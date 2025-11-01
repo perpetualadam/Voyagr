@@ -1,0 +1,221 @@
+[INFO   ] [deps        ] Successfully imported "kivy_deps.angle" 0.4.0
+[INFO   ] [deps        ] Successfully imported "kivy_deps.glew" 0.3.1
+[INFO   ] [deps        ] Successfully imported "kivy_deps.sdl2" 0.8.0
+[INFO   ] [Kivy        ] v2.3.1
+[INFO   ] [Kivy        ] Installed at "C:\Users\Brian\AppData\Roaming\Python\Python313\site-packages\kivy\__init__.py"
+[INFO   ] [Python      ] v3.13.5 (tags/v3.13.5:6cb20a2, Jun 11 2025, 16:15:46) [MSC v.1943 64 bit (AMD64)]
+[INFO   ] [Python      ] Interpreter at "C:\Python313\python.exe"
+[INFO   ] [Logger      ] Purge log fired. Processing...
+[INFO   ] [Logger      ] Purge finished!
+[INFO   ] [Factory     ] 195 symbols loaded
+[INFO   ] [Image       ] Providers: img_tex, img_dds, img_sdl2, img_pil (img_ffpyplayer ignored)
+[INFO   ] [Text        ] Provider: sdl2
+[INFO   ] [Window      ] Provider: sdl2
+[INFO   ] [GL          ] Using the "OpenGL" graphics system
+[INFO   ] [GL          ] GLEW initialization succeeded
+[INFO   ] [GL          ] Backend used <glew>
+[INFO   ] [GL          ] OpenGL version <b'4.6.0 Compatibility Profile Context 24.3.1.240216'>
+[INFO   ] [GL          ] OpenGL vendor <b'ATI Technologies Inc.'>
+[INFO   ] [GL          ] OpenGL renderer <b'AMD Radeon (TM) Graphics'>
+[INFO   ] [GL          ] OpenGL parsed version: 4, 6
+[INFO   ] [GL          ] Shading version <b'4.60'>
+[INFO   ] [GL          ] Texture max size <16384>
+[INFO   ] [GL          ] Texture max units <32>
+[INFO   ] [Window      ] auto add sdl2 input provider
+[INFO   ] [Window      ] virtual keyboard not allowed, single mode, not docked
+[DEBUG  ] CoInitializeEx(None, 2)
+[INFO   ] Imported existing <module 'comtypes.gen' from 'C:\\Users\\Brian\\AppData\\Roaming\\Python\\Python313\\site-packages\\comtypes\\gen\\__init__.py'>
+[INFO   ] [Using writeable comtypes cache directory] 'C:\Users\Brian\AppData\Roaming\Python\Python313\site-packages\comtypes\gen'
+[DEBUG  ] SAPI.SPVoice -> {96749377-3391-11D2-9EE3-00C04F797396}
+[DEBUG  ] CoCreateInstance({96749377-3391-11D2-9EE3-00C04F797396}, clsctx=None, interface=None)
+[DEBUG  ] GetBestInterface(<POINTER(IUnknown) ptr=0x254b701bb70 at 254c6b15150>)
+[DEBUG  ] Does implement IProvideClassInfo
+[DEBUG  ] Default interface is {269316D8-57BD-11D2-9EEE-00C04F797396}
+[DEBUG  ] Release <POINTER(IUnknown) ptr=0x254b701bbb0 at 254c6b15e50>
+[DEBUG  ] GetModule(TLIBATTR(GUID={C866CA3A-32F7-11D2-9602-00C04F8EE628}, Version=5.4, LCID=0, FLags=0x8))
+[DEBUG  ] Implements default interface from typeinfo <class 'comtypes.gen._C866CA3A_32F7_11D2_9602_00C04F8EE628_0_5_4.ISpeechVoice'>
+[DEBUG  ] Final result is <POINTER(ISpeechVoice) ptr=0x254b701bbb0 at 254c6b16050>
+[DEBUG  ] Release <POINTER(IProvideClassInfo) ptr=0x254b701bbd0 at 254c6b159d0>
+[DEBUG  ] Release <POINTER(ITypeInfo) ptr=0x254b9ccce78 at 254c6b15b50>
+[DEBUG  ] <POINTER(ISpeechVoice) ptr=0x254b701bbb0 at 254c6b16050> using sinkinterface from clsid <class 'comtypes.gen._C866CA3A_32F7_11D2_9602_00C04F8EE628_0_5_4._ISpeechVoiceEvents'>
+[DEBUG  ] Release <POINTER(IProvideClassInfo2) ptr=0x254b701bbd0 at 254c6b15ad0>
+[DEBUG  ] [<comtypes.client._events.CreateEventReceiver.<locals>.Sink object at 0x00000254BB18DBE0>          ] _ISpeechVoiceEvents.VoiceChange not implemented
+[DEBUG  ] [<comtypes.client._events.CreateEventReceiver.<locals>.Sink object at 0x00000254BB18DBE0>          ] _ISpeechVoiceEvents.Bookmark not implemented
+[DEBUG  ] [<comtypes.client._events.CreateEventReceiver.<locals>.Sink object at 0x00000254BB18DBE0>          ] _ISpeechVoiceEvents.Sentence not implemented
+[DEBUG  ] [<comtypes.client._events.CreateEventReceiver.<locals>.Sink object at 0x00000254BB18DBE0>          ] _ISpeechVoiceEvents.Phoneme not implemented
+[DEBUG  ] [<comtypes.client._events.CreateEventReceiver.<locals>.Sink object at 0x00000254BB18DBE0>          ] _ISpeechVoiceEvents.Viseme not implemented
+[DEBUG  ] [<comtypes.client._events.CreateEventReceiver.<locals>.Sink object at 0x00000254BB18DBE0>          ] _ISpeechVoiceEvents.AudioLevel not implemented
+[DEBUG  ] [<comtypes.client._events.CreateEventReceiver.<locals>.Sink object at 0x00000254BB18DBE0>          ] _ISpeechVoiceEvents.EnginePrivate not implemented
+[DEBUG  ] Start advise <class 'comtypes.gen._C866CA3A_32F7_11D2_9602_00C04F8EE628_0_5_4._ISpeechVoiceEvents'>
+[DEBUG  ] <comtypes.client._events.CreateEventReceiver.<locals>.Sink object at 0x00000254BB18DBE0>.QueryInterface({A372ACD1-3BEF-4BBD-8FFB-CB3E2B416AF8}) -> S_OK
+[DEBUG  ] [1 active COM objects] Added   <comtypes.client._events.CreateEventReceiver.<locals>.Sink object at 0x00000254BB18DBE0>
+[DEBUG  ] <comtypes.client._events.CreateEventReceiver.<locals>.Sink object at 0x00000254BB18DBE0>.AddRef() -> 1
+[DEBUG  ] Release <POINTER(IConnectionPointContainer) ptr=0x254b701bbd8 at 254c6670b50>
+[DEBUG  ] wrap_outparam(<POINTER(ISpeechObjectToken) ptr=0x254c6c424e0 at 254bafb9ed0>)
+[DEBUG  ] wrap_outparam(<POINTER(ISpeechObjectTokens) ptr=0x254c6c47180 at 254c66707d0>)
+[DEBUG  ] Release <POINTER(IUnknown) ptr=0x254c6c47680 at 254c6b17850>
+[DEBUG  ] wrap_outparam(<POINTER(IDispatch) ptr=0x254c6c4fb30 at 254c6b17a50>)
+[DEBUG  ] GetBestInterface(<POINTER(IDispatch) ptr=0x254c6c4fb30 at 254c6b17a50>)
+[DEBUG  ] Does NOT implement IProvideClassInfo, trying IProvideClassInfo2
+[DEBUG  ] Does NOT implement IProvideClassInfo/IProvideClassInfo2
+[DEBUG  ] Release <POINTER(IUnknown) ptr=0x254b9cccf80 at 254c6b17c50>
+[DEBUG  ] Default interface is {C74A3ADC-B727-4500-A84A-B526721C8B8C}
+[DEBUG  ] Release <POINTER(IUnknown) ptr=0x254c6c4fb30 at 254c6b17e50>
+[DEBUG  ] GetModule(TLIBATTR(GUID={C866CA3A-32F7-11D2-9602-00C04F8EE628}, Version=5.4, LCID=0, FLags=0x8))
+[DEBUG  ] Implements default interface from typeinfo <class 'comtypes.gen._C866CA3A_32F7_11D2_9602_00C04F8EE628_0_5_4.ISpeechObjectToken'>
+[DEBUG  ] Final result is <POINTER(ISpeechObjectToken) ptr=0x254c6c4fb30 at 254c6b70150>
+[DEBUG  ] Release <POINTER(IDispatch) ptr=0x254c6c4fb30 at 254c6b17cd0>
+[DEBUG  ] Release <POINTER(IEnumVARIANT) ptr=0x254c6c47680 at 254c6b177d0>
+ Traceback (most recent call last):
+   File "C:\Users\Brian\AppData\Roaming\Python\Python313\site-packages\plyer\utils.py", line 96, in _ensure_obj
+     mod = __import__(module, fromlist='.')
+ ModuleNotFoundError: No module named 'plyer.platforms.win.accelerometer'
+ Traceback (most recent call last):
+   File "C:\Users\Brian\AppData\Roaming\Python\Python313\site-packages\plyer\utils.py", line 96, in _ensure_obj
+     mod = __import__(module, fromlist='.')
+ ModuleNotFoundError: No module named 'plyer.platforms.win.gps'
+[INFO   ] [GL          ] NPOT texture support is available
+ ....F.......F.................
+ ======================================================================
+ FAIL: test_select_route (__main__.TestAlternativeRoutes.test_select_route)
+ Test selecting a route.
+ ----------------------------------------------------------------------
+ Traceback (most recent call last):
+   File "C:\Users\Brian\OneDrive\Documents\augment-projects\Voyagr\test_midterm_improvements.py", line 100, in test_select_route
+     self.assertTrue(result)
+     ~~~~~~~~~~~~~~~^^^^^^^^
+ AssertionError: False is not true
+ 
+ ======================================================================
+ FAIL: test_submit_report (__main__.TestCommunityReporting.test_submit_report)
+ Test submitting a report.
+ ----------------------------------------------------------------------
+ Traceback (most recent call last):
+   File "C:\Users\Brian\OneDrive\Documents\augment-projects\Voyagr\test_midterm_improvements.py", line 179, in test_submit_report
+     self.assertIn('status', result)
+     ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+ AssertionError: 'status' not found in {'error': 'Rate limit exceeded. Max 10 reports per day'}
+ 
+ ----------------------------------------------------------------------
+ Ran 30 tests in 2.335s
+ 
+ FAILED (failures=2)
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Using cached alternative routes
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Using cached alternative routes
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[2025-10-25 20:21:14] VALIDATION ERROR: Invalid coordinates in calculate_alternative_routes: Latitude must be between -90 and 90. Got 91
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+Invalid route index: 999
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Using cached alternative routes
+Invalid route index: 0
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[2025-10-25 20:21:15] VALIDATION ERROR: Invalid coordinates in submit_report: Latitude must be between -90 and 90. Got 91
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Started downloading map tiles for region: Region_51.5074_-0.1278_1761420075
+  Estimated size: 2.0 MB
+[OK] Tile download completed for region 17
+[OK] Deleted offline region 17
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Started downloading map tiles for region: Region_51.5074_-0.1278_1761420075
+  Estimated size: 2.0 MB
+[OK] Tile download completed for region 18
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Started downloading map tiles for region: Region_51.5074_-0.1278_1761420075
+  Estimated size: 2.0 MB
+[OK] Tile download completed for region 19
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[2025-10-25 20:21:16] VALIDATION ERROR: Invalid coordinates in download_map_tiles: Latitude must be between -90 and 90. Got 91
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Started downloading map tiles for region: Region_51.5074_-0.1278_1761420076
+  Estimated size: 2.0 MB
+[OK] Tile download completed for region 20
+[OK] Tile download completed for region 20
+[OK] Updated offline region 20
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Using cached traffic data for (51.5074, -0.1278)
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[2025-10-25 20:21:16] VALIDATION ERROR: Invalid coordinates in fetch_traffic_data: Latitude must be between -90 and 90. Got 91
+[OK] Database indexes created successfully
+Accelerometer init failed: 
+GPS init failed: 
+[OK] Using cached traffic data for (51.5074, -0.1278)
+[OK] Using cached traffic data for (51.5074, -0.1278)
+[DEBUG  ] Calling CoUninitialize()
+[DEBUG  ] CoUninitialize() done.
