@@ -60,3 +60,5 @@ cameras.geojson
 custom_model.json
 valhalla.json
 
+# NOTE: DO NOT EXCLUDE manifest.json or service-worker.js - they are needed!
+
