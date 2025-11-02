@@ -1,7 +1,7 @@
 Flask==2.3.3
 requests==2.31.0
 python-dotenv==1.0.0
-polyline==2.0.4
+polyline==2.0.3
 mercantile==1.2.1
 geopy==2.4.0
 protobuf==5.28.2
