@@ -4626,30 +4626,43 @@ def get_analytics():
 
 @app.route('/api/speed-limit', methods=['GET'])
 def get_speed_limit():
-    """Get speed limit for a location (mock data)."""
+    """Get speed limit for a location with variable speed limit detection."""
     try:
+        if not speed_limit_detector:
+            return jsonify({'success': False, 'error': 'Speed limit detector not available'})
+
         lat = float(request.args.get('lat', 51.5074))
         lon = float(request.args.get('lon', -0.1278))
+        road_type = request.args.get('road_type', 'motorway')
+        vehicle_type = request.args.get('vehicle_type', 'car')
 
-        # Mock speed limit data
-        # In production, use actual speed limit database
-        speed_limits = {
-            'motorway': 70,
-            'a_road': 60,
-            'b_road': 50,
-            'residential': 30,
-            'urban': 20
-        }
+        result = speed_limit_detector.get_speed_limit_for_location(
+            lat=lat, lon=lon, road_type=road_type, vehicle_type=vehicle_type
+        )
 
-        # Determine road type based on location (simplified)
-        road_type = 'residential'  # Default
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
 
-        return jsonify({
-            'success': True,
-            'speed_limit_mph': speed_limits[road_type],
-            'road_type': road_type,
-            'unit': 'mph'
-        })
+@app.route('/api/speed-violation', methods=['POST'])
+def check_speed_violation():
+    """Check if vehicle is exceeding speed limit."""
+    try:
+        if not speed_limit_detector:
+            return jsonify({'success': False, 'error': 'Speed limit detector not available'})
+
+        data = request.json
+        current_speed_mph = float(data.get('current_speed_mph', 0))
+        speed_limit_mph = int(data.get('speed_limit_mph', 70))
+        warning_threshold_mph = int(data.get('warning_threshold_mph', 5))
+
+        result = speed_limit_detector.check_speed_violation(
+            current_speed_mph=current_speed_mph,
+            speed_limit_mph=speed_limit_mph,
+            warning_threshold_mph=warning_threshold_mph
+        )
+
+        return jsonify({'success': True, 'data': result})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -4817,48 +4830,6 @@ def get_nearby_hazards():
 # ============================================================================
 # VARIABLE SPEED LIMIT DETECTION
 # ============================================================================
-
-@app.route('/api/speed-limit', methods=['GET'])
-def get_speed_limit():
-    """Get speed limit for a location."""
-    try:
-        if not speed_limit_detector:
-            return jsonify({'success': False, 'error': 'Speed limit detector not available'})
-
-        lat = float(request.args.get('lat', 51.5074))
-        lon = float(request.args.get('lon', -0.1278))
-        road_type = request.args.get('road_type', 'motorway')
-        vehicle_type = request.args.get('vehicle_type', 'car')
-
-        result = speed_limit_detector.get_speed_limit_for_location(
-            lat=lat, lon=lon, road_type=road_type, vehicle_type=vehicle_type
-        )
-
-        return jsonify({'success': True, 'data': result})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/api/speed-violation', methods=['POST'])
-def check_speed_violation():
-    """Check if vehicle is exceeding speed limit."""
-    try:
-        if not speed_limit_detector:
-            return jsonify({'success': False, 'error': 'Speed limit detector not available'})
-
-        data = request.json
-        current_speed_mph = float(data.get('current_speed_mph', 0))
-        speed_limit_mph = int(data.get('speed_limit_mph', 70))
-        warning_threshold_mph = int(data.get('warning_threshold_mph', 5))
-
-        result = speed_limit_detector.check_speed_violation(
-            current_speed_mph=current_speed_mph,
-            speed_limit_mph=speed_limit_mph,
-            warning_threshold_mph=warning_threshold_mph
-        )
-
-        return jsonify({'success': True, 'data': result})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
 
 # ============================================================================
 # PHASE 2 FEATURES - SEARCH HISTORY & FAVORITES
