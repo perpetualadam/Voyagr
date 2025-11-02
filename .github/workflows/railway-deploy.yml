@@ -1,0 +1,25 @@
+name: Deploy to Railway
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Deploy to Railway
+        uses: railway-app/deploy-action@v1
+        with:
+          token: ${{ secrets.RAILWAY_TOKEN }}
+          service: voyagr-web
+          
+      - name: Notify Deployment
+        run: |
+          echo "✅ Deployment to Railway completed!"
+          echo "Your app is live at: https://voyagr-production.up.railway.app"
+
