@@ -17,6 +17,12 @@ import threading
 import math
 import time
 
+# Import speed limit detector
+try:
+    from speed_limit_detector import SpeedLimitDetector
+except ImportError:
+    SpeedLimitDetector = None
+
 load_dotenv()
 
 app = Flask(__name__, static_folder='.')
@@ -257,6 +263,9 @@ def init_db():
     conn.close()
 
 init_db()
+
+# Initialize speed limit detector
+speed_limit_detector = SpeedLimitDetector() if SpeedLimitDetector else None
 
 # Cost calculation functions
 def calculate_fuel_cost(distance_km, fuel_efficiency_l_per_100km, fuel_price_gbp_per_l):
@@ -1380,6 +1389,60 @@ HTML_TEMPLATE = '''
             opacity: 0.9;
         }
 
+        /* Variable Speed Limit Display */
+        .variable-speed-display {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .variable-speed-display.show {
+            display: block;
+        }
+
+        .variable-speed-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            opacity: 0.9;
+        }
+
+        .variable-speed-icon {
+            font-size: 16px;
+        }
+
+        .variable-speed-title {
+            font-weight: 600;
+        }
+
+        .variable-speed-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .variable-speed-limit {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .variable-speed-info {
+            font-size: 12px;
+            text-align: right;
+            opacity: 0.9;
+        }
+
+        .variable-speed-info-item {
+            margin: 4px 0;
+        }
+
         /* Phase 3 Features Styles */
         .gesture-indicator {
             position: fixed;
@@ -1655,6 +1718,18 @@ HTML_TEMPLATE = '''
                     <div class="speed-warning-details" id="speedWarningDetails"></div>
                 </div>
 
+                <!-- Variable Speed Limit Display (NEW) -->
+                <div class="variable-speed-display" id="variableSpeedDisplay" style="display: none;">
+                    <div class="variable-speed-header">
+                        <span class="variable-speed-icon">🚗</span>
+                        <span class="variable-speed-title">Variable Speed Limit</span>
+                    </div>
+                    <div class="variable-speed-content">
+                        <div class="variable-speed-limit" id="variableSpeedLimit">70 mph</div>
+                        <div class="variable-speed-info" id="variableSpeedInfo"></div>
+                    </div>
+                </div>
+
                 <!-- Quick Search Buttons -->
                 <div class="quick-search">
                     <button class="quick-search-btn" onclick="quickSearch('parking')">
@@ -1722,6 +1797,11 @@ HTML_TEMPLATE = '''
                     <div class="preference-item">
                         <span class="preference-label">Avoid Traffic Cameras</span>
                         <button class="toggle-switch" id="avoidTrafficCameras" onclick="togglePreference('trafficCameras')"></button>
+                    </div>
+
+                    <div class="preference-item">
+                        <span class="preference-label">📊 Variable Speed Alerts</span>
+                        <button class="toggle-switch" id="variableSpeedAlerts" onclick="togglePreference('variableSpeedAlerts')"></button>
                     </div>
 
                     <!-- Phase 3: Gesture Control -->
@@ -2257,6 +2337,58 @@ HTML_TEMPLATE = '''
                     }
                 })
                 .catch(error => console.error('Error updating speed warning:', error));
+        }
+
+        // ===== VARIABLE SPEED LIMIT DETECTION =====
+
+        function updateVariableSpeedLimit(lat, lon, roadType = 'motorway', vehicleType = 'car') {
+            fetch(`/api/speed-limit?lat=${lat}&lon=${lon}&road_type=${roadType}&vehicle_type=${vehicleType}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const display = document.getElementById('variableSpeedDisplay');
+                        const limitEl = document.getElementById('variableSpeedLimit');
+                        const infoEl = document.getElementById('variableSpeedInfo');
+
+                        const speedData = data.data;
+                        limitEl.textContent = `${speedData.speed_limit_mph} mph`;
+
+                        let infoHtml = '';
+                        if (speedData.is_smart_motorway) {
+                            infoHtml += `<div class="variable-speed-info-item">🚗 Smart Motorway: ${speedData.motorway_name}</div>`;
+                        }
+                        infoHtml += `<div class="variable-speed-info-item">Road: ${speedData.road_type.replace(/_/g, ' ')}</div>`;
+
+                        infoEl.innerHTML = infoHtml;
+                        display.classList.add('show');
+                    }
+                })
+                .catch(error => console.error('Error updating variable speed limit:', error));
+        }
+
+        function checkSpeedViolation(currentSpeedMph, speedLimitMph, threshold = 5) {
+            fetch('/api/speed-violation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    current_speed_mph: currentSpeedMph,
+                    speed_limit_mph: speedLimitMph,
+                    warning_threshold_mph: threshold
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        const violation = data.data;
+                        console.log(`[Speed] Status: ${violation.status}, Diff: ${violation.speed_diff_mph} mph`);
+
+                        // Announce speed violations via voice if enabled
+                        if (violation.status === 'exceeding' && voiceRecognition) {
+                            speakMessage(`⚠️ Exceeding speed limit by ${violation.speed_diff_mph} mph`);
+                        }
+                    }
+                })
+                .catch(error => console.error('Error checking speed violation:', error));
         }
 
         // Initialize Phase 2 features on page load
@@ -3099,6 +3231,9 @@ HTML_TEMPLATE = '''
                     // Check for hazards nearby
                     checkNearbyHazards(lat, lon);
 
+                    // Check for variable speed limits
+                    updateVariableSpeedLimit(lat, lon, 'motorway', 'car');
+
                     // ===== PHASE 2: Update lane guidance and speed warnings =====
                     // Convert speed from m/s to mph
                     const speedMph = speed ? (speed * 2.237).toFixed(1) : 0;
@@ -3935,11 +4070,12 @@ HTML_TEMPLATE = '''
         }
 
         function loadPreferences() {
-            const prefs = ['tolls', 'caz', 'speedCameras', 'trafficCameras'];
+            const prefs = ['tolls', 'caz', 'speedCameras', 'trafficCameras', 'variableSpeedAlerts'];
             prefs.forEach(pref => {
                 const saved = localStorage.getItem('pref_' + pref);
                 if (saved === 'true') {
-                    const button = document.getElementById('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1));
+                    const button = document.getElementById('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1)) ||
+                                   document.getElementById(pref.charAt(0).toLowerCase() + pref.slice(1));
                     if (button) {
                         button.classList.add('active');
                     }
@@ -4675,6 +4811,52 @@ def get_nearby_hazards():
 
         conn.close()
         return jsonify({'success': True, 'hazards': hazards})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# ============================================================================
+# VARIABLE SPEED LIMIT DETECTION
+# ============================================================================
+
+@app.route('/api/speed-limit', methods=['GET'])
+def get_speed_limit():
+    """Get speed limit for a location."""
+    try:
+        if not speed_limit_detector:
+            return jsonify({'success': False, 'error': 'Speed limit detector not available'})
+
+        lat = float(request.args.get('lat', 51.5074))
+        lon = float(request.args.get('lon', -0.1278))
+        road_type = request.args.get('road_type', 'motorway')
+        vehicle_type = request.args.get('vehicle_type', 'car')
+
+        result = speed_limit_detector.get_speed_limit_for_location(
+            lat=lat, lon=lon, road_type=road_type, vehicle_type=vehicle_type
+        )
+
+        return jsonify({'success': True, 'data': result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/speed-violation', methods=['POST'])
+def check_speed_violation():
+    """Check if vehicle is exceeding speed limit."""
+    try:
+        if not speed_limit_detector:
+            return jsonify({'success': False, 'error': 'Speed limit detector not available'})
+
+        data = request.json
+        current_speed_mph = float(data.get('current_speed_mph', 0))
+        speed_limit_mph = int(data.get('speed_limit_mph', 70))
+        warning_threshold_mph = int(data.get('warning_threshold_mph', 5))
+
+        result = speed_limit_detector.check_speed_violation(
+            current_speed_mph=current_speed_mph,
+            speed_limit_mph=speed_limit_mph,
+            warning_threshold_mph=warning_threshold_mph
+        )
+
+        return jsonify({'success': True, 'data': result})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
