@@ -3995,12 +3995,14 @@ def index():
 
 @app.route('/manifest.json')
 def manifest():
-    with open('manifest.json', 'r', encoding='utf-8') as f:
+    manifest_path = os.path.join(os.path.dirname(__file__), 'manifest.json')
+    with open(manifest_path, 'r', encoding='utf-8') as f:
         return jsonify(json.load(f))
 
 @app.route('/service-worker.js')
 def service_worker():
-    with open('service-worker.js', 'r', encoding='utf-8') as f:
+    sw_path = os.path.join(os.path.dirname(__file__), 'service-worker.js')
+    with open(sw_path, 'r', encoding='utf-8') as f:
         response = app.make_response(f.read())
         response.headers['Content-Type'] = 'application/javascript'
         response.headers['Service-Worker-Allowed'] = '/'
