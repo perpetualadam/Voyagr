@@ -1,0 +1,8 @@
+[build]
+# Use requirements-railway.txt instead of requirements.txt
+# This avoids building Kivy and Pygame from source
+builder = "dockerfile"
+
+[deploy]
+startCommand = "python voyagr_web.py"
+
