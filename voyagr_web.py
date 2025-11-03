@@ -2972,7 +2972,6 @@ HTML_TEMPLATE = '''
         }
     </style>
 
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/polyline-encoded/0.0.9/polyline.js"></script>
     <script>
         // Suppress ethereum property redefinition warning from browser extensions
         if (typeof window !== 'undefined' && window.ethereum) {
