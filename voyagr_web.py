@@ -2198,8 +2198,18 @@ HTML_TEMPLATE = '''
                             opacity: 0.8
                         }).addTo(map);
 
-                        // Fit map to route
-                        map.fitBounds(routeLayer.getBounds().pad(0.1));
+                        // Fit map to route with smooth animation
+                        const bounds = routeLayer.getBounds().pad(0.1);
+                        const center = bounds.getCenter();
+                        const zoomLevel = map.getBoundsZoom(bounds);
+
+                        // Use smooth animation to fit route
+                        map.flyTo(center, zoomLevel, {
+                            duration: ZOOM_ANIMATION_DURATION,
+                            easeLinearity: 0.25
+                        });
+
+                        lastZoomLevel = zoomLevel;
 
                         // Update info
                         updateTripInfo(data.distance, data.time, data.fuel_cost || '-', data.toll_cost || '-');
@@ -2248,7 +2258,12 @@ HTML_TEMPLATE = '''
             if (endMarker) map.removeLayer(endMarker);
             if (routeLayer) map.removeLayer(routeLayer);
 
-            map.setView([51.5074, -0.1278], 13);
+            // Use smooth animation to return to default view
+            map.flyTo([51.5074, -0.1278], 13, {
+                duration: ZOOM_ANIMATION_DURATION,
+                easeLinearity: 0.25
+            });
+            lastZoomLevel = 13;
         }
 
         // ===== PHASE 2 FEATURES: SEARCH HISTORY & FAVORITES =====
@@ -2402,6 +2417,78 @@ HTML_TEMPLATE = '''
                 .catch(error => console.error('Error updating speed warning:', error));
         }
 
+        // ===== DISTANCE CALCULATION & TURN DETECTION =====
+
+        function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+            /**
+             * Calculate distance between two coordinates using Haversine formula.
+             * Returns distance in meters.
+             */
+            const R = 6371000; // Earth's radius in meters
+            const dLat = (lat2 - lat1) * Math.PI / 180;
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
+
+        function detectUpcomingTurn(userLat, userLon) {
+            /**
+             * Detect if user is approaching an upcoming turn in the route.
+             * Returns object with distance to next turn or null if no turn ahead.
+             */
+            if (!routeInProgress || !routePolyline || routePolyline.length === 0) {
+                return null;
+            }
+
+            // Find the closest point on the route to the user
+            let closestDistance = Infinity;
+            let closestIndex = 0;
+
+            for (let i = 0; i < routePolyline.length; i++) {
+                const point = routePolyline[i];
+                const distance = calculateHaversineDistance(userLat, userLon, point[0], point[1]);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestIndex = i;
+                }
+            }
+
+            // Look ahead for the next turn point (typically every 50-100 points)
+            // For now, we'll use the next significant waypoint
+            const lookAheadDistance = 100; // meters
+            let nextTurnIndex = closestIndex;
+
+            // Find next point that's at least lookAheadDistance away
+            for (let i = closestIndex + 1; i < routePolyline.length; i++) {
+                const point = routePolyline[i];
+                const distance = calculateHaversineDistance(userLat, userLon, point[0], point[1]);
+                if (distance > lookAheadDistance) {
+                    nextTurnIndex = i;
+                    break;
+                }
+            }
+
+            if (nextTurnIndex === closestIndex) {
+                return null; // No turn ahead
+            }
+
+            const nextTurnPoint = routePolyline[nextTurnIndex];
+            const distanceToTurn = calculateHaversineDistance(
+                userLat, userLon,
+                nextTurnPoint[0], nextTurnPoint[1]
+            );
+
+            return {
+                distance: distanceToTurn,
+                lat: nextTurnPoint[0],
+                lon: nextTurnPoint[1],
+                index: nextTurnIndex
+            };
+        }
+
         // ===== VEHICLE TYPE & ROUTING MODE MANAGEMENT =====
 
         function updateVehicleType() {
@@ -2490,13 +2577,20 @@ HTML_TEMPLATE = '''
         function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
             /**
              * Calculate optimal zoom level based on:
+             * - Distance to next turn (highest priority)
              * - Current speed
-             * - Distance to next turn
              * - Road type
              */
             let zoomLevel = ZOOM_LEVELS.urban_low_speed; // Default
 
-            // Speed-based zoom
+            // Priority 1: Turn-based zoom (highest priority)
+            if (distanceToNextTurn !== null && distanceToNextTurn < TURN_ZOOM_THRESHOLD) {
+                // Zoom in for turn details when within 500m
+                zoomLevel = ZOOM_LEVELS.turn_ahead;
+                return zoomLevel;
+            }
+
+            // Priority 2: Speed-based zoom
             if (speedMph > 100) {
                 // Motorway - zoom out to see more ahead
                 zoomLevel = ZOOM_LEVELS.motorway_high_speed;
@@ -2511,26 +2605,43 @@ HTML_TEMPLATE = '''
                 zoomLevel = ZOOM_LEVELS.parking_very_low_speed;
             }
 
-            // Adjust for upcoming turn
-            if (distanceToNextTurn !== null && distanceToNextTurn < 500) {
-                // Zoom in for turn details
-                zoomLevel = Math.min(zoomLevel + 1, 18);
-            }
-
             return zoomLevel;
         }
 
-        function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
+        function applySmartZoomWithAnimation(speedMph, distanceToNextTurn = null, roadType = 'urban', userLat = null, userLon = null) {
             if (!smartZoomEnabled || !routeInProgress) return;
 
             const newZoomLevel = calculateSmartZoom(speedMph, distanceToNextTurn, roadType);
 
             // Only update if zoom level changed significantly
             if (Math.abs(newZoomLevel - lastZoomLevel) >= 1) {
-                map.setZoom(newZoomLevel);
+                // Use smooth animation with flyTo
+                if (userLat !== null && userLon !== null) {
+                    map.flyTo([userLat, userLon], newZoomLevel, {
+                        duration: ZOOM_ANIMATION_DURATION,
+                        easeLinearity: 0.25
+                    });
+                } else {
+                    // Fallback if coordinates not provided
+                    map.setZoom(newZoomLevel);
+                }
+
                 lastZoomLevel = newZoomLevel;
-                console.log('[SmartZoom] Adjusted to level', newZoomLevel, 'for speed', speedMph, 'mph');
+
+                // Log zoom reason
+                if (distanceToNextTurn !== null && distanceToNextTurn < TURN_ZOOM_THRESHOLD) {
+                    console.log('[SmartZoom] Turn-based zoom to level', newZoomLevel, '- Turn in', distanceToNextTurn.toFixed(0), 'm');
+                    lastTurnZoomApplied = true;
+                } else {
+                    console.log('[SmartZoom] Speed-based zoom to level', newZoomLevel, 'for speed', speedMph.toFixed(1), 'mph');
+                    lastTurnZoomApplied = false;
+                }
             }
+        }
+
+        // Legacy function for backward compatibility
+        function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
+            applySmartZoomWithAnimation(speedMph, distanceToNextTurn, roadType, currentLat, currentLon);
         }
 
         function toggleSmartZoom() {
@@ -3070,6 +3181,7 @@ HTML_TEMPLATE = '''
         // ===== SMART ZOOM VARIABLES =====
         let smartZoomEnabled = true;
         let lastZoomLevel = 16;
+        let lastTurnZoomApplied = false;
         const ZOOM_LEVELS = {
             'motorway_high_speed': 14,      // > 100 km/h
             'main_road_medium_speed': 15,   // 50-100 km/h
@@ -3077,6 +3189,8 @@ HTML_TEMPLATE = '''
             'parking_very_low_speed': 17,   // < 20 km/h
             'turn_ahead': 18                 // Upcoming turn
         };
+        const TURN_ZOOM_THRESHOLD = 500;    // Zoom in when within 500m of turn
+        const ZOOM_ANIMATION_DURATION = 0.5; // 500ms smooth animation
 
         // ===== GEOCODING FEATURE =====
         let geocodingCache = {};
@@ -3471,9 +3585,12 @@ HTML_TEMPLATE = '''
                     currentUserMarker = createVehicleMarker(lat, lon, speed, accuracy);
                     currentUserMarker.addTo(map);
 
-                    // Center map on user (if not manually panned)
+                    // Center map on user (if not manually panned) with smooth animation
                     if (!map._userPanned) {
-                        map.setView([lat, lon], 16);
+                        map.flyTo([lat, lon], 16, {
+                            duration: 0.3,
+                            easeLinearity: 0.25
+                        });
                     }
 
                     // Check for route deviation
@@ -3487,9 +3604,19 @@ HTML_TEMPLATE = '''
                     // Check for variable speed limits
                     updateVariableSpeedLimit(lat, lon, 'motorway', currentVehicleType);
 
-                    // Apply smart zoom based on speed
+                    // Apply smart zoom with turn detection
                     const speedMph = speed ? (speed * 2.237) : 0;
-                    applySmartZoom(speedMph, null, 'motorway');
+                    let distanceToNextTurn = null;
+
+                    // Detect upcoming turns if navigation is active
+                    if (routeInProgress && routePolyline && routePolyline.length > 0) {
+                        const turnInfo = detectUpcomingTurn(lat, lon);
+                        if (turnInfo) {
+                            distanceToNextTurn = turnInfo.distance;
+                        }
+                    }
+
+                    applySmartZoomWithAnimation(speedMph, distanceToNextTurn, 'motorway', lat, lon);
 
                     // ===== PHASE 2: Update lane guidance and speed warnings =====
                     // Convert speed from m/s to mph (already done above)
@@ -3834,8 +3961,11 @@ HTML_TEMPLATE = '''
                     currentLat = lat;
                     currentLon = lon;
 
-                    // Center map on current location
-                    map.setView([lat, lon], 15);
+                    // Center map on current location with smooth animation
+                    map.flyTo([lat, lon], 15, {
+                        duration: ZOOM_ANIMATION_DURATION,
+                        easeLinearity: 0.25
+                    });
 
                     // Add marker
                     if (startMarker) map.removeLayer(startMarker);
