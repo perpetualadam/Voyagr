@@ -23,6 +23,12 @@ try:
 except ImportError:
     SpeedLimitDetector = None
 
+# Import routing monitor
+try:
+    from routing_monitor import get_monitor
+except ImportError:
+    get_monitor = None
+
 load_dotenv()
 
 app = Flask(__name__, static_folder='.')
@@ -452,6 +458,256 @@ def score_route_by_hazards(route_points, hazards):
     except Exception as e:
         print(f"Error scoring route: {e}")
         return 0, 0
+
+MONITORING_DASHBOARD_HTML = '''
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voyagr Routing Monitoring Dashboard</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 8px; margin-bottom: 30px; }
+        .header h1 { font-size: 28px; margin-bottom: 10px; }
+        .header p { opacity: 0.9; }
+
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px; margin-bottom: 30px; }
+        .card { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .card h2 { font-size: 16px; color: #333; margin-bottom: 15px; border-bottom: 2px solid #667eea; padding-bottom: 10px; }
+
+        .engine-status { display: flex; align-items: center; justify-content: space-between; padding: 12px; background: #f9f9f9; border-radius: 6px; margin-bottom: 10px; }
+        .engine-name { font-weight: 500; color: #333; }
+        .status-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+        .status-up { background: #4caf50; color: white; }
+        .status-down { background: #f44336; color: white; }
+        .status-degraded { background: #ff9800; color: white; }
+        .status-unknown { background: #9e9e9e; color: white; }
+
+        .uptime { font-size: 12px; color: #666; margin-top: 4px; }
+        .response-time { font-size: 12px; color: #999; }
+
+        .alert-item { padding: 12px; background: #fff3cd; border-left: 4px solid #ffc107; border-radius: 4px; margin-bottom: 10px; }
+        .alert-critical { background: #f8d7da; border-left-color: #f44336; }
+        .alert-warning { background: #fff3cd; border-left-color: #ff9800; }
+        .alert-info { background: #d1ecf1; border-left-color: #2196f3; }
+        .alert-time { font-size: 11px; color: #666; margin-top: 4px; }
+
+        .cost-chart { margin-top: 15px; }
+        .cost-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #eee; font-size: 13px; }
+        .cost-row:last-child { border-bottom: none; }
+        .cost-label { color: #666; }
+        .cost-value { font-weight: 600; color: #333; }
+
+        .button-group { display: flex; gap: 10px; margin-top: 15px; }
+        button { padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5568d3; }
+        .btn-secondary { background: #e0e0e0; color: #333; }
+        .btn-secondary:hover { background: #d0d0d0; }
+
+        .loading { text-align: center; padding: 20px; color: #999; }
+        .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #667eea; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .refresh-time { font-size: 12px; color: #999; margin-top: 10px; }
+        .footer { text-align: center; padding: 20px; color: #999; font-size: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🚀 Voyagr Routing Monitoring Dashboard</h1>
+            <p>Real-time health monitoring for GraphHopper, Valhalla, and OSRM routing engines</p>
+        </div>
+
+        <div class="grid">
+            <!-- Engine Status Card -->
+            <div class="card">
+                <h2>🔍 Engine Status</h2>
+                <div id="engineStatus" class="loading"><div class="spinner"></div> Loading...</div>
+                <div class="button-group">
+                    <button class="btn-primary" onclick="manualHealthCheck()">Check Now</button>
+                    <button class="btn-secondary" onclick="autoRefresh()">Auto Refresh</button>
+                </div>
+                <div class="refresh-time">Last updated: <span id="lastUpdate">--:--:--</span></div>
+            </div>
+
+            <!-- Alerts Card -->
+            <div class="card">
+                <h2>⚠️ Recent Alerts</h2>
+                <div id="alertsList" class="loading"><div class="spinner"></div> Loading...</div>
+                <div class="button-group">
+                    <button class="btn-secondary" onclick="loadAlerts()">Refresh Alerts</button>
+                </div>
+            </div>
+
+            <!-- OCI Costs Card -->
+            <div class="card">
+                <h2>💰 OCI Valhalla Costs (30 days)</h2>
+                <div id="costsList" class="loading"><div class="spinner"></div> Loading...</div>
+                <div class="button-group">
+                    <button class="btn-secondary" onclick="loadCosts()">Refresh Costs</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Monitoring updates every 5 minutes | <a href="/" style="color: #667eea; text-decoration: none;">Back to Voyagr</a></p>
+        </div>
+    </div>
+
+    <script>
+        let autoRefreshInterval = null;
+
+        async function loadEngineStatus() {
+            try {
+                const response = await fetch('/api/monitoring/engine-status');
+                const data = await response.json();
+
+                if (data.success) {
+                    const html = data.engines.map(engine => `
+                        <div class="engine-status">
+                            <div>
+                                <div class="engine-name">${engine.engine.toUpperCase()}</div>
+                                <div class="response-time">Last check: ${new Date(engine.last_check).toLocaleTimeString()}</div>
+                            </div>
+                            <div>
+                                <span class="status-badge status-${engine.status}">${engine.status.toUpperCase()}</span>
+                                <div class="uptime">Uptime: ${engine.uptime_24h}%</div>
+                            </div>
+                        </div>
+                    `).join('');
+                    document.getElementById('engineStatus').innerHTML = html;
+                    updateLastUpdate();
+                }
+            } catch (error) {
+                console.error('Error loading engine status:', error);
+                document.getElementById('engineStatus').innerHTML = '<div style="color: red;">Error loading status</div>';
+            }
+        }
+
+        async function loadAlerts() {
+            try {
+                const response = await fetch('/api/monitoring/alerts?limit=10');
+                const data = await response.json();
+
+                if (data.success && data.alerts.length > 0) {
+                    const html = data.alerts.map(alert => `
+                        <div class="alert-item alert-${alert.severity}">
+                            <strong>${alert.engine.toUpperCase()}</strong> - ${alert.message}
+                            <div class="alert-time">${new Date(alert.created_at).toLocaleString()}</div>
+                        </div>
+                    `).join('');
+                    document.getElementById('alertsList').innerHTML = html;
+                } else {
+                    document.getElementById('alertsList').innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No alerts</div>';
+                }
+            } catch (error) {
+                console.error('Error loading alerts:', error);
+                document.getElementById('alertsList').innerHTML = '<div style="color: red;">Error loading alerts</div>';
+            }
+        }
+
+        async function loadCosts() {
+            try {
+                const response = await fetch('/api/monitoring/costs?days=30');
+                const data = await response.json();
+
+                if (data.success && data.costs.length > 0) {
+                    const totalCost = data.costs.reduce((sum, c) => sum + c.estimated_cost, 0);
+                    const totalBandwidth = data.costs.reduce((sum, c) => sum + c.bandwidth_gb, 0);
+                    const totalRequests = data.costs.reduce((sum, c) => sum + c.api_requests, 0);
+
+                    const html = `
+                        <div class="cost-chart">
+                            <div class="cost-row">
+                                <span class="cost-label">Total Cost (30d)</span>
+                                <span class="cost-value">$${totalCost.toFixed(2)}</span>
+                            </div>
+                            <div class="cost-row">
+                                <span class="cost-label">Bandwidth Used</span>
+                                <span class="cost-value">${totalBandwidth.toFixed(2)} GB</span>
+                            </div>
+                            <div class="cost-row">
+                                <span class="cost-label">API Requests</span>
+                                <span class="cost-value">${totalRequests.toLocaleString()}</span>
+                            </div>
+                            <div class="cost-row">
+                                <span class="cost-label">Daily Average</span>
+                                <span class="cost-value">$${(totalCost / 30).toFixed(2)}</span>
+                            </div>
+                        </div>
+                    `;
+                    document.getElementById('costsList').innerHTML = html;
+                } else {
+                    document.getElementById('costsList').innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No cost data</div>';
+                }
+            } catch (error) {
+                console.error('Error loading costs:', error);
+                document.getElementById('costsList').innerHTML = '<div style="color: red;">Error loading costs</div>';
+            }
+        }
+
+        async function manualHealthCheck() {
+            try {
+                const btn = event.target;
+                btn.disabled = true;
+                btn.textContent = 'Checking...';
+
+                const response = await fetch('/api/monitoring/health-check', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    loadEngineStatus();
+                    alert('Health check completed!');
+                }
+
+                btn.disabled = false;
+                btn.textContent = 'Check Now';
+            } catch (error) {
+                console.error('Error during health check:', error);
+                alert('Error during health check');
+                event.target.disabled = false;
+                event.target.textContent = 'Check Now';
+            }
+        }
+
+        function autoRefresh() {
+            if (autoRefreshInterval) {
+                clearInterval(autoRefreshInterval);
+                autoRefreshInterval = null;
+                event.target.textContent = 'Auto Refresh';
+                event.target.style.background = '#e0e0e0';
+            } else {
+                autoRefreshInterval = setInterval(() => {
+                    loadEngineStatus();
+                    loadAlerts();
+                    loadCosts();
+                }, 30000); // Refresh every 30 seconds
+                event.target.textContent = 'Stop Refresh';
+                event.target.style.background = '#4caf50';
+            }
+        }
+
+        function updateLastUpdate() {
+            const now = new Date();
+            document.getElementById('lastUpdate').textContent = now.toLocaleTimeString();
+        }
+
+        // Initial load
+        window.addEventListener('load', () => {
+            loadEngineStatus();
+            loadAlerts();
+            loadCosts();
+        });
+    </script>
+</body>
+</html>
+'''
 
 HTML_TEMPLATE = '''
 <!DOCTYPE html>
@@ -5798,6 +6054,11 @@ HTML_TEMPLATE = '''
 def index():
     return render_template_string(HTML_TEMPLATE)
 
+@app.route('/monitoring')
+def monitoring_dashboard():
+    """Monitoring dashboard for routing engines."""
+    return render_template_string(MONITORING_DASHBOARD_HTML)
+
 @app.route('/manifest.json')
 def manifest():
     manifest_path = os.path.join(os.path.dirname(__file__), 'manifest.json')
@@ -7411,9 +7672,119 @@ def manage_traffic_patterns():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# ============================================================================
+# MONITORING AND ALERTING ENDPOINTS
+# ============================================================================
+
+@app.route('/api/monitoring/engine-status', methods=['GET'])
+def get_engine_status_endpoint():
+    """Get current status of all routing engines."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        status = monitor.get_all_engine_status()
+        return jsonify({'success': True, 'engines': status})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/engine-status/<engine_name>', methods=['GET'])
+def get_single_engine_status(engine_name):
+    """Get status of a specific routing engine."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        status = monitor.get_engine_status(engine_name)
+        if not status:
+            return jsonify({'success': False, 'error': 'Engine not found'})
+
+        return jsonify({'success': True, 'engine': status})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/alerts', methods=['GET'])
+def get_alerts_endpoint():
+    """Get recent routing alerts."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        limit = request.args.get('limit', 10, type=int)
+        alerts = monitor.get_recent_alerts(limit)
+        return jsonify({'success': True, 'alerts': alerts})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/alerts/<int:alert_id>/resolve', methods=['POST'])
+def resolve_alert_endpoint(alert_id):
+    """Mark an alert as resolved."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        monitor.resolve_alert(alert_id)
+        return jsonify({'success': True, 'message': 'Alert resolved'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/costs', methods=['GET', 'POST'])
+def manage_costs_endpoint():
+    """Get or track OCI costs."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        if request.method == 'GET':
+            days = request.args.get('days', 30, type=int)
+            costs = monitor.get_daily_costs(days)
+            return jsonify({'success': True, 'costs': costs})
+
+        else:  # POST - track new cost data
+            data = request.json
+            bandwidth_gb = data.get('bandwidth_gb', 0)
+            api_requests = data.get('api_requests', 0)
+            monitor.track_oci_cost(bandwidth_gb, api_requests)
+            return jsonify({'success': True, 'message': 'Cost tracked'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/health-check', methods=['POST'])
+def manual_health_check():
+    """Manually trigger a health check for all engines."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        results = {}
+        for engine_name in ['graphhopper', 'valhalla', 'osrm']:
+            status, response_time, error = monitor.check_engine_health(engine_name)
+            monitor.record_health_check(engine_name, status, response_time, error)
+            results[engine_name] = {
+                'status': status,
+                'response_time_ms': round(response_time, 2),
+                'error': error
+            }
+
+        return jsonify({'success': True, 'results': results})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
     # Get port from environment variable (Railway sets this)
     port = int(os.getenv('PORT', 5000))
+
+    # Initialize and start monitoring
+    if get_monitor:
+        monitor = get_monitor()
+        monitor.start_monitoring()
+        print("✅ Routing engine monitoring started")
 
     print("\n" + "="*60)
     print("🚀 Voyagr Web App is running!")
@@ -7424,7 +7795,14 @@ if __name__ == '__main__':
     print("   1. Find your PC's IP address (usually 192.168.x.x)")
     print("   2. Open browser on Pixel 6")
     print(f"   3. Go to: http://YOUR_PC_IP:{port}")
+    print("\n📊 Monitoring Dashboard:")
+    print(f"   http://localhost:{port}/monitoring")
     print("\n" + "="*60 + "\n")
 
-    app.run(host='0.0.0.0', port=port, debug=False)
+    try:
+        app.run(host='0.0.0.0', port=port, debug=False)
+    finally:
+        if get_monitor:
+            monitor = get_monitor()
+            monitor.stop_monitoring()
 
