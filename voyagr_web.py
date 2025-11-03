@@ -7776,6 +7776,92 @@ def manual_health_check():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/monitoring/alerts/summary', methods=['GET'])
+def get_alerts_summary():
+    """Get summary of all alerts."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        summary = monitor.get_alert_summary()
+        return jsonify({'success': True, 'summary': summary})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/alerts/severity/<severity>', methods=['GET'])
+def get_alerts_by_severity(severity):
+    """Get alerts filtered by severity level."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        limit = request.args.get('limit', 10, type=int)
+        alerts = monitor.get_alerts_by_severity(severity, limit)
+        return jsonify({'success': True, 'alerts': alerts})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/alerts/engine/<engine_name>', methods=['GET'])
+def get_alerts_by_engine_endpoint(engine_name):
+    """Get alerts for a specific engine."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        limit = request.args.get('limit', 10, type=int)
+        alerts = monitor.get_alerts_by_engine(engine_name, limit)
+        return jsonify({'success': True, 'alerts': alerts})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/alerts/unresolved', methods=['GET'])
+def get_unresolved_alerts():
+    """Get all unresolved alerts."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        limit = request.args.get('limit', 50, type=int)
+        alerts = monitor.get_recent_alerts(limit, unresolved_only=True)
+        return jsonify({'success': True, 'alerts': alerts})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/alerts/<int:alert_id>/notify', methods=['POST'])
+def send_alert_notification(alert_id):
+    """Send notification for an alert."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        method = request.json.get('method', 'log') if request.json else 'log'
+        success = monitor.send_alert_notification(alert_id, method)
+
+        if success:
+            return jsonify({'success': True, 'message': f'Notification sent via {method}'})
+        else:
+            return jsonify({'success': False, 'error': 'Failed to send notification'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/alerts/engine/<engine_name>/resolve-all', methods=['POST'])
+def resolve_all_engine_alerts(engine_name):
+    """Resolve all unresolved alerts for an engine."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        monitor.resolve_all_alerts_for_engine(engine_name)
+        return jsonify({'success': True, 'message': f'All alerts for {engine_name} resolved'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
     # Get port from environment variable (Railway sets this)
     port = int(os.getenv('PORT', 5000))

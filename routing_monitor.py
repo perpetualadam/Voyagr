@@ -161,52 +161,83 @@ class RoutingMonitor:
         """Record health check result in database."""
         conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
-        
+
         # Record health check
         cursor.execute('''
             INSERT INTO engine_health_checks (engine_name, status, response_time_ms, error_message)
             VALUES (?, ?, ?, ?)
         ''', (engine_name, status, response_time, error))
-        
-        # Update engine status
+
+        # Get current engine status
         cursor.execute('''
-            SELECT consecutive_failures FROM engine_status WHERE engine_name = ?
+            SELECT consecutive_failures, status FROM engine_status WHERE engine_name = ?
         ''', (engine_name,))
         result = cursor.fetchone()
         consecutive_failures = result[0] if result else 0
-        
+        previous_status = result[1] if result else 'unknown'
+
+        # Update consecutive failures and status
         if status == 'up':
+            # Engine recovered
+            if consecutive_failures > 0:
+                # Create recovery alert
+                self._create_alert(cursor, engine_name, 'engine_recovery', 'info',
+                                 f'{engine_name} recovered after {consecutive_failures} failures')
+                logger.info(f"✅ {engine_name} RECOVERED (was down for {consecutive_failures} checks)")
             consecutive_failures = 0
             new_status = 'up'
         else:
+            # Engine failed
             consecutive_failures += 1
             new_status = 'down' if consecutive_failures >= ALERT_THRESHOLD else 'degraded'
-        
+
+            # Create appropriate alert based on failure count
+            if consecutive_failures == ALERT_THRESHOLD:
+                self._create_alert(cursor, engine_name, 'engine_down', 'critical',
+                                 f'{engine_name} is DOWN - {ALERT_THRESHOLD} consecutive failures. Error: {error}')
+                logger.error(f"🔴 CRITICAL: {engine_name} DOWN after {ALERT_THRESHOLD} failures")
+            elif consecutive_failures == 1:
+                self._create_alert(cursor, engine_name, 'engine_failure', 'warning',
+                                 f'{engine_name} health check failed (1/3): {error}')
+                logger.warning(f"⚠️ {engine_name} FAILURE (1/3): {error}")
+            elif consecutive_failures == 2:
+                self._create_alert(cursor, engine_name, 'engine_failure', 'warning',
+                                 f'{engine_name} health check failed (2/3): {error}')
+                logger.warning(f"⚠️ {engine_name} FAILURE (2/3): {error}")
+
+        # Update engine status
         cursor.execute('''
             UPDATE engine_status
             SET status = ?, last_check = ?, consecutive_failures = ?, last_failure_time = ?
             WHERE engine_name = ?
-        ''', (new_status, datetime.now(), consecutive_failures, 
+        ''', (new_status, datetime.now(), consecutive_failures,
               datetime.now() if status == 'down' else None, engine_name))
-        
-        # Check if alert should be created
-        if consecutive_failures == ALERT_THRESHOLD:
-            self._create_alert(cursor, engine_name, 'engine_down', 'critical', 
-                             f'{engine_name} has failed {ALERT_THRESHOLD} consecutive health checks')
-        elif consecutive_failures == 1 and status == 'down':
-            self._create_alert(cursor, engine_name, 'engine_failure', 'warning',
-                             f'{engine_name} health check failed: {error}')
-        
+
         conn.commit()
         conn.close()
-    
+
     def _create_alert(self, cursor, engine_name: str, alert_type: str, severity: str, message: str):
-        """Create an alert in the database."""
+        """Create an alert in the database with deduplication."""
+        # Check if a similar unresolved alert already exists (within last 5 minutes)
+        five_min_ago = datetime.now() - timedelta(minutes=5)
         cursor.execute('''
-            INSERT INTO routing_alerts (engine_name, alert_type, severity, message)
-            VALUES (?, ?, ?, ?)
-        ''', (engine_name, alert_type, severity, message))
-        logger.warning(f"ALERT: {engine_name} - {message}")
+            SELECT id FROM routing_alerts
+            WHERE engine_name = ? AND alert_type = ? AND is_resolved = 0
+            AND created_at > ?
+            LIMIT 1
+        ''', (engine_name, alert_type, five_min_ago))
+
+        existing_alert = cursor.fetchone()
+
+        # Only create new alert if no similar unresolved alert exists
+        if not existing_alert:
+            cursor.execute('''
+                INSERT INTO routing_alerts (engine_name, alert_type, severity, message)
+                VALUES (?, ?, ?, ?)
+            ''', (engine_name, alert_type, severity, message))
+            logger.warning(f"🚨 ALERT [{severity.upper()}]: {engine_name} - {message}")
+        else:
+            logger.debug(f"Alert deduplication: Similar alert already exists for {engine_name}")
     
     def calculate_uptime(self, engine_name: str, hours: int = 24) -> float:
         """Calculate uptime percentage for an engine."""
@@ -256,17 +287,25 @@ class RoutingMonitor:
         """Get status of all engines."""
         return [self.get_engine_status(engine) for engine in ENGINES.keys()]
     
-    def get_recent_alerts(self, limit: int = 10) -> List[Dict]:
-        """Get recent alerts."""
+    def get_recent_alerts(self, limit: int = 10, unresolved_only: bool = False) -> List[Dict]:
+        """Get recent alerts with optional filtering."""
         conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
-        
-        cursor.execute('''
-            SELECT id, engine_name, alert_type, severity, message, created_at, is_resolved
-            FROM routing_alerts
-            ORDER BY created_at DESC LIMIT ?
-        ''', (limit,))
-        
+
+        if unresolved_only:
+            cursor.execute('''
+                SELECT id, engine_name, alert_type, severity, message, created_at, is_resolved
+                FROM routing_alerts
+                WHERE is_resolved = 0
+                ORDER BY created_at DESC LIMIT ?
+            ''', (limit,))
+        else:
+            cursor.execute('''
+                SELECT id, engine_name, alert_type, severity, message, created_at, is_resolved
+                FROM routing_alerts
+                ORDER BY created_at DESC LIMIT ?
+            ''', (limit,))
+
         alerts = []
         for row in cursor.fetchall():
             alerts.append({
@@ -278,23 +317,132 @@ class RoutingMonitor:
                 'created_at': row[5],
                 'resolved': bool(row[6])
             })
-        
+
         conn.close()
         return alerts
-    
+
+    def get_alerts_by_severity(self, severity: str, limit: int = 10) -> List[Dict]:
+        """Get alerts filtered by severity level."""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, engine_name, alert_type, severity, message, created_at, is_resolved
+            FROM routing_alerts
+            WHERE severity = ?
+            ORDER BY created_at DESC LIMIT ?
+        ''', (severity, limit))
+
+        alerts = []
+        for row in cursor.fetchall():
+            alerts.append({
+                'id': row[0],
+                'engine': row[1],
+                'type': row[2],
+                'severity': row[3],
+                'message': row[4],
+                'created_at': row[5],
+                'resolved': bool(row[6])
+            })
+
+        conn.close()
+        return alerts
+
+    def get_alerts_by_engine(self, engine_name: str, limit: int = 10) -> List[Dict]:
+        """Get alerts for a specific engine."""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT id, engine_name, alert_type, severity, message, created_at, is_resolved
+            FROM routing_alerts
+            WHERE engine_name = ?
+            ORDER BY created_at DESC LIMIT ?
+        ''', (engine_name, limit))
+
+        alerts = []
+        for row in cursor.fetchall():
+            alerts.append({
+                'id': row[0],
+                'engine': row[1],
+                'type': row[2],
+                'severity': row[3],
+                'message': row[4],
+                'created_at': row[5],
+                'resolved': bool(row[6])
+            })
+
+        conn.close()
+        return alerts
+
     def resolve_alert(self, alert_id: int):
         """Mark an alert as resolved."""
         conn = sqlite3.connect(self.db_file)
         cursor = conn.cursor()
-        
+
         cursor.execute('''
             UPDATE routing_alerts
             SET is_resolved = 1, resolved_at = ?
             WHERE id = ?
         ''', (datetime.now(), alert_id))
-        
+
         conn.commit()
         conn.close()
+        logger.info(f"Alert {alert_id} marked as resolved")
+
+    def resolve_all_alerts_for_engine(self, engine_name: str):
+        """Resolve all unresolved alerts for an engine."""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE routing_alerts
+            SET is_resolved = 1, resolved_at = ?
+            WHERE engine_name = ? AND is_resolved = 0
+        ''', (datetime.now(), engine_name))
+
+        conn.commit()
+        conn.close()
+        logger.info(f"All alerts for {engine_name} marked as resolved")
+
+    def get_alert_summary(self) -> Dict:
+        """Get summary of all alerts."""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+
+        # Count by severity
+        cursor.execute('''
+            SELECT severity, COUNT(*) as count
+            FROM routing_alerts
+            WHERE is_resolved = 0
+            GROUP BY severity
+        ''')
+        severity_counts = {row[0]: row[1] for row in cursor.fetchall()}
+
+        # Count by engine
+        cursor.execute('''
+            SELECT engine_name, COUNT(*) as count
+            FROM routing_alerts
+            WHERE is_resolved = 0
+            GROUP BY engine_name
+        ''')
+        engine_counts = {row[0]: row[1] for row in cursor.fetchall()}
+
+        # Total counts
+        cursor.execute('SELECT COUNT(*) FROM routing_alerts WHERE is_resolved = 0')
+        total_unresolved = cursor.fetchone()[0]
+
+        cursor.execute('SELECT COUNT(*) FROM routing_alerts')
+        total_all = cursor.fetchone()[0]
+
+        conn.close()
+
+        return {
+            'total_unresolved': total_unresolved,
+            'total_all': total_all,
+            'by_severity': severity_counts,
+            'by_engine': engine_counts
+        }
     
     def track_oci_cost(self, bandwidth_gb: float = 0, api_requests: int = 0):
         """Track OCI Valhalla costs."""
@@ -381,17 +529,87 @@ class RoutingMonitor:
     
     def _monitor_loop(self):
         """Background monitoring loop."""
+        logger.info("Starting monitoring loop...")
         while self.running:
             try:
+                logger.debug("Running health checks...")
                 for engine_name in ENGINES.keys():
                     status, response_time, error = self.check_engine_health(engine_name)
                     self.record_health_check(engine_name, status, response_time, error)
-                    logger.info(f"{engine_name}: {status} ({response_time:.0f}ms)")
-                
+
+                    # Log with emoji indicators
+                    if status == 'up':
+                        logger.info(f"✅ {engine_name}: UP ({response_time:.0f}ms)")
+                    else:
+                        logger.warning(f"❌ {engine_name}: DOWN ({response_time:.0f}ms) - {error}")
+
+                # Log alert summary
+                summary = self.get_alert_summary()
+                if summary['total_unresolved'] > 0:
+                    logger.warning(f"⚠️ Active alerts: {summary['total_unresolved']} unresolved")
+
                 time.sleep(HEALTH_CHECK_INTERVAL)
             except Exception as e:
-                logger.error(f"Monitoring loop error: {e}")
+                logger.error(f"Monitoring loop error: {e}", exc_info=True)
                 time.sleep(10)
+
+
+    def send_alert_notification(self, alert_id: int, method: str = 'log'):
+        """
+        Send alert notification via specified method.
+        Methods: 'log', 'email', 'browser'
+        """
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            SELECT engine_name, alert_type, severity, message, created_at
+            FROM routing_alerts WHERE id = ?
+        ''', (alert_id,))
+
+        result = cursor.fetchone()
+        conn.close()
+
+        if not result:
+            logger.warning(f"Alert {alert_id} not found")
+            return False
+
+        engine_name, alert_type, severity, message, created_at = result
+
+        if method == 'log':
+            self._notify_log(engine_name, severity, message)
+        elif method == 'email':
+            self._notify_email(engine_name, severity, message, created_at)
+        elif method == 'browser':
+            self._notify_browser(engine_name, severity, message)
+        else:
+            logger.warning(f"Unknown notification method: {method}")
+            return False
+
+        return True
+
+    def _notify_log(self, engine_name: str, severity: str, message: str):
+        """Log notification."""
+        if severity == 'critical':
+            logger.critical(f"🔴 CRITICAL ALERT: {message}")
+        elif severity == 'warning':
+            logger.warning(f"⚠️ WARNING ALERT: {message}")
+        else:
+            logger.info(f"ℹ️ INFO ALERT: {message}")
+
+    def _notify_email(self, engine_name: str, severity: str, message: str, created_at: str):
+        """Email notification (placeholder for implementation)."""
+        # This is a placeholder - implement with your email service
+        logger.info(f"📧 Email notification would be sent: {engine_name} - {message}")
+        # TODO: Implement email sending with SMTP or email service
+        # Example: send_email(to=ADMIN_EMAIL, subject=f"Alert: {engine_name}", body=message)
+
+    def _notify_browser(self, engine_name: str, severity: str, message: str):
+        """Browser notification (via WebSocket or polling)."""
+        # This is a placeholder - implement with your frontend
+        logger.info(f"🔔 Browser notification would be sent: {engine_name} - {message}")
+        # TODO: Implement browser notification via WebSocket or API endpoint
+        # The frontend can poll /api/monitoring/alerts for new alerts
 
 
 # Global monitor instance
