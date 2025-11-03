@@ -42,16 +42,15 @@
 **Current:** Using: `https://cdnjs.cloudflare.com/ajax/libs/polyline-encoded/0.0.9/polyline.js`  
 **Status:** ⚠️ NEEDS INVESTIGATION - May be intermittent CDN issue
 
-### ⚠️ ISSUE: GraphHopper Not Responding
-**Error:** Routes only using OSRM fallback, not GraphHopper  
-**Location:** /api/route endpoint  
-**Root Cause:** GraphHopper server not running at `http://localhost:8989`  
-**Configuration:** 
+### ✅ GraphHopper & Valhalla Configuration
+**Status:** ✅ BOTH RUNNING ON CLOUD SERVERS
+**Location:** /api/route endpoint
+**Configuration:**
 ```
-GRAPHHOPPER_URL = http://localhost:8989 (from .env or default)
-VALHALLA_URL = http://localhost:8002 (from .env or default)
+GRAPHHOPPER_URL = http://81.0.246.97:8989 (Contabo)
+VALHALLA_URL = http://141.147.102.102:8002 (OCI)
 ```
-**Status:** ⚠️ EXPECTED - GraphHopper/Valhalla not running locally
+**Current Behavior:** Routes using OSRM fallback (may indicate temporary cloud server unavailability)
 
 ---
 
@@ -60,13 +59,13 @@ VALHALLA_URL = http://localhost:8002 (from .env or default)
 The app tries routing engines in this order:
 
 1. **GraphHopper** (Primary)
-   - URL: `http://localhost:8989`
-   - Status: ❌ Not running (expected for PWA deployment)
+   - URL: `http://81.0.246.97:8989` (Contabo)
+   - Status: ✅ Running (UK tiles built)
    - Fallback: Yes → Try Valhalla
 
 2. **Valhalla** (Secondary)
-   - URL: `http://localhost:8002`
-   - Status: ❌ Not running (expected for PWA deployment)
+   - URL: `http://141.147.102.102:8002` (OCI)
+   - Status: ✅ Running
    - Fallback: Yes → Try OSRM
 
 3. **OSRM** (Public Fallback)
@@ -74,7 +73,7 @@ The app tries routing engines in this order:
    - Status: ✅ Working (public service)
    - Fallback: No (last resort)
 
-**Current Status:** ✅ OSRM is working correctly as fallback
+**Current Status:** ✅ OSRM is working correctly as fallback (cloud servers may be temporarily unavailable)
 
 ---
 
