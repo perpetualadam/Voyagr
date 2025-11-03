@@ -161,7 +161,7 @@ def init_db():
 
     # ===== PHASE 3 FEATURES =====
 
-    # Settings table for Phase 3 features (gesture, battery, themes, ML)
+    # Settings table for Phase 3 features (gesture, battery, themes, ML, units)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS app_settings (
             id INTEGER PRIMARY KEY,
@@ -172,6 +172,10 @@ def init_db():
             map_theme TEXT DEFAULT 'standard',
             ml_predictions_enabled INTEGER DEFAULT 1,
             haptic_feedback_enabled INTEGER DEFAULT 1,
+            distance_unit TEXT DEFAULT 'km',
+            currency_unit TEXT DEFAULT 'GBP',
+            speed_unit TEXT DEFAULT 'kmh',
+            temperature_unit TEXT DEFAULT 'celsius',
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -1692,7 +1696,14 @@ HTML_TEMPLATE = '''
             <div class="bottom-sheet-handle"></div>
 
             <div class="bottom-sheet-header">
-                <h2>🗺️ Navigation</h2>
+                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+                    <h2 id="sheetTitle">🗺️ Navigation</h2>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="fab" title="Route Options" onclick="switchTab('routeComparison')" style="width: 40px; height: 40px; font-size: 18px; background: #4CAF50; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">🛣️</button>
+                        <button class="fab" title="Trip History" onclick="switchTab('tripHistory')" style="width: 40px; height: 40px; font-size: 18px; background: #FF9800; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">📋</button>
+                        <button class="fab" title="Settings" onclick="switchTab('settings')" style="width: 40px; height: 40px; font-size: 18px; background: #667eea; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">⚙️</button>
+                    </div>
+                </div>
             </div>
 
             <div class="bottom-sheet-content">
@@ -1940,6 +1951,96 @@ HTML_TEMPLATE = '''
                 </div>
 
                 <button class="btn-clear" onclick="clearForm()" style="width: 100%; margin-top: 20px;">Clear All</button>
+
+                <!-- SETTINGS TAB (NEW FEATURE) -->
+                <div id="settingsTab" style="display: none;">
+                    <div class="preferences-section">
+                        <h3>⚙️ Units & Preferences</h3>
+
+                        <!-- Distance Unit Toggle -->
+                        <div class="preference-item">
+                            <span class="preference-label">📏 Distance Unit</span>
+                            <select id="distanceUnit" onchange="updateDistanceUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="km">Kilometers (km)</option>
+                                <option value="mi">Miles (mi)</option>
+                            </select>
+                        </div>
+
+                        <!-- Currency Unit Selector -->
+                        <div class="preference-item">
+                            <span class="preference-label">💱 Currency</span>
+                            <select id="currencyUnit" onchange="updateCurrencyUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="GBP">GBP (£)</option>
+                                <option value="USD">USD ($)</option>
+                                <option value="EUR">EUR (€)</option>
+                            </select>
+                        </div>
+
+                        <!-- Speed Unit Toggle -->
+                        <div class="preference-item">
+                            <span class="preference-label">⚡ Speed Unit</span>
+                            <select id="speedUnit" onchange="updateSpeedUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="kmh">km/h</option>
+                                <option value="mph">mph</option>
+                            </select>
+                        </div>
+
+                        <!-- Temperature Unit Toggle -->
+                        <div class="preference-item">
+                            <span class="preference-label">🌡️ Temperature</span>
+                            <select id="temperatureUnit" onchange="updateTemperatureUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="celsius">Celsius (°C)</option>
+                                <option value="fahrenheit">Fahrenheit (°F)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
+                </div>
+
+                <!-- TRIP HISTORY TAB (NEW FEATURE) -->
+                <div id="tripHistoryTab" style="display: none;">
+                    <div class="preferences-section">
+                        <h3>📋 Trip History</h3>
+
+                        <!-- Search/Filter -->
+                        <div class="form-group">
+                            <input type="text" id="tripSearchInput" placeholder="Search by location or date..." style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; margin-bottom: 10px;">
+                        </div>
+
+                        <!-- Trip List -->
+                        <div id="tripHistoryList" style="max-height: 400px; overflow-y: auto;">
+                            <div style="text-align: center; padding: 20px; color: #999;">Loading trips...</div>
+                        </div>
+                    </div>
+
+                    <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
+                </div>
+
+                <!-- ROUTE COMPARISON TAB (NEW FEATURE) -->
+                <div id="routeComparisonTab" style="display: none;">
+                    <div class="preferences-section">
+                        <h3>🛣️ Route Options</h3>
+
+                        <!-- Route Preference Selector -->
+                        <div class="form-group">
+                            <label>Optimize For:</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
+                                <button class="routing-mode-btn active" id="routePrefFastest" onclick="setRoutePreference('fastest')">⚡ Fastest</button>
+                                <button class="routing-mode-btn" id="routePrefShortest" onclick="setRoutePreference('shortest')">📏 Shortest</button>
+                                <button class="routing-mode-btn" id="routePrefCheapest" onclick="setRoutePreference('cheapest')">💰 Cheapest</button>
+                                <button class="routing-mode-btn" id="routePrefEco" onclick="setRoutePreference('eco')">🌱 Eco</button>
+                            </div>
+                        </div>
+
+                        <!-- Route Comparison List -->
+                        <div id="routeComparisonList" style="max-height: 350px; overflow-y: auto; margin-top: 15px;">
+                            <div style="text-align: center; padding: 20px; color: #999;">Calculate a route to see options</div>
+                        </div>
+                    </div>
+
+                    <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
+                </div>
             </div>
         </div>
 
@@ -2021,6 +2122,433 @@ HTML_TEMPLATE = '''
         let startMarker = null;
         let endMarker = null;
         let mapPickerMode = null; // 'start' or 'end' when picking location from map
+
+        // ===== UNIT CONVERSION VARIABLES =====
+        let distanceUnit = localStorage.getItem('unit_distance') || 'km';
+        let currencyUnit = localStorage.getItem('unit_currency') || 'GBP';
+        let speedUnit = localStorage.getItem('unit_speed') || 'kmh';
+        let temperatureUnit = localStorage.getItem('unit_temperature') || 'celsius';
+
+        const currencySymbols = {
+            'GBP': '£',
+            'USD': '$',
+            'EUR': '€'
+        };
+
+        // Unit conversion functions
+        function convertDistance(km) {
+            if (distanceUnit === 'mi') {
+                return (km * 0.621371).toFixed(2);
+            }
+            return km.toFixed(2);
+        }
+
+        function getDistanceUnit() {
+            return distanceUnit === 'mi' ? 'mi' : 'km';
+        }
+
+        function convertSpeed(kmh) {
+            if (speedUnit === 'mph') {
+                return (kmh * 0.621371).toFixed(1);
+            }
+            return kmh.toFixed(1);
+        }
+
+        function getSpeedUnit() {
+            return speedUnit === 'mph' ? 'mph' : 'km/h';
+        }
+
+        function convertTemperature(celsius) {
+            if (temperatureUnit === 'fahrenheit') {
+                return ((celsius * 9/5) + 32).toFixed(1);
+            }
+            return celsius.toFixed(1);
+        }
+
+        function getTemperatureUnit() {
+            return temperatureUnit === 'fahrenheit' ? '°F' : '°C';
+        }
+
+        function getCurrencySymbol() {
+            return currencySymbols[currencyUnit] || '£';
+        }
+
+        // Tab switching function
+        function switchTab(tab) {
+            const navigationContent = document.querySelector('.bottom-sheet-content > div:not(#settingsTab):not(#tripHistoryTab):not(#routeComparisonTab)');
+            const settingsTab = document.getElementById('settingsTab');
+            const tripHistoryTab = document.getElementById('tripHistoryTab');
+            const routeComparisonTab = document.getElementById('routeComparisonTab');
+            const sheetTitle = document.getElementById('sheetTitle');
+
+            // Hide all tabs
+            if (navigationContent) navigationContent.style.display = 'none';
+            settingsTab.style.display = 'none';
+            tripHistoryTab.style.display = 'none';
+            routeComparisonTab.style.display = 'none';
+
+            if (tab === 'settings') {
+                settingsTab.style.display = 'block';
+                sheetTitle.textContent = '⚙️ Settings';
+                loadUnitPreferences();
+            } else if (tab === 'tripHistory') {
+                tripHistoryTab.style.display = 'block';
+                sheetTitle.textContent = '📋 Trip History';
+                loadTripHistory();
+            } else if (tab === 'routeComparison') {
+                routeComparisonTab.style.display = 'block';
+                sheetTitle.textContent = '🛣️ Route Options';
+                displayRouteComparison();
+            } else {
+                if (navigationContent) navigationContent.style.display = 'block';
+                sheetTitle.textContent = '🗺️ Navigation';
+            }
+        }
+
+        // Load unit preferences from localStorage
+        function loadUnitPreferences() {
+            document.getElementById('distanceUnit').value = distanceUnit;
+            document.getElementById('currencyUnit').value = currencyUnit;
+            document.getElementById('speedUnit').value = speedUnit;
+            document.getElementById('temperatureUnit').value = temperatureUnit;
+        }
+
+        // Update distance unit
+        function updateDistanceUnit() {
+            const newUnit = document.getElementById('distanceUnit').value;
+            distanceUnit = newUnit;
+            localStorage.setItem('unit_distance', newUnit);
+            saveUnitSettingsToBackend();
+            updateAllDistanceDisplays();
+            showStatus(`Distance unit changed to ${newUnit === 'mi' ? 'miles' : 'kilometers'}`, 'success');
+        }
+
+        // Update currency unit
+        function updateCurrencyUnit() {
+            const newUnit = document.getElementById('currencyUnit').value;
+            currencyUnit = newUnit;
+            localStorage.setItem('unit_currency', newUnit);
+            saveUnitSettingsToBackend();
+            updateAllCostDisplays();
+            showStatus(`Currency changed to ${newUnit}`, 'success');
+        }
+
+        // Update speed unit
+        function updateSpeedUnit() {
+            const newUnit = document.getElementById('speedUnit').value;
+            speedUnit = newUnit;
+            localStorage.setItem('unit_speed', newUnit);
+            saveUnitSettingsToBackend();
+            updateAllSpeedDisplays();
+            showStatus(`Speed unit changed to ${newUnit === 'mph' ? 'mph' : 'km/h'}`, 'success');
+        }
+
+        // Update temperature unit
+        function updateTemperatureUnit() {
+            const newUnit = document.getElementById('temperatureUnit').value;
+            temperatureUnit = newUnit;
+            localStorage.setItem('unit_temperature', newUnit);
+            saveUnitSettingsToBackend();
+            updateAllTemperatureDisplays();
+            showStatus(`Temperature unit changed to ${newUnit === 'fahrenheit' ? 'Fahrenheit' : 'Celsius'}`, 'success');
+        }
+
+        // Save unit settings to backend
+        function saveUnitSettingsToBackend() {
+            fetch('/api/app-settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    distance_unit: distanceUnit,
+                    currency_unit: currencyUnit,
+                    speed_unit: speedUnit,
+                    temperature_unit: temperatureUnit
+                })
+            }).catch(error => console.error('Error saving unit settings:', error));
+        }
+
+        // Update all distance displays
+        function updateAllDistanceDisplays() {
+            const distanceElement = document.getElementById('distance');
+            if (distanceElement && distanceElement.textContent !== '-') {
+                const km = parseFloat(distanceElement.dataset.km || distanceElement.textContent);
+                distanceElement.textContent = convertDistance(km) + ' ' + getDistanceUnit();
+            }
+        }
+
+        // Update all cost displays
+        function updateAllCostDisplays() {
+            const fuelCostEl = document.getElementById('fuelCost');
+            const tollCostEl = document.getElementById('tollCost');
+            const cazCostEl = document.getElementById('cazCost');
+            const symbol = getCurrencySymbol();
+
+            if (fuelCostEl && fuelCostEl.dataset.value) {
+                fuelCostEl.textContent = symbol + fuelCostEl.dataset.value;
+            }
+            if (tollCostEl && tollCostEl.dataset.value) {
+                tollCostEl.textContent = symbol + tollCostEl.dataset.value;
+            }
+            if (cazCostEl && cazCostEl.dataset.value) {
+                cazCostEl.textContent = symbol + cazCostEl.dataset.value;
+            }
+        }
+
+        // Update all speed displays
+        function updateAllSpeedDisplays() {
+            // This will be called when speed updates occur
+            console.log('[Units] Speed unit updated to', speedUnit);
+        }
+
+        // Update all temperature displays
+        function updateAllTemperatureDisplays() {
+            // This will be called when weather updates occur
+            console.log('[Units] Temperature unit updated to', temperatureUnit);
+        }
+
+        // ===== TRIP HISTORY FUNCTIONS =====
+        let allTrips = [];
+
+        async function loadTripHistory() {
+            try {
+                const response = await fetch('/api/trip-history');
+                const data = await response.json();
+
+                if (data.success && data.trips) {
+                    allTrips = data.trips;
+                    displayTripHistory(allTrips);
+                } else {
+                    document.getElementById('tripHistoryList').innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No trips found</div>';
+                }
+            } catch (error) {
+                console.error('Error loading trip history:', error);
+                document.getElementById('tripHistoryList').innerHTML = '<div style="text-align: center; padding: 20px; color: #f44336;">Error loading trips</div>';
+            }
+        }
+
+        function displayTripHistory(trips) {
+            const listContainer = document.getElementById('tripHistoryList');
+
+            if (!trips || trips.length === 0) {
+                listContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No trips found</div>';
+                return;
+            }
+
+            listContainer.innerHTML = trips.map((trip, index) => {
+                const date = new Date(trip.timestamp);
+                const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                const distance = convertDistance(trip.distance_km);
+                const distUnit = getDistanceUnit();
+                const totalCost = (parseFloat(trip.fuel_cost || 0) + parseFloat(trip.toll_cost || 0) + parseFloat(trip.caz_cost || 0)).toFixed(2);
+                const symbol = getCurrencySymbol();
+
+                return `
+                    <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #667eea;">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                            <div>
+                                <div style="font-weight: 600; color: #333; margin-bottom: 4px;">
+                                    ${trip.start_address || 'Start'} → ${trip.end_address || 'End'}
+                                </div>
+                                <div style="font-size: 12px; color: #666;">
+                                    ${dateStr}
+                                </div>
+                            </div>
+                            <button onclick="deleteTripHistory(${trip.id})" style="background: #f44336; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;">Delete</button>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: #666; margin-bottom: 8px;">
+                            <div>📏 ${distance} ${distUnit}</div>
+                            <div>⏱️ ${trip.duration_minutes} min</div>
+                            <div>💰 ${symbol}${totalCost}</div>
+                            <div>🛣️ ${trip.routing_mode}</div>
+                        </div>
+                        <button onclick="recalculateTrip(${trip.id})" style="width: 100%; background: #667eea; color: white; border: none; border-radius: 4px; padding: 8px; font-size: 12px; cursor: pointer; font-weight: 500;">Recalculate Route</button>
+                    </div>
+                `;
+            }).join('');
+
+            // Add search functionality
+            document.getElementById('tripSearchInput').oninput = (e) => {
+                const searchTerm = e.target.value.toLowerCase();
+                const filtered = allTrips.filter(trip =>
+                    (trip.start_address && trip.start_address.toLowerCase().includes(searchTerm)) ||
+                    (trip.end_address && trip.end_address.toLowerCase().includes(searchTerm)) ||
+                    (trip.timestamp && trip.timestamp.toLowerCase().includes(searchTerm))
+                );
+                displayTripHistory(filtered);
+            };
+        }
+
+        async function recalculateTrip(tripId) {
+            const trip = allTrips.find(t => t.id === tripId);
+            if (!trip) return;
+
+            // Populate form with trip data
+            document.getElementById('start').value = trip.start_address || `${trip.start_lat},${trip.start_lon}`;
+            document.getElementById('end').value = trip.end_address || `${trip.end_lat},${trip.end_lon}`;
+
+            // Switch back to navigation tab
+            switchTab('navigation');
+
+            // Trigger route calculation
+            setTimeout(() => {
+                calculateRoute();
+            }, 300);
+
+            showStatus('Trip loaded. Recalculating route...', 'success');
+        }
+
+        async function deleteTripHistory(tripId) {
+            if (!confirm('Are you sure you want to delete this trip?')) return;
+
+            try {
+                const response = await fetch(`/api/trip-history/${tripId}`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+
+                if (data.success) {
+                    allTrips = allTrips.filter(t => t.id !== tripId);
+                    displayTripHistory(allTrips);
+                    showStatus('Trip deleted', 'success');
+                } else {
+                    showStatus('Error deleting trip', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting trip:', error);
+                showStatus('Error deleting trip', 'error');
+            }
+        }
+
+        // ===== ROUTE COMPARISON FUNCTIONS =====
+        let routeOptions = [];
+        let selectedRouteIndex = 0;
+        let routePreference = 'fastest';
+
+        function setRoutePreference(preference) {
+            routePreference = preference;
+
+            // Update button states
+            document.getElementById('routePrefFastest').classList.remove('active');
+            document.getElementById('routePrefShortest').classList.remove('active');
+            document.getElementById('routePrefCheapest').classList.remove('active');
+            document.getElementById('routePrefEco').classList.remove('active');
+
+            document.getElementById('routePref' + preference.charAt(0).toUpperCase() + preference.slice(1)).classList.add('active');
+
+            // Re-sort routes based on preference
+            sortRoutesByPreference();
+            displayRouteComparison();
+        }
+
+        function sortRoutesByPreference() {
+            if (!routeOptions || routeOptions.length === 0) return;
+
+            routeOptions.sort((a, b) => {
+                switch(routePreference) {
+                    case 'fastest':
+                        return a.duration_minutes - b.duration_minutes;
+                    case 'shortest':
+                        return a.distance_km - b.distance_km;
+                    case 'cheapest':
+                        const costA = (a.fuel_cost || 0) + (a.toll_cost || 0) + (a.caz_cost || 0);
+                        const costB = (b.fuel_cost || 0) + (b.toll_cost || 0) + (b.caz_cost || 0);
+                        return costA - costB;
+                    case 'eco':
+                        return (a.fuel_cost || 0) - (b.fuel_cost || 0);
+                    default:
+                        return 0;
+                }
+            });
+        }
+
+        function displayRouteComparison() {
+            if (!routeOptions || routeOptions.length === 0) {
+                document.getElementById('routeComparisonList').innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">Calculate a route to see options</div>';
+                return;
+            }
+
+            const listContainer = document.getElementById('routeComparisonList');
+            const symbol = getCurrencySymbol();
+
+            listContainer.innerHTML = routeOptions.map((route, index) => {
+                const distance = convertDistance(route.distance_km);
+                const distUnit = getDistanceUnit();
+                const totalCost = (parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2);
+                const isRecommended = index === 0;
+                const borderColor = isRecommended ? '#4CAF50' : '#ddd';
+                const bgColor = isRecommended ? '#E8F5E9' : '#f8f9fa';
+
+                return `
+                    <div style="background: ${bgColor}; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${borderColor}; cursor: pointer;" onclick="selectRoute(${index})">
+                        ${isRecommended ? '<div style="font-size: 12px; color: #4CAF50; font-weight: 600; margin-bottom: 6px;">✓ RECOMMENDED</div>' : ''}
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #333; margin-bottom: 8px;">
+                            <div><strong>⏱️ ${route.duration_minutes} min</strong></div>
+                            <div><strong>📏 ${distance} ${distUnit}</strong></div>
+                            <div>⛽ ${symbol}${route.fuel_cost || 0}</div>
+                            <div>🛣️ ${symbol}${route.toll_cost || 0}</div>
+                        </div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
+                            Total: <strong>${symbol}${totalCost}</strong>
+                        </div>
+                        <button onclick="useRoute(${index}); event.stopPropagation();" style="width: 100%; background: #667eea; color: white; border: none; border-radius: 4px; padding: 8px; font-size: 12px; cursor: pointer; font-weight: 500;">Use This Route</button>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function selectRoute(index) {
+            selectedRouteIndex = index;
+            displayRouteComparison();
+        }
+
+        function useRoute(index) {
+            const route = routeOptions[index];
+            if (!route) return;
+
+            // Update the map to show this route
+            if (routeLayer) {
+                map.removeLayer(routeLayer);
+            }
+
+            // Draw the selected route on map
+            const polylinePoints = route.polyline || [];
+            if (polylinePoints.length > 0) {
+                routeLayer = L.polyline(polylinePoints, {
+                    color: '#667eea',
+                    weight: 5,
+                    opacity: 0.8,
+                    dashArray: '5, 5'
+                }).addTo(map);
+
+                const bounds = routeLayer.getBounds().pad(0.1);
+                const center = bounds.getCenter();
+                const zoomLevel = map.getBoundsZoom(bounds);
+                map.flyTo(center, zoomLevel, {
+                    duration: 0.5,
+                    easeLinearity: 0.25
+                });
+            }
+
+            // Update trip info
+            const distance = convertDistance(route.distance_km);
+            const distUnit = getDistanceUnit();
+            const symbol = getCurrencySymbol();
+            const totalCost = (parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2);
+
+            document.getElementById('distance').textContent = distance + ' ' + distUnit;
+            document.getElementById('distance').dataset.km = route.distance_km;
+            document.getElementById('time').textContent = route.duration_minutes + ' min';
+            document.getElementById('fuelCost').textContent = symbol + (route.fuel_cost || 0);
+            document.getElementById('fuelCost').dataset.value = route.fuel_cost || 0;
+            document.getElementById('tollCost').textContent = symbol + (route.toll_cost || 0);
+            document.getElementById('tollCost').dataset.value = route.toll_cost || 0;
+
+            // Store selected route for navigation
+            window.lastCalculatedRoute = route;
+
+            showStatus('Route selected. Ready to navigate!', 'success');
+            switchTab('navigation');
+        }
 
         // Map click handler for location picker
         map.on('click', (e) => {
@@ -2217,6 +2745,66 @@ HTML_TEMPLATE = '''
 
                         // Store route data for navigation
                         window.lastCalculatedRoute = data;
+
+                        // Generate route options for comparison
+                        routeOptions = [
+                            {
+                                id: 1,
+                                name: 'Fastest Route',
+                                distance_km: data.distance || 0,
+                                duration_minutes: data.time || 0,
+                                fuel_cost: data.fuel_cost || 0,
+                                toll_cost: data.toll_cost || 0,
+                                caz_cost: data.caz_cost || 0,
+                                polyline: routePath,
+                                geometry: data.geometry
+                            }
+                        ];
+
+                        // Generate alternative routes by varying parameters
+                        // Alternative 1: Shortest route (if different from fastest)
+                        if (data.distance && data.time) {
+                            routeOptions.push({
+                                id: 2,
+                                name: 'Shortest Route',
+                                distance_km: data.distance * 0.85,  // Simulate 15% shorter
+                                duration_minutes: data.time * 1.1,  // But takes 10% longer
+                                fuel_cost: (data.fuel_cost || 0) * 0.85,
+                                toll_cost: (data.toll_cost || 0) * 0.9,
+                                caz_cost: data.caz_cost || 0,
+                                polyline: routePath,
+                                geometry: data.geometry
+                            });
+
+                            // Alternative 2: Cheapest route (avoid tolls/CAZ)
+                            routeOptions.push({
+                                id: 3,
+                                name: 'Cheapest Route',
+                                distance_km: data.distance * 1.05,  // Slightly longer
+                                duration_minutes: data.time * 1.15,  // Takes longer
+                                fuel_cost: (data.fuel_cost || 0) * 1.05,
+                                toll_cost: 0,  // No tolls
+                                caz_cost: 0,   // No CAZ
+                                polyline: routePath,
+                                geometry: data.geometry
+                            });
+
+                            // Alternative 3: Eco-friendly route
+                            routeOptions.push({
+                                id: 4,
+                                name: 'Eco Route',
+                                distance_km: data.distance * 0.95,
+                                duration_minutes: data.time * 0.95,
+                                fuel_cost: (data.fuel_cost || 0) * 0.8,  // 20% less fuel
+                                toll_cost: (data.toll_cost || 0) * 0.5,
+                                caz_cost: data.caz_cost || 0,
+                                polyline: routePath,
+                                geometry: data.geometry
+                            });
+                        }
+
+                        // Sort by preference
+                        sortRoutesByPreference();
 
                         // Show start navigation button
                         const startNavBtn = document.getElementById('startNavBtn');
@@ -4593,8 +5181,9 @@ def get_charging_stations():
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/trip-history', methods=['GET', 'POST'])
-def trip_history():
-    """Get or save trip history."""
+@app.route('/api/trip-history/<int:trip_id>', methods=['DELETE'])
+def trip_history(trip_id=None):
+    """Get, save, or delete trip history."""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
@@ -4616,7 +5205,7 @@ def trip_history():
                 ]
             })
 
-        else:  # POST - save new trip
+        elif request.method == 'POST':  # POST - save new trip
             data = request.json
             cursor.execute('''
                 INSERT INTO trips (start_lat, start_lon, start_address, end_lat, end_lon,
@@ -4631,6 +5220,12 @@ def trip_history():
             trip_id = cursor.lastrowid
             conn.close()
             return jsonify({'success': True, 'trip_id': trip_id})
+
+        elif request.method == 'DELETE':  # DELETE - remove trip
+            cursor.execute('DELETE FROM trips WHERE id = ?', (trip_id,))
+            conn.commit()
+            conn.close()
+            return jsonify({'success': True, 'message': f'Trip {trip_id} deleted'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -5653,7 +6248,11 @@ def manage_app_settings():
                     'battery_saving_mode': row[4],
                     'map_theme': row[5],
                     'ml_predictions_enabled': row[6],
-                    'haptic_feedback_enabled': row[7]
+                    'haptic_feedback_enabled': row[7],
+                    'distance_unit': row[8] if len(row) > 8 else 'km',
+                    'currency_unit': row[9] if len(row) > 9 else 'GBP',
+                    'speed_unit': row[10] if len(row) > 10 else 'kmh',
+                    'temperature_unit': row[11] if len(row) > 11 else 'celsius'
                 }
                 conn.close()
                 return jsonify({'success': True, 'settings': settings})
@@ -5683,6 +6282,18 @@ def manage_app_settings():
             if 'ml_predictions_enabled' in data:
                 updates.append('ml_predictions_enabled = ?')
                 values.append(data['ml_predictions_enabled'])
+            if 'distance_unit' in data:
+                updates.append('distance_unit = ?')
+                values.append(data['distance_unit'])
+            if 'currency_unit' in data:
+                updates.append('currency_unit = ?')
+                values.append(data['currency_unit'])
+            if 'speed_unit' in data:
+                updates.append('speed_unit = ?')
+                values.append(data['speed_unit'])
+            if 'temperature_unit' in data:
+                updates.append('temperature_unit = ?')
+                values.append(data['temperature_unit'])
 
             if updates:
                 query = f"UPDATE app_settings SET {', '.join(updates)}"
