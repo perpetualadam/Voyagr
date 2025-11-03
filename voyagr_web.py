@@ -2746,61 +2746,37 @@ HTML_TEMPLATE = '''
                         // Store route data for navigation
                         window.lastCalculatedRoute = data;
 
-                        // Generate route options for comparison
-                        routeOptions = [
-                            {
-                                id: 1,
-                                name: 'Fastest Route',
-                                distance_km: data.distance || 0,
-                                duration_minutes: data.time || 0,
-                                fuel_cost: data.fuel_cost || 0,
-                                toll_cost: data.toll_cost || 0,
-                                caz_cost: data.caz_cost || 0,
-                                polyline: routePath,
-                                geometry: data.geometry
-                            }
-                        ];
-
-                        // Generate alternative routes by varying parameters
-                        // Alternative 1: Shortest route (if different from fastest)
-                        if (data.distance && data.time) {
-                            routeOptions.push({
-                                id: 2,
-                                name: 'Shortest Route',
-                                distance_km: data.distance * 0.85,  // Simulate 15% shorter
-                                duration_minutes: data.time * 1.1,  // But takes 10% longer
-                                fuel_cost: (data.fuel_cost || 0) * 0.85,
-                                toll_cost: (data.toll_cost || 0) * 0.9,
-                                caz_cost: data.caz_cost || 0,
-                                polyline: routePath,
-                                geometry: data.geometry
-                            });
-
-                            // Alternative 2: Cheapest route (avoid tolls/CAZ)
-                            routeOptions.push({
-                                id: 3,
-                                name: 'Cheapest Route',
-                                distance_km: data.distance * 1.05,  // Slightly longer
-                                duration_minutes: data.time * 1.15,  // Takes longer
-                                fuel_cost: (data.fuel_cost || 0) * 1.05,
-                                toll_cost: 0,  // No tolls
-                                caz_cost: 0,   // No CAZ
-                                polyline: routePath,
-                                geometry: data.geometry
-                            });
-
-                            // Alternative 3: Eco-friendly route
-                            routeOptions.push({
-                                id: 4,
-                                name: 'Eco Route',
-                                distance_km: data.distance * 0.95,
-                                duration_minutes: data.time * 0.95,
-                                fuel_cost: (data.fuel_cost || 0) * 0.8,  // 20% less fuel
-                                toll_cost: (data.toll_cost || 0) * 0.5,
-                                caz_cost: data.caz_cost || 0,
-                                polyline: routePath,
-                                geometry: data.geometry
-                            });
+                        // Use real routes from backend if available, otherwise use main route
+                        if (data.routes && data.routes.length > 0) {
+                            // Real routes from routing engine
+                            routeOptions = data.routes.map(route => ({
+                                id: route.id,
+                                name: route.name,
+                                distance_km: route.distance_km,
+                                duration_minutes: route.duration_minutes,
+                                fuel_cost: route.fuel_cost,
+                                toll_cost: route.toll_cost,
+                                caz_cost: route.caz_cost,
+                                polyline: decodePolyline(route.geometry || ''),
+                                geometry: route.geometry
+                            }));
+                            console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}`);
+                        } else {
+                            // Fallback: single route (for backward compatibility)
+                            routeOptions = [
+                                {
+                                    id: 1,
+                                    name: 'Route',
+                                    distance_km: parseFloat(data.distance) || 0,
+                                    duration_minutes: parseInt(data.time) || 0,
+                                    fuel_cost: data.fuel_cost || 0,
+                                    toll_cost: data.toll_cost || 0,
+                                    caz_cost: data.caz_cost || 0,
+                                    polyline: routePath,
+                                    geometry: data.geometry
+                                }
+                            ];
+                            console.log('[Route Comparison] Using single route (fallback)');
                         }
 
                         // Sort by preference
@@ -5277,7 +5253,8 @@ def calculate_route():
             params = {
                 "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
                 "profile": "car",
-                "locale": "en"
+                "locale": "en",
+                "ch.disable": "true"  # Disable CH to get alternative routes
             }
             print(f"[GraphHopper] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
             response = requests.get(url, params=params, timeout=10)
@@ -5288,42 +5265,72 @@ def calculate_route():
                 print(f"[GraphHopper] Response keys: {route_data.keys()}")
 
                 if 'paths' in route_data and len(route_data['paths']) > 0:
-                    path = route_data['paths'][0]
-                    distance = path.get('distance', 0) / 1000  # Convert to km
-                    time = path.get('time', 0) / 60000  # Convert to minutes
+                    # Extract all available routes (up to 4)
+                    routes = []
+                    for idx, path in enumerate(route_data['paths'][:4]):
+                        distance = path.get('distance', 0) / 1000  # Convert to km
+                        time = path.get('time', 0) / 60000  # Convert to minutes
 
-                    # Extract route geometry
-                    route_geometry = None
-                    if 'points' in path:
-                        points = path['points']
-                        if isinstance(points, list):
-                            # Convert points to polyline format for consistency
-                            route_geometry = polyline.encode([(p['lat'], p['lng']) for p in points])
-                        elif isinstance(points, str):
-                            # Already encoded as polyline
-                            route_geometry = points
+                        # Extract route geometry
+                        route_geometry = None
+                        if 'points' in path:
+                            points = path['points']
+                            if isinstance(points, list):
+                                # Convert points to polyline format for consistency
+                                route_geometry = polyline.encode([(p['lat'], p['lng']) for p in points])
+                            elif isinstance(points, str):
+                                # Already encoded as polyline
+                                route_geometry = points
 
-                    # Calculate hazard score if enabled
-                    hazard_penalty = 0
-                    hazard_count = 0
-                    if enable_hazard_avoidance and hazards:
-                        hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
+                        # Calculate costs
+                        fuel_cost = 0
+                        toll_cost = 0
+                        caz_cost = 0
 
-                    print(f"[GraphHopper] SUCCESS: {distance:.2f} km, {time:.0f} min")
-                    response_data = {
+                        if vehicle_type == 'electric':
+                            fuel_cost = (distance / 100) * energy_efficiency * electricity_price
+                        else:
+                            fuel_cost = (distance / 100) * fuel_efficiency * fuel_price
+
+                        if include_tolls:
+                            toll_cost = calculate_toll_cost(distance, 'motorway')
+
+                        if include_caz and not caz_exempt:
+                            caz_cost = calculate_caz_cost(distance, vehicle_type, caz_exempt)
+
+                        # Determine route type based on index
+                        if idx == 0:
+                            route_type = 'Fastest'
+                        elif idx == 1:
+                            route_type = 'Shortest'
+                        elif idx == 2:
+                            route_type = 'Balanced'
+                        else:
+                            route_type = f'Alternative {idx}'
+
+                        routes.append({
+                            'id': idx + 1,
+                            'name': route_type,
+                            'distance_km': round(distance, 2),
+                            'duration_minutes': round(time, 0),
+                            'fuel_cost': round(fuel_cost, 2),
+                            'toll_cost': round(toll_cost, 2),
+                            'caz_cost': round(caz_cost, 2),
+                            'geometry': route_geometry
+                        })
+
+                    print(f"[GraphHopper] SUCCESS: {len(routes)} routes found")
+                    return jsonify({
                         'success': True,
-                        'distance': f'{distance:.2f} km',
-                        'time': f'{time:.0f} minutes',
+                        'routes': routes,
                         'source': 'GraphHopper ✅',
-                        'geometry': route_geometry
-                    }
-
-                    if enable_hazard_avoidance:
-                        response_data['hazard_penalty_seconds'] = hazard_penalty
-                        response_data['hazard_count'] = hazard_count
-                        response_data['hazard_time_penalty_minutes'] = hazard_penalty / 60
-
-                    return jsonify(response_data)
+                        'distance': f'{routes[0]["distance_km"]:.2f} km',
+                        'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
+                        'geometry': routes[0]['geometry'],
+                        'fuel_cost': routes[0]['fuel_cost'],
+                        'toll_cost': routes[0]['toll_cost'],
+                        'caz_cost': routes[0]['caz_cost']
+                    })
                 else:
                     graphhopper_error = f"Unexpected response format: {route_data.keys()}"
             else:
@@ -5346,7 +5353,8 @@ def calculate_route():
                     {"lat": start_lat, "lon": start_lon},
                     {"lat": end_lat, "lon": end_lon}
                 ],
-                "costing": "auto"
+                "costing": "auto",
+                "alternatives": True  # Request alternative routes
             }
             print(f"[Valhalla] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
             response = requests.post(url, json=payload, timeout=10)
@@ -5357,9 +5365,12 @@ def calculate_route():
                 print(f"[Valhalla] Response keys: {route_data.keys()}")
 
                 if 'trip' in route_data and 'legs' in route_data['trip']:
+                    # Extract all available routes
+                    routes = []
+
+                    # Main route
                     distance = route_data['trip']['summary']['length']
                     time = route_data['trip']['summary']['time']
-
                     distance_km = distance / 1000
                     time_min = time / 60
 
@@ -5371,13 +5382,89 @@ def calculate_route():
                                 route_geometry = leg['shape']
                                 break
 
-                    print(f"[Valhalla] SUCCESS: {distance_km:.2f} km, {time_min:.0f} min")
+                    # Calculate costs for main route
+                    fuel_cost = 0
+                    toll_cost = 0
+                    caz_cost = 0
+
+                    if vehicle_type == 'electric':
+                        fuel_cost = (distance_km / 100) * energy_efficiency * electricity_price
+                    else:
+                        fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
+
+                    if include_tolls:
+                        toll_cost = calculate_toll_cost(distance_km, 'motorway')
+
+                    if include_caz and not caz_exempt:
+                        caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt)
+
+                    routes.append({
+                        'id': 1,
+                        'name': 'Fastest',
+                        'distance_km': round(distance_km, 2),
+                        'duration_minutes': round(time_min, 0),
+                        'fuel_cost': round(fuel_cost, 2),
+                        'toll_cost': round(toll_cost, 2),
+                        'caz_cost': round(caz_cost, 2),
+                        'geometry': route_geometry
+                    })
+
+                    # Alternative routes (if available)
+                    if 'alternatives' in route_data:
+                        for idx, alt_route in enumerate(route_data['alternatives'][:3]):
+                            if 'trip' in alt_route and 'summary' in alt_route['trip']:
+                                alt_distance = alt_route['trip']['summary']['length']
+                                alt_time = alt_route['trip']['summary']['time']
+                                alt_distance_km = alt_distance / 1000
+                                alt_time_min = alt_time / 60
+
+                                # Extract geometry
+                                alt_geometry = None
+                                if 'legs' in alt_route['trip']:
+                                    for leg in alt_route['trip']['legs']:
+                                        if 'shape' in leg:
+                                            alt_geometry = leg['shape']
+                                            break
+
+                                # Calculate costs
+                                alt_fuel_cost = 0
+                                alt_toll_cost = 0
+                                alt_caz_cost = 0
+
+                                if vehicle_type == 'electric':
+                                    alt_fuel_cost = (alt_distance_km / 100) * energy_efficiency * electricity_price
+                                else:
+                                    alt_fuel_cost = (alt_distance_km / 100) * fuel_efficiency * fuel_price
+
+                                if include_tolls:
+                                    alt_toll_cost = calculate_toll_cost(alt_distance_km, 'motorway')
+
+                                if include_caz and not caz_exempt:
+                                    alt_caz_cost = calculate_caz_cost(alt_distance_km, vehicle_type, caz_exempt)
+
+                                route_names = ['Shortest', 'Balanced', 'Alternative']
+                                routes.append({
+                                    'id': idx + 2,
+                                    'name': route_names[idx] if idx < len(route_names) else f'Alternative {idx}',
+                                    'distance_km': round(alt_distance_km, 2),
+                                    'duration_minutes': round(alt_time_min, 0),
+                                    'fuel_cost': round(alt_fuel_cost, 2),
+                                    'toll_cost': round(alt_toll_cost, 2),
+                                    'caz_cost': round(alt_caz_cost, 2),
+                                    'geometry': alt_geometry
+                                })
+
+                    print(f"[Valhalla] SUCCESS: {len(routes)} routes found")
                     return jsonify({
                         'success': True,
-                        'distance': f'{distance_km:.2f} km',
-                        'time': f'{time_min:.0f} minutes',
+                        'routes': routes,
                         'source': 'Valhalla ✅',
-                        'geometry': route_geometry
+                        'distance': f'{routes[0]["distance_km"]:.2f} km',
+                        'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
+                        'geometry': routes[0]['geometry'],
+                        'fuel_cost': routes[0]['fuel_cost'],
+                        'toll_cost': routes[0]['toll_cost'],
+                        'caz_cost': routes[0]['caz_cost']
                     })
                 else:
                     valhalla_error = f"Unexpected response format: {route_data.keys()}"
@@ -5395,30 +5482,73 @@ def calculate_route():
 
         # Fallback to OSRM (public service)
         print(f"[OSRM] Trying fallback with ({start_lon},{start_lat}) to ({end_lon},{end_lat})")
-        osrm_url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}"
+        osrm_url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}?alternatives=true"
         response = requests.get(osrm_url, timeout=10)
 
         if response.status_code == 200:
             route_data = response.json()
             if route_data.get('code') == 'Ok' and 'routes' in route_data:
-                distance = route_data['routes'][0]['distance']
-                duration = route_data['routes'][0]['duration']
+                routes = []
 
-                distance_km = distance / 1000
-                time_min = duration / 60
+                # Process all available routes (up to 4)
+                for idx, route in enumerate(route_data['routes'][:4]):
+                    distance = route.get('distance', 0)
+                    duration = route.get('duration', 0)
 
-                # Extract route geometry from OSRM (polyline format)
-                route_geometry = None
-                if 'geometry' in route_data['routes'][0]:
-                    route_geometry = route_data['routes'][0]['geometry']
+                    distance_km = distance / 1000
+                    time_min = duration / 60
 
-                print(f"[OSRM] SUCCESS: {distance_km:.2f} km, {time_min:.0f} min")
+                    # Extract route geometry from OSRM (polyline format)
+                    route_geometry = route.get('geometry', None)
+
+                    # Calculate costs
+                    fuel_cost = 0
+                    toll_cost = 0
+                    caz_cost = 0
+
+                    if vehicle_type == 'electric':
+                        fuel_cost = (distance_km / 100) * energy_efficiency * electricity_price
+                    else:
+                        fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
+
+                    if include_tolls:
+                        toll_cost = calculate_toll_cost(distance_km, 'motorway')
+
+                    if include_caz and not caz_exempt:
+                        caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt)
+
+                    # Determine route type
+                    if idx == 0:
+                        route_type = 'Fastest'
+                    elif idx == 1:
+                        route_type = 'Shortest'
+                    elif idx == 2:
+                        route_type = 'Balanced'
+                    else:
+                        route_type = f'Alternative {idx}'
+
+                    routes.append({
+                        'id': idx + 1,
+                        'name': route_type,
+                        'distance_km': round(distance_km, 2),
+                        'duration_minutes': round(time_min, 0),
+                        'fuel_cost': round(fuel_cost, 2),
+                        'toll_cost': round(toll_cost, 2),
+                        'caz_cost': round(caz_cost, 2),
+                        'geometry': route_geometry
+                    })
+
+                print(f"[OSRM] SUCCESS: {len(routes)} routes found")
                 return jsonify({
                     'success': True,
-                    'distance': f'{distance_km:.2f} km',
-                    'time': f'{time_min:.0f} minutes',
+                    'routes': routes,
                     'source': 'OSRM (Fallback)',
-                    'geometry': route_geometry
+                    'distance': f'{routes[0]["distance_km"]:.2f} km',
+                    'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
+                    'geometry': routes[0]['geometry'],
+                    'fuel_cost': routes[0]['fuel_cost'],
+                    'toll_cost': routes[0]['toll_cost'],
+                    'caz_cost': routes[0]['caz_cost']
                 })
 
         return jsonify({
