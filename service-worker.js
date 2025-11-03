@@ -57,10 +57,12 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(request)
         .then(response => {
-          // Cache successful API responses
+          // Clone response before consuming it
           if (response.ok) {
-            const cache = caches.open(CACHE_NAME);
-            cache.then(c => c.put(request, response.clone()));
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(request, responseClone);
+            });
           }
           return response;
         })
@@ -87,8 +89,10 @@ self.addEventListener('fetch', event => {
         return fetch(request).then(response => {
           // Cache successful responses
           if (response.ok && request.method === 'GET') {
-            const cache = caches.open(CACHE_NAME);
-            cache.then(c => c.put(request, response.clone()));
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
+              cache.put(request, responseClone);
+            });
           }
           return response;
         });

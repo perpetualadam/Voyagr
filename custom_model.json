@@ -1,0 +1,27 @@
+{
+  "priority": [
+    {
+      "if": "tags[\"highway\"] == \"speed_camera\"",
+      "multiply_by": 0,
+      "comment": "Fully avoid speed cameras"
+    },
+    {
+      "if": "tags[\"highway\"] == \"traffic_signals\" AND tags[\"enforcement\"] == \"speed_camera\"",
+      "multiply_by": 0,
+      "comment": "Fully avoid traffic lights with speed cameras"
+    },
+    {
+      "if": "tags[\"highway\"] == \"traffic_signals\"",
+      "multiply_by": 0.1,
+      "comment": "Penalize regular traffic lights (reroute if possible)"
+    }
+  ],
+  "speed": [
+    {
+      "if": "tags[\"highway\"] == \"speed_camera\"",
+      "limit_to": 0,
+      "comment": "Block speed cameras completely"
+    }
+  ]
+}
+

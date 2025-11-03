@@ -461,10 +461,12 @@ HTML_TEMPLATE = '''
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#667eea">
     <meta name="description" content="Full-featured navigation app with route planning, cost estimation, and trip tracking">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Voyagr">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23667eea' width='192' height='192'/><text x='50%' y='50%' font-size='100' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'>V</text></svg>">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23667eea' width='192' height='192'/><text x='50%' y='50%' font-size='100' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'>V</text></svg>">
     <link rel="manifest" href="/manifest.json">
     <title>Voyagr Navigation</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
@@ -2316,6 +2318,20 @@ HTML_TEMPLATE = '''
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/polyline-encoded/0.0.9/polyline.js"></script>
     <script>
+        // Suppress ethereum property redefinition warning from browser extensions
+        if (typeof window !== 'undefined' && window.ethereum) {
+            try {
+                Object.defineProperty(window, 'ethereum', {
+                    value: window.ethereum,
+                    writable: false,
+                    configurable: false
+                });
+            } catch (e) {
+                // Ignore if property is already defined by extension
+                console.log('[Init] Ethereum property already defined by extension');
+            }
+        }
+
         // Initialize map
         const map = L.map('map').setView([51.5074, -0.1278], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {

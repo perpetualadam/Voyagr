@@ -74,6 +74,12 @@ VALHALLA_TIMEOUT = int(os.getenv('VALHALLA_TIMEOUT', '30'))
 VALHALLA_RETRIES = int(os.getenv('VALHALLA_RETRIES', '3'))
 VALHALLA_RETRY_DELAY = int(os.getenv('VALHALLA_RETRY_DELAY', '1'))
 
+# GraphHopper Configuration Constants
+GRAPHHOPPER_URL = os.getenv('GRAPHHOPPER_URL', 'http://localhost:8989')
+GRAPHHOPPER_TIMEOUT = int(os.getenv('GRAPHHOPPER_TIMEOUT', '30'))
+GRAPHHOPPER_RETRIES = int(os.getenv('GRAPHHOPPER_RETRIES', '3'))
+GRAPHHOPPER_RETRY_DELAY = int(os.getenv('GRAPHHOPPER_RETRY_DELAY', '1'))
+
 # ============================================================================
 # INPUT VALIDATION FUNCTIONS - SECURITY & DATA INTEGRITY
 # ============================================================================
@@ -267,6 +273,15 @@ class SatNavApp(App):
         self.valhalla_available = False
         self.valhalla_last_check = 0
         self.valhalla_check_interval = 60  # Check every 60 seconds
+
+        # GraphHopper routing engine configuration
+        self.graphhopper_url = GRAPHHOPPER_URL
+        self.graphhopper_timeout = GRAPHHOPPER_TIMEOUT
+        self.graphhopper_retries = GRAPHHOPPER_RETRIES
+        self.graphhopper_available = False
+        self.graphhopper_last_check = 0
+        self.graphhopper_check_interval = 60  # Check every 60 seconds
+
         self.route_cache = {}  # Cache for routes (1-hour expiry)
 
         # Search functionality
@@ -832,9 +847,11 @@ class SatNavApp(App):
             self.cursor.execute("INSERT OR IGNORE INTO clean_air_zones (zone_name, city, country, lat, lon, zone_type, charge_amount, currency_code, active, operating_hours, boundary_coords) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", caz)
 
         # Insert default hazard avoidance preferences
+        # NOTE: Traffic light cameras are now the HIGHEST priority hazard to avoid
+        # Penalty of 1200s (20 minutes) ensures routes go significantly out of their way to avoid them
         hazard_preferences = [
             ('speed_camera', 30, 1, 100),           # 30 seconds penalty, 100m threshold
-            ('traffic_light_camera', 45, 1, 100),   # 45 seconds penalty, 100m threshold
+            ('traffic_light_camera', 1200, 1, 100), # 1200 seconds (20 min) penalty - HIGHEST PRIORITY, 100m threshold
             ('police', 180, 1, 200),                # 3 minutes penalty, 200m threshold
             ('roadworks', 300, 1, 500),             # 5 minutes penalty, 500m threshold
             ('accident', 600, 1, 500),              # 10 minutes penalty, 500m threshold
@@ -4077,8 +4094,90 @@ class SatNavApp(App):
 
         return None
 
+    def check_graphhopper_connection(self):
+        """Check if GraphHopper server is available (cached for 60 seconds)."""
+        try:
+            current_time = time.time()
+
+            # Only check every 60 seconds to avoid excessive requests
+            if current_time - self.graphhopper_last_check < self.graphhopper_check_interval:
+                return self.graphhopper_available
+
+            self.graphhopper_last_check = current_time
+
+            response = requests.get(
+                f"{self.graphhopper_url}/info",
+                timeout=5
+            )
+
+            self.graphhopper_available = response.status_code == 200
+
+            if self.graphhopper_available:
+                print(f"[OK] GraphHopper server available: {self.graphhopper_url}")
+            else:
+                print(f"[FAIL] GraphHopper server unavailable: HTTP {response.status_code}")
+
+            return self.graphhopper_available
+
+        except requests.exceptions.ConnectionError as e:
+            print(f"[FAIL] GraphHopper connection error: {e}")
+            self.graphhopper_available = False
+            return False
+        except requests.exceptions.Timeout:
+            print("[FAIL] GraphHopper connection timeout")
+            self.graphhopper_available = False
+            return False
+        except Exception as e:
+            print(f"[FAIL] GraphHopper check error: {e}")
+            self.graphhopper_available = False
+            return False
+
+    def _make_graphhopper_request(self, endpoint, payload, method='POST'):
+        """Make request to GraphHopper with retry logic and exponential backoff."""
+        for attempt in range(self.graphhopper_retries):
+            try:
+                if method == 'POST':
+                    response = requests.post(
+                        f"{self.graphhopper_url}{endpoint}",
+                        json=payload,
+                        timeout=self.graphhopper_timeout,
+                        headers={"Content-Type": "application/json"}
+                    )
+                else:
+                    response = requests.get(
+                        f"{self.graphhopper_url}{endpoint}",
+                        timeout=self.graphhopper_timeout
+                    )
+
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    print(f"GraphHopper error: HTTP {response.status_code}")
+                    if attempt < self.graphhopper_retries - 1:
+                        delay = GRAPHHOPPER_RETRY_DELAY * (2 ** attempt)
+                        print(f"Retrying in {delay}s... (attempt {attempt + 1}/{self.graphhopper_retries})")
+                        time.sleep(delay)
+
+            except requests.exceptions.Timeout:
+                print(f"GraphHopper timeout (attempt {attempt + 1}/{self.graphhopper_retries})")
+                if attempt < self.graphhopper_retries - 1:
+                    delay = GRAPHHOPPER_RETRY_DELAY * (2 ** attempt)
+                    time.sleep(delay)
+
+            except requests.exceptions.ConnectionError as e:
+                print(f"GraphHopper connection error (attempt {attempt + 1}/{self.graphhopper_retries}): {e}")
+                if attempt < self.graphhopper_retries - 1:
+                    delay = GRAPHHOPPER_RETRY_DELAY * (2 ** attempt)
+                    time.sleep(delay)
+
+            except Exception as e:
+                print(f"GraphHopper request error: {e}")
+                return None
+
+        return None
+
     def calculate_route(self, start_lat, start_lon, end_lat, end_lon):
-        """Calculate route using Valhalla with error handling and fallback."""
+        """Calculate route using GraphHopper first, then Valhalla with error handling and fallback."""
         try:
             # SECURITY: Validate all coordinates before processing
             is_valid, error_msg = validate_coordinates(start_lat, start_lon, "calculate_route (start)")
@@ -4093,15 +4192,6 @@ class SatNavApp(App):
                 notification.notify(title="Route Error", message="Invalid destination coordinates")
                 return None
 
-            # Check if Valhalla is available
-            if not self.check_valhalla_connection():
-                print("Valhalla unavailable, using fallback route calculation")
-                notification.notify(
-                    title="Routing Service",
-                    message="Using offline routing (limited features)"
-                )
-                return self._fallback_route(start_lat, start_lon, end_lat, end_lon)
-
             # Create cache key from coordinates and routing mode
             cache_key = f"{start_lat},{start_lon},{end_lat},{end_lon},{self.routing_mode}"
 
@@ -4112,44 +4202,76 @@ class SatNavApp(App):
                     print("Using cached route")
                     return cached_route['route']
 
-            # Build Valhalla API payload
-            payload = {
-                "locations": [
-                    {"lat": start_lat, "lon": start_lon},
-                    {"lat": end_lat, "lon": end_lon}
-                ],
-                "costing": self.get_valhalla_costing(),
-                "format": "json"
-            }
+            # Try GraphHopper first (if available)
+            if self.check_graphhopper_connection():
+                print("[GraphHopper] Attempting route calculation...")
+                try:
+                    # GraphHopper uses GET with query parameters
+                    params = {
+                        "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
+                        "profile": "car",
+                        "locale": "en"
+                    }
+                    # Make GET request directly
+                    response = requests.get(
+                        f"{self.graphhopper_url}/route",
+                        params=params,
+                        timeout=self.graphhopper_timeout
+                    )
+                    if response.status_code == 200:
+                        route_data = response.json()
+                        if route_data and 'paths' in route_data and len(route_data['paths']) > 0:
+                            print("[GraphHopper] ✅ Route calculated successfully")
+                            # Cache the route
+                            self.route_cache[cache_key] = {
+                                'route': route_data,
+                                'timestamp': time.time()
+                            }
+                            return route_data
+                except Exception as e:
+                    print(f"[GraphHopper] Failed: {e}")
 
-            # Add costing options for auto mode (toll settings)
-            if self.routing_mode == 'auto':
-                payload["costing_options"] = {
-                    "auto": {
-                        "use_toll": self.include_tolls,
-                        "toll_factor": 1.0 if self.include_tolls else 10.0,
-                        "use_ferry": True
-                    }
-                }
-            elif self.routing_mode == 'pedestrian':
-                payload["costing_options"] = {
-                    "pedestrian": {
-                        "walking_speed": 5.1,
-                        "use_ferry": True
-                    }
-                }
-            elif self.routing_mode == 'bicycle':
-                payload["costing_options"] = {
-                    "bicycle": {
-                        "cycling_speed": 25,
-                        "use_bike_lanes": True,
-                        "use_roads": True,
-                        "use_ferry": True
-                    }
+            # Try Valhalla as fallback
+            if self.check_valhalla_connection():
+                print("[Valhalla] Attempting route calculation...")
+                # Build Valhalla API payload
+                payload = {
+                    "locations": [
+                        {"lat": start_lat, "lon": start_lon},
+                        {"lat": end_lat, "lon": end_lon}
+                    ],
+                    "costing": self.get_valhalla_costing(),
+                    "format": "json"
                 }
 
-            # Make request with retry logic
-            response = self._make_valhalla_request("/route", payload)
+                # Add costing options for auto mode (toll settings)
+                if self.routing_mode == 'auto':
+                    payload["costing_options"] = {
+                        "auto": {
+                            "use_toll": self.include_tolls,
+                            "toll_factor": 1.0 if self.include_tolls else 10.0,
+                            "use_ferry": True
+                        }
+                    }
+                elif self.routing_mode == 'pedestrian':
+                    payload["costing_options"] = {
+                        "pedestrian": {
+                            "walking_speed": 5.1,
+                            "use_ferry": True
+                        }
+                    }
+                elif self.routing_mode == 'bicycle':
+                    payload["costing_options"] = {
+                        "bicycle": {
+                            "cycling_speed": 25,
+                            "use_bike_lanes": True,
+                            "use_roads": True,
+                            "use_ferry": True
+                        }
+                    }
+
+                # Make request with retry logic
+                response = self._make_valhalla_request("/route", payload)
 
             # Perform pre-departure checks (traffic, weather, fuel/battery, maintenance)
             self.check_pre_departure_conditions(start_lat, start_lon, end_lat, end_lon)
@@ -8705,6 +8827,9 @@ class SatNavApp(App):
         """
         Calculate a hazard score for a route based on proximity to hazards.
 
+        Traffic light cameras are weighted with a multiplier to ensure they are the highest priority hazard.
+        Closer cameras receive exponentially higher penalties to strongly discourage routes passing near them.
+
         Args:
             route_coords: List of [lon, lat] coordinate pairs from route
             hazards: Dictionary of hazard lists by type
@@ -8731,19 +8856,41 @@ class SatNavApp(App):
                 threshold = weight_info.get('threshold_meters', 100)
                 penalty = weight_info.get('penalty_seconds', 0)
 
+                # TRAFFIC LIGHT CAMERA PRIORITY: Apply distance-based multiplier
+                # Cameras closer to route get exponentially higher penalty
+                # This ensures routes strongly avoid traffic light cameras
+                distance_multiplier = 1.0
+                if hazard_type == 'traffic_light_camera':
+                    distance_multiplier = 2.0  # Base 2x multiplier for all traffic light cameras
+
                 hazards_near_route = 0
                 for hazard in hazard_list:
                     hazard_lat = hazard.get('lat')
                     hazard_lon = hazard.get('lon')
 
                     # Check distance from hazard to route
+                    min_distance = float('inf')
                     for coord in route_coords:
                         distance = geodesic((coord[1], coord[0]), (hazard_lat, hazard_lon)).meters
-                        if distance < threshold:
-                            hazards_near_route += 1
-                            total_score += penalty
-                            time_penalty_minutes += penalty / 60
-                            break
+                        min_distance = min(min_distance, distance)
+
+                    if min_distance < threshold:
+                        hazards_near_route += 1
+
+                        # Apply distance-based penalty multiplier for traffic light cameras
+                        # Closer cameras get higher multiplier (exponential decay)
+                        if hazard_type == 'traffic_light_camera':
+                            # Proximity multiplier: 1.0 at threshold, 3.0 at 0m
+                            # Formula: 1 + (2 * (1 - distance/threshold))
+                            proximity_multiplier = 1.0 + (2.0 * (1.0 - min_distance / threshold))
+                            distance_multiplier = max(1.0, proximity_multiplier)
+                            applied_penalty = penalty * distance_multiplier
+                        else:
+                            applied_penalty = penalty
+
+                        total_score += applied_penalty
+                        time_penalty_minutes += applied_penalty / 60
+                        break
 
                 if hazards_near_route > 0:
                     hazards_by_type[hazard_type] = hazards_near_route
@@ -8953,12 +9100,16 @@ class SatNavApp(App):
         Calculate route that avoids hazards (cameras, police, etc).
         Uses client-side filtering of multiple route options.
 
+        TRAFFIC LIGHT CAMERA PRIORITY: Routes are strongly optimized to avoid traffic light cameras,
+        even if it means adding significant time/distance to the route. This is the highest priority
+        hazard avoidance objective.
+
         Args:
             start_lat, start_lon: Start coordinates
             end_lat, end_lon: End coordinates
 
         Returns:
-            Route data with lowest hazard score
+            Route data with lowest hazard score (prioritizing traffic light camera avoidance)
         """
         try:
             if not self.check_valhalla_connection():
@@ -8986,8 +9137,10 @@ class SatNavApp(App):
                 routes_to_compare.append(route3)
 
             # Score each route based on hazard proximity
+            # PRIORITY: Traffic light cameras are weighted most heavily
             best_route = None
             best_score = float('inf')
+            best_traffic_light_camera_count = float('inf')
 
             for route in routes_to_compare:
                 if 'trip' not in route or not route['trip'].get('legs'):
@@ -9002,12 +9155,22 @@ class SatNavApp(App):
                 # Calculate hazard score
                 hazard_score = self.calculate_route_hazard_score(route_coords, hazards)
                 total_score = hazard_score.get('total_score', 0)
+                traffic_light_camera_count = hazard_score.get('hazards_by_type', {}).get('traffic_light_camera', 0)
 
                 # Store hazard info in route
                 route['hazard_score'] = hazard_score
 
-                # Select route with lowest hazard score
-                if total_score < best_score:
+                # PRIORITY SELECTION LOGIC:
+                # 1. First priority: Minimize traffic light camera encounters
+                # 2. Second priority: Minimize total hazard score
+                # This ensures routes go significantly out of their way to avoid traffic light cameras
+                if traffic_light_camera_count < best_traffic_light_camera_count:
+                    # Found route with fewer traffic light cameras
+                    best_traffic_light_camera_count = traffic_light_camera_count
+                    best_score = total_score
+                    best_route = route
+                elif traffic_light_camera_count == best_traffic_light_camera_count and total_score < best_score:
+                    # Same number of traffic light cameras, but lower total hazard score
                     best_score = total_score
                     best_route = route
 

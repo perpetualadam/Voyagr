@@ -1,0 +1,168 @@
+╔════════════════════════════════════════════════════════════════════════════╗
+║                   VOYAGR PWA INSTALLATION GUIDE                            ║
+║                         5 MINUTES TO INSTALL                               ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 1: START FLASK ON YOUR PC                                              │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Open PowerShell and run:                                                   │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │ python voyagr_web.py                                                 │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  You should see:                                                            │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │ 🚀 Voyagr Web App is running!                                        │  │
+│  │ Access from: http://localhost:5000                                   │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ✅ KEEP THIS WINDOW OPEN                                                   │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 2: FIND YOUR PC'S IP ADDRESS                                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  Open a NEW PowerShell window and run:                                      │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │ ipconfig                                                             │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  Look for:                                                                  │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │ IPv4 Address. . . . . . . . . . : 192.168.1.100                     │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  📝 WRITE DOWN YOUR IP ADDRESS: ___________________                         │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 3: CONNECT PIXEL 6 TO SAME WIFI                                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  On your Pixel 6:                                                           │
+│  1. Swipe down from top (twice) → Quick Settings                            │
+│  2. Tap WiFi                                                                │
+│  3. Select your home WiFi network                                           │
+│  4. Enter password                                                          │
+│  5. Wait for "Connected" status                                             │
+│                                                                              │
+│  ✅ PIXEL 6 IS NOW ON SAME NETWORK AS PC                                    │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 4: OPEN VOYAGR IN CHROME                                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  On your Pixel 6:                                                           │
+│  1. Open Chrome browser                                                     │
+│  2. Tap the address bar                                                     │
+│  3. Type: http://192.168.1.100:5000                                         │
+│     (Replace 192.168.1.100 with YOUR IP from Step 2)                        │
+│  4. Tap Enter                                                               │
+│  5. WAIT 10-15 SECONDS for page to load                                     │
+│                                                                              │
+│  You should see:                                                            │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │ Voyagr Navigation App                                                │  │
+│  │ [Map of UK]                                                          │  │
+│  │ [Route Calculation Interface]                                        │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ✅ VOYAGR IS NOW OPEN IN CHROME                                            │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 5: INSTALL THE APP                                                     │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  On your Pixel 6 (Chrome):                                                  │
+│                                                                              │
+│  Option A: Install Icon in Address Bar                                      │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │ 1. Look for ⬇️ or 📱 icon in address bar                             │  │
+│  │ 2. Tap it                                                            │  │
+│  │ 3. Tap "Install"                                                     │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  Option B: Three-Dot Menu                                                   │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │ 1. Tap ⋮ (three dots, top-right)                                     │  │
+│  │ 2. Tap "Install app"                                                 │  │
+│  │ 3. Tap "Install"                                                     │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  ✅ APP IS BEING INSTALLED                                                  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ STEP 6: LAUNCH THE APP                                                      │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│  On your Pixel 6:                                                           │
+│  1. Press Home button or swipe up from bottom                               │
+│  2. Look for Voyagr icon (purple "V" on blue background)                    │
+│  3. Tap the icon                                                            │
+│  4. App launches in FULL-SCREEN mode (no browser UI!)                       │
+│                                                                              │
+│  You should see:                                                            │
+│  ┌──────────────────────────────────────────────────────────────────────┐  │
+│  │ Voyagr Navigation                                                    │  │
+│  │ [Full-screen map]                                                    │  │
+│  │ [Route calculation interface]                                        │  │
+│  │ [Vehicle profiles]                                                   │  │
+│  │ [Trip history]                                                       │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                              │
+│  🎉 INSTALLATION COMPLETE!                                                  │
+│                                                                              │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                         FEATURES NOW AVAILABLE                             ║
+╠════════════════════════════════════════════════════════════════════════════╣
+║                                                                            ║
+║  ✅ Route Calculation      - GraphHopper/Valhalla/OSRM                    ║
+║  ✅ Cost Estimation        - Fuel, toll, CAZ, energy costs                ║
+║  ✅ Multi-Stop Routing     - Plan routes with multiple waypoints          ║
+║  ✅ Trip History           - Track all your trips                         ║
+║  ✅ Vehicle Profiles       - Save multiple vehicles                       ║
+║  ✅ Offline Support        - Works without internet                       ║
+║  ✅ Notifications          - Get route alerts                             ║
+║  ✅ Full-Screen App        - No browser UI, app-like experience           ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+╔════════════════════════════════════════════════════════════════════════════╗
+║                      TROUBLESHOOTING QUICK REFERENCE                       ║
+╠════════════════════════════════════════════════════════════════════════════╣
+║                                                                            ║
+║  Problem: "Install app" option not showing                                ║
+║  Solution: Wait 15 seconds, refresh page, try again                       ║
+║                                                                            ║
+║  Problem: Cannot connect to server                                        ║
+║  Solution: Check PC IP, check WiFi, check Flask running                   ║
+║                                                                            ║
+║  Problem: App crashes on startup                                          ║
+║  Solution: Clear Chrome cache, reload page                                ║
+║                                                                            ║
+║  Problem: Offline not working                                             ║
+║  Solution: Use app online first to cache data                             ║
+║                                                                            ║
+╚════════════════════════════════════════════════════════════════════════════╝
+
+📚 FOR MORE INFORMATION, SEE:
+   • PWA_QUICK_INSTALL.md - Quick reference (2 min read)
+   • PWA_STEP_BY_STEP.md - Detailed guide (5 min read)
+   • PWA_INSTALLATION_GUIDE.md - Complete reference (10 min read)
+   • PWA_DOWNLOAD_SUMMARY.md - Overview (5 min read)
+
+🚀 READY TO INSTALL? START WITH STEP 1!
+
