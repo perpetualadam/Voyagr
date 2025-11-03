@@ -1640,6 +1640,40 @@ HTML_TEMPLATE = '''
             cursor: pointer;
             border: none;
         }
+
+        /* Routing Mode Buttons */
+        .routing-mode-btn {
+            flex: 1;
+            padding: 10px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            color: #666;
+        }
+
+        .routing-mode-btn:hover {
+            border-color: #667eea;
+            background: #f5f5ff;
+        }
+
+        .routing-mode-btn.active {
+            border-color: #667eea;
+            background: #667eea;
+            color: white;
+        }
+
+        /* Vehicle Marker Icon */
+        .vehicle-marker-icon {
+            width: 40px;
+            height: 40px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
     </style>
 </head>
 <body>
@@ -1683,6 +1717,28 @@ HTML_TEMPLATE = '''
                             <button class="location-btn" title="Pick from map" onclick="pickLocationFromMap('end')" style="font-size: 16px;">🗺️</button>
                         </div>
                         <div class="search-history-dropdown" id="searchHistoryDropdown"></div>
+                    </div>
+                </div>
+
+                <!-- Vehicle Type Selector -->
+                <div class="form-group">
+                    <label for="vehicleType">🚗 Vehicle Type</label>
+                    <select id="vehicleType" onchange="updateVehicleType()" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                        <option value="petrol_diesel">🚗 Car (Petrol/Diesel)</option>
+                        <option value="electric">⚡ Electric Vehicle</option>
+                        <option value="motorcycle">🏍️ Motorcycle</option>
+                        <option value="truck">🚚 Truck</option>
+                        <option value="van">🚐 Van</option>
+                    </select>
+                </div>
+
+                <!-- Routing Mode Selector -->
+                <div class="form-group">
+                    <label>🛣️ Routing Mode</label>
+                    <div style="display: flex; gap: 8px; margin-top: 8px;">
+                        <button class="routing-mode-btn active" id="routingAuto" onclick="setRoutingMode('auto')">🚗 Auto</button>
+                        <button class="routing-mode-btn" id="routingPedestrian" onclick="setRoutingMode('pedestrian')">🚶 Walk</button>
+                        <button class="routing-mode-btn" id="routingBicycle" onclick="setRoutingMode('bicycle')">🚴 Bike</button>
                     </div>
                 </div>
 
@@ -1802,6 +1858,11 @@ HTML_TEMPLATE = '''
                     <div class="preference-item">
                         <span class="preference-label">📊 Variable Speed Alerts</span>
                         <button class="toggle-switch" id="variableSpeedAlerts" onclick="togglePreference('variableSpeedAlerts')"></button>
+                    </div>
+
+                    <div class="preference-item">
+                        <span class="preference-label">🔍 Smart Zoom</span>
+                        <button class="toggle-switch" id="smartZoomToggle" onclick="toggleSmartZoom()"></button>
                     </div>
 
                     <!-- Phase 3: Gesture Control -->
@@ -2067,7 +2128,9 @@ HTML_TEMPLATE = '''
                 },
                 body: JSON.stringify({
                     start: geocodedStart,
-                    end: geocodedEnd
+                    end: geocodedEnd,
+                    routing_mode: currentRoutingMode,
+                    vehicle_type: currentVehicleType
                 })
             })
             .then(response => response.json())
@@ -2337,6 +2400,148 @@ HTML_TEMPLATE = '''
                     }
                 })
                 .catch(error => console.error('Error updating speed warning:', error));
+        }
+
+        // ===== VEHICLE TYPE & ROUTING MODE MANAGEMENT =====
+
+        function updateVehicleType() {
+            const select = document.getElementById('vehicleType');
+            currentVehicleType = select.value;
+            localStorage.setItem('vehicleType', currentVehicleType);
+
+            // Update user marker icon
+            updateUserMarkerIcon();
+
+            console.log('[Vehicle] Type changed to:', currentVehicleType);
+            showStatus(`🚗 Vehicle type: ${select.options[select.selectedIndex].text}`, 'info');
+        }
+
+        function setRoutingMode(mode) {
+            currentRoutingMode = mode;
+            localStorage.setItem('routingMode', mode);
+
+            // Update button states
+            document.getElementById('routingAuto').classList.toggle('active', mode === 'auto');
+            document.getElementById('routingPedestrian').classList.toggle('active', mode === 'pedestrian');
+            document.getElementById('routingBicycle').classList.toggle('active', mode === 'bicycle');
+
+            // Update vehicle type selector visibility
+            if (mode === 'pedestrian') {
+                document.getElementById('vehicleType').style.display = 'none';
+                currentVehicleType = 'pedestrian';
+            } else if (mode === 'bicycle') {
+                document.getElementById('vehicleType').style.display = 'none';
+                currentVehicleType = 'bicycle';
+            } else {
+                document.getElementById('vehicleType').style.display = 'block';
+                currentVehicleType = document.getElementById('vehicleType').value;
+            }
+
+            // Update user marker icon
+            updateUserMarkerIcon();
+
+            console.log('[Routing] Mode changed to:', mode);
+            const modeNames = { 'auto': '🚗 Auto', 'pedestrian': '🚶 Pedestrian', 'bicycle': '🚴 Bicycle' };
+            showStatus(`${modeNames[mode]} mode`, 'info');
+        }
+
+        function updateUserMarkerIcon() {
+            // Determine which icon to use
+            let iconEmoji = vehicleIcons[currentRoutingMode] || vehicleIcons[currentVehicleType] || '🚗';
+
+            // Update the marker if it exists
+            if (currentUserMarker) {
+                map.removeLayer(currentUserMarker);
+                currentUserMarker = null;
+            }
+
+            currentUserMarkerIcon = iconEmoji;
+            console.log('[Marker] Icon updated to:', iconEmoji);
+        }
+
+        function createVehicleMarker(lat, lon, speed, accuracy) {
+            // Create a custom marker with vehicle icon
+            const iconEmoji = vehicleIcons[currentRoutingMode] || vehicleIcons[currentVehicleType] || '🚗';
+
+            // Create a div element for the marker
+            const markerDiv = document.createElement('div');
+            markerDiv.style.fontSize = '24px';
+            markerDiv.style.textAlign = 'center';
+            markerDiv.style.width = '30px';
+            markerDiv.style.height = '30px';
+            markerDiv.innerHTML = iconEmoji;
+
+            // Create custom icon
+            const customIcon = L.divIcon({
+                html: markerDiv.innerHTML,
+                iconSize: [30, 30],
+                className: 'vehicle-marker-icon'
+            });
+
+            // Create marker with custom icon
+            const marker = L.marker([lat, lon], { icon: customIcon })
+                .bindPopup(`${iconEmoji} Current Position<br>Speed: ${(speed * 3.6).toFixed(1)} km/h<br>Accuracy: ${accuracy.toFixed(0)}m`);
+
+            return marker;
+        }
+
+        // ===== SMART ZOOM FUNCTIONALITY =====
+
+        function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
+            /**
+             * Calculate optimal zoom level based on:
+             * - Current speed
+             * - Distance to next turn
+             * - Road type
+             */
+            let zoomLevel = ZOOM_LEVELS.urban_low_speed; // Default
+
+            // Speed-based zoom
+            if (speedMph > 100) {
+                // Motorway - zoom out to see more ahead
+                zoomLevel = ZOOM_LEVELS.motorway_high_speed;
+            } else if (speedMph > 50) {
+                // Main road - medium zoom
+                zoomLevel = ZOOM_LEVELS.main_road_medium_speed;
+            } else if (speedMph > 20) {
+                // Urban - normal zoom
+                zoomLevel = ZOOM_LEVELS.urban_low_speed;
+            } else {
+                // Parking/very slow - zoom in
+                zoomLevel = ZOOM_LEVELS.parking_very_low_speed;
+            }
+
+            // Adjust for upcoming turn
+            if (distanceToNextTurn !== null && distanceToNextTurn < 500) {
+                // Zoom in for turn details
+                zoomLevel = Math.min(zoomLevel + 1, 18);
+            }
+
+            return zoomLevel;
+        }
+
+        function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
+            if (!smartZoomEnabled || !routeInProgress) return;
+
+            const newZoomLevel = calculateSmartZoom(speedMph, distanceToNextTurn, roadType);
+
+            // Only update if zoom level changed significantly
+            if (Math.abs(newZoomLevel - lastZoomLevel) >= 1) {
+                map.setZoom(newZoomLevel);
+                lastZoomLevel = newZoomLevel;
+                console.log('[SmartZoom] Adjusted to level', newZoomLevel, 'for speed', speedMph, 'mph');
+            }
+        }
+
+        function toggleSmartZoom() {
+            smartZoomEnabled = !smartZoomEnabled;
+            const btn = document.getElementById('smartZoomToggle');
+            if (btn) {
+                btn.classList.toggle('active', smartZoomEnabled);
+            }
+            localStorage.setItem('smartZoomEnabled', smartZoomEnabled ? '1' : '0');
+            showStatus(`🔍 Smart Zoom ${smartZoomEnabled ? 'enabled' : 'disabled'}`, 'info');
+            console.log('[SmartZoom] Toggled to:', smartZoomEnabled);
         }
 
         // ===== VARIABLE SPEED LIMIT DETECTION =====
@@ -2846,6 +3051,33 @@ HTML_TEMPLATE = '''
         let autoGpsLocationMonitor = null;
         const AUTO_GPS_UPDATE_INTERVAL = 5000; // Update every 5 seconds
 
+        // ===== VEHICLE TYPE & ROUTING MODE =====
+        let currentVehicleType = 'petrol_diesel';
+        let currentRoutingMode = 'auto';
+        let currentUserMarkerIcon = null;
+
+        // Vehicle icon mapping
+        const vehicleIcons = {
+            'petrol_diesel': '🚗',
+            'electric': '⚡',
+            'motorcycle': '🏍️',
+            'truck': '🚚',
+            'van': '🚐',
+            'bicycle': '🚴',
+            'pedestrian': '🚶'
+        };
+
+        // ===== SMART ZOOM VARIABLES =====
+        let smartZoomEnabled = true;
+        let lastZoomLevel = 16;
+        const ZOOM_LEVELS = {
+            'motorway_high_speed': 14,      // > 100 km/h
+            'main_road_medium_speed': 15,   // 50-100 km/h
+            'urban_low_speed': 16,          // 20-50 km/h
+            'parking_very_low_speed': 17,   // < 20 km/h
+            'turn_ahead': 18                 // Upcoming turn
+        };
+
         // ===== GEOCODING FEATURE =====
         let geocodingCache = {};
         const GEOCODING_CACHE_KEY = 'voyagr_geocoding_cache';
@@ -3065,6 +3297,33 @@ HTML_TEMPLATE = '''
             initBottomSheet();
             loadPreferences();
             initGeocodeCache();
+
+            // Load vehicle type and routing mode from localStorage
+            const savedVehicleType = localStorage.getItem('vehicleType');
+            if (savedVehicleType) {
+                currentVehicleType = savedVehicleType;
+                const vehicleSelect = document.getElementById('vehicleType');
+                if (vehicleSelect) vehicleSelect.value = savedVehicleType;
+            }
+
+            const savedRoutingMode = localStorage.getItem('routingMode');
+            if (savedRoutingMode) {
+                setRoutingMode(savedRoutingMode);
+            }
+
+            // Load smart zoom preference
+            const savedSmartZoom = localStorage.getItem('smartZoomEnabled');
+            if (savedSmartZoom === '0') {
+                smartZoomEnabled = false;
+                const btn = document.getElementById('smartZoomToggle');
+                if (btn) btn.classList.remove('active');
+            } else {
+                smartZoomEnabled = true;
+                const btn = document.getElementById('smartZoomToggle');
+                if (btn) btn.classList.add('active');
+            }
+
+            console.log('[Init] Vehicle Type:', currentVehicleType, 'Routing Mode:', currentRoutingMode, 'Smart Zoom:', smartZoomEnabled);
         });
 
         // ===== BOTTOM SHEET FUNCTIONALITY =====
@@ -3204,19 +3463,13 @@ HTML_TEMPLATE = '''
                         accuracy: accuracy
                     });
 
-                    // Update user marker on map
+                    // Update user marker on map with vehicle icon
                     if (currentUserMarker) {
                         map.removeLayer(currentUserMarker);
                     }
 
-                    currentUserMarker = L.circleMarker([lat, lon], {
-                        radius: 10,
-                        fillColor: '#4285F4',
-                        color: '#fff',
-                        weight: 3,
-                        opacity: 1,
-                        fillOpacity: 0.9
-                    }).addTo(map).bindPopup(`📍 Current Position<br>Speed: ${(speed * 3.6).toFixed(1)} km/h<br>Accuracy: ${accuracy.toFixed(0)}m`);
+                    currentUserMarker = createVehicleMarker(lat, lon, speed, accuracy);
+                    currentUserMarker.addTo(map);
 
                     // Center map on user (if not manually panned)
                     if (!map._userPanned) {
@@ -3232,11 +3485,15 @@ HTML_TEMPLATE = '''
                     checkNearbyHazards(lat, lon);
 
                     // Check for variable speed limits
-                    updateVariableSpeedLimit(lat, lon, 'motorway', 'car');
+                    updateVariableSpeedLimit(lat, lon, 'motorway', currentVehicleType);
+
+                    // Apply smart zoom based on speed
+                    const speedMph = speed ? (speed * 2.237) : 0;
+                    applySmartZoom(speedMph, null, 'motorway');
 
                     // ===== PHASE 2: Update lane guidance and speed warnings =====
-                    // Convert speed from m/s to mph
-                    const speedMph = speed ? (speed * 2.237).toFixed(1) : 0;
+                    // Convert speed from m/s to mph (already done above)
+                    const speedMphFormatted = speedMph.toFixed(1);
 
                     // Determine heading from tracking history
                     let heading = 0;
