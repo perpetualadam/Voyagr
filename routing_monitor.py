@@ -174,18 +174,26 @@ class RoutingMonitor:
         engine = ENGINES.get(engine_name)
         if not engine:
             return 'unknown', 0, 'Engine not found'
-        
+
         try:
             start_time = time.time()
-            url = f"{engine['url']}{engine['health_endpoint']}"
+
+            # Special handling for OSRM - use route endpoint instead of status
+            if engine_name == 'osrm':
+                # OSRM /status endpoint returns 400, so test with a simple route instead
+                url = f"{engine['url']}/route/v1/driving/-0.1278,51.5074;-0.1378,51.5174"
+            else:
+                url = f"{engine['url']}{engine['health_endpoint']}"
+
             response = requests.get(url, timeout=engine['timeout'])
             response_time = (time.time() - start_time) * 1000
-            
+
+            # OSRM returns 200 for successful route, other engines return 200 for status
             if response.status_code == 200:
                 return 'up', response_time, ''
             else:
                 return 'down', response_time, f'HTTP {response.status_code}'
-        
+
         except requests.Timeout:
             response_time = (time.time() - start_time) * 1000
             return 'down', response_time, 'Timeout'
