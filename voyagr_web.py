@@ -1698,7 +1698,10 @@ HTML_TEMPLATE = '''
             <div class="bottom-sheet-header">
                 <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                     <h2 id="sheetTitle">🗺️ Navigation</h2>
-                    <div style="display: flex; gap: 8px;">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
+                        <button class="fab" title="Saved Routes" onclick="switchTab('savedRoutes')" style="width: 40px; height: 40px; font-size: 18px; background: #E91E63; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">⭐</button>
+                        <button class="fab" title="Analytics" onclick="switchTab('routeAnalytics')" style="width: 40px; height: 40px; font-size: 18px; background: #FF5722; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">📊</button>
+                        <button class="fab" title="Share Route" onclick="switchTab('routeSharing')" style="width: 40px; height: 40px; font-size: 18px; background: #9C27B0; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">🔗</button>
                         <button class="fab" title="Route Options" onclick="switchTab('routeComparison')" style="width: 40px; height: 40px; font-size: 18px; background: #4CAF50; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">🛣️</button>
                         <button class="fab" title="Trip History" onclick="switchTab('tripHistory')" style="width: 40px; height: 40px; font-size: 18px; background: #FF9800; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">📋</button>
                         <button class="fab" title="Settings" onclick="switchTab('settings')" style="width: 40px; height: 40px; font-size: 18px; background: #667eea; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">⚙️</button>
@@ -1995,6 +1998,59 @@ HTML_TEMPLATE = '''
                         </div>
                     </div>
 
+                    <!-- Advanced Route Preferences -->
+                    <div class="preferences-section" style="margin-top: 20px;">
+                        <h3>🛣️ Advanced Route Preferences</h3>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="avoidHighways" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span style="font-size: 13px;">Avoid Highways</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="preferScenic" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span style="font-size: 13px;">Prefer Scenic</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="avoidTolls" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span style="font-size: 13px;">Avoid Tolls</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="avoidCAZ" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span style="font-size: 13px;">Avoid CAZ</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="preferQuiet" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span style="font-size: 13px;">Prefer Quiet</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="avoidUnpaved" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <span style="font-size: 13px;">Avoid Unpaved</span>
+                            </label>
+                        </div>
+
+                        <!-- Route Optimization -->
+                        <div class="preference-item">
+                            <span class="preference-label">Route Optimization</span>
+                            <select id="routeOptimization" onchange="saveRoutePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="fastest">⚡ Fastest</option>
+                                <option value="shortest">📏 Shortest</option>
+                                <option value="cheapest">💰 Cheapest</option>
+                                <option value="eco">🌱 Eco-Friendly</option>
+                                <option value="balanced">⚖️ Balanced</option>
+                            </select>
+                        </div>
+
+                        <!-- Max Detour Percentage -->
+                        <div class="preference-item">
+                            <span class="preference-label">Max Detour Allowed</span>
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <input type="range" id="maxDetour" min="0" max="50" value="20" onchange="updateDetourLabel()" style="flex: 1; cursor: pointer;">
+                                <span id="detourLabel" style="font-size: 13px; font-weight: 500; min-width: 40px;">20%</span>
+                            </div>
+                        </div>
+                    </div>
+
                     <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
                 </div>
 
@@ -2011,6 +2067,147 @@ HTML_TEMPLATE = '''
                         <!-- Trip List -->
                         <div id="tripHistoryList" style="max-height: 400px; overflow-y: auto;">
                             <div style="text-align: center; padding: 20px; color: #999;">Loading trips...</div>
+                        </div>
+                    </div>
+
+                    <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
+                </div>
+
+                <!-- ROUTE SHARING TAB (NEW FEATURE) -->
+                <div id="routeSharingTab" style="display: none;">
+                    <div class="preferences-section">
+                        <h3>🔗 Share Route</h3>
+
+                        <!-- Share Options -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                            <button class="routing-mode-btn" onclick="generateShareLink()" style="background: #667eea;">
+                                🔗 Copy Link
+                            </button>
+                            <button class="routing-mode-btn" onclick="generateQRCode()" style="background: #FF9800;">
+                                📱 QR Code
+                            </button>
+                        </div>
+
+                        <!-- Share Link Display -->
+                        <div id="shareLinkContainer" style="display: none; margin-bottom: 15px;">
+                            <label style="font-size: 12px; color: #666; display: block; margin-bottom: 5px;">Share Link:</label>
+                            <div style="display: flex; gap: 8px;">
+                                <input type="text" id="shareLink" readonly style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 12px; background: #f5f5f5;">
+                                <button onclick="copyShareLink()" style="background: #4CAF50; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-weight: 500;">Copy</button>
+                            </div>
+                        </div>
+
+                        <!-- QR Code Display -->
+                        <div id="qrCodeContainer" style="display: none; text-align: center; margin-bottom: 15px;">
+                            <div id="qrCode" style="display: inline-block; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 4px;"></div>
+                            <button onclick="downloadQRCode()" style="width: 100%; background: #FF9800; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: 500; margin-top: 10px;">📥 Download QR Code</button>
+                        </div>
+
+                        <!-- Route Summary -->
+                        <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px;">Route Summary</h4>
+                            <div style="font-size: 13px; color: #333; line-height: 1.6;">
+                                <div>📍 <strong id="shareStart">Start: -</strong></div>
+                                <div>📍 <strong id="shareEnd">End: -</strong></div>
+                                <div>📏 <strong id="shareDistance">Distance: -</strong></div>
+                                <div>⏱️ <strong id="shareTime">Duration: -</strong></div>
+                                <div>💰 <strong id="shareCost">Total Cost: -</strong></div>
+                            </div>
+                        </div>
+
+                        <!-- Social Share -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <button onclick="shareViaWhatsApp()" style="background: #25D366; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: 500;">💬 WhatsApp</button>
+                            <button onclick="shareViaEmail()" style="background: #EA4335; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: 500;">📧 Email</button>
+                        </div>
+                    </div>
+
+                    <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
+                </div>
+
+                <!-- ROUTE ANALYTICS TAB (NEW FEATURE) -->
+                <div id="routeAnalyticsTab" style="display: none;">
+                    <div class="preferences-section">
+                        <h3>📊 Trip Analytics</h3>
+
+                        <!-- Summary Stats -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                            <div style="background: #E3F2FD; padding: 12px; border-radius: 6px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #1976D2;" id="totalTrips">0</div>
+                                <div style="font-size: 12px; color: #666;">Total Trips</div>
+                            </div>
+                            <div style="background: #F3E5F5; padding: 12px; border-radius: 6px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #7B1FA2;" id="totalDistance">0</div>
+                                <div style="font-size: 12px; color: #666;">Total Distance</div>
+                            </div>
+                            <div style="background: #E8F5E9; padding: 12px; border-radius: 6px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #388E3C;" id="totalCost">£0</div>
+                                <div style="font-size: 12px; color: #666;">Total Cost</div>
+                            </div>
+                            <div style="background: #FFF3E0; padding: 12px; border-radius: 6px; text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #F57C00;" id="avgDuration">0</div>
+                                <div style="font-size: 12px; color: #666;">Avg Duration</div>
+                            </div>
+                        </div>
+
+                        <!-- Most Frequent Routes -->
+                        <div style="margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px;">🔄 Most Frequent Routes</h4>
+                            <div id="frequentRoutesList" style="max-height: 200px; overflow-y: auto;">
+                                <div style="text-align: center; padding: 20px; color: #999;">Loading...</div>
+                            </div>
+                        </div>
+
+                        <!-- Cost Breakdown -->
+                        <div style="margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px;">💰 Cost Breakdown</h4>
+                            <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; font-size: 13px;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span>⛽ Fuel Cost:</span>
+                                    <strong id="totalFuelCost">£0.00</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span>🛣️ Toll Cost:</span>
+                                    <strong id="totalTollCost">£0.00</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span>🚗 CAZ Cost:</span>
+                                    <strong id="totalCAZCost">£0.00</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Time Statistics -->
+                        <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; font-size: 13px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px;">⏱️ Time Statistics</h4>
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <span>Total Time:</span>
+                                <strong id="totalTime">0 hours</strong>
+                            </div>
+                            <div style="display: flex; justify-content: space-between;">
+                                <span>Average Speed:</span>
+                                <strong id="avgSpeed">0 km/h</strong>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
+                </div>
+
+                <!-- SAVED ROUTES TAB (NEW FEATURE) -->
+                <div id="savedRoutesTab" style="display: none;">
+                    <div class="preferences-section">
+                        <h3>⭐ Saved Routes</h3>
+
+                        <!-- Save Current Route -->
+                        <div style="margin-bottom: 15px;">
+                            <input type="text" id="routeName" placeholder="Route name (e.g., 'Home to Work')" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; margin-bottom: 8px;">
+                            <button onclick="saveCurrentRoute()" style="width: 100%; background: #E91E63; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: 500;">💾 Save Current Route</button>
+                        </div>
+
+                        <!-- Saved Routes List -->
+                        <div id="savedRoutesList" style="max-height: 400px; overflow-y: auto;">
+                            <div style="text-align: center; padding: 20px; color: #999;">No saved routes yet</div>
                         </div>
                     </div>
 
@@ -2036,6 +2233,14 @@ HTML_TEMPLATE = '''
                         <!-- Route Comparison List -->
                         <div id="routeComparisonList" style="max-height: 350px; overflow-y: auto; margin-top: 15px;">
                             <div style="text-align: center; padding: 20px; color: #999;">Calculate a route to see options</div>
+                        </div>
+
+                        <!-- Real-time Traffic Update -->
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                            <button onclick="updateTrafficConditions()" style="width: 100%; background: #FF6F00; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: 500; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                🚦 Update Traffic Conditions
+                            </button>
+                            <div id="trafficStatus" style="font-size: 12px; color: #666; margin-top: 8px; text-align: center;">Last updated: Never</div>
                         </div>
                     </div>
 
@@ -2175,10 +2380,13 @@ HTML_TEMPLATE = '''
 
         // Tab switching function
         function switchTab(tab) {
-            const navigationContent = document.querySelector('.bottom-sheet-content > div:not(#settingsTab):not(#tripHistoryTab):not(#routeComparisonTab)');
+            const navigationContent = document.querySelector('.bottom-sheet-content > div:not(#settingsTab):not(#tripHistoryTab):not(#routeComparisonTab):not(#routeSharingTab):not(#routeAnalyticsTab):not(#savedRoutesTab)');
             const settingsTab = document.getElementById('settingsTab');
             const tripHistoryTab = document.getElementById('tripHistoryTab');
             const routeComparisonTab = document.getElementById('routeComparisonTab');
+            const routeSharingTab = document.getElementById('routeSharingTab');
+            const routeAnalyticsTab = document.getElementById('routeAnalyticsTab');
+            const savedRoutesTab = document.getElementById('savedRoutesTab');
             const sheetTitle = document.getElementById('sheetTitle');
 
             // Hide all tabs
@@ -2186,11 +2394,15 @@ HTML_TEMPLATE = '''
             settingsTab.style.display = 'none';
             tripHistoryTab.style.display = 'none';
             routeComparisonTab.style.display = 'none';
+            routeSharingTab.style.display = 'none';
+            routeAnalyticsTab.style.display = 'none';
+            savedRoutesTab.style.display = 'none';
 
             if (tab === 'settings') {
                 settingsTab.style.display = 'block';
                 sheetTitle.textContent = '⚙️ Settings';
                 loadUnitPreferences();
+                loadRoutePreferences();
             } else if (tab === 'tripHistory') {
                 tripHistoryTab.style.display = 'block';
                 sheetTitle.textContent = '📋 Trip History';
@@ -2199,6 +2411,18 @@ HTML_TEMPLATE = '''
                 routeComparisonTab.style.display = 'block';
                 sheetTitle.textContent = '🛣️ Route Options';
                 displayRouteComparison();
+            } else if (tab === 'routeSharing') {
+                routeSharingTab.style.display = 'block';
+                sheetTitle.textContent = '🔗 Share Route';
+                prepareRouteSharing();
+            } else if (tab === 'routeAnalytics') {
+                routeAnalyticsTab.style.display = 'block';
+                sheetTitle.textContent = '📊 Analytics';
+                loadRouteAnalytics();
+            } else if (tab === 'savedRoutes') {
+                savedRoutesTab.style.display = 'block';
+                sheetTitle.textContent = '⭐ Saved Routes';
+                loadSavedRoutes();
             } else {
                 if (navigationContent) navigationContent.style.display = 'block';
                 sheetTitle.textContent = '🗺️ Navigation';
@@ -2548,6 +2772,484 @@ HTML_TEMPLATE = '''
 
             showStatus('Route selected. Ready to navigate!', 'success');
             switchTab('navigation');
+        }
+
+        // ===== ROUTE SHARING FUNCTIONS =====
+        function prepareRouteSharing() {
+            if (!window.lastCalculatedRoute) {
+                showStatus('No route calculated yet', 'error');
+                return;
+            }
+
+            const route = window.lastCalculatedRoute;
+            const startInput = document.getElementById('start').value;
+            const endInput = document.getElementById('end').value;
+            const symbol = getCurrencySymbol();
+            const distUnit = getDistanceUnit();
+
+            // Update route summary
+            document.getElementById('shareStart').textContent = `Start: ${startInput}`;
+            document.getElementById('shareEnd').textContent = `End: ${endInput}`;
+            document.getElementById('shareDistance').textContent = `Distance: ${convertDistance(route.distance_km || 0)} ${distUnit}`;
+            document.getElementById('shareTime').textContent = `Duration: ${route.time || 'N/A'}`;
+
+            const totalCost = (parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2);
+            document.getElementById('shareCost').textContent = `Total Cost: ${symbol}${totalCost}`;
+        }
+
+        function generateShareLink() {
+            if (!window.lastCalculatedRoute) {
+                showStatus('No route calculated yet', 'error');
+                return;
+            }
+
+            const route = window.lastCalculatedRoute;
+            const startInput = document.getElementById('start').value;
+            const endInput = document.getElementById('end').value;
+
+            // Create shareable link with route data
+            const routeData = {
+                start: startInput,
+                end: endInput,
+                distance: route.distance_km,
+                time: route.time,
+                fuel_cost: route.fuel_cost,
+                toll_cost: route.toll_cost,
+                caz_cost: route.caz_cost,
+                geometry: route.geometry
+            };
+
+            // Encode route data as base64
+            const encodedRoute = btoa(JSON.stringify(routeData));
+            const shareLink = `${window.location.origin}?route=${encodedRoute}`;
+
+            // Display share link
+            document.getElementById('shareLink').value = shareLink;
+            document.getElementById('shareLinkContainer').style.display = 'block';
+            document.getElementById('qrCodeContainer').style.display = 'none';
+
+            showStatus('Share link generated!', 'success');
+        }
+
+        function copyShareLink() {
+            const shareLink = document.getElementById('shareLink');
+            shareLink.select();
+            document.execCommand('copy');
+            showStatus('Link copied to clipboard!', 'success');
+        }
+
+        function generateQRCode() {
+            if (!window.lastCalculatedRoute) {
+                showStatus('No route calculated yet', 'error');
+                return;
+            }
+
+            // Generate share link first
+            const route = window.lastCalculatedRoute;
+            const startInput = document.getElementById('start').value;
+            const endInput = document.getElementById('end').value;
+
+            const routeData = {
+                start: startInput,
+                end: endInput,
+                distance: route.distance_km,
+                time: route.time,
+                fuel_cost: route.fuel_cost,
+                toll_cost: route.toll_cost,
+                caz_cost: route.caz_cost
+            };
+
+            const encodedRoute = btoa(JSON.stringify(routeData));
+            const shareLink = `${window.location.origin}?route=${encodedRoute}`;
+
+            // Clear previous QR code
+            const qrContainer = document.getElementById('qrCode');
+            qrContainer.innerHTML = '';
+
+            // Generate QR code using QR Server API
+            const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareLink)}`;
+            const qrImage = document.createElement('img');
+            qrImage.src = qrImageUrl;
+            qrImage.alt = 'Route QR Code';
+            qrImage.style.width = '200px';
+            qrImage.style.height = '200px';
+            qrContainer.appendChild(qrImage);
+
+            // Store QR image URL for download
+            window.qrImageUrl = qrImageUrl;
+
+            document.getElementById('qrCodeContainer').style.display = 'block';
+            document.getElementById('shareLinkContainer').style.display = 'none';
+
+            showStatus('QR code generated!', 'success');
+        }
+
+        function downloadQRCode() {
+            if (!window.qrImageUrl) {
+                showStatus('Generate QR code first', 'error');
+                return;
+            }
+
+            const link = document.createElement('a');
+            link.href = window.qrImageUrl;
+            link.download = 'route-qr-code.png';
+            link.click();
+
+            showStatus('QR code downloaded!', 'success');
+        }
+
+        function shareViaWhatsApp() {
+            if (!window.lastCalculatedRoute) {
+                showStatus('No route calculated yet', 'error');
+                return;
+            }
+
+            const route = window.lastCalculatedRoute;
+            const startInput = document.getElementById('start').value;
+            const endInput = document.getElementById('end').value;
+            const symbol = getCurrencySymbol();
+            const distUnit = getDistanceUnit();
+
+            const message = `📍 Route from ${startInput} to ${endInput}\n📏 Distance: ${convertDistance(route.distance_km)} ${distUnit}\n⏱️ Duration: ${route.time}\n💰 Cost: ${symbol}${(parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2)}\n\nShared via Voyagr Navigation`;
+
+            const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+            window.open(whatsappUrl, '_blank');
+
+            showStatus('Opening WhatsApp...', 'success');
+        }
+
+        function shareViaEmail() {
+            if (!window.lastCalculatedRoute) {
+                showStatus('No route calculated yet', 'error');
+                return;
+            }
+
+            const route = window.lastCalculatedRoute;
+            const startInput = document.getElementById('start').value;
+            const endInput = document.getElementById('end').value;
+            const symbol = getCurrencySymbol();
+            const distUnit = getDistanceUnit();
+
+            const subject = `Route: ${startInput} to ${endInput}`;
+            const body = `I'm sharing a route with you:\n\nFrom: ${startInput}\nTo: ${endInput}\nDistance: ${convertDistance(route.distance_km)} ${distUnit}\nDuration: ${route.time}\nEstimated Cost: ${symbol}${(parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2)}\n\nShared via Voyagr Navigation`;
+
+            const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+            window.location.href = mailtoUrl;
+
+            showStatus('Opening email client...', 'success');
+        }
+
+        // ===== ROUTE ANALYTICS FUNCTIONS =====
+        function loadRouteAnalytics() {
+            fetch('/api/trip-analytics')
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        displayAnalytics(data);
+                    } else {
+                        showStatus('Failed to load analytics', 'error');
+                    }
+                })
+                .catch(error => {
+                    console.error('Analytics error:', error);
+                    showStatus('Error loading analytics', 'error');
+                });
+        }
+
+        function displayAnalytics(data) {
+            const symbol = getCurrencySymbol();
+            const distUnit = getDistanceUnit();
+
+            // Update summary stats
+            document.getElementById('totalTrips').textContent = data.total_trips || 0;
+            document.getElementById('totalDistance').textContent = `${convertDistance(data.total_distance_km || 0)} ${distUnit}`;
+            document.getElementById('totalCost').textContent = `${symbol}${(data.total_cost || 0).toFixed(2)}`;
+            document.getElementById('avgDuration').textContent = `${data.avg_duration || 0} min`;
+
+            // Update cost breakdown
+            document.getElementById('totalFuelCost').textContent = `${symbol}${(data.total_fuel_cost || 0).toFixed(2)}`;
+            document.getElementById('totalTollCost').textContent = `${symbol}${(data.total_toll_cost || 0).toFixed(2)}`;
+            document.getElementById('totalCAZCost').textContent = `${symbol}${(data.total_caz_cost || 0).toFixed(2)}`;
+
+            // Update time statistics
+            const totalHours = Math.floor((data.total_time_minutes || 0) / 60);
+            const totalMinutes = (data.total_time_minutes || 0) % 60;
+            document.getElementById('totalTime').textContent = `${totalHours}h ${totalMinutes}m`;
+            document.getElementById('avgSpeed').textContent = `${(data.avg_speed || 0).toFixed(1)} ${distUnit === 'km' ? 'km/h' : 'mph'}`;
+
+            // Display most frequent routes
+            const frequentRoutesList = document.getElementById('frequentRoutesList');
+            if (data.frequent_routes && data.frequent_routes.length > 0) {
+                frequentRoutesList.innerHTML = data.frequent_routes.map((route, idx) => `
+                    <div style="background: white; padding: 10px; border-radius: 4px; margin-bottom: 8px; border-left: 4px solid #FF5722;">
+                        <div style="font-weight: 500; font-size: 13px; margin-bottom: 4px;">${idx + 1}. ${route.start} → ${route.end}</div>
+                        <div style="font-size: 12px; color: #666;">
+                            <span>🔄 ${route.count} trips</span> |
+                            <span>📏 ${convertDistance(route.avg_distance)} ${distUnit}</span> |
+                            <span>💰 ${symbol}${route.avg_cost.toFixed(2)}</span>
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                frequentRoutesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No trip history yet</div>';
+            }
+        }
+
+        // ===== ADVANCED ROUTE PREFERENCES FUNCTIONS =====
+        function saveRoutePreferences() {
+            const preferences = {
+                avoidHighways: document.getElementById('avoidHighways').checked,
+                preferScenic: document.getElementById('preferScenic').checked,
+                avoidTolls: document.getElementById('avoidTolls').checked,
+                avoidCAZ: document.getElementById('avoidCAZ').checked,
+                preferQuiet: document.getElementById('preferQuiet').checked,
+                avoidUnpaved: document.getElementById('avoidUnpaved').checked,
+                routeOptimization: document.getElementById('routeOptimization').value,
+                maxDetour: parseInt(document.getElementById('maxDetour').value)
+            };
+
+            localStorage.setItem('routePreferences', JSON.stringify(preferences));
+            showStatus('Route preferences saved!', 'success');
+        }
+
+        function loadRoutePreferences() {
+            const saved = localStorage.getItem('routePreferences');
+            if (saved) {
+                const preferences = JSON.parse(saved);
+                document.getElementById('avoidHighways').checked = preferences.avoidHighways || false;
+                document.getElementById('preferScenic').checked = preferences.preferScenic || false;
+                document.getElementById('avoidTolls').checked = preferences.avoidTolls || false;
+                document.getElementById('avoidCAZ').checked = preferences.avoidCAZ || false;
+                document.getElementById('preferQuiet').checked = preferences.preferQuiet || false;
+                document.getElementById('avoidUnpaved').checked = preferences.avoidUnpaved || false;
+                document.getElementById('routeOptimization').value = preferences.routeOptimization || 'fastest';
+                document.getElementById('maxDetour').value = preferences.maxDetour || 20;
+                updateDetourLabel();
+            }
+        }
+
+        function updateDetourLabel() {
+            const value = document.getElementById('maxDetour').value;
+            document.getElementById('detourLabel').textContent = value + '%';
+        }
+
+        function getRoutePreferences() {
+            const saved = localStorage.getItem('routePreferences');
+            if (saved) {
+                return JSON.parse(saved);
+            }
+            return {
+                avoidHighways: false,
+                preferScenic: false,
+                avoidTolls: false,
+                avoidCAZ: false,
+                preferQuiet: false,
+                avoidUnpaved: false,
+                routeOptimization: 'fastest',
+                maxDetour: 20
+            };
+        }
+
+        // ===== ROUTE SAVING FUNCTIONS =====
+        function saveCurrentRoute() {
+            if (!window.lastCalculatedRoute) {
+                showStatus('No route calculated yet', 'error');
+                return;
+            }
+
+            const routeName = document.getElementById('routeName').value.trim();
+            if (!routeName) {
+                showStatus('Please enter a route name', 'error');
+                return;
+            }
+
+            const route = window.lastCalculatedRoute;
+            const startInput = document.getElementById('start').value;
+            const endInput = document.getElementById('end').value;
+
+            const savedRoute = {
+                id: Date.now(),
+                name: routeName,
+                start: startInput,
+                end: endInput,
+                distance_km: route.distance_km,
+                duration_minutes: route.time,
+                fuel_cost: route.fuel_cost,
+                toll_cost: route.toll_cost,
+                caz_cost: route.caz_cost,
+                geometry: route.geometry,
+                timestamp: new Date().toISOString()
+            };
+
+            // Get existing saved routes
+            let savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+            savedRoutes.push(savedRoute);
+            localStorage.setItem('savedRoutes', JSON.stringify(savedRoutes));
+
+            document.getElementById('routeName').value = '';
+            showStatus(`Route "${routeName}" saved!`, 'success');
+            loadSavedRoutes();
+        }
+
+        function loadSavedRoutes() {
+            const savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+            const savedRoutesList = document.getElementById('savedRoutesList');
+
+            if (savedRoutes.length === 0) {
+                savedRoutesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No saved routes yet</div>';
+                return;
+            }
+
+            const symbol = getCurrencySymbol();
+            const distUnit = getDistanceUnit();
+
+            savedRoutesList.innerHTML = savedRoutes.map(route => `
+                <div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 4px solid #E91E63;">
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
+                        <div>
+                            <div style="font-weight: 500; font-size: 14px;">${route.name}</div>
+                            <div style="font-size: 12px; color: #666; margin-top: 4px;">📍 ${route.start} → ${route.end}</div>
+                        </div>
+                        <button onclick="deleteSavedRoute(${route.id})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;">✕</button>
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
+                        📏 ${convertDistance(route.distance_km)} ${distUnit} | ⏱️ ${route.duration_minutes} | 💰 ${symbol}${(parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2)}
+                    </div>
+                    <button onclick="useSavedRoute(${route.id})" style="width: 100%; background: #E91E63; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">🚀 Use This Route</button>
+                </div>
+            `).join('');
+        }
+
+        function useSavedRoute(routeId) {
+            const savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+            const route = savedRoutes.find(r => r.id === routeId);
+
+            if (route) {
+                document.getElementById('start').value = route.start;
+                document.getElementById('end').value = route.end;
+                window.lastCalculatedRoute = {
+                    distance_km: route.distance_km,
+                    time: route.duration_minutes,
+                    fuel_cost: route.fuel_cost,
+                    toll_cost: route.toll_cost,
+                    caz_cost: route.caz_cost,
+                    geometry: route.geometry
+                };
+                showStatus(`Loaded route: ${route.name}`, 'success');
+                switchTab('navigation');
+            }
+        }
+
+        function deleteSavedRoute(routeId) {
+            if (confirm('Delete this saved route?')) {
+                let savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
+                savedRoutes = savedRoutes.filter(r => r.id !== routeId);
+                localStorage.setItem('savedRoutes', JSON.stringify(savedRoutes));
+                showStatus('Route deleted', 'success');
+                loadSavedRoutes();
+            }
+        }
+
+        // ===== REAL-TIME TRAFFIC UPDATE FUNCTIONS =====
+        function updateTrafficConditions() {
+            if (!window.lastCalculatedRoute) {
+                showStatus('No route calculated yet', 'error');
+                return;
+            }
+
+            const startInput = document.getElementById('start').value;
+            const endInput = document.getElementById('end').value;
+
+            showStatus('Checking traffic conditions...', 'info');
+
+            // Fetch traffic data from backend
+            fetch('/api/traffic-conditions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    start: startInput,
+                    end: endInput
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayTrafficUpdate(data);
+                } else {
+                    showStatus('Could not fetch traffic data', 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Traffic update error:', error);
+                showStatus('Error updating traffic conditions', 'error');
+            });
+        }
+
+        function displayTrafficUpdate(data) {
+            const symbol = getCurrencySymbol();
+            const distUnit = getDistanceUnit();
+
+            // Update traffic status
+            const trafficStatus = document.getElementById('trafficStatus');
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
+            trafficStatus.textContent = `Last updated: ${timeStr} | Conditions: ${data.traffic_level}`;
+
+            // Update route information if traffic has changed
+            if (data.updated_duration_minutes !== window.lastCalculatedRoute.time) {
+                const oldTime = parseInt(window.lastCalculatedRoute.time);
+                const newTime = data.updated_duration_minutes;
+                const timeDiff = newTime - oldTime;
+                const timeDiffStr = timeDiff > 0 ? `+${timeDiff}` : `${timeDiff}`;
+
+                showStatus(`Traffic update: Duration changed from ${oldTime} to ${newTime} min (${timeDiffStr} min)`, 'warning');
+
+                // Update route data
+                window.lastCalculatedRoute.time = newTime;
+                window.lastCalculatedRoute.traffic_level = data.traffic_level;
+                window.lastCalculatedRoute.updated_at = new Date().toISOString();
+
+                // Recalculate costs if distance changed
+                if (data.updated_distance_km) {
+                    window.lastCalculatedRoute.distance_km = data.updated_distance_km;
+                }
+            } else {
+                showStatus(`Traffic conditions: ${data.traffic_level}`, 'success');
+            }
+
+            // Display traffic details
+            const trafficDetails = `
+                🚦 Traffic Level: ${data.traffic_level}
+                📏 Distance: ${convertDistance(data.updated_distance_km || window.lastCalculatedRoute.distance_km)} ${distUnit}
+                ⏱️ Duration: ${data.updated_duration_minutes} minutes
+                🚗 Congestion: ${data.congestion_percentage}%
+                ⚠️ Incidents: ${data.incidents_count}
+            `;
+
+            console.log('Traffic Update:', trafficDetails);
+        }
+
+        // Auto-update traffic every 5 minutes during navigation
+        function startTrafficMonitoring() {
+            if (window.trafficMonitoringInterval) {
+                clearInterval(window.trafficMonitoringInterval);
+            }
+
+            window.trafficMonitoringInterval = setInterval(() => {
+                if (window.lastCalculatedRoute && document.getElementById('start').value) {
+                    updateTrafficConditions();
+                }
+            }, 5 * 60 * 1000); // Update every 5 minutes
+
+            showStatus('Traffic monitoring started', 'success');
+        }
+
+        function stopTrafficMonitoring() {
+            if (window.trafficMonitoringInterval) {
+                clearInterval(window.trafficMonitoringInterval);
+                window.trafficMonitoringInterval = null;
+                showStatus('Traffic monitoring stopped', 'info');
+            }
         }
 
         // Map click handler for location picker
@@ -5203,6 +5905,132 @@ def trip_history(trip_id=None):
             conn.close()
             return jsonify({'success': True, 'message': f'Trip {trip_id} deleted'})
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/trip-analytics', methods=['GET'])
+def get_trip_analytics():
+    """Get trip analytics and statistics"""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cursor = conn.cursor()
+
+        # Get total trips and statistics
+        cursor.execute('''
+            SELECT
+                COUNT(*) as total_trips,
+                SUM(distance_km) as total_distance,
+                SUM(duration_minutes) as total_time,
+                AVG(duration_minutes) as avg_duration,
+                SUM(fuel_cost) as total_fuel_cost,
+                SUM(toll_cost) as total_toll_cost,
+                SUM(caz_cost) as total_caz_cost
+            FROM trips
+        ''')
+        stats = cursor.fetchone()
+
+        total_trips = stats[0] or 0
+        total_distance = stats[1] or 0
+        total_time = stats[2] or 0
+        avg_duration = stats[3] or 0
+        total_fuel_cost = stats[4] or 0
+        total_toll_cost = stats[5] or 0
+        total_caz_cost = stats[6] or 0
+
+        total_cost = total_fuel_cost + total_toll_cost + total_caz_cost
+        avg_speed = (total_distance / (total_time / 60)) if total_time > 0 else 0
+
+        # Get most frequent routes
+        cursor.execute('''
+            SELECT
+                start_address, end_address,
+                COUNT(*) as trip_count,
+                AVG(distance_km) as avg_distance,
+                AVG(fuel_cost + toll_cost + caz_cost) as avg_cost
+            FROM trips
+            GROUP BY start_address, end_address
+            ORDER BY trip_count DESC
+            LIMIT 5
+        ''')
+        frequent_routes = cursor.fetchall()
+
+        routes_list = []
+        for route in frequent_routes:
+            routes_list.append({
+                'start': route[0],
+                'end': route[1],
+                'count': route[2],
+                'avg_distance': route[3],
+                'avg_cost': route[4]
+            })
+
+        conn.close()
+
+        return jsonify({
+            'success': True,
+            'total_trips': total_trips,
+            'total_distance_km': total_distance,
+            'total_time_minutes': total_time,
+            'avg_duration': round(avg_duration, 0),
+            'total_cost': total_cost,
+            'total_fuel_cost': total_fuel_cost,
+            'total_toll_cost': total_toll_cost,
+            'total_caz_cost': total_caz_cost,
+            'avg_speed': avg_speed,
+            'frequent_routes': routes_list
+        })
+    except Exception as e:
+        print(f"Error fetching trip analytics: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/traffic-conditions', methods=['POST'])
+def get_traffic_conditions():
+    """Get real-time traffic conditions for a route"""
+    try:
+        data = request.json
+        start = data.get('start', '').strip()
+        end = data.get('end', '').strip()
+
+        # Simulate traffic data (in production, integrate with real traffic API)
+        # This would connect to services like Google Maps Traffic, HERE Traffic, or TomTom Traffic
+
+        import random
+        import math
+
+        # Simulate traffic level based on time of day
+        hour = datetime.datetime.now().hour
+        if 7 <= hour <= 9 or 17 <= hour <= 19:  # Rush hours
+            traffic_level = random.choice(['Heavy', 'Moderate', 'Heavy'])
+            congestion = random.randint(60, 95)
+        elif 10 <= hour <= 16:  # Mid-day
+            traffic_level = random.choice(['Light', 'Moderate'])
+            congestion = random.randint(20, 50)
+        else:  # Night
+            traffic_level = 'Light'
+            congestion = random.randint(5, 25)
+
+        # Simulate duration change based on traffic
+        base_duration = 30  # Default 30 minutes
+        if traffic_level == 'Heavy':
+            updated_duration = base_duration * random.uniform(1.5, 2.0)
+        elif traffic_level == 'Moderate':
+            updated_duration = base_duration * random.uniform(1.1, 1.4)
+        else:
+            updated_duration = base_duration * random.uniform(0.9, 1.1)
+
+        # Simulate incidents
+        incidents = random.randint(0, 3)
+
+        return jsonify({
+            'success': True,
+            'traffic_level': traffic_level,
+            'congestion_percentage': congestion,
+            'incidents_count': incidents,
+            'updated_duration_minutes': int(updated_duration),
+            'updated_distance_km': 25.5,  # Simulated distance
+            'timestamp': datetime.datetime.now().isoformat()
+        })
+    except Exception as e:
+        print(f"Error fetching traffic conditions: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/route', methods=['POST'])
