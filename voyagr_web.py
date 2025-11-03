@@ -7862,6 +7862,118 @@ def resolve_all_engine_alerts(engine_name):
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# ===== COST ANALYSIS ENDPOINTS =====
+
+@app.route('/api/monitoring/costs/bandwidth', methods=['GET'])
+def get_bandwidth_usage():
+    """Get bandwidth usage history."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        days = request.args.get('days', 30, type=int)
+        bandwidth_data = monitor.get_bandwidth_usage(days)
+        return jsonify({'success': True, 'bandwidth': bandwidth_data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/costs/requests', methods=['GET'])
+def get_request_counts():
+    """Get API request counts."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        days = request.args.get('days', 30, type=int)
+        request_data = monitor.get_request_counts(days)
+        return jsonify({'success': True, 'requests': request_data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/costs/estimate', methods=['GET'])
+def estimate_monthly_cost():
+    """Get estimated monthly OCI costs."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        days = request.args.get('days', 30, type=int)
+        estimate = monitor.estimate_monthly_cost(days)
+        return jsonify({'success': True, 'estimate': estimate})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/costs/trends', methods=['GET'])
+def analyze_cost_trends():
+    """Analyze cost trends and anomalies."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        days = request.args.get('days', 30, type=int)
+        trends = monitor.analyze_cost_trends(days)
+        return jsonify({'success': True, 'trends': trends})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/costs/history', methods=['GET'])
+def get_cost_history():
+    """Get comprehensive cost history."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        days = request.args.get('days', 30, type=int)
+        history = monitor.get_cost_history(days)
+        return jsonify({'success': True, 'history': history})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/costs/export', methods=['GET'])
+def export_cost_history():
+    """Export cost history to CSV."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        days = request.args.get('days', 30, type=int)
+        filename = f'cost_history_{datetime.now().strftime("%Y%m%d")}.csv'
+        result = monitor.export_cost_history_csv(days, filename)
+
+        if result:
+            return send_file(result, as_attachment=True, download_name=filename)
+        else:
+            return jsonify({'success': False, 'error': 'Failed to export cost history'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/costs/track', methods=['POST'])
+def track_bandwidth_and_requests():
+    """Track bandwidth and API requests."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        data = request.json
+        engine_name = data.get('engine_name', 'valhalla')
+        inbound_gb = data.get('inbound_gb', 0)
+        outbound_gb = data.get('outbound_gb', 0)
+        request_type = data.get('request_type', 'route_calculation')
+
+        monitor.track_bandwidth(engine_name, inbound_gb, outbound_gb, request_type)
+        monitor.track_api_request(engine_name, request_type)
+
+        return jsonify({'success': True, 'message': 'Bandwidth and request tracked'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
     # Get port from environment variable (Railway sets this)
     port = int(os.getenv('PORT', 5000))
