@@ -2795,14 +2795,6 @@ HTML_TEMPLATE = '''
                                 <span style="font-size: 13px;">Prefer Scenic</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="avoidTolls" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
-                                <span style="font-size: 13px;">Avoid Tolls</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="avoidCAZ" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
-                                <span style="font-size: 13px;">Avoid CAZ</span>
-                            </label>
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="preferQuiet" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
                                 <span style="font-size: 13px;">Prefer Quiet</span>
                             </label>
@@ -3805,8 +3797,8 @@ HTML_TEMPLATE = '''
             const preferences = {
                 avoidHighways: document.getElementById('avoidHighways').checked,
                 preferScenic: document.getElementById('preferScenic').checked,
-                avoidTolls: document.getElementById('avoidTolls').checked,
-                avoidCAZ: document.getElementById('avoidCAZ').checked,
+                avoidTolls: localStorage.getItem('pref_tolls') === 'true',
+                avoidCAZ: localStorage.getItem('pref_caz') === 'true',
                 preferQuiet: document.getElementById('preferQuiet').checked,
                 avoidUnpaved: document.getElementById('avoidUnpaved').checked,
                 routeOptimization: document.getElementById('routeOptimization').value,
@@ -3823,8 +3815,8 @@ HTML_TEMPLATE = '''
                 const preferences = JSON.parse(saved);
                 document.getElementById('avoidHighways').checked = preferences.avoidHighways || false;
                 document.getElementById('preferScenic').checked = preferences.preferScenic || false;
-                document.getElementById('avoidTolls').checked = preferences.avoidTolls || false;
-                document.getElementById('avoidCAZ').checked = preferences.avoidCAZ || false;
+                // Note: avoidTolls and avoidCAZ are toggle-switch buttons, not checkboxes
+                // They are managed by togglePreference() and stored in localStorage as pref_tolls and pref_caz
                 document.getElementById('preferQuiet').checked = preferences.preferQuiet || false;
                 document.getElementById('avoidUnpaved').checked = preferences.avoidUnpaved || false;
                 document.getElementById('routeOptimization').value = preferences.routeOptimization || 'fastest';
@@ -4249,6 +4241,11 @@ HTML_TEMPLATE = '''
                         // Update info
                         updateTripInfo(data.distance, data.time, data.fuel_cost || '-', data.toll_cost || '-');
                         showStatus('Route calculated successfully! (' + data.source + ')', 'success');
+
+                        // Auto-collapse bottom sheet to show full map view
+                        setTimeout(() => {
+                            collapseBottomSheet();
+                        }, 500); // 500ms delay to let user see the success message
 
                         // Store route data for navigation
                         window.lastCalculatedRoute = data;
@@ -6804,14 +6801,10 @@ HTML_TEMPLATE = '''
 
             // Handle specific preference behaviors
             if (pref === 'caz') {
-                // Update CAZ avoidance in route preferences
-                const cazCheckbox = document.getElementById('avoidCAZ');
-                if (cazCheckbox && cazCheckbox.type === 'checkbox') {
-                    cazCheckbox.checked = isActive;
-                }
                 console.log('[Preferences] CAZ avoidance:', isActive ? 'enabled' : 'disabled');
+            } else if (pref === 'tolls') {
+                console.log('[Preferences] Toll avoidance:', isActive ? 'enabled' : 'disabled');
             } else if (pref === 'variableSpeedAlerts') {
-                // Update variable speed alerts
                 console.log('[Preferences] Variable speed alerts:', isActive ? 'enabled' : 'disabled');
             }
         }
