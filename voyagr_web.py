@@ -5062,7 +5062,12 @@ HTML_TEMPLATE = '''
 
         function enableBatterySavingMode() {
             batterySavingMode = true;
-            document.getElementById('batterySavingMode').checked = true;
+            const button = document.getElementById('batterySavingMode');
+            if (button) {
+                button.classList.add('active');
+                button.style.background = '#4CAF50';
+                button.style.borderColor = '#4CAF50';
+            }
 
             // Reduce GPS update frequency
             if (gpsWatchId !== null) {
@@ -5083,6 +5088,7 @@ HTML_TEMPLATE = '''
             });
 
             showStatus('🔋 Battery saving mode enabled', 'success');
+            localStorage.setItem('pref_batterySaving', 'true');
             fetch('/api/app-settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -5092,7 +5098,12 @@ HTML_TEMPLATE = '''
 
         function disableBatterySavingMode() {
             batterySavingMode = false;
-            document.getElementById('batterySavingMode').checked = false;
+            const button = document.getElementById('batterySavingMode');
+            if (button) {
+                button.classList.remove('active');
+                button.style.background = '#ddd';
+                button.style.borderColor = '#999';
+            }
 
             // Restore GPS update frequency
             if (gpsWatchId !== null) {
@@ -5110,6 +5121,7 @@ HTML_TEMPLATE = '''
             document.body.style.animation = '';
 
             showStatus('🔋 Battery saving mode disabled', 'info');
+            localStorage.setItem('pref_batterySaving', 'false');
             fetch('/api/app-settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -6857,6 +6869,19 @@ HTML_TEMPLATE = '''
                     autoGpsEnabled = true;
                     startAutoGpsLocation();
                     console.log('[Auto GPS] Preference restored from localStorage');
+                }
+            }
+
+            // ===== LOAD BATTERY SAVING MODE PREFERENCE =====
+            const batterySavingSaved = localStorage.getItem('pref_batterySaving');
+            if (batterySavingSaved === 'true') {
+                const button = document.getElementById('batterySavingMode');
+                if (button) {
+                    button.classList.add('active');
+                    button.style.background = '#4CAF50';
+                    button.style.borderColor = '#4CAF50';
+                    batterySavingMode = true;
+                    console.log('[Battery] Battery saving mode restored from localStorage');
                 }
             }
         }
