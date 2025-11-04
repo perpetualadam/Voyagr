@@ -6,6 +6,7 @@ Features: Route calculation, cost estimation, multi-stop routing, trip history, 
 """
 
 from flask import Flask, render_template_string, request, jsonify, send_file
+from flask_cors import CORS
 import requests
 import os
 from dotenv import load_dotenv
@@ -32,6 +33,17 @@ except ImportError:
 load_dotenv()
 
 app = Flask(__name__, static_folder='.')
+
+# Enable CORS for mobile compatibility
+CORS(app, resources={
+    r"/api/*": {
+        "origins": "*",
+        "methods": ["GET", "POST", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization"],
+        "supports_credentials": False
+    }
+})
+
 VALHALLA_URL = os.getenv('VALHALLA_URL', 'http://localhost:8002')
 GRAPHHOPPER_URL = os.getenv('GRAPHHOPPER_URL', 'http://localhost:8989')
 USE_OSRM = os.getenv('USE_OSRM', 'false').lower() == 'true'
@@ -1222,12 +1234,26 @@ HTML_TEMPLATE = '''
         }
 
         .bottom-sheet-handle {
+            width: 100%;
+            height: 30px;
+            background: transparent;
+            border-radius: 2px;
+            margin: 0;
+            cursor: grab;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            z-index: 10;
+            touch-action: none;
+        }
+
+        .bottom-sheet-handle::before {
+            content: '';
             width: 40px;
             height: 4px;
             background: #ddd;
             border-radius: 2px;
-            margin: 12px auto;
-            cursor: grab;
         }
 
         .bottom-sheet-handle:active {
@@ -1240,12 +1266,22 @@ HTML_TEMPLATE = '''
             display: flex;
             justify-content: space-between;
             align-items: center;
+            position: relative;
+            z-index: 5;
+            cursor: pointer;
+            user-select: none;
         }
 
         .bottom-sheet-header h2 {
             font-size: 18px;
             color: #333;
             margin: 0;
+            flex: 1;
+        }
+
+        .bottom-sheet-header button {
+            pointer-events: auto;
+            z-index: 10;
         }
 
         .bottom-sheet-content {
@@ -1348,6 +1384,14 @@ HTML_TEMPLATE = '''
             background: #667eea;
             color: white;
             grid-column: 1 / -1;
+            font-weight: 600;
+            font-size: 16px;
+            padding: 14px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
         }
 
         .btn-calculate:hover {
@@ -1895,6 +1939,81 @@ HTML_TEMPLATE = '''
             background: #f8f9ff;
         }
 
+        /* Autocomplete Dropdown Styles */
+        .autocomplete-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            max-height: 250px;
+            overflow-y: auto;
+            z-index: 1001;
+            display: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .autocomplete-dropdown.show {
+            display: block;
+        }
+
+        .autocomplete-item {
+            padding: 12px 16px;
+            border-bottom: 1px solid #f0f0f0;
+            cursor: pointer;
+            transition: background 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .autocomplete-item:hover {
+            background: #f0f7ff;
+        }
+
+        .autocomplete-item-icon {
+            font-size: 16px;
+            min-width: 20px;
+        }
+
+        .autocomplete-item-text {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .autocomplete-item-name {
+            font-weight: 500;
+            color: #333;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .autocomplete-item-address {
+            font-size: 12px;
+            color: #999;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .autocomplete-loading {
+            padding: 12px 16px;
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+        }
+
+        .autocomplete-no-results {
+            padding: 12px 16px;
+            text-align: center;
+            color: #999;
+            font-size: 14px;
+        }
+
         .search-history-item-text {
             font-size: 14px;
             color: #333;
@@ -2356,13 +2475,14 @@ HTML_TEMPLATE = '''
             <div class="bottom-sheet-header">
                 <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
                     <h2 id="sheetTitle">🗺️ Navigation</h2>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end;">
+                    <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center;">
                         <button class="fab" title="Saved Routes" onclick="switchTab('savedRoutes')" style="width: 40px; height: 40px; font-size: 18px; background: #E91E63; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">⭐</button>
                         <button class="fab" title="Analytics" onclick="switchTab('routeAnalytics')" style="width: 40px; height: 40px; font-size: 18px; background: #FF5722; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">📊</button>
                         <button class="fab" title="Share Route" onclick="switchTab('routeSharing')" style="width: 40px; height: 40px; font-size: 18px; background: #9C27B0; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">🔗</button>
                         <button class="fab" title="Route Options" onclick="switchTab('routeComparison')" style="width: 40px; height: 40px; font-size: 18px; background: #4CAF50; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">🛣️</button>
                         <button class="fab" title="Trip History" onclick="switchTab('tripHistory')" style="width: 40px; height: 40px; font-size: 18px; background: #FF9800; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">📋</button>
                         <button class="fab" title="Settings" onclick="switchTab('settings')" style="width: 40px; height: 40px; font-size: 18px; background: #667eea; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">⚙️</button>
+                        <button class="fab" title="Collapse" onclick="collapseBottomSheet()" style="width: 40px; height: 40px; font-size: 18px; background: #999; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: 8px;">▼</button>
                     </div>
                 </div>
             </div>
@@ -2372,22 +2492,24 @@ HTML_TEMPLATE = '''
                 <div class="form-group">
                     <label for="start">Start Location</label>
                     <div class="location-input-group">
-                        <input type="text" id="start" placeholder="Enter address or tap map">
+                        <input type="text" id="start" placeholder="Enter address or tap map" oninput="showAutocomplete('start')" onfocus="showAutocomplete('start')">
                         <div style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px;">
                             <button class="location-btn" title="Use current location" onclick="setCurrentLocation('start')" style="font-size: 16px;">📍</button>
                             <button class="location-btn" title="Pick from map" onclick="pickLocationFromMap('start')" style="font-size: 16px;">🗺️</button>
                         </div>
+                        <div class="autocomplete-dropdown" id="autocompleteStart"></div>
                     </div>
                 </div>
 
                 <div class="form-group">
                     <label for="end">Destination</label>
                     <div class="location-input-group">
-                        <input type="text" id="end" placeholder="Enter address or tap map" onfocus="showSearchHistory()">
+                        <input type="text" id="end" placeholder="Enter address or tap map" oninput="showAutocomplete('end')" onfocus="showAutocomplete('end')">
                         <div style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px;">
                             <button class="location-btn" title="Use current location" onclick="setCurrentLocation('end')" style="font-size: 16px;">📍</button>
                             <button class="location-btn" title="Pick from map" onclick="pickLocationFromMap('end')" style="font-size: 16px;">🗺️</button>
                         </div>
+                        <div class="autocomplete-dropdown" id="autocompleteEnd"></div>
                         <div class="search-history-dropdown" id="searchHistoryDropdown"></div>
                     </div>
                 </div>
@@ -2413,6 +2535,9 @@ HTML_TEMPLATE = '''
                         <button class="routing-mode-btn" id="routingBicycle" onclick="setRoutingMode('bicycle')">🚴 Bike</button>
                     </div>
                 </div>
+
+                <!-- Route Calculation Button (MOVED TO TOP FOR VISIBILITY) -->
+                <button class="btn-calculate" onclick="calculateRoute()" style="margin-top: 15px; margin-bottom: 20px;">🚀 Calculate Route</button>
 
                 <!-- Auto GPS Location Toggle (NEW FEATURE) -->
                 <div class="form-group" style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-top: 15px;">
@@ -2497,8 +2622,8 @@ HTML_TEMPLATE = '''
                 <!-- Status Message -->
                 <div id="status" class="status"></div>
 
-                <!-- Route Calculation Button -->
-                <button class="btn-calculate" onclick="calculateRoute()">Calculate Route</button>
+                <!-- Go Now / Start Navigation Button -->
+                <button id="startNavBtnSheet" class="btn-calculate" onclick="startNavigation()" style="background: #34A853; margin-top: 10px; display: none;">🧭 Go Now - Start Navigation</button>
 
                 <!-- Add to Favorites Button (Phase 2) -->
                 <button class="btn-calculate" onclick="addCurrentToFavorites()" style="background: #764ba2; margin-top: 10px;">⭐ Save Location</button>
@@ -2909,6 +3034,15 @@ HTML_TEMPLATE = '''
 
         <!-- Turn-by-Turn Navigation Display -->
         <div id="turnInfo" style="position: absolute; top: 80px; right: 20px; z-index: 100; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); display: none; min-width: 200px;"></div>
+
+        <!-- Speed Widget -->
+        <div id="speedWidget" style="position: absolute; top: 20px; right: 20px; z-index: 100; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); display: none; min-width: 140px; text-align: center;">
+            <div style="font-size: 12px; color: #666; margin-bottom: 8px;">Current Speed</div>
+            <div id="speedValue" style="font-size: 32px; font-weight: bold; color: #333; margin-bottom: 8px;">0 <span id="speedUnit">km/h</span></div>
+            <div style="font-size: 12px; color: #666; margin-bottom: 8px;">Speed Limit</div>
+            <div id="speedLimitValue" style="font-size: 20px; font-weight: bold; color: #4CAF50; margin-bottom: 8px;">-- <span id="speedLimitUnit">km/h</span></div>
+            <div id="speedWarning" style="font-size: 14px; color: #FF5722; font-weight: bold; display: none; margin-top: 8px;">⚠️ SPEEDING</div>
+        </div>
 
         <!-- Notification Container -->
         <div id="notificationContainer" style="position: fixed; top: 20px; right: 20px; z-index: 200; max-width: 400px;"></div>
@@ -4155,10 +4289,14 @@ HTML_TEMPLATE = '''
                         // Sort by preference
                         sortRoutesByPreference();
 
-                        // Show start navigation button
+                        // Show start navigation buttons (both in FAB and in bottom sheet)
                         const startNavBtn = document.getElementById('startNavBtn');
+                        const startNavBtnSheet = document.getElementById('startNavBtnSheet');
                         if (startNavBtn) {
                             startNavBtn.style.display = 'block';
+                        }
+                        if (startNavBtnSheet) {
+                            startNavBtnSheet.style.display = 'block';
                         }
 
                         // Send notification
@@ -4183,6 +4321,10 @@ HTML_TEMPLATE = '''
             }
             startTurnByTurnNavigation(window.lastCalculatedRoute);
             document.getElementById('startNavBtn').style.display = 'none';
+            const startNavBtnSheet = document.getElementById('startNavBtnSheet');
+            if (startNavBtnSheet) {
+                startNavBtnSheet.style.display = 'none';
+            }
         }
 
         function clearForm() {
@@ -4336,6 +4478,68 @@ HTML_TEMPLATE = '''
         }
 
         // ===== PHASE 2 FEATURES: SPEED WARNINGS =====
+
+        // Speed widget variables
+        let speedWidgetEnabled = false;
+        let currentSpeedMph = 0;
+        let currentSpeedLimitMph = 0;
+        let speedLimitThreshold = 5; // mph over limit to trigger warning
+
+        function updateSpeedWidget(speedMph, speedLimitMph = null) {
+            /**
+             * Update the speed widget display with current speed and speed limit.
+             * Shows visual warning when exceeding speed limit.
+             */
+            const widget = document.getElementById('speedWidget');
+            if (!widget) return;
+
+            // Get user's preferred unit
+            const useMetric = localStorage.getItem('useMetric') !== 'false';
+            const speedUnit = useMetric ? 'km/h' : 'mph';
+            const displaySpeed = useMetric ? (speedMph * 1.60934) : speedMph;
+
+            // Update current speed
+            document.getElementById('speedValue').textContent = Math.round(displaySpeed);
+            document.getElementById('speedUnit').textContent = speedUnit;
+
+            // Update speed limit if provided
+            if (speedLimitMph !== null && speedLimitMph > 0) {
+                const displaySpeedLimit = useMetric ? (speedLimitMph * 1.60934) : speedLimitMph;
+                document.getElementById('speedLimitValue').textContent = Math.round(displaySpeedLimit);
+                document.getElementById('speedLimitUnit').textContent = speedUnit;
+
+                // Check if speeding
+                const speedDiff = speedMph - speedLimitMph;
+                const warningElement = document.getElementById('speedWarning');
+                if (speedDiff > speedLimitThreshold) {
+                    warningElement.style.display = 'block';
+                    widget.style.borderLeft = '4px solid #FF5722';
+                } else {
+                    warningElement.style.display = 'none';
+                    widget.style.borderLeft = '4px solid #4CAF50';
+                }
+            } else {
+                document.getElementById('speedLimitValue').textContent = '--';
+                document.getElementById('speedWarning').style.display = 'none';
+                widget.style.borderLeft = '4px solid #999';
+            }
+
+            // Show widget if tracking is active
+            if (isTrackingActive) {
+                widget.style.display = 'block';
+            }
+        }
+
+        function toggleSpeedWidget() {
+            speedWidgetEnabled = !speedWidgetEnabled;
+            const widget = document.getElementById('speedWidget');
+            if (speedWidgetEnabled && isTrackingActive) {
+                widget.style.display = 'block';
+            } else {
+                widget.style.display = 'none';
+            }
+            localStorage.setItem('speedWidgetEnabled', speedWidgetEnabled);
+        }
 
         function updateSpeedWarning(lat, lon, currentSpeed, roadType) {
             fetch(`/api/speed-warnings?lat=${lat}&lon=${lon}&speed=${currentSpeed}&road_type=${roadType}`)
@@ -4765,8 +4969,29 @@ HTML_TEMPLATE = '''
         }
 
         function toggleGestureControl() {
+            /**
+             * Toggle gesture control and save preference to localStorage.
+             * Enables/disables DeviceMotionEvent listener for shake detection.
+             */
             gestureEnabled = !gestureEnabled;
+
+            // Update UI
+            const button = document.getElementById('gestureEnabled');
+            if (button) {
+                button.classList.toggle('active');
+                if (gestureEnabled) {
+                    button.style.background = '#4CAF50';
+                    button.style.borderColor = '#4CAF50';
+                } else {
+                    button.style.background = '#ddd';
+                    button.style.borderColor = '#999';
+                }
+            }
+
             document.getElementById('gestureSettings').style.display = gestureEnabled ? 'block' : 'none';
+
+            // Save to localStorage
+            localStorage.setItem('gestureEnabled', gestureEnabled);
 
             fetch('/api/app-settings', {
                 method: 'POST',
@@ -5385,7 +5610,31 @@ HTML_TEMPLATE = '''
         function initBottomSheet() {
             const bottomSheet = document.getElementById('bottomSheet');
             const handle = document.querySelector('.bottom-sheet-handle');
+            const header = document.querySelector('.bottom-sheet-header');
             let isDragging = false;
+
+            // Click on handle or header to expand/collapse
+            handle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (bottomSheetIsExpanded) {
+                    collapseBottomSheet();
+                } else {
+                    expandBottomSheet();
+                }
+            });
+
+            if (header) {
+                header.addEventListener('click', (e) => {
+                    // Don't expand if clicking on the icon buttons
+                    if (e.target.closest('button')) return;
+                    e.stopPropagation();
+                    if (bottomSheetIsExpanded) {
+                        collapseBottomSheet();
+                    } else {
+                        expandBottomSheet();
+                    }
+                });
+            }
 
             // Touch events for dragging
             handle.addEventListener('touchstart', (e) => {
@@ -5578,6 +5827,19 @@ HTML_TEMPLATE = '''
 
                     // Update speed warnings (assume local roads by default)
                     updateSpeedWarning(lat, lon, speedMph, 'local');
+
+                    // ===== UPDATE SPEED WIDGET =====
+                    // Fetch speed limit for current location and update widget
+                    fetch(`/api/speed-limit?lat=${lat}&lon=${lon}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success && data.speed_limit) {
+                                updateSpeedWidget(speedMph, data.speed_limit);
+                            } else {
+                                updateSpeedWidget(speedMph, null);
+                            }
+                        })
+                        .catch(() => updateSpeedWidget(speedMph, null));
                 },
                 (error) => {
                     showStatus('GPS Error: ' + error.message, 'error');
@@ -5597,6 +5859,11 @@ HTML_TEMPLATE = '''
                 gpsWatchId = null;
             }
             isTrackingActive = false;
+            // Hide speed widget when tracking stops
+            const speedWidget = document.getElementById('speedWidget');
+            if (speedWidget) {
+                speedWidget.style.display = 'none';
+            }
             showStatus('🛑 GPS Tracking stopped', 'info');
         }
 
@@ -6051,6 +6318,136 @@ HTML_TEMPLATE = '''
             }
         }
 
+        let autocompleteTimeout = null;
+        let autocompleteCache = {};
+
+        async function showAutocomplete(fieldId) {
+            const input = document.getElementById(fieldId);
+            const dropdown = document.getElementById(`autocomplete${fieldId === 'start' ? 'Start' : 'End'}`);
+            const query = input.value.trim();
+
+            // Clear previous timeout
+            if (autocompleteTimeout) {
+                clearTimeout(autocompleteTimeout);
+            }
+
+            // Hide dropdown if input is empty
+            if (!query || query.length < 2) {
+                dropdown.classList.remove('show');
+                return;
+            }
+
+            // Show loading state
+            dropdown.innerHTML = '<div class="autocomplete-loading">🔍 Searching...</div>';
+            dropdown.classList.add('show');
+
+            // Debounce the search
+            autocompleteTimeout = setTimeout(async () => {
+                try {
+                    // Check cache first
+                    if (autocompleteCache[query]) {
+                        displayAutocompleteResults(fieldId, autocompleteCache[query]);
+                        return;
+                    }
+
+                    // Fetch from Nominatim
+                    const response = await fetch(
+                        `${NOMINATIM_API}?q=${encodeURIComponent(query)}&format=json&limit=8&addressdetails=1`,
+                        {
+                            headers: {
+                                'User-Agent': 'Voyagr-PWA/1.0'
+                            }
+                        }
+                    );
+
+                    if (!response.ok) {
+                        throw new Error(`API error: ${response.status}`);
+                    }
+
+                    const results = await response.json();
+
+                    // Cache results
+                    autocompleteCache[query] = results;
+
+                    // Display results
+                    displayAutocompleteResults(fieldId, results);
+                } catch (error) {
+                    console.error('[Autocomplete] Error:', error);
+                    dropdown.innerHTML = '<div class="autocomplete-no-results">❌ Search failed. Try again.</div>';
+                }
+            }, 300); // 300ms debounce
+        }
+
+        function displayAutocompleteResults(fieldId, results) {
+            const dropdown = document.getElementById(`autocomplete${fieldId === 'start' ? 'Start' : 'End'}`);
+
+            if (!results || results.length === 0) {
+                dropdown.innerHTML = '<div class="autocomplete-no-results">No results found</div>';
+                return;
+            }
+
+            let html = '';
+            results.forEach((result, index) => {
+                const icon = getLocationIcon(result);
+                const name = result.name || result.address?.road || result.address?.city || 'Location';
+                const address = result.display_name || '';
+                const shortAddress = address.length > 60 ? address.substring(0, 60) + '...' : address;
+
+                html += `
+                    <div class="autocomplete-item" onclick="selectAutocompleteResult('${fieldId}', ${result.lat}, ${result.lon}, '${name.replace(/'/g, "\\'")}')">
+                        <div class="autocomplete-item-icon">${icon}</div>
+                        <div class="autocomplete-item-text">
+                            <div class="autocomplete-item-name">${name}</div>
+                            <div class="autocomplete-item-address">${shortAddress}</div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            dropdown.innerHTML = html;
+        }
+
+        function getLocationIcon(result) {
+            const type = result.type || '';
+            const category = result.category || '';
+
+            if (type === 'house' || category === 'building') return '🏠';
+            if (type === 'street' || category === 'highway') return '🛣️';
+            if (type === 'city' || type === 'town' || category === 'place') return '🏙️';
+            if (type === 'restaurant' || category === 'amenity') return '🍽️';
+            if (type === 'parking' || category === 'parking') return '🅿️';
+            if (type === 'fuel' || category === 'fuel') return '⛽';
+            if (type === 'hospital' || category === 'hospital') return '🏥';
+            if (type === 'school' || category === 'school') return '🏫';
+            if (type === 'shop' || category === 'shop') return '🛍️';
+            if (type === 'airport' || category === 'airport') return '✈️';
+            if (type === 'railway' || category === 'railway') return '🚂';
+            if (type === 'bus_stop' || category === 'bus') return '🚌';
+            if (type === 'hotel' || category === 'hotel') return '🏨';
+            if (type === 'museum' || category === 'museum') return '🏛️';
+            if (type === 'park' || category === 'park') return '🌳';
+            if (type === 'beach' || category === 'beach') return '🏖️';
+            if (type === 'mountain' || category === 'mountain') return '⛰️';
+            if (type === 'lake' || category === 'water') return '🌊';
+            return '📍';
+        }
+
+        function selectAutocompleteResult(fieldId, lat, lon, name) {
+            const input = document.getElementById(fieldId);
+            const dropdown = document.getElementById(`autocomplete${fieldId === 'start' ? 'Start' : 'End'}`);
+
+            // Set the input value to coordinates
+            input.value = `${lat},${lon}`;
+
+            // Hide dropdown
+            dropdown.classList.remove('show');
+
+            // Show confirmation
+            showStatus(`✅ Selected: ${name}`, 'success');
+
+            console.log(`[Autocomplete] Selected ${fieldId}: ${name} (${lat}, ${lon})`);
+        }
+
         function isCoordinateFormat(input) {
             // Check if input is already in "lat,lon" format
             const parts = input.trim().split(',');
@@ -6385,26 +6782,78 @@ HTML_TEMPLATE = '''
 
         // ===== PREFERENCE FUNCTIONS =====
         function togglePreference(pref) {
+            /**
+             * Toggle preference button and save to localStorage.
+             * Affects routing behavior based on preference type.
+             */
             const button = document.getElementById('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1));
             if (!button) return;
 
             button.classList.toggle('active');
             const isActive = button.classList.contains('active');
             localStorage.setItem('pref_' + pref, isActive);
+
+            // Update visual state
+            if (isActive) {
+                button.style.background = '#4CAF50';
+                button.style.borderColor = '#4CAF50';
+            } else {
+                button.style.background = '#ddd';
+                button.style.borderColor = '#999';
+            }
+
+            // Handle specific preference behaviors
+            if (pref === 'caz') {
+                // Update CAZ avoidance in route preferences
+                const cazCheckbox = document.getElementById('avoidCAZ');
+                if (cazCheckbox && cazCheckbox.type === 'checkbox') {
+                    cazCheckbox.checked = isActive;
+                }
+                console.log('[Preferences] CAZ avoidance:', isActive ? 'enabled' : 'disabled');
+            } else if (pref === 'variableSpeedAlerts') {
+                // Update variable speed alerts
+                console.log('[Preferences] Variable speed alerts:', isActive ? 'enabled' : 'disabled');
+            }
         }
 
         function loadPreferences() {
+            /**
+             * Load all saved preferences from localStorage on page load.
+             * Restores toggle states and applies visual styling.
+             */
             const prefs = ['tolls', 'caz', 'speedCameras', 'trafficCameras', 'variableSpeedAlerts'];
             prefs.forEach(pref => {
                 const saved = localStorage.getItem('pref_' + pref);
-                if (saved === 'true') {
-                    const button = document.getElementById('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1)) ||
-                                   document.getElementById(pref.charAt(0).toLowerCase() + pref.slice(1));
-                    if (button) {
+                const button = document.getElementById('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1)) ||
+                               document.getElementById(pref.charAt(0).toLowerCase() + pref.slice(1));
+                if (button) {
+                    if (saved === 'true') {
                         button.classList.add('active');
+                        button.style.background = '#4CAF50';
+                        button.style.borderColor = '#4CAF50';
+                    } else {
+                        button.classList.remove('active');
+                        button.style.background = '#ddd';
+                        button.style.borderColor = '#999';
                     }
                 }
             });
+
+            // ===== LOAD GESTURE CONTROL PREFERENCE =====
+            const gestureSaved = localStorage.getItem('gestureEnabled');
+            if (gestureSaved === 'true') {
+                const button = document.getElementById('gestureEnabled');
+                if (button) {
+                    button.classList.add('active');
+                    button.style.background = '#4CAF50';
+                    button.style.borderColor = '#4CAF50';
+                    gestureEnabled = true;
+                    document.getElementById('gestureSettings').style.display = 'block';
+                    if ('DeviceMotionEvent' in window) {
+                        window.addEventListener('devicemotion', handleDeviceMotion);
+                    }
+                }
+            }
 
             // ===== LOAD AUTO GPS PREFERENCE =====
             const autoGpsSaved = localStorage.getItem('autoGpsEnabled');
@@ -6709,8 +7158,65 @@ def get_traffic_conditions():
         print(f"Error fetching traffic conditions: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/test-routing-engines', methods=['GET'])
+def test_routing_engines():
+    """Test if routing engines are accessible."""
+    results = {}
+
+    # Test GraphHopper
+    try:
+        response = requests.get(f"{GRAPHHOPPER_URL}/info", timeout=5)
+        results['graphhopper'] = {
+            'status': 'OK' if response.status_code == 200 else f'HTTP {response.status_code}',
+            'url': GRAPHHOPPER_URL,
+            'accessible': response.status_code == 200
+        }
+    except Exception as e:
+        results['graphhopper'] = {
+            'status': f'Error: {str(e)}',
+            'url': GRAPHHOPPER_URL,
+            'accessible': False
+        }
+
+    # Test Valhalla
+    try:
+        response = requests.get(f"{VALHALLA_URL}/status", timeout=5)
+        results['valhalla'] = {
+            'status': 'OK' if response.status_code == 200 else f'HTTP {response.status_code}',
+            'url': VALHALLA_URL,
+            'accessible': response.status_code == 200
+        }
+    except Exception as e:
+        results['valhalla'] = {
+            'status': f'Error: {str(e)}',
+            'url': VALHALLA_URL,
+            'accessible': False
+        }
+
+    # Test OSRM
+    try:
+        response = requests.get("http://router.project-osrm.org/route/v1/driving/13.388860,52.517037;13.385983,52.496891", timeout=5)
+        results['osrm'] = {
+            'status': 'OK' if response.status_code == 200 else f'HTTP {response.status_code}',
+            'url': 'http://router.project-osrm.org',
+            'accessible': response.status_code == 200
+        }
+    except Exception as e:
+        results['osrm'] = {
+            'status': f'Error: {str(e)}',
+            'url': 'http://router.project-osrm.org',
+            'accessible': False
+        }
+
+    return jsonify(results)
+
 @app.route('/api/route', methods=['POST'])
 def calculate_route():
+    """
+    Calculate route using available routing engines.
+    Supports: GraphHopper, Valhalla, OSRM (fallback)
+    Mobile-optimized with proper error handling and fallbacks.
+    """
     try:
         data = request.json
         start = data.get('start', '').strip()
@@ -6751,6 +7257,10 @@ def calculate_route():
         graphhopper_error = None
         valhalla_error = None
 
+        print(f"\n[ROUTING] Starting route calculation from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+        print(f"[ROUTING] GraphHopper URL: {GRAPHHOPPER_URL}")
+        print(f"[ROUTING] Valhalla URL: {VALHALLA_URL}")
+
         # Try GraphHopper first (if available)
         try:
             url = f"{GRAPHHOPPER_URL}/route"
@@ -6761,8 +7271,17 @@ def calculate_route():
                 "ch.disable": "true"  # Disable CH to get alternative routes
             }
             print(f"[GraphHopper] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
-            response = requests.get(url, params=params, timeout=10)
+            print(f"[GraphHopper] URL: {url}")
+            print(f"[GraphHopper] Params: {params}")
+            # Add headers for mobile compatibility
+            headers = {
+                'User-Agent': 'Voyagr-PWA/1.0',
+                'Accept': 'application/json'
+            }
+            response = requests.get(url, params=params, timeout=10, headers=headers)
             print(f"[GraphHopper] Response status: {response.status_code}")
+            if response.status_code != 200:
+                print(f"[GraphHopper] Response body: {response.text[:500]}")
 
             if response.status_code == 200:
                 route_data = response.json()
@@ -6841,10 +7360,13 @@ def calculate_route():
                 graphhopper_error = f"HTTP {response.status_code}"
         except requests.exceptions.Timeout:
             graphhopper_error = "Timeout (>10s)"
+            print(f"[GraphHopper] Timeout error: {graphhopper_error}")
         except requests.exceptions.ConnectionError as e:
-            graphhopper_error = f"Connection error"
+            graphhopper_error = f"Connection error: {str(e)}"
+            print(f"[GraphHopper] Connection error: {graphhopper_error}")
         except Exception as e:
             graphhopper_error = str(e)
+            print(f"[GraphHopper] Exception: {graphhopper_error}")
 
         if graphhopper_error:
             print(f"[GraphHopper] Failed: {graphhopper_error}")
@@ -6861,8 +7383,18 @@ def calculate_route():
                 "alternatives": True  # Request alternative routes
             }
             print(f"[Valhalla] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
-            response = requests.post(url, json=payload, timeout=10)
+            print(f"[Valhalla] URL: {url}")
+            print(f"[Valhalla] Payload: {payload}")
+            # Add headers for mobile compatibility
+            headers = {
+                'User-Agent': 'Voyagr-PWA/1.0',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+            response = requests.post(url, json=payload, timeout=10, headers=headers)
             print(f"[Valhalla] Response status: {response.status_code}")
+            if response.status_code != 200:
+                print(f"[Valhalla] Response body: {response.text[:500]}")
 
             if response.status_code == 200:
                 route_data = response.json()
@@ -6976,10 +7508,13 @@ def calculate_route():
                 valhalla_error = f"HTTP {response.status_code}"
         except requests.exceptions.Timeout:
             valhalla_error = "Timeout (>10s)"
+            print(f"[Valhalla] Timeout error: {valhalla_error}")
         except requests.exceptions.ConnectionError as e:
-            valhalla_error = f"Connection error"
+            valhalla_error = f"Connection error: {str(e)}"
+            print(f"[Valhalla] Connection error: {valhalla_error}")
         except Exception as e:
             valhalla_error = str(e)
+            print(f"[Valhalla] Exception: {valhalla_error}")
 
         if valhalla_error:
             print(f"[Valhalla] Failed: {valhalla_error}")
@@ -6987,77 +7522,99 @@ def calculate_route():
         # Fallback to OSRM (public service)
         print(f"[OSRM] Trying fallback with ({start_lon},{start_lat}) to ({end_lon},{end_lat})")
         osrm_url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}?alternatives=true"
-        response = requests.get(osrm_url, timeout=10)
+        try:
+            headers = {
+                'User-Agent': 'Voyagr-PWA/1.0',
+                'Accept': 'application/json'
+            }
+            response = requests.get(osrm_url, timeout=10, headers=headers)
 
-        if response.status_code == 200:
-            route_data = response.json()
-            if route_data.get('code') == 'Ok' and 'routes' in route_data:
-                routes = []
+            if response.status_code == 200:
+                route_data = response.json()
+                if route_data.get('code') == 'Ok' and 'routes' in route_data:
+                    routes = []
 
-                # Process all available routes (up to 4)
-                for idx, route in enumerate(route_data['routes'][:4]):
-                    distance = route.get('distance', 0)
-                    duration = route.get('duration', 0)
+                    # Process all available routes (up to 4)
+                    for idx, route in enumerate(route_data['routes'][:4]):
+                        distance = route.get('distance', 0)
+                        duration = route.get('duration', 0)
 
-                    distance_km = distance / 1000
-                    time_min = duration / 60
+                        distance_km = distance / 1000
+                        time_min = duration / 60
 
-                    # Extract route geometry from OSRM (polyline format)
-                    route_geometry = route.get('geometry', None)
+                        # Extract route geometry from OSRM (polyline format)
+                        route_geometry = route.get('geometry', None)
 
-                    # Calculate costs
-                    fuel_cost = 0
-                    toll_cost = 0
-                    caz_cost = 0
+                        # Calculate costs
+                        fuel_cost = 0
+                        toll_cost = 0
+                        caz_cost = 0
 
-                    if vehicle_type == 'electric':
-                        fuel_cost = (distance_km / 100) * energy_efficiency * electricity_price
-                    else:
-                        fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
+                        if vehicle_type == 'electric':
+                            fuel_cost = (distance_km / 100) * energy_efficiency * electricity_price
+                        else:
+                            fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
 
-                    if include_tolls:
-                        toll_cost = calculate_toll_cost(distance_km, 'motorway')
+                        if include_tolls:
+                            toll_cost = calculate_toll_cost(distance_km, 'motorway')
 
-                    if include_caz and not caz_exempt:
-                        caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt)
+                        if include_caz and not caz_exempt:
+                            caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt)
 
-                    # Determine route type
-                    if idx == 0:
-                        route_type = 'Fastest'
-                    elif idx == 1:
-                        route_type = 'Shortest'
-                    elif idx == 2:
-                        route_type = 'Balanced'
-                    else:
-                        route_type = f'Alternative {idx}'
+                        # Determine route type
+                        if idx == 0:
+                            route_type = 'Fastest'
+                        elif idx == 1:
+                            route_type = 'Shortest'
+                        elif idx == 2:
+                            route_type = 'Balanced'
+                        else:
+                            route_type = f'Alternative {idx}'
 
-                    routes.append({
-                        'id': idx + 1,
-                        'name': route_type,
-                        'distance_km': round(distance_km, 2),
-                        'duration_minutes': round(time_min, 0),
-                        'fuel_cost': round(fuel_cost, 2),
-                        'toll_cost': round(toll_cost, 2),
-                        'caz_cost': round(caz_cost, 2),
-                        'geometry': route_geometry
+                        routes.append({
+                            'id': idx + 1,
+                            'name': route_type,
+                            'distance_km': round(distance_km, 2),
+                            'duration_minutes': round(time_min, 0),
+                            'fuel_cost': round(fuel_cost, 2),
+                            'toll_cost': round(toll_cost, 2),
+                            'caz_cost': round(caz_cost, 2),
+                            'geometry': route_geometry
+                        })
+
+                    print(f"[OSRM] SUCCESS: {len(routes)} routes found")
+                    return jsonify({
+                        'success': True,
+                        'routes': routes,
+                        'source': 'OSRM (Fallback)',
+                        'distance': f'{routes[0]["distance_km"]:.2f} km',
+                        'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
+                        'geometry': routes[0]['geometry'],
+                        'fuel_cost': routes[0]['fuel_cost'],
+                        'toll_cost': routes[0]['toll_cost'],
+                        'caz_cost': routes[0]['caz_cost']
                     })
+                else:
+                    print(f"[OSRM] Unexpected response: {route_data.get('code')}")
+            else:
+                print(f"[OSRM] HTTP {response.status_code}")
+        except requests.exceptions.Timeout:
+            print(f"[OSRM] Timeout (>10s)")
+        except requests.exceptions.ConnectionError as e:
+            print(f"[OSRM] Connection error: {str(e)}")
+        except Exception as e:
+            print(f"[OSRM] Error: {str(e)}")
 
-                print(f"[OSRM] SUCCESS: {len(routes)} routes found")
-                return jsonify({
-                    'success': True,
-                    'routes': routes,
-                    'source': 'OSRM (Fallback)',
-                    'distance': f'{routes[0]["distance_km"]:.2f} km',
-                    'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
-                    'geometry': routes[0]['geometry'],
-                    'fuel_cost': routes[0]['fuel_cost'],
-                    'toll_cost': routes[0]['toll_cost'],
-                    'caz_cost': routes[0]['caz_cost']
-                })
+        # All routing engines failed - log summary
+        print(f"\n[ROUTING SUMMARY]")
+        print(f"  GraphHopper ({GRAPHHOPPER_URL}): {graphhopper_error}")
+        print(f"  Valhalla ({VALHALLA_URL}): {valhalla_error}")
+        print(f"  OSRM (fallback): Failed")
+        print(f"[ROUTING] All routing engines failed for route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
 
         return jsonify({
             'success': False,
-            'error': f'Valhalla failed ({valhalla_error}), OSRM also unavailable'
+            'error': f'All routing engines failed. GraphHopper: {graphhopper_error}, Valhalla: {valhalla_error}. Please check your internet connection or try again later.'
         })
 
     except Exception as e:
