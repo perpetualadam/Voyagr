@@ -5287,6 +5287,9 @@ HTML_TEMPLATE = '''
         let routeStarted = false;
         let routeInProgress = false;
 
+        // ===== SCREEN WAKE LOCK (keeps screen on during navigation) =====
+        window.screenWakeLock = null;
+
         // ===== TURN-BY-TURN NAVIGATION =====
         let currentRouteSteps = [];
         let currentStepIndex = 0;
@@ -6589,6 +6592,27 @@ HTML_TEMPLATE = '''
                 return;
             }
 
+            // ===== SCREEN WAKE LOCK: Keep screen on during navigation =====
+            if ('wakeLock' in navigator) {
+                navigator.wakeLock.request('screen')
+                    .then(wakeLock => {
+                        window.screenWakeLock = wakeLock;
+                        console.log('[Screen Wake Lock] Screen lock acquired - screen will stay on');
+                        showStatus('🔒 Screen lock enabled - screen will stay on', 'success');
+
+                        // Handle wake lock release
+                        wakeLock.addEventListener('release', () => {
+                            console.log('[Screen Wake Lock] Screen lock released');
+                        });
+                    })
+                    .catch(err => {
+                        console.log('[Screen Wake Lock] Failed to acquire wake lock:', err.name, err.message);
+                        // This is not critical - navigation will continue without wake lock
+                    });
+            } else {
+                console.log('[Screen Wake Lock] Screen Wake Lock API not supported on this device');
+            }
+
             // Start GPS tracking if not already active
             if (!isTrackingActive) {
                 startGPSTracking();
@@ -6607,6 +6631,18 @@ HTML_TEMPLATE = '''
             currentStepIndex = 0;
             currentRouteSteps = [];
             stopGPSTracking();
+
+            // ===== SCREEN WAKE LOCK: Release screen lock when navigation ends =====
+            if (window.screenWakeLock) {
+                window.screenWakeLock.release()
+                    .then(() => {
+                        console.log('[Screen Wake Lock] Screen lock released - screen can turn off');
+                        window.screenWakeLock = null;
+                    })
+                    .catch(err => {
+                        console.log('[Screen Wake Lock] Error releasing wake lock:', err);
+                    });
+            }
 
             // ===== PHASE 1: Stop live data refresh =====
             stopLiveDataRefresh();
@@ -7423,9 +7459,10 @@ def calculate_route():
                     routes = []
 
                     # Main route
+                    # NOTE: Valhalla returns distance in kilometers, not meters!
                     distance = route_data['trip']['summary']['length']
                     time = route_data['trip']['summary']['time']
-                    distance_km = distance / 1000
+                    distance_km = distance  # Already in km, don't divide by 1000
                     time_min = time / 60
 
                     # Extract route geometry
@@ -7469,7 +7506,8 @@ def calculate_route():
                             if 'trip' in alt_route and 'summary' in alt_route['trip']:
                                 alt_distance = alt_route['trip']['summary']['length']
                                 alt_time = alt_route['trip']['summary']['time']
-                                alt_distance_km = alt_distance / 1000
+                                # NOTE: Valhalla returns distance in kilometers, not meters!
+                                alt_distance_km = alt_distance  # Already in km, don't divide by 1000
                                 alt_time_min = alt_time / 60
 
                                 # Extract geometry
@@ -7705,7 +7743,8 @@ def calculate_multi_stop_route():
             if response.status_code == 200:
                 route_data = response.json()
                 if 'trip' in route_data:
-                    distance = route_data['trip']['summary']['length'] / 1000
+                    # NOTE: Valhalla returns distance in kilometers, not meters!
+                    distance = route_data['trip']['summary']['length']  # Already in km
                     time = route_data['trip']['summary']['time'] / 60
 
                     return jsonify({

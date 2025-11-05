@@ -4281,7 +4281,8 @@ class SatNavApp(App):
                 if 'trip' in response and response['trip'].get('legs'):
                     leg = response['trip']['legs'][0]
                     summary = leg.get('summary', {})
-                    self.route_distance = summary.get('length', 0) / 1000  # Convert to km
+                    # NOTE: Valhalla returns distance in kilometers, not meters!
+                    self.route_distance = summary.get('length', 0)  # Already in km
                     self.route_time = summary.get('time', 0)  # In seconds
 
                 # Fetch real-time traffic data for the route (auto mode only)
@@ -4903,7 +4904,8 @@ class SatNavApp(App):
 
                 for i, leg in enumerate(legs):
                     summary = leg.get('summary', {})
-                    distance_km = summary.get('length', 0) / 1000
+                    # NOTE: Valhalla returns distance in kilometers, not meters!
+                    distance_km = summary.get('length', 0)  # Already in km
                     time_seconds = summary.get('time', 0)
                     total_distance += distance_km
                     total_time += time_seconds
@@ -5328,14 +5330,16 @@ class SatNavApp(App):
             new_time = new_route.get('trip', {}).get('legs', [{}])[0].get('summary', {}).get('time', self.route_time)
 
             time_saved = current_time - new_time
-            distance_diff = self.route_distance - (new_route.get('trip', {}).get('legs', [{}])[0].get('summary', {}).get('length', 0) / 1000)
+            # NOTE: Valhalla returns distance in kilometers, not meters!
+            new_distance_km = new_route.get('trip', {}).get('legs', [{}])[0].get('summary', {}).get('length', 0)  # Already in km
+            distance_diff = self.route_distance - new_distance_km
 
             return {
                 'route': new_route,
                 'time_saved_seconds': time_saved,
                 'distance_difference_km': distance_diff,
                 'new_time_seconds': new_time,
-                'new_distance_km': new_route.get('trip', {}).get('legs', [{}])[0].get('summary', {}).get('length', 0) / 1000,
+                'new_distance_km': new_distance_km,
                 'timestamp': int(time.time())
             }
 
@@ -9190,7 +9194,8 @@ class SatNavApp(App):
             leg = route['trip']['legs'][0]
             summary = leg.get('summary', {})
 
-            distance_km = summary.get('length', 0) / 1000
+            # NOTE: Valhalla returns distance in kilometers, not meters!
+            distance_km = summary.get('length', 0)  # Already in km
             time_seconds = summary.get('time', 0)
 
             # Calculate costs
