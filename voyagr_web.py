@@ -2628,93 +2628,6 @@ HTML_TEMPLATE = '''
                 <!-- Add to Favorites Button (Phase 2) -->
                 <button class="btn-calculate" onclick="addCurrentToFavorites()" style="background: #764ba2; margin-top: 10px;">⭐ Save Location</button>
 
-                <!-- Preferences Section -->
-                <div class="preferences-section">
-                    <h3>Preferences</h3>
-
-                    <div class="preference-item">
-                        <span class="preference-label">Avoid Tolls</span>
-                        <button class="toggle-switch" id="avoidTolls" onclick="togglePreference('tolls')"></button>
-                    </div>
-
-                    <div class="preference-item">
-                        <span class="preference-label">Avoid CAZ</span>
-                        <button class="toggle-switch" id="avoidCAZ" onclick="togglePreference('caz')"></button>
-                    </div>
-
-                    <div class="preference-item">
-                        <span class="preference-label">Avoid Speed Cameras</span>
-                        <button class="toggle-switch" id="avoidSpeedCameras" onclick="togglePreference('speedCameras')"></button>
-                    </div>
-
-                    <div class="preference-item">
-                        <span class="preference-label">Avoid Traffic Cameras</span>
-                        <button class="toggle-switch" id="avoidTrafficCameras" onclick="togglePreference('trafficCameras')"></button>
-                    </div>
-
-                    <div class="preference-item">
-                        <span class="preference-label">📊 Variable Speed Alerts</span>
-                        <button class="toggle-switch" id="variableSpeedAlerts" onclick="togglePreference('variableSpeedAlerts')"></button>
-                    </div>
-
-                    <div class="preference-item">
-                        <span class="preference-label">🔍 Smart Zoom</span>
-                        <button class="toggle-switch" id="smartZoomToggle" onclick="toggleSmartZoom()"></button>
-                    </div>
-
-                    <!-- Phase 3: Gesture Control -->
-                    <div class="preference-item">
-                        <span class="preference-label">🤝 Gesture Control</span>
-                        <button class="toggle-switch" id="gestureEnabled" onclick="toggleGestureControl()"></button>
-                    </div>
-
-                    <div id="gestureSettings" style="display: none; margin-left: 15px; margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
-                        <label style="font-size: 12px; color: #666; display: block; margin-bottom: 8px;">Shake Sensitivity:</label>
-                        <select id="gestureSensitivity" onchange="updateGestureSensitivity()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                            <option value="low">Low (Easy to trigger)</option>
-                            <option value="medium" selected>Medium (Balanced)</option>
-                            <option value="high">High (Hard to trigger)</option>
-                        </select>
-                        <label style="font-size: 12px; color: #666; display: block; margin-top: 10px; margin-bottom: 8px;">Shake Action:</label>
-                        <select id="gestureAction" onchange="updateGestureAction()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
-                            <option value="recalculate">Recalculate Route</option>
-                            <option value="report">Report Hazard</option>
-                            <option value="clear">Clear Route</option>
-                        </select>
-                    </div>
-
-                    <!-- Phase 3: Battery Saving Mode -->
-                    <div class="preference-item">
-                        <span class="preference-label">🔋 Battery Saving Mode</span>
-                        <button class="toggle-switch" id="batterySavingMode" onclick="toggleBatterySavingMode()"></button>
-                    </div>
-
-                    <!-- Phase 3: Map Themes -->
-                    <div class="preference-item">
-                        <span class="preference-label">🗺️ Map Theme</span>
-                    </div>
-                    <div class="theme-selector">
-                        <button class="theme-option active" onclick="setMapTheme('standard')">
-                            <div class="theme-preview standard"></div>
-                            Standard
-                        </button>
-                        <button class="theme-option" onclick="setMapTheme('satellite')">
-                            <div class="theme-preview satellite"></div>
-                            Satellite
-                        </button>
-                        <button class="theme-option" onclick="setMapTheme('dark')">
-                            <div class="theme-preview dark"></div>
-                            Dark
-                        </button>
-                    </div>
-
-                    <!-- Phase 3: ML Predictions -->
-                    <div class="preference-item">
-                        <span class="preference-label">🤖 Smart Route Predictions</span>
-                        <button class="toggle-switch" id="mlPredictionsEnabled" onclick="toggleMLPredictions()"></button>
-                    </div>
-                </div>
-
                 <!-- ML Predictions Display (Phase 3) -->
                 <div class="ml-predictions-section" id="mlPredictionsSection">
                     <div class="ml-predictions-title">💡 Smart Route Suggestions</div>
@@ -2738,12 +2651,12 @@ HTML_TEMPLATE = '''
 
                 <button class="btn-clear" onclick="clearForm()" style="width: 100%; margin-top: 20px;">Clear All</button>
 
-                <!-- SETTINGS TAB (NEW FEATURE) -->
+                <!-- UNIFIED SETTINGS TAB -->
                 <div id="settingsTab" style="display: none;">
+                    <!-- Unit Preferences Section -->
                     <div class="preferences-section">
-                        <h3>⚙️ Units & Preferences</h3>
+                        <h3>📏 Unit Preferences</h3>
 
-                        <!-- Distance Unit Toggle -->
                         <div class="preference-item">
                             <span class="preference-label">📏 Distance Unit</span>
                             <select id="distanceUnit" onchange="updateDistanceUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
@@ -2752,17 +2665,6 @@ HTML_TEMPLATE = '''
                             </select>
                         </div>
 
-                        <!-- Currency Unit Selector -->
-                        <div class="preference-item">
-                            <span class="preference-label">💱 Currency</span>
-                            <select id="currencyUnit" onchange="updateCurrencyUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="GBP">GBP (£)</option>
-                                <option value="USD">USD ($)</option>
-                                <option value="EUR">EUR (€)</option>
-                            </select>
-                        </div>
-
-                        <!-- Speed Unit Toggle -->
                         <div class="preference-item">
                             <span class="preference-label">⚡ Speed Unit</span>
                             <select id="speedUnit" onchange="updateSpeedUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
@@ -2771,7 +2673,6 @@ HTML_TEMPLATE = '''
                             </select>
                         </div>
 
-                        <!-- Temperature Unit Toggle -->
                         <div class="preference-item">
                             <span class="preference-label">🌡️ Temperature</span>
                             <select id="temperatureUnit" onchange="updateTemperatureUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
@@ -2779,11 +2680,50 @@ HTML_TEMPLATE = '''
                                 <option value="fahrenheit">Fahrenheit (°F)</option>
                             </select>
                         </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">💱 Currency</span>
+                            <select id="currencyUnit" onchange="updateCurrencyUnit()" style="width: 100px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="GBP">GBP (£)</option>
+                                <option value="USD">USD ($)</option>
+                                <option value="EUR">EUR (€)</option>
+                            </select>
+                        </div>
                     </div>
 
-                    <!-- Advanced Route Preferences -->
-                    <div class="preferences-section" style="margin-top: 20px;">
-                        <h3>🛣️ Advanced Route Preferences</h3>
+                    <!-- Hazard Avoidance Section -->
+                    <div class="preferences-section">
+                        <h3>⚠️ Hazard Avoidance</h3>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Avoid Tolls</span>
+                            <button class="toggle-switch" id="avoidTolls" onclick="togglePreference('tolls')"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Avoid CAZ</span>
+                            <button class="toggle-switch" id="avoidCAZ" onclick="togglePreference('caz')"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Avoid Speed Cameras</span>
+                            <button class="toggle-switch" id="avoidSpeedCameras" onclick="togglePreference('speedCameras')"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Avoid Traffic Cameras</span>
+                            <button class="toggle-switch" id="avoidTrafficCameras" onclick="togglePreference('trafficCameras')"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">📊 Variable Speed Alerts</span>
+                            <button class="toggle-switch" id="variableSpeedAlerts" onclick="togglePreference('variableSpeedAlerts')"></button>
+                        </div>
+                    </div>
+
+                    <!-- Route Preferences Section -->
+                    <div class="preferences-section">
+                        <h3>🛣️ Route Preferences</h3>
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
@@ -2804,7 +2744,6 @@ HTML_TEMPLATE = '''
                             </label>
                         </div>
 
-                        <!-- Route Optimization -->
                         <div class="preference-item">
                             <span class="preference-label">Route Optimization</span>
                             <select id="routeOptimization" onchange="saveRoutePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
@@ -2816,13 +2755,75 @@ HTML_TEMPLATE = '''
                             </select>
                         </div>
 
-                        <!-- Max Detour Percentage -->
                         <div class="preference-item">
                             <span class="preference-label">Max Detour Allowed</span>
                             <div style="display: flex; align-items: center; gap: 10px;">
                                 <input type="range" id="maxDetour" min="0" max="50" value="20" onchange="updateDetourLabel()" style="flex: 1; cursor: pointer;">
                                 <span id="detourLabel" style="font-size: 13px; font-weight: 500; min-width: 40px;">20%</span>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Display Preferences Section -->
+                    <div class="preferences-section">
+                        <h3>🎨 Display Preferences</h3>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🗺️ Map Theme</span>
+                        </div>
+                        <div class="theme-selector">
+                            <button class="theme-option active" onclick="setMapTheme('standard')">
+                                <div class="theme-preview standard"></div>
+                                Standard
+                            </button>
+                            <button class="theme-option" onclick="setMapTheme('satellite')">
+                                <div class="theme-preview satellite"></div>
+                                Satellite
+                            </button>
+                            <button class="theme-option" onclick="setMapTheme('dark')">
+                                <div class="theme-preview dark"></div>
+                                Dark
+                            </button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🔍 Smart Zoom</span>
+                            <button class="toggle-switch" id="smartZoomToggle" onclick="toggleSmartZoom()"></button>
+                        </div>
+                    </div>
+
+                    <!-- Advanced Features Section -->
+                    <div class="preferences-section">
+                        <h3>⚙️ Advanced Features</h3>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🤖 Smart Route Predictions</span>
+                            <button class="toggle-switch" id="mlPredictionsEnabled" onclick="toggleMLPredictions()"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🔋 Battery Saving Mode</span>
+                            <button class="toggle-switch" id="batterySavingMode" onclick="toggleBatterySavingMode()"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🤝 Gesture Control</span>
+                            <button class="toggle-switch" id="gestureEnabled" onclick="toggleGestureControl()"></button>
+                        </div>
+
+                        <div id="gestureSettings" style="display: none; margin-left: 15px; margin-top: 10px; padding: 10px; background: #f8f9fa; border-radius: 6px;">
+                            <label style="font-size: 12px; color: #666; display: block; margin-bottom: 8px;">Shake Sensitivity:</label>
+                            <select id="gestureSensitivity" onchange="updateGestureSensitivity()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="low">Low (Easy to trigger)</option>
+                                <option value="medium" selected>Medium (Balanced)</option>
+                                <option value="high">High (Hard to trigger)</option>
+                            </select>
+                            <label style="font-size: 12px; color: #666; display: block; margin-top: 10px; margin-bottom: 8px;">Shake Action:</label>
+                            <select id="gestureAction" onchange="updateGestureAction()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                                <option value="recalculate">Recalculate Route</option>
+                                <option value="report">Report Hazard</option>
+                                <option value="clear">Clear Route</option>
+                            </select>
                         </div>
                     </div>
 
