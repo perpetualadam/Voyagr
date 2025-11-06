@@ -3335,6 +3335,7 @@ HTML_TEMPLATE = '''
             localStorage.setItem('unit_distance', newUnit);
             saveUnitSettingsToBackend();
             updateAllDistanceDisplays();
+            saveAllSettings();
             showStatus(`Distance unit changed to ${newUnit === 'mi' ? 'miles' : 'kilometers'}`, 'success');
         }
 
@@ -3345,6 +3346,7 @@ HTML_TEMPLATE = '''
             localStorage.setItem('unit_currency', newUnit);
             saveUnitSettingsToBackend();
             updateAllCostDisplays();
+            saveAllSettings();
             showStatus(`Currency changed to ${newUnit}`, 'success');
         }
 
@@ -3355,6 +3357,7 @@ HTML_TEMPLATE = '''
             localStorage.setItem('unit_speed', newUnit);
             saveUnitSettingsToBackend();
             updateAllSpeedDisplays();
+            saveAllSettings();
             showStatus(`Speed unit changed to ${newUnit === 'mph' ? 'mph' : 'km/h'}`, 'success');
         }
 
@@ -3365,6 +3368,7 @@ HTML_TEMPLATE = '''
             localStorage.setItem('unit_temperature', newUnit);
             saveUnitSettingsToBackend();
             updateAllTemperatureDisplays();
+            saveAllSettings();
             showStatus(`Temperature unit changed to ${newUnit === 'fahrenheit' ? 'Fahrenheit' : 'Celsius'}`, 'success');
         }
 
@@ -3380,6 +3384,285 @@ HTML_TEMPLATE = '''
                     temperature_unit: temperatureUnit
                 })
             }).catch(error => console.error('Error saving unit settings:', error));
+        }
+
+        // ===== COMPREHENSIVE PERSISTENT SETTINGS SYSTEM =====
+
+        /**
+         * Save all user settings to localStorage
+         * Called whenever any setting changes
+         */
+        function saveAllSettings() {
+            const allSettings = {
+                // Unit preferences
+                unit_distance: distanceUnit,
+                unit_currency: currencyUnit,
+                unit_speed: speedUnit,
+                unit_temperature: temperatureUnit,
+
+                // Vehicle and routing
+                vehicleType: currentVehicleType,
+                routingMode: currentRoutingMode,
+
+                // Route preferences
+                routePreferences: {
+                    avoidHighways: document.getElementById('avoidHighways')?.checked || false,
+                    preferScenic: document.getElementById('preferScenic')?.checked || false,
+                    avoidTolls: localStorage.getItem('pref_tolls') === 'true',
+                    avoidCAZ: localStorage.getItem('pref_caz') === 'true',
+                    preferQuiet: document.getElementById('preferQuiet')?.checked || false,
+                    avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
+                    routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
+                    maxDetour: parseInt(document.getElementById('maxDetour')?.value || 20)
+                },
+
+                // Hazard avoidance
+                hazardPreferences: {
+                    avoidTolls: localStorage.getItem('pref_tolls') === 'true',
+                    avoidCAZ: localStorage.getItem('pref_caz') === 'true',
+                    avoidSpeedCameras: localStorage.getItem('pref_speedCameras') === 'true',
+                    avoidTrafficCameras: localStorage.getItem('pref_trafficCameras') === 'true',
+                    variableSpeedAlerts: localStorage.getItem('pref_variableSpeedAlerts') === 'true'
+                },
+
+                // Display preferences
+                mapTheme: localStorage.getItem('mapTheme') || 'standard',
+                smartZoomEnabled: smartZoomEnabled,
+
+                // Timestamp for debugging
+                lastSaved: new Date().toISOString()
+            };
+
+            localStorage.setItem('voyagr_all_settings', JSON.stringify(allSettings));
+            console.log('[Settings] All settings saved to localStorage', allSettings);
+        }
+
+        /**
+         * Load all user settings from localStorage
+         * Called on page load to restore user preferences
+         */
+        function loadAllSettings() {
+            try {
+                const saved = localStorage.getItem('voyagr_all_settings');
+                if (saved) {
+                    const settings = JSON.parse(saved);
+                    console.log('[Settings] Loaded settings from localStorage', settings);
+
+                    // Restore unit preferences
+                    if (settings.unit_distance) {
+                        distanceUnit = settings.unit_distance;
+                        localStorage.setItem('unit_distance', distanceUnit);
+                    }
+                    if (settings.unit_currency) {
+                        currencyUnit = settings.unit_currency;
+                        localStorage.setItem('unit_currency', currencyUnit);
+                    }
+                    if (settings.unit_speed) {
+                        speedUnit = settings.unit_speed;
+                        localStorage.setItem('unit_speed', speedUnit);
+                    }
+                    if (settings.unit_temperature) {
+                        temperatureUnit = settings.unit_temperature;
+                        localStorage.setItem('unit_temperature', temperatureUnit);
+                    }
+
+                    // Restore vehicle type and routing mode
+                    if (settings.vehicleType) {
+                        currentVehicleType = settings.vehicleType;
+                        localStorage.setItem('vehicleType', currentVehicleType);
+                    }
+                    if (settings.routingMode) {
+                        currentRoutingMode = settings.routingMode;
+                        localStorage.setItem('routingMode', currentRoutingMode);
+                    }
+
+                    // Restore route preferences
+                    if (settings.routePreferences) {
+                        localStorage.setItem('routePreferences', JSON.stringify(settings.routePreferences));
+                    }
+
+                    // Restore hazard preferences
+                    if (settings.hazardPreferences) {
+                        localStorage.setItem('pref_tolls', settings.hazardPreferences.avoidTolls ? 'true' : 'false');
+                        localStorage.setItem('pref_caz', settings.hazardPreferences.avoidCAZ ? 'true' : 'false');
+                        localStorage.setItem('pref_speedCameras', settings.hazardPreferences.avoidSpeedCameras ? 'true' : 'false');
+                        localStorage.setItem('pref_trafficCameras', settings.hazardPreferences.avoidTrafficCameras ? 'true' : 'false');
+                        localStorage.setItem('pref_variableSpeedAlerts', settings.hazardPreferences.variableSpeedAlerts ? 'true' : 'false');
+                    }
+
+                    // Restore display preferences
+                    if (settings.mapTheme) {
+                        localStorage.setItem('mapTheme', settings.mapTheme);
+                    }
+                    if (settings.smartZoomEnabled !== undefined) {
+                        smartZoomEnabled = settings.smartZoomEnabled;
+                        localStorage.setItem('smartZoomEnabled', smartZoomEnabled ? '1' : '0');
+                    }
+
+                    console.log('[Settings] All settings restored successfully');
+                    return true;
+                } else {
+                    console.log('[Settings] No saved settings found, using defaults');
+                    return false;
+                }
+            } catch (error) {
+                console.error('[Settings] Error loading settings:', error);
+                return false;
+            }
+        }
+
+        /**
+         * Apply all loaded settings to the UI
+         * Called after loadAllSettings() to update all controls
+         */
+        function applySettingsToUI() {
+            try {
+                // Apply unit preferences
+                const distanceUnitEl = document.getElementById('distanceUnit');
+                if (distanceUnitEl) distanceUnitEl.value = distanceUnit;
+
+                const currencyUnitEl = document.getElementById('currencyUnit');
+                if (currencyUnitEl) currencyUnitEl.value = currencyUnit;
+
+                const speedUnitEl = document.getElementById('speedUnit');
+                if (speedUnitEl) speedUnitEl.value = speedUnit;
+
+                const temperatureUnitEl = document.getElementById('temperatureUnit');
+                if (temperatureUnitEl) temperatureUnitEl.value = temperatureUnit;
+
+                // Apply vehicle type
+                const vehicleTypeEl = document.getElementById('vehicleType');
+                if (vehicleTypeEl) vehicleTypeEl.value = currentVehicleType;
+
+                // Apply routing mode
+                setRoutingMode(currentRoutingMode);
+
+                // Apply route preferences
+                const saved = localStorage.getItem('routePreferences');
+                if (saved) {
+                    const prefs = JSON.parse(saved);
+                    const avoidHighwaysEl = document.getElementById('avoidHighways');
+                    if (avoidHighwaysEl) avoidHighwaysEl.checked = prefs.avoidHighways || false;
+
+                    const preferScenicEl = document.getElementById('preferScenic');
+                    if (preferScenicEl) preferScenicEl.checked = prefs.preferScenic || false;
+
+                    const preferQuietEl = document.getElementById('preferQuiet');
+                    if (preferQuietEl) preferQuietEl.checked = prefs.preferQuiet || false;
+
+                    const avoidUnpavedEl = document.getElementById('avoidUnpaved');
+                    if (avoidUnpavedEl) avoidUnpavedEl.checked = prefs.avoidUnpaved || false;
+
+                    const routeOptimizationEl = document.getElementById('routeOptimization');
+                    if (routeOptimizationEl) routeOptimizationEl.value = prefs.routeOptimization || 'fastest';
+
+                    const maxDetourEl = document.getElementById('maxDetour');
+                    if (maxDetourEl) {
+                        maxDetourEl.value = prefs.maxDetour || 20;
+                        updateDetourLabel();
+                    }
+                }
+
+                // Apply hazard preferences
+                loadPreferences();
+
+                // Apply display preferences
+                const mapTheme = localStorage.getItem('mapTheme') || 'standard';
+                setMapTheme(mapTheme);
+
+                const smartZoomToggle = document.getElementById('smartZoomToggle');
+                if (smartZoomToggle) {
+                    if (smartZoomEnabled) {
+                        smartZoomToggle.classList.add('active');
+                    } else {
+                        smartZoomToggle.classList.remove('active');
+                    }
+                }
+
+                console.log('[Settings] All settings applied to UI');
+            } catch (error) {
+                console.error('[Settings] Error applying settings to UI:', error);
+            }
+        }
+
+        /**
+         * Reset all settings to defaults
+         */
+        function resetAllSettings() {
+            if (confirm('Are you sure you want to reset all settings to defaults?')) {
+                // Clear all settings from localStorage
+                const keysToRemove = [
+                    'voyagr_all_settings',
+                    'unit_distance', 'unit_currency', 'unit_speed', 'unit_temperature',
+                    'vehicleType', 'routingMode',
+                    'routePreferences',
+                    'pref_tolls', 'pref_caz', 'pref_speedCameras', 'pref_trafficCameras', 'pref_variableSpeedAlerts',
+                    'mapTheme', 'smartZoomEnabled'
+                ];
+
+                keysToRemove.forEach(key => localStorage.removeItem(key));
+
+                // Reset variables to defaults
+                distanceUnit = 'km';
+                currencyUnit = 'GBP';
+                speedUnit = 'kmh';
+                temperatureUnit = 'celsius';
+                currentVehicleType = 'petrol_diesel';
+                currentRoutingMode = 'auto';
+                smartZoomEnabled = true;
+
+                // Reload page to apply defaults
+                location.reload();
+                showStatus('✅ Settings reset to defaults', 'success');
+            }
+        }
+
+        /**
+         * Export settings as JSON for backup
+         */
+        function exportSettings() {
+            const settings = localStorage.getItem('voyagr_all_settings');
+            if (settings) {
+                const dataStr = JSON.stringify(JSON.parse(settings), null, 2);
+                const dataBlob = new Blob([dataStr], { type: 'application/json' });
+                const url = URL.createObjectURL(dataBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `voyagr-settings-${new Date().toISOString().split('T')[0]}.json`;
+                link.click();
+                showStatus('✅ Settings exported', 'success');
+            } else {
+                showStatus('❌ No settings to export', 'error');
+            }
+        }
+
+        /**
+         * Import settings from JSON file
+         */
+        function importSettings() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        try {
+                            const settings = JSON.parse(event.target.result);
+                            localStorage.setItem('voyagr_all_settings', JSON.stringify(settings));
+                            loadAllSettings();
+                            applySettingsToUI();
+                            showStatus('✅ Settings imported successfully', 'success');
+                        } catch (error) {
+                            console.error('Error importing settings:', error);
+                            showStatus('❌ Error importing settings', 'error');
+                        }
+                    };
+                    reader.readAsText(file);
+                }
+            };
+            input.click();
         }
 
         // Update all distance displays
@@ -3900,6 +4183,7 @@ HTML_TEMPLATE = '''
             };
 
             localStorage.setItem('routePreferences', JSON.stringify(preferences));
+            saveAllSettings();
             showStatus('Route preferences saved!', 'success');
         }
 
@@ -3922,6 +4206,7 @@ HTML_TEMPLATE = '''
         function updateDetourLabel() {
             const value = document.getElementById('maxDetour').value;
             document.getElementById('detourLabel').textContent = value + '%';
+            saveRoutePreferences();
         }
 
         function getRoutePreferences() {
@@ -4851,6 +5136,7 @@ HTML_TEMPLATE = '''
             updateUserMarkerIcon();
 
             console.log('[Vehicle] Type changed to:', currentVehicleType);
+            saveAllSettings();
             showStatus(`🚗 Vehicle type: ${select.options[select.selectedIndex].text}`, 'info');
         }
 
@@ -4880,6 +5166,7 @@ HTML_TEMPLATE = '''
 
             console.log('[Routing] Mode changed to:', mode);
             const modeNames = { 'auto': '🚗 Auto', 'pedestrian': '🚶 Pedestrian', 'bicycle': '🚴 Bicycle' };
+            saveAllSettings();
             showStatus(`${modeNames[mode]} mode`, 'info');
         }
 
@@ -5002,6 +5289,7 @@ HTML_TEMPLATE = '''
                 btn.classList.toggle('active', smartZoomEnabled);
             }
             localStorage.setItem('smartZoomEnabled', smartZoomEnabled ? '1' : '0');
+            saveAllSettings();
             showStatus(`🔍 Smart Zoom ${smartZoomEnabled ? 'enabled' : 'disabled'}`, 'info');
             console.log('[SmartZoom] Toggled to:', smartZoomEnabled);
         }
@@ -5348,12 +5636,15 @@ HTML_TEMPLATE = '''
 
         function setMapTheme(theme) {
             currentMapTheme = theme;
+            localStorage.setItem('mapTheme', theme);
 
             // Update UI
             document.querySelectorAll('.theme-option').forEach(btn => {
                 btn.classList.remove('active');
             });
-            event.target.closest('.theme-option').classList.add('active');
+            if (event && event.target) {
+                event.target.closest('.theme-option')?.classList.add('active');
+            }
 
             // Apply theme to map
             const tileUrls = {
@@ -5376,6 +5667,7 @@ HTML_TEMPLATE = '''
             }).addTo(map);
 
             showStatus(`🗺️ Map theme changed to ${theme}`, 'success');
+            saveAllSettings();
 
             // Save preference
             fetch('/api/app-settings', {
@@ -5796,35 +6088,18 @@ HTML_TEMPLATE = '''
             initVoiceRecognition();
             setupVoiceCommandProcessing();
             initBottomSheet();
-            loadPreferences();
             initGeocodeCache();
 
-            // Load vehicle type and routing mode from localStorage
-            const savedVehicleType = localStorage.getItem('vehicleType');
-            if (savedVehicleType) {
-                currentVehicleType = savedVehicleType;
-                const vehicleSelect = document.getElementById('vehicleType');
-                if (vehicleSelect) vehicleSelect.value = savedVehicleType;
-            }
+            // Load all persistent settings from localStorage
+            console.log('[Settings] Loading all persistent settings...');
+            loadAllSettings();
+            applySettingsToUI();
 
-            const savedRoutingMode = localStorage.getItem('routingMode');
-            if (savedRoutingMode) {
-                setRoutingMode(savedRoutingMode);
-            }
-
-            // Load smart zoom preference
-            const savedSmartZoom = localStorage.getItem('smartZoomEnabled');
-            if (savedSmartZoom === '0') {
-                smartZoomEnabled = false;
-                const btn = document.getElementById('smartZoomToggle');
-                if (btn) btn.classList.remove('active');
-            } else {
-                smartZoomEnabled = true;
-                const btn = document.getElementById('smartZoomToggle');
-                if (btn) btn.classList.add('active');
-            }
+            // Legacy preference loading (for backward compatibility)
+            loadPreferences();
 
             console.log('[Init] Vehicle Type:', currentVehicleType, 'Routing Mode:', currentRoutingMode, 'Smart Zoom:', smartZoomEnabled);
+            console.log('[Init] All settings loaded and applied successfully');
         });
 
         // ===== BOTTOM SHEET FUNCTIONALITY =====
@@ -7068,6 +7343,9 @@ HTML_TEMPLATE = '''
             } else if (pref === 'variableSpeedAlerts') {
                 console.log('[Preferences] Variable speed alerts:', isActive ? 'enabled' : 'disabled');
             }
+
+            // Save all settings to persistent storage
+            saveAllSettings();
         }
 
         function loadPreferences() {
