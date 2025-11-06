@@ -1,11 +1,12 @@
 name: Build APK
 
 on:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
   workflow_dispatch:
+  # Disabled automatic builds - use workflow_dispatch to manually trigger
+  # push:
+  #   branches: [ main ]
+  # pull_request:
+  #   branches: [ main ]
 
 jobs:
   build:
