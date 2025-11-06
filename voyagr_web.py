@@ -3155,17 +3155,22 @@ HTML_TEMPLATE = '''
 
                         <!-- Action Buttons -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <button onclick="overviewRoute()" style="background: #9C27B0; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                🗺️ Overview Route
+                            </button>
                             <button onclick="startNavigationFromPreview()" style="background: #34A853; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                                 🧭 Start Navigation
                             </button>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                             <button onclick="findParkingNearDestination()" style="background: #FF9800; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                                 🅿️ Find Parking
                             </button>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                             <button onclick="switchTab('routeComparison')" style="background: #2196F3; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
                                 🛣️ View Options
                             </button>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px;">
                             <button onclick="switchTab('navigation')" style="background: #999; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
                                 ✏️ Modify Route
                             </button>
@@ -4805,8 +4810,13 @@ HTML_TEMPLATE = '''
                             startNavBtnSheet.style.display = 'block';
                         }
 
-                        // Send notification
-                        sendNotification('Route Ready', `${data.distance} in ${data.time}. Ready to navigate?`, 'success');
+                        // Send notification with proper unit conversion
+                        const distanceKm = parseFloat(data.distance_km || data.distance) || 0;
+                        const distUnit = getDistanceUnit();
+                        const displayDistance = convertDistance(distanceKm);
+                        const notificationMessage = `${displayDistance} ${distUnit} in ${data.time}. Ready to navigate?`;
+                        console.log('[Route] Route ready notification:', notificationMessage);
+                        sendNotification('Route Ready', notificationMessage, 'success');
                     } catch (e) {
                         showStatus('Error parsing coordinates: ' + e.message, 'error');
                         console.error('Coordinate parsing error:', e);
@@ -4928,6 +4938,44 @@ HTML_TEMPLATE = '''
             });
 
             parentContainer.style.display = 'block';
+        }
+
+        /**
+         * Overview the entire route on the map
+         * Fits the full route geometry within the map bounds
+         */
+        function overviewRoute() {
+            if (!routePath || routePath.length === 0) {
+                showStatus('No route to overview', 'error');
+                return;
+            }
+
+            try {
+                // Calculate bounds from route polyline
+                let minLat = routePath[0][0];
+                let maxLat = routePath[0][0];
+                let minLon = routePath[0][1];
+                let maxLon = routePath[0][1];
+
+                routePath.forEach(point => {
+                    minLat = Math.min(minLat, point[0]);
+                    maxLat = Math.max(maxLat, point[0]);
+                    minLon = Math.min(minLon, point[1]);
+                    maxLon = Math.max(maxLon, point[1]);
+                });
+
+                // Create bounds object for Leaflet
+                const bounds = [[minLat, minLon], [maxLat, maxLon]];
+
+                // Fit map to bounds with padding
+                map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
+
+                showStatus('📍 Route overview - pan and zoom to inspect', 'success');
+                console.log('[Route] Overview fitted bounds:', bounds);
+            } catch (error) {
+                showStatus('Error displaying route overview: ' + error.message, 'error');
+                console.error('[Route] Overview error:', error);
+            }
         }
 
         /**
@@ -5509,20 +5557,19 @@ HTML_TEMPLATE = '''
             const widget = document.getElementById('speedWidget');
             if (!widget) return;
 
-            // Get user's preferred unit
-            const useMetric = localStorage.getItem('useMetric') !== 'false';
-            const speedUnit = useMetric ? 'km/h' : 'mph';
-            const displaySpeed = useMetric ? (speedMph * 1.60934) : speedMph;
+            // Get user's preferred unit using global speedUnit variable
+            const displaySpeedUnit = getSpeedUnit();
+            const displaySpeed = convertSpeed(speedMph);
 
             // Update current speed
             document.getElementById('speedValue').textContent = Math.round(displaySpeed);
-            document.getElementById('speedUnit').textContent = speedUnit;
+            document.getElementById('speedUnit').textContent = displaySpeedUnit;
 
             // Update speed limit if provided
             if (speedLimitMph !== null && speedLimitMph > 0) {
-                const displaySpeedLimit = useMetric ? (speedLimitMph * 1.60934) : speedLimitMph;
+                const displaySpeedLimit = convertSpeed(speedLimitMph);
                 document.getElementById('speedLimitValue').textContent = Math.round(displaySpeedLimit);
-                document.getElementById('speedLimitUnit').textContent = speedUnit;
+                document.getElementById('speedLimitUnit').textContent = displaySpeedUnit;
 
                 // Check if speeding
                 const speedDiff = speedMph - speedLimitMph;
@@ -5537,7 +5584,7 @@ HTML_TEMPLATE = '''
             } else {
                 // No speed limit data available - show '?' instead of '--'
                 document.getElementById('speedLimitValue').textContent = '?';
-                document.getElementById('speedLimitUnit').textContent = speedUnit;
+                document.getElementById('speedLimitUnit').textContent = displaySpeedUnit;
                 document.getElementById('speedWarning').style.display = 'none';
                 widget.style.borderLeft = '4px solid #999';
                 console.log('[Speed Widget] No speed limit available');
@@ -8245,30 +8292,56 @@ HTML_TEMPLATE = '''
             /**
              * Toggle preference button and save to localStorage.
              * Affects routing behavior based on preference type.
+             * FIXED: Now properly handles button ID mapping and visual updates
              */
-            const button = document.getElementById('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1));
-            if (!button) return;
+            // Map preference names to button IDs
+            const buttonIdMap = {
+                'tolls': 'avoidTolls',
+                'caz': 'avoidCAZ',
+                'speedCameras': 'avoidSpeedCameras',
+                'trafficCameras': 'avoidTrafficCameras',
+                'variableSpeedAlerts': 'variableSpeedAlerts'
+            };
+
+            const buttonId = buttonIdMap[pref] || ('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1));
+            const button = document.getElementById(buttonId);
+
+            if (!button) {
+                console.warn('[Preferences] Button not found for preference:', pref, 'ID:', buttonId);
+                return;
+            }
 
             button.classList.toggle('active');
             const isActive = button.classList.contains('active');
-            localStorage.setItem('pref_' + pref, isActive);
+            localStorage.setItem('pref_' + pref, isActive ? 'true' : 'false');
 
-            // Update visual state
+            // Update visual state with proper styling
             if (isActive) {
                 button.style.background = '#4CAF50';
                 button.style.borderColor = '#4CAF50';
+                button.style.color = 'white';
             } else {
                 button.style.background = '#ddd';
                 button.style.borderColor = '#999';
+                button.style.color = '#333';
             }
 
             // Handle specific preference behaviors
             if (pref === 'caz') {
-                console.log('[Preferences] CAZ avoidance:', isActive ? 'enabled' : 'disabled');
+                console.log('[Settings] CAZ avoidance:', isActive ? 'enabled' : 'disabled');
+                showStatus(`🚫 CAZ avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
             } else if (pref === 'tolls') {
-                console.log('[Preferences] Toll avoidance:', isActive ? 'enabled' : 'disabled');
+                console.log('[Settings] Toll avoidance:', isActive ? 'enabled' : 'disabled');
+                showStatus(`💰 Toll avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
             } else if (pref === 'variableSpeedAlerts') {
-                console.log('[Preferences] Variable speed alerts:', isActive ? 'enabled' : 'disabled');
+                console.log('[Settings] Variable speed alerts:', isActive ? 'enabled' : 'disabled');
+                showStatus(`📊 Variable speed alerts ${isActive ? 'enabled' : 'disabled'}`, 'info');
+            } else if (pref === 'speedCameras') {
+                console.log('[Settings] Speed camera avoidance:', isActive ? 'enabled' : 'disabled');
+                showStatus(`📷 Speed camera avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
+            } else if (pref === 'trafficCameras') {
+                console.log('[Settings] Traffic camera avoidance:', isActive ? 'enabled' : 'disabled');
+                showStatus(`📹 Traffic camera avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
             }
 
             // Save all settings to persistent storage
@@ -8279,22 +8352,38 @@ HTML_TEMPLATE = '''
             /**
              * Load all saved preferences from localStorage on page load.
              * Restores toggle states and applies visual styling.
+             * FIXED: Now properly maps preference names to button IDs
              */
+            const buttonIdMap = {
+                'tolls': 'avoidTolls',
+                'caz': 'avoidCAZ',
+                'speedCameras': 'avoidSpeedCameras',
+                'trafficCameras': 'avoidTrafficCameras',
+                'variableSpeedAlerts': 'variableSpeedAlerts'
+            };
+
             const prefs = ['tolls', 'caz', 'speedCameras', 'trafficCameras', 'variableSpeedAlerts'];
             prefs.forEach(pref => {
                 const saved = localStorage.getItem('pref_' + pref);
-                const button = document.getElementById('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1)) ||
-                               document.getElementById(pref.charAt(0).toLowerCase() + pref.slice(1));
+                const buttonId = buttonIdMap[pref];
+                const button = document.getElementById(buttonId);
+
                 if (button) {
                     if (saved === 'true') {
                         button.classList.add('active');
                         button.style.background = '#4CAF50';
                         button.style.borderColor = '#4CAF50';
+                        button.style.color = 'white';
+                        console.log('[Settings] Loaded preference:', pref, '= enabled');
                     } else {
                         button.classList.remove('active');
                         button.style.background = '#ddd';
                         button.style.borderColor = '#999';
+                        button.style.color = '#333';
+                        console.log('[Settings] Loaded preference:', pref, '= disabled');
                     }
+                } else {
+                    console.warn('[Settings] Button not found for preference:', pref, 'ID:', buttonId);
                 }
             });
 
