@@ -13,8 +13,8 @@ RUN pip install --no-cache-dir -r requirements-railway.txt
 # Copy all application files
 COPY . .
 
-# Ensure critical files exist
-RUN ls -la voyagr_web.py manifest.json service-worker.js
+# Verify critical files exist
+RUN test -f voyagr_web.py || (echo "ERROR: voyagr_web.py not found" && exit 1)
 
 # Expose port
 EXPOSE 5000
