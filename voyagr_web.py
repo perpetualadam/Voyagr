@@ -329,8 +329,6 @@ def calculate_caz_cost(distance_km, vehicle_type='petrol_diesel', is_exempt=Fals
     return caz_entries * rate
 
 # Hazard avoidance functions
-import math
-import time
 
 def get_distance_between_points(lat1, lon1, lat2, lon2):
     """Calculate distance between two points in meters using Haversine formula."""
@@ -3364,6 +3362,49 @@ HTML_TEMPLATE = '''
             return currencySymbols[currencyUnit] || '£';
         }
 
+        /**
+         * Adjust cost calculations based on user's unit preference
+         * Costs are calculated on backend in km, but need adjustment for imperial units
+         * Fuel efficiency: 6.5 L/100km = 36.2 MPG (miles per gallon)
+         * Toll rates: £0.15/km = £0.24/mile
+         */
+        function adjustCostForUnits(cost, costType = 'fuel') {
+            /**
+             * Adjust cost based on distance unit preference
+             * costType: 'fuel', 'toll', or 'caz'
+             * Note: Costs are calculated on backend using km, so we need to adjust
+             * the underlying efficiency/rate values if user selected imperial units
+             */
+            if (distanceUnit === 'mi') {
+                // For imperial units, costs need to be adjusted
+                // Fuel: 1 L/100km = 0.0621371 L/mile, so multiply by 1.60934
+                // Toll: £/km becomes £/mile, multiply by 1.60934
+                // CAZ: Based on distance, so multiply by 1.60934
+                return cost * 1.60934;
+            }
+            return cost;
+        }
+
+        /**
+         * Get fuel efficiency in appropriate units
+         * Returns L/100km for metric, MPG for imperial
+         */
+        function getFuelEfficiencyInUnits(liters_per_100km) {
+            if (distanceUnit === 'mi') {
+                // Convert L/100km to MPG (miles per gallon)
+                // 1 L/100km ≈ 235.214 / L/100km = MPG
+                return (235.214 / liters_per_100km).toFixed(1);
+            }
+            return liters_per_100km.toFixed(1);
+        }
+
+        /**
+         * Get fuel efficiency label
+         */
+        function getFuelEfficiencyLabel() {
+            return distanceUnit === 'mi' ? 'MPG' : 'L/100km';
+        }
+
         // Tab switching function
         function switchTab(tab) {
             const navigationContent = document.querySelector('.bottom-sheet-content > div:not(#settingsTab):not(#tripHistoryTab):not(#routeComparisonTab):not(#routeSharingTab):not(#routeAnalyticsTab):not(#savedRoutesTab)');
@@ -4003,7 +4044,16 @@ HTML_TEMPLATE = '''
             listContainer.innerHTML = routeOptions.map((route, index) => {
                 const distance = convertDistance(route.distance_km);
                 const distUnit = getDistanceUnit();
-                const totalCost = (parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2);
+
+                // Adjust costs for imperial units if needed
+                const fuelCost = parseFloat(route.fuel_cost || 0);
+                const tollCost = parseFloat(route.toll_cost || 0);
+                const cazCost = parseFloat(route.caz_cost || 0);
+                const adjustedFuelCost = distanceUnit === 'mi' ? fuelCost * 1.60934 : fuelCost;
+                const adjustedTollCost = distanceUnit === 'mi' ? tollCost * 1.60934 : tollCost;
+                const adjustedCazCost = distanceUnit === 'mi' ? cazCost * 1.60934 : cazCost;
+                const totalCost = (adjustedFuelCost + adjustedTollCost + adjustedCazCost).toFixed(2);
+
                 const isRecommended = index === 0;
                 const borderColor = isRecommended ? '#4CAF50' : '#ddd';
                 const bgColor = isRecommended ? '#E8F5E9' : '#f8f9fa';
@@ -4014,8 +4064,8 @@ HTML_TEMPLATE = '''
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #333; margin-bottom: 8px;">
                             <div><strong>⏱️ ${route.duration_minutes} min</strong></div>
                             <div><strong>📏 ${distance} ${distUnit}</strong></div>
-                            <div>⛽ ${symbol}${route.fuel_cost || 0}</div>
-                            <div>🛣️ ${symbol}${route.toll_cost || 0}</div>
+                            <div>⛽ ${symbol}${adjustedFuelCost.toFixed(2)}</div>
+                            <div>🛣️ ${symbol}${adjustedTollCost.toFixed(2)}</div>
                         </div>
                         <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
                             Total: <strong>${symbol}${totalCost}</strong>
@@ -4059,19 +4109,35 @@ HTML_TEMPLATE = '''
                 });
             }
 
-            // Update trip info
+            // Update trip info with unit-adjusted costs
             const distance = convertDistance(route.distance_km);
             const distUnit = getDistanceUnit();
             const symbol = getCurrencySymbol();
-            const totalCost = (parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2);
+
+            // Adjust costs for imperial units if needed
+            const fuelCost = parseFloat(route.fuel_cost || 0);
+            const tollCost = parseFloat(route.toll_cost || 0);
+            const cazCost = parseFloat(route.caz_cost || 0);
+            const adjustedFuelCost = distanceUnit === 'mi' ? fuelCost * 1.60934 : fuelCost;
+            const adjustedTollCost = distanceUnit === 'mi' ? tollCost * 1.60934 : tollCost;
+            const adjustedCazCost = distanceUnit === 'mi' ? cazCost * 1.60934 : cazCost;
+            const totalCost = (adjustedFuelCost + adjustedTollCost + adjustedCazCost).toFixed(2);
 
             document.getElementById('distance').textContent = distance + ' ' + distUnit;
             document.getElementById('distance').dataset.km = route.distance_km;
             document.getElementById('time').textContent = route.duration_minutes + ' min';
-            document.getElementById('fuelCost').textContent = symbol + (route.fuel_cost || 0);
-            document.getElementById('fuelCost').dataset.value = route.fuel_cost || 0;
-            document.getElementById('tollCost').textContent = symbol + (route.toll_cost || 0);
-            document.getElementById('tollCost').dataset.value = route.toll_cost || 0;
+            document.getElementById('fuelCost').textContent = symbol + adjustedFuelCost.toFixed(2);
+            document.getElementById('fuelCost').dataset.value = adjustedFuelCost;
+            document.getElementById('tollCost').textContent = symbol + adjustedTollCost.toFixed(2);
+            document.getElementById('tollCost').dataset.value = adjustedTollCost;
+
+            console.log('[Cost] Route selected with adjusted costs:', {
+                distanceUnit: distanceUnit,
+                fuelCost: adjustedFuelCost.toFixed(2),
+                tollCost: adjustedTollCost.toFixed(2),
+                cazCost: adjustedCazCost.toFixed(2),
+                totalCost: totalCost
+            });
 
             // Store selected route for navigation
             window.lastCalculatedRoute = route;
@@ -4093,14 +4159,26 @@ HTML_TEMPLATE = '''
             const symbol = getCurrencySymbol();
             const distUnit = getDistanceUnit();
 
-            // Update route summary
+            // Update route summary with unit-adjusted costs
             document.getElementById('shareStart').textContent = `Start: ${startInput}`;
             document.getElementById('shareEnd').textContent = `End: ${endInput}`;
             document.getElementById('shareDistance').textContent = `Distance: ${convertDistance(route.distance_km || 0)} ${distUnit}`;
             document.getElementById('shareTime').textContent = `Duration: ${route.time || 'N/A'}`;
 
-            const totalCost = (parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2);
+            // Adjust costs for imperial units if needed
+            const fuelCost = parseFloat(route.fuel_cost || 0);
+            const tollCost = parseFloat(route.toll_cost || 0);
+            const cazCost = parseFloat(route.caz_cost || 0);
+            const adjustedFuelCost = distanceUnit === 'mi' ? fuelCost * 1.60934 : fuelCost;
+            const adjustedTollCost = distanceUnit === 'mi' ? tollCost * 1.60934 : tollCost;
+            const adjustedCazCost = distanceUnit === 'mi' ? cazCost * 1.60934 : cazCost;
+            const totalCost = (adjustedFuelCost + adjustedTollCost + adjustedCazCost).toFixed(2);
             document.getElementById('shareCost').textContent = `Total Cost: ${symbol}${totalCost}`;
+
+            console.log('[Cost] Route sharing prepared with adjusted costs:', {
+                distanceUnit: distanceUnit,
+                totalCost: totalCost
+            });
         }
 
         function generateShareLink() {
@@ -4867,16 +4945,29 @@ HTML_TEMPLATE = '''
             const endInput = document.getElementById('end').value;
             document.getElementById('previewRoute').textContent = `${startInput} → ${endInput}`;
 
-            // Update cost breakdown
+            // Update cost breakdown with unit conversion
             const fuelCost = parseFloat(routeData.fuel_cost || 0);
             const tollCost = parseFloat(routeData.toll_cost || 0);
             const cazCost = parseFloat(routeData.caz_cost || 0);
-            const totalCost = fuelCost + tollCost + cazCost;
 
-            document.getElementById('previewFuelCost').textContent = symbol + fuelCost.toFixed(2);
-            document.getElementById('previewTollCost').textContent = symbol + tollCost.toFixed(2);
-            document.getElementById('previewCAZCost').textContent = symbol + cazCost.toFixed(2);
+            // Adjust costs for imperial units if needed
+            const adjustedFuelCost = distanceUnit === 'mi' ? fuelCost * 1.60934 : fuelCost;
+            const adjustedTollCost = distanceUnit === 'mi' ? tollCost * 1.60934 : tollCost;
+            const adjustedCazCost = distanceUnit === 'mi' ? cazCost * 1.60934 : cazCost;
+            const totalCost = adjustedFuelCost + adjustedTollCost + adjustedCazCost;
+
+            document.getElementById('previewFuelCost').textContent = symbol + adjustedFuelCost.toFixed(2);
+            document.getElementById('previewTollCost').textContent = symbol + adjustedTollCost.toFixed(2);
+            document.getElementById('previewCAZCost').textContent = symbol + adjustedCazCost.toFixed(2);
             document.getElementById('previewTotalCost').textContent = symbol + totalCost.toFixed(2);
+
+            console.log('[Cost] Route preview costs adjusted for unit preference:', {
+                distanceUnit: distanceUnit,
+                fuelCost: adjustedFuelCost.toFixed(2),
+                tollCost: adjustedTollCost.toFixed(2),
+                cazCost: adjustedCazCost.toFixed(2),
+                totalCost: totalCost.toFixed(2)
+            });
 
             // Update route details
             document.getElementById('previewRoutingEngine').textContent = routeData.source || 'Unknown';
@@ -4916,7 +5007,14 @@ HTML_TEMPLATE = '''
             const distUnit = getDistanceUnit();
 
             routeOptions.forEach((route, index) => {
-                const totalCost = (parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2);
+                // Adjust costs for imperial units if needed
+                const fuelCost = parseFloat(route.fuel_cost || 0);
+                const tollCost = parseFloat(route.toll_cost || 0);
+                const cazCost = parseFloat(route.caz_cost || 0);
+                const adjustedFuelCost = distanceUnit === 'mi' ? fuelCost * 1.60934 : fuelCost;
+                const adjustedTollCost = distanceUnit === 'mi' ? tollCost * 1.60934 : tollCost;
+                const adjustedCazCost = distanceUnit === 'mi' ? cazCost * 1.60934 : cazCost;
+                const totalCost = (adjustedFuelCost + adjustedTollCost + adjustedCazCost).toFixed(2);
                 const div = document.createElement('div');
                 div.style.cssText = 'background: white; padding: 10px; border-radius: 6px; margin-bottom: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.3s ease;';
                 div.innerHTML = `
@@ -5547,7 +5645,7 @@ HTML_TEMPLATE = '''
         let speedWidgetEnabled = false;
         let currentSpeedMph = 0;
         let currentSpeedLimitMph = 0;
-        let speedLimitThreshold = 5; // mph over limit to trigger warning
+        let speedLimitThreshold = 3; // mph over limit to trigger warning
 
         function updateSpeedWidget(speedMph, speedLimitMph = null) {
             /**
