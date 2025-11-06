@@ -12,13 +12,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Deploy to Railway
-        uses: railwayapp/deploy-action@v1
-        with:
-          token: ${{ secrets.RAILWAY_TOKEN }}
-
-      - name: Notify Deployment
+      - name: Notify Railway Deployment
         run: |
-          echo "✅ Deployment to Railway completed!"
+          echo "✅ Code pushed to GitHub!"
+          echo "Railway will automatically deploy this to production."
           echo "Your app is live at: https://voyagr-production.up.railway.app"
+          echo ""
+          echo "Note: Railway automatically deploys when you push to GitHub."
+          echo "No manual deployment action needed."
 
