@@ -2792,6 +2792,39 @@ HTML_TEMPLATE = '''
                         </div>
                     </div>
 
+                    <!-- Parking Preferences Section -->
+                    <div class="preferences-section">
+                        <h3>🅿️ Parking Preferences</h3>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Max Walking Distance</span>
+                            <select id="parkingMaxWalkingDistance" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="5">5 minutes (400m)</option>
+                                <option value="10" selected>10 minutes (800m)</option>
+                                <option value="15">15 minutes (1.2km)</option>
+                            </select>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Preferred Parking Type</span>
+                            <select id="parkingPreferredType" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="any" selected>Any Type</option>
+                                <option value="garage">Garage</option>
+                                <option value="street">Street Parking</option>
+                                <option value="lot">Parking Lot</option>
+                            </select>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Price Preference</span>
+                            <select id="parkingPricePreference" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="any" selected>Any Price</option>
+                                <option value="free">Free Only</option>
+                                <option value="paid">Paid Parking</option>
+                            </select>
+                        </div>
+                    </div>
+
                     <!-- Advanced Features Section -->
                     <div class="preferences-section">
                         <h3>⚙️ Advanced Features</h3>
@@ -3061,18 +3094,32 @@ HTML_TEMPLATE = '''
                             <div id="previewAlternativeRoutesList" style="max-height: 200px; overflow-y: auto;"></div>
                         </div>
 
+                        <!-- Parking Section -->
+                        <div id="parkingSection" style="display: none; background: #FFF3E0; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #FF9800;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #E65100;">🅿️ Parking Options</h4>
+                            <div id="parkingList" style="max-height: 250px; overflow-y: auto; margin-bottom: 10px;"></div>
+                            <button onclick="clearParkingSelection()" style="width: 100%; background: #FF9800; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">
+                                ✕ Clear Parking Selection
+                            </button>
+                        </div>
+
                         <!-- Action Buttons -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                             <button onclick="startNavigationFromPreview()" style="background: #34A853; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                                 🧭 Start Navigation
                             </button>
-                            <button onclick="switchTab('routeComparison')" style="background: #FF9800; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                                🛣️ View Options
+                            <button onclick="findParkingNearDestination()" style="background: #FF9800; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                🅿️ Find Parking
                             </button>
                         </div>
-                        <button onclick="switchTab('navigation')" style="width: 100%; background: #999; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px;">
-                            ✏️ Modify Route
-                        </button>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <button onclick="switchTab('routeComparison')" style="background: #2196F3; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
+                                🛣️ View Options
+                            </button>
+                            <button onclick="switchTab('navigation')" style="background: #999; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
+                                ✏️ Modify Route
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -3429,6 +3476,13 @@ HTML_TEMPLATE = '''
                 mapTheme: localStorage.getItem('mapTheme') || 'standard',
                 smartZoomEnabled: smartZoomEnabled,
 
+                // Parking preferences
+                parkingPreferences: {
+                    maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance')?.value || '10',
+                    preferredType: document.getElementById('parkingPreferredType')?.value || 'any',
+                    pricePreference: document.getElementById('parkingPricePreference')?.value || 'any'
+                },
+
                 // Timestamp for debugging
                 lastSaved: new Date().toISOString()
             };
@@ -3499,6 +3553,11 @@ HTML_TEMPLATE = '''
                         localStorage.setItem('smartZoomEnabled', smartZoomEnabled ? '1' : '0');
                     }
 
+                    // Restore parking preferences
+                    if (settings.parkingPreferences) {
+                        localStorage.setItem('parkingPreferences', JSON.stringify(settings.parkingPreferences));
+                    }
+
                     console.log('[Settings] All settings restored successfully');
                     return true;
                 } else {
@@ -3566,6 +3625,22 @@ HTML_TEMPLATE = '''
                 // Apply hazard preferences
                 loadPreferences();
 
+                // Apply parking preferences
+                const parkingMaxWalkingEl = document.getElementById('parkingMaxWalkingDistance');
+                const parkingTypeEl = document.getElementById('parkingPreferredType');
+                const parkingPriceEl = document.getElementById('parkingPricePreference');
+                const savedParking = localStorage.getItem('parkingPreferences');
+                if (savedParking) {
+                    try {
+                        const parkingPrefs = JSON.parse(savedParking);
+                        if (parkingMaxWalkingEl) parkingMaxWalkingEl.value = parkingPrefs.maxWalkingDistance || '10';
+                        if (parkingTypeEl) parkingTypeEl.value = parkingPrefs.preferredType || 'any';
+                        if (parkingPriceEl) parkingPriceEl.value = parkingPrefs.pricePreference || 'any';
+                    } catch (e) {
+                        console.log('[Settings] Error applying parking preferences:', e);
+                    }
+                }
+
                 // Apply display preferences
                 const mapTheme = localStorage.getItem('mapTheme') || 'standard';
                 setMapTheme(mapTheme);
@@ -3597,7 +3672,8 @@ HTML_TEMPLATE = '''
                     'vehicleType', 'routingMode',
                     'routePreferences',
                     'pref_tolls', 'pref_caz', 'pref_speedCameras', 'pref_trafficCameras', 'pref_variableSpeedAlerts',
-                    'mapTheme', 'smartZoomEnabled'
+                    'mapTheme', 'smartZoomEnabled',
+                    'parkingPreferences'
                 ];
 
                 keysToRemove.forEach(key => localStorage.removeItem(key));
@@ -4822,6 +4898,332 @@ HTML_TEMPLATE = '''
             collapseBottomSheet();
         }
 
+        // ===== PARKING INTEGRATION FEATURE =====
+
+        let parkingMarkers = [];
+        let selectedParking = null;
+        let parkingWalkingRoute = null;
+        let parkingDrivingRoute = null;
+
+        /**
+         * Save parking preferences to localStorage
+         */
+        function saveParkingPreferences() {
+            const prefs = {
+                maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance').value,
+                preferredType: document.getElementById('parkingPreferredType').value,
+                pricePreference: document.getElementById('parkingPricePreference').value
+            };
+            localStorage.setItem('parkingPreferences', JSON.stringify(prefs));
+            saveAllSettings();
+            console.log('[Parking] Preferences saved:', prefs);
+        }
+
+        /**
+         * Load parking preferences from localStorage
+         */
+        function loadParkingPreferences() {
+            try {
+                const saved = localStorage.getItem('parkingPreferences');
+                if (saved) {
+                    const prefs = JSON.parse(saved);
+                    document.getElementById('parkingMaxWalkingDistance').value = prefs.maxWalkingDistance || '10';
+                    document.getElementById('parkingPreferredType').value = prefs.preferredType || 'any';
+                    document.getElementById('parkingPricePreference').value = prefs.pricePreference || 'any';
+                    console.log('[Parking] Preferences loaded:', prefs);
+                }
+            } catch (e) {
+                console.log('[Parking] Error loading preferences:', e);
+            }
+        }
+
+        /**
+         * Find parking near destination
+         */
+        async function findParkingNearDestination() {
+            if (!window.lastCalculatedRoute) {
+                showStatus('No route calculated yet', 'error');
+                return;
+            }
+
+            const endInput = document.getElementById('end').value;
+            if (!endInput) {
+                showStatus('Please enter a destination first', 'error');
+                return;
+            }
+
+            showStatus('🔍 Searching for parking near destination...', 'loading');
+
+            try {
+                // Get destination coordinates from last route
+                const endCoords = window.lastCalculatedRoute.end_lat && window.lastCalculatedRoute.end_lon
+                    ? { lat: window.lastCalculatedRoute.end_lat, lon: window.lastCalculatedRoute.end_lon }
+                    : null;
+
+                if (!endCoords) {
+                    showStatus('Could not determine destination coordinates', 'error');
+                    return;
+                }
+
+                // Get parking preferences
+                const maxWalkingDist = parseInt(document.getElementById('parkingMaxWalkingDistance').value) || 10;
+                const radiusMeters = maxWalkingDist * 80; // Approximate: 1 min walk ≈ 80m
+
+                // Search for parking
+                const response = await fetch('/api/parking-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lat: endCoords.lat,
+                        lon: endCoords.lon,
+                        radius: radiusMeters,
+                        type: document.getElementById('parkingPreferredType').value
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!data.success || !data.parking || data.parking.length === 0) {
+                    showStatus('No parking found nearby. Try adjusting your search radius.', 'warning');
+                    return;
+                }
+
+                // Display parking options
+                displayParkingOptions(data.parking, endCoords);
+                showStatus(`✅ Found ${data.parking.length} parking options`, 'success');
+
+            } catch (error) {
+                console.error('[Parking] Error:', error);
+                showStatus('Error searching for parking: ' + error.message, 'error');
+            }
+        }
+
+        /**
+         * Display parking options in the UI
+         */
+        function displayParkingOptions(parkingList, destinationCoords) {
+            // Clear previous markers
+            parkingMarkers.forEach(marker => map.removeLayer(marker));
+            parkingMarkers = [];
+
+            const parkingSection = document.getElementById('parkingSection');
+            const parkingListDiv = document.getElementById('parkingList');
+            parkingListDiv.innerHTML = '';
+
+            // Sort by distance
+            parkingList.sort((a, b) => a.distance_m - b.distance_m);
+
+            // Display top 5 parking options
+            parkingList.slice(0, 5).forEach((parking, index) => {
+                // Add marker to map
+                const icon = L.divIcon({
+                    html: `<div style="background: #FF9800; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>`,
+                    iconSize: [32, 32],
+                    className: 'parking-marker'
+                });
+
+                const marker = L.marker([parking.lat, parking.lon], { icon })
+                    .bindPopup(`<strong>${parking.name}</strong><br>Distance: ${(parking.distance_m / 1000).toFixed(2)} km`)
+                    .addTo(map);
+
+                marker.parkingData = parking;
+                marker.on('click', () => selectParking(parking, destinationCoords));
+                parkingMarkers.push(marker);
+
+                // Add to list
+                const walkingTime = Math.round(parking.distance_m / 1.4); // 1.4 m/s walking speed
+                const walkingMinutes = Math.round(walkingTime / 60);
+
+                const item = document.createElement('div');
+                item.style.cssText = 'background: white; padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; transition: all 0.2s;';
+                item.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
+                        <strong style="font-size: 13px;">${parking.name}</strong>
+                        <span style="background: #FF9800; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold;">${index + 1}</span>
+                    </div>
+                    <div style="font-size: 12px; color: #666;">
+                        📍 ${(parking.distance_m / 1000).toFixed(2)} km away
+                        <br>🚶 ${walkingMinutes} min walk
+                    </div>
+                `;
+
+                item.onmouseover = () => item.style.background = '#FFF3E0';
+                item.onmouseout = () => item.style.background = 'white';
+                item.onclick = () => selectParking(parking, destinationCoords);
+
+                parkingListDiv.appendChild(item);
+            });
+
+            parkingSection.style.display = 'block';
+        }
+
+        /**
+         * Select a parking location and recalculate routes
+         */
+        async function selectParking(parking, destinationCoords) {
+            selectedParking = parking;
+            showStatus('🅿️ Calculating routes via parking...', 'loading');
+
+            try {
+                // Get current location or start location
+                const startInput = document.getElementById('start').value;
+                let startCoords = null;
+
+                if (window.lastCalculatedRoute && window.lastCalculatedRoute.start_lat) {
+                    startCoords = {
+                        lat: window.lastCalculatedRoute.start_lat,
+                        lon: window.lastCalculatedRoute.start_lon
+                    };
+                } else {
+                    showStatus('Could not determine start location', 'error');
+                    return;
+                }
+
+                // Calculate driving route to parking
+                const drivingResponse = await fetch('/api/route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        start: `${startCoords.lat},${startCoords.lon}`,
+                        end: `${parking.lat},${parking.lon}`,
+                        routing_mode: 'auto',
+                        vehicle_type: currentVehicleType,
+                        include_tolls: localStorage.getItem('pref_tolls') === 'true',
+                        avoid_caz: localStorage.getItem('pref_caz') === 'true'
+                    })
+                });
+
+                const drivingData = await drivingResponse.json();
+                if (!drivingData.success) {
+                    showStatus('Error calculating driving route', 'error');
+                    return;
+                }
+
+                // Calculate walking route from parking to destination
+                const walkingResponse = await fetch('/api/route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        start: `${parking.lat},${parking.lon}`,
+                        end: `${destinationCoords.lat},${destinationCoords.lon}`,
+                        routing_mode: 'pedestrian',
+                        vehicle_type: 'pedestrian'
+                    })
+                });
+
+                const walkingData = await walkingResponse.json();
+                if (!walkingData.success) {
+                    showStatus('Error calculating walking route', 'error');
+                    return;
+                }
+
+                // Display both routes on map
+                displayParkingRoutes(drivingData, walkingData, parking, destinationCoords);
+
+                // Update preview with combined journey info
+                updateParkingPreview(drivingData, walkingData, parking);
+
+                showStatus('✅ Routes calculated. Driving + Walking shown on map', 'success');
+
+            } catch (error) {
+                console.error('[Parking] Error selecting parking:', error);
+                showStatus('Error: ' + error.message, 'error');
+            }
+        }
+
+        /**
+         * Display driving and walking routes on map
+         */
+        function displayParkingRoutes(drivingData, walkingData, parking, destination) {
+            // Remove previous parking routes
+            if (parkingDrivingRoute) map.removeLayer(parkingDrivingRoute);
+            if (parkingWalkingRoute) map.removeLayer(parkingWalkingRoute);
+
+            // Decode and display driving route (blue)
+            if (drivingData.geometry) {
+                const drivingCoords = polyline.decode(drivingData.geometry);
+                parkingDrivingRoute = L.polyline(drivingCoords, {
+                    color: '#2196F3',
+                    weight: 5,
+                    opacity: 0.8,
+                    dashArray: '5, 5'
+                }).addTo(map);
+            }
+
+            // Decode and display walking route (green)
+            if (walkingData.geometry) {
+                const walkingCoords = polyline.decode(walkingData.geometry);
+                parkingWalkingRoute = L.polyline(walkingCoords, {
+                    color: '#4CAF50',
+                    weight: 4,
+                    opacity: 0.7
+                }).addTo(map);
+            }
+
+            // Fit map to show both routes
+            const allCoords = [];
+            if (parkingDrivingRoute) allCoords.push(...parkingDrivingRoute.getLatLngs());
+            if (parkingWalkingRoute) allCoords.push(...parkingWalkingRoute.getLatLngs());
+            if (allCoords.length > 0) {
+                const bounds = L.latLngBounds(allCoords);
+                map.fitBounds(bounds, { padding: [50, 50] });
+            }
+        }
+
+        /**
+         * Update route preview with parking journey info
+         */
+        function updateParkingPreview(drivingData, walkingData, parking) {
+            const drivingDist = drivingData.distance_km || 0;
+            const drivingTime = drivingData.duration_minutes || 0;
+            const walkingDist = walkingData.distance_km || 0;
+            const walkingTime = walkingData.duration_minutes || 0;
+            const totalDist = drivingDist + walkingDist;
+            const totalTime = drivingTime + walkingTime;
+
+            const distUnit = getDistanceUnit();
+            const convertedDist = convertDistance(totalDist);
+
+            // Update preview info
+            document.getElementById('previewDistance').textContent = convertedDist + ' ' + distUnit;
+            document.getElementById('previewDuration').textContent = Math.round(totalTime) + ' min';
+            document.getElementById('previewRoute').textContent = `${document.getElementById('start').value} → 🅿️ ${parking.name} → ${document.getElementById('end').value}`;
+
+            // Show breakdown
+            const breakdown = `
+                <div style="font-size: 12px; line-height: 1.6; color: #333;">
+                    <div style="margin-bottom: 8px;">
+                        <strong>🚗 Driving:</strong> ${drivingDist.toFixed(1)} km / ${Math.round(drivingTime)} min
+                    </div>
+                    <div>
+                        <strong>🚶 Walking:</strong> ${walkingDist.toFixed(2)} km / ${Math.round(walkingTime)} min
+                    </div>
+                </div>
+            `;
+            document.getElementById('previewRoute').innerHTML = `${document.getElementById('start').value} → 🅿️ ${parking.name} → ${document.getElementById('end').value}` + breakdown;
+        }
+
+        /**
+         * Clear parking selection and return to original route
+         */
+        function clearParkingSelection() {
+            selectedParking = null;
+            if (parkingDrivingRoute) map.removeLayer(parkingDrivingRoute);
+            if (parkingWalkingRoute) map.removeLayer(parkingWalkingRoute);
+            parkingMarkers.forEach(marker => map.removeLayer(marker));
+            parkingMarkers = [];
+
+            document.getElementById('parkingSection').style.display = 'none';
+            document.getElementById('parkingList').innerHTML = '';
+
+            // Restore original route preview
+            if (window.lastCalculatedRoute) {
+                showRoutePreview(window.lastCalculatedRoute);
+            }
+
+            showStatus('🗺️ Parking selection cleared', 'info');
+        }
+
         function clearForm() {
             document.getElementById('start').value = '';
             document.getElementById('end').value = '';
@@ -4831,6 +5233,9 @@ HTML_TEMPLATE = '''
             if (startMarker) map.removeLayer(startMarker);
             if (endMarker) map.removeLayer(endMarker);
             if (routeLayer) map.removeLayer(routeLayer);
+
+            // Clear parking
+            clearParkingSelection();
 
             // Use smooth animation to return to default view
             map.flyTo([51.5074, -0.1278], 13, {
@@ -6094,6 +6499,10 @@ HTML_TEMPLATE = '''
             console.log('[Settings] Loading all persistent settings...');
             loadAllSettings();
             applySettingsToUI();
+
+            // Load parking preferences
+            console.log('[Parking] Loading parking preferences...');
+            loadParkingPreferences();
 
             // Legacy preference loading (for backward compatibility)
             loadPreferences();
@@ -8551,6 +8960,95 @@ def get_nearby_hazards():
 # ============================================================================
 # VARIABLE SPEED LIMIT DETECTION
 # ============================================================================
+
+# ============================================================================
+# PARKING INTEGRATION FEATURE
+# ============================================================================
+
+@app.route('/api/parking-search', methods=['POST'])
+def search_parking():
+    """Search for parking near a destination using Nominatim/OSM."""
+    try:
+        data = request.json
+        lat = float(data.get('lat', 0))
+        lon = float(data.get('lon', 0))
+        radius = int(data.get('radius', 800))  # Default 800m
+        parking_type = data.get('type', 'any')
+
+        if lat == 0 or lon == 0:
+            return jsonify({'success': False, 'error': 'Invalid coordinates'})
+
+        # Search for parking amenities using Nominatim Overpass API
+        # Using Nominatim search with amenity=parking filter
+        url = 'https://nominatim.openstreetmap.org/search'
+
+        # Build search query for parking
+        search_query = f'parking near {lat},{lon}'
+
+        params = {
+            'q': search_query,
+            'format': 'json',
+            'limit': 20,
+            'addressdetails': 1
+        }
+
+        headers = {'User-Agent': 'Voyagr-PWA/1.0'}
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+
+        if response.status_code != 200:
+            print(f"[Parking] Nominatim error: {response.status_code}")
+            return jsonify({'success': False, 'error': 'Parking search failed'})
+
+        results = response.json()
+
+        if not results:
+            return jsonify({'success': True, 'parking': []})
+
+        # Filter and process results
+        parking_list = []
+        for result in results:
+            try:
+                p_lat = float(result.get('lat', 0))
+                p_lon = float(result.get('lon', 0))
+
+                # Calculate distance from destination
+                distance_m = math.sqrt((p_lat - lat)**2 + (p_lon - lon)**2) * 111000  # Rough conversion to meters
+
+                # Filter by radius
+                if distance_m > radius:
+                    continue
+
+                # Filter by type if specified
+                if parking_type != 'any':
+                    name_lower = result.get('name', '').lower()
+                    if parking_type == 'garage' and 'garage' not in name_lower:
+                        continue
+                    elif parking_type == 'street' and 'street' not in name_lower:
+                        continue
+                    elif parking_type == 'lot' and 'lot' not in name_lower:
+                        continue
+
+                parking_list.append({
+                    'name': result.get('name', 'Parking'),
+                    'lat': p_lat,
+                    'lon': p_lon,
+                    'distance_m': distance_m,
+                    'address': result.get('display_name', ''),
+                    'type': 'parking'
+                })
+            except (ValueError, KeyError) as e:
+                print(f"[Parking] Error processing result: {e}")
+                continue
+
+        # Sort by distance
+        parking_list.sort(key=lambda x: x['distance_m'])
+
+        print(f"[Parking] Found {len(parking_list)} parking options near ({lat},{lon})")
+        return jsonify({'success': True, 'parking': parking_list[:10]})  # Return top 10
+
+    except Exception as e:
+        print(f"[Parking] Error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
 
 # ============================================================================
 # PHASE 2 FEATURES - SEARCH HISTORY & FAVORITES
