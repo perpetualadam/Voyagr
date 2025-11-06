@@ -4697,8 +4697,11 @@ HTML_TEMPLATE = '''
                         updateTripInfo(data.distance, data.time, data.fuel_cost || '-', data.toll_cost || '-');
                         showStatus('Route calculated successfully! (' + data.source + ')', 'success');
 
-                        // Store route data for navigation
-                        window.lastCalculatedRoute = data;
+                        // Store route data for navigation (including destination for rerouting)
+                        window.lastCalculatedRoute = {
+                            ...data,
+                            destination: end  // Store destination for automatic rerouting
+                        };
 
                         // Show route preview instead of auto-starting navigation
                         setTimeout(() => {
@@ -5419,9 +5422,12 @@ HTML_TEMPLATE = '''
                     widget.style.borderLeft = '4px solid #4CAF50';
                 }
             } else {
-                document.getElementById('speedLimitValue').textContent = '--';
+                // No speed limit data available - show '?' instead of '--'
+                document.getElementById('speedLimitValue').textContent = '?';
+                document.getElementById('speedLimitUnit').textContent = speedUnit;
                 document.getElementById('speedWarning').style.display = 'none';
                 widget.style.borderLeft = '4px solid #999';
+                console.log('[Speed Widget] No speed limit available');
             }
 
             // Show widget if tracking is active
@@ -6708,6 +6714,9 @@ HTML_TEMPLATE = '''
                         const turnInfo = detectUpcomingTurn(lat, lon);
                         if (turnInfo) {
                             distanceToNextTurn = turnInfo.distance;
+
+                            // FIXED: Announce upcoming turns via voice
+                            announceUpcomingTurn(turnInfo);
                         }
                     }
 
@@ -6742,13 +6751,20 @@ HTML_TEMPLATE = '''
                     fetch(`/api/speed-limit?lat=${lat}&lon=${lon}`)
                         .then(response => response.json())
                         .then(data => {
-                            if (data.success && data.speed_limit) {
-                                updateSpeedWidget(speedMph, data.speed_limit);
+                            if (data.success && data.data) {
+                                // FIXED: Extract speed_limit_mph from data.data object
+                                const speedLimitMph = data.data.speed_limit_mph || data.data.speed_limit;
+                                console.log('[Speed Limit] API response:', data.data, 'Extracted limit:', speedLimitMph);
+                                updateSpeedWidget(speedMph, speedLimitMph);
                             } else {
+                                console.log('[Speed Limit] No data in response:', data);
                                 updateSpeedWidget(speedMph, null);
                             }
                         })
-                        .catch(() => updateSpeedWidget(speedMph, null));
+                        .catch(err => {
+                            console.log('[Speed Limit] API error:', err);
+                            updateSpeedWidget(speedMph, null);
+                        });
                 },
                 (error) => {
                     showStatus('GPS Error: ' + error.message, 'error');
@@ -6776,6 +6792,53 @@ HTML_TEMPLATE = '''
             showStatus('🛑 GPS Tracking stopped', 'info');
         }
 
+        // Turn announcement variables
+        let lastTurnAnnouncementDistance = Infinity;
+        const TURN_ANNOUNCEMENT_DISTANCES = [500, 200, 100, 50]; // meters
+
+        function announceUpcomingTurn(turnInfo) {
+            /**
+             * Announce upcoming turns via voice at specific distances
+             * FIXED: Implements turn-by-turn voice instructions
+             */
+            if (!turnInfo || !voiceRecognition) return;
+
+            const distance = turnInfo.distance;
+
+            // Check if we should announce at this distance
+            for (const announcementDistance of TURN_ANNOUNCEMENT_DISTANCES) {
+                // Announce when within range (with 10m hysteresis to avoid repeated announcements)
+                if (distance <= announcementDistance && lastTurnAnnouncementDistance > announcementDistance + 10) {
+                    let message = '';
+
+                    if (announcementDistance === 500) {
+                        message = `In 500 meters, prepare for upcoming turn`;
+                    } else if (announcementDistance === 200) {
+                        message = `In 200 meters, turn ahead`;
+                    } else if (announcementDistance === 100) {
+                        message = `In 100 meters, turn`;
+                    } else if (announcementDistance === 50) {
+                        message = `Turn now`;
+                    }
+
+                    console.log(`[Voice] Announcing turn: ${message} (distance: ${distance.toFixed(0)}m)`);
+                    speakMessage(message);
+                    lastTurnAnnouncementDistance = distance;
+                    break;
+                }
+            }
+
+            // Reset announcement when turn is passed
+            if (distance > 600) {
+                lastTurnAnnouncementDistance = Infinity;
+            }
+        }
+
+        // Rerouting debounce variables
+        let lastRerouteTime = 0;
+        const REROUTE_DEBOUNCE_MS = 5000; // Wait 5 seconds between reroute attempts
+        let lastRerouteDeviation = 0;
+
         function checkRouteDeviation(lat, lon) {
             // Calculate distance from current position to route
             if (!routePolyline || routePolyline.length === 0) return;
@@ -6789,10 +6852,107 @@ HTML_TEMPLATE = '''
                 }
             }
 
-            // If deviation > 100 meters, suggest re-routing
-            if (minDistance > 100) {
-                sendNotification('Route Deviation', `You are ${minDistance.toFixed(0)}m off route. Recalculating...`, 'warning');
-                // Auto re-route could be triggered here
+            // If deviation > 50 meters, trigger automatic rerouting
+            if (minDistance > 50) {
+                const now = Date.now();
+                const timeSinceLastReroute = now - lastRerouteTime;
+
+                // Only reroute if enough time has passed (debounce)
+                if (timeSinceLastReroute > REROUTE_DEBOUNCE_MS) {
+                    console.log(`[Rerouting] Deviation detected: ${minDistance.toFixed(0)}m (threshold: 50m)`);
+                    sendNotification('Route Deviation', `You are ${minDistance.toFixed(0)}m off route. Recalculating...`, 'warning');
+                    triggerAutomaticReroute(lat, lon);
+                    lastRerouteTime = now;
+                } else {
+                    console.log(`[Rerouting] Deviation ${minDistance.toFixed(0)}m detected but debouncing (${(REROUTE_DEBOUNCE_MS - timeSinceLastReroute).toFixed(0)}ms remaining)`);
+                }
+                lastRerouteDeviation = minDistance;
+            }
+        }
+
+        async function triggerAutomaticReroute(currentLat, currentLon) {
+            /**
+             * Automatically recalculate route from current position to original destination
+             * FIXED: Now implements actual rerouting instead of just showing notification
+             */
+            try {
+                if (!window.lastCalculatedRoute || !window.lastCalculatedRoute.destination) {
+                    console.log('[Rerouting] No destination stored, cannot reroute');
+                    return;
+                }
+
+                const destination = window.lastCalculatedRoute.destination;
+                console.log(`[Rerouting] Starting automatic reroute from (${currentLat.toFixed(4)}, ${currentLon.toFixed(4)}) to ${destination}`);
+
+                // Prepare route calculation request
+                const routeRequest = {
+                    start: `${currentLat},${currentLon}`,
+                    end: destination,
+                    routing_mode: currentRoutingMode || 'auto',
+                    vehicle_type: currentVehicleType || 'petrol_diesel',
+                    fuel_efficiency: parseFloat(localStorage.getItem('fuelEfficiency') || '6.5'),
+                    fuel_price: parseFloat(localStorage.getItem('fuelPrice') || '1.40'),
+                    energy_efficiency: parseFloat(localStorage.getItem('energyEfficiency') || '18.5'),
+                    electricity_price: parseFloat(localStorage.getItem('electricityPrice') || '0.30'),
+                    include_tolls: localStorage.getItem('includeTolls') !== 'false',
+                    include_caz: localStorage.getItem('includeCAZ') !== 'false'
+                };
+
+                const response = await fetch('/api/route', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(routeRequest)
+                });
+
+                const data = await response.json();
+
+                if (data.success && data.routes && data.routes.length > 0) {
+                    const newRoute = data.routes[0];
+                    console.log(`[Rerouting] New route calculated: ${newRoute.distance_km}km, ${newRoute.duration_minutes}min`);
+
+                    // Update route on map
+                    if (routeLayer) {
+                        map.removeLayer(routeLayer);
+                    }
+
+                    // Decode new route geometry
+                    routePolyline = decodePolyline(newRoute.geometry);
+                    console.log(`[Rerouting] Route polyline decoded: ${routePolyline.length} points`);
+
+                    // Draw new route on map
+                    routeLayer = L.polyline(routePolyline, {
+                        color: '#667eea',
+                        weight: 5,
+                        opacity: 0.8,
+                        dashArray: '5, 5'
+                    }).addTo(map);
+
+                    // Update trip info
+                    updateTripInfo(newRoute.distance_km, newRoute.duration_minutes, newRoute.fuel_cost, newRoute.toll_cost);
+
+                    // Store updated route
+                    window.lastCalculatedRoute = {
+                        ...window.lastCalculatedRoute,
+                        ...newRoute,
+                        geometry: newRoute.geometry,
+                        distance: `${newRoute.distance_km} km`,
+                        time: `${newRoute.duration_minutes} minutes`
+                    };
+
+                    // Announce reroute via voice
+                    if (voiceRecognition) {
+                        speakMessage(`Route recalculated. New distance: ${newRoute.distance_km} kilometers, time: ${newRoute.duration_minutes} minutes`);
+                    }
+
+                    sendNotification('Route Updated', `New route: ${newRoute.distance_km}km, ${newRoute.duration_minutes}min`, 'success');
+                    console.log('[Rerouting] Automatic reroute completed successfully');
+                } else {
+                    console.log('[Rerouting] Failed to calculate new route:', data.error);
+                    sendNotification('Rerouting Failed', 'Could not calculate new route. Continuing on current route.', 'error');
+                }
+            } catch (error) {
+                console.error('[Rerouting] Error during automatic reroute:', error);
+                sendNotification('Rerouting Error', 'Error recalculating route: ' + error.message, 'error');
             }
         }
 
