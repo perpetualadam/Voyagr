@@ -2453,6 +2453,405 @@ HTML_TEMPLATE = '''
             background-repeat: no-repeat;
             background-position: center;
         }
+
+        /* ===== DARK MODE STYLES ===== */
+        /* Dark mode is applied via body.dark-mode class */
+
+        body.dark-mode {
+            background: #1a1a1a;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode html {
+            background: #1a1a1a;
+        }
+
+        /* Bottom Sheet Dark Mode */
+        body.dark-mode .bottom-sheet {
+            background: #2d2d2d;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+        }
+
+        body.dark-mode .bottom-sheet-handle::before {
+            background: #555;
+        }
+
+        body.dark-mode .bottom-sheet-header {
+            border-bottom-color: #444;
+        }
+
+        body.dark-mode .bottom-sheet-header h2 {
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .bottom-sheet-content {
+            background: #2d2d2d;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .bottom-sheet-content::-webkit-scrollbar-track {
+            background: #1a1a1a;
+        }
+
+        body.dark-mode .bottom-sheet-content::-webkit-scrollbar-thumb {
+            background: #555;
+        }
+
+        body.dark-mode .bottom-sheet-content::-webkit-scrollbar-thumb:hover {
+            background: #777;
+        }
+
+        /* Form Elements Dark Mode */
+        body.dark-mode label {
+            color: #b0b0b0;
+        }
+
+        body.dark-mode input,
+        body.dark-mode select,
+        body.dark-mode textarea {
+            background: #3a3a3a;
+            color: #e0e0e0;
+            border-color: #555;
+        }
+
+        body.dark-mode input:focus,
+        body.dark-mode select:focus,
+        body.dark-mode textarea:focus {
+            border-color: #667eea;
+            background: #3a3a3a;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode input::placeholder,
+        body.dark-mode textarea::placeholder {
+            color: #888;
+        }
+
+        /* Button Dark Mode */
+        body.dark-mode .btn-calculate {
+            background: #667eea;
+            color: white;
+        }
+
+        body.dark-mode .btn-calculate:hover {
+            background: #5568d3;
+        }
+
+        body.dark-mode .btn-clear {
+            background: #3a3a3a;
+            color: #e0e0e0;
+            border: 1px solid #555;
+        }
+
+        body.dark-mode .btn-clear:hover {
+            background: #4a4a4a;
+        }
+
+        /* Routing Mode Buttons Dark Mode */
+        body.dark-mode .routing-mode-btn {
+            background: #3a3a3a;
+            border-color: #555;
+            color: #b0b0b0;
+        }
+
+        body.dark-mode .routing-mode-btn:hover {
+            border-color: #667eea;
+            background: #3a3a3a;
+        }
+
+        body.dark-mode .routing-mode-btn.active {
+            background: #667eea;
+            border-color: #667eea;
+            color: white;
+        }
+
+        /* FAB Dark Mode */
+        body.dark-mode .fab {
+            background: #3a3a3a;
+            color: #e0e0e0;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        body.dark-mode .fab:hover {
+            box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+        }
+
+        /* Status Messages Dark Mode */
+        body.dark-mode .status.loading {
+            background: #4a3a1a;
+            color: #ffd700;
+        }
+
+        body.dark-mode .status.success {
+            background: #1a3a1a;
+            color: #51cf66;
+        }
+
+        body.dark-mode .status.error {
+            background: #3a1a1a;
+            color: #ff6b6b;
+        }
+
+        body.dark-mode .status.info {
+            background: #1a2a3a;
+            color: #74c0fc;
+        }
+
+        /* Result Container Dark Mode */
+        body.dark-mode .result {
+            background: #3a3a3a;
+            border: 1px solid #555;
+        }
+
+        /* Preference Items Dark Mode */
+        body.dark-mode .preference-item {
+            background: #3a3a3a;
+            border-color: #555;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .preference-label {
+            color: #b0b0b0;
+        }
+
+        /* Toggle Switch Dark Mode */
+        body.dark-mode .toggle-switch {
+            background: #3a3a3a;
+            border-color: #555;
+        }
+
+        body.dark-mode .toggle-switch.active {
+            background: #4CAF50;
+            border-color: #4CAF50;
+        }
+
+        /* Theme Option Dark Mode */
+        body.dark-mode .theme-option {
+            background: #3a3a3a;
+            border-color: #555;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .theme-option:hover {
+            border-color: #667eea;
+            background: #4a4a4a;
+        }
+
+        body.dark-mode .theme-option.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* Preferences Section Dark Mode */
+        body.dark-mode .preferences-section {
+            background: #3a3a3a;
+            border-color: #555;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .preferences-section h3 {
+            color: #e0e0e0;
+        }
+
+        /* Tabs Dark Mode */
+        body.dark-mode .tab-button {
+            background: #3a3a3a;
+            color: #b0b0b0;
+            border-color: #555;
+        }
+
+        body.dark-mode .tab-button.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* Tab Content Dark Mode */
+        body.dark-mode .tab-content {
+            background: #2d2d2d;
+            color: #e0e0e0;
+        }
+
+        /* Battery Indicator Dark Mode */
+        body.dark-mode .battery-indicator {
+            background: #3a3a3a;
+            border-color: #667eea;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .battery-indicator.low {
+            background: #3a1a1a;
+            border-color: #ff6b6b;
+            color: #ff6b6b;
+        }
+
+        body.dark-mode .battery-indicator.medium {
+            background: #3a3a1a;
+            border-color: #ffd700;
+            color: #ffd700;
+        }
+
+        body.dark-mode .battery-indicator.high {
+            background: #1a3a1a;
+            border-color: #51cf66;
+            color: #51cf66;
+        }
+
+        /* Slider Dark Mode */
+        body.dark-mode .preference-slider {
+            background: #555;
+        }
+
+        body.dark-mode .preference-slider::-webkit-slider-thumb {
+            background: #667eea;
+        }
+
+        body.dark-mode .preference-slider::-moz-range-thumb {
+            background: #667eea;
+        }
+
+        /* Location Input Group Dark Mode */
+        body.dark-mode .location-input-group {
+            background: #3a3a3a;
+        }
+
+        body.dark-mode .location-btn {
+            background: transparent;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .location-btn:hover {
+            background: #4a4a4a;
+        }
+
+        /* Autocomplete Dropdown Dark Mode */
+        body.dark-mode .autocomplete-dropdown,
+        body.dark-mode .search-history-dropdown {
+            background: #3a3a3a;
+            border-color: #555;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+        }
+
+        body.dark-mode .autocomplete-item,
+        body.dark-mode .history-item {
+            background: #3a3a3a;
+            color: #e0e0e0;
+            border-color: #555;
+        }
+
+        body.dark-mode .autocomplete-item:hover,
+        body.dark-mode .history-item:hover {
+            background: #4a4a4a;
+        }
+
+        /* Route Preview Dark Mode */
+        body.dark-mode .route-preview-container {
+            background: #3a3a3a;
+            border-color: #555;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .route-preview-item {
+            background: #2d2d2d;
+            border-color: #555;
+            color: #e0e0e0;
+        }
+
+        /* Route Comparison Dark Mode */
+        body.dark-mode .route-comparison-item {
+            background: #3a3a3a;
+            border-color: #555;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .route-comparison-item:hover {
+            background: #4a4a4a;
+        }
+
+        /* Trip History Dark Mode */
+        body.dark-mode .trip-history-item {
+            background: #3a3a3a;
+            border-color: #555;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .trip-history-item:hover {
+            background: #4a4a4a;
+        }
+
+        /* In-App Notification Dark Mode */
+        body.dark-mode .in-app-notification {
+            background: #3a3a3a;
+            border-color: #555;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .in-app-notification.success {
+            background: #1a3a1a;
+            border-color: #51cf66;
+            color: #51cf66;
+        }
+
+        body.dark-mode .in-app-notification.error {
+            background: #3a1a1a;
+            border-color: #ff6b6b;
+            color: #ff6b6b;
+        }
+
+        body.dark-mode .in-app-notification.info {
+            background: #1a2a3a;
+            border-color: #74c0fc;
+            color: #74c0fc;
+        }
+
+        /* Voice Section Dark Mode */
+        body.dark-mode .voice-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        body.dark-mode .voice-status,
+        body.dark-mode .voice-transcript,
+        body.dark-mode .voice-commands {
+            background: rgba(0, 0, 0, 0.3);
+            color: #e0e0e0;
+        }
+
+        /* ML Predictions Dark Mode */
+        body.dark-mode .ml-predictions-section {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        body.dark-mode .ml-prediction-item {
+            background: rgba(0, 0, 0, 0.2);
+            border-left-color: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Gesture Indicator Dark Mode */
+        body.dark-mode .gesture-indicator {
+            background: rgba(102, 126, 234, 0.9);
+        }
+
+        /* Headings Dark Mode */
+        body.dark-mode h1,
+        body.dark-mode h2,
+        body.dark-mode h3,
+        body.dark-mode h4,
+        body.dark-mode h5,
+        body.dark-mode h6 {
+            color: #e0e0e0;
+        }
+
+        /* Form Group Dark Mode */
+        body.dark-mode .form-group {
+            background: transparent;
+        }
+
+        body.dark-mode .form-group[style*="background: #f5f5f5"] {
+            background: #3a3a3a !important;
+        }
     </style>
 </head>
 <body>
@@ -2781,6 +3180,21 @@ HTML_TEMPLATE = '''
                             <button class="theme-option" onclick="setMapTheme('dark')">
                                 <div class="theme-preview dark"></div>
                                 Dark
+                            </button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🌙 UI Theme</span>
+                        </div>
+                        <div class="theme-selector">
+                            <button class="theme-option" id="themeLight" onclick="setTheme('light')">
+                                ☀️ Light
+                            </button>
+                            <button class="theme-option" id="themeDark" onclick="setTheme('dark')">
+                                🌙 Dark
+                            </button>
+                            <button class="theme-option" id="themeAuto" onclick="setTheme('auto')">
+                                🔄 Auto
                             </button>
                         </div>
 
@@ -3405,6 +3819,104 @@ HTML_TEMPLATE = '''
             return distanceUnit === 'mi' ? 'MPG' : 'L/100km';
         }
 
+        // ===== DARK MODE FUNCTIONS =====
+        let currentTheme = localStorage.getItem('ui_theme') || 'light';
+
+        /**
+         * Initialize dark mode on page load
+         * Checks localStorage for saved theme preference and applies it
+         */
+        function initializeDarkMode() {
+            const savedTheme = localStorage.getItem('ui_theme') || 'light';
+            currentTheme = savedTheme;
+            applyTheme(savedTheme);
+            console.log('[Dark Mode] Initialized with theme:', savedTheme);
+        }
+
+        /**
+         * Apply theme to the UI
+         * @param {string} theme - 'light', 'dark', or 'auto'
+         */
+        function applyTheme(theme) {
+            const body = document.body;
+
+            if (theme === 'auto') {
+                // Use system preference
+                const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+                if (prefersDark) {
+                    body.classList.add('dark-mode');
+                    console.log('[Dark Mode] Applied auto theme (system prefers dark)');
+                } else {
+                    body.classList.remove('dark-mode');
+                    console.log('[Dark Mode] Applied auto theme (system prefers light)');
+                }
+            } else if (theme === 'dark') {
+                body.classList.add('dark-mode');
+                console.log('[Dark Mode] Applied dark theme');
+            } else {
+                body.classList.remove('dark-mode');
+                console.log('[Dark Mode] Applied light theme');
+            }
+
+            currentTheme = theme;
+            localStorage.setItem('ui_theme', theme);
+        }
+
+        /**
+         * Toggle between light and dark mode
+         */
+        function toggleDarkMode() {
+            const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+            applyTheme(newTheme);
+            showStatus(`🌙 Theme changed to ${newTheme} mode`, 'success');
+        }
+
+        /**
+         * Set theme to specific value
+         * @param {string} theme - 'light', 'dark', or 'auto'
+         */
+        function setTheme(theme) {
+            applyTheme(theme);
+            showStatus(`🎨 Theme changed to ${theme} mode`, 'success');
+        }
+
+        /**
+         * Listen for system theme changes when in auto mode
+         */
+        if (window.matchMedia) {
+            window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
+                if (currentTheme === 'auto') {
+                    applyTheme('auto');
+                    console.log('[Dark Mode] System theme changed, reapplying auto theme');
+                }
+            });
+        }
+
+        /**
+         * Update theme button UI to show which theme is currently active
+         */
+        function updateThemeButtons() {
+            const lightBtn = document.getElementById('themeLight');
+            const darkBtn = document.getElementById('themeDark');
+            const autoBtn = document.getElementById('themeAuto');
+
+            // Remove active class from all buttons
+            if (lightBtn) lightBtn.classList.remove('active');
+            if (darkBtn) darkBtn.classList.remove('active');
+            if (autoBtn) autoBtn.classList.remove('active');
+
+            // Add active class to current theme button
+            if (currentTheme === 'light' && lightBtn) {
+                lightBtn.classList.add('active');
+            } else if (currentTheme === 'dark' && darkBtn) {
+                darkBtn.classList.add('active');
+            } else if (currentTheme === 'auto' && autoBtn) {
+                autoBtn.classList.add('active');
+            }
+
+            console.log('[Dark Mode] Theme buttons updated for theme:', currentTheme);
+        }
+
         // Tab switching function
         function switchTab(tab) {
             const navigationContent = document.querySelector('.bottom-sheet-content > div:not(#settingsTab):not(#tripHistoryTab):not(#routeComparisonTab):not(#routeSharingTab):not(#routeAnalyticsTab):not(#savedRoutesTab)');
@@ -3750,6 +4262,10 @@ HTML_TEMPLATE = '''
                         smartZoomToggle.classList.remove('active');
                     }
                 }
+
+                // Apply UI theme preference
+                initializeDarkMode();
+                updateThemeButtons();
 
                 console.log('[Settings] All settings applied to UI');
             } catch (error) {
