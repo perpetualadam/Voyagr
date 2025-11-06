@@ -2825,6 +2825,56 @@ HTML_TEMPLATE = '''
                         </div>
                     </div>
 
+                    <!-- Voice Preferences Section -->
+                    <div class="preferences-section">
+                        <h3>🎤 Voice Preferences</h3>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Turn Announcement Distance (1st)</span>
+                            <select id="voiceTurnDistance1" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="300">300 meters</option>
+                                <option value="500" selected>500 meters</option>
+                                <option value="800">800 meters</option>
+                                <option value="1000">1 kilometer</option>
+                            </select>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Turn Announcement Distance (2nd)</span>
+                            <select id="voiceTurnDistance2" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="100">100 meters</option>
+                                <option value="150">150 meters</option>
+                                <option value="200" selected>200 meters</option>
+                                <option value="300">300 meters</option>
+                            </select>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Turn Announcement Distance (3rd)</span>
+                            <select id="voiceTurnDistance3" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="50">50 meters</option>
+                                <option value="75">75 meters</option>
+                                <option value="100" selected>100 meters</option>
+                                <option value="150">150 meters</option>
+                            </select>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Hazard Warning Distance</span>
+                            <select id="voiceHazardDistance" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="300">300 meters</option>
+                                <option value="500" selected>500 meters</option>
+                                <option value="800">800 meters</option>
+                                <option value="1000">1 kilometer</option>
+                            </select>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🔊 Voice Announcements</span>
+                            <button class="toggle-switch" id="voiceAnnouncementsEnabled" onclick="toggleVoiceAnnouncements()"></button>
+                        </div>
+                    </div>
+
                     <!-- Advanced Features Section -->
                     <div class="preferences-section">
                         <h3>⚙️ Advanced Features</h3>
@@ -3336,6 +3386,7 @@ HTML_TEMPLATE = '''
                 sheetTitle.textContent = '⚙️ Settings';
                 loadUnitPreferences();
                 loadRoutePreferences();
+                loadVoicePreferences();
             } else if (tab === 'tripHistory') {
                 tripHistoryTab.style.display = 'block';
                 sheetTitle.textContent = '📋 Trip History';
@@ -4941,6 +4992,68 @@ HTML_TEMPLATE = '''
         }
 
         /**
+         * Save voice preferences to localStorage
+         */
+        function saveVoicePreferences() {
+            const prefs = {
+                turnDistance1: parseInt(document.getElementById('voiceTurnDistance1').value),
+                turnDistance2: parseInt(document.getElementById('voiceTurnDistance2').value),
+                turnDistance3: parseInt(document.getElementById('voiceTurnDistance3').value),
+                hazardDistance: parseInt(document.getElementById('voiceHazardDistance').value),
+                announcementsEnabled: document.getElementById('voiceAnnouncementsEnabled').checked
+            };
+            localStorage.setItem('voicePreferences', JSON.stringify(prefs));
+
+            // Update global announcement distance arrays
+            TURN_ANNOUNCEMENT_DISTANCES.length = 0;
+            TURN_ANNOUNCEMENT_DISTANCES.push(prefs.turnDistance1, prefs.turnDistance2, prefs.turnDistance3, 50);
+            DESTINATION_ANNOUNCEMENT_DISTANCES.length = 0;
+            DESTINATION_ANNOUNCEMENT_DISTANCES.push(10000, 5000, 2000, 1000, 500, 100);
+            HAZARD_WARNING_DISTANCE = prefs.hazardDistance;
+            voiceRecognition = prefs.announcementsEnabled;
+
+            console.log('[Voice] Preferences saved:', prefs);
+            showStatus('✅ Voice preferences updated', 'success');
+        }
+
+        /**
+         * Load voice preferences from localStorage
+         */
+        function loadVoicePreferences() {
+            try {
+                const saved = localStorage.getItem('voicePreferences');
+                if (saved) {
+                    const prefs = JSON.parse(saved);
+                    document.getElementById('voiceTurnDistance1').value = prefs.turnDistance1 || 500;
+                    document.getElementById('voiceTurnDistance2').value = prefs.turnDistance2 || 200;
+                    document.getElementById('voiceTurnDistance3').value = prefs.turnDistance3 || 100;
+                    document.getElementById('voiceHazardDistance').value = prefs.hazardDistance || 500;
+                    document.getElementById('voiceAnnouncementsEnabled').checked = prefs.announcementsEnabled !== false;
+
+                    // Update global arrays
+                    TURN_ANNOUNCEMENT_DISTANCES.length = 0;
+                    TURN_ANNOUNCEMENT_DISTANCES.push(prefs.turnDistance1, prefs.turnDistance2, prefs.turnDistance3, 50);
+                    HAZARD_WARNING_DISTANCE = prefs.hazardDistance || 500;
+                    voiceRecognition = prefs.announcementsEnabled !== false;
+
+                    console.log('[Voice] Preferences loaded:', prefs);
+                }
+            } catch (e) {
+                console.log('[Voice] Error loading preferences:', e);
+            }
+        }
+
+        /**
+         * Toggle voice announcements on/off
+         */
+        function toggleVoiceAnnouncements() {
+            const enabled = document.getElementById('voiceAnnouncementsEnabled').checked;
+            voiceRecognition = enabled;
+            saveVoicePreferences();
+            showStatus(enabled ? '🔊 Voice announcements enabled' : '🔇 Voice announcements disabled', 'success');
+        }
+
+        /**
          * Find parking near destination
          */
         async function findParkingNearDestination() {
@@ -5481,10 +5594,48 @@ HTML_TEMPLATE = '''
             return R * c;
         }
 
+        function calculateBearing(lat1, lon1, lat2, lon2) {
+            /**
+             * Calculate bearing (direction) between two points in degrees (0-360)
+             * 0° = North, 90° = East, 180° = South, 270° = West
+             */
+            const dLon = (lon2 - lon1) * Math.PI / 180;
+            const lat1Rad = lat1 * Math.PI / 180;
+            const lat2Rad = lat2 * Math.PI / 180;
+
+            const y = Math.sin(dLon) * Math.cos(lat2Rad);
+            const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
+            const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+
+            return bearing;
+        }
+
+        function calculateTurnDirection(bearing1, bearing2) {
+            /**
+             * Calculate turn direction based on bearing change
+             * Returns: 'sharp_left', 'left', 'slight_left', 'straight', 'slight_right', 'right', 'sharp_right'
+             */
+            let bearingChange = bearing2 - bearing1;
+
+            // Normalize to -180 to 180 range
+            if (bearingChange > 180) bearingChange -= 360;
+            if (bearingChange < -180) bearingChange += 360;
+
+            // Classify turn
+            if (bearingChange < -135) return 'sharp_left';
+            if (bearingChange < -45) return 'left';
+            if (bearingChange < -10) return 'slight_left';
+            if (bearingChange <= 10) return 'straight';
+            if (bearingChange <= 45) return 'slight_right';
+            if (bearingChange <= 135) return 'right';
+            return 'sharp_right';
+        }
+
         function detectUpcomingTurn(userLat, userLon) {
             /**
              * Detect if user is approaching an upcoming turn in the route.
              * Returns object with distance to next turn or null if no turn ahead.
+             * ENHANCED: Now includes turn direction detection
              */
             if (!routeInProgress || !routePolyline || routePolyline.length === 0) {
                 return null;
@@ -5528,11 +5679,25 @@ HTML_TEMPLATE = '''
                 nextTurnPoint[0], nextTurnPoint[1]
             );
 
+            // ENHANCED: Calculate turn direction
+            let turnDirection = 'straight';
+            if (closestIndex > 0 && nextTurnIndex < routePolyline.length - 1) {
+                const prevPoint = routePolyline[closestIndex - 1];
+                const currPoint = routePolyline[closestIndex];
+                const nextPoint = routePolyline[nextTurnIndex];
+
+                const bearing1 = calculateBearing(prevPoint[0], prevPoint[1], currPoint[0], currPoint[1]);
+                const bearing2 = calculateBearing(currPoint[0], currPoint[1], nextPoint[0], nextPoint[1]);
+
+                turnDirection = calculateTurnDirection(bearing1, bearing2);
+            }
+
             return {
                 distance: distanceToTurn,
                 lat: nextTurnPoint[0],
                 lon: nextTurnPoint[1],
-                index: nextTurnIndex
+                index: nextTurnIndex,
+                direction: turnDirection  // NEW: Turn direction
             };
         }
 
@@ -6483,6 +6648,17 @@ HTML_TEMPLATE = '''
                     .then(r => r.json())
                     .then(r => console.log('[Voice] Hazard reported:', r));
                     break;
+
+                case 'reroute':
+                    console.log('[Voice] Rerouting from current location');
+                    if (routeInProgress && currentLat && currentLon) {
+                        // Trigger automatic reroute from current position
+                        triggerAutomaticReroute(currentLat, currentLon);
+                        speakMessage('Recalculating route from your current location');
+                    } else {
+                        speakMessage('No active route to recalculate');
+                    }
+                    break;
             }
         }
 
@@ -6718,6 +6894,12 @@ HTML_TEMPLATE = '''
                             // FIXED: Announce upcoming turns via voice
                             announceUpcomingTurn(turnInfo);
                         }
+
+                        // NEW: Announce distance to destination
+                        announceDistanceToDestination(lat, lon);
+
+                        // NEW: Announce ETA updates
+                        announceETAUpdate(lat, lon);
                     }
 
                     applySmartZoomWithAnimation(speedMph, distanceToNextTurn, 'motorway', lat, lon);
@@ -6796,14 +6978,173 @@ HTML_TEMPLATE = '''
         let lastTurnAnnouncementDistance = Infinity;
         const TURN_ANNOUNCEMENT_DISTANCES = [500, 200, 100, 50]; // meters
 
+        // Distance-to-destination announcement variables
+        let lastDestinationAnnouncementDistance = Infinity;
+        const DESTINATION_ANNOUNCEMENT_DISTANCES = [10000, 5000, 2000, 1000, 500, 100]; // meters (10km, 5km, 2km, 1km, 500m, 100m)
+
+        // ETA announcement variables
+        let lastETAAnnouncementTime = 0;
+        let lastAnnouncedETA = null;
+        const ETA_ANNOUNCEMENT_INTERVAL_MS = 600000; // Announce ETA every 10 minutes
+        const ETA_CHANGE_THRESHOLD_MS = 300000; // Announce if ETA changes by >5 minutes
+
+        function getTurnDirectionText(direction) {
+            /**
+             * Convert turn direction code to human-readable text
+             */
+            const directionMap = {
+                'sharp_left': 'sharply left',
+                'left': 'left',
+                'slight_left': 'slightly left',
+                'straight': 'straight',
+                'slight_right': 'slightly right',
+                'right': 'right',
+                'sharp_right': 'sharply right'
+            };
+            return directionMap[direction] || 'ahead';
+        }
+
+        function announceDistanceToDestination(currentLat, currentLon) {
+            /**
+             * Announce remaining distance to destination at specific intervals
+             * IMPLEMENTED: Distance-to-destination voice announcements
+             */
+            if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceRecognition) return;
+
+            // Calculate remaining distance from current position to destination
+            let remainingDistance = 0;
+            let closestIndex = 0;
+            let closestDistance = Infinity;
+
+            // Find closest point on route
+            for (let i = 0; i < routePolyline.length; i++) {
+                const point = routePolyline[i];
+                const distance = calculateHaversineDistance(currentLat, currentLon, point[0], point[1]);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestIndex = i;
+                }
+            }
+
+            // Calculate remaining distance from closest point to destination
+            for (let i = closestIndex; i < routePolyline.length - 1; i++) {
+                remainingDistance += calculateDistance(
+                    routePolyline[i][0], routePolyline[i][1],
+                    routePolyline[i+1][0], routePolyline[i+1][1]
+                );
+            }
+
+            // Check if we should announce at this distance
+            for (const announcementDistance of DESTINATION_ANNOUNCEMENT_DISTANCES) {
+                // Announce when within range (with hysteresis to avoid repeated announcements)
+                if (remainingDistance <= announcementDistance && lastDestinationAnnouncementDistance > announcementDistance + 100) {
+                    let message = '';
+
+                    if (announcementDistance === 10000) {
+                        message = `10 kilometers to destination`;
+                    } else if (announcementDistance === 5000) {
+                        message = `5 kilometers to destination`;
+                    } else if (announcementDistance === 2000) {
+                        message = `2 kilometers to destination`;
+                    } else if (announcementDistance === 1000) {
+                        message = `1 kilometer to destination`;
+                    } else if (announcementDistance === 500) {
+                        message = `500 meters to destination`;
+                    } else if (announcementDistance === 100) {
+                        message = `Arriving at destination`;
+                    }
+
+                    console.log(`[Voice] Distance announcement: ${message} (remaining: ${(remainingDistance/1000).toFixed(1)}km)`);
+                    speakMessage(message);
+                    lastDestinationAnnouncementDistance = remainingDistance;
+                    break;
+                }
+            }
+
+            // Reset announcement when destination is reached
+            if (remainingDistance > 11000) {
+                lastDestinationAnnouncementDistance = Infinity;
+            }
+        }
+
+        function announceETAUpdate(currentLat, currentLon) {
+            /**
+             * Announce ETA updates at regular intervals or when ETA changes significantly
+             * IMPLEMENTED: ETA voice announcements
+             */
+            if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceRecognition) return;
+
+            const now = Date.now();
+
+            // Calculate remaining distance
+            let remainingDistance = 0;
+            let closestIndex = 0;
+            let closestDistance = Infinity;
+
+            // Find closest point on route
+            for (let i = 0; i < routePolyline.length; i++) {
+                const point = routePolyline[i];
+                const distance = calculateHaversineDistance(currentLat, currentLon, point[0], point[1]);
+                if (distance < closestDistance) {
+                    closestDistance = distance;
+                    closestIndex = i;
+                }
+            }
+
+            // Calculate remaining distance from closest point to destination
+            for (let i = closestIndex; i < routePolyline.length - 1; i++) {
+                remainingDistance += calculateDistance(
+                    routePolyline[i][0], routePolyline[i][1],
+                    routePolyline[i+1][0], routePolyline[i+1][1]
+                );
+            }
+
+            // Get average speed from recent tracking history
+            let avgSpeed = 40; // Default 40 km/h
+            if (trackingHistory.length > 5) {
+                const recentSpeeds = trackingHistory.slice(-5).map(t => t.speed * 3.6); // Convert m/s to km/h
+                avgSpeed = recentSpeeds.reduce((a, b) => a + b) / recentSpeeds.length;
+            }
+
+            // Calculate ETA in milliseconds
+            const timeRemainingMs = (remainingDistance / (avgSpeed * 1000)) * 3600000; // Convert to ms
+            const etaTime = new Date(now + timeRemainingMs);
+
+            // Check if we should announce
+            const timeSinceLastAnnouncement = now - lastETAAnnouncementTime;
+            const etaChanged = lastAnnouncedETA && Math.abs(etaTime.getTime() - lastAnnouncedETA.getTime()) > ETA_CHANGE_THRESHOLD_MS;
+
+            if (timeSinceLastAnnouncement > ETA_ANNOUNCEMENT_INTERVAL_MS || etaChanged) {
+                const etaHours = etaTime.getHours();
+                const etaMinutes = etaTime.getMinutes();
+                const timeRemainingMinutes = Math.round(timeRemainingMs / 60000);
+
+                let message = '';
+                if (timeRemainingMinutes > 60) {
+                    const hours = Math.floor(timeRemainingMinutes / 60);
+                    const minutes = timeRemainingMinutes % 60;
+                    message = `You will arrive in ${hours} hour${hours > 1 ? 's' : ''} and ${minutes} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
+                } else {
+                    message = `You will arrive in ${timeRemainingMinutes} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
+                }
+
+                console.log(`[Voice] ETA announcement: ${message} (remaining: ${(remainingDistance/1000).toFixed(1)}km, avg speed: ${avgSpeed.toFixed(1)}km/h)`);
+                speakMessage(message);
+                lastETAAnnouncementTime = now;
+                lastAnnouncedETA = etaTime;
+            }
+        }
+
         function announceUpcomingTurn(turnInfo) {
             /**
              * Announce upcoming turns via voice at specific distances
-             * FIXED: Implements turn-by-turn voice instructions
+             * ENHANCED: Now includes turn direction in announcements
              */
             if (!turnInfo || !voiceRecognition) return;
 
             const distance = turnInfo.distance;
+            const direction = turnInfo.direction || 'straight';
+            const directionText = getTurnDirectionText(direction);
 
             // Check if we should announce at this distance
             for (const announcementDistance of TURN_ANNOUNCEMENT_DISTANCES) {
@@ -6812,16 +7153,16 @@ HTML_TEMPLATE = '''
                     let message = '';
 
                     if (announcementDistance === 500) {
-                        message = `In 500 meters, prepare for upcoming turn`;
+                        message = `In 500 meters, prepare to turn ${directionText}`;
                     } else if (announcementDistance === 200) {
-                        message = `In 200 meters, turn ahead`;
+                        message = `In 200 meters, turn ${directionText}`;
                     } else if (announcementDistance === 100) {
-                        message = `In 100 meters, turn`;
+                        message = `In 100 meters, turn ${directionText}`;
                     } else if (announcementDistance === 50) {
-                        message = `Turn now`;
+                        message = `Turn ${directionText} now`;
                     }
 
-                    console.log(`[Voice] Announcing turn: ${message} (distance: ${distance.toFixed(0)}m)`);
+                    console.log(`[Voice] Announcing turn: ${message} (distance: ${distance.toFixed(0)}m, direction: ${direction})`);
                     speakMessage(message);
                     lastTurnAnnouncementDistance = distance;
                     break;
@@ -6968,6 +7309,11 @@ HTML_TEMPLATE = '''
             return R * c * 1000; // Return in meters
         }
 
+        // Hazard announcement debouncing
+        const hazardAnnouncementDebounce = {}; // Track last announcement time per hazard type
+        const HAZARD_ANNOUNCEMENT_DEBOUNCE_MS = 30000; // Wait 30 seconds between announcements for same hazard type
+        const HAZARD_WARNING_DISTANCE = 500; // meters
+
         function checkNearbyHazards(lat, lon) {
             // Check for hazards within 500m
             fetch(`/api/hazards/nearby?lat=${lat}&lon=${lon}&radius=0.5`)
@@ -6976,12 +7322,24 @@ HTML_TEMPLATE = '''
                     if (data.success && data.hazards && data.hazards.length > 0) {
                         data.hazards.forEach(hazard => {
                             const distance = calculateDistance(lat, lon, hazard.lat, hazard.lon);
-                            if (distance < 500) {
+                            if (distance < HAZARD_WARNING_DISTANCE) {
                                 const message = `⚠️ ${hazard.type} ${distance.toFixed(0)}m ahead`;
                                 sendNotification('Hazard Alert', message, 'warning');
-                                // Also announce via voice if enabled
+
+                                // ENHANCED: Announce via voice with debouncing per hazard type
                                 if (voiceRecognition) {
-                                    speakMessage(message);
+                                    const now = Date.now();
+                                    const lastAnnouncementTime = hazardAnnouncementDebounce[hazard.type] || 0;
+                                    const timeSinceLastAnnouncement = now - lastAnnouncementTime;
+
+                                    if (timeSinceLastAnnouncement > HAZARD_ANNOUNCEMENT_DEBOUNCE_MS) {
+                                        const voiceMessage = `${hazard.type.replace(/_/g, ' ')} ${distance.toFixed(0)} meters ahead`;
+                                        console.log(`[Voice] Hazard announcement: ${voiceMessage} (type: ${hazard.type})`);
+                                        speakMessage(voiceMessage);
+                                        hazardAnnouncementDebounce[hazard.type] = now;
+                                    } else {
+                                        console.log(`[Voice] Hazard debounced: ${hazard.type} (${(HAZARD_ANNOUNCEMENT_DEBOUNCE_MS - timeSinceLastAnnouncement).toFixed(0)}ms remaining)`);
+                                    }
                                 }
                             }
                         });
@@ -9518,6 +9876,14 @@ def parse_voice_command_web(command, lat, lon):
                 'action': 'search',
                 'search_term': search_term,
                 'message': f'Searching for nearest {search_term}'
+            }
+
+        # ===== REROUTING COMMANDS =====
+        if any(cmd in command for cmd in ['reroute', 'recalculate', 'find new route', 'alternative route', 'new route']):
+            return {
+                'success': True,
+                'action': 'reroute',
+                'message': 'Recalculating route from current location'
             }
 
         # ===== ROUTE PREFERENCE COMMANDS =====
