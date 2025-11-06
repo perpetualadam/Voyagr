@@ -173,19 +173,100 @@ All features include comprehensive console logging for debugging:
 
 ---
 
+## Voice Navigation Features - NEW!
+
+### 1. ✅ Turn Direction Detection
+**Implemented:** Calculate bearing between route points and classify turns as left/right/straight
+- **Functions Added:**
+  - `calculateBearing(lat1, lon1, lat2, lon2)` - Calculate direction between two GPS points (0-360°)
+  - `calculateTurnDirection(bearing1, bearing2)` - Classify turn direction based on bearing change
+  - Enhanced `detectUpcomingTurn()` to return `direction` property
+- **Turn Classifications:** sharp_left, left, slight_left, straight, slight_right, right, sharp_right
+- **Voice Integration:** `announceUpcomingTurn()` now includes direction in messages
+  - Example: "In 200 meters, turn left" (instead of just "In 200 meters, turn ahead")
+
+### 2. ✅ Distance-to-Destination Announcements
+**Implemented:** Announce remaining distance at intervals
+- **Announcement Distances:** 10km, 5km, 2km, 1km, 500m, 100m
+- **Function:** `announceDistanceToDestination(currentLat, currentLon)`
+- **Debouncing:** Prevents repeated announcements with hysteresis logic
+- **Integration:** Called in GPS tracking loop during active navigation
+
+### 3. ✅ ETA Update Announcements
+**Implemented:** Announce estimated time of arrival
+- **Function:** `announceETAUpdate(currentLat, currentLon)`
+- **Announcement Triggers:**
+  - Every 10 minutes during navigation
+  - When ETA changes by more than 5 minutes
+- **Smart Calculation:** Uses average speed from recent tracking history
+- **Format:** "You will arrive in X hours and Y minutes at HH:MM"
+
+### 4. ✅ Hazard Warning Voice Announcements (Enhanced)
+**Enhanced:** Added per-hazard-type debouncing
+- **Debounce Time:** 30 seconds between announcements for same hazard type
+- **Function:** `checkNearbyHazards(lat, lon)` with debouncing logic
+- **Tracking:** `hazardAnnouncementDebounce` Map tracks last announcement time per hazard type
+- **Prevents Spam:** Same hazard type won't announce more than once per 30 seconds
+
+### 5. ✅ Voice Command Support for Rerouting
+**Implemented:** Voice commands to trigger automatic rerouting
+- **Voice Commands:** "reroute", "recalculate", "find new route", "alternative route", "new route"
+- **Backend:** Added to `parse_voice_command_web()` function
+- **Frontend Handler:** New case in `handleVoiceAction()` for 'reroute' action
+- **Integration:** Calls existing `triggerAutomaticReroute()` function
+- **Confirmation:** Voice feedback: "Recalculating route from your current location"
+
+### 6. ✅ Customizable Announcement Distances Settings
+**Implemented:** Voice Preferences section in Settings tab
+- **UI Location:** Settings → Voice Preferences
+- **Customizable Options:**
+  - Turn Announcement Distance (1st): 300m, 500m, 800m, 1km
+  - Turn Announcement Distance (2nd): 100m, 150m, 200m, 300m
+  - Turn Announcement Distance (3rd): 50m, 75m, 100m, 150m
+  - Hazard Warning Distance: 300m, 500m, 800m, 1km
+  - Voice Announcements Toggle: Enable/Disable all voice features
+- **Persistence:** All settings saved to localStorage
+- **Functions:**
+  - `saveVoicePreferences()` - Save to localStorage and update global arrays
+  - `loadVoicePreferences()` - Load from localStorage on page load
+  - `toggleVoiceAnnouncements()` - Enable/disable all voice features
+
+---
+
+## Code Changes Summary
+
+**Lines Added:** 376 insertions across voyagr_web.py
+**Key Functions Added/Modified:**
+- `calculateBearing()` - NEW (14 lines)
+- `calculateTurnDirection()` - NEW (17 lines)
+- `detectUpcomingTurn()` - ENHANCED (73 lines)
+- `getTurnDirectionText()` - NEW (13 lines)
+- `announceUpcomingTurn()` - ENHANCED (55 lines)
+- `announceDistanceToDestination()` - NEW (73 lines)
+- `announceETAUpdate()` - NEW (60 lines)
+- `checkNearbyHazards()` - ENHANCED (38 lines)
+- `saveVoicePreferences()` - NEW (22 lines)
+- `loadVoicePreferences()` - NEW (25 lines)
+- `toggleVoiceAnnouncements()` - NEW (7 lines)
+- `handleVoiceAction()` - ENHANCED (8 lines for reroute case)
+- `parse_voice_command_web()` - ENHANCED (7 lines for reroute commands)
+- Settings UI - ENHANCED (52 lines for Voice Preferences section)
+
+---
+
 ## Next Steps (Optional Enhancements)
-1. Add turn direction detection (left/right/straight)
-2. Add distance-to-destination announcements
-3. Add ETA update announcements
-4. Add hazard warning voice announcements
-5. Add customizable announcement distances
-6. Add voice command support for rerouting
+1. Add turn direction icons/arrows on map
+2. Add customizable voice speed/pitch settings
+3. Add voice command for "repeat last instruction"
+4. Add voice command for "show nearby amenities"
+5. Add multi-language voice support
 
 ---
 
 ## Commit Information
-- **Hash:** 4b4a1d2
+- **Hash:** b6bd52c
 - **Branch:** main
 - **Date:** 2025-11-06
-- **Changes:** 170 insertions, 10 deletions
+- **Changes:** 376 insertions, 10 deletions
+- **Previous Hash:** 4b4a1d2 (Turn-by-turn navigation fixes)
 
