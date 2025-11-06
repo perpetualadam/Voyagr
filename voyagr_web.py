@@ -2990,6 +2990,92 @@ HTML_TEMPLATE = '''
                     <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
                 </div>
 
+                <!-- ROUTE PREVIEW TAB (NEW FEATURE) -->
+                <div id="routePreviewTab" style="display: none;">
+                    <div class="preferences-section">
+                        <h3>📍 Route Preview</h3>
+
+                        <!-- Route Summary -->
+                        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 15px;">
+                                <div>
+                                    <div style="font-size: 12px; opacity: 0.9;">📏 Distance</div>
+                                    <div style="font-size: 24px; font-weight: bold;" id="previewDistance">-</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: 12px; opacity: 0.9;">⏱️ Duration</div>
+                                    <div style="font-size: 24px; font-weight: bold;" id="previewDuration">-</div>
+                                </div>
+                            </div>
+                            <div style="border-top: 1px solid rgba(255,255,255,0.3); padding-top: 12px;">
+                                <div style="font-size: 12px; opacity: 0.9; margin-bottom: 4px;">📍 Route</div>
+                                <div style="font-size: 13px;" id="previewRoute">-</div>
+                            </div>
+                        </div>
+
+                        <!-- Cost Breakdown -->
+                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">💰 Cost Breakdown</h4>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 13px;">
+                                <div>
+                                    <div style="color: #666; margin-bottom: 4px;">⛽ Fuel</div>
+                                    <div style="font-weight: bold; color: #333;" id="previewFuelCost">-</div>
+                                </div>
+                                <div>
+                                    <div style="color: #666; margin-bottom: 4px;">🛣️ Tolls</div>
+                                    <div style="font-weight: bold; color: #333;" id="previewTollCost">-</div>
+                                </div>
+                                <div>
+                                    <div style="color: #666; margin-bottom: 4px;">🚗 CAZ</div>
+                                    <div style="font-weight: bold; color: #333;" id="previewCAZCost">-</div>
+                                </div>
+                                <div>
+                                    <div style="color: #666; margin-bottom: 4px;">💵 Total</div>
+                                    <div style="font-weight: bold; color: #667eea; font-size: 14px;" id="previewTotalCost">-</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Route Details -->
+                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📋 Route Details</h4>
+                            <div style="font-size: 13px; line-height: 1.6;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span style="color: #666;">Routing Engine:</span>
+                                    <strong id="previewRoutingEngine">-</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span style="color: #666;">Routing Mode:</span>
+                                    <strong id="previewRoutingMode">-</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #666;">Vehicle Type:</span>
+                                    <strong id="previewVehicleType">-</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Alternative Routes (if available) -->
+                        <div id="previewAlternativeRoutesContainer" style="display: none; margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">🛣️ Alternative Routes</h4>
+                            <div id="previewAlternativeRoutesList" style="max-height: 200px; overflow-y: auto;"></div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <button onclick="startNavigationFromPreview()" style="background: #34A853; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                🧭 Start Navigation
+                            </button>
+                            <button onclick="switchTab('routeComparison')" style="background: #FF9800; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                🛣️ View Options
+                            </button>
+                        </div>
+                        <button onclick="switchTab('navigation')" style="width: 100%; background: #999; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px;">
+                            ✏️ Modify Route
+                        </button>
+                    </div>
+                </div>
+
                 <!-- ROUTE COMPARISON TAB (NEW FEATURE) -->
                 <div id="routeComparisonTab" style="display: none;">
                     <div class="preferences-section">
@@ -3195,6 +3281,8 @@ HTML_TEMPLATE = '''
             routeSharingTab.style.display = 'none';
             routeAnalyticsTab.style.display = 'none';
             savedRoutesTab.style.display = 'none';
+            const routePreviewTab = document.getElementById('routePreviewTab');
+            if (routePreviewTab) routePreviewTab.style.display = 'none';
 
             if (tab === 'settings') {
                 settingsTab.style.display = 'block';
@@ -3205,6 +3293,11 @@ HTML_TEMPLATE = '''
                 tripHistoryTab.style.display = 'block';
                 sheetTitle.textContent = '📋 Trip History';
                 loadTripHistory();
+            } else if (tab === 'routePreview') {
+                if (routePreviewTab) {
+                    routePreviewTab.style.display = 'block';
+                    sheetTitle.textContent = '📍 Route Preview';
+                }
             } else if (tab === 'routeComparison') {
                 routeComparisonTab.style.display = 'block';
                 sheetTitle.textContent = '🛣️ Route Options';
@@ -4243,13 +4336,13 @@ HTML_TEMPLATE = '''
                         updateTripInfo(data.distance, data.time, data.fuel_cost || '-', data.toll_cost || '-');
                         showStatus('Route calculated successfully! (' + data.source + ')', 'success');
 
-                        // Auto-collapse bottom sheet to show full map view
-                        setTimeout(() => {
-                            collapseBottomSheet();
-                        }, 500); // 500ms delay to let user see the success message
-
                         // Store route data for navigation
                         window.lastCalculatedRoute = data;
+
+                        // Show route preview instead of auto-starting navigation
+                        setTimeout(() => {
+                            showRoutePreview(data);
+                        }, 300);
 
                         // Use real routes from backend if available, otherwise use main route
                         if (data.routes && data.routes.length > 0) {
@@ -4323,6 +4416,125 @@ HTML_TEMPLATE = '''
             if (startNavBtnSheet) {
                 startNavBtnSheet.style.display = 'none';
             }
+        }
+
+        // ===== ROUTE PREVIEW FEATURE =====
+        /**
+         * Display route preview/overview screen before turn-by-turn navigation
+         * Shows route summary, cost breakdown, and allows user to review before starting
+         */
+        function showRoutePreview(routeData) {
+            if (!routeData) {
+                showStatus('No route data available', 'error');
+                return;
+            }
+
+            const symbol = getCurrencySymbol();
+            const distUnit = getDistanceUnit();
+            const speedUnit = getSpeedUnit();
+
+            // Update route preview information
+            document.getElementById('previewDistance').textContent = convertDistance(routeData.distance_km) + ' ' + distUnit;
+            document.getElementById('previewDuration').textContent = routeData.time || routeData.duration_minutes + ' min';
+
+            // Build route description
+            const startInput = document.getElementById('start').value;
+            const endInput = document.getElementById('end').value;
+            document.getElementById('previewRoute').textContent = `${startInput} → ${endInput}`;
+
+            // Update cost breakdown
+            const fuelCost = parseFloat(routeData.fuel_cost || 0);
+            const tollCost = parseFloat(routeData.toll_cost || 0);
+            const cazCost = parseFloat(routeData.caz_cost || 0);
+            const totalCost = fuelCost + tollCost + cazCost;
+
+            document.getElementById('previewFuelCost').textContent = symbol + fuelCost.toFixed(2);
+            document.getElementById('previewTollCost').textContent = symbol + tollCost.toFixed(2);
+            document.getElementById('previewCAZCost').textContent = symbol + cazCost.toFixed(2);
+            document.getElementById('previewTotalCost').textContent = symbol + totalCost.toFixed(2);
+
+            // Update route details
+            document.getElementById('previewRoutingEngine').textContent = routeData.source || 'Unknown';
+            document.getElementById('previewRoutingMode').textContent = currentRoutingMode.charAt(0).toUpperCase() + currentRoutingMode.slice(1);
+            document.getElementById('previewVehicleType').textContent = currentVehicleType.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+
+            // Show alternative routes if available
+            if (routeOptions && routeOptions.length > 1) {
+                showAlternativeRoutesInPreview();
+            } else {
+                document.getElementById('previewAlternativeRoutesContainer').style.display = 'none';
+            }
+
+            // Switch to route preview tab
+            switchTab('routePreview');
+
+            // Expand bottom sheet to show preview
+            expandBottomSheet();
+
+            showStatus('📍 Review your route before starting navigation', 'success');
+        }
+
+        /**
+         * Display alternative routes in the preview screen
+         */
+        function showAlternativeRoutesInPreview() {
+            const container = document.getElementById('previewAlternativeRoutesList');
+            const parentContainer = document.getElementById('previewAlternativeRoutesContainer');
+
+            if (!routeOptions || routeOptions.length <= 1) {
+                parentContainer.style.display = 'none';
+                return;
+            }
+
+            container.innerHTML = '';
+            const symbol = getCurrencySymbol();
+            const distUnit = getDistanceUnit();
+
+            routeOptions.forEach((route, index) => {
+                const totalCost = (parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2);
+                const div = document.createElement('div');
+                div.style.cssText = 'background: white; padding: 10px; border-radius: 6px; margin-bottom: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.3s ease;';
+                div.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <strong style="color: #333;">Route ${index + 1}</strong>
+                        <span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">${convertDistance(route.distance_km)} ${distUnit}</span>
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-bottom: 6px;">
+                        ⏱️ ${route.duration_minutes} min | 💰 ${symbol}${totalCost}
+                    </div>
+                `;
+                div.onmouseover = () => div.style.borderColor = '#667eea';
+                div.onmouseout = () => div.style.borderColor = '#ddd';
+                div.onclick = () => {
+                    useRoute(index);
+                    showRoutePreview(routeOptions[index]);
+                };
+                container.appendChild(div);
+            });
+
+            parentContainer.style.display = 'block';
+        }
+
+        /**
+         * Start navigation from the route preview screen
+         */
+        function startNavigationFromPreview() {
+            if (!window.lastCalculatedRoute) {
+                showStatus('No route available', 'error');
+                return;
+            }
+
+            // Hide the start navigation buttons
+            const startNavBtn = document.getElementById('startNavBtn');
+            const startNavBtnSheet = document.getElementById('startNavBtnSheet');
+            if (startNavBtn) startNavBtn.style.display = 'none';
+            if (startNavBtnSheet) startNavBtnSheet.style.display = 'none';
+
+            // Start turn-by-turn navigation
+            startTurnByTurnNavigation(window.lastCalculatedRoute);
+
+            // Collapse bottom sheet to show full map
+            collapseBottomSheet();
         }
 
         function clearForm() {
