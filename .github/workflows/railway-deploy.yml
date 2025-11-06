@@ -12,15 +12,10 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - name: Deploy to Railway using Railway CLI
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-        run: |
-          # Install Railway CLI
-          npm install -g @railway/cli
-
-          # Deploy to Railway
-          railway up --service voyagr-web
+      - name: Deploy to Railway
+        uses: railwayapp/deploy-action@v1
+        with:
+          token: ${{ secrets.RAILWAY_TOKEN }}
 
       - name: Notify Deployment
         run: |
