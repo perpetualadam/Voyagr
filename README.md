@@ -7,7 +7,6 @@ A feature-rich, cost-free satellite navigation application with toll road cost e
 ### Core Navigation
 - **Routing Engine**: Valhalla for route calculation
 - **Map Rendering**: Kivy with MapView for interactive maps
-- **Default Location**: Barnsley (53.5526, -1.4797)
 - **GPS Integration**: Real-time location tracking
 
 ### Toll Road Support
