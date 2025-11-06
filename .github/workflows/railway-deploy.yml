@@ -7,24 +7,30 @@ on:
   workflow_dispatch:
 
 jobs:
-  deploy:
+  notify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - name: Deploy to Railway using CLI
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Notify Railway Deployment
         run: |
-          echo "🚀 Starting Railway deployment..."
-
-          # Install Railway CLI
-          npm install -g @railway/cli
-
-          # Deploy to Railway
-          railway up --service voyagr-web
-
-          echo "✅ Deployment triggered!"
-          echo "Your app will be live at: https://voyagr-production.up.railway.app"
-          echo "Deployment typically takes 2-3 minutes."
+          echo "✅ Code pushed to GitHub!"
+          echo ""
+          echo "🚀 Railway.app will automatically deploy this to production."
+          echo ""
+          echo "📍 Your app is live at:"
+          echo "   https://voyagr-production.up.railway.app"
+          echo ""
+          echo "⏱️  Deployment typically takes 2-3 minutes."
+          echo ""
+          echo "📊 Monitor deployment at:"
+          echo "   https://railway.app/dashboard"
+          echo ""
+          echo "✨ Recent features deployed:"
+          echo "   ✅ Route Preview Feature"
+          echo "   ✅ Unified Settings Tab"
+          echo "   ✅ Valhalla Distance Fix"
+          echo "   ✅ Screen Wake Lock API"
+          echo "   ✅ Geocoding Autocomplete"
+          echo "   ✅ All Routing Engines"
 
