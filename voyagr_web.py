@@ -4269,6 +4269,23 @@ HTML_TEMPLATE = '''
                     }
                 }
 
+                // Apply ML predictions toggle state
+                const mlPredictionsEnabled = localStorage.getItem('mlPredictionsEnabled') === 'true';
+                const mlToggle = document.getElementById('mlPredictionsEnabled');
+                if (mlToggle) {
+                    if (mlPredictionsEnabled) {
+                        mlToggle.classList.add('active');
+                        mlToggle.style.background = '#4CAF50';
+                        mlToggle.style.borderColor = '#4CAF50';
+                        mlToggle.style.color = 'white';
+                    } else {
+                        mlToggle.classList.remove('active');
+                        mlToggle.style.background = '#ddd';
+                        mlToggle.style.borderColor = '#999';
+                        mlToggle.style.color = '#333';
+                    }
+                }
+
                 // Apply UI theme preference
                 initializeDarkMode();
                 updateThemeButtons();
@@ -6979,7 +6996,27 @@ HTML_TEMPLATE = '''
         }
 
         function toggleMLPredictions() {
-            const enabled = document.getElementById('mlPredictionsEnabled').checked;
+            const button = document.getElementById('mlPredictionsEnabled');
+
+            // Toggle the active class (like other toggle switches)
+            button.classList.toggle('active');
+            const enabled = button.classList.contains('active');
+
+            // Update visual state
+            if (enabled) {
+                button.style.background = '#4CAF50';
+                button.style.borderColor = '#4CAF50';
+                button.style.color = 'white';
+            } else {
+                button.style.background = '#ddd';
+                button.style.borderColor = '#999';
+                button.style.color = '#333';
+            }
+
+            // Save to localStorage
+            localStorage.setItem('mlPredictionsEnabled', enabled ? 'true' : 'false');
+
+            // Send to backend
             fetch('/api/app-settings', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -6993,6 +7030,9 @@ HTML_TEMPLATE = '''
                 document.getElementById('mlPredictionsSection').classList.remove('show');
                 showStatus('🤖 Smart predictions disabled', 'info');
             }
+
+            // Save all settings
+            saveAllSettings();
         }
 
         // PWA Service Worker Registration
