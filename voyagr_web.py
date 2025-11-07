@@ -3877,6 +3877,8 @@ HTML_TEMPLATE = '''
          */
         function setTheme(theme) {
             applyTheme(theme);
+            updateThemeButtons();  // Update button states to show which theme is active
+            saveAllSettings();  // Save theme preference
             showStatus(`🎨 Theme changed to ${theme} mode`, 'success');
         }
 
@@ -9471,14 +9473,18 @@ def calculate_route():
 
                         # Extract route geometry
                         route_geometry = None
+                        # GraphHopper returns encoded polyline by default
                         if 'points' in path:
                             points = path['points']
-                            if isinstance(points, list):
-                                # Convert points to polyline format for consistency
-                                route_geometry = polyline.encode([(p['lat'], p['lng']) for p in points])
-                            elif isinstance(points, str):
-                                # Already encoded as polyline
+                            if isinstance(points, str):
+                                # Already encoded as polyline (most common case)
                                 route_geometry = points
+                            elif isinstance(points, list):
+                                # If it's a list of points, encode it
+                                route_geometry = polyline.encode([(p['lat'], p['lng']) for p in points])
+                        elif 'points_encoded' in path and path['points_encoded']:
+                            # Use the encoded points string directly
+                            route_geometry = path.get('points', None)
 
                         # Calculate costs
                         fuel_cost = 0
@@ -11213,18 +11219,21 @@ if __name__ == '__main__':
     if get_monitor:
         monitor = get_monitor()
         monitor.start_monitoring()
-        print("✅ Routing engine monitoring started")
+        try:
+            print("[OK] Routing engine monitoring started")
+        except UnicodeEncodeError:
+            print("[OK] Routing engine monitoring started (emoji display disabled)")
 
     print("\n" + "="*60)
-    print("🚀 Voyagr Web App is running!")
+    print("[STARTUP] Voyagr Web App is running!")
     print("="*60)
-    print(f"\n🌐 Access the app at:")
+    print(f"\n[INFO] Access the app at:")
     print(f"   http://localhost:{port}")
-    print("\n📱 Access from your Pixel 6:")
+    print("\n[INFO] Access from your Pixel 6:")
     print("   1. Find your PC's IP address (usually 192.168.x.x)")
     print("   2. Open browser on Pixel 6")
     print(f"   3. Go to: http://YOUR_PC_IP:{port}")
-    print("\n📊 Monitoring Dashboard:")
+    print("\n[INFO] Monitoring Dashboard:")
     print(f"   http://localhost:{port}/monitoring")
     print("\n" + "="*60 + "\n")
 
