@@ -4286,6 +4286,57 @@ HTML_TEMPLATE = '''
                     }
                 }
 
+                // Apply voice announcements toggle state
+                const voiceAnnouncementsEnabled = localStorage.getItem('voiceAnnouncementsEnabled') === 'true';
+                const voiceToggle = document.getElementById('voiceAnnouncementsEnabled');
+                if (voiceToggle) {
+                    if (voiceAnnouncementsEnabled) {
+                        voiceToggle.classList.add('active');
+                        voiceToggle.style.background = '#4CAF50';
+                        voiceToggle.style.borderColor = '#4CAF50';
+                        voiceToggle.style.color = 'white';
+                    } else {
+                        voiceToggle.classList.remove('active');
+                        voiceToggle.style.background = '#ddd';
+                        voiceToggle.style.borderColor = '#999';
+                        voiceToggle.style.color = '#333';
+                    }
+                }
+
+                // Apply battery saving mode toggle state
+                const batterySavingEnabled = localStorage.getItem('pref_batterySaving') === 'true';
+                const batteryToggle = document.getElementById('batterySavingMode');
+                if (batteryToggle) {
+                    if (batterySavingEnabled) {
+                        batteryToggle.classList.add('active');
+                        batteryToggle.style.background = '#4CAF50';
+                        batteryToggle.style.borderColor = '#4CAF50';
+                        batteryToggle.style.color = 'white';
+                    } else {
+                        batteryToggle.classList.remove('active');
+                        batteryToggle.style.background = '#ddd';
+                        batteryToggle.style.borderColor = '#999';
+                        batteryToggle.style.color = '#333';
+                    }
+                }
+
+                // Apply gesture control toggle state
+                const gestureControlEnabled = localStorage.getItem('gestureEnabled') === 'true';
+                const gestureToggle = document.getElementById('gestureEnabled');
+                if (gestureToggle) {
+                    if (gestureControlEnabled) {
+                        gestureToggle.classList.add('active');
+                        gestureToggle.style.background = '#4CAF50';
+                        gestureToggle.style.borderColor = '#4CAF50';
+                        gestureToggle.style.color = 'white';
+                    } else {
+                        gestureToggle.classList.remove('active');
+                        gestureToggle.style.background = '#ddd';
+                        gestureToggle.style.borderColor = '#999';
+                        gestureToggle.style.color = '#333';
+                    }
+                }
+
                 // Apply UI theme preference
                 initializeDarkMode();
                 updateThemeButtons();
@@ -5758,10 +5809,30 @@ HTML_TEMPLATE = '''
          * Toggle voice announcements on/off
          */
         function toggleVoiceAnnouncements() {
-            const enabled = document.getElementById('voiceAnnouncementsEnabled').checked;
+            const button = document.getElementById('voiceAnnouncementsEnabled');
+
+            // Toggle the active class (like other toggle switches)
+            button.classList.toggle('active');
+            const enabled = button.classList.contains('active');
+
+            // Update visual state
+            if (enabled) {
+                button.style.background = '#4CAF50';
+                button.style.borderColor = '#4CAF50';
+                button.style.color = 'white';
+            } else {
+                button.style.background = '#ddd';
+                button.style.borderColor = '#999';
+                button.style.color = '#333';
+            }
+
+            // Save to localStorage
+            localStorage.setItem('voiceAnnouncementsEnabled', enabled ? 'true' : 'false');
+
             voiceRecognition = enabled;
             saveVoicePreferences();
             showStatus(enabled ? '🔊 Voice announcements enabled' : '🔇 Voice announcements disabled', 'success');
+            saveAllSettings();
         }
 
         /**
