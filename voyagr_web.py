@@ -3322,7 +3322,11 @@ HTML_TEMPLATE = '''
                         </div>
                     </div>
 
-                    <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
+                    <!-- Action Buttons -->
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px;">
+                        <button class="btn-calculate" onclick="recalculateRouteWithPreferences()" style="width: 100%; background: #667eea; color: white; border: none; border-radius: 4px; padding: 12px; font-size: 14px; cursor: pointer; font-weight: 500;">🔄 Recalculate Route</button>
+                        <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; background: #666; color: white; border: none; border-radius: 4px; padding: 12px; font-size: 14px; cursor: pointer; font-weight: 500;">← Back to Navigation</button>
+                    </div>
                 </div>
 
                 <!-- TRIP HISTORY TAB (NEW FEATURE) -->
@@ -4952,6 +4956,32 @@ HTML_TEMPLATE = '''
                 routeOptimization: 'fastest',
                 maxDetour: 20
             };
+        }
+
+        /**
+         * Recalculate route with current preferences
+         * Called from Settings tab "Recalculate Route" button
+         */
+        function recalculateRouteWithPreferences() {
+            // Check if there's an active route to recalculate
+            if (!window.lastCalculatedRoute || !window.lastCalculatedRoute.destination) {
+                showStatus('No active route to recalculate. Please calculate a route first.', 'error');
+                return;
+            }
+
+            // Save current preferences
+            saveRoutePreferences();
+
+            // Show loading status
+            showStatus('🔄 Recalculating route with new preferences...', 'loading');
+
+            // Switch back to navigation tab to show results
+            switchTab('navigation');
+
+            // Trigger route calculation with current start/end locations
+            setTimeout(() => {
+                calculateRoute();
+            }, 300);
         }
 
         // ===== ROUTE SAVING FUNCTIONS =====
