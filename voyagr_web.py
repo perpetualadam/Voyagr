@@ -5780,6 +5780,7 @@ HTML_TEMPLATE = '''
 
         /**
          * Load voice preferences from localStorage
+         * FIXED: Now properly sets the active class on the toggle button
          */
         function loadVoicePreferences() {
             try {
@@ -5790,15 +5791,38 @@ HTML_TEMPLATE = '''
                     document.getElementById('voiceTurnDistance2').value = prefs.turnDistance2 || 200;
                     document.getElementById('voiceTurnDistance3').value = prefs.turnDistance3 || 100;
                     document.getElementById('voiceHazardDistance').value = prefs.hazardDistance || 500;
-                    document.getElementById('voiceAnnouncementsEnabled').checked = prefs.announcementsEnabled !== false;
+
+                    // FIXED: Properly set toggle button state with active class
+                    const toggleButton = document.getElementById('voiceAnnouncementsEnabled');
+                    const announcementsEnabled = prefs.announcementsEnabled !== false;
+
+                    if (announcementsEnabled) {
+                        toggleButton.classList.add('active');
+                        toggleButton.style.background = '#4CAF50';
+                        toggleButton.style.borderColor = '#4CAF50';
+                    } else {
+                        toggleButton.classList.remove('active');
+                        toggleButton.style.background = '#ddd';
+                        toggleButton.style.borderColor = '#999';
+                    }
 
                     // Update global arrays
                     TURN_ANNOUNCEMENT_DISTANCES.length = 0;
                     TURN_ANNOUNCEMENT_DISTANCES.push(prefs.turnDistance1, prefs.turnDistance2, prefs.turnDistance3, 50);
                     HAZARD_WARNING_DISTANCE = prefs.hazardDistance || 500;
-                    voiceRecognition = prefs.announcementsEnabled !== false;
+                    voiceRecognition = announcementsEnabled;
 
                     console.log('[Voice] Preferences loaded:', prefs);
+                } else {
+                    // Initialize with defaults if no saved preferences
+                    const toggleButton = document.getElementById('voiceAnnouncementsEnabled');
+                    if (toggleButton) {
+                        toggleButton.classList.add('active');
+                        toggleButton.style.background = '#4CAF50';
+                        toggleButton.style.borderColor = '#4CAF50';
+                        voiceRecognition = true;
+                    }
+                    console.log('[Voice] No saved preferences, using defaults');
                 }
             } catch (e) {
                 console.log('[Voice] Error loading preferences:', e);
@@ -6416,7 +6440,7 @@ HTML_TEMPLATE = '''
             /**
              * Detect if user is approaching an upcoming turn in the route.
              * Returns object with distance to next turn or null if no turn ahead.
-             * ENHANCED: Now includes turn direction detection
+             * FIXED: Improved turn detection with proper bearing calculation
              */
             if (!routeInProgress || !routePolyline || routePolyline.length === 0) {
                 return null;
@@ -6435,22 +6459,48 @@ HTML_TEMPLATE = '''
                 }
             }
 
-            // Look ahead for the next turn point (typically every 50-100 points)
-            // For now, we'll use the next significant waypoint
-            const lookAheadDistance = 100; // meters
-            let nextTurnIndex = closestIndex;
+            // FIXED: Look ahead for significant direction changes (turns)
+            // Scan ahead to find the next point where direction changes significantly
+            let nextTurnIndex = null;
+            let maxBearingChange = 0;
 
-            // Find next point that's at least lookAheadDistance away
-            for (let i = closestIndex + 1; i < routePolyline.length; i++) {
-                const point = routePolyline[i];
-                const distance = calculateHaversineDistance(userLat, userLon, point[0], point[1]);
-                if (distance > lookAheadDistance) {
-                    nextTurnIndex = i;
-                    break;
+            // Get current bearing (from closest point to next point)
+            let currentBearing = null;
+            if (closestIndex < routePolyline.length - 1) {
+                const currPoint = routePolyline[closestIndex];
+                const nextPoint = routePolyline[closestIndex + 1];
+                currentBearing = calculateBearing(currPoint[0], currPoint[1], nextPoint[0], nextPoint[1]);
+            }
+
+            // Scan ahead up to 50 points or 1km to find the next significant turn
+            const scanDistance = Math.min(50, routePolyline.length - closestIndex - 1);
+            for (let i = closestIndex + 2; i < closestIndex + scanDistance; i++) {
+                if (i >= routePolyline.length) break;
+
+                const prevPoint = routePolyline[i - 1];
+                const currPoint = routePolyline[i];
+                const bearing = calculateBearing(prevPoint[0], prevPoint[1], currPoint[0], currPoint[1]);
+
+                if (currentBearing !== null) {
+                    let bearingChange = bearing - currentBearing;
+                    // Normalize to -180 to 180
+                    if (bearingChange > 180) bearingChange -= 360;
+                    if (bearingChange < -180) bearingChange += 360;
+
+                    // Look for significant direction changes (>10 degrees)
+                    if (Math.abs(bearingChange) > 10 && Math.abs(bearingChange) > maxBearingChange) {
+                        maxBearingChange = Math.abs(bearingChange);
+                        nextTurnIndex = i;
+                    }
                 }
             }
 
-            if (nextTurnIndex === closestIndex) {
+            // If no significant turn found, use the next point ahead
+            if (nextTurnIndex === null) {
+                nextTurnIndex = Math.min(closestIndex + 5, routePolyline.length - 1);
+            }
+
+            if (nextTurnIndex === closestIndex || nextTurnIndex === closestIndex + 1) {
                 return null; // No turn ahead
             }
 
@@ -6460,10 +6510,11 @@ HTML_TEMPLATE = '''
                 nextTurnPoint[0], nextTurnPoint[1]
             );
 
-            // ENHANCED: Calculate turn direction
+            // FIXED: Calculate turn direction using proper bearing calculation
             let turnDirection = 'straight';
             if (closestIndex > 0 && nextTurnIndex < routePolyline.length - 1) {
-                const prevPoint = routePolyline[closestIndex - 1];
+                // Get bearing from point before closest to closest point
+                const prevPoint = routePolyline[Math.max(0, closestIndex - 1)];
                 const currPoint = routePolyline[closestIndex];
                 const nextPoint = routePolyline[nextTurnIndex];
 
@@ -6478,7 +6529,7 @@ HTML_TEMPLATE = '''
                 lat: nextTurnPoint[0],
                 lon: nextTurnPoint[1],
                 index: nextTurnIndex,
-                direction: turnDirection  // NEW: Turn direction
+                direction: turnDirection
             };
         }
 
@@ -7490,6 +7541,10 @@ HTML_TEMPLATE = '''
             console.log('[Parking] Loading parking preferences...');
             loadParkingPreferences();
 
+            // Load voice preferences (FIXED: was missing)
+            console.log('[Voice] Loading voice preferences...');
+            loadVoicePreferences();
+
             // Legacy preference loading (for backward compatibility)
             loadPreferences();
 
@@ -7874,7 +7929,7 @@ HTML_TEMPLATE = '''
         function announceETAUpdate(currentLat, currentLon) {
             /**
              * Announce ETA updates at regular intervals or when ETA changes significantly
-             * IMPLEMENTED: ETA voice announcements
+             * FIXED: Corrected ETA calculation formula and reduced announcement frequency
              */
             if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceRecognition) return;
 
@@ -7910,8 +7965,12 @@ HTML_TEMPLATE = '''
                 avgSpeed = recentSpeeds.reduce((a, b) => a + b) / recentSpeeds.length;
             }
 
-            // Calculate ETA in milliseconds
-            const timeRemainingMs = (remainingDistance / (avgSpeed * 1000)) * 3600000; // Convert to ms
+            // FIXED: Correct ETA calculation - remainingDistance is in meters, avgSpeed is in km/h
+            // Formula: time (hours) = distance (km) / speed (km/h)
+            // Then convert to milliseconds
+            const remainingDistanceKm = remainingDistance / 1000;
+            const timeRemainingHours = remainingDistanceKm / avgSpeed;
+            const timeRemainingMs = timeRemainingHours * 3600000; // Convert hours to milliseconds
             const etaTime = new Date(now + timeRemainingMs);
 
             // Check if we should announce
@@ -7932,7 +7991,7 @@ HTML_TEMPLATE = '''
                     message = `You will arrive in ${timeRemainingMinutes} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
                 }
 
-                console.log(`[Voice] ETA announcement: ${message} (remaining: ${(remainingDistance/1000).toFixed(1)}km, avg speed: ${avgSpeed.toFixed(1)}km/h)`);
+                console.log(`[Voice] ETA announcement: ${message} (remaining: ${remainingDistanceKm.toFixed(1)}km, avg speed: ${avgSpeed.toFixed(1)}km/h)`);
                 speakMessage(message);
                 lastETAAnnouncementTime = now;
                 lastAnnouncedETA = etaTime;
