@@ -7929,7 +7929,7 @@ HTML_TEMPLATE = '''
         function announceETAUpdate(currentLat, currentLon) {
             /**
              * Announce ETA updates at regular intervals or when ETA changes significantly
-             * FIXED: Corrected ETA calculation formula and reduced announcement frequency
+             * FIXED: Proper validation of avgSpeed to prevent "100 hours" bug
              */
             if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceRecognition) return;
 
@@ -7958,19 +7958,53 @@ HTML_TEMPLATE = '''
                 );
             }
 
-            // Get average speed from recent tracking history
+            // Get average speed from recent tracking history with proper validation
             let avgSpeed = 40; // Default 40 km/h
-            if (trackingHistory.length > 5) {
-                const recentSpeeds = trackingHistory.slice(-5).map(t => t.speed * 3.6); // Convert m/s to km/h
-                avgSpeed = recentSpeeds.reduce((a, b) => a + b) / recentSpeeds.length;
+            if (trackingHistory && trackingHistory.length > 5) {
+                try {
+                    const recentSpeeds = trackingHistory.slice(-5)
+                        .map(t => {
+                            // Handle both m/s and km/h formats
+                            let speed = t.speed || 0;
+                            // If speed is very small (< 1), assume it's in m/s, convert to km/h
+                            if (speed < 1 && speed > 0) {
+                                speed = speed * 3.6;
+                            }
+                            return speed;
+                        })
+                        .filter(s => s > 0 && s < 200); // Filter out invalid speeds (0 or > 200 km/h)
+
+                    if (recentSpeeds.length > 0) {
+                        avgSpeed = recentSpeeds.reduce((a, b) => a + b) / recentSpeeds.length;
+                        // Ensure avgSpeed is reasonable (5-200 km/h)
+                        avgSpeed = Math.max(5, Math.min(200, avgSpeed));
+                    }
+                } catch (e) {
+                    console.warn('[Voice] Error calculating average speed:', e);
+                    avgSpeed = 40; // Fall back to default
+                }
             }
 
-            // FIXED: Correct ETA calculation - remainingDistance is in meters, avgSpeed is in km/h
+            // FIXED: Correct ETA calculation with validation
             // Formula: time (hours) = distance (km) / speed (km/h)
             // Then convert to milliseconds
             const remainingDistanceKm = remainingDistance / 1000;
+
+            // Prevent division by zero
+            if (avgSpeed <= 0) {
+                console.warn('[Voice] Invalid average speed:', avgSpeed, 'using default 40 km/h');
+                avgSpeed = 40;
+            }
+
             const timeRemainingHours = remainingDistanceKm / avgSpeed;
             const timeRemainingMs = timeRemainingHours * 3600000; // Convert hours to milliseconds
+
+            // Sanity check: ETA should be reasonable (< 24 hours)
+            if (timeRemainingMs > 86400000) {
+                console.warn('[Voice] ETA exceeds 24 hours, skipping announcement');
+                return;
+            }
+
             const etaTime = new Date(now + timeRemainingMs);
 
             // Check if we should announce
@@ -7991,7 +8025,7 @@ HTML_TEMPLATE = '''
                     message = `You will arrive in ${timeRemainingMinutes} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
                 }
 
-                console.log(`[Voice] ETA announcement: ${message} (remaining: ${remainingDistanceKm.toFixed(1)}km, avg speed: ${avgSpeed.toFixed(1)}km/h)`);
+                console.log(`[Voice] ETA announcement: ${message} (remaining: ${remainingDistanceKm.toFixed(1)}km, avg speed: ${avgSpeed.toFixed(1)}km/h, time: ${timeRemainingMinutes}min)`);
                 speakMessage(message);
                 lastETAAnnouncementTime = now;
                 lastAnnouncedETA = etaTime;
@@ -8284,15 +8318,30 @@ HTML_TEMPLATE = '''
                 );
             }
 
-            // Get average speed from recent tracking history
+            // Get average speed from recent tracking history with proper validation
             let avgSpeed = 40; // Default 40 km/h
-            if (trackingHistory.length > 5) {
-                const recentSpeeds = trackingHistory.slice(-5).map(t => t.speed * 3.6);
-                avgSpeed = recentSpeeds.reduce((a, b) => a + b) / recentSpeeds.length;
+            if (trackingHistory && trackingHistory.length > 5) {
+                try {
+                    const recentSpeeds = trackingHistory.slice(-5)
+                        .map(t => {
+                            let speed = t.speed || 0;
+                            if (speed < 1 && speed > 0) speed = speed * 3.6;
+                            return speed;
+                        })
+                        .filter(s => s > 0 && s < 200);
+
+                    if (recentSpeeds.length > 0) {
+                        avgSpeed = recentSpeeds.reduce((a, b) => a + b) / recentSpeeds.length;
+                        avgSpeed = Math.max(5, Math.min(200, avgSpeed));
+                    }
+                } catch (e) {
+                    console.warn('[ETA] Error calculating speed:', e);
+                }
             }
 
-            // Calculate ETA
-            const timeRemaining = (remainingDistance / avgSpeed) * 60; // minutes
+            // Calculate ETA with validation
+            if (avgSpeed <= 0) avgSpeed = 40;
+            const timeRemaining = (remainingDistance / 1000 / avgSpeed) * 60; // minutes (convert distance to km)
             const eta = new Date(Date.now() + timeRemaining * 60000);
 
             // Update display

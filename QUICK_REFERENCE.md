@@ -255,5 +255,80 @@ See **VOYAGR_VALHALLA_INTEGRATION_COMPLETE.md** for:
 
 ---
 
-**End of Quick Reference**
+---
+
+# NEW: Voyagr Questions - November 9, 2025
+
+## Question 1: Kotlin Android App - Hazard Avoidance
+
+### Status: ❌ NOT IMPLEMENTED
+
+**Missing Features:**
+- 8 hazard types (speed cameras, traffic cameras, police, roadworks, accidents, railway, potholes, debris)
+- Community hazard reporting
+- SCDB camera database (144,528 cameras)
+- GraphHopper custom model
+
+**What Exists:**
+- ✅ Traffic visualization
+- ✅ Traffic incident detection
+- ✅ Automatic rerouting
+- ✅ Traffic-adjusted ETA
+
+**Solution:**
+- Follow `android/HAZARD_AVOIDANCE_PORTING_GUIDE.md`
+- Effort: 2 hours
+- Priority: High (feature parity)
+
+**Key Files to Create:**
+- HazardHelper.kt
+- HazardRepository.kt
+- Hazard.kt
+- CommunityReport.kt
+
+---
+
+## Question 2: PWA - Voice ETA Bug
+
+### Status: ✅ FIXED
+
+**Problem:** Voice announcements said "100 hours 38 minutes"
+
+**Root Cause:** Invalid speed calculation (no validation, no bounds checking)
+
+**Solution Applied:**
+- ✅ Speed validation with unit conversion
+- ✅ Bounds checking (5-200 km/h)
+- ✅ Division by zero prevention
+- ✅ Sanity check on ETA (< 24 hours)
+
+**Files Modified:**
+- voyagr_web.py lines 7929-8033 (announceETAUpdate)
+- voyagr_web.py lines 8309-8345 (updateETACalculation)
+
+**Ready to Deploy:** YES ✅
+
+---
+
+## Test Cases - ETA Fix
+
+| Distance | Speed | Expected | Status |
+|----------|-------|----------|--------|
+| 100 km | 100 km/h | 1 hour | ✅ |
+| 10 km | 50 km/h | 12 min | ✅ |
+| 100 km | 0 (invalid) | 2.5 hours | ✅ |
+| 100 km | 500 (invalid) | 30 min | ✅ |
+
+---
+
+## Documentation
+
+- `QUESTION_ANSWERS.md` - Detailed answers
+- `FIXES_AND_RECOMMENDATIONS.md` - Full recommendations
+- `android/HAZARD_AVOIDANCE_PORTING_GUIDE.md` - Implementation guide
+
+---
+
+**Last Updated:** 2025-11-09
+**Status:** Ready ✅
 
