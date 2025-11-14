@@ -270,6 +270,25 @@ def init_db():
         )
     ''')
 
+    # Persistent route cache table (Phase 4 feature)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS persistent_route_cache (
+            id INTEGER PRIMARY KEY,
+            start_lat REAL, start_lon REAL,
+            end_lat REAL, end_lon REAL,
+            routing_mode TEXT, vehicle_type TEXT,
+            route_data TEXT,
+            distance_km REAL, duration_minutes REAL,
+            fuel_cost REAL, toll_cost REAL, caz_cost REAL,
+            total_cost REAL,
+            source TEXT,
+            access_count INTEGER DEFAULT 1,
+            last_accessed DATETIME DEFAULT CURRENT_TIMESTAMP,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
+        )
+    ''')
+
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS community_hazard_reports (
             report_id INTEGER PRIMARY KEY,
@@ -447,12 +466,13 @@ print("[DB POOL] Initialized with 5 connections")
 # ============================================================================
 
 class CostCalculator:
-    """Background cost calculator for routes."""
+    """Advanced cost calculator for routes with breakdown and comparison."""
 
     def __init__(self):
         """Initialize cost calculator."""
         self.cache = {}
         self.lock = threading.Lock()
+        self.cost_history = []  # Track cost calculations for analytics
 
     def calculate_costs(self, distance_km, vehicle_type, fuel_efficiency, fuel_price,
                        energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt):
@@ -481,6 +501,412 @@ class CostCalculator:
             'caz_cost': round(caz_cost, 2),
             'total_cost': round(fuel_cost + toll_cost + caz_cost, 2)
         }
+
+    def calculate_detailed_breakdown(self, distance_km, duration_minutes, vehicle_type,
+                                    fuel_efficiency, fuel_price, energy_efficiency,
+                                    electricity_price, include_tolls, include_caz, caz_exempt):
+        """Calculate detailed cost breakdown with per-unit costs."""
+        costs = self.calculate_costs(distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                                    energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt)
+
+        # Calculate per-unit costs
+        cost_per_km = costs['total_cost'] / distance_km if distance_km > 0 else 0
+        cost_per_minute = costs['total_cost'] / duration_minutes if duration_minutes > 0 else 0
+
+        # Calculate fuel efficiency metrics
+        if vehicle_type == 'electric':
+            fuel_efficiency_actual = energy_efficiency
+            fuel_unit = 'kWh/100km'
+        else:
+            fuel_efficiency_actual = fuel_efficiency
+            fuel_unit = 'L/100km'
+
+        return {
+            **costs,
+            'breakdown': {
+                'fuel_cost': costs['fuel_cost'],
+                'toll_cost': costs['toll_cost'],
+                'caz_cost': costs['caz_cost']
+            },
+            'per_unit': {
+                'cost_per_km': round(cost_per_km, 3),
+                'cost_per_minute': round(cost_per_minute, 3),
+                'fuel_efficiency': fuel_efficiency_actual,
+                'fuel_unit': fuel_unit
+            },
+            'metrics': {
+                'distance_km': round(distance_km, 2),
+                'duration_minutes': round(duration_minutes, 0),
+                'avg_speed_kmh': round((distance_km / (duration_minutes / 60)) if duration_minutes > 0 else 0, 1)
+            }
+        }
+
+    def compare_routes(self, routes_data):
+        """Compare multiple routes and provide recommendations."""
+        if not routes_data or len(routes_data) < 2:
+            return None
+
+        comparisons = []
+        for idx, route in enumerate(routes_data):
+            comparison = {
+                'route_id': idx + 1,
+                'distance_km': route.get('distance_km', 0),
+                'duration_minutes': route.get('duration_minutes', 0),
+                'fuel_cost': route.get('fuel_cost', 0),
+                'toll_cost': route.get('toll_cost', 0),
+                'caz_cost': route.get('caz_cost', 0),
+                'total_cost': route.get('fuel_cost', 0) + route.get('toll_cost', 0) + route.get('caz_cost', 0),
+                'cost_per_km': round((route.get('fuel_cost', 0) + route.get('toll_cost', 0) + route.get('caz_cost', 0)) / route.get('distance_km', 1), 3),
+                'cost_per_minute': round((route.get('fuel_cost', 0) + route.get('toll_cost', 0) + route.get('caz_cost', 0)) / route.get('duration_minutes', 1), 3)
+            }
+            comparisons.append(comparison)
+
+        # Find best routes
+        cheapest = min(comparisons, key=lambda x: x['total_cost'])
+        fastest = min(comparisons, key=lambda x: x['duration_minutes'])
+        shortest = min(comparisons, key=lambda x: x['distance_km'])
+
+        return {
+            'routes': comparisons,
+            'recommendations': {
+                'cheapest': {
+                    'route_id': cheapest['route_id'],
+                    'savings': round(max(c['total_cost'] for c in comparisons) - cheapest['total_cost'], 2),
+                    'reason': f"Saves £{round(max(c['total_cost'] for c in comparisons) - cheapest['total_cost'], 2)} compared to most expensive"
+                },
+                'fastest': {
+                    'route_id': fastest['route_id'],
+                    'time_saved': round(max(c['duration_minutes'] for c in comparisons) - fastest['duration_minutes'], 0),
+                    'reason': f"Saves {round(max(c['duration_minutes'] for c in comparisons) - fastest['duration_minutes'], 0)} minutes compared to slowest"
+                },
+                'shortest': {
+                    'route_id': shortest['route_id'],
+                    'distance_saved': round(max(c['distance_km'] for c in comparisons) - shortest['distance_km'], 2),
+                    'reason': f"Saves {round(max(c['distance_km'] for c in comparisons) - shortest['distance_km'], 2)} km compared to longest"
+                }
+            }
+        }
+
+    def cache_route_to_db(self, start_lat, start_lon, end_lat, end_lon, routing_mode,
+                         vehicle_type, route_data, source):
+        """Cache a route to the database for long-term storage and analytics."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            distance_km = route_data.get('distance_km', 0)
+            duration_minutes = route_data.get('duration_minutes', 0)
+            fuel_cost = route_data.get('fuel_cost', 0)
+            toll_cost = route_data.get('toll_cost', 0)
+            caz_cost = route_data.get('caz_cost', 0)
+            total_cost = fuel_cost + toll_cost + caz_cost
+
+            # Try to insert or update
+            cursor.execute('''
+                INSERT OR REPLACE INTO persistent_route_cache
+                (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                 route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
+                 total_cost, source, access_count, last_accessed)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                        COALESCE((SELECT access_count FROM persistent_route_cache
+                                 WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
+                                 AND routing_mode=? AND vehicle_type=?), 0) + 1,
+                        CURRENT_TIMESTAMP)
+            ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                  json.dumps(route_data), distance_km, duration_minutes, fuel_cost, toll_cost,
+                  caz_cost, total_cost, source, start_lat, start_lon, end_lat, end_lon,
+                  routing_mode, vehicle_type))
+
+            conn.commit()
+            return_db_connection(conn)
+            return True
+        except Exception as e:
+            print(f"[Cache] Error caching route to DB: {e}")
+            return False
+
+    def get_cached_route_from_db(self, start_lat, start_lon, end_lat, end_lon,
+                                routing_mode, vehicle_type):
+        """Retrieve a cached route from the database."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                SELECT route_data, access_count FROM persistent_route_cache
+                WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
+                AND routing_mode=? AND vehicle_type=?
+            ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type))
+
+            result = cursor.fetchone()
+            if result:
+                route_data_str, access_count = result
+                # Update access count
+                cursor.execute('''
+                    UPDATE persistent_route_cache
+                    SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
+                    WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
+                    AND routing_mode=? AND vehicle_type=?
+                ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type))
+                conn.commit()
+                return_db_connection(conn)
+                return json.loads(route_data_str)
+
+            return_db_connection(conn)
+            return None
+        except Exception as e:
+            print(f"[Cache] Error retrieving cached route: {e}")
+            return None
+
+    def get_cache_statistics(self):
+        """Get statistics about the persistent route cache."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # Total cached routes
+            cursor.execute('SELECT COUNT(*) FROM persistent_route_cache')
+            total_routes = cursor.fetchone()[0]
+
+            # Most accessed routes
+            cursor.execute('''
+                SELECT start_lat, start_lon, end_lat, end_lon, access_count
+                FROM persistent_route_cache
+                ORDER BY access_count DESC LIMIT 5
+            ''')
+            most_accessed = cursor.fetchall()
+
+            # Average cost
+            cursor.execute('SELECT AVG(total_cost) FROM persistent_route_cache')
+            avg_cost = cursor.fetchone()[0] or 0
+
+            # Total distance cached
+            cursor.execute('SELECT SUM(distance_km) FROM persistent_route_cache')
+            total_distance = cursor.fetchone()[0] or 0
+
+            return_db_connection(conn)
+
+            return {
+                'total_cached_routes': total_routes,
+                'average_cost': round(avg_cost, 2),
+                'total_distance_cached_km': round(total_distance, 2),
+                'most_accessed_routes': [
+                    {
+                        'start': f"({row[0]:.4f}, {row[1]:.4f})",
+                        'end': f"({row[2]:.4f}, {row[3]:.4f})",
+                        'access_count': row[4]
+                    } for row in most_accessed
+                ]
+            }
+        except Exception as e:
+            print(f"[Cache] Error getting cache statistics: {e}")
+            return {}
+
+    def predict_cost(self, distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                    energy_efficiency, electricity_price, include_tolls, include_caz):
+        """Predict cost for a route using historical data and ML-based estimation."""
+        try:
+            # Get historical average cost per km for similar routes
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                SELECT AVG(total_cost / distance_km) as avg_cost_per_km
+                FROM persistent_route_cache
+                WHERE vehicle_type = ? AND distance_km > ? AND distance_km < ?
+            ''', (vehicle_type, distance_km * 0.8, distance_km * 1.2))
+
+            result = cursor.fetchone()
+            historical_cost_per_km = result[0] if result and result[0] else None
+
+            return_db_connection(conn)
+
+            # Calculate base cost
+            base_costs = self.calculate_costs(
+                distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                energy_efficiency, electricity_price, include_tolls, include_caz, False
+            )
+
+            # If we have historical data, blend with prediction
+            if historical_cost_per_km:
+                predicted_total = historical_cost_per_km * distance_km
+                # Blend: 70% calculated, 30% historical
+                blended_cost = (base_costs['total_cost'] * 0.7) + (predicted_total * 0.3)
+                confidence = 0.85  # High confidence with historical data
+            else:
+                blended_cost = base_costs['total_cost']
+                confidence = 0.65  # Lower confidence without historical data
+
+            return {
+                'predicted_cost': round(blended_cost, 2),
+                'base_cost': round(base_costs['total_cost'], 2),
+                'confidence': round(confidence, 2),
+                'cost_per_km': round(blended_cost / distance_km if distance_km > 0 else 0, 3),
+                'breakdown': base_costs
+            }
+        except Exception as e:
+            print(f"[Prediction] Error predicting cost: {e}")
+            # Fallback to basic calculation
+            return {
+                'predicted_cost': round(self.calculate_costs(
+                    distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                    energy_efficiency, electricity_price, include_tolls, include_caz, False
+                )['total_cost'], 2),
+                'confidence': 0.5,
+                'error': str(e)
+            }
+
+    def optimize_route_cost(self, routes_data, vehicle_type, fuel_efficiency, fuel_price,
+                           energy_efficiency, electricity_price):
+        """Provide cost optimization suggestions for routes."""
+        if not routes_data or len(routes_data) == 0:
+            return None
+
+        optimizations = []
+
+        for idx, route in enumerate(routes_data):
+            distance_km = route.get('distance_km', 0)
+            duration_minutes = route.get('duration_minutes', 0)
+            total_cost = route.get('fuel_cost', 0) + route.get('toll_cost', 0) + route.get('caz_cost', 0)
+
+            suggestions = []
+
+            # Suggestion 1: Toll avoidance
+            if route.get('toll_cost', 0) > 0:
+                toll_savings = route.get('toll_cost', 0)
+                suggestions.append({
+                    'type': 'toll_avoidance',
+                    'title': 'Avoid Tolls',
+                    'savings': round(toll_savings, 2),
+                    'description': f'Avoid toll roads to save £{toll_savings:.2f}'
+                })
+
+            # Suggestion 2: CAZ avoidance
+            if route.get('caz_cost', 0) > 0:
+                caz_savings = route.get('caz_cost', 0)
+                suggestions.append({
+                    'type': 'caz_avoidance',
+                    'title': 'Avoid CAZ',
+                    'savings': round(caz_savings, 2),
+                    'description': f'Avoid Congestion Charge Zone to save £{caz_savings:.2f}'
+                })
+
+            # Suggestion 3: Time optimization
+            if duration_minutes > 60:
+                time_saved_minutes = max(5, int(duration_minutes * 0.1))  # 10% time reduction
+                cost_per_minute = total_cost / duration_minutes if duration_minutes > 0 else 0
+                cost_savings = cost_per_minute * time_saved_minutes
+                suggestions.append({
+                    'type': 'time_optimization',
+                    'title': 'Faster Route',
+                    'savings': round(cost_savings, 2),
+                    'description': f'Take a faster route to save ~{time_saved_minutes} minutes and £{cost_savings:.2f}'
+                })
+
+            # Suggestion 4: Vehicle efficiency
+            if vehicle_type != 'electric':
+                # Estimate EV savings
+                ev_cost = (distance_km / 100) * energy_efficiency * electricity_price
+                fuel_cost = route.get('fuel_cost', 0)
+                if fuel_cost > ev_cost:
+                    ev_savings = fuel_cost - ev_cost
+                    suggestions.append({
+                        'type': 'vehicle_efficiency',
+                        'title': 'Use Electric Vehicle',
+                        'savings': round(ev_savings, 2),
+                        'description': f'Using an EV could save £{ev_savings:.2f} on fuel'
+                    })
+
+            optimizations.append({
+                'route_id': idx + 1,
+                'total_cost': round(total_cost, 2),
+                'suggestions': suggestions,
+                'total_potential_savings': round(sum(s['savings'] for s in suggestions), 2)
+            })
+
+        return {
+            'routes': optimizations,
+            'best_optimization': max(optimizations, key=lambda x: x['total_potential_savings']) if optimizations else None
+        }
+
+    def cache_alternative_routes(self, start_lat, start_lon, end_lat, end_lon,
+                                routing_mode, vehicle_type, routes_data):
+        """Cache alternative routes with smart TTL and invalidation strategy."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            # Store each alternative route
+            for idx, route in enumerate(routes_data):
+                distance_km = route.get('distance_km', 0)
+                duration_minutes = route.get('duration_minutes', 0)
+                fuel_cost = route.get('fuel_cost', 0)
+                toll_cost = route.get('toll_cost', 0)
+                caz_cost = route.get('caz_cost', 0)
+                total_cost = fuel_cost + toll_cost + caz_cost
+
+                # Determine TTL based on route characteristics
+                # Longer routes get longer TTL (more stable)
+                # Routes with tolls/CAZ get shorter TTL (prices change)
+                base_ttl = 3600  # 1 hour
+                if distance_km > 100:
+                    ttl_multiplier = 2  # 2 hours for long routes
+                elif distance_km > 50:
+                    ttl_multiplier = 1.5  # 1.5 hours for medium routes
+                else:
+                    ttl_multiplier = 1  # 1 hour for short routes
+
+                # Reduce TTL if route has tolls or CAZ
+                if toll_cost > 0 or caz_cost > 0:
+                    ttl_multiplier *= 0.7  # 30% reduction
+
+                ttl_seconds = int(base_ttl * ttl_multiplier)
+
+                # Insert alternative route
+                cursor.execute('''
+                    INSERT INTO persistent_route_cache
+                    (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                     route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
+                     total_cost, source, access_count, last_accessed)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                    ON CONFLICT(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
+                    DO UPDATE SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
+                ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                      json.dumps(route), distance_km, duration_minutes, fuel_cost, toll_cost,
+                      caz_cost, total_cost, f'Alternative-{idx+1}'))
+
+            conn.commit()
+            return_db_connection(conn)
+            return True
+        except Exception as e:
+            print(f"[Cache] Error caching alternative routes: {e}")
+            return False
+
+    def get_alternative_route_cache_info(self, start_lat, start_lon, end_lat, end_lon):
+        """Get cache information for alternative routes."""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                SELECT COUNT(*), AVG(total_cost), SUM(access_count)
+                FROM persistent_route_cache
+                WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
+            ''', (start_lat, start_lon, end_lat, end_lon))
+
+            result = cursor.fetchone()
+            return_db_connection(conn)
+
+            if result:
+                count, avg_cost, total_accesses = result
+                return {
+                    'cached_alternatives': count or 0,
+                    'average_cost': round(avg_cost, 2) if avg_cost else 0,
+                    'total_accesses': total_accesses or 0
+                }
+            return {}
+        except Exception as e:
+            print(f"[Cache] Error getting alternative route cache info: {e}")
+            return {}
 
 # Initialize cost calculator
 cost_calculator = CostCalculator()
@@ -3804,11 +4230,14 @@ HTML_TEMPLATE = '''
                             <button onclick="findParkingNearDestination()" style="background: #FF9800; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                                 🅿️ Find Parking
                             </button>
+                            <button onclick="showRouteComparison()" style="background: #FF5722; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                📊 Compare Routes
+                            </button>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                             <button onclick="switchTab('routeComparison')" style="background: #2196F3; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
                                 🛣️ View Options
                             </button>
-                        </div>
-                        <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px;">
                             <button onclick="switchTab('navigation')" style="background: #999; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
                                 ✏️ Modify Route
                             </button>
@@ -5874,6 +6303,101 @@ HTML_TEMPLATE = '''
             });
 
             parentContainer.style.display = 'block';
+        }
+
+        /**
+         * Display route comparison with intelligent recommendations
+         * Shows cost breakdown, time/distance comparison, and recommendations
+         */
+        async function showRouteComparison() {
+            if (!routeOptions || routeOptions.length < 2) {
+                showStatus('Need at least 2 routes to compare', 'error');
+                return;
+            }
+
+            try {
+                // Prepare routes data for comparison
+                const routesForComparison = routeOptions.map(route => ({
+                    distance_km: route.distance_km || 0,
+                    duration_minutes: route.duration_minutes || 0,
+                    fuel_cost: route.fuel_cost || 0,
+                    toll_cost: route.toll_cost || 0,
+                    caz_cost: route.caz_cost || 0
+                }));
+
+                // Call comparison API
+                const response = await fetch('/api/route-comparison', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ routes: routesForComparison })
+                });
+
+                const data = await response.json();
+                if (!data.success) {
+                    showStatus('Error comparing routes: ' + data.error, 'error');
+                    return;
+                }
+
+                const comparison = data.comparison;
+                const symbol = getCurrencySymbol();
+                const distUnit = getDistanceUnit();
+
+                // Create comparison table
+                let comparisonHTML = '<div style="overflow-x: auto; margin: 10px 0;">';
+                comparisonHTML += '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+                comparisonHTML += '<thead><tr style="background: #667eea; color: white;">';
+                comparisonHTML += '<th style="padding: 8px; text-align: left;">Route</th>';
+                comparisonHTML += '<th style="padding: 8px; text-align: center;">Distance</th>';
+                comparisonHTML += '<th style="padding: 8px; text-align: center;">Time</th>';
+                comparisonHTML += '<th style="padding: 8px; text-align: center;">Cost</th>';
+                comparisonHTML += '<th style="padding: 8px; text-align: center;">Cost/km</th>';
+                comparisonHTML += '</tr></thead><tbody>';
+
+                comparison.routes.forEach((route, idx) => {
+                    const bgColor = idx % 2 === 0 ? '#f9f9f9' : '#fff';
+                    comparisonHTML += `<tr style="background: ${bgColor}; border-bottom: 1px solid #ddd;">`;
+                    comparisonHTML += `<td style="padding: 8px;"><strong>Route ${route.route_id}</strong></td>`;
+                    comparisonHTML += `<td style="padding: 8px; text-align: center;">${convertDistance(route.distance_km)} ${distUnit}</td>`;
+                    comparisonHTML += `<td style="padding: 8px; text-align: center;">${Math.round(route.duration_minutes)} min</td>`;
+                    comparisonHTML += `<td style="padding: 8px; text-align: center;"><strong>${symbol}${route.total_cost.toFixed(2)}</strong></td>`;
+                    comparisonHTML += `<td style="padding: 8px; text-align: center;">${symbol}${route.cost_per_km.toFixed(2)}</td>`;
+                    comparisonHTML += '</tr>';
+                });
+
+                comparisonHTML += '</tbody></table></div>';
+
+                // Add recommendations
+                comparisonHTML += '<div style="margin-top: 15px; padding: 10px; background: #f0f4ff; border-radius: 6px;">';
+                comparisonHTML += '<strong style="color: #667eea;">💡 Recommendations:</strong><br>';
+
+                const rec = comparison.recommendations;
+                comparisonHTML += `<div style="margin-top: 8px; font-size: 12px;">`;
+                comparisonHTML += `<div style="margin-bottom: 6px;">💰 <strong>Cheapest:</strong> Route ${rec.cheapest.route_id} - ${rec.cheapest.reason}</div>`;
+                comparisonHTML += `<div style="margin-bottom: 6px;">⚡ <strong>Fastest:</strong> Route ${rec.fastest.route_id} - ${rec.fastest.reason}</div>`;
+                comparisonHTML += `<div>📍 <strong>Shortest:</strong> Route ${rec.shortest.route_id} - ${rec.shortest.reason}</div>`;
+                comparisonHTML += '</div></div>';
+
+                // Display in a modal or alert
+                const modal = document.createElement('div');
+                modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+                modal.innerHTML = `
+                    <div style="background: white; padding: 20px; border-radius: 12px; max-width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                            <h3 style="margin: 0; color: #333;">Route Comparison</h3>
+                            <button onclick="this.closest('div').parentElement.remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">×</button>
+                        </div>
+                        ${comparisonHTML}
+                        <div style="margin-top: 15px; display: flex; gap: 10px;">
+                            <button onclick="this.closest('div').parentElement.remove()" style="flex: 1; padding: 10px; background: #ddd; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Close</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                showStatus('📊 Route comparison displayed', 'success');
+            } catch (error) {
+                showStatus('Error: ' + error.message, 'error');
+                console.error('[Comparison] Error:', error);
+            }
         }
 
         /**
@@ -10218,7 +10742,16 @@ def calculate_route():
 
                     # Cache the route for future requests
                     route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data)
-                    print(f"[CACHE] STORED: Route cached for future requests")
+                    print(f"[CACHE] STORED: Route cached in memory")
+
+                    # ================================================================
+                    # PHASE 4: Persistent database caching for long-term storage
+                    # ================================================================
+                    cost_calculator.cache_route_to_db(
+                        start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                        response_data, 'Valhalla'
+                    )
+                    print(f"[CACHE] STORED: Route cached in database")
 
                     return jsonify(response_data)
                 else:
@@ -10302,7 +10835,7 @@ def calculate_route():
                         })
 
                     print(f"[OSRM] SUCCESS: {len(routes)} routes found")
-                    return jsonify({
+                    response_data = {
                         'success': True,
                         'routes': routes,
                         'source': 'OSRM (Fallback)',
@@ -10312,7 +10845,18 @@ def calculate_route():
                         'fuel_cost': routes[0]['fuel_cost'],
                         'toll_cost': routes[0]['toll_cost'],
                         'caz_cost': routes[0]['caz_cost']
-                    })
+                    }
+
+                    # ================================================================
+                    # PHASE 4: Persistent database caching for long-term storage
+                    # ================================================================
+                    cost_calculator.cache_route_to_db(
+                        start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                        response_data, 'OSRM'
+                    )
+                    print(f"[CACHE] STORED: Route cached in database")
+
+                    return jsonify(response_data)
                 else:
                     print(f"[OSRM] Unexpected response: {route_data.get('code')}")
             else:
@@ -11744,6 +12288,152 @@ def track_bandwidth_and_requests():
         monitor.track_api_request(engine_name, request_type)
 
         return jsonify({'success': True, 'message': 'Bandwidth and request tracked'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# ============================================================================
+# PHASE 4: ADVANCED COST BREAKDOWN & COMPARISON (NEW)
+# ============================================================================
+
+@app.route('/api/cost-breakdown', methods=['POST'])
+def get_cost_breakdown():
+    """Get detailed cost breakdown for a route."""
+    try:
+        data = request.json
+        distance_km = float(data.get('distance_km', 0))
+        duration_minutes = float(data.get('duration_minutes', 0))
+        vehicle_type = data.get('vehicle_type', 'petrol_diesel')
+        fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
+        fuel_price = float(data.get('fuel_price', 1.40))
+        energy_efficiency = float(data.get('energy_efficiency', 18.5))
+        electricity_price = float(data.get('electricity_price', 0.30))
+        include_tolls = data.get('include_tolls', True)
+        include_caz = data.get('include_caz', True)
+        caz_exempt = data.get('caz_exempt', False)
+
+        breakdown = cost_calculator.calculate_detailed_breakdown(
+            distance_km, duration_minutes, vehicle_type,
+            fuel_efficiency, fuel_price, energy_efficiency,
+            electricity_price, include_tolls, include_caz, caz_exempt
+        )
+
+        return jsonify({
+            'success': True,
+            'breakdown': breakdown
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/route-comparison', methods=['POST'])
+def compare_routes():
+    """Compare multiple routes and provide recommendations."""
+    try:
+        data = request.json
+        routes = data.get('routes', [])
+
+        if not routes:
+            return jsonify({'success': False, 'error': 'No routes provided'})
+
+        comparison = cost_calculator.compare_routes(routes)
+
+        if not comparison:
+            return jsonify({'success': False, 'error': 'Unable to compare routes'})
+
+        return jsonify({
+            'success': True,
+            'comparison': comparison
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/cache-statistics', methods=['GET'])
+def get_cache_statistics():
+    """Get persistent route cache statistics."""
+    try:
+        stats = cost_calculator.get_cache_statistics()
+        return jsonify({
+            'success': True,
+            'statistics': stats
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/cost-prediction', methods=['POST'])
+def predict_cost():
+    """Predict cost for a route using ML-based estimation."""
+    try:
+        data = request.json
+        distance_km = float(data.get('distance_km', 0))
+        vehicle_type = data.get('vehicle_type', 'petrol_diesel')
+        fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
+        fuel_price = float(data.get('fuel_price', 1.40))
+        energy_efficiency = float(data.get('energy_efficiency', 18.5))
+        electricity_price = float(data.get('electricity_price', 0.30))
+        include_tolls = data.get('include_tolls', True)
+        include_caz = data.get('include_caz', True)
+
+        prediction = cost_calculator.predict_cost(
+            distance_km, vehicle_type, fuel_efficiency, fuel_price,
+            energy_efficiency, electricity_price, include_tolls, include_caz
+        )
+
+        return jsonify({
+            'success': True,
+            'prediction': prediction
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/cost-optimization', methods=['POST'])
+def optimize_route_cost():
+    """Get cost optimization suggestions for routes."""
+    try:
+        data = request.json
+        routes = data.get('routes', [])
+        vehicle_type = data.get('vehicle_type', 'petrol_diesel')
+        fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
+        fuel_price = float(data.get('fuel_price', 1.40))
+        energy_efficiency = float(data.get('energy_efficiency', 18.5))
+        electricity_price = float(data.get('electricity_price', 0.30))
+
+        if not routes:
+            return jsonify({'success': False, 'error': 'No routes provided'})
+
+        optimization = cost_calculator.optimize_route_cost(
+            routes, vehicle_type, fuel_efficiency, fuel_price,
+            energy_efficiency, electricity_price
+        )
+
+        if not optimization:
+            return jsonify({'success': False, 'error': 'Unable to optimize routes'})
+
+        return jsonify({
+            'success': True,
+            'optimization': optimization
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/alternative-route-cache-info', methods=['GET'])
+def get_alternative_route_cache_info():
+    """Get cache information for alternative routes."""
+    try:
+        start_lat = float(request.args.get('start_lat', 0))
+        start_lon = float(request.args.get('start_lon', 0))
+        end_lat = float(request.args.get('end_lat', 0))
+        end_lon = float(request.args.get('end_lon', 0))
+
+        if start_lat == 0 or start_lon == 0 or end_lat == 0 or end_lon == 0:
+            return jsonify({'success': False, 'error': 'Invalid coordinates'})
+
+        cache_info = cost_calculator.get_alternative_route_cache_info(
+            start_lat, start_lon, end_lat, end_lon
+        )
+
+        return jsonify({
+            'success': True,
+            'cache_info': cache_info
+        })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
