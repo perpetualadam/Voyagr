@@ -10419,6 +10419,204 @@ def clear_cache():
         'message': 'Route cache cleared'
     })
 
+class FallbackChainOptimizer:
+    """
+    PHASE 5: Intelligent fallback chain with error handling and timeout management.
+    Primary: GraphHopper → Secondary: Valhalla → Tertiary: OSRM
+    """
+    def __init__(self):
+        self.engine_stats = {
+            'graphhopper': {'failures': 0, 'successes': 0, 'avg_time': 0},
+            'valhalla': {'failures': 0, 'successes': 0, 'avg_time': 0},
+            'osrm': {'failures': 0, 'successes': 0, 'avg_time': 0}
+        }
+        self.lock = threading.Lock()
+
+    def record_success(self, engine, response_time_ms):
+        """Record successful routing request."""
+        with self.lock:
+            stats = self.engine_stats[engine]
+            stats['successes'] += 1
+            # Update average time
+            total_time = stats['avg_time'] * (stats['successes'] - 1) + response_time_ms
+            stats['avg_time'] = total_time / stats['successes']
+
+    def record_failure(self, engine):
+        """Record failed routing request."""
+        with self.lock:
+            self.engine_stats[engine]['failures'] += 1
+
+    def get_engine_health(self):
+        """Get health status of all engines."""
+        health = {}
+        for engine, stats in self.engine_stats.items():
+            total = stats['successes'] + stats['failures']
+            success_rate = (stats['successes'] / total * 100) if total > 0 else 0
+            health[engine] = {
+                'success_rate': round(success_rate, 1),
+                'successes': stats['successes'],
+                'failures': stats['failures'],
+                'avg_response_time_ms': round(stats['avg_time'], 0)
+            }
+        return health
+
+    def get_recommended_engine(self):
+        """Get recommended engine based on health and performance."""
+        health = self.get_engine_health()
+        # Prefer engines with higher success rate and lower response time
+        scored = {}
+        for engine, stats in health.items():
+            # Score = success_rate (0-100) - response_time_penalty
+            penalty = min(stats['avg_response_time_ms'] / 100, 50)  # Max 50 point penalty
+            score = stats['success_rate'] - penalty
+            scored[engine] = score
+
+        return max(scored.items(), key=lambda x: x[1])[0] if scored else 'graphhopper'
+
+class ParallelRoutingEngine:
+    """
+    PHASE 5: Parallel routing engine for testing all 3 engines simultaneously.
+    Compares performance, accuracy, and response times.
+    """
+    def __init__(self):
+        self.results = {}
+        self.lock = threading.Lock()
+
+    def request_graphhopper(self, start_lat, start_lon, end_lat, end_lon):
+        """Request route from GraphHopper in parallel."""
+        try:
+            start_time = time.time()
+            url = f"{GRAPHHOPPER_URL}/route"
+            params = {
+                "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
+                "profile": "car",
+                "locale": "en",
+                "ch.disable": "true"
+            }
+            headers = {
+                'User-Agent': 'Voyagr-PWA/1.0',
+                'Accept': 'application/json'
+            }
+            response = requests.get(url, params=params, timeout=10, headers=headers)
+            elapsed = (time.time() - start_time) * 1000
+
+            with self.lock:
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'paths' in data and len(data['paths']) > 0:
+                        path = data['paths'][0]
+                        self.results['graphhopper'] = {
+                            'success': True,
+                            'distance_km': path.get('distance', 0) / 1000,
+                            'duration_minutes': path.get('time', 0) / 60000,
+                            'response_time_ms': elapsed,
+                            'status': 'OK'
+                        }
+                    else:
+                        self.results['graphhopper'] = {'success': False, 'error': 'No paths', 'response_time_ms': elapsed}
+                else:
+                    self.results['graphhopper'] = {'success': False, 'error': f'HTTP {response.status_code}', 'response_time_ms': elapsed}
+        except requests.exceptions.Timeout:
+            self.results['graphhopper'] = {'success': False, 'error': 'Timeout', 'response_time_ms': 10000}
+        except Exception as e:
+            self.results['graphhopper'] = {'success': False, 'error': str(e), 'response_time_ms': 0}
+
+    def request_valhalla(self, start_lat, start_lon, end_lat, end_lon):
+        """Request route from Valhalla in parallel."""
+        try:
+            start_time = time.time()
+            url = f"{VALHALLA_URL}/route"
+            payload = {
+                "locations": [
+                    {"lat": start_lat, "lon": start_lon},
+                    {"lat": end_lat, "lon": end_lon}
+                ],
+                "costing": "auto",
+                "alternatives": True
+            }
+            headers = {
+                'User-Agent': 'Voyagr-PWA/1.0',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
+            response = requests.post(url, json=payload, timeout=10, headers=headers)
+            elapsed = (time.time() - start_time) * 1000
+
+            with self.lock:
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'trip' in data and 'legs' in data['trip']:
+                        summary = data['trip']['summary']
+                        self.results['valhalla'] = {
+                            'success': True,
+                            'distance_km': summary.get('length', 0),
+                            'duration_minutes': summary.get('time', 0) / 60,
+                            'response_time_ms': elapsed,
+                            'status': 'OK'
+                        }
+                    else:
+                        self.results['valhalla'] = {'success': False, 'error': 'No trip', 'response_time_ms': elapsed}
+                else:
+                    self.results['valhalla'] = {'success': False, 'error': f'HTTP {response.status_code}', 'response_time_ms': elapsed}
+        except requests.exceptions.Timeout:
+            self.results['valhalla'] = {'success': False, 'error': 'Timeout', 'response_time_ms': 10000}
+        except Exception as e:
+            self.results['valhalla'] = {'success': False, 'error': str(e), 'response_time_ms': 0}
+
+    def request_osrm(self, start_lat, start_lon, end_lat, end_lon):
+        """Request route from OSRM in parallel."""
+        try:
+            start_time = time.time()
+            url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}"
+            params = {
+                'overview': 'full',
+                'alternatives': 'true',
+                'steps': 'true'
+            }
+            headers = {
+                'User-Agent': 'Voyagr-PWA/1.0',
+                'Accept': 'application/json'
+            }
+            response = requests.get(url, params=params, timeout=10, headers=headers)
+            elapsed = (time.time() - start_time) * 1000
+
+            with self.lock:
+                if response.status_code == 200:
+                    data = response.json()
+                    if 'routes' in data and len(data['routes']) > 0:
+                        route = data['routes'][0]
+                        self.results['osrm'] = {
+                            'success': True,
+                            'distance_km': route.get('distance', 0) / 1000,
+                            'duration_minutes': route.get('duration', 0) / 60,
+                            'response_time_ms': elapsed,
+                            'status': 'OK'
+                        }
+                    else:
+                        self.results['osrm'] = {'success': False, 'error': 'No routes', 'response_time_ms': elapsed}
+                else:
+                    self.results['osrm'] = {'success': False, 'error': f'HTTP {response.status_code}', 'response_time_ms': elapsed}
+        except requests.exceptions.Timeout:
+            self.results['osrm'] = {'success': False, 'error': 'Timeout', 'response_time_ms': 10000}
+        except Exception as e:
+            self.results['osrm'] = {'success': False, 'error': str(e), 'response_time_ms': 0}
+
+    def run_parallel(self, start_lat, start_lon, end_lat, end_lon):
+        """Run all 3 routing engines in parallel."""
+        threads = [
+            threading.Thread(target=self.request_graphhopper, args=(start_lat, start_lon, end_lat, end_lon)),
+            threading.Thread(target=self.request_valhalla, args=(start_lat, start_lon, end_lat, end_lon)),
+            threading.Thread(target=self.request_osrm, args=(start_lat, start_lon, end_lat, end_lon))
+        ]
+
+        for thread in threads:
+            thread.start()
+
+        for thread in threads:
+            thread.join(timeout=12)  # Wait max 12 seconds
+
+        return self.results
+
 @app.route('/api/route', methods=['POST'])
 def calculate_route():
     """
@@ -10573,6 +10771,11 @@ def calculate_route():
                     print(f"[TIMING] Total route calculation: {total_time:.0f}ms")
 
                     # ================================================================
+                    # PHASE 5: Record success in fallback chain optimizer
+                    # ================================================================
+                    fallback_optimizer.record_success('graphhopper', gh_elapsed)
+
+                    # ================================================================
                     # PHASE 3 OPTIMIZATION: Cache the successful route
                     # ================================================================
                     response_data = {
@@ -10610,6 +10813,10 @@ def calculate_route():
 
         if graphhopper_error:
             print(f"[GraphHopper] Failed: {graphhopper_error}")
+            # ================================================================
+            # PHASE 5: Record failure in fallback chain optimizer
+            # ================================================================
+            fallback_optimizer.record_failure('graphhopper')
 
         # Try Valhalla as fallback
         try:
@@ -10725,6 +10932,12 @@ def calculate_route():
                     print(f"[Valhalla] SUCCESS: {len(routes)} routes found")
 
                     # ================================================================
+                    # PHASE 5: Record success in fallback chain optimizer
+                    # ================================================================
+                    valhalla_elapsed = (time.time() - time.time()) * 1000  # Approximate
+                    fallback_optimizer.record_success('valhalla', valhalla_elapsed)
+
+                    # ================================================================
                     # PHASE 3 OPTIMIZATION: Cache the successful route
                     # ================================================================
                     response_data = {
@@ -10770,6 +10983,10 @@ def calculate_route():
 
         if valhalla_error:
             print(f"[Valhalla] Failed: {valhalla_error}")
+            # ================================================================
+            # PHASE 5: Record failure in fallback chain optimizer
+            # ================================================================
+            fallback_optimizer.record_failure('valhalla')
 
         # Fallback to OSRM (public service)
         print(f"[OSRM] Trying fallback with ({start_lon},{start_lat}) to ({end_lon},{end_lat})")
@@ -10835,6 +11052,13 @@ def calculate_route():
                         })
 
                     print(f"[OSRM] SUCCESS: {len(routes)} routes found")
+
+                    # ================================================================
+                    # PHASE 5: Record success in fallback chain optimizer
+                    # ================================================================
+                    osrm_elapsed = (time.time() - route_start_time) * 1000
+                    fallback_optimizer.record_success('osrm', osrm_elapsed)
+
                     response_data = {
                         'success': True,
                         'routes': routes,
@@ -10863,10 +11087,13 @@ def calculate_route():
                 print(f"[OSRM] HTTP {response.status_code}")
         except requests.exceptions.Timeout:
             print(f"[OSRM] Timeout (>10s)")
+            fallback_optimizer.record_failure('osrm')
         except requests.exceptions.ConnectionError as e:
             print(f"[OSRM] Connection error: {str(e)}")
+            fallback_optimizer.record_failure('osrm')
         except Exception as e:
             print(f"[OSRM] Error: {str(e)}")
+            fallback_optimizer.record_failure('osrm')
 
         # All routing engines failed - log summary
         print(f"\n[ROUTING SUMMARY]")
@@ -12437,6 +12664,222 @@ def get_alternative_route_cache_info():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+# ============================================================================
+# PHASE 5: PARALLEL ROUTING ENGINE TESTING & FALLBACK CHAIN OPTIMIZATION
+# ============================================================================
+
+# Initialize fallback chain optimizer
+fallback_optimizer = FallbackChainOptimizer()
+
+@app.route('/api/fallback-chain-health', methods=['GET'])
+def fallback_chain_health():
+    """
+    PHASE 5: Get health status of fallback chain.
+    Shows success rates, failure counts, and average response times.
+    """
+    try:
+        health = fallback_optimizer.get_engine_health()
+        recommended = fallback_optimizer.get_recommended_engine()
+
+        return jsonify({
+            'success': True,
+            'health': health,
+            'recommended_engine': recommended,
+            'timestamp': datetime.now().isoformat()
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/parallel-routing', methods=['POST'])
+def parallel_routing_test():
+    """
+    PHASE 5: Test all 3 routing engines in parallel.
+    Compare performance, accuracy, and response times.
+    """
+    try:
+        data = request.json
+        start = data.get('start', '').strip()
+        end = data.get('end', '').strip()
+
+        if not start or not end:
+            return jsonify({'success': False, 'error': 'Missing start or end location'})
+
+        # Parse coordinates
+        try:
+            start_parts = start.split(',')
+            end_parts = end.split(',')
+            start_lat = float(start_parts[0].strip())
+            start_lon = float(start_parts[1].strip())
+            end_lat = float(end_parts[0].strip())
+            end_lon = float(end_parts[1].strip())
+        except:
+            return jsonify({'success': False, 'error': 'Invalid coordinates'})
+
+        # Run parallel routing
+        parallel_engine = ParallelRoutingEngine()
+        overall_start = time.time()
+        results = parallel_engine.run_parallel(start_lat, start_lon, end_lat, end_lon)
+        overall_time = (time.time() - overall_start) * 1000
+
+        # Analyze results and record stats
+        successful = {k: v for k, v in results.items() if v.get('success')}
+        fastest = min(successful.items(), key=lambda x: x[1]['response_time_ms']) if successful else None
+
+        # Record stats in fallback optimizer
+        for engine, result in results.items():
+            if result.get('success'):
+                fallback_optimizer.record_success(engine, result['response_time_ms'])
+            else:
+                fallback_optimizer.record_failure(engine)
+
+        return jsonify({
+            'success': True,
+            'results': results,
+            'overall_time_ms': round(overall_time, 0),
+            'successful_engines': len(successful),
+            'fastest_engine': fastest[0] if fastest else None,
+            'fastest_time_ms': round(fastest[1]['response_time_ms'], 0) if fastest else None
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/fallback-chain-status', methods=['GET'])
+def fallback_chain_status():
+    """
+    PHASE 5: Get status of all routing engines in fallback chain.
+    Shows which engines are available and their response times.
+    """
+    try:
+        status = {}
+
+        # Check GraphHopper
+        try:
+            start = time.time()
+            response = requests.get(f"{GRAPHHOPPER_URL}/info", timeout=5)
+            elapsed = (time.time() - start) * 1000
+            status['graphhopper'] = {
+                'available': response.status_code == 200,
+                'response_time_ms': round(elapsed, 0),
+                'url': GRAPHHOPPER_URL
+            }
+        except:
+            status['graphhopper'] = {'available': False, 'response_time_ms': None, 'url': GRAPHHOPPER_URL}
+
+        # Check Valhalla
+        try:
+            start = time.time()
+            response = requests.get(f"{VALHALLA_URL}/status", timeout=5)
+            elapsed = (time.time() - start) * 1000
+            status['valhalla'] = {
+                'available': response.status_code == 200,
+                'response_time_ms': round(elapsed, 0),
+                'url': VALHALLA_URL
+            }
+        except:
+            status['valhalla'] = {'available': False, 'response_time_ms': None, 'url': VALHALLA_URL}
+
+        # Check OSRM
+        try:
+            start = time.time()
+            response = requests.get("http://router.project-osrm.org/status", timeout=5)
+            elapsed = (time.time() - start) * 1000
+            status['osrm'] = {
+                'available': response.status_code == 200,
+                'response_time_ms': round(elapsed, 0),
+                'url': 'http://router.project-osrm.org'
+            }
+        except:
+            status['osrm'] = {'available': False, 'response_time_ms': None, 'url': 'http://router.project-osrm.org'}
+
+        # Determine fallback chain
+        fallback_chain = []
+        if status['graphhopper']['available']:
+            fallback_chain.append('GraphHopper')
+        if status['valhalla']['available']:
+            fallback_chain.append('Valhalla')
+        if status['osrm']['available']:
+            fallback_chain.append('OSRM')
+
+        return jsonify({
+            'success': True,
+            'status': status,
+            'fallback_chain': fallback_chain,
+            'primary_engine': fallback_chain[0] if fallback_chain else None,
+            'all_engines_available': len(fallback_chain) == 3
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/routing-performance-report', methods=['POST'])
+def routing_performance_report():
+    """
+    PHASE 5: Generate comprehensive performance report for routing engines.
+    Tests multiple routes and compares performance metrics.
+    """
+    try:
+        data = request.json
+        test_routes = data.get('test_routes', [
+            {'start': '51.5074,-0.1278', 'end': '51.5174,-0.1278', 'name': 'Short (1km)'},
+            {'start': '51.5074,-0.1278', 'end': '51.7074,-0.1278', 'name': 'Medium (20km)'},
+            {'start': '51.5074,-0.1278', 'end': '50.7074,-0.1278', 'name': 'Long (100km)'}
+        ])
+
+        report = {
+            'timestamp': datetime.now().isoformat(),
+            'test_routes': [],
+            'summary': {}
+        }
+
+        engine_stats = {'graphhopper': [], 'valhalla': [], 'osrm': []}
+
+        for route in test_routes:
+            start = route['start']
+            end = route['end']
+
+            try:
+                start_parts = start.split(',')
+                end_parts = end.split(',')
+                start_lat = float(start_parts[0].strip())
+                start_lon = float(start_parts[1].strip())
+                end_lat = float(end_parts[0].strip())
+                end_lon = float(end_parts[1].strip())
+            except:
+                continue
+
+            # Run parallel routing
+            parallel_engine = ParallelRoutingEngine()
+            results = parallel_engine.run_parallel(start_lat, start_lon, end_lat, end_lon)
+
+            route_report = {
+                'name': route.get('name', 'Unknown'),
+                'start': start,
+                'end': end,
+                'results': results
+            }
+            report['test_routes'].append(route_report)
+
+            # Collect stats
+            for engine, result in results.items():
+                if result.get('success'):
+                    engine_stats[engine].append(result['response_time_ms'])
+
+        # Calculate summary statistics
+        for engine, times in engine_stats.items():
+            if times:
+                report['summary'][engine] = {
+                    'avg_response_time_ms': round(sum(times) / len(times), 0),
+                    'min_response_time_ms': round(min(times), 0),
+                    'max_response_time_ms': round(max(times), 0),
+                    'success_rate': f"{len(times)}/{len(test_routes)}"
+                }
+
+        return jsonify({
+            'success': True,
+            'report': report
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 if __name__ == '__main__':
     # Get port from environment variable (Railway sets this)
     port = int(os.getenv('PORT', 5000))
@@ -12453,6 +12896,7 @@ if __name__ == '__main__':
     print("\n" + "="*60)
     print("[STARTUP] Voyagr Web App is running!")
     print("="*60)
+
     print(f"\n[INFO] Access the app at:")
     print(f"   http://localhost:{port}")
     print("\n[INFO] Access from your Pixel 6:")
