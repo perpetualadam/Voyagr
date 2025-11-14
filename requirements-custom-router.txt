@@ -1,0 +1,4 @@
+# Custom Routing Engine Requirements
+osmium>=3.4.0
+polyline>=2.0.0
+

@@ -15,16 +15,22 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
 import os
 
-# Configure logging
+# Configure logging with UTF-8 encoding for Windows compatibility
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('routing_monitor.log'),
+        logging.FileHandler('routing_monitor.log', encoding='utf-8'),
         logging.StreamHandler()
     ]
 )
 logger = logging.getLogger(__name__)
+
+# Fix Windows console encoding for emoji/unicode characters
+import sys
+if sys.platform == 'win32':
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # Routing engine URLs
 ENGINES = {

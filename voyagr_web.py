@@ -17,6 +17,12 @@ from datetime import datetime
 import threading
 import math
 import time
+from functools import lru_cache
+from collections import OrderedDict
+try:
+    from flask_compress import Compress
+except ImportError:
+    Compress = None
 
 # Import speed limit detector
 try:
@@ -44,12 +50,158 @@ CORS(app, resources={
     }
 })
 
+# ============================================================================
+# RESPONSE COMPRESSION (Phase 3 Optimization)
+# ============================================================================
+if Compress:
+    Compress(app)
+    print("[COMPRESSION] Gzip compression enabled")
+else:
+    print("[COMPRESSION] flask-compress not installed, compression disabled")
+    print("[COMPRESSION] Install with: pip install flask-compress")
+
 VALHALLA_URL = os.getenv('VALHALLA_URL', 'http://localhost:8002')
 GRAPHHOPPER_URL = os.getenv('GRAPHHOPPER_URL', 'http://localhost:8989')
 USE_OSRM = os.getenv('USE_OSRM', 'false').lower() == 'true'
 
+# ============================================================================
+# ROUTE CACHING SYSTEM (Phase 3 Optimization)
+# ============================================================================
+
+class RouteCache:
+    """LRU cache for route calculations with TTL support."""
+
+    def __init__(self, max_size=1000, ttl_seconds=3600):
+        """Initialize cache with max size and TTL."""
+        self.max_size = max_size
+        self.ttl_seconds = ttl_seconds
+        self.cache = OrderedDict()
+        self.timestamps = {}
+        self.lock = threading.Lock()
+        self.hits = 0
+        self.misses = 0
+
+    def _make_key(self, start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type):
+        """Create cache key from route parameters."""
+        return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type}"
+
+    def get(self, start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type):
+        """Get cached route if available and not expired."""
+        with self.lock:
+            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
+
+            if key not in self.cache:
+                self.misses += 1
+                return None
+
+            # Check if expired
+            if time.time() - self.timestamps[key] > self.ttl_seconds:
+                del self.cache[key]
+                del self.timestamps[key]
+                self.misses += 1
+                return None
+
+            # Move to end (most recently used)
+            self.cache.move_to_end(key)
+            self.hits += 1
+            return self.cache[key]
+
+    def set(self, start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, route_data):
+        """Cache a route calculation."""
+        with self.lock:
+            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
+
+            # Remove oldest if at capacity
+            if len(self.cache) >= self.max_size and key not in self.cache:
+                oldest_key = next(iter(self.cache))
+                del self.cache[oldest_key]
+                del self.timestamps[oldest_key]
+
+            # Add or update
+            self.cache[key] = route_data
+            self.timestamps[key] = time.time()
+            self.cache.move_to_end(key)
+
+    def get_stats(self):
+        """Get cache statistics."""
+        with self.lock:
+            total = self.hits + self.misses
+            hit_rate = (self.hits / total * 100) if total > 0 else 0
+            return {
+                'hits': self.hits,
+                'misses': self.misses,
+                'total': total,
+                'hit_rate': f"{hit_rate:.1f}%",
+                'size': len(self.cache),
+                'max_size': self.max_size
+            }
+
+    def clear(self):
+        """Clear all cached routes."""
+        with self.lock:
+            self.cache.clear()
+            self.timestamps.clear()
+
+# Initialize route cache
+route_cache = RouteCache(max_size=1000, ttl_seconds=3600)
+
+# ============================================================================
+# DATABASE CONNECTION POOLING (Phase 3 Optimization)
+# ============================================================================
+
+class DatabasePool:
+    """Simple connection pool for SQLite database."""
+
+    def __init__(self, db_file, pool_size=5):
+        """Initialize connection pool."""
+        self.db_file = db_file
+        self.pool_size = pool_size
+        self.connections = []
+        self.available = []
+        self.lock = threading.Lock()
+        self._initialize_pool()
+
+    def _initialize_pool(self):
+        """Initialize the connection pool."""
+        for _ in range(self.pool_size):
+            conn = sqlite3.connect(self.db_file, check_same_thread=False)
+            conn.row_factory = sqlite3.Row
+            self.connections.append(conn)
+            self.available.append(conn)
+
+    def get_connection(self):
+        """Get a connection from the pool."""
+        with self.lock:
+            if self.available:
+                return self.available.pop()
+            else:
+                # Create new connection if pool exhausted
+                conn = sqlite3.connect(self.db_file, check_same_thread=False)
+                conn.row_factory = sqlite3.Row
+                return conn
+
+    def return_connection(self, conn):
+        """Return a connection to the pool."""
+        with self.lock:
+            if len(self.available) < self.pool_size:
+                self.available.append(conn)
+            else:
+                conn.close()
+
+    def close_all(self):
+        """Close all connections in the pool."""
+        with self.lock:
+            for conn in self.connections:
+                try:
+                    conn.close()
+                except:
+                    pass
+            self.connections.clear()
+            self.available.clear()
+
 # Database setup
 DB_FILE = 'voyagr_web.db'
+db_pool = None  # Will be initialized after DB creation
 
 def init_db():
     """Initialize database with all tables."""
@@ -286,6 +438,53 @@ def init_db():
 
 init_db()
 
+# Initialize database connection pool (Phase 3 Optimization)
+db_pool = DatabasePool(DB_FILE, pool_size=5)
+print("[DB POOL] Initialized with 5 connections")
+
+# ============================================================================
+# ASYNC COST CALCULATION (Phase 3 Optimization)
+# ============================================================================
+
+class CostCalculator:
+    """Background cost calculator for routes."""
+
+    def __init__(self):
+        """Initialize cost calculator."""
+        self.cache = {}
+        self.lock = threading.Lock()
+
+    def calculate_costs(self, distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                       energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt):
+        """Calculate all costs for a route."""
+        fuel_cost = 0
+        toll_cost = 0
+        caz_cost = 0
+
+        # Calculate fuel/energy cost
+        if vehicle_type == 'electric':
+            fuel_cost = (distance_km / 100) * energy_efficiency * electricity_price
+        else:
+            fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
+
+        # Calculate toll cost
+        if include_tolls:
+            toll_cost = calculate_toll_cost(distance_km, 'motorway')
+
+        # Calculate CAZ cost
+        if include_caz and not caz_exempt:
+            caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt)
+
+        return {
+            'fuel_cost': round(fuel_cost, 2),
+            'toll_cost': round(toll_cost, 2),
+            'caz_cost': round(caz_cost, 2),
+            'total_cost': round(fuel_cost + toll_cost + caz_cost, 2)
+        }
+
+# Initialize cost calculator
+cost_calculator = CostCalculator()
+
 # Initialize speed limit detector
 speed_limit_detector = SpeedLimitDetector() if SpeedLimitDetector else None
 
@@ -342,10 +541,33 @@ def get_distance_between_points(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
     return R * c
 
+# ============================================================================
+# DATABASE HELPER FUNCTION (Phase 3 Optimization)
+# ============================================================================
+
+def get_db_connection():
+    """Get a database connection from the pool."""
+    global db_pool
+    if db_pool is None:
+        # Fallback if pool not initialized
+        return sqlite3.connect(DB_FILE)
+    return db_pool.get_connection()
+
+def return_db_connection(conn):
+    """Return a database connection to the pool."""
+    global db_pool
+    if db_pool is not None:
+        db_pool.return_connection(conn)
+    else:
+        conn.close()
+
 def fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon):
     """Fetch hazards within bounding box of route."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        # ====================================================================
+        # PHASE 3 OPTIMIZATION: Use connection pool instead of direct connect
+        # ====================================================================
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         # Calculate bounding box with 10km buffer
@@ -363,7 +585,7 @@ def fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon):
         if cached:
             cached_data, timestamp = cached
             if time.time() - timestamp < 600:  # 10-minute cache
-                conn.close()
+                return_db_connection(conn)
                 return json.loads(cached_data)
 
         hazards = {
@@ -395,7 +617,7 @@ def fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon):
             if hazard_type in hazards:
                 hazards[hazard_type].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': severity})
 
-        conn.close()
+        return_db_connection(conn)
         return hazards
     except Exception as e:
         print(f"Error fetching hazards: {e}")
@@ -7844,18 +8066,20 @@ HTML_TEMPLATE = '''
         // ETA announcement variables
         let lastETAAnnouncementTime = 0;
         let lastAnnouncedETA = null;
-        const ETA_ANNOUNCEMENT_INTERVAL_MS = 600000; // Announce ETA every 10 minutes
-        const ETA_CHANGE_THRESHOLD_MS = 300000; // Announce if ETA changes by >5 minutes
+        const ETA_ANNOUNCEMENT_INTERVAL_MS = 600000; // Announce ETA every 10 minutes (600,000 ms)
+        const ETA_CHANGE_THRESHOLD_MS = 300000; // Announce if ETA changes by >5 minutes (300,000 ms)
+        const ETA_MIN_INTERVAL_MS = 60000; // Minimum 1 minute between any ETA announcements (prevents excessive frequency)
 
         function getTurnDirectionText(direction) {
             /**
              * Convert turn direction code to human-readable text
+             * FIXED: "straight" now returns "continue straight" instead of "turn straight"
              */
             const directionMap = {
                 'sharp_left': 'sharply left',
                 'left': 'left',
                 'slight_left': 'slightly left',
-                'straight': 'straight',
+                'straight': 'continue straight',  // FIXED: Changed from 'straight' to 'continue straight'
                 'slight_right': 'slightly right',
                 'right': 'right',
                 'sharp_right': 'sharply right'
@@ -8011,7 +8235,10 @@ HTML_TEMPLATE = '''
             const timeSinceLastAnnouncement = now - lastETAAnnouncementTime;
             const etaChanged = lastAnnouncedETA && Math.abs(etaTime.getTime() - lastAnnouncedETA.getTime()) > ETA_CHANGE_THRESHOLD_MS;
 
-            if (timeSinceLastAnnouncement > ETA_ANNOUNCEMENT_INTERVAL_MS || etaChanged) {
+            // FIXED: Enforce minimum interval (1 minute) to prevent excessive announcements
+            // Only announce if: (1) 10 minutes have passed, OR (2) ETA changed by >5 minutes AND at least 1 minute has passed
+            if ((timeSinceLastAnnouncement > ETA_ANNOUNCEMENT_INTERVAL_MS) ||
+                (etaChanged && timeSinceLastAnnouncement > ETA_MIN_INTERVAL_MS)) {
                 const etaHours = etaTime.getHours();
                 const etaMinutes = etaTime.getMinutes();
                 const timeRemainingMinutes = Math.round(timeRemainingMs / 60000);
@@ -8036,12 +8263,14 @@ HTML_TEMPLATE = '''
             /**
              * Announce upcoming turns via voice at specific distances
              * ENHANCED: Now includes turn direction in announcements
+             * FIXED: Proper handling of "straight" direction (continue straight, not turn straight)
              */
             if (!turnInfo || !voiceRecognition) return;
 
             const distance = turnInfo.distance;
             const direction = turnInfo.direction || 'straight';
             const directionText = getTurnDirectionText(direction);
+            const isStraight = direction === 'straight';
 
             // Check if we should announce at this distance
             for (const announcementDistance of TURN_ANNOUNCEMENT_DISTANCES) {
@@ -8050,13 +8279,21 @@ HTML_TEMPLATE = '''
                     let message = '';
 
                     if (announcementDistance === 500) {
-                        message = `In 500 meters, prepare to turn ${directionText}`;
+                        message = isStraight
+                            ? `In 500 meters, prepare to ${directionText}`
+                            : `In 500 meters, prepare to turn ${directionText}`;
                     } else if (announcementDistance === 200) {
-                        message = `In 200 meters, turn ${directionText}`;
+                        message = isStraight
+                            ? `In 200 meters, ${directionText}`
+                            : `In 200 meters, turn ${directionText}`;
                     } else if (announcementDistance === 100) {
-                        message = `In 100 meters, turn ${directionText}`;
+                        message = isStraight
+                            ? `In 100 meters, ${directionText}`
+                            : `In 100 meters, turn ${directionText}`;
                     } else if (announcementDistance === 50) {
-                        message = `Turn ${directionText} now`;
+                        message = isStraight
+                            ? `${directionText} now`
+                            : `Turn ${directionText} now`;
                     }
 
                     console.log(`[Voice] Announcing turn: ${message} (distance: ${distance.toFixed(0)}m, direction: ${direction})`);
@@ -9352,13 +9589,14 @@ def service_worker():
 def manage_vehicles():
     """Get or create vehicle profiles."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        # PHASE 3 OPTIMIZATION: Use connection pool
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         if request.method == 'GET':
             cursor.execute('SELECT * FROM vehicles')
             vehicles = cursor.fetchall()
-            conn.close()
+            return_db_connection(conn)
             return jsonify({
                 'success': True,
                 'vehicles': [
@@ -9382,7 +9620,7 @@ def manage_vehicles():
                   data.get('electricity_price', 0.30), data.get('caz_exempt', 0)))
             conn.commit()
             vehicle_id = cursor.lastrowid
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True, 'vehicle_id': vehicle_id})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -9414,13 +9652,14 @@ def get_charging_stations():
 def trip_history(trip_id=None):
     """Get, save, or delete trip history."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        # PHASE 3 OPTIMIZATION: Use connection pool
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         if request.method == 'GET':
             cursor.execute('SELECT * FROM trips ORDER BY timestamp DESC LIMIT 50')
             trips = cursor.fetchall()
-            conn.close()
+            return_db_connection(conn)
             return jsonify({
                 'success': True,
                 'trips': [
@@ -9447,13 +9686,13 @@ def trip_history(trip_id=None):
                   data.get('toll_cost', 0), data.get('caz_cost', 0), data.get('routing_mode', 'auto')))
             conn.commit()
             trip_id = cursor.lastrowid
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True, 'trip_id': trip_id})
 
         elif request.method == 'DELETE':  # DELETE - remove trip
             cursor.execute('DELETE FROM trips WHERE id = ?', (trip_id,))
             conn.commit()
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True, 'message': f'Trip {trip_id} deleted'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -9462,7 +9701,8 @@ def trip_history(trip_id=None):
 def get_trip_analytics():
     """Get trip analytics and statistics"""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        # PHASE 3 OPTIMIZATION: Use connection pool
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         # Get total trips and statistics
@@ -9514,7 +9754,7 @@ def get_trip_analytics():
                 'avg_cost': route[4]
             })
 
-        conn.close()
+        return_db_connection(conn)
 
         return jsonify({
             'success': True,
@@ -9636,6 +9876,25 @@ def test_routing_engines():
 
     return jsonify(results)
 
+@app.route('/api/cache-stats', methods=['GET'])
+def get_cache_stats():
+    """Get route cache statistics."""
+    stats = route_cache.get_stats()
+    return jsonify({
+        'success': True,
+        'cache_stats': stats,
+        'message': 'Route cache statistics'
+    })
+
+@app.route('/api/cache-clear', methods=['POST'])
+def clear_cache():
+    """Clear the route cache."""
+    route_cache.clear()
+    return jsonify({
+        'success': True,
+        'message': 'Route cache cleared'
+    })
+
 @app.route('/api/route', methods=['POST'])
 def calculate_route():
     """
@@ -9643,6 +9902,9 @@ def calculate_route():
     Supports: GraphHopper, Valhalla, OSRM (fallback)
     Mobile-optimized with proper error handling and fallbacks.
     """
+    import time
+    route_start_time = time.time()
+
     try:
         data = request.json
         start = data.get('start', '').strip()
@@ -9674,10 +9936,22 @@ def calculate_route():
             start_lat, start_lon = 51.5074, -0.1278
             end_lat, end_lon = 51.5174, -0.1278
 
+        # ====================================================================
+        # PHASE 3 OPTIMIZATION: Check route cache first
+        # ====================================================================
+        cached_route = route_cache.get(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
+        if cached_route:
+            print(f"[CACHE] HIT: Route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+            cached_route['cached'] = True
+            cached_route['cache_stats'] = route_cache.get_stats()
+            return jsonify(cached_route)
+
         # Fetch hazards if hazard avoidance is enabled
         hazards = {}
         if enable_hazard_avoidance:
+            hazard_start = time.time()
             hazards = fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
+            print(f"[TIMING] Hazard fetch: {(time.time() - hazard_start)*1000:.0f}ms")
 
         # Try routing engines in order: GraphHopper, Valhalla, OSRM
         graphhopper_error = None
@@ -9704,7 +9978,10 @@ def calculate_route():
                 'User-Agent': 'Voyagr-PWA/1.0',
                 'Accept': 'application/json'
             }
+            gh_start = time.time()
             response = requests.get(url, params=params, timeout=10, headers=headers)
+            gh_elapsed = (time.time() - gh_start) * 1000
+            print(f"[TIMING] GraphHopper request: {gh_elapsed:.0f}ms")
             print(f"[GraphHopper] Response status: {response.status_code}")
             if response.status_code != 200:
                 print(f"[GraphHopper] Response body: {response.text[:500]}")
@@ -9735,21 +10012,16 @@ def calculate_route():
                             # Use the encoded points string directly
                             route_geometry = path.get('points', None)
 
-                        # Calculate costs
-                        fuel_cost = 0
-                        toll_cost = 0
-                        caz_cost = 0
-
-                        if vehicle_type == 'electric':
-                            fuel_cost = (distance / 100) * energy_efficiency * electricity_price
-                        else:
-                            fuel_cost = (distance / 100) * fuel_efficiency * fuel_price
-
-                        if include_tolls:
-                            toll_cost = calculate_toll_cost(distance, 'motorway')
-
-                        if include_caz and not caz_exempt:
-                            caz_cost = calculate_caz_cost(distance, vehicle_type, caz_exempt)
+                        # ================================================================
+                        # PHASE 3 OPTIMIZATION: Use cost calculator
+                        # ================================================================
+                        costs = cost_calculator.calculate_costs(
+                            distance, vehicle_type, fuel_efficiency, fuel_price,
+                            energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt
+                        )
+                        fuel_cost = costs['fuel_cost']
+                        toll_cost = costs['toll_cost']
+                        caz_cost = costs['caz_cost']
 
                         # Determine route type based on index
                         if idx == 0:
@@ -9773,7 +10045,13 @@ def calculate_route():
                         })
 
                     print(f"[GraphHopper] SUCCESS: {len(routes)} routes found")
-                    return jsonify({
+                    total_time = (time.time() - route_start_time) * 1000
+                    print(f"[TIMING] Total route calculation: {total_time:.0f}ms")
+
+                    # ================================================================
+                    # PHASE 3 OPTIMIZATION: Cache the successful route
+                    # ================================================================
+                    response_data = {
                         'success': True,
                         'routes': routes,
                         'source': 'GraphHopper ✅',
@@ -9782,8 +10060,16 @@ def calculate_route():
                         'geometry': routes[0]['geometry'],
                         'fuel_cost': routes[0]['fuel_cost'],
                         'toll_cost': routes[0]['toll_cost'],
-                        'caz_cost': routes[0]['caz_cost']
-                    })
+                        'caz_cost': routes[0]['caz_cost'],
+                        'response_time_ms': total_time,
+                        'cached': False
+                    }
+
+                    # Cache the route for future requests
+                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data)
+                    print(f"[CACHE] STORED: Route cached for future requests")
+
+                    return jsonify(response_data)
                 else:
                     graphhopper_error = f"Unexpected response format: {route_data.keys()}"
             else:
@@ -9849,21 +10135,16 @@ def calculate_route():
                                 route_geometry = leg['shape']
                                 break
 
-                    # Calculate costs for main route
-                    fuel_cost = 0
-                    toll_cost = 0
-                    caz_cost = 0
-
-                    if vehicle_type == 'electric':
-                        fuel_cost = (distance_km / 100) * energy_efficiency * electricity_price
-                    else:
-                        fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
-
-                    if include_tolls:
-                        toll_cost = calculate_toll_cost(distance_km, 'motorway')
-
-                    if include_caz and not caz_exempt:
-                        caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt)
+                    # ================================================================
+                    # PHASE 3 OPTIMIZATION: Use cost calculator
+                    # ================================================================
+                    costs = cost_calculator.calculate_costs(
+                        distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                        energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt
+                    )
+                    fuel_cost = costs['fuel_cost']
+                    toll_cost = costs['toll_cost']
+                    caz_cost = costs['caz_cost']
 
                     routes.append({
                         'id': 1,
@@ -9894,21 +10175,16 @@ def calculate_route():
                                             alt_geometry = leg['shape']
                                             break
 
-                                # Calculate costs
-                                alt_fuel_cost = 0
-                                alt_toll_cost = 0
-                                alt_caz_cost = 0
-
-                                if vehicle_type == 'electric':
-                                    alt_fuel_cost = (alt_distance_km / 100) * energy_efficiency * electricity_price
-                                else:
-                                    alt_fuel_cost = (alt_distance_km / 100) * fuel_efficiency * fuel_price
-
-                                if include_tolls:
-                                    alt_toll_cost = calculate_toll_cost(alt_distance_km, 'motorway')
-
-                                if include_caz and not caz_exempt:
-                                    alt_caz_cost = calculate_caz_cost(alt_distance_km, vehicle_type, caz_exempt)
+                                # ================================================================
+                                # PHASE 3 OPTIMIZATION: Use cost calculator
+                                # ================================================================
+                                alt_costs = cost_calculator.calculate_costs(
+                                    alt_distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                                    energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt
+                                )
+                                alt_fuel_cost = alt_costs['fuel_cost']
+                                alt_toll_cost = alt_costs['toll_cost']
+                                alt_caz_cost = alt_costs['caz_cost']
 
                                 route_names = ['Shortest', 'Balanced', 'Alternative']
                                 routes.append({
@@ -9923,7 +10199,11 @@ def calculate_route():
                                 })
 
                     print(f"[Valhalla] SUCCESS: {len(routes)} routes found")
-                    return jsonify({
+
+                    # ================================================================
+                    # PHASE 3 OPTIMIZATION: Cache the successful route
+                    # ================================================================
+                    response_data = {
                         'success': True,
                         'routes': routes,
                         'source': 'Valhalla ✅',
@@ -9932,8 +10212,15 @@ def calculate_route():
                         'geometry': routes[0]['geometry'],
                         'fuel_cost': routes[0]['fuel_cost'],
                         'toll_cost': routes[0]['toll_cost'],
-                        'caz_cost': routes[0]['caz_cost']
-                    })
+                        'caz_cost': routes[0]['caz_cost'],
+                        'cached': False
+                    }
+
+                    # Cache the route for future requests
+                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data)
+                    print(f"[CACHE] STORED: Route cached for future requests")
+
+                    return jsonify(response_data)
                 else:
                     valhalla_error = f"Unexpected response format: {route_data.keys()}"
             else:
