@@ -51,6 +51,89 @@ CORS(app, resources={
 })
 
 # ============================================================================
+# PHASE 5: REQUEST VALIDATION HELPER FUNCTIONS
+# ============================================================================
+
+def validate_coordinates(coord_str):
+    """
+    Validate coordinate string in format 'lat,lon'.
+    Returns (lat, lon) tuple or None if invalid.
+    """
+    try:
+        parts = coord_str.strip().split(',')
+        if len(parts) != 2:
+            return None
+        lat = float(parts[0].strip())
+        lon = float(parts[1].strip())
+        # Validate ranges
+        if lat < -90 or lat > 90 or lon < -180 or lon > 180:
+            return None
+        return (lat, lon)
+    except (ValueError, AttributeError):
+        return None
+
+def validate_routing_mode(mode):
+    """Validate routing mode."""
+    valid_modes = ['auto', 'pedestrian', 'bicycle']
+    return mode in valid_modes
+
+def validate_vehicle_type(vehicle_type):
+    """Validate vehicle type."""
+    valid_types = ['petrol_diesel', 'electric', 'hybrid']
+    return vehicle_type in valid_types
+
+def validate_route_request(data):
+    """
+    Validate route calculation request.
+    Returns (is_valid, error_message) tuple.
+    """
+    try:
+        if not data:
+            return False, "Request body is empty"
+
+        # Check required fields
+        start = data.get('start', '').strip()
+        end = data.get('end', '').strip()
+
+        if not start or not end:
+            return False, "Missing start or end location"
+
+        # Validate coordinates
+        start_coords = validate_coordinates(start)
+        end_coords = validate_coordinates(end)
+
+        if not start_coords:
+            return False, "Invalid start coordinates (format: lat,lon)"
+        if not end_coords:
+            return False, "Invalid end coordinates (format: lat,lon)"
+    except Exception as e:
+        print(f"[VALIDATION ERROR] {str(e)}")
+        return False, f"Validation error: {str(e)}"
+
+    # Validate optional fields
+    routing_mode = data.get('routing_mode', 'auto')
+    if not validate_routing_mode(routing_mode):
+        return False, f"Invalid routing_mode: {routing_mode}"
+
+    vehicle_type = data.get('vehicle_type', 'petrol_diesel')
+    if not validate_vehicle_type(vehicle_type):
+        return False, f"Invalid vehicle_type: {vehicle_type}"
+
+    # Validate numeric fields
+    try:
+        fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
+        fuel_price = float(data.get('fuel_price', 1.40))
+        energy_efficiency = float(data.get('energy_efficiency', 18.5))
+        electricity_price = float(data.get('electricity_price', 0.30))
+
+        if fuel_efficiency < 0 or fuel_price < 0 or energy_efficiency < 0 or electricity_price < 0:
+            return False, "Numeric values cannot be negative"
+    except (ValueError, TypeError):
+        return False, "Invalid numeric values"
+
+    return True, None
+
+# ============================================================================
 # RESPONSE COMPRESSION (Phase 3 Optimization)
 # ============================================================================
 if Compress:
@@ -10135,13 +10218,38 @@ def manage_vehicles():
 
         else:  # POST - create new vehicle
             data = request.json
+
+            # ================================================================
+            # PHASE 5: Validate vehicle creation request
+            # ================================================================
+            if not data:
+                return jsonify({'success': False, 'error': 'Request body is empty'}), 400
+
+            name = data.get('name', '').strip()
+            if not name or len(name) < 1 or len(name) > 100:
+                return jsonify({'success': False, 'error': 'Vehicle name must be 1-100 characters'}), 400
+
+            vehicle_type = data.get('vehicle_type', 'petrol_diesel')
+            if not validate_vehicle_type(vehicle_type):
+                return jsonify({'success': False, 'error': f'Invalid vehicle_type: {vehicle_type}'}), 400
+
+            try:
+                fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
+                fuel_price = float(data.get('fuel_price', 1.40))
+                energy_efficiency = float(data.get('energy_efficiency', 18.5))
+                electricity_price = float(data.get('electricity_price', 0.30))
+
+                if fuel_efficiency < 0 or fuel_price < 0 or energy_efficiency < 0 or electricity_price < 0:
+                    return jsonify({'success': False, 'error': 'Numeric values cannot be negative'}), 400
+            except (ValueError, TypeError):
+                return jsonify({'success': False, 'error': 'Invalid numeric values'}), 400
+
             cursor.execute('''
                 INSERT INTO vehicles (name, vehicle_type, fuel_efficiency, fuel_price,
                                      energy_efficiency, electricity_price, is_caz_exempt)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (data['name'], data['vehicle_type'], data.get('fuel_efficiency', 6.5),
-                  data.get('fuel_price', 1.40), data.get('energy_efficiency', 18.5),
-                  data.get('electricity_price', 0.30), data.get('caz_exempt', 0)))
+            ''', (name, vehicle_type, fuel_efficiency, fuel_price, energy_efficiency,
+                  electricity_price, data.get('caz_exempt', 0)))
             conn.commit()
             vehicle_id = cursor.lastrowid
             return_db_connection(conn)
@@ -10153,9 +10261,21 @@ def manage_vehicles():
 def get_charging_stations():
     """Get nearby charging stations."""
     try:
-        lat = float(request.args.get('lat', 51.5074))
-        lon = float(request.args.get('lon', -0.1278))
-        radius_km = float(request.args.get('radius', 5))
+        # ================================================================
+        # PHASE 5: Validate charging stations request
+        # ================================================================
+        try:
+            lat = float(request.args.get('lat', 51.5074))
+            lon = float(request.args.get('lon', -0.1278))
+            radius_km = float(request.args.get('radius', 5))
+
+            if lat < -90 or lat > 90 or lon < -180 or lon > 180:
+                return jsonify({'success': False, 'error': 'Invalid coordinates'}), 400
+
+            if radius_km < 0.1 or radius_km > 100:
+                return jsonify({'success': False, 'error': 'Radius must be between 0.1 and 100 km'}), 400
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'error': 'Invalid numeric parameters'}), 400
 
         # Mock charging stations data (in production, use real API)
         stations = [
@@ -10199,15 +10319,51 @@ def trip_history(trip_id=None):
 
         elif request.method == 'POST':  # POST - save new trip
             data = request.json
+
+            # ================================================================
+            # PHASE 5: Validate trip history request
+            # ================================================================
+            if not data:
+                return_db_connection(conn)
+                return jsonify({'success': False, 'error': 'Request body is empty'}), 400
+
+            try:
+                start_lat = float(data.get('start_lat'))
+                start_lon = float(data.get('start_lon'))
+                end_lat = float(data.get('end_lat'))
+                end_lon = float(data.get('end_lon'))
+                distance_km = float(data.get('distance_km', 0))
+                duration_minutes = float(data.get('duration_minutes', 0))
+
+                if start_lat < -90 or start_lat > 90 or start_lon < -180 or start_lon > 180:
+                    return_db_connection(conn)
+                    return jsonify({'success': False, 'error': 'Invalid start coordinates'}), 400
+
+                if end_lat < -90 or end_lat > 90 or end_lon < -180 or end_lon > 180:
+                    return_db_connection(conn)
+                    return jsonify({'success': False, 'error': 'Invalid end coordinates'}), 400
+
+                if distance_km < 0 or duration_minutes < 0:
+                    return_db_connection(conn)
+                    return jsonify({'success': False, 'error': 'Distance and duration cannot be negative'}), 400
+            except (ValueError, TypeError, KeyError) as e:
+                return_db_connection(conn)
+                return jsonify({'success': False, 'error': f'Invalid trip data: {str(e)}'}), 400
+
+            routing_mode = data.get('routing_mode', 'auto')
+            if not validate_routing_mode(routing_mode):
+                return_db_connection(conn)
+                return jsonify({'success': False, 'error': f'Invalid routing_mode: {routing_mode}'}), 400
+
             cursor.execute('''
                 INSERT INTO trips (start_lat, start_lon, start_address, end_lat, end_lon,
                                   end_address, distance_km, duration_minutes, fuel_cost,
                                   toll_cost, caz_cost, routing_mode)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (data['start_lat'], data['start_lon'], data.get('start_address', ''),
-                  data['end_lat'], data['end_lon'], data.get('end_address', ''),
-                  data['distance_km'], data['duration_minutes'], data.get('fuel_cost', 0),
-                  data.get('toll_cost', 0), data.get('caz_cost', 0), data.get('routing_mode', 'auto')))
+            ''', (start_lat, start_lon, data.get('start_address', ''),
+                  end_lat, end_lon, data.get('end_address', ''),
+                  distance_km, duration_minutes, data.get('fuel_cost', 0),
+                  data.get('toll_cost', 0), data.get('caz_cost', 0), routing_mode))
             conn.commit()
             trip_id = cursor.lastrowid
             return_db_connection(conn)
@@ -10629,6 +10785,17 @@ def calculate_route():
 
     try:
         data = request.json
+        print(f"[ROUTE] Received request: {data}")
+
+        # ================================================================
+        # PHASE 5: Validate request parameters
+        # ================================================================
+        is_valid, error_msg = validate_route_request(data)
+        print(f"[ROUTE] Validation result: is_valid={is_valid}, error={error_msg}")
+        if not is_valid:
+            print(f"[VALIDATION] Request validation failed: {error_msg}")
+            return jsonify({'success': False, 'error': error_msg}), 400
+
         start = data.get('start', '').strip()
         end = data.get('end', '').strip()
         routing_mode = data.get('routing_mode', 'auto')
@@ -10642,21 +10809,11 @@ def calculate_route():
         caz_exempt = data.get('caz_exempt', False)
         enable_hazard_avoidance = data.get('enable_hazard_avoidance', False)
 
-        if not start or not end:
-            return jsonify({'success': False, 'error': 'Missing start or end location'})
-
-        # Parse coordinates - handle both "lat,lon" and "lon,lat" formats
-        try:
-            start_parts = start.split(',')
-            end_parts = end.split(',')
-            start_lat = float(start_parts[0].strip())
-            start_lon = float(start_parts[1].strip())
-            end_lat = float(end_parts[0].strip())
-            end_lon = float(end_parts[1].strip())
-        except:
-            # Default to London if parsing fails
-            start_lat, start_lon = 51.5074, -0.1278
-            end_lat, end_lon = 51.5174, -0.1278
+        # Parse coordinates
+        start_coords = validate_coordinates(start)
+        end_coords = validate_coordinates(end)
+        start_lat, start_lon = start_coords
+        end_lat, end_lon = end_coords
 
         # ====================================================================
         # PHASE 3 OPTIMIZATION: Check route cache first
@@ -11119,24 +11276,29 @@ def calculate_multi_stop_route():
         waypoints = data.get('waypoints', [])
         routing_mode = data.get('routing_mode', 'auto')
 
-        if len(waypoints) < 2:
-            return jsonify({'success': False, 'error': 'Need at least 2 waypoints'})
+        # ================================================================
+        # PHASE 5: Validate multi-stop request
+        # ================================================================
+        if not waypoints or len(waypoints) < 2:
+            return jsonify({'success': False, 'error': 'Need at least 2 waypoints'}), 400
 
-        # Parse all waypoints
+        if len(waypoints) > 25:
+            return jsonify({'success': False, 'error': 'Maximum 25 waypoints allowed'}), 400
+
+        if not validate_routing_mode(routing_mode):
+            return jsonify({'success': False, 'error': f'Invalid routing_mode: {routing_mode}'}), 400
+
+        # Parse and validate all waypoints
         coords = []
         coords_gh = []  # For GraphHopper format
-        for wp in waypoints:
-            parts = wp.split(',')
-            lat = float(parts[0].strip())
-            lon = float(parts[1].strip())
-            coords.append({
-                'lat': lat,
-                'lon': lon
-            })
-            coords_gh.append({
-                'lat': lat,
-                'lng': lon
-            })
+        for i, wp in enumerate(waypoints):
+            wp_coords = validate_coordinates(wp)
+            if not wp_coords:
+                return jsonify({'success': False, 'error': f'Invalid waypoint {i+1}: {wp}'}), 400
+
+            lat, lon = wp_coords
+            coords.append({'lat': lat, 'lon': lon})
+            coords_gh.append({'lat': lat, 'lng': lon})
 
         # Try GraphHopper first
         try:
