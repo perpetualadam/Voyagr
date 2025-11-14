@@ -13,8 +13,13 @@ from datetime import datetime, timedelta
 from pathlib import Path
 import threading
 import time
-import boto3
-from botocore.exceptions import ClientError
+
+try:
+    import boto3
+    from botocore.exceptions import ClientError
+except ImportError:
+    boto3 = None
+    ClientError = None
 
 class BackupManager:
     """Manage automated database backups."""
@@ -44,6 +49,11 @@ class BackupManager:
     def _init_s3(self):
         """Initialize S3 client."""
         try:
+            if not boto3:
+                print("[WARNING] boto3 not installed. S3 backups disabled.")
+                self.s3_enabled = False
+                return
+
             self.s3_client = boto3.client(
                 's3',
                 region_name=self.s3_region,
@@ -133,20 +143,20 @@ class BackupManager:
     def _upload_to_s3(self, backup_path, backup_name):
         """Upload backup to S3."""
         try:
-            if not self.s3_client:
+            if not self.s3_client or not boto3:
                 return
-            
+
             print(f"[INFO] Uploading to S3: {backup_name}")
-            
+
             self.s3_client.upload_file(
                 str(backup_path),
                 self.s3_bucket,
                 f"backups/{backup_name}",
                 ExtraArgs={'ServerSideEncryption': 'AES256'}
             )
-            
+
             print(f"[OK] Uploaded to S3: {backup_name}")
-        except ClientError as e:
+        except Exception as e:
             print(f"[ERROR] S3 upload failed: {str(e)}")
     
     def cleanup_old_backups(self):
