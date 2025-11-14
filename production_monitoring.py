@@ -4,13 +4,14 @@ Production Monitoring Module for Voyagr PWA
 Comprehensive logging, metrics tracking, and performance monitoring
 """
 
-import logging
-import time
 import threading
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
-import json
-import os
+from typing import Dict, List, Optional, Any
+import logging
+
+from production_utils import LoggerFactory, ConfigManager, thread_safe, calculate_rate
+
 
 class ProductionMonitor:
     """Comprehensive production monitoring for Voyagr PWA."""
