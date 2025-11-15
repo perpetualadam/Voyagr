@@ -23,6 +23,7 @@
   "devDependencies": {
     "@babel/core": "^7.23.0",
     "@babel/preset-env": "^7.23.0",
+    "@playwright/test": "^1.56.1",
     "@testing-library/jest-dom": "^6.1.0",
     "babel-jest": "^29.7.0",
     "jest": "^29.7.0",
@@ -33,4 +34,3 @@
     "polyline": "^0.2.0"
   }
 }
-
