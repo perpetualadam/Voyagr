@@ -272,14 +272,34 @@ def validate_route_request(data):
 # ============================================================================
 if Compress:
     Compress(app)
-    print("[COMPRESSION] Gzip compression enabled")
+    logger.info("[COMPRESSION] Gzip compression enabled")
 else:
-    print("[COMPRESSION] flask-compress not installed, compression disabled")
-    print("[COMPRESSION] Install with: pip install flask-compress")
+    logger.warning("[COMPRESSION] flask-compress not installed, compression disabled")
+    logger.info("[COMPRESSION] Install with: pip install flask-compress")
 
 VALHALLA_URL = os.getenv('VALHALLA_URL', 'http://localhost:8002')
 GRAPHHOPPER_URL = os.getenv('GRAPHHOPPER_URL', 'http://localhost:8989')
 USE_OSRM = os.getenv('USE_OSRM', 'false').lower() == 'true'
+
+# ============================================================================
+# CONFIGURABLE RATES (Environment Variables)
+# ============================================================================
+# Toll rates (£ per km) - configurable via environment variables
+TOLL_RATES = {
+    'motorway': float(os.getenv('TOLL_RATE_MOTORWAY', '0.15')),
+    'a_road': float(os.getenv('TOLL_RATE_A_ROAD', '0.05')),
+    'local': float(os.getenv('TOLL_RATE_LOCAL', '0.0'))
+}
+
+# CAZ rates (£ per entry) - configurable via environment variables
+CAZ_RATES = {
+    'petrol_diesel': float(os.getenv('CAZ_RATE_PETROL_DIESEL', '8.0')),
+    'electric': float(os.getenv('CAZ_RATE_ELECTRIC', '0.0')),
+    'hybrid': float(os.getenv('CAZ_RATE_HYBRID', '4.0'))
+}
+
+# CAZ entry frequency (km between entries) - configurable
+CAZ_ENTRY_FREQUENCY_KM = float(os.getenv('CAZ_ENTRY_FREQUENCY_KM', '50.0'))
 
 # ============================================================================
 # ROUTE CACHING SYSTEM (Phase 3 Optimization)
@@ -838,7 +858,7 @@ class CostCalculator:
             return_db_connection(conn)
             return True
         except Exception as e:
-            print(f"[Cache] Error caching route to DB: {e}")
+            logger.error(f"[Cache] Error caching route to DB: {e}")
             return False
 
     def get_cached_route_from_db(self, start_lat, start_lon, end_lat, end_lon,
@@ -871,7 +891,7 @@ class CostCalculator:
             return_db_connection(conn)
             return None
         except Exception as e:
-            print(f"[Cache] Error retrieving cached route: {e}")
+            logger.error(f"[Cache] Error retrieving cached route: {e}")
             return None
 
     def get_cache_statistics(self):
@@ -915,7 +935,7 @@ class CostCalculator:
                 ]
             }
         except Exception as e:
-            print(f"[Cache] Error getting cache statistics: {e}")
+            logger.error(f"[Cache] Error getting cache statistics: {e}")
             return {}
 
     def predict_cost(self, distance_km, vehicle_type, fuel_efficiency, fuel_price,
@@ -961,7 +981,7 @@ class CostCalculator:
                 'breakdown': base_costs
             }
         except Exception as e:
-            print(f"[Prediction] Error predicting cost: {e}")
+            logger.error(f"[Prediction] Error predicting cost: {e}")
             # Fallback to basic calculation
             return {
                 'predicted_cost': round(self.calculate_costs(
@@ -1095,7 +1115,7 @@ class CostCalculator:
             return_db_connection(conn)
             return True
         except Exception as e:
-            print(f"[Cache] Error caching alternative routes: {e}")
+            logger.error(f"[Cache] Error caching alternative routes: {e}")
             return False
 
     def get_alternative_route_cache_info(self, start_lat, start_lon, end_lat, end_lon):
@@ -1122,7 +1142,7 @@ class CostCalculator:
                 }
             return {}
         except Exception as e:
-            print(f"[Cache] Error getting alternative route cache info: {e}")
+            logger.error(f"[Cache] Error getting alternative route cache info: {e}")
             return {}
 
 # Initialize cost calculator
@@ -1186,31 +1206,31 @@ def calculate_energy_cost(distance_km, energy_efficiency_kwh_per_100km, electric
     return energy_needed * electricity_price_gbp_per_kwh
 
 def calculate_toll_cost(distance_km, route_type='motorway'):
-    """Estimate toll cost based on distance and route type."""
-    # UK toll rates (approximate)
-    toll_rates = {
-        'motorway': 0.15,  # £0.15 per km
-        'a_road': 0.05,    # £0.05 per km
-        'local': 0.0       # No toll
-    }
-    rate = toll_rates.get(route_type, 0.05)
+    """Estimate toll cost based on distance and route type.
+
+    Rates are configurable via environment variables:
+    - TOLL_RATE_MOTORWAY (default: 0.15)
+    - TOLL_RATE_A_ROAD (default: 0.05)
+    - TOLL_RATE_LOCAL (default: 0.0)
+    """
+    rate = TOLL_RATES.get(route_type, TOLL_RATES.get('a_road', 0.05))
     return distance_km * rate
 
 def calculate_caz_cost(distance_km, vehicle_type='petrol_diesel', is_exempt=False):
-    """Calculate Congestion Charge Zone cost."""
+    """Calculate Congestion Charge Zone cost.
+
+    Rates are configurable via environment variables:
+    - CAZ_RATE_PETROL_DIESEL (default: 8.0)
+    - CAZ_RATE_ELECTRIC (default: 0.0)
+    - CAZ_RATE_HYBRID (default: 4.0)
+    - CAZ_ENTRY_FREQUENCY_KM (default: 50.0)
+    """
     if is_exempt:
         return 0.0
 
-    # UK CAZ rates (daily charge)
-    caz_rates = {
-        'petrol_diesel': 8.0,
-        'electric': 0.0,
-        'hybrid': 4.0
-    }
-
-    # Assume 1 CAZ entry per 50km
-    caz_entries = max(1, int(distance_km / 50))
-    rate = caz_rates.get(vehicle_type, 8.0)
+    # Calculate CAZ entries based on distance and frequency
+    caz_entries = max(1, int(distance_km / CAZ_ENTRY_FREQUENCY_KM))
+    rate = CAZ_RATES.get(vehicle_type, CAZ_RATES.get('petrol_diesel', 8.0))
     return caz_entries * rate
 
 # Hazard avoidance functions
@@ -1306,7 +1326,7 @@ def fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon):
         return_db_connection(conn)
         return hazards
     except Exception as e:
-        print(f"Error fetching hazards: {e}")
+        logger.error(f"Error fetching hazards: {e}")
         return {}
 
 def score_route_by_hazards(route_points, hazards):
@@ -1374,7 +1394,7 @@ def score_route_by_hazards(route_points, hazards):
 
         return total_penalty, hazard_count
     except Exception as e:
-        print(f"Error scoring route: {e}")
+        logger.error(f"Error scoring route: {e}")
         return 0, 0
 
 MONITORING_DASHBOARD_HTML = '''
@@ -3190,7 +3210,7 @@ def get_trip_analytics():
             'frequent_routes': routes_list
         })
     except Exception as e:
-        print(f"Error fetching trip analytics: {e}")
+        logger.error(f"Error fetching trip analytics: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/traffic-conditions', methods=['POST'])
@@ -3241,7 +3261,7 @@ def get_traffic_conditions():
             'timestamp': datetime.now().isoformat()
         })
     except Exception as e:
-        print(f"Error fetching traffic conditions: {e}")
+        logger.error(f"Error fetching traffic conditions: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/test-routing-engines', methods=['GET'])
@@ -3562,7 +3582,7 @@ def calculate_route():
         # ====================================================================
         cached_route = route_cache.get(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
         if cached_route:
-            print(f"[CACHE] HIT: Route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+            logger.info(f"[CACHE] HIT: Route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
             cached_route['cached'] = True
             cached_route['cache_stats'] = route_cache.get_stats()
             return jsonify(cached_route)
@@ -3572,15 +3592,15 @@ def calculate_route():
         if enable_hazard_avoidance:
             hazard_start = time.time()
             hazards = fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
-            print(f"[TIMING] Hazard fetch: {(time.time() - hazard_start)*1000:.0f}ms")
+            logger.debug(f"[TIMING] Hazard fetch: {(time.time() - hazard_start)*1000:.0f}ms")
 
         # Try routing engines in order: GraphHopper, Valhalla, OSRM
         graphhopper_error = None
         valhalla_error = None
 
-        print(f"\n[ROUTING] Starting route calculation from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
-        print(f"[ROUTING] GraphHopper URL: {GRAPHHOPPER_URL}")
-        print(f"[ROUTING] Valhalla URL: {VALHALLA_URL}")
+        logger.debug(f"\n[ROUTING] Starting route calculation from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+        logger.debug(f"[ROUTING] GraphHopper URL: {GRAPHHOPPER_URL}")
+        logger.debug(f"[ROUTING] Valhalla URL: {VALHALLA_URL}")
 
         # Try GraphHopper first (if available)
         try:
@@ -3591,9 +3611,9 @@ def calculate_route():
                 "locale": "en",
                 "ch.disable": "true"  # Disable CH to get alternative routes
             }
-            print(f"[GraphHopper] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
-            print(f"[GraphHopper] URL: {url}")
-            print(f"[GraphHopper] Params: {params}")
+            logger.debug(f"[GraphHopper] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+            logger.debug(f"[GraphHopper] URL: {url}")
+            logger.debug(f"[GraphHopper] Params: {params}")
             # Add headers for mobile compatibility
             headers = {
                 'User-Agent': 'Voyagr-PWA/1.0',
@@ -3602,14 +3622,14 @@ def calculate_route():
             gh_start = time.time()
             response = requests.get(url, params=params, timeout=10, headers=headers)
             gh_elapsed = (time.time() - gh_start) * 1000
-            print(f"[TIMING] GraphHopper request: {gh_elapsed:.0f}ms")
-            print(f"[GraphHopper] Response status: {response.status_code}")
+            logger.debug(f"[TIMING] GraphHopper request: {gh_elapsed:.0f}ms")
+            logger.debug(f"[GraphHopper] Response status: {response.status_code}")
             if response.status_code != 200:
-                print(f"[GraphHopper] Response body: {response.text[:500]}")
+                logger.warning(f"[GraphHopper] Response body: {response.text[:500]}")
 
             if response.status_code == 200:
                 route_data = response.json()
-                print(f"[GraphHopper] Response keys: {route_data.keys()}")
+                logger.debug(f"[GraphHopper] Response keys: {route_data.keys()}")
 
                 if 'paths' in route_data and len(route_data['paths']) > 0:
                     # Extract all available routes (up to 4)
