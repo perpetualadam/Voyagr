@@ -19,7 +19,7 @@ import time
 from functools import wraps
 from collections import OrderedDict
 import logging
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Optional, Any
 
 # Optional imports with fallbacks
 try:
@@ -193,17 +193,17 @@ def sanitize_string(value, max_length=500):
 
     return sanitized.strip() if sanitized else None
 
-def validate_coordinates(coord_str):
+def validate_coordinates(coord_str: str) -> Optional[Tuple[float, float]]:
     """
     Validate coordinate string in format 'lat,lon'.
     Returns (lat, lon) tuple or None if invalid.
     """
     try:
-        parts = coord_str.strip().split(',')
+        parts: List[str] = coord_str.strip().split(',')
         if len(parts) != 2:
             return None
-        lat = float(parts[0].strip())
-        lon = float(parts[1].strip())
+        lat: float = float(parts[0].strip())
+        lon: float = float(parts[1].strip())
         # Validate ranges
         if lat < -90 or lat > 90 or lon < -180 or lon > 180:
             return None
@@ -211,17 +211,17 @@ def validate_coordinates(coord_str):
     except (ValueError, AttributeError):
         return None
 
-def validate_routing_mode(mode):
+def validate_routing_mode(mode: str) -> bool:
     """Validate routing mode."""
-    valid_modes = ['auto', 'pedestrian', 'bicycle']
+    valid_modes: List[str] = ['auto', 'pedestrian', 'bicycle']
     return mode in valid_modes
 
-def validate_vehicle_type(vehicle_type):
+def validate_vehicle_type(vehicle_type: str) -> bool:
     """Validate vehicle type."""
-    valid_types = ['petrol_diesel', 'electric', 'hybrid']
+    valid_types: List[str] = ['petrol_diesel', 'electric', 'hybrid']
     return vehicle_type in valid_types
 
-def validate_route_request(data):
+def validate_route_request(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     """
     Validate route calculation request.
     Returns (is_valid, error_message) tuple.
@@ -231,8 +231,8 @@ def validate_route_request(data):
             return False, "Request body is empty"
 
         # Check required fields
-        start = data.get('start', '').strip()
-        end = data.get('end', '').strip()
+        start: str = data.get('start', '').strip()
+        end: str = data.get('end', '').strip()
 
         if not start or not end:
             return False, "Missing start or end location"
