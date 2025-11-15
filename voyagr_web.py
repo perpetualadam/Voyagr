@@ -17,8 +17,9 @@ from datetime import datetime
 import threading
 import math
 import time
-from functools import lru_cache
+from functools import lru_cache, wraps
 from collections import OrderedDict
+import logging
 try:
     from flask_compress import Compress
 except ImportError:
@@ -41,9 +42,20 @@ load_dotenv()
 app = Flask(__name__, static_folder='.')
 
 # Enable CORS for mobile compatibility
+# Restrict origins to prevent CSRF attacks
+ALLOWED_ORIGINS = [
+    "http://localhost:5000",
+    "http://localhost:3000",
+    "http://127.0.0.1:5000",
+    "http://127.0.0.1:3000",
+    os.getenv('ALLOWED_ORIGINS', '').split(',') if os.getenv('ALLOWED_ORIGINS') else []
+]
+# Flatten the list if env var was provided
+ALLOWED_ORIGINS = [origin.strip() for origins in ALLOWED_ORIGINS for origin in (origins if isinstance(origins, list) else [origins]) if origin]
+
 CORS(app, resources={
     r"/api/*": {
-        "origins": "*",
+        "origins": ALLOWED_ORIGINS if ALLOWED_ORIGINS else ["http://localhost:5000"],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": False
@@ -51,8 +63,120 @@ CORS(app, resources={
 })
 
 # ============================================================================
+# LOGGING CONFIGURATION
+# ============================================================================
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    handlers=[
+        logging.FileHandler('voyagr_web.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+# ============================================================================
+# RATE LIMITING
+# ============================================================================
+class RateLimiter:
+    """Simple in-memory rate limiter for API endpoints."""
+    def __init__(self, max_requests=100, window_seconds=60):
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests = {}  # {ip: [(timestamp, count)]}
+        self.lock = threading.Lock()
+
+    def is_allowed(self, ip):
+        """Check if IP is allowed to make a request."""
+        with self.lock:
+            now = time.time()
+            if ip not in self.requests:
+                self.requests[ip] = []
+
+            # Remove old requests outside the window
+            self.requests[ip] = [
+                (ts, count) for ts, count in self.requests[ip]
+                if now - ts < self.window_seconds
+            ]
+
+            # Count total requests in window
+            total = sum(count for _, count in self.requests[ip])
+
+            if total >= self.max_requests:
+                return False
+
+            # Add new request
+            if self.requests[ip] and self.requests[ip][-1][0] == now:
+                # Same second, increment count
+                ts, count = self.requests[ip][-1]
+                self.requests[ip][-1] = (ts, count + 1)
+            else:
+                self.requests[ip].append((now, 1))
+
+            return True
+
+# Initialize rate limiters for different endpoints
+route_limiter = RateLimiter(max_requests=100, window_seconds=60)  # 100 requests/min
+api_limiter = RateLimiter(max_requests=500, window_seconds=60)    # 500 requests/min
+
+def rate_limit(limiter):
+    """Decorator for rate limiting endpoints."""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            ip = request.remote_addr
+            if not limiter.is_allowed(ip):
+                logger.warning(f"Rate limit exceeded for IP: {ip}")
+                return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+# ============================================================================
+# AUTHENTICATION
+# ============================================================================
+# Simple API key authentication (can be extended with JWT tokens)
+VALID_API_KEYS = set(os.getenv('API_KEYS', 'voyagr-default-key').split(','))
+
+def require_auth(f):
+    """Decorator for API key authentication."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Allow requests from localhost without auth (for development)
+        if request.remote_addr in ['127.0.0.1', 'localhost']:
+            return f(*args, **kwargs)
+
+        # Check for API key in header or query parameter
+        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+
+        if not api_key or api_key not in VALID_API_KEYS:
+            logger.warning(f"Unauthorized API access attempt from {request.remote_addr}")
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+
+        return f(*args, **kwargs)
+    return decorated_function
+
+# ============================================================================
 # PHASE 5: REQUEST VALIDATION HELPER FUNCTIONS
 # ============================================================================
+
+def sanitize_string(value, max_length=500):
+    """
+    Sanitize string input to prevent SQL injection and XSS.
+    Returns sanitized string or None if invalid.
+    """
+    if not isinstance(value, str):
+        return None
+
+    # Limit length
+    value = value[:max_length]
+
+    # Remove potentially dangerous characters
+    # Allow alphanumeric, spaces, and common punctuation
+    import re
+    sanitized = re.sub(r'[^\w\s\-.,&\'()]', '', value)
+
+    return sanitized.strip() if sanitized else None
 
 def validate_coordinates(coord_str):
     """
@@ -107,7 +231,7 @@ def validate_route_request(data):
         if not end_coords:
             return False, "Invalid end coordinates (format: lat,lon)"
     except Exception as e:
-        print(f"[VALIDATION ERROR] {str(e)}")
+        logger.error(f"[VALIDATION ERROR] {str(e)}")
         return False, f"Validation error: {str(e)}"
 
     # Validate optional fields
@@ -130,6 +254,16 @@ def validate_route_request(data):
             return False, "Numeric values cannot be negative"
     except (ValueError, TypeError):
         return False, "Invalid numeric values"
+
+    # Validate waypoints if provided (for multi-stop routes)
+    waypoints = data.get('waypoints', [])
+    if waypoints:
+        if not isinstance(waypoints, list):
+            return False, "Waypoints must be a list"
+        if len(waypoints) > 25:
+            return False, "Maximum 25 waypoints allowed (DoS prevention)"
+        if len(waypoints) < 2:
+            return False, "Need at least 2 waypoints for multi-stop route"
 
     return True, None
 
@@ -542,7 +676,7 @@ init_db()
 
 # Initialize database connection pool (Phase 3 Optimization)
 db_pool = DatabasePool(DB_FILE, pool_size=5)
-print("[DB POOL] Initialized with 5 connections")
+logger.info("[DB POOL] Initialized with 5 connections")
 
 # ============================================================================
 # ASYNC COST CALCULATION (Phase 3 Optimization)
@@ -997,6 +1131,49 @@ cost_calculator = CostCalculator()
 # Initialize speed limit detector
 speed_limit_detector = SpeedLimitDetector() if SpeedLimitDetector else None
 
+# ============================================================================
+# CACHE INVALIDATION
+# ============================================================================
+def invalidate_hazard_cache():
+    """Invalidate hazard-related caches when hazard data is updated."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Clear expired hazard reports (older than 24 hours)
+        cursor.execute('''
+            DELETE FROM community_hazard_reports
+            WHERE expiry_timestamp < ?
+        ''', (int(time.time()),))
+
+        conn.commit()
+        return_db_connection(conn)
+        logger.info("Hazard cache invalidated and expired reports cleaned")
+        return True
+    except Exception as e:
+        logger.error(f"Error invalidating hazard cache: {e}")
+        return False
+
+def invalidate_route_cache():
+    """Invalidate route cache when preferences change."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Clear routes older than 24 hours
+        cursor.execute('''
+            DELETE FROM persistent_route_cache
+            WHERE last_accessed < datetime('now', '-24 hours')
+        ''')
+
+        conn.commit()
+        return_db_connection(conn)
+        logger.info("Route cache invalidated and old routes cleaned")
+        return True
+    except Exception as e:
+        logger.error(f"Error invalidating route cache: {e}")
+        return False
+
 # Cost calculation functions
 def calculate_fuel_cost(distance_km, fuel_efficiency_l_per_100km, fuel_price_gbp_per_l):
     """Calculate fuel cost for a route."""
@@ -1140,7 +1317,7 @@ def score_route_by_hazards(route_points, hazards):
     Closer cameras receive exponentially higher penalties to strongly discourage routes passing near them.
     """
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         total_penalty = 0
@@ -3031,7 +3208,7 @@ def get_traffic_conditions():
         import math
 
         # Simulate traffic level based on time of day
-        hour = datetime.datetime.now().hour
+        hour = datetime.now().hour
         if 7 <= hour <= 9 or 17 <= hour <= 19:  # Rush hours
             traffic_level = random.choice(['Heavy', 'Moderate', 'Heavy'])
             congestion = random.randint(60, 95)
@@ -3061,7 +3238,7 @@ def get_traffic_conditions():
             'incidents_count': incidents,
             'updated_duration_minutes': int(updated_duration),
             'updated_distance_km': 25.5,  # Simulated distance
-            'timestamp': datetime.datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat()
         })
     except Exception as e:
         print(f"Error fetching traffic conditions: {e}")
@@ -3337,6 +3514,8 @@ class ParallelRoutingEngine:
         return self.results
 
 @app.route('/api/route', methods=['POST'])
+@rate_limit(route_limiter)
+@require_auth
 def calculate_route():
     """
     Calculate route using available routing engines.
@@ -3348,15 +3527,15 @@ def calculate_route():
 
     try:
         data = request.json
-        print(f"[ROUTE] Received request: {data}")
+        logger.info(f"[ROUTE] Received request: {data}")
 
         # ================================================================
         # PHASE 5: Validate request parameters
         # ================================================================
         is_valid, error_msg = validate_route_request(data)
-        print(f"[ROUTE] Validation result: is_valid={is_valid}, error={error_msg}")
+        logger.info(f"[ROUTE] Validation result: is_valid={is_valid}, error={error_msg}")
         if not is_valid:
-            print(f"[VALIDATION] Request validation failed: {error_msg}")
+            logger.warning(f"[VALIDATION] Request validation failed: {error_msg}")
             return jsonify({'success': False, 'error': error_msg}), 400
 
         start = data.get('start', '').strip()
@@ -3974,7 +4153,7 @@ def get_weather():
 def get_analytics():
     """Get trip analytics and statistics."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         # Total trips
@@ -4063,13 +4242,13 @@ def check_speed_violation():
 def hazard_preferences():
     """Get or update hazard preferences."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         if request.method == 'GET':
             cursor.execute('SELECT hazard_type, penalty_seconds, enabled, proximity_threshold_meters FROM hazard_preferences')
             prefs = cursor.fetchall()
-            conn.close()
+            return_db_connection(conn)
             return jsonify({
                 'success': True,
                 'preferences': [
@@ -4096,7 +4275,12 @@ def hazard_preferences():
             ''', (penalty, int(enabled), threshold, hazard_type))
 
             conn.commit()
-            conn.close()
+            return_db_connection(conn)
+
+            # Invalidate caches when preferences change
+            invalidate_hazard_cache()
+            invalidate_route_cache()
+
             return jsonify({'success': True, 'message': f'Updated {hazard_type}'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -4109,9 +4293,9 @@ def add_camera():
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
         camera_type = data.get('type', 'speed_camera')  # speed_camera or traffic_light_camera
-        description = data.get('description', '')
+        description = sanitize_string(data.get('description', ''), max_length=500) or ''
 
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO cameras (lat, lon, type, description, severity)
@@ -4126,6 +4310,7 @@ def add_camera():
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/hazards/report', methods=['POST'])
+@require_auth
 def report_hazard():
     """Report a hazard (community report)."""
     try:
@@ -4133,14 +4318,14 @@ def report_hazard():
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
         hazard_type = data.get('hazard_type')  # speed_camera, police, roadworks, accident, etc.
-        description = data.get('description', '')
+        description = sanitize_string(data.get('description', ''), max_length=500) or ''
         severity = data.get('severity', 'medium')
-        user_id = data.get('user_id', 'anonymous')
+        user_id = sanitize_string(data.get('user_id', 'anonymous'), max_length=100) or 'anonymous'
 
         # Set expiry to 24 hours from now
         expiry_timestamp = int(time.time()) + 86400
 
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO community_hazard_reports
@@ -4172,7 +4357,7 @@ def get_nearby_hazards():
         east = lon + lon_delta
         west = lon - lon_delta
 
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         hazards = {
@@ -4317,7 +4502,7 @@ def search_parking():
 def manage_search_history():
     """Get, add, or clear search history."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         if request.method == 'GET':
@@ -4339,8 +4524,8 @@ def manage_search_history():
         elif request.method == 'POST':
             # Add to search history
             data = request.json
-            query = data.get('query', '').strip()
-            result_name = data.get('result_name', '')
+            query = sanitize_string(data.get('query', '').strip(), max_length=200)
+            result_name = sanitize_string(data.get('result_name', ''), max_length=200) or ''
             lat = data.get('lat')
             lon = data.get('lon')
 
@@ -4375,7 +4560,7 @@ def manage_search_history():
 def manage_favorites():
     """Get, add, or remove favorite locations."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         if request.method == 'GET':
@@ -4399,11 +4584,11 @@ def manage_favorites():
         elif request.method == 'POST':
             # Add favorite location
             data = request.json
-            name = data.get('name', '').strip()
-            address = data.get('address', '').strip()
+            name = sanitize_string(data.get('name', '').strip(), max_length=100)
+            address = sanitize_string(data.get('address', '').strip(), max_length=200) or ''
             lat = float(data.get('lat', 0))
             lon = float(data.get('lon', 0))
-            category = data.get('category', 'location').strip()
+            category = sanitize_string(data.get('category', 'location').strip(), max_length=50) or 'location'
 
             if not name or lat == 0 or lon == 0:
                 conn.close()
@@ -4738,7 +4923,7 @@ def parse_voice_command_web(command, lat, lon):
 def manage_app_settings():
     """Manage Phase 3 app settings (gesture, battery, themes, ML)."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         if request.method == 'GET':
@@ -4814,7 +4999,7 @@ def log_gesture_event():
     """Log gesture events for analytics."""
     try:
         data = request.json
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         cursor.execute('''
@@ -4832,12 +5017,11 @@ def log_gesture_event():
 def manage_ml_predictions():
     """Get ML route predictions based on trip history."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         if request.method == 'GET':
             # Get current day and hour
-            from datetime import datetime
             now = datetime.now()
             day_of_week = now.weekday()
             hour_of_day = now.hour
@@ -4893,7 +5077,7 @@ def manage_ml_predictions():
 def manage_traffic_patterns():
     """Manage ML traffic pattern data."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = get_db_connection()
         cursor = conn.cursor()
 
         if request.method == 'GET':
@@ -4925,7 +5109,6 @@ def manage_traffic_patterns():
 
         else:  # POST - record traffic observation
             data = request.json
-            from datetime import datetime
             now = datetime.now()
 
             cursor.execute('''
