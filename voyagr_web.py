@@ -4802,7 +4802,7 @@ def voice_command():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-def parse_voice_command_web(command, lat, lon):
+def parse_voice_command_web(command: str, lat: float, lon: float) -> Dict[str, Any]:
     """Parse voice command and return action to execute."""
     try:
         # Normalize command
@@ -5189,7 +5189,7 @@ def get_engine_status_endpoint():
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/monitoring/engine-status/<engine_name>', methods=['GET'])
-def get_single_engine_status(engine_name):
+def get_single_engine_status(engine_name: str):
     """Get status of a specific routing engine."""
     try:
         monitor = get_monitor()
@@ -5219,7 +5219,7 @@ def get_alerts_endpoint():
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/monitoring/alerts/<int:alert_id>/resolve', methods=['POST'])
-def resolve_alert_endpoint(alert_id):
+def resolve_alert_endpoint(alert_id: int):
     """Mark an alert as resolved."""
     try:
         monitor = get_monitor()
@@ -5289,7 +5289,7 @@ def get_alerts_summary():
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/monitoring/alerts/severity/<severity>', methods=['GET'])
-def get_alerts_by_severity(severity):
+def get_alerts_by_severity(severity: str):
     """Get alerts filtered by severity level."""
     try:
         monitor = get_monitor()
@@ -5303,7 +5303,7 @@ def get_alerts_by_severity(severity):
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/monitoring/alerts/engine/<engine_name>', methods=['GET'])
-def get_alerts_by_engine_endpoint(engine_name):
+def get_alerts_by_engine_endpoint(engine_name: str):
     """Get alerts for a specific engine."""
     try:
         monitor = get_monitor()
@@ -5331,7 +5331,7 @@ def get_unresolved_alerts():
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/monitoring/alerts/<int:alert_id>/notify', methods=['POST'])
-def send_alert_notification(alert_id):
+def send_alert_notification(alert_id: int):
     """Send notification for an alert."""
     try:
         monitor = get_monitor()
@@ -5349,7 +5349,7 @@ def send_alert_notification(alert_id):
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/monitoring/alerts/engine/<engine_name>/resolve-all', methods=['POST'])
-def resolve_all_engine_alerts(engine_name):
+def resolve_all_engine_alerts(engine_name: str):
     """Resolve all unresolved alerts for an engine."""
     try:
         monitor = get_monitor()
@@ -6049,7 +6049,7 @@ def batch_requests():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-def calculate_route_internal(data):
+def calculate_route_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal route calculation for batch requests."""
     try:
         start = data.get('start', '')
@@ -6060,7 +6060,7 @@ def calculate_route_internal(data):
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
-def get_weather_internal(data):
+def get_weather_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal weather fetch for batch requests."""
     try:
         lat = data.get('lat', 51.5074)
@@ -6070,7 +6070,7 @@ def get_weather_internal(data):
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
-def get_traffic_patterns_internal(data):
+def get_traffic_patterns_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal traffic patterns fetch for batch requests."""
     try:
         lat = data.get('lat', 51.5074)
@@ -6080,7 +6080,7 @@ def get_traffic_patterns_internal(data):
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
-def get_speed_limit_internal(data):
+def get_speed_limit_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal speed limit fetch for batch requests."""
     try:
         lat = data.get('lat', 51.5074)
@@ -6090,7 +6090,7 @@ def get_speed_limit_internal(data):
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
-def get_nearby_hazards_internal(data):
+def get_nearby_hazards_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal hazards fetch for batch requests."""
     try:
         lat = data.get('lat', 51.5074)
