@@ -11,15 +11,22 @@ import requests
 import os
 from dotenv import load_dotenv
 import json
-import polyline
 import sqlite3
 from datetime import datetime
 import threading
 import math
 import time
-from functools import lru_cache, wraps
+from functools import wraps
 from collections import OrderedDict
 import logging
+from typing import List, Dict, Tuple
+
+# Optional imports with fallbacks
+try:
+    import polyline
+except ImportError:
+    polyline = None
+
 try:
     from flask_compress import Compress
 except ImportError:
@@ -43,15 +50,23 @@ app = Flask(__name__, static_folder='.')
 
 # Enable CORS for mobile compatibility
 # Restrict origins to prevent CSRF attacks
-ALLOWED_ORIGINS = [
-    "http://localhost:5000",
-    "http://localhost:3000",
-    "http://127.0.0.1:5000",
-    "http://127.0.0.1:3000",
-    os.getenv('ALLOWED_ORIGINS', '').split(',') if os.getenv('ALLOWED_ORIGINS') else []
-]
-# Flatten the list if env var was provided
-ALLOWED_ORIGINS = [origin.strip() for origins in ALLOWED_ORIGINS for origin in (origins if isinstance(origins, list) else [origins]) if origin]
+def _get_allowed_origins() -> List[str]:
+    """Get list of allowed CORS origins from config and environment."""
+    origins: List[str] = [
+        "http://localhost:5000",
+        "http://localhost:3000",
+        "http://127.0.0.1:5000",
+        "http://127.0.0.1:3000",
+    ]
+
+    # Add environment-configured origins
+    env_origins = os.getenv('ALLOWED_ORIGINS', '').strip()
+    if env_origins:
+        origins.extend([origin.strip() for origin in env_origins.split(',') if origin.strip()])
+
+    return origins
+
+ALLOWED_ORIGINS: List[str] = _get_allowed_origins()
 
 CORS(app, resources={
     r"/api/*": {
@@ -80,16 +95,16 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 class RateLimiter:
     """Simple in-memory rate limiter for API endpoints."""
-    def __init__(self, max_requests=100, window_seconds=60):
-        self.max_requests = max_requests
-        self.window_seconds = window_seconds
-        self.requests = {}  # {ip: [(timestamp, count)]}
-        self.lock = threading.Lock()
+    def __init__(self, max_requests: int = 100, window_seconds: int = 60) -> None:
+        self.max_requests: int = max_requests
+        self.window_seconds: int = window_seconds
+        self.requests: Dict[str, List[Tuple[float, int]]] = {}  # {ip: [(timestamp, count)]}
+        self.lock: threading.Lock = threading.Lock()
 
-    def is_allowed(self, ip):
+    def is_allowed(self, ip: str) -> bool:
         """Check if IP is allowed to make a request."""
         with self.lock:
-            now = time.time()
+            now: float = time.time()
             if ip not in self.requests:
                 self.requests[ip] = []
 
@@ -100,7 +115,7 @@ class RateLimiter:
             ]
 
             # Count total requests in window
-            total = sum(count for _, count in self.requests[ip])
+            total: int = sum(count for _, count in self.requests[ip])
 
             if total >= self.max_requests:
                 return False
@@ -1351,10 +1366,14 @@ def score_route_by_hazards(route_points, hazards):
         # Decode polyline to get route points
         try:
             if isinstance(route_points, str):
+                if not polyline:
+                    logger.warning("polyline module not available, cannot decode route points")
+                    return 0, 0
                 decoded_points = polyline.decode(route_points)
             else:
                 decoded_points = route_points
-        except:
+        except Exception as e:
+            logger.error(f"Error decoding polyline: {e}")
             return 0, 0
 
         # Check each hazard against route
@@ -3648,7 +3667,15 @@ def calculate_route():
                                 route_geometry = points
                             elif isinstance(points, list):
                                 # If it's a list of points, encode it
-                                route_geometry = polyline.encode([(p['lat'], p['lng']) for p in points])
+                                if polyline:
+                                    try:
+                                        route_geometry = polyline.encode([(p['lat'], p['lng']) for p in points])
+                                    except Exception as e:
+                                        logger.warning(f"Failed to encode polyline: {e}")
+                                        route_geometry = None
+                                else:
+                                    logger.warning("polyline module not available, cannot encode points")
+                                    route_geometry = None
                         elif 'points_encoded' in path and path['points_encoded']:
                             # Use the encoded points string directly
                             route_geometry = path.get('points', None)
