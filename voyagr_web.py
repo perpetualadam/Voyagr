@@ -4050,14 +4050,18 @@ def calculate_route():
             fallback_optimizer.record_failure('valhalla')
 
         # Fallback to OSRM (public service)
-        print(f"[OSRM] Trying fallback with ({start_lon},{start_lat}) to ({end_lon},{end_lat})")
-        osrm_url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}?alternatives=true"
+        logger.info(f"[OSRM] Trying fallback with ({start_lon},{start_lat}) to ({end_lon},{end_lat})")
+        osrm_url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}?alternatives=true&overview=full&steps=true"
         try:
             headers = {
                 'User-Agent': 'Voyagr-PWA/1.0',
                 'Accept': 'application/json'
             }
-            response = requests.get(osrm_url, timeout=10, headers=headers)
+            logger.debug(f"[OSRM] URL: {osrm_url}")
+            osrm_start = time.time()
+            response = requests.get(osrm_url, timeout=15, headers=headers)
+            osrm_elapsed = (time.time() - osrm_start) * 1000
+            logger.info(f"[OSRM] Response status: {response.status_code}, elapsed: {osrm_elapsed:.0f}ms")
 
             if response.status_code == 200:
                 route_data = response.json()
@@ -4157,15 +4161,26 @@ def calculate_route():
             fallback_optimizer.record_failure('osrm')
 
         # All routing engines failed - log summary
-        print(f"\n[ROUTING SUMMARY]")
-        print(f"  GraphHopper ({GRAPHHOPPER_URL}): {graphhopper_error}")
-        print(f"  Valhalla ({VALHALLA_URL}): {valhalla_error}")
-        print(f"  OSRM (fallback): Failed")
-        print(f"[ROUTING] All routing engines failed for route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+        logger.error(f"\n[ROUTING SUMMARY]")
+        logger.error(f"  GraphHopper ({GRAPHHOPPER_URL}): {graphhopper_error}")
+        logger.error(f"  Valhalla ({VALHALLA_URL}): {valhalla_error}")
+        logger.error(f"  OSRM (fallback): Failed")
+        logger.error(f"[ROUTING] All routing engines failed for route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+
+        # Provide diagnostic information
+        diagnostic_info = {
+            'graphhopper_url': GRAPHHOPPER_URL,
+            'valhalla_url': VALHALLA_URL,
+            'osrm_url': 'http://router.project-osrm.org',
+            'graphhopper_error': str(graphhopper_error),
+            'valhalla_error': str(valhalla_error),
+            'deployment_hint': 'If on Railway.app, routing engines may be unreachable. Try /api/test-routing-engines for diagnostics.'
+        }
 
         return jsonify({
             'success': False,
-            'error': f'All routing engines failed. GraphHopper: {graphhopper_error}, Valhalla: {valhalla_error}. Please check your internet connection or try again later.'
+            'error': f'All routing engines failed. GraphHopper: {graphhopper_error}, Valhalla: {valhalla_error}. Please check your internet connection or try again later.',
+            'diagnostic': diagnostic_info
         })
 
     except Exception as e:
