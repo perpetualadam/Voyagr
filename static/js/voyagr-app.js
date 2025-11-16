@@ -4422,7 +4422,7 @@ window.addEventListener('load', () => {
     console.log('[Voice] Initializing voice system');
     initVoiceRecognition();
     setupVoiceCommandProcessing();
-    initBottomSheet();
+    // Note: initBottomSheet() is already called from app.js
     initGeocodeCache();
 
     // Load all persistent settings from localStorage
