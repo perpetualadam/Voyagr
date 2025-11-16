@@ -748,13 +748,17 @@ class CostCalculator:
         else:
             fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
 
-        # Calculate toll cost
+        # Calculate toll cost - NO LONGER DISTANCE-BASED
+        # Tolls are now only charged if route passes through known toll roads
+        # Since we don't have route coordinates here, toll_cost is always 0
         if include_tolls:
-            toll_cost = calculate_toll_cost(distance_km, 'motorway')
+            toll_cost = calculate_toll_cost(distance_km, 'motorway', route_coords=None)
 
-        # Calculate CAZ cost
+        # Calculate CAZ cost - NO LONGER DISTANCE-BASED
+        # CAZ is now only charged if route passes through known CAZ zones
+        # Since we don't have route coordinates here, caz_cost is always 0
         if include_caz and not caz_exempt:
-            caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt)
+            caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt, route_coords=None)
 
         return {
             'fuel_cost': round(fuel_cost, 2),
@@ -1230,33 +1234,129 @@ def calculate_energy_cost(distance_km: float, energy_efficiency_kwh_per_100km: f
     energy_needed = (distance_km / 100) * energy_efficiency_kwh_per_100km
     return energy_needed * electricity_price_gbp_per_kwh
 
-def calculate_toll_cost(distance_km: float, route_type: str = 'motorway') -> float:
-    """Estimate toll cost based on distance and route type.
+def calculate_toll_cost(distance_km: float, route_type: str = 'motorway', route_coords: list = None) -> float:
+    """Calculate toll cost based on actual toll roads, not distance.
 
-    Rates are configurable via environment variables:
-    - TOLL_RATE_MOTORWAY (default: 0.15)
-    - TOLL_RATE_A_ROAD (default: 0.05)
-    - TOLL_RATE_LOCAL (default: 0.0)
+    IMPORTANT: Toll costs are NOT calculated based on distance anymore.
+    Only charges tolls if route passes through known UK toll roads:
+    - M6 Toll (£3.50)
+    - Dartford Crossing (£2.50)
+    - Severn Bridge (£6.70)
+    - Humber Bridge (£2.00)
+
+    Returns 0.0 by default (conservative approach) unless route_coords provided.
+
+    Args:
+        distance_km: Route distance (DEPRECATED - no longer used)
+        route_type: Type of route (DEPRECATED - no longer used)
+        route_coords: List of route coordinates to check for toll roads
+
+    Returns:
+        Toll cost in GBP (0 if no toll roads detected or no coordinates provided)
     """
-    rate = TOLL_RATES.get(route_type, TOLL_RATES.get('a_road', 0.05))
-    return distance_km * rate
+    # If no coordinates provided, don't charge tolls (conservative approach)
+    # This prevents false toll charges on non-toll routes
+    if not route_coords or len(route_coords) == 0:
+        return 0.0
 
-def calculate_caz_cost(distance_km: float, vehicle_type: str = 'petrol_diesel', is_exempt: bool = False) -> float:
-    """Calculate Congestion Charge Zone cost.
+    # Known UK toll roads with approximate locations
+    TOLL_ROADS = {
+        'M6 Toll': {'lat': 52.5, 'lon': -1.9, 'cost': 3.50, 'radius_km': 15},
+        'Dartford Crossing': {'lat': 51.45, 'lon': 0.2, 'cost': 2.50, 'radius_km': 10},
+        'Severn Bridge': {'lat': 51.4, 'lon': -2.6, 'cost': 6.70, 'radius_km': 15},
+        'Humber Bridge': {'lat': 53.7, 'lon': -0.4, 'cost': 2.00, 'radius_km': 10},
+    }
 
-    Rates are configurable via environment variables:
-    - CAZ_RATE_PETROL_DIESEL (default: 8.0)
-    - CAZ_RATE_ELECTRIC (default: 0.0)
-    - CAZ_RATE_HYBRID (default: 4.0)
-    - CAZ_ENTRY_FREQUENCY_KM (default: 50.0)
+    # Check if route passes through any known toll roads
+    total_toll = 0.0
+    tolls_charged = set()
+
+    for coord in route_coords:
+        if isinstance(coord, (list, tuple)) and len(coord) >= 2:
+            lat, lon = coord[0], coord[1]
+
+            for toll_name, toll_data in TOLL_ROADS.items():
+                if toll_name not in tolls_charged:
+                    # Simple distance check
+                    lat_diff = abs(lat - toll_data['lat'])
+                    lon_diff = abs(lon - toll_data['lon'])
+                    approx_distance = (lat_diff ** 2 + lon_diff ** 2) ** 0.5 * 111
+
+                    if approx_distance < toll_data['radius_km']:
+                        total_toll += toll_data['cost']
+                        tolls_charged.add(toll_name)
+
+    return round(total_toll, 2)
+
+def calculate_caz_cost(distance_km: float, vehicle_type: str = 'petrol_diesel', is_exempt: bool = False, route_coords: list = None) -> float:
+    """Calculate Congestion Charge Zone cost based on actual CAZ zones.
+
+    IMPORTANT: CAZ costs are NOT calculated based on distance anymore.
+    Only charges CAZ if route passes through known UK CAZ zones:
+    - London (£15.00/day)
+    - Birmingham (£8.00/day)
+    - Leeds (£10.00/day)
+    - Bristol (£9.00/day)
+    - Bath (£9.00/day)
+    - Derby (£8.00/day)
+    - Nottingham (£8.00/day)
+    - Portsmouth (£10.00/day)
+
+    Returns 0.0 by default (conservative approach) unless route_coords provided.
+
+    Args:
+        distance_km: Route distance (DEPRECATED - no longer used)
+        vehicle_type: Type of vehicle
+        is_exempt: Whether vehicle is CAZ exempt
+        route_coords: List of route coordinates to check for CAZ zones
+
+    Returns:
+        CAZ cost in GBP (0 if no CAZ zones detected, vehicle exempt, or no coordinates)
     """
     if is_exempt:
         return 0.0
 
-    # Calculate CAZ entries based on distance and frequency
-    caz_entries = max(1, int(distance_km / CAZ_ENTRY_FREQUENCY_KM))
-    rate = CAZ_RATES.get(vehicle_type, CAZ_RATES.get('petrol_diesel', 8.0))
-    return caz_entries * rate
+    # Electric vehicles are exempt from CAZ
+    if vehicle_type == 'electric':
+        return 0.0
+
+    # If no coordinates provided, don't charge CAZ (conservative approach)
+    # This prevents false CAZ charges on routes not passing through CAZ zones
+    if not route_coords or len(route_coords) == 0:
+        return 0.0
+
+    # Known UK CAZ zones with approximate locations and charges
+    CAZ_ZONES = {
+        'London': {'lat': 51.5, 'lon': -0.1, 'cost': 15.00, 'radius_km': 15},
+        'Birmingham': {'lat': 52.5, 'lon': -1.9, 'cost': 8.00, 'radius_km': 8},
+        'Leeds': {'lat': 53.8, 'lon': -1.5, 'cost': 10.00, 'radius_km': 8},
+        'Bristol': {'lat': 51.45, 'lon': -2.6, 'cost': 9.00, 'radius_km': 8},
+        'Bath': {'lat': 51.38, 'lon': -2.36, 'cost': 9.00, 'radius_km': 5},
+        'Derby': {'lat': 52.92, 'lon': -1.48, 'cost': 8.00, 'radius_km': 5},
+        'Nottingham': {'lat': 52.95, 'lon': -1.15, 'cost': 8.00, 'radius_km': 5},
+        'Portsmouth': {'lat': 50.82, 'lon': -1.09, 'cost': 10.00, 'radius_km': 5},
+    }
+
+    # Check if route passes through any known CAZ zones
+    total_caz = 0.0
+    zones_charged = set()
+
+    for coord in route_coords:
+        if isinstance(coord, (list, tuple)) and len(coord) >= 2:
+            lat, lon = coord[0], coord[1]
+
+            for zone_name, zone_data in CAZ_ZONES.items():
+                if zone_name not in zones_charged:
+                    # Simple distance check
+                    lat_diff = abs(lat - zone_data['lat'])
+                    lon_diff = abs(lon - zone_data['lon'])
+                    approx_distance = (lat_diff ** 2 + lon_diff ** 2) ** 0.5 * 111
+
+                    if approx_distance < zone_data['radius_km']:
+                        total_caz += zone_data['cost']
+                        zones_charged.add(zone_name)
+
+    return round(total_caz, 2)
 
 # Hazard avoidance functions
 
