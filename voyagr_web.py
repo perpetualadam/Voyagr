@@ -275,8 +275,6 @@ def validate_route_request(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     # Validate waypoints if provided (for multi-stop routes)
     waypoints: List[Any] = data.get('waypoints', [])
     if waypoints:
-        if not isinstance(waypoints, list):
-            return False, "Waypoints must be a list"
         if len(waypoints) > 25:
             return False, "Maximum 25 waypoints allowed (DoS prevention)"
         if len(waypoints) < 2:
@@ -841,8 +839,8 @@ class CostCalculator:
             }
         }
 
-    def cache_route_to_db(self, start_lat, start_lon, end_lat, end_lon, routing_mode,
-                         vehicle_type, route_data, source):
+    def cache_route_to_db(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str,
+                         vehicle_type: str, route_data: Dict[str, Any], source: str) -> bool:
         """Cache a route to the database for long-term storage and analytics."""
         try:
             conn = get_db_connection()
@@ -878,8 +876,8 @@ class CostCalculator:
             logger.error(f"[Cache] Error caching route to DB: {e}")
             return False
 
-    def get_cached_route_from_db(self, start_lat, start_lon, end_lat, end_lon,
-                                routing_mode, vehicle_type):
+    def get_cached_route_from_db(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float,
+                                routing_mode: str, vehicle_type: str) -> Optional[Dict[str, Any]]:
         """Retrieve a cached route from the database."""
         try:
             conn = get_db_connection()
@@ -893,7 +891,7 @@ class CostCalculator:
 
             result = cursor.fetchone()
             if result:
-                route_data_str, _access_count = result
+                route_data_str = result[0]
                 # Update access count
                 cursor.execute('''
                     UPDATE persistent_route_cache
@@ -955,8 +953,8 @@ class CostCalculator:
             logger.error(f"[Cache] Error getting cache statistics: {e}")
             return {}
 
-    def predict_cost(self, distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                    energy_efficiency, electricity_price, include_tolls, include_caz):
+    def predict_cost(self, distance_km: float, vehicle_type: str, fuel_efficiency: float, fuel_price: float,
+                    energy_efficiency: float, electricity_price: float, include_tolls: bool, include_caz: bool) -> Dict[str, Any]:
         """Predict cost for a route using historical data and ML-based estimation."""
         try:
             # Get historical average cost per km for similar routes
@@ -1009,7 +1007,7 @@ class CostCalculator:
                 'error': str(e)
             }
 
-    def optimize_route_cost(self, routes_data, vehicle_type, _fuel_efficiency, _fuel_price,
+    def optimize_route_cost(self, routes_data, vehicle_type, fuel_efficiency, fuel_price,
                            energy_efficiency, electricity_price):
         """Provide cost optimization suggestions for routes."""
         if not routes_data or len(routes_data) == 0:
@@ -1112,8 +1110,6 @@ class CostCalculator:
                 # Reduce TTL if route has tolls or CAZ
                 if toll_cost > 0 or caz_cost > 0:
                     ttl_multiplier *= 0.7  # 30% reduction
-
-                _ttl_seconds = int(base_ttl * ttl_multiplier)
 
                 # Insert alternative route
                 cursor.execute('''
@@ -3238,10 +3234,7 @@ def get_trip_analytics():
 def get_traffic_conditions():
     """Get real-time traffic conditions for a route"""
     try:
-        data = request.json
-        _start = data.get('start', '').strip()
-        _end = data.get('end', '').strip()
-
+        data = request.json or {}
         # Simulate traffic data (in production, integrate with real traffic API)
         # This would connect to services like Google Maps Traffic, HERE Traffic, or TomTom Traffic
 
@@ -3611,7 +3604,7 @@ def calculate_route():
         _hazards = {}
         if enable_hazard_avoidance:
             hazard_start = time.time()
-            _hazards = fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
+            fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
             logger.debug(f"[TIMING] Hazard fetch: {(time.time() - hazard_start)*1000:.0f}ms")
 
         # Try routing engines in order: GraphHopper, Valhalla, OSRM
@@ -4687,8 +4680,6 @@ def manage_favorites():
 def get_lane_guidance():
     """Get lane guidance for current location."""
     try:
-        _lat = float(request.args.get('lat', 51.5074))
-        _lon = float(request.args.get('lon', -0.1278))
         heading = float(request.args.get('heading', 0))
         next_maneuver = request.args.get('maneuver', 'straight')
 
@@ -4721,8 +4712,6 @@ def get_lane_guidance():
 def get_speed_warnings():
     """Get speed warning for current location and speed."""
     try:
-        _lat = float(request.args.get('lat', 51.5074))
-        _lon = float(request.args.get('lon', -0.1278))
         current_speed_mph = float(request.args.get('speed', 0))
         road_type = request.args.get('road_type', 'local')
 
@@ -4818,7 +4807,7 @@ def voice_command():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-def parse_voice_command_web(command: str, _lat: float, _lon: float) -> Dict[str, Any]:
+def parse_voice_command_web(command: str, lat: float, lon: float) -> Dict[str, Any]:
     """Parse voice command and return action to execute."""
     try:
         # Normalize command
@@ -5560,7 +5549,7 @@ def get_cache_statistics():
 def predict_cost():
     """Predict cost for a route using ML-based estimation."""
     try:
-        data = request.json
+        data = request.json or {}
         distance_km = float(data.get('distance_km', 0))
         vehicle_type = data.get('vehicle_type', 'petrol_diesel')
         fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
@@ -5586,7 +5575,7 @@ def predict_cost():
 def optimize_route_cost():
     """Get cost optimization suggestions for routes."""
     try:
-        data = request.json
+        data = request.json or {}
         routes = data.get('routes', [])
         vehicle_type = data.get('vehicle_type', 'petrol_diesel')
         fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
@@ -5668,7 +5657,7 @@ def parallel_routing_test():
     Compare performance, accuracy, and response times.
     """
     try:
-        data = request.json
+        data = request.json or {}
         start = data.get('start', '').strip()
         end = data.get('end', '').strip()
 
@@ -5788,7 +5777,7 @@ def routing_performance_report():
     Tests multiple routes and compares performance metrics.
     """
     try:
-        data = request.json
+        data = request.json or {}
         test_routes = data.get('test_routes', [
             {'start': '51.5074,-0.1278', 'end': '51.5174,-0.1278', 'name': 'Short (1km)'},
             {'start': '51.5074,-0.1278', 'end': '51.7074,-0.1278', 'name': 'Medium (20km)'},
@@ -5886,7 +5875,7 @@ def engine_comparison():
     Returns detailed performance metrics for each engine.
     """
     try:
-        data = request.json
+        data = request.json or {}
         start = data.get('start', '51.5074,-0.1278')
         end = data.get('end', '51.5174,-0.1278')
 
@@ -6017,7 +6006,7 @@ def batch_requests():
     }
     """
     try:
-        data = request.json
+        data = request.json or {}
         requests_list = data.get('requests', [])
 
         if not requests_list:
@@ -6068,8 +6057,6 @@ def batch_requests():
 def calculate_route_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal route calculation for batch requests."""
     try:
-        _start = data.get('start', '')
-        _end = data.get('end', '')
         # Call existing route calculation logic
         # This is a simplified version - integrate with actual route calculation
         return {'success': True, 'message': 'Route calculated'}
@@ -6079,8 +6066,6 @@ def calculate_route_internal(data: Dict[str, Any]) -> Dict[str, Any]:
 def get_weather_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal weather fetch for batch requests."""
     try:
-        _lat = data.get('lat', 51.5074)
-        _lon = data.get('lon', -0.1278)
         # Call existing weather logic
         return {'success': True, 'message': 'Weather fetched'}
     except Exception as e:
@@ -6089,8 +6074,6 @@ def get_weather_internal(data: Dict[str, Any]) -> Dict[str, Any]:
 def get_traffic_patterns_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal traffic patterns fetch for batch requests."""
     try:
-        _lat = data.get('lat', 51.5074)
-        _lon = data.get('lon', -0.1278)
         # Call existing traffic logic
         return {'success': True, 'message': 'Traffic patterns fetched'}
     except Exception as e:
@@ -6099,8 +6082,6 @@ def get_traffic_patterns_internal(data: Dict[str, Any]) -> Dict[str, Any]:
 def get_speed_limit_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal speed limit fetch for batch requests."""
     try:
-        _lat = data.get('lat', 51.5074)
-        _lon = data.get('lon', -0.1278)
         # Call existing speed limit logic
         return {'success': True, 'message': 'Speed limit fetched'}
     except Exception as e:
@@ -6109,9 +6090,6 @@ def get_speed_limit_internal(data: Dict[str, Any]) -> Dict[str, Any]:
 def get_nearby_hazards_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal hazards fetch for batch requests."""
     try:
-        _lat = data.get('lat', 51.5074)
-        _lon = data.get('lon', -0.1278)
-        _radius = data.get('radius', 5)
         # Call existing hazards logic
         return {'success': True, 'message': 'Hazards fetched'}
     except Exception as e:
