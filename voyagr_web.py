@@ -1476,7 +1476,12 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
             (south, north, west, east)
         )
         for lat, lon, camera_type, desc in cursor.fetchall():
-            if camera_type in hazards:
+            # CRITICAL FIX: Treat speed_camera as traffic_light_camera for hazard avoidance
+            # SCDB database contains speed cameras which should be avoided like traffic light cameras
+            if camera_type == 'speed_camera':
+                # Add to traffic_light_camera category for high-priority avoidance
+                hazards['traffic_light_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
+            elif camera_type in hazards:
                 hazards[camera_type].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
 
         # Fetch community reports
@@ -3860,10 +3865,12 @@ def calculate_route():
             return jsonify(cached_route)
 
         # Fetch hazards if hazard avoidance is enabled
+        hazards = {}
         if enable_hazard_avoidance:
             hazard_start = time.time()
-            fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
+            hazards = fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
             logger.debug(f"[TIMING] Hazard fetch: {(time.time() - hazard_start)*1000:.0f}ms")
+            logger.debug(f"[HAZARDS] Fetched hazards: {[(k, len(v)) for k, v in hazards.items() if v]}")
 
         # Try routing engines in order: GraphHopper, Valhalla, OSRM
         graphhopper_error = None
@@ -3957,6 +3964,13 @@ def calculate_route():
                         else:
                             route_type = f'Alternative {idx}'
 
+                        # Score route by hazards if hazard avoidance is enabled
+                        hazard_penalty = 0
+                        hazard_count = 0
+                        if enable_hazard_avoidance and hazards:
+                            hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
+                            logger.debug(f"[HAZARDS] Route {idx+1}: penalty={hazard_penalty:.0f}s, count={hazard_count}")
+
                         routes.append({
                             'id': idx + 1,
                             'name': route_type,
@@ -3965,7 +3979,9 @@ def calculate_route():
                             'fuel_cost': round(fuel_cost, 2),
                             'toll_cost': round(toll_cost, 2),
                             'caz_cost': round(caz_cost, 2),
-                            'geometry': route_geometry
+                            'geometry': route_geometry,
+                            'hazard_penalty_seconds': round(hazard_penalty, 0),
+                            'hazard_count': hazard_count
                         })
 
                     print(f"[GraphHopper] SUCCESS: {len(routes)} routes found")
@@ -4091,6 +4107,13 @@ def calculate_route():
                     toll_cost = costs['toll_cost']
                     caz_cost = costs['caz_cost']
 
+                    # Score route by hazards if hazard avoidance is enabled
+                    hazard_penalty = 0
+                    hazard_count = 0
+                    if enable_hazard_avoidance and hazards:
+                        hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
+                        logger.debug(f"[HAZARDS] Valhalla main route: penalty={hazard_penalty:.0f}s, count={hazard_count}")
+
                     routes.append({
                         'id': 1,
                         'name': 'Fastest',
@@ -4099,7 +4122,9 @@ def calculate_route():
                         'fuel_cost': round(fuel_cost, 2),
                         'toll_cost': round(toll_cost, 2),
                         'caz_cost': round(caz_cost, 2),
-                        'geometry': route_geometry
+                        'geometry': route_geometry,
+                        'hazard_penalty_seconds': round(hazard_penalty, 0),
+                        'hazard_count': hazard_count
                     })
 
                     # Alternative routes (if available)
@@ -4135,6 +4160,13 @@ def calculate_route():
                                 alt_toll_cost = alt_costs['toll_cost']
                                 alt_caz_cost = alt_costs['caz_cost']
 
+                                # Score alternative route by hazards if hazard avoidance is enabled
+                                alt_hazard_penalty = 0
+                                alt_hazard_count = 0
+                                if enable_hazard_avoidance and hazards:
+                                    alt_hazard_penalty, alt_hazard_count = score_route_by_hazards(alt_geometry, hazards)
+                                    logger.debug(f"[HAZARDS] Valhalla alt route {idx+1}: penalty={alt_hazard_penalty:.0f}s, count={alt_hazard_count}")
+
                                 route_names = ['Shortest', 'Balanced', 'Alternative']
                                 routes.append({
                                     'id': idx + 2,
@@ -4144,7 +4176,9 @@ def calculate_route():
                                     'fuel_cost': round(alt_fuel_cost, 2),
                                     'toll_cost': round(alt_toll_cost, 2),
                                     'caz_cost': round(alt_caz_cost, 2),
-                                    'geometry': alt_geometry
+                                    'geometry': alt_geometry,
+                                    'hazard_penalty_seconds': round(alt_hazard_penalty, 0),
+                                    'hazard_count': alt_hazard_count
                                 })
 
                     print(f"[Valhalla] SUCCESS: {len(routes)} routes found")
@@ -4272,6 +4306,13 @@ def calculate_route():
                         else:
                             route_type = f'Alternative {idx}'
 
+                        # Score route by hazards if hazard avoidance is enabled
+                        hazard_penalty = 0
+                        hazard_count = 0
+                        if enable_hazard_avoidance and hazards:
+                            hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
+                            logger.debug(f"[HAZARDS] OSRM route {idx+1}: penalty={hazard_penalty:.0f}s, count={hazard_count}")
+
                         routes.append({
                             'id': idx + 1,
                             'name': route_type,
@@ -4280,7 +4321,9 @@ def calculate_route():
                             'fuel_cost': round(fuel_cost, 2),
                             'toll_cost': round(toll_cost, 2),
                             'caz_cost': round(caz_cost, 2),
-                            'geometry': route_geometry
+                            'geometry': route_geometry,
+                            'hazard_penalty_seconds': round(hazard_penalty, 0),
+                            'hazard_count': hazard_count
                         })
 
                     print(f"[OSRM] SUCCESS: {len(routes)} routes found")
