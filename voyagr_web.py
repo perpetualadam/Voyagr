@@ -1499,6 +1499,69 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
         logger.error(f"Error fetching hazards: {e}")
         return {}
 
+def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    """
+    Get list of hazards that are on or near the route.
+    Returns hazards with their lat, lon, type, and description.
+    """
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        hazards_on_route = []
+
+        # Get hazard preferences
+        cursor.execute("SELECT hazard_type, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
+        preferences = {row[0]: {'threshold': row[1]} for row in cursor.fetchall()}
+        conn.close()
+
+        # Decode polyline to get route points
+        try:
+            if isinstance(route_points, str):
+                if not polyline:
+                    return []
+                decoded_points = polyline.decode(route_points)
+            else:
+                decoded_points = route_points
+        except Exception as e:
+            logger.error(f"Error decoding polyline: {e}")
+            return []
+
+        # Check each hazard against route
+        for hazard_type, hazard_list in hazards.items():
+            if hazard_type not in preferences:
+                continue
+
+            if len(hazard_list) == 0:
+                continue
+
+            threshold = preferences[hazard_type]['threshold']
+
+            for hazard in hazard_list:
+                hazard_lat = hazard.get('lat')
+                hazard_lon = hazard.get('lon')
+
+                # Find minimum distance to route
+                min_distance = float('inf')
+                for point_lat, point_lon in decoded_points:
+                    distance = get_distance_between_points(hazard_lat, hazard_lon, point_lat, point_lon)
+                    min_distance = min(min_distance, distance)
+
+                # If hazard is within threshold, add to list
+                if min_distance <= threshold:
+                    hazards_on_route.append({
+                        'lat': hazard_lat,
+                        'lon': hazard_lon,
+                        'type': hazard_type,
+                        'description': hazard.get('description', 'Hazard detected'),
+                        'distance': round(min_distance, 0)
+                    })
+
+        return hazards_on_route
+    except Exception as e:
+        logger.error(f"Error getting hazards on route: {e}")
+        return []
+
 def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dict[str, List[Dict[str, Any]]]) -> Tuple[float, int]:
     """
     Calculate hazard score for a route based on proximity to hazards.
@@ -4005,9 +4068,11 @@ def calculate_route():
                         # Score route by hazards if hazard avoidance is enabled
                         hazard_penalty = 0
                         hazard_count = 0
+                        hazards_list = []
                         if enable_hazard_avoidance and hazards:
                             hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
-                            logger.debug(f"[HAZARDS] Route {idx+1}: penalty={hazard_penalty:.0f}s, count={hazard_count}")
+                            hazards_list = get_hazards_on_route(route_geometry, hazards)
+                            logger.debug(f"[HAZARDS] Route {idx+1}: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
 
                         routes.append({
                             'id': idx + 1,
@@ -4019,7 +4084,8 @@ def calculate_route():
                             'caz_cost': round(caz_cost, 2),
                             'geometry': route_geometry,
                             'hazard_penalty_seconds': round(hazard_penalty, 0),
-                            'hazard_count': hazard_count
+                            'hazard_count': hazard_count,
+                            'hazards': hazards_list
                         })
 
                     print(f"[GraphHopper] SUCCESS: {len(routes)} routes found")
@@ -4148,9 +4214,11 @@ def calculate_route():
                     # Score route by hazards if hazard avoidance is enabled
                     hazard_penalty = 0
                     hazard_count = 0
+                    hazards_list = []
                     if enable_hazard_avoidance and hazards:
                         hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
-                        logger.debug(f"[HAZARDS] Valhalla main route: penalty={hazard_penalty:.0f}s, count={hazard_count}")
+                        hazards_list = get_hazards_on_route(route_geometry, hazards)
+                        logger.debug(f"[HAZARDS] Valhalla main route: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
 
                     routes.append({
                         'id': 1,
@@ -4162,7 +4230,8 @@ def calculate_route():
                         'caz_cost': round(caz_cost, 2),
                         'geometry': route_geometry,
                         'hazard_penalty_seconds': round(hazard_penalty, 0),
-                        'hazard_count': hazard_count
+                        'hazard_count': hazard_count,
+                        'hazards': hazards_list
                     })
 
                     # Alternative routes (if available)
@@ -4201,9 +4270,11 @@ def calculate_route():
                                 # Score alternative route by hazards if hazard avoidance is enabled
                                 alt_hazard_penalty = 0
                                 alt_hazard_count = 0
+                                alt_hazards_list = []
                                 if enable_hazard_avoidance and hazards:
                                     alt_hazard_penalty, alt_hazard_count = score_route_by_hazards(alt_geometry, hazards)
-                                    logger.debug(f"[HAZARDS] Valhalla alt route {idx+1}: penalty={alt_hazard_penalty:.0f}s, count={alt_hazard_count}")
+                                    alt_hazards_list = get_hazards_on_route(alt_geometry, hazards)
+                                    logger.debug(f"[HAZARDS] Valhalla alt route {idx+1}: penalty={alt_hazard_penalty:.0f}s, count={alt_hazard_count}, hazards_list={len(alt_hazards_list)}")
 
                                 route_names = ['Shortest', 'Balanced', 'Alternative']
                                 routes.append({
@@ -4216,7 +4287,8 @@ def calculate_route():
                                     'caz_cost': round(alt_caz_cost, 2),
                                     'geometry': alt_geometry,
                                     'hazard_penalty_seconds': round(alt_hazard_penalty, 0),
-                                    'hazard_count': alt_hazard_count
+                                    'hazard_count': alt_hazard_count,
+                                    'hazards': alt_hazards_list
                                 })
 
                     print(f"[Valhalla] SUCCESS: {len(routes)} routes found")

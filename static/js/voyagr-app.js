@@ -2028,6 +2028,11 @@ async function calculateRoute() {
                     destination: end  // Store destination for automatic rerouting
                 };
 
+                // Display hazard markers if hazards are present
+                if (data.routes && data.routes.length > 0 && data.routes[0].hazards) {
+                    displayHazardMarkers(data.routes[0].hazards);
+                }
+
                 // Show route preview instead of auto-starting navigation
                 setTimeout(() => {
                     showRoutePreview(data);
@@ -2045,7 +2050,8 @@ async function calculateRoute() {
                         toll_cost: route.toll_cost,
                         caz_cost: route.caz_cost,
                         polyline: decodePolyline(route.geometry || ''),
-                        geometry: route.geometry
+                        geometry: route.geometry,
+                        hazards: route.hazards || []
                     }));
                     console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}`);
                 } else {
@@ -2096,7 +2102,58 @@ async function calculateRoute() {
     })
     .catch(error => {
         showStatus('Error: ' + error.message, 'error');
+        console.error('[Route] Fetch error:', error);
     });
+}
+
+/**
+ * Display hazard markers on the map
+ * @param {Array} hazards - Array of hazard objects with lat, lon, type, description
+ */
+function displayHazardMarkers(hazards) {
+    if (!hazards || hazards.length === 0) {
+        console.log('[Hazards] No hazards to display');
+        return;
+    }
+
+    // Clear existing hazard markers
+    if (window.hazardMarkers) {
+        window.hazardMarkers.forEach(marker => map.removeLayer(marker));
+    }
+    window.hazardMarkers = [];
+
+    // Hazard type to emoji mapping
+    const hazardEmojis = {
+        'traffic_light_camera': '🚨',
+        'speed_camera': '📷',
+        'police': '🚔',
+        'roadworks': '🚧',
+        'accident': '⚠️',
+        'railway_crossing': '🚂',
+        'pothole': '🕳️',
+        'debris': '🪨'
+    };
+
+    // Display each hazard
+    hazards.forEach(hazard => {
+        const emoji = hazardEmojis[hazard.type] || '⚠️';
+        const color = hazard.type === 'traffic_light_camera' ? '#FF0000' : '#FFA500';
+
+        const marker = L.circleMarker([hazard.lat, hazard.lon], {
+            radius: 6,
+            fillColor: color,
+            color: '#000',
+            weight: 2,
+            opacity: 1,
+            fillOpacity: 0.8
+        })
+        .bindPopup(`${emoji} ${hazard.type.replace(/_/g, ' ').toUpperCase()}<br>${hazard.description || 'Hazard detected'}`)
+        .addTo(map);
+
+        window.hazardMarkers.push(marker);
+    });
+
+    console.log(`[Hazards] Displayed ${window.hazardMarkers.length} hazard markers on map`);
 }
 
 /**
