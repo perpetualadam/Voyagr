@@ -26,6 +26,8 @@ const currencySymbols = {
  * @function convertDistance
  * @param {*} km - Parameter description
  * @returns {*} Return value description
+ */
+ */
 function convertDistance(km) {
     if (distanceUnit === 'mi') {
         return (km * 0.621371).toFixed(2);
@@ -37,6 +39,8 @@ function convertDistance(km) {
  * getDistanceUnit function
  * @function getDistanceUnit
  * @returns {*} Return value description
+ */
+ */
 function getDistanceUnit() {
     return distanceUnit === 'mi' ? 'mi' : 'km';
 }
@@ -46,6 +50,8 @@ function getDistanceUnit() {
  * @function convertSpeed
  * @param {*} kmh - Parameter description
  * @returns {*} Return value description
+ */
+ */
 function convertSpeed(kmh) {
     if (speedUnit === 'mph') {
         return (kmh * 0.621371).toFixed(1);
@@ -57,6 +63,7 @@ function convertSpeed(kmh) {
  * getSpeedUnit function
  * @function getSpeedUnit
  * @returns {*} Return value description
+ */
 function getSpeedUnit() {
     return speedUnit === 'mph' ? 'mph' : 'km/h';
 }
@@ -66,6 +73,7 @@ function getSpeedUnit() {
  * @function convertTemperature
  * @param {*} celsius - Parameter description
  * @returns {*} Return value description
+ */
 function convertTemperature(celsius) {
     if (temperatureUnit === 'fahrenheit') {
         return ((celsius * 9/5) + 32).toFixed(1);
@@ -77,6 +85,7 @@ function convertTemperature(celsius) {
  * getTemperatureUnit function
  * @function getTemperatureUnit
  * @returns {*} Return value description
+ */
 function getTemperatureUnit() {
     return temperatureUnit === 'fahrenheit' ? '°F' : '°C';
 }
@@ -85,6 +94,7 @@ function getTemperatureUnit() {
  * getCurrencySymbol function
  * @function getCurrencySymbol
  * @returns {*} Return value description
+ */
 function getCurrencySymbol() {
     return currencySymbols[currencyUnit] || '£';
 }
@@ -94,6 +104,7 @@ function getCurrencySymbol() {
  * @param {*} cost - Parameter description
  * @param {*} costType - Parameter description
  * @returns {*} Return value description
+ */
 function adjustCostForUnits(cost, costType = 'fuel') {
     if (distanceUnit === 'mi') {
         // For imperial units, costs need to be adjusted
@@ -109,6 +120,7 @@ function adjustCostForUnits(cost, costType = 'fuel') {
  * @function getFuelEfficiencyInUnits
  * @param {*} liters_per_100km - Parameter description
  * @returns {*} Return value description
+ */
 function getFuelEfficiencyInUnits(liters_per_100km) {
     if (distanceUnit === 'mi') {
         // Convert L/100km to MPG (miles per gallon)
@@ -122,6 +134,7 @@ function getFuelEfficiencyInUnits(liters_per_100km) {
  * getFuelEfficiencyLabel function
  * @function getFuelEfficiencyLabel
  * @returns {*} Return value description
+ */
 function getFuelEfficiencyLabel() {
     return distanceUnit === 'mi' ? 'MPG' : 'L/100km';
 }
@@ -133,6 +146,7 @@ let currentTheme = localStorage.getItem('ui_theme') || 'light';
  * initializeDarkMode function
  * @function initializeDarkMode
  * @returns {*} Return value description
+ */
 function initializeDarkMode() {
     const savedTheme = localStorage.getItem('ui_theme') || 'light';
     currentTheme = savedTheme;
@@ -144,6 +158,7 @@ function initializeDarkMode() {
  * @function applyTheme
  * @param {*} theme - Parameter description
  * @returns {*} Return value description
+ */
 function applyTheme(theme) {
     const body = document.body;
 
@@ -173,6 +188,7 @@ function applyTheme(theme) {
  * toggleDarkMode function
  * @function toggleDarkMode
  * @returns {*} Return value description
+ */
 function toggleDarkMode() {
     const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
     applyTheme(newTheme);
@@ -183,6 +199,7 @@ function toggleDarkMode() {
  * @function setTheme
  * @param {*} theme - Parameter description
  * @returns {*} Return value description
+ */
 function setTheme(theme) {
     applyTheme(theme);
     updateThemeButtons();  // Update button states to show which theme is active
@@ -203,6 +220,7 @@ if (window.matchMedia) {
  * updateThemeButtons function
  * @function updateThemeButtons
  * @returns {*} Return value description
+ */
 function updateThemeButtons() {
     const lightBtn = document.getElementById('themeLight');
     const darkBtn = document.getElementById('themeDark');
@@ -231,6 +249,7 @@ function updateThemeButtons() {
  * @function switchTab
  * @param {*} tab - Parameter description
  * @returns {*} Return value description
+ */
 function switchTab(tab) {
     const navigationContent = document.querySelector('.bottom-sheet-content > div:not(#settingsTab):not(#tripHistoryTab):not(#routeComparisonTab):not(#routeSharingTab):not(#routeAnalyticsTab):not(#savedRoutesTab)');
     const settingsTab = document.getElementById('settingsTab');
@@ -294,6 +313,7 @@ function switchTab(tab) {
  * loadUnitPreferences function
  * @function loadUnitPreferences
  * @returns {*} Return value description
+ */
 function loadUnitPreferences() {
     document.getElementById('distanceUnit').value = distanceUnit;
     document.getElementById('currencyUnit').value = currencyUnit;
@@ -306,6 +326,7 @@ function loadUnitPreferences() {
  * updateDistanceUnit function
  * @function updateDistanceUnit
  * @returns {*} Return value description
+ */
 function updateDistanceUnit() {
     const newUnit = document.getElementById('distanceUnit').value;
     distanceUnit = newUnit;
@@ -321,6 +342,7 @@ function updateDistanceUnit() {
  * updateCurrencyUnit function
  * @function updateCurrencyUnit
  * @returns {*} Return value description
+ */
 function updateCurrencyUnit() {
     const newUnit = document.getElementById('currencyUnit').value;
     currencyUnit = newUnit;
@@ -336,6 +358,7 @@ function updateCurrencyUnit() {
  * updateSpeedUnit function
  * @function updateSpeedUnit
  * @returns {*} Return value description
+ */
 function updateSpeedUnit() {
     const newUnit = document.getElementById('speedUnit').value;
     speedUnit = newUnit;
@@ -351,6 +374,7 @@ function updateSpeedUnit() {
  * updateTemperatureUnit function
  * @function updateTemperatureUnit
  * @returns {*} Return value description
+ */
 function updateTemperatureUnit() {
     const newUnit = document.getElementById('temperatureUnit').value;
     temperatureUnit = newUnit;
@@ -366,6 +390,7 @@ function updateTemperatureUnit() {
  * saveUnitSettingsToBackend function
  * @function saveUnitSettingsToBackend
  * @returns {*} Return value description
+ */
 function saveUnitSettingsToBackend() {
     fetch('/api/app-settings', {
         method: 'POST',
@@ -385,6 +410,7 @@ function saveUnitSettingsToBackend() {
  * saveAllSettings function
  * @function saveAllSettings
  * @returns {*} Return value description
+ */
 function saveAllSettings() {
     const allSettings = {
         // Unit preferences
@@ -441,6 +467,7 @@ function saveAllSettings() {
  * loadAllSettings function
  * @function loadAllSettings
  * @returns {*} Return value description
+ */
 function loadAllSettings() {
     try {
         const saved = localStorage.getItem('voyagr_all_settings');
@@ -520,6 +547,7 @@ function loadAllSettings() {
  * applySettingsToUI function
  * @function applySettingsToUI
  * @returns {*} Return value description
+ */
 function applySettingsToUI() {
     try {
         // Apply unit preferences
@@ -682,6 +710,7 @@ function applySettingsToUI() {
  * resetAllSettings function
  * @function resetAllSettings
  * @returns {*} Return value description
+ */
 function resetAllSettings() {
     if (confirm('Are you sure you want to reset all settings to defaults?')) {
         // Clear all settings from localStorage
@@ -716,6 +745,7 @@ function resetAllSettings() {
  * exportSettings function
  * @function exportSettings
  * @returns {*} Return value description
+ */
 function exportSettings() {
     const settings = localStorage.getItem('voyagr_all_settings');
     if (settings) {
@@ -736,6 +766,7 @@ function exportSettings() {
  * importSettings function
  * @function importSettings
  * @returns {*} Return value description
+ */
 function importSettings() {
     const input = document.createElement('input');
     input.type = 'file';
@@ -767,6 +798,7 @@ function importSettings() {
  * updateAllDistanceDisplays function
  * @function updateAllDistanceDisplays
  * @returns {*} Return value description
+ */
 function updateAllDistanceDisplays() {
     const distanceElement = document.getElementById('distance');
     if (distanceElement && distanceElement.textContent !== '-') {
@@ -780,6 +812,7 @@ function updateAllDistanceDisplays() {
  * updateAllCostDisplays function
  * @function updateAllCostDisplays
  * @returns {*} Return value description
+ */
 function updateAllCostDisplays() {
     const fuelCostEl = document.getElementById('fuelCost');
     const tollCostEl = document.getElementById('tollCost');
@@ -802,6 +835,7 @@ function updateAllCostDisplays() {
  * updateAllSpeedDisplays function
  * @function updateAllSpeedDisplays
  * @returns {*} Return value description
+ */
 function updateAllSpeedDisplays() {
     // This will be called when speed updates occur
     console.log('[Units] Speed unit updated to', speedUnit);
@@ -812,6 +846,7 @@ function updateAllSpeedDisplays() {
  * updateAllTemperatureDisplays function
  * @function updateAllTemperatureDisplays
  * @returns {*} Return value description
+ */
 function updateAllTemperatureDisplays() {
     // This will be called when weather updates occur
     console.log('[Units] Temperature unit updated to', temperatureUnit);
@@ -841,6 +876,7 @@ async function loadTripHistory() {
  * @function displayTripHistory
  * @param {*} trips - Parameter description
  * @returns {*} Return value description
+ */
 function displayTripHistory(trips) {
     const listContainer = document.getElementById('tripHistoryList');
 
@@ -943,6 +979,7 @@ let routePreference = 'fastest';
  * @function setRoutePreference
  * @param {*} preference - Parameter description
  * @returns {*} Return value description
+ */
 function setRoutePreference(preference) {
     routePreference = preference;
 
@@ -963,6 +1000,7 @@ function setRoutePreference(preference) {
  * sortRoutesByPreference function
  * @function sortRoutesByPreference
  * @returns {*} Return value description
+ */
 function sortRoutesByPreference() {
     if (!routeOptions || routeOptions.length === 0) return;
 
@@ -988,6 +1026,7 @@ function sortRoutesByPreference() {
  * displayRouteComparison function
  * @function displayRouteComparison
  * @returns {*} Return value description
+ */
 function displayRouteComparison() {
     if (!routeOptions || routeOptions.length === 0) {
         document.getElementById('routeComparisonList').innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">Calculate a route to see options</div>';
@@ -1036,6 +1075,7 @@ function displayRouteComparison() {
  * @function selectRoute
  * @param {*} index - Parameter description
  * @returns {*} Return value description
+ */
 function selectRoute(index) {
     selectedRouteIndex = index;
     displayRouteComparison();
@@ -1045,6 +1085,7 @@ function selectRoute(index) {
  * @function useRoute
  * @param {*} index - Parameter description
  * @returns {*} Return value description
+ */
 function useRoute(index) {
     const route = routeOptions[index];
     if (!route) return;
@@ -1115,6 +1156,7 @@ function useRoute(index) {
  * prepareRouteSharing function
  * @function prepareRouteSharing
  * @returns {*} Return value description
+ */
 function prepareRouteSharing() {
     if (!window.lastCalculatedRoute) {
         showStatus('No route calculated yet', 'error');
@@ -1153,6 +1195,7 @@ function prepareRouteSharing() {
  * generateShareLink function
  * @function generateShareLink
  * @returns {*} Return value description
+ */
 function generateShareLink() {
     if (!window.lastCalculatedRoute) {
         showStatus('No route calculated yet', 'error');
@@ -1191,6 +1234,7 @@ function generateShareLink() {
  * copyShareLink function
  * @function copyShareLink
  * @returns {*} Return value description
+ */
 function copyShareLink() {
     const shareLink = document.getElementById('shareLink');
     shareLink.select();
@@ -1202,6 +1246,7 @@ function copyShareLink() {
  * generateQRCode function
  * @function generateQRCode
  * @returns {*} Return value description
+ */
 function generateQRCode() {
     if (!window.lastCalculatedRoute) {
         showStatus('No route calculated yet', 'error');
@@ -1252,6 +1297,7 @@ function generateQRCode() {
  * downloadQRCode function
  * @function downloadQRCode
  * @returns {*} Return value description
+ */
 function downloadQRCode() {
     if (!window.qrImageUrl) {
         showStatus('Generate QR code first', 'error');
@@ -1270,6 +1316,7 @@ function downloadQRCode() {
  * shareViaWhatsApp function
  * @function shareViaWhatsApp
  * @returns {*} Return value description
+ */
 function shareViaWhatsApp() {
     if (!window.lastCalculatedRoute) {
         showStatus('No route calculated yet', 'error');
@@ -1294,6 +1341,7 @@ function shareViaWhatsApp() {
  * shareViaEmail function
  * @function shareViaEmail
  * @returns {*} Return value description
+ */
 function shareViaEmail() {
     if (!window.lastCalculatedRoute) {
         showStatus('No route calculated yet', 'error');
@@ -1320,6 +1368,7 @@ function shareViaEmail() {
  * loadRouteAnalytics function
  * @function loadRouteAnalytics
  * @returns {*} Return value description
+ */
 function loadRouteAnalytics() {
     fetch('/api/trip-analytics')
         .then(response => response.json())
@@ -1340,6 +1389,7 @@ function loadRouteAnalytics() {
  * @function displayAnalytics
  * @param {*} data - Parameter description
  * @returns {*} Return value description
+ */
 function displayAnalytics(data) {
     const symbol = getCurrencySymbol();
     const distUnit = getDistanceUnit();
@@ -1384,6 +1434,7 @@ function displayAnalytics(data) {
  * saveRoutePreferences function
  * @function saveRoutePreferences
  * @returns {*} Return value description
+ */
 function saveRoutePreferences() {
     const preferences = {
         avoidHighways: document.getElementById('avoidHighways').checked,
@@ -1405,6 +1456,7 @@ function saveRoutePreferences() {
  * loadRoutePreferences function
  * @function loadRoutePreferences
  * @returns {*} Return value description
+ */
 function loadRoutePreferences() {
     const saved = localStorage.getItem('routePreferences');
     if (saved) {
@@ -1425,6 +1477,7 @@ function loadRoutePreferences() {
  * updateDetourLabel function
  * @function updateDetourLabel
  * @returns {*} Return value description
+ */
 function updateDetourLabel() {
     const value = document.getElementById('maxDetour').value;
     document.getElementById('detourLabel').textContent = value + '%';
@@ -1435,6 +1488,7 @@ function updateDetourLabel() {
  * getRoutePreferences function
  * @function getRoutePreferences
  * @returns {*} Return value description
+ */
 function getRoutePreferences() {
     const saved = localStorage.getItem('routePreferences');
     if (saved) {
@@ -1456,6 +1510,7 @@ function getRoutePreferences() {
  * recalculateRouteWithPreferences function
  * @function recalculateRouteWithPreferences
  * @returns {*} Return value description
+ */
 function recalculateRouteWithPreferences() {
     // Check if there's an active route to recalculate
     if (!window.lastCalculatedRoute || !window.lastCalculatedRoute.destination) {
@@ -1483,6 +1538,7 @@ function recalculateRouteWithPreferences() {
  * saveCurrentRoute function
  * @function saveCurrentRoute
  * @returns {*} Return value description
+ */
 function saveCurrentRoute() {
     if (!window.lastCalculatedRoute) {
         showStatus('No route calculated yet', 'error');
@@ -1527,6 +1583,7 @@ function saveCurrentRoute() {
  * loadSavedRoutes function
  * @function loadSavedRoutes
  * @returns {*} Return value description
+ */
 function loadSavedRoutes() {
     const savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
     const savedRoutesList = document.getElementById('savedRoutesList');
@@ -1560,6 +1617,7 @@ function loadSavedRoutes() {
  * @function useSavedRoute
  * @param {*} routeId - Parameter description
  * @returns {*} Return value description
+ */
 function useSavedRoute(routeId) {
     const savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
     const route = savedRoutes.find(r => r.id === routeId);
@@ -1584,6 +1642,7 @@ function useSavedRoute(routeId) {
  * @function deleteSavedRoute
  * @param {*} routeId - Parameter description
  * @returns {*} Return value description
+ */
 function deleteSavedRoute(routeId) {
     if (confirm('Delete this saved route?')) {
         let savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
@@ -1599,6 +1658,7 @@ function deleteSavedRoute(routeId) {
  * updateTrafficConditions function
  * @function updateTrafficConditions
  * @returns {*} Return value description
+ */
 function updateTrafficConditions() {
     if (!window.lastCalculatedRoute) {
         showStatus('No route calculated yet', 'error');
@@ -1637,6 +1697,7 @@ function updateTrafficConditions() {
  * @function displayTrafficUpdate
  * @param {*} data - Parameter description
  * @returns {*} Return value description
+ */
 function displayTrafficUpdate(data) {
     const symbol = getCurrencySymbol();
     const distUnit = getDistanceUnit();
@@ -1686,6 +1747,7 @@ function displayTrafficUpdate(data) {
  * startTrafficMonitoring function
  * @function startTrafficMonitoring
  * @returns {*} Return value description
+ */
 function startTrafficMonitoring() {
     if (window.trafficMonitoringInterval) {
         clearInterval(window.trafficMonitoringInterval);
@@ -1704,6 +1766,7 @@ function startTrafficMonitoring() {
  * stopTrafficMonitoring function
  * @function stopTrafficMonitoring
  * @returns {*} Return value description
+ */
 function stopTrafficMonitoring() {
     if (window.trafficMonitoringInterval) {
         clearInterval(window.trafficMonitoringInterval);
@@ -1750,6 +1813,7 @@ map.on('click', (e) => {
  * @function decodePolyline
  * @param {*} encoded - Parameter description
  * @returns {*} Return value description
+ */
 function decodePolyline(encoded) {
     if (!encoded) return [];
     const inv = 1.0 / 1e5;
@@ -1781,6 +1845,7 @@ function decodePolyline(encoded) {
  * @param {*} message - Parameter description
  * @param {*} type - Parameter description
  * @returns {*} Return value description
+ */
 function showStatus(message, type) {
     const status = document.getElementById('status');
     status.textContent = message;
@@ -1996,6 +2061,7 @@ async function calculateRoute() {
  * startNavigation function
  * @function startNavigation
  * @returns {*} Return value description
+ */
 function startNavigation() {
     if (!window.lastCalculatedRoute) {
         showStatus('Please calculate a route first', 'error');
@@ -2015,6 +2081,7 @@ function startNavigation() {
  * @function showRoutePreview
  * @param {*} routeData - Parameter description
  * @returns {*} Return value description
+ */
 function showRoutePreview(routeData) {
     if (!routeData) {
         showStatus('No route data available', 'error');
@@ -2083,6 +2150,7 @@ function showRoutePreview(routeData) {
  * showAlternativeRoutesInPreview function
  * @function showAlternativeRoutesInPreview
  * @returns {*} Return value description
+ */
 function showAlternativeRoutesInPreview() {
     const container = document.getElementById('previewAlternativeRoutesList');
     const parentContainer = document.getElementById('previewAlternativeRoutesContainer');
@@ -2223,6 +2291,7 @@ async function showRouteComparison() {
  * overviewRoute function
  * @function overviewRoute
  * @returns {*} Return value description
+ */
 function overviewRoute() {
     if (!routePath || routePath.length === 0) {
         showStatus('No route to overview', 'error');
@@ -2261,6 +2330,7 @@ function overviewRoute() {
  * startNavigationFromPreview function
  * @function startNavigationFromPreview
  * @returns {*} Return value description
+ */
 function startNavigationFromPreview() {
     if (!window.lastCalculatedRoute) {
         showStatus('No route available', 'error');
@@ -2291,6 +2361,7 @@ let parkingDrivingRoute = null;
  * saveParkingPreferences function
  * @function saveParkingPreferences
  * @returns {*} Return value description
+ */
 function saveParkingPreferences() {
     const prefs = {
         maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance').value,
@@ -2306,6 +2377,7 @@ function saveParkingPreferences() {
  * loadParkingPreferences function
  * @function loadParkingPreferences
  * @returns {*} Return value description
+ */
 function loadParkingPreferences() {
     try {
         const saved = localStorage.getItem('parkingPreferences');
@@ -2325,6 +2397,7 @@ function loadParkingPreferences() {
  * saveVoicePreferences function
  * @function saveVoicePreferences
  * @returns {*} Return value description
+ */
 function saveVoicePreferences() {
     const prefs = {
         turnDistance1: parseInt(document.getElementById('voiceTurnDistance1').value),
@@ -2351,6 +2424,7 @@ function saveVoicePreferences() {
  * loadVoicePreferences function
  * @function loadVoicePreferences
  * @returns {*} Return value description
+ */
 function loadVoicePreferences() {
     try {
         const saved = localStorage.getItem('voicePreferences');
@@ -2403,6 +2477,7 @@ function loadVoicePreferences() {
  * toggleVoiceAnnouncements function
  * @function toggleVoiceAnnouncements
  * @returns {*} Return value description
+ */
 function toggleVoiceAnnouncements() {
     const button = document.getElementById('voiceAnnouncementsEnabled');
 
@@ -2494,6 +2569,7 @@ async function findParkingNearDestination() {
  * @param {*} parkingList - Parameter description
  * @param {*} destinationCoords - Parameter description
  * @returns {*} Return value description
+ */
 function displayParkingOptions(parkingList, destinationCoords) {
     // Clear previous markers
     parkingMarkers.forEach(marker => map.removeLayer(marker));
@@ -2628,6 +2704,7 @@ async function selectParking(parking, destinationCoords) {
  * @param {*} parking - Parameter description
  * @param {*} destination - Parameter description
  * @returns {*} Return value description
+ */
 function displayParkingRoutes(drivingData, walkingData, parking, destination) {
     // Remove previous parking routes
     if (parkingDrivingRoute) map.removeLayer(parkingDrivingRoute);
@@ -2670,6 +2747,7 @@ function displayParkingRoutes(drivingData, walkingData, parking, destination) {
  * @param {*} walkingData - Parameter description
  * @param {*} parking - Parameter description
  * @returns {*} Return value description
+ */
 function updateParkingPreview(drivingData, walkingData, parking) {
     const drivingDist = drivingData.distance_km || 0;
     const drivingTime = drivingData.duration_minutes || 0;
@@ -2704,6 +2782,7 @@ function updateParkingPreview(drivingData, walkingData, parking) {
  * clearParkingSelection function
  * @function clearParkingSelection
  * @returns {*} Return value description
+ */
 function clearParkingSelection() {
     selectedParking = null;
     if (parkingDrivingRoute) map.removeLayer(parkingDrivingRoute);
@@ -2726,6 +2805,7 @@ function clearParkingSelection() {
  * clearForm function
  * @function clearForm
  * @returns {*} Return value description
+ */
 function clearForm() {
     document.getElementById('start').value = '';
     document.getElementById('end').value = '';
@@ -2754,6 +2834,7 @@ function clearForm() {
  * showSearchHistory function
  * @function showSearchHistory
  * @returns {*} Return value description
+ */
 function showSearchHistory() {
     fetch('/api/search-history')
         .then(response => response.json())
@@ -2791,6 +2872,7 @@ function showSearchHistory() {
  * @param {*} lat - Parameter description
  * @param {*} lon - Parameter description
  * @returns {*} Return value description
+ */
 function addToSearchHistory(query, resultName, lat, lon) {
     fetch('/api/search-history', {
         method: 'POST',
@@ -2805,6 +2887,7 @@ function addToSearchHistory(query, resultName, lat, lon) {
  * loadFavorites function
  * @function loadFavorites
  * @returns {*} Return value description
+ */
 function loadFavorites() {
     fetch('/api/favorites')
         .then(response => response.json())
@@ -2840,6 +2923,7 @@ function loadFavorites() {
  * addCurrentToFavorites function
  * @function addCurrentToFavorites
  * @returns {*} Return value description
+ */
 function addCurrentToFavorites() {
     const name = prompt('Enter name for this location (e.g., Home, Work):');
     if (!name) return;
@@ -2880,6 +2964,7 @@ function addCurrentToFavorites() {
  * @param {*} heading - Parameter description
  * @param {*} maneuver - Parameter description
  * @returns {*} Return value description
+ */
 function updateLaneGuidance(lat, lon, heading, maneuver) {
     fetch(`/api/lane-guidance?lat=${lat}&lon=${lon}&heading=${heading}&maneuver=${maneuver}`)
         .then(response => response.json())
@@ -2919,6 +3004,7 @@ let speedLimitThreshold = 3; // mph over limit to trigger warning
  * @param {*} speedMph - Parameter description
  * @param {*} speedLimitMph - Parameter description
  * @returns {*} Return value description
+ */
 function updateSpeedWidget(speedMph, speedLimitMph = null) {
     const widget = document.getElementById('speedWidget');
     if (!widget) return;
@@ -2966,6 +3052,7 @@ function updateSpeedWidget(speedMph, speedLimitMph = null) {
  * toggleSpeedWidget function
  * @function toggleSpeedWidget
  * @returns {*} Return value description
+ */
 function toggleSpeedWidget() {
     speedWidgetEnabled = !speedWidgetEnabled;
     const widget = document.getElementById('speedWidget');
@@ -2984,6 +3071,7 @@ function toggleSpeedWidget() {
  * @param {*} currentSpeed - Parameter description
  * @param {*} roadType - Parameter description
  * @returns {*} Return value description
+ */
 function updateSpeedWarning(lat, lon, currentSpeed, roadType) {
     fetch(`/api/speed-warnings?lat=${lat}&lon=${lon}&speed=${currentSpeed}&road_type=${roadType}`)
         .then(response => response.json())
@@ -3010,6 +3098,7 @@ function updateSpeedWarning(lat, lon, currentSpeed, roadType) {
  * @param {*} lat2 - Parameter description
  * @param {*} lon2 - Parameter description
  * @returns {*} Return value description
+ */
 function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
     const R = 6371000; // Earth's radius in meters
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -3028,6 +3117,7 @@ function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
  * @param {*} lat2 - Parameter description
  * @param {*} lon2 - Parameter description
  * @returns {*} Return value description
+ */
 function calculateBearing(lat1, lon1, lat2, lon2) {
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const lat1Rad = lat1 * Math.PI / 180;
@@ -3045,6 +3135,7 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
  * @param {*} bearing1 - Parameter description
  * @param {*} bearing2 - Parameter description
  * @returns {*} Return value description
+ */
 function calculateTurnDirection(bearing1, bearing2) {
     let bearingChange = bearing2 - bearing1;
 
@@ -3067,6 +3158,7 @@ function calculateTurnDirection(bearing1, bearing2) {
  * @param {*} userLat - Parameter description
  * @param {*} userLon - Parameter description
  * @returns {*} Return value description
+ */
 function detectUpcomingTurn(userLat, userLon) {
     if (!routeInProgress || !routePolyline || routePolyline.length === 0) {
         return null;
@@ -3165,6 +3257,7 @@ function detectUpcomingTurn(userLat, userLon) {
  * updateVehicleType function
  * @function updateVehicleType
  * @returns {*} Return value description
+ */
 function updateVehicleType() {
     const select = document.getElementById('vehicleType');
     currentVehicleType = select.value;
@@ -3182,6 +3275,7 @@ function updateVehicleType() {
  * @function setRoutingMode
  * @param {*} mode - Parameter description
  * @returns {*} Return value description
+ */
 function setRoutingMode(mode) {
     currentRoutingMode = mode;
     localStorage.setItem('routingMode', mode);
@@ -3216,6 +3310,7 @@ function setRoutingMode(mode) {
  * updateUserMarkerIcon function
  * @function updateUserMarkerIcon
  * @returns {*} Return value description
+ */
 function updateUserMarkerIcon() {
     // Determine which icon to use
     let iconEmoji = vehicleIcons[currentRoutingMode] || vehicleIcons[currentVehicleType] || '🚗';
@@ -3237,6 +3332,7 @@ function updateUserMarkerIcon() {
  * @param {*} speed - Parameter description
  * @param {*} accuracy - Parameter description
  * @returns {*} Return value description
+ */
 function createVehicleMarker(lat, lon, speed, accuracy) {
     // Create a custom marker with vehicle icon
     const iconEmoji = vehicleIcons[currentRoutingMode] || vehicleIcons[currentVehicleType] || '🚗';
@@ -3271,6 +3367,7 @@ function createVehicleMarker(lat, lon, speed, accuracy) {
  * @param {*} distanceToNextTurn - Parameter description
  * @param {*} roadType - Parameter description
  * @returns {*} Return value description
+ */
 function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
     let zoomLevel = ZOOM_LEVELS.urban_low_speed; // Default
 
@@ -3307,6 +3404,7 @@ function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urb
  * @param {*} userLat - Parameter description
  * @param {*} userLon - Parameter description
  * @returns {*} Return value description
+ */
 function applySmartZoomWithAnimation(speedMph, distanceToNextTurn = null, roadType = 'urban', userLat = null, userLon = null) {
     if (!smartZoomEnabled || !routeInProgress) return;
 
@@ -3346,6 +3444,7 @@ function applySmartZoomWithAnimation(speedMph, distanceToNextTurn = null, roadTy
  * @param {*} distanceToNextTurn - Parameter description
  * @param {*} roadType - Parameter description
  * @returns {*} Return value description
+ */
 function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
     applySmartZoomWithAnimation(speedMph, distanceToNextTurn, roadType, currentLat, currentLon);
 }
@@ -3354,6 +3453,7 @@ function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban')
  * toggleSmartZoom function
  * @function toggleSmartZoom
  * @returns {*} Return value description
+ */
 function toggleSmartZoom() {
     smartZoomEnabled = !smartZoomEnabled;
     const btn = document.getElementById('smartZoomToggle');
@@ -3375,6 +3475,7 @@ function toggleSmartZoom() {
  * @param {*} roadType - Parameter description
  * @param {*} vehicleType - Parameter description
  * @returns {*} Return value description
+ */
 function updateVariableSpeedLimit(lat, lon, roadType = 'motorway', vehicleType = 'car') {
     fetch(`/api/speed-limit?lat=${lat}&lon=${lon}&road_type=${roadType}&vehicle_type=${vehicleType}`)
         .then(response => response.json())
@@ -3406,6 +3507,7 @@ function updateVariableSpeedLimit(lat, lon, roadType = 'motorway', vehicleType =
  * @param {*} speedLimitMph - Parameter description
  * @param {*} threshold - Parameter description
  * @returns {*} Return value description
+ */
 function checkSpeedViolation(currentSpeedMph, speedLimitMph, threshold = 5) {
     fetch('/api/speed-violation', {
         method: 'POST',
@@ -3450,6 +3552,7 @@ let gestureAction = 'recalculate';
  * initPhase3Features function
  * @function initPhase3Features
  * @returns {*} Return value description
+ */
 function initPhase3Features() {
     // Load gesture settings
     fetch('/api/app-settings')
@@ -3491,6 +3594,7 @@ function initPhase3Features() {
  * @function handleDeviceMotion
  * @param {*} event - Parameter description
  * @returns {*} Return value description
+ */
 function handleDeviceMotion(event) {
     if (!gestureEnabled) return;
 
@@ -3528,6 +3632,7 @@ function handleDeviceMotion(event) {
  * triggerGestureAction function
  * @function triggerGestureAction
  * @returns {*} Return value description
+ */
 function triggerGestureAction() {
     // Show gesture indicator
     const indicator = document.getElementById('gestureIndicator');
@@ -3567,6 +3672,7 @@ function triggerGestureAction() {
  * toggleGestureControl function
  * @function toggleGestureControl
  * @returns {*} Return value description
+ */
 function toggleGestureControl() {
     gestureEnabled = !gestureEnabled;
 
@@ -3607,6 +3713,7 @@ function toggleGestureControl() {
  * updateGestureSensitivity function
  * @function updateGestureSensitivity
  * @returns {*} Return value description
+ */
 function updateGestureSensitivity() {
     gestureSensitivity = document.getElementById('gestureSensitivity').value;
     fetch('/api/app-settings', {
@@ -3620,6 +3727,7 @@ function updateGestureSensitivity() {
  * updateGestureAction function
  * @function updateGestureAction
  * @returns {*} Return value description
+ */
 function updateGestureAction() {
     gestureAction = document.getElementById('gestureAction').value;
     fetch('/api/app-settings', {
@@ -3638,6 +3746,7 @@ let originalGPSFrequency = 1000; // ms
  * @function updateBatteryStatus
  * @param {*} battery - Parameter description
  * @returns {*} Return value description
+ */
 function updateBatteryStatus(battery) {
     const level = Math.round(battery.level * 100);
     const indicator = document.getElementById('batteryIndicator');
@@ -3665,6 +3774,7 @@ function updateBatteryStatus(battery) {
  * toggleBatterySavingMode function
  * @function toggleBatterySavingMode
  * @returns {*} Return value description
+ */
 function toggleBatterySavingMode() {
     batterySavingMode = !batterySavingMode;
     if (batterySavingMode) {
@@ -3678,6 +3788,7 @@ function toggleBatterySavingMode() {
  * enableBatterySavingMode function
  * @function enableBatterySavingMode
  * @returns {*} Return value description
+ */
 function enableBatterySavingMode() {
     batterySavingMode = true;
     const button = document.getElementById('batterySavingMode');
@@ -3718,6 +3829,7 @@ function enableBatterySavingMode() {
  * disableBatterySavingMode function
  * @function disableBatterySavingMode
  * @returns {*} Return value description
+ */
 function disableBatterySavingMode() {
     batterySavingMode = false;
     const button = document.getElementById('batterySavingMode');
@@ -3759,6 +3871,7 @@ let currentMapTheme = 'standard';
  * @function setMapTheme
  * @param {*} theme - Parameter description
  * @returns {*} Return value description
+ */
 function setMapTheme(theme) {
     currentMapTheme = theme;
     localStorage.setItem('mapTheme', theme);
@@ -3808,6 +3921,7 @@ function setMapTheme(theme) {
  * loadMLPredictions function
  * @function loadMLPredictions
  * @returns {*} Return value description
+ */
 function loadMLPredictions() {
     fetch('/api/ml-predictions')
         .then(response => response.json())
@@ -3842,6 +3956,7 @@ function loadMLPredictions() {
  * toggleMLPredictions function
  * @function toggleMLPredictions
  * @returns {*} Return value description
+ */
 function toggleMLPredictions() {
     const button = document.getElementById('mlPredictionsEnabled');
 
@@ -4039,6 +4154,7 @@ let isGeocoding = false;
  * initVoiceRecognition function
  * @function initVoiceRecognition
  * @returns {*} Return value description
+ */
 function initVoiceRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -4091,6 +4207,7 @@ function initVoiceRecognition() {
  * toggleVoiceInput function
  * @function toggleVoiceInput
  * @returns {*} Return value description
+ */
 function toggleVoiceInput() {
     if (!voiceRecognition) {
         if (!initVoiceRecognition()) {
@@ -4112,6 +4229,7 @@ function toggleVoiceInput() {
  * @function speakText
  * @param {*} text - Parameter description
  * @returns {*} Return value description
+ */
 function speakText(text) {
     if (!('speechSynthesis' in window)) {
         console.log('[Voice] Speech Synthesis not supported');
@@ -4149,6 +4267,7 @@ function speakText(text) {
  * setupVoiceCommandProcessing function
  * @function setupVoiceCommandProcessing
  * @returns {*} Return value description
+ */
 function setupVoiceCommandProcessing() {
     if (!voiceRecognition) return;
 
@@ -4168,6 +4287,7 @@ function setupVoiceCommandProcessing() {
  * @function processVoiceCommand
  * @param {*} command - Parameter description
  * @returns {*} Return value description
+ */
 function processVoiceCommand(command) {
     if (!command) return;
 
@@ -4208,6 +4328,7 @@ function processVoiceCommand(command) {
  * @function handleVoiceAction
  * @param {*} data - Parameter description
  * @returns {*} Return value description
+ */
 function handleVoiceAction(data) {
     const action = data.action;
 
@@ -4310,6 +4431,7 @@ let bottomSheetIsExpanded = false;
  * initBottomSheet function
  * @function initBottomSheet
  * @returns {*} Return value description
+ */
 function initBottomSheet() {
     const bottomSheet = document.getElementById('bottomSheet');
     const handle = document.querySelector('.bottom-sheet-handle');
@@ -4422,6 +4544,7 @@ function initBottomSheet() {
  * expandBottomSheet function
  * @function expandBottomSheet
  * @returns {*} Return value description
+ */
 function expandBottomSheet() {
     const bottomSheet = document.getElementById('bottomSheet');
     bottomSheet.classList.add('expanded');
@@ -4432,6 +4555,7 @@ function expandBottomSheet() {
  * collapseBottomSheet function
  * @function collapseBottomSheet
  * @returns {*} Return value description
+ */
 function collapseBottomSheet() {
     const bottomSheet = document.getElementById('bottomSheet');
     bottomSheet.classList.remove('expanded');
@@ -4443,6 +4567,7 @@ function collapseBottomSheet() {
  * startGPSTracking function
  * @function startGPSTracking
  * @returns {*} Return value description
+ */
 function startGPSTracking() {
     if (!navigator.geolocation) {
         showStatus('Geolocation not supported', 'error');
@@ -4589,6 +4714,7 @@ function startGPSTracking() {
  * stopGPSTracking function
  * @function stopGPSTracking
  * @returns {*} Return value description
+ */
 function stopGPSTracking() {
     if (gpsWatchId !== null) {
         navigator.geolocation.clearWatch(gpsWatchId);
@@ -4625,6 +4751,7 @@ let voiceAnnouncementsEnabled = true;
  * @function getTurnDirectionText
  * @param {*} direction - Parameter description
  * @returns {*} Return value description
+ */
 function getTurnDirectionText(direction) {
     const directionMap = {
         'sharp_left': 'sharply left',
@@ -4643,6 +4770,7 @@ function getTurnDirectionText(direction) {
  * @param {*} currentLat - Parameter description
  * @param {*} currentLon - Parameter description
  * @returns {*} Return value description
+ */
 function announceDistanceToDestination(currentLat, currentLon) {
     // FIXED: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
     if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceAnnouncementsEnabled) return;
@@ -4709,6 +4837,7 @@ function announceDistanceToDestination(currentLat, currentLon) {
  * @param {*} currentLon - Parameter description
  * @returns {*} Return value description
  * @deprecated Use announceETAIfNeeded() instead - this function is no longer called from GPS callback
+ */
 function announceETAUpdate(currentLat, currentLon) {
     // FIXED: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
     if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceAnnouncementsEnabled) return;
@@ -4819,6 +4948,7 @@ function announceETAUpdate(currentLat, currentLon) {
  * @function announceUpcomingTurn
  * @param {*} turnInfo - Parameter description
  * @returns {*} Return value description
+ */
 function announceUpcomingTurn(turnInfo) {
     // FIXED: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
     if (!turnInfo || !voiceAnnouncementsEnabled) return;
@@ -4885,6 +5015,7 @@ let lastRerouteDeviation = 0;
  * @param {*} lat - Parameter description
  * @param {*} lon - Parameter description
  * @returns {*} Return value description
+ */
 function checkRouteDeviation(lat, lon) {
     // Calculate distance from current position to route
     if (!routePolyline || routePolyline.length === 0) return;
@@ -5005,6 +5136,7 @@ async function triggerAutomaticReroute(currentLat, currentLon) {
  * @param {*} lat2 - Parameter description
  * @param {*} lon2 - Parameter description
  * @returns {*} Return value description
+ */
 function calculateDistance(lat1, lon1, lat2, lon2) {
     // Haversine formula for distance calculation
     const R = 6371; // Earth's radius in km
@@ -5027,6 +5159,7 @@ const HAZARD_WARNING_DISTANCE = 500; // meters
  * @param {*} lat - Parameter description
  * @param {*} lon - Parameter description
  * @returns {*} Return value description
+ */
 function checkNearbyHazards(lat, lon) {
     // Check for hazards within 500m
     fetch(`/api/hazards/nearby?lat=${lat}&lon=${lon}&radius=0.5`)
@@ -5066,6 +5199,7 @@ function checkNearbyHazards(lat, lon) {
  * startLiveDataRefresh function
  * @function startLiveDataRefresh
  * @returns {*} Return value description
+ */
 function startLiveDataRefresh() {
     if (routeInProgress) {
         // Get adaptive intervals based on battery level (Phase 3)
@@ -5106,6 +5240,7 @@ function startLiveDataRefresh() {
  * stopLiveDataRefresh function
  * @function stopLiveDataRefresh
  * @returns {*} Return value description
+ */
 function stopLiveDataRefresh() {
     clearInterval(trafficRefreshInterval);
     clearInterval(etaRefreshInterval);
@@ -5118,6 +5253,7 @@ function stopLiveDataRefresh() {
  * refreshTrafficData function
  * @function refreshTrafficData
  * @returns {*} Return value description
+ */
 function refreshTrafficData() {
     if (!routeInProgress || !currentLat || !currentLon) return;
 
@@ -5140,6 +5276,7 @@ function refreshTrafficData() {
  * updateETACalculation function
  * @function updateETACalculation
  * @returns {*} Return value description
+ */
 function updateETACalculation() {
     if (!routeInProgress || !routePolyline || currentStepIndex === undefined) return;
 
@@ -5199,6 +5336,7 @@ function updateETACalculation() {
  * announceETAIfNeeded function
  * @function announceETAIfNeeded
  * @returns {*} Return value description
+ */
 function announceETAIfNeeded() {
     // FIXED: Announce ETA only when needed (every 10 minutes)
     // This replaces the old announceETAUpdate() which was called on every GPS update
@@ -5265,6 +5403,7 @@ function announceETAIfNeeded() {
  * refreshWeatherData function
  * @function refreshWeatherData
  * @returns {*} Return value description
+ */
 function refreshWeatherData() {
     if (!currentLat || !currentLon) return;
 
@@ -5290,6 +5429,7 @@ function refreshWeatherData() {
  * saveAppState function
  * @function saveAppState
  * @returns {*} Return value description
+ */
 function saveAppState() {
     try {
         const state = {
@@ -5322,6 +5462,7 @@ function saveAppState() {
  * restoreAppState function
  * @function restoreAppState
  * @returns {*} Return value description
+ */
 function restoreAppState() {
     try {
         const saved = localStorage.getItem('appState');
@@ -5347,6 +5488,7 @@ function restoreAppState() {
  * @function getAdaptiveRefreshInterval
  * @param {*} baseInterval - Parameter description
  * @returns {*} Return value description
+ */
 function getAdaptiveRefreshInterval(baseInterval) {
     // Adjust refresh intervals based on battery level
     if (!('getBattery' in navigator)) {
@@ -5372,6 +5514,7 @@ function getAdaptiveRefreshInterval(baseInterval) {
  * initBatteryMonitoring function
  * @function initBatteryMonitoring
  * @returns {*} Return value description
+ */
 function initBatteryMonitoring() {
     // Monitor battery status for adaptive refresh intervals
     if ('getBattery' in navigator) {
@@ -5415,6 +5558,7 @@ function initBatteryMonitoring() {
  * getCurrentLocation function
  * @function getCurrentLocation
  * @returns {*} Return value description
+ */
 function getCurrentLocation() {
     if (!navigator.geolocation) {
         showStatus('Geolocation not supported', 'error');
@@ -5458,6 +5602,7 @@ function getCurrentLocation() {
  * @function setCurrentLocation
  * @param {*} field - Parameter description
  * @returns {*} Return value description
+ */
 function setCurrentLocation(field) {
     if (!navigator.geolocation) {
         showStatus('Geolocation not supported', 'error');
@@ -5485,6 +5630,7 @@ function setCurrentLocation(field) {
  * toggleAutoGpsLocation function
  * @function toggleAutoGpsLocation
  * @returns {*} Return value description
+ */
 function toggleAutoGpsLocation() {
     const toggle = document.getElementById('autoGpsToggle');
     autoGpsEnabled = toggle.checked;
@@ -5503,6 +5649,7 @@ function toggleAutoGpsLocation() {
  * startAutoGpsLocation function
  * @function startAutoGpsLocation
  * @returns {*} Return value description
+ */
 function startAutoGpsLocation() {
     if (!navigator.geolocation) {
         showStatus('❌ Geolocation not supported by your browser', 'error');
@@ -5527,6 +5674,7 @@ function startAutoGpsLocation() {
  * stopAutoGpsLocation function
  * @function stopAutoGpsLocation
  * @returns {*} Return value description
+ */
 function stopAutoGpsLocation() {
     if (autoGpsLocationMonitor) {
         clearInterval(autoGpsLocationMonitor);
@@ -5540,6 +5688,7 @@ function stopAutoGpsLocation() {
  * updateAutoGpsLocation function
  * @function updateAutoGpsLocation
  * @returns {*} Return value description
+ */
 function updateAutoGpsLocation() {
     if (!autoGpsEnabled) return;
 
@@ -5578,6 +5727,7 @@ function updateAutoGpsLocation() {
  * @function pickLocationFromMap
  * @param {*} field - Parameter description
  * @returns {*} Return value description
+ */
 function pickLocationFromMap(field) {
     mapPickerMode = field;
     collapseBottomSheet();
@@ -5589,6 +5739,7 @@ function pickLocationFromMap(field) {
  * initGeocodeCache function
  * @function initGeocodeCache
  * @returns {*} Return value description
+ */
 function initGeocodeCache() {
     try {
         const cached = localStorage.getItem(GEOCODING_CACHE_KEY);
@@ -5606,6 +5757,7 @@ function initGeocodeCache() {
  * saveGeocodeCache function
  * @function saveGeocodeCache
  * @returns {*} Return value description
+ */
 function saveGeocodeCache() {
     try {
         localStorage.setItem(GEOCODING_CACHE_KEY, JSON.stringify(geocodingCache));
@@ -5679,6 +5831,7 @@ async function showAutocomplete(fieldId) {
  * @param {*} fieldId - Parameter description
  * @param {*} results - Parameter description
  * @returns {*} Return value description
+ */
 function displayAutocompleteResults(fieldId, results) {
     const dropdown = document.getElementById(`autocomplete${fieldId === 'start' ? 'Start' : 'End'}`);
 
@@ -5712,6 +5865,7 @@ function displayAutocompleteResults(fieldId, results) {
  * @function getLocationIcon
  * @param {*} result - Parameter description
  * @returns {*} Return value description
+ */
 function getLocationIcon(result) {
     const type = result.type || '';
     const category = result.category || '';
@@ -5744,6 +5898,7 @@ function getLocationIcon(result) {
  * @param {*} lon - Parameter description
  * @param {*} name - Parameter description
  * @returns {*} Return value description
+ */
 function selectAutocompleteResult(fieldId, lat, lon, name) {
     const input = document.getElementById(fieldId);
     const dropdown = document.getElementById(`autocomplete${fieldId === 'start' ? 'Start' : 'End'}`);
@@ -5764,6 +5919,7 @@ function selectAutocompleteResult(fieldId, lat, lon, name) {
  * @function isCoordinateFormat
  * @param {*} input - Parameter description
  * @returns {*} Return value description
+ */
 function isCoordinateFormat(input) {
     // Check if input is already in "lat,lon" format
     const parts = input.trim().split(',');
@@ -5882,6 +6038,7 @@ async function geocodeLocations(startAddress, endAddress) {
  * @function startTurnByTurnNavigation
  * @param {*} routeData - Parameter description
  * @returns {*} Return value description
+ */
 function startTurnByTurnNavigation(routeData) {
     if (!routeData || !routeData.geometry) {
         showStatus('No route geometry available', 'error');
@@ -5939,6 +6096,7 @@ function startTurnByTurnNavigation(routeData) {
  * stopTurnByTurnNavigation function
  * @function stopTurnByTurnNavigation
  * @returns {*} Return value description
+ */
 function stopTurnByTurnNavigation() {
     routeInProgress = false;
     currentStepIndex = 0;
@@ -5979,6 +6137,7 @@ function stopTurnByTurnNavigation() {
  * @param {*} userLat - Parameter description
  * @param {*} userLon - Parameter description
  * @returns {*} Return value description
+ */
 function updateTurnGuidance(userLat, userLon) {
     if (!routeInProgress || !routePolyline || routePolyline.length === 0) return;
 
@@ -6030,6 +6189,7 @@ function updateTurnGuidance(userLat, userLon) {
  * @function quickSearch
  * @param {*} type - Parameter description
  * @returns {*} Return value description
+ */
 function quickSearch(type) {
     if (!navigator.geolocation) {
         showStatus('Geolocation not supported', 'error');
@@ -6065,6 +6225,7 @@ function quickSearch(type) {
  * @param {*} message - Parameter description
  * @param {*} type - Parameter description
  * @returns {*} Return value description
+ */
 function sendNotification(title, message, type = 'info') {
     // Throttle notifications to prevent spam
     const now = Date.now();
@@ -6108,6 +6269,7 @@ function sendNotification(title, message, type = 'info') {
  * @param {*} message - Parameter description
  * @param {*} type - Parameter description
  * @returns {*} Return value description
+ */
 function showInAppNotification(title, message, type = 'info') {
     // Create notification element
     const notifContainer = document.getElementById('notificationContainer');
@@ -6142,6 +6304,7 @@ function showInAppNotification(title, message, type = 'info') {
  * @function speakMessage
  * @param {*} message - Parameter description
  * @returns {*} Return value description
+ */
 function speakMessage(message) {
     // Use Web Speech API for voice output
     if ('speechSynthesis' in window) {
@@ -6158,6 +6321,7 @@ function speakMessage(message) {
  * @param {*} eta - Parameter description
  * @param {*} distance - Parameter description
  * @returns {*} Return value description
+ */
 function sendETANotification(eta, distance) {
     const etaTime = new Date(eta);
     const timeStr = etaTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -6168,6 +6332,7 @@ function sendETANotification(eta, distance) {
  * sendArrivalNotification function
  * @function sendArrivalNotification
  * @returns {*} Return value description
+ */
 function sendArrivalNotification() {
     sendNotification('🎉 Destination Reached', 'You have arrived at your destination', 'success');
     speakMessage('You have arrived at your destination');
@@ -6180,6 +6345,7 @@ function sendArrivalNotification() {
  * @function togglePreference
  * @param {*} pref - Parameter description
  * @returns {*} Return value description
+ */
 function togglePreference(pref) {
     // Map preference names to button IDs
     const buttonIdMap = {
@@ -6239,6 +6405,7 @@ function togglePreference(pref) {
  * loadPreferences function
  * @function loadPreferences
  * @returns {*} Return value description
+ */
 function loadPreferences() {
     const buttonIdMap = {
         'tolls': 'avoidTolls',
@@ -6324,6 +6491,7 @@ function loadPreferences() {
  * @param {*} fuelCost - Parameter description
  * @param {*} tollCost - Parameter description
  * @returns {*} Return value description
+ */
 function updateTripInfo(distance, time, fuelCost, tollCost) {
     const tripInfo = document.getElementById('tripInfo');
     if (distance && time) {
