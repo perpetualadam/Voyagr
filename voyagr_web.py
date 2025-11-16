@@ -3773,6 +3773,7 @@ def calculate_route():
             fallback_optimizer.record_failure('graphhopper')
 
         # Try Valhalla as fallback
+        valhalla_start_time = time.time()
         try:
             url = f"{VALHALLA_URL}/route"
             payload = {
@@ -3810,7 +3811,7 @@ def calculate_route():
                     distance = route_data['trip']['summary']['length']
                     duration_seconds = route_data['trip']['summary']['time']
                     distance_km = distance  # Already in km, don't divide by 1000
-                    time_min = duration_seconds / 60
+                    time_minutes = duration_seconds / 60
 
                     # Extract route geometry
                     route_geometry = None
@@ -3835,7 +3836,7 @@ def calculate_route():
                         'id': 1,
                         'name': 'Fastest',
                         'distance_km': round(distance_km, 2),
-                        'duration_minutes': round(time_min, 0),
+                        'duration_minutes': round(time_minutes, 0),
                         'fuel_cost': round(fuel_cost, 2),
                         'toll_cost': round(toll_cost, 2),
                         'caz_cost': round(caz_cost, 2),
@@ -3850,7 +3851,7 @@ def calculate_route():
                                 alt_duration_seconds = alt_route['trip']['summary']['time']
                                 # NOTE: Valhalla returns distance in kilometers, not meters!
                                 alt_distance_km = alt_distance  # Already in km, don't divide by 1000
-                                alt_time_min = alt_duration_seconds / 60
+                                alt_time_minutes = alt_duration_seconds / 60
 
                                 # Extract geometry
                                 alt_geometry = None
@@ -3876,7 +3877,7 @@ def calculate_route():
                                     'id': idx + 2,
                                     'name': route_names[idx] if idx < len(route_names) else f'Alternative {idx}',
                                     'distance_km': round(alt_distance_km, 2),
-                                    'duration_minutes': round(alt_time_min, 0),
+                                    'duration_minutes': round(alt_time_minutes, 0),
                                     'fuel_cost': round(alt_fuel_cost, 2),
                                     'toll_cost': round(alt_toll_cost, 2),
                                     'caz_cost': round(alt_caz_cost, 2),
@@ -3888,7 +3889,7 @@ def calculate_route():
                     # ================================================================
                     # PHASE 5: Record success in fallback chain optimizer
                     # ================================================================
-                    valhalla_elapsed = (time.time() - time.time()) * 1000  # Approximate
+                    valhalla_elapsed = (time.time() - valhalla_start_time) * 1000
                     fallback_optimizer.record_success('valhalla', valhalla_elapsed)
 
                     # ================================================================
