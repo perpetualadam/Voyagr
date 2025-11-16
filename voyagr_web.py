@@ -342,14 +342,14 @@ class RouteCache:
         self.hits = 0
         self.misses = 0
 
-    def _make_key(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str) -> str:
+    def _make_key(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False) -> str:
         """Create cache key from route parameters."""
-        return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type}"
+        return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type},{enable_hazard_avoidance}"
 
-    def get(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str) -> Optional[Dict[str, Any]]:
+    def get(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False) -> Optional[Dict[str, Any]]:
         """Get cached route if available and not expired."""
         with self.lock:
-            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
+            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance)
 
             if key not in self.cache:
                 self.misses += 1
@@ -367,10 +367,10 @@ class RouteCache:
             self.hits += 1
             return self.cache[key]
 
-    def set(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, route_data: Dict[str, Any]) -> None:
+    def set(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, route_data: Dict[str, Any], enable_hazard_avoidance: bool = False) -> None:
         """Cache a route calculation."""
         with self.lock:
-            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
+            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance)
 
             # Remove oldest if at capacity
             if len(self.cache) >= self.max_size and key not in self.cache:
@@ -3893,9 +3893,9 @@ def calculate_route():
         # ====================================================================
         # PHASE 3 OPTIMIZATION: Check route cache first
         # ====================================================================
-        cached_route = route_cache.get(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
+        cached_route = route_cache.get(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance)
         if cached_route:
-            logger.info(f"[CACHE] HIT: Route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+            logger.info(f"[CACHE] HIT: Route from ({start_lat},{start_lon}) to ({end_lat},{end_lon}) with hazard_avoidance={enable_hazard_avoidance}")
             cached_route['cached'] = True
             cached_route['cache_stats'] = route_cache.get_stats()
             return jsonify(cached_route)
@@ -4049,8 +4049,8 @@ def calculate_route():
                     }
 
                     # Cache the route for future requests
-                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data)
-                    print(f"[CACHE] STORED: Route cached for future requests")
+                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance)
+                    print(f"[CACHE] STORED: Route cached for future requests with hazard_avoidance={enable_hazard_avoidance}")
 
                     return jsonify(response_data)
                 else:
@@ -4244,8 +4244,8 @@ def calculate_route():
                     }
 
                     # Cache the route for future requests
-                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data)
-                    print(f"[CACHE] STORED: Route cached in memory")
+                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance)
+                    print(f"[CACHE] STORED: Route cached in memory with hazard_avoidance={enable_hazard_avoidance}")
 
                     # ================================================================
                     # PHASE 4: Persistent database caching for long-term storage
