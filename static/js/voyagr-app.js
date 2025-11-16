@@ -799,17 +799,22 @@ function importSettings() {
  * @returns {*} Return value description
  */
 function updateAllDistanceDisplays() {
+    // Update main distance display
     const distanceElement = document.getElementById('distance');
-    if (distanceElement && distanceElement.textContent !== '-') {
-        const km = parseFloat(distanceElement.dataset.km || distanceElement.textContent);
-        distanceElement.textContent = convertDistance(km) + ' ' + getDistanceUnit();
+    if (distanceElement && distanceElement.dataset.km) {
+        const km = parseFloat(distanceElement.dataset.km);
+        if (!isNaN(km)) {
+            distanceElement.textContent = convertDistance(km) + ' ' + getDistanceUnit();
+        }
     }
 
     // Update route preview distance if available
     const previewDistanceElement = document.getElementById('previewDistance');
     if (previewDistanceElement && previewDistanceElement.dataset.km) {
         const previewKm = parseFloat(previewDistanceElement.dataset.km);
-        previewDistanceElement.textContent = convertDistance(previewKm) + ' ' + getDistanceUnit();
+        if (!isNaN(previewKm)) {
+            previewDistanceElement.textContent = convertDistance(previewKm) + ' ' + getDistanceUnit();
+        }
     }
 }
 
@@ -2124,8 +2129,10 @@ function showRoutePreview(routeData) {
 
     // Store distance_km in data attribute for unit conversion updates
     const previewDistanceEl = document.getElementById('previewDistance');
-    previewDistanceEl.dataset.km = distanceKm;
-    previewDistanceEl.textContent = convertDistance(distanceKm) + ' ' + distUnit;
+    if (previewDistanceEl) {
+        previewDistanceEl.dataset.km = distanceKm;
+        previewDistanceEl.textContent = convertDistance(distanceKm) + ' ' + distUnit;
+    }
     document.getElementById('previewDuration').textContent = (routeData.time || routeData.duration_minutes || 0) + ' min';
 
     // Build route description
@@ -6534,7 +6541,7 @@ function loadPreferences() {
 /**
  * updateTripInfo function
  * @function updateTripInfo
- * @param {*} distance - Parameter description
+ * @param {*} distance - Parameter description (can be string like "8.64 km" or number)
  * @param {*} time - Parameter description
  * @param {*} fuelCost - Parameter description
  * @param {*} tollCost - Parameter description
@@ -6543,7 +6550,19 @@ function loadPreferences() {
 function updateTripInfo(distance, time, fuelCost, tollCost) {
     const tripInfo = document.getElementById('tripInfo');
     if (distance && time) {
-        document.getElementById('distance').textContent = distance;
+        // Extract km value from distance (handle both "8.64 km" string and numeric formats)
+        let distanceKm = 0;
+        if (typeof distance === 'string') {
+            distanceKm = parseFloat(distance) || 0;
+        } else {
+            distanceKm = parseFloat(distance) || 0;
+        }
+
+        // Store km value in data attribute for unit conversion
+        const distanceEl = document.getElementById('distance');
+        distanceEl.dataset.km = distanceKm;
+        distanceEl.textContent = convertDistance(distanceKm) + ' ' + getDistanceUnit();
+
         document.getElementById('time').textContent = time;
         document.getElementById('fuelCost').textContent = fuelCost || '-';
         document.getElementById('tollCost').textContent = tollCost || '-';
