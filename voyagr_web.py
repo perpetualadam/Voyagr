@@ -1518,6 +1518,9 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
         preferences = {row[0]: {'penalty': row[1], 'threshold': row[2]} for row in cursor.fetchall()}
         conn.close()
 
+        logger.debug(f"[HAZARDS] Preferences loaded: {list(preferences.keys())}")
+        logger.debug(f"[HAZARDS] Hazards to score: {[(k, len(v)) for k, v in hazards.items() if v]}")
+
         # Decode polyline to get route points
         try:
             if isinstance(route_points, str):
@@ -1525,8 +1528,10 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
                     logger.warning("polyline module not available, cannot decode route points")
                     return 0, 0
                 decoded_points = polyline.decode(route_points)
+                logger.debug(f"[HAZARDS] Decoded {len(decoded_points)} route points from polyline")
             else:
                 decoded_points = route_points
+                logger.debug(f"[HAZARDS] Using {len(decoded_points)} route points directly")
         except Exception as e:
             logger.error(f"Error decoding polyline: {e}")
             return 0, 0
@@ -1534,13 +1539,20 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
         # Check each hazard against route
         for hazard_type, hazard_list in hazards.items():
             if hazard_type not in preferences:
+                logger.debug(f"[HAZARDS] Skipping {hazard_type} - not in preferences")
+                continue
+
+            if len(hazard_list) == 0:
+                logger.debug(f"[HAZARDS] Skipping {hazard_type} - no hazards in list")
                 continue
 
             pref = preferences[hazard_type]
             threshold = pref['threshold']
             penalty = pref['penalty']
 
-            for hazard in hazard_list:
+            logger.debug(f"[HAZARDS] Processing {len(hazard_list)} {hazard_type} hazards (threshold={threshold}m, penalty={penalty}s)")
+
+            for idx, hazard in enumerate(hazard_list):
                 hazard_lat = hazard.get('lat')
                 hazard_lon = hazard.get('lon')
 
@@ -1566,9 +1578,15 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
                     total_penalty += applied_penalty
                     hazard_count += 1
 
+                    if idx < 3:  # Log first 3 hazards
+                        logger.debug(f"[HAZARDS]   Hazard {idx+1}: distance={min_distance:.0f}m, penalty={applied_penalty:.0f}s")
+
+        logger.info(f"[HAZARDS] Route scoring complete: total_penalty={total_penalty:.0f}s, hazard_count={hazard_count}")
         return total_penalty, hazard_count
     except Exception as e:
         logger.error(f"Error scoring route: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
         return 0, 0
 
 MONITORING_DASHBOARD_HTML = '''
