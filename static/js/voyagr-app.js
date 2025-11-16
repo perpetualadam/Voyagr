@@ -2337,11 +2337,18 @@ function showAlternativeRoutesInPreview() {
 async function showRouteComparison() {
     console.log('[RouteComparison] showRouteComparison called');
     console.log('[RouteComparison] routeOptions:', routeOptions);
+    console.log('[RouteComparison] routeOptions length:', routeOptions ? routeOptions.length : 0);
 
-    if (!routeOptions || routeOptions.length < 2) {
-        console.error('[RouteComparison] Not enough routes:', routeOptions ? routeOptions.length : 0);
-        showStatus('Need at least 2 routes to compare', 'error');
+    if (!routeOptions || routeOptions.length < 1) {
+        console.error('[RouteComparison] No routes available:', routeOptions ? routeOptions.length : 0);
+        showStatus('No routes available. Calculate a route first.', 'error');
         return;
+    }
+
+    // If only 1 route, show it anyway
+    if (routeOptions.length < 2) {
+        console.warn('[RouteComparison] Only 1 route available, showing it anyway');
+        showStatus('Only 1 route available', 'info');
     }
 
     try {

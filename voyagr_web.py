@@ -4129,7 +4129,11 @@ def calculate_route():
                         'toll_cost': routes[0]['toll_cost'],
                         'caz_cost': routes[0]['caz_cost'],
                         'response_time_ms': total_time,
-                        'cached': False
+                        'cached': False,
+                        'start_lat': start_lat,
+                        'start_lon': start_lon,
+                        'end_lat': end_lat,
+                        'end_lon': end_lon
                     }
 
                     # Cache the route for future requests
@@ -4341,7 +4345,11 @@ def calculate_route():
                         'fuel_cost': routes[0]['fuel_cost'],
                         'toll_cost': routes[0]['toll_cost'],
                         'caz_cost': routes[0]['caz_cost'],
-                        'cached': False
+                        'cached': False,
+                        'start_lat': start_lat,
+                        'start_lon': start_lon,
+                        'end_lat': end_lat,
+                        'end_lon': end_lon
                     }
 
                     # Cache the route for future requests
@@ -4493,7 +4501,11 @@ def calculate_route():
                         'geometry': routes[0]['geometry'],
                         'fuel_cost': routes[0]['fuel_cost'],
                         'toll_cost': routes[0]['toll_cost'],
-                        'caz_cost': routes[0]['caz_cost']
+                        'caz_cost': routes[0]['caz_cost'],
+                        'start_lat': start_lat,
+                        'start_lon': start_lon,
+                        'end_lat': end_lat,
+                        'end_lon': end_lon
                     }
 
                     # ================================================================
