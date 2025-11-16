@@ -66,11 +66,13 @@ class Router:
         
         return route_data
 
-    def _are_connected(self, start_node: int, end_node: int, max_search: int = 50000) -> bool:
+    def _are_connected(self, start_node: int, end_node: int, max_search: int = 500000) -> bool:
         """Quick check if two nodes are in the same connected component.
 
         Uses BFS with a limited search to avoid long computations.
         Returns True if connected, False if not connected or search limit reached.
+
+        Note: Increased max_search from 50k to 500k to handle graph fragmentation.
         """
         if start_node == end_node:
             return True
@@ -87,12 +89,12 @@ class Router:
             if node == end_node:
                 return True
 
-            # Get neighbors
-            if node in self.graph.edges:
-                for neighbor, _, _, _ in self.graph.edges[node]:
-                    if neighbor not in visited:
-                        visited.add(neighbor)
-                        queue.append(neighbor)
+            # Get neighbors (uses lazy loading)
+            neighbors = self.graph.get_neighbors(node)
+            for neighbor, _, _, _ in neighbors:
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    queue.append(neighbor)
 
         # If we hit the search limit, assume not connected
         return False
@@ -142,7 +144,8 @@ class Router:
         """Optimized bidirectional Dijkstra algorithm with early termination."""
 
         # Quick connectivity check to avoid wasting time on disconnected nodes
-        if not self._are_connected(start_node, end_node, max_search=10000):
+        # Increased from 10k to 100k to handle graph fragmentation
+        if not self._are_connected(start_node, end_node, max_search=100000):
             return None
 
         # Forward search
