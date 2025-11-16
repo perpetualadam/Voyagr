@@ -3880,10 +3880,13 @@ let currentMapTheme = 'standard';
 /**
  * setMapTheme function
  * @function setMapTheme
- * @param {*} theme - Parameter description
- * @returns {*} Return value description
+ * @param {string|Event} themeOrEvent - Theme name or event object
+ * @returns {void}
  */
-function setMapTheme(theme) {
+function setMapTheme(themeOrEvent) {
+    // Handle both string theme and event object
+    let theme = typeof themeOrEvent === 'string' ? themeOrEvent : (themeOrEvent?.target?.dataset?.theme || 'standard');
+
     currentMapTheme = theme;
     localStorage.setItem('mapTheme', theme);
 
@@ -3891,8 +3894,11 @@ function setMapTheme(theme) {
     document.querySelectorAll('.theme-option').forEach(btn => {
         btn.classList.remove('active');
     });
-    if (event && event.target) {
-        event.target.closest('.theme-option')?.classList.add('active');
+
+    // Highlight the active theme button
+    const activeBtn = document.querySelector(`[data-theme="${theme}"]`);
+    if (activeBtn) {
+        activeBtn.classList.add('active');
     }
 
     // Apply theme to map
