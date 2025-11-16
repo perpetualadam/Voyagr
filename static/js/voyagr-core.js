@@ -29,6 +29,12 @@ const currencySymbols = {
  * @returns {void}
  */
 function initializeMap() {
+    // Check if map is already initialized
+    if (map !== null) {
+        console.log('[Init] Map already initialized, skipping');
+        return;
+    }
+
     // Suppress ethereum property redefinition warning from browser extensions
     if (typeof window !== 'undefined' && window.ethereum) {
         try {
@@ -48,6 +54,7 @@ function initializeMap() {
         attribution: '© OpenStreetMap contributors',
         maxZoom: 19
     }).addTo(map);
+    console.log('[Init] Map initialized successfully');
 }
 
 /**

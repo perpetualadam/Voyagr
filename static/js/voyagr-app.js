@@ -1769,37 +1769,49 @@ function stopTrafficMonitoring() {
     }
 }
 
-// Map click handler for location picker
-map.on('click', (e) => {
-    if (mapPickerMode) {
-        const lat = e.latlng.lat;
-        const lon = e.latlng.lng;
-        document.getElementById(mapPickerMode).value = `${lat},${lon}`;
-
-        // Add marker
-        if (mapPickerMode === 'start' && startMarker) map.removeLayer(startMarker);
-        if (mapPickerMode === 'end' && endMarker) map.removeLayer(endMarker);
-
-        const marker = L.circleMarker([lat, lon], {
-            radius: 8,
-            fillColor: mapPickerMode === 'start' ? '#00ff00' : '#ff0000',
-            color: '#000',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.8
-        }).addTo(map);
-
-        if (mapPickerMode === 'start') {
-            startMarker = marker;
-        } else {
-            endMarker = marker;
-        }
-
-        mapPickerMode = null;
-        showStatus('Location selected!', 'success');
-        collapseBottomSheet();
+/**
+ * setupMapClickHandler function
+ * @function setupMapClickHandler
+ * @returns {void}
+ */
+function setupMapClickHandler() {
+    if (!map) {
+        console.log('[Map] Map not initialized yet, deferring click handler setup');
+        return;
     }
-});
+
+    // Map click handler for location picker
+    map.on('click', (e) => {
+        if (mapPickerMode) {
+            const lat = e.latlng.lat;
+            const lon = e.latlng.lng;
+            document.getElementById(mapPickerMode).value = `${lat},${lon}`;
+
+            // Add marker
+            if (mapPickerMode === 'start' && startMarker) map.removeLayer(startMarker);
+            if (mapPickerMode === 'end' && endMarker) map.removeLayer(endMarker);
+
+            const marker = L.circleMarker([lat, lon], {
+                radius: 8,
+                fillColor: mapPickerMode === 'start' ? '#00ff00' : '#ff0000',
+                color: '#000',
+                weight: 2,
+                opacity: 1,
+                fillOpacity: 0.8
+            }).addTo(map);
+
+            if (mapPickerMode === 'start') {
+                startMarker = marker;
+            } else {
+                endMarker = marker;
+            }
+
+            mapPickerMode = null;
+            showStatus('Location selected!', 'success');
+            collapseBottomSheet();
+        }
+    });
+}
 
 // Decode polyline (for OSRM format)
 /**

@@ -17,11 +17,15 @@ function initializeApp() {
         // Initialize core components
         initializeMap();
         console.log('[App] Map initialized');
-        
+
+        // Setup map click handler for location picker
+        setupMapClickHandler();
+        console.log('[App] Map click handler setup');
+
         // Load user preferences
         loadAllSettings();
         console.log('[App] Settings loaded');
-        
+
         // Initialize UI components
         initBottomSheet();
         console.log('[App] Bottom sheet initialized');
