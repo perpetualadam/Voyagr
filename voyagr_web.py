@@ -3284,19 +3284,28 @@ def test_routing_engines():
     """Test if routing engines are accessible."""
     results = {}
 
+    # Get environment info
+    results['environment'] = {
+        'graphhopper_url': GRAPHHOPPER_URL,
+        'valhalla_url': VALHALLA_URL,
+        'deployment': 'Railway.app' if 'railway' in os.getenv('HOSTNAME', '').lower() else 'Local/Other'
+    }
+
     # Test GraphHopper
     try:
         response = requests.get(f"{GRAPHHOPPER_URL}/info", timeout=5)
         results['graphhopper'] = {
             'status': 'OK' if response.status_code == 200 else f'HTTP {response.status_code}',
             'url': GRAPHHOPPER_URL,
-            'accessible': response.status_code == 200
+            'accessible': response.status_code == 200,
+            'response_time_ms': response.elapsed.total_seconds() * 1000
         }
     except Exception as e:
         results['graphhopper'] = {
             'status': f'Error: {str(e)}',
             'url': GRAPHHOPPER_URL,
-            'accessible': False
+            'accessible': False,
+            'error_type': type(e).__name__
         }
 
     # Test Valhalla
@@ -3305,13 +3314,15 @@ def test_routing_engines():
         results['valhalla'] = {
             'status': 'OK' if response.status_code == 200 else f'HTTP {response.status_code}',
             'url': VALHALLA_URL,
-            'accessible': response.status_code == 200
+            'accessible': response.status_code == 200,
+            'response_time_ms': response.elapsed.total_seconds() * 1000
         }
     except Exception as e:
         results['valhalla'] = {
             'status': f'Error: {str(e)}',
             'url': VALHALLA_URL,
-            'accessible': False
+            'accessible': False,
+            'error_type': type(e).__name__
         }
 
     # Test OSRM
@@ -3320,16 +3331,110 @@ def test_routing_engines():
         results['osrm'] = {
             'status': 'OK' if response.status_code == 200 else f'HTTP {response.status_code}',
             'url': 'http://router.project-osrm.org',
-            'accessible': response.status_code == 200
+            'accessible': response.status_code == 200,
+            'response_time_ms': response.elapsed.total_seconds() * 1000
         }
     except Exception as e:
         results['osrm'] = {
             'status': f'Error: {str(e)}',
             'url': 'http://router.project-osrm.org',
-            'accessible': False
+            'accessible': False,
+            'error_type': type(e).__name__
         }
 
     return jsonify(results)
+
+@app.route('/api/debug-route', methods=['POST'])
+def debug_route():
+    """Debug endpoint for route calculation - returns detailed error info."""
+    try:
+        data = request.json or {}
+        start = data.get('start', '51.5074,-0.1278')
+        end = data.get('end', '51.5174,-0.1278')
+
+        # Parse coordinates
+        start_coords = validate_coordinates(start)
+        end_coords = validate_coordinates(end)
+
+        if not start_coords or not end_coords:
+            return jsonify({'success': False, 'error': 'Invalid coordinates'}), 400
+
+        start_lat, start_lon = start_coords
+        end_lat, end_lon = end_coords
+
+        debug_info = {
+            'timestamp': datetime.now().isoformat(),
+            'request': {'start': start, 'end': end},
+            'parsed_coords': {
+                'start': {'lat': start_lat, 'lon': start_lon},
+                'end': {'lat': end_lat, 'lon': end_lon}
+            },
+            'routing_engines': {
+                'graphhopper': {'url': GRAPHHOPPER_URL, 'status': 'testing...'},
+                'valhalla': {'url': VALHALLA_URL, 'status': 'testing...'},
+                'osrm': {'url': 'http://router.project-osrm.org', 'status': 'testing...'}
+            },
+            'errors': []
+        }
+
+        # Test GraphHopper
+        try:
+            url = f"{GRAPHHOPPER_URL}/route"
+            params = {
+                "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
+                "profile": "car",
+                "locale": "en",
+                "ch.disable": "true"
+            }
+            response = requests.get(url, params=params, timeout=10)
+            debug_info['routing_engines']['graphhopper']['status'] = f'HTTP {response.status_code}'
+            debug_info['routing_engines']['graphhopper']['response_time_ms'] = response.elapsed.total_seconds() * 1000
+            if response.status_code == 200:
+                debug_info['routing_engines']['graphhopper']['success'] = True
+            else:
+                debug_info['routing_engines']['graphhopper']['error'] = response.text[:200]
+        except Exception as e:
+            debug_info['routing_engines']['graphhopper']['error'] = str(e)
+            debug_info['errors'].append(f"GraphHopper: {str(e)}")
+
+        # Test Valhalla
+        try:
+            url = f"{VALHALLA_URL}/route"
+            payload = {
+                "locations": [
+                    {"lat": start_lat, "lon": start_lon},
+                    {"lat": end_lat, "lon": end_lon}
+                ],
+                "costing": "auto"
+            }
+            response = requests.post(url, json=payload, timeout=10)
+            debug_info['routing_engines']['valhalla']['status'] = f'HTTP {response.status_code}'
+            debug_info['routing_engines']['valhalla']['response_time_ms'] = response.elapsed.total_seconds() * 1000
+            if response.status_code == 200:
+                debug_info['routing_engines']['valhalla']['success'] = True
+            else:
+                debug_info['routing_engines']['valhalla']['error'] = response.text[:200]
+        except Exception as e:
+            debug_info['routing_engines']['valhalla']['error'] = str(e)
+            debug_info['errors'].append(f"Valhalla: {str(e)}")
+
+        # Test OSRM
+        try:
+            osrm_url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}"
+            response = requests.get(osrm_url, timeout=10)
+            debug_info['routing_engines']['osrm']['status'] = f'HTTP {response.status_code}'
+            debug_info['routing_engines']['osrm']['response_time_ms'] = response.elapsed.total_seconds() * 1000
+            if response.status_code == 200:
+                debug_info['routing_engines']['osrm']['success'] = True
+            else:
+                debug_info['routing_engines']['osrm']['error'] = response.text[:200]
+        except Exception as e:
+            debug_info['routing_engines']['osrm']['error'] = str(e)
+            debug_info['errors'].append(f"OSRM: {str(e)}")
+
+        return jsonify(debug_info)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'error_type': type(e).__name__}), 500
 
 @app.route('/api/cache-stats', methods=['GET'])
 def get_cache_stats():
