@@ -1,5 +1,5 @@
 // Voyagr Service Worker
-const CACHE_NAME = 'voyagr-v1';
+const CACHE_NAME = 'voyagr-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/manifest.json',
