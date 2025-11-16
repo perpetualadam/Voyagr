@@ -2186,6 +2186,23 @@ function showRoutePreview(routeData) {
         totalCost: totalCost.toFixed(2)
     });
 
+    // Update hazard information
+    const hazardCount = routeData.hazard_count || 0;
+    const hazardPenaltySeconds = routeData.hazard_penalty_seconds || 0;
+    const hazardContainer = document.getElementById('hazardInfoContainer');
+
+    if (hazardCount > 0 && hazardPenaltySeconds > 0) {
+        // Convert seconds to minutes
+        const hazardPenaltyMinutes = Math.round(hazardPenaltySeconds / 60);
+        document.getElementById('previewHazardCount').textContent = hazardCount;
+        document.getElementById('previewHazardPenalty').textContent = hazardPenaltyMinutes + ' min';
+        hazardContainer.style.display = 'block';
+        console.log('[Hazards] Route preview hazards:', { count: hazardCount, penalty: hazardPenaltyMinutes + ' min' });
+    } else {
+        hazardContainer.style.display = 'none';
+        console.log('[Hazards] No hazards detected for this route');
+    }
+
     // Update route details
     document.getElementById('previewRoutingEngine').textContent = routeData.source || 'Unknown';
     document.getElementById('previewRoutingMode').textContent = currentRoutingMode.charAt(0).toUpperCase() + currentRoutingMode.slice(1);

@@ -2930,6 +2930,21 @@ HTML_TEMPLATE = '''
                             </div>
                         </div>
 
+                        <!-- Hazard Information -->
+                        <div id="hazardInfoContainer" style="display: none; background: #FFF3E0; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #FF9800;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #E65100;">⚠️ Hazards Detected</h4>
+                            <div style="font-size: 13px; line-height: 1.6;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span style="color: #666;">Hazard Count:</span>
+                                    <strong id="previewHazardCount">0</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span style="color: #666;">Time Penalty:</span>
+                                    <strong id="previewHazardPenalty">0 min</strong>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Route Details -->
                         <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
                             <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📋 Route Details</h4>
