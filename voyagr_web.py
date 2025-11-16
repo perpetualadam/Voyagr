@@ -2570,27 +2570,27 @@ HTML_TEMPLATE = '''
 
                         <div class="preference-item">
                             <span class="preference-label">Avoid Tolls</span>
-                            <button class="toggle-switch" id="avoidTolls" onclick="togglePreference('tolls')"></button>
+                            <button class="toggle-switch" id="avoidTolls" data-pref="tolls" onclick="togglePreference('tolls')"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">Avoid CAZ</span>
-                            <button class="toggle-switch" id="avoidCAZ" onclick="togglePreference('caz')"></button>
+                            <button class="toggle-switch" id="avoidCAZ" data-pref="caz" onclick="togglePreference('caz')"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">Avoid Speed Cameras</span>
-                            <button class="toggle-switch" id="avoidSpeedCameras" onclick="togglePreference('speedCameras')"></button>
+                            <button class="toggle-switch" id="avoidSpeedCameras" data-pref="speedCameras" onclick="togglePreference('speedCameras')"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">Avoid Traffic Cameras</span>
-                            <button class="toggle-switch" id="avoidTrafficCameras" onclick="togglePreference('trafficCameras')"></button>
+                            <button class="toggle-switch" id="avoidTrafficCameras" data-pref="trafficCameras" onclick="togglePreference('trafficCameras')"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">📊 Variable Speed Alerts</span>
-                            <button class="toggle-switch" id="variableSpeedAlerts" onclick="togglePreference('variableSpeedAlerts')"></button>
+                            <button class="toggle-switch" id="variableSpeedAlerts" data-pref="variableSpeedAlerts" onclick="togglePreference('variableSpeedAlerts')"></button>
                         </div>
                     </div>
 

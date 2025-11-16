@@ -6647,6 +6647,12 @@ function sendArrivalNotification() {
  * @returns {*} Return value description
  */
 function togglePreference(pref) {
+    // Safety check - pref should not be undefined
+    if (!pref) {
+        console.error('[Preferences] togglePreference called with undefined pref');
+        return;
+    }
+
     // Map preference names to button IDs
     const buttonIdMap = {
         'tolls': 'avoidTolls',
