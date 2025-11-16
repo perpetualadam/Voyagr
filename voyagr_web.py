@@ -3655,7 +3655,6 @@ class ParallelRoutingEngine:
 
 @app.route('/api/route', methods=['POST'])
 @rate_limit(route_limiter)
-@require_auth
 def calculate_route():
     """
     Calculate route using available routing engines.
