@@ -250,14 +250,17 @@ function updateThemeButtons() {
  * @returns {*} Return value description
  */
 function switchTab(tab) {
-    const navigationContent = document.querySelector('.bottom-sheet-content > div:not(#settingsTab):not(#tripHistoryTab):not(#routeComparisonTab):not(#routeSharingTab):not(#routeAnalyticsTab):not(#savedRoutesTab)');
+    const navigationContent = document.querySelector('.bottom-sheet-content > div:not(#settingsTab):not(#tripHistoryTab):not(#routeComparisonTab):not(#routeSharingTab):not(#routeAnalyticsTab):not(#savedRoutesTab):not(#routePreviewTab)');
     const settingsTab = document.getElementById('settingsTab');
     const tripHistoryTab = document.getElementById('tripHistoryTab');
     const routeComparisonTab = document.getElementById('routeComparisonTab');
     const routeSharingTab = document.getElementById('routeSharingTab');
     const routeAnalyticsTab = document.getElementById('routeAnalyticsTab');
     const savedRoutesTab = document.getElementById('savedRoutesTab');
+    const routePreviewTab = document.getElementById('routePreviewTab');
     const sheetTitle = document.getElementById('sheetTitle');
+
+    console.log('[SwitchTab] Switching to tab:', tab);
 
     // Hide all tabs
     if (navigationContent) navigationContent.style.display = 'none';
@@ -267,7 +270,6 @@ function switchTab(tab) {
     routeSharingTab.style.display = 'none';
     routeAnalyticsTab.style.display = 'none';
     savedRoutesTab.style.display = 'none';
-    const routePreviewTab = document.getElementById('routePreviewTab');
     if (routePreviewTab) routePreviewTab.style.display = 'none';
 
     if (tab === 'settings') {
