@@ -6,6 +6,7 @@
 import { RequestDeduplicator } from './deduplicator.js';
 import { CacheManager } from './cache.js';
 import { BatchRequestManager } from './batcher.js';
+import { ResponseOptimizer } from './response-optimizer.js';
 
 /**
  * Optimized API Client
@@ -28,11 +29,13 @@ export class APIClient {
         this.deduplicator = new RequestDeduplicator(config.deduplicationWindow || 5000);
         this.cache = new CacheManager(config.cache || {});
         this.batcher = new BatchRequestManager(config.batch || {});
-        
+        this.optimizer = new ResponseOptimizer(config.optimizer || {});
+
         this.config = {
             enableDedup: config.enableDedup !== false,
             enableCache: config.enableCache !== false,
             enableBatch: config.enableBatch !== false,
+            enableOptimization: config.enableOptimization !== false,
             ...config
         };
 
@@ -40,7 +43,8 @@ export class APIClient {
             requests: 0,
             cached: 0,
             deduplicated: 0,
-            batched: 0
+            batched: 0,
+            optimized: 0
         };
     }
 
@@ -58,6 +62,47 @@ export class APIClient {
     }
 
     /**
+     * Endpoint-specific TTL configuration
+     * @type {Object}
+     */
+    static ENDPOINT_TTL = {
+        '/api/route': 3600000,           // 1 hour - routes don't change often
+        '/api/hazards': 600000,          // 10 minutes - hazards update regularly
+        '/api/weather': 1800000,         // 30 minutes - weather updates periodically
+        '/api/charging': 86400000,       // 24 hours - charging stations change slowly
+        '/api/trip-history': 300000,     // 5 minutes - trip history updates frequently
+        '/api/vehicle': 86400000,        // 24 hours - vehicle data changes rarely
+        '/api/settings': 86400000,       // 24 hours - settings change rarely
+        '/api/traffic': 300000           // 5 minutes - traffic updates frequently
+    };
+
+    /**
+     * Get endpoint-specific TTL
+     * @function getEndpointTTL
+     * @param {string} url - Request URL
+     * @returns {number} TTL in milliseconds
+     */
+    getEndpointTTL(url) {
+        // Extract endpoint from URL
+        const endpoint = url.split('?')[0];
+
+        // Check for exact match
+        if (APIClient.ENDPOINT_TTL[endpoint]) {
+            return APIClient.ENDPOINT_TTL[endpoint];
+        }
+
+        // Check for pattern match (e.g., /api/route/123)
+        for (const [pattern, ttl] of Object.entries(APIClient.ENDPOINT_TTL)) {
+            if (endpoint.startsWith(pattern)) {
+                return ttl;
+            }
+        }
+
+        // Default TTL
+        return 300000; // 5 minutes
+    }
+
+    /**
      * GET request with optimizations
      * @async
      * @function get
@@ -69,7 +114,9 @@ export class APIClient {
     async get(url, params = {}, options = {}) {
         const fullUrl = this.buildUrl(url, params);
         const cacheKey = `GET:${fullUrl}`;
-        const cacheTTL = options.cacheTTL || 300000; // 5 min default
+
+        // Use endpoint-specific TTL if not provided
+        const cacheTTL = options.cacheTTL || this.getEndpointTTL(url);
 
         // Check cache first
         if (this.config.enableCache) {
@@ -83,24 +130,36 @@ export class APIClient {
         // Use deduplicator
         if (this.config.enableDedup) {
             const response = await this.deduplicator.fetch(fullUrl, { method: 'GET' });
-            const data = await response.json();
-            
+            let data = await response.json();
+
+            // Optimize response
+            if (this.config.enableOptimization) {
+                data = this.optimizer.optimize(data, url);
+                this.stats.optimized++;
+            }
+
             if (this.config.enableCache) {
                 this.cache.set(cacheKey, data, cacheTTL);
             }
-            
+
             this.stats.requests++;
             return data;
         }
 
         // Fallback to regular fetch
         const response = await fetch(fullUrl, { method: 'GET' });
-        const data = await response.json();
-        
+        let data = await response.json();
+
+        // Optimize response
+        if (this.config.enableOptimization) {
+            data = this.optimizer.optimize(data, url);
+            this.stats.optimized++;
+        }
+
         if (this.config.enableCache) {
             this.cache.set(cacheKey, data, cacheTTL);
         }
-        
+
         this.stats.requests++;
         return data;
     }

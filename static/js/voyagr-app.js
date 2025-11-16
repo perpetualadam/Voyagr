@@ -3100,6 +3100,30 @@ function toggleSpeedWidget() {
     }
     localStorage.setItem('speedWidgetEnabled', speedWidgetEnabled);
 }
+
+/**
+ * toggleZoomAndFollow function
+ * @function toggleZoomAndFollow
+ * @returns {*} Return value description
+ */
+function toggleZoomAndFollow() {
+    zoomAndFollowEnabled = !zoomAndFollowEnabled;
+    const btn = document.getElementById('zoomFollowToggle');
+    if (btn) {
+        btn.classList.toggle('active', zoomAndFollowEnabled);
+    }
+    localStorage.setItem('zoomAndFollowEnabled', zoomAndFollowEnabled ? 'true' : 'false');
+
+    if (zoomAndFollowEnabled) {
+        mapFollowingActive = true;
+        showStatus('📍 Zoom & Follow enabled - map will follow your vehicle', 'success');
+        console.log('[Zoom & Follow] Enabled');
+    } else {
+        mapFollowingActive = false;
+        showStatus('📍 Zoom & Follow disabled - map is free to pan', 'info');
+        console.log('[Zoom & Follow] Disabled');
+    }
+}
 /**
  * updateSpeedWarning function
  * @function updateSpeedWarning
@@ -3368,30 +3392,63 @@ function updateUserMarkerIcon() {
  * @param {*} lon - Parameter description
  * @param {*} speed - Parameter description
  * @param {*} accuracy - Parameter description
+ * @param {*} heading - Parameter description (optional, in degrees 0-360)
  * @returns {*} Return value description
  */
-function createVehicleMarker(lat, lon, speed, accuracy) {
+function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
     // Create a custom marker with vehicle icon
     const iconEmoji = vehicleIcons[currentRoutingMode] || vehicleIcons[currentVehicleType] || '🚗';
 
-    // Create a div element for the marker
+    // Create a div element for the marker with ENHANCED styling
     const markerDiv = document.createElement('div');
-    markerDiv.style.fontSize = '24px';
+    markerDiv.style.fontSize = '32px';
     markerDiv.style.textAlign = 'center';
-    markerDiv.style.width = '30px';
-    markerDiv.style.height = '30px';
+    markerDiv.style.width = '50px';
+    markerDiv.style.height = '50px';
+    markerDiv.style.display = 'flex';
+    markerDiv.style.alignItems = 'center';
+    markerDiv.style.justifyContent = 'center';
+    markerDiv.style.borderRadius = '50%';
+    markerDiv.style.backgroundColor = 'white';
+
+    // Enhanced shadow with glow effect
+    markerDiv.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.3), 0 6px 16px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.8)';
+    markerDiv.style.border = '3px solid #667eea';
+    markerDiv.style.transform = `rotate(${heading}deg) scale(1)`;
+    markerDiv.style.transition = 'transform 0.2s ease-out, box-shadow 0.3s ease-out';
+    markerDiv.style.filter = 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2))';
     markerDiv.innerHTML = iconEmoji;
 
-    // Create custom icon
+    // Create custom icon with improved styling
     const customIcon = L.divIcon({
-        html: markerDiv.innerHTML,
-        iconSize: [30, 30],
+        html: markerDiv.outerHTML,
+        iconSize: [50, 50],
+        iconAnchor: [25, 25],
+        popupAnchor: [0, -25],
         className: 'vehicle-marker-icon'
     });
 
     // Create marker with custom icon
-    const marker = L.marker([lat, lon], { icon: customIcon })
-        .bindPopup(`${iconEmoji} Current Position<br>Speed: ${(speed * 3.6).toFixed(1)} km/h<br>Accuracy: ${accuracy.toFixed(0)}m`);
+    const speedKmh = speed ? (speed * 3.6).toFixed(1) : 0;
+    const speedUnit = getSpeedUnit();
+    const displaySpeed = convertSpeed(speedKmh);
+
+    const marker = L.marker([lat, lon], { icon: customIcon, zIndexOffset: 1000 })
+        .bindPopup(`
+            <div style="font-family: Arial, sans-serif; font-size: 13px; min-width: 180px;">
+                <strong style="font-size: 14px;">${iconEmoji} Current Position</strong><br>
+                <div style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 8px;">
+                    <div>Speed: <strong>${displaySpeed} ${speedUnit}</strong></div>
+                    <div>Heading: <strong>${Math.round(heading)}°</strong></div>
+                    <div>Accuracy: <strong>±${accuracy.toFixed(0)}m</strong></div>
+                </div>
+            </div>
+        `);
+
+    // Store heading and speed for later updates
+    marker.heading = heading;
+    marker.speed = speed;
+    marker.accuracy = accuracy;
 
     return marker;
 }
@@ -4664,8 +4721,22 @@ function startGPSTracking() {
             currentUserMarker = createVehicleMarker(lat, lon, speed, accuracy);
             currentUserMarker.addTo(map);
 
-            // Center map on user (if not manually panned) with smooth animation
-            if (!map._userPanned) {
+            // ===== ZOOM AND FOLLOW: Center map on user with smart zoom =====
+            if (zoomAndFollowEnabled && mapFollowingActive) {
+                // Calculate smart zoom based on speed and route context
+                const speedMph = speed ? (speed * 2.237) : 0;
+                const smartZoom = calculateSmartZoom(speedMph, null, 'motorway');
+
+                // Smooth animation to follow vehicle
+                map.flyTo([lat, lon], smartZoom, {
+                    duration: 0.5,
+                    easeLinearity: 0.25,
+                    noMoveStart: false
+                });
+
+                console.log(`[Zoom & Follow] Following vehicle at zoom ${smartZoom}, speed ${speedMph.toFixed(1)} mph`);
+            } else if (!zoomAndFollowEnabled && !map._userPanned) {
+                // If zoom and follow is disabled but map hasn't been manually panned, still center on user
                 map.flyTo([lat, lon], 16, {
                     duration: 0.3,
                     easeLinearity: 0.25
@@ -6176,6 +6247,14 @@ function startTurnByTurnNavigation(routeData) {
     // ===== PHASE 1: Start live data refresh =====
     startLiveDataRefresh();
 
+    // ===== SHOW ZOOM AND FOLLOW BUTTON =====
+    mapFollowingActive = true;
+    const zoomFollowBtn = document.getElementById('zoomFollowToggle');
+    if (zoomFollowBtn) {
+        zoomFollowBtn.style.display = 'block';
+        zoomFollowBtn.classList.toggle('active', zoomAndFollowEnabled);
+    }
+
     sendNotification('Navigation Started', 'Turn-by-turn guidance activated', 'success');
     speakMessage('Navigation started. Follow the route.');
     showStatus('🧭 Turn-by-turn navigation active', 'success');
@@ -6206,6 +6285,13 @@ function stopTurnByTurnNavigation() {
 
     // ===== PHASE 1: Stop live data refresh =====
     stopLiveDataRefresh();
+
+    // ===== HIDE ZOOM AND FOLLOW BUTTON =====
+    mapFollowingActive = false;
+    const zoomFollowBtn = document.getElementById('zoomFollowToggle');
+    if (zoomFollowBtn) {
+        zoomFollowBtn.style.display = 'none';
+    }
 
     // ===== PHASE 2: Apply pending PWA update if available =====
     if (updatePending) {

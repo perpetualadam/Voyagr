@@ -3007,6 +3007,7 @@ HTML_TEMPLATE = '''
         <div style="position: absolute; bottom: 100px; right: 20px; z-index: 100; display: flex; flex-direction: column; gap: 10px;">
             <button id="startTrackingBtn" class="fab" title="Start GPS Tracking" onclick="startGPSTracking()" style="background: #4285F4;">📡</button>
             <button id="startNavBtn" class="fab" title="Start Navigation" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
+            <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
         </div>
     </div>
 

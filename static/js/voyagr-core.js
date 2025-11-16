@@ -11,6 +11,10 @@ let startMarker = null;
 let endMarker = null;
 let mapPickerMode = null; // 'start' or 'end' when picking location from map
 
+// ===== ZOOM AND FOLLOW VARIABLES =====
+let zoomAndFollowEnabled = localStorage.getItem('zoomAndFollowEnabled') === 'true' || true; // Default: enabled
+let mapFollowingActive = false; // Whether we're currently following the vehicle
+
 // ===== UNIT CONVERSION VARIABLES =====
 let distanceUnit = localStorage.getItem('unit_distance') || 'km';
 let currencyUnit = localStorage.getItem('unit_currency') || 'GBP';
