@@ -3757,6 +3757,11 @@ def calculate_route():
         except Exception as e:
             graphhopper_error = str(e)
             print(f"[GraphHopper] Exception: {graphhopper_error}")
+            print(f"[GraphHopper] Exception type: {type(e).__name__}")
+            print(f"[GraphHopper] Response type: {type(response) if 'response' in locals() else 'N/A'}")
+            if 'response' in locals():
+                print(f"[GraphHopper] Response status: {response.status_code if hasattr(response, 'status_code') else 'N/A'}")
+                print(f"[GraphHopper] Response text: {response.text if hasattr(response, 'text') else 'N/A'}")
             import traceback
             traceback.print_exc()
 
@@ -3929,6 +3934,11 @@ def calculate_route():
         except Exception as e:
             valhalla_error = str(e)
             print(f"[Valhalla] Exception: {valhalla_error}")
+            print(f"[Valhalla] Exception type: {type(e).__name__}")
+            print(f"[Valhalla] Response type: {type(response) if 'response' in locals() else 'N/A'}")
+            if 'response' in locals():
+                print(f"[Valhalla] Response status: {response.status_code if hasattr(response, 'status_code') else 'N/A'}")
+                print(f"[Valhalla] Response text: {response.text if hasattr(response, 'text') else 'N/A'}")
             import traceback
             traceback.print_exc()
 
