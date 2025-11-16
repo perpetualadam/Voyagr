@@ -3921,10 +3921,12 @@ def calculate_route():
     """
     import time
     route_start_time = time.time()
+    print(f"[DEBUG] calculate_route() called at {time.time()}")
 
     try:
         data = request.json
         logger.info(f"[ROUTE] Received request: {data}")
+        print(f"[DEBUG] Request data: {data}")
 
         # ================================================================
         # PHASE 5: Validate request parameters
@@ -4016,8 +4018,10 @@ def calculate_route():
             if response.status_code == 200:
                 route_data = response.json()
                 logger.debug(f"[GraphHopper] Response keys: {route_data.keys()}")
+                print(f"[DEBUG] GraphHopper response received, paths count: {len(route_data.get('paths', []))}")
 
                 if 'paths' in route_data and len(route_data['paths']) > 0:
+                    print(f"[DEBUG] Processing {len(route_data['paths'])} paths from GraphHopper")
                     # Extract all available routes (up to 4)
                     routes = []
                     for idx, path in enumerate(route_data['paths'][:4]):
@@ -4135,6 +4139,10 @@ def calculate_route():
                         'end_lat': end_lat,
                         'end_lon': end_lon
                     }
+
+                    # DEBUG: Print response data before returning
+                    print(f"[DEBUG] GraphHopper response_data keys: {list(response_data.keys())}")
+                    print(f"[DEBUG] start_lat={response_data.get('start_lat')}, end_lat={response_data.get('end_lat')}")
 
                     # Cache the route for future requests
                     route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance)
