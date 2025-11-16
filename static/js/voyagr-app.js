@@ -35,8 +35,7 @@
             'EUR': '€'
         };
 
-        // Unit conversion functions
- */
+        // ===== UNIT CONVERSION FUNCTIONS =====
 /**
  * convertDistance function
  * @function convertDistance
@@ -59,7 +58,6 @@
             return distanceUnit === 'mi' ? 'mi' : 'km';
         }
 
- */
 /**
  * convertSpeed function
  * @function convertSpeed
@@ -2497,7 +2495,8 @@
                     TURN_ANNOUNCEMENT_DISTANCES.length = 0;
                     TURN_ANNOUNCEMENT_DISTANCES.push(prefs.turnDistance1, prefs.turnDistance2, prefs.turnDistance3, 50);
                     HAZARD_WARNING_DISTANCE = prefs.hazardDistance || 500;
-                    voiceRecognition = announcementsEnabled;
+                    // FIXED: Update the new boolean flag instead of voiceRecognition object
+                    voiceAnnouncementsEnabled = announcementsEnabled;
 
                     console.log('[Voice] Preferences loaded:', prefs);
                 } else {
@@ -2542,7 +2541,8 @@
             // Save to localStorage
             localStorage.setItem('voiceAnnouncementsEnabled', enabled ? 'true' : 'false');
 
-            voiceRecognition = enabled;
+            // FIXED: Update the new boolean flag instead of voiceRecognition object
+            voiceAnnouncementsEnabled = enabled;
             saveVoicePreferences();
             showStatus(enabled ? '🔊 Voice announcements enabled' : '🔇 Voice announcements disabled', 'success');
             saveAllSettings();
@@ -4735,8 +4735,9 @@
                         // NEW: Announce distance to destination
                         announceDistanceToDestination(lat, lon);
 
-                        // NEW: Announce ETA updates
-                        announceETAUpdate(lat, lon);
+                        // FIXED: Removed announceETAUpdate() from GPS callback
+                        // ETA is now announced only via interval timer (every 10 minutes)
+                        // This prevents ETA from being announced every 1-5 seconds
                     }
 
                     applySmartZoomWithAnimation(speedMph, distanceToNextTurn, 'motorway', lat, lon);
@@ -4817,7 +4818,7 @@
         }
 
         // Turn announcement variables
-        let lastTurnAnnouncementDistance = Infinity;
+        let announcedTurnThresholds = new Set();  // FIXED: Track each threshold independently
         const TURN_ANNOUNCEMENT_DISTANCES = [500, 200, 100, 50]; // meters
 
         // Distance-to-destination announcement variables
@@ -4830,6 +4831,9 @@
         const ETA_ANNOUNCEMENT_INTERVAL_MS = 600000; // Announce ETA every 10 minutes (600,000 ms)
         const ETA_CHANGE_THRESHOLD_MS = 300000; // Announce if ETA changes by >5 minutes (300,000 ms)
         const ETA_MIN_INTERVAL_MS = 60000; // Minimum 1 minute between any ETA announcements (prevents excessive frequency)
+
+        // Voice announcements enabled flag (FIXED: separate from Web Speech API object)
+        let voiceAnnouncementsEnabled = true;
 
  */
 /**
@@ -4860,7 +4864,8 @@
  * @returns {*} Return value description
  */
         function announceDistanceToDestination(currentLat, currentLon) {
-            if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceRecognition) return;
+            // FIXED: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
+            if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceAnnouncementsEnabled) return;
 
             // Calculate remaining distance from current position to destination
             let remainingDistance = 0;
@@ -4925,9 +4930,11 @@
  * @param {*} currentLat - Parameter description
  * @param {*} currentLon - Parameter description
  * @returns {*} Return value description
+ * @deprecated Use announceETAIfNeeded() instead - this function is no longer called from GPS callback
  */
         function announceETAUpdate(currentLat, currentLon) {
-            if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceRecognition) return;
+            // FIXED: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
+            if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceAnnouncementsEnabled) return;
 
             const now = Date.now();
 
@@ -5039,17 +5046,29 @@
  * @returns {*} Return value description
  */
         function announceUpcomingTurn(turnInfo) {
-            if (!turnInfo || !voiceRecognition) return;
+            // FIXED: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
+            if (!turnInfo || !voiceAnnouncementsEnabled) return;
 
             const distance = turnInfo.distance;
+
+            // FIXED: Validate distance is a valid number
+            if (typeof distance !== 'number' || isNaN(distance) || distance < 0) {
+                console.warn('[Voice] Invalid turn distance:', distance);
+                return;
+            }
+
             const direction = turnInfo.direction || 'straight';
             const directionText = getTurnDirectionText(direction);
             const isStraight = direction === 'straight';
 
-            // Check if we should announce at this distance
+            // FIXED: Check each threshold independently using Set
+            // This ensures all thresholds are announced (500m, 200m, 100m, 50m)
             for (const announcementDistance of TURN_ANNOUNCEMENT_DISTANCES) {
-                // Announce when within range (with 10m hysteresis to avoid repeated announcements)
-                if (distance <= announcementDistance && lastTurnAnnouncementDistance > announcementDistance + 10) {
+                // Announce when: (1) within range, (2) not already announced, (3) haven't passed it yet
+                if (distance <= announcementDistance &&
+                    !announcedTurnThresholds.has(announcementDistance) &&
+                    distance > announcementDistance - 50) {  // 50m buffer before threshold
+
                     let message = '';
 
                     if (announcementDistance === 500) {
@@ -5072,14 +5091,13 @@
 
                     console.log(`[Voice] Announcing turn: ${message} (distance: ${distance.toFixed(0)}m, direction: ${direction})`);
                     speakMessage(message);
-                    lastTurnAnnouncementDistance = distance;
-                    break;
+                    announcedTurnThresholds.add(announcementDistance);
                 }
             }
 
-            // Reset announcement when turn is passed
+            // FIXED: Reset when turn is completely passed
             if (distance > 600) {
-                lastTurnAnnouncementDistance = Infinity;
+                announcedTurnThresholds.clear();
             }
         }
 
@@ -5297,9 +5315,11 @@
                     refreshTrafficData();
                 }, trafficInterval);
 
-                // ETA refresh every 30 seconds (or adaptive)
+                // FIXED: ETA refresh every 30 seconds (or adaptive)
+                // Now includes voice announcement with proper throttling
                 etaRefreshInterval = setInterval(() => {
                     updateETACalculation();
+                    announceETAIfNeeded();  // FIXED: Announce ETA only when needed (every 10 minutes)
                 }, etaInterval);
 
                 // Weather refresh every 30 minutes (or adaptive)
@@ -5411,6 +5431,73 @@
                         </div>
                     </div>
                 `;
+            }
+        }
+
+/**
+ * announceETAIfNeeded function
+ * @function announceETAIfNeeded
+ * @returns {*} Return value description
+ */
+        function announceETAIfNeeded() {
+            // FIXED: Announce ETA only when needed (every 10 minutes)
+            // This replaces the old announceETAUpdate() which was called on every GPS update
+            if (!routeInProgress || !routePolyline || currentStepIndex === undefined || !voiceAnnouncementsEnabled) return;
+
+            const now = Date.now();
+            const timeSinceLastAnnouncement = now - lastETAAnnouncementTime;
+
+            // Only announce if 10 minutes have passed since last announcement
+            if (timeSinceLastAnnouncement > ETA_ANNOUNCEMENT_INTERVAL_MS) {
+                // Calculate remaining distance
+                let remainingDistance = 0;
+                for (let i = currentStepIndex; i < routePolyline.length - 1; i++) {
+                    remainingDistance += calculateDistance(
+                        routePolyline[i][0], routePolyline[i][1],
+                        routePolyline[i+1][0], routePolyline[i+1][1]
+                    );
+                }
+
+                // Get average speed from recent tracking history with proper validation
+                let avgSpeed = 40; // Default 40 km/h
+                if (trackingHistory && trackingHistory.length > 5) {
+                    try {
+                        const recentSpeeds = trackingHistory.slice(-5)
+                            .map(t => {
+                                let speed = t.speed || 0;
+                                if (speed < 1 && speed > 0) speed = speed * 3.6;
+                                return speed;
+                            })
+                            .filter(s => s > 0 && s < 200);
+                        if (recentSpeeds.length > 0) {
+                            avgSpeed = recentSpeeds.reduce((a, b) => a + b) / recentSpeeds.length;
+                            avgSpeed = Math.max(5, Math.min(200, avgSpeed));
+                        }
+                    } catch (e) {
+                        console.warn('[ETA] Error calculating speed:', e);
+                    }
+                }
+
+                // Calculate ETA with validation
+                if (avgSpeed <= 0) avgSpeed = 40;
+                const timeRemainingMinutes = Math.round((remainingDistance / 1000 / avgSpeed) * 60);
+                const eta = new Date(now + timeRemainingMinutes * 60000);
+                const etaHours = eta.getHours();
+                const etaMinutes = eta.getMinutes();
+
+                let message = '';
+                if (timeRemainingMinutes > 60) {
+                    const hours = Math.floor(timeRemainingMinutes / 60);
+                    const mins = timeRemainingMinutes % 60;
+                    message = `You will arrive in ${hours} hour${hours > 1 ? 's' : ''} and ${mins} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
+                } else {
+                    message = `You will arrive in ${timeRemainingMinutes} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
+                }
+
+                console.log(`[Voice] ETA announcement: ${message} (remaining: ${(remainingDistance / 1000).toFixed(1)}km, avg speed: ${avgSpeed.toFixed(1)}km/h, time: ${timeRemainingMinutes}min)`);
+                speakMessage(message);
+                lastETAAnnouncementTime = now;
+                lastAnnouncedETA = eta;
             }
         }
 
