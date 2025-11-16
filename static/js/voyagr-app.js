@@ -2140,20 +2140,18 @@ function showRoutePreview(routeData) {
     const endInput = document.getElementById('end').value;
     document.getElementById('previewRoute').textContent = `${startInput} → ${endInput}`;
 
-    // Update cost breakdown with unit conversion
+    // Update cost breakdown
+    // NOTE: Costs are already calculated by backend based on actual distance in km
+    // They should NOT be adjusted based on distance unit preference (km vs miles)
+    // The distance unit is just for display - the actual cost is the same regardless
     const fuelCost = parseFloat(routeData.fuel_cost || 0);
     const tollCost = parseFloat(routeData.toll_cost || 0);
     const cazCost = parseFloat(routeData.caz_cost || 0);
+    const totalCost = fuelCost + tollCost + cazCost;
 
-    // Adjust costs for imperial units if needed
-    const adjustedFuelCost = distanceUnit === 'mi' ? fuelCost * 1.60934 : fuelCost;
-    const adjustedTollCost = distanceUnit === 'mi' ? tollCost * 1.60934 : tollCost;
-    const adjustedCazCost = distanceUnit === 'mi' ? cazCost * 1.60934 : cazCost;
-    const totalCost = adjustedFuelCost + adjustedTollCost + adjustedCazCost;
-
-    document.getElementById('previewFuelCost').textContent = symbol + adjustedFuelCost.toFixed(2);
-    document.getElementById('previewTollCost').textContent = symbol + adjustedTollCost.toFixed(2);
-    document.getElementById('previewCAZCost').textContent = symbol + adjustedCazCost.toFixed(2);
+    document.getElementById('previewFuelCost').textContent = symbol + fuelCost.toFixed(2);
+    document.getElementById('previewTollCost').textContent = symbol + tollCost.toFixed(2);
+    document.getElementById('previewCAZCost').textContent = symbol + cazCost.toFixed(2);
     document.getElementById('previewTotalCost').textContent = symbol + totalCost.toFixed(2);
 
     console.log('[Cost] Route preview costs adjusted for unit preference:', {
