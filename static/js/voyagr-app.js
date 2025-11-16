@@ -2020,7 +2020,16 @@ async function calculateRoute() {
 
                 // Update info
                 updateTripInfo(data.distance, data.time, data.fuel_cost || '-', data.toll_cost || '-');
-                showStatus('Route calculated successfully! (' + data.source + ')', 'success');
+
+                // Show custom router performance if available
+                let statusMsg = 'Route calculated successfully! (' + data.source + ')';
+                if (data.response_time_ms) {
+                    statusMsg += ` - ${data.response_time_ms.toFixed(0)}ms`;
+                }
+                if (data.source && data.source.includes('Custom Router')) {
+                    statusMsg += ' ⚡ Ultra-fast!';
+                }
+                showStatus(statusMsg, 'success');
 
                 // Store route data for navigation (including destination for rerouting)
                 window.lastCalculatedRoute = {
