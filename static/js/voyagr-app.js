@@ -11,14 +11,11 @@ if (typeof window !== 'undefined' && window.ethereum) {
     }
 }
 
-// Note: Map initialization is handled in voyagr-core.js
+// Note: All global variables are declared in voyagr-core.js
 // This file contains all the application logic and functions
-
-const currencySymbols = {
-    'GBP': '£',
-    'USD': '$',
-    'EUR': '€'
-};
+// Variables: map, routeLayer, startMarker, endMarker, mapPickerMode
+// Unit variables: distanceUnit, currencyUnit, speedUnit, temperatureUnit
+// Currency symbols: currencySymbols
 
 // ===== UNIT CONVERSION FUNCTIONS =====
 /**
@@ -26,7 +23,6 @@ const currencySymbols = {
  * @function convertDistance
  * @param {*} km - Parameter description
  * @returns {*} Return value description
- */
  */
 function convertDistance(km) {
     if (distanceUnit === 'mi') {
@@ -40,7 +36,6 @@ function convertDistance(km) {
  * @function getDistanceUnit
  * @returns {*} Return value description
  */
- */
 function getDistanceUnit() {
     return distanceUnit === 'mi' ? 'mi' : 'km';
 }
@@ -50,7 +45,6 @@ function getDistanceUnit() {
  * @function convertSpeed
  * @param {*} kmh - Parameter description
  * @returns {*} Return value description
- */
  */
 function convertSpeed(kmh) {
     if (speedUnit === 'mph') {
