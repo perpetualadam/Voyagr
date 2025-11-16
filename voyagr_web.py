@@ -3656,7 +3656,7 @@ def calculate_route():
                     routes = []
                     for idx, path in enumerate(route_data['paths'][:4]):
                         distance = path.get('distance', 0) / 1000  # Convert to km
-                        time = path.get('time', 0) / 60000  # Convert to minutes
+                        duration_minutes = path.get('time', 0) / 60000  # Convert to minutes
 
                         # Extract route geometry
                         route_geometry = None
@@ -3706,7 +3706,7 @@ def calculate_route():
                             'id': idx + 1,
                             'name': route_type,
                             'distance_km': round(distance, 2),
-                            'duration_minutes': round(time, 0),
+                            'duration_minutes': round(duration_minutes, 0),
                             'fuel_cost': round(fuel_cost, 2),
                             'toll_cost': round(toll_cost, 2),
                             'caz_cost': round(caz_cost, 2),
@@ -3801,9 +3801,9 @@ def calculate_route():
                     # Main route
                     # NOTE: Valhalla returns distance in kilometers, not meters!
                     distance = route_data['trip']['summary']['length']
-                    time = route_data['trip']['summary']['time']
+                    duration_seconds = route_data['trip']['summary']['time']
                     distance_km = distance  # Already in km, don't divide by 1000
-                    time_min = time / 60
+                    time_min = duration_seconds / 60
 
                     # Extract route geometry
                     route_geometry = None
@@ -3840,10 +3840,10 @@ def calculate_route():
                         for idx, alt_route in enumerate(route_data['alternatives'][:3]):
                             if 'trip' in alt_route and 'summary' in alt_route['trip']:
                                 alt_distance = alt_route['trip']['summary']['length']
-                                alt_time = alt_route['trip']['summary']['time']
+                                alt_duration_seconds = alt_route['trip']['summary']['time']
                                 # NOTE: Valhalla returns distance in kilometers, not meters!
                                 alt_distance_km = alt_distance  # Already in km, don't divide by 1000
-                                alt_time_min = alt_time / 60
+                                alt_time_min = alt_duration_seconds / 60
 
                                 # Extract geometry
                                 alt_geometry = None
