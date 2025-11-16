@@ -306,6 +306,35 @@ GRAPHHOPPER_URL = os.getenv('GRAPHHOPPER_URL', 'http://localhost:8989')
 USE_OSRM = os.getenv('USE_OSRM', 'false').lower() == 'true'
 
 # ============================================================================
+# PHASE 3: CUSTOM ROUTER INTEGRATION
+# ============================================================================
+# Phase 3: Import custom router modules
+try:
+    from custom_router import RoadNetwork, Router, KShortestPaths
+    CUSTOM_ROUTER_AVAILABLE = True
+except ImportError:
+    CUSTOM_ROUTER_AVAILABLE = False
+    logger.warning("[CUSTOM_ROUTER] Module not available - will use external engines only")
+
+# Phase 3: Custom router configuration
+USE_CUSTOM_ROUTER = os.getenv('USE_CUSTOM_ROUTER', 'true').lower() == 'true'
+CUSTOM_ROUTER_DB = os.getenv('CUSTOM_ROUTER_DB', 'data/uk_router.db')
+CUSTOM_ROUTER_K_PATHS = int(os.getenv('CUSTOM_ROUTER_K_PATHS', '4'))
+CUSTOM_ROUTER_TIMEOUT = int(os.getenv('CUSTOM_ROUTER_TIMEOUT', '5000'))
+
+# Phase 3: Global custom router instances
+custom_graph = None
+custom_router = None
+k_paths = None
+custom_router_stats = {
+    'requests': 0,
+    'successes': 0,
+    'failures': 0,
+    'total_time_ms': 0,
+    'avg_time_ms': 0
+}
+
+# ============================================================================
 # CONFIGURABLE RATES (Environment Variables)
 # ============================================================================
 # Toll rates (£ per km) - configurable via environment variables
@@ -405,6 +434,48 @@ class RouteCache:
 
 # Initialize route cache
 route_cache = RouteCache(max_size=1000, ttl_seconds=3600)
+
+# ============================================================================
+# PHASE 3: CUSTOM ROUTER INITIALIZATION
+# ============================================================================
+
+def init_custom_router() -> bool:
+    """Initialize custom router at app startup."""
+    global custom_graph, custom_router, k_paths
+
+    if not CUSTOM_ROUTER_AVAILABLE or not USE_CUSTOM_ROUTER:
+        logger.info("[CUSTOM_ROUTER] Disabled or not available")
+        return False
+
+    try:
+        if not os.path.exists(CUSTOM_ROUTER_DB):
+            logger.warning(f"[CUSTOM_ROUTER] Database not found: {CUSTOM_ROUTER_DB}")
+            return False
+
+        logger.info(f"[CUSTOM_ROUTER] Initializing from {CUSTOM_ROUTER_DB}...")
+        custom_graph = RoadNetwork(CUSTOM_ROUTER_DB)
+        custom_router = Router(custom_graph)
+        k_paths = KShortestPaths(custom_router)
+
+        logger.info(f"[CUSTOM_ROUTER] ✅ Initialized successfully")
+        logger.info(f"[CUSTOM_ROUTER] Nodes: {len(custom_graph.nodes):,}")
+        logger.info(f"[CUSTOM_ROUTER] Edges: {sum(len(e) for e in custom_graph.edges.values()):,}")
+        return True
+    except Exception as e:
+        logger.error(f"[CUSTOM_ROUTER] ❌ Initialization failed: {e}")
+        return False
+
+def update_custom_router_stats(time_ms: float, success: bool) -> None:
+    """Update custom router performance statistics."""
+    custom_router_stats['requests'] += 1
+    custom_router_stats['total_time_ms'] += time_ms
+    custom_router_stats['avg_time_ms'] = (
+        custom_router_stats['total_time_ms'] / custom_router_stats['requests']
+    )
+    if success:
+        custom_router_stats['successes'] += 1
+    else:
+        custom_router_stats['failures'] += 1
 
 # ============================================================================
 # DATABASE CONNECTION POOLING (Phase 3 Optimization)
@@ -3911,6 +3982,103 @@ class ParallelRoutingEngine:
 
         return self.results
 
+# ============================================================================
+# PHASE 3: CUSTOM ROUTER ENDPOINT
+# ============================================================================
+
+@app.route('/api/route/custom', methods=['POST'])
+@rate_limit(route_limiter)
+def calculate_route_custom():
+    """
+    Calculate route using custom router (Phase 3).
+    Provides ultra-fast routing with 3-4 alternatives.
+    """
+    route_start_time = time.time()
+
+    try:
+        if not custom_router:
+            return jsonify({'success': False, 'error': 'Custom router not initialized'}), 503
+
+        data = request.json
+        logger.info(f"[CUSTOM_ROUTER] Route request: {data}")
+
+        # Validate request
+        is_valid, error_msg = validate_route_request(data)
+        if not is_valid:
+            return jsonify({'success': False, 'error': error_msg}), 400
+
+        # Parse coordinates
+        start = data.get('start', '').strip()
+        end = data.get('end', '').strip()
+        start_coords = validate_coordinates(start)
+        end_coords = validate_coordinates(end)
+        start_lat, start_lon = start_coords
+        end_lat, end_lon = end_coords
+
+        # Calculate route
+        logger.info(f"[CUSTOM_ROUTER] Calculating route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+        route = custom_router.route(start_lat, start_lon, end_lat, end_lon)
+
+        if not route:
+            update_custom_router_stats(0, False)
+            return jsonify({'success': False, 'error': 'Route not found'}), 404
+
+        # Get alternatives
+        alternatives = k_paths.find_k_paths(start_lat, start_lon, end_lat, end_lon, k=CUSTOM_ROUTER_K_PATHS)
+
+        # Combine routes
+        routes = [route] + alternatives
+
+        # Calculate costs
+        vehicle_type = data.get('vehicle_type', 'petrol_diesel')
+        fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
+        fuel_price = float(data.get('fuel_price', 1.40))
+        include_tolls = data.get('include_tolls', True)
+        include_caz = data.get('include_caz', True)
+
+        for route_item in routes:
+            distance_km = route_item.get('distance_km', 0)
+
+            # Calculate fuel cost
+            fuel_cost = (distance_km / fuel_efficiency) * fuel_price if fuel_efficiency > 0 else 0
+
+            # Calculate toll cost (estimate)
+            toll_cost = distance_km * 0.15 if include_tolls else 0
+
+            # Calculate CAZ cost (estimate)
+            caz_cost = 8.0 if include_caz and vehicle_type == 'petrol_diesel' else 0
+
+            route_item['fuel_cost'] = round(fuel_cost, 2)
+            route_item['toll_cost'] = round(toll_cost, 2)
+            route_item['caz_cost'] = round(caz_cost, 2)
+            route_item['total_cost'] = round(fuel_cost + toll_cost + caz_cost, 2)
+
+        elapsed = (time.time() - route_start_time) * 1000
+        update_custom_router_stats(elapsed, True)
+
+        response_data = {
+            'success': True,
+            'routes': routes,
+            'source': 'Custom Router ⚡',
+            'distance': f'{route.get("distance_km", 0):.2f} km',
+            'time': f'{route.get("duration_minutes", 0):.0f} minutes',
+            'response_time_ms': elapsed,
+            'cached': False,
+            'start_lat': start_lat,
+            'start_lon': start_lon,
+            'end_lat': end_lat,
+            'end_lon': end_lon,
+            'custom_router_stats': custom_router_stats
+        }
+
+        logger.info(f"[CUSTOM_ROUTER] ✅ Route calculated in {elapsed:.0f}ms with {len(alternatives)} alternatives")
+        return jsonify(response_data)
+
+    except Exception as e:
+        logger.error(f"[CUSTOM_ROUTER] ❌ Error: {e}")
+        update_custom_router_stats(0, False)
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 @app.route('/api/route', methods=['POST'])
 @rate_limit(route_limiter)
 def calculate_route():
@@ -3978,6 +4146,61 @@ def calculate_route():
             logger.info(f"[HAZARDS] Fetched hazards in {hazard_elapsed:.0f}ms: {[(k, len(v)) for k, v in hazards.items() if v]}")
         else:
             logger.info(f"[HAZARDS] Hazard avoidance disabled - skipping hazard fetch")
+
+        # ====================================================================
+        # PHASE 3: Try custom router first (if available)
+        # ====================================================================
+        if custom_router and USE_CUSTOM_ROUTER:
+            try:
+                logger.info(f"[ROUTING] Trying custom router first...")
+                custom_start = time.time()
+                route = custom_router.route(start_lat, start_lon, end_lat, end_lon)
+                custom_elapsed = (time.time() - custom_start) * 1000
+
+                if route:
+                    logger.info(f"[ROUTING] ✅ Custom router succeeded in {custom_elapsed:.0f}ms")
+
+                    # Get alternatives
+                    alternatives = k_paths.find_k_paths(start_lat, start_lon, end_lat, end_lon, k=CUSTOM_ROUTER_K_PATHS)
+                    routes = [route] + alternatives
+
+                    # Calculate costs for all routes
+                    for route_item in routes:
+                        distance_km = route_item.get('distance_km', 0)
+                        fuel_cost = (distance_km / fuel_efficiency) * fuel_price if fuel_efficiency > 0 else 0
+                        toll_cost = distance_km * 0.15 if include_tolls else 0
+                        caz_cost = 8.0 if include_caz and vehicle_type == 'petrol_diesel' else 0
+
+                        route_item['fuel_cost'] = round(fuel_cost, 2)
+                        route_item['toll_cost'] = round(toll_cost, 2)
+                        route_item['caz_cost'] = round(caz_cost, 2)
+                        route_item['total_cost'] = round(fuel_cost + toll_cost + caz_cost, 2)
+
+                    response_data = {
+                        'success': True,
+                        'routes': routes,
+                        'source': 'Custom Router ⚡',
+                        'distance': f'{route.get("distance_km", 0):.2f} km',
+                        'time': f'{route.get("duration_minutes", 0):.0f} minutes',
+                        'geometry': route.get('geometry', ''),
+                        'fuel_cost': route.get('fuel_cost', 0),
+                        'toll_cost': route.get('toll_cost', 0),
+                        'caz_cost': route.get('caz_cost', 0),
+                        'response_time_ms': custom_elapsed,
+                        'cached': False,
+                        'start_lat': start_lat,
+                        'start_lon': start_lon,
+                        'end_lat': end_lat,
+                        'end_lon': end_lon
+                    }
+
+                    # Cache the route
+                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance)
+                    update_custom_router_stats(custom_elapsed, True)
+                    return jsonify(response_data)
+            except Exception as e:
+                logger.warning(f"[ROUTING] Custom router failed: {e} - falling back to external engines")
+                update_custom_router_stats(0, False)
 
         # Try routing engines in order: GraphHopper, Valhalla, OSRM
         graphhopper_error = None
@@ -6599,6 +6822,15 @@ def get_nearby_hazards_internal(_data: Dict[str, Any]) -> Dict[str, Any]:
 if __name__ == '__main__':
     # Get port from environment variable (Railway sets this)
     port = int(os.getenv('PORT', 5000))
+
+    # ====================================================================
+    # PHASE 3: Initialize custom router
+    # ====================================================================
+    print("\n[STARTUP] Initializing custom router...")
+    if init_custom_router():
+        print("[STARTUP] ✅ Custom router ready as primary engine")
+    else:
+        print("[STARTUP] ⚠️  Custom router not available - using external engines")
 
     # Initialize and start monitoring
     if get_monitor:
