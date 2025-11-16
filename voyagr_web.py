@@ -736,8 +736,24 @@ class CostCalculator:
         self.cost_history = []  # Track cost calculations for analytics
 
     def calculate_costs(self, distance_km: float, vehicle_type: str, fuel_efficiency: float, fuel_price: float,
-                       energy_efficiency: float, electricity_price: float, include_tolls: bool, include_caz: bool, caz_exempt: bool) -> Dict[str, float]:
-        """Calculate all costs for a route."""
+                       energy_efficiency: float, electricity_price: float, include_tolls: bool, include_caz: bool, caz_exempt: bool, route_coords: Optional[List[Tuple[float, float]]] = None) -> Dict[str, float]:
+        """Calculate all costs for a route.
+
+        Args:
+            distance_km: Route distance in kilometers
+            vehicle_type: Type of vehicle (petrol_diesel, electric, hybrid)
+            fuel_efficiency: Fuel efficiency in L/100km or kWh/100km
+            fuel_price: Fuel price in GBP/L or GBP/kWh
+            energy_efficiency: Energy efficiency in kWh/100km (for EVs)
+            electricity_price: Electricity price in GBP/kWh
+            include_tolls: Whether to include toll costs
+            include_caz: Whether to include CAZ costs
+            caz_exempt: Whether vehicle is CAZ exempt
+            route_coords: List of (lat, lon) tuples for the route (used for toll/CAZ detection)
+
+        Returns:
+            Dictionary with fuel_cost, toll_cost, caz_cost, total_cost
+        """
         fuel_cost: float = 0.0
         toll_cost: float = 0.0
         caz_cost: float = 0.0
@@ -748,17 +764,15 @@ class CostCalculator:
         else:
             fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
 
-        # Calculate toll cost - NO LONGER DISTANCE-BASED
-        # Tolls are now only charged if route passes through known toll roads
-        # Since we don't have route coordinates here, toll_cost is always 0
+        # Calculate toll cost - ONLY if route passes through known toll roads
+        # Pass route coordinates to enable location-based toll detection
         if include_tolls:
-            toll_cost = calculate_toll_cost(distance_km, 'motorway', route_coords=None)
+            toll_cost = calculate_toll_cost(distance_km, 'motorway', route_coords=route_coords)
 
-        # Calculate CAZ cost - NO LONGER DISTANCE-BASED
-        # CAZ is now only charged if route passes through known CAZ zones
-        # Since we don't have route coordinates here, caz_cost is always 0
+        # Calculate CAZ cost - ONLY if route passes through known CAZ zones
+        # Pass route coordinates to enable location-based CAZ detection
         if include_caz and not caz_exempt:
-            caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt, route_coords=None)
+            caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt, route_coords=route_coords)
 
         return {
             'fuel_cost': round(fuel_cost, 2),
@@ -1224,6 +1238,32 @@ def invalidate_route_cache():
         return False
 
 # Cost calculation functions
+def decode_route_geometry(geometry: str) -> List[Tuple[float, float]]:
+    """Decode route geometry (polyline) to list of coordinates.
+
+    Args:
+        geometry: Encoded polyline string or list of coordinates
+
+    Returns:
+        List of (lat, lon) tuples
+    """
+    if not geometry:
+        return []
+
+    try:
+        # If it's already a list, return it
+        if isinstance(geometry, list):
+            return geometry
+
+        # If it's a string, try to decode as polyline
+        if isinstance(geometry, str) and polyline:
+            decoded = polyline.decode(geometry)
+            return decoded
+    except Exception as e:
+        logger.warning(f"Error decoding geometry: {e}")
+
+    return []
+
 def calculate_fuel_cost(distance_km: float, fuel_efficiency_l_per_100km: float, fuel_price_gbp_per_l: float) -> float:
     """Calculate fuel cost for a route."""
     fuel_needed = (distance_km / 100) * fuel_efficiency_l_per_100km
@@ -3893,11 +3933,15 @@ def calculate_route():
                             route_geometry = path.get('points', None)
 
                         # ================================================================
-                        # PHASE 3 OPTIMIZATION: Use cost calculator
+                        # PHASE 3 OPTIMIZATION: Use cost calculator with route coordinates
                         # ================================================================
+                        # Decode route geometry to get coordinates for toll/CAZ detection
+                        route_coords = decode_route_geometry(route_geometry)
+
                         costs = cost_calculator.calculate_costs(
                             distance, vehicle_type, fuel_efficiency, fuel_price,
-                            energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt
+                            energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+                            route_coords=route_coords
                         )
                         fuel_cost = costs['fuel_cost']
                         toll_cost = costs['toll_cost']
@@ -4033,11 +4077,15 @@ def calculate_route():
                                 break
 
                     # ================================================================
-                    # PHASE 3 OPTIMIZATION: Use cost calculator
+                    # PHASE 3 OPTIMIZATION: Use cost calculator with route coordinates
                     # ================================================================
+                    # Valhalla returns shape as encoded polyline string
+                    route_coords = decode_route_geometry(route_geometry)
+
                     costs = cost_calculator.calculate_costs(
                         distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                        energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt
+                        energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+                        route_coords=route_coords
                     )
                     fuel_cost = costs['fuel_cost']
                     toll_cost = costs['toll_cost']
@@ -4073,11 +4121,15 @@ def calculate_route():
                                             break
 
                                 # ================================================================
-                                # PHASE 3 OPTIMIZATION: Use cost calculator
+                                # PHASE 3 OPTIMIZATION: Use cost calculator with route coordinates
                                 # ================================================================
+                                # Decode alternative route geometry
+                                alt_route_coords = decode_route_geometry(alt_geometry)
+
                                 alt_costs = cost_calculator.calculate_costs(
                                     alt_distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                                    energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt
+                                    energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+                                    route_coords=alt_route_coords
                                 )
                                 alt_fuel_cost = alt_costs['fuel_cost']
                                 alt_toll_cost = alt_costs['toll_cost']
@@ -4191,6 +4243,9 @@ def calculate_route():
                         # Extract route geometry from OSRM (polyline format)
                         route_geometry = route.get('geometry', None)
 
+                        # Decode route geometry to get coordinates for toll/CAZ detection
+                        route_coords = decode_route_geometry(route_geometry)
+
                         # Calculate costs
                         fuel_cost = 0
                         toll_cost = 0
@@ -4202,10 +4257,10 @@ def calculate_route():
                             fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
 
                         if include_tolls:
-                            toll_cost = calculate_toll_cost(distance_km, 'motorway')
+                            toll_cost = calculate_toll_cost(distance_km, 'motorway', route_coords=route_coords)
 
                         if include_caz and not caz_exempt:
-                            caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt)
+                            caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt, route_coords=route_coords)
 
                         # Determine route type
                         if idx == 0:
