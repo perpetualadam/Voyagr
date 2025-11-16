@@ -2335,7 +2335,11 @@ function showAlternativeRoutesInPreview() {
 }
 
 async function showRouteComparison() {
+    console.log('[RouteComparison] showRouteComparison called');
+    console.log('[RouteComparison] routeOptions:', routeOptions);
+
     if (!routeOptions || routeOptions.length < 2) {
+        console.error('[RouteComparison] Not enough routes:', routeOptions ? routeOptions.length : 0);
         showStatus('Need at least 2 routes to compare', 'error');
         return;
     }
@@ -2350,6 +2354,8 @@ async function showRouteComparison() {
             caz_cost: route.caz_cost || 0
         }));
 
+        console.log('[RouteComparison] Sending routes to API:', routesForComparison);
+
         // Call comparison API
         const response = await fetch('/api/route-comparison', {
             method: 'POST',
@@ -2358,7 +2364,10 @@ async function showRouteComparison() {
         });
 
         const data = await response.json();
+        console.log('[RouteComparison] API response:', data);
+
         if (!data.success) {
+            console.error('[RouteComparison] API error:', data.error);
             showStatus('Error comparing routes: ' + data.error, 'error');
             return;
         }
@@ -2645,13 +2654,18 @@ function toggleVoiceAnnouncements() {
 }
 
 async function findParkingNearDestination() {
+    console.log('[Parking] findParkingNearDestination called');
+    console.log('[Parking] lastCalculatedRoute:', window.lastCalculatedRoute);
+
     if (!window.lastCalculatedRoute) {
+        console.error('[Parking] No route calculated');
         showStatus('No route calculated yet', 'error');
         return;
     }
 
     const endInput = document.getElementById('end').value;
     if (!endInput) {
+        console.error('[Parking] No destination entered');
         showStatus('Please enter a destination first', 'error');
         return;
     }
@@ -2664,7 +2678,10 @@ async function findParkingNearDestination() {
             ? { lat: window.lastCalculatedRoute.end_lat, lon: window.lastCalculatedRoute.end_lon }
             : null;
 
+        console.log('[Parking] End coordinates:', endCoords);
+
         if (!endCoords) {
+            console.error('[Parking] Could not determine destination coordinates');
             showStatus('Could not determine destination coordinates', 'error');
             return;
         }

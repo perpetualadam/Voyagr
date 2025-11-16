@@ -4097,6 +4097,17 @@ def calculate_route():
                     print(f"[TIMING] Total route calculation: {total_time:.0f}ms")
 
                     # ================================================================
+                    # HAZARD AVOIDANCE: Reorder routes by hazard penalty if enabled
+                    # ================================================================
+                    if enable_hazard_avoidance and hazards:
+                        # Sort routes by hazard penalty (ascending - fewer hazards first)
+                        routes_sorted = sorted(routes, key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)))
+                        print(f"[HAZARDS] Routes reordered by hazard penalty:")
+                        for idx, route in enumerate(routes_sorted):
+                            print(f"  Route {idx+1}: {route['name']} - Hazard penalty: {route.get('hazard_penalty_seconds', 0):.0f}s, Count: {route.get('hazard_count', 0)}")
+                        routes = routes_sorted
+
+                    # ================================================================
                     # PHASE 5: Record success in fallback chain optimizer
                     # ================================================================
                     fallback_optimizer.record_success('graphhopper', gh_elapsed)
@@ -4298,6 +4309,17 @@ def calculate_route():
                     print(f"[Valhalla] SUCCESS: {len(routes)} routes found")
 
                     # ================================================================
+                    # HAZARD AVOIDANCE: Reorder routes by hazard penalty if enabled
+                    # ================================================================
+                    if enable_hazard_avoidance and hazards:
+                        # Sort routes by hazard penalty (ascending - fewer hazards first)
+                        routes_sorted = sorted(routes, key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)))
+                        print(f"[HAZARDS] Routes reordered by hazard penalty:")
+                        for idx, route in enumerate(routes_sorted):
+                            print(f"  Route {idx+1}: {route['name']} - Hazard penalty: {route.get('hazard_penalty_seconds', 0):.0f}s, Count: {route.get('hazard_count', 0)}")
+                        routes = routes_sorted
+
+                    # ================================================================
                     # PHASE 5: Record success in fallback chain optimizer
                     # ================================================================
                     valhalla_elapsed = (time.time() - valhalla_start_time) * 1000
@@ -4441,6 +4463,17 @@ def calculate_route():
                         })
 
                     print(f"[OSRM] SUCCESS: {len(routes)} routes found")
+
+                    # ================================================================
+                    # HAZARD AVOIDANCE: Reorder routes by hazard penalty if enabled
+                    # ================================================================
+                    if enable_hazard_avoidance and hazards:
+                        # Sort routes by hazard penalty (ascending - fewer hazards first)
+                        routes_sorted = sorted(routes, key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)))
+                        print(f"[HAZARDS] Routes reordered by hazard penalty:")
+                        for idx, route in enumerate(routes_sorted):
+                            print(f"  Route {idx+1}: {route['name']} - Hazard penalty: {route.get('hazard_penalty_seconds', 0):.0f}s, Count: {route.get('hazard_count', 0)}")
+                        routes = routes_sorted
 
                     # ================================================================
                     # PHASE 5: Record success in fallback chain optimizer
