@@ -5339,42 +5339,55 @@ function refreshTrafficData() {
  * @returns {*} Return value description
  */
 function updateETACalculation() {
-    if (!routeInProgress || !routePolyline || currentStepIndex === undefined) return;
+    if (!routeInProgress || !window.lastCalculatedRoute || !routePolyline) return;
 
-    // Calculate remaining distance
+    // Get original route duration from the calculated route
+    const originalDurationMinutes = window.lastCalculatedRoute.duration_minutes ||
+                                   (window.lastCalculatedRoute.time ? parseInt(window.lastCalculatedRoute.time) : 0);
+
+    if (!originalDurationMinutes || originalDurationMinutes <= 0) {
+        console.warn('[ETA] No valid route duration available');
+        return;
+    }
+
+    // Calculate remaining distance to estimate progress
     let remainingDistance = 0;
-    for (let i = currentStepIndex; i < routePolyline.length - 1; i++) {
-        remainingDistance += calculateDistance(
+    if (currentStepIndex !== undefined) {
+        for (let i = currentStepIndex; i < routePolyline.length - 1; i++) {
+            remainingDistance += calculateDistance(
+                routePolyline[i][0], routePolyline[i][1],
+                routePolyline[i+1][0], routePolyline[i+1][1]
+            );
+        }
+    }
+
+    // Calculate total route distance
+    let totalDistance = 0;
+    for (let i = 0; i < routePolyline.length - 1; i++) {
+        totalDistance += calculateDistance(
             routePolyline[i][0], routePolyline[i][1],
             routePolyline[i+1][0], routePolyline[i+1][1]
         );
     }
 
-    // Get average speed from recent tracking history with proper validation
-    let avgSpeed = 40; // Default 40 km/h
-    if (trackingHistory && trackingHistory.length > 5) {
-        try {
-            const recentSpeeds = trackingHistory.slice(-5)
-                .map(t => {
-                    let speed = t.speed || 0;
-                    if (speed < 1 && speed > 0) speed = speed * 3.6;
-                    return speed;
-                })
-                .filter(s => s > 0 && s < 200);
-
-            if (recentSpeeds.length > 0) {
-                avgSpeed = recentSpeeds.reduce((a, b) => a + b) / recentSpeeds.length;
-                avgSpeed = Math.max(5, Math.min(200, avgSpeed));
-            }
-        } catch (e) {
-            console.warn('[ETA] Error calculating speed:', e);
-        }
+    // Calculate progress percentage (0-100)
+    let progressPercent = 0;
+    if (totalDistance > 0) {
+        progressPercent = Math.max(0, Math.min(100, ((totalDistance - remainingDistance) / totalDistance) * 100));
     }
 
-    // Calculate ETA with validation
-    if (avgSpeed <= 0) avgSpeed = 40;
-    const timeRemaining = (remainingDistance / 1000 / avgSpeed) * 60; // minutes (convert distance to km)
-    const eta = new Date(Date.now() + timeRemaining * 60000);
+    // Calculate time remaining based on progress
+    // If we've completed X% of the route, we have (100-X)% of time remaining
+    const timeRemainingMinutes = Math.round(originalDurationMinutes * (1 - (progressPercent / 100)));
+
+    // Sanity check: time remaining should be positive and less than original duration
+    if (timeRemainingMinutes < 0 || timeRemainingMinutes > originalDurationMinutes) {
+        console.warn('[ETA] Invalid time remaining calculated:', timeRemainingMinutes, 'original:', originalDurationMinutes);
+        return;
+    }
+
+    const now = Date.now();
+    const eta = new Date(now + timeRemainingMinutes * 60000);
 
     // Update display
     const turnInfo = document.getElementById('turnInfo');
@@ -5386,7 +5399,7 @@ function updateETACalculation() {
                     ${eta.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
                 </div>
                 <div style="font-size: 12px; color: #999; margin-top: 5px;">
-                    ${(remainingDistance / 1000).toFixed(1)} km remaining
+                    ${timeRemainingMinutes} min remaining (${progressPercent.toFixed(0)}% complete)
                 </div>
             </div>
         `;
