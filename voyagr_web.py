@@ -19,30 +19,30 @@ import time
 from functools import wraps
 from collections import OrderedDict
 import logging
-from typing import List, Dict, Tuple, Optional, Any
+from typing import List, Dict, Tuple, Optional, Any, Callable
 
 # Optional imports with fallbacks
 try:
     import polyline
 except ImportError:
-    polyline = None
+    polyline = None  # type: ignore
 
 try:
     from flask_compress import Compress
 except ImportError:
-    Compress = None
+    Compress = None  # type: ignore
 
 # Import speed limit detector
 try:
     from speed_limit_detector import SpeedLimitDetector
 except ImportError:
-    SpeedLimitDetector = None
+    SpeedLimitDetector = None  # type: ignore
 
 # Import routing monitor
 try:
     from routing_monitor import get_monitor
 except ImportError:
-    get_monitor = None
+    get_monitor = None  # type: ignore
 
 load_dotenv()
 
@@ -134,11 +134,11 @@ class RateLimiter:
 route_limiter = RateLimiter(max_requests=100, window_seconds=60)  # 100 requests/min
 api_limiter = RateLimiter(max_requests=500, window_seconds=60)    # 500 requests/min
 
-def rate_limit(limiter):
+def rate_limit(limiter: RateLimiter) -> Callable:
     """Decorator for rate limiting endpoints."""
-    def decorator(f):
+    def decorator(f: Callable) -> Callable:
         @wraps(f)
-        def decorated_function(*args, **kwargs):
+        def decorated_function(*args: Any, **kwargs: Any) -> Any:
             ip = request.remote_addr
             if not limiter.is_allowed(ip):
                 logger.warning(f"Rate limit exceeded for IP: {ip}")
@@ -153,10 +153,10 @@ def rate_limit(limiter):
 # Simple API key authentication (can be extended with JWT tokens)
 VALID_API_KEYS = set(os.getenv('API_KEYS', 'voyagr-default-key').split(','))
 
-def require_auth(f):
+def require_auth(f: Callable) -> Callable:
     """Decorator for API key authentication."""
     @wraps(f)
-    def decorated_function(*args, **kwargs):
+    def decorated_function(*args: Any, **kwargs: Any) -> Any:
         # Allow requests from localhost without auth (for development)
         if request.remote_addr in ['127.0.0.1', 'localhost']:
             return f(*args, **kwargs)
@@ -175,7 +175,7 @@ def require_auth(f):
 # PHASE 5: REQUEST VALIDATION HELPER FUNCTIONS
 # ============================================================================
 
-def sanitize_string(value, max_length=500):
+def sanitize_string(value: str, max_length: int = 500) -> Optional[str]:
     """
     Sanitize string input to prevent SQL injection and XSS.
     Returns sanitized string or None if invalid.
@@ -323,21 +323,21 @@ CAZ_ENTRY_FREQUENCY_KM = float(os.getenv('CAZ_ENTRY_FREQUENCY_KM', '50.0'))
 class RouteCache:
     """LRU cache for route calculations with TTL support."""
 
-    def __init__(self, max_size=1000, ttl_seconds=3600):
+    def __init__(self, max_size: int = 1000, ttl_seconds: int = 3600) -> None:
         """Initialize cache with max size and TTL."""
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
-        self.cache = OrderedDict()
-        self.timestamps = {}
+        self.cache: OrderedDict = OrderedDict()
+        self.timestamps: Dict[str, float] = {}
         self.lock = threading.Lock()
         self.hits = 0
         self.misses = 0
 
-    def _make_key(self, start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type):
+    def _make_key(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str) -> str:
         """Create cache key from route parameters."""
         return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type}"
 
-    def get(self, start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type):
+    def get(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str) -> Optional[Dict[str, Any]]:
         """Get cached route if available and not expired."""
         with self.lock:
             key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
@@ -891,7 +891,7 @@ class CostCalculator:
 
             result = cursor.fetchone()
             if result:
-                route_data_str, access_count = result
+                route_data_str, _access_count = result
                 # Update access count
                 cursor.execute('''
                     UPDATE persistent_route_cache
@@ -1007,7 +1007,7 @@ class CostCalculator:
                 'error': str(e)
             }
 
-    def optimize_route_cost(self, routes_data, vehicle_type, fuel_efficiency, fuel_price,
+    def optimize_route_cost(self, routes_data, vehicle_type, _fuel_efficiency, _fuel_price,
                            energy_efficiency, electricity_price):
         """Provide cost optimization suggestions for routes."""
         if not routes_data or len(routes_data) == 0:
@@ -1111,7 +1111,7 @@ class CostCalculator:
                 if toll_cost > 0 or caz_cost > 0:
                     ttl_multiplier *= 0.7  # 30% reduction
 
-                ttl_seconds = int(base_ttl * ttl_multiplier)
+                _ttl_seconds = int(base_ttl * ttl_multiplier)
 
                 # Insert alternative route
                 cursor.execute('''
@@ -3237,14 +3237,13 @@ def get_traffic_conditions():
     """Get real-time traffic conditions for a route"""
     try:
         data = request.json
-        start = data.get('start', '').strip()
-        end = data.get('end', '').strip()
+        _start = data.get('start', '').strip()
+        _end = data.get('end', '').strip()
 
         # Simulate traffic data (in production, integrate with real traffic API)
         # This would connect to services like Google Maps Traffic, HERE Traffic, or TomTom Traffic
 
         import random
-        import math
 
         # Simulate traffic level based on time of day
         hour = datetime.now().hour
@@ -3607,10 +3606,10 @@ def calculate_route():
             return jsonify(cached_route)
 
         # Fetch hazards if hazard avoidance is enabled
-        hazards = {}
+        _hazards = {}
         if enable_hazard_avoidance:
             hazard_start = time.time()
-            hazards = fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
+            _hazards = fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
             logger.debug(f"[TIMING] Hazard fetch: {(time.time() - hazard_start)*1000:.0f}ms")
 
         # Try routing engines in order: GraphHopper, Valhalla, OSRM
@@ -4671,8 +4670,8 @@ def manage_favorites():
 def get_lane_guidance():
     """Get lane guidance for current location."""
     try:
-        lat = float(request.args.get('lat', 51.5074))
-        lon = float(request.args.get('lon', -0.1278))
+        _lat = float(request.args.get('lat', 51.5074))
+        _lon = float(request.args.get('lon', -0.1278))
         heading = float(request.args.get('heading', 0))
         next_maneuver = request.args.get('maneuver', 'straight')
 
@@ -4705,8 +4704,8 @@ def get_lane_guidance():
 def get_speed_warnings():
     """Get speed warning for current location and speed."""
     try:
-        lat = float(request.args.get('lat', 51.5074))
-        lon = float(request.args.get('lon', -0.1278))
+        _lat = float(request.args.get('lat', 51.5074))
+        _lon = float(request.args.get('lon', -0.1278))
         current_speed_mph = float(request.args.get('speed', 0))
         road_type = request.args.get('road_type', 'local')
 
@@ -4802,7 +4801,7 @@ def voice_command():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-def parse_voice_command_web(command: str, lat: float, lon: float) -> Dict[str, Any]:
+def parse_voice_command_web(command: str, _lat: float, _lon: float) -> Dict[str, Any]:
     """Parse voice command and return action to execute."""
     try:
         # Normalize command
@@ -6052,8 +6051,8 @@ def batch_requests():
 def calculate_route_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal route calculation for batch requests."""
     try:
-        start = data.get('start', '')
-        end = data.get('end', '')
+        _start = data.get('start', '')
+        _end = data.get('end', '')
         # Call existing route calculation logic
         # This is a simplified version - integrate with actual route calculation
         return {'success': True, 'message': 'Route calculated'}
@@ -6063,8 +6062,8 @@ def calculate_route_internal(data: Dict[str, Any]) -> Dict[str, Any]:
 def get_weather_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal weather fetch for batch requests."""
     try:
-        lat = data.get('lat', 51.5074)
-        lon = data.get('lon', -0.1278)
+        _lat = data.get('lat', 51.5074)
+        _lon = data.get('lon', -0.1278)
         # Call existing weather logic
         return {'success': True, 'message': 'Weather fetched'}
     except Exception as e:
@@ -6073,8 +6072,8 @@ def get_weather_internal(data: Dict[str, Any]) -> Dict[str, Any]:
 def get_traffic_patterns_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal traffic patterns fetch for batch requests."""
     try:
-        lat = data.get('lat', 51.5074)
-        lon = data.get('lon', -0.1278)
+        _lat = data.get('lat', 51.5074)
+        _lon = data.get('lon', -0.1278)
         # Call existing traffic logic
         return {'success': True, 'message': 'Traffic patterns fetched'}
     except Exception as e:
@@ -6083,8 +6082,8 @@ def get_traffic_patterns_internal(data: Dict[str, Any]) -> Dict[str, Any]:
 def get_speed_limit_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal speed limit fetch for batch requests."""
     try:
-        lat = data.get('lat', 51.5074)
-        lon = data.get('lon', -0.1278)
+        _lat = data.get('lat', 51.5074)
+        _lon = data.get('lon', -0.1278)
         # Call existing speed limit logic
         return {'success': True, 'message': 'Speed limit fetched'}
     except Exception as e:
@@ -6093,9 +6092,9 @@ def get_speed_limit_internal(data: Dict[str, Any]) -> Dict[str, Any]:
 def get_nearby_hazards_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal hazards fetch for batch requests."""
     try:
-        lat = data.get('lat', 51.5074)
-        lon = data.get('lon', -0.1278)
-        radius = data.get('radius', 5)
+        _lat = data.get('lat', 51.5074)
+        _lon = data.get('lon', -0.1278)
+        _radius = data.get('radius', 5)
         # Call existing hazards logic
         return {'success': True, 'message': 'Hazards fetched'}
     except Exception as e:
