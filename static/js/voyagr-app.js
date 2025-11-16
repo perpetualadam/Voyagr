@@ -1919,6 +1919,14 @@ async function calculateRoute() {
 
     showStatus('📍 Calculating route...', 'loading');
 
+    // Check if hazard avoidance is enabled (any hazard type selected)
+    const enableHazardAvoidance =
+        localStorage.getItem('pref_speedCameras') === 'true' ||
+        localStorage.getItem('pref_trafficCameras') === 'true' ||
+        localStorage.getItem('pref_police') === 'true' ||
+        localStorage.getItem('pref_roadworks') === 'true' ||
+        localStorage.getItem('pref_accidents') === 'true';
+
     fetch('/api/route', {
         method: 'POST',
         headers: {
@@ -1928,7 +1936,8 @@ async function calculateRoute() {
             start: geocodedStart,
             end: geocodedEnd,
             routing_mode: currentRoutingMode,
-            vehicle_type: currentVehicleType
+            vehicle_type: currentVehicleType,
+            enable_hazard_avoidance: enableHazardAvoidance
         })
     })
     .then(response => response.json())
@@ -2701,6 +2710,13 @@ async function selectParking(parking, destinationCoords) {
         }
 
         // Calculate driving route to parking
+        const enableHazardAvoidanceParking =
+            localStorage.getItem('pref_speedCameras') === 'true' ||
+            localStorage.getItem('pref_trafficCameras') === 'true' ||
+            localStorage.getItem('pref_police') === 'true' ||
+            localStorage.getItem('pref_roadworks') === 'true' ||
+            localStorage.getItem('pref_accidents') === 'true';
+
         const drivingResponse = await fetch('/api/route', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2710,7 +2726,8 @@ async function selectParking(parking, destinationCoords) {
                 routing_mode: 'auto',
                 vehicle_type: currentVehicleType,
                 include_tolls: localStorage.getItem('pref_tolls') === 'true',
-                avoid_caz: localStorage.getItem('pref_caz') === 'true'
+                avoid_caz: localStorage.getItem('pref_caz') === 'true',
+                enable_hazard_avoidance: enableHazardAvoidanceParking
             })
         });
 
@@ -2721,6 +2738,13 @@ async function selectParking(parking, destinationCoords) {
         }
 
         // Calculate walking route from parking to destination
+        const enableHazardAvoidanceWalking =
+            localStorage.getItem('pref_speedCameras') === 'true' ||
+            localStorage.getItem('pref_trafficCameras') === 'true' ||
+            localStorage.getItem('pref_police') === 'true' ||
+            localStorage.getItem('pref_roadworks') === 'true' ||
+            localStorage.getItem('pref_accidents') === 'true';
+
         const walkingResponse = await fetch('/api/route', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -2728,7 +2752,8 @@ async function selectParking(parking, destinationCoords) {
                 start: `${parking.lat},${parking.lon}`,
                 end: `${destinationCoords.lat},${destinationCoords.lon}`,
                 routing_mode: 'pedestrian',
-                vehicle_type: 'pedestrian'
+                vehicle_type: 'pedestrian',
+                enable_hazard_avoidance: enableHazardAvoidanceWalking
             })
         });
 
@@ -5206,6 +5231,13 @@ async function triggerAutomaticReroute(currentLat, currentLon) {
         console.log(`[Rerouting] Starting automatic reroute from (${currentLat.toFixed(4)}, ${currentLon.toFixed(4)}) to ${destination}`);
 
         // Prepare route calculation request
+        const enableHazardAvoidanceReroute =
+            localStorage.getItem('pref_speedCameras') === 'true' ||
+            localStorage.getItem('pref_trafficCameras') === 'true' ||
+            localStorage.getItem('pref_police') === 'true' ||
+            localStorage.getItem('pref_roadworks') === 'true' ||
+            localStorage.getItem('pref_accidents') === 'true';
+
         const routeRequest = {
             start: `${currentLat},${currentLon}`,
             end: destination,
@@ -5216,7 +5248,8 @@ async function triggerAutomaticReroute(currentLat, currentLon) {
             energy_efficiency: parseFloat(localStorage.getItem('energyEfficiency') || '18.5'),
             electricity_price: parseFloat(localStorage.getItem('electricityPrice') || '0.30'),
             include_tolls: localStorage.getItem('includeTolls') !== 'false',
-            include_caz: localStorage.getItem('includeCAZ') !== 'false'
+            include_caz: localStorage.getItem('includeCAZ') !== 'false',
+            enable_hazard_avoidance: enableHazardAvoidanceReroute
         };
 
         const response = await fetch('/api/route', {
