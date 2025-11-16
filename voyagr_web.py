@@ -2232,6 +2232,8 @@ HTML_TEMPLATE = '''
             </div>
 
             <div class="bottom-sheet-content">
+                <!-- NAVIGATION TAB (DEFAULT) -->
+                <div id="navigationTab">
                 <!-- Location Inputs -->
                 <div class="form-group">
                     <label for="start">Start Location</label>
@@ -2394,6 +2396,7 @@ HTML_TEMPLATE = '''
                 </div>
 
                 <button class="btn-clear" onclick="clearForm()" style="width: 100%; margin-top: 20px;">Clear All</button>
+                </div>
 
                 <!-- UNIFIED SETTINGS TAB -->
                 <div id="settingsTab" style="display: none;">

@@ -250,7 +250,7 @@ function updateThemeButtons() {
  * @returns {*} Return value description
  */
 function switchTab(tab) {
-    const navigationContent = document.querySelector('.bottom-sheet-content > div:not(#settingsTab):not(#tripHistoryTab):not(#routeComparisonTab):not(#routeSharingTab):not(#routeAnalyticsTab):not(#savedRoutesTab):not(#routePreviewTab)');
+    const navigationTab = document.getElementById('navigationTab');
     const settingsTab = document.getElementById('settingsTab');
     const tripHistoryTab = document.getElementById('tripHistoryTab');
     const routeComparisonTab = document.getElementById('routeComparisonTab');
@@ -263,13 +263,13 @@ function switchTab(tab) {
     console.log('[SwitchTab] Switching to tab:', tab);
 
     // Hide all tabs
-    if (navigationContent) navigationContent.style.display = 'none';
-    settingsTab.style.display = 'none';
-    tripHistoryTab.style.display = 'none';
-    routeComparisonTab.style.display = 'none';
-    routeSharingTab.style.display = 'none';
-    routeAnalyticsTab.style.display = 'none';
-    savedRoutesTab.style.display = 'none';
+    if (navigationTab) navigationTab.style.display = 'none';
+    if (settingsTab) settingsTab.style.display = 'none';
+    if (tripHistoryTab) tripHistoryTab.style.display = 'none';
+    if (routeComparisonTab) routeComparisonTab.style.display = 'none';
+    if (routeSharingTab) routeSharingTab.style.display = 'none';
+    if (routeAnalyticsTab) routeAnalyticsTab.style.display = 'none';
+    if (savedRoutesTab) savedRoutesTab.style.display = 'none';
     if (routePreviewTab) routePreviewTab.style.display = 'none';
 
     if (tab === 'settings') {
@@ -307,8 +307,12 @@ function switchTab(tab) {
         savedRoutesTab.style.display = 'block';
         sheetTitle.textContent = '⭐ Saved Routes';
         loadSavedRoutes();
+    } else if (tab === 'navigation') {
+        if (navigationTab) navigationTab.style.display = 'block';
+        sheetTitle.textContent = '🗺️ Navigation';
     } else {
-        if (navigationContent) navigationContent.style.display = 'block';
+        // Default to navigation tab
+        if (navigationTab) navigationTab.style.display = 'block';
         sheetTitle.textContent = '🗺️ Navigation';
     }
 }
