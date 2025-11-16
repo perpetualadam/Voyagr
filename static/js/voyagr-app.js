@@ -4856,15 +4856,21 @@ function announceDistanceToDestination(currentLat, currentLon) {
         // Announce when within range (with hysteresis to avoid repeated announcements)
         if (remainingDistance <= announcementDistance && lastDestinationAnnouncementDistance > announcementDistance + 100) {
             let message = '';
+            const distUnit = getDistanceUnit();
 
+            // Convert distances based on user preference
             if (announcementDistance === 10000) {
-                message = `10 kilometers to destination`;
+                const displayDist = distUnit === 'mi' ? (10 * 0.621371).toFixed(1) : '10';
+                message = `${displayDist} ${distUnit} to destination`;
             } else if (announcementDistance === 5000) {
-                message = `5 kilometers to destination`;
+                const displayDist = distUnit === 'mi' ? (5 * 0.621371).toFixed(1) : '5';
+                message = `${displayDist} ${distUnit} to destination`;
             } else if (announcementDistance === 2000) {
-                message = `2 kilometers to destination`;
+                const displayDist = distUnit === 'mi' ? (2 * 0.621371).toFixed(1) : '2';
+                message = `${displayDist} ${distUnit} to destination`;
             } else if (announcementDistance === 1000) {
-                message = `1 kilometer to destination`;
+                const displayDist = distUnit === 'mi' ? (1 * 0.621371).toFixed(1) : '1';
+                message = `${displayDist} ${distUnit} to destination`;
             } else if (announcementDistance === 500) {
                 message = `500 meters to destination`;
             } else if (announcementDistance === 100) {
@@ -5165,9 +5171,11 @@ async function triggerAutomaticReroute(currentLat, currentLon) {
                 time: `${newRoute.duration_minutes} minutes`
             };
 
-            // Announce reroute via voice
+            // Announce reroute via voice with proper unit conversion
             if (voiceRecognition) {
-                speakMessage(`Route recalculated. New distance: ${newRoute.distance_km} kilometers, time: ${newRoute.duration_minutes} minutes`);
+                const distUnit = getDistanceUnit();
+                const displayDist = convertDistance(newRoute.distance_km);
+                speakMessage(`Route recalculated. New distance: ${displayDist} ${distUnit}, time: ${newRoute.duration_minutes} minutes`);
             }
 
             sendNotification('Route Updated', `New route: ${newRoute.distance_km}km, ${newRoute.duration_minutes}min`, 'success');
