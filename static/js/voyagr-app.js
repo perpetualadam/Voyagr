@@ -804,6 +804,13 @@ function updateAllDistanceDisplays() {
         const km = parseFloat(distanceElement.dataset.km || distanceElement.textContent);
         distanceElement.textContent = convertDistance(km) + ' ' + getDistanceUnit();
     }
+
+    // Update route preview distance if available
+    const previewDistanceElement = document.getElementById('previewDistance');
+    if (previewDistanceElement && previewDistanceElement.dataset.km) {
+        const previewKm = parseFloat(previewDistanceElement.dataset.km);
+        previewDistanceElement.textContent = convertDistance(previewKm) + ' ' + getDistanceUnit();
+    }
 }
 
 // Update all cost displays
@@ -2104,8 +2111,22 @@ function showRoutePreview(routeData) {
     const speedUnit = getSpeedUnit();
 
     // Update route preview information
-    document.getElementById('previewDistance').textContent = convertDistance(routeData.distance_km) + ' ' + distUnit;
-    document.getElementById('previewDuration').textContent = routeData.time || routeData.duration_minutes + ' min';
+    // Use distance_km from routes array if available, otherwise parse from distance string
+    let distanceKm = 0;
+    if (routeData.routes && routeData.routes.length > 0) {
+        distanceKm = routeData.routes[0].distance_km || 0;
+    } else if (routeData.distance_km) {
+        distanceKm = routeData.distance_km;
+    } else if (routeData.distance) {
+        // Parse distance string like "1.31 km" to extract number
+        distanceKm = parseFloat(routeData.distance) || 0;
+    }
+
+    // Store distance_km in data attribute for unit conversion updates
+    const previewDistanceEl = document.getElementById('previewDistance');
+    previewDistanceEl.dataset.km = distanceKm;
+    previewDistanceEl.textContent = convertDistance(distanceKm) + ' ' + distUnit;
+    document.getElementById('previewDuration').textContent = (routeData.time || routeData.duration_minutes || 0) + ' min';
 
     // Build route description
     const startInput = document.getElementById('start').value;
