@@ -5400,46 +5400,61 @@ function updateETACalculation() {
  */
 function announceETAIfNeeded() {
     // FIXED: Announce ETA only when needed (every 10 minutes)
-    // This replaces the old announceETAUpdate() which was called on every GPS update
-    if (!routeInProgress || !routePolyline || currentStepIndex === undefined || !voiceAnnouncementsEnabled) return;
+    // Uses original route duration for accurate ETA calculation
+    if (!routeInProgress || !window.lastCalculatedRoute || !voiceAnnouncementsEnabled) return;
 
     const now = Date.now();
     const timeSinceLastAnnouncement = now - lastETAAnnouncementTime;
 
     // Only announce if 10 minutes have passed since last announcement
     if (timeSinceLastAnnouncement > ETA_ANNOUNCEMENT_INTERVAL_MS) {
-        // Calculate remaining distance
-        let remainingDistance = 0;
-        for (let i = currentStepIndex; i < routePolyline.length - 1; i++) {
-            remainingDistance += calculateDistance(
-                routePolyline[i][0], routePolyline[i][1],
-                routePolyline[i+1][0], routePolyline[i+1][1]
-            );
+        // Get original route duration from the calculated route
+        const originalDurationMinutes = window.lastCalculatedRoute.duration_minutes ||
+                                       (window.lastCalculatedRoute.time ? parseInt(window.lastCalculatedRoute.time) : 0);
+
+        if (!originalDurationMinutes || originalDurationMinutes <= 0) {
+            console.warn('[ETA] No valid route duration available');
+            return;
         }
 
-        // Get average speed from recent tracking history with proper validation
-        let avgSpeed = 40; // Default 40 km/h
-        if (trackingHistory && trackingHistory.length > 5) {
-            try {
-                const recentSpeeds = trackingHistory.slice(-5)
-                    .map(t => {
-                        let speed = t.speed || 0;
-                        if (speed < 1 && speed > 0) speed = speed * 3.6;
-                        return speed;
-                    })
-                    .filter(s => s > 0 && s < 200);
-                if (recentSpeeds.length > 0) {
-                    avgSpeed = recentSpeeds.reduce((a, b) => a + b) / recentSpeeds.length;
-                    avgSpeed = Math.max(5, Math.min(200, avgSpeed));
-                }
-            } catch (e) {
-                console.warn('[ETA] Error calculating speed:', e);
+        // Calculate remaining distance to estimate progress
+        let remainingDistance = 0;
+        if (routePolyline && currentStepIndex !== undefined) {
+            for (let i = currentStepIndex; i < routePolyline.length - 1; i++) {
+                remainingDistance += calculateDistance(
+                    routePolyline[i][0], routePolyline[i][1],
+                    routePolyline[i+1][0], routePolyline[i+1][1]
+                );
             }
         }
 
-        // Calculate ETA with validation
-        if (avgSpeed <= 0) avgSpeed = 40;
-        const timeRemainingMinutes = Math.round((remainingDistance / 1000 / avgSpeed) * 60);
+        // Calculate total route distance
+        let totalDistance = 0;
+        if (routePolyline) {
+            for (let i = 0; i < routePolyline.length - 1; i++) {
+                totalDistance += calculateDistance(
+                    routePolyline[i][0], routePolyline[i][1],
+                    routePolyline[i+1][0], routePolyline[i+1][1]
+                );
+            }
+        }
+
+        // Calculate progress percentage (0-100)
+        let progressPercent = 0;
+        if (totalDistance > 0) {
+            progressPercent = Math.max(0, Math.min(100, ((totalDistance - remainingDistance) / totalDistance) * 100));
+        }
+
+        // Calculate time remaining based on progress
+        // If we've completed X% of the route, we have (100-X)% of time remaining
+        const timeRemainingMinutes = Math.round(originalDurationMinutes * (1 - (progressPercent / 100)));
+
+        // Sanity check: time remaining should be positive and less than original duration
+        if (timeRemainingMinutes < 0 || timeRemainingMinutes > originalDurationMinutes) {
+            console.warn('[ETA] Invalid time remaining calculated:', timeRemainingMinutes, 'original:', originalDurationMinutes);
+            return;
+        }
+
         const eta = new Date(now + timeRemainingMinutes * 60000);
         const etaHours = eta.getHours();
         const etaMinutes = eta.getMinutes();
@@ -5453,7 +5468,7 @@ function announceETAIfNeeded() {
             message = `You will arrive in ${timeRemainingMinutes} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
         }
 
-        console.log(`[Voice] ETA announcement: ${message} (remaining: ${(remainingDistance / 1000).toFixed(1)}km, avg speed: ${avgSpeed.toFixed(1)}km/h, time: ${timeRemainingMinutes}min)`);
+        console.log(`[Voice] ETA announcement: ${message} (progress: ${progressPercent.toFixed(1)}%, remaining: ${(remainingDistance / 1000).toFixed(1)}km, time: ${timeRemainingMinutes}min)`);
         speakMessage(message);
         lastETAAnnouncementTime = now;
         lastAnnouncedETA = eta;
