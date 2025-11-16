@@ -4105,12 +4105,12 @@ def calculate_multi_stop_route():
                 if 'paths' in route_data and len(route_data['paths']) > 0:
                     path = route_data['paths'][0]
                     distance = path.get('distance', 0) / 1000
-                    time = path.get('time', 0) / 60000
+                    duration_minutes = path.get('time', 0) / 60000
 
                     return jsonify({
                         'success': True,
                         'distance': f'{distance:.2f} km',
-                        'time': f'{time:.0f} minutes',
+                        'time': f'{duration_minutes:.0f} minutes',
                         'waypoints': len(waypoints),
                         'source': 'GraphHopper ✅'
                     })
@@ -4131,12 +4131,12 @@ def calculate_multi_stop_route():
                 if 'trip' in route_data:
                     # NOTE: Valhalla returns distance in kilometers, not meters!
                     distance = route_data['trip']['summary']['length']  # Already in km
-                    time = route_data['trip']['summary']['time'] / 60
+                    duration_minutes = route_data['trip']['summary']['time'] / 60
 
                     return jsonify({
                         'success': True,
                         'distance': f'{distance:.2f} km',
-                        'time': f'{time:.0f} minutes',
+                        'time': f'{duration_minutes:.0f} minutes',
                         'waypoints': len(waypoints),
                         'source': 'Valhalla'
                     })
