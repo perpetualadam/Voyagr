@@ -18,8 +18,11 @@ import math
 import time
 from functools import wraps
 from collections import OrderedDict
+from typing import cast
 import logging
-from typing import List, Dict, Tuple, Optional, Any, Callable
+from typing import List, Dict, Tuple, Optional, Any, Callable, TypeVar
+
+F = TypeVar('F', bound=Callable[..., Any])
 
 # Optional imports with fallbacks
 try:
@@ -134,17 +137,17 @@ class RateLimiter:
 route_limiter = RateLimiter(max_requests=100, window_seconds=60)  # 100 requests/min
 api_limiter = RateLimiter(max_requests=500, window_seconds=60)    # 500 requests/min
 
-def rate_limit(limiter: RateLimiter) -> Callable:
+def rate_limit(limiter: RateLimiter) -> Callable[[F], F]:
     """Decorator for rate limiting endpoints."""
-    def decorator(f: Callable) -> Callable:
+    def decorator(f: F) -> F:
         @wraps(f)
         def decorated_function(*args: Any, **kwargs: Any) -> Any:
-            ip = request.remote_addr
-            if not limiter.is_allowed(ip):
+            ip: Optional[str] = request.remote_addr
+            if ip and not limiter.is_allowed(ip):
                 logger.warning(f"Rate limit exceeded for IP: {ip}")
                 return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
             return f(*args, **kwargs)
-        return decorated_function
+        return decorated_function  # type: ignore
     return decorator
 
 # ============================================================================
@@ -153,7 +156,7 @@ def rate_limit(limiter: RateLimiter) -> Callable:
 # Simple API key authentication (can be extended with JWT tokens)
 VALID_API_KEYS = set(os.getenv('API_KEYS', 'voyagr-default-key').split(','))
 
-def require_auth(f: Callable) -> Callable:
+def require_auth(f: F) -> F:
     """Decorator for API key authentication."""
     @wraps(f)
     def decorated_function(*args: Any, **kwargs: Any) -> Any:
@@ -169,7 +172,7 @@ def require_auth(f: Callable) -> Callable:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 401
 
         return f(*args, **kwargs)
-    return decorated_function
+    return decorated_function  # type: ignore
 
 # ============================================================================
 # PHASE 5: REQUEST VALIDATION HELPER FUNCTIONS
@@ -180,7 +183,7 @@ def sanitize_string(value: str, max_length: int = 500) -> Optional[str]:
     Sanitize string input to prevent SQL injection and XSS.
     Returns sanitized string or None if invalid.
     """
-    if not isinstance(value, str):
+    if not value:
         return None
 
     # Limit length
@@ -327,7 +330,7 @@ class RouteCache:
         """Initialize cache with max size and TTL."""
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
-        self.cache: OrderedDict = OrderedDict()
+        self.cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
         self.timestamps: Dict[str, float] = {}
         self.lock = threading.Lock()
         self.hits = 0
@@ -358,7 +361,7 @@ class RouteCache:
             self.hits += 1
             return self.cache[key]
 
-    def set(self, start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, route_data):
+    def set(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, route_data: Dict[str, Any]) -> None:
         """Cache a route calculation."""
         with self.lock:
             key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
@@ -374,7 +377,7 @@ class RouteCache:
             self.timestamps[key] = time.time()
             self.cache.move_to_end(key)
 
-    def get_stats(self):
+    def get_stats(self) -> Dict[str, Any]:
         """Get cache statistics."""
         with self.lock:
             total = self.hits + self.misses
@@ -388,7 +391,7 @@ class RouteCache:
                 'max_size': self.max_size
             }
 
-    def clear(self):
+    def clear(self) -> None:
         """Clear all cached routes."""
         with self.lock:
             self.cache.clear()
@@ -404,7 +407,7 @@ route_cache = RouteCache(max_size=1000, ttl_seconds=3600)
 class DatabasePool:
     """Simple connection pool for SQLite database."""
 
-    def __init__(self, db_file, pool_size=5):
+    def __init__(self, db_file: str, pool_size: int = 5) -> None:
         """Initialize connection pool."""
         self.db_file = db_file
         self.pool_size = pool_size
@@ -4764,7 +4767,7 @@ def voice_speak():
 
         # Use pyttsx3 for TTS if available, otherwise return text for browser TTS
         try:
-            import pyttsx3
+            import pyttsx3  # type: ignore
             engine = pyttsx3.init()
             engine.setProperty('rate', 150)
 
