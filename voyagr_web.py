@@ -1476,11 +1476,13 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
             (south, north, west, east)
         )
         for lat, lon, camera_type, desc in cursor.fetchall():
-            # CRITICAL FIX: Treat speed_camera as traffic_light_camera for hazard avoidance
-            # SCDB database contains speed cameras which should be avoided like traffic light cameras
+            # Keep original database type (speed_camera) but also add to traffic_light_camera for scoring
+            # This preserves database jargon while ensuring high-priority avoidance
             if camera_type == 'speed_camera':
-                # Add to traffic_light_camera category for high-priority avoidance
-                hazards['traffic_light_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
+                # Add to speed_camera category (preserves database type)
+                hazards['speed_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
+                # Also add to traffic_light_camera for high-priority scoring (1200s penalty)
+                hazards['traffic_light_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high', 'original_type': 'speed_camera'})
             elif camera_type in hazards:
                 hazards[camera_type].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
 
@@ -1549,10 +1551,12 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[
 
                 # If hazard is within threshold, add to list
                 if min_distance <= threshold:
+                    # Use original_type if available (for speed cameras), otherwise use hazard_type
+                    display_type = hazard.get('original_type', hazard_type)
                     hazards_on_route.append({
                         'lat': hazard_lat,
                         'lon': hazard_lon,
-                        'type': hazard_type,
+                        'type': display_type,
                         'description': hazard.get('description', 'Hazard detected'),
                         'distance': round(min_distance, 0)
                     })
