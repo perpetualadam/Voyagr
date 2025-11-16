@@ -10,7 +10,7 @@ from collections import defaultdict
 
 class RoadNetwork:
     """In-memory road network graph."""
-    
+
     def __init__(self, db_file: str):
         """Initialize road network from database."""
         self.db_file = db_file
@@ -18,7 +18,11 @@ class RoadNetwork:
         self.edges = defaultdict(list)  # node_id -> [(neighbor_id, distance_m, speed_kmh, way_id)]
         self.ways = {}  # way_id -> {name, highway, speed_limit}
         self.turn_restrictions = {}  # (from_way, to_way) -> restriction_type
-        
+
+        # Phase 4: Component caching
+        self.components = {}  # node_id -> component_id
+        self.component_analyzer = None
+
         self.load_from_database()
     
     def load_from_database(self):
@@ -185,11 +189,35 @@ class RoadNetwork:
     def get_statistics(self) -> Dict:
         """Get graph statistics."""
         total_edges = sum(len(neighbors) for neighbors in self.edges.values())
-        
+
         return {
             'nodes': len(self.nodes),
             'edges': total_edges,
             'ways': len(self.ways),
             'turn_restrictions': len(self.turn_restrictions)
         }
+
+    # Phase 4: Component caching methods
+    def set_component_analyzer(self, analyzer):
+        """Set component analyzer for this graph."""
+        self.component_analyzer = analyzer
+        self.components = analyzer.components
+
+    def is_connected(self, node1: int, node2: int) -> bool:
+        """Check if two nodes are in same component (O(1))."""
+        if not self.component_analyzer:
+            return True  # Assume connected if no analyzer
+        return self.component_analyzer.is_connected(node1, node2)
+
+    def get_component_id(self, node_id: int) -> int:
+        """Get component ID for a node."""
+        if not self.component_analyzer:
+            return -1
+        return self.component_analyzer.get_component_id(node_id)
+
+    def is_in_main_component(self, node_id: int) -> bool:
+        """Check if node is in main component."""
+        if not self.component_analyzer:
+            return True  # Assume in main if no analyzer
+        return self.component_analyzer.is_in_main_component(node_id)
 

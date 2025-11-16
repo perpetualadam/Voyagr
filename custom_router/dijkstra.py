@@ -42,24 +42,35 @@ class Router:
             'heuristic_calls': 0,  # Phase 2: Track heuristic usage
         }
     
-    def route(self, start_lat: float, start_lon: float, 
+    def route(self, start_lat: float, start_lon: float,
               end_lat: float, end_lon: float) -> Optional[Dict]:
         """Calculate route between two points."""
         start_time = time.time()
-        
+
         # Find nearest nodes
         start_node = self.graph.find_nearest_node(start_lat, start_lon)
         end_node = self.graph.find_nearest_node(end_lat, end_lon)
-        
+
         if not start_node or not end_node:
             return None
-        
+
+        # Phase 4: Check if nodes are in same component (O(1))
+        if not self.graph.is_connected(start_node, end_node):
+            elapsed = (time.time() - start_time) * 1000
+            return {
+                'error': 'No route found',
+                'reason': 'Start and end points are in different road network components',
+                'start_component': self.graph.get_component_id(start_node),
+                'end_component': self.graph.get_component_id(end_node),
+                'response_time_ms': elapsed
+            }
+
         # Run Dijkstra
         path = self.dijkstra(start_node, end_node)
-        
+
         if not path:
             return None
-        
+
         # Extract route data
         route_data = self.extract_route_data(path)
         route_data['response_time_ms'] = (time.time() - start_time) * 1000
