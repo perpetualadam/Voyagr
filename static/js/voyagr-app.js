@@ -17,6 +17,11 @@ if (typeof window !== 'undefined' && window.ethereum) {
 // Unit variables: distanceUnit, currencyUnit, speedUnit, temperatureUnit
 // Currency symbols: currencySymbols
 
+// ===== BOTTOM SHEET VARIABLES =====
+let bottomSheetStartY = 0;
+let bottomSheetCurrentY = 0;
+let bottomSheetIsExpanded = false;
+
 // ===== UNIT CONVERSION FUNCTIONS =====
 /**
  * convertDistance function
@@ -4393,12 +4398,24 @@ function handleVoiceAction(data) {
     }
 }
 
-// Update current location when map is moved
-map.on('move', () => {
-    const center = map.getCenter();
-    currentLat = center.lat;
-    currentLon = center.lng;
-});
+/**
+ * setupMapMoveHandler function
+ * @function setupMapMoveHandler
+ * @returns {void}
+ */
+function setupMapMoveHandler() {
+    if (!map) {
+        console.log('[Map] Map not initialized yet, deferring move handler setup');
+        return;
+    }
+
+    // Update current location when map is moved
+    map.on('move', () => {
+        const center = map.getCenter();
+        currentLat = center.lat;
+        currentLon = center.lng;
+    });
+}
 
 // Initialize voice recognition on page load
 window.addEventListener('load', () => {
@@ -4429,10 +4446,6 @@ window.addEventListener('load', () => {
 });
 
 // ===== BOTTOM SHEET FUNCTIONALITY =====
-let bottomSheetStartY = 0;
-let bottomSheetCurrentY = 0;
-let bottomSheetIsExpanded = false;
-
 /**
  * initBottomSheet function
  * @function initBottomSheet

@@ -22,6 +22,10 @@ function initializeApp() {
         setupMapClickHandler();
         console.log('[App] Map click handler setup');
 
+        // Setup map move handler
+        setupMapMoveHandler();
+        console.log('[App] Map move handler setup');
+
         // Load user preferences
         loadAllSettings();
         console.log('[App] Settings loaded');
