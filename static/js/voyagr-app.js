@@ -4553,15 +4553,6 @@ function initBottomSheet() {
         }
     });
 
-    // Click to expand/collapse
-    handle.addEventListener('click', () => {
-        if (bottomSheetIsExpanded) {
-            collapseBottomSheet();
-        } else {
-            expandBottomSheet();
-        }
-    });
-
     // Expand on input focus
     document.getElementById('start').addEventListener('focus', expandBottomSheet);
     document.getElementById('end').addEventListener('focus', expandBottomSheet);
