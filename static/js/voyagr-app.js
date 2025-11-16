@@ -281,9 +281,13 @@ function switchTab(tab) {
         sheetTitle.textContent = '📋 Trip History';
         loadTripHistory();
     } else if (tab === 'routePreview') {
+        console.log('[SwitchTab] Switching to routePreview tab, element:', routePreviewTab);
         if (routePreviewTab) {
             routePreviewTab.style.display = 'block';
             sheetTitle.textContent = '📍 Route Preview';
+            console.log('[SwitchTab] routePreviewTab displayed successfully');
+        } else {
+            console.error('[SwitchTab] routePreviewTab element not found!');
         }
     } else if (tab === 'routeComparison') {
         routeComparisonTab.style.display = 'block';
@@ -2106,14 +2110,19 @@ function startNavigation() {
  * @returns {*} Return value description
  */
 function showRoutePreview(routeData) {
+    console.log('[Route Preview] showRoutePreview called with data:', routeData);
+
     if (!routeData) {
         showStatus('No route data available', 'error');
+        console.error('[Route Preview] No route data provided');
         return;
     }
 
     const symbol = getCurrencySymbol();
     const distUnit = getDistanceUnit();
     const speedUnit = getSpeedUnit();
+
+    console.log('[Route Preview] Currency:', symbol, 'Distance Unit:', distUnit);
 
     // Update route preview information
     // Use distance_km from routes array if available, otherwise parse from distance string
@@ -2175,11 +2184,14 @@ function showRoutePreview(routeData) {
     }
 
     // Switch to route preview tab
+    console.log('[Route Preview] Switching to routePreview tab');
     switchTab('routePreview');
 
     // Expand bottom sheet to show preview
+    console.log('[Route Preview] Expanding bottom sheet');
     expandBottomSheet();
 
+    console.log('[Route Preview] Route preview displayed successfully');
     showStatus('📍 Review your route before starting navigation', 'success');
 }
 
