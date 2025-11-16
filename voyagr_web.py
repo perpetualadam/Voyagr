@@ -3757,6 +3757,8 @@ def calculate_route():
         except Exception as e:
             graphhopper_error = str(e)
             print(f"[GraphHopper] Exception: {graphhopper_error}")
+            import traceback
+            traceback.print_exc()
 
         if graphhopper_error:
             print(f"[GraphHopper] Failed: {graphhopper_error}")
@@ -3927,6 +3929,8 @@ def calculate_route():
         except Exception as e:
             valhalla_error = str(e)
             print(f"[Valhalla] Exception: {valhalla_error}")
+            import traceback
+            traceback.print_exc()
 
         if valhalla_error:
             print(f"[Valhalla] Failed: {valhalla_error}")
