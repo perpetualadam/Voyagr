@@ -3848,6 +3848,9 @@ def calculate_route():
         caz_exempt = data.get('caz_exempt', False)
         enable_hazard_avoidance = data.get('enable_hazard_avoidance', False)
 
+        # DEBUG: Log hazard avoidance parameter
+        logger.info(f"[HAZARDS] enable_hazard_avoidance={enable_hazard_avoidance} (type={type(enable_hazard_avoidance)})")
+
         # Parse coordinates
         start_coords = validate_coordinates(start)
         end_coords = validate_coordinates(end)
@@ -3869,8 +3872,10 @@ def calculate_route():
         if enable_hazard_avoidance:
             hazard_start = time.time()
             hazards = fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
-            logger.debug(f"[TIMING] Hazard fetch: {(time.time() - hazard_start)*1000:.0f}ms")
-            logger.debug(f"[HAZARDS] Fetched hazards: {[(k, len(v)) for k, v in hazards.items() if v]}")
+            hazard_elapsed = (time.time() - hazard_start) * 1000
+            logger.info(f"[HAZARDS] Fetched hazards in {hazard_elapsed:.0f}ms: {[(k, len(v)) for k, v in hazards.items() if v]}")
+        else:
+            logger.info(f"[HAZARDS] Hazard avoidance disabled - skipping hazard fetch")
 
         # Try routing engines in order: GraphHopper, Valhalla, OSRM
         graphhopper_error = None
