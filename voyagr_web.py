@@ -3992,7 +3992,10 @@ def calculate_route():
                 "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
                 "profile": "car",
                 "locale": "en",
-                "ch.disable": "true"  # Disable CH to get alternative routes
+                "ch.disable": "true",  # Disable CH to get alternative routes
+                "algorithm": "alternative_route",  # Request alternative routes
+                "alternative_route.max_paths": "4",  # Request up to 4 routes
+                "alternative_route.max_weight_factor": "1.4"  # Allow routes up to 40% longer
             }
             logger.debug(f"[GraphHopper] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
             logger.debug(f"[GraphHopper] URL: {url}")
