@@ -112,11 +112,9 @@ function setupEventListeners() {
         option.addEventListener('click', (e) => setTheme(e.target.dataset.theme));
     });
     
-    // Preference toggles
-    const toggleSwitches = document.querySelectorAll('.toggle-switch');
-    toggleSwitches.forEach(toggle => {
-        toggle.addEventListener('click', (e) => togglePreference(e.target.dataset.pref));
-    });
+    // Preference toggles - Note: These are handled by inline onclick handlers in HTML
+    // The buttons have onclick="togglePreference('preference_name')" attributes
+    // No need to add event listeners here as they would conflict with the inline handlers
     
     // Unit preference selectors
     const distanceSelect = document.getElementById('distanceUnit');
