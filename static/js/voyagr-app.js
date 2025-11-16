@@ -4438,8 +4438,16 @@ function initBottomSheet() {
     const header = document.querySelector('.bottom-sheet-header');
     let isDragging = false;
 
+    console.log('[BottomSheet] Initializing...', { bottomSheet, handle, header });
+
+    if (!bottomSheet || !handle) {
+        console.error('[BottomSheet] ERROR: bottomSheet or handle not found!');
+        return;
+    }
+
     // Click on handle or header to expand/collapse
     handle.addEventListener('click', (e) => {
+        console.log('[BottomSheet] Handle clicked, expanded:', bottomSheetIsExpanded);
         e.stopPropagation();
         if (bottomSheetIsExpanded) {
             collapseBottomSheet();
@@ -4547,8 +4555,10 @@ function initBottomSheet() {
  */
 function expandBottomSheet() {
     const bottomSheet = document.getElementById('bottomSheet');
+    console.log('[BottomSheet] Expanding...');
     bottomSheet.classList.add('expanded');
     bottomSheetIsExpanded = true;
+    console.log('[BottomSheet] Expanded, classes:', bottomSheet.className);
 }
 
 /**
@@ -4558,6 +4568,7 @@ function expandBottomSheet() {
  */
 function collapseBottomSheet() {
     const bottomSheet = document.getElementById('bottomSheet');
+    console.log('[BottomSheet] Collapsing...');
     bottomSheet.classList.remove('expanded');
     bottomSheetIsExpanded = false;
 }
