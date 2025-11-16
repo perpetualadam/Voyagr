@@ -2169,11 +2169,11 @@ function showRoutePreview(routeData) {
     document.getElementById('previewCAZCost').textContent = symbol + cazCost.toFixed(2);
     document.getElementById('previewTotalCost').textContent = symbol + totalCost.toFixed(2);
 
-    console.log('[Cost] Route preview costs adjusted for unit preference:', {
+    console.log('[Cost] Route preview costs:', {
         distanceUnit: distanceUnit,
-        fuelCost: adjustedFuelCost.toFixed(2),
-        tollCost: adjustedTollCost.toFixed(2),
-        cazCost: adjustedCazCost.toFixed(2),
+        fuelCost: fuelCost.toFixed(2),
+        tollCost: tollCost.toFixed(2),
+        cazCost: cazCost.toFixed(2),
         totalCost: totalCost.toFixed(2)
     });
 
