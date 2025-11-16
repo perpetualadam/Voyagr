@@ -909,7 +909,7 @@ class CostCalculator:
             logger.error(f"[Cache] Error retrieving cached route: {e}")
             return None
 
-    def get_cache_statistics(self):
+    def get_cache_statistics(self) -> Dict[str, Any]:
         """Get statistics about the persistent route cache."""
         try:
             conn = get_db_connection()
@@ -1007,8 +1007,8 @@ class CostCalculator:
                 'error': str(e)
             }
 
-    def optimize_route_cost(self, routes_data, vehicle_type, fuel_efficiency, fuel_price,
-                           energy_efficiency, electricity_price):
+    def optimize_route_cost(self, routes_data: List[Dict[str, Any]], vehicle_type: str, fuel_efficiency: float, fuel_price: float,
+                           energy_efficiency: float, electricity_price: float) -> Optional[Dict[str, Any]]:
         """Provide cost optimization suggestions for routes."""
         if not routes_data or len(routes_data) == 0:
             return None
@@ -1080,8 +1080,8 @@ class CostCalculator:
             'best_optimization': max(optimizations, key=lambda x: x['total_potential_savings']) if optimizations else None
         }
 
-    def cache_alternative_routes(self, start_lat, start_lon, end_lat, end_lon,
-                                routing_mode, vehicle_type, routes_data):
+    def cache_alternative_routes(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float,
+                                routing_mode: str, vehicle_type: str, routes_data: List[Dict[str, Any]]) -> bool:
         """Cache alternative routes with smart TTL and invalidation strategy."""
         try:
             conn = get_db_connection()
@@ -1099,9 +1099,9 @@ class CostCalculator:
                 # Determine TTL based on route characteristics
                 # Longer routes get longer TTL (more stable)
                 # Routes with tolls/CAZ get shorter TTL (prices change)
-                base_ttl = 3600  # 1 hour
+                base_ttl: int = 3600  # 1 hour
                 if distance_km > 100:
-                    ttl_multiplier = 2  # 2 hours for long routes
+                    ttl_multiplier: float = 2  # 2 hours for long routes
                 elif distance_km > 50:
                     ttl_multiplier = 1.5  # 1.5 hours for medium routes
                 else:
@@ -1110,6 +1110,9 @@ class CostCalculator:
                 # Reduce TTL if route has tolls or CAZ
                 if toll_cost > 0 or caz_cost > 0:
                     ttl_multiplier *= 0.7  # 30% reduction
+
+                # Calculate final TTL (currently not used in INSERT, but kept for future use)
+                _ttl_seconds: int = int(base_ttl * ttl_multiplier)
 
                 # Insert alternative route
                 cursor.execute('''
@@ -1131,7 +1134,7 @@ class CostCalculator:
             logger.error(f"[Cache] Error caching alternative routes: {e}")
             return False
 
-    def get_alternative_route_cache_info(self, start_lat, start_lon, end_lat, end_lon):
+    def get_alternative_route_cache_info(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, Any]:
         """Get cache information for alternative routes."""
         try:
             conn = get_db_connection()
@@ -1342,7 +1345,7 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
         logger.error(f"Error fetching hazards: {e}")
         return {}
 
-def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dict[str, List[Dict[str, Any]]]) -> float:
+def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dict[str, List[Dict[str, Any]]]) -> Tuple[float, int]:
     """
     Calculate hazard score for a route based on proximity to hazards.
 
@@ -3234,7 +3237,6 @@ def get_trip_analytics():
 def get_traffic_conditions():
     """Get real-time traffic conditions for a route"""
     try:
-        data = request.json or {}
         # Simulate traffic data (in production, integrate with real traffic API)
         # This would connect to services like Google Maps Traffic, HERE Traffic, or TomTom Traffic
 
@@ -3601,7 +3603,6 @@ def calculate_route():
             return jsonify(cached_route)
 
         # Fetch hazards if hazard avoidance is enabled
-        _hazards = {}
         if enable_hazard_avoidance:
             hazard_start = time.time()
             fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
@@ -4807,7 +4808,7 @@ def voice_command():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-def parse_voice_command_web(command: str, lat: float, lon: float) -> Dict[str, Any]:
+def parse_voice_command_web(command: str, _lat: float, _lon: float) -> Dict[str, Any]:
     """Parse voice command and return action to execute."""
     try:
         # Normalize command
@@ -6054,7 +6055,7 @@ def batch_requests():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
-def calculate_route_internal(data: Dict[str, Any]) -> Dict[str, Any]:
+def calculate_route_internal(_data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal route calculation for batch requests."""
     try:
         # Call existing route calculation logic
@@ -6063,7 +6064,7 @@ def calculate_route_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
-def get_weather_internal(data: Dict[str, Any]) -> Dict[str, Any]:
+def get_weather_internal(_data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal weather fetch for batch requests."""
     try:
         # Call existing weather logic
@@ -6071,7 +6072,7 @@ def get_weather_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
-def get_traffic_patterns_internal(data: Dict[str, Any]) -> Dict[str, Any]:
+def get_traffic_patterns_internal(_data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal traffic patterns fetch for batch requests."""
     try:
         # Call existing traffic logic
@@ -6079,7 +6080,7 @@ def get_traffic_patterns_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
-def get_speed_limit_internal(data: Dict[str, Any]) -> Dict[str, Any]:
+def get_speed_limit_internal(_data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal speed limit fetch for batch requests."""
     try:
         # Call existing speed limit logic
@@ -6087,7 +6088,7 @@ def get_speed_limit_internal(data: Dict[str, Any]) -> Dict[str, Any]:
     except Exception as e:
         return {'success': False, 'error': str(e)}
 
-def get_nearby_hazards_internal(data: Dict[str, Any]) -> Dict[str, Any]:
+def get_nearby_hazards_internal(_data: Dict[str, Any]) -> Dict[str, Any]:
     """Internal hazards fetch for batch requests."""
     try:
         # Call existing hazards logic
