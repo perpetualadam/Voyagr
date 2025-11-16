@@ -18,7 +18,6 @@ import math
 import time
 from functools import wraps
 from collections import OrderedDict
-from typing import cast
 import logging
 from typing import List, Dict, Tuple, Optional, Any, Callable, TypeVar
 
@@ -274,7 +273,7 @@ def validate_route_request(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
         return False, "Invalid numeric values"
 
     # Validate waypoints if provided (for multi-stop routes)
-    waypoints = data.get('waypoints', [])
+    waypoints: List[Any] = data.get('waypoints', [])
     if waypoints:
         if not isinstance(waypoints, list):
             return False, "Waypoints must be a list"
@@ -411,8 +410,8 @@ class DatabasePool:
         """Initialize connection pool."""
         self.db_file = db_file
         self.pool_size = pool_size
-        self.connections = []
-        self.available = []
+        self.connections: List[Any] = []
+        self.available: List[Any] = []
         self.lock = threading.Lock()
         self._initialize_pool()
 
@@ -424,7 +423,7 @@ class DatabasePool:
             self.connections.append(conn)
             self.available.append(conn)
 
-    def get_connection(self):
+    def get_connection(self) -> Any:
         """Get a connection from the pool."""
         with self.lock:
             if self.available:
@@ -435,7 +434,7 @@ class DatabasePool:
                 conn.row_factory = sqlite3.Row
                 return conn
 
-    def return_connection(self, conn):
+    def return_connection(self, conn: Any) -> None:
         """Return a connection to the pool."""
         with self.lock:
             if len(self.available) < self.pool_size:
@@ -443,7 +442,7 @@ class DatabasePool:
             else:
                 conn.close()
 
-    def close_all(self):
+    def close_all(self) -> None:
         """Close all connections in the pool."""
         with self.lock:
             for conn in self.connections:
@@ -729,12 +728,12 @@ class CostCalculator:
         self.lock = threading.Lock()
         self.cost_history = []  # Track cost calculations for analytics
 
-    def calculate_costs(self, distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                       energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt):
+    def calculate_costs(self, distance_km: float, vehicle_type: str, fuel_efficiency: float, fuel_price: float,
+                       energy_efficiency: float, electricity_price: float, include_tolls: bool, include_caz: bool, caz_exempt: bool) -> Dict[str, float]:
         """Calculate all costs for a route."""
-        fuel_cost = 0
-        toll_cost = 0
-        caz_cost = 0
+        fuel_cost: float = 0.0
+        toll_cost: float = 0.0
+        caz_cost: float = 0.0
 
         # Calculate fuel/energy cost
         if vehicle_type == 'electric':
@@ -757,21 +756,21 @@ class CostCalculator:
             'total_cost': round(fuel_cost + toll_cost + caz_cost, 2)
         }
 
-    def calculate_detailed_breakdown(self, distance_km, duration_minutes, vehicle_type,
-                                    fuel_efficiency, fuel_price, energy_efficiency,
-                                    electricity_price, include_tolls, include_caz, caz_exempt):
+    def calculate_detailed_breakdown(self, distance_km: float, duration_minutes: float, vehicle_type: str,
+                                    fuel_efficiency: float, fuel_price: float, energy_efficiency: float,
+                                    electricity_price: float, include_tolls: bool, include_caz: bool, caz_exempt: bool) -> Dict[str, Any]:
         """Calculate detailed cost breakdown with per-unit costs."""
         costs = self.calculate_costs(distance_km, vehicle_type, fuel_efficiency, fuel_price,
                                     energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt)
 
         # Calculate per-unit costs
-        cost_per_km = costs['total_cost'] / distance_km if distance_km > 0 else 0
-        cost_per_minute = costs['total_cost'] / duration_minutes if duration_minutes > 0 else 0
+        cost_per_km: float = costs['total_cost'] / distance_km if distance_km > 0 else 0.0
+        cost_per_minute: float = costs['total_cost'] / duration_minutes if duration_minutes > 0 else 0.0
 
         # Calculate fuel efficiency metrics
         if vehicle_type == 'electric':
-            fuel_efficiency_actual = energy_efficiency
-            fuel_unit = 'kWh/100km'
+            fuel_efficiency_actual: float = energy_efficiency
+            fuel_unit: str = 'kWh/100km'
         else:
             fuel_efficiency_actual = fuel_efficiency
             fuel_unit = 'L/100km'
@@ -796,14 +795,14 @@ class CostCalculator:
             }
         }
 
-    def compare_routes(self, routes_data):
+    def compare_routes(self, routes_data: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         """Compare multiple routes and provide recommendations."""
         if not routes_data or len(routes_data) < 2:
             return None
 
-        comparisons = []
+        comparisons: List[Dict[str, Any]] = []
         for idx, route in enumerate(routes_data):
-            comparison = {
+            comparison: Dict[str, Any] = {
                 'route_id': idx + 1,
                 'distance_km': route.get('distance_km', 0),
                 'duration_minutes': route.get('duration_minutes', 0),
@@ -1213,17 +1212,17 @@ def invalidate_route_cache():
         return False
 
 # Cost calculation functions
-def calculate_fuel_cost(distance_km, fuel_efficiency_l_per_100km, fuel_price_gbp_per_l):
+def calculate_fuel_cost(distance_km: float, fuel_efficiency_l_per_100km: float, fuel_price_gbp_per_l: float) -> float:
     """Calculate fuel cost for a route."""
     fuel_needed = (distance_km / 100) * fuel_efficiency_l_per_100km
     return fuel_needed * fuel_price_gbp_per_l
 
-def calculate_energy_cost(distance_km, energy_efficiency_kwh_per_100km, electricity_price_gbp_per_kwh):
+def calculate_energy_cost(distance_km: float, energy_efficiency_kwh_per_100km: float, electricity_price_gbp_per_kwh: float) -> float:
     """Calculate energy cost for EV."""
     energy_needed = (distance_km / 100) * energy_efficiency_kwh_per_100km
     return energy_needed * electricity_price_gbp_per_kwh
 
-def calculate_toll_cost(distance_km, route_type='motorway'):
+def calculate_toll_cost(distance_km: float, route_type: str = 'motorway') -> float:
     """Estimate toll cost based on distance and route type.
 
     Rates are configurable via environment variables:
@@ -1234,7 +1233,7 @@ def calculate_toll_cost(distance_km, route_type='motorway'):
     rate = TOLL_RATES.get(route_type, TOLL_RATES.get('a_road', 0.05))
     return distance_km * rate
 
-def calculate_caz_cost(distance_km, vehicle_type='petrol_diesel', is_exempt=False):
+def calculate_caz_cost(distance_km: float, vehicle_type: str = 'petrol_diesel', is_exempt: bool = False) -> float:
     """Calculate Congestion Charge Zone cost.
 
     Rates are configurable via environment variables:
@@ -1253,7 +1252,7 @@ def calculate_caz_cost(distance_km, vehicle_type='petrol_diesel', is_exempt=Fals
 
 # Hazard avoidance functions
 
-def get_distance_between_points(lat1, lon1, lat2, lon2):
+def get_distance_between_points(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
     """Calculate distance between two points in meters using Haversine formula."""
     R = 6371000  # Earth radius in meters
     phi1 = math.radians(lat1)
@@ -1277,7 +1276,7 @@ def get_db_connection():
         return sqlite3.connect(DB_FILE)
     return db_pool.get_connection()
 
-def return_db_connection(conn):
+def return_db_connection(conn: Any) -> None:
     """Return a database connection to the pool."""
     global db_pool
     if db_pool is not None:
@@ -1285,7 +1284,7 @@ def return_db_connection(conn):
     else:
         conn.close()
 
-def fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon):
+def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, List[Dict[str, Any]]]:
     """Fetch hazards within bounding box of route."""
     try:
         # ====================================================================
@@ -1347,7 +1346,7 @@ def fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon):
         logger.error(f"Error fetching hazards: {e}")
         return {}
 
-def score_route_by_hazards(route_points, hazards):
+def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dict[str, List[Dict[str, Any]]]) -> float:
     """
     Calculate hazard score for a route based on proximity to hazards.
 
@@ -3075,7 +3074,7 @@ def get_charging_stations():
 
 @app.route('/api/trip-history', methods=['GET', 'POST'])
 @app.route('/api/trip-history/<int:trip_id>', methods=['DELETE'])
-def trip_history(trip_id=None):
+def trip_history(trip_id: Optional[int] = None) -> Any:
     """Get, save, or delete trip history."""
     try:
         # PHASE 3 OPTIMIZATION: Use connection pool
@@ -3369,7 +3368,7 @@ class FallbackChainOptimizer:
         }
         self.lock = threading.Lock()
 
-    def record_success(self, engine, response_time_ms):
+    def record_success(self, engine: str, response_time_ms: float) -> None:
         """Record successful routing request."""
         with self.lock:
             stats = self.engine_stats[engine]
@@ -3378,14 +3377,14 @@ class FallbackChainOptimizer:
             total_time = stats['avg_time'] * (stats['successes'] - 1) + response_time_ms
             stats['avg_time'] = total_time / stats['successes']
 
-    def record_failure(self, engine):
+    def record_failure(self, engine: str) -> None:
         """Record failed routing request."""
         with self.lock:
             self.engine_stats[engine]['failures'] += 1
 
-    def get_engine_health(self):
+    def get_engine_health(self) -> Dict[str, Any]:
         """Get health status of all engines."""
-        health = {}
+        health: Dict[str, Any] = {}
         for engine, stats in self.engine_stats.items():
             total = stats['successes'] + stats['failures']
             success_rate = (stats['successes'] / total * 100) if total > 0 else 0
@@ -3397,15 +3396,15 @@ class FallbackChainOptimizer:
             }
         return health
 
-    def get_recommended_engine(self):
+    def get_recommended_engine(self) -> str:
         """Get recommended engine based on health and performance."""
         health = self.get_engine_health()
         # Prefer engines with higher success rate and lower response time
-        scored = {}
+        scored: Dict[str, float] = {}
         for engine, stats in health.items():
             # Score = success_rate (0-100) - response_time_penalty
-            penalty = min(stats['avg_response_time_ms'] / 100, 50)  # Max 50 point penalty
-            score = stats['success_rate'] - penalty
+            penalty: float = min(stats['avg_response_time_ms'] / 100, 50)  # Max 50 point penalty
+            score: float = stats['success_rate'] - penalty
             scored[engine] = score
 
         return max(scored.items(), key=lambda x: x[1])[0] if scored else 'graphhopper'
@@ -3419,7 +3418,7 @@ class ParallelRoutingEngine:
         self.results = {}
         self.lock = threading.Lock()
 
-    def request_graphhopper(self, start_lat, start_lon, end_lat, end_lon):
+    def request_graphhopper(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> None:
         """Request route from GraphHopper in parallel."""
         try:
             start_time = time.time()
@@ -3458,7 +3457,7 @@ class ParallelRoutingEngine:
         except Exception as e:
             self.results['graphhopper'] = {'success': False, 'error': str(e), 'response_time_ms': 0}
 
-    def request_valhalla(self, start_lat, start_lon, end_lat, end_lon):
+    def request_valhalla(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> None:
         """Request route from Valhalla in parallel."""
         try:
             start_time = time.time()
@@ -3500,7 +3499,7 @@ class ParallelRoutingEngine:
         except Exception as e:
             self.results['valhalla'] = {'success': False, 'error': str(e), 'response_time_ms': 0}
 
-    def request_osrm(self, start_lat, start_lon, end_lat, end_lon):
+    def request_osrm(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> None:
         """Request route from OSRM in parallel."""
         try:
             start_time = time.time()
@@ -3538,7 +3537,7 @@ class ParallelRoutingEngine:
         except Exception as e:
             self.results['osrm'] = {'success': False, 'error': str(e), 'response_time_ms': 0}
 
-    def run_parallel(self, start_lat, start_lon, end_lat, end_lon):
+    def run_parallel(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, Any]:
         """Run all 3 routing engines in parallel."""
         threads = [
             threading.Thread(target=self.request_graphhopper, args=(start_lat, start_lon, end_lat, end_lon)),
