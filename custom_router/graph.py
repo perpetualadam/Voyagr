@@ -5,6 +5,8 @@ In-memory representation for fast routing
 
 import sqlite3
 import math
+import gc
+import traceback
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
 
@@ -26,7 +28,7 @@ class RoadNetwork:
         self.load_from_database()
     
     def load_from_database(self):
-        """Load graph from SQLite database with lazy edge loading."""
+        """Load graph from SQLite database with eager edge loading."""
         print("[Graph] Loading from database...")
 
         try:
@@ -56,17 +58,46 @@ class RoadNetwork:
                 way_count += 1
             print(f"[Graph] Loaded {way_count:,} ways")
 
-            # Load edges with LAZY LOADING for large graphs
-            # Only load edges on-demand to save memory
-            print("[Graph] Setting up lazy edge loading...")
-            self.db_file_for_edges = self.db_file
-            self.edges_loaded = False
+            # Load edges with BATCH LOADING for component analysis
+            # Pre-load all edges into memory for fast component detection
+            print("[Graph] Loading edges (batch loading for component analysis)...")
+            edge_count = 0
+            batch_size = 5000000
+            offset = 0
 
-            # Get edge count for reference
-            cursor.execute('SELECT COUNT(*) as cnt FROM edges')
-            edge_count = cursor.fetchone()['cnt']
-            print(f"[Graph] Total edges in database: {edge_count:,}")
-            print("[Graph] ⚠️  Using lazy loading - edges loaded on-demand")
+            try:
+                while True:
+                    cursor.execute(
+                        'SELECT from_node_id, to_node_id, distance_m, speed_limit_kmh, way_id '
+                        'FROM edges LIMIT ? OFFSET ?',
+                        (batch_size, offset)
+                    )
+
+                    rows = cursor.fetchall()
+                    if not rows:
+                        break
+
+                    for row in rows:
+                        from_node = row['from_node_id']
+                        to_node = row['to_node_id']
+                        distance = row['distance_m']
+                        speed_limit = row['speed_limit_kmh']
+                        way_id = row['way_id']
+
+                        self.edges[from_node].append((to_node, distance, speed_limit, way_id))
+                        edge_count += 1
+
+                    offset += batch_size
+                    print(f"[Graph] Loaded {edge_count:,} edges...")
+
+                    # Force garbage collection between batches
+                    gc.collect()
+
+            except Exception as e:
+                print(f"[Graph] Error loading edges at {edge_count:,}: {e}")
+                traceback.print_exc()
+
+            print(f"[Graph] Loaded {edge_count:,} edges")
 
             # Load turn restrictions
             print("[Graph] Loading turn restrictions...")
@@ -79,34 +110,13 @@ class RoadNetwork:
 
             conn.close()
 
-            print(f"[Graph] Loaded: {node_count:,} nodes, {way_count:,} ways, {edge_count:,} edges (lazy)")
+            print(f"[Graph] Loaded: {node_count:,} nodes, {way_count:,} ways, {edge_count:,} edges (eager)")
         except Exception as e:
             print(f"[Graph] Load error: {e}")
 
-    def load_edges_for_node(self, node_id: int):
-        """Lazy load edges for a specific node."""
-        try:
-            conn = sqlite3.connect(self.db_file_for_edges)
-            cursor = conn.cursor()
-            cursor.execute(
-                'SELECT to_node_id, distance_m, speed_limit_kmh, way_id FROM edges WHERE from_node_id = ?',
-                (node_id,)
-            )
-            edges = []
-            for to_node, distance, speed_limit, way_id in cursor.fetchall():
-                edges.append((to_node, distance, speed_limit, way_id))
-            conn.close()
-            return edges
-        except Exception as e:
-            print(f"[Graph] Error loading edges for node {node_id}: {e}")
-            return []
-
     def get_neighbors(self, node_id: int):
-        """Get neighbors of a node, loading edges on-demand."""
-        if node_id not in self.edges or len(self.edges[node_id]) == 0:
-            # Load edges for this node on-demand
-            self.edges[node_id] = self.load_edges_for_node(node_id)
-        return self.edges[node_id]
+        """Get neighbors of a node."""
+        return self.edges.get(node_id, [])
     
     def build_edges_from_ways(self, ways: Dict):
         """Build edge list from ways."""
