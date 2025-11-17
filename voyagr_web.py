@@ -311,9 +311,11 @@ USE_OSRM = os.getenv('USE_OSRM', 'false').lower() == 'true'
 # Phase 3: Import custom router modules
 try:
     from custom_router import RoadNetwork, Router, KShortestPaths
+    from custom_router.component_analyzer import ComponentAnalyzer
     CUSTOM_ROUTER_AVAILABLE = True
 except ImportError:
     CUSTOM_ROUTER_AVAILABLE = False
+    ComponentAnalyzer = None  # type: ignore
     logger.warning("[CUSTOM_ROUTER] Module not available - will use external engines only")
 
 # Phase 3: Custom router configuration
@@ -440,7 +442,7 @@ route_cache = RouteCache(max_size=1000, ttl_seconds=3600)
 # ============================================================================
 
 def init_custom_router() -> bool:
-    """Initialize custom router at app startup."""
+    """Initialize custom router at app startup with full BFS component analysis."""
     global custom_graph, custom_router, k_paths
 
     if not CUSTOM_ROUTER_AVAILABLE or not USE_CUSTOM_ROUTER:
@@ -454,6 +456,20 @@ def init_custom_router() -> bool:
 
         logger.info(f"[CUSTOM_ROUTER] Initializing from {CUSTOM_ROUTER_DB}...")
         custom_graph = RoadNetwork(CUSTOM_ROUTER_DB)
+
+        # Phase 4: Run full BFS component analysis for accurate routing
+        logger.info(f"[CUSTOM_ROUTER] Running full BFS component analysis (all 26.5M nodes)...")
+        if ComponentAnalyzer:
+            try:
+                analyzer = ComponentAnalyzer(custom_graph)
+                stats = analyzer.analyze_full()
+                custom_graph.set_component_analyzer(analyzer)
+                logger.info(f"[CUSTOM_ROUTER] ✅ Component analysis complete:")
+                logger.info(f"[CUSTOM_ROUTER]    Total components: {stats['total_components']}")
+                logger.info(f"[CUSTOM_ROUTER]    Main component: {stats['main_component_size']:,} nodes ({stats['main_component_pct']:.1f}%)")
+            except Exception as e:
+                logger.warning(f"[CUSTOM_ROUTER] ⚠️  Component analysis failed: {e} - continuing without it")
+
         custom_router = Router(custom_graph)
         k_paths = KShortestPaths(custom_router)
 
