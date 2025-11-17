@@ -82,7 +82,57 @@ class ComponentAnalyzer:
 
         self.analysis_mode = 'fast'
         return stats
-    
+
+    def analyze_full(self) -> Dict:
+        """
+        Complete component analysis using full BFS.
+        Analyzes ALL nodes (not sampled).
+        Takes 30-60 minutes but guarantees accuracy.
+        """
+        print("[ComponentAnalyzer] Starting FULL component analysis...")
+        start_time = time.time()
+
+        visited = set()
+        component_id = 0
+        node_list = list(self.graph.nodes.keys())
+        total_nodes = len(node_list)
+
+        print(f"[ComponentAnalyzer] Analyzing ALL {total_nodes:,} nodes...")
+
+        for i, start_node in enumerate(node_list):
+            if start_node in visited:
+                continue
+
+            if i % 100000 == 0 and i > 0:
+                elapsed = time.time() - start_time
+                rate = i / elapsed
+                remaining = (total_nodes - i) / rate / 60
+                print(f"[ComponentAnalyzer] {i:,}/{total_nodes:,} "
+                      f"({100*i/total_nodes:.1f}%) - ETA: {remaining:.0f}m")
+
+            component_nodes = self._bfs_component(start_node, visited)
+            self.components.update({node: component_id for node in component_nodes})
+            self.component_sizes[component_id] = len(component_nodes)
+            component_id += 1
+
+        if self.component_sizes:
+            self.main_component_id = max(self.component_sizes,
+                                         key=self.component_sizes.get)
+            self.main_component_size = self.component_sizes[self.main_component_id]
+
+        elapsed = time.time() - start_time
+
+        # Print statistics
+        stats = self._get_statistics()
+        print(f"[ComponentAnalyzer] FULL analysis complete in {elapsed:.1f}s ({elapsed/60:.1f}m)")
+        print(f"[ComponentAnalyzer] Found {len(self.component_sizes)} components")
+        if self.main_component_size > 0:
+            print(f"[ComponentAnalyzer] Main component: {self.main_component_size:,} nodes "
+                  f"({stats['main_component_pct']:.1f}%)")
+
+        self.analysis_mode = 'full'
+        return stats
+
     def _bfs_component(self, start_node: int, visited: Set[int]) -> Set[int]:
         """Find all nodes in component using BFS."""
         component = set()
@@ -124,8 +174,10 @@ class ComponentAnalyzer:
     
     def is_connected(self, node1: int, node2: int) -> bool:
         """Check if two nodes are in same component (O(1))."""
+        # If either node is not analyzed, assume they're connected
+        # (fallback to other routing engines)
         if node1 not in self.components or node2 not in self.components:
-            return False
+            return True
         return self.components[node1] == self.components[node2]
     
     def get_component_id(self, node_id: int) -> int:
