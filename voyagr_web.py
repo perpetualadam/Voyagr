@@ -319,7 +319,9 @@ except ImportError:
     logger.warning("[CUSTOM_ROUTER] Module not available - will use external engines only")
 
 # Phase 3: Custom router configuration
-USE_CUSTOM_ROUTER = os.getenv('USE_CUSTOM_ROUTER', 'true').lower() == 'true'
+# NOTE: Custom router disabled due to performance issues (Dijkstra too slow for large graphs)
+# Use GraphHopper/Valhalla/OSRM as primary engines instead
+USE_CUSTOM_ROUTER = os.getenv('USE_CUSTOM_ROUTER', 'false').lower() == 'true'
 CUSTOM_ROUTER_DB = os.getenv('CUSTOM_ROUTER_DB', 'data/uk_router.db')
 CUSTOM_ROUTER_K_PATHS = int(os.getenv('CUSTOM_ROUTER_K_PATHS', '4'))
 CUSTOM_ROUTER_TIMEOUT = int(os.getenv('CUSTOM_ROUTER_TIMEOUT', '5000'))
@@ -442,7 +444,7 @@ route_cache = RouteCache(max_size=1000, ttl_seconds=3600)
 # ============================================================================
 
 def init_custom_router() -> bool:
-    """Initialize custom router at app startup with full BFS component analysis."""
+    """Initialize custom router at app startup with background component analysis."""
     global custom_graph, custom_router, k_paths
 
     if not CUSTOM_ROUTER_AVAILABLE or not USE_CUSTOM_ROUTER:
@@ -457,25 +459,44 @@ def init_custom_router() -> bool:
         logger.info(f"[CUSTOM_ROUTER] Initializing from {CUSTOM_ROUTER_DB}...")
         custom_graph = RoadNetwork(CUSTOM_ROUTER_DB)
 
-        # Phase 4: Run full BFS component analysis for accurate routing
-        logger.info(f"[CUSTOM_ROUTER] Running full BFS component analysis (all 26.5M nodes)...")
-        if ComponentAnalyzer:
-            try:
-                analyzer = ComponentAnalyzer(custom_graph)
-                stats = analyzer.analyze_full()
-                custom_graph.set_component_analyzer(analyzer)
-                logger.info(f"[CUSTOM_ROUTER] ✅ Component analysis complete:")
-                logger.info(f"[CUSTOM_ROUTER]    Total components: {stats['total_components']}")
-                logger.info(f"[CUSTOM_ROUTER]    Main component: {stats['main_component_size']:,} nodes ({stats['main_component_pct']:.1f}%)")
-            except Exception as e:
-                logger.warning(f"[CUSTOM_ROUTER] ⚠️  Component analysis failed: {e} - continuing without it")
-
-        custom_router = Router(custom_graph)
+        # Phase 3: Initialize with Contraction Hierarchies support
+        custom_router = Router(custom_graph, use_ch=True, db_file=CUSTOM_ROUTER_DB)
         k_paths = KShortestPaths(custom_router)
 
         logger.info(f"[CUSTOM_ROUTER] ✅ Initialized successfully")
         logger.info(f"[CUSTOM_ROUTER] Nodes: {len(custom_graph.nodes):,}")
         logger.info(f"[CUSTOM_ROUTER] Edges: {sum(len(e) for e in custom_graph.edges.values()):,}")
+
+        # Log CH status
+        if custom_router.ch_available:
+            logger.info(f"[CUSTOM_ROUTER] ✅ Contraction Hierarchies available ({len(custom_router.ch_levels):,} nodes)")
+        else:
+            logger.warning(f"[CUSTOM_ROUTER] ⚠️  CH not available - using standard Dijkstra+A*")
+
+        # Phase 4: Run full BFS component analysis in background (after edges load)
+        logger.info(f"[CUSTOM_ROUTER] Starting background component analysis (all 26.5M nodes)...")
+        if ComponentAnalyzer:
+            def run_component_analysis():
+                try:
+                    # Wait for edges to load in background
+                    import time
+                    while not getattr(custom_graph, '_edges_loaded', False):
+                        time.sleep(1)
+                    logger.info(f"[CUSTOM_ROUTER] Edges loaded, starting component analysis...")
+
+                    analyzer = ComponentAnalyzer(custom_graph)
+                    stats = analyzer.analyze_full()
+                    custom_graph.set_component_analyzer(analyzer)
+                    logger.info(f"[CUSTOM_ROUTER] ✅ Background component analysis complete:")
+                    logger.info(f"[CUSTOM_ROUTER]    Total components: {stats['total_components']}")
+                    logger.info(f"[CUSTOM_ROUTER]    Main component: {stats['main_component_size']:,} nodes ({stats['main_component_pct']:.1f}%)")
+                except Exception as e:
+                    logger.warning(f"[CUSTOM_ROUTER] ⚠️  Component analysis failed: {e}")
+
+            import threading
+            analysis_thread = threading.Thread(target=run_component_analysis, daemon=True)
+            analysis_thread.start()
+
         return True
     except Exception as e:
         logger.error(f"[CUSTOM_ROUTER] ❌ Initialization failed: {e}")
@@ -4173,7 +4194,14 @@ def calculate_route():
                 route = custom_router.route(start_lat, start_lon, end_lat, end_lon)
                 custom_elapsed = (time.time() - custom_start) * 1000
 
-                if route:
+                # Check if custom router took too long
+                if custom_elapsed > CUSTOM_ROUTER_TIMEOUT:
+                    logger.warning(f"[ROUTING] Custom router timeout ({custom_elapsed:.0f}ms > {CUSTOM_ROUTER_TIMEOUT}ms) - falling back to external engines")
+                    update_custom_router_stats(custom_elapsed, False)
+                elif route is None:
+                    logger.info(f"[ROUTING] Custom router returned None in {custom_elapsed:.0f}ms - falling back to external engines")
+                    update_custom_router_stats(custom_elapsed, False)
+                elif route and 'error' not in route:
                     logger.info(f"[ROUTING] ✅ Custom router succeeded in {custom_elapsed:.0f}ms")
 
                     # Get alternatives
@@ -4214,6 +4242,9 @@ def calculate_route():
                     route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance)
                     update_custom_router_stats(custom_elapsed, True)
                     return jsonify(response_data)
+                elif route and 'error' in route:
+                    logger.info(f"[ROUTING] ⚠️  Custom router: {route.get('reason', route.get('error'))} - falling back to external engines")
+                    update_custom_router_stats(custom_elapsed, False)
             except Exception as e:
                 logger.warning(f"[ROUTING] Custom router failed: {e} - falling back to external engines")
                 update_custom_router_stats(0, False)
