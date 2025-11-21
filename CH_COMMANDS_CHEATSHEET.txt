@@ -1,0 +1,119 @@
+================================================================================
+CH EXTERNAL TESTING - COMMANDS CHEATSHEET
+================================================================================
+
+QUICK START (Copy & Paste)
+================================================================================
+
+# Test 1: Verify CH Index (< 1 second)
+python test_ch_routing_v2.py
+
+# Test 2: Simple CH Verification (< 5 seconds)
+python test_ch_simple.py
+
+# Test 3: Full Diagnostics (30-60 seconds)
+python test_ch_diagnostics.py
+
+# Test 4: Performance Benchmark (15-60 seconds)
+python test_ch_performance.py
+
+# Run All Tests in Sequence
+python test_ch_routing_v2.py && python test_ch_simple.py && python test_ch_diagnostics.py && python test_ch_performance.py
+
+================================================================================
+WINDOWS POWERSHELL
+================================================================================
+
+# Test 1
+python test_ch_routing_v2.py
+
+# Test 2
+python test_ch_simple.py
+
+# Test 3
+python test_ch_diagnostics.py
+
+# Test 4
+python test_ch_performance.py
+
+# All tests
+python test_ch_routing_v2.py; python test_ch_simple.py; python test_ch_diagnostics.py; python test_ch_performance.py
+
+# Or use batch script
+.\run_ch_tests.ps1
+
+================================================================================
+LINUX/MAC/WSL
+================================================================================
+
+# Test 1
+python test_ch_routing_v2.py
+
+# Test 2
+python test_ch_simple.py
+
+# Test 3
+python test_ch_diagnostics.py
+
+# Test 4
+python test_ch_performance.py
+
+# All tests
+python test_ch_routing_v2.py && python test_ch_simple.py && python test_ch_diagnostics.py && python test_ch_performance.py
+
+# Or use batch script
+bash run_ch_tests.sh
+
+================================================================================
+EXPECTED OUTPUT
+================================================================================
+
+Test 1: Verify CH Index
+  CH Nodes: 26,544,335
+  CH Shortcuts: 123,628,499
+  Status: READY
+
+Test 2: Simple CH Verification
+  CH Nodes: 26,544,335
+  CH Shortcuts: 123,628,499
+  Valid Shortcuts: 123,628,499
+  Status: READY
+
+Test 3: Full Diagnostics
+  Database: OK
+  Graph Loading: OK
+  CH Router: OK
+  Memory: OK
+
+Test 4: Performance Benchmark
+  Average Time: 52.3ms
+  Status: PASS
+
+================================================================================
+TROUBLESHOOTING
+================================================================================
+
+"CH tables not found"
+  -> Run: python rebuild_ch_index_full.py
+
+"No route found"
+  -> Graph still loading edges - wait 2-3 minutes
+
+"Slow queries (>1 second)"
+  -> Background edge loading in progress
+
+"Memory error"
+  -> Close other applications or wait
+
+================================================================================
+DOCUMENTATION
+================================================================================
+
+CH_EXTERNAL_TESTING_COMMANDS.md - Detailed reference
+CH_TESTING_QUICK_REFERENCE.md - Quick reference
+CH_EXTERNAL_TESTING_FINAL.md - Final verification
+CH_TESTING_MASTER_REFERENCE.md - Master reference
+CH_TESTING_FILES_CREATED.md - File index
+
+================================================================================
+
