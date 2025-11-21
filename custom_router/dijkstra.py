@@ -13,6 +13,7 @@ import sqlite3
 from typing import List, Tuple, Optional, Dict, Set
 from collections import deque
 from .graph import RoadNetwork
+from .memory_monitor import get_monitor
 
 class Router:
     """Route calculation using Dijkstra algorithm with A* heuristic and optional Contraction Hierarchies."""
@@ -91,10 +92,14 @@ class Router:
         falls back to bidirectional Dijkstra with A* heuristic.
         """
         start_time = time.time()
+        monitor = get_monitor()
+        monitor.start()
+        monitor.snapshot("route_start")
 
         # Find nearest nodes
         start_node = self.graph.find_nearest_node(start_lat, start_lon)
         end_node = self.graph.find_nearest_node(end_lat, end_lon)
+        monitor.snapshot("nodes_found")
 
         if not start_node or not end_node:
             return None
@@ -126,6 +131,12 @@ class Router:
         route_data = self.extract_route_data(path)
         route_data['response_time_ms'] = (time.time() - start_time) * 1000
         route_data['algorithm'] = 'CH' if self.stats['ch_used'] else 'Dijkstra+A*'
+
+        # Add memory monitoring data
+        monitor.snapshot("route_complete")
+        memory_report = monitor.get_report()
+        route_data['memory_mb'] = memory_report.get('peak_memory_mb', 0)
+        route_data['memory_delta_mb'] = memory_report.get('total_delta_mb', 0)
 
         return route_data
 

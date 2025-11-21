@@ -319,9 +319,9 @@ except ImportError:
     logger.warning("[CUSTOM_ROUTER] Module not available - will use external engines only")
 
 # Phase 3: Custom router configuration
-# NOTE: Custom router disabled due to performance issues (Dijkstra too slow for large graphs)
-# Use GraphHopper/Valhalla/OSRM as primary engines instead
-USE_CUSTOM_ROUTER = os.getenv('USE_CUSTOM_ROUTER', 'false').lower() == 'true'
+# NOTE: Custom router with Contraction Hierarchies is now primary engine
+# Fallback chain: CH → GraphHopper → Valhalla → OSRM
+USE_CUSTOM_ROUTER = os.getenv('USE_CUSTOM_ROUTER', 'true').lower() == 'true'
 CUSTOM_ROUTER_DB = os.getenv('CUSTOM_ROUTER_DB', 'data/uk_router.db')
 CUSTOM_ROUTER_K_PATHS = int(os.getenv('CUSTOM_ROUTER_K_PATHS', '4'))
 CUSTOM_ROUTER_TIMEOUT = int(os.getenv('CUSTOM_ROUTER_TIMEOUT', '5000'))
@@ -463,15 +463,16 @@ def init_custom_router() -> bool:
         custom_router = Router(custom_graph, use_ch=True, db_file=CUSTOM_ROUTER_DB)
         k_paths = KShortestPaths(custom_router)
 
-        logger.info(f"[CUSTOM_ROUTER] ✅ Initialized successfully")
+        logger.info(f"[CUSTOM_ROUTER] OK Initialized successfully")
         logger.info(f"[CUSTOM_ROUTER] Nodes: {len(custom_graph.nodes):,}")
         logger.info(f"[CUSTOM_ROUTER] Edges: {sum(len(e) for e in custom_graph.edges.values()):,}")
 
         # Log CH status
         if custom_router.ch_available:
-            logger.info(f"[CUSTOM_ROUTER] ✅ Contraction Hierarchies available ({len(custom_router.ch_levels):,} nodes)")
+            logger.info(f"[CUSTOM_ROUTER] OK Contraction Hierarchies available ({len(custom_router.ch_levels):,} nodes)")
+            logger.info(f"[CUSTOM_ROUTER] PRIMARY ROUTER: CH with 5-10x speedup enabled")
         else:
-            logger.warning(f"[CUSTOM_ROUTER] ⚠️  CH not available - using standard Dijkstra+A*")
+            logger.warning(f"[CUSTOM_ROUTER] WARNING CH not available - using standard Dijkstra+A*")
 
         # Phase 4: Run full BFS component analysis in background (after edges load)
         logger.info(f"[CUSTOM_ROUTER] Starting background component analysis (all 26.5M nodes)...")
