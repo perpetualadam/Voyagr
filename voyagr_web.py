@@ -82,11 +82,23 @@ ALLOWED_ORIGINS: List[str] = _get_allowed_origins()
 CORS(app, resources={
     r"/api/*": {
         "origins": ALLOWED_ORIGINS if ALLOWED_ORIGINS else ["http://localhost:5000"],
-        "methods": ["GET", "POST", "OPTIONS"],
+        "methods": ["GET", "POST", "OPTIONS", "DELETE"],
         "allow_headers": ["Content-Type", "Authorization"],
         "supports_credentials": False
     }
 })
+
+# ============================================================================
+# DASHCAM BLUEPRINT INITIALIZATION
+# ============================================================================
+# Import dashcam blueprint (will be initialized after DB setup)
+try:
+    from dashcam_blueprint import init_dashcam_blueprint
+    dashcam_available = True
+except ImportError:
+    dashcam_available = False
+    logger_temp = logging.getLogger(__name__)
+    logger_temp.warning("Dashcam blueprint not available")
 
 # ============================================================================
 # LOGGING CONFIGURATION
@@ -792,6 +804,23 @@ def init_db():
         )
     ''')
 
+    # Dashcam recordings table (Dashcam feature)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS dashcam_recordings (
+            id INTEGER PRIMARY KEY,
+            recording_id TEXT UNIQUE NOT NULL,
+            trip_id TEXT,
+            start_time DATETIME NOT NULL,
+            end_time DATETIME,
+            duration_seconds REAL,
+            status TEXT DEFAULT 'recording',
+            metadata_points INTEGER DEFAULT 0,
+            file_path TEXT,
+            file_size_mb REAL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # Initialize app settings if not exists
     cursor.execute('SELECT COUNT(*) FROM app_settings')
     if cursor.fetchone()[0] == 0:
@@ -826,6 +855,14 @@ def init_db():
     conn.close()
 
 init_db()
+
+# Initialize dashcam blueprint after database is ready
+if dashcam_available:
+    try:
+        init_dashcam_blueprint(app, db_path=DB_FILE)
+        logger.info("[DASHCAM] Blueprint initialized successfully")
+    except Exception as e:
+        logger.warning(f"[DASHCAM] Failed to initialize blueprint: {e}")
 
 # Initialize database connection pool (Phase 3 Optimization)
 db_pool = DatabasePool(DB_FILE, pool_size=5)
@@ -2464,6 +2501,7 @@ HTML_TEMPLATE = '''
                         <button class="fab" title="Share Route" onclick="switchTab('routeSharing')" style="width: 40px; height: 40px; font-size: 18px; background: #9C27B0; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">🔗</button>
                         <button class="fab" title="Route Options" onclick="switchTab('routeComparison')" style="width: 40px; height: 40px; font-size: 18px; background: #4CAF50; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">🛣️</button>
                         <button class="fab" title="Trip History" onclick="switchTab('tripHistory')" style="width: 40px; height: 40px; font-size: 18px; background: #FF9800; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">📋</button>
+                        <button class="fab" title="Dashcam" onclick="switchTab('dashcam')" style="width: 40px; height: 40px; font-size: 18px; background: #E91E63; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">📹</button>
                         <button class="fab" title="Settings" onclick="switchTab('settings')" style="width: 40px; height: 40px; font-size: 18px; background: #667eea; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">⚙️</button>
                         <button class="fab" title="Collapse" onclick="collapseBottomSheet()" style="width: 40px; height: 40px; font-size: 18px; background: #999; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: 8px;">▼</button>
                     </div>
@@ -2937,6 +2975,107 @@ HTML_TEMPLATE = '''
                     <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
                 </div>
 
+                <!-- DASHCAM TAB (NEW FEATURE) -->
+                <div id="dashcamTab" style="display: none;">
+                    <div class="preferences-section">
+                        <h3>📹 Dashcam Recorder</h3>
+
+                        <!-- Recording Status -->
+                        <div id="dashcamStatus" style="background: #f5f5f5; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center;">
+                            <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Recording Status</div>
+                            <div id="dashcamStatusText" style="font-size: 24px; font-weight: bold; color: #999;">⏹️ Stopped</div>
+                            <div id="dashcamRecordingTime" style="font-size: 12px; color: #666; margin-top: 8px; display: none;">Recording time: <span id="recordingDuration">00:00:00</span></div>
+                        </div>
+
+                        <!-- Recording Controls -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+                            <button id="dashcamStartBtn" class="routing-mode-btn" onclick="startDashcamRecording()" style="background: #4CAF50; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 14px;">🔴 Start Recording</button>
+                            <button id="dashcamStopBtn" class="routing-mode-btn" onclick="stopDashcamRecording()" style="background: #F44336; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 14px; display: none;">⏹️ Stop Recording</button>
+                        </div>
+
+                        <!-- Recording Indicator (During Navigation) -->
+                        <div id="dashcamIndicator" style="display: none; background: #FFEBEE; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #F44336;">
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-size: 20px; animation: blink 1s infinite;">🔴</span>
+                                <div>
+                                    <div style="font-weight: 500; color: #C62828;">Recording in progress</div>
+                                    <div style="font-size: 12px; color: #666;">Video is being saved with GPS metadata</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Dashcam Settings -->
+                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 12px 0; font-size: 14px; color: #333;">⚙️ Recording Settings</h4>
+
+                            <div class="preference-item" style="margin-bottom: 12px;">
+                                <span class="preference-label">Video Resolution</span>
+                                <select id="dashcamResolution" onchange="updateDashcamSettings()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                    <option value="720p">720p (HD)</option>
+                                    <option value="1080p" selected>1080p (Full HD)</option>
+                                    <option value="1440p">1440p (2K)</option>
+                                </select>
+                            </div>
+
+                            <div class="preference-item" style="margin-bottom: 12px;">
+                                <span class="preference-label">Frame Rate</span>
+                                <select id="dashcamFps" onchange="updateDashcamSettings()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                    <option value="24">24 FPS</option>
+                                    <option value="30" selected>30 FPS</option>
+                                    <option value="60">60 FPS</option>
+                                </select>
+                            </div>
+
+                            <div class="preference-item" style="margin-bottom: 12px;">
+                                <span class="preference-label">Audio Recording</span>
+                                <button class="toggle-switch" id="dashcamAudio" onclick="updateDashcamSettings()" style="margin-left: auto;"></button>
+                            </div>
+
+                            <div class="preference-item">
+                                <span class="preference-label">Retention Period</span>
+                                <select id="dashcamRetention" onchange="updateDashcamSettings()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                    <option value="7">7 Days</option>
+                                    <option value="14" selected>14 Days</option>
+                                    <option value="30">30 Days</option>
+                                    <option value="90">90 Days</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Storage Information -->
+                        <div style="background: #E3F2FD; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #1565C0;">💾 Storage Information</h4>
+                            <div style="font-size: 13px; line-height: 1.6;">
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span>Total Recordings:</span>
+                                    <strong id="dashcamTotalRecordings">0</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                    <span>Total Size:</span>
+                                    <strong id="dashcamTotalSize">0 MB</strong>
+                                </div>
+                                <div style="display: flex; justify-content: space-between;">
+                                    <span>Oldest Recording:</span>
+                                    <strong id="dashcamOldestRecording">-</strong>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recordings List -->
+                        <div style="margin-bottom: 15px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px;">📹 Recent Recordings</h4>
+                            <div id="dashcamRecordingsList" style="max-height: 300px; overflow-y: auto;">
+                                <div style="text-align: center; padding: 20px; color: #999;">No recordings yet</div>
+                            </div>
+                        </div>
+
+                        <!-- Cleanup Button -->
+                        <button onclick="cleanupOldDashcamRecordings()" style="width: 100%; background: #FF9800; color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: 500; margin-bottom: 15px;">🗑️ Cleanup Old Recordings</button>
+                    </div>
+
+                    <button class="btn-calculate" onclick="switchTab('navigation')" style="width: 100%; margin-top: 20px;">← Back to Navigation</button>
+                </div>
+
                 <!-- ROUTE SHARING TAB (NEW FEATURE) -->
                 <div id="routeSharingTab" style="display: none;">
                     <div class="preferences-section">
@@ -3310,7 +3449,294 @@ HTML_TEMPLATE = '''
             }
         }
 
+        @keyframes blink {
+            0%, 49% { opacity: 1; }
+            50%, 100% { opacity: 0.3; }
+        }
+
     <!-- JavaScript moved to /static/js/ -->
+    <script>
+        // ============================================================
+        // DASHCAM FUNCTIONALITY
+        // ============================================================
+
+        let dashcamState = {
+            isRecording: false,
+            recordingStartTime: null,
+            recordingDurationInterval: null,
+            currentRecordingId: null,
+            recordingMetadata: []
+        };
+
+        // Initialize dashcam on page load
+        window.addEventListener('load', () => {
+            loadDashcamRecordings();
+            loadDashcamSettings();
+        });
+
+        async function startDashcamRecording() {
+            try {
+                const response = await fetch('/api/dashcam/start', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    dashcamState.isRecording = true;
+                    dashcamState.recordingStartTime = Date.now();
+                    dashcamState.currentRecordingId = data.recording_id;
+                    dashcamState.recordingMetadata = [];
+
+                    // Update UI
+                    updateDashcamUI();
+                    startRecordingTimer();
+                    showNotification('Dashcam recording started', 'success');
+
+                    // Show recording indicator
+                    document.getElementById('dashcamIndicator').style.display = 'block';
+
+                    // Start collecting GPS metadata
+                    startDashcamMetadataCollection();
+                } else {
+                    showNotification('Failed to start recording: ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error starting dashcam:', error);
+                showNotification('Error starting dashcam recording', 'error');
+            }
+        }
+
+        async function stopDashcamRecording() {
+            try {
+                const response = await fetch('/api/dashcam/stop', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    dashcamState.isRecording = false;
+                    clearInterval(dashcamState.recordingDurationInterval);
+
+                    // Update UI
+                    updateDashcamUI();
+                    document.getElementById('dashcamIndicator').style.display = 'none';
+
+                    showNotification('Dashcam recording stopped', 'success');
+
+                    // Reload recordings list
+                    loadDashcamRecordings();
+                } else {
+                    showNotification('Failed to stop recording: ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error stopping dashcam:', error);
+                showNotification('Error stopping dashcam recording', 'error');
+            }
+        }
+
+        function startRecordingTimer() {
+            if (dashcamState.recordingDurationInterval) {
+                clearInterval(dashcamState.recordingDurationInterval);
+            }
+
+            dashcamState.recordingDurationInterval = setInterval(() => {
+                if (dashcamState.isRecording && dashcamState.recordingStartTime) {
+                    const elapsed = Math.floor((Date.now() - dashcamState.recordingStartTime) / 1000);
+                    const hours = Math.floor(elapsed / 3600);
+                    const minutes = Math.floor((elapsed % 3600) / 60);
+                    const seconds = elapsed % 60;
+
+                    const timeStr = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                    document.getElementById('recordingDuration').textContent = timeStr;
+                }
+            }, 1000);
+        }
+
+        function startDashcamMetadataCollection() {
+            // Collect GPS metadata every 5 seconds during recording
+            const metadataInterval = setInterval(async () => {
+                if (!dashcamState.isRecording) {
+                    clearInterval(metadataInterval);
+                    return;
+                }
+
+                // Get current GPS position if available
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(async (position) => {
+                        const { latitude, longitude } = position.coords;
+                        const speed = position.coords.speed || 0;
+                        const heading = position.coords.heading || 0;
+
+                        try {
+                            await fetch('/api/dashcam/metadata', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    recording_id: dashcamState.currentRecordingId,
+                                    latitude,
+                                    longitude,
+                                    speed,
+                                    heading,
+                                    timestamp: new Date().toISOString()
+                                })
+                            });
+                        } catch (error) {
+                            console.error('Error sending metadata:', error);
+                        }
+                    });
+                }
+            }, 5000);
+        }
+
+        function updateDashcamUI() {
+            const startBtn = document.getElementById('dashcamStartBtn');
+            const stopBtn = document.getElementById('dashcamStopBtn');
+            const statusText = document.getElementById('dashcamStatusText');
+            const recordingTime = document.getElementById('dashcamRecordingTime');
+
+            if (dashcamState.isRecording) {
+                startBtn.style.display = 'none';
+                stopBtn.style.display = 'block';
+                statusText.textContent = '🔴 Recording...';
+                statusText.style.color = '#F44336';
+                recordingTime.style.display = 'block';
+            } else {
+                startBtn.style.display = 'block';
+                stopBtn.style.display = 'none';
+                statusText.textContent = '⏹️ Stopped';
+                statusText.style.color = '#999';
+                recordingTime.style.display = 'none';
+            }
+        }
+
+        async function loadDashcamRecordings() {
+            try {
+                const response = await fetch('/api/dashcam/recordings');
+                const data = await response.json();
+
+                if (data.success && data.recordings) {
+                    const recordingsList = document.getElementById('dashcamRecordingsList');
+
+                    if (data.recordings.length === 0) {
+                        recordingsList.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No recordings yet</div>';
+                        return;
+                    }
+
+                    let html = '';
+                    data.recordings.forEach(recording => {
+                        const startTime = new Date(recording.start_time).toLocaleString();
+                        const duration = recording.duration_seconds ? `${Math.floor(recording.duration_seconds / 60)}m ${Math.floor(recording.duration_seconds % 60)}s` : 'Recording...';
+                        const size = recording.file_size_mb ? `${recording.file_size_mb.toFixed(1)} MB` : '-';
+
+                        html += `
+                            <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                                <div style="flex: 1;">
+                                    <div style="font-weight: 500; color: #333;">📹 ${startTime}</div>
+                                    <div style="font-size: 12px; color: #666;">Duration: ${duration} | Size: ${size}</div>
+                                </div>
+                                <button onclick="deleteDashcamRecording('${recording.recording_id}')" style="background: #F44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
+                            </div>
+                        `;
+                    });
+
+                    recordingsList.innerHTML = html;
+
+                    // Update storage info
+                    const totalSize = data.recordings.reduce((sum, r) => sum + (r.file_size_mb || 0), 0);
+                    document.getElementById('dashcamTotalRecordings').textContent = data.recordings.length;
+                    document.getElementById('dashcamTotalSize').textContent = `${totalSize.toFixed(1)} MB`;
+
+                    if (data.recordings.length > 0) {
+                        const oldestDate = new Date(data.recordings[data.recordings.length - 1].start_time).toLocaleDateString();
+                        document.getElementById('dashcamOldestRecording').textContent = oldestDate;
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading dashcam recordings:', error);
+            }
+        }
+
+        async function deleteDashcamRecording(recordingId) {
+            if (!confirm('Are you sure you want to delete this recording?')) return;
+
+            try {
+                const response = await fetch(`/api/dashcam/recordings/${recordingId}`, { method: 'DELETE' });
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification('Recording deleted', 'success');
+                    loadDashcamRecordings();
+                } else {
+                    showNotification('Failed to delete recording', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting recording:', error);
+                showNotification('Error deleting recording', 'error');
+            }
+        }
+
+        async function cleanupOldDashcamRecordings() {
+            if (!confirm('This will delete all recordings older than the retention period. Continue?')) return;
+
+            try {
+                const response = await fetch('/api/dashcam/cleanup', { method: 'POST' });
+                const data = await response.json();
+
+                if (data.success) {
+                    showNotification(`Cleaned up ${data.deleted_count} old recordings`, 'success');
+                    loadDashcamRecordings();
+                } else {
+                    showNotification('Cleanup failed: ' + data.error, 'error');
+                }
+            } catch (error) {
+                console.error('Error cleaning up recordings:', error);
+                showNotification('Error cleaning up recordings', 'error');
+            }
+        }
+
+        function loadDashcamSettings() {
+            try {
+                const response = fetch('/api/dashcam/settings');
+                response.then(r => r.json()).then(data => {
+                    if (data.success && data.settings) {
+                        document.getElementById('dashcamResolution').value = data.settings.resolution || '1080p';
+                        document.getElementById('dashcamFps').value = data.settings.fps || '30';
+                        document.getElementById('dashcamRetention').value = data.settings.retention_days || '14';
+
+                        const audioBtn = document.getElementById('dashcamAudio');
+                        if (data.settings.audio) {
+                            audioBtn.classList.add('active');
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading dashcam settings:', error);
+            }
+        }
+
+        async function updateDashcamSettings() {
+            try {
+                const settings = {
+                    resolution: document.getElementById('dashcamResolution').value,
+                    fps: parseInt(document.getElementById('dashcamFps').value),
+                    audio: document.getElementById('dashcamAudio').classList.contains('active'),
+                    retention_days: parseInt(document.getElementById('dashcamRetention').value)
+                };
+
+                const response = await fetch('/api/dashcam/settings', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(settings)
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showNotification('Dashcam settings updated', 'success');
+                } else {
+                    showNotification('Failed to update settings', 'error');
+                }
+            } catch (error) {
+                console.error('Error updating dashcam settings:', error);
+                showNotification('Error updating settings', 'error');
+            }
+        }
+    </script>
 </body>
 </html>
 '''
