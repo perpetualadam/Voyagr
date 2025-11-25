@@ -5199,9 +5199,11 @@ def calculate_route():
                         # Score route by hazards if hazard avoidance is enabled
                         hazard_penalty = 0
                         hazard_count = 0
+                        hazards_list = []
                         if enable_hazard_avoidance and hazards:
                             hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
-                            logger.debug(f"[HAZARDS] OSRM route {idx+1}: penalty={hazard_penalty:.0f}s, count={hazard_count}")
+                            hazards_list = get_hazards_on_route(route_geometry, hazards)
+                            logger.debug(f"[HAZARDS] OSRM route {idx+1}: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
 
                         routes.append({
                             'id': idx + 1,
@@ -5213,7 +5215,8 @@ def calculate_route():
                             'caz_cost': round(caz_cost, 2),
                             'geometry': route_geometry,
                             'hazard_penalty_seconds': round(hazard_penalty, 0),
-                            'hazard_count': hazard_count
+                            'hazard_count': hazard_count,
+                            'hazards': hazards_list
                         })
 
                     print(f"[OSRM] SUCCESS: {len(routes)} routes found")
