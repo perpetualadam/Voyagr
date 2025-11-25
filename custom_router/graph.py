@@ -8,6 +8,7 @@ import math
 import gc
 import traceback
 import threading
+import time
 from typing import Dict, List, Tuple, Optional
 from collections import defaultdict
 
@@ -40,11 +41,11 @@ class RoadNetwork:
         self.load_from_database()
     
     def load_from_database(self):
-        """Load graph from SQLite database with eager edge loading."""
+        """Load graph from SQLite database with EAGER edge loading (blocking)."""
         print("[Graph] Loading from database...")
 
         try:
-            conn = sqlite3.connect(self.db_file)
+            conn = sqlite3.connect(self.db_file, timeout=30)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
@@ -76,11 +77,10 @@ class RoadNetwork:
                 way_count += 1
             print(f"[Graph] Loaded {way_count:,} ways")
 
-            # Load edges in background thread for component analysis
-            # This allows app to start immediately while edges load in background
-            print("[Graph] Edges will be loaded in background for component analysis...")
-            self._edges_loaded = False
-            self._load_edges_background()
+            # Load edges EAGERLY (blocking) - this is critical for proper initialization
+            print("[Graph] Loading edges (this may take 2-3 minutes)...")
+            self._load_edges_eager(cursor)
+            self._edges_loaded = True
 
             # Load turn restrictions
             print("[Graph] Loading turn restrictions...")
@@ -93,19 +93,23 @@ class RoadNetwork:
 
             conn.close()
 
-            print(f"[Graph] Loaded: {node_count:,} nodes, {way_count:,} ways (edges loaded on-demand)")
+            edge_count = sum(len(e) for e in self.edges.values())
+            print(f"[Graph] ✅ FULLY LOADED: {node_count:,} nodes, {way_count:,} ways, {edge_count:,} edges")
         except Exception as e:
             print(f"[Graph] Load error: {e}")
+            traceback.print_exc()
 
     def get_neighbors(self, node_id: int):
-        """Get neighbors of a node. Loads edges on-demand if not cached."""
+        """Get neighbors of a node. Waits for edges to load if needed."""
         # If edges not loaded yet, wait for background loading to complete
         if not self._edges_loaded:
-            # Wait for edges to load in background (max 30 seconds)
-            import time
+            # Wait for edges to load in background (max 180 seconds - edges take ~60-90s to load)
             start_wait = time.time()
-            while not self._edges_loaded and (time.time() - start_wait) < 30:
+            while not self._edges_loaded and (time.time() - start_wait) < 180:
                 time.sleep(0.1)
+
+            if not self._edges_loaded:
+                print(f"[Graph] WARNING: Edges still loading after 180s timeout. Returning empty neighbors for node {node_id}")
 
         return self.edges.get(node_id, [])
 
@@ -192,59 +196,59 @@ class RoadNetwork:
                 self.spatial_grid[grid_key] = []
             self.spatial_grid[grid_key].append(node_id)
 
-    def _load_edges_background(self) -> None:
-        """Load edges in background thread."""
-        def load_edges():
-            import sys
-            try:
-                conn = sqlite3.connect(self.db_file)
-                conn.row_factory = sqlite3.Row
-                cursor = conn.cursor()
 
-                msg = "[Graph] Loading edges in background..."
-                print(msg, file=sys.stderr, flush=True)
-                edge_count = 0
-                batch_size = 5000000
-                offset = 0
 
-                while True:
-                    cursor.execute(
-                        'SELECT from_node_id, to_node_id, distance_m, speed_limit_kmh, way_id '
-                        'FROM edges LIMIT ? OFFSET ?',
-                        (batch_size, offset)
-                    )
+    def _load_edges_eager(self, cursor) -> None:
+        """Load all edges eagerly from database cursor - optimized for speed."""
+        print("[Graph] Loading edges eagerly...")
+        start_time = time.time()
 
-                    rows = cursor.fetchall()
-                    if not rows:
-                        break
+        edge_count = 0
+        batch_size = 10000000  # Larger batches for faster loading
+        offset = 0
+        last_print_time = start_time
 
-                    for row in rows:
-                        from_node = row['from_node_id']
-                        to_node = row['to_node_id']
-                        distance = row['distance_m']
-                        speed_limit = row['speed_limit_kmh']
-                        way_id = row['way_id']
+        try:
+            while True:
+                cursor.execute(
+                    'SELECT from_node_id, to_node_id, distance_m, speed_limit_kmh, way_id '
+                    'FROM edges LIMIT ? OFFSET ?',
+                    (batch_size, offset)
+                )
 
-                        self.edges[from_node].append((to_node, distance, speed_limit, way_id))
-                        edge_count += 1
+                rows = cursor.fetchall()
+                if not rows:
+                    break
 
-                    offset += batch_size
-                    msg = f"[Graph] Loaded {edge_count:,} edges in background..."
-                    print(msg, file=sys.stderr, flush=True)
-                    gc.collect()
+                # Process rows in bulk
+                for row in rows:
+                    from_node = row['from_node_id']
+                    to_node = row['to_node_id']
+                    distance = row['distance_m']
+                    speed_limit = row['speed_limit_kmh']
+                    way_id = row['way_id']
 
-                conn.close()
-                self._edges_loaded = True
-                msg = f"[Graph] ✅ Background edge loading complete: {edge_count:,} edges"
-                print(msg, file=sys.stderr, flush=True)
-            except Exception as e:
-                msg = f"[Graph] Error loading edges in background: {e}"
-                print(msg, file=sys.stderr, flush=True)
-                traceback.print_exc()
+                    self.edges[from_node].append((to_node, distance, speed_limit, way_id))
+                    edge_count += 1
 
-        # Start background thread
-        thread = threading.Thread(target=load_edges, daemon=True)
-        thread.start()
+                offset += batch_size
+
+                # Print progress every 2 seconds
+                current_time = time.time()
+                if current_time - last_print_time >= 2.0:
+                    elapsed = current_time - start_time
+                    rate = edge_count / elapsed if elapsed > 0 else 0
+                    print(f"[Graph] Loaded {edge_count:,} edges ({rate:.0f} edges/sec)...")
+                    last_print_time = current_time
+
+                gc.collect()
+
+            elapsed = time.time() - start_time
+            rate = edge_count / elapsed if elapsed > 0 else 0
+            print(f"[Graph] ✅ Edge loading complete: {edge_count:,} edges in {elapsed:.1f}s ({rate:.0f} edges/sec)")
+        except Exception as e:
+            print(f"[Graph] Error loading edges: {e}")
+            traceback.print_exc()
 
     @staticmethod
     def haversine_distance(coord1: Tuple[float, float], coord2: Tuple[float, float]) -> float:
@@ -277,6 +281,7 @@ class RoadNetwork:
 
         Uses grid-based spatial indexing for fast O(1) cell lookup + O(k) search.
         Optimized to search only nearby cells and expand if needed.
+        Only returns nodes that have at least one neighbor (connected to roads).
         """
         if not self.spatial_grid:
             # Fallback to brute force if grid not built
@@ -284,6 +289,10 @@ class RoadNetwork:
             nearest_node = None
 
             for node_id, (node_lat, node_lon) in self.nodes.items():
+                # Only consider nodes with neighbors
+                if not self.get_neighbors(node_id):
+                    continue
+
                 distance = self.haversine_distance((lat, lon), (node_lat, node_lon))
                 if distance < min_distance:
                     min_distance = distance
@@ -315,6 +324,10 @@ class RoadNetwork:
 
                     # Check all nodes in this cell
                     for node_id in self.spatial_grid[cell_key]:
+                        # Only consider nodes with neighbors
+                        if not self.get_neighbors(node_id):
+                            continue
+
                         node_lat, node_lon = self.nodes[node_id]
                         distance = self.haversine_distance((lat, lon), (node_lat, node_lon))
 

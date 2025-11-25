@@ -46,6 +46,13 @@ try:
 except ImportError:
     get_monitor = None  # type: ignore
 
+# Import custom router service
+try:
+    from custom_router_service import initialize_router, get_router_service
+except ImportError:
+    initialize_router = None  # type: ignore
+    get_router_service = None  # type: ignore
+
 load_dotenv()
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
@@ -331,8 +338,8 @@ except ImportError:
     logger.warning("[CUSTOM_ROUTER] Module not available - will use external engines only")
 
 # Phase 3: Custom router configuration
-# NOTE: Custom router with Contraction Hierarchies is now primary engine
-# Fallback chain: CH → GraphHopper → Valhalla → OSRM
+# Custom router is now PRIMARY router with fallback chain
+# Fallback chain: Custom Router → GraphHopper → Valhalla → OSRM
 USE_CUSTOM_ROUTER = os.getenv('USE_CUSTOM_ROUTER', 'true').lower() == 'true'
 CUSTOM_ROUTER_DB = os.getenv('CUSTOM_ROUTER_DB', 'data/uk_router.db')
 CUSTOM_ROUTER_K_PATHS = int(os.getenv('CUSTOM_ROUTER_K_PATHS', '4'))
@@ -455,52 +462,51 @@ route_cache = RouteCache(max_size=1000, ttl_seconds=3600)
 # PHASE 3: CUSTOM ROUTER INITIALIZATION
 # ============================================================================
 
-def init_custom_router() -> bool:
-    """Initialize custom router at app startup with background component analysis."""
+def init_custom_router() -> None:
+    """Initialize custom router with persistent service (loads once, reuses forever)."""
     global custom_graph, custom_router, k_paths
-
-    if not CUSTOM_ROUTER_AVAILABLE or not USE_CUSTOM_ROUTER:
-        logger.info("[CUSTOM_ROUTER] Disabled or not available")
-        return False
 
     try:
         if not os.path.exists(CUSTOM_ROUTER_DB):
             logger.warning(f"[CUSTOM_ROUTER] Database not found: {CUSTOM_ROUTER_DB}")
-            return False
+            return
 
         logger.info(f"[CUSTOM_ROUTER] Initializing from {CUSTOM_ROUTER_DB}...")
-        custom_graph = RoadNetwork(CUSTOM_ROUTER_DB)
+        logger.info(f"[CUSTOM_ROUTER] ⏳ Loading graph (this may take 2-3 minutes)...")
 
-        # Phase 3: Initialize with Contraction Hierarchies support
-        custom_router = Router(custom_graph, use_ch=True, db_file=CUSTOM_ROUTER_DB)
-        k_paths = KShortestPaths(custom_router)
+        # Use persistent router service (loads once, reuses forever)
+        if initialize_router:
+            service = initialize_router(CUSTOM_ROUTER_DB, use_ch=True)
+            custom_graph = service.graph
+            custom_router = service.router
+            k_paths = service.k_paths
+        else:
+            # Fallback to direct initialization if service not available
+            custom_graph = RoadNetwork(CUSTOM_ROUTER_DB)
+            custom_router = Router(custom_graph, use_ch=True, db_file=CUSTOM_ROUTER_DB)
+            k_paths = KShortestPaths(custom_router)
 
-        logger.info(f"[CUSTOM_ROUTER] OK Initialized successfully")
+        logger.info(f"[CUSTOM_ROUTER] ✅ Initialized successfully")
         logger.info(f"[CUSTOM_ROUTER] Nodes: {len(custom_graph.nodes):,}")
         logger.info(f"[CUSTOM_ROUTER] Edges: {sum(len(e) for e in custom_graph.edges.values()):,}")
 
         # Log CH status
         if custom_router.ch_available:
-            logger.info(f"[CUSTOM_ROUTER] OK Contraction Hierarchies available ({len(custom_router.ch_levels):,} nodes)")
+            logger.info(f"[CUSTOM_ROUTER] ✅ Contraction Hierarchies available ({len(custom_router.ch_levels):,} nodes)")
             logger.info(f"[CUSTOM_ROUTER] PRIMARY ROUTER: CH with 5-10x speedup enabled")
         else:
-            logger.warning(f"[CUSTOM_ROUTER] WARNING CH not available - using standard Dijkstra+A*")
+            logger.warning(f"[CUSTOM_ROUTER] ⚠️  CH not available - using standard Dijkstra+A*")
 
         # Phase 4: Run full BFS component analysis in background (after edges load)
         logger.info(f"[CUSTOM_ROUTER] Starting background component analysis (all 26.5M nodes)...")
         if ComponentAnalyzer:
             def run_component_analysis():
                 try:
-                    # Wait for edges to load in background
-                    import time
-                    while not getattr(custom_graph, '_edges_loaded', False):
-                        time.sleep(1)
-                    logger.info(f"[CUSTOM_ROUTER] Edges loaded, starting component analysis...")
-
+                    logger.info(f"[CUSTOM_ROUTER] Component analysis starting...")
                     analyzer = ComponentAnalyzer(custom_graph)
                     stats = analyzer.analyze_full()
                     custom_graph.set_component_analyzer(analyzer)
-                    logger.info(f"[CUSTOM_ROUTER] ✅ Background component analysis complete:")
+                    logger.info(f"[CUSTOM_ROUTER] ✅ Component analysis complete:")
                     logger.info(f"[CUSTOM_ROUTER]    Total components: {stats['total_components']}")
                     logger.info(f"[CUSTOM_ROUTER]    Main component: {stats['main_component_size']:,} nodes ({stats['main_component_pct']:.1f}%)")
                 except Exception as e:
@@ -510,10 +516,10 @@ def init_custom_router() -> bool:
             analysis_thread = threading.Thread(target=run_component_analysis, daemon=True)
             analysis_thread.start()
 
-        return True
     except Exception as e:
         logger.error(f"[CUSTOM_ROUTER] ❌ Initialization failed: {e}")
-        return False
+        import traceback
+        traceback.print_exc()
 
 def update_custom_router_stats(time_ms: float, success: bool) -> None:
     """Update custom router performance statistics."""
@@ -4614,6 +4620,7 @@ def calculate_route():
         # ====================================================================
         # PHASE 3: Try custom router first (if available)
         # ====================================================================
+        logger.info(f"[ROUTING] Custom router check: custom_router={custom_router is not None}, USE_CUSTOM_ROUTER={USE_CUSTOM_ROUTER}")
         if custom_router and USE_CUSTOM_ROUTER:
             try:
                 logger.info(f"[ROUTING] Trying custom router first...")
@@ -4627,6 +4634,9 @@ def calculate_route():
                     update_custom_router_stats(custom_elapsed, False)
                 elif route is None:
                     logger.info(f"[ROUTING] Custom router returned None in {custom_elapsed:.0f}ms - falling back to external engines")
+                    update_custom_router_stats(custom_elapsed, False)
+                elif route and isinstance(route, dict) and 'error' in route:
+                    logger.info(f"[ROUTING] ⚠️  Custom router: {route.get('reason', route.get('error'))} in {custom_elapsed:.0f}ms - falling back to external engines")
                     update_custom_router_stats(custom_elapsed, False)
                 elif route and 'error' not in route:
                     logger.info(f"[ROUTING] ✅ Custom router succeeded in {custom_elapsed:.0f}ms")
@@ -4646,6 +4656,34 @@ def calculate_route():
                         route_item['toll_cost'] = round(toll_cost, 2)
                         route_item['caz_cost'] = round(caz_cost, 2)
                         route_item['total_cost'] = round(fuel_cost + toll_cost + caz_cost, 2)
+
+                    # ================================================================
+                    # HAZARD AVOIDANCE: Score routes by hazard penalty if enabled
+                    # ================================================================
+                    for route_item in routes:
+                        hazard_penalty = 0
+                        hazard_count = 0
+                        hazards_list = []
+                        if enable_hazard_avoidance and hazards:
+                            route_geometry = decode_route_geometry(route_item.get('polyline', ''))
+                            hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
+                            hazards_list = get_hazards_on_route(route_geometry, hazards)
+                            logger.debug(f"[HAZARDS] Custom router route: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
+
+                        route_item['hazard_penalty_seconds'] = hazard_penalty
+                        route_item['hazard_count'] = hazard_count
+                        route_item['hazards'] = hazards_list
+
+                    # ================================================================
+                    # HAZARD AVOIDANCE: Reorder routes by hazard penalty if enabled
+                    # ================================================================
+                    if enable_hazard_avoidance and hazards:
+                        # Sort routes by hazard penalty (ascending - fewer hazards first)
+                        routes_sorted = sorted(routes, key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)))
+                        logger.info(f"[HAZARDS] Custom router routes reordered by hazard penalty:")
+                        for idx, route in enumerate(routes_sorted):
+                            logger.info(f"  Route {idx+1}: Hazard penalty: {route.get('hazard_penalty_seconds', 0):.0f}s, Count: {route.get('hazard_count', 0)}")
+                        routes = routes_sorted
 
                     response_data = {
                         'success': True,
@@ -7298,13 +7336,15 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 5000))
 
     # ====================================================================
-    # PHASE 3: Initialize custom router
+    # PHASE 3: Custom router initialization (background thread)
     # ====================================================================
-    print("\n[STARTUP] Initializing custom router...")
-    if init_custom_router():
-        print("[STARTUP] ✅ Custom router ready as primary engine")
+    # Initialize custom router as PRIMARY router (BLOCKING - eager edge loading)
+    if CUSTOM_ROUTER_AVAILABLE and USE_CUSTOM_ROUTER:
+        print("\n[STARTUP] Initializing custom router (this may take 2-3 minutes)...")
+        init_custom_router()
+        print("[STARTUP] ✅ Custom router initialization complete")
     else:
-        print("[STARTUP] ⚠️  Custom router not available - using external engines")
+        print("\n[STARTUP] Custom router disabled - using fallback chain (GraphHopper/Valhalla/OSRM)")
 
     # Initialize and start monitoring
     if get_monitor:
