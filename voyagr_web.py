@@ -1653,7 +1653,7 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
         logger.error(f"Error fetching hazards: {e}")
         return {}
 
-def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], max_hazards: int = 50) -> Dict[str, Any]:
+def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], route_bbox: Dict[str, float] = None, max_hazards: int = 25) -> Dict[str, Any]:
     """
     Build GraphHopper Custom Model to avoid hazards.
 
@@ -1662,6 +1662,7 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], max
 
     Args:
         hazards: Dictionary of hazard types and their locations
+        route_bbox: Optional bounding box to filter hazards (keys: min_lat, max_lat, min_lon, max_lon)
         max_hazards: Maximum number of hazards to include (to avoid huge payloads)
 
     Returns:
@@ -1688,6 +1689,16 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], max
             # Only include high-priority hazards (cameras and police)
             if weight >= 30.0:
                 for hazard in hazard_list:
+                    # Filter by bounding box if provided (with 10% margin)
+                    if route_bbox:
+                        margin = 0.1  # 10% margin
+                        lat_margin = (route_bbox['max_lat'] - route_bbox['min_lat']) * margin
+                        lon_margin = (route_bbox['max_lon'] - route_bbox['min_lon']) * margin
+
+                        if not (route_bbox['min_lat'] - lat_margin <= hazard['lat'] <= route_bbox['max_lat'] + lat_margin and
+                                route_bbox['min_lon'] - lon_margin <= hazard['lon'] <= route_bbox['max_lon'] + lon_margin):
+                            continue  # Skip hazards outside bounding box
+
                     all_hazards.append({
                         'lat': hazard['lat'],
                         'lon': hazard['lon'],
@@ -1712,7 +1723,7 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], max
         }
 
         priority_rules = []
-        radius_meters = 50  # 50 meter radius around each hazard
+        radius_meters = 30  # 30 meter radius around each hazard (reduced from 50m for performance)
 
         for idx, hazard in enumerate(all_hazards):
             area_id = f"hazard_{idx}"
@@ -1723,10 +1734,10 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], max
             lat_offset = radius_meters / 111000
             lon_offset = radius_meters / (111000 * math.cos(math.radians(hazard['lat'])))
 
-            # Create 8-point circle polygon
+            # Create 6-point hexagon polygon (reduced from 8-point for performance)
             coordinates = []
-            for i in range(9):  # 9 points to close the polygon
-                angle = (i / 8) * 2 * math.pi
+            for i in range(7):  # 7 points to close the polygon
+                angle = (i / 6) * 2 * math.pi
                 lat = hazard['lat'] + lat_offset * math.sin(angle)
                 lon = hazard['lon'] + lon_offset * math.cos(angle)
                 coordinates.append([lon, lat])
@@ -1742,15 +1753,15 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], max
             })
 
             # Calculate priority multiplier based on hazard weight
-            # Traffic light cameras: 0 (complete avoidance)
-            # Speed cameras: 0.01 (very strong avoidance)
-            # Police: 0.1 (strong avoidance)
+            # Traffic light cameras: 0.05 (very strong avoidance, but not complete to allow routing)
+            # Speed cameras: 0.1 (strong avoidance)
+            # Police: 0.3 (medium avoidance)
             if hazard['weight'] >= 100:
-                multiplier = 0  # Complete avoidance
+                multiplier = 0.05  # Very strong avoidance (changed from 0 to allow routing)
             elif hazard['weight'] >= 50:
-                multiplier = 0.01  # Very strong avoidance
+                multiplier = 0.1  # Strong avoidance (changed from 0.01)
             else:
-                multiplier = 0.1  # Strong avoidance
+                multiplier = 0.3  # Medium avoidance (changed from 0.1)
 
             # Add priority rule for this hazard area
             priority_rules.append({
@@ -4851,9 +4862,17 @@ def calculate_route():
             use_custom_model = False
 
             if enable_hazard_avoidance and hazards:
-                # Try to build custom model (limit to 50 hazards to avoid huge payloads)
+                # Calculate bounding box for route to filter hazards
+                route_bbox = {
+                    'min_lat': min(start_lat, end_lat),
+                    'max_lat': max(start_lat, end_lat),
+                    'min_lon': min(start_lon, end_lon),
+                    'max_lon': max(start_lon, end_lon)
+                }
+
+                # Try to build custom model (limit to 25 hazards to avoid huge payloads)
                 try:
-                    custom_model = build_graphhopper_custom_model(hazards, max_hazards=50)
+                    custom_model = build_graphhopper_custom_model(hazards, route_bbox=route_bbox, max_hazards=25)
                     if custom_model and len(custom_model.get('priority', [])) > 0:
                         use_custom_model = True
                         logger.info(f"[GRAPHHOPPER] Using custom model with {len(custom_model['priority'])} hazard rules")
@@ -4874,8 +4893,8 @@ def calculate_route():
                     "locale": "en",
                     "ch.disable": True,
                     "algorithm": "alternative_route",
-                    "alternative_route.max_paths": 4,
-                    "alternative_route.max_weight_factor": 1.4,
+                    "alternative_route.max_paths": 3,  # Reduced from 4 to 3 for performance
+                    "alternative_route.max_weight_factor": 1.3,  # Reduced from 1.4 to 1.3 for performance
                     "custom_model": custom_model
                 }
                 headers = {
@@ -4886,7 +4905,7 @@ def calculate_route():
                 logger.debug(f"[GraphHopper] POST request with custom model ({len(custom_model['priority'])} rules)")
                 logger.debug(f"[GraphHopper] URL: {url}")
                 gh_start = time.time()
-                response = requests.post(url, json=payload, timeout=20, headers=headers)  # Increased timeout for custom model
+                response = requests.post(url, json=payload, timeout=15, headers=headers)  # Reduced timeout from 20s to 15s
                 gh_elapsed = (time.time() - gh_start) * 1000
             else:
                 # GET request without custom model (standard routing)
