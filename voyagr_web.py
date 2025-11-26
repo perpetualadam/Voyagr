@@ -1653,19 +1653,19 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
         logger.error(f"Error fetching hazards: {e}")
         return {}
 
-def build_graphhopper_block_areas(hazards: Dict[str, List[Dict[str, Any]]], max_hazards: int = 100) -> str:
+def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], max_hazards: int = 50) -> Dict[str, Any]:
     """
-    Build GraphHopper block_area parameter to avoid hazards.
+    Build GraphHopper Custom Model to avoid hazards.
 
-    Uses GraphHopper's block_area feature to define circular zones around hazards.
-    Returns a GeoJSON string with circular polygons around each hazard.
+    Uses GraphHopper's custom model 'areas' feature to define circular zones around hazards
+    and applies priority penalties to routes passing through those zones.
 
     Args:
         hazards: Dictionary of hazard types and their locations
         max_hazards: Maximum number of hazards to include (to avoid huge payloads)
 
     Returns:
-        GeoJSON string for block_area parameter
+        Custom model dictionary for GraphHopper API
     """
     try:
         # Collect all hazards with priority weighting
@@ -1673,8 +1673,8 @@ def build_graphhopper_block_areas(hazards: Dict[str, List[Dict[str, Any]]], max_
 
         # Priority weights for different hazard types
         hazard_weights = {
-            'traffic_light_camera': 100.0,  # Highest priority - block completely
-            'speed_camera': 50.0,            # High priority - block
+            'traffic_light_camera': 100.0,  # Highest priority - avoid completely
+            'speed_camera': 50.0,            # High priority - strong avoidance
             'police': 30.0,                  # Medium-high priority
             'accident': 20.0,                # Medium priority
             'roadworks': 15.0,               # Medium-low priority
@@ -1685,7 +1685,7 @@ def build_graphhopper_block_areas(hazards: Dict[str, List[Dict[str, Any]]], max_
 
         for hazard_type, hazard_list in hazards.items():
             weight = hazard_weights.get(hazard_type, 10.0)
-            # Only block high-priority hazards (cameras and police)
+            # Only include high-priority hazards (cameras and police)
             if weight >= 30.0:
                 for hazard in hazard_list:
                     all_hazards.append({
@@ -1699,21 +1699,31 @@ def build_graphhopper_block_areas(hazards: Dict[str, List[Dict[str, Any]]], max_
         all_hazards.sort(key=lambda h: h['weight'], reverse=True)
         all_hazards = all_hazards[:max_hazards]
 
-        # Build GeoJSON with circular polygons around each hazard
-        # We'll create a simple circle approximation with 8 points
+        if not all_hazards:
+            logger.warning(f"[CUSTOM_MODEL] No high-priority hazards found")
+            return {}
+
+        # Build GeoJSON areas with circular polygons around each hazard
         import math
 
-        features = []
+        areas_geojson = {
+            "type": "FeatureCollection",
+            "features": []
+        }
+
+        priority_rules = []
         radius_meters = 50  # 50 meter radius around each hazard
 
-        for hazard in all_hazards:
+        for idx, hazard in enumerate(all_hazards):
+            area_id = f"hazard_{idx}"
+
             # Convert radius from meters to degrees (approximate)
             # 1 degree latitude ≈ 111km
             # 1 degree longitude ≈ 111km * cos(latitude)
             lat_offset = radius_meters / 111000
             lon_offset = radius_meters / (111000 * math.cos(math.radians(hazard['lat'])))
 
-            # Create 8-point circle
+            # Create 8-point circle polygon
             coordinates = []
             for i in range(9):  # 9 points to close the polygon
                 angle = (i / 8) * 2 * math.pi
@@ -1721,31 +1731,45 @@ def build_graphhopper_block_areas(hazards: Dict[str, List[Dict[str, Any]]], max_
                 lon = hazard['lon'] + lon_offset * math.cos(angle)
                 coordinates.append([lon, lat])
 
-            features.append({
+            # Add area to GeoJSON
+            areas_geojson["features"].append({
                 "type": "Feature",
+                "id": area_id,
                 "geometry": {
                     "type": "Polygon",
                     "coordinates": [coordinates]
-                },
-                "properties": {
-                    "type": hazard['type']
                 }
             })
 
-        geojson = {
-            "type": "FeatureCollection",
-            "features": features
+            # Calculate priority multiplier based on hazard weight
+            # Traffic light cameras: 0 (complete avoidance)
+            # Speed cameras: 0.01 (very strong avoidance)
+            # Police: 0.1 (strong avoidance)
+            if hazard['weight'] >= 100:
+                multiplier = 0  # Complete avoidance
+            elif hazard['weight'] >= 50:
+                multiplier = 0.01  # Very strong avoidance
+            else:
+                multiplier = 0.1  # Strong avoidance
+
+            # Add priority rule for this hazard area
+            priority_rules.append({
+                "if": f"in_{area_id}",
+                "multiply_by": str(multiplier)
+            })
+
+        custom_model = {
+            "priority": priority_rules,
+            "areas": areas_geojson
         }
 
-        geojson_str = json.dumps(geojson)
-        logger.info(f"[BLOCK_AREA] Built {len(features)} blocking zones (from {sum(len(h) for h in hazards.values())} total hazards)")
-        logger.debug(f"[BLOCK_AREA] GeoJSON size: {len(geojson_str)} chars")
-        logger.debug(f"[BLOCK_AREA] Sample feature: {features[0] if features else 'none'}")
-        return geojson_str
+        logger.info(f"[CUSTOM_MODEL] Built model with {len(all_hazards)} hazard areas (from {sum(len(h) for h in hazards.values())} total hazards)")
+        logger.debug(f"[CUSTOM_MODEL] Priority rules: {len(priority_rules)}")
+        return custom_model
 
     except Exception as e:
-        logger.error(f"[BLOCK_AREA] Error building block areas: {e}")
-        return json.dumps({"type": "FeatureCollection", "features": []})  # Return empty on error
+        logger.error(f"[CUSTOM_MODEL] Error building custom model: {e}")
+        return {}  # Return empty model on error
 
 def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
     """
@@ -4821,57 +4845,77 @@ def calculate_route():
             url = f"{GRAPHHOPPER_URL}/route"
 
             # ================================================================
-            # HAZARD AVOIDANCE: Try block_area first, fall back to standard routing
+            # HAZARD AVOIDANCE: Build custom model if enabled
             # ================================================================
-            block_area_geojson = None
-            use_block_area = False
+            custom_model = None
+            use_custom_model = False
 
             if enable_hazard_avoidance and hazards:
-                # Try to build block_area (limit to 20 hazards to avoid huge payloads)
+                # Try to build custom model (limit to 50 hazards to avoid huge payloads)
                 try:
-                    block_area_geojson = build_graphhopper_block_areas(hazards, max_hazards=20)
-                    use_block_area = True
-                    logger.info(f"[GRAPHHOPPER] Attempting route with block_area (hazard avoidance)")
+                    custom_model = build_graphhopper_custom_model(hazards, max_hazards=50)
+                    if custom_model and len(custom_model.get('priority', [])) > 0:
+                        use_custom_model = True
+                        logger.info(f"[GRAPHHOPPER] Using custom model with {len(custom_model['priority'])} hazard rules")
+                    else:
+                        logger.warning(f"[GRAPHHOPPER] Custom model is empty, using standard routing")
                 except Exception as e:
-                    logger.warning(f"[GRAPHHOPPER] Failed to build block_area: {e}")
-                    use_block_area = False
+                    logger.warning(f"[GRAPHHOPPER] Failed to build custom model: {e}")
+                    use_custom_model = False
 
-            # Build request parameters
-            params = {
-                "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
-                "profile": "car",
-                "locale": "en",
-                "ch.disable": "true",  # Disable CH to get alternative routes
-                "algorithm": "alternative_route",  # Request alternative routes
-                "alternative_route.max_paths": "4",  # Request up to 4 routes
-                "alternative_route.max_weight_factor": "1.4"  # Allow routes up to 40% longer
-            }
-
-            # Add block_area if available
-            if use_block_area and block_area_geojson:
-                params["block_area"] = block_area_geojson
-                logger.debug(f"[GraphHopper] Request WITH block_area (length: {len(block_area_geojson)} chars)")
+            # Build request
+            # If custom model is used, we need to use POST with JSON body
+            # Otherwise, use GET with query parameters
+            if use_custom_model and custom_model:
+                # POST request with custom model
+                payload = {
+                    "points": [[start_lon, start_lat], [end_lon, end_lat]],  # Note: lon, lat order for GeoJSON
+                    "profile": "car",
+                    "locale": "en",
+                    "ch.disable": True,
+                    "algorithm": "alternative_route",
+                    "alternative_route.max_paths": 4,
+                    "alternative_route.max_weight_factor": 1.4,
+                    "custom_model": custom_model
+                }
+                headers = {
+                    'User-Agent': 'Voyagr-PWA/1.0',
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json'
+                }
+                logger.debug(f"[GraphHopper] POST request with custom model ({len(custom_model['priority'])} rules)")
+                logger.debug(f"[GraphHopper] URL: {url}")
+                gh_start = time.time()
+                response = requests.post(url, json=payload, timeout=20, headers=headers)  # Increased timeout for custom model
+                gh_elapsed = (time.time() - gh_start) * 1000
             else:
-                logger.debug(f"[GraphHopper] Request WITHOUT block_area")
-
-            logger.debug(f"[GraphHopper] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
-            logger.debug(f"[GraphHopper] URL: {url}")
-
-            # Add headers for mobile compatibility
-            headers = {
-                'User-Agent': 'Voyagr-PWA/1.0',
-                'Accept': 'application/json'
-            }
-            gh_start = time.time()
-            response = requests.get(url, params=params, timeout=15, headers=headers)
-            gh_elapsed = (time.time() - gh_start) * 1000
+                # GET request without custom model (standard routing)
+                params = {
+                    "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
+                    "profile": "car",
+                    "locale": "en",
+                    "ch.disable": "true",
+                    "algorithm": "alternative_route",
+                    "alternative_route.max_paths": "4",
+                    "alternative_route.max_weight_factor": "1.4"
+                }
+                headers = {
+                    'User-Agent': 'Voyagr-PWA/1.0',
+                    'Accept': 'application/json'
+                }
+                logger.debug(f"[GraphHopper] GET request (no custom model)")
+                logger.debug(f"[GraphHopper] URL: {url}")
+                logger.debug(f"[GraphHopper] Params: {params}")
+                gh_start = time.time()
+                response = requests.get(url, params=params, timeout=10, headers=headers)
+                gh_elapsed = (time.time() - gh_start) * 1000
             logger.debug(f"[TIMING] GraphHopper request: {gh_elapsed:.0f}ms")
             logger.debug(f"[GraphHopper] Response status: {response.status_code}")
             if response.status_code != 200:
                 logger.warning(f"[GraphHopper] ERROR Response body: {response.text[:1000]}")
-                # If block_area caused the error, retry without it
-                if use_block_area:
-                    logger.warning(f"[GraphHopper] block_area may have caused error - retrying without it")
+                # If custom model caused the error, retry without it
+                if use_custom_model:
+                    logger.warning(f"[GraphHopper] Custom model may have caused error - retrying without it")
                     params_retry = {
                         "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
                         "profile": "car",
@@ -4881,11 +4925,15 @@ def calculate_route():
                         "alternative_route.max_paths": "4",
                         "alternative_route.max_weight_factor": "1.4"
                     }
+                    headers_retry = {
+                        'User-Agent': 'Voyagr-PWA/1.0',
+                        'Accept': 'application/json'
+                    }
                     gh_start_retry = time.time()
-                    response = requests.get(url, params=params_retry, timeout=10, headers=headers)
+                    response = requests.get(url, params=params_retry, timeout=10, headers=headers_retry)
                     gh_elapsed = (time.time() - gh_start_retry) * 1000
-                    logger.info(f"[GraphHopper] Retry without block_area: status={response.status_code}, time={gh_elapsed:.0f}ms")
-                    use_block_area = False  # Disable for this request
+                    logger.info(f"[GraphHopper] Retry without custom model: status={response.status_code}, time={gh_elapsed:.0f}ms")
+                    use_custom_model = False  # Disable for this request
 
             if response.status_code == 200:
                 route_data = response.json()
