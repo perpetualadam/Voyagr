@@ -658,6 +658,10 @@ def init_db():
         )
     ''')
 
+    # Create indexes for fast bounding box queries
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_cameras_lat_lon ON cameras(lat, lon)')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_cameras_type ON cameras(type)')
+
     # Persistent route cache table (Phase 4 feature)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS persistent_route_cache (
@@ -1622,30 +1626,18 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
             'debris': []
         }
 
-        # Fetch cameras
+        # Fetch cameras (optimized: only fetch high-priority cameras for custom model)
+        # Only fetch speed_camera and traffic_light_camera types (weight >= 30)
         cursor.execute(
-            "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
+            "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND type IN ('speed_camera', 'traffic_light_camera')",
             (south, north, west, east)
         )
         for lat, lon, camera_type, desc in cursor.fetchall():
-            # Keep original database type (speed_camera) but also add to traffic_light_camera for scoring
-            # This preserves database jargon while ensuring high-priority avoidance
-            if camera_type == 'speed_camera':
-                # Add to speed_camera category (preserves database type)
-                hazards['speed_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
-                # Also add to traffic_light_camera for high-priority scoring (1200s penalty)
-                hazards['traffic_light_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high', 'original_type': 'speed_camera'})
-            elif camera_type in hazards:
-                hazards[camera_type].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
+            # Treat all cameras as traffic_light_camera for consistent high-priority avoidance
+            hazards['traffic_light_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
 
-        # Fetch community reports
-        cursor.execute(
-            "SELECT lat, lon, hazard_type, description, severity FROM community_hazard_reports WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND status = 'active' AND expiry_timestamp > ?",
-            (south, north, west, east, int(time.time()))
-        )
-        for lat, lon, hazard_type, desc, severity in cursor.fetchall():
-            if hazard_type in hazards:
-                hazards[hazard_type].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': severity})
+        # Skip community reports for custom model (only cameras are used for avoidance)
+        # Community reports are still used for post-processing hazard scoring
 
         return_db_connection(conn)
         return hazards
