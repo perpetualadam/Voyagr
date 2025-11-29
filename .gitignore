@@ -76,3 +76,8 @@ satnav.db
 test_*.db
 *.ppn
 
+# Environment variables (contains sensitive API keys and server IPs)
+.env
+.env.local
+.env.*.local
+
