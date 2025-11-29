@@ -5209,6 +5209,21 @@ def calculate_route():
                         hazards_list = get_hazards_on_route(route_geometry, hazards)
                         logger.info(f"[HAZARDS] Valhalla main route: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
 
+                    # Extract turn-by-turn maneuvers from Valhalla response
+                    maneuvers = []
+                    if 'legs' in route_data['trip']:
+                        for leg in route_data['trip']['legs']:
+                            if 'maneuvers' in leg:
+                                for maneuver in leg['maneuvers']:
+                                    maneuvers.append({
+                                        'instruction': maneuver.get('instruction', ''),
+                                        'distance': maneuver.get('length', 0),  # km
+                                        'time': maneuver.get('time', 0),  # seconds
+                                        'type': maneuver.get('type', 0),
+                                        'street_name': maneuver.get('street_names', [''])[0] if maneuver.get('street_names') else ''
+                                    })
+                    logger.info(f"[VALHALLA] Extracted {len(maneuvers)} maneuvers from route")
+
                     routes.append({
                         'id': 1,
                         'name': 'Fastest',
@@ -5220,7 +5235,8 @@ def calculate_route():
                         'geometry': route_geometry,
                         'hazard_penalty_seconds': round(hazard_penalty, 0),
                         'hazard_count': hazard_count,
-                        'hazards': hazards_list
+                        'hazards': hazards_list,
+                        'maneuvers': maneuvers
                     })
 
                     # Alternative routes (if available)

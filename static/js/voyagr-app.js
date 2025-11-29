@@ -3375,6 +3375,69 @@ function detectUpcomingTurn(userLat, userLon) {
         return null;
     }
 
+    // If we have maneuvers from Valhalla, use them for accurate turn instructions
+    if (currentRouteSteps && currentRouteSteps.length > 0) {
+        // Find the next maneuver based on current position
+        let totalDistance = 0;
+
+        for (let i = currentStepIndex; i < currentRouteSteps.length; i++) {
+            const maneuver = currentRouteSteps[i];
+            const maneuverDistance = (maneuver.distance || 0) * 1000; // Convert km to meters
+
+            // Calculate distance from user to this maneuver
+            // For simplicity, use accumulated distance along route
+            const distanceToManeuver = totalDistance;
+
+            if (distanceToManeuver <= 600) {  // Within 600m
+                // Map Valhalla maneuver types to our direction system
+                const type = maneuver.type || 0;
+                let direction = 'straight';
+
+                // Valhalla maneuver types: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/
+                if (type === 1) direction = 'straight';  // Start
+                if (type === 2) direction = 'straight';  // Start right
+                if (type === 3) direction = 'straight';  // Start left
+                if (type === 4) direction = 'destination';  // Destination
+                if (type === 5) direction = 'destination';  // Destination right
+                if (type === 6) direction = 'destination';  // Destination left
+                if (type === 7) direction = 'straight';  // Becomes
+                if (type === 8) direction = 'straight';  // Continue
+                if (type === 9) direction = 'slight_right';  // Slight right
+                if (type === 10) direction = 'right';  // Right
+                if (type === 11) direction = 'sharp_right';  // Sharp right
+                if (type === 12) direction = 'uturn';  // U-turn right
+                if (type === 13) direction = 'uturn';  // U-turn left
+                if (type === 14) direction = 'sharp_left';  // Sharp left
+                if (type === 15) direction = 'left';  // Left
+                if (type === 16) direction = 'slight_left';  // Slight left
+                if (type === 17) direction = 'straight';  // Ramp straight
+                if (type === 18) direction = 'slight_right';  // Ramp right
+                if (type === 19) direction = 'slight_left';  // Ramp left
+                if (type === 20) direction = 'exit';  // Exit right
+                if (type === 21) direction = 'exit';  // Exit left
+                if (type === 22) direction = 'slight_right';  // Stay right
+                if (type === 23) direction = 'slight_left';  // Stay left
+                if (type === 24) direction = 'merge';  // Merge
+                if (type === 25) direction = 'roundabout';  // Roundabout enter
+                if (type === 26) direction = 'roundabout';  // Roundabout exit
+                if (type === 27) direction = 'straight';  // Ferry enter
+                if (type === 28) direction = 'straight';  // Ferry exit
+
+                currentStepIndex = i;  // Update current step
+
+                return {
+                    distance: distanceToManeuver,
+                    direction: direction,
+                    streetName: maneuver.street_name || '',
+                    instruction: maneuver.instruction || ''
+                };
+            }
+
+            totalDistance += maneuverDistance;
+        }
+    }
+
+    // Fallback: Use geometry-based turn detection if no maneuvers available
     // Find the closest point on the route to the user
     let closestDistance = Infinity;
     let closestIndex = 0;
@@ -3388,8 +3451,7 @@ function detectUpcomingTurn(userLat, userLon) {
         }
     }
 
-    // FIXED: Look ahead for significant direction changes (turns)
-    // Scan ahead to find the next point where direction changes significantly
+    // Look ahead for significant direction changes (turns)
     let nextTurnIndex = null;
     let maxBearingChange = 0;
 
@@ -3401,7 +3463,7 @@ function detectUpcomingTurn(userLat, userLon) {
         currentBearing = calculateBearing(currPoint[0], currPoint[1], nextPoint[0], nextPoint[1]);
     }
 
-    // Scan ahead up to 50 points or 1km to find the next significant turn
+    // Scan ahead up to 50 points to find the next significant turn
     const scanDistance = Math.min(50, routePolyline.length - closestIndex - 1);
     for (let i = closestIndex + 2; i < closestIndex + scanDistance; i++) {
         if (i >= routePolyline.length) break;
@@ -3439,10 +3501,9 @@ function detectUpcomingTurn(userLat, userLon) {
         nextTurnPoint[0], nextTurnPoint[1]
     );
 
-    // FIXED: Calculate turn direction using proper bearing calculation
+    // Calculate turn direction using proper bearing calculation
     let turnDirection = 'straight';
     if (closestIndex > 0 && nextTurnIndex < routePolyline.length - 1) {
-        // Get bearing from point before closest to closest point
         const prevPoint = routePolyline[Math.max(0, closestIndex - 1)];
         const currPoint = routePolyline[closestIndex];
         const nextPoint = routePolyline[nextTurnIndex];
@@ -3458,7 +3519,8 @@ function detectUpcomingTurn(userLat, userLon) {
         lat: nextTurnPoint[0],
         lon: nextTurnPoint[1],
         index: nextTurnIndex,
-        direction: turnDirection
+        direction: turnDirection,
+        streetName: ''
     };
 }
 
@@ -5028,15 +5090,20 @@ let voiceAnnouncementsEnabled = true;
  */
 function getTurnDirectionText(direction) {
     const directionMap = {
-        'sharp_left': 'sharply left',
-        'left': 'left',
-        'slight_left': 'slightly left',
-        'straight': 'continue straight',  // FIXED: Changed from 'straight' to 'continue straight'
-        'slight_right': 'slightly right',
-        'right': 'right',
-        'sharp_right': 'sharply right'
+        'sharp_left': 'turn sharply left',
+        'left': 'turn left',
+        'slight_left': 'keep left',
+        'straight': 'continue straight',
+        'slight_right': 'keep right',
+        'right': 'turn right',
+        'sharp_right': 'turn sharply right',
+        'uturn': 'make a U-turn',
+        'exit': 'take the exit',
+        'merge': 'merge',
+        'roundabout': 'enter the roundabout',
+        'destination': 'arrive at your destination'
     };
-    return directionMap[direction] || 'ahead';
+    return directionMap[direction] || 'continue';
 }
 /**
  * announceDistanceToDestination function
@@ -5243,7 +5310,7 @@ function announceUpcomingTurn(turnInfo) {
 
     const direction = turnInfo.direction || 'straight';
     const directionText = getTurnDirectionText(direction);
-    const isStraight = direction === 'straight';
+    const streetName = turnInfo.streetName || '';
 
     // FIXED: Check each threshold independently using Set
     // This ensures all thresholds are announced (500m, 200m, 100m, 50m)
@@ -5254,23 +5321,16 @@ function announceUpcomingTurn(turnInfo) {
             distance > announcementDistance - 50) {  // 50m buffer before threshold
 
             let message = '';
+            const streetInfo = streetName ? ` onto ${streetName}` : '';
 
             if (announcementDistance === 500) {
-                message = isStraight
-                    ? `In 500 meters, prepare to ${directionText}`
-                    : `In 500 meters, prepare to turn ${directionText}`;
+                message = `In 500 meters, ${directionText}${streetInfo}`;
             } else if (announcementDistance === 200) {
-                message = isStraight
-                    ? `In 200 meters, ${directionText}`
-                    : `In 200 meters, turn ${directionText}`;
+                message = `In 200 meters, ${directionText}${streetInfo}`;
             } else if (announcementDistance === 100) {
-                message = isStraight
-                    ? `In 100 meters, ${directionText}`
-                    : `In 100 meters, turn ${directionText}`;
+                message = `In 100 meters, ${directionText}${streetInfo}`;
             } else if (announcementDistance === 50) {
-                message = isStraight
-                    ? `${directionText} now`
-                    : `Turn ${directionText} now`;
+                message = `${directionText}${streetInfo}`;
             }
 
             console.log(`[Voice] Announcing turn: ${message} (distance: ${distance.toFixed(0)}m, direction: ${direction})`);
@@ -5932,7 +5992,14 @@ function setCurrentLocation(field) {
         (position) => {
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
-            document.getElementById(field).value = `${lat},${lon}`;
+            const input = document.getElementById(field);
+
+            // Display "Current Location" instead of coordinates
+            input.value = 'Current Location';
+            input.dataset.lat = lat;
+            input.dataset.lon = lon;
+            input.dataset.displayName = 'Current Location';
+
             currentLat = lat;
             currentLon = lon;
             showStatus('Location set!', 'success');
@@ -6221,8 +6288,11 @@ function selectAutocompleteResult(fieldId, lat, lon, name) {
     const input = document.getElementById(fieldId);
     const dropdown = document.getElementById(`autocomplete${fieldId === 'start' ? 'Start' : 'End'}`);
 
-    // Set the input value to coordinates
-    input.value = `${lat},${lon}`;
+    // Store coordinates in data attribute and display human-readable name
+    input.value = name;  // Display the human-readable name
+    input.dataset.lat = lat;  // Store lat in data attribute
+    input.dataset.lon = lon;  // Store lon in data attribute
+    input.dataset.displayName = name;  // Store display name for later use
 
     // Hide dropdown
     dropdown.classList.remove('show');
@@ -6315,20 +6385,50 @@ async function geocodeLocations(startAddress, endAddress) {
     showStatus('🔍 Geocoding locations...', 'loading');
 
     try {
-        // Geocode start location
-        const startResult = await geocodeAddress(startAddress);
-        if (!startResult) {
-            showStatus('❌ Could not find start location: ' + startAddress, 'error');
-            isGeocoding = false;
-            return null;
+        // Check if coordinates are already stored in data attributes
+        const startInput = document.getElementById('start');
+        const endInput = document.getElementById('end');
+
+        let startResult, endResult;
+
+        // Check start location
+        if (startInput.dataset.lat && startInput.dataset.lon) {
+            // Use stored coordinates
+            startResult = {
+                lat: parseFloat(startInput.dataset.lat),
+                lon: parseFloat(startInput.dataset.lon),
+                display_name: startInput.dataset.displayName || startAddress,
+                cached: true
+            };
+            console.log('[Geocoding] Using stored coordinates for start:', startResult);
+        } else {
+            // Geocode start location
+            startResult = await geocodeAddress(startAddress);
+            if (!startResult) {
+                showStatus('❌ Could not find start location: ' + startAddress, 'error');
+                isGeocoding = false;
+                return null;
+            }
         }
 
-        // Geocode end location
-        const endResult = await geocodeAddress(endAddress);
-        if (!endResult) {
-            showStatus('❌ Could not find end location: ' + endAddress, 'error');
-            isGeocoding = false;
-            return null;
+        // Check end location
+        if (endInput.dataset.lat && endInput.dataset.lon) {
+            // Use stored coordinates
+            endResult = {
+                lat: parseFloat(endInput.dataset.lat),
+                lon: parseFloat(endInput.dataset.lon),
+                display_name: endInput.dataset.displayName || endAddress,
+                cached: true
+            };
+            console.log('[Geocoding] Using stored coordinates for end:', endResult);
+        } else {
+            // Geocode end location
+            endResult = await geocodeAddress(endAddress);
+            if (!endResult) {
+                showStatus('❌ Could not find end location: ' + endAddress, 'error');
+                isGeocoding = false;
+                return null;
+            }
         }
 
         // Show resolved locations
@@ -6365,12 +6465,13 @@ function startTurnByTurnNavigation(routeData) {
 
     routeInProgress = true;
     currentStepIndex = 0;
-    currentRouteSteps = [];
+    currentRouteSteps = routeData.maneuvers || [];  // Store maneuvers from Valhalla
 
     // Decode route geometry
     try {
         routePolyline = decodePolyline(routeData.geometry);
         console.log('Route polyline decoded:', routePolyline.length, 'points');
+        console.log('Route maneuvers:', currentRouteSteps.length, 'steps');
     } catch (e) {
         console.log('Could not decode geometry:', e);
         return;
