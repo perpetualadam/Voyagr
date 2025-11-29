@@ -337,10 +337,10 @@ except ImportError:
     ComponentAnalyzer = None  # type: ignore
     logger.warning("[CUSTOM_ROUTER] Module not available - will use external engines only")
 
-# Phase 3: Custom router configuration
-# Custom router is now PRIMARY router with fallback chain
-# Fallback chain: Custom Router → GraphHopper → Valhalla → OSRM
-USE_CUSTOM_ROUTER = os.getenv('USE_CUSTOM_ROUTER', 'true').lower() == 'true'
+# Phase 3: Routing engine configuration
+# Routing engine priority: Valhalla (PRIMARY) → OSRM (FALLBACK)
+# Custom router and GraphHopper have been removed
+USE_CUSTOM_ROUTER = os.getenv('USE_CUSTOM_ROUTER', 'false').lower() == 'true'
 CUSTOM_ROUTER_DB = os.getenv('CUSTOM_ROUTER_DB', 'data/uk_router.db')
 CUSTOM_ROUTER_K_PATHS = int(os.getenv('CUSTOM_ROUTER_K_PATHS', '4'))
 CUSTOM_ROUTER_TIMEOUT = int(os.getenv('CUSTOM_ROUTER_TIMEOUT', '5000'))
@@ -1412,8 +1412,9 @@ def decode_route_geometry(geometry: str) -> List[Tuple[float, float]]:
             return geometry
 
         # If it's a string, try to decode as polyline
+        # Valhalla uses precision 6, GraphHopper uses precision 5
         if isinstance(geometry, str) and polyline:
-            decoded = polyline.decode(geometry)
+            decoded = polyline.decode(geometry, 6)  # Valhalla precision
             return decoded
     except Exception as e:
         logger.warning(f"Error decoding geometry: {e}")
@@ -1617,7 +1618,6 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
 
         hazards = {
             'speed_camera': [],
-            'traffic_light_camera': [],
             'police': [],
             'roadworks': [],
             'accident': [],
@@ -1626,15 +1626,14 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
             'debris': []
         }
 
-        # Fetch cameras (optimized: only fetch high-priority cameras for custom model)
-        # Only fetch speed_camera and traffic_light_camera types (weight >= 30)
+        # Fetch cameras (only speed_camera type)
         cursor.execute(
-            "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND type IN ('speed_camera', 'traffic_light_camera')",
+            "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND type = 'speed_camera'",
             (south, north, west, east)
         )
         for lat, lon, camera_type, desc in cursor.fetchall():
-            # Treat all cameras as traffic_light_camera for consistent high-priority avoidance
-            hazards['traffic_light_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
+            # Add to speed_camera list
+            hazards['speed_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
 
         # Skip community reports for custom model (only cameras are used for avoidance)
         # Community reports are still used for post-processing hazard scoring
@@ -1666,7 +1665,6 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], rou
 
         # Priority weights for different hazard types
         hazard_weights = {
-            'traffic_light_camera': 100.0,  # Highest priority - avoid completely
             'speed_camera': 50.0,            # High priority - strong avoidance
             'police': 30.0,                  # Medium-high priority
             'accident': 20.0,                # Medium priority
@@ -1774,6 +1772,138 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], rou
         logger.error(f"[CUSTOM_MODEL] Error building custom model: {e}")
         return {}  # Return empty model on error
 
+def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]], route_bbox: Dict[str, float] = None, max_hazards: int = 100, start_lat: float = None, start_lon: float = None, end_lat: float = None, end_lon: float = None) -> List[Dict[str, float]]:
+    """
+    Build Valhalla exclude_locations to avoid hazards.
+
+    This is more efficient than exclude_polygons and has no circumference limit.
+    Valhalla will map each location to the closest road and exclude it.
+
+    Args:
+        hazards: Dictionary of hazard types and their locations
+        route_bbox: Optional bounding box to filter hazards (keys: min_lat, max_lat, min_lon, max_lon)
+        max_hazards: Maximum number of hazards to include (no hard limit, but keep reasonable for performance)
+        start_lat, start_lon, end_lat, end_lon: Route endpoints for distance-based prioritization
+
+    Returns:
+        List of locations in Valhalla format: [{"lat": lat, "lon": lon}, ...]
+    """
+    try:
+        # Hazard weights (higher = more important to avoid)
+        hazard_weights = {
+            'speed_camera': 50.0,
+            'police': 30.0,
+            'accident': 20.0,
+            'roadworks': 15.0,
+            'railway_crossing': 10.0,
+            'pothole': 5.0,
+            'debris': 5.0
+        }
+
+        # Collect all hazards with weights
+        all_hazards = []
+
+        for hazard_type, hazard_list in hazards.items():
+            weight = hazard_weights.get(hazard_type, 10.0)
+            # Only include high-priority hazards (cameras and police)
+            if weight >= 30.0:
+                for hazard in hazard_list:
+                    # Filter by bounding box if provided (with margin to cover detour routes)
+                    if route_bbox:
+                        # Use 50% margin OR minimum 0.15 degrees (~17km), whichever is larger
+                        # This ensures we capture cameras on detour routes even for short trips
+                        margin_percent = 0.5
+                        min_margin_degrees = 0.15  # ~17km
+
+                        lat_margin = max(
+                            (route_bbox['max_lat'] - route_bbox['min_lat']) * margin_percent,
+                            min_margin_degrees
+                        )
+                        lon_margin = max(
+                            (route_bbox['max_lon'] - route_bbox['min_lon']) * margin_percent,
+                            min_margin_degrees
+                        )
+
+                        if not (route_bbox['min_lat'] - lat_margin <= hazard['lat'] <= route_bbox['max_lat'] + lat_margin and
+                                route_bbox['min_lon'] - lon_margin <= hazard['lon'] <= route_bbox['max_lon'] + lon_margin):
+                            continue  # Skip hazards outside bounding box
+
+                    # Calculate perpendicular distance to route line (for prioritization)
+                    distance_to_route = float('inf')
+                    if start_lat is not None and start_lon is not None and end_lat is not None and end_lon is not None:
+                        # Calculate perpendicular distance from point to line segment
+                        # Using the formula: distance = |cross product| / |line length|
+
+                        # Vector from start to end
+                        dx = end_lon - start_lon
+                        dy = end_lat - start_lat
+
+                        # Vector from start to hazard
+                        px = hazard['lon'] - start_lon
+                        py = hazard['lat'] - start_lat
+
+                        # Calculate line length squared
+                        line_length_sq = dx * dx + dy * dy
+
+                        if line_length_sq > 0:
+                            # Calculate projection parameter (0 = at start, 1 = at end)
+                            t = max(0, min(1, (px * dx + py * dy) / line_length_sq))
+
+                            # Find closest point on line segment
+                            closest_lon = start_lon + t * dx
+                            closest_lat = start_lat + t * dy
+
+                            # Calculate perpendicular distance to closest point on line
+                            distance_to_route = get_distance_between_points(
+                                hazard['lat'], hazard['lon'],
+                                closest_lat, closest_lon
+                            )
+                        else:
+                            # Start and end are the same point - use distance to start
+                            distance_to_route = get_distance_between_points(
+                                hazard['lat'], hazard['lon'],
+                                start_lat, start_lon
+                            )
+
+                    all_hazards.append({
+                        'lat': hazard['lat'],
+                        'lon': hazard['lon'],
+                        'type': hazard_type,
+                        'weight': weight,
+                        'distance_to_route': distance_to_route
+                    })
+
+        # Sort by distance to route (closest first), then by weight
+        # This ensures we exclude cameras that are actually ON or NEAR the route
+        all_hazards.sort(key=lambda h: (h['distance_to_route'], -h['weight']))
+        all_hazards = all_hazards[:max_hazards]
+
+        if not all_hazards:
+            logger.warning(f"[VALHALLA] No high-priority hazards found for exclude_locations")
+            return []
+
+        # Build exclude_locations list (just lat/lon pairs)
+        exclude_locations = []
+        for hazard in all_hazards:
+            exclude_locations.append({
+                "lat": hazard['lat'],
+                "lon": hazard['lon']
+            })
+
+        total_hazards = sum(len(h) for h in hazards.values())
+        logger.info(f"[VALHALLA] Built {len(exclude_locations)} exclude_locations (from {total_hazards} total hazards)")
+
+        # Log bounding box info for debugging
+        if route_bbox and exclude_locations:
+            logger.info(f"[VALHALLA] Bounding box: lat [{route_bbox['min_lat']:.4f}, {route_bbox['max_lat']:.4f}], lon [{route_bbox['min_lon']:.4f}, {route_bbox['max_lon']:.4f}]")
+            logger.info(f"[VALHALLA] Margins applied: lat={lat_margin:.4f} (~{lat_margin*111:.1f}km), lon={lon_margin:.4f} (~{lon_margin*111:.1f}km)")
+
+        return exclude_locations
+
+    except Exception as e:
+        logger.error(f"[VALHALLA] Error building exclude_locations: {e}")
+        return []  # Return empty list on error
+
 def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
     """
     Get list of hazards that are on or near the route.
@@ -1795,7 +1925,7 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[
             if isinstance(route_points, str):
                 if not polyline:
                     return []
-                decoded_points = polyline.decode(route_points)
+                decoded_points = polyline.decode(route_points, 6)  # Valhalla precision
             else:
                 decoded_points = route_points
         except Exception as e:
@@ -1867,7 +1997,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
                 if not polyline:
                     logger.warning("polyline module not available, cannot decode route points")
                     return 0, 0
-                decoded_points = polyline.decode(route_points)
+                decoded_points = polyline.decode(route_points, 6)  # Valhalla precision
                 logger.debug(f"[HAZARDS] Decoded {len(decoded_points)} route points from polyline")
             else:
                 decoded_points = route_points
@@ -2024,7 +2154,7 @@ MONITORING_DASHBOARD_HTML = '''
         <div class="header">
             <div>
                 <h1>🚀 Voyagr Routing Monitoring Dashboard</h1>
-                <p>Real-time health monitoring & cost analysis for GraphHopper, Valhalla, and OSRM</p>
+                <p>Real-time health monitoring & cost analysis for Valhalla and OSRM</p>
             </div>
             <div class="header-controls">
                 <div class="refresh-timer">Next refresh: <span id="refreshCountdown">60</span>s</div>
@@ -2308,7 +2438,7 @@ MONITORING_DASHBOARD_HTML = '''
                     }
 
                     // Load engine resolve buttons
-                    const engines = ['graphhopper', 'valhalla', 'osrm'];
+                    const engines = ['valhalla', 'osrm'];
                     const resolveHTML = engines.map(engine => `
                         <button class="btn-secondary" onclick="resolveAllEngineAlerts('${engine}')" style="margin-bottom: 8px; width: 100%;">Resolve All ${engine.toUpperCase()} Alerts</button>
                     `).join('');
@@ -4206,27 +4336,9 @@ def test_routing_engines():
 
     # Get environment info
     results['environment'] = {
-        'graphhopper_url': GRAPHHOPPER_URL,
         'valhalla_url': VALHALLA_URL,
         'deployment': 'Railway.app' if 'railway' in os.getenv('HOSTNAME', '').lower() else 'Local/Other'
     }
-
-    # Test GraphHopper
-    try:
-        response = requests.get(f"{GRAPHHOPPER_URL}/info", timeout=5)
-        results['graphhopper'] = {
-            'status': 'OK' if response.status_code == 200 else f'HTTP {response.status_code}',
-            'url': GRAPHHOPPER_URL,
-            'accessible': response.status_code == 200,
-            'response_time_ms': response.elapsed.total_seconds() * 1000
-        }
-    except Exception as e:
-        results['graphhopper'] = {
-            'status': f'Error: {str(e)}',
-            'url': GRAPHHOPPER_URL,
-            'accessible': False,
-            'error_type': type(e).__name__
-        }
 
     # Test Valhalla
     try:
@@ -4290,32 +4402,11 @@ def debug_route():
                 'end': {'lat': end_lat, 'lon': end_lon}
             },
             'routing_engines': {
-                'graphhopper': {'url': GRAPHHOPPER_URL, 'status': 'testing...'},
                 'valhalla': {'url': VALHALLA_URL, 'status': 'testing...'},
                 'osrm': {'url': 'http://router.project-osrm.org', 'status': 'testing...'}
             },
             'errors': []
         }
-
-        # Test GraphHopper
-        try:
-            url = f"{GRAPHHOPPER_URL}/route"
-            params = {
-                "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
-                "profile": "car",
-                "locale": "en",
-                "ch.disable": "true"
-            }
-            response = requests.get(url, params=params, timeout=10)
-            debug_info['routing_engines']['graphhopper']['status'] = f'HTTP {response.status_code}'
-            debug_info['routing_engines']['graphhopper']['response_time_ms'] = response.elapsed.total_seconds() * 1000
-            if response.status_code == 200:
-                debug_info['routing_engines']['graphhopper']['success'] = True
-            else:
-                debug_info['routing_engines']['graphhopper']['error'] = response.text[:200]
-        except Exception as e:
-            debug_info['routing_engines']['graphhopper']['error'] = str(e)
-            debug_info['errors'].append(f"GraphHopper: {str(e)}")
 
         # Test Valhalla
         try:
@@ -4378,11 +4469,10 @@ def clear_cache():
 class FallbackChainOptimizer:
     """
     PHASE 5: Intelligent fallback chain with error handling and timeout management.
-    Primary: GraphHopper → Secondary: Valhalla → Tertiary: OSRM
+    Primary: Valhalla → Secondary: OSRM
     """
     def __init__(self):
         self.engine_stats = {
-            'graphhopper': {'failures': 0, 'successes': 0, 'avg_time': 0},
             'valhalla': {'failures': 0, 'successes': 0, 'avg_time': 0},
             'osrm': {'failures': 0, 'successes': 0, 'avg_time': 0}
         }
@@ -4427,7 +4517,7 @@ class FallbackChainOptimizer:
             score: float = stats['success_rate'] - penalty
             scored[engine] = score
 
-        return max(scored.items(), key=lambda x: x[1])[0] if scored else 'graphhopper'
+        return max(scored.items(), key=lambda x: x[1])[0] if scored else 'valhalla'
 
 class ParallelRoutingEngine:
     """
@@ -4675,17 +4765,24 @@ def calculate_route_custom():
 def calculate_route():
     """
     Calculate route using available routing engines.
-    Supports: GraphHopper, Valhalla, OSRM (fallback)
+    Supports: Valhalla (PRIMARY), OSRM (FALLBACK)
     Mobile-optimized with proper error handling and fallbacks.
     """
     import time
+    import sys
     route_start_time = time.time()
-    print(f"[DEBUG] calculate_route() called at {time.time()}")
+
+    # FORCE OUTPUT TO APPEAR IMMEDIATELY
+    print(f"\n{'='*80}", flush=True)
+    print(f"[API] /api/route endpoint HIT at {time.time()}", flush=True)
+    print(f"{'='*80}\n", flush=True)
+    sys.stdout.flush()
 
     try:
         data = request.json
+        print(f"[API] Request data: {data}", flush=True)
+        sys.stdout.flush()
         logger.info(f"[ROUTE] Received request: {data}")
-        print(f"[DEBUG] Request data: {data}")
 
         # ================================================================
         # PHASE 5: Validate request parameters
@@ -4709,8 +4806,12 @@ def calculate_route():
         caz_exempt = data.get('caz_exempt', False)
         enable_hazard_avoidance = data.get('enable_hazard_avoidance', False)
 
-        # DEBUG: Log hazard avoidance parameter
-        logger.info(f"[HAZARDS] enable_hazard_avoidance={enable_hazard_avoidance} (type={type(enable_hazard_avoidance)})")
+        # DEBUG: Log request received
+        print(f"\n{'='*80}")
+        print(f"[API REQUEST] /api/route called")
+        print(f"[API REQUEST] enable_hazard_avoidance={enable_hazard_avoidance}")
+        print(f"{'='*80}\n")
+        logger.info(f"[API REQUEST] Route calculation started: ({start},{end}), hazard_avoidance={enable_hazard_avoidance}")
 
         # Parse coordinates
         start_coords = validate_coordinates(start)
@@ -4728,130 +4829,40 @@ def calculate_route():
             cached_route['cache_stats'] = route_cache.get_stats()
             return jsonify(cached_route)
 
-        # Fetch hazards if hazard avoidance is enabled
-        hazards = {}
+        # Fetch hazards (always fetch for scoring, even if avoidance is disabled)
+        hazard_start = time.time()
+        hazards = fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
+        hazard_elapsed = (time.time() - hazard_start) * 1000
+        logger.info(f"[HAZARDS] Fetched hazards in {hazard_elapsed:.0f}ms: {[(k, len(v)) for k, v in hazards.items() if v]}")
+
         if enable_hazard_avoidance:
-            hazard_start = time.time()
-            hazards = fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
-            hazard_elapsed = (time.time() - hazard_start) * 1000
-            logger.info(f"[HAZARDS] Fetched hazards in {hazard_elapsed:.0f}ms: {[(k, len(v)) for k, v in hazards.items() if v]}")
+            logger.info(f"[HAZARDS] Hazard avoidance ENABLED - will use exclude_locations")
         else:
-            logger.info(f"[HAZARDS] Hazard avoidance disabled - skipping hazard fetch")
+            logger.info(f"[HAZARDS] Hazard avoidance DISABLED - will score route but not avoid hazards")
 
         # ====================================================================
-        # PHASE 3: Try custom router first (if available)
+        # Try routing engines in order: Valhalla (PRIMARY), OSRM (FALLBACK)
         # ====================================================================
-        logger.info(f"[ROUTING] Custom router check: custom_router={custom_router is not None}, USE_CUSTOM_ROUTER={USE_CUSTOM_ROUTER}")
-        if custom_router and USE_CUSTOM_ROUTER:
-            try:
-                logger.info(f"[ROUTING] Trying custom router first...")
-                custom_start = time.time()
-                route = custom_router.route(start_lat, start_lon, end_lat, end_lon)
-                custom_elapsed = (time.time() - custom_start) * 1000
-
-                # Check if custom router took too long
-                if custom_elapsed > CUSTOM_ROUTER_TIMEOUT:
-                    logger.warning(f"[ROUTING] Custom router timeout ({custom_elapsed:.0f}ms > {CUSTOM_ROUTER_TIMEOUT}ms) - falling back to external engines")
-                    update_custom_router_stats(custom_elapsed, False)
-                elif route is None:
-                    logger.info(f"[ROUTING] Custom router returned None in {custom_elapsed:.0f}ms - falling back to external engines")
-                    update_custom_router_stats(custom_elapsed, False)
-                elif route and isinstance(route, dict) and 'error' in route:
-                    logger.info(f"[ROUTING] ⚠️  Custom router: {route.get('reason', route.get('error'))} in {custom_elapsed:.0f}ms - falling back to external engines")
-                    update_custom_router_stats(custom_elapsed, False)
-                elif route and 'error' not in route:
-                    logger.info(f"[ROUTING] ✅ Custom router succeeded in {custom_elapsed:.0f}ms")
-
-                    # Get alternatives
-                    alternatives = k_paths.find_k_paths(start_lat, start_lon, end_lat, end_lon, k=CUSTOM_ROUTER_K_PATHS)
-                    routes = [route] + alternatives
-
-                    # Calculate costs for all routes
-                    for route_item in routes:
-                        distance_km = route_item.get('distance_km', 0)
-                        fuel_cost = (distance_km / fuel_efficiency) * fuel_price if fuel_efficiency > 0 else 0
-                        toll_cost = distance_km * 0.15 if include_tolls else 0
-                        caz_cost = 8.0 if include_caz and vehicle_type == 'petrol_diesel' else 0
-
-                        route_item['fuel_cost'] = round(fuel_cost, 2)
-                        route_item['toll_cost'] = round(toll_cost, 2)
-                        route_item['caz_cost'] = round(caz_cost, 2)
-                        route_item['total_cost'] = round(fuel_cost + toll_cost + caz_cost, 2)
-
-                    # ================================================================
-                    # HAZARD AVOIDANCE: Score routes by hazard penalty if enabled
-                    # ================================================================
-                    for route_item in routes:
-                        hazard_penalty = 0
-                        hazard_count = 0
-                        hazards_list = []
-                        if enable_hazard_avoidance and hazards:
-                            route_geometry = decode_route_geometry(route_item.get('polyline', ''))
-                            hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
-                            hazards_list = get_hazards_on_route(route_geometry, hazards)
-                            logger.debug(f"[HAZARDS] Custom router route: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
-
-                        route_item['hazard_penalty_seconds'] = hazard_penalty
-                        route_item['hazard_count'] = hazard_count
-                        route_item['hazards'] = hazards_list
-
-                    # ================================================================
-                    # HAZARD AVOIDANCE: Reorder routes by hazard penalty if enabled
-                    # ================================================================
-                    if enable_hazard_avoidance and hazards:
-                        # Sort routes by hazard penalty (ascending - fewer hazards first)
-                        routes_sorted = sorted(routes, key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)))
-                        logger.info(f"[HAZARDS] Custom router routes reordered by hazard penalty:")
-                        for idx, route in enumerate(routes_sorted):
-                            logger.info(f"  Route {idx+1}: Hazard penalty: {route.get('hazard_penalty_seconds', 0):.0f}s, Count: {route.get('hazard_count', 0)}")
-                        routes = routes_sorted
-
-                    response_data = {
-                        'success': True,
-                        'routes': routes,
-                        'source': 'Custom Router ⚡',
-                        'distance': f'{route.get("distance_km", 0):.2f} km',
-                        'time': f'{route.get("duration_minutes", 0):.0f} minutes',
-                        'geometry': route.get('geometry', ''),
-                        'fuel_cost': route.get('fuel_cost', 0),
-                        'toll_cost': route.get('toll_cost', 0),
-                        'caz_cost': route.get('caz_cost', 0),
-                        'response_time_ms': custom_elapsed,
-                        'cached': False,
-                        'start_lat': start_lat,
-                        'start_lon': start_lon,
-                        'end_lat': end_lat,
-                        'end_lon': end_lon
-                    }
-
-                    # Cache the route
-                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance)
-                    update_custom_router_stats(custom_elapsed, True)
-                    return jsonify(response_data)
-                elif route and 'error' in route:
-                    logger.info(f"[ROUTING] ⚠️  Custom router: {route.get('reason', route.get('error'))} - falling back to external engines")
-                    update_custom_router_stats(custom_elapsed, False)
-            except Exception as e:
-                logger.warning(f"[ROUTING] Custom router failed: {e} - falling back to external engines")
-                update_custom_router_stats(0, False)
-
-        # Try routing engines in order: GraphHopper, Valhalla, OSRM
-        graphhopper_error = None
         valhalla_error = None
 
         logger.debug(f"\n[ROUTING] Starting route calculation from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
-        logger.debug(f"[ROUTING] GraphHopper URL: {GRAPHHOPPER_URL}")
         logger.debug(f"[ROUTING] Valhalla URL: {VALHALLA_URL}")
 
-        # Try GraphHopper first (if available)
+        valhalla_start_time = time.time()
         try:
-            url = f"{GRAPHHOPPER_URL}/route"
+            url = f"{VALHALLA_URL}/route"
+
+            # Define headers for all Valhalla requests
+            headers = {
+                'User-Agent': 'Voyagr-PWA/1.0',
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            }
 
             # ================================================================
-            # HAZARD AVOIDANCE: Build custom model if enabled
+            # HAZARD AVOIDANCE: Build exclude_polygons if enabled
             # ================================================================
-            custom_model = None
-            use_custom_model = False
+            exclude_polygons = []
 
             if enable_hazard_avoidance and hazards:
                 # Calculate bounding box for route to filter hazards
@@ -4862,256 +4873,264 @@ def calculate_route():
                     'max_lon': max(start_lon, end_lon)
                 }
 
-                # Try to build custom model (limit to 25 hazards to avoid huge payloads)
+            # Build exclude_locations (more efficient than exclude_polygons)
+            # No circumference limit - can send many more locations
+            exclude_locations = []
+            if enable_hazard_avoidance:
                 try:
-                    custom_model = build_graphhopper_custom_model(hazards, route_bbox=route_bbox, max_hazards=25)
-                    if custom_model and len(custom_model.get('priority', [])) > 0:
-                        use_custom_model = True
-                        logger.info(f"[GRAPHHOPPER] Using custom model with {len(custom_model['priority'])} hazard rules")
+                    # Use 500 max to cover all cameras in route area (typically 50-100)
+                    # This will be reduced if Valhalla can't find a route
+                    # Pass route coordinates for distance-based prioritization
+                    exclude_locations = build_valhalla_exclude_locations(
+                        hazards,
+                        route_bbox=route_bbox,
+                        max_hazards=500,
+                        start_lat=start_lat,
+                        start_lon=start_lon,
+                        end_lat=end_lat,
+                        end_lon=end_lon
+                    )
+                    if exclude_locations:
+                        logger.info(f"[VALHALLA] Using {len(exclude_locations)} exclude_locations for hazard avoidance")
                     else:
-                        logger.warning(f"[GRAPHHOPPER] Custom model is empty, using standard routing")
+                        logger.warning(f"[VALHALLA] No exclude_locations generated, using standard routing")
                 except Exception as e:
-                    logger.warning(f"[GRAPHHOPPER] Failed to build custom model: {e}")
-                    use_custom_model = False
+                    logger.warning(f"[VALHALLA] Failed to build exclude_locations: {e}")
+                    exclude_locations = []
 
-            # Build request
-            # If custom model is used, we need to use POST with JSON body
-            # Otherwise, use GET with query parameters
-            if use_custom_model and custom_model:
-                # POST request with custom model
-                payload = {
-                    "points": [[start_lon, start_lat], [end_lon, end_lat]],  # Note: lon, lat order for GeoJSON
-                    "profile": "car",
-                    "locale": "en",
-                    "ch.disable": True,
-                    "algorithm": "alternative_route",
-                    "alternative_route.max_paths": 3,  # Reduced from 4 to 3 for performance
-                    "alternative_route.max_weight_factor": 1.3,  # Reduced from 1.4 to 1.3 for performance
-                    "custom_model": custom_model
-                }
-                headers = {
-                    'User-Agent': 'Voyagr-PWA/1.0',
-                    'Accept': 'application/json',
-                    'Content-Type': 'application/json'
-                }
-                logger.debug(f"[GraphHopper] POST request with custom model ({len(custom_model['priority'])} rules)")
-                logger.debug(f"[GraphHopper] URL: {url}")
-                gh_start = time.time()
-                response = requests.post(url, json=payload, timeout=15, headers=headers)  # Reduced timeout from 20s to 15s
-                gh_elapsed = (time.time() - gh_start) * 1000
-            else:
-                # GET request without custom model (standard routing)
-                params = {
-                    "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
-                    "profile": "car",
-                    "locale": "en",
-                    "ch.disable": "true",
-                    "algorithm": "alternative_route",
-                    "alternative_route.max_paths": "4",
-                    "alternative_route.max_weight_factor": "1.4"
-                }
-                headers = {
-                    'User-Agent': 'Voyagr-PWA/1.0',
-                    'Accept': 'application/json'
-                }
-                logger.debug(f"[GraphHopper] GET request (no custom model)")
-                logger.debug(f"[GraphHopper] URL: {url}")
-                logger.debug(f"[GraphHopper] Params: {params}")
-                gh_start = time.time()
-                response = requests.get(url, params=params, timeout=10, headers=headers)
-                gh_elapsed = (time.time() - gh_start) * 1000
-            logger.debug(f"[TIMING] GraphHopper request: {gh_elapsed:.0f}ms")
-            logger.debug(f"[GraphHopper] Response status: {response.status_code}")
-            if response.status_code != 200:
-                logger.warning(f"[GraphHopper] ERROR Response body: {response.text[:1000]}")
-                # If custom model caused the error, retry without it
-                if use_custom_model:
-                    logger.warning(f"[GraphHopper] Custom model may have caused error - retrying without it")
-                    params_retry = {
-                        "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
-                        "profile": "car",
-                        "locale": "en",
-                        "ch.disable": "true",
-                        "algorithm": "alternative_route",
-                        "alternative_route.max_paths": "4",
-                        "alternative_route.max_weight_factor": "1.4"
+            # ================================================================
+            # SEGMENTED ROUTING FOR HIGH-DENSITY ROUTES
+            # ================================================================
+            # If we have >75 cameras, use segmented routing with separate API calls
+            # Each segment gets its own 50 exclude_locations
+            use_segmented_routing = False
+            num_segments = 1
+
+            if enable_hazard_avoidance and len(exclude_locations) > 75:
+                # Determine number of segments based on camera density
+                if len(exclude_locations) > 150:
+                    num_segments = 3  # 150 total exclusions
+                else:
+                    num_segments = 2  # 100 total exclusions
+
+                use_segmented_routing = True
+                logger.info(f"[VALHALLA] High camera density ({len(exclude_locations)} cameras) - using {num_segments}-segment routing")
+                print(f"[Valhalla] SEGMENTED ROUTING: {num_segments} segments for {len(exclude_locations)} cameras")
+
+                # Calculate each segment separately
+                try:
+                    # ================================================================
+                    # STEP 1: Get baseline route to extract real waypoints
+                    # ================================================================
+                    logger.info(f"[VALHALLA] Step 1: Getting baseline route to extract waypoints")
+                    baseline_payload = {
+                        "locations": [
+                            {"lat": start_lat, "lon": start_lon},
+                            {"lat": end_lat, "lon": end_lon}
+                        ],
+                        "costing": "auto",
+                        "alternatives": False
                     }
-                    headers_retry = {
-                        'User-Agent': 'Voyagr-PWA/1.0',
-                        'Accept': 'application/json'
-                    }
-                    gh_start_retry = time.time()
-                    response = requests.get(url, params=params_retry, timeout=10, headers=headers_retry)
-                    gh_elapsed = (time.time() - gh_start_retry) * 1000
-                    logger.info(f"[GraphHopper] Retry without custom model: status={response.status_code}, time={gh_elapsed:.0f}ms")
-                    use_custom_model = False  # Disable for this request
 
-            if response.status_code == 200:
-                route_data = response.json()
-                logger.debug(f"[GraphHopper] Response keys: {route_data.keys()}")
-                print(f"[DEBUG] GraphHopper response received, paths count: {len(route_data.get('paths', []))}")
+                    baseline_response = requests.post(url, json=baseline_payload, timeout=10, headers=headers)
 
-                if 'paths' in route_data and len(route_data['paths']) > 0:
-                    print(f"[DEBUG] Processing {len(route_data['paths'])} paths from GraphHopper")
-                    # Extract all available routes (up to 4)
-                    routes = []
-                    for idx, path in enumerate(route_data['paths'][:4]):
-                        distance = path.get('distance', 0) / 1000  # Convert to km
-                        duration_minutes = path.get('time', 0) / 60000  # Convert to minutes
+                    if baseline_response.status_code != 200:
+                        logger.error(f"[VALHALLA] Baseline route failed: HTTP {baseline_response.status_code}")
+                        use_segmented_routing = False
+                    elif 'trip' not in baseline_response.json() or 'legs' not in baseline_response.json()['trip']:
+                        logger.error(f"[VALHALLA] Baseline route invalid response structure")
+                        use_segmented_routing = False
+                    else:
+                        # Extract baseline route geometry
+                        baseline_data = baseline_response.json()
+                        baseline_geometry = baseline_data['trip']['legs'][0]['shape']
+                        baseline_coords = polyline.decode(baseline_geometry, precision=6)
 
-                        # Extract route geometry
-                        route_geometry = None
-                        # GraphHopper returns encoded polyline by default
-                        if 'points' in path:
-                            points = path['points']
-                            if isinstance(points, str):
-                                # Already encoded as polyline (most common case)
-                                route_geometry = points
-                            elif isinstance(points, list):
-                                # If it's a list of points, encode it
-                                if polyline:
-                                    try:
-                                        route_geometry = polyline.encode([(p['lat'], p['lng']) for p in points])
-                                    except Exception as e:
-                                        logger.warning(f"Failed to encode polyline: {e}")
-                                        route_geometry = None
-                                else:
-                                    logger.warning("polyline module not available, cannot encode points")
-                                    route_geometry = None
-                        elif 'points_encoded' in path and path['points_encoded']:
-                            # Use the encoded points string directly
-                            route_geometry = path.get('points', None)
+                        logger.info(f"[VALHALLA] Baseline route has {len(baseline_coords)} points")
 
-                        # ================================================================
-                        # PHASE 3 OPTIMIZATION: Use cost calculator with route coordinates
-                        # ================================================================
-                        # Decode route geometry to get coordinates for toll/CAZ detection
-                        route_coords = decode_route_geometry(route_geometry)
+                        # Extract waypoints at equal intervals along the route
+                        waypoints = []
+                        waypoints.append({"lat": start_lat, "lon": start_lon})  # Start point
 
-                        costs = cost_calculator.calculate_costs(
-                            distance, vehicle_type, fuel_efficiency, fuel_price,
-                            energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
-                            route_coords=route_coords
+                        for i in range(1, num_segments):
+                            # Calculate index at i/num_segments position
+                            idx = int((i / num_segments) * len(baseline_coords))
+                            idx = min(idx, len(baseline_coords) - 1)  # Ensure within bounds
+
+                            waypoint_lat, waypoint_lon = baseline_coords[idx]
+                            waypoints.append({"lat": waypoint_lat, "lon": waypoint_lon})
+                            logger.info(f"[VALHALLA] Waypoint {i}: ({waypoint_lat:.4f},{waypoint_lon:.4f}) at index {idx}/{len(baseline_coords)}")
+
+                        waypoints.append({"lat": end_lat, "lon": end_lon})  # End point
+
+                        logger.info(f"[VALHALLA] Extracted {len(waypoints)} waypoints from baseline route")
+
+                    # ================================================================
+                    # STEP 2: Calculate each segment separately
+                    # ================================================================
+                    if not use_segmented_routing:
+                        raise Exception("Baseline route failed - cannot extract waypoints")
+
+                    segment_results = []
+                    total_distance = 0
+                    total_duration = 0
+                    all_geometries = []
+                    all_hazards = []
+
+                    logger.info(f"[VALHALLA] Step 2: Calculating {num_segments} segments with real waypoints")
+
+                    # Calculate each segment
+                    for i in range(num_segments):
+                        seg_start = waypoints[i]
+                        seg_end = waypoints[i + 1]
+
+                        logger.info(f"[VALHALLA] Segment {i+1}/{num_segments}: ({seg_start['lat']:.4f},{seg_start['lon']:.4f}) → ({seg_end['lat']:.4f},{seg_end['lon']:.4f})")
+
+                        # Build segment bounding box
+                        seg_bbox = {
+                            'min_lat': min(seg_start['lat'], seg_end['lat']),
+                            'max_lat': max(seg_start['lat'], seg_end['lat']),
+                            'min_lon': min(seg_start['lon'], seg_end['lon']),
+                            'max_lon': max(seg_start['lon'], seg_end['lon'])
+                        }
+
+                        # Build exclude_locations for this segment (max 50)
+                        seg_exclude = build_valhalla_exclude_locations(
+                            hazards,
+                            route_bbox=seg_bbox,
+                            max_hazards=50,
+                            start_lat=seg_start['lat'],
+                            start_lon=seg_start['lon'],
+                            end_lat=seg_end['lat'],
+                            end_lon=seg_end['lon']
                         )
+
+                        logger.info(f"[VALHALLA] Segment {i+1}: {len(seg_exclude)} exclude_locations")
+
+                        # Build segment payload
+                        seg_payload = {
+                            "locations": [seg_start, seg_end],
+                            "costing": "auto",
+                            "alternatives": False
+                        }
+
+                        if seg_exclude:
+                            seg_payload["exclude_locations"] = seg_exclude
+
+                        # Make segment request
+                        seg_response = requests.post(url, json=seg_payload, timeout=10, headers=headers)
+
+                        if seg_response.status_code == 200:
+                            seg_data = seg_response.json()
+                            if 'trip' in seg_data and 'legs' in seg_data['trip']:
+                                # Extract segment data
+                                seg_distance = seg_data['trip']['summary']['length']  # km
+                                seg_duration = seg_data['trip']['summary']['time']  # seconds
+                                seg_geometry = seg_data['trip']['legs'][0]['shape']
+
+                                total_distance += seg_distance
+                                total_duration += seg_duration
+                                all_geometries.append(seg_geometry)
+
+                                logger.info(f"[VALHALLA] Segment {i+1} SUCCESS: {seg_distance:.2f}km, {seg_duration/60:.0f}min")
+                            else:
+                                logger.error(f"[VALHALLA] Segment {i+1} FAILED: Invalid response structure")
+                                logger.error(f"[VALHALLA] Response: {seg_data}")
+                                use_segmented_routing = False
+                                break
+                        else:
+                            logger.error(f"[VALHALLA] Segment {i+1} FAILED: HTTP {seg_response.status_code}")
+                            logger.error(f"[VALHALLA] Error: {seg_response.text[:500]}")
+                            use_segmented_routing = False
+                            break
+
+                    # If all segments succeeded, build combined route
+                    if use_segmented_routing:
+                        logger.info(f"[VALHALLA] All segments calculated successfully")
+                        logger.info(f"[VALHALLA] Total: {total_distance:.2f}km, {total_duration/60:.0f}min")
+
+                        # Decode and combine geometries
+                        combined_coords = []
+                        for geom in all_geometries:
+                            coords = polyline.decode(geom, precision=6)
+                            combined_coords.extend(coords)
+
+                        # Re-encode combined geometry
+                        combined_geometry = polyline.encode(combined_coords, precision=6)
+
+                        # Calculate costs
+                        costs = cost_calculator.calculate_costs(
+                            total_distance,
+                            vehicle_type,
+                            fuel_efficiency,
+                            fuel_price,
+                            energy_efficiency,
+                            electricity_price,
+                            include_tolls,
+                            include_caz,
+                            caz_exempt,
+                            combined_coords
+                        )
+
                         fuel_cost = costs['fuel_cost']
                         toll_cost = costs['toll_cost']
                         caz_cost = costs['caz_cost']
+                        energy_cost = fuel_cost if vehicle_type == 'electric' else 0.0
 
-                        # Determine route type based on index
-                        if idx == 0:
-                            route_type = 'Fastest'
-                        elif idx == 1:
-                            route_type = 'Shortest'
-                        elif idx == 2:
-                            route_type = 'Balanced'
-                        else:
-                            route_type = f'Alternative {idx}'
+                        # Score hazards on combined route
+                        hazard_penalty, hazard_count = score_route_by_hazards(combined_coords, hazards)
+                        hazards_on_route = get_hazards_on_route(combined_coords, hazards)
 
-                        # Score route by hazards if hazard avoidance is enabled
-                        hazard_penalty = 0
-                        hazard_count = 0
-                        hazards_list = []
-                        if enable_hazard_avoidance and hazards:
-                            hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
-                            hazards_list = get_hazards_on_route(route_geometry, hazards)
-                            logger.debug(f"[HAZARDS] Route {idx+1}: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
+                        logger.info(f"[HAZARDS] Segmented route scoring complete: total_penalty={hazard_penalty}s, hazard_count={hazard_count}")
 
-                        routes.append({
-                            'id': idx + 1,
-                            'name': route_type,
-                            'distance_km': round(distance, 2),
-                            'duration_minutes': round(duration_minutes, 0),
-                            'fuel_cost': round(fuel_cost, 2),
-                            'toll_cost': round(toll_cost, 2),
-                            'caz_cost': round(caz_cost, 2),
-                            'geometry': route_geometry,
-                            'hazard_penalty_seconds': round(hazard_penalty, 0),
+                        # Build combined route response
+                        routes = [{
+                            'distance_km': total_distance,
+                            'duration_minutes': total_duration / 60,
+                            'geometry': combined_geometry,
+                            'fuel_cost': fuel_cost,
+                            'toll_cost': toll_cost,
+                            'caz_cost': caz_cost,
+                            'energy_cost': energy_cost,
+                            'total_cost': fuel_cost + toll_cost + caz_cost + energy_cost,
+                            'hazard_penalty_seconds': hazard_penalty,
                             'hazard_count': hazard_count,
-                            'hazards': hazards_list
-                        })
+                            'hazards': hazards_on_route
+                        }]
 
-                    print(f"[GraphHopper] SUCCESS: {len(routes)} routes found")
-                    total_time = (time.time() - route_start_time) * 1000
-                    print(f"[TIMING] Total route calculation: {total_time:.0f}ms")
+                        response_data = {
+                            'success': True,
+                            'routes': routes,
+                            'source': f'Valhalla ✅ ({num_segments}-Segment)',
+                            'routing_mode': routing_mode,
+                            'vehicle_type': vehicle_type,
+                            'hazard_avoidance_enabled': enable_hazard_avoidance
+                        }
 
-                    # ================================================================
-                    # HAZARD AVOIDANCE: Reorder routes by hazard penalty if enabled
-                    # ================================================================
-                    if enable_hazard_avoidance and hazards:
-                        # Sort routes by hazard penalty (ascending - fewer hazards first)
-                        routes_sorted = sorted(routes, key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)))
-                        print(f"[HAZARDS] Routes reordered by hazard penalty:")
-                        for idx, route in enumerate(routes_sorted):
-                            print(f"  Route {idx+1}: {route['name']} - Hazard penalty: {route.get('hazard_penalty_seconds', 0):.0f}s, Count: {route.get('hazard_count', 0)}")
-                        routes = routes_sorted
+                        # Cache the route
+                        route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance)
+                        print(f"[CACHE] STORED: Segmented route cached in memory")
 
-                    # ================================================================
-                    # PHASE 5: Record success in fallback chain optimizer
-                    # ================================================================
-                    fallback_optimizer.record_success('graphhopper', gh_elapsed)
+                        cost_calculator.cache_route_to_db(
+                            start_lat, start_lon, end_lat, end_lon,
+                            routing_mode, vehicle_type,
+                            routes[0],  # route_data
+                            f'Valhalla ({num_segments}-Segment)'  # source
+                        )
+                        print(f"[CACHE] STORED: Segmented route cached in database")
 
-                    # ================================================================
-                    # PHASE 3 OPTIMIZATION: Cache the successful route
-                    # ================================================================
-                    response_data = {
-                        'success': True,
-                        'routes': routes,
-                        'source': 'GraphHopper ✅',
-                        'distance': f'{routes[0]["distance_km"]:.2f} km',
-                        'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
-                        'geometry': routes[0]['geometry'],
-                        'fuel_cost': routes[0]['fuel_cost'],
-                        'toll_cost': routes[0]['toll_cost'],
-                        'caz_cost': routes[0]['caz_cost'],
-                        'response_time_ms': total_time,
-                        'cached': False,
-                        'start_lat': start_lat,
-                        'start_lon': start_lon,
-                        'end_lat': end_lat,
-                        'end_lon': end_lon
-                    }
+                        logger.info(f"[VALHALLA] Segmented routing complete: {hazard_count} hazards, {total_distance:.2f}km")
+                        print(f"[Valhalla] SEGMENTED SUCCESS: {num_segments} segments, {hazard_count} hazards")
 
-                    # DEBUG: Print response data before returning
-                    print(f"[DEBUG] GraphHopper response_data keys: {list(response_data.keys())}")
-                    print(f"[DEBUG] start_lat={response_data.get('start_lat')}, end_lat={response_data.get('end_lat')}")
+                        return jsonify(response_data)
 
-                    # Cache the route for future requests
-                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance)
-                    print(f"[CACHE] STORED: Route cached for future requests with hazard_avoidance={enable_hazard_avoidance}")
+                except Exception as e:
+                    logger.error(f"[VALHALLA] Segmented routing failed: {e}")
+                    import traceback
+                    logger.error(f"[VALHALLA] Traceback: {traceback.format_exc()}")
+                    use_segmented_routing = False
 
-                    return jsonify(response_data)
-                else:
-                    graphhopper_error = f"Unexpected response format: {route_data.keys()}"
-            else:
-                graphhopper_error = f"HTTP {response.status_code}"
-        except requests.exceptions.Timeout:
-            graphhopper_error = "Timeout (>10s)"
-            print(f"[GraphHopper] Timeout error: {graphhopper_error}")
-        except requests.exceptions.ConnectionError as e:
-            graphhopper_error = f"Connection error: {str(e)}"
-            print(f"[GraphHopper] Connection error: {graphhopper_error}")
-        except Exception as e:
-            graphhopper_error = str(e)
-            print(f"[GraphHopper] Exception: {graphhopper_error}")
-            print(f"[GraphHopper] Exception type: {type(e).__name__}")
-            print(f"[GraphHopper] Response type: {type(response) if 'response' in locals() else 'N/A'}")
-            if 'response' in locals():
-                print(f"[GraphHopper] Response status: {response.status_code if hasattr(response, 'status_code') else 'N/A'}")
-                print(f"[GraphHopper] Response text: {response.text if hasattr(response, 'text') else 'N/A'}")
-            import traceback
-            traceback.print_exc()
-
-        if graphhopper_error:
-            print(f"[GraphHopper] Failed: {graphhopper_error}")
-            # ================================================================
-            # PHASE 5: Record failure in fallback chain optimizer
-            # ================================================================
-            fallback_optimizer.record_failure('graphhopper')
-
-        # Try Valhalla as fallback
-        valhalla_start_time = time.time()
-        try:
-            url = f"{VALHALLA_URL}/route"
+            # Build request payload (standard 2-point routing)
             payload = {
                 "locations": [
                     {"lat": start_lat, "lon": start_lon},
@@ -5120,23 +5139,32 @@ def calculate_route():
                 "costing": "auto",
                 "alternatives": True  # Request alternative routes
             }
+
+            # Add exclude_locations if hazard avoidance is enabled
+            if exclude_locations:
+                payload["exclude_locations"] = exclude_locations
+                logger.debug(f"[VALHALLA] Added {len(exclude_locations)} exclude_locations to request")
+
             print(f"[Valhalla] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
             print(f"[Valhalla] URL: {url}")
-            print(f"[Valhalla] Payload: {payload}")
-            # Add headers for mobile compatibility
-            headers = {
-                'User-Agent': 'Voyagr-PWA/1.0',
-                'Content-Type': 'application/json',
-                'Accept': 'application/json'
-            }
+            print(f"[Valhalla] Hazard avoidance: {enable_hazard_avoidance}, Locations: {len(exclude_locations) if exclude_locations else 0}")
             response = requests.post(url, json=payload, timeout=10, headers=headers)
-            print(f"[Valhalla] Response status: {response.status_code}")
+            print(f"[Valhalla] Response status: {response.status_code}", flush=True)
             if response.status_code != 200:
-                print(f"[Valhalla] Response body: {response.text[:500]}")
+                print(f"[Valhalla] Response body: {response.text[:500]}", flush=True)
 
             if response.status_code == 200:
                 route_data = response.json()
-                print(f"[Valhalla] Response keys: {route_data.keys()}")
+                print(f"[Valhalla] Response keys: {route_data.keys()}", flush=True)
+
+                # DEBUG: Check for error in response
+                if 'error' in route_data:
+                    print(f"[Valhalla] ERROR in response: {route_data['error']}", flush=True)
+                    valhalla_error = f"Valhalla returned error: {route_data['error']}"
+                elif 'trip' not in route_data:
+                    print(f"[Valhalla] ERROR: No 'trip' key in response. Keys: {list(route_data.keys())}", flush=True)
+                    print(f"[Valhalla] Full response: {json.dumps(route_data, indent=2)[:1000]}", flush=True)
+                    valhalla_error = "Valhalla response missing 'trip' key"
 
                 if 'trip' in route_data and 'legs' in route_data['trip']:
                     # Extract all available routes
@@ -5172,14 +5200,14 @@ def calculate_route():
                     toll_cost = costs['toll_cost']
                     caz_cost = costs['caz_cost']
 
-                    # Score route by hazards if hazard avoidance is enabled
+                    # Score route by hazards (always score, regardless of avoidance setting)
                     hazard_penalty = 0
                     hazard_count = 0
                     hazards_list = []
-                    if enable_hazard_avoidance and hazards:
+                    if hazards:
                         hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
                         hazards_list = get_hazards_on_route(route_geometry, hazards)
-                        logger.debug(f"[HAZARDS] Valhalla main route: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
+                        logger.info(f"[HAZARDS] Valhalla main route: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
 
                     routes.append({
                         'id': 1,
@@ -5228,14 +5256,14 @@ def calculate_route():
                                 alt_toll_cost = alt_costs['toll_cost']
                                 alt_caz_cost = alt_costs['caz_cost']
 
-                                # Score alternative route by hazards if hazard avoidance is enabled
+                                # Score alternative route by hazards (always score, regardless of avoidance setting)
                                 alt_hazard_penalty = 0
                                 alt_hazard_count = 0
                                 alt_hazards_list = []
-                                if enable_hazard_avoidance and hazards:
+                                if hazards:
                                     alt_hazard_penalty, alt_hazard_count = score_route_by_hazards(alt_geometry, hazards)
                                     alt_hazards_list = get_hazards_on_route(alt_geometry, hazards)
-                                    logger.debug(f"[HAZARDS] Valhalla alt route {idx+1}: penalty={alt_hazard_penalty:.0f}s, count={alt_hazard_count}, hazards_list={len(alt_hazards_list)}")
+                                    logger.info(f"[HAZARDS] Valhalla alt route {idx+1}: penalty={alt_hazard_penalty:.0f}s, count={alt_hazard_count}, hazards_list={len(alt_hazards_list)}")
 
                                 route_names = ['Shortest', 'Balanced', 'Alternative']
                                 routes.append({
@@ -5328,174 +5356,316 @@ def calculate_route():
 
         if valhalla_error:
             print(f"[Valhalla] Failed: {valhalla_error}")
+
+            # ================================================================
+            # RETRY WITH FEWER EXCLUSIONS IF ROUTE NOT FOUND
+            # ================================================================
+            # If Valhalla failed because it couldn't find a route with all exclusions,
+            # retry with progressively fewer exclusions (some hazards may be unavoidable)
+            if enable_hazard_avoidance and exclude_locations and len(exclude_locations) > 10:
+                retry_limits = [50, 20, 10]  # Try with 50, then 20, then 10 exclusions
+                for retry_limit in retry_limits:
+                    if retry_limit >= len(exclude_locations):
+                        continue  # Skip if we already tried this many
+
+                    logger.warning(f"[VALHALLA] Retrying with {retry_limit} exclude_locations (reduced from {len(exclude_locations)})")
+                    print(f"[Valhalla] RETRY: Reducing exclusions to {retry_limit} locations")
+
+                    try:
+                        # Rebuild with fewer exclusions (prioritized by distance to route)
+                        retry_locations = build_valhalla_exclude_locations(
+                            hazards,
+                            route_bbox=route_bbox,
+                            max_hazards=retry_limit,
+                            start_lat=start_lat,
+                            start_lon=start_lon,
+                            end_lat=end_lat,
+                            end_lon=end_lon
+                        )
+
+                        # Build retry payload
+                        retry_payload = {
+                            "locations": [
+                                {"lat": start_lat, "lon": start_lon},
+                                {"lat": end_lat, "lon": end_lon}
+                            ],
+                            "costing": "auto",
+                            "alternatives": True,
+                            "exclude_locations": retry_locations
+                        }
+
+                        retry_response = requests.post(url, json=retry_payload, timeout=10, headers=headers)
+
+                        if retry_response.status_code == 200:
+                            retry_data = retry_response.json()
+                            if 'trip' in retry_data and 'legs' in retry_data['trip']:
+                                logger.info(f"[VALHALLA] RETRY SUCCESS with {retry_limit} exclusions!")
+                                print(f"[Valhalla] RETRY SUCCESS: Route found with {retry_limit} exclusions")
+
+                                # Process the retry response (same as initial success)
+                                routes = []
+
+                                # Extract main route data
+                                distance = retry_data['trip']['summary']['length']
+                                duration_seconds = retry_data['trip']['summary']['time']
+                                distance_km = distance  # Valhalla returns km
+                                time_minutes = duration_seconds / 60
+
+                                # Extract geometry
+                                route_geometry = None
+                                if 'legs' in retry_data['trip']:
+                                    for leg in retry_data['trip']['legs']:
+                                        if 'shape' in leg:
+                                            route_geometry = leg['shape']
+                                            break
+
+                                # Decode route geometry
+                                route_coords = decode_route_geometry(route_geometry)
+
+                                # Calculate costs
+                                costs = cost_calculator.calculate_costs(
+                                    distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                                    energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+                                    route_coords=route_coords
+                                )
+                                fuel_cost = costs['fuel_cost']
+                                toll_cost = costs['toll_cost']
+                                caz_cost = costs['caz_cost']
+
+                                # Score route by hazards
+                                hazard_penalty = 0
+                                hazard_count = 0
+                                hazards_list = []
+                                if hazards:
+                                    hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
+                                    hazards_list = get_hazards_on_route(route_geometry, hazards)
+                                    logger.info(f"[HAZARDS] Valhalla retry route: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
+
+                                routes.append({
+                                    'id': 1,
+                                    'name': 'Fastest',
+                                    'distance_km': round(distance_km, 2),
+                                    'duration_minutes': round(time_minutes, 0),
+                                    'fuel_cost': round(fuel_cost, 2),
+                                    'toll_cost': round(toll_cost, 2),
+                                    'caz_cost': round(caz_cost, 2),
+                                    'geometry': route_geometry,
+                                    'hazard_penalty_seconds': round(hazard_penalty, 0),
+                                    'hazard_count': hazard_count,
+                                    'hazards': hazards_list
+                                })
+
+                                print(f"[Valhalla] RETRY SUCCESS: {len(routes)} routes found")
+
+                                # Record success
+                                valhalla_elapsed = (time.time() - valhalla_start_time) * 1000
+                                fallback_optimizer.record_success('valhalla', valhalla_elapsed)
+
+                                # Build response
+                                response_data = {
+                                    'success': True,
+                                    'routes': routes,
+                                    'source': 'Valhalla ✅ (Retry)',
+                                    'distance': f'{routes[0]["distance_km"]:.2f} km',
+                                    'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
+                                    'geometry': routes[0]['geometry'],
+                                    'fuel_cost': routes[0]['fuel_cost'],
+                                    'toll_cost': routes[0]['toll_cost'],
+                                    'caz_cost': routes[0]['caz_cost'],
+                                    'cached': False,
+                                    'start_lat': start_lat,
+                                    'start_lon': start_lon,
+                                    'end_lat': end_lat,
+                                    'end_lon': end_lon
+                                }
+
+                                # Cache the route
+                                route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance)
+                                print(f"[CACHE] STORED: Retry route cached in memory")
+
+                                cost_calculator.cache_route_to_db(
+                                    start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                                    response_data, 'Valhalla'
+                                )
+                                print(f"[CACHE] STORED: Retry route cached in database")
+
+                                # Return the successful retry response
+                                return jsonify(response_data)
+                    except Exception as retry_e:
+                        logger.warning(f"[VALHALLA] Retry with {retry_limit} exclusions failed: {retry_e}")
+                        continue  # Try next retry limit
+
             # ================================================================
             # PHASE 5: Record failure in fallback chain optimizer
             # ================================================================
-            fallback_optimizer.record_failure('valhalla')
+            if valhalla_error:  # Only record if all retries failed
+                fallback_optimizer.record_failure('valhalla')
 
-        # Fallback to OSRM (public service)
-        logger.info(f"[OSRM] Trying fallback with ({start_lon},{start_lat}) to ({end_lon},{end_lat})")
-        osrm_url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}?alternatives=true&overview=full&steps=true"
-        try:
-            headers = {
-                'User-Agent': 'Voyagr-PWA/1.0',
-                'Accept': 'application/json'
-            }
-            logger.debug(f"[OSRM] URL: {osrm_url}")
-            osrm_start = time.time()
-            response = requests.get(osrm_url, timeout=15, headers=headers)
-            osrm_elapsed = (time.time() - osrm_start) * 1000
-            logger.info(f"[OSRM] Response status: {response.status_code}, elapsed: {osrm_elapsed:.0f}ms")
+        # Only fallback to OSRM if Valhalla failed (including all retries)
+        if not valhalla_error:
+            # Valhalla succeeded (either first attempt or retry) - skip OSRM fallback
+            logger.info(f"[ROUTING] Valhalla succeeded, skipping OSRM fallback")
+        else:
+            # Fallback to OSRM (public service)
+            logger.info(f"[OSRM] Trying fallback with ({start_lon},{start_lat}) to ({end_lon},{end_lat})")
+            osrm_url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}?alternatives=true&overview=full&steps=true"
+            try:
+                headers = {
+                    'User-Agent': 'Voyagr-PWA/1.0',
+                    'Accept': 'application/json'
+                }
+                logger.debug(f"[OSRM] URL: {osrm_url}")
+                osrm_start = time.time()
+                response = requests.get(osrm_url, timeout=15, headers=headers)
+                osrm_elapsed = (time.time() - osrm_start) * 1000
+                logger.info(f"[OSRM] Response status: {response.status_code}, elapsed: {osrm_elapsed:.0f}ms")
 
-            if response.status_code == 200:
-                route_data = response.json()
-                if route_data.get('code') == 'Ok' and 'routes' in route_data:
-                    routes = []
+                if response.status_code == 200:
+                    route_data = response.json()
+                    if route_data.get('code') == 'Ok' and 'routes' in route_data:
+                        routes = []
 
-                    # Process all available routes (up to 4)
-                    for idx, route in enumerate(route_data['routes'][:4]):
-                        distance = route.get('distance', 0)
-                        duration = route.get('duration', 0)
+                        # Process all available routes (up to 4)
+                        for idx, route in enumerate(route_data['routes'][:4]):
+                            distance = route.get('distance', 0)
+                            duration = route.get('duration', 0)
 
-                        distance_km = distance / 1000
-                        time_min = duration / 60
+                            distance_km = distance / 1000
+                            time_min = duration / 60
 
-                        # Extract route geometry from OSRM (polyline format)
-                        route_geometry = route.get('geometry', None)
+                            # Extract route geometry from OSRM (polyline format)
+                            route_geometry = route.get('geometry', None)
 
-                        # Decode route geometry to get coordinates for toll/CAZ detection
-                        route_coords = decode_route_geometry(route_geometry)
+                            # Decode route geometry to get coordinates for toll/CAZ detection
+                            route_coords = decode_route_geometry(route_geometry)
 
-                        # Calculate costs
-                        fuel_cost = 0
-                        toll_cost = 0
-                        caz_cost = 0
+                            # Calculate costs
+                            fuel_cost = 0
+                            toll_cost = 0
+                            caz_cost = 0
 
-                        if vehicle_type == 'electric':
-                            fuel_cost = (distance_km / 100) * energy_efficiency * electricity_price
-                        else:
-                            fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
+                            if vehicle_type == 'electric':
+                                fuel_cost = (distance_km / 100) * energy_efficiency * electricity_price
+                            else:
+                                fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
 
-                        if include_tolls:
-                            toll_cost = calculate_toll_cost(distance_km, 'motorway', route_coords=route_coords)
+                            if include_tolls:
+                                toll_cost = calculate_toll_cost(distance_km, 'motorway', route_coords=route_coords)
 
-                        if include_caz and not caz_exempt:
-                            caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt, route_coords=route_coords)
+                            if include_caz and not caz_exempt:
+                                caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt, route_coords=route_coords)
 
-                        # Determine route type
-                        if idx == 0:
-                            route_type = 'Fastest'
-                        elif idx == 1:
-                            route_type = 'Shortest'
-                        elif idx == 2:
-                            route_type = 'Balanced'
-                        else:
-                            route_type = f'Alternative {idx}'
+                            # Determine route type
+                            if idx == 0:
+                                route_type = 'Fastest'
+                            elif idx == 1:
+                                route_type = 'Shortest'
+                            elif idx == 2:
+                                route_type = 'Balanced'
+                            else:
+                                route_type = f'Alternative {idx}'
 
-                        # Score route by hazards if hazard avoidance is enabled
-                        hazard_penalty = 0
-                        hazard_count = 0
-                        hazards_list = []
+                            # Score route by hazards (always score, regardless of avoidance setting)
+                            hazard_penalty = 0
+                            hazard_count = 0
+                            hazards_list = []
+                            if hazards:
+                                hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
+                                hazards_list = get_hazards_on_route(route_geometry, hazards)
+                                logger.info(f"[HAZARDS] OSRM route {idx+1}: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
+
+                            routes.append({
+                                'id': idx + 1,
+                                'name': route_type,
+                                'distance_km': round(distance_km, 2),
+                                'duration_minutes': round(time_min, 0),
+                                'fuel_cost': round(fuel_cost, 2),
+                                'toll_cost': round(toll_cost, 2),
+                                'caz_cost': round(caz_cost, 2),
+                                'geometry': route_geometry,
+                                'hazard_penalty_seconds': round(hazard_penalty, 0),
+                                'hazard_count': hazard_count,
+                                'hazards': hazards_list
+                            })
+
+                        print(f"[OSRM] SUCCESS: {len(routes)} routes found")
+
+                        # ================================================================
+                        # HAZARD AVOIDANCE: Reorder routes by hazard penalty if enabled
+                        # ================================================================
                         if enable_hazard_avoidance and hazards:
-                            hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
-                            hazards_list = get_hazards_on_route(route_geometry, hazards)
-                            logger.debug(f"[HAZARDS] OSRM route {idx+1}: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
+                            # Sort routes by hazard penalty (ascending - fewer hazards first)
+                            routes_sorted = sorted(routes, key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)))
+                            print(f"[HAZARDS] Routes reordered by hazard penalty:")
+                            for idx, route in enumerate(routes_sorted):
+                                print(f"  Route {idx+1}: {route['name']} - Hazard penalty: {route.get('hazard_penalty_seconds', 0):.0f}s, Count: {route.get('hazard_count', 0)}")
+                            routes = routes_sorted
 
-                        routes.append({
-                            'id': idx + 1,
-                            'name': route_type,
-                            'distance_km': round(distance_km, 2),
-                            'duration_minutes': round(time_min, 0),
-                            'fuel_cost': round(fuel_cost, 2),
-                            'toll_cost': round(toll_cost, 2),
-                            'caz_cost': round(caz_cost, 2),
-                            'geometry': route_geometry,
-                            'hazard_penalty_seconds': round(hazard_penalty, 0),
-                            'hazard_count': hazard_count,
-                            'hazards': hazards_list
-                        })
+                        # ================================================================
+                        # PHASE 5: Record success in fallback chain optimizer
+                        # ================================================================
+                        osrm_elapsed = (time.time() - route_start_time) * 1000
+                        fallback_optimizer.record_success('osrm', osrm_elapsed)
 
-                    print(f"[OSRM] SUCCESS: {len(routes)} routes found")
+                        response_data = {
+                            'success': True,
+                            'routes': routes,
+                            'source': 'OSRM (Fallback)',
+                            'distance': f'{routes[0]["distance_km"]:.2f} km',
+                            'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
+                            'geometry': routes[0]['geometry'],
+                            'fuel_cost': routes[0]['fuel_cost'],
+                            'toll_cost': routes[0]['toll_cost'],
+                            'caz_cost': routes[0]['caz_cost'],
+                            'start_lat': start_lat,
+                            'start_lon': start_lon,
+                            'end_lat': end_lat,
+                            'end_lon': end_lon
+                        }
 
-                    # ================================================================
-                    # HAZARD AVOIDANCE: Reorder routes by hazard penalty if enabled
-                    # ================================================================
-                    if enable_hazard_avoidance and hazards:
-                        # Sort routes by hazard penalty (ascending - fewer hazards first)
-                        routes_sorted = sorted(routes, key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)))
-                        print(f"[HAZARDS] Routes reordered by hazard penalty:")
-                        for idx, route in enumerate(routes_sorted):
-                            print(f"  Route {idx+1}: {route['name']} - Hazard penalty: {route.get('hazard_penalty_seconds', 0):.0f}s, Count: {route.get('hazard_count', 0)}")
-                        routes = routes_sorted
+                        # ================================================================
+                        # PHASE 4: Persistent database caching for long-term storage
+                        # ================================================================
+                        cost_calculator.cache_route_to_db(
+                            start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                            response_data, 'OSRM'
+                        )
+                        print(f"[CACHE] STORED: Route cached in database")
 
-                    # ================================================================
-                    # PHASE 5: Record success in fallback chain optimizer
-                    # ================================================================
-                    osrm_elapsed = (time.time() - route_start_time) * 1000
-                    fallback_optimizer.record_success('osrm', osrm_elapsed)
-
-                    response_data = {
-                        'success': True,
-                        'routes': routes,
-                        'source': 'OSRM (Fallback)',
-                        'distance': f'{routes[0]["distance_km"]:.2f} km',
-                        'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
-                        'geometry': routes[0]['geometry'],
-                        'fuel_cost': routes[0]['fuel_cost'],
-                        'toll_cost': routes[0]['toll_cost'],
-                        'caz_cost': routes[0]['caz_cost'],
-                        'start_lat': start_lat,
-                        'start_lon': start_lon,
-                        'end_lat': end_lat,
-                        'end_lon': end_lon
-                    }
-
-                    # ================================================================
-                    # PHASE 4: Persistent database caching for long-term storage
-                    # ================================================================
-                    cost_calculator.cache_route_to_db(
-                        start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                        response_data, 'OSRM'
-                    )
-                    print(f"[CACHE] STORED: Route cached in database")
-
-                    return jsonify(response_data)
+                        return jsonify(response_data)
+                    else:
+                        print(f"[OSRM] Unexpected response: {route_data.get('code')}")
                 else:
-                    print(f"[OSRM] Unexpected response: {route_data.get('code')}")
-            else:
-                print(f"[OSRM] HTTP {response.status_code}")
-        except requests.exceptions.Timeout:
-            print(f"[OSRM] Timeout (>10s)")
-            fallback_optimizer.record_failure('osrm')
-        except requests.exceptions.ConnectionError as e:
-            print(f"[OSRM] Connection error: {str(e)}")
-            fallback_optimizer.record_failure('osrm')
-        except Exception as e:
-            print(f"[OSRM] Error: {str(e)}")
-            fallback_optimizer.record_failure('osrm')
+                    print(f"[OSRM] HTTP {response.status_code}")
+            except requests.exceptions.Timeout:
+                print(f"[OSRM] Timeout (>10s)")
+                fallback_optimizer.record_failure('osrm')
+            except requests.exceptions.ConnectionError as e:
+                print(f"[OSRM] Connection error: {str(e)}")
+                fallback_optimizer.record_failure('osrm')
+            except Exception as e:
+                print(f"[OSRM] Error: {str(e)}")
+                fallback_optimizer.record_failure('osrm')
 
-        # All routing engines failed - log summary
-        logger.error(f"\n[ROUTING SUMMARY]")
-        logger.error(f"  GraphHopper ({GRAPHHOPPER_URL}): {graphhopper_error}")
-        logger.error(f"  Valhalla ({VALHALLA_URL}): {valhalla_error}")
-        logger.error(f"  OSRM (fallback): Failed")
-        logger.error(f"[ROUTING] All routing engines failed for route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+            # All routing engines failed - log summary
+            logger.error(f"\n[ROUTING SUMMARY]")
+            logger.error(f"  Valhalla ({VALHALLA_URL}): {valhalla_error}")
+            logger.error(f"  OSRM (fallback): Failed")
+            logger.error(f"[ROUTING] All routing engines failed for route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
 
-        # Provide diagnostic information
-        diagnostic_info = {
-            'graphhopper_url': GRAPHHOPPER_URL,
-            'valhalla_url': VALHALLA_URL,
-            'osrm_url': 'http://router.project-osrm.org',
-            'graphhopper_error': str(graphhopper_error),
-            'valhalla_error': str(valhalla_error),
-            'deployment_hint': 'If on Railway.app, routing engines may be unreachable. Try /api/test-routing-engines for diagnostics.'
-        }
+            # Provide diagnostic information
+            diagnostic_info = {
+                'valhalla_url': VALHALLA_URL,
+                'osrm_url': 'http://router.project-osrm.org',
+                'valhalla_error': str(valhalla_error),
+                'deployment_hint': 'If on Railway.app, routing engines may be unreachable. Try /api/test-routing-engines for diagnostics.'
+            }
 
-        return jsonify({
-            'success': False,
-            'error': f'All routing engines failed. GraphHopper: {graphhopper_error}, Valhalla: {valhalla_error}. Please check your internet connection or try again later.',
-            'diagnostic': diagnostic_info
-        })
+            return jsonify({
+                'success': False,
+                'error': f'All routing engines failed. Valhalla: {valhalla_error}. Please check your internet connection or try again later.',
+                'diagnostic': diagnostic_info
+            })
 
     except Exception as e:
         print(f"[Error] {str(e)}")
@@ -5523,7 +5693,6 @@ def calculate_multi_stop_route():
 
         # Parse and validate all waypoints
         coords = []
-        coords_gh = []  # For GraphHopper format
         for i, wp in enumerate(waypoints):
             wp_coords = validate_coordinates(wp)
             if not wp_coords:
@@ -5531,36 +5700,8 @@ def calculate_multi_stop_route():
 
             lat, lon = wp_coords
             coords.append({'lat': lat, 'lon': lon})
-            coords_gh.append({'lat': lat, 'lng': lon})
 
-        # Try GraphHopper first
-        try:
-            url = f"{GRAPHHOPPER_URL}/route"
-            params = {
-                "point": [f"{c['lat']},{c['lng']}" for c in coords_gh],
-                "profile": "car",
-                "locale": "en"
-            }
-            response = requests.get(url, params=params, timeout=15)
-
-            if response.status_code == 200:
-                route_data = response.json()
-                if 'paths' in route_data and len(route_data['paths']) > 0:
-                    path = route_data['paths'][0]
-                    distance = path.get('distance', 0) / 1000
-                    duration_minutes = path.get('time', 0) / 60000
-
-                    return jsonify({
-                        'success': True,
-                        'distance': f'{distance:.2f} km',
-                        'time': f'{duration_minutes:.0f} minutes',
-                        'waypoints': len(waypoints),
-                        'source': 'GraphHopper ✅'
-                    })
-        except:
-            pass
-
-        # Try Valhalla as fallback
+        # Try Valhalla (PRIMARY)
         try:
             url = f"{VALHALLA_URL}/route"
             payload = {
@@ -5581,7 +5722,7 @@ def calculate_multi_stop_route():
                         'distance': f'{distance:.2f} km',
                         'time': f'{duration_minutes:.0f} minutes',
                         'waypoints': len(waypoints),
-                        'source': 'Valhalla'
+                        'source': 'Valhalla ✅'
                     })
         except:
             pass
@@ -6702,7 +6843,7 @@ def manual_health_check():
             return jsonify({'success': False, 'error': 'Monitoring not available'})
 
         results = {}
-        for engine_name in ['graphhopper', 'valhalla', 'osrm']:
+        for engine_name in ['valhalla', 'osrm']:
             status, response_time, error = monitor.check_engine_health(engine_name)
             monitor.record_health_check(engine_name, status, response_time, error)
             results[engine_name] = {
@@ -6798,6 +6939,19 @@ def resolve_all_engine_alerts(engine_name: str):
 
         monitor.resolve_all_alerts_for_engine(engine_name)
         return jsonify({'success': True, 'message': f'All alerts for {engine_name} resolved'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/monitoring/alerts/resolve-all', methods=['POST'])
+def resolve_all_alerts():
+    """Resolve ALL unresolved alerts (all engines)."""
+    try:
+        monitor = get_monitor()
+        if not monitor:
+            return jsonify({'success': False, 'error': 'Monitoring not available'})
+
+        affected = monitor.resolve_all_alerts()
+        return jsonify({'success': True, 'message': f'Resolved {affected} alerts', 'count': affected})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
@@ -7147,19 +7301,6 @@ def fallback_chain_status():
     try:
         status = {}
 
-        # Check GraphHopper
-        try:
-            start = time.time()
-            response = requests.get(f"{GRAPHHOPPER_URL}/info", timeout=5)
-            elapsed = (time.time() - start) * 1000
-            status['graphhopper'] = {
-                'available': response.status_code == 200,
-                'response_time_ms': round(elapsed, 0),
-                'url': GRAPHHOPPER_URL
-            }
-        except:
-            status['graphhopper'] = {'available': False, 'response_time_ms': None, 'url': GRAPHHOPPER_URL}
-
         # Check Valhalla
         try:
             start = time.time()
@@ -7188,8 +7329,6 @@ def fallback_chain_status():
 
         # Determine fallback chain
         fallback_chain = []
-        if status['graphhopper']['available']:
-            fallback_chain.append('GraphHopper')
         if status['valhalla']['available']:
             fallback_chain.append('Valhalla')
         if status['osrm']['available']:
@@ -7200,7 +7339,7 @@ def fallback_chain_status():
             'status': status,
             'fallback_chain': fallback_chain,
             'primary_engine': fallback_chain[0] if fallback_chain else None,
-            'all_engines_available': len(fallback_chain) == 3
+            'all_engines_available': len(fallback_chain) == 2
         })
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -7225,7 +7364,7 @@ def routing_performance_report():
             'summary': {}
         }
 
-        engine_stats = {'graphhopper': [], 'valhalla': [], 'osrm': []}
+        engine_stats = {'valhalla': [], 'osrm': []}
 
         for route in test_routes:
             start = route['start']
@@ -7543,7 +7682,7 @@ if __name__ == '__main__':
         init_custom_router()
         print("[STARTUP] ✅ Custom router initialization complete")
     else:
-        print("\n[STARTUP] Custom router disabled - using fallback chain (GraphHopper/Valhalla/OSRM)")
+        print("\n[STARTUP] Custom router disabled - using routing engines (Valhalla/OSRM)")
 
     # Initialize and start monitoring
     if get_monitor:

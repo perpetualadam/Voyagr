@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Routing Engine Health Monitoring System for Voyagr PWA
-Monitors GraphHopper, Valhalla, and OSRM routing engines
+Monitors Valhalla and OSRM routing engines
 Tracks health status, alerts, and OCI costs
 """
 
@@ -34,11 +34,6 @@ if sys.platform == 'win32':
 
 # Routing engine URLs
 ENGINES = {
-    'graphhopper': {
-        'url': os.getenv('GRAPHHOPPER_URL', 'http://81.0.246.97:8989'),
-        'health_endpoint': '/info',
-        'timeout': 5
-    },
     'valhalla': {
         'url': os.getenv('VALHALLA_URL', 'http://141.147.102.102:8002'),
         'health_endpoint': '/status',
@@ -457,6 +452,23 @@ class RoutingMonitor:
         conn.commit()
         conn.close()
         logger.info(f"All alerts for {engine_name} marked as resolved")
+
+    def resolve_all_alerts(self) -> int:
+        """Resolve ALL unresolved alerts (all engines)."""
+        conn = sqlite3.connect(self.db_file)
+        cursor = conn.cursor()
+
+        cursor.execute('''
+            UPDATE routing_alerts
+            SET is_resolved = 1, resolved_at = ?
+            WHERE is_resolved = 0
+        ''', (datetime.now(),))
+
+        affected = cursor.rowcount
+        conn.commit()
+        conn.close()
+        logger.info(f"All {affected} unresolved alerts marked as resolved")
+        return affected
 
     def get_alert_summary(self) -> Dict:
         """Get summary of all alerts."""
