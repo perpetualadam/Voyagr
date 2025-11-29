@@ -3586,7 +3586,7 @@ function setRoutingMode(mode) {
  */
 function updateUserMarkerIcon() {
     // Determine which icon to use
-    let iconEmoji = vehicleIcons[currentRoutingMode] || vehicleIcons[currentVehicleType] || '🚗';
+    let iconPath = vehicleIcons[currentRoutingMode] || vehicleIcons[currentVehicleType] || vehicleIcons['petrol_diesel'];
 
     // Update the marker if it exists
     if (currentUserMarker) {
@@ -3594,8 +3594,8 @@ function updateUserMarkerIcon() {
         currentUserMarker = null;
     }
 
-    currentUserMarkerIcon = iconEmoji;
-    console.log('[Marker] Icon updated to:', iconEmoji);
+    currentUserMarkerIcon = iconPath;
+    console.log('[Marker] Icon updated to:', iconPath);
 }
 /**
  * createVehicleMarker function
@@ -3608,30 +3608,36 @@ function updateUserMarkerIcon() {
  * @returns {*} Return value description
  */
 function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
-    // Create a custom marker with vehicle icon
-    const iconEmoji = vehicleIcons[currentRoutingMode] || vehicleIcons[currentVehicleType] || '🚗';
+    // Get the custom SVG icon path
+    const iconPath = vehicleIcons[currentRoutingMode] || vehicleIcons[currentVehicleType] || vehicleIcons['petrol_diesel'];
+    const iconEmoji = vehicleIconEmojis[currentRoutingMode] || vehicleIconEmojis[currentVehicleType] || '🚗';
 
-    // Create a div element for the marker with ENHANCED styling
+    // Create a div element for the marker with custom SVG icon
     const markerDiv = document.createElement('div');
-    markerDiv.style.fontSize = '32px';
-    markerDiv.style.textAlign = 'center';
     markerDiv.style.width = '50px';
     markerDiv.style.height = '50px';
     markerDiv.style.display = 'flex';
     markerDiv.style.alignItems = 'center';
     markerDiv.style.justifyContent = 'center';
-    markerDiv.style.borderRadius = '50%';
-    markerDiv.style.backgroundColor = 'white';
+    markerDiv.style.position = 'relative';
 
-    // Enhanced shadow with glow effect
-    markerDiv.style.boxShadow = '0 0 0 4px rgba(102, 126, 234, 0.3), 0 6px 16px rgba(0, 0, 0, 0.4), inset 0 1px 2px rgba(255, 255, 255, 0.8)';
-    markerDiv.style.border = '3px solid #667eea';
-    markerDiv.style.transform = `rotate(${heading}deg) scale(1)`;
-    markerDiv.style.transition = 'transform 0.2s ease-out, box-shadow 0.3s ease-out';
-    markerDiv.style.filter = 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.2))';
-    markerDiv.innerHTML = iconEmoji;
+    // Apply rotation to the entire marker based on heading
+    markerDiv.style.transform = `rotate(${heading}deg)`;
+    markerDiv.style.transition = 'transform 0.3s ease-out';
 
-    // Create custom icon with improved styling
+    // Add drop shadow for better visibility
+    markerDiv.style.filter = 'drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4))';
+
+    // Create the SVG image element
+    const imgElement = document.createElement('img');
+    imgElement.src = iconPath;
+    imgElement.style.width = '100%';
+    imgElement.style.height = '100%';
+    imgElement.style.objectFit = 'contain';
+
+    markerDiv.appendChild(imgElement);
+
+    // Create custom icon with the rotated SVG
     const customIcon = L.divIcon({
         html: markerDiv.outerHTML,
         iconSize: [50, 50],
@@ -4429,8 +4435,19 @@ let currentVehicleType = 'petrol_diesel';
 let currentRoutingMode = 'auto';
 let currentUserMarkerIcon = null;
 
-// Vehicle icon mapping
+// Vehicle icon mapping - now using custom SVG icons
 const vehicleIcons = {
+    'petrol_diesel': '/static/images/vehicles/car-aerial.svg',
+    'electric': '/static/images/vehicles/electric-aerial.svg',
+    'motorcycle': '/static/images/vehicles/motorcycle-aerial.svg',
+    'truck': '/static/images/vehicles/truck-aerial.svg',
+    'van': '/static/images/vehicles/van-aerial.svg',
+    'bicycle': '/static/images/vehicles/bicycle-aerial.svg',
+    'pedestrian': '/static/images/vehicles/pedestrian-aerial.svg'
+};
+
+// Vehicle icon emoji mapping (for display purposes only)
+const vehicleIconEmojis = {
     'petrol_diesel': '🚗',
     'electric': '⚡',
     'motorcycle': '🏍️',
@@ -4925,12 +4942,22 @@ function startGPSTracking() {
                 accuracy: accuracy
             });
 
-            // Update user marker on map with vehicle icon
+            // Calculate heading from tracking history
+            let heading = 0;
+            if (trackingHistory.length > 1) {
+                const prev = trackingHistory[trackingHistory.length - 2];
+                const curr = trackingHistory[trackingHistory.length - 1];
+                const dLon = curr.lon - prev.lon;
+                const dLat = curr.lat - prev.lat;
+                heading = (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360;
+            }
+
+            // Update user marker on map with vehicle icon and heading
             if (currentUserMarker) {
                 map.removeLayer(currentUserMarker);
             }
 
-            currentUserMarker = createVehicleMarker(lat, lon, speed, accuracy);
+            currentUserMarker = createVehicleMarker(lat, lon, speed, accuracy, heading);
             currentUserMarker.addTo(map);
 
             // ===== ZOOM AND FOLLOW: Center map on user with smart zoom =====
@@ -4994,15 +5021,7 @@ function startGPSTracking() {
             // Convert speed from m/s to mph (already done above)
             const speedMphFormatted = speedMph.toFixed(1);
 
-            // Determine heading from tracking history
-            let heading = 0;
-            if (trackingHistory.length > 1) {
-                const prev = trackingHistory[trackingHistory.length - 2];
-                const curr = trackingHistory[trackingHistory.length - 1];
-                const dLon = curr.lon - prev.lon;
-                const dLat = curr.lat - prev.lat;
-                heading = (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360;
-            }
+            // Heading already calculated above when creating vehicle marker
 
             // Update lane guidance if navigating
             if (routeInProgress && currentRouteSteps.length > 0) {

@@ -1,0 +1,33 @@
+<svg width="50" height="50" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+  <!-- Electric car body (aerial view) -->
+  <g transform="translate(25, 25)">
+    <!-- Main car body (sleeker design for electric) -->
+    <rect x="-10" y="-15" width="20" height="30" rx="4" fill="#10B981" stroke="#059669" stroke-width="1.5"/>
+    
+    <!-- Windshield (front) -->
+    <rect x="-8" y="-13" width="16" height="6" rx="1" fill="#34D399" opacity="0.7"/>
+    
+    <!-- Rear window -->
+    <rect x="-8" y="7" width="16" height="6" rx="1" fill="#34D399" opacity="0.7"/>
+    
+    <!-- Side mirrors -->
+    <rect x="-12" y="-5" width="2" height="4" rx="1" fill="#059669"/>
+    <rect x="10" y="-5" width="2" height="4" rx="1" fill="#059669"/>
+    
+    <!-- Wheels -->
+    <rect x="-12" y="-10" width="3" height="6" rx="1" fill="#1F2937"/>
+    <rect x="9" y="-10" width="3" height="6" rx="1" fill="#1F2937"/>
+    <rect x="-12" y="4" width="3" height="6" rx="1" fill="#1F2937"/>
+    <rect x="9" y="4" width="3" height="6" rx="1" fill="#1F2937"/>
+    
+    <!-- Electric bolt symbol on roof -->
+    <path d="M 2,-3 L -2,0 L 1,0 L -3,5 L 1,2 L -1,2 Z" fill="#FCD34D" stroke="#F59E0B" stroke-width="0.5"/>
+    
+    <!-- Directional triangle (pointing forward/up) -->
+    <path d="M 0,-20 L -6,-12 L 6,-12 Z" fill="#FBBF24" stroke="#D97706" stroke-width="1.5"/>
+    
+    <!-- Highlight on car body -->
+    <rect x="-8" y="-12" width="4" height="8" rx="1" fill="#FFFFFF" opacity="0.3"/>
+  </g>
+</svg>
+

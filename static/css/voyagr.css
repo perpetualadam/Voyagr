@@ -1244,13 +1244,25 @@ h1 {
     color: white;
 }
 
-/* Vehicle Marker Icon */
+/* Vehicle Marker Icon - Custom SVG with directional indicator */
 .vehicle-marker-icon {
-    width: 40px;
-    height: 40px;
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
+    width: 50px !important;
+    height: 50px !important;
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+}
+
+.vehicle-marker-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+}
+
+/* Ensure smooth rotation transitions */
+.vehicle-marker-icon > div {
+    transition: transform 0.3s ease-out !important;
 }
 
 /* ===== DARK MODE STYLES ===== */

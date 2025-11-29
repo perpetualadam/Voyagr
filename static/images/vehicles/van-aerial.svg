@@ -1,0 +1,33 @@
+<svg width="50" height="50" viewBox="0 0 50 50" xmlns="http://www.w3.org/2000/svg">
+  <!-- Van (aerial view) -->
+  <g transform="translate(25, 25)">
+    <!-- Main van body (taller/longer than car) -->
+    <rect x="-10" y="-16" width="20" height="32" rx="3" fill="#F59E0B" stroke="#D97706" stroke-width="1.5"/>
+    
+    <!-- Windshield (front) -->
+    <rect x="-8" y="-14" width="16" height="5" rx="1" fill="#FCD34D" opacity="0.7"/>
+    
+    <!-- Rear windows -->
+    <rect x="-8" y="9" width="16" height="5" rx="1" fill="#FCD34D" opacity="0.7"/>
+    
+    <!-- Side mirrors -->
+    <rect x="-12" y="-8" width="2" height="4" rx="1" fill="#D97706"/>
+    <rect x="10" y="-8" width="2" height="4" rx="1" fill="#D97706"/>
+    
+    <!-- Wheels -->
+    <rect x="-12" y="-11" width="3" height="6" rx="1" fill="#1F2937"/>
+    <rect x="9" y="-11" width="3" height="6" rx="1" fill="#1F2937"/>
+    <rect x="-12" y="5" width="3" height="6" rx="1" fill="#1F2937"/>
+    <rect x="9" y="5" width="3" height="6" rx="1" fill="#1F2937"/>
+    
+    <!-- Cargo area indicator -->
+    <rect x="-7" y="0" width="14" height="8" rx="1" fill="#FFFFFF" opacity="0.2"/>
+    
+    <!-- Directional triangle (pointing forward/up) -->
+    <path d="M 0,-21 L -6,-13 L 6,-13 Z" fill="#3B82F6" stroke="#1E40AF" stroke-width="1.5"/>
+    
+    <!-- Highlight on van body -->
+    <rect x="-8" y="-13" width="4" height="7" rx="1" fill="#FFFFFF" opacity="0.3"/>
+  </g>
+</svg>
+
