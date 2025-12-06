@@ -1840,37 +1840,56 @@ function setupMapClickHandler() {
     });
 }
 
-// Decode polyline (for OSRM format)
+// Decode polyline (supports both precision 5 and precision 6)
 /**
  * decodePolyline function
  * @function decodePolyline
- * @param {*} encoded - Parameter description
- * @returns {*} Return value description
+ * @param {*} encoded - Encoded polyline string
+ * @param {*} precision - Precision level (5 for OSRM/GraphHopper, 6 for Valhalla). Default: 6
+ * @returns {*} Array of [lat, lon] coordinates
  */
-function decodePolyline(encoded) {
-    if (!encoded) return [];
-    const inv = 1.0 / 1e5;
+function decodePolyline(encoded, precision = 6) {
+    if (!encoded || typeof encoded !== 'string') {
+        console.warn('[decodePolyline] Invalid input:', encoded);
+        return [];
+    }
+
+    // Valhalla uses precision 6 (1e6), OSRM/GraphHopper use precision 5 (1e5)
+    const inv = 1.0 / Math.pow(10, precision);
     const decoded = [];
     let previous = [0, 0];
     let i = 0;
 
-    while (i < encoded.length) {
-        let ll = [0, 0];
-        for (let j = 0; j < 2; j++) {
-            let shift = 0;
-            let result = 0;
-            let byte = 0;
-            do {
-                byte = encoded.charCodeAt(i++) - 63;
-                result |= (byte & 0x1f) << shift;
-                shift += 5;
-            } while (byte >= 0x20);
-            ll[j] = previous[j] + (result & 1 ? ~(result >> 1) : result >> 1);
-            previous[j] = ll[j];
+    try {
+        while (i < encoded.length) {
+            let ll = [0, 0];
+            for (let j = 0; j < 2; j++) {
+                let shift = 0;
+                let result = 0;
+                let byte = 0;
+                do {
+                    byte = encoded.charCodeAt(i++) - 63;
+                    result |= (byte & 0x1f) << shift;
+                    shift += 5;
+                } while (byte >= 0x20);
+                ll[j] = previous[j] + (result & 1 ? ~(result >> 1) : result >> 1);
+                previous[j] = ll[j];
+            }
+            // Polyline format is [lat, lon], which is what Leaflet expects
+            decoded.push([ll[0] * inv, ll[1] * inv]);
         }
-        decoded.push([ll[0] * inv, ll[1] * inv]);
+
+        console.log(`[decodePolyline] Decoded ${decoded.length} points with precision ${precision}`);
+        if (decoded.length > 0) {
+            console.log(`[decodePolyline] First point: [${decoded[0][0]}, ${decoded[0][1]}]`);
+            console.log(`[decodePolyline] Last point: [${decoded[decoded.length-1][0]}, ${decoded[decoded.length-1][1]}]`);
+        }
+
+        return decoded;
+    } catch (error) {
+        console.error('[decodePolyline] Error decoding polyline:', error);
+        return [];
     }
-    return decoded;
 }
 /**
  * showStatus function
@@ -1942,6 +1961,16 @@ async function calculateRoute() {
     })
     .then(response => response.json())
     .then(data => {
+        console.log('[Route API] Response received:', {
+            success: data.success,
+            source: data.source,
+            hasGeometry: !!data.geometry,
+            geometryLength: data.geometry ? data.geometry.length : 0,
+            distance: data.distance,
+            time: data.time,
+            routesCount: data.routes ? data.routes.length : 0
+        });
+
         if (data.success) {
             // Parse coordinates
             try {
@@ -1991,11 +2020,26 @@ async function calculateRoute() {
                 // If we have geometry from the routing service, use it
                 if (data.geometry) {
                     try {
-                        // Decode polyline geometry
-                        routePath = decodePolyline(data.geometry);
+                        // Decode polyline geometry (Valhalla uses precision 6)
+                        routePath = decodePolyline(data.geometry, 6);
                         console.log('Route path decoded:', routePath.length, 'points');
+
+                        // Validate decoded coordinates
+                        if (routePath.length === 0) {
+                            console.error('[Route] Decoded polyline is empty, using straight line');
+                            routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
+                        } else {
+                            // Check if coordinates are valid (not [0,0] or NaN)
+                            const firstPoint = routePath[0];
+                            if (!firstPoint || isNaN(firstPoint[0]) || isNaN(firstPoint[1]) ||
+                                (firstPoint[0] === 0 && firstPoint[1] === 0)) {
+                                console.error('[Route] Invalid decoded coordinates, using straight line');
+                                routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
+                            }
+                        }
                     } catch (e) {
-                        console.log('Could not decode geometry, using straight line:', e);
+                        console.error('Could not decode geometry, using straight line:', e);
+                        routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
                     }
                 }
 
@@ -2058,7 +2102,7 @@ async function calculateRoute() {
                         fuel_cost: route.fuel_cost,
                         toll_cost: route.toll_cost,
                         caz_cost: route.caz_cost,
-                        polyline: decodePolyline(route.geometry || ''),
+                        polyline: decodePolyline(route.geometry || '', 6),  // Valhalla precision 6
                         geometry: route.geometry,
                         hazards: route.hazards || []
                     }));
@@ -5455,8 +5499,8 @@ async function triggerAutomaticReroute(currentLat, currentLon) {
                 map.removeLayer(routeLayer);
             }
 
-            // Decode new route geometry
-            routePolyline = decodePolyline(newRoute.geometry);
+            // Decode new route geometry (Valhalla precision 6)
+            routePolyline = decodePolyline(newRoute.geometry, 6);
             console.log(`[Rerouting] Route polyline decoded: ${routePolyline.length} points`);
 
             // Draw new route on map
@@ -6486,13 +6530,21 @@ function startTurnByTurnNavigation(routeData) {
     currentStepIndex = 0;
     currentRouteSteps = routeData.maneuvers || [];  // Store maneuvers from Valhalla
 
-    // Decode route geometry
+    // Decode route geometry (Valhalla precision 6)
     try {
-        routePolyline = decodePolyline(routeData.geometry);
+        routePolyline = decodePolyline(routeData.geometry, 6);
         console.log('Route polyline decoded:', routePolyline.length, 'points');
         console.log('Route maneuvers:', currentRouteSteps.length, 'steps');
+
+        // Validate decoded polyline
+        if (!routePolyline || routePolyline.length === 0) {
+            console.error('[Navigation] Failed to decode route geometry - polyline is empty');
+            showStatus('Error: Invalid route geometry', 'error');
+            return;
+        }
     } catch (e) {
-        console.log('Could not decode geometry:', e);
+        console.error('Could not decode geometry:', e);
+        showStatus('Error: Could not decode route geometry', 'error');
         return;
     }
 
