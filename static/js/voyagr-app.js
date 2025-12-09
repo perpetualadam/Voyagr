@@ -994,6 +994,60 @@ async function deleteTripHistory(tripId) {
 // ===== ROUTE COMPARISON FUNCTIONS =====
 let routeOptions = [];
 let selectedRouteIndex = 0;
+let allRouteLayers = []; // Store all route polylines for multi-route display
+
+// Route colors for multi-route display
+const ROUTE_COLORS = ['#667eea', '#e53935', '#43a047', '#fb8c00', '#8e24aa'];
+
+/**
+ * Display all routes on map with different colors
+ * @function displayAllRoutesOnMap
+ * @returns {void}
+ */
+function displayAllRoutesOnMap() {
+    // Clear previous route layers
+    allRouteLayers.forEach(layer => {
+        if (layer && map.hasLayer(layer)) {
+            map.removeLayer(layer);
+        }
+    });
+    allRouteLayers = [];
+
+    if (!routeOptions || routeOptions.length === 0) return;
+
+    // Draw all routes (in reverse order so first route is on top)
+    for (let i = routeOptions.length - 1; i >= 0; i--) {
+        const route = routeOptions[i];
+        const polylinePoints = route.polyline || [];
+
+        if (polylinePoints.length > 0) {
+            const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
+            const weight = (i === selectedRouteIndex) ? 6 : 4;
+            const opacity = (i === selectedRouteIndex) ? 0.9 : 0.6;
+
+            const layer = L.polyline(polylinePoints, {
+                color: color,
+                weight: weight,
+                opacity: opacity
+            }).addTo(map);
+
+            // Add popup with route info
+            const routeName = route.name || `Route ${i + 1}`;
+            const hazardCount = route.hazard_count || 0;
+            layer.bindPopup(`<b>${routeName}</b><br>📷 ${hazardCount} cameras<br>⏱️ ${route.duration_minutes} min`);
+
+            allRouteLayers.unshift(layer); // Add to front so indices match
+        }
+    }
+
+    // Fit map to show all routes
+    if (allRouteLayers.length > 0) {
+        const allBounds = L.featureGroup(allRouteLayers).getBounds();
+        map.fitBounds(allBounds.pad(0.1));
+    }
+
+    console.log(`[Routes] Displayed ${allRouteLayers.length} routes on map`);
+}
 
 /**
  * displayRouteComparison function - Shows distinct route types with hazard counts
@@ -1006,6 +1060,9 @@ function displayRouteComparison() {
         return;
     }
 
+    // Display all routes on map with different colors
+    displayAllRoutesOnMap();
+
     const listContainer = document.getElementById('routeComparisonList');
     const symbol = getCurrencySymbol();
 
@@ -1014,6 +1071,7 @@ function displayRouteComparison() {
         const distUnit = getDistanceUnit();
         const routeName = route.name || `Route ${index + 1}`;
         const hazardCount = route.hazard_count || 0;
+        const routeColor = ROUTE_COLORS[index % ROUTE_COLORS.length];
 
         // Adjust costs for imperial units if needed
         const fuelCost = parseFloat(route.fuel_cost || 0);
@@ -1025,16 +1083,19 @@ function displayRouteComparison() {
         const totalCost = (adjustedFuelCost + adjustedTollCost + adjustedCazCost).toFixed(2);
 
         const isSelected = index === selectedRouteIndex;
-        const borderColor = isSelected ? '#4CAF50' : '#ddd';
+        const borderColor = isSelected ? routeColor : '#ddd';
         const bgColor = isSelected ? '#E8F5E9' : '#f8f9fa';
 
         // Hazard badge color based on count
         const hazardColor = hazardCount === 0 ? '#4CAF50' : (hazardCount <= 2 ? '#FF9800' : '#F44336');
 
         return `
-            <div style="background: ${bgColor}; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${borderColor}; cursor: pointer;" onclick="selectRoute(${index})">
+            <div style="background: ${bgColor}; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${routeColor}; cursor: pointer;" onclick="selectRoute(${index})">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <div style="font-size: 14px; font-weight: 600; color: #333;">${routeName}</div>
+                    <div style="font-size: 14px; font-weight: 600; color: #333;">
+                        <span style="display: inline-block; width: 12px; height: 12px; background: ${routeColor}; border-radius: 50%; margin-right: 6px;"></span>
+                        ${routeName}
+                    </div>
                     <div style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: ${hazardColor}; color: white;">📷 ${hazardCount} cameras</div>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #333; margin-bottom: 8px;">
@@ -1046,7 +1107,7 @@ function displayRouteComparison() {
                 <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
                     Total: <strong>${symbol}${totalCost}</strong>
                 </div>
-                <button onclick="useRoute(${index}); event.stopPropagation();" style="width: 100%; background: #667eea; color: white; border: none; border-radius: 4px; padding: 8px; font-size: 12px; cursor: pointer; font-weight: 500;">Use This Route</button>
+                <button onclick="useRoute(${index}); event.stopPropagation();" style="width: 100%; background: ${routeColor}; color: white; border: none; border-radius: 4px; padding: 8px; font-size: 12px; cursor: pointer; font-weight: 500;">Use This Route</button>
             </div>
         `;
     }).join('');

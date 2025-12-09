@@ -5051,6 +5051,100 @@ def calculate_route():
                         except Exception as e:
                             logger.warning(f"[VALHALLA] Eco route failed: {e}")
 
+                        # Route 4: Via Town Center - Force route through nearest major town center
+                        # This creates a truly different route by adding a via-point offset from the direct line
+                        try:
+                            # Calculate midpoint and offset perpendicular to route to find town center
+                            mid_lat = (start_lat + end_lat) / 2
+                            mid_lon = (start_lon + end_lon) / 2
+
+                            # Calculate perpendicular offset (0.05 degrees ≈ 5km offset toward town centers)
+                            # Use bearing perpendicular to route direction
+                            delta_lat = end_lat - start_lat
+                            delta_lon = end_lon - start_lon
+
+                            # Perpendicular offset (rotate 90 degrees) - try both directions
+                            offset = 0.05  # ~5km offset
+                            via_lat1 = mid_lat + delta_lon * offset / max(abs(delta_lon), 0.001)
+                            via_lon1 = mid_lon - delta_lat * offset / max(abs(delta_lat), 0.001)
+
+                            via_lat2 = mid_lat - delta_lon * offset / max(abs(delta_lon), 0.001)
+                            via_lon2 = mid_lon + delta_lat * offset / max(abs(delta_lat), 0.001)
+
+                            # Try first offset direction
+                            via_payload1 = {
+                                "locations": [
+                                    {"lat": start_lat, "lon": start_lon},
+                                    {"lat": via_lat1, "lon": via_lon1},
+                                    {"lat": end_lat, "lon": end_lon}
+                                ],
+                                "costing": "auto"
+                            }
+                            if alt_exclude:
+                                via_payload1["exclude_locations"] = alt_exclude
+
+                            logger.info(f"[VALHALLA] Requesting Via-Town route through ({via_lat1:.4f},{via_lon1:.4f})")
+                            via_response = requests.post(url, json=via_payload1, timeout=10, headers=headers)
+
+                            if via_response.status_code == 200:
+                                via_data = via_response.json()
+                                if 'trip' in via_data and 'legs' in via_data['trip']:
+                                    # Combine geometry from all legs
+                                    all_shapes = []
+                                    total_dist = 0
+                                    total_time = 0
+                                    for leg in via_data['trip']['legs']:
+                                        all_shapes.append(leg['shape'])
+                                        total_dist += via_data['trip']['summary']['length']
+                                        total_time += via_data['trip']['summary']['time']
+
+                                    # Use first leg's geometry (main route)
+                                    via_geom = via_data['trip']['legs'][0]['shape']
+                                    # Concatenate all leg geometries
+                                    combined_coords = []
+                                    for shape in all_shapes:
+                                        coords = polyline.decode(shape, precision=6)
+                                        combined_coords.extend(coords)
+                                    # Re-encode combined route
+                                    combined_geom = polyline.encode(combined_coords, precision=6)
+
+                                    via_dist = via_data['trip']['summary']['length']
+                                    via_time = via_data['trip']['summary']['time']
+                                    alternative_routes.append(build_route_entry('🏘️ Via Town Center', combined_geom, via_dist, via_time))
+                                    logger.info(f"[VALHALLA] Via-Town: {via_dist:.1f}km")
+                            else:
+                                # Try second offset direction
+                                via_payload2 = {
+                                    "locations": [
+                                        {"lat": start_lat, "lon": start_lon},
+                                        {"lat": via_lat2, "lon": via_lon2},
+                                        {"lat": end_lat, "lon": end_lon}
+                                    ],
+                                    "costing": "auto"
+                                }
+                                if alt_exclude:
+                                    via_payload2["exclude_locations"] = alt_exclude
+
+                                via_response2 = requests.post(url, json=via_payload2, timeout=10, headers=headers)
+                                if via_response2.status_code == 200:
+                                    via_data2 = via_response2.json()
+                                    if 'trip' in via_data2 and 'legs' in via_data2['trip']:
+                                        all_shapes = []
+                                        for leg in via_data2['trip']['legs']:
+                                            all_shapes.append(leg['shape'])
+                                        combined_coords = []
+                                        for shape in all_shapes:
+                                            coords = polyline.decode(shape, precision=6)
+                                            combined_coords.extend(coords)
+                                        combined_geom = polyline.encode(combined_coords, precision=6)
+
+                                        via_dist = via_data2['trip']['summary']['length']
+                                        via_time = via_data2['trip']['summary']['time']
+                                        alternative_routes.append(build_route_entry('🏘️ Via Town Center', combined_geom, via_dist, via_time))
+                                        logger.info(f"[VALHALLA] Via-Town (alt): {via_dist:.1f}km")
+                        except Exception as e:
+                            logger.warning(f"[VALHALLA] Via-Town route failed: {e}")
+
                         # Extract waypoints at equal intervals along the route
                         waypoints = []
                         waypoints.append({"lat": start_lat, "lon": start_lon})  # Start point
