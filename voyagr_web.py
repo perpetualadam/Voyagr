@@ -4927,16 +4927,16 @@ def calculate_route():
                 # Calculate each segment separately
                 try:
                     # ================================================================
-                    # STEP 1: Get baseline route to extract real waypoints
+                    # STEP 1: Get baseline route WITH ALTERNATES to extract real waypoints
                     # ================================================================
-                    logger.info(f"[VALHALLA] Step 1: Getting baseline route to extract waypoints")
+                    logger.info(f"[VALHALLA] Step 1: Getting baseline route with alternates")
                     baseline_payload = {
                         "locations": [
                             {"lat": start_lat, "lon": start_lon},
                             {"lat": end_lat, "lon": end_lon}
                         ],
                         "costing": "auto",
-                        "alternatives": False
+                        "alternates": 3  # Request up to 3 alternatives
                     }
 
                     baseline_response = requests.post(url, json=baseline_payload, timeout=10, headers=headers)
@@ -4954,6 +4954,49 @@ def calculate_route():
                         baseline_coords = polyline.decode(baseline_geometry, precision=6)
 
                         logger.info(f"[VALHALLA] Baseline route has {len(baseline_coords)} points")
+
+                        # ================================================================
+                        # EXTRACT ALTERNATIVE ROUTES (for comparison)
+                        # ================================================================
+                        alternative_routes = []
+                        if 'alternates' in baseline_data:
+                            logger.info(f"[VALHALLA] Found {len(baseline_data['alternates'])} alternative routes")
+                            for alt_idx, alt_route in enumerate(baseline_data['alternates'][:3]):
+                                if 'trip' in alt_route and 'summary' in alt_route['trip']:
+                                    alt_distance_km = alt_route['trip']['summary']['length']
+                                    alt_duration_sec = alt_route['trip']['summary']['time']
+                                    alt_geometry = None
+                                    if 'legs' in alt_route['trip']:
+                                        for leg in alt_route['trip']['legs']:
+                                            if 'shape' in leg:
+                                                alt_geometry = leg['shape']
+                                                break
+                                    if alt_geometry:
+                                        alt_coords = polyline.decode(alt_geometry, precision=6)
+                                        # Score this alternative by hazards
+                                        alt_penalty, alt_hazard_count = score_route_by_hazards(alt_coords, hazards)
+                                        alt_hazards_list = get_hazards_on_route(alt_coords, hazards)
+                                        # Calculate costs
+                                        alt_costs = cost_calculator.calculate_costs(
+                                            alt_distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                                            energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+                                            route_coords=alt_coords
+                                        )
+                                        alternative_routes.append({
+                                            'name': f'Alternative {alt_idx + 1}',
+                                            'distance_km': round(alt_distance_km, 2),
+                                            'duration_minutes': round(alt_duration_sec / 60, 0),
+                                            'geometry': alt_geometry,
+                                            'fuel_cost': alt_costs['fuel_cost'],
+                                            'toll_cost': alt_costs['toll_cost'],
+                                            'caz_cost': alt_costs['caz_cost'],
+                                            'hazard_penalty_seconds': alt_penalty,
+                                            'hazard_count': alt_hazard_count,
+                                            'hazards': alt_hazards_list
+                                        })
+                                        logger.info(f"[VALHALLA] Alt {alt_idx+1}: {alt_distance_km:.1f}km, {alt_hazard_count} hazards")
+                        else:
+                            logger.info(f"[VALHALLA] No alternative routes in response")
 
                         # Extract waypoints at equal intervals along the route
                         waypoints = []
@@ -5088,8 +5131,9 @@ def calculate_route():
 
                         logger.info(f"[HAZARDS] Segmented route scoring complete: total_penalty={hazard_penalty}s, hazard_count={hazard_count}")
 
-                        # Build combined route response
+                        # Build combined route response - include camera-avoiding route + alternatives
                         routes = [{
+                            'name': 'Camera Avoiding Route',
                             'distance_km': total_distance,
                             'duration_minutes': total_duration / 60,
                             'geometry': combined_geometry,
@@ -5102,6 +5146,14 @@ def calculate_route():
                             'hazard_count': hazard_count,
                             'hazards': hazards_on_route
                         }]
+
+                        # Add alternative routes from baseline (may have cameras but different paths)
+                        if alternative_routes:
+                            routes.extend(alternative_routes)
+                            logger.info(f"[VALHALLA] Added {len(alternative_routes)} alternative routes to response")
+
+                        # Sort all routes by hazard count (fewest first)
+                        routes = sorted(routes, key=lambda r: (r.get('hazard_count', 0), r.get('duration_minutes', 0)))
 
                         response_data = {
                             'success': True,
