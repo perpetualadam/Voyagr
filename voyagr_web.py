@@ -4973,13 +4973,28 @@ def calculate_route():
                                 'hazards': hazards_list
                             }
 
-                        # Route 1: Shortest Distance (auto_shorter costing)
+                        # Build exclude_locations for alternative routes (use top 50 cameras closest to route)
+                        alt_exclude = []
+                        if enable_hazard_avoidance and hazards:
+                            try:
+                                alt_exclude = build_valhalla_exclude_locations(
+                                    hazards, route_bbox=route_bbox, max_hazards=50,
+                                    start_lat=start_lat, start_lon=start_lon,
+                                    end_lat=end_lat, end_lon=end_lon
+                                )
+                                logger.info(f"[VALHALLA] Alt routes: using {len(alt_exclude)} exclude_locations")
+                            except Exception as e:
+                                logger.warning(f"[VALHALLA] Failed to build alt exclude_locations: {e}")
+
+                        # Route 1: Shortest Distance (auto_shorter costing) WITH camera avoidance
                         try:
                             shortest_payload = {
                                 "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
                                 "costing": "auto_shorter"
                             }
-                            logger.info(f"[VALHALLA] Requesting Shortest route")
+                            if alt_exclude:
+                                shortest_payload["exclude_locations"] = alt_exclude
+                            logger.info(f"[VALHALLA] Requesting Shortest route with {len(alt_exclude)} exclusions")
                             sh_response = requests.post(url, json=shortest_payload, timeout=10, headers=headers)
                             if sh_response.status_code == 200:
                                 sh_data = sh_response.json()
@@ -4992,34 +5007,38 @@ def calculate_route():
                         except Exception as e:
                             logger.warning(f"[VALHALLA] Shortest route failed: {e}")
 
-                        # Route 2: Cheapest (avoid tolls)
+                        # Route 2: Avoid Highways (use smaller roads - more likely to avoid main road cameras)
                         try:
-                            cheapest_payload = {
+                            avoid_hwy_payload = {
                                 "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
                                 "costing": "auto",
-                                "costing_options": {"auto": {"use_tolls": 0.0}}
+                                "costing_options": {"auto": {"use_highways": 0.0}}
                             }
-                            logger.info(f"[VALHALLA] Requesting Cheapest route")
-                            ch_response = requests.post(url, json=cheapest_payload, timeout=10, headers=headers)
-                            if ch_response.status_code == 200:
-                                ch_data = ch_response.json()
-                                if 'trip' in ch_data and 'legs' in ch_data['trip']:
-                                    ch_geom = ch_data['trip']['legs'][0]['shape']
-                                    ch_dist = ch_data['trip']['summary']['length']
-                                    ch_time = ch_data['trip']['summary']['time']
-                                    alternative_routes.append(build_route_entry('💰 Cheapest', ch_geom, ch_dist, ch_time))
-                                    logger.info(f"[VALHALLA] Cheapest: {ch_dist:.1f}km")
+                            if alt_exclude:
+                                avoid_hwy_payload["exclude_locations"] = alt_exclude
+                            logger.info(f"[VALHALLA] Requesting Avoid-Highways route with {len(alt_exclude)} exclusions")
+                            ah_response = requests.post(url, json=avoid_hwy_payload, timeout=10, headers=headers)
+                            if ah_response.status_code == 200:
+                                ah_data = ah_response.json()
+                                if 'trip' in ah_data and 'legs' in ah_data['trip']:
+                                    ah_geom = ah_data['trip']['legs'][0]['shape']
+                                    ah_dist = ah_data['trip']['summary']['length']
+                                    ah_time = ah_data['trip']['summary']['time']
+                                    alternative_routes.append(build_route_entry('🛤️ Avoid Highways', ah_geom, ah_dist, ah_time))
+                                    logger.info(f"[VALHALLA] Avoid-Highways: {ah_dist:.1f}km")
                         except Exception as e:
-                            logger.warning(f"[VALHALLA] Cheapest route failed: {e}")
+                            logger.warning(f"[VALHALLA] Avoid-Highways route failed: {e}")
 
-                        # Route 3: Eco-friendly (avoid highways, lower fuel use)
+                        # Route 3: Eco-friendly (avoid highways AND tolls - uses local roads)
                         try:
                             eco_payload = {
                                 "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
                                 "costing": "auto",
                                 "costing_options": {"auto": {"use_highways": 0.0, "use_tolls": 0.0}}
                             }
-                            logger.info(f"[VALHALLA] Requesting Eco route")
+                            if alt_exclude:
+                                eco_payload["exclude_locations"] = alt_exclude
+                            logger.info(f"[VALHALLA] Requesting Eco route with {len(alt_exclude)} exclusions")
                             eco_response = requests.post(url, json=eco_payload, timeout=10, headers=headers)
                             if eco_response.status_code == 200:
                                 eco_data = eco_response.json()
