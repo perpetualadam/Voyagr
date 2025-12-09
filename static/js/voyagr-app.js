@@ -994,59 +994,11 @@ async function deleteTripHistory(tripId) {
 // ===== ROUTE COMPARISON FUNCTIONS =====
 let routeOptions = [];
 let selectedRouteIndex = 0;
-let routePreference = 'fastest';
-/**
- * setRoutePreference function
- * @function setRoutePreference
- * @param {*} preference - Parameter description
- * @returns {*} Return value description
- */
-function setRoutePreference(preference) {
-    routePreference = preference;
-
-    // Update button states
-    document.getElementById('routePrefFastest').classList.remove('active');
-    document.getElementById('routePrefShortest').classList.remove('active');
-    document.getElementById('routePrefCheapest').classList.remove('active');
-    document.getElementById('routePrefEco').classList.remove('active');
-
-    document.getElementById('routePref' + preference.charAt(0).toUpperCase() + preference.slice(1)).classList.add('active');
-
-    // Re-sort routes based on preference
-    sortRoutesByPreference();
-    displayRouteComparison();
-}
 
 /**
- * sortRoutesByPreference function
- * @function sortRoutesByPreference
- * @returns {*} Return value description
- */
-function sortRoutesByPreference() {
-    if (!routeOptions || routeOptions.length === 0) return;
-
-    routeOptions.sort((a, b) => {
-        switch(routePreference) {
-            case 'fastest':
-                return a.duration_minutes - b.duration_minutes;
-            case 'shortest':
-                return a.distance_km - b.distance_km;
-            case 'cheapest':
-                const costA = (a.fuel_cost || 0) + (a.toll_cost || 0) + (a.caz_cost || 0);
-                const costB = (b.fuel_cost || 0) + (b.toll_cost || 0) + (b.caz_cost || 0);
-                return costA - costB;
-            case 'eco':
-                return (a.fuel_cost || 0) - (b.fuel_cost || 0);
-            default:
-                return 0;
-        }
-    });
-}
-
-/**
- * displayRouteComparison function
+ * displayRouteComparison function - Shows distinct route types with hazard counts
  * @function displayRouteComparison
- * @returns {*} Return value description
+ * @returns {void}
  */
 function displayRouteComparison() {
     if (!routeOptions || routeOptions.length === 0) {
@@ -1060,6 +1012,8 @@ function displayRouteComparison() {
     listContainer.innerHTML = routeOptions.map((route, index) => {
         const distance = convertDistance(route.distance_km);
         const distUnit = getDistanceUnit();
+        const routeName = route.name || `Route ${index + 1}`;
+        const hazardCount = route.hazard_count || 0;
 
         // Adjust costs for imperial units if needed
         const fuelCost = parseFloat(route.fuel_cost || 0);
@@ -1070,13 +1024,19 @@ function displayRouteComparison() {
         const adjustedCazCost = distanceUnit === 'mi' ? cazCost * 1.60934 : cazCost;
         const totalCost = (adjustedFuelCost + adjustedTollCost + adjustedCazCost).toFixed(2);
 
-        const isRecommended = index === 0;
-        const borderColor = isRecommended ? '#4CAF50' : '#ddd';
-        const bgColor = isRecommended ? '#E8F5E9' : '#f8f9fa';
+        const isSelected = index === selectedRouteIndex;
+        const borderColor = isSelected ? '#4CAF50' : '#ddd';
+        const bgColor = isSelected ? '#E8F5E9' : '#f8f9fa';
+
+        // Hazard badge color based on count
+        const hazardColor = hazardCount === 0 ? '#4CAF50' : (hazardCount <= 2 ? '#FF9800' : '#F44336');
 
         return `
             <div style="background: ${bgColor}; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${borderColor}; cursor: pointer;" onclick="selectRoute(${index})">
-                ${isRecommended ? '<div style="font-size: 12px; color: #4CAF50; font-weight: 600; margin-bottom: 6px;">✓ RECOMMENDED</div>' : ''}
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                    <div style="font-size: 14px; font-weight: 600; color: #333;">${routeName}</div>
+                    <div style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: ${hazardColor}; color: white;">📷 ${hazardCount} cameras</div>
+                </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #333; margin-bottom: 8px;">
                     <div><strong>⏱️ ${route.duration_minutes} min</strong></div>
                     <div><strong>📏 ${distance} ${distUnit}</strong></div>

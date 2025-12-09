@@ -3610,20 +3610,10 @@ HTML_TEMPLATE = '''
                 <div id="routeComparisonTab" style="display: none;">
                     <div class="preferences-section">
                         <h3>🛣️ Route Options</h3>
-
-                        <!-- Route Preference Selector -->
-                        <div class="form-group">
-                            <label>Optimize For:</label>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
-                                <button class="routing-mode-btn active" id="routePrefFastest" onclick="setRoutePreference('fastest')">⚡ Fastest</button>
-                                <button class="routing-mode-btn" id="routePrefShortest" onclick="setRoutePreference('shortest')">📏 Shortest</button>
-                                <button class="routing-mode-btn" id="routePrefCheapest" onclick="setRoutePreference('cheapest')">💰 Cheapest</button>
-                                <button class="routing-mode-btn" id="routePrefEco" onclick="setRoutePreference('eco')">🌱 Eco</button>
-                            </div>
-                        </div>
+                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Compare different route types with hazard counts</p>
 
                         <!-- Route Comparison List -->
-                        <div id="routeComparisonList" style="max-height: 350px; overflow-y: auto; margin-top: 15px;">
+                        <div id="routeComparisonList" style="max-height: 400px; overflow-y: auto;">
                             <div style="text-align: center; padding: 20px; color: #999;">Calculate a route to see options</div>
                         </div>
 
@@ -4956,138 +4946,91 @@ def calculate_route():
                         logger.info(f"[VALHALLA] Baseline route has {len(baseline_coords)} points")
 
                         # ================================================================
-                        # EXTRACT ALTERNATIVE ROUTES (for comparison)
+                        # REQUEST DISTINCT ROUTE TYPES (Fastest, Shortest, Cheapest, Eco)
                         # ================================================================
                         alternative_routes = []
-                        if 'alternates' in baseline_data:
-                            logger.info(f"[VALHALLA] Found {len(baseline_data['alternates'])} alternative routes")
-                            for alt_idx, alt_route in enumerate(baseline_data['alternates'][:3]):
-                                if 'trip' in alt_route and 'summary' in alt_route['trip']:
-                                    alt_distance_km = alt_route['trip']['summary']['length']
-                                    alt_duration_sec = alt_route['trip']['summary']['time']
-                                    alt_geometry = None
-                                    if 'legs' in alt_route['trip']:
-                                        for leg in alt_route['trip']['legs']:
-                                            if 'shape' in leg:
-                                                alt_geometry = leg['shape']
-                                                break
-                                    if alt_geometry:
-                                        alt_coords = polyline.decode(alt_geometry, precision=6)
-                                        # Score this alternative by hazards
-                                        alt_penalty, alt_hazard_count = score_route_by_hazards(alt_coords, hazards)
-                                        alt_hazards_list = get_hazards_on_route(alt_coords, hazards)
-                                        # Calculate costs
-                                        alt_costs = cost_calculator.calculate_costs(
-                                            alt_distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                                            energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
-                                            route_coords=alt_coords
-                                        )
-                                        alternative_routes.append({
-                                            'name': f'Alternative {alt_idx + 1}',
-                                            'distance_km': round(alt_distance_km, 2),
-                                            'duration_minutes': round(alt_duration_sec / 60, 0),
-                                            'geometry': alt_geometry,
-                                            'fuel_cost': alt_costs['fuel_cost'],
-                                            'toll_cost': alt_costs['toll_cost'],
-                                            'caz_cost': alt_costs['caz_cost'],
-                                            'hazard_penalty_seconds': alt_penalty,
-                                            'hazard_count': alt_hazard_count,
-                                            'hazards': alt_hazards_list
-                                        })
-                                        logger.info(f"[VALHALLA] Alt {alt_idx+1}: {alt_distance_km:.1f}km, {alt_hazard_count} hazards")
-                        else:
-                            logger.info(f"[VALHALLA] No alternative routes in response")
 
-                        # ================================================================
-                        # REQUEST DIVERSE ROUTES WITH DIFFERENT COSTING STRATEGIES
-                        # ================================================================
-                        # Strategy 1: Prefer smaller roads (avoid highways)
-                        try:
-                            avoid_highways_payload = {
-                                "locations": [
-                                    {"lat": start_lat, "lon": start_lon},
-                                    {"lat": end_lat, "lon": end_lon}
-                                ],
-                                "costing": "auto",
-                                "costing_options": {
-                                    "auto": {
-                                        "use_highways": 0.0,  # Avoid highways completely
-                                        "use_tolls": 0.0      # Avoid tolls
-                                    }
-                                }
+                        # Helper function to build a route entry
+                        def build_route_entry(name, geometry, distance_km, duration_sec):
+                            coords = polyline.decode(geometry, precision=6)
+                            penalty, hazard_count = score_route_by_hazards(coords, hazards)
+                            hazards_list = get_hazards_on_route(coords, hazards)
+                            costs = cost_calculator.calculate_costs(
+                                distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                                energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+                                route_coords=coords
+                            )
+                            return {
+                                'name': name,
+                                'distance_km': round(distance_km, 2),
+                                'duration_minutes': round(duration_sec / 60, 0),
+                                'geometry': geometry,
+                                'fuel_cost': costs['fuel_cost'],
+                                'toll_cost': costs['toll_cost'],
+                                'caz_cost': costs['caz_cost'],
+                                'hazard_penalty_seconds': penalty,
+                                'hazard_count': hazard_count,
+                                'hazards': hazards_list
                             }
-                            logger.info(f"[VALHALLA] Requesting avoid-highways route")
-                            ah_response = requests.post(url, json=avoid_highways_payload, timeout=10, headers=headers)
-                            if ah_response.status_code == 200:
-                                ah_data = ah_response.json()
-                                if 'trip' in ah_data and 'legs' in ah_data['trip']:
-                                    ah_distance_km = ah_data['trip']['summary']['length']
-                                    ah_duration_sec = ah_data['trip']['summary']['time']
-                                    ah_geometry = ah_data['trip']['legs'][0]['shape']
-                                    ah_coords = polyline.decode(ah_geometry, precision=6)
-                                    ah_penalty, ah_hazard_count = score_route_by_hazards(ah_coords, hazards)
-                                    ah_hazards_list = get_hazards_on_route(ah_coords, hazards)
-                                    ah_costs = cost_calculator.calculate_costs(
-                                        ah_distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                                        energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
-                                        route_coords=ah_coords
-                                    )
-                                    alternative_routes.append({
-                                        'name': 'Avoid Highways',
-                                        'distance_km': round(ah_distance_km, 2),
-                                        'duration_minutes': round(ah_duration_sec / 60, 0),
-                                        'geometry': ah_geometry,
-                                        'fuel_cost': ah_costs['fuel_cost'],
-                                        'toll_cost': ah_costs['toll_cost'],
-                                        'caz_cost': ah_costs['caz_cost'],
-                                        'hazard_penalty_seconds': ah_penalty,
-                                        'hazard_count': ah_hazard_count,
-                                        'hazards': ah_hazards_list
-                                    })
-                                    logger.info(f"[VALHALLA] Avoid-highways: {ah_distance_km:.1f}km, {ah_hazard_count} hazards")
-                        except Exception as e:
-                            logger.warning(f"[VALHALLA] Avoid-highways route failed: {e}")
 
-                        # Strategy 2: Shortest distance (may use different roads)
+                        # Route 1: Shortest Distance (auto_shorter costing)
                         try:
                             shortest_payload = {
-                                "locations": [
-                                    {"lat": start_lat, "lon": start_lon},
-                                    {"lat": end_lat, "lon": end_lon}
-                                ],
-                                "costing": "auto_shorter"  # Shortest distance instead of fastest
+                                "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
+                                "costing": "auto_shorter"
                             }
-                            logger.info(f"[VALHALLA] Requesting shortest-distance route")
+                            logger.info(f"[VALHALLA] Requesting Shortest route")
                             sh_response = requests.post(url, json=shortest_payload, timeout=10, headers=headers)
                             if sh_response.status_code == 200:
                                 sh_data = sh_response.json()
                                 if 'trip' in sh_data and 'legs' in sh_data['trip']:
-                                    sh_distance_km = sh_data['trip']['summary']['length']
-                                    sh_duration_sec = sh_data['trip']['summary']['time']
-                                    sh_geometry = sh_data['trip']['legs'][0]['shape']
-                                    sh_coords = polyline.decode(sh_geometry, precision=6)
-                                    sh_penalty, sh_hazard_count = score_route_by_hazards(sh_coords, hazards)
-                                    sh_hazards_list = get_hazards_on_route(sh_coords, hazards)
-                                    sh_costs = cost_calculator.calculate_costs(
-                                        sh_distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                                        energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
-                                        route_coords=sh_coords
-                                    )
-                                    alternative_routes.append({
-                                        'name': 'Shortest Distance',
-                                        'distance_km': round(sh_distance_km, 2),
-                                        'duration_minutes': round(sh_duration_sec / 60, 0),
-                                        'geometry': sh_geometry,
-                                        'fuel_cost': sh_costs['fuel_cost'],
-                                        'toll_cost': sh_costs['toll_cost'],
-                                        'caz_cost': sh_costs['caz_cost'],
-                                        'hazard_penalty_seconds': sh_penalty,
-                                        'hazard_count': sh_hazard_count,
-                                        'hazards': sh_hazards_list
-                                    })
-                                    logger.info(f"[VALHALLA] Shortest: {sh_distance_km:.1f}km, {sh_hazard_count} hazards")
+                                    sh_geom = sh_data['trip']['legs'][0]['shape']
+                                    sh_dist = sh_data['trip']['summary']['length']
+                                    sh_time = sh_data['trip']['summary']['time']
+                                    alternative_routes.append(build_route_entry('📏 Shortest', sh_geom, sh_dist, sh_time))
+                                    logger.info(f"[VALHALLA] Shortest: {sh_dist:.1f}km")
                         except Exception as e:
                             logger.warning(f"[VALHALLA] Shortest route failed: {e}")
+
+                        # Route 2: Cheapest (avoid tolls)
+                        try:
+                            cheapest_payload = {
+                                "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
+                                "costing": "auto",
+                                "costing_options": {"auto": {"use_tolls": 0.0}}
+                            }
+                            logger.info(f"[VALHALLA] Requesting Cheapest route")
+                            ch_response = requests.post(url, json=cheapest_payload, timeout=10, headers=headers)
+                            if ch_response.status_code == 200:
+                                ch_data = ch_response.json()
+                                if 'trip' in ch_data and 'legs' in ch_data['trip']:
+                                    ch_geom = ch_data['trip']['legs'][0]['shape']
+                                    ch_dist = ch_data['trip']['summary']['length']
+                                    ch_time = ch_data['trip']['summary']['time']
+                                    alternative_routes.append(build_route_entry('💰 Cheapest', ch_geom, ch_dist, ch_time))
+                                    logger.info(f"[VALHALLA] Cheapest: {ch_dist:.1f}km")
+                        except Exception as e:
+                            logger.warning(f"[VALHALLA] Cheapest route failed: {e}")
+
+                        # Route 3: Eco-friendly (avoid highways, lower fuel use)
+                        try:
+                            eco_payload = {
+                                "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
+                                "costing": "auto",
+                                "costing_options": {"auto": {"use_highways": 0.0, "use_tolls": 0.0}}
+                            }
+                            logger.info(f"[VALHALLA] Requesting Eco route")
+                            eco_response = requests.post(url, json=eco_payload, timeout=10, headers=headers)
+                            if eco_response.status_code == 200:
+                                eco_data = eco_response.json()
+                                if 'trip' in eco_data and 'legs' in eco_data['trip']:
+                                    eco_geom = eco_data['trip']['legs'][0]['shape']
+                                    eco_dist = eco_data['trip']['summary']['length']
+                                    eco_time = eco_data['trip']['summary']['time']
+                                    alternative_routes.append(build_route_entry('🌱 Eco', eco_geom, eco_dist, eco_time))
+                                    logger.info(f"[VALHALLA] Eco: {eco_dist:.1f}km")
+                        except Exception as e:
+                            logger.warning(f"[VALHALLA] Eco route failed: {e}")
 
                         # Extract waypoints at equal intervals along the route
                         waypoints = []
