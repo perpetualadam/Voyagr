@@ -4587,7 +4587,7 @@ class ParallelRoutingEngine:
                     {"lat": end_lat, "lon": end_lon}
                 ],
                 "costing": "auto",
-                "alternatives": True
+                "alternates": 3
             }
             headers = {
                 'User-Agent': 'Voyagr-PWA/1.0',
@@ -5152,7 +5152,7 @@ def calculate_route():
                     {"lat": end_lat, "lon": end_lon}
                 ],
                 "costing": "auto",
-                "alternatives": True  # Request alternative routes
+                "alternates": 3  # Request up to 3 alternative routes
             }
 
             # Add exclude_locations if hazard avoidance is enabled
@@ -5254,9 +5254,9 @@ def calculate_route():
                         'maneuvers': maneuvers
                     })
 
-                    # Alternative routes (if available)
-                    if 'alternatives' in route_data:
-                        for idx, alt_route in enumerate(route_data['alternatives'][:3]):
+                    # Alternative routes (if available) - Valhalla uses 'alternates' not 'alternatives'
+                    if 'alternates' in route_data:
+                        for idx, alt_route in enumerate(route_data['alternates'][:3]):
                             if 'trip' in alt_route and 'summary' in alt_route['trip']:
                                 alt_distance = alt_route['trip']['summary']['length']
                                 alt_duration_seconds = alt_route['trip']['summary']['time']
@@ -5421,7 +5421,7 @@ def calculate_route():
                                 {"lat": end_lat, "lon": end_lon}
                             ],
                             "costing": "auto",
-                            "alternatives": True,
+                            "alternates": 3,
                             "exclude_locations": retry_locations
                         }
 
