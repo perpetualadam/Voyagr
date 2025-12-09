@@ -1790,88 +1790,91 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]], r
     """
     try:
         # Hazard weights (higher = more important to avoid)
+        # FIXED: All hazards should be avoided, not just high-priority ones
+        # The weights determine PRIORITY when we hit max_hazards limit
         hazard_weights = {
-            'speed_camera': 50.0,
-            'police': 30.0,
-            'accident': 20.0,
-            'roadworks': 15.0,
-            'railway_crossing': 10.0,
-            'pothole': 5.0,
-            'debris': 5.0
+            'speed_camera': 50.0,      # Highest priority - always avoid
+            'traffic_light_camera': 50.0,  # Same as speed camera
+            'police': 40.0,            # High priority
+            'accident': 35.0,          # High priority - safety hazard
+            'roadworks': 30.0,         # Medium-high priority
+            'railway_crossing': 20.0,  # Medium priority
+            'pothole': 15.0,           # Lower priority
+            'debris': 15.0             # Lower priority
         }
 
-        # Collect all hazards with weights
+        # Collect ALL hazards with weights (not just high-priority)
         all_hazards = []
 
         for hazard_type, hazard_list in hazards.items():
             weight = hazard_weights.get(hazard_type, 10.0)
-            # Only include high-priority hazards (cameras and police)
-            if weight >= 30.0:
-                for hazard in hazard_list:
-                    # Filter by bounding box if provided (with margin to cover detour routes)
-                    if route_bbox:
-                        # Use 50% margin OR minimum 0.15 degrees (~17km), whichever is larger
-                        # This ensures we capture cameras on detour routes even for short trips
-                        margin_percent = 0.5
-                        min_margin_degrees = 0.15  # ~17km
+            # FIXED: Include ALL hazard types, not just those with weight >= 30
+            # This ensures routes with avoidance have FEWER hazards, not more
+            for hazard in hazard_list:
+                # Filter by bounding box if provided (with margin to cover detour routes)
+                if route_bbox:
+                    # Use 50% margin OR minimum 0.15 degrees (~17km), whichever is larger
+                    # This ensures we capture cameras on detour routes even for short trips
+                    margin_percent = 0.5
+                    min_margin_degrees = 0.15  # ~17km
 
-                        lat_margin = max(
-                            (route_bbox['max_lat'] - route_bbox['min_lat']) * margin_percent,
-                            min_margin_degrees
+                    lat_margin = max(
+                        (route_bbox['max_lat'] - route_bbox['min_lat']) * margin_percent,
+                        min_margin_degrees
+                    )
+                    lon_margin = max(
+                        (route_bbox['max_lon'] - route_bbox['min_lon']) * margin_percent,
+                        min_margin_degrees
+                    )
+
+                    if not (route_bbox['min_lat'] - lat_margin <= hazard['lat'] <= route_bbox['max_lat'] + lat_margin and
+                            route_bbox['min_lon'] - lon_margin <= hazard['lon'] <= route_bbox['max_lon'] + lon_margin):
+                        continue  # Skip hazards outside bounding box
+
+                # Calculate perpendicular distance to route line (for prioritization)
+                distance_to_route = float('inf')
+                if start_lat is not None and start_lon is not None and end_lat is not None and end_lon is not None:
+                    # Calculate perpendicular distance from point to line segment
+                    # Using the formula: distance = |cross product| / |line length|
+
+                    # Vector from start to end
+                    dx = end_lon - start_lon
+                    dy = end_lat - start_lat
+
+                    # Vector from start to hazard
+                    px = hazard['lon'] - start_lon
+                    py = hazard['lat'] - start_lat
+
+                    # Calculate line length squared
+                    line_length_sq = dx * dx + dy * dy
+
+                    if line_length_sq > 0:
+                        # Calculate projection parameter (0 = at start, 1 = at end)
+                        t = max(0, min(1, (px * dx + py * dy) / line_length_sq))
+
+                        # Find closest point on line segment
+                        closest_lon = start_lon + t * dx
+                        closest_lat = start_lat + t * dy
+
+                        # Calculate perpendicular distance to closest point on line
+                        distance_to_route = get_distance_between_points(
+                            hazard['lat'], hazard['lon'],
+                            closest_lat, closest_lon
                         )
-                        lon_margin = max(
-                            (route_bbox['max_lon'] - route_bbox['min_lon']) * margin_percent,
-                            min_margin_degrees
+                    else:
+                        # Start and end are the same point - use distance to start
+                        distance_to_route = get_distance_between_points(
+                            hazard['lat'], hazard['lon'],
+                            start_lat, start_lon
                         )
 
-                        if not (route_bbox['min_lat'] - lat_margin <= hazard['lat'] <= route_bbox['max_lat'] + lat_margin and
-                                route_bbox['min_lon'] - lon_margin <= hazard['lon'] <= route_bbox['max_lon'] + lon_margin):
-                            continue  # Skip hazards outside bounding box
-
-                    # Calculate perpendicular distance to route line (for prioritization)
-                    distance_to_route = float('inf')
-                    if start_lat is not None and start_lon is not None and end_lat is not None and end_lon is not None:
-                        # Calculate perpendicular distance from point to line segment
-                        # Using the formula: distance = |cross product| / |line length|
-
-                        # Vector from start to end
-                        dx = end_lon - start_lon
-                        dy = end_lat - start_lat
-
-                        # Vector from start to hazard
-                        px = hazard['lon'] - start_lon
-                        py = hazard['lat'] - start_lat
-
-                        # Calculate line length squared
-                        line_length_sq = dx * dx + dy * dy
-
-                        if line_length_sq > 0:
-                            # Calculate projection parameter (0 = at start, 1 = at end)
-                            t = max(0, min(1, (px * dx + py * dy) / line_length_sq))
-
-                            # Find closest point on line segment
-                            closest_lon = start_lon + t * dx
-                            closest_lat = start_lat + t * dy
-
-                            # Calculate perpendicular distance to closest point on line
-                            distance_to_route = get_distance_between_points(
-                                hazard['lat'], hazard['lon'],
-                                closest_lat, closest_lon
-                            )
-                        else:
-                            # Start and end are the same point - use distance to start
-                            distance_to_route = get_distance_between_points(
-                                hazard['lat'], hazard['lon'],
-                                start_lat, start_lon
-                            )
-
-                    all_hazards.append({
-                        'lat': hazard['lat'],
-                        'lon': hazard['lon'],
-                        'type': hazard_type,
-                        'weight': weight,
-                        'distance_to_route': distance_to_route
-                    })
+                all_hazards.append({
+                    'lat': hazard['lat'],
+                    'lon': hazard['lon'],
+                    'type': hazard_type,
+                    'weight': weight,
+                    'distance_to_route': distance_to_route
+                })
 
         # Sort by distance to route (closest first), then by weight
         # This ensures we exclude cameras that are actually ON or NEAR the route
