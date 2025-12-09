@@ -1112,6 +1112,299 @@ function displayRouteComparison() {
         `;
     }).join('');
 }
+
+// ===== VIA-POINTS AND STOPS FUNCTIONALITY =====
+let viaPoints = [];  // Array of {lat, lon, name, type: 'via'}
+let stops = [];      // Array of {lat, lon, name, type: 'stop', duration: 15}
+let viaPointMarkers = [];
+let stopMarkers = [];
+let addingViaPoint = false;
+let addingStop = false;
+
+/**
+ * Toggle via-point adding mode
+ */
+function toggleAddViaPoint() {
+    addingViaPoint = !addingViaPoint;
+    addingStop = false;
+
+    const btn = document.getElementById('addViaPointBtn');
+    if (btn) {
+        btn.classList.toggle('active', addingViaPoint);
+        btn.textContent = addingViaPoint ? '📍 Click map to add via-point' : '📍 Add Via-Point';
+    }
+
+    if (addingViaPoint) {
+        showStatus('Click on the map to add a via-point', 'info');
+        map.getContainer().style.cursor = 'crosshair';
+    } else {
+        map.getContainer().style.cursor = '';
+    }
+}
+
+/**
+ * Toggle stop adding mode
+ */
+function toggleAddStop() {
+    addingStop = !addingStop;
+    addingViaPoint = false;
+
+    const btn = document.getElementById('addStopBtn');
+    if (btn) {
+        btn.classList.toggle('active', addingStop);
+        btn.textContent = addingStop ? '🛑 Click map to add stop' : '🛑 Add Stop';
+    }
+
+    if (addingStop) {
+        showStatus('Click on the map to add a stop', 'info');
+        map.getContainer().style.cursor = 'crosshair';
+    } else {
+        map.getContainer().style.cursor = '';
+    }
+}
+
+/**
+ * Handle map click for adding via-points or stops
+ */
+function handleMapClickForWaypoints(e) {
+    if (addingViaPoint) {
+        addViaPoint(e.latlng.lat, e.latlng.lng);
+        toggleAddViaPoint();  // Turn off mode after adding
+    } else if (addingStop) {
+        addStop(e.latlng.lat, e.latlng.lng);
+        toggleAddStop();  // Turn off mode after adding
+    }
+}
+
+/**
+ * Add a via-point at given coordinates
+ */
+function addViaPoint(lat, lon, name = null) {
+    const pointName = name || `Via-point ${viaPoints.length + 1}`;
+    viaPoints.push({ lat, lon, name: pointName, type: 'via' });
+
+    // Add marker to map
+    const marker = L.marker([lat, lon], {
+        icon: L.divIcon({
+            className: 'via-point-marker',
+            html: `<div style="background: #FF9800; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${viaPoints.length}</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+        }),
+        draggable: true
+    }).addTo(map);
+
+    marker.bindPopup(`<b>${pointName}</b><br><button onclick="removeViaPoint(${viaPoints.length - 1})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>`);
+
+    // Handle drag
+    marker.on('dragend', function(e) {
+        const idx = viaPointMarkers.indexOf(marker);
+        if (idx >= 0) {
+            viaPoints[idx].lat = e.target.getLatLng().lat;
+            viaPoints[idx].lon = e.target.getLatLng().lng;
+        }
+    });
+
+    viaPointMarkers.push(marker);
+    updateWaypointsList();
+    showStatus(`Added via-point: ${pointName}`, 'success');
+}
+
+/**
+ * Add a stop at given coordinates
+ */
+function addStop(lat, lon, name = null, duration = 15) {
+    const stopName = name || `Stop ${stops.length + 1}`;
+    stops.push({ lat, lon, name: stopName, type: 'stop', duration });
+
+    // Add marker to map
+    const marker = L.marker([lat, lon], {
+        icon: L.divIcon({
+            className: 'stop-marker',
+            html: `<div style="background: #E91E63; color: white; border-radius: 4px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+        }),
+        draggable: true
+    }).addTo(map);
+
+    marker.bindPopup(`<b>${stopName}</b><br>Duration: ${duration} min<br><button onclick="removeStop(${stops.length - 1})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>`);
+
+    // Handle drag
+    marker.on('dragend', function(e) {
+        const idx = stopMarkers.indexOf(marker);
+        if (idx >= 0) {
+            stops[idx].lat = e.target.getLatLng().lat;
+            stops[idx].lon = e.target.getLatLng().lng;
+        }
+    });
+
+    stopMarkers.push(marker);
+    updateWaypointsList();
+    showStatus(`Added stop: ${stopName} (${duration} min)`, 'success');
+}
+
+/**
+ * Remove a via-point
+ */
+function removeViaPoint(index) {
+    if (index >= 0 && index < viaPoints.length) {
+        viaPoints.splice(index, 1);
+        if (viaPointMarkers[index]) {
+            map.removeLayer(viaPointMarkers[index]);
+        }
+        viaPointMarkers.splice(index, 1);
+        updateWaypointsList();
+        refreshViaPointMarkers();
+        showStatus('Via-point removed', 'info');
+    }
+}
+
+/**
+ * Remove a stop
+ */
+function removeStop(index) {
+    if (index >= 0 && index < stops.length) {
+        stops.splice(index, 1);
+        if (stopMarkers[index]) {
+            map.removeLayer(stopMarkers[index]);
+        }
+        stopMarkers.splice(index, 1);
+        updateWaypointsList();
+        showStatus('Stop removed', 'info');
+    }
+}
+
+/**
+ * Refresh via-point markers (update numbers after removal)
+ */
+function refreshViaPointMarkers() {
+    viaPointMarkers.forEach((marker, idx) => {
+        if (marker) {
+            map.removeLayer(marker);
+        }
+    });
+    viaPointMarkers = [];
+
+    viaPoints.forEach((point, idx) => {
+        const marker = L.marker([point.lat, point.lon], {
+            icon: L.divIcon({
+                className: 'via-point-marker',
+                html: `<div style="background: #FF9800; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${idx + 1}</div>`,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14]
+            }),
+            draggable: true
+        }).addTo(map);
+
+        marker.bindPopup(`<b>${point.name}</b><br><button onclick="removeViaPoint(${idx})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>`);
+        viaPointMarkers.push(marker);
+    });
+}
+
+/**
+ * Clear all via-points and stops
+ */
+function clearAllWaypoints() {
+    viaPoints = [];
+    stops = [];
+    viaPointMarkers.forEach(m => map.removeLayer(m));
+    stopMarkers.forEach(m => map.removeLayer(m));
+    viaPointMarkers = [];
+    stopMarkers = [];
+    updateWaypointsList();
+    showStatus('All waypoints cleared', 'info');
+}
+
+/**
+ * Update the waypoints list display
+ */
+function updateWaypointsList() {
+    const container = document.getElementById('waypointsList');
+    if (!container) return;
+
+    if (viaPoints.length === 0 && stops.length === 0) {
+        container.innerHTML = '<div style="color: #999; font-size: 12px; padding: 10px;">No waypoints added. Click buttons above to add via-points or stops.</div>';
+        return;
+    }
+
+    let html = '';
+
+    // Via-points
+    viaPoints.forEach((point, idx) => {
+        html += `
+            <div style="display: flex; align-items: center; padding: 8px; background: #FFF3E0; border-radius: 6px; margin-bottom: 6px;">
+                <span style="background: #FF9800; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 8px;">${idx + 1}</span>
+                <span style="flex: 1; font-size: 13px;">${point.name}</span>
+                <button onclick="removeViaPoint(${idx})" style="background: none; border: none; color: #f44336; cursor: pointer; font-size: 16px;">✕</button>
+            </div>
+        `;
+    });
+
+    // Stops
+    stops.forEach((stop, idx) => {
+        html += `
+            <div style="display: flex; align-items: center; padding: 8px; background: #FCE4EC; border-radius: 6px; margin-bottom: 6px;">
+                <span style="background: #E91E63; color: white; border-radius: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 8px;">🅿️</span>
+                <span style="flex: 1; font-size: 13px;">${stop.name} (${stop.duration} min)</span>
+                <button onclick="removeStop(${idx})" style="background: none; border: none; color: #f44336; cursor: pointer; font-size: 16px;">✕</button>
+            </div>
+        `;
+    });
+
+    // Total stop time
+    const totalStopTime = stops.reduce((sum, s) => sum + s.duration, 0);
+    if (totalStopTime > 0) {
+        html += `<div style="font-size: 12px; color: #666; margin-top: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px;">⏱️ Total stop time: <strong>${totalStopTime} min</strong></div>`;
+    }
+
+    container.innerHTML = html;
+}
+
+/**
+ * Get all waypoints for route calculation (start + viaPoints + stops + end)
+ */
+function getOrderedWaypoints(startLat, startLon, endLat, endLon) {
+    const waypoints = [];
+
+    // Start
+    waypoints.push({ lat: startLat, lon: startLon, type: 'start' });
+
+    // Combine via-points and stops, sort by distance from start for optimization
+    const intermediate = [...viaPoints, ...stops];
+
+    if (intermediate.length > 0) {
+        // Simple greedy optimization: visit closest point next
+        const remaining = [...intermediate];
+        let current = { lat: startLat, lon: startLon };
+
+        while (remaining.length > 0) {
+            let closestIdx = 0;
+            let closestDist = Infinity;
+
+            for (let i = 0; i < remaining.length; i++) {
+                const dist = Math.sqrt(
+                    Math.pow(remaining[i].lat - current.lat, 2) +
+                    Math.pow(remaining[i].lon - current.lon, 2)
+                );
+                if (dist < closestDist) {
+                    closestDist = dist;
+                    closestIdx = i;
+                }
+            }
+
+            waypoints.push(remaining[closestIdx]);
+            current = remaining[closestIdx];
+            remaining.splice(closestIdx, 1);
+        }
+    }
+
+    // End
+    waypoints.push({ lat: endLat, lon: endLon, type: 'end' });
+
+    return waypoints;
+}
+
 /**
  * selectRoute function
  * @function selectRoute
@@ -1830,6 +2123,12 @@ function setupMapClickHandler() {
 
     // Map click handler for location picker
     map.on('click', (e) => {
+        // Handle via-point and stop adding first
+        if (addingViaPoint || addingStop) {
+            handleMapClickForWaypoints(e);
+            return;
+        }
+
         if (mapPickerMode) {
             const lat = e.latlng.lat;
             const lon = e.latlng.lng;
@@ -1983,15 +2282,38 @@ async function calculateRoute() {
         localStorage.getItem('pref_roadworks') === 'true' ||
         localStorage.getItem('pref_accidents') === 'true';
 
+    // Build via-points array for multi-stop routing
+    const viaPointsData = viaPoints.map(vp => ({
+        lat: vp.lat,
+        lon: vp.lon,
+        name: vp.name,
+        type: 'via'
+    }));
+
+    // Build stops array with duration
+    const stopsData = stops.map(s => ({
+        lat: s.lat,
+        lon: s.lon,
+        name: s.name,
+        type: 'stop',
+        duration: s.duration || 15
+    }));
+
+    // Calculate total stop time for display
+    const totalStopTime = stops.reduce((sum, s) => sum + (s.duration || 15), 0);
+
     const requestBody = {
         start: geocodedStart,
         end: geocodedEnd,
         routing_mode: currentRoutingMode,
         vehicle_type: currentVehicleType,
-        enable_hazard_avoidance: enableHazardAvoidance
+        enable_hazard_avoidance: enableHazardAvoidance,
+        via_points: viaPointsData,
+        stops: stopsData
     };
 
     console.log('[calculateRoute] Making API request to /api/route with:', requestBody);
+    console.log('[calculateRoute] Via-points:', viaPointsData.length, 'Stops:', stopsData.length, 'Total stop time:', totalStopTime, 'min');
 
     fetch('/api/route', {
         method: 'POST',
@@ -2106,8 +2428,13 @@ async function calculateRoute() {
 
                 lastZoomLevel = zoomLevel;
 
-                // Update info
-                updateTripInfo(data.distance, data.time, data.fuel_cost || '-', data.toll_cost || '-');
+                // Update info - include stop time if present
+                let displayTime = data.time;
+                if (data.total_stop_time && data.total_stop_time > 0) {
+                    displayTime = data.total_time_with_stops || data.time;
+                    console.log(`[Route] Total time with ${data.stops_count} stops: ${displayTime}`);
+                }
+                updateTripInfo(data.distance, displayTime, data.fuel_cost || '-', data.toll_cost || '-');
 
                 // Show custom router performance if available
                 let statusMsg = 'Route calculated successfully! (' + data.source + ')';
@@ -2116,6 +2443,9 @@ async function calculateRoute() {
                 }
                 if (data.source && data.source.includes('Custom Router')) {
                     statusMsg += ' ⚡ Ultra-fast!';
+                }
+                if (data.via_points_count > 0 || data.stops_count > 0) {
+                    statusMsg += ` 📍 ${data.via_points_count || 0} via-points, ${data.stops_count || 0} stops`;
                 }
                 showStatus(statusMsg, 'success');
 

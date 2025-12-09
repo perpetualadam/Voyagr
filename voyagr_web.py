@@ -2803,6 +2803,23 @@ HTML_TEMPLATE = '''
                     </div>
                 </div>
 
+                <!-- VIA-POINTS AND STOPS SECTION (NEW) -->
+                <div class="form-group" style="background: #FFFDE7; padding: 12px; border-radius: 8px; margin-top: 10px;">
+                    <label style="margin-bottom: 8px; display: block;">📍 Via-Points & Stops</label>
+                    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+                        <button id="addViaPointBtn" onclick="toggleAddViaPoint()" style="flex: 1; padding: 8px 12px; border: 1px solid #FF9800; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; color: #FF9800;">📍 Add Via-Point</button>
+                        <button id="addStopBtn" onclick="toggleAddStop()" style="flex: 1; padding: 8px 12px; border: 1px solid #E91E63; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; color: #E91E63;">🛑 Add Stop</button>
+                        <button onclick="clearAllWaypoints()" style="padding: 8px 12px; border: 1px solid #999; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; color: #666;">✕ Clear</button>
+                    </div>
+                    <div id="waypointsList" style="max-height: 150px; overflow-y: auto;">
+                        <div style="color: #999; font-size: 12px; padding: 10px;">No waypoints added. Click buttons above to add via-points or stops.</div>
+                    </div>
+                    <div style="font-size: 11px; color: #888; margin-top: 8px;">
+                        <strong>Via-Points:</strong> Route must pass through (e.g., scenic route)<br>
+                        <strong>Stops:</strong> Places to park/stop (adds time to journey)
+                    </div>
+                </div>
+
                 <!-- Vehicle Type Selector -->
                 <div class="form-group">
                     <label for="vehicleType">🚗 Vehicle Type</label>
@@ -4805,6 +4822,15 @@ def calculate_route():
         caz_exempt = data.get('caz_exempt', False)
         enable_hazard_avoidance = data.get('enable_hazard_avoidance', False)
 
+        # VIA-POINTS AND STOPS (NEW)
+        via_points = data.get('via_points', [])  # [{lat, lon, name, type: 'via'}]
+        stops = data.get('stops', [])  # [{lat, lon, name, type: 'stop', duration: 15}]
+
+        # Calculate total stop time
+        total_stop_time = sum(s.get('duration', 15) for s in stops)
+
+        logger.info(f"[ROUTE] Via-points: {len(via_points)}, Stops: {len(stops)}, Total stop time: {total_stop_time} min")
+
         # DEBUG: Log request received
         print(f"\n{'='*80}")
         print(f"[API REQUEST] /api/route called")
@@ -4896,6 +4922,59 @@ def calculate_route():
                     exclude_locations = []
 
             # ================================================================
+            # BUILD LOCATIONS ARRAY WITH VIA-POINTS AND STOPS
+            # ================================================================
+            # Combine start, via-points, stops, and end into ordered locations
+            def build_locations_with_waypoints(start_lat, start_lon, end_lat, end_lon, via_points, stops):
+                """Build Valhalla locations array with via-points and stops."""
+                locations = [{"lat": start_lat, "lon": start_lon}]
+
+                # Combine via-points and stops
+                intermediate = []
+                for vp in via_points:
+                    intermediate.append({
+                        'lat': float(vp.get('lat', 0)),
+                        'lon': float(vp.get('lon', 0)),
+                        'type': 'via'
+                    })
+                for s in stops:
+                    intermediate.append({
+                        'lat': float(s.get('lat', 0)),
+                        'lon': float(s.get('lon', 0)),
+                        'type': 'stop',
+                        'duration': s.get('duration', 15)
+                    })
+
+                # Simple greedy optimization: visit closest point next
+                if intermediate:
+                    remaining = intermediate.copy()
+                    current = {'lat': start_lat, 'lon': start_lon}
+
+                    while remaining:
+                        closest_idx = 0
+                        closest_dist = float('inf')
+
+                        for i, wp in enumerate(remaining):
+                            dist = ((wp['lat'] - current['lat'])**2 + (wp['lon'] - current['lon'])**2)**0.5
+                            if dist < closest_dist:
+                                closest_dist = dist
+                                closest_idx = i
+
+                        wp = remaining.pop(closest_idx)
+                        locations.append({"lat": wp['lat'], "lon": wp['lon']})
+                        current = wp
+
+                locations.append({"lat": end_lat, "lon": end_lon})
+                return locations
+
+            # Build locations array
+            route_locations = build_locations_with_waypoints(start_lat, start_lon, end_lat, end_lon, via_points, stops)
+            has_waypoints = len(route_locations) > 2
+
+            if has_waypoints:
+                logger.info(f"[ROUTE] Multi-stop route with {len(route_locations)} locations")
+
+            # ================================================================
             # SEGMENTED ROUTING FOR HIGH-DENSITY ROUTES
             # ================================================================
             # If we have >75 cameras, use segmented routing with separate API calls
@@ -4921,12 +5000,9 @@ def calculate_route():
                     # ================================================================
                     logger.info(f"[VALHALLA] Step 1: Getting baseline route with alternates")
                     baseline_payload = {
-                        "locations": [
-                            {"lat": start_lat, "lon": start_lon},
-                            {"lat": end_lat, "lon": end_lon}
-                        ],
+                        "locations": route_locations,  # Use locations with via-points
                         "costing": "auto",
-                        "alternates": 3  # Request up to 3 alternatives
+                        "alternates": 3 if not has_waypoints else 0  # No alternates for multi-stop
                     }
 
                     baseline_response = requests.post(url, json=baseline_payload, timeout=10, headers=headers)
@@ -5051,99 +5127,124 @@ def calculate_route():
                         except Exception as e:
                             logger.warning(f"[VALHALLA] Eco route failed: {e}")
 
-                        # Route 4: Via Town Center - Force route through nearest major town center
-                        # This creates a truly different route by adding a via-point offset from the direct line
+                        # ================================================================
+                        # INTELLIGENT ROUTE DISCOVERY
+                        # Find genuinely different routes by discovering nearby towns
+                        # and using them as via-points
+                        # ================================================================
+
+                        # Route 4: Via Nearby Town - Use Nominatim to find real towns near route
                         try:
-                            # Calculate midpoint and offset perpendicular to route to find town center
                             mid_lat = (start_lat + end_lat) / 2
                             mid_lon = (start_lon + end_lon) / 2
 
-                            # Calculate perpendicular offset (0.05 degrees ≈ 5km offset toward town centers)
-                            # Use bearing perpendicular to route direction
-                            delta_lat = end_lat - start_lat
-                            delta_lon = end_lon - start_lon
-
-                            # Perpendicular offset (rotate 90 degrees) - try both directions
-                            offset = 0.05  # ~5km offset
-                            via_lat1 = mid_lat + delta_lon * offset / max(abs(delta_lon), 0.001)
-                            via_lon1 = mid_lon - delta_lat * offset / max(abs(delta_lat), 0.001)
-
-                            via_lat2 = mid_lat - delta_lon * offset / max(abs(delta_lon), 0.001)
-                            via_lon2 = mid_lon + delta_lat * offset / max(abs(delta_lat), 0.001)
-
-                            # Try first offset direction
-                            via_payload1 = {
-                                "locations": [
-                                    {"lat": start_lat, "lon": start_lon},
-                                    {"lat": via_lat1, "lon": via_lon1},
-                                    {"lat": end_lat, "lon": end_lon}
-                                ],
-                                "costing": "auto"
+                            # Search for towns/cities near the route midpoint
+                            nominatim_url = "https://nominatim.openstreetmap.org/search"
+                            search_params = {
+                                "q": "town",
+                                "format": "json",
+                                "limit": 5,
+                                "viewbox": f"{min(start_lon, end_lon)-0.1},{max(start_lat, end_lat)+0.1},{max(start_lon, end_lon)+0.1},{min(start_lat, end_lat)-0.1}",
+                                "bounded": 1,
+                                "addressdetails": 1
                             }
-                            if alt_exclude:
-                                via_payload1["exclude_locations"] = alt_exclude
+                            nominatim_headers = {"User-Agent": "Voyagr/1.0"}
 
-                            logger.info(f"[VALHALLA] Requesting Via-Town route through ({via_lat1:.4f},{via_lon1:.4f})")
-                            via_response = requests.post(url, json=via_payload1, timeout=10, headers=headers)
+                            nom_response = requests.get(nominatim_url, params=search_params, headers=nominatim_headers, timeout=5)
 
-                            if via_response.status_code == 200:
-                                via_data = via_response.json()
-                                if 'trip' in via_data and 'legs' in via_data['trip']:
-                                    # Combine geometry from all legs
-                                    all_shapes = []
-                                    total_dist = 0
-                                    total_time = 0
-                                    for leg in via_data['trip']['legs']:
-                                        all_shapes.append(leg['shape'])
-                                        total_dist += via_data['trip']['summary']['length']
-                                        total_time += via_data['trip']['summary']['time']
+                            if nom_response.status_code == 200:
+                                towns = nom_response.json()
+                                logger.info(f"[DISCOVERY] Found {len(towns)} towns near route")
 
-                                    # Use first leg's geometry (main route)
-                                    via_geom = via_data['trip']['legs'][0]['shape']
-                                    # Concatenate all leg geometries
-                                    combined_coords = []
-                                    for shape in all_shapes:
-                                        coords = polyline.decode(shape, precision=6)
-                                        combined_coords.extend(coords)
-                                    # Re-encode combined route
-                                    combined_geom = polyline.encode(combined_coords, precision=6)
+                                # Try each town as a via-point
+                                for town in towns[:3]:  # Limit to 3 towns
+                                    try:
+                                        town_lat = float(town['lat'])
+                                        town_lon = float(town['lon'])
+                                        town_name = town.get('display_name', 'Unknown').split(',')[0]
 
-                                    via_dist = via_data['trip']['summary']['length']
-                                    via_time = via_data['trip']['summary']['time']
-                                    alternative_routes.append(build_route_entry('🏘️ Via Town Center', combined_geom, via_dist, via_time))
-                                    logger.info(f"[VALHALLA] Via-Town: {via_dist:.1f}km")
-                            else:
-                                # Try second offset direction
-                                via_payload2 = {
-                                    "locations": [
-                                        {"lat": start_lat, "lon": start_lon},
-                                        {"lat": via_lat2, "lon": via_lon2},
-                                        {"lat": end_lat, "lon": end_lon}
-                                    ],
-                                    "costing": "auto"
-                                }
-                                if alt_exclude:
-                                    via_payload2["exclude_locations"] = alt_exclude
+                                        # Skip if town is too close to start/end
+                                        dist_to_start = ((town_lat - start_lat)**2 + (town_lon - start_lon)**2)**0.5
+                                        dist_to_end = ((town_lat - end_lat)**2 + (town_lon - end_lon)**2)**0.5
+                                        if dist_to_start < 0.02 or dist_to_end < 0.02:  # ~2km
+                                            continue
 
-                                via_response2 = requests.post(url, json=via_payload2, timeout=10, headers=headers)
-                                if via_response2.status_code == 200:
-                                    via_data2 = via_response2.json()
-                                    if 'trip' in via_data2 and 'legs' in via_data2['trip']:
-                                        all_shapes = []
-                                        for leg in via_data2['trip']['legs']:
-                                            all_shapes.append(leg['shape'])
-                                        combined_coords = []
-                                        for shape in all_shapes:
-                                            coords = polyline.decode(shape, precision=6)
-                                            combined_coords.extend(coords)
-                                        combined_geom = polyline.encode(combined_coords, precision=6)
+                                        via_payload = {
+                                            "locations": [
+                                                {"lat": start_lat, "lon": start_lon},
+                                                {"lat": town_lat, "lon": town_lon},
+                                                {"lat": end_lat, "lon": end_lon}
+                                            ],
+                                            "costing": "auto"
+                                        }
+                                        if alt_exclude:
+                                            via_payload["exclude_locations"] = alt_exclude
 
-                                        via_dist = via_data2['trip']['summary']['length']
-                                        via_time = via_data2['trip']['summary']['time']
-                                        alternative_routes.append(build_route_entry('🏘️ Via Town Center', combined_geom, via_dist, via_time))
-                                        logger.info(f"[VALHALLA] Via-Town (alt): {via_dist:.1f}km")
+                                        logger.info(f"[DISCOVERY] Trying via {town_name} ({town_lat:.4f},{town_lon:.4f})")
+                                        via_response = requests.post(url, json=via_payload, timeout=10, headers=headers)
+
+                                        if via_response.status_code == 200:
+                                            via_data = via_response.json()
+                                            if 'trip' in via_data and 'legs' in via_data['trip']:
+                                                # Combine geometry from all legs
+                                                combined_coords = []
+                                                for leg in via_data['trip']['legs']:
+                                                    coords = polyline.decode(leg['shape'], precision=6)
+                                                    combined_coords.extend(coords)
+                                                combined_geom = polyline.encode(combined_coords, precision=6)
+
+                                                via_dist = via_data['trip']['summary']['length']
+                                                via_time = via_data['trip']['summary']['time']
+                                                route_entry = build_route_entry(f'🏘️ Via {town_name}', combined_geom, via_dist, via_time)
+
+                                                # Only add if hazard count is different from existing routes
+                                                if not alternative_routes or route_entry['hazard_count'] != alternative_routes[-1].get('hazard_count', -1):
+                                                    alternative_routes.append(route_entry)
+                                                    logger.info(f"[DISCOVERY] Via {town_name}: {via_dist:.1f}km, {route_entry['hazard_count']} cameras")
+                                                    break  # Found a good alternative, stop searching
+                                    except Exception as e:
+                                        logger.warning(f"[DISCOVERY] Town via-point failed: {e}")
+                                        continue
                         except Exception as e:
-                            logger.warning(f"[VALHALLA] Via-Town route failed: {e}")
+                            logger.warning(f"[DISCOVERY] Nearby town discovery failed: {e}")
+
+                        # Route 5: Camera-Free Discovery - Aggressively exclude all route cameras
+                        # This finds routes that completely avoid camera-heavy roads
+                        try:
+                            # Get cameras that are ON the baseline route (within 100m)
+                            baseline_cameras = []
+                            for hazard in alt_exclude[:30]:  # Check top 30 cameras
+                                for coord in baseline_coords[::10]:  # Sample every 10th point
+                                    dist = ((hazard['lat'] - coord[0])**2 + (hazard['lon'] - coord[1])**2)**0.5
+                                    if dist < 0.001:  # ~100m
+                                        baseline_cameras.append(hazard)
+                                        break
+
+                            if baseline_cameras:
+                                # Request route excluding specifically the cameras on the baseline
+                                discovery_payload = {
+                                    "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
+                                    "costing": "auto",
+                                    "exclude_locations": baseline_cameras[:50]
+                                }
+
+                                logger.info(f"[DISCOVERY] Requesting camera-free route excluding {len(baseline_cameras)} baseline cameras")
+                                disc_response = requests.post(url, json=discovery_payload, timeout=10, headers=headers)
+
+                                if disc_response.status_code == 200:
+                                    disc_data = disc_response.json()
+                                    if 'trip' in disc_data and 'legs' in disc_data['trip']:
+                                        disc_geom = disc_data['trip']['legs'][0]['shape']
+                                        disc_dist = disc_data['trip']['summary']['length']
+                                        disc_time = disc_data['trip']['summary']['time']
+                                        route_entry = build_route_entry('🛡️ Camera-Free Discovery', disc_geom, disc_dist, disc_time)
+
+                                        # Only add if it has fewer cameras than baseline
+                                        if route_entry['hazard_count'] < len(baseline_cameras):
+                                            alternative_routes.append(route_entry)
+                                            logger.info(f"[DISCOVERY] Camera-Free: {disc_dist:.1f}km, {route_entry['hazard_count']} cameras (was {len(baseline_cameras)})")
+                        except Exception as e:
+                            logger.warning(f"[DISCOVERY] Camera-free discovery failed: {e}")
 
                         # Extract waypoints at equal intervals along the route
                         waypoints = []
@@ -5532,12 +5633,19 @@ def calculate_route():
                     # ================================================================
                     # PHASE 3 OPTIMIZATION: Cache the successful route
                     # ================================================================
+                    # Add total stop time to duration if stops exist
+                    total_duration_with_stops = routes[0]["duration_minutes"] + total_stop_time
+
                     response_data = {
                         'success': True,
                         'routes': routes,
                         'source': 'Valhalla ✅',
                         'distance': f'{routes[0]["distance_km"]:.2f} km',
                         'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
+                        'total_time_with_stops': f'{total_duration_with_stops:.0f} minutes',
+                        'total_stop_time': total_stop_time,
+                        'via_points_count': len(via_points),
+                        'stops_count': len(stops),
                         'geometry': routes[0]['geometry'],
                         'fuel_cost': routes[0]['fuel_cost'],
                         'toll_cost': routes[0]['toll_cost'],
