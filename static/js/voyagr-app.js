@@ -2637,9 +2637,7 @@ async function calculateRoute() {
                     console.log('[Route Comparison] Using single route (fallback)');
                 }
 
-                // Sort by preference
-                sortRoutesByPreference();
-
+                // Routes are already sorted by hazard count from backend
                 // Display all routes on map immediately
                 if (routeOptions.length > 1) {
                     displayAllRoutesOnMap();
