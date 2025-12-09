@@ -1198,13 +1198,19 @@ function displayRouteComparison() {
         return;
     }
 
-    // Display all routes on map with different colors
-    displayAllRoutesOnMap();
+    // DON'T call displayAllRoutesOnMap() here - it's controlled by selectRoute/showAllRoutes
 
     const listContainer = document.getElementById('routeComparisonList');
     const symbol = getCurrencySymbol();
 
-    listContainer.innerHTML = routeOptions.map((route, index) => {
+    // Add "Show All Routes" button at the top
+    let html = `
+        <button onclick="showAllRoutes(); event.stopPropagation();" style="width: 100%; background: #667eea; color: white; border: none; border-radius: 8px; padding: 12px; font-size: 14px; cursor: pointer; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+            🗺️ Show All ${routeOptions.length} Routes
+        </button>
+    `;
+
+    html += routeOptions.map((route, index) => {
         const distance = convertDistance(route.distance_km);
         const distUnit = getDistanceUnit();
         const routeName = route.name || `Route ${index + 1}`;
@@ -1249,6 +1255,8 @@ function displayRouteComparison() {
             </div>
         `;
     }).join('');
+
+    listContainer.innerHTML = html;
 }
 
 // ===== VIA-POINTS AND STOPS FUNCTIONALITY =====
@@ -1544,14 +1552,65 @@ function getOrderedWaypoints(startLat, startLon, endLat, endLon) {
 }
 
 /**
- * selectRoute function
+ * selectRoute function - shows only the selected route and hides others
  * @function selectRoute
- * @param {*} index - Parameter description
- * @returns {*} Return value description
+ * @param {number} index - Route index to select
  */
 function selectRoute(index) {
     selectedRouteIndex = index;
+
+    // Hide all route layers except the selected one
+    displaySingleRoute(index);
+
+    // Update the route list display
     displayRouteComparison();
+}
+
+/**
+ * Display only a single route on the map
+ * @param {number} index - Route index to display
+ */
+function displaySingleRoute(index) {
+    // Clear all route layers
+    allRouteLayers.forEach(layer => {
+        if (layer && map.hasLayer(layer)) {
+            map.removeLayer(layer);
+        }
+    });
+    allRouteLayers = [];
+
+    if (!routeOptions || !routeOptions[index]) return;
+
+    const route = routeOptions[index];
+    const polylinePoints = route.polyline || [];
+
+    if (polylinePoints.length > 0) {
+        const color = ROUTE_COLORS[index % ROUTE_COLORS.length];
+        const layer = L.polyline(polylinePoints, {
+            color: color,
+            weight: 6,
+            opacity: 0.9
+        }).addTo(map);
+
+        const routeName = route.name || `Route ${index + 1}`;
+        const hazardCount = route.hazard_count || 0;
+        layer.bindPopup(`<b>${routeName}</b><br>📷 ${hazardCount} cameras<br>⏱️ ${route.duration_minutes} min`);
+
+        allRouteLayers.push(layer);
+
+        // Fit map to the selected route
+        map.fitBounds(layer.getBounds().pad(0.1));
+    }
+
+    console.log(`[Routes] Showing only route ${index + 1}: ${route.name}`);
+}
+
+/**
+ * Show all routes on the map (called by "Show All Routes" button)
+ */
+function showAllRoutes() {
+    displayAllRoutesOnMap();
+    showStatus(`Showing all ${routeOptions.length} routes`, 'info');
 }
 /**
  * useRoute function
