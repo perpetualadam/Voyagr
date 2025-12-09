@@ -1905,36 +1905,52 @@ function showStatus(message, type) {
 }
 
 async function calculateRoute() {
+    console.log('[calculateRoute] START - Function called');
+
     const startInput = document.getElementById('start');
     const endInput = document.getElementById('end');
 
     if (!startInput || !endInput) {
         showStatus('Error: Input fields not found', 'error');
+        console.error('[calculateRoute] ERROR: Input fields not found');
         return;
     }
 
     const start = startInput.value ? startInput.value.trim() : '';
     const end = endInput.value ? endInput.value.trim() : '';
 
+    console.log('[calculateRoute] Start:', start);
+    console.log('[calculateRoute] End:', end);
+    console.log('[calculateRoute] Start dataset:', startInput.dataset);
+    console.log('[calculateRoute] End dataset:', endInput.dataset);
+
     if (!start || !end) {
         showStatus('Please enter both start and end locations', 'error');
+        console.error('[calculateRoute] ERROR: Empty start or end');
         return;
     }
 
     // Prevent multiple simultaneous geocoding requests
     if (isGeocoding) {
         showStatus('⏳ Geocoding in progress...', 'loading');
+        console.warn('[calculateRoute] WARNING: Geocoding already in progress');
         return;
     }
+
+    console.log('[calculateRoute] Calling geocodeLocations...');
 
     // Geocode locations if needed
     let geocodedResult = await geocodeLocations(start, end);
     if (!geocodedResult) {
+        console.error('[calculateRoute] ERROR: geocodeLocations returned null');
         return; // Error already shown by geocodeLocations
     }
 
     const geocodedStart = geocodedResult.start;
     const geocodedEnd = geocodedResult.end;
+
+    console.log('[calculateRoute] Geocoded start:', geocodedStart);
+    console.log('[calculateRoute] Geocoded end:', geocodedEnd);
 
     showStatus('📍 Calculating route...', 'loading');
 
@@ -1946,20 +1962,27 @@ async function calculateRoute() {
         localStorage.getItem('pref_roadworks') === 'true' ||
         localStorage.getItem('pref_accidents') === 'true';
 
+    const requestBody = {
+        start: geocodedStart,
+        end: geocodedEnd,
+        routing_mode: currentRoutingMode,
+        vehicle_type: currentVehicleType,
+        enable_hazard_avoidance: enableHazardAvoidance
+    };
+
+    console.log('[calculateRoute] Making API request to /api/route with:', requestBody);
+
     fetch('/api/route', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-            start: geocodedStart,
-            end: geocodedEnd,
-            routing_mode: currentRoutingMode,
-            vehicle_type: currentVehicleType,
-            enable_hazard_avoidance: enableHazardAvoidance
-        })
+        body: JSON.stringify(requestBody)
     })
-    .then(response => response.json())
+    .then(response => {
+        console.log('[calculateRoute] API response status:', response.status);
+        return response.json();
+    })
     .then(data => {
         console.log('[Route API] Response received:', {
             success: data.success,
@@ -2076,9 +2099,11 @@ async function calculateRoute() {
                 showStatus(statusMsg, 'success');
 
                 // Store route data for navigation (including destination for rerouting)
+                // FIXED: Store geocoded coordinates instead of raw input text
                 window.lastCalculatedRoute = {
                     ...data,
-                    destination: end  // Store destination for automatic rerouting
+                    destination: geocodedEnd,  // Store geocoded coordinates for automatic rerouting
+                    destinationName: end  // Store human-readable name for display
                 };
 
                 // Display hazard markers if hazards are present
@@ -6221,6 +6246,15 @@ async function showAutocomplete(fieldId) {
     const input = document.getElementById(fieldId);
     const dropdown = document.getElementById(`autocomplete${fieldId === 'start' ? 'Start' : 'End'}`);
     const query = input.value.trim();
+
+    // CRITICAL FIX: Clear stored coordinates when user types new text
+    // This ensures fresh geocoding when the user modifies the input
+    if (input.dataset.lat || input.dataset.lon) {
+        console.log(`[Autocomplete] Clearing stored coordinates for ${fieldId} - user is typing`);
+        delete input.dataset.lat;
+        delete input.dataset.lon;
+        delete input.dataset.displayName;
+    }
 
     // Clear previous timeout
     if (autocompleteTimeout) {
