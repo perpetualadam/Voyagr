@@ -19,7 +19,7 @@ import time
 from functools import wraps
 from collections import OrderedDict
 import logging
-from typing import List, Dict, Tuple, Optional, Any, Callable, TypeVar
+from typing import List, Dict, Tuple, Optional, Any, Callable, TypeVar, Set
 
 F = TypeVar('F', bound=Callable[..., Any])
 
@@ -346,15 +346,15 @@ CUSTOM_ROUTER_K_PATHS = int(os.getenv('CUSTOM_ROUTER_K_PATHS', '4'))
 CUSTOM_ROUTER_TIMEOUT = int(os.getenv('CUSTOM_ROUTER_TIMEOUT', '5000'))
 
 # Phase 3: Global custom router instances
-custom_graph = None
-custom_router = None
-k_paths = None
-custom_router_stats = {
-    'requests': 0,
-    'successes': 0,
-    'failures': 0,
-    'total_time_ms': 0,
-    'avg_time_ms': 0
+custom_graph: Any = None
+custom_router: Any = None
+k_paths: Any = None
+custom_router_stats: Dict[str, float] = {
+    'requests': 0.0,
+    'successes': 0.0,
+    'failures': 0.0,
+    'total_time_ms': 0.0,
+    'avg_time_ms': 0.0
 }
 
 # ============================================================================
@@ -1190,7 +1190,7 @@ class CostCalculator:
                 'error': str(e)
             }
 
-    def optimize_route_cost(self, routes_data: List[Dict[str, Any]], vehicle_type: str, fuel_efficiency: float, fuel_price: float,
+    def optimize_route_cost(self, routes_data: List[Dict[str, Any]], vehicle_type: str, _fuel_efficiency: float, _fuel_price: float,
                            energy_efficiency: float, electricity_price: float) -> Optional[Dict[str, Any]]:
         """Provide cost optimization suggestions for routes."""
         if not routes_data or len(routes_data) == 0:
@@ -1282,7 +1282,7 @@ class CostCalculator:
                 # Determine TTL based on route characteristics
                 # Longer routes get longer TTL (more stable)
                 # Routes with tolls/CAZ get shorter TTL (prices change)
-                base_ttl: int = 3600  # 1 hour
+                # base_ttl: 3600 seconds = 1 hour (kept for reference, TTL not currently used)
                 if distance_km > 100:
                     ttl_multiplier: float = 2  # 2 hours for long routes
                 elif distance_km > 50:
@@ -1294,8 +1294,7 @@ class CostCalculator:
                 if toll_cost > 0 or caz_cost > 0:
                     ttl_multiplier *= 0.7  # 30% reduction
 
-                # Calculate final TTL (currently not used in INSERT, but kept for future use)
-                _ttl_seconds: int = int(base_ttl * ttl_multiplier)
+                # TTL calculation available for future use: int(base_ttl * ttl_multiplier)
 
                 # Insert alternative route
                 cursor.execute('''
@@ -1431,10 +1430,11 @@ def calculate_energy_cost(distance_km: float, energy_efficiency_kwh_per_100km: f
     energy_needed = (distance_km / 100) * energy_efficiency_kwh_per_100km
     return energy_needed * electricity_price_gbp_per_kwh
 
-def calculate_toll_cost(distance_km: float, route_type: str = 'motorway', route_coords: list = None) -> float:
+def calculate_toll_cost(_distance_km: float, _route_type: str = 'motorway', route_coords: Optional[List[Tuple[float, float]]] = None) -> float:
     """Calculate toll cost based on actual toll roads, not distance.
 
     IMPORTANT: Toll costs are NOT calculated based on distance anymore.
+    The _distance_km and _route_type parameters are kept for backward compatibility.
     Only charges tolls if route passes through known UK toll roads:
     - M6 Toll (£3.50)
     - Dartford Crossing (£2.50)
@@ -1457,7 +1457,7 @@ def calculate_toll_cost(distance_km: float, route_type: str = 'motorway', route_
         return 0.0
 
     # Known UK toll roads with approximate locations
-    TOLL_ROADS = {
+    TOLL_ROADS: Dict[str, Dict[str, float]] = {
         'M6 Toll': {'lat': 52.5, 'lon': -1.9, 'cost': 3.50, 'radius_km': 15},
         'Dartford Crossing': {'lat': 51.45, 'lon': 0.2, 'cost': 2.50, 'radius_km': 10},
         'Severn Bridge': {'lat': 51.4, 'lon': -2.6, 'cost': 6.70, 'radius_km': 15},
@@ -1465,8 +1465,8 @@ def calculate_toll_cost(distance_km: float, route_type: str = 'motorway', route_
     }
 
     # Check if route passes through any known toll roads
-    total_toll = 0.0
-    tolls_charged = set()
+    total_toll: float = 0.0
+    tolls_charged: Set[str] = set()
 
     for coord in route_coords:
         if isinstance(coord, (list, tuple)) and len(coord) >= 2:
@@ -1485,10 +1485,11 @@ def calculate_toll_cost(distance_km: float, route_type: str = 'motorway', route_
 
     return round(total_toll, 2)
 
-def calculate_caz_cost(distance_km: float, vehicle_type: str = 'petrol_diesel', is_exempt: bool = False, route_coords: list = None) -> float:
+def calculate_caz_cost(_distance_km: float, vehicle_type: str = 'petrol_diesel', is_exempt: bool = False, route_coords: Optional[List[Tuple[float, float]]] = None) -> float:
     """Calculate Congestion Charge Zone cost based on actual CAZ zones.
 
     IMPORTANT: CAZ costs are NOT calculated based on distance anymore.
+    The _distance_km parameter is kept for backward compatibility.
     Only charges CAZ if route passes through known UK CAZ zones:
     - London (£15.00/day)
     - Birmingham (£8.00/day)
@@ -1523,7 +1524,7 @@ def calculate_caz_cost(distance_km: float, vehicle_type: str = 'petrol_diesel', 
         return 0.0
 
     # Known UK CAZ zones with approximate locations and charges
-    CAZ_ZONES = {
+    CAZ_ZONES: Dict[str, Dict[str, float]] = {
         'London': {'lat': 51.5, 'lon': -0.1, 'cost': 15.00, 'radius_km': 15},
         'Birmingham': {'lat': 52.5, 'lon': -1.9, 'cost': 8.00, 'radius_km': 8},
         'Leeds': {'lat': 53.8, 'lon': -1.5, 'cost': 10.00, 'radius_km': 8},
@@ -1535,8 +1536,8 @@ def calculate_caz_cost(distance_km: float, vehicle_type: str = 'petrol_diesel', 
     }
 
     # Check if route passes through any known CAZ zones
-    total_caz = 0.0
-    zones_charged = set()
+    total_caz: float = 0.0
+    zones_charged: Set[str] = set()
 
     for coord in route_coords:
         if isinstance(coord, (list, tuple)) and len(coord) >= 2:
@@ -1616,7 +1617,7 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
                 return_db_connection(conn)
                 return json.loads(cached_data)
 
-        hazards = {
+        hazards: Dict[str, List[Dict[str, Any]]] = {
             'speed_camera': [],
             'police': [],
             'roadworks': [],
@@ -1631,7 +1632,7 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
             "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND type = 'speed_camera'",
             (south, north, west, east)
         )
-        for lat, lon, camera_type, desc in cursor.fetchall():
+        for lat, lon, _camera_type, desc in cursor.fetchall():
             # Add to speed_camera list
             hazards['speed_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
 
@@ -1644,7 +1645,7 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
         logger.error(f"Error fetching hazards: {e}")
         return {}
 
-def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], route_bbox: Dict[str, float] = None, max_hazards: int = 25) -> Dict[str, Any]:
+def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], route_bbox: Optional[Dict[str, float]] = None, max_hazards: int = 25) -> Dict[str, Any]:
     """
     Build GraphHopper Custom Model to avoid hazards.
 
@@ -1772,7 +1773,7 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], rou
         logger.error(f"[CUSTOM_MODEL] Error building custom model: {e}")
         return {}  # Return empty model on error
 
-def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]], route_bbox: Dict[str, float] = None, max_hazards: int = 100, start_lat: float = None, start_lon: float = None, end_lat: float = None, end_lon: float = None) -> List[Dict[str, float]]:
+def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]], route_bbox: Optional[Dict[str, float]] = None, max_hazards: int = 100, start_lat: Optional[float] = None, start_lon: Optional[float] = None, end_lat: Optional[float] = None, end_lon: Optional[float] = None) -> List[Dict[str, float]]:
     """
     Build Valhalla exclude_locations to avoid hazards.
 
@@ -1899,7 +1900,12 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]], r
         # Log bounding box info for debugging
         if route_bbox and exclude_locations:
             logger.info(f"[VALHALLA] Bounding box: lat [{route_bbox['min_lat']:.4f}, {route_bbox['max_lat']:.4f}], lon [{route_bbox['min_lon']:.4f}, {route_bbox['max_lon']:.4f}]")
-            logger.info(f"[VALHALLA] Margins applied: lat={lat_margin:.4f} (~{lat_margin*111:.1f}km), lon={lon_margin:.4f} (~{lon_margin*111:.1f}km)")
+            # Calculate margins for logging (same formula as in the loop)
+            margin_percent = 0.5
+            min_margin_degrees = 0.15
+            lat_margin_log = max((route_bbox['max_lat'] - route_bbox['min_lat']) * margin_percent, min_margin_degrees)
+            lon_margin_log = max((route_bbox['max_lon'] - route_bbox['min_lon']) * margin_percent, min_margin_degrees)
+            logger.info(f"[VALHALLA] Margins applied: lat={lat_margin_log:.4f} (~{lat_margin_log*111:.1f}km), lon={lon_margin_log:.4f} (~{lon_margin_log*111:.1f}km)")
 
         return exclude_locations
 
@@ -4863,10 +4869,8 @@ def calculate_route():
             }
 
             # ================================================================
-            # HAZARD AVOIDANCE: Build exclude_polygons if enabled
+            # HAZARD AVOIDANCE: Build exclude_locations if enabled
             # ================================================================
-            exclude_polygons = []
-
             if enable_hazard_avoidance and hazards:
                 # Calculate bounding box for route to filter hazards
                 route_bbox = {
@@ -4974,11 +4978,9 @@ def calculate_route():
                     if not use_segmented_routing:
                         raise Exception("Baseline route failed - cannot extract waypoints")
 
-                    segment_results = []
                     total_distance = 0
                     total_duration = 0
                     all_geometries = []
-                    all_hazards = []
 
                     logger.info(f"[VALHALLA] Step 2: Calculating {num_segments} segments with real waypoints")
 
