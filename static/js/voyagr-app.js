@@ -1049,6 +1049,144 @@ function displayAllRoutesOnMap() {
     console.log(`[Routes] Displayed ${allRouteLayers.length} routes on map`);
 }
 
+// ===== DRAGGABLE ROUTE EDITING =====
+let routeDragMarkers = [];  // Markers for dragging route points
+let routeEditingEnabled = false;
+
+/**
+ * Enable route editing by adding draggable waypoints along the route
+ */
+function enableRouteEditing() {
+    if (!routePath || routePath.length < 2) {
+        showStatus('No route to edit', 'error');
+        return;
+    }
+
+    routeEditingEnabled = true;
+    clearRouteDragMarkers();
+
+    // Add drag markers at intervals along the route (every ~5km or ~20 points)
+    const interval = Math.max(10, Math.floor(routePath.length / 15));
+
+    for (let i = interval; i < routePath.length - interval; i += interval) {
+        const point = routePath[i];
+        addRouteDragMarker(point[0], point[1], i);
+    }
+
+    showStatus(`🖐️ Drag the orange markers to modify the route (${routeDragMarkers.length} edit points)`, 'info');
+    console.log(`[Route Edit] Added ${routeDragMarkers.length} drag markers`);
+}
+
+/**
+ * Add a draggable marker for route editing
+ */
+function addRouteDragMarker(lat, lon, routeIndex) {
+    const marker = L.marker([lat, lon], {
+        icon: L.divIcon({
+            className: 'route-drag-marker',
+            html: `<div style="background: #FF9800; border: 3px solid white; border-radius: 50%; width: 20px; height: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.4); cursor: grab;"></div>`,
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+        }),
+        draggable: true
+    }).addTo(map);
+
+    marker.routeIndex = routeIndex;
+    marker.originalLat = lat;
+    marker.originalLon = lon;
+
+    // Handle drag end - recalculate route with new via-point
+    marker.on('dragend', async function(e) {
+        const newPos = e.target.getLatLng();
+        console.log(`[Route Edit] Marker dragged from [${lat}, ${lon}] to [${newPos.lat}, ${newPos.lng}]`);
+
+        // Add this as a via-point and recalculate
+        await addDraggedViaPoint(newPos.lat, newPos.lng);
+    });
+
+    // Visual feedback on drag start
+    marker.on('dragstart', function() {
+        marker.getElement().style.cursor = 'grabbing';
+    });
+
+    routeDragMarkers.push(marker);
+}
+
+/**
+ * Add a via-point from route dragging and recalculate
+ */
+async function addDraggedViaPoint(lat, lon) {
+    // Add as via-point
+    const viaPoint = {
+        lat: lat,
+        lon: lon,
+        name: `Drag point ${viaPoints.length + 1}`,
+        type: 'via'
+    };
+    viaPoints.push(viaPoint);
+
+    // Add visual marker
+    const marker = L.marker([lat, lon], {
+        icon: L.divIcon({
+            className: 'via-point-marker',
+            html: `<div style="background: #4CAF50; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">✓</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+        }),
+        draggable: true
+    }).addTo(map);
+
+    marker.bindPopup(`
+        <div style="text-align: center;">
+            <strong>Via Point</strong><br>
+            <small>Drag to adjust</small><br>
+            <button onclick="removeViaPoint(${viaPoints.length - 1})" style="background: #F44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; margin-top: 6px; cursor: pointer;">Remove</button>
+        </div>
+    `);
+
+    viaPointMarkers.push(marker);
+    updateWaypointsList();
+
+    // Clear drag markers and recalculate route
+    clearRouteDragMarkers();
+    showStatus('🔄 Recalculating route with new via-point...', 'info');
+
+    // Recalculate route
+    await calculateRoute();
+}
+
+/**
+ * Clear all route drag markers
+ */
+function clearRouteDragMarkers() {
+    routeDragMarkers.forEach(marker => {
+        if (marker && map.hasLayer(marker)) {
+            map.removeLayer(marker);
+        }
+    });
+    routeDragMarkers = [];
+    routeEditingEnabled = false;
+}
+
+/**
+ * Toggle route editing mode
+ */
+function toggleRouteEditing() {
+    if (routeEditingEnabled) {
+        clearRouteDragMarkers();
+        showStatus('Route editing disabled', 'info');
+    } else {
+        enableRouteEditing();
+    }
+
+    // Update button state
+    const btn = document.getElementById('editRouteBtn');
+    if (btn) {
+        btn.classList.toggle('active', routeEditingEnabled);
+        btn.textContent = routeEditingEnabled ? '✏️ Editing... (click to stop)' : '✏️ Edit Route';
+    }
+}
+
 /**
  * displayRouteComparison function - Shows distinct route types with hazard counts
  * @function displayRouteComparison
@@ -2697,6 +2835,8 @@ function showRoutePreview(routeData) {
     // Show alternative routes if available
     if (routeOptions && routeOptions.length > 1) {
         showAlternativeRoutesInPreview();
+        // Display all routes on map with different colors
+        displayAllRoutesOnMap();
     } else {
         document.getElementById('previewAlternativeRoutesContainer').style.display = 'none';
     }
@@ -2740,20 +2880,29 @@ function showAlternativeRoutesInPreview() {
         const adjustedTollCost = distanceUnit === 'mi' ? tollCost * 1.60934 : tollCost;
         const adjustedCazCost = distanceUnit === 'mi' ? cazCost * 1.60934 : cazCost;
         const totalCost = (adjustedFuelCost + adjustedTollCost + adjustedCazCost).toFixed(2);
+        const routeColor = ROUTE_COLORS[index % ROUTE_COLORS.length];
+        const routeName = route.name || `Route ${index + 1}`;
+        const hazardCount = route.hazard_count || 0;
+        const hazardColor = hazardCount === 0 ? '#4CAF50' : (hazardCount <= 2 ? '#FF9800' : '#F44336');
         const div = document.createElement('div');
-        div.style.cssText = 'background: white; padding: 10px; border-radius: 6px; margin-bottom: 8px; border: 2px solid #ddd; cursor: pointer; transition: all 0.3s ease;';
+        div.style.cssText = `background: white; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid ${routeColor}; border: 2px solid #ddd; cursor: pointer; transition: all 0.3s ease;`;
         div.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <strong style="color: #333;">Route ${index + 1}</strong>
-                <span style="background: #667eea; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">${convertDistance(route.distance_km)} ${distUnit}</span>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="display: inline-block; width: 12px; height: 12px; background: ${routeColor}; border-radius: 50%;"></span>
+                    <strong style="color: #333;">${routeName}</strong>
+                </div>
+                <span style="background: ${hazardColor}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">📷 ${hazardCount}</span>
             </div>
-            <div style="font-size: 12px; color: #666; margin-bottom: 6px;">
-                ⏱️ ${route.duration_minutes} min | 💰 ${symbol}${totalCost}
+            <div style="font-size: 12px; color: #666;">
+                ⏱️ ${route.duration_minutes} min | 📏 ${convertDistance(route.distance_km)} ${distUnit} | 💰 ${symbol}${totalCost}
             </div>
         `;
-        div.onmouseover = () => div.style.borderColor = '#667eea';
-        div.onmouseout = () => div.style.borderColor = '#ddd';
+        div.onmouseover = () => { div.style.borderColor = routeColor; div.style.background = '#f0f4ff'; };
+        div.onmouseout = () => { div.style.borderColor = '#ddd'; div.style.background = 'white'; };
         div.onclick = () => {
+            selectedRouteIndex = index;
+            displayAllRoutesOnMap();  // Refresh map to highlight selected route
             useRoute(index);
             showRoutePreview(routeOptions[index]);
         };

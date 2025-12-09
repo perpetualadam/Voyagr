@@ -2811,12 +2811,16 @@ HTML_TEMPLATE = '''
                         <button id="addStopBtn" onclick="toggleAddStop()" style="flex: 1; padding: 8px 12px; border: 1px solid #E91E63; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; color: #E91E63;">🛑 Add Stop</button>
                         <button onclick="clearAllWaypoints()" style="padding: 8px 12px; border: 1px solid #999; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; color: #666;">✕ Clear</button>
                     </div>
+                    <div style="margin-bottom: 10px;">
+                        <button id="editRouteBtn" onclick="toggleRouteEditing()" style="width: 100%; padding: 10px 12px; border: 2px solid #4CAF50; background: white; border-radius: 6px; cursor: pointer; font-size: 13px; color: #4CAF50; font-weight: 600;">✏️ Edit Route (Drag to modify)</button>
+                    </div>
                     <div id="waypointsList" style="max-height: 150px; overflow-y: auto;">
                         <div style="color: #999; font-size: 12px; padding: 10px;">No waypoints added. Click buttons above to add via-points or stops.</div>
                     </div>
                     <div style="font-size: 11px; color: #888; margin-top: 8px;">
                         <strong>Via-Points:</strong> Route must pass through (e.g., scenic route)<br>
-                        <strong>Stops:</strong> Places to park/stop (adds time to journey)
+                        <strong>Stops:</strong> Places to park/stop (adds time to journey)<br>
+                        <strong>Edit Route:</strong> Drag orange markers on route to modify path
                     </div>
                 </div>
 
