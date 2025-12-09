@@ -5109,7 +5109,17 @@ def calculate_route():
                             'source': f'Valhalla ✅ ({num_segments}-Segment)',
                             'routing_mode': routing_mode,
                             'vehicle_type': vehicle_type,
-                            'hazard_avoidance_enabled': enable_hazard_avoidance
+                            'hazard_avoidance_enabled': enable_hazard_avoidance,
+                            # Top-level fields for frontend compatibility
+                            'geometry': combined_geometry,
+                            'distance': f'{total_distance:.2f} km',
+                            'time': f'{int(total_duration // 60)} min',
+                            'fuel_cost': fuel_cost,
+                            'toll_cost': toll_cost,
+                            'caz_cost': caz_cost,
+                            'energy_cost': energy_cost,
+                            'hazards': hazards_on_route,
+                            'hazard_count': hazard_count
                         }
 
                         # Cache the route
