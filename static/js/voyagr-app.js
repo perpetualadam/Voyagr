@@ -2600,12 +2600,8 @@ async function calculateRoute() {
                     displayHazardMarkers(data.routes[0].hazards);
                 }
 
-                // Show route preview instead of auto-starting navigation
-                setTimeout(() => {
-                    showRoutePreview(data);
-                }, 300);
-
-                // Use real routes from backend if available, otherwise use main route
+                // IMPORTANT: Populate routeOptions BEFORE showing route preview
+                // so that displayAllRoutesOnMap() has routes to display
                 if (data.routes && data.routes.length > 0) {
                     // Real routes from routing engine
                     routeOptions = data.routes.map(route => ({
@@ -2616,6 +2612,7 @@ async function calculateRoute() {
                         fuel_cost: route.fuel_cost,
                         toll_cost: route.toll_cost,
                         caz_cost: route.caz_cost,
+                        hazard_count: route.hazard_count || 0,
                         polyline: decodePolyline(route.geometry || '', 6),  // Valhalla precision 6
                         geometry: route.geometry,
                         hazards: route.hazards || []
@@ -2632,6 +2629,7 @@ async function calculateRoute() {
                             fuel_cost: data.fuel_cost || 0,
                             toll_cost: data.toll_cost || 0,
                             caz_cost: data.caz_cost || 0,
+                            hazard_count: 0,
                             polyline: routePath,
                             geometry: data.geometry
                         }
@@ -2641,6 +2639,17 @@ async function calculateRoute() {
 
                 // Sort by preference
                 sortRoutesByPreference();
+
+                // Display all routes on map immediately
+                if (routeOptions.length > 1) {
+                    displayAllRoutesOnMap();
+                    console.log(`[Routes] Displayed ${routeOptions.length} routes on map with different colors`);
+                }
+
+                // Show route preview AFTER routeOptions is populated
+                setTimeout(() => {
+                    showRoutePreview(data);
+                }, 300);
 
                 // Show start navigation buttons (both in FAB and in bottom sheet)
                 const startNavBtn = document.getElementById('startNavBtn');
