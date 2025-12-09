@@ -5087,49 +5087,26 @@ def calculate_route():
                         except Exception as e:
                             logger.warning(f"[VALHALLA] Shortest route failed: {e}")
 
-                        # Route 2: Avoid Highways (use smaller roads - more likely to avoid main road cameras)
+                        # Route 2: Shortest Distance (different path optimization)
                         try:
-                            avoid_hwy_payload = {
+                            shortest_payload = {
                                 "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
-                                "costing": "auto",
-                                "costing_options": {"auto": {"use_highways": 0.0}}
+                                "costing": "auto_shorter"
                             }
                             if alt_exclude:
-                                avoid_hwy_payload["exclude_locations"] = alt_exclude
-                            logger.info(f"[VALHALLA] Requesting Avoid-Highways route with {len(alt_exclude)} exclusions")
-                            ah_response = requests.post(url, json=avoid_hwy_payload, timeout=10, headers=headers)
-                            if ah_response.status_code == 200:
-                                ah_data = ah_response.json()
-                                if 'trip' in ah_data and 'legs' in ah_data['trip']:
-                                    ah_geom = ah_data['trip']['legs'][0]['shape']
-                                    ah_dist = ah_data['trip']['summary']['length']
-                                    ah_time = ah_data['trip']['summary']['time']
-                                    alternative_routes.append(build_route_entry('🛤️ Avoid Highways', ah_geom, ah_dist, ah_time))
-                                    logger.info(f"[VALHALLA] Avoid-Highways: {ah_dist:.1f}km")
+                                shortest_payload["exclude_locations"] = alt_exclude
+                            logger.info(f"[VALHALLA] Requesting Shortest route with {len(alt_exclude)} exclusions")
+                            sh_response = requests.post(url, json=shortest_payload, timeout=10, headers=headers)
+                            if sh_response.status_code == 200:
+                                sh_data = sh_response.json()
+                                if 'trip' in sh_data and 'legs' in sh_data['trip']:
+                                    sh_geom = sh_data['trip']['legs'][0]['shape']
+                                    sh_dist = sh_data['trip']['summary']['length']
+                                    sh_time = sh_data['trip']['summary']['time']
+                                    alternative_routes.append(build_route_entry('📏 Shortest', sh_geom, sh_dist, sh_time))
+                                    logger.info(f"[VALHALLA] Shortest: {sh_dist:.1f}km")
                         except Exception as e:
-                            logger.warning(f"[VALHALLA] Avoid-Highways route failed: {e}")
-
-                        # Route 3: Eco-friendly (avoid highways AND tolls - uses local roads)
-                        try:
-                            eco_payload = {
-                                "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
-                                "costing": "auto",
-                                "costing_options": {"auto": {"use_highways": 0.0, "use_tolls": 0.0}}
-                            }
-                            if alt_exclude:
-                                eco_payload["exclude_locations"] = alt_exclude
-                            logger.info(f"[VALHALLA] Requesting Eco route with {len(alt_exclude)} exclusions")
-                            eco_response = requests.post(url, json=eco_payload, timeout=10, headers=headers)
-                            if eco_response.status_code == 200:
-                                eco_data = eco_response.json()
-                                if 'trip' in eco_data and 'legs' in eco_data['trip']:
-                                    eco_geom = eco_data['trip']['legs'][0]['shape']
-                                    eco_dist = eco_data['trip']['summary']['length']
-                                    eco_time = eco_data['trip']['summary']['time']
-                                    alternative_routes.append(build_route_entry('🌱 Eco', eco_geom, eco_dist, eco_time))
-                                    logger.info(f"[VALHALLA] Eco: {eco_dist:.1f}km")
-                        except Exception as e:
-                            logger.warning(f"[VALHALLA] Eco route failed: {e}")
+                            logger.warning(f"[VALHALLA] Shortest route failed: {e}")
 
                         # ================================================================
                         # INTELLIGENT ROUTE DISCOVERY
