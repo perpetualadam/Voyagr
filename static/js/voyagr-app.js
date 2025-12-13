@@ -1005,6 +1005,12 @@ const ROUTE_COLORS = ['#667eea', '#e53935', '#43a047', '#fb8c00', '#8e24aa'];
  * @returns {void}
  */
 function displayAllRoutesOnMap() {
+    // Clear the main routeLayer if it exists
+    if (routeLayer && map.hasLayer(routeLayer)) {
+        map.removeLayer(routeLayer);
+        routeLayer = null;
+    }
+
     // Clear previous route layers
     allRouteLayers.forEach(layer => {
         if (layer && map.hasLayer(layer)) {
@@ -1571,6 +1577,12 @@ function selectRoute(index) {
  * @param {number} index - Route index to display
  */
 function displaySingleRoute(index) {
+    // Clear the main routeLayer if it exists
+    if (routeLayer && map.hasLayer(routeLayer)) {
+        map.removeLayer(routeLayer);
+        routeLayer = null;
+    }
+
     // Clear all route layers
     allRouteLayers.forEach(layer => {
         if (layer && map.hasLayer(layer)) {
