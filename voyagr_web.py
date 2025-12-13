@@ -563,9 +563,11 @@ class DatabasePool:
             if self.available:
                 return self.available.pop()
             else:
-                # Create new connection if pool exhausted
+                # Create new connection if pool exhausted - track it for cleanup
                 conn = sqlite3.connect(self.db_file, check_same_thread=False)
                 conn.row_factory = sqlite3.Row
+                self.connections.append(conn)  # Track for proper cleanup
+                logger.debug(f"[DB POOL] Created overflow connection (total: {len(self.connections)})")
                 return conn
 
     def return_connection(self, conn: Any) -> None:
@@ -574,7 +576,13 @@ class DatabasePool:
             if len(self.available) < self.pool_size:
                 self.available.append(conn)
             else:
-                conn.close()
+                # Close overflow connections
+                try:
+                    conn.close()
+                    if conn in self.connections:
+                        self.connections.remove(conn)
+                except Exception as e:
+                    logger.warning(f"[DB POOL] Error closing overflow connection: {e}")
 
     def close_all(self) -> None:
         """Close all connections in the pool."""
@@ -582,8 +590,8 @@ class DatabasePool:
             for conn in self.connections:
                 try:
                     conn.close()
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"[DB POOL] Error closing connection: {e}")
             self.connections.clear()
             self.available.clear()
 
@@ -4596,9 +4604,11 @@ class ParallelRoutingEngine:
                 else:
                     self.results['graphhopper'] = {'success': False, 'error': f'HTTP {response.status_code}', 'response_time_ms': elapsed}
         except requests.exceptions.Timeout:
-            self.results['graphhopper'] = {'success': False, 'error': 'Timeout', 'response_time_ms': 10000}
+            with self.lock:
+                self.results['graphhopper'] = {'success': False, 'error': 'Timeout', 'response_time_ms': 10000}
         except Exception as e:
-            self.results['graphhopper'] = {'success': False, 'error': str(e), 'response_time_ms': 0}
+            with self.lock:
+                self.results['graphhopper'] = {'success': False, 'error': str(e), 'response_time_ms': 0}
 
     def request_valhalla(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> None:
         """Request route from Valhalla in parallel."""
@@ -4638,9 +4648,11 @@ class ParallelRoutingEngine:
                 else:
                     self.results['valhalla'] = {'success': False, 'error': f'HTTP {response.status_code}', 'response_time_ms': elapsed}
         except requests.exceptions.Timeout:
-            self.results['valhalla'] = {'success': False, 'error': 'Timeout', 'response_time_ms': 10000}
+            with self.lock:
+                self.results['valhalla'] = {'success': False, 'error': 'Timeout', 'response_time_ms': 10000}
         except Exception as e:
-            self.results['valhalla'] = {'success': False, 'error': str(e), 'response_time_ms': 0}
+            with self.lock:
+                self.results['valhalla'] = {'success': False, 'error': str(e), 'response_time_ms': 0}
 
     def request_osrm(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> None:
         """Request route from OSRM in parallel."""
@@ -4676,9 +4688,11 @@ class ParallelRoutingEngine:
                 else:
                     self.results['osrm'] = {'success': False, 'error': f'HTTP {response.status_code}', 'response_time_ms': elapsed}
         except requests.exceptions.Timeout:
-            self.results['osrm'] = {'success': False, 'error': 'Timeout', 'response_time_ms': 10000}
+            with self.lock:
+                self.results['osrm'] = {'success': False, 'error': 'Timeout', 'response_time_ms': 10000}
         except Exception as e:
-            self.results['osrm'] = {'success': False, 'error': str(e), 'response_time_ms': 0}
+            with self.lock:
+                self.results['osrm'] = {'success': False, 'error': str(e), 'response_time_ms': 0}
 
     def run_parallel(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, Any]:
         """Run all 3 routing engines in parallel."""
@@ -6056,8 +6070,8 @@ def calculate_multi_stop_route():
                         'waypoints': len(waypoints),
                         'source': 'Valhalla ✅'
                     })
-        except:
-            pass
+        except (requests.exceptions.RequestException, KeyError, ValueError) as e:
+            logger.debug(f"[MULTI-STOP] Valhalla fallback failed: {e}")
 
         # Fallback: calculate segments with OSRM
         total_distance = 0
@@ -6738,8 +6752,9 @@ def voice_speak():
 
             # Return audio file
             return send_file(temp_file, mimetype='audio/wav')
-        except:
+        except (ImportError, RuntimeError, OSError) as e:
             # Fallback: return text for browser Web Speech API
+            logger.debug(f"[TTS] pyttsx3 unavailable, using browser TTS: {e}")
             return jsonify({'success': True, 'text': text, 'use_browser_tts': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -7639,7 +7654,7 @@ def parallel_routing_test():
             start_lon = float(start_parts[1].strip())
             end_lat = float(end_parts[0].strip())
             end_lon = float(end_parts[1].strip())
-        except:
+        except (ValueError, IndexError, AttributeError):
             return jsonify({'success': False, 'error': 'Invalid coordinates'})
 
         # Run parallel routing
@@ -7689,7 +7704,7 @@ def fallback_chain_status():
                 'response_time_ms': round(elapsed, 0),
                 'url': VALHALLA_URL
             }
-        except:
+        except requests.exceptions.RequestException:
             status['valhalla'] = {'available': False, 'response_time_ms': None, 'url': VALHALLA_URL}
 
         # Check OSRM
@@ -7702,7 +7717,7 @@ def fallback_chain_status():
                 'response_time_ms': round(elapsed, 0),
                 'url': 'http://router.project-osrm.org'
             }
-        except:
+        except requests.exceptions.RequestException:
             status['osrm'] = {'available': False, 'response_time_ms': None, 'url': 'http://router.project-osrm.org'}
 
         # Determine fallback chain
@@ -7755,7 +7770,7 @@ def routing_performance_report():
                 start_lon = float(start_parts[1].strip())
                 end_lat = float(end_parts[0].strip())
                 end_lon = float(end_parts[1].strip())
-            except:
+            except (ValueError, IndexError, AttributeError):
                 continue
 
             # Run parallel routing
