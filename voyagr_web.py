@@ -3323,13 +3323,8 @@ HTML_TEMPLATE = '''
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">Avoid Speed Cameras</span>
-                            <button class="toggle-switch" id="avoidSpeedCameras" data-pref="speedCameras" onclick="togglePreference('speedCameras')"></button>
-                        </div>
-
-                        <div class="preference-item">
-                            <span class="preference-label">Avoid Traffic Cameras</span>
-                            <button class="toggle-switch" id="avoidTrafficCameras" data-pref="trafficCameras" onclick="togglePreference('trafficCameras')"></button>
+                            <span class="preference-label">📷 Avoid Cameras</span>
+                            <button class="toggle-switch" id="avoidCameras" data-pref="cameras" onclick="togglePreference('cameras')"></button>
                         </div>
 
                         <div class="preference-item">

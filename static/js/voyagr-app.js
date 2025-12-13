@@ -448,8 +448,7 @@ function saveAllSettings() {
         hazardPreferences: {
             avoidTolls: localStorage.getItem('pref_tolls') === 'true',
             avoidCAZ: localStorage.getItem('pref_caz') === 'true',
-            avoidSpeedCameras: localStorage.getItem('pref_speedCameras') === 'true',
-            avoidTrafficCameras: localStorage.getItem('pref_trafficCameras') === 'true',
+            avoidCameras: localStorage.getItem('pref_cameras') === 'true',
             variableSpeedAlerts: localStorage.getItem('pref_variableSpeedAlerts') === 'true'
         },
 
@@ -523,8 +522,7 @@ function loadAllSettings() {
             if (settings.hazardPreferences) {
                 localStorage.setItem('pref_tolls', settings.hazardPreferences.avoidTolls ? 'true' : 'false');
                 localStorage.setItem('pref_caz', settings.hazardPreferences.avoidCAZ ? 'true' : 'false');
-                localStorage.setItem('pref_speedCameras', settings.hazardPreferences.avoidSpeedCameras ? 'true' : 'false');
-                localStorage.setItem('pref_trafficCameras', settings.hazardPreferences.avoidTrafficCameras ? 'true' : 'false');
+                localStorage.setItem('pref_cameras', settings.hazardPreferences.avoidCameras ? 'true' : 'false');
                 localStorage.setItem('pref_variableSpeedAlerts', settings.hazardPreferences.variableSpeedAlerts ? 'true' : 'false');
             }
 
@@ -738,7 +736,7 @@ function resetAllSettings() {
             'unit_distance', 'unit_currency', 'unit_speed', 'unit_temperature',
             'vehicleType', 'routingMode',
             'routePreferences',
-            'pref_tolls', 'pref_caz', 'pref_speedCameras', 'pref_trafficCameras', 'pref_variableSpeedAlerts',
+            'pref_tolls', 'pref_caz', 'pref_cameras', 'pref_variableSpeedAlerts',
             'mapTheme', 'smartZoomEnabled',
             'parkingPreferences'
         ];
@@ -2505,8 +2503,7 @@ async function calculateRoute() {
 
     // Check if hazard avoidance is enabled (any hazard type selected)
     const enableHazardAvoidance =
-        localStorage.getItem('pref_speedCameras') === 'true' ||
-        localStorage.getItem('pref_trafficCameras') === 'true' ||
+        localStorage.getItem('pref_cameras') === 'true' ||
         localStorage.getItem('pref_police') === 'true' ||
         localStorage.getItem('pref_roadworks') === 'true' ||
         localStorage.getItem('pref_accidents') === 'true';
@@ -3844,8 +3841,7 @@ async function selectParking(parking, destinationCoords) {
 
         // Calculate driving route to parking
         const enableHazardAvoidanceParking =
-            localStorage.getItem('pref_speedCameras') === 'true' ||
-            localStorage.getItem('pref_trafficCameras') === 'true' ||
+            localStorage.getItem('pref_cameras') === 'true' ||
             localStorage.getItem('pref_police') === 'true' ||
             localStorage.getItem('pref_roadworks') === 'true' ||
             localStorage.getItem('pref_accidents') === 'true';
@@ -3872,8 +3868,7 @@ async function selectParking(parking, destinationCoords) {
 
         // Calculate walking route from parking to destination
         const enableHazardAvoidanceWalking =
-            localStorage.getItem('pref_speedCameras') === 'true' ||
-            localStorage.getItem('pref_trafficCameras') === 'true' ||
+            localStorage.getItem('pref_cameras') === 'true' ||
             localStorage.getItem('pref_police') === 'true' ||
             localStorage.getItem('pref_roadworks') === 'true' ||
             localStorage.getItem('pref_accidents') === 'true';
@@ -6447,8 +6442,7 @@ async function triggerAutomaticReroute(currentLat, currentLon) {
 
         // Prepare route calculation request
         const enableHazardAvoidanceReroute =
-            localStorage.getItem('pref_speedCameras') === 'true' ||
-            localStorage.getItem('pref_trafficCameras') === 'true' ||
+            localStorage.getItem('pref_cameras') === 'true' ||
             localStorage.getItem('pref_police') === 'true' ||
             localStorage.getItem('pref_roadworks') === 'true' ||
             localStorage.getItem('pref_accidents') === 'true';
@@ -6878,8 +6872,7 @@ function saveAppState() {
             preferences: {
                 tolls: localStorage.getItem('pref_tolls'),
                 caz: localStorage.getItem('pref_caz'),
-                speedCameras: localStorage.getItem('pref_speedCameras'),
-                trafficCameras: localStorage.getItem('pref_trafficCameras'),
+                cameras: localStorage.getItem('pref_cameras'),
                 policeRadars: localStorage.getItem('pref_policeRadars'),
                 roadworks: localStorage.getItem('pref_roadworks'),
                 accidents: localStorage.getItem('pref_accidents'),
@@ -7880,8 +7873,7 @@ function togglePreference(pref) {
     const buttonIdMap = {
         'tolls': 'avoidTolls',
         'caz': 'avoidCAZ',
-        'speedCameras': 'avoidSpeedCameras',
-        'trafficCameras': 'avoidTrafficCameras',
+        'cameras': 'avoidCameras',
         'variableSpeedAlerts': 'variableSpeedAlerts'
     };
 
@@ -7918,12 +7910,9 @@ function togglePreference(pref) {
     } else if (pref === 'variableSpeedAlerts') {
         console.log('[Settings] Variable speed alerts:', isActive ? 'enabled' : 'disabled');
         showStatus(`📊 Variable speed alerts ${isActive ? 'enabled' : 'disabled'}`, 'info');
-    } else if (pref === 'speedCameras') {
-        console.log('[Settings] Speed camera avoidance:', isActive ? 'enabled' : 'disabled');
-        showStatus(`📷 Speed camera avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
-    } else if (pref === 'trafficCameras') {
-        console.log('[Settings] Traffic camera avoidance:', isActive ? 'enabled' : 'disabled');
-        showStatus(`📹 Traffic camera avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
+    } else if (pref === 'cameras') {
+        console.log('[Settings] Camera avoidance:', isActive ? 'enabled' : 'disabled');
+        showStatus(`📷 Camera avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
     }
 
     // Save all settings to persistent storage
@@ -7939,12 +7928,11 @@ function loadPreferences() {
     const buttonIdMap = {
         'tolls': 'avoidTolls',
         'caz': 'avoidCAZ',
-        'speedCameras': 'avoidSpeedCameras',
-        'trafficCameras': 'avoidTrafficCameras',
+        'cameras': 'avoidCameras',
         'variableSpeedAlerts': 'variableSpeedAlerts'
     };
 
-    const prefs = ['tolls', 'caz', 'speedCameras', 'trafficCameras', 'variableSpeedAlerts'];
+    const prefs = ['tolls', 'caz', 'cameras', 'variableSpeedAlerts'];
     prefs.forEach(pref => {
         const saved = localStorage.getItem('pref_' + pref);
         const buttonId = buttonIdMap[pref];
