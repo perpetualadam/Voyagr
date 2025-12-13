@@ -8835,8 +8835,12 @@ function initMobileEnhancements() {
         }, { passive: true });
     });
 
-    // Prevent double-tap zoom on interactive elements
-    document.querySelectorAll('button, .fab, .btn, input, select').forEach(el => {
+    // Prevent double-tap zoom on buttons (NOT inputs/selects - they need normal touch behavior)
+    document.querySelectorAll('button, .fab, .btn').forEach(el => {
+        // Skip if element is an input or select (they need default touch behavior for keyboard)
+        if (el.tagName === 'INPUT' || el.tagName === 'SELECT' || el.tagName === 'TEXTAREA') {
+            return;
+        }
         el.addEventListener('touchend', (e) => {
             e.preventDefault();
             e.target.click();
