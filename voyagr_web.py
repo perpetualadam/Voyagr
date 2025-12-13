@@ -1349,7 +1349,7 @@ class CostCalculator:
         self.cost_history = []  # Track cost calculations for analytics
 
     def calculate_costs(self, distance_km: float, vehicle_type: str, fuel_efficiency: float, fuel_price: float,
-                       energy_efficiency: float, electricity_price: float, include_tolls: bool, include_caz: bool, caz_exempt: bool, route_coords: Optional[List[Tuple[float, float]]] = None) -> Dict[str, float]:
+                       energy_efficiency: float, electricity_price: float, include_tolls: bool, include_caz: bool, caz_exempt: bool, route_coords: Optional[List[Tuple[float, float]]] = None) -> Dict[str, Any]:
         """Calculate all costs for a route.
 
         Args:
