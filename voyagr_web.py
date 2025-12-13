@@ -3487,9 +3487,9 @@ HTML_TEMPLATE = '''
                     <label for="start">Start Location</label>
                     <div class="location-input-group">
                         <input type="text" id="start" placeholder="Enter address or tap map" oninput="showAutocomplete('start')" onfocus="showAutocomplete('start')">
-                        <div style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px;">
-                            <button class="location-btn" title="Use current location" onclick="setCurrentLocation('start')" style="font-size: 16px;">📍</button>
-                            <button class="location-btn" title="Pick from map" onclick="pickLocationFromMap('start')" style="font-size: 16px;">🗺️</button>
+                        <div class="location-btn-container">
+                            <button type="button" class="location-btn" title="Use current location" onclick="setCurrentLocation('start')">📍</button>
+                            <button type="button" class="location-btn" title="Pick from map" onclick="pickLocationFromMap('start')">🗺️</button>
                         </div>
                         <div class="autocomplete-dropdown" id="autocompleteStart"></div>
                     </div>
@@ -3499,9 +3499,9 @@ HTML_TEMPLATE = '''
                     <label for="end">Destination</label>
                     <div class="location-input-group">
                         <input type="text" id="end" placeholder="Enter address or tap map" oninput="showAutocomplete('end')" onfocus="showAutocomplete('end')">
-                        <div style="position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px;">
-                            <button class="location-btn" title="Use current location" onclick="setCurrentLocation('end')" style="font-size: 16px;">📍</button>
-                            <button class="location-btn" title="Pick from map" onclick="pickLocationFromMap('end')" style="font-size: 16px;">🗺️</button>
+                        <div class="location-btn-container">
+                            <button type="button" class="location-btn" title="Use current location" onclick="setCurrentLocation('end')">📍</button>
+                            <button type="button" class="location-btn" title="Pick from map" onclick="pickLocationFromMap('end')">🗺️</button>
                         </div>
                         <div class="autocomplete-dropdown" id="autocompleteEnd"></div>
                         <div class="search-history-dropdown" id="searchHistoryDropdown"></div>

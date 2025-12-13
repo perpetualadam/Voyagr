@@ -250,24 +250,43 @@ input:focus, select:focus {
 }
 
 .location-input-group input {
-    padding-right: 40px;
+    padding-right: 90px; /* Space for two buttons (40px each + gap) */
 }
 
-.location-btn {
+/* Container for location buttons - positioned to not block input touch area */
+.location-btn-container {
     position: absolute;
     right: 8px;
     top: 50%;
     transform: translateY(-50%);
-    background: none;
-    border: none;
+    display: flex;
+    gap: 4px;
+    pointer-events: none; /* Let touches pass through to input */
+}
+
+.location-btn {
+    background: #f5f5f5;
+    border: 1px solid #ddd;
+    border-radius: 6px;
     cursor: pointer;
     font-size: 18px;
     color: #667eea;
     padding: 8px;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto; /* Re-enable touch on buttons themselves */
 }
 
 .location-btn:hover {
     color: #5568d3;
+    background: #e8e8e8;
+}
+
+.location-btn:active {
+    background: #ddd;
 }
 
 .button-group {
@@ -1639,12 +1658,17 @@ body.dark-mode .location-input-group {
 }
 
 body.dark-mode .location-btn {
-    background: transparent;
+    background: #4a4a4a;
+    border-color: #666;
     color: #e0e0e0;
 }
 
 body.dark-mode .location-btn:hover {
-    background: #4a4a4a;
+    background: #555;
+}
+
+body.dark-mode .location-btn:active {
+    background: #666;
 }
 
 /* Autocomplete Dropdown Dark Mode */
