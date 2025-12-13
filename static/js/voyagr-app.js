@@ -1052,6 +1052,9 @@ function displayAllRoutesOnMap() {
         map.fitBounds(allBounds.pad(0.1));
     }
 
+    // Display hazards from all routes
+    displayAllRouteHazards();
+
     console.log(`[Routes] Displayed ${allRouteLayers.length} routes on map`);
 }
 
@@ -1612,6 +1615,13 @@ function displaySingleRoute(index) {
 
         // Fit map to the selected route
         map.fitBounds(layer.getBounds().pad(0.1));
+    }
+
+    // Display hazards for the selected route only
+    if (route.hazards && route.hazards.length > 0) {
+        displayHazardMarkers(route.hazards);
+    } else {
+        clearHazardMarkers();
     }
 
     console.log(`[Routes] Showing only route ${index + 1}: ${route.name}`);
@@ -2762,43 +2772,103 @@ function displayHazardMarkers(hazards) {
     }
 
     // Clear existing hazard markers
-    if (window.hazardMarkers) {
-        window.hazardMarkers.forEach(marker => map.removeLayer(marker));
-    }
-    window.hazardMarkers = [];
+    clearHazardMarkers();
 
-    // Hazard type to emoji mapping
-    const hazardEmojis = {
-        'traffic_light_camera': '🚨',
-        'speed_camera': '📷',
-        'police': '🚔',
-        'roadworks': '🚧',
-        'accident': '⚠️',
-        'railway_crossing': '🚂',
-        'pothole': '🕳️',
-        'debris': '🪨'
+    // Hazard type configuration
+    const hazardConfig = {
+        'traffic_light_camera': { emoji: '🚨', color: '#e53935', bgColor: '#ffebee', label: 'Traffic Light Camera' },
+        'speed_camera': { emoji: '📷', color: '#ff9800', bgColor: '#fff3e0', label: 'Speed Camera' },
+        'average_speed_camera': { emoji: '📸', color: '#ff5722', bgColor: '#fbe9e7', label: 'Average Speed Camera' },
+        'red_light_camera': { emoji: '🔴', color: '#d32f2f', bgColor: '#ffcdd2', label: 'Red Light Camera' },
+        'mobile_camera': { emoji: '🚐', color: '#9c27b0', bgColor: '#f3e5f5', label: 'Mobile Camera' },
+        'police': { emoji: '🚔', color: '#1976d2', bgColor: '#e3f2fd', label: 'Police' },
+        'roadworks': { emoji: '🚧', color: '#ffc107', bgColor: '#fff8e1', label: 'Roadworks' },
+        'accident': { emoji: '⚠️', color: '#f44336', bgColor: '#ffebee', label: 'Accident' },
+        'railway_crossing': { emoji: '🚂', color: '#795548', bgColor: '#efebe9', label: 'Railway Crossing' },
+        'pothole': { emoji: '🕳️', color: '#607d8b', bgColor: '#eceff1', label: 'Pothole' },
+        'debris': { emoji: '🪨', color: '#8d6e63', bgColor: '#efebe9', label: 'Debris' }
     };
+
+    // Track unique locations to avoid duplicates
+    const seenLocations = new Set();
 
     // Display each hazard
     hazards.forEach(hazard => {
-        const emoji = hazardEmojis[hazard.type] || '⚠️';
-        const color = hazard.type === 'traffic_light_camera' ? '#FF0000' : '#FFA500';
+        const locationKey = `${hazard.lat.toFixed(5)},${hazard.lon.toFixed(5)}`;
+        if (seenLocations.has(locationKey)) return;
+        seenLocations.add(locationKey);
 
-        const marker = L.circleMarker([hazard.lat, hazard.lon], {
-            radius: 6,
-            fillColor: color,
-            color: '#000',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.8
-        })
-        .bindPopup(`${emoji} ${hazard.type.replace(/_/g, ' ').toUpperCase()}<br>${hazard.description || 'Hazard detected'}`)
-        .addTo(map);
+        const config = hazardConfig[hazard.type] || { emoji: '⚠️', color: '#ff9800', bgColor: '#fff3e0', label: 'Hazard' };
+
+        // Create custom HTML icon
+        const icon = L.divIcon({
+            className: 'hazard-marker',
+            html: `<div style="
+                background: ${config.bgColor};
+                border: 2px solid ${config.color};
+                border-radius: 50%;
+                width: 28px;
+                height: 28px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 14px;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                cursor: pointer;
+            ">${config.emoji}</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
+        });
+
+        const marker = L.marker([hazard.lat, hazard.lon], { icon })
+            .bindPopup(`
+                <div style="text-align: center; min-width: 150px;">
+                    <div style="font-size: 24px; margin-bottom: 5px;">${config.emoji}</div>
+                    <div style="font-weight: bold; color: ${config.color}; margin-bottom: 5px;">${config.label}</div>
+                    ${hazard.description ? `<div style="font-size: 12px; color: #666;">${hazard.description}</div>` : ''}
+                    ${hazard.distance_m ? `<div style="font-size: 11px; color: #999; margin-top: 5px;">📍 ${(hazard.distance_m / 1000).toFixed(2)} km from route</div>` : ''}
+                </div>
+            `)
+            .addTo(map);
 
         window.hazardMarkers.push(marker);
     });
 
     console.log(`[Hazards] Displayed ${window.hazardMarkers.length} hazard markers on map`);
+}
+
+/**
+ * Clear all hazard markers from the map
+ */
+function clearHazardMarkers() {
+    if (window.hazardMarkers) {
+        window.hazardMarkers.forEach(marker => {
+            if (map.hasLayer(marker)) {
+                map.removeLayer(marker);
+            }
+        });
+    }
+    window.hazardMarkers = [];
+}
+
+/**
+ * Display hazards from all routes on the map
+ */
+function displayAllRouteHazards() {
+    if (!routeOptions || routeOptions.length === 0) return;
+
+    // Collect all hazards from all routes
+    const allHazards = [];
+    routeOptions.forEach(route => {
+        if (route.hazards && route.hazards.length > 0) {
+            allHazards.push(...route.hazards);
+        }
+    });
+
+    if (allHazards.length > 0) {
+        displayHazardMarkers(allHazards);
+        console.log(`[Hazards] Displaying hazards from all ${routeOptions.length} routes: ${allHazards.length} total`);
+    }
 }
 
 /**
