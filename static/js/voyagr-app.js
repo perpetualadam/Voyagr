@@ -458,6 +458,10 @@ function saveAllSettings() {
         showCamerasEnabled: showCamerasEnabled,
         showTrafficEnabled: showTrafficEnabled,
 
+        // Navigation automation
+        autoTrafficUpdateEnabled: autoTrafficUpdateEnabled,
+        autoRerouteOnDeviationEnabled: autoRerouteOnDeviationEnabled,
+
         // Parking preferences
         parkingPreferences: {
             maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance')?.value || '10',
@@ -541,6 +545,16 @@ function loadAllSettings() {
             if (settings.showTrafficEnabled !== undefined) {
                 showTrafficEnabled = settings.showTrafficEnabled;
                 localStorage.setItem('showTrafficEnabled', showTrafficEnabled ? 'true' : 'false');
+            }
+
+            // Restore navigation automation settings
+            if (settings.autoTrafficUpdateEnabled !== undefined) {
+                autoTrafficUpdateEnabled = settings.autoTrafficUpdateEnabled;
+                localStorage.setItem('autoTrafficUpdate', autoTrafficUpdateEnabled ? 'true' : 'false');
+            }
+            if (settings.autoRerouteOnDeviationEnabled !== undefined) {
+                autoRerouteOnDeviationEnabled = settings.autoRerouteOnDeviationEnabled;
+                localStorage.setItem('autoRerouteOnDeviation', autoRerouteOnDeviationEnabled ? 'true' : 'false');
             }
 
             // Restore parking preferences
@@ -716,6 +730,34 @@ function applySettingsToUI() {
         // Apply UI theme preference
         initializeDarkMode();
         updateThemeButtons();
+
+        // Apply auto-traffic update toggle state
+        const autoTrafficToggle = document.getElementById('autoTrafficUpdateToggle');
+        if (autoTrafficToggle) {
+            if (autoTrafficUpdateEnabled) {
+                autoTrafficToggle.classList.add('active');
+                autoTrafficToggle.style.background = '#4CAF50';
+                autoTrafficToggle.style.borderColor = '#4CAF50';
+            } else {
+                autoTrafficToggle.classList.remove('active');
+                autoTrafficToggle.style.background = '#ddd';
+                autoTrafficToggle.style.borderColor = '#999';
+            }
+        }
+
+        // Apply auto-reroute on deviation toggle state
+        const autoRerouteToggle = document.getElementById('autoRerouteDeviationToggle');
+        if (autoRerouteToggle) {
+            if (autoRerouteOnDeviationEnabled) {
+                autoRerouteToggle.classList.add('active');
+                autoRerouteToggle.style.background = '#4CAF50';
+                autoRerouteToggle.style.borderColor = '#4CAF50';
+            } else {
+                autoRerouteToggle.classList.remove('active');
+                autoRerouteToggle.style.background = '#ddd';
+                autoRerouteToggle.style.borderColor = '#999';
+            }
+        }
 
         console.log('[Settings] All settings applied to UI');
     } catch (error) {
@@ -2999,6 +3041,336 @@ function initTrafficLayer() {
 
     if (showTrafficEnabled && map) {
         addTrafficLayer();
+    }
+}
+
+// ===== AUTO-TRAFFIC UPDATE & AUTO-REROUTE SYSTEM =====
+// Feature 1: Automatic traffic updates during navigation
+// Feature 2: Automatic rerouting on deviation with hazard avoidance
+
+// Auto-traffic update settings
+let autoTrafficUpdateEnabled = localStorage.getItem('autoTrafficUpdate') !== 'false'; // Default: enabled
+let autoRerouteOnDeviationEnabled = localStorage.getItem('autoRerouteOnDeviation') !== 'false'; // Default: enabled
+let trafficUpdateInterval = null;
+const TRAFFIC_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+let lastTrafficData = null;
+let lastTrafficUpdateTime = 0;
+
+// Deviation tracking for time-based detection
+let deviationStartTime = null;
+let isCurrentlyDeviated = false;
+const DEVIATION_THRESHOLD_METERS = 50;
+const DEVIATION_TIME_THRESHOLD_MS = 10000; // 10 seconds
+
+/**
+ * Toggle auto-traffic update on/off
+ */
+function toggleAutoTrafficUpdate() {
+    autoTrafficUpdateEnabled = !autoTrafficUpdateEnabled;
+    localStorage.setItem('autoTrafficUpdate', autoTrafficUpdateEnabled ? 'true' : 'false');
+
+    const toggle = document.getElementById('autoTrafficUpdateToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', autoTrafficUpdateEnabled);
+        if (autoTrafficUpdateEnabled) {
+            toggle.style.background = '#4CAF50';
+            toggle.style.borderColor = '#4CAF50';
+        } else {
+            toggle.style.background = '#ddd';
+            toggle.style.borderColor = '#999';
+        }
+    }
+
+    if (autoTrafficUpdateEnabled) {
+        showStatus('🚦 Auto-traffic updates enabled', 'success');
+        if (routeInProgress) {
+            startAutoTrafficUpdates();
+        }
+    } else {
+        showStatus('🚦 Auto-traffic updates disabled', 'info');
+        stopAutoTrafficUpdates();
+    }
+
+    saveAllSettings();
+}
+
+/**
+ * Toggle auto-reroute on deviation on/off
+ */
+function toggleAutoRerouteOnDeviation() {
+    autoRerouteOnDeviationEnabled = !autoRerouteOnDeviationEnabled;
+    localStorage.setItem('autoRerouteOnDeviation', autoRerouteOnDeviationEnabled ? 'true' : 'false');
+
+    const toggle = document.getElementById('autoRerouteDeviationToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', autoRerouteOnDeviationEnabled);
+        if (autoRerouteOnDeviationEnabled) {
+            toggle.style.background = '#4CAF50';
+            toggle.style.borderColor = '#4CAF50';
+        } else {
+            toggle.style.background = '#ddd';
+            toggle.style.borderColor = '#999';
+        }
+    }
+
+    if (autoRerouteOnDeviationEnabled) {
+        showStatus('🔄 Auto-reroute on deviation enabled', 'success');
+    } else {
+        showStatus('🔄 Auto-reroute on deviation disabled', 'info');
+    }
+
+    saveAllSettings();
+}
+
+/**
+ * Start automatic traffic updates during navigation
+ */
+function startAutoTrafficUpdates() {
+    if (!autoTrafficUpdateEnabled || trafficUpdateInterval) return;
+
+    console.log('[Auto-Traffic] Starting automatic traffic updates (every 5 minutes)');
+
+    // Immediate first update
+    checkTrafficAndReroute();
+
+    // Set up interval
+    trafficUpdateInterval = setInterval(() => {
+        if (routeInProgress && autoTrafficUpdateEnabled) {
+            checkTrafficAndReroute();
+        }
+    }, TRAFFIC_UPDATE_INTERVAL_MS);
+}
+
+/**
+ * Stop automatic traffic updates
+ */
+function stopAutoTrafficUpdates() {
+    if (trafficUpdateInterval) {
+        clearInterval(trafficUpdateInterval);
+        trafficUpdateInterval = null;
+        console.log('[Auto-Traffic] Stopped automatic traffic updates');
+    }
+}
+
+/**
+ * Check traffic conditions and reroute if significant changes detected
+ */
+async function checkTrafficAndReroute() {
+    if (!routeInProgress || !currentLat || !currentLon) return;
+
+    console.log('[Auto-Traffic] Checking traffic conditions...');
+
+    try {
+        // Fetch current traffic along route
+        const response = await fetch('/api/traffic-patterns', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                lat: currentLat,
+                lon: currentLon,
+                radius: 5000
+            })
+        });
+
+        const data = await response.json();
+        lastTrafficUpdateTime = Date.now();
+
+        if (!data.success) {
+            console.log('[Auto-Traffic] Traffic fetch failed:', data.error);
+            return;
+        }
+
+        // Compare with previous traffic data
+        const significantChange = detectSignificantTrafficChange(lastTrafficData, data);
+        lastTrafficData = data;
+
+        if (significantChange) {
+            console.log('[Auto-Traffic] Significant traffic change detected!');
+            sendNotification('🚦 Traffic Update', 'New traffic conditions detected. Checking for better route...', 'warning');
+
+            // Trigger reroute with current hazard avoidance settings
+            await triggerTrafficBasedReroute();
+        } else {
+            console.log('[Auto-Traffic] No significant traffic changes');
+        }
+    } catch (error) {
+        console.error('[Auto-Traffic] Error checking traffic:', error);
+    }
+}
+
+/**
+ * Detect if there's a significant traffic change
+ */
+function detectSignificantTrafficChange(previousData, currentData) {
+    if (!previousData || !previousData.patterns) return false;
+    if (!currentData || !currentData.patterns) return false;
+
+    // Check if congestion level increased significantly
+    const prevPatterns = previousData.patterns || [];
+    const currPatterns = currentData.patterns || [];
+
+    // Calculate average congestion
+    const prevAvgCongestion = prevPatterns.length > 0 ?
+        prevPatterns.reduce((sum, p) => sum + (p.congestion || 0), 0) / prevPatterns.length : 0;
+    const currAvgCongestion = currPatterns.length > 0 ?
+        currPatterns.reduce((sum, p) => sum + (p.congestion || 0), 0) / currPatterns.length : 0;
+
+    // Significant change if congestion increased by 1+ level (on 1-5 scale)
+    const congestionIncrease = currAvgCongestion - prevAvgCongestion;
+
+    if (congestionIncrease >= 1) {
+        console.log(`[Auto-Traffic] Congestion increased: ${prevAvgCongestion.toFixed(1)} -> ${currAvgCongestion.toFixed(1)}`);
+        return true;
+    }
+
+    // Check for new incidents/accidents
+    const prevIncidentCount = prevPatterns.filter(p => p.type === 'incident' || p.type === 'accident').length;
+    const currIncidentCount = currPatterns.filter(p => p.type === 'incident' || p.type === 'accident').length;
+
+    if (currIncidentCount > prevIncidentCount) {
+        console.log(`[Auto-Traffic] New incidents detected: ${prevIncidentCount} -> ${currIncidentCount}`);
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Trigger reroute based on traffic changes
+ */
+async function triggerTrafficBasedReroute() {
+    if (!window.lastCalculatedRoute || !window.lastCalculatedRoute.destination) {
+        console.log('[Auto-Traffic] No destination stored, cannot reroute');
+        return;
+    }
+
+    const destination = window.lastCalculatedRoute.destination;
+    console.log(`[Auto-Traffic] Calculating new route due to traffic changes...`);
+
+    try {
+        const routeRequest = buildRouteRequest(currentLat, currentLon, destination);
+        const response = await fetch('/api/route', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(routeRequest)
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.routes && data.routes.length > 0) {
+            const newRoute = data.routes[0];
+            const oldDuration = window.lastCalculatedRoute.duration_minutes || 0;
+            const timeSaved = oldDuration - newRoute.duration_minutes;
+
+            // Only reroute if new route saves at least 2 minutes
+            if (timeSaved >= 2) {
+                updateRouteOnMap(newRoute);
+                sendNotification('✅ Route Updated', `New route found! Saves ${timeSaved.toFixed(0)} minutes due to traffic.`, 'success');
+                if (voiceRecognition) {
+                    speakMessage(`Route updated. New route saves ${timeSaved.toFixed(0)} minutes.`);
+                }
+            } else {
+                console.log('[Auto-Traffic] New route not significantly faster, keeping current route');
+            }
+        }
+    } catch (error) {
+        console.error('[Auto-Traffic] Error during traffic-based reroute:', error);
+    }
+}
+
+/**
+ * Manual traffic update button handler
+ */
+async function manualTrafficUpdate() {
+    showStatus('🚦 Updating traffic...', 'info');
+    await checkTrafficAndReroute();
+    showStatus('🚦 Traffic updated', 'success');
+}
+
+/**
+ * Build route request with current hazard avoidance settings
+ */
+function buildRouteRequest(startLat, startLon, destination) {
+    const enableHazardAvoidance =
+        localStorage.getItem('pref_cameras') === 'true' ||
+        localStorage.getItem('pref_tolls') === 'true' ||
+        localStorage.getItem('pref_caz') === 'true';
+
+    return {
+        start: `${startLat},${startLon}`,
+        end: destination,
+        routing_mode: currentRoutingMode || 'auto',
+        vehicle_type: currentVehicleType || 'petrol_diesel',
+        fuel_efficiency: parseFloat(localStorage.getItem('fuelEfficiency') || '6.5'),
+        fuel_price: parseFloat(localStorage.getItem('fuelPrice') || '1.40'),
+        energy_efficiency: parseFloat(localStorage.getItem('energyEfficiency') || '18.5'),
+        electricity_price: parseFloat(localStorage.getItem('electricityPrice') || '0.30'),
+        include_tolls: localStorage.getItem('includeTolls') !== 'false',
+        include_caz: localStorage.getItem('includeCAZ') !== 'false',
+        enable_hazard_avoidance: enableHazardAvoidance,
+        avoid_cameras: localStorage.getItem('pref_cameras') === 'true',
+        avoid_tolls: localStorage.getItem('pref_tolls') === 'true',
+        avoid_caz: localStorage.getItem('pref_caz') === 'true'
+    };
+}
+
+/**
+ * Update route on map with new route data
+ */
+function updateRouteOnMap(newRoute) {
+    // Remove old route layer
+    if (routeLayer) {
+        map.removeLayer(routeLayer);
+    }
+
+    // Decode new route geometry
+    routePolyline = decodePolyline(newRoute.geometry, 6);
+    console.log(`[Reroute] Route polyline decoded: ${routePolyline.length} points`);
+
+    // Draw new route on map
+    routeLayer = L.polyline(routePolyline, {
+        color: '#667eea',
+        weight: 5,
+        opacity: 0.8
+    }).addTo(map);
+
+    // Update trip info
+    updateTripInfo(newRoute.distance_km, newRoute.duration_minutes, newRoute.fuel_cost, newRoute.toll_cost);
+
+    // Store updated route
+    window.lastCalculatedRoute = {
+        ...window.lastCalculatedRoute,
+        ...newRoute,
+        geometry: newRoute.geometry,
+        distance: `${newRoute.distance_km} km`,
+        time: `${newRoute.duration_minutes} minutes`
+    };
+
+    console.log('[Reroute] Route updated on map');
+}
+
+/**
+ * Initialize auto-traffic and auto-reroute toggles
+ */
+function initAutoTrafficRerouteToggles() {
+    // Auto-traffic update toggle
+    const trafficToggle = document.getElementById('autoTrafficUpdateToggle');
+    if (trafficToggle) {
+        trafficToggle.classList.toggle('active', autoTrafficUpdateEnabled);
+        if (autoTrafficUpdateEnabled) {
+            trafficToggle.style.background = '#4CAF50';
+            trafficToggle.style.borderColor = '#4CAF50';
+        }
+    }
+
+    // Auto-reroute on deviation toggle
+    const rerouteToggle = document.getElementById('autoRerouteDeviationToggle');
+    if (rerouteToggle) {
+        rerouteToggle.classList.toggle('active', autoRerouteOnDeviationEnabled);
+        if (autoRerouteOnDeviationEnabled) {
+            rerouteToggle.style.background = '#4CAF50';
+            rerouteToggle.style.borderColor = '#4CAF50';
+        }
     }
 }
 
@@ -6538,14 +6910,20 @@ function announceUpcomingTurn(turnInfo) {
 let lastRerouteTime = 0;
 const REROUTE_DEBOUNCE_MS = 5000; // Wait 5 seconds between reroute attempts
 let lastRerouteDeviation = 0;
+let deviationStartTimeCheck = null; // Track when deviation started
+let rerouteAttemptCount = 0; // Track reroute attempts for logging
+
 /**
- * checkRouteDeviation function
- * @function checkRouteDeviation
- * @param {*} lat - Parameter description
- * @param {*} lon - Parameter description
- * @returns {*} Return value description
+ * checkRouteDeviation function - Enhanced with time-based detection
+ * Only triggers reroute if user is >50m off-route for >10 seconds
+ * Respects auto-reroute toggle setting
  */
 function checkRouteDeviation(lat, lon) {
+    // Check if auto-reroute is enabled
+    if (!autoRerouteOnDeviationEnabled) {
+        return;
+    }
+
     // Calculate distance from current position to route
     if (!routePolyline || routePolyline.length === 0) return;
 
@@ -6558,25 +6936,52 @@ function checkRouteDeviation(lat, lon) {
         }
     }
 
-    // If deviation > 50 meters, trigger automatic rerouting
-    if (minDistance > 50) {
-        const now = Date.now();
-        const timeSinceLastReroute = now - lastRerouteTime;
+    const now = Date.now();
 
-        // Only reroute if enough time has passed (debounce)
-        if (timeSinceLastReroute > REROUTE_DEBOUNCE_MS) {
-            console.log(`[Rerouting] Deviation detected: ${minDistance.toFixed(0)}m (threshold: 50m)`);
-            sendNotification('Route Deviation', `You are ${minDistance.toFixed(0)}m off route. Recalculating...`, 'warning');
-            triggerAutomaticReroute(lat, lon);
-            lastRerouteTime = now;
-        } else {
-            console.log(`[Rerouting] Deviation ${minDistance.toFixed(0)}m detected but debouncing (${(REROUTE_DEBOUNCE_MS - timeSinceLastReroute).toFixed(0)}ms remaining)`);
+    // If deviation > 50 meters
+    if (minDistance > DEVIATION_THRESHOLD_METERS) {
+        // Start tracking deviation time if not already
+        if (!deviationStartTimeCheck) {
+            deviationStartTimeCheck = now;
+            console.log(`[Rerouting] Deviation started: ${minDistance.toFixed(0)}m off route`);
         }
+
+        const deviationDuration = now - deviationStartTimeCheck;
+
+        // Only reroute if deviated for more than 10 seconds
+        if (deviationDuration >= DEVIATION_TIME_THRESHOLD_MS) {
+            const timeSinceLastReroute = now - lastRerouteTime;
+
+            // Only reroute if enough time has passed (debounce)
+            if (timeSinceLastReroute > REROUTE_DEBOUNCE_MS) {
+                rerouteAttemptCount++;
+                console.log(`[Rerouting] Deviation confirmed: ${minDistance.toFixed(0)}m for ${(deviationDuration/1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
+                sendNotification('🔄 Route Deviation', `You are ${minDistance.toFixed(0)}m off route for ${(deviationDuration/1000).toFixed(0)}s. Recalculating...`, 'warning');
+                triggerAutomaticRerouteWithHazardHandling(lat, lon);
+                lastRerouteTime = now;
+                deviationStartTimeCheck = null; // Reset after reroute
+            } else {
+                console.log(`[Rerouting] Deviation ${minDistance.toFixed(0)}m for ${(deviationDuration/1000).toFixed(1)}s - debouncing (${(REROUTE_DEBOUNCE_MS - timeSinceLastReroute).toFixed(0)}ms remaining)`);
+            }
+        } else {
+            console.log(`[Rerouting] Deviation ${minDistance.toFixed(0)}m - waiting for ${((DEVIATION_TIME_THRESHOLD_MS - deviationDuration)/1000).toFixed(1)}s more`);
+        }
+
         lastRerouteDeviation = minDistance;
+    } else {
+        // Back on route - reset deviation tracking
+        if (deviationStartTimeCheck) {
+            console.log(`[Rerouting] Back on route (${minDistance.toFixed(0)}m from route)`);
+            deviationStartTimeCheck = null;
+        }
     }
 }
 
-async function triggerAutomaticReroute(currentLat, currentLon) {
+/**
+ * Trigger automatic reroute with hazard handling
+ * This enhanced version handles unavoidable hazards gracefully
+ */
+async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon) {
     try {
         if (!window.lastCalculatedRoute || !window.lastCalculatedRoute.destination) {
             console.log('[Rerouting] No destination stored, cannot reroute');
@@ -6586,26 +6991,8 @@ async function triggerAutomaticReroute(currentLat, currentLon) {
         const destination = window.lastCalculatedRoute.destination;
         console.log(`[Rerouting] Starting automatic reroute from (${currentLat.toFixed(4)}, ${currentLon.toFixed(4)}) to ${destination}`);
 
-        // Prepare route calculation request
-        const enableHazardAvoidanceReroute =
-            localStorage.getItem('pref_cameras') === 'true' ||
-            localStorage.getItem('pref_police') === 'true' ||
-            localStorage.getItem('pref_roadworks') === 'true' ||
-            localStorage.getItem('pref_accidents') === 'true';
-
-        const routeRequest = {
-            start: `${currentLat},${currentLon}`,
-            end: destination,
-            routing_mode: currentRoutingMode || 'auto',
-            vehicle_type: currentVehicleType || 'petrol_diesel',
-            fuel_efficiency: parseFloat(localStorage.getItem('fuelEfficiency') || '6.5'),
-            fuel_price: parseFloat(localStorage.getItem('fuelPrice') || '1.40'),
-            energy_efficiency: parseFloat(localStorage.getItem('energyEfficiency') || '18.5'),
-            electricity_price: parseFloat(localStorage.getItem('electricityPrice') || '0.30'),
-            include_tolls: localStorage.getItem('includeTolls') !== 'false',
-            include_caz: localStorage.getItem('includeCAZ') !== 'false',
-            enable_hazard_avoidance: enableHazardAvoidanceReroute
-        };
+        // Build route request with hazard avoidance settings
+        const routeRequest = buildRouteRequest(currentLat, currentLon, destination);
 
         const response = await fetch('/api/route', {
             method: 'POST',
@@ -6619,52 +7006,230 @@ async function triggerAutomaticReroute(currentLat, currentLon) {
             const newRoute = data.routes[0];
             console.log(`[Rerouting] New route calculated: ${newRoute.distance_km}km, ${newRoute.duration_minutes}min`);
 
-            // Update route on map
-            if (routeLayer) {
-                map.removeLayer(routeLayer);
+            // Check for unavoidable hazards
+            const hazardCount = newRoute.hazard_count || 0;
+            const hazardsList = newRoute.hazards_on_route || [];
+
+            if (hazardCount > 0 && routeRequest.enable_hazard_avoidance) {
+                // Hazards exist on all routes - handle gracefully
+                handleUnavoidableHazards(newRoute, hazardsList, hazardCount);
             }
 
-            // Decode new route geometry (Valhalla precision 6)
-            routePolyline = decodePolyline(newRoute.geometry, 6);
-            console.log(`[Rerouting] Route polyline decoded: ${routePolyline.length} points`);
+            // Update route on map
+            updateRouteOnMap(newRoute);
 
-            // Draw new route on map
-            routeLayer = L.polyline(routePolyline, {
-                color: '#667eea',
-                weight: 5,
-                opacity: 0.8,
-                dashArray: '5, 5'
-            }).addTo(map);
+            // Log rerouting event
+            logReroutingEvent(currentLat, currentLon, destination, newRoute, hazardCount);
 
-            // Update trip info
-            updateTripInfo(newRoute.distance_km, newRoute.duration_minutes, newRoute.fuel_cost, newRoute.toll_cost);
-
-            // Store updated route
-            window.lastCalculatedRoute = {
-                ...window.lastCalculatedRoute,
-                ...newRoute,
-                geometry: newRoute.geometry,
-                distance: `${newRoute.distance_km} km`,
-                time: `${newRoute.duration_minutes} minutes`
-            };
-
-            // Announce reroute via voice with proper unit conversion
+            // Announce reroute via voice
             if (voiceRecognition) {
                 const distUnit = getDistanceUnit();
                 const displayDist = convertDistance(newRoute.distance_km);
-                speakMessage(`Route recalculated. New distance: ${displayDist} ${distUnit}, time: ${newRoute.duration_minutes} minutes`);
+                let voiceMsg = `Route recalculated. New distance: ${displayDist} ${distUnit}, time: ${newRoute.duration_minutes} minutes`;
+                if (hazardCount > 0) {
+                    voiceMsg += `. Warning: ${hazardCount} hazard${hazardCount > 1 ? 's' : ''} on route.`;
+                }
+                speakMessage(voiceMsg);
             }
 
-            sendNotification('Route Updated', `New route: ${newRoute.distance_km}km, ${newRoute.duration_minutes}min`, 'success');
+            if (hazardCount > 0) {
+                sendNotification('⚠️ Route Updated', `New route with ${hazardCount} unavoidable hazard${hazardCount > 1 ? 's' : ''}`, 'warning');
+            } else {
+                sendNotification('✅ Route Updated', `New route: ${newRoute.distance_km}km, ${newRoute.duration_minutes}min`, 'success');
+            }
+
             console.log('[Rerouting] Automatic reroute completed successfully');
         } else {
             console.log('[Rerouting] Failed to calculate new route:', data.error);
-            sendNotification('Rerouting Failed', 'Could not calculate new route. Continuing on current route.', 'error');
+            sendNotification('❌ Rerouting Failed', 'Could not calculate new route. Continuing on current route.', 'error');
         }
     } catch (error) {
         console.error('[Rerouting] Error during automatic reroute:', error);
-        sendNotification('Rerouting Error', 'Error recalculating route: ' + error.message, 'error');
+        sendNotification('❌ Rerouting Error', 'Error recalculating route: ' + error.message, 'error');
     }
+}
+
+/**
+ * Handle unavoidable hazards on route
+ * Shows user-friendly notification with hazard details
+ */
+function handleUnavoidableHazards(route, hazardsList, hazardCount) {
+    console.log(`[Rerouting] Route has ${hazardCount} unavoidable hazards`);
+
+    // Group hazards by type
+    const hazardTypes = {};
+    hazardsList.forEach(hazard => {
+        const type = hazard.type || 'unknown';
+        hazardTypes[type] = (hazardTypes[type] || 0) + 1;
+    });
+
+    // Build hazard summary
+    const hazardSummary = Object.entries(hazardTypes)
+        .map(([type, count]) => `${count}x ${type.replace(/_/g, ' ')}`)
+        .join(', ');
+
+    // Show detailed notification
+    const message = `⚠️ ${hazardCount} hazard${hazardCount > 1 ? 's' : ''} cannot be avoided on any route to destination:\n${hazardSummary}`;
+
+    // Display in UI (use a modal or prominent notification)
+    showUnavoidableHazardsModal(hazardTypes, hazardCount);
+
+    console.log(`[Rerouting] Unavoidable hazards: ${hazardSummary}`);
+}
+
+/**
+ * Show modal for unavoidable hazards
+ */
+function showUnavoidableHazardsModal(hazardTypes, totalCount) {
+    // Check if modal already exists
+    let modal = document.getElementById('unavoidableHazardsModal');
+    if (!modal) {
+        // Create modal
+        modal = document.createElement('div');
+        modal.id = 'unavoidableHazardsModal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            z-index: 10001;
+            max-width: 320px;
+            text-align: center;
+        `;
+        document.body.appendChild(modal);
+    }
+
+    // Build hazard list HTML
+    const hazardListHtml = Object.entries(hazardTypes)
+        .map(([type, count]) => {
+            const icon = getHazardIcon(type);
+            return `<div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #fff3e0; border-radius: 8px; margin: 5px 0;">
+                <span style="font-size: 20px;">${icon}</span>
+                <span style="flex: 1; text-align: left;">${type.replace(/_/g, ' ')}</span>
+                <span style="font-weight: bold; color: #e65100;">${count}</span>
+            </div>`;
+        })
+        .join('');
+
+    modal.innerHTML = `
+        <div style="font-size: 40px; margin-bottom: 10px;">⚠️</div>
+        <h3 style="margin: 0 0 10px 0; color: #e65100;">Unavoidable Hazards</h3>
+        <p style="font-size: 13px; color: #666; margin-bottom: 15px;">
+            ${totalCount} hazard${totalCount > 1 ? 's' : ''} on all routes to destination
+        </p>
+        <div style="margin-bottom: 15px;">
+            ${hazardListHtml}
+        </div>
+        <div style="display: flex; gap: 10px;">
+            <button onclick="closeUnavoidableHazardsModal()" style="flex: 1; padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                Continue Anyway
+            </button>
+            <button onclick="openHazardSettings()" style="flex: 1; padding: 12px; background: #2196F3; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">
+                Adjust Settings
+            </button>
+        </div>
+    `;
+
+    // Add backdrop
+    let backdrop = document.getElementById('unavoidableHazardsBackdrop');
+    if (!backdrop) {
+        backdrop = document.createElement('div');
+        backdrop.id = 'unavoidableHazardsBackdrop';
+        backdrop.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 10000;
+        `;
+        backdrop.onclick = closeUnavoidableHazardsModal;
+        document.body.appendChild(backdrop);
+    }
+
+    backdrop.style.display = 'block';
+    modal.style.display = 'block';
+
+    // Auto-close after 10 seconds
+    setTimeout(closeUnavoidableHazardsModal, 10000);
+}
+
+/**
+ * Close unavoidable hazards modal
+ */
+function closeUnavoidableHazardsModal() {
+    const modal = document.getElementById('unavoidableHazardsModal');
+    const backdrop = document.getElementById('unavoidableHazardsBackdrop');
+    if (modal) modal.style.display = 'none';
+    if (backdrop) backdrop.style.display = 'none';
+}
+
+/**
+ * Open hazard settings (navigates to settings tab)
+ */
+function openHazardSettings() {
+    closeUnavoidableHazardsModal();
+    showTab('settings');
+}
+
+/**
+ * Get emoji icon for hazard type
+ */
+function getHazardIcon(type) {
+    const icons = {
+        'speed_camera': '📷',
+        'traffic_camera': '📹',
+        'red_light_camera': '🚦',
+        'average_speed_camera': '⏱️',
+        'mobile_camera': '📱',
+        'police': '👮',
+        'accident': '🚗💥',
+        'roadworks': '🚧',
+        'traffic_jam': '🚗',
+        'hazard': '⚠️',
+        'toll': '💰',
+        'caz': '🏙️'
+    };
+    return icons[type] || '⚠️';
+}
+
+/**
+ * Log rerouting event for debugging and analytics
+ */
+function logReroutingEvent(startLat, startLon, destination, route, hazardCount) {
+    const event = {
+        timestamp: new Date().toISOString(),
+        type: 'automatic_reroute',
+        start: { lat: startLat, lon: startLon },
+        destination: destination,
+        route: {
+            distance_km: route.distance_km,
+            duration_minutes: route.duration_minutes,
+            hazard_count: hazardCount
+        },
+        settings: {
+            avoid_cameras: localStorage.getItem('pref_cameras') === 'true',
+            avoid_tolls: localStorage.getItem('pref_tolls') === 'true',
+            avoid_caz: localStorage.getItem('pref_caz') === 'true'
+        }
+    };
+
+    // Store in sessionStorage for debugging
+    const rerouteLog = JSON.parse(sessionStorage.getItem('rerouteLog') || '[]');
+    rerouteLog.push(event);
+    sessionStorage.setItem('rerouteLog', JSON.stringify(rerouteLog.slice(-20))); // Keep last 20 events
+
+    console.log('[Rerouting] Event logged:', event);
+}
+
+// Keep old function for backwards compatibility
+async function triggerAutomaticReroute(currentLat, currentLon) {
+    return triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon);
 }
 /**
  * calculateDistance function
@@ -7726,6 +8291,12 @@ function startTurnByTurnNavigation(routeData) {
     // ===== PHASE 1: Start live data refresh =====
     startLiveDataRefresh();
 
+    // ===== START AUTO-TRAFFIC UPDATES =====
+    if (autoTrafficUpdateEnabled) {
+        startAutoTrafficUpdates();
+        console.log('[Navigation] Auto-traffic updates started');
+    }
+
     // ===== SHOW ZOOM AND FOLLOW BUTTON =====
     mapFollowingActive = true;
     const zoomFollowBtn = document.getElementById('zoomFollowToggle');
@@ -7764,6 +8335,10 @@ function stopTurnByTurnNavigation() {
 
     // ===== PHASE 1: Stop live data refresh =====
     stopLiveDataRefresh();
+
+    // ===== STOP AUTO-TRAFFIC UPDATES =====
+    stopAutoTrafficUpdates();
+    console.log('[Navigation] Auto-traffic updates stopped');
 
     // ===== HIDE ZOOM AND FOLLOW BUTTON =====
     mapFollowingActive = false;

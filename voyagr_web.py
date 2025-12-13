@@ -3732,6 +3732,31 @@ HTML_TEMPLATE = '''
                         </div>
                     </div>
 
+                    <!-- Navigation Automation Section -->
+                    <div class="preferences-section">
+                        <h3>🤖 Navigation Automation</h3>
+                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Automatic updates and rerouting during navigation</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🚦 Auto-Update Traffic</span>
+                            <button class="toggle-switch active" id="autoTrafficUpdateToggle" onclick="toggleAutoTrafficUpdate()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Automatically check traffic every 5 minutes and reroute if faster route found</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🔄 Auto-Reroute on Deviation</span>
+                            <button class="toggle-switch active" id="autoRerouteDeviationToggle" onclick="toggleAutoRerouteOnDeviation()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Automatically recalculate route when you go off-route for more than 10 seconds</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🔔 Manual Traffic Update</span>
+                            <button onclick="manualTrafficUpdate()" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
+                                Update Now
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- CAZ Information Section -->
                     <div class="preferences-section">
                         <h3>🚗 Clean Air Zones (CAZ)</h3>
