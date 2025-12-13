@@ -1,23 +1,45 @@
 /* Voyagr Navigation App - Main Stylesheet */
 /* Extracted from HTML_TEMPLATE for better maintainability */
+/* Enhanced for modern PWA mobile experience - 2024 */
 
 * {
     margin: 0;
     padding: 0;
     box-sizing: border-box;
+    -webkit-tap-highlight-color: transparent;
+}
+
+html {
+    /* iOS safe area support */
+    --safe-area-inset-top: env(safe-area-inset-top, 0px);
+    --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-area-inset-left: env(safe-area-inset-left, 0px);
+    --safe-area-inset-right: env(safe-area-inset-right, 0px);
 }
 
 html, body {
     width: 100%;
     height: 100%;
+    height: 100dvh; /* Dynamic viewport height for mobile */
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background: #f5f5f5;
     overflow: hidden;
+    /* Smooth scrolling */
+    -webkit-overflow-scrolling: touch;
+    /* Prevent text size adjustment on orientation change */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    /* Prevent pull-to-refresh on Chrome Android */
+    overscroll-behavior-y: contain;
 }
 
 body {
     display: flex;
     flex-direction: column;
+    /* iOS safe area padding */
+    padding-top: var(--safe-area-inset-top);
+    padding-left: var(--safe-area-inset-left);
+    padding-right: var(--safe-area-inset-right);
 }
 
 /* Full-screen map layout */
@@ -41,12 +63,12 @@ body {
 /* Floating action buttons */
 .fab-container {
     position: absolute;
-    bottom: 100px;
-    right: 20px;
+    bottom: calc(100px + var(--safe-area-inset-bottom, 0px));
+    right: calc(20px + var(--safe-area-inset-right, 0px));
     z-index: 100;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 
 .fab {
@@ -61,16 +83,33 @@ body {
     align-items: center;
     justify-content: center;
     font-size: 24px;
-    transition: all 0.3s;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+    /* GPU acceleration for smooth animations */
+    will-change: transform;
+    /* Prevent text selection */
+    user-select: none;
+    -webkit-user-select: none;
 }
 
 .fab:hover {
-    transform: scale(1.1);
+    transform: scale(1.08);
     box-shadow: 0 6px 16px rgba(0,0,0,0.2);
 }
 
 .fab:active {
-    transform: scale(0.95);
+    transform: scale(0.92);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+/* Haptic feedback visual indicator */
+.fab.haptic-feedback {
+    animation: hapticPulse 0.15s ease;
+}
+
+@keyframes hapticPulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(0.88); }
+    100% { transform: scale(1); }
 }
 
 /* Bottom sheet drawer */
@@ -80,12 +119,17 @@ body {
     left: 0;
     right: 0;
     background: white;
-    border-radius: 20px 20px 0 0;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.15);
+    border-radius: 24px 24px 0 0;
+    box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
     z-index: 50;
     max-height: 90vh;
+    max-height: 90dvh; /* Dynamic viewport for mobile */
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: translateY(calc(100% - 80px));
+    transform: translateY(calc(100% - 80px - var(--safe-area-inset-bottom, 0px)));
+    /* GPU acceleration */
+    will-change: transform;
+    /* Prevent content from going behind notch */
+    padding-bottom: var(--safe-area-inset-bottom, 0px);
     display: flex;
     flex-direction: column;
 }
@@ -507,14 +551,18 @@ button {
     font-size: 12px;
 }
 
-/* Responsive design */
+/* Responsive design - Mobile First */
 @media (max-width: 768px) {
     .bottom-sheet {
         border-radius: 16px 16px 0 0;
+        /* iOS safe area for bottom sheet */
+        padding-bottom: var(--safe-area-inset-bottom);
     }
 
     .bottom-sheet-content {
         padding: 15px;
+        /* Enable smooth momentum scrolling on iOS */
+        -webkit-overflow-scrolling: touch;
     }
 
     .quick-search {
@@ -524,18 +572,34 @@ button {
     .button-group {
         grid-template-columns: 1fr;
     }
+
+    /* Larger touch targets for accessibility (min 44px) */
+    button, .btn, .fab, input, select, .toggle-btn {
+        min-height: 44px;
+        min-width: 44px;
+    }
+
+    input, select, textarea {
+        font-size: 16px; /* Prevents iOS zoom on focus */
+    }
 }
 
 @media (max-width: 480px) {
     .fab-container {
-        bottom: 90px;
-        right: 10px;
+        bottom: calc(90px + var(--safe-area-inset-bottom));
+        right: calc(10px + var(--safe-area-inset-right));
     }
 
     .fab {
-        width: 48px;
-        height: 48px;
-        font-size: 20px;
+        width: 52px;
+        height: 52px;
+        font-size: 22px;
+        /* Better touch feedback */
+        transition: transform 0.1s ease, box-shadow 0.1s ease;
+    }
+
+    .fab:active {
+        transform: scale(0.92);
     }
 
     .quick-search {
@@ -544,6 +608,53 @@ button {
 
     .bottom-sheet-content {
         padding: 12px;
+        padding-bottom: calc(12px + var(--safe-area-inset-bottom));
+    }
+
+    /* Better button spacing for touch */
+    .button-group {
+        gap: 12px;
+    }
+
+    .btn {
+        padding: 14px 20px;
+        font-size: 16px;
+        border-radius: 12px;
+    }
+}
+
+/* Standalone PWA mode adjustments */
+@media (display-mode: standalone) {
+    .app-container {
+        padding-top: var(--safe-area-inset-top);
+    }
+
+    .bottom-sheet {
+        padding-bottom: var(--safe-area-inset-bottom);
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .btn, .fab {
+        border: 2px solid currentColor;
+    }
+
+    input, select, textarea {
+        border-width: 2px;
+    }
+}
+
+/* Reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    .bottom-sheet {
+        transition: none;
     }
 }
 

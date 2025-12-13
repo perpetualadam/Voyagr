@@ -7951,3 +7951,210 @@ calculateRoute = function() {
     originalCalculateRoute();
     // Trip info will be updated when route is calculated
 }
+
+// ===== MOBILE PWA ENHANCEMENTS =====
+
+/**
+ * Check if running in standalone PWA mode
+ */
+function isStandalonePWA() {
+    return (window.matchMedia('(display-mode: standalone)').matches) ||
+           (window.navigator.standalone === true) ||
+           document.referrer.includes('android-app://');
+}
+
+/**
+ * Check if running on iOS
+ */
+function isIOS() {
+    return /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+}
+
+/**
+ * Check if running on Android
+ */
+function isAndroid() {
+    return /Android/.test(navigator.userAgent);
+}
+
+/**
+ * Trigger haptic feedback if available
+ * @param {string} type - 'light', 'medium', 'heavy', or 'selection'
+ */
+function triggerHaptic(type = 'light') {
+    if ('vibrate' in navigator) {
+        const durations = {
+            'selection': 10,
+            'light': 15,
+            'medium': 30,
+            'heavy': 50
+        };
+        navigator.vibrate(durations[type] || 15);
+    }
+}
+
+/**
+ * Initialize mobile-specific enhancements
+ */
+function initMobileEnhancements() {
+    console.log('[Mobile] Initializing mobile enhancements');
+    console.log('[Mobile] Standalone PWA:', isStandalonePWA());
+    console.log('[Mobile] iOS:', isIOS());
+    console.log('[Mobile] Android:', isAndroid());
+
+    // Add haptic feedback to all FAB buttons
+    document.querySelectorAll('.fab').forEach(fab => {
+        fab.addEventListener('touchstart', () => {
+            triggerHaptic('light');
+            fab.classList.add('haptic-feedback');
+        }, { passive: true });
+        fab.addEventListener('touchend', () => {
+            setTimeout(() => fab.classList.remove('haptic-feedback'), 150);
+        }, { passive: true });
+    });
+
+    // Add haptic feedback to main action buttons
+    document.querySelectorAll('.btn, .quick-btn, .toggle-btn').forEach(btn => {
+        btn.addEventListener('touchstart', () => {
+            triggerHaptic('selection');
+        }, { passive: true });
+    });
+
+    // Prevent double-tap zoom on interactive elements
+    document.querySelectorAll('button, .fab, .btn, input, select').forEach(el => {
+        el.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            e.target.click();
+        });
+    });
+
+    // Handle iOS standalone mode status bar
+    if (isIOS() && isStandalonePWA()) {
+        document.body.classList.add('ios-standalone');
+        // Set viewport to account for notch
+        const meta = document.querySelector('meta[name="viewport"]');
+        if (meta) {
+            meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+        }
+    }
+
+    // Handle Android back button in PWA
+    if (isAndroid() && isStandalonePWA()) {
+        window.addEventListener('popstate', (e) => {
+            // Check if bottom sheet is expanded
+            const bottomSheet = document.getElementById('bottomSheet');
+            if (bottomSheet && bottomSheet.classList.contains('expanded')) {
+                e.preventDefault();
+                collapseBottomSheet();
+                history.pushState(null, '', location.href);
+            }
+        });
+        // Push initial state
+        history.pushState(null, '', location.href);
+    }
+
+    // Prevent pull-to-refresh on mobile browsers
+    document.body.addEventListener('touchmove', (e) => {
+        if (e.target.closest('.bottom-sheet-content')) {
+            // Allow scrolling in bottom sheet
+            return;
+        }
+        if (window.scrollY === 0 && e.touches[0].clientY > 0) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+    // Improve touch scrolling in bottom sheet
+    const bottomSheetContent = document.querySelector('.bottom-sheet-content');
+    if (bottomSheetContent) {
+        let startY = 0;
+        bottomSheetContent.addEventListener('touchstart', (e) => {
+            startY = e.touches[0].clientY;
+        }, { passive: true });
+
+        bottomSheetContent.addEventListener('touchmove', (e) => {
+            const currentY = e.touches[0].clientY;
+            const scrollTop = bottomSheetContent.scrollTop;
+            const scrollHeight = bottomSheetContent.scrollHeight;
+            const clientHeight = bottomSheetContent.clientHeight;
+
+            // Prevent overscroll at top
+            if (scrollTop <= 0 && currentY > startY) {
+                e.preventDefault();
+            }
+            // Prevent overscroll at bottom
+            if (scrollTop + clientHeight >= scrollHeight && currentY < startY) {
+                e.preventDefault();
+            }
+        }, { passive: false });
+    }
+
+    // Handle orientation changes
+    window.addEventListener('orientationchange', () => {
+        console.log('[Mobile] Orientation changed:', screen.orientation?.type || window.orientation);
+        // Delay to allow DOM to update
+        setTimeout(() => {
+            if (map) {
+                map.invalidateSize();
+            }
+        }, 200);
+    });
+
+    // Handle visibility changes (app goes to background/foreground)
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            console.log('[Mobile] App came to foreground');
+            // Refresh map if needed
+            if (map) {
+                map.invalidateSize();
+            }
+            // Resume GPS tracking if it was active
+            if (isTrackingActive && !gpsWatchId) {
+                startGPSTracking();
+            }
+        } else {
+            console.log('[Mobile] App went to background');
+        }
+    });
+
+    // Enable smooth transitions after initial load
+    setTimeout(() => {
+        document.body.classList.add('transitions-enabled');
+    }, 300);
+
+    console.log('[Mobile] Mobile enhancements initialized');
+}
+
+/**
+ * Request persistent storage for PWA
+ */
+async function requestPersistentStorage() {
+    if (navigator.storage && navigator.storage.persist) {
+        const isPersisted = await navigator.storage.persisted();
+        console.log('[PWA] Storage persisted:', isPersisted);
+        if (!isPersisted) {
+            const result = await navigator.storage.persist();
+            console.log('[PWA] Persistent storage granted:', result);
+        }
+    }
+}
+
+/**
+ * Check storage usage
+ */
+async function checkStorageUsage() {
+    if (navigator.storage && navigator.storage.estimate) {
+        const estimate = await navigator.storage.estimate();
+        const usage = (estimate.usage / estimate.quota * 100).toFixed(2);
+        console.log(`[PWA] Storage used: ${usage}% (${(estimate.usage / 1024 / 1024).toFixed(2)} MB of ${(estimate.quota / 1024 / 1024).toFixed(2)} MB)`);
+        return estimate;
+    }
+    return null;
+}
+
+// Initialize mobile enhancements on page load
+window.addEventListener('load', () => {
+    initMobileEnhancements();
+    requestPersistentStorage();
+    checkStorageUsage();
+});
