@@ -2980,7 +2980,7 @@ function showAlternativeRoutesInPreview() {
         div.onmouseout = () => { div.style.borderColor = '#ddd'; div.style.background = 'white'; };
         div.onclick = () => {
             selectedRouteIndex = index;
-            displayAllRoutesOnMap();  // Refresh map to highlight selected route
+            displaySingleRoute(index);  // Show only the selected route
             useRoute(index);
             showRoutePreview(routeOptions[index]);
         };
