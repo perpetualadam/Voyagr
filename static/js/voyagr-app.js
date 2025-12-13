@@ -2913,8 +2913,8 @@ function showRoutePreview(routeData) {
     // Show alternative routes if available
     if (routeOptions && routeOptions.length > 1) {
         showAlternativeRoutesInPreview();
-        // Display all routes on map with different colors
-        displayAllRoutesOnMap();
+        // NOTE: Don't call displayAllRoutesOnMap() here - it's controlled by selectRoute/showAllRoutes
+        // The map display is already set correctly before this function is called
     } else {
         document.getElementById('previewAlternativeRoutesContainer').style.display = 'none';
     }
