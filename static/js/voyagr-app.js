@@ -3002,6 +3002,114 @@ function initTrafficLayer() {
     }
 }
 
+// ===== CAZ (CLEAN AIR ZONE) INFORMATION =====
+let cazZonesData = null;
+let cazPassTypes = null;
+
+/**
+ * Show CAZ zones information in settings
+ */
+async function showCAZInfo() {
+    const container = document.getElementById('cazInfoContainer');
+    if (!container) return;
+
+    // Toggle visibility
+    if (container.style.display === 'block') {
+        container.style.display = 'none';
+        return;
+    }
+
+    container.style.display = 'block';
+    container.innerHTML = '<p style="text-align: center; color: #666;">Loading CAZ zones...</p>';
+
+    try {
+        // Fetch CAZ zones if not cached
+        if (!cazZonesData) {
+            const response = await fetch('/api/caz-zones');
+            const data = await response.json();
+            if (data.success) {
+                cazZonesData = data.zones;
+            } else {
+                throw new Error(data.error || 'Failed to load CAZ zones');
+            }
+        }
+
+        // Build HTML for CAZ zones
+        let html = '';
+        for (const zone of cazZonesData) {
+            const passesHtml = zone.passes ? Object.entries(zone.passes).map(([type, price]) =>
+                `<span style="display: inline-block; background: #e3f2fd; padding: 2px 6px; border-radius: 4px; margin: 2px; font-size: 11px;">${type}: £${price}</span>`
+            ).join('') : '';
+
+            const exemptionsHtml = zone.exemptions && zone.exemptions.length > 0 ?
+                `<div style="margin-top: 5px; font-size: 11px; color: #4caf50;">✅ Exempt: ${zone.exemptions.join(', ')}</div>` : '';
+
+            html += `
+                <div style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: white;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong style="font-size: 14px;">${zone.name}</strong>
+                        <span style="background: #ff5722; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">£${zone.daily_charge}/day</span>
+                    </div>
+                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
+                        📍 ${zone.city} | ⏰ ${zone.operating_hours} | 📅 ${zone.operating_days}
+                    </div>
+                    ${passesHtml ? `<div style="margin-top: 8px;"><strong style="font-size: 11px;">Passes:</strong><br>${passesHtml}</div>` : ''}
+                    ${exemptionsHtml}
+                    ${zone.purchase_url ? `<a href="${zone.purchase_url}" target="_blank" style="display: inline-block; margin-top: 8px; font-size: 12px; color: #1976d2; text-decoration: none;">🔗 Buy Pass</a>` : ''}
+                </div>
+            `;
+        }
+
+        container.innerHTML = html || '<p style="text-align: center; color: #666;">No CAZ zones found</p>';
+    } catch (error) {
+        console.error('[CAZ] Error loading zones:', error);
+        container.innerHTML = `<p style="text-align: center; color: #f44336;">Error: ${error.message}</p>`;
+    }
+}
+
+/**
+ * Get CAZ pass types for vehicle selection
+ */
+async function getCAZPassTypes() {
+    if (cazPassTypes) return cazPassTypes;
+
+    try {
+        const response = await fetch('/api/caz-pass-types');
+        const data = await response.json();
+        if (data.success) {
+            cazPassTypes = data.pass_types;
+            return cazPassTypes;
+        }
+    } catch (error) {
+        console.error('[CAZ] Error loading pass types:', error);
+    }
+    return [];
+}
+
+/**
+ * Check if route passes through CAZ zones
+ */
+async function checkRouteCAZ(routeCoords, vehicleCazPass = 'none', vehicleType = 'petrol_diesel') {
+    try {
+        const response = await fetch('/api/caz-check', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                route_coords: routeCoords,
+                vehicle_caz_pass: vehicleCazPass,
+                vehicle_type: vehicleType
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            return data.caz_result;
+        }
+    } catch (error) {
+        console.error('[CAZ] Error checking route:', error);
+    }
+    return null;
+}
+
 // ===== ALWAYS-ON CAMERA LAYER =====
 // Separate layer for displaying cameras regardless of route
 window.cameraMarkers = [];
@@ -3266,12 +3374,35 @@ function showRoutePreview(routeData) {
     document.getElementById('previewCAZCost').textContent = symbol + cazCost.toFixed(2);
     document.getElementById('previewTotalCost').textContent = symbol + totalCost.toFixed(2);
 
+    // Update CAZ status display
+    const cazStatusContainer = document.getElementById('cazStatusContainer');
+    const cazDetails = routeData.caz_details || {};
+
+    if (cazStatusContainer) {
+        if (cazDetails.zones_crossed && cazDetails.zones_crossed.length > 0) {
+            let cazStatusHtml = '';
+            if (cazDetails.is_exempt) {
+                cazStatusHtml = `<div style="color: #4caf50; font-size: 12px;">✅ CAZ Exempt (${cazDetails.exemption_reason || 'Electric Vehicle'})</div>`;
+            } else if (cazDetails.pass_covers) {
+                cazStatusHtml = `<div style="color: #2196f3; font-size: 12px;">🎫 CAZ covered by ${cazDetails.pass_type || 'Pass'}</div>`;
+            } else {
+                const zoneNames = cazDetails.zones_crossed.join(', ');
+                cazStatusHtml = `<div style="color: #ff9800; font-size: 12px;">⚠️ Passes through: ${zoneNames}</div>`;
+            }
+            cazStatusContainer.innerHTML = cazStatusHtml;
+            cazStatusContainer.style.display = 'block';
+        } else {
+            cazStatusContainer.style.display = 'none';
+        }
+    }
+
     console.log('[Cost] Route preview costs:', {
         distanceUnit: distanceUnit,
         fuelCost: fuelCost.toFixed(2),
         tollCost: tollCost.toFixed(2),
         cazCost: cazCost.toFixed(2),
-        totalCost: totalCost.toFixed(2)
+        totalCost: totalCost.toFixed(2),
+        cazDetails: cazDetails
     });
 
     // Update hazard information

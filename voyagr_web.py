@@ -410,6 +410,406 @@ CAZ_RATES = {
 CAZ_ENTRY_FREQUENCY_KM = float(os.getenv('CAZ_ENTRY_FREQUENCY_KM', '50.0'))
 
 # ============================================================================
+# CAZ ZONES DATA - Comprehensive UK Clean Air Zones with Polygon Boundaries
+# ============================================================================
+# Each zone has: name, polygon boundary, pricing tiers, pass types, exemptions, purchase URL
+CAZ_ZONES_DATA = {
+    'london_ulez': {
+        'name': 'London ULEZ',
+        'city': 'London',
+        'type': 'ULEZ',  # Ultra Low Emission Zone
+        'daily_charge': 12.50,
+        'currency': 'GBP',
+        # Simplified polygon for London ULEZ (North/South Circular boundary)
+        'polygon': [
+            (51.5874, -0.2270), (51.5890, -0.1650), (51.5850, -0.1050), (51.5750, -0.0450),
+            (51.5550, -0.0150), (51.5250, -0.0050), (51.4950, 0.0050), (51.4650, -0.0150),
+            (51.4450, -0.0450), (51.4350, -0.0850), (51.4350, -0.1350), (51.4450, -0.1850),
+            (51.4650, -0.2250), (51.4950, -0.2450), (51.5250, -0.2550), (51.5550, -0.2450),
+            (51.5874, -0.2270)  # Close polygon
+        ],
+        'operating_hours': '00:00-23:59',
+        'operating_days': 'Daily',
+        'passes': {
+            'daily': {'price': 12.50, 'available': True},
+            'weekly': {'price': None, 'available': False},
+            'monthly': {'price': None, 'available': False},
+            'annual': {'price': None, 'available': False},
+            'auto_pay': {'price': 12.50, 'available': True, 'note': 'Auto Pay with 10% discount'}
+        },
+        'exemptions': [
+            'Electric vehicles (100% battery electric)',
+            'Vehicles meeting Euro 6 diesel or Euro 4 petrol standards',
+            'Disabled tax class vehicles',
+            'Historic vehicles (40+ years old)',
+            'Military vehicles',
+            'NHS vehicles with exemption'
+        ],
+        'vehicle_requirements': {
+            'petrol': 'Euro 4 or later (approx. 2006+)',
+            'diesel': 'Euro 6 or later (approx. 2015+)',
+            'hybrid': 'Must meet petrol/diesel standard',
+            'electric': 'Exempt'
+        },
+        'purchase_url': 'https://tfl.gov.uk/modes/driving/ultra-low-emission-zone'
+    },
+    'london_cc': {
+        'name': 'London Congestion Charge',
+        'city': 'London',
+        'type': 'CC',  # Congestion Charge
+        'daily_charge': 15.00,
+        'currency': 'GBP',
+        # Central London Congestion Charge zone (smaller inner zone)
+        'polygon': [
+            (51.5250, -0.1550), (51.5300, -0.1350), (51.5280, -0.1150), (51.5200, -0.0950),
+            (51.5100, -0.0850), (51.5000, -0.0850), (51.4900, -0.0950), (51.4850, -0.1150),
+            (51.4870, -0.1350), (51.4950, -0.1550), (51.5050, -0.1650), (51.5150, -0.1650),
+            (51.5250, -0.1550)  # Close polygon
+        ],
+        'operating_hours': '07:00-18:00',
+        'operating_days': 'Mon-Fri (excl. bank holidays)',
+        'passes': {
+            'daily': {'price': 15.00, 'available': True},
+            'weekly': {'price': None, 'available': False},
+            'monthly': {'price': 331.50, 'available': True, 'note': 'Fleet discount'},
+            'annual': {'price': 3315.00, 'available': True, 'note': 'Fleet discount'},
+            'auto_pay': {'price': 15.00, 'available': True}
+        },
+        'exemptions': [
+            'Electric vehicles (100% battery electric)',
+            'Disabled Blue Badge holders',
+            'NHS exemption holders',
+            'Residents (90% discount)',
+            'Licensed taxis',
+            'Motorcycles, mopeds, bicycles'
+        ],
+        'vehicle_requirements': {
+            'petrol': 'All subject to charge',
+            'diesel': 'All subject to charge',
+            'hybrid': 'Subject to charge unless registered for Cleaner Vehicle Discount',
+            'electric': 'Exempt (Cleaner Vehicle Discount)'
+        },
+        'purchase_url': 'https://tfl.gov.uk/modes/driving/congestion-charge'
+    },
+    'birmingham': {
+        'name': 'Birmingham CAZ',
+        'city': 'Birmingham',
+        'type': 'CAZ',
+        'daily_charge': 8.00,
+        'currency': 'GBP',
+        'polygon': [
+            (52.4950, -1.9200), (52.4980, -1.8900), (52.4900, -1.8650), (52.4800, -1.8550),
+            (52.4650, -1.8600), (52.4550, -1.8750), (52.4520, -1.9000), (52.4580, -1.9250),
+            (52.4700, -1.9350), (52.4850, -1.9300), (52.4950, -1.9200)  # Close polygon
+        ],
+        'operating_hours': '00:00-23:59',
+        'operating_days': 'Daily',
+        'passes': {
+            'daily': {'price': 8.00, 'available': True},
+            'weekly': {'price': 48.00, 'available': True},
+            'monthly': {'price': 168.00, 'available': True},
+            'annual': {'price': 1680.00, 'available': True},
+            'auto_pay': {'price': 8.00, 'available': False}
+        },
+        'exemptions': [
+            'Electric vehicles',
+            'Euro 6 diesel vehicles',
+            'Euro 4 petrol vehicles',
+            'Disabled tax class vehicles',
+            'Historic vehicles (40+ years old)',
+            'Military vehicles'
+        ],
+        'vehicle_requirements': {
+            'petrol': 'Euro 4 or later',
+            'diesel': 'Euro 6 or later',
+            'hybrid': 'Must meet petrol/diesel standard',
+            'electric': 'Exempt'
+        },
+        'purchase_url': 'https://www.brumbreathes.co.uk/'
+    },
+    'bath': {
+        'name': 'Bath CAZ',
+        'city': 'Bath',
+        'type': 'CAZ',
+        'daily_charge': 9.00,
+        'currency': 'GBP',
+        'polygon': [
+            (51.3950, -2.3800), (51.3970, -2.3550), (51.3900, -2.3400), (51.3800, -2.3450),
+            (51.3720, -2.3600), (51.3750, -2.3800), (51.3850, -2.3900), (51.3950, -2.3800)
+        ],
+        'operating_hours': '00:00-23:59',
+        'operating_days': 'Daily',
+        'passes': {
+            'daily': {'price': 9.00, 'available': True},
+            'weekly': {'price': 45.00, 'available': True},
+            'monthly': {'price': 162.00, 'available': True},
+            'annual': {'price': None, 'available': False},
+            'auto_pay': {'price': 9.00, 'available': False}
+        },
+        'exemptions': [
+            'Electric vehicles',
+            'Euro 6 diesel vehicles',
+            'Euro 4 petrol vehicles',
+            'Disabled tax class vehicles',
+            'Historic vehicles'
+        ],
+        'vehicle_requirements': {
+            'petrol': 'Euro 4 or later',
+            'diesel': 'Euro 6 or later',
+            'hybrid': 'Must meet petrol/diesel standard',
+            'electric': 'Exempt'
+        },
+        'purchase_url': 'https://www.bathnes.gov.uk/bath-clean-air-zone'
+    },
+    'bristol': {
+        'name': 'Bristol CAZ',
+        'city': 'Bristol',
+        'type': 'CAZ',
+        'daily_charge': 9.00,
+        'currency': 'GBP',
+        'polygon': [
+            (51.4650, -2.6100), (51.4680, -2.5850), (51.4600, -2.5650), (51.4500, -2.5600),
+            (51.4400, -2.5700), (51.4350, -2.5900), (51.4400, -2.6100), (51.4500, -2.6200),
+            (51.4600, -2.6200), (51.4650, -2.6100)
+        ],
+        'operating_hours': '00:00-23:59',
+        'operating_days': 'Daily',
+        'passes': {
+            'daily': {'price': 9.00, 'available': True},
+            'weekly': {'price': 45.00, 'available': True},
+            'monthly': {'price': 162.00, 'available': True},
+            'annual': {'price': None, 'available': False},
+            'auto_pay': {'price': 9.00, 'available': False}
+        },
+        'exemptions': [
+            'Electric vehicles',
+            'Euro 6 diesel vehicles',
+            'Euro 4 petrol vehicles',
+            'Disabled tax class vehicles',
+            'Historic vehicles'
+        ],
+        'vehicle_requirements': {
+            'petrol': 'Euro 4 or later',
+            'diesel': 'Euro 6 or later',
+            'hybrid': 'Must meet petrol/diesel standard',
+            'electric': 'Exempt'
+        },
+        'purchase_url': 'https://www.bristol.gov.uk/bristol-clean-air-zone'
+    },
+    'portsmouth': {
+        'name': 'Portsmouth CAZ',
+        'city': 'Portsmouth',
+        'type': 'CAZ',
+        'daily_charge': 10.00,
+        'currency': 'GBP',
+        'polygon': [
+            (50.8050, -1.1000), (50.8100, -1.0850), (50.8050, -1.0700), (50.7950, -1.0700),
+            (50.7900, -1.0850), (50.7950, -1.1000), (50.8050, -1.1000)
+        ],
+        'operating_hours': '00:00-23:59',
+        'operating_days': 'Daily',
+        'passes': {
+            'daily': {'price': 10.00, 'available': True},
+            'weekly': {'price': 50.00, 'available': True},
+            'monthly': {'price': 180.00, 'available': True},
+            'annual': {'price': None, 'available': False},
+            'auto_pay': {'price': 10.00, 'available': False}
+        },
+        'exemptions': [
+            'Electric vehicles',
+            'Euro 6 diesel vehicles',
+            'Euro 4 petrol vehicles',
+            'Disabled tax class vehicles'
+        ],
+        'vehicle_requirements': {
+            'petrol': 'Euro 4 or later',
+            'diesel': 'Euro 6 or later',
+            'hybrid': 'Must meet petrol/diesel standard',
+            'electric': 'Exempt'
+        },
+        'purchase_url': 'https://www.portsmouth.gov.uk/cleanairzone'
+    },
+    'sheffield': {
+        'name': 'Sheffield CAZ',
+        'city': 'Sheffield',
+        'type': 'CAZ',
+        'daily_charge': 10.00,
+        'currency': 'GBP',
+        'polygon': [
+            (53.3900, -1.4800), (53.3920, -1.4600), (53.3850, -1.4450), (53.3750, -1.4500),
+            (53.3700, -1.4650), (53.3750, -1.4850), (53.3850, -1.4900), (53.3900, -1.4800)
+        ],
+        'operating_hours': '00:00-23:59',
+        'operating_days': 'Daily',
+        'passes': {
+            'daily': {'price': 10.00, 'available': True},
+            'weekly': {'price': 50.00, 'available': True},
+            'monthly': {'price': 180.00, 'available': True},
+            'annual': {'price': None, 'available': False},
+            'auto_pay': {'price': 10.00, 'available': False}
+        },
+        'exemptions': [
+            'Electric vehicles',
+            'Euro 6 diesel vehicles',
+            'Euro 4 petrol vehicles',
+            'Disabled tax class vehicles'
+        ],
+        'vehicle_requirements': {
+            'petrol': 'Euro 4 or later',
+            'diesel': 'Euro 6 or later',
+            'hybrid': 'Must meet petrol/diesel standard',
+            'electric': 'Exempt'
+        },
+        'purchase_url': 'https://www.sheffield.gov.uk/cleanairzone'
+    },
+    'newcastle': {
+        'name': 'Newcastle CAZ',
+        'city': 'Newcastle',
+        'type': 'CAZ',
+        'daily_charge': 12.50,
+        'currency': 'GBP',
+        'polygon': [
+            (54.9800, -1.6300), (54.9820, -1.6050), (54.9750, -1.5850), (54.9650, -1.5900),
+            (54.9600, -1.6100), (54.9650, -1.6350), (54.9750, -1.6400), (54.9800, -1.6300)
+        ],
+        'operating_hours': '00:00-23:59',
+        'operating_days': 'Daily',
+        'passes': {
+            'daily': {'price': 12.50, 'available': True},
+            'weekly': {'price': 62.50, 'available': True},
+            'monthly': {'price': 225.00, 'available': True},
+            'annual': {'price': None, 'available': False},
+            'auto_pay': {'price': 12.50, 'available': False}
+        },
+        'exemptions': [
+            'Electric vehicles',
+            'Euro 6 diesel vehicles',
+            'Euro 4 petrol vehicles',
+            'Disabled tax class vehicles'
+        ],
+        'vehicle_requirements': {
+            'petrol': 'Euro 4 or later',
+            'diesel': 'Euro 6 or later',
+            'hybrid': 'Must meet petrol/diesel standard',
+            'electric': 'Exempt'
+        },
+        'purchase_url': 'https://www.newcastle.gov.uk/cleanairzone'
+    }
+}
+
+# CAZ Pass Types - used for vehicle profile selection
+CAZ_PASS_TYPES = [
+    {'id': 'none', 'name': 'No Pass', 'description': 'No CAZ pass - will be charged at each zone'},
+    {'id': 'exempt_electric', 'name': 'Electric Vehicle Exempt', 'description': 'Electric vehicles are exempt from all UK CAZ charges'},
+    {'id': 'exempt_euro6', 'name': 'Euro 6/4 Compliant', 'description': 'Vehicle meets Euro 6 diesel or Euro 4 petrol standards'},
+    {'id': 'exempt_disabled', 'name': 'Disabled Tax Class', 'description': 'Vehicle registered in disabled tax class'},
+    {'id': 'exempt_historic', 'name': 'Historic Vehicle', 'description': 'Vehicle is 40+ years old (historic classification)'},
+    {'id': 'exempt_military', 'name': 'Military Vehicle', 'description': 'Military vehicle exemption'},
+    {'id': 'pass_daily', 'name': 'Daily Pass', 'description': 'Valid daily pass purchased for specific zones'},
+    {'id': 'pass_weekly', 'name': 'Weekly Pass', 'description': 'Valid weekly pass for specific zones'},
+    {'id': 'pass_monthly', 'name': 'Monthly Pass', 'description': 'Valid monthly pass for specific zones'},
+    {'id': 'pass_annual', 'name': 'Annual Pass', 'description': 'Valid annual pass for specific zones'},
+    {'id': 'auto_pay', 'name': 'Auto Pay Registered', 'description': 'Registered for automatic payment (TfL Auto Pay, etc.)'}
+]
+
+
+def point_in_polygon(lat: float, lon: float, polygon: List[Tuple[float, float]]) -> bool:
+    """
+    Check if a point (lat, lon) is inside a polygon using ray casting algorithm.
+
+    Args:
+        lat: Latitude of the point
+        lon: Longitude of the point
+        polygon: List of (lat, lon) tuples defining the polygon vertices
+
+    Returns:
+        True if point is inside polygon, False otherwise
+    """
+    n = len(polygon)
+    inside = False
+
+    j = n - 1
+    for i in range(n):
+        xi, yi = polygon[i]
+        xj, yj = polygon[j]
+
+        if ((yi > lon) != (yj > lon)) and (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi):
+            inside = not inside
+        j = i
+
+    return inside
+
+
+def check_route_in_caz(route_coords: List[Tuple[float, float]], vehicle_caz_pass: str = 'none') -> Dict[str, Any]:
+    """
+    Check if a route passes through any CAZ zones and calculate charges.
+
+    Args:
+        route_coords: List of (lat, lon) tuples representing the route
+        vehicle_caz_pass: The CAZ pass/exemption type the vehicle has
+
+    Returns:
+        Dictionary with:
+        - zones_crossed: List of zone IDs the route passes through
+        - total_charge: Total CAZ charge (0 if exempt/has pass)
+        - is_exempt: Whether the vehicle is exempt
+        - pass_covers: Whether a pass covers the charges
+        - zone_details: Details of each zone crossed
+    """
+    result = {
+        'zones_crossed': [],
+        'total_charge': 0.0,
+        'is_exempt': False,
+        'pass_covers': False,
+        'zone_details': []
+    }
+
+    # Check if vehicle has exemption
+    exempt_passes = ['exempt_electric', 'exempt_euro6', 'exempt_disabled', 'exempt_historic', 'exempt_military']
+    has_pass = ['pass_daily', 'pass_weekly', 'pass_monthly', 'pass_annual', 'auto_pay']
+
+    if vehicle_caz_pass in exempt_passes:
+        result['is_exempt'] = True
+    elif vehicle_caz_pass in has_pass:
+        result['pass_covers'] = True
+
+    if not route_coords or len(route_coords) == 0:
+        return result
+
+    # Check each CAZ zone
+    for zone_id, zone_data in CAZ_ZONES_DATA.items():
+        polygon = zone_data.get('polygon', [])
+        if not polygon:
+            continue
+
+        # Check if any route point falls within this zone
+        zone_crossed = False
+        for coord in route_coords:
+            if isinstance(coord, (list, tuple)) and len(coord) >= 2:
+                lat, lon = float(coord[0]), float(coord[1])
+                if point_in_polygon(lat, lon, polygon):
+                    zone_crossed = True
+                    break
+
+        if zone_crossed:
+            result['zones_crossed'].append(zone_id)
+            zone_detail = {
+                'zone_id': zone_id,
+                'name': zone_data['name'],
+                'city': zone_data['city'],
+                'daily_charge': zone_data['daily_charge'],
+                'purchase_url': zone_data.get('purchase_url', '')
+            }
+            result['zone_details'].append(zone_detail)
+
+            # Add charge only if not exempt and no pass
+            if not result['is_exempt'] and not result['pass_covers']:
+                result['total_charge'] += zone_data['daily_charge']
+
+    result['total_charge'] = round(result['total_charge'], 2)
+    return result
+
+# ============================================================================
 # ROUTE CACHING SYSTEM (Phase 3 Optimization)
 # ============================================================================
 
@@ -663,9 +1063,16 @@ def init_db():
             fuel_efficiency REAL, fuel_price REAL,
             energy_efficiency REAL, electricity_price REAL,
             is_caz_exempt INTEGER DEFAULT 0,
+            caz_pass_type TEXT DEFAULT 'none',
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # Add caz_pass_type column if it doesn't exist (migration for existing databases)
+    try:
+        cursor.execute('ALTER TABLE vehicles ADD COLUMN caz_pass_type TEXT DEFAULT "none"')
+    except Exception:
+        pass  # Column already exists
 
     # Charging stations table
     cursor.execute('''
@@ -977,13 +1384,15 @@ class CostCalculator:
 
         # Calculate CAZ cost - ONLY if route passes through known CAZ zones
         # Pass route coordinates to enable location-based CAZ detection
+        caz_details: Dict[str, Any] = {}
         if include_caz and not caz_exempt:
-            caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt, route_coords=route_coords)
+            caz_cost, caz_details = calculate_caz_cost(distance_km, vehicle_type, caz_exempt, route_coords=route_coords)
 
         return {
             'fuel_cost': round(fuel_cost, 2),
             'toll_cost': round(toll_cost, 2),
             'caz_cost': round(caz_cost, 2),
+            'caz_details': caz_details,
             'total_cost': round(fuel_cost + toll_cost + caz_cost, 2)
         }
 
@@ -1535,76 +1944,61 @@ def calculate_toll_cost(_distance_km: float, _route_type: str = 'motorway', rout
 
     return round(total_toll, 2)
 
-def calculate_caz_cost(_distance_km: float, vehicle_type: str = 'petrol_diesel', is_exempt: bool = False, route_coords: Optional[List[Tuple[float, float]]] = None) -> float:
-    """Calculate Congestion Charge Zone cost based on actual CAZ zones.
+def calculate_caz_cost(_distance_km: float, vehicle_type: str = 'petrol_diesel', is_exempt: bool = False,
+                       route_coords: Optional[List[Tuple[float, float]]] = None,
+                       vehicle_caz_pass: str = 'none') -> Tuple[float, Dict[str, Any]]:
+    """Calculate Congestion Charge Zone cost using polygon-based boundary detection.
 
-    IMPORTANT: CAZ costs are NOT calculated based on distance anymore.
-    The _distance_km parameter is kept for backward compatibility.
-    Only charges CAZ if route passes through known UK CAZ zones:
-    - London (£15.00/day)
-    - Birmingham (£8.00/day)
-    - Leeds (£10.00/day)
-    - Bristol (£9.00/day)
-    - Bath (£9.00/day)
-    - Derby (£8.00/day)
-    - Nottingham (£8.00/day)
-    - Portsmouth (£10.00/day)
-
-    Returns 0.0 by default (conservative approach) unless route_coords provided.
+    Uses precise polygon boundaries for each UK CAZ zone instead of radius-based detection.
+    Checks if route coordinates fall within actual zone boundaries.
 
     Args:
-        distance_km: Route distance (DEPRECATED - no longer used)
-        vehicle_type: Type of vehicle
-        is_exempt: Whether vehicle is CAZ exempt
+        _distance_km: Route distance (DEPRECATED - kept for backward compatibility)
+        vehicle_type: Type of vehicle (petrol_diesel, electric, hybrid)
+        is_exempt: Whether vehicle is CAZ exempt (legacy parameter)
         route_coords: List of route coordinates to check for CAZ zones
+        vehicle_caz_pass: The CAZ pass/exemption type (from CAZ_PASS_TYPES)
 
     Returns:
-        CAZ cost in GBP (0 if no CAZ zones detected, vehicle exempt, or no coordinates)
+        Tuple of (cost, details_dict) where details_dict contains:
+        - zones_crossed: List of zone IDs crossed
+        - total_charge: Total charge amount
+        - is_exempt: Whether vehicle is exempt
+        - pass_covers: Whether a pass covers the charges
+        - zone_details: Details of each zone
     """
-    if is_exempt:
-        return 0.0
-
-    # Electric vehicles are exempt from CAZ
-    if vehicle_type == 'electric':
-        return 0.0
-
-    # If no coordinates provided, don't charge CAZ (conservative approach)
-    # This prevents false CAZ charges on routes not passing through CAZ zones
-    if not route_coords or len(route_coords) == 0:
-        return 0.0
-
-    # Known UK CAZ zones with approximate locations and charges
-    CAZ_ZONES: Dict[str, Dict[str, float]] = {
-        'London': {'lat': 51.5, 'lon': -0.1, 'cost': 15.00, 'radius_km': 15},
-        'Birmingham': {'lat': 52.5, 'lon': -1.9, 'cost': 8.00, 'radius_km': 8},
-        'Leeds': {'lat': 53.8, 'lon': -1.5, 'cost': 10.00, 'radius_km': 8},
-        'Bristol': {'lat': 51.45, 'lon': -2.6, 'cost': 9.00, 'radius_km': 8},
-        'Bath': {'lat': 51.38, 'lon': -2.36, 'cost': 9.00, 'radius_km': 5},
-        'Derby': {'lat': 52.92, 'lon': -1.48, 'cost': 8.00, 'radius_km': 5},
-        'Nottingham': {'lat': 52.95, 'lon': -1.15, 'cost': 8.00, 'radius_km': 5},
-        'Portsmouth': {'lat': 50.82, 'lon': -1.09, 'cost': 10.00, 'radius_km': 5},
+    # Default empty result
+    empty_result: Dict[str, Any] = {
+        'zones_crossed': [],
+        'total_charge': 0.0,
+        'is_exempt': False,
+        'pass_covers': False,
+        'zone_details': []
     }
 
-    # Check if route passes through any known CAZ zones
-    total_caz: float = 0.0
-    zones_charged: Set[str] = set()
+    # Legacy exemption check
+    if is_exempt:
+        empty_result['is_exempt'] = True
+        return 0.0, empty_result
 
-    for coord in route_coords:
-        if isinstance(coord, (list, tuple)) and len(coord) >= 2:
-            lat, lon = coord[0], coord[1]
+    # Electric vehicles are always exempt
+    if vehicle_type == 'electric':
+        empty_result['is_exempt'] = True
+        return 0.0, empty_result
 
-            for zone_name, zone_data in CAZ_ZONES.items():
-                if zone_name not in zones_charged:
-                    # Simple distance check
-                    lat_diff = abs(lat - zone_data['lat'])
-                    lon_diff = abs(lon - zone_data['lon'])
-                    approx_distance = (lat_diff ** 2 + lon_diff ** 2) ** 0.5 * 111
+    # Map vehicle_caz_pass 'exempt_electric' for electric vehicles
+    if vehicle_caz_pass == 'exempt_electric':
+        empty_result['is_exempt'] = True
+        return 0.0, empty_result
 
-                    if approx_distance < zone_data['radius_km']:
-                        total_caz += zone_data['cost']
-                        zones_charged.add(zone_name)
+    # If no coordinates provided, don't charge CAZ (conservative approach)
+    if not route_coords or len(route_coords) == 0:
+        return 0.0, empty_result
 
-    return round(total_caz, 2)
+    # Use polygon-based detection
+    caz_result = check_route_in_caz(route_coords, vehicle_caz_pass)
+
+    return caz_result['total_charge'], caz_result
 
 # Hazard avoidance functions
 
@@ -3338,6 +3732,18 @@ HTML_TEMPLATE = '''
                         </div>
                     </div>
 
+                    <!-- CAZ Information Section -->
+                    <div class="preferences-section">
+                        <h3>🚗 Clean Air Zones (CAZ)</h3>
+                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">UK Clean Air Zones with charges, passes, and exemptions</p>
+
+                        <button onclick="showCAZInfo()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 10px;">
+                            📋 View CAZ Zones & Pricing
+                        </button>
+
+                        <div id="cazInfoContainer" style="display: none; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;"></div>
+                    </div>
+
                     <!-- Route Preferences Section -->
                     <div class="preferences-section">
                         <h3>🛣️ Route Preferences</h3>
@@ -3864,6 +4270,8 @@ HTML_TEMPLATE = '''
                                     <div style="font-weight: bold; color: #667eea; font-size: 14px;" id="previewTotalCost">-</div>
                                 </div>
                             </div>
+                            <!-- CAZ Status Display -->
+                            <div id="cazStatusContainer" style="display: none; margin-top: 10px; padding: 8px; background: #f5f5f5; border-radius: 6px;"></div>
                         </div>
 
                         <!-- Hazard Information -->
@@ -4371,7 +4779,7 @@ def manage_vehicles():
         cursor = conn.cursor()
 
         if request.method == 'GET':
-            cursor.execute('SELECT * FROM vehicles')
+            cursor.execute('SELECT id, name, vehicle_type, fuel_efficiency, fuel_price, energy_efficiency, electricity_price, is_caz_exempt, caz_pass_type FROM vehicles')
             vehicles = cursor.fetchall()
             return jsonify({
                 'success': True,
@@ -4380,7 +4788,8 @@ def manage_vehicles():
                         'id': v[0], 'name': v[1], 'vehicle_type': v[2],
                         'fuel_efficiency': v[3], 'fuel_price': v[4],
                         'energy_efficiency': v[5], 'electricity_price': v[6],
-                        'caz_exempt': v[7]
+                        'caz_exempt': v[7],
+                        'caz_pass_type': v[8] if len(v) > 8 else 'none'
                     } for v in vehicles
                 ]
             })
@@ -4413,12 +4822,18 @@ def manage_vehicles():
             except (ValueError, TypeError):
                 return jsonify({'success': False, 'error': 'Invalid numeric values'}), 400
 
+            caz_pass_type = data.get('caz_pass_type', 'none')
+            # Validate pass type
+            valid_passes = [p['id'] for p in CAZ_PASS_TYPES]
+            if caz_pass_type not in valid_passes:
+                caz_pass_type = 'none'
+
             cursor.execute('''
                 INSERT INTO vehicles (name, vehicle_type, fuel_efficiency, fuel_price,
-                                     energy_efficiency, electricity_price, is_caz_exempt)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                                     energy_efficiency, electricity_price, is_caz_exempt, caz_pass_type)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             ''', (name, vehicle_type, fuel_efficiency, fuel_price, energy_efficiency,
-                  electricity_price, data.get('caz_exempt', 0)))
+                  electricity_price, data.get('caz_exempt', 0), caz_pass_type))
             conn.commit()
             vehicle_id = cursor.lastrowid
             return jsonify({'success': True, 'vehicle_id': vehicle_id})
@@ -4427,6 +4842,105 @@ def manage_vehicles():
     finally:
         if conn:
             return_db_connection(conn)
+
+
+@app.route('/api/vehicles/<int:vehicle_id>/caz-pass', methods=['PUT'])
+@rate_limit(api_limiter)
+def update_vehicle_caz_pass(vehicle_id: int):
+    """Update CAZ pass/exemption for a vehicle."""
+    conn = None
+    try:
+        data = request.get_json()
+        caz_pass_type = data.get('caz_pass_type', 'none')
+
+        # Validate pass type
+        valid_passes = [p['id'] for p in CAZ_PASS_TYPES]
+        if caz_pass_type not in valid_passes:
+            return jsonify({'success': False, 'error': f'Invalid CAZ pass type. Valid options: {valid_passes}'})
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('UPDATE vehicles SET caz_pass_type = ? WHERE id = ?', (caz_pass_type, vehicle_id))
+        conn.commit()
+
+        if cursor.rowcount == 0:
+            return jsonify({'success': False, 'error': 'Vehicle not found'})
+
+        return jsonify({'success': True, 'message': f'CAZ pass updated to {caz_pass_type}'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
+@app.route('/api/caz-zones', methods=['GET'])
+@rate_limit(api_limiter)
+def get_caz_zones():
+    """Get all CAZ zones with their details, pricing, passes, and exemptions."""
+    try:
+        zones = []
+        for zone_id, zone_data in CAZ_ZONES_DATA.items():
+            zones.append({
+                'id': zone_id,
+                'name': zone_data['name'],
+                'city': zone_data['city'],
+                'type': zone_data['type'],
+                'daily_charge': zone_data['daily_charge'],
+                'currency': zone_data['currency'],
+                'operating_hours': zone_data.get('operating_hours', '00:00-23:59'),
+                'operating_days': zone_data.get('operating_days', 'Daily'),
+                'passes': zone_data.get('passes', {}),
+                'exemptions': zone_data.get('exemptions', []),
+                'vehicle_requirements': zone_data.get('vehicle_requirements', {}),
+                'purchase_url': zone_data.get('purchase_url', '')
+            })
+        return jsonify({'success': True, 'zones': zones, 'count': len(zones)})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/caz-pass-types', methods=['GET'])
+@rate_limit(api_limiter)
+def get_caz_pass_types():
+    """Get all available CAZ pass and exemption types."""
+    try:
+        return jsonify({'success': True, 'pass_types': CAZ_PASS_TYPES})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@app.route('/api/caz-check', methods=['POST'])
+@rate_limit(api_limiter)
+def check_caz_for_route():
+    """Check if a route passes through CAZ zones and calculate charges."""
+    try:
+        data = request.get_json()
+        route_coords = data.get('route_coords', [])
+        vehicle_caz_pass = data.get('vehicle_caz_pass', 'none')
+        vehicle_type = data.get('vehicle_type', 'petrol_diesel')
+
+        if not route_coords:
+            return jsonify({'success': True, 'caz_result': {
+                'zones_crossed': [],
+                'total_charge': 0.0,
+                'is_exempt': False,
+                'pass_covers': False,
+                'zone_details': []
+            }})
+
+        # Use polygon-based detection
+        caz_result = check_route_in_caz(route_coords, vehicle_caz_pass)
+
+        # Check if vehicle type grants exemption
+        if vehicle_type == 'electric':
+            caz_result['is_exempt'] = True
+            caz_result['total_charge'] = 0.0
+
+        return jsonify({'success': True, 'caz_result': caz_result})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 
 @app.route('/api/charging-stations', methods=['GET'])
 @rate_limit(api_limiter)
@@ -6062,6 +6576,7 @@ def calculate_route():
                     fuel_cost = costs['fuel_cost']
                     toll_cost = costs['toll_cost']
                     caz_cost = costs['caz_cost']
+                    caz_details = costs.get('caz_details', {})
 
                     # Score route by hazards (always score, regardless of avoidance setting)
                     hazard_penalty = 0
@@ -6095,6 +6610,7 @@ def calculate_route():
                         'fuel_cost': round(fuel_cost, 2),
                         'toll_cost': round(toll_cost, 2),
                         'caz_cost': round(caz_cost, 2),
+                        'caz_details': caz_details,
                         'geometry': route_geometry,
                         'hazard_penalty_seconds': round(hazard_penalty, 0),
                         'hazard_count': hazard_count,
@@ -6198,6 +6714,7 @@ def calculate_route():
                         'fuel_cost': routes[0]['fuel_cost'],
                         'toll_cost': routes[0]['toll_cost'],
                         'caz_cost': routes[0]['caz_cost'],
+                        'caz_details': routes[0].get('caz_details', {}),
                         'cached': False,
                         'start_lat': start_lat,
                         'start_lon': start_lon,
@@ -6438,8 +6955,9 @@ def calculate_route():
                             if include_tolls:
                                 toll_cost = calculate_toll_cost(distance_km, 'motorway', route_coords=route_coords)
 
+                            caz_details = {}
                             if include_caz and not caz_exempt:
-                                caz_cost = calculate_caz_cost(distance_km, vehicle_type, caz_exempt, route_coords=route_coords)
+                                caz_cost, caz_details = calculate_caz_cost(distance_km, vehicle_type, caz_exempt, route_coords=route_coords)
 
                             # Determine route type
                             if idx == 0:
