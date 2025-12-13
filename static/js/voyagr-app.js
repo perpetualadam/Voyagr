@@ -2913,7 +2913,7 @@ function displayAllRouteHazards() {
 // ===== TOMTOM TRAFFIC FLOW LAYER =====
 // Real-time traffic visualization overlay
 let trafficLayer = null;
-let showTrafficEnabled = localStorage.getItem('showTrafficEnabled') === 'true'; // Default: disabled
+let showTrafficEnabled = localStorage.getItem('showTrafficEnabled') !== 'false'; // Default: enabled
 
 /**
  * Toggle TomTom traffic flow layer on/off
