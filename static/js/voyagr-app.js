@@ -2774,13 +2774,20 @@ function displayHazardMarkers(hazards) {
     // Clear existing hazard markers
     clearHazardMarkers();
 
-    // Hazard type configuration
+    // SVG icons for camera types (UK-style speed camera icons)
+    const speedCameraSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="2" y="6" width="20" height="12" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="12" r="4" fill="#222"/><circle cx="12" cy="12" r="2" fill="#FFD600"/><rect x="8" y="3" width="8" height="4" rx="1" fill="#222"/></svg>`;
+    const avgSpeedSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="2" y="6" width="20" height="12" rx="2" fill="#1565C0" stroke="#222" stroke-width="1.5"/><circle cx="8" cy="12" r="2.5" fill="#fff"/><circle cx="16" cy="12" r="2.5" fill="#fff"/><path d="M8 12 L16 12" stroke="#fff" stroke-width="1" stroke-dasharray="2,1"/></svg>`;
+    const redLightSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="8" y="2" width="8" height="18" rx="2" fill="#333" stroke="#222" stroke-width="1"/><circle cx="12" cy="6" r="2" fill="#f44336"/><circle cx="12" cy="11" r="2" fill="#555"/><circle cx="12" cy="16" r="2" fill="#555"/></svg>`;
+    const mobileSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="2" y="8" width="16" height="10" rx="2" fill="#9C27B0" stroke="#222" stroke-width="1"/><rect x="14" y="10" width="8" height="6" rx="1" fill="#7B1FA2"/><circle cx="6" cy="18" r="2" fill="#333"/><circle cx="14" cy="18" r="2" fill="#333"/><circle cx="18" cy="12" r="2" fill="#FFD600" stroke="#222" stroke-width="0.5"/></svg>`;
+    const trafficLightSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="7" y="2" width="10" height="20" rx="2" fill="#333" stroke="#222" stroke-width="1"/><circle cx="12" cy="6" r="2.5" fill="#f44336"/><circle cx="12" cy="12" r="2.5" fill="#FFD600"/><circle cx="12" cy="18" r="2.5" fill="#4CAF50"/></svg>`;
+
+    // Hazard type configuration with SVG for cameras, emoji for other hazards
     const hazardConfig = {
-        'traffic_light_camera': { emoji: '🚨', color: '#e53935', bgColor: '#ffebee', label: 'Traffic Light Camera' },
-        'speed_camera': { emoji: '📷', color: '#ff9800', bgColor: '#fff3e0', label: 'Speed Camera' },
-        'average_speed_camera': { emoji: '📸', color: '#ff5722', bgColor: '#fbe9e7', label: 'Average Speed Camera' },
-        'red_light_camera': { emoji: '🔴', color: '#d32f2f', bgColor: '#ffcdd2', label: 'Red Light Camera' },
-        'mobile_camera': { emoji: '🚐', color: '#9c27b0', bgColor: '#f3e5f5', label: 'Mobile Camera' },
+        'traffic_light_camera': { svg: trafficLightSVG, color: '#e53935', bgColor: '#ffebee', label: 'Traffic Light Camera' },
+        'speed_camera': { svg: speedCameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Speed Camera' },
+        'average_speed_camera': { svg: avgSpeedSVG, color: '#1565C0', bgColor: '#e3f2fd', label: 'Average Speed Camera' },
+        'red_light_camera': { svg: redLightSVG, color: '#d32f2f', bgColor: '#ffcdd2', label: 'Red Light Camera' },
+        'mobile_camera': { svg: mobileSVG, color: '#9c27b0', bgColor: '#f3e5f5', label: 'Mobile Camera' },
         'police': { emoji: '🚔', color: '#1976d2', bgColor: '#e3f2fd', label: 'Police' },
         'roadworks': { emoji: '🚧', color: '#ffc107', bgColor: '#fff8e1', label: 'Roadworks' },
         'accident': { emoji: '⚠️', color: '#f44336', bgColor: '#ffebee', label: 'Accident' },
@@ -2799,31 +2806,38 @@ function displayHazardMarkers(hazards) {
         seenLocations.add(locationKey);
 
         const config = hazardConfig[hazard.type] || { emoji: '⚠️', color: '#ff9800', bgColor: '#fff3e0', label: 'Hazard' };
+        const iconContent = config.svg || config.emoji;
+        const isCamera = !!config.svg;
 
-        // Create custom HTML icon
+        // Create custom HTML icon (square for cameras, round for other hazards)
         const icon = L.divIcon({
             className: 'hazard-marker',
             html: `<div style="
                 background: ${config.bgColor};
                 border: 2px solid ${config.color};
-                border-radius: 50%;
+                border-radius: ${isCamera ? '4px' : '50%'};
                 width: 28px;
                 height: 28px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 14px;
+                font-size: ${isCamera ? '12px' : '14px'};
                 box-shadow: 0 2px 6px rgba(0,0,0,0.3);
                 cursor: pointer;
-            ">${config.emoji}</div>`,
+            ">${iconContent}</div>`,
             iconSize: [28, 28],
             iconAnchor: [14, 14]
         });
 
+        // Popup content - larger SVG for cameras
+        const popupIcon = config.svg
+            ? config.svg.replace('width="20"', 'width="36"').replace('height="20"', 'height="36"')
+            : `<span style="font-size: 32px;">${config.emoji}</span>`;
+
         const marker = L.marker([hazard.lat, hazard.lon], { icon })
             .bindPopup(`
                 <div style="text-align: center; min-width: 150px;">
-                    <div style="font-size: 24px; margin-bottom: 5px;">${config.emoji}</div>
+                    <div style="margin-bottom: 8px; display: flex; justify-content: center;">${popupIcon}</div>
                     <div style="font-weight: bold; color: ${config.color}; margin-bottom: 5px;">${config.label}</div>
                     ${hazard.description ? `<div style="font-size: 12px; color: #666;">${hazard.description}</div>` : ''}
                     ${hazard.distance_m ? `<div style="font-size: 11px; color: #999; margin-top: 5px;">📍 ${(hazard.distance_m / 1000).toFixed(2)} km from route</div>` : ''}
@@ -2958,13 +2972,24 @@ function displayCameraMarkers(cameras) {
     // Clear existing camera markers
     clearCameraMarkers();
 
-    // Camera type configuration
+    // Camera type configuration with UK-style speed camera icons (SVG)
+    // Speed camera SVG: Yellow/black GATSO-style camera icon
+    const speedCameraSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="2" y="6" width="20" height="12" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="12" r="4" fill="#222"/><circle cx="12" cy="12" r="2" fill="#FFD600"/><rect x="8" y="3" width="8" height="4" rx="1" fill="#222"/></svg>`;
+    // Average speed camera: Blue/white SPECS-style icon
+    const avgSpeedSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="2" y="6" width="20" height="12" rx="2" fill="#1565C0" stroke="#222" stroke-width="1.5"/><circle cx="8" cy="12" r="2.5" fill="#fff"/><circle cx="16" cy="12" r="2.5" fill="#fff"/><path d="M8 12 L16 12" stroke="#fff" stroke-width="1" stroke-dasharray="2,1"/></svg>`;
+    // Red light camera: Red with traffic light icon
+    const redLightSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="8" y="2" width="8" height="18" rx="2" fill="#333" stroke="#222" stroke-width="1"/><circle cx="12" cy="6" r="2" fill="#f44336"/><circle cx="12" cy="11" r="2" fill="#555"/><circle cx="12" cy="16" r="2" fill="#555"/></svg>`;
+    // Mobile camera: Van with camera
+    const mobileSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="2" y="8" width="16" height="10" rx="2" fill="#9C27B0" stroke="#222" stroke-width="1"/><rect x="14" y="10" width="8" height="6" rx="1" fill="#7B1FA2"/><circle cx="6" cy="18" r="2" fill="#333"/><circle cx="14" cy="18" r="2" fill="#333"/><circle cx="18" cy="12" r="2" fill="#FFD600" stroke="#222" stroke-width="0.5"/></svg>`;
+    // Traffic light camera
+    const trafficLightSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="7" y="2" width="10" height="20" rx="2" fill="#333" stroke="#222" stroke-width="1"/><circle cx="12" cy="6" r="2.5" fill="#f44336"/><circle cx="12" cy="12" r="2.5" fill="#FFD600"/><circle cx="12" cy="18" r="2.5" fill="#4CAF50"/></svg>`;
+
     const cameraConfig = {
-        'traffic_light_camera': { emoji: '🚨', color: '#e53935', bgColor: '#ffebee', label: 'Traffic Light Camera' },
-        'speed_camera': { emoji: '📷', color: '#ff9800', bgColor: '#fff3e0', label: 'Speed Camera' },
-        'average_speed_camera': { emoji: '📸', color: '#ff5722', bgColor: '#fbe9e7', label: 'Average Speed Camera' },
-        'red_light_camera': { emoji: '🔴', color: '#d32f2f', bgColor: '#ffcdd2', label: 'Red Light Camera' },
-        'mobile_camera': { emoji: '🚐', color: '#9c27b0', bgColor: '#f3e5f5', label: 'Mobile Camera' }
+        'traffic_light_camera': { svg: trafficLightSVG, color: '#e53935', bgColor: '#ffebee', label: 'Traffic Light Camera' },
+        'speed_camera': { svg: speedCameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Speed Camera' },
+        'average_speed_camera': { svg: avgSpeedSVG, color: '#1565C0', bgColor: '#e3f2fd', label: 'Average Speed Camera' },
+        'red_light_camera': { svg: redLightSVG, color: '#d32f2f', bgColor: '#ffcdd2', label: 'Red Light Camera' },
+        'mobile_camera': { svg: mobileSVG, color: '#9c27b0', bgColor: '#f3e5f5', label: 'Mobile Camera' }
     };
 
     // Track unique locations to avoid duplicates
@@ -2977,31 +3002,29 @@ function displayCameraMarkers(cameras) {
 
         const config = cameraConfig[camera.type] || cameraConfig['speed_camera'];
 
-        // Create custom HTML icon
+        // Create custom HTML icon with SVG
         const icon = L.divIcon({
             className: 'camera-marker',
             html: `<div style="
                 background: ${config.bgColor};
                 border: 2px solid ${config.color};
-                border-radius: 50%;
-                width: 24px;
-                height: 24px;
+                border-radius: 4px;
+                width: 26px;
+                height: 26px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: 12px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
                 cursor: pointer;
-                opacity: 0.85;
-            ">${config.emoji}</div>`,
-            iconSize: [24, 24],
-            iconAnchor: [12, 12]
+            ">${config.svg}</div>`,
+            iconSize: [26, 26],
+            iconAnchor: [13, 13]
         });
 
         const marker = L.marker([camera.lat, camera.lon], { icon })
             .bindPopup(`
-                <div style="text-align: center; min-width: 120px;">
-                    <div style="font-size: 20px; margin-bottom: 5px;">${config.emoji}</div>
+                <div style="text-align: center; min-width: 140px;">
+                    <div style="margin-bottom: 8px; display: flex; justify-content: center;">${config.svg.replace('width="18"', 'width="32"').replace('height="18"', 'height="32"')}</div>
                     <div style="font-weight: bold; color: ${config.color}; margin-bottom: 5px;">${config.label}</div>
                     ${camera.description ? `<div style="font-size: 11px; color: #666;">${camera.description}</div>` : ''}
                 </div>
