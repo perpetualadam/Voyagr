@@ -49,7 +49,11 @@ function initializeApp() {
         // Initialize geocode cache
         initGeocodeCache();
         console.log('[App] Geocode cache initialized');
-        
+
+        // Initialize camera layer (always-on cameras on map)
+        initializeCameraLayer();
+        console.log('[App] Camera layer initialized');
+
         // Setup event listeners
         setupEventListeners();
         console.log('[App] Event listeners setup');

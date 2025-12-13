@@ -2871,6 +2871,182 @@ function displayAllRouteHazards() {
     }
 }
 
+// ===== ALWAYS-ON CAMERA LAYER =====
+// Separate layer for displaying cameras regardless of route
+window.cameraMarkers = [];
+let showCamerasEnabled = localStorage.getItem('showCamerasEnabled') !== 'false'; // Default: enabled
+let cameraFetchTimeout = null;
+
+/**
+ * Toggle show cameras on map
+ */
+function toggleShowCameras() {
+    showCamerasEnabled = !showCamerasEnabled;
+    localStorage.setItem('showCamerasEnabled', showCamerasEnabled);
+
+    const toggle = document.getElementById('showCamerasToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', showCamerasEnabled);
+    }
+
+    if (showCamerasEnabled) {
+        fetchAndDisplayCameras();
+        console.log('[Cameras] Camera display enabled');
+    } else {
+        clearCameraMarkers();
+        console.log('[Cameras] Camera display disabled');
+    }
+}
+
+/**
+ * Clear all camera markers from the map (separate from hazard markers)
+ */
+function clearCameraMarkers() {
+    if (window.cameraMarkers) {
+        window.cameraMarkers.forEach(marker => {
+            if (map && map.hasLayer(marker)) {
+                map.removeLayer(marker);
+            }
+        });
+    }
+    window.cameraMarkers = [];
+}
+
+/**
+ * Fetch cameras in current map viewport and display them
+ */
+function fetchAndDisplayCameras() {
+    if (!showCamerasEnabled || !map) return;
+
+    const bounds = map.getBounds();
+    const zoom = map.getZoom();
+
+    // Only show cameras at zoom level 12 or higher to avoid overload
+    if (zoom < 12) {
+        clearCameraMarkers();
+        console.log('[Cameras] Zoom level too low, hiding cameras');
+        return;
+    }
+
+    const north = bounds.getNorth();
+    const south = bounds.getSouth();
+    const east = bounds.getEast();
+    const west = bounds.getWest();
+
+    fetch(`/api/cameras/area?north=${north}&south=${south}&east=${east}&west=${west}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.cameras) {
+                displayCameraMarkers(data.cameras);
+                console.log(`[Cameras] Loaded ${data.cameras.length} cameras in viewport`);
+            }
+        })
+        .catch(error => {
+            console.error('[Cameras] Error fetching cameras:', error);
+        });
+}
+
+/**
+ * Display camera markers on the map (separate layer from route hazards)
+ */
+function displayCameraMarkers(cameras) {
+    if (!cameras || cameras.length === 0) {
+        clearCameraMarkers();
+        return;
+    }
+
+    // Clear existing camera markers
+    clearCameraMarkers();
+
+    // Camera type configuration
+    const cameraConfig = {
+        'traffic_light_camera': { emoji: '🚨', color: '#e53935', bgColor: '#ffebee', label: 'Traffic Light Camera' },
+        'speed_camera': { emoji: '📷', color: '#ff9800', bgColor: '#fff3e0', label: 'Speed Camera' },
+        'average_speed_camera': { emoji: '📸', color: '#ff5722', bgColor: '#fbe9e7', label: 'Average Speed Camera' },
+        'red_light_camera': { emoji: '🔴', color: '#d32f2f', bgColor: '#ffcdd2', label: 'Red Light Camera' },
+        'mobile_camera': { emoji: '🚐', color: '#9c27b0', bgColor: '#f3e5f5', label: 'Mobile Camera' }
+    };
+
+    // Track unique locations to avoid duplicates
+    const seenLocations = new Set();
+
+    cameras.forEach(camera => {
+        const locationKey = `${camera.lat.toFixed(5)},${camera.lon.toFixed(5)}`;
+        if (seenLocations.has(locationKey)) return;
+        seenLocations.add(locationKey);
+
+        const config = cameraConfig[camera.type] || cameraConfig['speed_camera'];
+
+        // Create custom HTML icon
+        const icon = L.divIcon({
+            className: 'camera-marker',
+            html: `<div style="
+                background: ${config.bgColor};
+                border: 2px solid ${config.color};
+                border-radius: 50%;
+                width: 24px;
+                height: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                cursor: pointer;
+                opacity: 0.85;
+            ">${config.emoji}</div>`,
+            iconSize: [24, 24],
+            iconAnchor: [12, 12]
+        });
+
+        const marker = L.marker([camera.lat, camera.lon], { icon })
+            .bindPopup(`
+                <div style="text-align: center; min-width: 120px;">
+                    <div style="font-size: 20px; margin-bottom: 5px;">${config.emoji}</div>
+                    <div style="font-weight: bold; color: ${config.color}; margin-bottom: 5px;">${config.label}</div>
+                    ${camera.description ? `<div style="font-size: 11px; color: #666;">${camera.description}</div>` : ''}
+                </div>
+            `)
+            .addTo(map);
+
+        window.cameraMarkers.push(marker);
+    });
+
+    console.log(`[Cameras] Displayed ${window.cameraMarkers.length} camera markers`);
+}
+
+/**
+ * Initialize camera layer - called after map is ready
+ */
+function initializeCameraLayer() {
+    if (!map) {
+        console.log('[Cameras] Map not ready, deferring camera layer init');
+        return;
+    }
+
+    // Set toggle state based on saved preference
+    const toggle = document.getElementById('showCamerasToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', showCamerasEnabled);
+    }
+
+    // Fetch cameras on map move (with debounce)
+    map.on('moveend', () => {
+        if (cameraFetchTimeout) {
+            clearTimeout(cameraFetchTimeout);
+        }
+        cameraFetchTimeout = setTimeout(() => {
+            fetchAndDisplayCameras();
+        }, 500); // 500ms debounce
+    });
+
+    // Initial fetch if enabled
+    if (showCamerasEnabled) {
+        fetchAndDisplayCameras();
+    }
+
+    console.log('[Cameras] Camera layer initialized');
+}
+
 /**
  * startNavigation function
  * @function startNavigation

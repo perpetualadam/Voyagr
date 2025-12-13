@@ -1619,6 +1619,10 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
 
         hazards: Dict[str, List[Dict[str, Any]]] = {
             'speed_camera': [],
+            'average_speed_camera': [],
+            'traffic_light_camera': [],
+            'red_light_camera': [],
+            'mobile_camera': [],
             'police': [],
             'roadworks': [],
             'accident': [],
@@ -1627,14 +1631,18 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
             'debris': []
         }
 
-        # Fetch cameras (only speed_camera type)
+        # Fetch ALL cameras (all types, not just speed_camera)
         cursor.execute(
-            "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ? AND type = 'speed_camera'",
+            "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
             (south, north, west, east)
         )
-        for lat, lon, _camera_type, desc in cursor.fetchall():
-            # Add to speed_camera list
-            hazards['speed_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
+        for lat, lon, camera_type, desc in cursor.fetchall():
+            # Map camera type to appropriate hazard category
+            if camera_type in hazards:
+                hazards[camera_type].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high', 'original_type': camera_type})
+            else:
+                # Default to speed_camera for unknown types
+                hazards['speed_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high', 'original_type': camera_type or 'speed_camera'})
 
         # Skip community reports for custom model (only cameras are used for avoidance)
         # Community reports are still used for post-processing hazard scoring
@@ -3115,6 +3123,11 @@ HTML_TEMPLATE = '''
                         <div class="preference-item">
                             <span class="preference-label">🔍 Smart Zoom</span>
                             <button class="toggle-switch" id="smartZoomToggle" onclick="toggleSmartZoom()"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">📷 Show Cameras on Map</span>
+                            <button class="toggle-switch active" id="showCamerasToggle" onclick="toggleShowCameras()"></button>
                         </div>
                     </div>
 
@@ -6350,6 +6363,52 @@ def get_nearby_hazards():
         conn.close()
         return jsonify({'success': True, 'hazards': hazards})
     except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/cameras/area', methods=['GET'])
+def get_cameras_in_area():
+    """Get all cameras within a map viewport bounding box.
+
+    Used for always-on camera display on the map.
+    Query params: north, south, east, west (bounding box coordinates)
+    """
+    try:
+        north = float(request.args.get('north', 90))
+        south = float(request.args.get('south', -90))
+        east = float(request.args.get('east', 180))
+        west = float(request.args.get('west', -180))
+
+        # Limit query size to prevent overload (max ~2 degree box)
+        if abs(north - south) > 2 or abs(east - west) > 2:
+            # If viewport too large, return empty to prevent overload
+            return jsonify({'success': True, 'cameras': [], 'message': 'Zoom in to see cameras'})
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        # Get all cameras in bounding box (all types)
+        cursor.execute(
+            '''SELECT lat, lon, type, description, severity
+               FROM cameras
+               WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?
+               LIMIT 500''',
+            (south, north, west, east)
+        )
+
+        cameras = []
+        for row in cursor.fetchall():
+            cameras.append({
+                'lat': row[0],
+                'lon': row[1],
+                'type': row[2] or 'speed_camera',
+                'description': row[3] or '',
+                'severity': row[4] or 'high'
+            })
+
+        return_db_connection(conn)
+        return jsonify({'success': True, 'cameras': cameras, 'count': len(cameras)})
+    except Exception as e:
+        logger.error(f"Error fetching cameras in area: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 # ============================================================================
