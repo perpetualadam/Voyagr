@@ -3039,6 +3039,10 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <!-- API Keys for client-side features -->
+    <script>
+        window.TOMTOM_API_KEY = '""" + os.getenv('TOMTOM_API_KEY', '') + """';
+    </script>
     <!-- External JavaScript modules -->
     <script src="/static/js/voyagr-core.js"></script>
     <script src="/static/js/voyagr-app.js"></script>
@@ -3422,6 +3426,11 @@ HTML_TEMPLATE = '''
                         <div class="preference-item">
                             <span class="preference-label">📷 Show Cameras on Map</span>
                             <button class="toggle-switch active" id="showCamerasToggle" onclick="toggleShowCameras()"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🚦 Show Traffic Flow</span>
+                            <button class="toggle-switch" id="showTrafficToggle" onclick="toggleTrafficLayer()"></button>
                         </div>
                     </div>
 

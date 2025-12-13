@@ -456,6 +456,8 @@ function saveAllSettings() {
         // Display preferences
         mapTheme: localStorage.getItem('mapTheme') || 'standard',
         smartZoomEnabled: smartZoomEnabled,
+        showCamerasEnabled: showCamerasEnabled,
+        showTrafficEnabled: showTrafficEnabled,
 
         // Parking preferences
         parkingPreferences: {
@@ -533,6 +535,14 @@ function loadAllSettings() {
             if (settings.smartZoomEnabled !== undefined) {
                 smartZoomEnabled = settings.smartZoomEnabled;
                 localStorage.setItem('smartZoomEnabled', smartZoomEnabled ? '1' : '0');
+            }
+            if (settings.showCamerasEnabled !== undefined) {
+                showCamerasEnabled = settings.showCamerasEnabled;
+                localStorage.setItem('showCamerasEnabled', showCamerasEnabled ? 'true' : 'false');
+            }
+            if (settings.showTrafficEnabled !== undefined) {
+                showTrafficEnabled = settings.showTrafficEnabled;
+                localStorage.setItem('showTrafficEnabled', showTrafficEnabled ? 'true' : 'false');
             }
 
             // Restore parking preferences
@@ -2890,6 +2900,98 @@ function displayAllRouteHazards() {
     if (allHazards.length > 0) {
         displayHazardMarkers(allHazards);
         console.log(`[Hazards] Displaying hazards from all ${routeOptions.length} routes: ${allHazards.length} total`);
+    }
+}
+
+// ===== TOMTOM TRAFFIC FLOW LAYER =====
+// Real-time traffic visualization overlay
+let trafficLayer = null;
+let showTrafficEnabled = localStorage.getItem('showTrafficEnabled') === 'true'; // Default: disabled
+
+/**
+ * Toggle TomTom traffic flow layer on/off
+ */
+function toggleTrafficLayer() {
+    showTrafficEnabled = !showTrafficEnabled;
+    localStorage.setItem('showTrafficEnabled', showTrafficEnabled);
+
+    const toggle = document.getElementById('showTrafficToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', showTrafficEnabled);
+    }
+
+    if (showTrafficEnabled) {
+        addTrafficLayer();
+        showStatus('🚦 Traffic layer enabled', 'success');
+        console.log('[Traffic] Traffic flow layer enabled');
+    } else {
+        removeTrafficLayer();
+        showStatus('🚦 Traffic layer disabled', 'info');
+        console.log('[Traffic] Traffic flow layer disabled');
+    }
+
+    saveAllSettings();
+}
+
+/**
+ * Add TomTom traffic flow tile layer to map
+ */
+function addTrafficLayer() {
+    if (!map) {
+        console.log('[Traffic] Map not ready');
+        return;
+    }
+
+    // Remove existing traffic layer if any
+    removeTrafficLayer();
+
+    // TomTom Traffic Flow Tiles - relative speed coloring
+    // Green = free flow, Yellow = slow, Red = congested, Black = blocked
+    // Using 'relative0' style which shows all roads with traffic coloring
+    const tomtomApiKey = window.TOMTOM_API_KEY || '';
+
+    if (!tomtomApiKey) {
+        console.log('[Traffic] TomTom API key not available, using fallback');
+        showStatus('⚠️ Traffic layer requires API key', 'warning');
+        return;
+    }
+
+    trafficLayer = L.tileLayer(
+        `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${tomtomApiKey}&tileSize=256`,
+        {
+            maxZoom: 22,
+            opacity: 0.7,
+            attribution: '© TomTom Traffic',
+            zIndex: 400  // Above base tiles, below markers
+        }
+    );
+
+    trafficLayer.addTo(map);
+    console.log('[Traffic] TomTom traffic layer added');
+}
+
+/**
+ * Remove traffic layer from map
+ */
+function removeTrafficLayer() {
+    if (trafficLayer && map) {
+        map.removeLayer(trafficLayer);
+        trafficLayer = null;
+        console.log('[Traffic] Traffic layer removed');
+    }
+}
+
+/**
+ * Initialize traffic layer based on saved preference
+ */
+function initTrafficLayer() {
+    const toggle = document.getElementById('showTrafficToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', showTrafficEnabled);
+    }
+
+    if (showTrafficEnabled && map) {
+        addTrafficLayer();
     }
 }
 
@@ -5677,6 +5779,10 @@ window.addEventListener('load', () => {
 
     // Legacy preference loading (for backward compatibility)
     loadPreferences();
+
+    // Initialize traffic layer based on saved preference
+    console.log('[Traffic] Initializing traffic layer...');
+    initTrafficLayer();
 
     console.log('[Init] Vehicle Type:', currentVehicleType, 'Routing Mode:', currentRoutingMode, 'Smart Zoom:', smartZoomEnabled);
     console.log('[Init] All settings loaded and applied successfully');
