@@ -34,6 +34,16 @@ try:
 except ImportError:
     Compress = None  # type: ignore
 
+# Optional rate limiting for DoS protection
+try:
+    from flask_limiter import Limiter
+    from flask_limiter.util import get_remote_address
+    RATE_LIMITING_AVAILABLE = True
+except ImportError:
+    Limiter = None  # type: ignore
+    get_remote_address = None  # type: ignore
+    RATE_LIMITING_AVAILABLE = False
+
 # Import speed limit detector
 try:
     from speed_limit_detector import SpeedLimitDetector
@@ -161,21 +171,40 @@ class RateLimiter:
             return True
 
 # Initialize rate limiters for different endpoints
-route_limiter = RateLimiter(max_requests=100, window_seconds=60)  # 100 requests/min
-api_limiter = RateLimiter(max_requests=500, window_seconds=60)    # 500 requests/min
+route_limiter = RateLimiter(max_requests=100, window_seconds=60)  # 100 requests/min for routes
+api_limiter = RateLimiter(max_requests=500, window_seconds=60)    # 500 requests/min for general APIs
+auth_limiter = RateLimiter(max_requests=20, window_seconds=60)    # 20 requests/min for auth endpoints
+voice_limiter = RateLimiter(max_requests=60, window_seconds=60)   # 60 requests/min for voice endpoints
 
 def rate_limit(limiter: RateLimiter) -> Callable[[F], F]:
-    """Decorator for rate limiting endpoints."""
+    """Decorator for rate limiting endpoints using in-memory limiter."""
     def decorator(f: F) -> F:
         @wraps(f)
         def decorated_function(*args: Any, **kwargs: Any) -> Any:
             ip: Optional[str] = request.remote_addr
             if ip and not limiter.is_allowed(ip):
                 logger.warning(f"Rate limit exceeded for IP: {ip}")
-                return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
+                return jsonify({'success': False, 'error': 'Rate limit exceeded. Try again later.'}), 429
             return f(*args, **kwargs)
         return decorated_function  # type: ignore
     return decorator
+
+# Initialize Flask-Limiter if available (more robust, supports Redis backend)
+flask_limiter: Optional[Any] = None
+if RATE_LIMITING_AVAILABLE and Limiter is not None:
+    try:
+        flask_limiter = Limiter(
+            key_func=get_remote_address,
+            app=app,
+            default_limits=["500 per minute", "10000 per hour"],
+            storage_uri="memory://",  # Use Redis in production: "redis://localhost:6379"
+        )
+        logger.info("[SECURITY] Flask-Limiter enabled with default limits: 500/min, 10000/hr")
+    except Exception as e:
+        logger.warning(f"[SECURITY] Flask-Limiter initialization failed: {e}. Using fallback.")
+        flask_limiter = None
+else:
+    logger.info("[SECURITY] Flask-Limiter not available. Using in-memory rate limiting.")
 
 # ============================================================================
 # AUTHENTICATION
@@ -4095,8 +4124,10 @@ def service_worker():
         return response
 
 @app.route('/api/vehicles', methods=['GET', 'POST'])
+@rate_limit(api_limiter)
 def manage_vehicles():
     """Get or create vehicle profiles."""
+    conn = None
     try:
         # PHASE 3 OPTIMIZATION: Use connection pool
         conn = get_db_connection()
@@ -4105,7 +4136,6 @@ def manage_vehicles():
         if request.method == 'GET':
             cursor.execute('SELECT * FROM vehicles')
             vehicles = cursor.fetchall()
-            return_db_connection(conn)
             return jsonify({
                 'success': True,
                 'vehicles': [
@@ -4154,12 +4184,15 @@ def manage_vehicles():
                   electricity_price, data.get('caz_exempt', 0)))
             conn.commit()
             vehicle_id = cursor.lastrowid
-            return_db_connection(conn)
             return jsonify({'success': True, 'vehicle_id': vehicle_id})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.route('/api/charging-stations', methods=['GET'])
+@rate_limit(api_limiter)
 def get_charging_stations():
     """Get nearby charging stations using OpenChargeMap API."""
     try:
@@ -4269,8 +4302,10 @@ def get_charging_stations():
 
 @app.route('/api/trip-history', methods=['GET', 'POST'])
 @app.route('/api/trip-history/<int:trip_id>', methods=['DELETE'])
+@rate_limit(api_limiter)
 def trip_history(trip_id: Optional[int] = None) -> Any:
     """Get, save, or delete trip history."""
+    conn = None
     try:
         # PHASE 3 OPTIMIZATION: Use connection pool
         conn = get_db_connection()
@@ -4279,7 +4314,6 @@ def trip_history(trip_id: Optional[int] = None) -> Any:
         if request.method == 'GET':
             cursor.execute('SELECT * FROM trips ORDER BY timestamp DESC LIMIT 50')
             trips = cursor.fetchall()
-            return_db_connection(conn)
             return jsonify({
                 'success': True,
                 'trips': [
@@ -4300,7 +4334,6 @@ def trip_history(trip_id: Optional[int] = None) -> Any:
             # PHASE 5: Validate trip history request
             # ================================================================
             if not data:
-                return_db_connection(conn)
                 return jsonify({'success': False, 'error': 'Request body is empty'}), 400
 
             try:
@@ -4312,23 +4345,18 @@ def trip_history(trip_id: Optional[int] = None) -> Any:
                 duration_minutes = float(data.get('duration_minutes', 0))
 
                 if start_lat < -90 or start_lat > 90 or start_lon < -180 or start_lon > 180:
-                    return_db_connection(conn)
                     return jsonify({'success': False, 'error': 'Invalid start coordinates'}), 400
 
                 if end_lat < -90 or end_lat > 90 or end_lon < -180 or end_lon > 180:
-                    return_db_connection(conn)
                     return jsonify({'success': False, 'error': 'Invalid end coordinates'}), 400
 
                 if distance_km < 0 or duration_minutes < 0:
-                    return_db_connection(conn)
                     return jsonify({'success': False, 'error': 'Distance and duration cannot be negative'}), 400
             except (ValueError, TypeError, KeyError) as e:
-                return_db_connection(conn)
                 return jsonify({'success': False, 'error': f'Invalid trip data: {str(e)}'}), 400
 
             routing_mode = data.get('routing_mode', 'auto')
             if not validate_routing_mode(routing_mode):
-                return_db_connection(conn)
                 return jsonify({'success': False, 'error': f'Invalid routing_mode: {routing_mode}'}), 400
 
             cursor.execute('''
@@ -4342,20 +4370,23 @@ def trip_history(trip_id: Optional[int] = None) -> Any:
                   data.get('toll_cost', 0), data.get('caz_cost', 0), routing_mode))
             conn.commit()
             trip_id = cursor.lastrowid
-            return_db_connection(conn)
             return jsonify({'success': True, 'trip_id': trip_id})
 
         elif request.method == 'DELETE':  # DELETE - remove trip
             cursor.execute('DELETE FROM trips WHERE id = ?', (trip_id,))
             conn.commit()
-            return_db_connection(conn)
             return jsonify({'success': True, 'message': f'Trip {trip_id} deleted'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.route('/api/trip-analytics', methods=['GET'])
+@rate_limit(api_limiter)
 def get_trip_analytics():
     """Get trip analytics and statistics"""
+    conn = None
     try:
         # PHASE 3 OPTIMIZATION: Use connection pool
         conn = get_db_connection()
@@ -4410,8 +4441,6 @@ def get_trip_analytics():
                 'avg_cost': route[4]
             })
 
-        return_db_connection(conn)
-
         return jsonify({
             'success': True,
             'total_trips': total_trips,
@@ -4428,47 +4457,127 @@ def get_trip_analytics():
     except Exception as e:
         logger.error(f"Error fetching trip analytics: {e}")
         return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.route('/api/traffic-conditions', methods=['POST'])
+@rate_limit(api_limiter)
 def get_traffic_conditions():
-    """Get real-time traffic conditions for a route"""
+    """Get real-time traffic conditions using TomTom Traffic Flow API (free tier: 2,500/day)."""
     try:
-        # Simulate traffic data (in production, integrate with real traffic API)
-        # This would connect to services like Google Maps Traffic, HERE Traffic, or TomTom Traffic
-
         import random
+        data = request.json or {}
+        lat = float(data.get('lat', 51.5074))
+        lon = float(data.get('lon', -0.1278))
+        base_duration = int(data.get('duration_minutes', 30))
 
-        # Simulate traffic level based on time of day
+        # TomTom Traffic Flow API (free tier: 2,500 requests/day)
+        # Get API key from environment or use fallback simulation
+        tomtom_api_key = os.getenv('TOMTOM_API_KEY', '')
+
+        if tomtom_api_key:
+            try:
+                # TomTom Traffic Flow Segment Data endpoint
+                tomtom_url = f"https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
+                params = {
+                    'key': tomtom_api_key,
+                    'point': f"{lat},{lon}",
+                    'unit': 'KMPH'
+                }
+                response = requests.get(tomtom_url, params=params, timeout=5)
+
+                if response.status_code == 200:
+                    flow_data = response.json().get('flowSegmentData', {})
+
+                    # Calculate traffic level from current vs free flow speed
+                    current_speed = flow_data.get('currentSpeed', 50)
+                    free_flow_speed = flow_data.get('freeFlowSpeed', 60)
+                    confidence = flow_data.get('confidence', 0.5)
+
+                    # Calculate congestion percentage
+                    if free_flow_speed > 0:
+                        speed_ratio = current_speed / free_flow_speed
+                        congestion = int((1 - speed_ratio) * 100)
+                    else:
+                        congestion = 0
+
+                    # Determine traffic level
+                    if congestion >= 50:
+                        traffic_level = 'Heavy'
+                    elif congestion >= 25:
+                        traffic_level = 'Moderate'
+                    else:
+                        traffic_level = 'Light'
+
+                    # Calculate updated duration based on speed ratio
+                    if free_flow_speed > 0:
+                        duration_multiplier = free_flow_speed / max(current_speed, 5)
+                        updated_duration = int(base_duration * min(duration_multiplier, 3.0))
+                    else:
+                        updated_duration = base_duration
+
+                    logger.info(f"[TRAFFIC] TomTom API: {traffic_level}, {congestion}% congestion, {current_speed}/{free_flow_speed} km/h")
+
+                    return jsonify({
+                        'success': True,
+                        'source': 'TomTom',
+                        'traffic_level': traffic_level,
+                        'congestion_percentage': max(0, min(congestion, 100)),
+                        'current_speed_kmph': current_speed,
+                        'free_flow_speed_kmph': free_flow_speed,
+                        'confidence': confidence,
+                        'incidents_count': 0,  # Incidents require separate API call
+                        'updated_duration_minutes': updated_duration,
+                        'timestamp': datetime.now().isoformat()
+                    })
+                else:
+                    logger.warning(f"[TRAFFIC] TomTom API error: {response.status_code}")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"[TRAFFIC] TomTom API request failed: {e}")
+
+        # Fallback: Time-based estimation (no API key or API failed)
         hour = datetime.now().hour
-        if 7 <= hour <= 9 or 17 <= hour <= 19:  # Rush hours
-            traffic_level = random.choice(['Heavy', 'Moderate', 'Heavy'])
-            congestion = random.randint(60, 95)
-        elif 10 <= hour <= 16:  # Mid-day
-            traffic_level = random.choice(['Light', 'Moderate'])
-            congestion = random.randint(20, 50)
-        else:  # Night
-            traffic_level = 'Light'
-            congestion = random.randint(5, 25)
+        weekday = datetime.now().weekday()
+        is_weekend = weekday >= 5
 
-        # Simulate duration change based on traffic
-        base_duration = 30  # Default 30 minutes
+        # More realistic traffic patterns
+        if is_weekend:
+            if 10 <= hour <= 18:  # Weekend daytime shopping
+                traffic_level = random.choice(['Light', 'Moderate'])
+                congestion = random.randint(15, 45)
+            else:
+                traffic_level = 'Light'
+                congestion = random.randint(5, 20)
+        else:  # Weekday
+            if 7 <= hour <= 9:  # Morning rush
+                traffic_level = random.choice(['Heavy', 'Moderate', 'Heavy'])
+                congestion = random.randint(55, 90)
+            elif 17 <= hour <= 19:  # Evening rush
+                traffic_level = random.choice(['Heavy', 'Moderate', 'Heavy'])
+                congestion = random.randint(60, 95)
+            elif 10 <= hour <= 16:  # Mid-day
+                traffic_level = random.choice(['Light', 'Moderate'])
+                congestion = random.randint(20, 45)
+            else:  # Night
+                traffic_level = 'Light'
+                congestion = random.randint(5, 20)
+
+        # Calculate duration based on congestion
         if traffic_level == 'Heavy':
-            updated_duration = base_duration * random.uniform(1.5, 2.0)
+            updated_duration = int(base_duration * random.uniform(1.4, 1.8))
         elif traffic_level == 'Moderate':
-            updated_duration = base_duration * random.uniform(1.1, 1.4)
+            updated_duration = int(base_duration * random.uniform(1.1, 1.3))
         else:
-            updated_duration = base_duration * random.uniform(0.9, 1.1)
-
-        # Simulate incidents
-        incidents = random.randint(0, 3)
+            updated_duration = int(base_duration * random.uniform(0.95, 1.05))
 
         return jsonify({
             'success': True,
+            'source': 'Estimation',
             'traffic_level': traffic_level,
             'congestion_percentage': congestion,
-            'incidents_count': incidents,
-            'updated_duration_minutes': int(updated_duration),
-            'updated_distance_km': 25.5,  # Simulated distance
+            'incidents_count': random.randint(0, 2 if traffic_level == 'Heavy' else 1),
+            'updated_duration_minutes': updated_duration,
             'timestamp': datetime.now().isoformat()
         })
     except Exception as e:
@@ -6322,8 +6431,10 @@ def check_speed_violation():
 # ============================================================================
 
 @app.route('/api/hazard-preferences', methods=['GET', 'POST'])
+@rate_limit(api_limiter)
 def hazard_preferences():
     """Get or update hazard preferences."""
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -6331,7 +6442,6 @@ def hazard_preferences():
         if request.method == 'GET':
             cursor.execute('SELECT hazard_type, penalty_seconds, enabled, proximity_threshold_meters FROM hazard_preferences')
             prefs = cursor.fetchall()
-            return_db_connection(conn)
             return jsonify({
                 'success': True,
                 'preferences': [
@@ -6358,7 +6468,6 @@ def hazard_preferences():
             ''', (penalty, int(enabled), threshold, hazard_type))
 
             conn.commit()
-            return_db_connection(conn)
 
             # Invalidate caches when preferences change
             invalidate_hazard_cache()
@@ -6367,10 +6476,15 @@ def hazard_preferences():
             return jsonify({'success': True, 'message': f'Updated {hazard_type}'})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.route('/api/hazards/add-camera', methods=['POST'])
+@rate_limit(api_limiter)
 def add_camera():
     """Add a speed/traffic camera location."""
+    conn = None
     try:
         data = request.json
         lat = float(data.get('lat'))
@@ -6386,16 +6500,20 @@ def add_camera():
         ''', (lat, lon, camera_type, description, 'high'))
         conn.commit()
         camera_id = cursor.lastrowid
-        return_db_connection(conn)
 
         return jsonify({'success': True, 'camera_id': camera_id})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.route('/api/hazards/report', methods=['POST'])
+@rate_limit(api_limiter)
 @require_auth
 def report_hazard():
     """Report a hazard (community report)."""
+    conn = None
     try:
         data = request.json
         lat = float(data.get('lat'))
@@ -6417,15 +6535,19 @@ def report_hazard():
         ''', (user_id, hazard_type, lat, lon, description, severity, expiry_timestamp))
         conn.commit()
         report_id = cursor.lastrowid
-        return_db_connection(conn)
 
         return jsonify({'success': True, 'report_id': report_id})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.route('/api/hazards/nearby', methods=['GET'])
+@rate_limit(api_limiter)
 def get_nearby_hazards():
     """Get hazards near a location."""
+    conn = None
     try:
         lat = float(request.args.get('lat', 51.5074))
         lon = float(request.args.get('lon', -0.1278))
@@ -6479,18 +6601,22 @@ def get_nearby_hazards():
                 'distance_meters': distance
             })
 
-        return_db_connection(conn)
         return jsonify({'success': True, 'hazards': hazards})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.route('/api/cameras/area', methods=['GET'])
+@rate_limit(api_limiter)
 def get_cameras_in_area():
     """Get all cameras within a map viewport bounding box.
 
     Used for always-on camera display on the map.
     Query params: north, south, east, west (bounding box coordinates)
     """
+    conn = None
     try:
         north = float(request.args.get('north', 90))
         south = float(request.args.get('south', -90))
@@ -6524,11 +6650,13 @@ def get_cameras_in_area():
                 'severity': row[4] or 'high'
             })
 
-        return_db_connection(conn)
         return jsonify({'success': True, 'cameras': cameras, 'count': len(cameras)})
     except Exception as e:
         logger.error(f"Error fetching cameras in area: {e}")
         return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 # ============================================================================
 # VARIABLE SPEED LIMIT DETECTION
@@ -6628,8 +6756,10 @@ def search_parking():
 # ============================================================================
 
 @app.route('/api/search-history', methods=['GET', 'POST', 'DELETE'])
+@rate_limit(api_limiter)
 def manage_search_history():
     """Get, add, or clear search history."""
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -6647,7 +6777,6 @@ def manage_search_history():
                     'lat': row[2],
                     'lon': row[3]
                 })
-            return_db_connection(conn)
             return jsonify({'success': True, 'history': history})
 
         elif request.method == 'POST':
@@ -6659,7 +6788,6 @@ def manage_search_history():
             lon = data.get('lon')
 
             if not query:
-                return_db_connection(conn)
                 return jsonify({'success': False, 'error': 'Query required'})
 
             cursor.execute(
@@ -6672,22 +6800,25 @@ def manage_search_history():
                 'DELETE FROM search_history WHERE id NOT IN (SELECT id FROM search_history ORDER BY timestamp DESC LIMIT 50)'
             )
             conn.commit()
-            return_db_connection(conn)
             return jsonify({'success': True, 'message': 'Search added to history'})
 
         elif request.method == 'DELETE':
             # Clear search history
             cursor.execute('DELETE FROM search_history')
             conn.commit()
-            return_db_connection(conn)
             return jsonify({'success': True, 'message': 'Search history cleared'})
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.route('/api/favorites', methods=['GET', 'POST', 'DELETE'])
+@rate_limit(api_limiter)
 def manage_favorites():
     """Get, add, or remove favorite locations."""
+    conn = None
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -6707,7 +6838,6 @@ def manage_favorites():
                     'lon': row[4],
                     'category': row[5]
                 })
-            return_db_connection(conn)
             return jsonify({'success': True, 'favorites': favorites})
 
         elif request.method == 'POST':
@@ -6720,7 +6850,6 @@ def manage_favorites():
             category = sanitize_string(data.get('category', 'location').strip(), max_length=50) or 'location'
 
             if not name or lat == 0 or lon == 0:
-                return_db_connection(conn)
                 return jsonify({'success': False, 'error': 'Name and coordinates required'})
 
             cursor.execute(
@@ -6729,7 +6858,6 @@ def manage_favorites():
             )
             fav_id = cursor.lastrowid
             conn.commit()
-            return_db_connection(conn)
             return jsonify({'success': True, 'favorite_id': fav_id, 'message': f'Added {name} to favorites'})
 
         elif request.method == 'DELETE':
@@ -6738,16 +6866,17 @@ def manage_favorites():
             fav_id = data.get('id')
 
             if not fav_id:
-                return_db_connection(conn)
                 return jsonify({'success': False, 'error': 'Favorite ID required'})
 
             cursor.execute('DELETE FROM favorite_locations WHERE id = ?', (fav_id,))
             conn.commit()
-            return_db_connection(conn)
             return jsonify({'success': True, 'message': 'Favorite removed'})
 
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
+    finally:
+        if conn:
+            return_db_connection(conn)
 
 @app.route('/api/lane-guidance', methods=['GET'])
 def get_lane_guidance():
@@ -6832,6 +6961,7 @@ def get_speed_warnings():
 # ============================================================================
 
 @app.route('/api/voice/speak', methods=['POST'])
+@rate_limit(voice_limiter)
 def voice_speak():
     """Convert text to speech using browser Web Audio API or backend TTS."""
     try:
@@ -6876,6 +7006,7 @@ def voice_speak():
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/voice/command', methods=['POST'])
+@rate_limit(voice_limiter)
 def voice_command():
     """Parse and execute voice commands."""
     try:
