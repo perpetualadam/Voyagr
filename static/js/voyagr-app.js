@@ -8409,10 +8409,9 @@ function updateTurnGuidance(userLat, userLon) {
 
 // ===== QUICK SEARCH FUNCTIONS =====
 /**
- * quickSearch function
+ * quickSearch function - searches for POIs near current location
  * @function quickSearch
- * @param {*} type - Parameter description
- * @returns {*} Return value description
+ * @param {string} type - Type of POI to search for (parking, fuel, food)
  */
 function quickSearch(type) {
     if (!navigator.geolocation) {
@@ -8420,25 +8419,147 @@ function quickSearch(type) {
         return;
     }
 
+    showStatus(`🔍 Searching for ${type}...`, 'info');
+
     navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
 
-            const searchTerms = {
-                'parking': 'parking near ' + lat + ',' + lon,
-                'fuel': 'gas station near ' + lat + ',' + lon,
-                'food': 'restaurant near ' + lat + ',' + lon
-            };
+            try {
+                // Use the POI search API
+                const response = await fetch('/api/poi-search', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lat: lat,
+                        lon: lon,
+                        type: type,
+                        radius: 3000  // 3km radius
+                    })
+                });
 
-            document.getElementById('end').value = searchTerms[type] || type;
-            showStatus('Search term set. Click Calculate Route to find ' + type, 'success');
-            expandBottomSheet();
+                const data = await response.json();
+
+                if (!data.success || !data.results || data.results.length === 0) {
+                    showStatus(`No ${type} found nearby. Try a different location.`, 'warning');
+                    return;
+                }
+
+                // Display POI results in a modal or list
+                displayPOIResults(data.results, type, lat, lon);
+                showStatus(`✅ Found ${data.results.length} ${type} options`, 'success');
+
+            } catch (error) {
+                console.error('[QuickSearch] Error:', error);
+                showStatus('Error searching for ' + type + ': ' + error.message, 'error');
+            }
         },
         (error) => {
             showStatus('Error getting location: ' + error.message, 'error');
-        }
+        },
+        { enableHighAccuracy: true, timeout: 10000 }
     );
+}
+
+/**
+ * Display POI search results in a modal
+ * @param {Array} results - Array of POI results
+ * @param {string} type - Type of POI
+ * @param {number} userLat - User's latitude
+ * @param {number} userLon - User's longitude
+ */
+function displayPOIResults(results, type, userLat, userLon) {
+    const icons = {
+        'fuel': '⛽',
+        'food': '🍽️',
+        'parking': '🅿️',
+        'charging': '🔌',
+        'hospital': '🏥',
+        'pharmacy': '💊'
+    };
+    const icon = icons[type] || '📍';
+
+    // Create modal content
+    let modalHTML = `
+        <div id="poiModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;">
+            <div style="background: white; border-radius: 12px; max-width: 400px; width: 100%; max-height: 80vh; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
+                <div style="padding: 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <h3 style="margin: 0; font-size: 18px;">${icon} Nearby ${type.charAt(0).toUpperCase() + type.slice(1)}</h3>
+                        <button onclick="closePOIModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0;">✕</button>
+                    </div>
+                    <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Found ${results.length} locations</p>
+                </div>
+                <div style="max-height: 50vh; overflow-y: auto; padding: 12px;">
+    `;
+
+    results.forEach((poi, index) => {
+        const distance = poi.distance_m < 1000
+            ? `${Math.round(poi.distance_m)}m`
+            : `${(poi.distance_m / 1000).toFixed(1)}km`;
+        const brand = poi.brand ? `<span style="color: #667eea; font-weight: 500;">${poi.brand}</span> - ` : '';
+
+        modalHTML += `
+            <div style="padding: 12px; margin-bottom: 8px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea;">
+                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
+                    <div style="font-weight: 600; color: #333; font-size: 14px;">${icon} ${brand}${poi.name}</div>
+                    <div style="font-size: 12px; color: #667eea; font-weight: 500;">${distance}</div>
+                </div>
+                ${poi.address ? `<div style="font-size: 11px; color: #666; margin-bottom: 6px;">${poi.address}</div>` : ''}
+                ${poi.opening_hours ? `<div style="font-size: 11px; color: #888;">🕒 ${poi.opening_hours}</div>` : ''}
+                <button onclick="selectPOI(${poi.lat}, ${poi.lon}, '${poi.name.replace(/'/g, "\\'")}', ${userLat}, ${userLon})"
+                    style="width: 100%; margin-top: 8px; background: #667eea; color: white; border: none; border-radius: 6px; padding: 10px; cursor: pointer; font-weight: 500; font-size: 13px;">
+                    🚗 Navigate Here
+                </button>
+            </div>
+        `;
+    });
+
+    modalHTML += `
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Remove existing modal if any
+    closePOIModal();
+
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+/**
+ * Close the POI results modal
+ */
+function closePOIModal() {
+    const modal = document.getElementById('poiModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+/**
+ * Select a POI and set it as destination
+ * @param {number} poiLat - POI latitude
+ * @param {number} poiLon - POI longitude
+ * @param {string} poiName - POI name
+ * @param {number} userLat - User's current latitude
+ * @param {number} userLon - User's current longitude
+ */
+function selectPOI(poiLat, poiLon, poiName, userLat, userLon) {
+    closePOIModal();
+
+    // Set start to current location
+    document.getElementById('start').value = `${userLat},${userLon}`;
+
+    // Set end to POI location
+    document.getElementById('end').value = `${poiLat},${poiLon}`;
+
+    showStatus(`📍 Destination set: ${poiName}`, 'success');
+
+    // Automatically calculate route
+    calculateRoute();
 }
 
 // ===== NOTIFICATIONS SYSTEM FUNCTIONS =====

@@ -7624,6 +7624,151 @@ def search_parking():
         print(f"[Parking] Error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/poi-search', methods=['POST'])
+@rate_limit(api_limiter)
+def search_poi():
+    """Search for points of interest (fuel stations, restaurants, etc.) near a location."""
+    try:
+        data = request.json
+        lat = float(data.get('lat', 0))
+        lon = float(data.get('lon', 0))
+        poi_type = data.get('type', 'fuel')  # fuel, food, charging, etc.
+        radius = int(data.get('radius', 2000))  # Default 2km
+
+        if lat == 0 or lon == 0:
+            return jsonify({'success': False, 'error': 'Invalid coordinates'})
+
+        # Map POI types to Overpass API amenity tags
+        poi_mapping = {
+            'fuel': ['fuel'],
+            'food': ['restaurant', 'fast_food', 'cafe'],
+            'charging': ['charging_station'],
+            'hospital': ['hospital', 'clinic'],
+            'pharmacy': ['pharmacy'],
+            'atm': ['atm', 'bank'],
+            'supermarket': ['supermarket']
+        }
+
+        amenities = poi_mapping.get(poi_type, ['fuel'])
+
+        # Use Overpass API for accurate POI search
+        overpass_url = 'https://overpass-api.de/api/interpreter'
+
+        # Build Overpass query for the amenities
+        amenity_queries = ''.join([
+            f'node["amenity"="{a}"](around:{radius},{lat},{lon});' for a in amenities
+        ])
+
+        query = f'''
+        [out:json][timeout:10];
+        (
+            {amenity_queries}
+        );
+        out body;
+        '''
+
+        response = requests.post(overpass_url, data={'data': query}, timeout=15)
+
+        if response.status_code != 200:
+            logger.warning(f"[POI] Overpass API error: {response.status_code}")
+            # Fallback to Nominatim
+            return _nominatim_poi_fallback(lat, lon, poi_type, radius)
+
+        results = response.json().get('elements', [])
+
+        if not results:
+            return jsonify({'success': True, 'results': [], 'message': f'No {poi_type} found nearby'})
+
+        # Process results
+        poi_list = []
+        for element in results:
+            try:
+                p_lat = float(element.get('lat', 0))
+                p_lon = float(element.get('lon', 0))
+                tags = element.get('tags', {})
+
+                # Calculate distance using Haversine
+                distance_m = get_distance_between_points(lat, lon, p_lat, p_lon)
+
+                poi_list.append({
+                    'name': tags.get('name', f'{poi_type.title()} Station'),
+                    'lat': p_lat,
+                    'lon': p_lon,
+                    'distance_m': round(distance_m, 0),
+                    'type': poi_type,
+                    'brand': tags.get('brand', ''),
+                    'address': tags.get('addr:street', '') + ' ' + tags.get('addr:city', ''),
+                    'opening_hours': tags.get('opening_hours', ''),
+                    'amenity': tags.get('amenity', poi_type)
+                })
+            except (ValueError, KeyError) as e:
+                logger.debug(f"[POI] Error processing result: {e}")
+                continue
+
+        # Sort by distance
+        poi_list.sort(key=lambda x: x['distance_m'])
+
+        logger.info(f"[POI] Found {len(poi_list)} {poi_type} locations near ({lat},{lon})")
+        return jsonify({'success': True, 'results': poi_list[:15], 'type': poi_type})
+
+    except Exception as e:
+        logger.error(f"[POI] Error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
+
+def _nominatim_poi_fallback(lat: float, lon: float, poi_type: str, radius: int) -> Any:
+    """Fallback POI search using Nominatim when Overpass fails."""
+    try:
+        url = 'https://nominatim.openstreetmap.org/search'
+        search_terms = {
+            'fuel': 'petrol station',
+            'food': 'restaurant',
+            'charging': 'electric vehicle charging',
+            'hospital': 'hospital',
+            'pharmacy': 'pharmacy'
+        }
+
+        params = {
+            'q': f'{search_terms.get(poi_type, poi_type)} near {lat},{lon}',
+            'format': 'json',
+            'limit': 15,
+            'addressdetails': 1
+        }
+
+        headers = {'User-Agent': 'Voyagr-PWA/1.0'}
+        response = requests.get(url, params=params, headers=headers, timeout=10)
+
+        if response.status_code != 200:
+            return jsonify({'success': False, 'error': 'POI search failed'})
+
+        results = response.json()
+        poi_list = []
+
+        for result in results:
+            try:
+                p_lat = float(result.get('lat', 0))
+                p_lon = float(result.get('lon', 0))
+                distance_m = get_distance_between_points(lat, lon, p_lat, p_lon)
+
+                if distance_m > radius:
+                    continue
+
+                poi_list.append({
+                    'name': result.get('name', result.get('display_name', 'Unknown')[:50]),
+                    'lat': p_lat,
+                    'lon': p_lon,
+                    'distance_m': round(distance_m, 0),
+                    'type': poi_type,
+                    'address': result.get('display_name', '')
+                })
+            except (ValueError, KeyError):
+                continue
+
+        poi_list.sort(key=lambda x: x['distance_m'])
+        return jsonify({'success': True, 'results': poi_list[:15], 'type': poi_type, 'source': 'nominatim'})
+
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 # ============================================================================
 # PHASE 2 FEATURES - SEARCH HISTORY & FAVORITES
 # ============================================================================
