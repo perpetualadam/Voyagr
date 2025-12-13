@@ -2670,11 +2670,19 @@ async function calculateRoute() {
 
                 // Store route data for navigation (including destination for rerouting)
                 // FIXED: Store geocoded coordinates instead of raw input text
+                // FIXED: Ensure duration_minutes is set at top level for ETA calculations
+                const durationMinutes = (data.routes && data.routes.length > 0)
+                    ? data.routes[0].duration_minutes
+                    : (data.time ? parseInt(data.time) : 0);
+
                 window.lastCalculatedRoute = {
                     ...data,
+                    duration_minutes: durationMinutes,  // FIXED: Ensure duration_minutes is at top level
                     destination: geocodedEnd,  // Store geocoded coordinates for automatic rerouting
                     destinationName: end  // Store human-readable name for display
                 };
+
+                console.log(`[Route] Stored route with duration_minutes: ${durationMinutes}`);
 
                 // Display hazard markers if hazards are present
                 if (data.routes && data.routes.length > 0 && data.routes[0].hazards) {
@@ -6010,6 +6018,10 @@ const ETA_ANNOUNCEMENT_INTERVAL_MS = 600000; // Announce ETA every 10 minutes (6
 const ETA_CHANGE_THRESHOLD_MS = 300000; // Announce if ETA changes by >5 minutes (300,000 ms)
 const ETA_MIN_INTERVAL_MS = 60000; // Minimum 1 minute between any ETA announcements (prevents excessive frequency)
 
+// FIXED: Global voice announcement throttle to prevent rapid-fire announcements
+let lastVoiceAnnouncementTime = 0;
+const VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = 5000; // Minimum 5 seconds between ANY voice announcements
+
 // Voice announcements enabled flag (FIXED: separate from Web Speech API object)
 let voiceAnnouncementsEnabled = true;
 /**
@@ -6264,7 +6276,7 @@ function announceUpcomingTurn(turnInfo) {
             }
 
             console.log(`[Voice] Announcing turn: ${message} (distance: ${distance.toFixed(0)}m, direction: ${direction})`);
-            speakMessage(message);
+            speakMessage(message, 'high');  // High priority - bypass throttle for turns
             announcedTurnThresholds.add(announcementDistance);
         }
     }
@@ -6561,13 +6573,22 @@ function updateETACalculation() {
     if (!routeInProgress || !window.lastCalculatedRoute || !routePolyline) return;
 
     // Get original route duration from the calculated route
-    const originalDurationMinutes = window.lastCalculatedRoute.duration_minutes ||
+    let originalDurationMinutes = window.lastCalculatedRoute.duration_minutes ||
                                    (window.lastCalculatedRoute.time ? parseInt(window.lastCalculatedRoute.time) : 0);
+
+    // FIXED: Sanity check - duration should be reasonable (< 24 hours = 1440 minutes)
+    // If duration is > 1440, it might be in seconds instead of minutes
+    if (originalDurationMinutes > 1440) {
+        console.warn('[ETA] Duration seems to be in seconds, converting:', originalDurationMinutes);
+        originalDurationMinutes = Math.round(originalDurationMinutes / 60);
+    }
 
     if (!originalDurationMinutes || originalDurationMinutes <= 0) {
         console.warn('[ETA] No valid route duration available');
         return;
     }
+
+    console.log('[ETA] Using duration:', originalDurationMinutes, 'minutes');
 
     // Calculate remaining distance to estimate progress
     let remainingDistance = 0;
@@ -6641,8 +6662,15 @@ function announceETAIfNeeded() {
     // Only announce if 10 minutes have passed since last announcement
     if (timeSinceLastAnnouncement > ETA_ANNOUNCEMENT_INTERVAL_MS) {
         // Get original route duration from the calculated route
-        const originalDurationMinutes = window.lastCalculatedRoute.duration_minutes ||
+        let originalDurationMinutes = window.lastCalculatedRoute.duration_minutes ||
                                        (window.lastCalculatedRoute.time ? parseInt(window.lastCalculatedRoute.time) : 0);
+
+        // FIXED: Sanity check - duration should be reasonable (< 24 hours = 1440 minutes)
+        // If duration is > 1440, it might be in seconds instead of minutes
+        if (originalDurationMinutes > 1440) {
+            console.warn('[ETA] Duration seems to be in seconds, converting:', originalDurationMinutes);
+            originalDurationMinutes = Math.round(originalDurationMinutes / 60);
+        }
 
         if (!originalDurationMinutes || originalDurationMinutes <= 0) {
             console.warn('[ETA] No valid route duration available');
@@ -7681,7 +7709,18 @@ function showInAppNotification(title, message, type = 'info') {
  * @param {*} message - Parameter description
  * @returns {*} Return value description
  */
-function speakMessage(message) {
+function speakMessage(message, priority = 'normal') {
+    // FIXED: Global throttle to prevent rapid-fire announcements
+    const now = Date.now();
+    const timeSinceLastAnnouncement = now - lastVoiceAnnouncementTime;
+
+    // Allow high-priority messages (turns, hazards) to bypass throttle
+    // Normal messages (ETA, distance) must wait for throttle
+    if (priority !== 'high' && timeSinceLastAnnouncement < VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS) {
+        console.log(`[Voice] Throttled: "${message}" (${timeSinceLastAnnouncement}ms since last)`);
+        return;
+    }
+
     // Use Web Speech API for voice output
     if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(message);
@@ -7689,6 +7728,8 @@ function speakMessage(message) {
         utterance.pitch = 1.0;
         utterance.volume = 1.0;
         speechSynthesis.speak(utterance);
+        lastVoiceAnnouncementTime = now;
+        console.log(`[Voice] Speaking: "${message}"`);
     }
 }
 /**
