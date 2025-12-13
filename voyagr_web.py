@@ -334,6 +334,9 @@ try:
     CUSTOM_ROUTER_AVAILABLE = True
 except ImportError:
     CUSTOM_ROUTER_AVAILABLE = False
+    RoadNetwork = None  # type: ignore
+    Router = None  # type: ignore
+    KShortestPaths = None  # type: ignore
     ComponentAnalyzer = None  # type: ignore
     logger.warning("[CUSTOM_ROUTER] Module not available - will use external engines only")
 
@@ -467,6 +470,10 @@ def init_custom_router() -> None:
     global custom_graph, custom_router, k_paths
 
     try:
+        if not CUSTOM_ROUTER_AVAILABLE:
+            logger.warning("[CUSTOM_ROUTER] Module not available - cannot initialize")
+            return
+
         if not os.path.exists(CUSTOM_ROUTER_DB):
             logger.warning(f"[CUSTOM_ROUTER] Database not found: {CUSTOM_ROUTER_DB}")
             return
@@ -480,11 +487,14 @@ def init_custom_router() -> None:
             custom_graph = service.graph
             custom_router = service.router
             k_paths = service.k_paths
-        else:
+        elif RoadNetwork is not None and Router is not None and KShortestPaths is not None:
             # Fallback to direct initialization if service not available
             custom_graph = RoadNetwork(CUSTOM_ROUTER_DB)
             custom_router = Router(custom_graph, use_ch=True, db_file=CUSTOM_ROUTER_DB)
             k_paths = KShortestPaths(custom_router)
+        else:
+            logger.error("[CUSTOM_ROUTER] Neither router service nor direct classes available")
+            return
 
         logger.info(f"[CUSTOM_ROUTER] ✅ Initialized successfully")
         logger.info(f"[CUSTOM_ROUTER] Nodes: {len(custom_graph.nodes):,}")
@@ -2333,6 +2343,17 @@ MONITORING_DASHBOARD_HTML = '''
         let charts = {};
         let countdownValue = 60;
 
+        // XSS sanitization function
+        function sanitizeHTML(str) {
+            if (str === null || str === undefined) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         // Initialize
         window.addEventListener('load', () => {
             loadAllData();
@@ -2392,13 +2413,17 @@ MONITORING_DASHBOARD_HTML = '''
                 if (data.success) {
                     const html = data.engines.map(engine => {
                         const statusIcon = engine.status === 'up' ? '✅' : engine.status === 'degraded' ? '⚠️' : '❌';
+                        const engineName = sanitizeHTML(engine.engine).toUpperCase();
+                        const statusText = sanitizeHTML(engine.status);
+                        const responseTime = sanitizeHTML(engine.response_time_ms);
+                        const uptime = sanitizeHTML(engine.uptime_24h);
                         return `
                             <div class="engine-status">
                                 <div class="engine-info">
-                                    <div class="engine-name">${statusIcon} ${engine.engine.toUpperCase()}</div>
-                                    <div class="engine-details">Response: ${engine.response_time_ms}ms | Uptime: ${engine.uptime_24h}% | Last: ${new Date(engine.last_check).toLocaleTimeString()}</div>
+                                    <div class="engine-name">${statusIcon} ${engineName}</div>
+                                    <div class="engine-details">Response: ${responseTime}ms | Uptime: ${uptime}% | Last: ${new Date(engine.last_check).toLocaleTimeString()}</div>
                                 </div>
-                                <span class="status-badge status-${engine.status}">${engine.status.toUpperCase()}</span>
+                                <span class="status-badge status-${statusText}">${statusText.toUpperCase()}</span>
                             </div>
                         `;
                     }).join('');
@@ -2447,13 +2472,17 @@ MONITORING_DASHBOARD_HTML = '''
                     if (data.alerts && data.alerts.length > 0) {
                         const html = data.alerts.map(alert => {
                             const severityIcon = alert.severity === 'critical' ? '🔴' : alert.severity === 'warning' ? '⚠️' : 'ℹ️';
+                            const engineName = sanitizeHTML(alert.engine).toUpperCase();
+                            const alertType = sanitizeHTML(alert.alert_type);
+                            const severity = sanitizeHTML(alert.severity);
+                            const alertId = parseInt(alert.id, 10);
                             return `
-                                <div class="alert-item alert-${alert.severity}">
+                                <div class="alert-item alert-${severity}">
                                     <div class="alert-content">
-                                        <strong>${severityIcon} ${alert.engine.toUpperCase()}</strong> - ${alert.alert_type}
+                                        <strong>${severityIcon} ${engineName}</strong> - ${alertType}
                                         <div class="alert-time">${new Date(alert.created_at).toLocaleString()}</div>
                                     </div>
-                                    <button class="alert-resolve" onclick="resolveAlert(${alert.id})">Resolve</button>
+                                    <button class="alert-resolve" onclick="resolveAlert(${alertId})">Resolve</button>
                                 </div>
                             `;
                         }).join('');
@@ -2509,7 +2538,7 @@ MONITORING_DASHBOARD_HTML = '''
                     if (trends.trends.cost_spikes && trends.trends.cost_spikes.length > 0) {
                         const spikesHTML = trends.trends.cost_spikes.map(spike => `
                             <div class="spike-alert">
-                                <span class="spike-date">${spike.date}</span>: +${spike.increase_pct}% increase (${spike.bandwidth_gb}GB, ${spike.requests} requests)
+                                <span class="spike-date">${sanitizeHTML(spike.date)}</span>: +${sanitizeHTML(spike.increase_pct)}% increase (${sanitizeHTML(spike.bandwidth_gb)}GB, ${sanitizeHTML(spike.requests)} requests)
                             </div>
                         `).join('');
                         document.getElementById('costSpikes').innerHTML = spikesHTML;
@@ -3921,6 +3950,8 @@ HTML_TEMPLATE = '''
                         const startTime = new Date(recording.start_time).toLocaleString();
                         const duration = recording.duration_seconds ? `${Math.floor(recording.duration_seconds / 60)}m ${Math.floor(recording.duration_seconds % 60)}s` : 'Recording...';
                         const size = recording.file_size_mb ? `${recording.file_size_mb.toFixed(1)} MB` : '-';
+                        // Sanitize recording_id to prevent XSS via onclick
+                        const recordingId = String(recording.recording_id).replace(/[^a-zA-Z0-9_-]/g, '');
 
                         html += `
                             <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
@@ -3928,7 +3959,7 @@ HTML_TEMPLATE = '''
                                     <div style="font-weight: 500; color: #333;">📹 ${startTime}</div>
                                     <div style="font-size: 12px; color: #666;">Duration: ${duration} | Size: ${size}</div>
                                 </div>
-                                <button onclick="deleteDashcamRecording('${recording.recording_id}')" style="background: #F44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
+                                <button onclick="deleteDashcamRecording('${recordingId}')" style="background: #F44336; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">🗑️ Delete</button>
                             </div>
                         `;
                     });
@@ -4130,7 +4161,7 @@ def manage_vehicles():
 
 @app.route('/api/charging-stations', methods=['GET'])
 def get_charging_stations():
-    """Get nearby charging stations."""
+    """Get nearby charging stations using OpenChargeMap API."""
     try:
         # ================================================================
         # PHASE 5: Validate charging stations request
@@ -4148,18 +4179,92 @@ def get_charging_stations():
         except (ValueError, TypeError):
             return jsonify({'success': False, 'error': 'Invalid numeric parameters'}), 400
 
-        # Mock charging stations data (in production, use real API)
-        stations = [
-            {'id': 1, 'name': 'Tesla Supercharger', 'lat': lat + 0.01, 'lon': lon + 0.01,
-             'connector': 'Tesla', 'power_kw': 150, 'cost_per_kwh': 0.35, 'availability': 'available'},
-            {'id': 2, 'name': 'BP Pulse', 'lat': lat - 0.01, 'lon': lon - 0.01,
-             'connector': 'CCS', 'power_kw': 50, 'cost_per_kwh': 0.40, 'availability': 'available'},
-            {'id': 3, 'name': 'Pod Point', 'lat': lat + 0.02, 'lon': lon - 0.02,
-             'connector': 'Type 2', 'power_kw': 22, 'cost_per_kwh': 0.30, 'availability': 'busy'}
-        ]
+        # OpenChargeMap API - free, no API key required for basic usage
+        ocm_url = "https://api.openchargemap.io/v3/poi/"
+        params = {
+            'output': 'json',
+            'latitude': lat,
+            'longitude': lon,
+            'distance': radius_km,
+            'distanceunit': 'km',
+            'maxresults': 50,
+            'compact': 'true',
+            'verbose': 'false'
+        }
 
-        return jsonify({'success': True, 'stations': stations})
+        try:
+            response = requests.get(ocm_url, params=params, timeout=10)
+            if response.status_code == 200:
+                ocm_data = response.json()
+                stations = []
+
+                for poi in ocm_data:
+                    # Extract address info
+                    addr = poi.get('AddressInfo', {})
+                    # Extract connections (charger types)
+                    connections = poi.get('Connections', [])
+
+                    # Get primary connector info
+                    connector_type = 'Unknown'
+                    power_kw = 0
+                    for conn in connections:
+                        conn_type = conn.get('ConnectionType', {})
+                        if conn_type:
+                            connector_type = conn_type.get('Title', 'Unknown')
+                        if conn.get('PowerKW'):
+                            power_kw = max(power_kw, conn.get('PowerKW', 0))
+
+                    # Get status
+                    status_type = poi.get('StatusType', {})
+                    is_operational = status_type.get('IsOperational', True) if status_type else True
+                    availability = 'available' if is_operational else 'unavailable'
+
+                    # Get operator info
+                    operator = poi.get('OperatorInfo', {})
+                    operator_name = operator.get('Title', '') if operator else ''
+
+                    # Build station name
+                    station_name = addr.get('Title', 'Charging Station')
+                    if operator_name and operator_name not in station_name:
+                        station_name = f"{operator_name} - {station_name}"
+
+                    stations.append({
+                        'id': poi.get('ID', 0),
+                        'name': station_name[:100],  # Limit name length
+                        'lat': addr.get('Latitude', lat),
+                        'lon': addr.get('Longitude', lon),
+                        'connector': connector_type,
+                        'power_kw': power_kw or 7,  # Default to 7kW if unknown
+                        'cost_per_kwh': 0.35,  # Default cost (OCM doesn't always have pricing)
+                        'availability': availability,
+                        'address': addr.get('AddressLine1', ''),
+                        'town': addr.get('Town', ''),
+                        'postcode': addr.get('Postcode', ''),
+                        'distance_km': addr.get('Distance', 0),
+                        'num_points': len(connections)
+                    })
+
+                logger.info(f"[CHARGING] Found {len(stations)} stations near ({lat},{lon}) within {radius_km}km")
+                return jsonify({'success': True, 'stations': stations, 'source': 'openchargemap'})
+            else:
+                logger.warning(f"[CHARGING] OpenChargeMap API returned {response.status_code}")
+                raise requests.exceptions.RequestException("API error")
+
+        except requests.exceptions.RequestException as api_error:
+            # Fallback to mock data if API fails
+            logger.warning(f"[CHARGING] OpenChargeMap API failed: {api_error}, using fallback data")
+            stations = [
+                {'id': 1, 'name': 'Tesla Supercharger', 'lat': lat + 0.01, 'lon': lon + 0.01,
+                 'connector': 'Tesla', 'power_kw': 150, 'cost_per_kwh': 0.35, 'availability': 'available'},
+                {'id': 2, 'name': 'BP Pulse', 'lat': lat - 0.01, 'lon': lon - 0.01,
+                 'connector': 'CCS', 'power_kw': 50, 'cost_per_kwh': 0.40, 'availability': 'available'},
+                {'id': 3, 'name': 'Pod Point', 'lat': lat + 0.02, 'lon': lon - 0.02,
+                 'connector': 'Type 2', 'power_kw': 22, 'cost_per_kwh': 0.30, 'availability': 'busy'}
+            ]
+            return jsonify({'success': True, 'stations': stations, 'source': 'fallback'})
+
     except Exception as e:
+        logger.error(f"[CHARGING] Error: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 @app.route('/api/trip-history', methods=['GET', 'POST'])
