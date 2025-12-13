@@ -276,8 +276,12 @@ def validate_routing_mode(mode: str) -> bool:
     return mode in valid_modes
 
 def validate_vehicle_type(vehicle_type: str) -> bool:
-    """Validate vehicle type."""
-    valid_types: List[str] = ['petrol_diesel', 'electric', 'hybrid']
+    """Validate vehicle type.
+
+    Note: 'pedestrian' and 'bicycle' are valid when routing_mode matches,
+    as they represent the travel mode rather than actual vehicle types.
+    """
+    valid_types: List[str] = ['petrol_diesel', 'electric', 'hybrid', 'pedestrian', 'bicycle']
     return vehicle_type in valid_types
 
 def validate_route_request(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
