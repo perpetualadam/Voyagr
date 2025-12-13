@@ -1700,6 +1700,230 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
         logger.error(f"Error fetching hazards: {e}")
         return {}
 
+
+# ============================================================================
+# TOMTOM TRAFFIC INCIDENTS API - HYBRID INTEGRATION
+# ============================================================================
+# TomTom provides real-time data for: accidents, roadworks, road closures, jams
+# This data is converted to Valhalla exclude_locations format and merged with
+# existing SCDB camera data for comprehensive hazard avoidance.
+# ============================================================================
+
+def fetch_tomtom_incidents(bbox: Dict[str, float], incident_types: Optional[List[str]] = None) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Fetch real-time traffic incidents from TomTom Traffic Incidents API.
+
+    Args:
+        bbox: Bounding box with keys: north, south, east, west
+        incident_types: Optional list of incident types to fetch.
+                       Default: ['Accident', 'RoadWorks', 'RoadClosed', 'Jam', 'LaneClosed']
+
+    Returns:
+        Dictionary of incident types with lat/lon locations, compatible with hazards format
+
+    TomTom Category Codes:
+        0: Unknown, 1: Accident, 2: Fog, 3: DangerousConditions, 4: Rain, 5: Ice,
+        6: Jam, 7: LaneClosed, 8: RoadClosed, 9: RoadWorks, 10: Wind, 11: Flooding,
+        14: BrokenDownVehicle
+    """
+    tomtom_api_key = os.getenv('TOMTOM_API_KEY', '')
+
+    if not tomtom_api_key:
+        logger.warning("[TOMTOM] No API key configured - skipping real-time incidents")
+        return {}
+
+    # Default incident types to fetch (most relevant for routing)
+    if incident_types is None:
+        incident_types = ['1', '6', '7', '8', '9', '14']  # Accident, Jam, LaneClosed, RoadClosed, RoadWorks, BrokenDownVehicle
+
+    # TomTom category code to Voyagr hazard type mapping
+    category_mapping = {
+        '1': 'accident',           # Accident
+        '3': 'debris',             # DangerousConditions
+        '6': 'jam',                # Jam (traffic congestion) - will be added to hazards
+        '7': 'lane_closed',        # LaneClosed
+        '8': 'road_closed',        # RoadClosed
+        '9': 'roadworks',          # RoadWorks
+        '14': 'debris',            # BrokenDownVehicle
+    }
+
+    incidents: Dict[str, List[Dict[str, Any]]] = {
+        'accident': [],
+        'roadworks': [],
+        'road_closed': [],
+        'lane_closed': [],
+        'jam': [],
+        'debris': []
+    }
+
+    try:
+        # TomTom Incident Details API v5
+        # bbox format: minLon,minLat,maxLon,maxLat (west,south,east,north)
+        bbox_str = f"{bbox['west']},{bbox['south']},{bbox['east']},{bbox['north']}"
+
+        url = "https://api.tomtom.com/traffic/services/5/incidentDetails"
+        params = {
+            'key': tomtom_api_key,
+            'bbox': bbox_str,
+            'fields': '{incidents{type,geometry{type,coordinates},properties{iconCategory,magnitudeOfDelay,events{description},from,to}}}',
+            'language': 'en-GB',
+            'categoryFilter': ','.join(incident_types),
+            'timeValidityFilter': 'present'
+        }
+
+        logger.info(f"[TOMTOM] Fetching incidents for bbox: {bbox_str}")
+
+        response = requests.get(url, params=params, timeout=10)
+
+        if response.status_code == 200:
+            data = response.json()
+            incident_list = data.get('incidents', [])
+
+            logger.info(f"[TOMTOM] Received {len(incident_list)} incidents from API")
+
+            for incident in incident_list:
+                try:
+                    # Get incident properties
+                    props = incident.get('properties', {})
+                    icon_category = str(props.get('iconCategory', '0'))
+                    geometry = incident.get('geometry', {})
+
+                    # Map TomTom category to Voyagr hazard type
+                    hazard_type = category_mapping.get(icon_category, None)
+                    if hazard_type is None:
+                        continue  # Skip unknown incident types
+
+                    # Get description from events
+                    events = props.get('events', [])
+                    description = events[0].get('description', 'Traffic incident') if events else 'Traffic incident'
+
+                    # Add location information
+                    from_location = props.get('from', '')
+                    to_location = props.get('to', '')
+                    if from_location and to_location:
+                        description = f"{description} ({from_location} to {to_location})"
+
+                    # Get coordinates based on geometry type
+                    coords = geometry.get('coordinates', [])
+                    geo_type = geometry.get('type', '')
+
+                    if geo_type == 'Point' and len(coords) >= 2:
+                        # Single point: [lon, lat]
+                        incidents[hazard_type].append({
+                            'lat': coords[1],
+                            'lon': coords[0],
+                            'description': description,
+                            'severity': 'high' if icon_category in ['1', '8'] else 'medium',
+                            'source': 'TomTom',
+                            'original_type': icon_category
+                        })
+                    elif geo_type == 'LineString' and len(coords) > 0:
+                        # Line: use start, middle, and end points for better avoidance
+                        # This ensures long incidents (like roadworks) are properly avoided
+                        points_to_add = []
+
+                        # Always add start point
+                        if len(coords[0]) >= 2:
+                            points_to_add.append((coords[0][1], coords[0][0]))
+
+                        # Add middle point for longer incidents
+                        if len(coords) > 2:
+                            mid_idx = len(coords) // 2
+                            if len(coords[mid_idx]) >= 2:
+                                points_to_add.append((coords[mid_idx][1], coords[mid_idx][0]))
+
+                        # Always add end point
+                        if len(coords) > 1 and len(coords[-1]) >= 2:
+                            points_to_add.append((coords[-1][1], coords[-1][0]))
+
+                        for lat, lon in points_to_add:
+                            incidents[hazard_type].append({
+                                'lat': lat,
+                                'lon': lon,
+                                'description': description,
+                                'severity': 'high' if icon_category in ['1', '8'] else 'medium',
+                                'source': 'TomTom',
+                                'original_type': icon_category
+                            })
+                    elif geo_type == 'MultiPoint':
+                        # Multiple points
+                        for coord in coords:
+                            if len(coord) >= 2:
+                                incidents[hazard_type].append({
+                                    'lat': coord[1],
+                                    'lon': coord[0],
+                                    'description': description,
+                                    'severity': 'high' if icon_category in ['1', '8'] else 'medium',
+                                    'source': 'TomTom',
+                                    'original_type': icon_category
+                                })
+
+                except Exception as parse_error:
+                    logger.warning(f"[TOMTOM] Error parsing incident: {parse_error}")
+                    continue
+
+            # Log summary
+            total_incidents = sum(len(v) for v in incidents.values())
+            logger.info(f"[TOMTOM] Parsed {total_incidents} incident points: "
+                       f"accidents={len(incidents['accident'])}, "
+                       f"roadworks={len(incidents['roadworks'])}, "
+                       f"road_closed={len(incidents['road_closed'])}, "
+                       f"jam={len(incidents['jam'])}, "
+                       f"debris={len(incidents['debris'])}")
+
+            return incidents
+
+        elif response.status_code == 403:
+            logger.warning("[TOMTOM] API key invalid or quota exceeded")
+            return {}
+        else:
+            logger.warning(f"[TOMTOM] API returned status {response.status_code}: {response.text[:200]}")
+            return {}
+
+    except requests.exceptions.Timeout:
+        logger.warning("[TOMTOM] API request timed out")
+        return {}
+    except Exception as e:
+        logger.error(f"[TOMTOM] Error fetching incidents: {e}")
+        return {}
+
+
+def merge_hazards_with_tomtom_incidents(hazards: Dict[str, List[Dict[str, Any]]],
+                                         tomtom_incidents: Dict[str, List[Dict[str, Any]]]) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Merge existing hazards (cameras from SCDB) with TomTom real-time incidents.
+
+    Args:
+        hazards: Existing hazards dictionary (cameras, community reports)
+        tomtom_incidents: Real-time incidents from TomTom API
+
+    Returns:
+        Merged hazards dictionary with both static and real-time data
+    """
+    merged = hazards.copy()
+
+    # Add new hazard types from TomTom that may not exist in base hazards
+    for hazard_type in ['road_closed', 'lane_closed', 'jam']:
+        if hazard_type not in merged:
+            merged[hazard_type] = []
+
+    # Merge TomTom incidents into hazards
+    for incident_type, incident_list in tomtom_incidents.items():
+        if incident_type in merged:
+            merged[incident_type].extend(incident_list)
+        else:
+            merged[incident_type] = incident_list
+
+    # Log merge summary
+    camera_count = sum(len(merged.get(t, [])) for t in ['speed_camera', 'traffic_light_camera', 'average_speed_camera'])
+    tomtom_count = sum(len(tomtom_incidents.get(t, [])) for t in tomtom_incidents.keys())
+    total_count = sum(len(v) for v in merged.values())
+
+    logger.info(f"[HYBRID] Merged hazards: {camera_count} cameras + {tomtom_count} TomTom incidents = {total_count} total")
+
+    return merged
+
+
 def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], route_bbox: Optional[Dict[str, float]] = None, max_hazards: int = 25) -> Dict[str, Any]:
     """
     Build GraphHopper Custom Model to avoid hazards.
@@ -1848,15 +2072,19 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]], r
         # Hazard weights (higher = more important to avoid)
         # FIXED: All hazards should be avoided, not just high-priority ones
         # The weights determine PRIORITY when we hit max_hazards limit
+        # UPDATED: Added TomTom real-time incident types (road_closed, lane_closed, jam)
         hazard_weights = {
             'speed_camera': 50.0,      # Highest priority - always avoid
             'traffic_light_camera': 50.0,  # Same as speed camera
+            'road_closed': 45.0,       # TomTom: Very high - road is impassable
             'police': 40.0,            # High priority
-            'accident': 35.0,          # High priority - safety hazard
-            'roadworks': 30.0,         # Medium-high priority
+            'accident': 35.0,          # High priority - safety hazard (TomTom + community)
+            'lane_closed': 32.0,       # TomTom: Medium-high - reduces capacity
+            'roadworks': 30.0,         # Medium-high priority (TomTom + community)
+            'jam': 25.0,               # TomTom: Medium - traffic congestion
             'railway_crossing': 20.0,  # Medium priority
             'pothole': 15.0,           # Lower priority
-            'debris': 15.0             # Lower priority
+            'debris': 15.0             # Lower priority (TomTom + community)
         }
 
         # Collect ALL hazards with weights (not just high-priority)
@@ -4584,6 +4812,68 @@ def get_traffic_conditions():
         logger.error(f"Error fetching traffic conditions: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
+
+@app.route('/api/tomtom-incidents', methods=['POST'])
+@rate_limit(api_limiter)
+def get_tomtom_incidents():
+    """
+    Get real-time traffic incidents from TomTom Traffic Incidents API.
+
+    This endpoint provides accidents, roadworks, road closures, and traffic jams
+    which are used to enhance Valhalla routing with real-time hazard avoidance.
+
+    Request body:
+        {
+            "lat": 51.5074,  # Center latitude
+            "lon": -0.1278,  # Center longitude
+            "radius_km": 10  # Optional: search radius in km (default: 10)
+        }
+
+    Returns:
+        Dictionary with incident counts and details by type
+    """
+    try:
+        data = request.json or {}
+        lat = float(data.get('lat', 51.5074))
+        lon = float(data.get('lon', -0.1278))
+        radius_km = float(data.get('radius_km', 10))
+
+        # Convert radius to degrees (approximate)
+        radius_deg = radius_km / 111.0  # 1 degree ≈ 111 km
+
+        # Build bounding box
+        bbox = {
+            'north': lat + radius_deg,
+            'south': lat - radius_deg,
+            'east': lon + radius_deg,
+            'west': lon - radius_deg
+        }
+
+        # Fetch incidents
+        incidents = fetch_tomtom_incidents(bbox)
+
+        # Build response with summary
+        summary = {
+            incident_type: len(incident_list)
+            for incident_type, incident_list in incidents.items()
+        }
+        total = sum(summary.values())
+
+        return jsonify({
+            'success': True,
+            'source': 'TomTom Traffic Incidents API',
+            'bbox': bbox,
+            'total_incidents': total,
+            'summary': summary,
+            'incidents': incidents,
+            'timestamp': datetime.now().isoformat()
+        })
+
+    except Exception as e:
+        logger.error(f"Error fetching TomTom incidents: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/test-routing-engines', methods=['GET'])
 def test_routing_engines():
     """Test if routing engines are accessible."""
@@ -5103,7 +5393,34 @@ def calculate_route():
         hazard_start = time.time()
         hazards = fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
         hazard_elapsed = (time.time() - hazard_start) * 1000
-        logger.info(f"[HAZARDS] Fetched hazards in {hazard_elapsed:.0f}ms: {[(k, len(v)) for k, v in hazards.items() if v]}")
+        logger.info(f"[HAZARDS] Fetched camera hazards in {hazard_elapsed:.0f}ms: {[(k, len(v)) for k, v in hazards.items() if v]}")
+
+        # ====================================================================
+        # HYBRID INTEGRATION: Fetch TomTom real-time incidents
+        # Combines SCDB cameras with TomTom accidents, roadworks, closures
+        # ====================================================================
+        tomtom_start = time.time()
+        try:
+            # Build bounding box for TomTom API
+            tomtom_bbox = {
+                'north': max(start_lat, end_lat) + 0.1,  # 10km buffer
+                'south': min(start_lat, end_lat) - 0.1,
+                'east': max(start_lon, end_lon) + 0.1,
+                'west': min(start_lon, end_lon) - 0.1
+            }
+
+            # Fetch real-time incidents from TomTom
+            tomtom_incidents = fetch_tomtom_incidents(tomtom_bbox)
+
+            if tomtom_incidents:
+                # Merge TomTom incidents with camera hazards
+                hazards = merge_hazards_with_tomtom_incidents(hazards, tomtom_incidents)
+                tomtom_elapsed = (time.time() - tomtom_start) * 1000
+                logger.info(f"[TOMTOM] Merged real-time incidents in {tomtom_elapsed:.0f}ms")
+            else:
+                logger.debug("[TOMTOM] No real-time incidents found for route area")
+        except Exception as e:
+            logger.warning(f"[TOMTOM] Failed to fetch incidents (using cameras only): {e}")
 
         if enable_hazard_avoidance:
             logger.info(f"[HAZARDS] Hazard avoidance ENABLED - will use exclude_locations")
