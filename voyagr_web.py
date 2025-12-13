@@ -888,11 +888,14 @@ def init_db():
         ''')
 
     # Insert default hazard preferences if not exists
-    # NOTE: Traffic light cameras are now the HIGHEST priority hazard to avoid
-    # Penalty of 1200s (20 minutes) ensures routes go significantly out of their way to avoid them
+    # NOTE: All cameras now have HIGH priority to avoid (consolidated camera setting)
+    # Penalty of 600s (10 minutes) for all camera types ensures routes avoid them
     hazard_preferences = [
-        ('speed_camera', 30, 1, 100),
-        ('traffic_light_camera', 1200, 1, 100),  # 1200 seconds (20 min) penalty - HIGHEST PRIORITY
+        ('speed_camera', 600, 1, 100),           # 600s (10 min) - high priority
+        ('traffic_light_camera', 600, 1, 100),   # 600s (10 min) - high priority
+        ('average_speed_camera', 600, 1, 100),   # 600s (10 min) - high priority
+        ('red_light_camera', 600, 1, 100),       # 600s (10 min) - high priority
+        ('mobile_camera', 600, 1, 100),          # 600s (10 min) - high priority
         ('police', 180, 1, 200),
         ('roadworks', 300, 1, 500),
         ('accident', 600, 1, 500),
@@ -2326,9 +2329,11 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
 
                 # If hazard is within threshold, add penalty
                 if min_distance <= threshold:
-                    # TRAFFIC LIGHT CAMERA PRIORITY: Apply distance-based multiplier
+                    # CAMERA PRIORITY: Apply distance-based multiplier for ALL camera types
                     # Cameras closer to route get exponentially higher penalty
-                    if hazard_type == 'traffic_light_camera':
+                    camera_types = ['speed_camera', 'traffic_light_camera', 'average_speed_camera',
+                                    'red_light_camera', 'mobile_camera']
+                    if hazard_type in camera_types:
                         # Proximity multiplier: 1.0 at threshold, 3.0 at 0m
                         # Formula: 1 + (2 * (1 - distance/threshold))
                         proximity_multiplier = 1.0 + (2.0 * (1.0 - min_distance / threshold))

@@ -1063,6 +1063,11 @@ function displayAllRoutesOnMap() {
     // Display hazards from all routes
     displayAllRouteHazards();
 
+    // Ensure traffic layer stays visible if enabled
+    if (showTrafficEnabled && !trafficLayer) {
+        addTrafficLayer();
+    }
+
     console.log(`[Routes] Displayed ${allRouteLayers.length} routes on map`);
 }
 
@@ -1630,6 +1635,11 @@ function displaySingleRoute(index) {
         displayHazardMarkers(route.hazards);
     } else {
         clearHazardMarkers();
+    }
+
+    // Ensure traffic layer stays visible if enabled
+    if (showTrafficEnabled && !trafficLayer) {
+        addTrafficLayer();
     }
 
     console.log(`[Routes] Showing only route ${index + 1}: ${route.name}`);
@@ -3302,6 +3312,11 @@ function showRoutePreview(routeData) {
     // Expand bottom sheet to show preview
     console.log('[Route Preview] Expanding bottom sheet');
     expandBottomSheet();
+
+    // Ensure traffic layer stays visible if enabled
+    if (showTrafficEnabled && !trafficLayer) {
+        addTrafficLayer();
+    }
 
     console.log('[Route Preview] Route preview displayed successfully');
     showStatus('📍 Review your route before starting navigation', 'success');
