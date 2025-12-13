@@ -5,7 +5,7 @@ Run this on your PC and access from any device with a browser
 Features: Route calculation, cost estimation, multi-stop routing, trip history, vehicle profiles
 """
 
-from flask import Flask, render_template_string, request, jsonify, send_file
+from flask import Flask, render_template_string, request, jsonify, send_file, after_this_request
 from flask_cors import CORS
 import requests
 import os
@@ -1953,7 +1953,7 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[
         # Get hazard preferences
         cursor.execute("SELECT hazard_type, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
         preferences = {row[0]: {'threshold': row[1]} for row in cursor.fetchall()}
-        conn.close()
+        return_db_connection(conn)
 
         # Decode polyline to get route points
         try:
@@ -2021,7 +2021,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
         # Get hazard preferences
         cursor.execute("SELECT hazard_type, penalty_seconds, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
         preferences = {row[0]: {'penalty': row[1], 'threshold': row[2]} for row in cursor.fetchall()}
-        conn.close()
+        return_db_connection(conn)
 
         logger.debug(f"[HAZARDS] Preferences loaded: {list(preferences.keys())}")
         logger.debug(f"[HAZARDS] Hazards to score: {[(k, len(v)) for k, v in hazards.items() if v]}")
@@ -6259,7 +6259,7 @@ def get_analytics():
         cursor.execute('SELECT routing_mode, COUNT(*) FROM trips GROUP BY routing_mode')
         mode_breakdown = {row[0]: row[1] for row in cursor.fetchall()}
 
-        conn.close()
+        return_db_connection(conn)
 
         return jsonify({
             'success': True,
@@ -6386,7 +6386,7 @@ def add_camera():
         ''', (lat, lon, camera_type, description, 'high'))
         conn.commit()
         camera_id = cursor.lastrowid
-        conn.close()
+        return_db_connection(conn)
 
         return jsonify({'success': True, 'camera_id': camera_id})
     except Exception as e:
@@ -6417,7 +6417,7 @@ def report_hazard():
         ''', (user_id, hazard_type, lat, lon, description, severity, expiry_timestamp))
         conn.commit()
         report_id = cursor.lastrowid
-        conn.close()
+        return_db_connection(conn)
 
         return jsonify({'success': True, 'report_id': report_id})
     except Exception as e:
@@ -6479,7 +6479,7 @@ def get_nearby_hazards():
                 'distance_meters': distance
             })
 
-        conn.close()
+        return_db_connection(conn)
         return jsonify({'success': True, 'hazards': hazards})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -6647,7 +6647,7 @@ def manage_search_history():
                     'lat': row[2],
                     'lon': row[3]
                 })
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True, 'history': history})
 
         elif request.method == 'POST':
@@ -6659,7 +6659,7 @@ def manage_search_history():
             lon = data.get('lon')
 
             if not query:
-                conn.close()
+                return_db_connection(conn)
                 return jsonify({'success': False, 'error': 'Query required'})
 
             cursor.execute(
@@ -6672,14 +6672,14 @@ def manage_search_history():
                 'DELETE FROM search_history WHERE id NOT IN (SELECT id FROM search_history ORDER BY timestamp DESC LIMIT 50)'
             )
             conn.commit()
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True, 'message': 'Search added to history'})
 
         elif request.method == 'DELETE':
             # Clear search history
             cursor.execute('DELETE FROM search_history')
             conn.commit()
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True, 'message': 'Search history cleared'})
 
     except Exception as e:
@@ -6707,7 +6707,7 @@ def manage_favorites():
                     'lon': row[4],
                     'category': row[5]
                 })
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True, 'favorites': favorites})
 
         elif request.method == 'POST':
@@ -6720,7 +6720,7 @@ def manage_favorites():
             category = sanitize_string(data.get('category', 'location').strip(), max_length=50) or 'location'
 
             if not name or lat == 0 or lon == 0:
-                conn.close()
+                return_db_connection(conn)
                 return jsonify({'success': False, 'error': 'Name and coordinates required'})
 
             cursor.execute(
@@ -6729,7 +6729,7 @@ def manage_favorites():
             )
             fav_id = cursor.lastrowid
             conn.commit()
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True, 'favorite_id': fav_id, 'message': f'Added {name} to favorites'})
 
         elif request.method == 'DELETE':
@@ -6738,12 +6738,12 @@ def manage_favorites():
             fav_id = data.get('id')
 
             if not fav_id:
-                conn.close()
+                return_db_connection(conn)
                 return jsonify({'success': False, 'error': 'Favorite ID required'})
 
             cursor.execute('DELETE FROM favorite_locations WHERE id = ?', (fav_id,))
             conn.commit()
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True, 'message': 'Favorite removed'})
 
     except Exception as e:
@@ -6844,18 +6844,29 @@ def voice_speak():
         # Use pyttsx3 for TTS if available, otherwise return text for browser TTS
         try:
             import pyttsx3  # type: ignore
+            import tempfile
+            import os as os_module
             engine = pyttsx3.init()
             engine.setProperty('rate', 150)
 
             # Save to temporary audio file
-            import tempfile
             with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
                 temp_file = f.name
 
             engine.save_to_file(text, temp_file)
             engine.runAndWait()
 
-            # Return audio file
+            # Return audio file and schedule cleanup after response
+            @after_this_request
+            def cleanup_temp_file(response):
+                try:
+                    if os_module.path.exists(temp_file):
+                        os_module.remove(temp_file)
+                        logger.debug(f"[TTS] Cleaned up temp file: {temp_file}")
+                except OSError as cleanup_err:
+                    logger.warning(f"[TTS] Failed to clean up temp file: {cleanup_err}")
+                return response
+
             return send_file(temp_file, mimetype='audio/wav')
         except (ImportError, RuntimeError, OSError) as e:
             # Fallback: return text for browser Web Speech API
@@ -7069,9 +7080,9 @@ def manage_app_settings():
                     'speed_unit': row[10] if len(row) > 10 else 'kmh',
                     'temperature_unit': row[11] if len(row) > 11 else 'celsius'
                 }
-                conn.close()
+                return_db_connection(conn)
                 return jsonify({'success': True, 'settings': settings})
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': False, 'error': 'Settings not found'})
 
         else:  # POST - update settings
@@ -7115,7 +7126,7 @@ def manage_app_settings():
                 cursor.execute(query, values)
                 conn.commit()
 
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -7134,7 +7145,7 @@ def log_gesture_event():
         ''', (data.get('gesture_type', 'unknown'), data.get('action', 'unknown')))
 
         conn.commit()
-        conn.close()
+        return_db_connection(conn)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -7171,7 +7182,7 @@ def manage_ml_predictions():
                     'frequency': row[7]
                 })
 
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True, 'predictions': predictions})
 
         else:  # POST - record trip for ML training
@@ -7194,7 +7205,7 @@ def manage_ml_predictions():
                   data.get('fuel_cost', 0), 0.85))
 
             conn.commit()
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
@@ -7230,7 +7241,7 @@ def manage_traffic_patterns():
                     'speed': row[3]
                 })
 
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True, 'patterns': patterns})
 
         else:  # POST - record traffic observation
@@ -7245,7 +7256,7 @@ def manage_traffic_patterns():
                   data.get('congestion_level', 0), data.get('speed_kmh', 0)))
 
             conn.commit()
-            conn.close()
+            return_db_connection(conn)
             return jsonify({'success': True})
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})

@@ -4293,63 +4293,58 @@ function detectUpcomingTurn(userLat, userLon) {
 
     // If we have maneuvers from Valhalla, use them for accurate turn instructions
     if (currentRouteSteps && currentRouteSteps.length > 0) {
-        // Find the next maneuver based on current position
-        let totalDistance = 0;
+        // Find the next ACTUAL turn maneuver (skip straight/continue)
+        let accumulatedDistance = 0;
 
         for (let i = currentStepIndex; i < currentRouteSteps.length; i++) {
             const maneuver = currentRouteSteps[i];
             const maneuverDistance = (maneuver.distance || 0) * 1000; // Convert km to meters
 
-            // Calculate distance from user to this maneuver
-            // For simplicity, use accumulated distance along route
-            const distanceToManeuver = totalDistance;
+            // Map Valhalla maneuver types to our direction system
+            const type = maneuver.type || 0;
+            let direction = null;  // null = skip this maneuver
 
-            if (distanceToManeuver <= 600) {  // Within 600m
-                // Map Valhalla maneuver types to our direction system
-                const type = maneuver.type || 0;
-                let direction = 'straight';
+            // Valhalla maneuver types: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/
+            // SKIP types 1-3, 7-8, 17, 27-28 (Start, Becomes, Continue, Ramp straight, Ferry)
+            if (type === 4 || type === 5 || type === 6) direction = 'destination';  // Destination
+            else if (type === 9) direction = 'slight_right';  // Slight right
+            else if (type === 10) direction = 'right';  // Right
+            else if (type === 11) direction = 'sharp_right';  // Sharp right
+            else if (type === 12 || type === 13) direction = 'uturn';  // U-turn
+            else if (type === 14) direction = 'sharp_left';  // Sharp left
+            else if (type === 15) direction = 'left';  // Left
+            else if (type === 16) direction = 'slight_left';  // Slight left
+            else if (type === 18) direction = 'slight_right';  // Ramp right
+            else if (type === 19) direction = 'slight_left';  // Ramp left
+            else if (type === 20) direction = 'exit';  // Exit right
+            else if (type === 21) direction = 'exit';  // Exit left
+            else if (type === 22) direction = 'slight_right';  // Stay right
+            else if (type === 23) direction = 'slight_left';  // Stay left
+            else if (type === 24) direction = 'merge';  // Merge
+            else if (type === 25 || type === 26) direction = 'roundabout';  // Roundabout
 
-                // Valhalla maneuver types: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/
-                if (type === 1) direction = 'straight';  // Start
-                if (type === 2) direction = 'straight';  // Start right
-                if (type === 3) direction = 'straight';  // Start left
-                if (type === 4) direction = 'destination';  // Destination
-                if (type === 5) direction = 'destination';  // Destination right
-                if (type === 6) direction = 'destination';  // Destination left
-                if (type === 7) direction = 'straight';  // Becomes
-                if (type === 8) direction = 'straight';  // Continue
-                if (type === 9) direction = 'slight_right';  // Slight right
-                if (type === 10) direction = 'right';  // Right
-                if (type === 11) direction = 'sharp_right';  // Sharp right
-                if (type === 12) direction = 'uturn';  // U-turn right
-                if (type === 13) direction = 'uturn';  // U-turn left
-                if (type === 14) direction = 'sharp_left';  // Sharp left
-                if (type === 15) direction = 'left';  // Left
-                if (type === 16) direction = 'slight_left';  // Slight left
-                if (type === 17) direction = 'straight';  // Ramp straight
-                if (type === 18) direction = 'slight_right';  // Ramp right
-                if (type === 19) direction = 'slight_left';  // Ramp left
-                if (type === 20) direction = 'exit';  // Exit right
-                if (type === 21) direction = 'exit';  // Exit left
-                if (type === 22) direction = 'slight_right';  // Stay right
-                if (type === 23) direction = 'slight_left';  // Stay left
-                if (type === 24) direction = 'merge';  // Merge
-                if (type === 25) direction = 'roundabout';  // Roundabout enter
-                if (type === 26) direction = 'roundabout';  // Roundabout exit
-                if (type === 27) direction = 'straight';  // Ferry enter
-                if (type === 28) direction = 'straight';  // Ferry exit
+            // Calculate distance to this maneuver (accumulated distance to start of step)
+            const distanceToManeuver = accumulatedDistance;
 
+            // Only return actual turns (not straight/continue), within 600m
+            if (direction !== null && distanceToManeuver <= 600) {
                 currentStepIndex = i;  // Update current step
+
+                console.log(`[Turn] Detected: ${direction} in ${distanceToManeuver.toFixed(0)}m (type=${type}, step=${i})`);
 
                 return {
                     distance: distanceToManeuver,
                     direction: direction,
-                    streetName: maneuver.street_name || '',
-                    instruction: maneuver.instruction || ''
+                    streetName: maneuver.street_name || maneuver.begin_street_names?.[0] || '',
+                    instruction: maneuver.instruction || maneuver.verbal_pre_transition_instruction || ''
                 };
             }
 
-            totalDistance += maneuverDistance;
+            // Accumulate distance for next iteration
+            accumulatedDistance += maneuverDistance;
+
+            // Stop searching if beyond 1km
+            if (accumulatedDistance > 1000) break;
         }
     }
 
@@ -7560,13 +7555,8 @@ function updateTurnGuidance(userLat, userLon) {
         `;
     }
 
-    // Announce upcoming turns (every 500m)
-    if (closestIndex % 50 === 0 && closestIndex > 0) {
-        const nextTurnDistance = Math.min(500, distanceToEnd);
-        if (nextTurnDistance < 500) {
-            speakMessage(`Turn ahead in ${nextTurnDistance.toFixed(0)} meters`);
-        }
-    }
+    // REMOVED: Redundant generic "Turn ahead" announcement
+    // Turn announcements are now handled properly by announceUpcomingTurn() with specific directions
 }
 
 // ===== QUICK SEARCH FUNCTIONS =====
