@@ -48,6 +48,8 @@ htmlcov/
 *.db
 *.sqlite
 *.sqlite3
+*.duckdb
+*.db.backup
 
 # Kivy
 .kivy/

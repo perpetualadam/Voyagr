@@ -1300,13 +1300,13 @@ def init_db():
 
     # Insert default hazard preferences if not exists
     # NOTE: All cameras now have HIGH priority to avoid (consolidated camera setting)
-    # Penalty of 600s (10 minutes) for all camera types ensures routes avoid them
+    # Penalty of 800s (~13 minutes) for all camera types ensures routes avoid them
     hazard_preferences = [
-        ('speed_camera', 600, 1, 100),           # 600s (10 min) - high priority
-        ('traffic_light_camera', 600, 1, 100),   # 600s (10 min) - high priority
-        ('average_speed_camera', 600, 1, 100),   # 600s (10 min) - high priority
-        ('red_light_camera', 600, 1, 100),       # 600s (10 min) - high priority
-        ('mobile_camera', 600, 1, 100),          # 600s (10 min) - high priority
+        ('speed_camera', 800, 1, 100),           # 800s (13 min) - high priority
+        ('traffic_light_camera', 800, 1, 100),   # 800s (13 min) - high priority
+        ('average_speed_camera', 800, 1, 100),   # 800s (13 min) - high priority
+        ('red_light_camera', 800, 1, 100),       # 800s (13 min) - high priority
+        ('mobile_camera', 800, 1, 100),          # 800s (13 min) - high priority
         ('police', 180, 1, 200),
         ('roadworks', 300, 1, 500),
         ('accident', 600, 1, 500),
@@ -3867,6 +3867,12 @@ HTML_TEMPLATE = '''
                             <span class="preference-label">🚦 Show Traffic Flow</span>
                             <button class="toggle-switch" id="showTrafficToggle" onclick="toggleTrafficLayer()"></button>
                         </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🛤️ Route Traffic Edges</span>
+                            <button class="toggle-switch active" id="routeTrafficToggle" onclick="toggleRouteTraffic()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Show traffic conditions as colored edges along your route (green/orange/red/black)</p>
                     </div>
 
                     <!-- Parking Preferences Section -->
@@ -3984,6 +3990,25 @@ HTML_TEMPLATE = '''
                                 <option value="report">Report Hazard</option>
                                 <option value="clear">Clear Route</option>
                             </select>
+                        </div>
+                    </div>
+
+                    <!-- PWA App Section -->
+                    <div class="preferences-section">
+                        <h3>📱 App Controls</h3>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <button onclick="refreshApp()" style="padding: 12px 16px; background: #2196F3; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                🔄 Refresh App
+                            </button>
+                            <button onclick="checkForUpdates()" style="padding: 12px 16px; background: #4CAF50; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                📥 Check Updates
+                            </button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: 0 0 10px 0;">Refresh to reload the app. Check Updates to get the latest version.</p>
+
+                        <div id="pwaStatus" style="padding: 10px; background: #f5f5f5; border-radius: 6px; font-size: 12px; color: #666;">
+                            <span id="pwaVersionText">App version: Loading...</span>
                         </div>
                     </div>
 
@@ -4434,6 +4459,7 @@ HTML_TEMPLATE = '''
             <button id="startTrackingBtn" class="fab" title="Start GPS Tracking" onclick="startGPSTracking()" style="background: #4285F4;">📡</button>
             <button id="startNavBtn" class="fab" title="Start Navigation" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
             <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
+            <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
         </div>
     </div>
 
@@ -5365,6 +5391,166 @@ def get_traffic_conditions():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@app.route('/api/route-traffic-flow', methods=['POST'])
+@rate_limit(api_limiter)
+def get_route_traffic_flow():
+    """
+    Get traffic flow data for route segments using TomTom Traffic Flow API.
+
+    Returns traffic level (green/orange/red/black) for each segment of the route.
+    This is used to display traffic-colored edges along the route polyline.
+
+    Request body:
+        {
+            "points": [[lat1, lon1], [lat2, lon2], ...],  # Route points
+            "sample_interval": 10  # Optional: sample every N points (default: 10)
+        }
+
+    Returns:
+        {
+            "success": true,
+            "segments": [
+                {
+                    "start": [lat1, lon1],
+                    "end": [lat2, lon2],
+                    "traffic_level": "green|orange|red|black",
+                    "current_speed": 45,
+                    "free_flow_speed": 60,
+                    "congestion_percent": 25
+                },
+                ...
+            ]
+        }
+    """
+    try:
+        data = request.json or {}
+        points = data.get('points', [])
+        sample_interval = int(data.get('sample_interval', 10))
+
+        if not points or len(points) < 2:
+            return jsonify({'success': False, 'error': 'At least 2 points required'})
+
+        tomtom_api_key = os.getenv('TOMTOM_API_KEY', '')
+
+        if not tomtom_api_key:
+            logger.warning("[ROUTE-TRAFFIC] No TomTom API key - returning simulated data")
+            # Return simulated traffic for demo purposes - cover ENTIRE route
+            import random
+            segments = []
+            # Use smaller intervals to cover the entire route with more detail
+            effective_interval = max(1, min(sample_interval, len(points) // 10))
+
+            # Create segments covering the entire route
+            i = 0
+            while i < len(points) - 1:
+                end_idx = min(i + effective_interval, len(points) - 1)
+                # Simulate traffic levels (mostly green with some orange/red)
+                level = random.choice(['green', 'green', 'green', 'green', 'orange', 'red'])
+                segments.append({
+                    'start': points[i],
+                    'end': points[end_idx],
+                    'traffic_level': level,
+                    'current_speed': random.randint(30, 70),
+                    'free_flow_speed': 70,
+                    'congestion_percent': random.randint(10, 60) if level != 'green' else random.randint(0, 15)
+                })
+                i = end_idx
+                # Make sure we don't get stuck in an infinite loop
+                if i >= len(points) - 1:
+                    break
+
+            logger.info(f"[ROUTE-TRAFFIC] Simulated {len(segments)} traffic segments for {len(points)} route points")
+            return jsonify({'success': True, 'segments': segments, 'source': 'simulated'})
+
+        # Sample points along route to reduce API calls
+        sampled_points = []
+        for i in range(0, len(points), sample_interval):
+            sampled_points.append(points[i])
+        # Always include last point
+        if points[-1] not in sampled_points:
+            sampled_points.append(points[-1])
+
+        segments = []
+
+        # Fetch traffic flow for each sampled point
+        for i in range(len(sampled_points) - 1):
+            start_point = sampled_points[i]
+            end_point = sampled_points[i + 1]
+
+            # Use midpoint for traffic query
+            mid_lat = (start_point[0] + end_point[0]) / 2
+            mid_lon = (start_point[1] + end_point[1]) / 2
+
+            try:
+                # TomTom Traffic Flow Segment Data endpoint
+                tomtom_url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
+                params = {
+                    'key': tomtom_api_key,
+                    'point': f"{mid_lat},{mid_lon}",
+                    'unit': 'KMPH'
+                }
+                response = requests.get(tomtom_url, params=params, timeout=3)
+
+                if response.status_code == 200:
+                    flow_data = response.json().get('flowSegmentData', {})
+                    current_speed = flow_data.get('currentSpeed', 50)
+                    free_flow_speed = flow_data.get('freeFlowSpeed', 60)
+
+                    # Calculate congestion and traffic level
+                    if free_flow_speed > 0:
+                        speed_ratio = current_speed / free_flow_speed
+                        congestion = int((1 - speed_ratio) * 100)
+                    else:
+                        speed_ratio = 1.0
+                        congestion = 0
+
+                    # Determine traffic level color
+                    if speed_ratio >= 0.75:
+                        traffic_level = 'green'
+                    elif speed_ratio >= 0.5:
+                        traffic_level = 'orange'
+                    elif speed_ratio >= 0.25:
+                        traffic_level = 'red'
+                    else:
+                        traffic_level = 'black'
+
+                    segments.append({
+                        'start': start_point,
+                        'end': end_point,
+                        'traffic_level': traffic_level,
+                        'current_speed': current_speed,
+                        'free_flow_speed': free_flow_speed,
+                        'congestion_percent': max(0, min(congestion, 100))
+                    })
+                else:
+                    # Default to green if API fails for this segment
+                    segments.append({
+                        'start': start_point,
+                        'end': end_point,
+                        'traffic_level': 'green',
+                        'current_speed': 60,
+                        'free_flow_speed': 60,
+                        'congestion_percent': 0
+                    })
+            except Exception as seg_error:
+                logger.warning(f"[ROUTE-TRAFFIC] Segment error: {seg_error}")
+                segments.append({
+                    'start': start_point,
+                    'end': end_point,
+                    'traffic_level': 'green',
+                    'current_speed': 60,
+                    'free_flow_speed': 60,
+                    'congestion_percent': 0
+                })
+
+        logger.info(f"[ROUTE-TRAFFIC] Fetched traffic for {len(segments)} segments")
+        return jsonify({'success': True, 'segments': segments, 'source': 'TomTom'})
+
+    except Exception as e:
+        logger.error(f"Error fetching route traffic flow: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @app.route('/api/tomtom-incidents', methods=['POST'])
 @rate_limit(api_limiter)
 def get_tomtom_incidents():
@@ -6197,109 +6383,28 @@ def calculate_route():
                         except Exception as e:
                             logger.warning(f"[VALHALLA] Shortest route failed: {e}")
 
-                        # Route 2: Shortest Distance (different path optimization)
+                        # Route 2: Fastest route (standard auto costing) WITH camera avoidance
                         try:
-                            shortest_payload = {
+                            fastest_payload = {
                                 "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
-                                "costing": "auto_shorter"
+                                "costing": "auto"
                             }
                             if alt_exclude:
-                                shortest_payload["exclude_locations"] = alt_exclude
-                            logger.info(f"[VALHALLA] Requesting Shortest route with {len(alt_exclude)} exclusions")
-                            sh_response = requests.post(url, json=shortest_payload, timeout=10, headers=headers)
-                            if sh_response.status_code == 200:
-                                sh_data = sh_response.json()
-                                if 'trip' in sh_data and 'legs' in sh_data['trip']:
-                                    sh_geom = sh_data['trip']['legs'][0]['shape']
-                                    sh_dist = sh_data['trip']['summary']['length']
-                                    sh_time = sh_data['trip']['summary']['time']
-                                    alternative_routes.append(build_route_entry('📏 Shortest', sh_geom, sh_dist, sh_time))
-                                    logger.info(f"[VALHALLA] Shortest: {sh_dist:.1f}km")
+                                fastest_payload["exclude_locations"] = alt_exclude
+                            logger.info(f"[VALHALLA] Requesting Fastest route with {len(alt_exclude)} exclusions")
+                            fast_response = requests.post(url, json=fastest_payload, timeout=10, headers=headers)
+                            if fast_response.status_code == 200:
+                                fast_data = fast_response.json()
+                                if 'trip' in fast_data and 'legs' in fast_data['trip']:
+                                    fast_geom = fast_data['trip']['legs'][0]['shape']
+                                    fast_dist = fast_data['trip']['summary']['length']
+                                    fast_time = fast_data['trip']['summary']['time']
+                                    alternative_routes.append(build_route_entry('⚡ Fastest', fast_geom, fast_dist, fast_time))
+                                    logger.info(f"[VALHALLA] Fastest: {fast_dist:.1f}km, {fast_time/60:.0f}min")
                         except Exception as e:
-                            logger.warning(f"[VALHALLA] Shortest route failed: {e}")
+                            logger.warning(f"[VALHALLA] Fastest route failed: {e}")
 
-                        # ================================================================
-                        # INTELLIGENT ROUTE DISCOVERY
-                        # Find genuinely different routes by discovering nearby towns
-                        # and using them as via-points
-                        # ================================================================
-
-                        # Route 4: Via Nearby Town - Use Nominatim to find real towns near route
-                        try:
-                            mid_lat = (start_lat + end_lat) / 2
-                            mid_lon = (start_lon + end_lon) / 2
-
-                            # Search for towns/cities near the route midpoint
-                            nominatim_url = "https://nominatim.openstreetmap.org/search"
-                            search_params = {
-                                "q": "town",
-                                "format": "json",
-                                "limit": 5,
-                                "viewbox": f"{min(start_lon, end_lon)-0.1},{max(start_lat, end_lat)+0.1},{max(start_lon, end_lon)+0.1},{min(start_lat, end_lat)-0.1}",
-                                "bounded": 1,
-                                "addressdetails": 1
-                            }
-                            nominatim_headers = {"User-Agent": "Voyagr/1.0"}
-
-                            nom_response = requests.get(nominatim_url, params=search_params, headers=nominatim_headers, timeout=5)
-
-                            if nom_response.status_code == 200:
-                                towns = nom_response.json()
-                                logger.info(f"[DISCOVERY] Found {len(towns)} towns near route")
-
-                                # Try each town as a via-point
-                                for town in towns[:3]:  # Limit to 3 towns
-                                    try:
-                                        town_lat = float(town['lat'])
-                                        town_lon = float(town['lon'])
-                                        town_name = town.get('display_name', 'Unknown').split(',')[0]
-
-                                        # Skip if town is too close to start/end
-                                        dist_to_start = ((town_lat - start_lat)**2 + (town_lon - start_lon)**2)**0.5
-                                        dist_to_end = ((town_lat - end_lat)**2 + (town_lon - end_lon)**2)**0.5
-                                        if dist_to_start < 0.02 or dist_to_end < 0.02:  # ~2km
-                                            continue
-
-                                        via_payload = {
-                                            "locations": [
-                                                {"lat": start_lat, "lon": start_lon},
-                                                {"lat": town_lat, "lon": town_lon},
-                                                {"lat": end_lat, "lon": end_lon}
-                                            ],
-                                            "costing": "auto"
-                                        }
-                                        if alt_exclude:
-                                            via_payload["exclude_locations"] = alt_exclude
-
-                                        logger.info(f"[DISCOVERY] Trying via {town_name} ({town_lat:.4f},{town_lon:.4f})")
-                                        via_response = requests.post(url, json=via_payload, timeout=10, headers=headers)
-
-                                        if via_response.status_code == 200:
-                                            via_data = via_response.json()
-                                            if 'trip' in via_data and 'legs' in via_data['trip']:
-                                                # Combine geometry from all legs
-                                                combined_coords = []
-                                                for leg in via_data['trip']['legs']:
-                                                    coords = polyline.decode(leg['shape'], precision=6)
-                                                    combined_coords.extend(coords)
-                                                combined_geom = polyline.encode(combined_coords, precision=6)
-
-                                                via_dist = via_data['trip']['summary']['length']
-                                                via_time = via_data['trip']['summary']['time']
-                                                route_entry = build_route_entry(f'🏘️ Via {town_name}', combined_geom, via_dist, via_time)
-
-                                                # Only add if hazard count is different from existing routes
-                                                if not alternative_routes or route_entry['hazard_count'] != alternative_routes[-1].get('hazard_count', -1):
-                                                    alternative_routes.append(route_entry)
-                                                    logger.info(f"[DISCOVERY] Via {town_name}: {via_dist:.1f}km, {route_entry['hazard_count']} cameras")
-                                                    break  # Found a good alternative, stop searching
-                                    except Exception as e:
-                                        logger.warning(f"[DISCOVERY] Town via-point failed: {e}")
-                                        continue
-                        except Exception as e:
-                            logger.warning(f"[DISCOVERY] Nearby town discovery failed: {e}")
-
-                        # Route 5: Camera-Free Discovery - Aggressively exclude all route cameras
+                        # Route 4: Camera-Free Discovery - Aggressively exclude all route cameras
                         # This finds routes that completely avoid camera-heavy roads
                         try:
                             # Get cameras that are ON the baseline route (within 100m)
@@ -6703,6 +6808,106 @@ def calculate_route():
                                     'hazard_count': alt_hazard_count,
                                     'hazards': alt_hazards_list
                                 })
+
+                    # ================================================================
+                    # REQUEST ADDITIONAL DISTINCT ROUTE TYPES (Shortest, Camera-Free)
+                    # Only for standard routing when no alternates were returned
+                    # ================================================================
+                    if enable_hazard_avoidance and len(routes) < 3:
+                        logger.info(f"[VALHALLA] Standard routing: Adding distinct route types ({len(routes)} routes so far)")
+
+                        # Build exclude_locations for alternative routes (use top 50 cameras closest to route)
+                        alt_exclude = []
+                        if hazards:
+                            try:
+                                alt_exclude = build_valhalla_exclude_locations(
+                                    hazards, route_bbox=route_bbox, max_hazards=50,
+                                    start_lat=start_lat, start_lon=start_lon,
+                                    end_lat=end_lat, end_lon=end_lon
+                                )
+                            except Exception as e:
+                                logger.warning(f"[VALHALLA] Failed to build alt exclude_locations: {e}")
+
+                        # Helper function to build a route entry for standard routing
+                        def build_std_route_entry(name, geometry, distance_km, duration_sec, route_id):
+                            coords = polyline.decode(geometry, precision=6)
+                            penalty, haz_count = score_route_by_hazards(coords, hazards)
+                            hazards_list = get_hazards_on_route(coords, hazards)
+                            costs = cost_calculator.calculate_costs(
+                                distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                                energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+                                route_coords=coords
+                            )
+                            return {
+                                'id': route_id,
+                                'name': name,
+                                'distance_km': round(distance_km, 2),
+                                'duration_minutes': round(duration_sec / 60, 0),
+                                'fuel_cost': round(costs['fuel_cost'], 2),
+                                'toll_cost': round(costs['toll_cost'], 2),
+                                'caz_cost': round(costs['caz_cost'], 2),
+                                'geometry': geometry,
+                                'hazard_penalty_seconds': round(penalty, 0),
+                                'hazard_count': haz_count,
+                                'hazards': hazards_list
+                            }
+
+                        next_route_id = len(routes) + 1
+
+                        # Route: Shortest Distance (auto_shorter costing)
+                        try:
+                            shortest_payload = {
+                                "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
+                                "costing": "auto_shorter"
+                            }
+                            if alt_exclude:
+                                shortest_payload["exclude_locations"] = alt_exclude
+                            sh_response = requests.post(url, json=shortest_payload, timeout=10, headers=headers)
+                            if sh_response.status_code == 200:
+                                sh_data = sh_response.json()
+                                if 'trip' in sh_data and 'legs' in sh_data['trip']:
+                                    sh_geom = sh_data['trip']['legs'][0]['shape']
+                                    sh_dist = sh_data['trip']['summary']['length']
+                                    sh_time = sh_data['trip']['summary']['time']
+                                    routes.append(build_std_route_entry('📏 Shortest', sh_geom, sh_dist, sh_time, next_route_id))
+                                    next_route_id += 1
+                                    logger.info(f"[VALHALLA] Added Shortest route: {sh_dist:.1f}km")
+                        except Exception as e:
+                            logger.warning(f"[VALHALLA] Shortest route failed: {e}")
+
+                        # Route: Camera-Free Discovery (aggressive camera avoidance)
+                        try:
+                            if route_geometry:
+                                baseline_coords = polyline.decode(route_geometry, precision=6)
+                                baseline_cameras = []
+                                for hazard in alt_exclude[:30]:
+                                    for coord in baseline_coords[::10]:
+                                        dist = ((hazard['lat'] - coord[0])**2 + (hazard['lon'] - coord[1])**2)**0.5
+                                        if dist < 0.001:
+                                            baseline_cameras.append(hazard)
+                                            break
+
+                                if baseline_cameras:
+                                    disc_payload = {
+                                        "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
+                                        "costing": "auto",
+                                        "exclude_locations": baseline_cameras[:50]
+                                    }
+                                    disc_response = requests.post(url, json=disc_payload, timeout=10, headers=headers)
+                                    if disc_response.status_code == 200:
+                                        disc_data = disc_response.json()
+                                        if 'trip' in disc_data and 'legs' in disc_data['trip']:
+                                            disc_geom = disc_data['trip']['legs'][0]['shape']
+                                            disc_dist = disc_data['trip']['summary']['length']
+                                            disc_time = disc_data['trip']['summary']['time']
+                                            route_entry = build_std_route_entry('🛡️ Camera-Free', disc_geom, disc_dist, disc_time, next_route_id)
+                                            if route_entry['hazard_count'] < hazard_count:
+                                                routes.append(route_entry)
+                                                logger.info(f"[VALHALLA] Added Camera-Free route: {disc_dist:.1f}km, {route_entry['hazard_count']} cameras")
+                        except Exception as e:
+                            logger.warning(f"[VALHALLA] Camera-Free route failed: {e}")
+
+                        logger.info(f"[VALHALLA] Final route count: {len(routes)}")
 
                     print(f"[Valhalla] SUCCESS: {len(routes)} routes found")
 

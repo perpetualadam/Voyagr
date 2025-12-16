@@ -1761,6 +1761,12 @@ function useRoute(index) {
     // Store selected route for navigation
     window.lastCalculatedRoute = route;
 
+    // Display traffic edges on selected route if enabled
+    if (routeTrafficEnabled && polylinePoints.length > 0) {
+        routePolyline = polylinePoints; // Temporarily set for traffic display
+        fetchAndDisplayRouteTraffic();
+    }
+
     showStatus('Route selected. Ready to navigate!', 'success');
     switchTab('navigation');
 }
@@ -2023,7 +2029,10 @@ function displayAnalytics(data) {
     const totalHours = Math.floor((data.total_time_minutes || 0) / 60);
     const totalMinutes = (data.total_time_minutes || 0) % 60;
     document.getElementById('totalTime').textContent = `${totalHours}h ${totalMinutes}m`;
-    document.getElementById('avgSpeed').textContent = `${(data.avg_speed || 0).toFixed(1)} ${distUnit === 'km' ? 'km/h' : 'mph'}`;
+    // avg_speed from backend is in km/h - convert based on user's speed preference
+    const avgSpeedKmh = data.avg_speed || 0;
+    const displayAvgSpeed = speedUnit === 'mph' ? (avgSpeedKmh * 0.621371) : avgSpeedKmh;
+    document.getElementById('avgSpeed').textContent = `${displayAvgSpeed.toFixed(1)} ${getSpeedUnit()}`;
 
     // Display most frequent routes
     const frequentRoutesList = document.getElementById('frequentRoutesList');
@@ -2751,7 +2760,9 @@ async function calculateRoute() {
                 // IMPORTANT: Populate routeOptions BEFORE showing route preview
                 // so that displayAllRoutesOnMap() has routes to display
                 if (data.routes && data.routes.length > 0) {
-                    // Real routes from routing engine
+                    // Real routes from routing engine - include source from response
+                    const routeSource = data.source || 'Unknown';
+                    console.log(`[Route API] Received ${data.routes.length} routes from backend:`, data.routes.map(r => r.name));
                     routeOptions = data.routes.map(route => ({
                         id: route.id,
                         name: route.name,
@@ -2763,9 +2774,10 @@ async function calculateRoute() {
                         hazard_count: route.hazard_count || 0,
                         polyline: decodePolyline(route.geometry || '', 6),  // Valhalla precision 6
                         geometry: route.geometry,
-                        hazards: route.hazards || []
+                        hazards: route.hazards || [],
+                        source: routeSource  // Include routing engine source in each route
                     }));
-                    console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}`);
+                    console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}:`, routeOptions.map(r => r.name));
                 } else {
                     // Fallback: single route (for backward compatibility)
                     routeOptions = [
@@ -2779,7 +2791,8 @@ async function calculateRoute() {
                             caz_cost: data.caz_cost || 0,
                             hazard_count: 0,
                             polyline: routePath,
-                            geometry: data.geometry
+                            geometry: data.geometry,
+                            source: data.source || 'Unknown'
                         }
                     ];
                     console.log('[Route Comparison] Using single route (fallback)');
@@ -2901,13 +2914,22 @@ function displayHazardMarkers(hazards) {
             ? config.svg.replace('width="20"', 'width="36"').replace('height="20"', 'height="36"')
             : `<span style="font-size: 32px;">${config.emoji}</span>`;
 
+        // Convert hazard distance based on user's unit preference
+        let hazardDistanceText = '';
+        if (hazard.distance_m) {
+            const distKm = hazard.distance_m / 1000;
+            const displayDist = convertDistance(distKm);
+            const distUnit = getDistanceUnit();
+            hazardDistanceText = `<div style="font-size: 11px; color: #999; margin-top: 5px;">📍 ${displayDist} ${distUnit} from route</div>`;
+        }
+
         const marker = L.marker([hazard.lat, hazard.lon], { icon })
             .bindPopup(`
                 <div style="text-align: center; min-width: 150px;">
                     <div style="margin-bottom: 8px; display: flex; justify-content: center;">${popupIcon}</div>
                     <div style="font-weight: bold; color: ${config.color}; margin-bottom: 5px;">${config.label}</div>
                     ${hazard.description ? `<div style="font-size: 12px; color: #666;">${hazard.description}</div>` : ''}
-                    ${hazard.distance_m ? `<div style="font-size: 11px; color: #999; margin-top: 5px;">📍 ${(hazard.distance_m / 1000).toFixed(2)} km from route</div>` : ''}
+                    ${hazardDistanceText}
                 </div>
             `)
             .addTo(map);
@@ -3042,6 +3064,255 @@ function initTrafficLayer() {
     if (showTrafficEnabled && map) {
         addTrafficLayer();
     }
+}
+
+// ===== ROUTE TRAFFIC EDGE COLORING =====
+// Displays traffic congestion as colored edges along the active route
+// Only shows congested segments (orange/red/black) - green segments are hidden to reduce clutter
+// Colors: orange (moderate), red (heavy), black (blocked/severe)
+
+let routeTrafficLayers = []; // Array of polylines for traffic segments
+let routeTrafficEnabled = localStorage.getItem('routeTrafficEnabled') !== 'false'; // Default: enabled
+let routeTrafficUpdateInterval = null;
+const ROUTE_TRAFFIC_UPDATE_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
+
+// Traffic level colors (matching traffic light colors)
+// Note: Green segments are filtered out and not displayed
+const TRAFFIC_COLORS = {
+    'green': '#00AA00',   // Free flow - NOT DISPLAYED (filtered out)
+    'orange': '#FF8C00',  // Moderate congestion - orange
+    'red': '#FF0000',     // Heavy congestion - red
+    'black': '#333333'    // Blocked/severe - dark
+};
+
+/**
+ * Toggle route traffic edge display on/off
+ */
+function toggleRouteTraffic() {
+    routeTrafficEnabled = !routeTrafficEnabled;
+    localStorage.setItem('routeTrafficEnabled', routeTrafficEnabled ? 'true' : 'false');
+
+    const toggle = document.getElementById('routeTrafficToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', routeTrafficEnabled);
+        if (routeTrafficEnabled) {
+            toggle.style.background = '#4CAF50';
+            toggle.style.borderColor = '#4CAF50';
+        } else {
+            toggle.style.background = '#ddd';
+            toggle.style.borderColor = '#999';
+        }
+    }
+
+    if (routeTrafficEnabled) {
+        showStatus('🚦 Route traffic display enabled', 'success');
+        if (routeInProgress && routePolyline) {
+            fetchAndDisplayRouteTraffic();
+        }
+    } else {
+        showStatus('🚦 Route traffic display disabled', 'info');
+        clearRouteTrafficLayers();
+    }
+}
+
+/**
+ * Clear all route traffic edge layers from the map
+ */
+function clearRouteTrafficLayers() {
+    routeTrafficLayers.forEach(layer => {
+        if (map && layer) {
+            map.removeLayer(layer);
+        }
+    });
+    routeTrafficLayers = [];
+    console.log('[Route Traffic] Cleared traffic edge layers');
+}
+
+/**
+ * Fetch traffic data for route and display colored edges
+ */
+async function fetchAndDisplayRouteTraffic() {
+    if (!routeTrafficEnabled || !routePolyline || routePolyline.length < 2) {
+        console.log('[Route Traffic] Not enabled or no route available');
+        return;
+    }
+
+    console.log('[Route Traffic] Fetching traffic data for route...');
+
+    try {
+        // Sample route points (every 10th point to reduce API calls)
+        const sampleInterval = Math.max(1, Math.floor(routePolyline.length / 20));
+
+        const response = await fetch('/api/route-traffic-flow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                points: routePolyline,
+                sample_interval: sampleInterval
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.segments && data.segments.length > 0) {
+            displayRouteTrafficEdges(data.segments);
+            console.log(`[Route Traffic] Displayed ${data.segments.length} traffic segments (source: ${data.source})`);
+        } else {
+            console.log('[Route Traffic] No traffic segments returned');
+        }
+    } catch (error) {
+        console.error('[Route Traffic] Error fetching traffic:', error);
+    }
+}
+
+/**
+ * Find the index of the closest point in the route polyline to a given coordinate
+ */
+function findClosestRoutePointIndex(targetPoint, startSearchIdx = 0) {
+    if (!routePolyline || routePolyline.length === 0) return -1;
+
+    let closestIdx = startSearchIdx;
+    let minDist = Infinity;
+
+    // Search from startSearchIdx onwards to maintain order
+    for (let i = startSearchIdx; i < routePolyline.length; i++) {
+        const point = routePolyline[i];
+        const dist = Math.pow(point[0] - targetPoint[0], 2) + Math.pow(point[1] - targetPoint[1], 2);
+        if (dist < minDist) {
+            minDist = dist;
+            closestIdx = i;
+        }
+    }
+    return closestIdx;
+}
+
+/**
+ * Display traffic-colored edges along the route
+ * Creates polylines that follow the actual route geometry (not straight lines)
+ */
+function displayRouteTrafficEdges(segments) {
+    // Clear existing traffic layers
+    clearRouteTrafficLayers();
+
+    if (!map || !segments || segments.length === 0 || !routePolyline || routePolyline.length === 0) return;
+
+    let lastEndIdx = 0;  // Track position along route to ensure segments are in order
+
+    segments.forEach(segment => {
+        const color = TRAFFIC_COLORS[segment.traffic_level] || TRAFFIC_COLORS['green'];
+
+        // Only show congested segments (orange/red/black) - skip green (free flow)
+        // This reduces visual clutter and highlights problem areas
+        if (segment.traffic_level === 'green') {
+            return; // Skip green segments - no congestion
+        }
+
+        // Find the indices in the route polyline that correspond to this segment
+        const startIdx = findClosestRoutePointIndex(segment.start, lastEndIdx);
+        const endIdx = findClosestRoutePointIndex(segment.end, startIdx);
+
+        // Skip invalid segments
+        if (startIdx < 0 || endIdx < 0 || endIdx <= startIdx) {
+            return;
+        }
+
+        // Extract all route points between start and end to follow the curved road geometry
+        const segmentPoints = routePolyline.slice(startIdx, endIdx + 1);
+
+        if (segmentPoints.length < 2) {
+            // Fallback to direct line if not enough points
+            segmentPoints.push(segment.start, segment.end);
+        }
+
+        // Update lastEndIdx for next segment
+        lastEndIdx = endIdx;
+
+        // Create the traffic edge polyline following the route geometry
+        const trafficLine = L.polyline(
+            segmentPoints,
+            {
+                color: color,
+                weight: 10,           // Thick line for visibility
+                opacity: 0.8,
+                lineCap: 'round',
+                lineJoin: 'round',
+                pane: 'overlayPane'   // Ensure traffic renders on top
+            }
+        );
+
+        trafficLine.addTo(map);
+        trafficLine.bringToFront();  // Ensure it's on top of other layers
+        routeTrafficLayers.push(trafficLine);
+
+        // Add popup with traffic info (convert speeds based on user preference)
+        let speedInfo = 'N/A';
+        if (segment.current_speed && segment.free_flow_speed) {
+            if (speedUnit === 'mph') {
+                const currentMph = Math.round(segment.current_speed * 0.621371);
+                const freeFlowMph = Math.round(segment.free_flow_speed * 0.621371);
+                speedInfo = `${currentMph}/${freeFlowMph} mph`;
+            } else {
+                speedInfo = `${segment.current_speed}/${segment.free_flow_speed} km/h`;
+            }
+        }
+        const congestionInfo = segment.congestion_percent !== undefined
+            ? `${segment.congestion_percent}%`
+            : 'N/A';
+
+        trafficLine.bindPopup(`
+            <div style="text-align: center;">
+                <strong style="color: ${color};">
+                    ${segment.traffic_level === 'green' ? '🟢 Free Flow' :
+                      segment.traffic_level === 'orange' ? '🟠 Moderate' :
+                      segment.traffic_level === 'red' ? '🔴 Heavy' : '⚫ Blocked'}
+                </strong><br>
+                <small>Speed: ${speedInfo}<br>Congestion: ${congestionInfo}</small>
+            </div>
+        `);
+    });
+
+    console.log(`[Route Traffic] Added ${routeTrafficLayers.length} traffic edge layers`);
+}
+
+/**
+ * Start automatic route traffic updates during navigation
+ */
+function startRouteTrafficUpdates() {
+    if (routeTrafficUpdateInterval) {
+        clearInterval(routeTrafficUpdateInterval);
+    }
+
+    console.log('[Route Traffic] Starting updates - enabled:', routeTrafficEnabled, 'polyline:', routePolyline ? routePolyline.length : 0);
+
+    // Immediate first update with slight delay to ensure route is drawn first
+    if (routeTrafficEnabled && routePolyline && routePolyline.length > 0) {
+        setTimeout(() => {
+            console.log('[Route Traffic] Executing first traffic update');
+            fetchAndDisplayRouteTraffic();
+        }, 500);
+    }
+
+    // Set up periodic updates
+    routeTrafficUpdateInterval = setInterval(() => {
+        if (routeInProgress && routeTrafficEnabled && routePolyline && routePolyline.length > 0) {
+            console.log('[Route Traffic] Periodic update triggered');
+            fetchAndDisplayRouteTraffic();
+        }
+    }, ROUTE_TRAFFIC_UPDATE_INTERVAL_MS);
+
+    console.log('[Route Traffic] Started automatic updates every', ROUTE_TRAFFIC_UPDATE_INTERVAL_MS / 1000, 'seconds');
+}
+
+/**
+ * Stop automatic route traffic updates
+ */
+function stopRouteTrafficUpdates() {
+    if (routeTrafficUpdateInterval) {
+        clearInterval(routeTrafficUpdateInterval);
+        routeTrafficUpdateInterval = null;
+    }
+    clearRouteTrafficLayers();
+    console.log('[Route Traffic] Stopped automatic updates');
 }
 
 // ===== AUTO-TRAFFIC UPDATE & AUTO-REROUTE SYSTEM =====
@@ -3337,12 +3608,14 @@ function updateRouteOnMap(newRoute) {
     // Update trip info
     updateTripInfo(newRoute.distance_km, newRoute.duration_minutes, newRoute.fuel_cost, newRoute.toll_cost);
 
-    // Store updated route
+    // Store updated route with proper unit conversion
+    const displayDist = convertDistance(newRoute.distance_km);
+    const distUnit = getDistanceUnit();
     window.lastCalculatedRoute = {
         ...window.lastCalculatedRoute,
         ...newRoute,
         geometry: newRoute.geometry,
-        distance: `${newRoute.distance_km} km`,
+        distance: `${displayDist} ${distUnit}`,
         time: `${newRoute.duration_minutes} minutes`
     };
 
@@ -3370,6 +3643,19 @@ function initAutoTrafficRerouteToggles() {
         if (autoRerouteOnDeviationEnabled) {
             rerouteToggle.style.background = '#4CAF50';
             rerouteToggle.style.borderColor = '#4CAF50';
+        }
+    }
+
+    // Route traffic edge toggle
+    const routeTrafficToggle = document.getElementById('routeTrafficToggle');
+    if (routeTrafficToggle) {
+        routeTrafficToggle.classList.toggle('active', routeTrafficEnabled);
+        if (routeTrafficEnabled) {
+            routeTrafficToggle.style.background = '#4CAF50';
+            routeTrafficToggle.style.borderColor = '#4CAF50';
+        } else {
+            routeTrafficToggle.style.background = '#ddd';
+            routeTrafficToggle.style.borderColor = '#999';
         }
     }
 }
@@ -3819,6 +4105,17 @@ function showRoutePreview(routeData) {
     // Ensure traffic layer stays visible if enabled
     if (showTrafficEnabled && !trafficLayer) {
         addTrafficLayer();
+    }
+
+    // Display route traffic edges on preview if enabled
+    if (routeTrafficEnabled && routeOptions && routeOptions.length > 0 && routeOptions[0].polyline) {
+        // Temporarily set routePolyline for traffic display
+        const previewPolyline = routeOptions[selectedRouteIndex || 0].polyline;
+        if (previewPolyline && previewPolyline.length > 0) {
+            routePolyline = previewPolyline;
+            console.log('[Route Preview] Fetching traffic edges for preview route');
+            fetchAndDisplayRouteTraffic();
+        }
     }
 
     console.log('[Route Preview] Route preview displayed successfully');
@@ -4303,8 +4600,13 @@ function displayParkingOptions(parkingList, destinationCoords) {
             className: 'parking-marker'
         });
 
+        // Convert parking distance based on user's unit preference
+        const parkingDistKm = parking.distance_m / 1000;
+        const parkingDisplayDist = convertDistance(parkingDistKm);
+        const parkingDistUnit = getDistanceUnit();
+
         const marker = L.marker([parking.lat, parking.lon], { icon })
-            .bindPopup(`<strong>${parking.name}</strong><br>Distance: ${(parking.distance_m / 1000).toFixed(2)} km`)
+            .bindPopup(`<strong>${parking.name}</strong><br>Distance: ${parkingDisplayDist} ${parkingDistUnit}`)
             .addTo(map);
 
         marker.parkingData = parking;
@@ -4323,7 +4625,7 @@ function displayParkingOptions(parkingList, destinationCoords) {
                 <span style="background: #FF9800; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold;">${index + 1}</span>
             </div>
             <div style="font-size: 12px; color: #666;">
-                📍 ${(parking.distance_m / 1000).toFixed(2)} km away
+                📍 ${parkingDisplayDist} ${parkingDistUnit} away
                 <br>🚶 ${walkingMinutes} min walk
             </div>
         `;
@@ -4490,14 +4792,16 @@ function updateParkingPreview(drivingData, walkingData, parking) {
     document.getElementById('previewDuration').textContent = Math.round(totalTime) + ' min';
     document.getElementById('previewRoute').textContent = `${document.getElementById('start').value} → 🅿️ ${parking.name} → ${document.getElementById('end').value}`;
 
-    // Show breakdown
+    // Show breakdown with proper unit conversion
+    const drivingDisplayDist = convertDistance(drivingDist);
+    const walkingDisplayDist = convertDistance(walkingDist);
     const breakdown = `
         <div style="font-size: 12px; line-height: 1.6; color: #333;">
             <div style="margin-bottom: 8px;">
-                <strong>🚗 Driving:</strong> ${drivingDist.toFixed(1)} km / ${Math.round(drivingTime)} min
+                <strong>🚗 Driving:</strong> ${drivingDisplayDist} ${distUnit} / ${Math.round(drivingTime)} min
             </div>
             <div>
-                <strong>🚶 Walking:</strong> ${walkingDist.toFixed(2)} km / ${Math.round(walkingTime)} min
+                <strong>🚶 Walking:</strong> ${walkingDisplayDist} ${distUnit} / ${Math.round(walkingTime)} min
             </div>
         </div>
     `;
@@ -4727,8 +5031,8 @@ let speedLimitThreshold = 3; // mph over limit to trigger warning
 /**
  * updateSpeedWidget function
  * @function updateSpeedWidget
- * @param {*} speedMph - Parameter description
- * @param {*} speedLimitMph - Parameter description
+ * @param {*} speedMph - Current speed in MPH (from GPS)
+ * @param {*} speedLimitMph - Speed limit in MPH (from API)
  * @returns {*} Return value description
  */
 function updateSpeedWidget(speedMph, speedLimitMph = null) {
@@ -4737,7 +5041,18 @@ function updateSpeedWidget(speedMph, speedLimitMph = null) {
 
     // Get user's preferred unit using global speedUnit variable
     const displaySpeedUnit = getSpeedUnit();
-    const displaySpeed = convertSpeed(speedMph);
+
+    // Convert from MPH to user's preferred unit
+    // speedMph is already in mph, so:
+    // - If user wants mph: display as-is
+    // - If user wants km/h: convert mph to km/h (multiply by 1.60934)
+    let displaySpeed;
+    if (speedUnit === 'mph') {
+        displaySpeed = speedMph;
+    } else {
+        // Convert mph to km/h
+        displaySpeed = speedMph * 1.60934;
+    }
 
     // Update current speed
     document.getElementById('speedValue').textContent = Math.round(displaySpeed);
@@ -4745,11 +5060,17 @@ function updateSpeedWidget(speedMph, speedLimitMph = null) {
 
     // Update speed limit if provided
     if (speedLimitMph !== null && speedLimitMph > 0) {
-        const displaySpeedLimit = convertSpeed(speedLimitMph);
+        let displaySpeedLimit;
+        if (speedUnit === 'mph') {
+            displaySpeedLimit = speedLimitMph;
+        } else {
+            // Convert mph to km/h
+            displaySpeedLimit = speedLimitMph * 1.60934;
+        }
         document.getElementById('speedLimitValue').textContent = Math.round(displaySpeedLimit);
         document.getElementById('speedLimitUnit').textContent = displaySpeedUnit;
 
-        // Check if speeding
+        // Check if speeding (compare in same units - mph)
         const speedDiff = speedMph - speedLimitMph;
         const warningElement = document.getElementById('speedWarning');
         if (speedDiff > speedLimitThreshold) {
@@ -4800,6 +5121,14 @@ function toggleZoomAndFollow() {
     const btn = document.getElementById('zoomFollowToggle');
     if (btn) {
         btn.classList.toggle('active', zoomAndFollowEnabled);
+        // Update visual feedback - change color and icon based on state
+        if (zoomAndFollowEnabled) {
+            btn.style.background = '#FF9800';  // Orange when enabled
+            btn.innerHTML = '📍';
+        } else {
+            btn.style.background = '#9E9E9E';  // Gray when disabled
+            btn.innerHTML = '🔓';  // Unlocked icon when free panning
+        }
     }
     localStorage.setItem('zoomAndFollowEnabled', zoomAndFollowEnabled ? 'true' : 'false');
 
@@ -4807,12 +5136,98 @@ function toggleZoomAndFollow() {
         mapFollowingActive = true;
         showStatus('📍 Zoom & Follow enabled - map will follow your vehicle', 'success');
         console.log('[Zoom & Follow] Enabled');
+
+        // Immediately center on current position if available
+        if (currentLat && currentLon && map) {
+            map.flyTo([currentLat, currentLon], 17, {
+                duration: 0.5,
+                easeLinearity: 0.25
+            });
+        }
     } else {
         mapFollowingActive = false;
         showStatus('📍 Zoom & Follow disabled - map is free to pan', 'info');
         console.log('[Zoom & Follow] Disabled');
     }
 }
+
+// Journey Overview state
+let journeyOverviewActive = false;
+let savedMapState = null;
+
+/**
+ * Toggle journey overview mode during navigation
+ * Shows entire route zoomed out, then returns to following view
+ */
+function toggleJourneyOverview() {
+    if (!routeInProgress || !routePolyline || routePolyline.length === 0) {
+        showStatus('No active navigation to show overview', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('journeyOverviewBtn');
+
+    if (!journeyOverviewActive) {
+        // Save current map state
+        savedMapState = {
+            center: map.getCenter(),
+            zoom: map.getZoom()
+        };
+
+        // Temporarily disable zoom and follow
+        mapFollowingActive = false;
+
+        // Fit map to show entire route
+        if (allRouteLayers.length > 0) {
+            const allBounds = L.featureGroup(allRouteLayers).getBounds();
+            map.fitBounds(allBounds.pad(0.15), {
+                duration: 0.5,
+                easeLinearity: 0.25
+            });
+        } else if (routePolyline.length > 0) {
+            const routeBounds = L.latLngBounds(routePolyline);
+            map.fitBounds(routeBounds.pad(0.15), {
+                duration: 0.5,
+                easeLinearity: 0.25
+            });
+        }
+
+        journeyOverviewActive = true;
+        if (btn) {
+            btn.style.background = '#4CAF50';
+            btn.innerHTML = '📍';
+            btn.title = 'Return to Navigation View';
+        }
+        showStatus('🗺️ Journey Overview - Tap again to return', 'info');
+        console.log('[Navigation] Journey overview activated');
+    } else {
+        // Return to navigation view
+        journeyOverviewActive = false;
+
+        // Re-enable zoom and follow if it was enabled
+        if (zoomAndFollowEnabled) {
+            mapFollowingActive = true;
+        }
+
+        // Return to saved position or follow current location
+        if (savedMapState) {
+            map.flyTo(savedMapState.center, savedMapState.zoom, {
+                duration: 0.5,
+                easeLinearity: 0.25
+            });
+            savedMapState = null;
+        }
+
+        if (btn) {
+            btn.style.background = '#9C27B0';
+            btn.innerHTML = '🗺️';
+            btn.title = 'Journey Overview';
+        }
+        showStatus('📍 Returned to navigation view', 'success');
+        console.log('[Navigation] Journey overview deactivated');
+    }
+}
+
 /**
  * updateSpeedWarning function
  * @function updateSpeedWarning
@@ -4833,7 +5248,19 @@ function updateSpeedWarning(lat, lon, currentSpeed, roadType) {
 
                 display.className = `speed-warning-display show ${data.status}`;
                 text.textContent = data.message;
-                details.textContent = `Limit: ${data.speed_limit_mph} mph | Current: ${data.current_speed_mph} mph`;
+
+                // Convert speeds based on user preference
+                const userSpeedUnit = getSpeedUnit();
+                let displayLimit, displayCurrent;
+                if (speedUnit === 'mph') {
+                    displayLimit = Math.round(data.speed_limit_mph);
+                    displayCurrent = Math.round(data.current_speed_mph);
+                } else {
+                    // Convert mph to km/h
+                    displayLimit = Math.round(data.speed_limit_mph * 1.60934);
+                    displayCurrent = Math.round(data.current_speed_mph * 1.60934);
+                }
+                details.textContent = `Limit: ${displayLimit} ${userSpeedUnit} | Current: ${displayCurrent} ${userSpeedUnit}`;
             }
         })
         .catch(error => console.error('Error updating speed warning:', error));
@@ -6721,12 +7148,18 @@ function announceDistanceToDestination(currentLat, currentLon) {
                 const displayDist = distUnit === 'mi' ? (1 * 0.621371).toFixed(1) : '1';
                 message = `${displayDist} ${distUnit} to destination`;
             } else if (announcementDistance === 500) {
-                message = `500 meters to destination`;
+                // 500 meters = ~1640 feet = ~0.31 miles
+                if (distUnit === 'mi') {
+                    message = `1600 feet to destination`;
+                } else {
+                    message = `500 meters to destination`;
+                }
             } else if (announcementDistance === 100) {
                 message = `Arriving at destination`;
             }
 
-            console.log(`[Voice] Distance announcement: ${message} (remaining: ${(remainingDistance/1000).toFixed(1)}km)`);
+            const displayRemaining = convertDistance(remainingDistance / 1000);
+            console.log(`[Voice] Distance announcement: ${message} (remaining: ${displayRemaining} ${distUnit})`);
             speakMessage(message);
             lastDestinationAnnouncementDistance = remainingDistance;
             break;
@@ -6956,7 +7389,18 @@ function checkRouteDeviation(lat, lon) {
             if (timeSinceLastReroute > REROUTE_DEBOUNCE_MS) {
                 rerouteAttemptCount++;
                 console.log(`[Rerouting] Deviation confirmed: ${minDistance.toFixed(0)}m for ${(deviationDuration/1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
-                sendNotification('🔄 Route Deviation', `You are ${minDistance.toFixed(0)}m off route for ${(deviationDuration/1000).toFixed(0)}s. Recalculating...`, 'warning');
+
+                // Convert deviation distance to user's preferred units
+                let deviationDisplay;
+                if (distanceUnit === 'mi') {
+                    // Convert meters to feet for imperial users
+                    const deviationFeet = Math.round(minDistance * 3.28084);
+                    deviationDisplay = `${deviationFeet} ft`;
+                } else {
+                    deviationDisplay = `${minDistance.toFixed(0)} m`;
+                }
+
+                sendNotification('🔄 Route Deviation', `You are ${deviationDisplay} off route for ${(deviationDuration/1000).toFixed(0)}s. Recalculating...`, 'warning');
                 triggerAutomaticRerouteWithHazardHandling(lat, lon);
                 lastRerouteTime = now;
                 deviationStartTimeCheck = null; // Reset after reroute
@@ -7035,7 +7479,9 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
             if (hazardCount > 0) {
                 sendNotification('⚠️ Route Updated', `New route with ${hazardCount} unavoidable hazard${hazardCount > 1 ? 's' : ''}`, 'warning');
             } else {
-                sendNotification('✅ Route Updated', `New route: ${newRoute.distance_km}km, ${newRoute.duration_minutes}min`, 'success');
+                const displayDist = convertDistance(newRoute.distance_km);
+                const distUnit = getDistanceUnit();
+                sendNotification('✅ Route Updated', `New route: ${displayDist} ${distUnit}, ${newRoute.duration_minutes} min`, 'success');
             }
 
             console.log('[Rerouting] Automatic reroute completed successfully');
@@ -7627,6 +8073,71 @@ function restoreAppState() {
         console.log('[PWA] State restore error:', e);
     }
 }
+
+/**
+ * Refresh the PWA app - saves state and reloads
+ */
+function refreshApp() {
+    showStatus('🔄 Refreshing app...', 'info');
+
+    // Save current app state
+    saveAppState();
+
+    // Short delay to show status message
+    setTimeout(() => {
+        window.location.reload(true); // Force reload from server
+    }, 500);
+}
+
+/**
+ * Check for PWA updates and apply if available
+ */
+async function checkForUpdates() {
+    showStatus('📥 Checking for updates...', 'info');
+
+    if ('serviceWorker' in navigator) {
+        try {
+            const registration = await navigator.serviceWorker.getRegistration();
+
+            if (registration) {
+                // Force service worker to check for updates
+                await registration.update();
+
+                if (registration.waiting) {
+                    // New version waiting - activate it
+                    showStatus('📥 New update found! Installing...', 'success');
+                    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+                } else if (registration.installing) {
+                    showStatus('📥 Update installing...', 'info');
+                } else {
+                    showStatus('✅ App is up to date!', 'success');
+                }
+            } else {
+                showStatus('⚠️ Service worker not registered', 'warning');
+            }
+        } catch (error) {
+            console.error('[PWA] Update check failed:', error);
+            showStatus('❌ Update check failed', 'error');
+        }
+    } else {
+        showStatus('⚠️ PWA not supported on this browser', 'warning');
+    }
+}
+
+/**
+ * Display PWA version info
+ */
+function displayPWAVersion() {
+    const versionElement = document.getElementById('pwaVersionText');
+    if (versionElement) {
+        // Generate version based on service worker cache version or build date
+        const buildDate = new Date().toISOString().split('T')[0];
+        versionElement.textContent = `App version: PWA ${buildDate}`;
+    }
+}
+
+// Call on page load
+document.addEventListener('DOMContentLoaded', displayPWAVersion);
 
 // ===== PHASE 3: BATTERY-AWARE REFRESH INTERVALS =====
 /**
@@ -8297,12 +8808,32 @@ function startTurnByTurnNavigation(routeData) {
         console.log('[Navigation] Auto-traffic updates started');
     }
 
+    // ===== START ROUTE TRAFFIC EDGE DISPLAY =====
+    if (routeTrafficEnabled) {
+        startRouteTrafficUpdates();
+        console.log('[Navigation] Route traffic edge display started');
+    }
+
     // ===== SHOW ZOOM AND FOLLOW BUTTON =====
     mapFollowingActive = true;
     const zoomFollowBtn = document.getElementById('zoomFollowToggle');
     if (zoomFollowBtn) {
         zoomFollowBtn.style.display = 'block';
         zoomFollowBtn.classList.toggle('active', zoomAndFollowEnabled);
+        // Set initial visual state based on current setting
+        if (zoomAndFollowEnabled) {
+            zoomFollowBtn.style.background = '#FF9800';  // Orange when enabled
+            zoomFollowBtn.innerHTML = '📍';
+        } else {
+            zoomFollowBtn.style.background = '#9E9E9E';  // Gray when disabled
+            zoomFollowBtn.innerHTML = '🔓';
+        }
+    }
+
+    // Show journey overview button during navigation
+    const journeyOverviewBtn = document.getElementById('journeyOverviewBtn');
+    if (journeyOverviewBtn) {
+        journeyOverviewBtn.style.display = 'block';
     }
 
     sendNotification('Navigation Started', 'Turn-by-turn guidance activated', 'success');
@@ -8340,12 +8871,24 @@ function stopTurnByTurnNavigation() {
     stopAutoTrafficUpdates();
     console.log('[Navigation] Auto-traffic updates stopped');
 
+    // ===== STOP ROUTE TRAFFIC EDGE DISPLAY =====
+    stopRouteTrafficUpdates();
+    console.log('[Navigation] Route traffic edge display stopped');
+
     // ===== HIDE ZOOM AND FOLLOW BUTTON =====
     mapFollowingActive = false;
     const zoomFollowBtn = document.getElementById('zoomFollowToggle');
     if (zoomFollowBtn) {
         zoomFollowBtn.style.display = 'none';
     }
+
+    // ===== HIDE JOURNEY OVERVIEW BUTTON =====
+    const journeyOverviewBtn = document.getElementById('journeyOverviewBtn');
+    if (journeyOverviewBtn) {
+        journeyOverviewBtn.style.display = 'none';
+    }
+    journeyOverviewActive = false;
+    savedMapState = null;
 
     // ===== PHASE 2: Apply pending PWA update if available =====
     if (updatePending) {
@@ -8391,13 +8934,16 @@ function updateTurnGuidance(userLat, userLon) {
         );
     }
 
-    // Update turn guidance display
+    // Update turn guidance display with proper unit conversion
     const turnInfo = document.getElementById('turnInfo');
     if (turnInfo) {
+        const distanceKm = distanceToEnd / 1000;
+        const displayDistance = convertDistance(distanceKm);
+        const distUnit = getDistanceUnit();
         turnInfo.innerHTML = `
             <div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
                 <div style="font-size: 14px; color: #666;">Distance to destination</div>
-                <div style="font-size: 24px; font-weight: bold; color: #333;">${(distanceToEnd / 1000).toFixed(1)} km</div>
+                <div style="font-size: 24px; font-weight: bold; color: #333;">${displayDistance} ${distUnit}</div>
                 <div style="font-size: 12px; color: #999; margin-top: 5px;">Route progress: ${((closestIndex / routePolyline.length) * 100).toFixed(0)}%</div>
             </div>
         `;
@@ -8419,46 +8965,65 @@ function quickSearch(type) {
         return;
     }
 
+    console.log(`[QuickSearch] Starting search for ${type}`);
     showStatus(`🔍 Searching for ${type}...`, 'info');
 
+    // Use cached position if available, otherwise get current position
+    const searchWithPosition = async (lat, lon) => {
+        console.log(`[QuickSearch] Searching at position: ${lat}, ${lon}`);
+        try {
+            // Use the POI search API
+            const response = await fetch('/api/poi-search', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    lat: lat,
+                    lon: lon,
+                    type: type,
+                    radius: 3000  // 3km radius
+                })
+            });
+
+            const data = await response.json();
+            console.log(`[QuickSearch] Response:`, data);
+
+            if (!data.success || !data.results || data.results.length === 0) {
+                showStatus(`No ${type} found nearby. Try a different location.`, 'warning');
+                return;
+            }
+
+            // Display POI results in a modal or list
+            console.log(`[QuickSearch] Displaying ${data.results.length} results`);
+            displayPOIResults(data.results, type, lat, lon);
+            showStatus(`✅ Found ${data.results.length} ${type} options`, 'success');
+
+        } catch (error) {
+            console.error('[QuickSearch] Error:', error);
+            showStatus('Error searching for ' + type + ': ' + error.message, 'error');
+        }
+    };
+
+    // If we have a cached current position, use it immediately
+    if (currentLat && currentLon) {
+        console.log('[QuickSearch] Using cached position');
+        searchWithPosition(currentLat, currentLon);
+        return;
+    }
+
+    // Otherwise get a fresh position
     navigator.geolocation.getCurrentPosition(
-        async (position) => {
+        (position) => {
             const lat = position.coords.latitude;
             const lon = position.coords.longitude;
-
-            try {
-                // Use the POI search API
-                const response = await fetch('/api/poi-search', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        lat: lat,
-                        lon: lon,
-                        type: type,
-                        radius: 3000  // 3km radius
-                    })
-                });
-
-                const data = await response.json();
-
-                if (!data.success || !data.results || data.results.length === 0) {
-                    showStatus(`No ${type} found nearby. Try a different location.`, 'warning');
-                    return;
-                }
-
-                // Display POI results in a modal or list
-                displayPOIResults(data.results, type, lat, lon);
-                showStatus(`✅ Found ${data.results.length} ${type} options`, 'success');
-
-            } catch (error) {
-                console.error('[QuickSearch] Error:', error);
-                showStatus('Error searching for ' + type + ': ' + error.message, 'error');
-            }
+            currentLat = lat;
+            currentLon = lon;
+            searchWithPosition(lat, lon);
         },
         (error) => {
+            console.error('[QuickSearch] GPS Error:', error);
             showStatus('Error getting location: ' + error.message, 'error');
         },
-        { enableHighAccuracy: true, timeout: 10000 }
+        { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }  // 30s timeout, allow 1min cached position
     );
 }
 
@@ -8495,9 +9060,24 @@ function displayPOIResults(results, type, userLat, userLon) {
     `;
 
     results.forEach((poi, index) => {
-        const distance = poi.distance_m < 1000
-            ? `${Math.round(poi.distance_m)}m`
-            : `${(poi.distance_m / 1000).toFixed(1)}km`;
+        // Convert POI distance based on user's unit preference
+        let distance;
+        if (distanceUnit === 'mi') {
+            // Convert meters to feet/miles
+            const distanceFeet = poi.distance_m * 3.28084;
+            if (distanceFeet < 5280) {
+                distance = `${Math.round(distanceFeet)} ft`;
+            } else {
+                distance = `${(poi.distance_m / 1609.344).toFixed(1)} mi`;
+            }
+        } else {
+            // Metric: meters/km
+            if (poi.distance_m < 1000) {
+                distance = `${Math.round(poi.distance_m)} m`;
+            } else {
+                distance = `${(poi.distance_m / 1000).toFixed(1)} km`;
+            }
+        }
         const brand = poi.brand ? `<span style="color: #667eea; font-weight: 500;">${poi.brand}</span> - ` : '';
 
         modalHTML += `
