@@ -3442,10 +3442,6 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-    <!-- API Keys for client-side features -->
-    <script>
-        window.TOMTOM_API_KEY = '""" + os.getenv('TOMTOM_API_KEY', '') + """';
-    </script>
     <!-- External JavaScript modules -->
     <script src="/static/js/voyagr-core.js?v=20251216"></script>
     <script src="/static/js/voyagr-app.js?v=20251216"></script>

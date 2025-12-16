@@ -3210,11 +3210,8 @@ function displayRouteTrafficEdges(segments) {
     segments.forEach(segment => {
         const color = TRAFFIC_COLORS[segment.traffic_level] || TRAFFIC_COLORS['green'];
 
-        // Only show congested segments (orange/red/black) - skip green (free flow)
-        // This reduces visual clutter and highlights problem areas
-        if (segment.traffic_level === 'green') {
-            return; // Skip green segments - no congestion
-        }
+        // Show ALL traffic segments including green (free flow)
+        // This provides full traffic visibility on the route
 
         // Find the indices in the route polyline that correspond to this segment
         const startIdx = findClosestRoutePointIndex(segment.start, lastEndIdx);
