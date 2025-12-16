@@ -3194,9 +3194,18 @@ function displayRouteTrafficEdges(segments) {
     // Clear existing traffic layers
     clearRouteTrafficLayers();
 
-    if (!map || !segments || segments.length === 0 || !routePolyline || routePolyline.length === 0) return;
+    if (!map || !segments || segments.length === 0 || !routePolyline || routePolyline.length === 0) {
+        console.log('[Route Traffic] Cannot display - map:', !!map, 'segments:', segments?.length, 'routePolyline:', routePolyline?.length);
+        return;
+    }
+
+    // Count traffic levels for debugging
+    const levelCounts = { green: 0, orange: 0, red: 0, black: 0 };
+    segments.forEach(s => levelCounts[s.traffic_level] = (levelCounts[s.traffic_level] || 0) + 1);
+    console.log('[Route Traffic] Segment levels:', levelCounts);
 
     let lastEndIdx = 0;  // Track position along route to ensure segments are in order
+    let displayedCount = 0;
 
     segments.forEach(segment => {
         const color = TRAFFIC_COLORS[segment.traffic_level] || TRAFFIC_COLORS['green'];

@@ -3447,9 +3447,9 @@ HTML_TEMPLATE = '''
         window.TOMTOM_API_KEY = '""" + os.getenv('TOMTOM_API_KEY', '') + """';
     </script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js"></script>
-    <script src="/static/js/voyagr-app.js"></script>
-    <script src="/static/js/app.js"></script>
+    <script src="/static/js/voyagr-core.js?v=20251216"></script>
+    <script src="/static/js/voyagr-app.js?v=20251216"></script>
+    <script src="/static/js/app.js?v=20251216"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>

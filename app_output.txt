@@ -1,0 +1,1194 @@
+2025-11-22 04:54:25,192 - __main__ - INFO - [COMPRESSION] Gzip compression enabled
+2025-11-22 04:54:25,292 - dashcam_service - INFO - Dashcam service initialized (storage: dashcam_recordings)
+2025-11-22 04:54:25,295 - dashcam_blueprint - INFO - Dashcam blueprint initialized
+2025-11-22 04:54:25,295 - __main__ - INFO - [DASHCAM] Blueprint initialized successfully
+2025-11-22 04:54:25,296 - __main__ - INFO - [DB POOL] Initialized with 5 connections
+2025-11-22 04:54:25,314 - __main__ - INFO - [CUSTOM_ROUTER] Background initialization started
+2025-11-22 04:54:25,314 - __main__ - INFO - [CUSTOM_ROUTER] Initializing from data/uk_router.db...
+2025-11-22 04:54:25,316 - routing_monitor - INFO - Monitoring database initialized
+2025-11-22 04:54:25,316 - routing_monitor - INFO - Starting monitoring loop...
+2025-11-22 04:54:25,317 - routing_monitor - INFO - Monitoring started
+
+[STARTUP] Custom router initialization started in background
+[Graph] Loading from database...
+[Graph] Loading nodes...
+[OK] Routing engine monitoring started
+
+============================================================
+[STARTUP] Voyagr Web App is running!
+============================================================
+
+[INFO] Access the app at:
+   http://localhost:5000
+
+[INFO] Access from your Pixel 6:
+   1. Find your PC's IP address (usually 192.168.x.x)
+   2. Open browser on Pixel 6
+   3. Go to: http://YOUR_PC_IP:5000
+
+[INFO] Monitoring Dashboard:
+   http://localhost:5000/monitoring
+
+============================================================
+
+ * Serving Flask app 'voyagr_web'
+ * Debug mode: off
+2025-11-22 04:54:25,338 - werkzeug - INFO - WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.0.111:5000
+2025-11-22 04:54:25,338 - werkzeug - INFO - Press CTRL+C to quit
+2025-11-22 04:54:25,393 - routing_monitor - INFO - \u2705 graphhopper: UP (68ms)
+2025-11-22 04:54:25,477 - routing_monitor - INFO - \u2705 valhalla: UP (75ms)
+2025-11-22 04:54:25,593 - routing_monitor - INFO - \u2705 osrm: UP (95ms)
+2025-11-22 04:54:25,595 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 04:55:09,535 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 04:55:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 04:55:11,927 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 04:55:11] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 04:55:14,990 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 04:55:14] "GET /service-worker.js HTTP/1.1" 200 -
+[Graph] Loading edges in background...
+[Graph] Loaded 10,000,000 edges (271933 edges/sec)...
+2025-11-22 04:56:11,232 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 04:56:11] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 04:56:15,337 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 04:56:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 04:57:02,087 - __main__ - INFO - [CUSTOM_ROUTER] \u2705 Initialized successfully
+2025-11-22 04:57:02,090 - __main__ - INFO - [CUSTOM_ROUTER] Nodes: 26,544,335
+2025-11-22 04:57:03,267 - __main__ - INFO - [CUSTOM_ROUTER] Edges: 10,000,000
+2025-11-22 04:57:03,267 - __main__ - INFO - [CUSTOM_ROUTER] \u2705 Contraction Hierarchies available (26,544,335 nodes)
+2025-11-22 04:57:03,267 - __main__ - INFO - [CUSTOM_ROUTER] PRIMARY ROUTER: CH with 5-10x speedup enabled
+2025-11-22 04:57:03,267 - __main__ - INFO - [CUSTOM_ROUTER] Starting background component analysis (all 26.5M nodes)...
+2025-11-22 04:57:33,423 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 04:57:33] "GET /service-worker.js HTTP/1.1" 200 -
+[Graph] Loaded 20,000,000 edges (135350 edges/sec)...
+2025-11-22 04:58:09,595 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 04:58:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 04:58:15,215 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 04:58:15] "GET /service-worker.js HTTP/1.1" 200 -
+[Graph] Loaded 30,000,000 edges (136739 edges/sec)...
+2025-11-22 04:59:17,938 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 04:59:17] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 04:59:25,694 - routing_monitor - INFO - \u2705 graphhopper: UP (75ms)
+2025-11-22 04:59:25,771 - routing_monitor - INFO - \u2705 valhalla: UP (64ms)
+2025-11-22 04:59:25,922 - routing_monitor - INFO - \u2705 osrm: UP (139ms)
+2025-11-22 04:59:25,925 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 05:00:38,378 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:00:38] "GET /service-worker.js HTTP/1.1" 200 -
+[Graph] Loaded 40,000,000 edges (117286 edges/sec)...
+2025-11-22 05:02:16,158 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:02:16] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:04:59,924 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:04:59] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:05:00,264 - routing_monitor - INFO - \u2705 graphhopper: UP (334ms)
+2025-11-22 05:05:00,777 - routing_monitor - INFO - \u2705 valhalla: UP (220ms)
+2025-11-22 05:05:01,385 - routing_monitor - INFO - \u2705 osrm: UP (268ms)
+2025-11-22 05:05:01,781 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 05:05:09,731 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:05:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:05:15,357 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:05:15] "GET /service-worker.js HTTP/1.1" 200 -
+[Graph] Loaded 50,000,000 edges (80262 edges/sec)...
+2025-11-22 05:08:11,121 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:08:11] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:08:15,221 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:08:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:09:09,724 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:09:09] "GET /service-worker.js HTTP/1.1" 200 -
+[Graph] Loaded 52,634,373 edges (63006 edges/sec)...
+2025-11-22 05:11:57,692 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:11:57] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:11:57,778 - routing_monitor - INFO - \u2705 graphhopper: UP (118ms)
+2025-11-22 05:11:57,905 - routing_monitor - INFO - \u2705 valhalla: UP (63ms)
+2025-11-22 05:11:58,205 - routing_monitor - INFO - \u2705 osrm: UP (152ms)
+2025-11-22 05:11:58,212 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 05:12:09,636 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:12:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:12:14,874 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:12:14] "GET /service-worker.js HTTP/1.1" 200 -
+[Graph] \u2705 Background edge loading complete: 52,634,373 edges in 1028.9s (51157 edges/sec)
+2025-11-22 05:12:25,535 - __main__ - INFO - [CUSTOM_ROUTER] Edges loaded, starting component analysis...
+2025-11-22 05:13:09,705 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:13:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:13:15,390 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:13:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:14:09,921 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:14:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:14:15,374 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:14:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:15:09,688 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:15:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:15:16,049 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:15:16] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:16:09,704 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:16:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:16:15,018 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:16:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:16:58,845 - routing_monitor - INFO - \u2705 graphhopper: UP (282ms)
+2025-11-22 05:16:59,455 - routing_monitor - INFO - \u2705 valhalla: UP (220ms)
+2025-11-22 05:17:00,115 - routing_monitor - INFO - \u2705 osrm: UP (300ms)
+2025-11-22 05:17:00,650 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 05:17:09,721 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:17:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:17:15,429 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:17:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:18:09,768 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:18:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:18:15,005 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:18:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:19:09,686 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:19:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:19:15,375 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:19:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:19:37,823 - __main__ - INFO - [CUSTOM_ROUTER] \u2705 Background component analysis complete:
+2025-11-22 05:19:37,825 - __main__ - INFO - [CUSTOM_ROUTER]    Total components: 16519
+2025-11-22 05:19:37,826 - __main__ - INFO - [CUSTOM_ROUTER]    Main component: 26,062,374 nodes (98.2%)
+2025-11-22 05:20:09,521 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:20:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:20:14,865 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:20:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:21:09,515 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:21:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:21:14,869 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:21:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:22:00,805 - routing_monitor - INFO - \u2705 graphhopper: UP (99ms)
+2025-11-22 05:22:00,874 - routing_monitor - INFO - \u2705 valhalla: UP (60ms)
+2025-11-22 05:22:01,027 - routing_monitor - INFO - \u2705 osrm: UP (144ms)
+2025-11-22 05:22:01,030 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 05:22:09,501 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:22:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:22:14,858 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:22:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:23:09,521 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:23:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:23:14,864 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:23:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:24:09,513 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:24:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:24:14,858 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:24:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:25:09,525 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:25:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:25:14,871 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:25:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:26:09,510 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:26:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:26:14,864 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:26:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:27:01,109 - routing_monitor - INFO - \u2705 graphhopper: UP (75ms)
+2025-11-22 05:27:01,182 - routing_monitor - INFO - \u2705 valhalla: UP (65ms)
+2025-11-22 05:27:01,279 - routing_monitor - INFO - \u2705 osrm: UP (91ms)
+2025-11-22 05:27:01,281 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 05:27:09,522 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:27:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:27:14,855 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:27:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:28:09,516 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:28:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:28:14,870 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:28:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:29:09,505 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:29:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:29:14,868 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:29:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:30:09,508 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:30:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:30:14,853 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:30:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:31:09,509 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:31:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:31:14,851 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:31:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:32:01,375 - routing_monitor - INFO - \u2705 graphhopper: UP (89ms)
+2025-11-22 05:32:01,482 - routing_monitor - INFO - \u2705 valhalla: UP (81ms)
+2025-11-22 05:32:01,654 - routing_monitor - INFO - \u2705 osrm: UP (141ms)
+2025-11-22 05:32:01,656 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 05:32:09,507 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:32:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:32:14,869 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:32:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:33:09,504 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:33:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:33:14,868 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:33:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:34:09,495 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:34:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:34:14,861 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:34:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:35:09,509 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:35:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:35:14,860 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:35:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:36:09,500 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:36:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:36:14,864 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:36:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:37:01,755 - routing_monitor - INFO - \u2705 graphhopper: UP (80ms)
+2025-11-22 05:37:01,846 - routing_monitor - INFO - \u2705 valhalla: UP (67ms)
+2025-11-22 05:37:01,970 - routing_monitor - INFO - \u2705 osrm: UP (102ms)
+2025-11-22 05:37:01,972 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 05:37:09,503 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:37:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:37:14,855 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:37:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:38:09,521 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:38:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:38:14,848 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:38:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:39:09,527 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:39:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:39:14,849 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:39:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:40:09,507 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:40:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:40:14,848 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:40:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:41:09,492 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:41:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:41:14,848 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:41:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:42:02,049 - routing_monitor - INFO - \u2705 graphhopper: UP (67ms)
+2025-11-22 05:42:02,131 - routing_monitor - INFO - \u2705 valhalla: UP (61ms)
+2025-11-22 05:42:02,293 - routing_monitor - INFO - \u2705 osrm: UP (139ms)
+2025-11-22 05:42:02,295 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 05:42:09,508 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:42:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:42:14,854 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:42:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:43:09,498 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:43:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:43:14,848 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:43:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:44:09,524 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:44:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:44:14,845 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:44:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:45:09,497 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:45:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:45:14,847 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:45:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:46:09,493 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:46:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:46:14,849 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:46:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:47:02,390 - routing_monitor - INFO - \u2705 graphhopper: UP (77ms)
+2025-11-22 05:47:02,482 - routing_monitor - INFO - \u2705 valhalla: UP (71ms)
+2025-11-22 05:47:02,606 - routing_monitor - INFO - \u2705 osrm: UP (104ms)
+2025-11-22 05:47:02,607 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 05:47:09,505 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:47:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:47:14,854 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:47:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:48:09,498 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:48:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:48:14,845 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:48:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:49:09,522 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:49:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:49:14,848 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:49:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:50:09,493 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:50:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:50:14,847 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:50:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:51:09,489 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:51:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:51:14,848 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:51:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:52:02,692 - routing_monitor - INFO - \u2705 graphhopper: UP (76ms)
+2025-11-22 05:52:02,770 - routing_monitor - INFO - \u2705 valhalla: UP (56ms)
+2025-11-22 05:52:02,934 - routing_monitor - INFO - \u2705 osrm: UP (141ms)
+2025-11-22 05:52:02,936 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 05:52:09,498 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:52:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:52:14,855 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:52:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:53:09,489 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:53:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:53:14,850 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:53:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:54:09,488 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:54:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:54:14,852 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:54:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:55:09,490 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:55:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:55:14,846 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:55:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:56:09,492 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:56:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:56:14,839 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:56:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:57:03,033 - routing_monitor - INFO - \u2705 graphhopper: UP (80ms)
+2025-11-22 05:57:03,133 - routing_monitor - INFO - \u2705 valhalla: UP (74ms)
+2025-11-22 05:57:03,263 - routing_monitor - INFO - \u2705 osrm: UP (111ms)
+2025-11-22 05:57:03,265 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 05:57:09,490 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:57:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:57:14,849 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:57:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:58:09,494 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:58:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:58:14,847 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:58:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:59:09,493 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:59:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 05:59:14,847 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 05:59:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:00:09,497 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:00:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:00:15,167 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:00:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:01:09,183 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:01:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:01:15,165 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:01:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:02:03,349 - routing_monitor - INFO - \u2705 graphhopper: UP (65ms)
+2025-11-22 06:02:03,447 - routing_monitor - INFO - \u2705 valhalla: UP (76ms)
+2025-11-22 06:02:03,605 - routing_monitor - INFO - \u2705 osrm: UP (138ms)
+2025-11-22 06:02:03,606 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 06:02:09,183 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:02:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:02:15,163 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:02:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:03:09,187 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:03:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:03:15,164 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:03:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:04:09,179 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:04:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:04:15,145 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:04:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:05:09,179 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:05:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:05:15,157 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:05:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:06:09,183 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:06:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:06:15,159 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:06:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:07:03,685 - routing_monitor - INFO - \u2705 graphhopper: UP (58ms)
+2025-11-22 06:07:03,780 - routing_monitor - INFO - \u2705 valhalla: UP (73ms)
+2025-11-22 06:07:03,904 - routing_monitor - INFO - \u2705 osrm: UP (104ms)
+2025-11-22 06:07:03,905 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 06:07:09,182 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:07:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:07:15,151 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:07:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:08:09,188 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:08:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:08:15,163 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:08:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:09:09,180 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:09:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:09:15,163 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:09:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:10:09,183 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:10:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:10:15,144 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:10:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:11:09,174 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:11:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:11:15,161 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:11:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:12:03,984 - routing_monitor - INFO - \u2705 graphhopper: UP (61ms)
+2025-11-22 06:12:04,064 - routing_monitor - INFO - \u2705 valhalla: UP (57ms)
+2025-11-22 06:12:04,330 - routing_monitor - INFO - \u2705 osrm: UP (255ms)
+2025-11-22 06:12:04,332 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 06:12:09,183 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:12:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:12:15,152 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:12:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:13:09,183 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:13:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:13:15,141 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:13:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:14:09,180 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:14:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:14:15,149 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:14:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:15:09,181 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:15:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:15:15,162 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:15:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:16:09,181 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:16:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:16:15,150 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:16:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:17:04,412 - routing_monitor - INFO - \u2705 graphhopper: UP (59ms)
+2025-11-22 06:17:04,502 - routing_monitor - INFO - \u2705 valhalla: UP (55ms)
+2025-11-22 06:17:04,605 - routing_monitor - INFO - \u2705 osrm: UP (95ms)
+2025-11-22 06:17:04,607 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 06:17:09,182 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:17:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:17:15,145 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:17:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:18:09,178 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:18:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:18:15,151 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:18:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:19:09,490 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:19:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:19:14,841 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:19:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:20:09,478 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:20:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:20:14,844 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:20:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:21:09,475 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:21:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:21:14,833 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:21:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:22:04,689 - routing_monitor - INFO - \u2705 graphhopper: UP (64ms)
+2025-11-22 06:22:04,773 - routing_monitor - INFO - \u2705 valhalla: UP (55ms)
+2025-11-22 06:22:04,904 - routing_monitor - INFO - \u2705 osrm: UP (123ms)
+2025-11-22 06:22:04,906 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 06:22:09,492 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:22:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:22:14,832 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:22:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:23:09,489 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:23:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:23:14,831 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:23:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:24:09,488 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:24:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:24:14,830 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:24:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:25:09,488 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:25:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:25:14,835 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:25:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:26:09,493 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:26:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:26:14,836 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:26:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:27:04,992 - routing_monitor - INFO - \u2705 graphhopper: UP (65ms)
+2025-11-22 06:27:05,073 - routing_monitor - INFO - \u2705 valhalla: UP (57ms)
+2025-11-22 06:27:05,175 - routing_monitor - INFO - \u2705 osrm: UP (94ms)
+2025-11-22 06:27:05,177 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 06:27:09,480 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:27:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:27:14,832 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:27:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:28:09,474 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:28:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:28:14,831 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:28:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:29:09,473 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:29:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:29:14,832 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:29:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:30:09,489 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:30:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:30:14,841 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:30:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:31:09,490 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:31:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:31:14,838 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:31:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:32:05,260 - routing_monitor - INFO - \u2705 graphhopper: UP (73ms)
+2025-11-22 06:32:05,332 - routing_monitor - INFO - \u2705 valhalla: UP (65ms)
+2025-11-22 06:32:05,468 - routing_monitor - INFO - \u2705 osrm: UP (128ms)
+2025-11-22 06:32:05,470 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 06:32:09,488 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:32:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:32:14,831 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:32:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:33:09,478 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:33:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:33:14,840 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:33:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:34:09,474 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:34:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:34:14,839 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:34:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:35:09,474 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:35:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:35:14,839 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:35:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:36:09,473 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:36:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:36:14,827 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:36:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:37:05,549 - routing_monitor - INFO - \u2705 graphhopper: UP (61ms)
+2025-11-22 06:37:05,652 - routing_monitor - INFO - \u2705 valhalla: UP (78ms)
+2025-11-22 06:37:05,766 - routing_monitor - INFO - \u2705 osrm: UP (91ms)
+2025-11-22 06:37:05,768 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 06:37:09,474 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:37:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:37:14,826 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:37:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:38:09,476 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:38:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:38:14,838 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:38:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:39:09,476 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:39:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:39:14,836 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:39:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:40:09,471 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:40:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:40:14,832 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:40:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:41:09,482 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:41:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:41:14,841 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:41:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:42:05,850 - routing_monitor - INFO - \u2705 graphhopper: UP (61ms)
+2025-11-22 06:42:05,955 - routing_monitor - INFO - \u2705 valhalla: UP (83ms)
+2025-11-22 06:42:06,122 - routing_monitor - INFO - \u2705 osrm: UP (133ms)
+2025-11-22 06:42:06,123 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 06:42:09,476 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:42:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:42:14,825 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:42:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:43:09,475 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:43:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:43:14,831 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:43:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:44:09,479 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:44:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:44:14,832 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:44:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:45:09,476 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:45:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:45:15,147 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:45:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:46:09,168 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:46:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:46:15,134 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:46:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:47:06,191 - routing_monitor - INFO - \u2705 graphhopper: UP (58ms)
+2025-11-22 06:47:06,262 - routing_monitor - INFO - \u2705 valhalla: UP (63ms)
+2025-11-22 06:47:06,356 - routing_monitor - INFO - \u2705 osrm: UP (87ms)
+2025-11-22 06:47:06,358 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 06:47:09,158 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:47:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:47:15,167 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:47:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:48:09,160 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:48:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:48:15,146 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:48:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:49:09,475 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:49:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:49:14,833 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:49:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:50:09,468 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:50:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:50:14,822 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:50:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:51:09,472 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:51:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:51:14,837 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:51:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:52:06,452 - routing_monitor - INFO - \u2705 graphhopper: UP (73ms)
+2025-11-22 06:52:06,536 - routing_monitor - INFO - \u2705 valhalla: UP (58ms)
+2025-11-22 06:52:06,689 - routing_monitor - INFO - \u2705 osrm: UP (131ms)
+2025-11-22 06:52:06,691 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 06:52:09,478 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:52:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:52:14,833 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:52:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:53:09,484 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:53:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:53:14,831 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:53:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:54:09,462 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:54:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:54:14,831 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:54:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:55:09,475 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:55:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:55:14,820 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:55:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:56:09,470 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:56:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:56:14,823 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:56:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:57:06,754 - routing_monitor - INFO - \u2705 graphhopper: UP (59ms)
+2025-11-22 06:57:06,831 - routing_monitor - INFO - \u2705 valhalla: UP (69ms)
+2025-11-22 06:57:06,941 - routing_monitor - INFO - \u2705 osrm: UP (103ms)
+2025-11-22 06:57:06,942 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 06:57:09,475 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:57:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:57:14,831 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:57:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:58:09,474 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:58:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:58:14,816 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:58:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:59:09,472 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:59:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 06:59:14,816 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 06:59:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:00:09,468 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:00:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:00:14,828 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:00:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:01:09,458 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:01:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:01:14,818 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:01:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:02:07,026 - routing_monitor - INFO - \u2705 graphhopper: UP (76ms)
+2025-11-22 07:02:07,115 - routing_monitor - INFO - \u2705 valhalla: UP (68ms)
+2025-11-22 07:02:07,262 - routing_monitor - INFO - \u2705 osrm: UP (127ms)
+2025-11-22 07:02:07,264 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 07:02:09,474 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:02:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:02:14,820 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:02:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:03:09,464 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:03:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:03:14,824 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:03:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:04:09,473 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:04:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:04:14,821 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:04:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:05:09,465 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:05:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:05:14,827 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:05:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:06:09,466 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:06:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:06:14,815 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:06:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:07:07,353 - routing_monitor - INFO - \u2705 graphhopper: UP (81ms)
+2025-11-22 07:07:07,441 - routing_monitor - INFO - \u2705 valhalla: UP (67ms)
+2025-11-22 07:07:07,562 - routing_monitor - INFO - \u2705 osrm: UP (103ms)
+2025-11-22 07:07:07,564 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 07:07:09,462 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:07:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:07:14,826 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:07:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:08:09,458 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:08:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:08:14,820 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:08:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:09:09,458 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:09:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:09:14,824 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:09:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:10:09,466 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:10:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:10:14,811 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:10:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:11:09,464 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:11:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:11:14,823 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:11:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:12:07,650 - routing_monitor - INFO - \u2705 graphhopper: UP (68ms)
+2025-11-22 07:12:07,740 - routing_monitor - INFO - \u2705 valhalla: UP (69ms)
+2025-11-22 07:12:07,995 - routing_monitor - INFO - \u2705 osrm: UP (232ms)
+2025-11-22 07:12:07,997 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 07:12:09,468 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:12:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:12:14,816 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:12:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:13:09,462 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:13:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:13:14,816 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:13:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:14:09,457 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:14:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:14:14,816 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:14:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:15:09,463 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:15:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:15:14,817 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:15:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:16:09,458 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:16:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:16:14,820 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:16:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:17:08,092 - routing_monitor - INFO - \u2705 graphhopper: UP (77ms)
+2025-11-22 07:17:08,182 - routing_monitor - INFO - \u2705 valhalla: UP (68ms)
+2025-11-22 07:17:08,308 - routing_monitor - INFO - \u2705 osrm: UP (105ms)
+2025-11-22 07:17:08,310 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 07:17:09,459 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:17:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:17:14,820 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:17:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:18:09,457 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:18:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:18:14,808 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:18:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:19:09,458 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:19:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:19:14,821 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:19:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:20:09,466 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:20:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:20:14,820 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:20:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:21:09,463 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:21:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:21:14,816 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:21:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:22:08,406 - routing_monitor - INFO - \u2705 graphhopper: UP (88ms)
+2025-11-22 07:22:08,504 - routing_monitor - INFO - \u2705 valhalla: UP (77ms)
+2025-11-22 07:22:08,661 - routing_monitor - INFO - \u2705 osrm: UP (135ms)
+2025-11-22 07:22:08,662 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 07:22:09,459 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:22:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:22:14,824 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:22:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:23:09,463 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:23:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:23:14,811 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:23:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:24:09,456 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:24:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:24:14,811 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:24:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:25:09,458 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:25:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:25:14,805 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:25:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:26:09,456 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:26:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:26:14,823 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:26:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:27:08,759 - routing_monitor - INFO - \u2705 graphhopper: UP (74ms)
+2025-11-22 07:27:08,846 - routing_monitor - INFO - \u2705 valhalla: UP (65ms)
+2025-11-22 07:27:08,957 - routing_monitor - INFO - \u2705 osrm: UP (92ms)
+2025-11-22 07:27:08,959 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 07:27:09,467 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:27:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:27:14,804 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:27:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:28:09,457 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:28:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:28:14,817 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:28:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:29:09,460 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:29:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:29:14,810 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:29:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:30:09,442 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:30:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:30:14,817 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:30:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:31:09,458 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:31:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:31:14,804 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:31:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:32:09,054 - routing_monitor - INFO - \u2705 graphhopper: UP (77ms)
+2025-11-22 07:32:09,136 - routing_monitor - INFO - \u2705 valhalla: UP (58ms)
+2025-11-22 07:32:09,287 - routing_monitor - INFO - \u2705 osrm: UP (130ms)
+2025-11-22 07:32:09,288 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 07:32:09,461 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:32:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:32:14,809 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:32:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:33:09,457 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:33:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:33:14,816 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:33:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:34:09,458 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:34:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:34:14,804 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:34:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:35:09,464 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:35:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:35:14,805 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:35:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:36:09,459 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:36:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:36:14,805 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:36:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:37:09,382 - routing_monitor - INFO - \u2705 graphhopper: UP (74ms)
+2025-11-22 07:37:09,466 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:37:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:37:09,471 - routing_monitor - INFO - \u2705 valhalla: UP (67ms)
+2025-11-22 07:37:09,576 - routing_monitor - INFO - \u2705 osrm: UP (83ms)
+2025-11-22 07:37:09,578 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 07:37:14,807 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:37:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:38:09,466 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:38:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:38:14,813 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:38:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:39:09,459 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:39:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:39:14,801 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:39:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:40:09,458 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:40:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:40:14,800 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:40:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:41:09,459 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:41:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:41:14,803 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:41:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:42:09,450 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:42:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:42:09,673 - routing_monitor - INFO - \u2705 graphhopper: UP (76ms)
+2025-11-22 07:42:09,753 - routing_monitor - INFO - \u2705 valhalla: UP (53ms)
+2025-11-22 07:42:09,880 - routing_monitor - INFO - \u2705 osrm: UP (119ms)
+2025-11-22 07:42:09,882 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 07:42:14,809 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:42:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:43:09,458 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:43:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:43:14,809 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:43:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:44:09,457 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:44:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:44:14,810 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:44:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:45:09,445 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:45:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:45:14,809 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:45:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:46:09,443 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:46:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:46:14,812 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:46:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:47:09,442 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:47:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:47:09,980 - routing_monitor - INFO - \u2705 graphhopper: UP (80ms)
+2025-11-22 07:47:10,070 - routing_monitor - INFO - \u2705 valhalla: UP (67ms)
+2025-11-22 07:47:10,195 - routing_monitor - INFO - \u2705 osrm: UP (104ms)
+2025-11-22 07:47:10,197 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 07:47:14,800 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:47:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:48:09,441 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:48:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:48:14,800 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:48:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:49:09,444 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:49:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:49:14,800 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:49:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:50:09,446 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:50:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:50:14,804 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:50:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:51:09,445 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:51:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:51:14,799 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:51:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:52:09,446 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:52:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:52:10,292 - routing_monitor - INFO - \u2705 graphhopper: UP (76ms)
+2025-11-22 07:52:10,374 - routing_monitor - INFO - \u2705 valhalla: UP (64ms)
+2025-11-22 07:52:10,550 - routing_monitor - INFO - \u2705 osrm: UP (154ms)
+2025-11-22 07:52:10,552 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 07:52:14,801 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:52:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:53:09,458 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:53:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:53:14,800 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:53:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:54:09,457 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:54:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:54:14,803 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:54:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:55:09,454 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:55:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:55:14,803 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:55:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:56:09,442 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:56:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:56:14,805 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:56:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:57:09,457 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:57:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:57:10,636 - routing_monitor - INFO - \u2705 graphhopper: UP (65ms)
+2025-11-22 07:57:10,712 - routing_monitor - INFO - \u2705 valhalla: UP (53ms)
+2025-11-22 07:57:10,812 - routing_monitor - INFO - \u2705 osrm: UP (93ms)
+2025-11-22 07:57:10,814 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 07:57:14,792 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:57:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:58:09,453 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:58:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:58:14,800 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:58:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:59:09,440 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:59:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 07:59:14,798 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 07:59:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:00:09,445 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:00:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:00:14,799 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:00:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:01:09,446 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:01:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:01:14,791 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:01:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:02:09,458 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:02:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:02:10,893 - routing_monitor - INFO - \u2705 graphhopper: UP (65ms)
+2025-11-22 08:02:10,969 - routing_monitor - INFO - \u2705 valhalla: UP (56ms)
+2025-11-22 08:02:11,102 - routing_monitor - INFO - \u2705 osrm: UP (126ms)
+2025-11-22 08:02:11,104 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 08:02:14,800 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:02:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:03:09,441 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:03:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:03:14,802 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:03:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:04:09,442 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:04:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:04:14,801 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:04:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:05:09,439 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:05:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:05:14,795 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:05:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:06:09,445 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:06:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:06:14,794 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:06:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:07:09,444 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:07:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:07:11,185 - routing_monitor - INFO - \u2705 graphhopper: UP (74ms)
+2025-11-22 08:07:11,263 - routing_monitor - INFO - \u2705 valhalla: UP (57ms)
+2025-11-22 08:07:11,364 - routing_monitor - INFO - \u2705 osrm: UP (93ms)
+2025-11-22 08:07:11,366 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 08:07:14,795 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:07:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:08:09,448 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:08:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:08:14,795 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:08:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:09:09,440 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:09:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:09:14,795 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:09:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:10:09,445 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:10:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:10:14,787 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:10:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:11:09,436 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:11:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:11:14,790 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:11:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:12:09,425 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:12:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:12:11,448 - routing_monitor - INFO - \u2705 graphhopper: UP (74ms)
+2025-11-22 08:12:11,541 - routing_monitor - INFO - \u2705 valhalla: UP (72ms)
+2025-11-22 08:12:11,726 - routing_monitor - INFO - \u2705 osrm: UP (163ms)
+2025-11-22 08:12:11,728 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 08:12:14,793 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:12:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:13:09,442 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:13:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:13:14,784 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:13:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:14:09,441 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:14:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:14:14,785 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:14:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:15:09,442 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:15:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:15:14,785 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:15:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:16:09,446 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:16:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:16:14,797 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:16:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:17:09,425 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:17:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:17:11,804 - routing_monitor - INFO - \u2705 graphhopper: UP (68ms)
+2025-11-22 08:17:11,890 - routing_monitor - INFO - \u2705 valhalla: UP (65ms)
+2025-11-22 08:17:12,003 - routing_monitor - INFO - \u2705 osrm: UP (93ms)
+2025-11-22 08:17:12,005 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 08:17:14,794 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:17:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:18:09,441 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:18:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:18:14,792 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:18:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:19:09,435 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:19:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:19:14,789 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:19:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:20:09,435 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:20:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:20:14,780 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:20:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:21:09,433 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:21:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:21:14,784 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:21:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:22:09,425 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:22:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:22:12,077 - routing_monitor - INFO - \u2705 graphhopper: UP (65ms)
+2025-11-22 08:22:12,167 - routing_monitor - INFO - \u2705 valhalla: UP (69ms)
+2025-11-22 08:22:12,324 - routing_monitor - INFO - \u2705 osrm: UP (135ms)
+2025-11-22 08:22:12,326 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 08:22:14,784 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:22:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:23:09,436 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:23:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:23:14,784 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:23:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:24:09,428 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:24:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:24:14,786 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:24:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:25:09,442 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:25:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:25:14,778 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:25:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:26:09,441 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:26:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:26:14,791 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:26:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:27:09,435 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:27:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:27:12,399 - routing_monitor - INFO - \u2705 graphhopper: UP (64ms)
+2025-11-22 08:27:12,500 - routing_monitor - INFO - \u2705 valhalla: UP (79ms)
+2025-11-22 08:27:12,623 - routing_monitor - INFO - \u2705 osrm: UP (102ms)
+2025-11-22 08:27:12,625 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 08:27:14,789 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:27:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:28:09,434 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:28:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:28:14,776 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:28:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:29:09,430 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:29:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:29:14,778 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:29:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:30:09,425 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:30:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:30:15,086 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:30:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:31:09,120 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:31:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:31:15,083 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:31:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:32:09,119 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:32:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:32:12,727 - routing_monitor - INFO - \u2705 graphhopper: UP (84ms)
+2025-11-22 08:32:12,813 - routing_monitor - INFO - \u2705 valhalla: UP (64ms)
+2025-11-22 08:32:12,963 - routing_monitor - INFO - \u2705 osrm: UP (127ms)
+2025-11-22 08:32:12,964 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 08:32:15,096 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:32:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:33:09,124 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:33:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:33:15,080 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:33:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:34:09,118 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:34:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:34:15,088 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:34:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:35:09,118 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:35:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:35:15,085 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:35:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:36:09,113 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:36:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:36:15,099 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:36:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:37:09,119 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:37:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:37:13,046 - routing_monitor - INFO - \u2705 graphhopper: UP (74ms)
+2025-11-22 08:37:13,135 - routing_monitor - INFO - \u2705 valhalla: UP (68ms)
+2025-11-22 08:37:13,275 - routing_monitor - INFO - \u2705 osrm: UP (117ms)
+2025-11-22 08:37:13,277 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 08:37:15,104 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:37:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:38:09,109 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:38:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:38:15,099 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:38:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:39:09,121 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:39:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:39:15,085 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:39:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:40:09,118 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:40:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:40:15,085 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:40:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:41:09,117 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:41:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:41:15,072 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:41:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:42:09,119 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:42:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:42:13,351 - routing_monitor - INFO - \u2705 graphhopper: UP (66ms)
+2025-11-22 08:42:13,438 - routing_monitor - INFO - \u2705 valhalla: UP (65ms)
+2025-11-22 08:42:13,645 - routing_monitor - INFO - \u2705 osrm: UP (186ms)
+2025-11-22 08:42:13,647 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 08:42:15,087 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:42:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:43:09,120 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:43:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:43:15,074 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:43:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:44:09,106 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:44:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:44:15,084 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:44:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:45:09,118 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:45:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:45:15,085 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:45:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:46:09,106 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:46:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:46:15,089 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:46:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:47:09,102 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:47:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:47:13,741 - routing_monitor - INFO - \u2705 graphhopper: UP (76ms)
+2025-11-22 08:47:13,833 - routing_monitor - INFO - \u2705 valhalla: UP (71ms)
+2025-11-22 08:47:13,964 - routing_monitor - INFO - \u2705 osrm: UP (110ms)
+2025-11-22 08:47:13,965 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 08:47:15,085 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:47:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:48:09,114 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:48:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:48:15,084 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:48:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:49:09,415 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:49:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:49:14,769 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:49:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:50:09,424 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:50:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:50:14,774 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:50:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:51:09,416 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:51:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:51:14,771 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:51:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:52:09,418 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:52:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:52:14,056 - routing_monitor - INFO - \u2705 graphhopper: UP (84ms)
+2025-11-22 08:52:14,144 - routing_monitor - INFO - \u2705 valhalla: UP (66ms)
+2025-11-22 08:52:14,295 - routing_monitor - INFO - \u2705 osrm: UP (133ms)
+2025-11-22 08:52:14,297 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 08:52:14,774 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:52:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:53:09,412 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:53:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:53:14,777 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:53:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:54:09,414 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:54:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:54:14,769 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:54:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:55:09,415 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:55:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:55:14,769 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:55:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:56:09,412 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:56:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:56:14,764 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:56:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:57:09,410 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:57:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:57:14,371 - routing_monitor - INFO - \u2705 graphhopper: UP (66ms)
+2025-11-22 08:57:14,453 - routing_monitor - INFO - \u2705 valhalla: UP (62ms)
+2025-11-22 08:57:14,562 - routing_monitor - INFO - \u2705 osrm: UP (89ms)
+2025-11-22 08:57:14,563 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 08:57:14,774 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:57:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:58:09,420 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:58:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:58:14,760 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:58:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:59:09,410 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:59:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 08:59:14,773 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 08:59:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:00:09,414 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:00:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:00:14,770 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:00:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:01:09,412 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:01:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:01:14,767 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:01:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:02:09,411 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:02:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:02:14,660 - routing_monitor - INFO - \u2705 graphhopper: UP (88ms)
+2025-11-22 09:02:14,756 - routing_monitor - INFO - \u2705 valhalla: UP (75ms)
+2025-11-22 09:02:14,759 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:02:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:02:14,937 - routing_monitor - INFO - \u2705 osrm: UP (160ms)
+2025-11-22 09:02:14,938 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 09:03:09,415 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:03:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:03:14,770 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:03:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:04:09,415 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:04:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:04:14,768 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:04:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:05:09,412 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:05:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:05:14,770 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:05:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:06:09,414 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:06:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:06:14,769 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:06:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:07:09,410 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:07:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:07:14,760 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:07:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:07:15,025 - routing_monitor - INFO - \u2705 graphhopper: UP (79ms)
+2025-11-22 09:07:15,111 - routing_monitor - INFO - \u2705 valhalla: UP (66ms)
+2025-11-22 09:07:15,237 - routing_monitor - INFO - \u2705 osrm: UP (105ms)
+2025-11-22 09:07:15,238 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 09:08:09,411 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:08:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:08:14,763 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:08:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:09:09,417 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:09:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:09:14,762 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:09:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:10:09,418 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:10:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:10:14,767 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:10:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:11:09,412 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:11:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:11:14,768 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:11:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:12:09,415 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:12:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:12:14,753 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:12:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:12:15,309 - routing_monitor - INFO - \u2705 graphhopper: UP (63ms)
+2025-11-22 09:12:15,395 - routing_monitor - INFO - \u2705 valhalla: UP (67ms)
+2025-11-22 09:12:15,664 - routing_monitor - INFO - \u2705 osrm: UP (261ms)
+2025-11-22 09:12:15,665 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 09:13:09,412 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:13:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:13:14,759 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:13:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:14:09,411 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:14:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:14:14,758 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:14:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:15:09,412 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:15:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:15:14,753 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:15:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:16:09,400 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:16:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:16:14,755 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:16:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:17:09,395 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:17:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:17:14,752 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:17:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:17:15,755 - routing_monitor - INFO - \u2705 graphhopper: UP (67ms)
+2025-11-22 09:17:15,843 - routing_monitor - INFO - \u2705 valhalla: UP (67ms)
+2025-11-22 09:17:15,971 - routing_monitor - INFO - \u2705 osrm: UP (104ms)
+2025-11-22 09:17:15,973 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 09:18:09,404 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:18:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:18:14,752 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:18:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:19:09,403 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:19:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:19:14,752 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:19:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:20:09,403 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:20:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:20:14,763 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:20:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:21:09,397 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:21:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:21:14,751 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:21:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:22:09,402 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:22:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:22:14,753 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:22:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:22:16,056 - routing_monitor - INFO - \u2705 graphhopper: UP (75ms)
+2025-11-22 09:22:16,141 - routing_monitor - INFO - \u2705 valhalla: UP (65ms)
+2025-11-22 09:22:16,298 - routing_monitor - INFO - \u2705 osrm: UP (134ms)
+2025-11-22 09:22:16,299 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 09:23:09,393 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:23:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:23:14,755 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:23:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:24:09,409 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:24:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:24:14,752 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:24:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:25:09,394 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:25:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:25:14,750 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:25:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:26:09,410 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:26:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:26:14,749 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:26:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:27:09,404 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:27:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:27:14,754 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:27:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:27:16,389 - routing_monitor - INFO - \u2705 graphhopper: UP (82ms)
+2025-11-22 09:27:16,476 - routing_monitor - INFO - \u2705 valhalla: UP (65ms)
+2025-11-22 09:27:16,599 - routing_monitor - INFO - \u2705 osrm: UP (104ms)
+2025-11-22 09:27:16,601 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 09:28:09,396 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:28:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:28:14,753 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:28:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:29:09,398 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:29:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:29:14,752 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:29:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:30:09,404 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:30:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:30:14,752 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:30:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:31:09,410 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:31:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:31:14,753 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:31:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:32:09,394 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:32:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:32:14,753 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:32:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:32:16,679 - routing_monitor - INFO - \u2705 graphhopper: UP (71ms)
+2025-11-22 09:32:16,768 - routing_monitor - INFO - \u2705 valhalla: UP (69ms)
+2025-11-22 09:32:16,926 - routing_monitor - INFO - \u2705 osrm: UP (136ms)
+2025-11-22 09:32:16,927 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 09:33:09,394 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:33:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:33:14,757 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:33:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:34:09,408 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:34:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:34:14,758 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:34:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:35:09,392 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:35:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:35:14,745 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:35:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:36:09,401 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:36:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:36:14,747 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:36:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:37:09,395 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:37:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:37:14,754 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:37:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:37:17,009 - routing_monitor - INFO - \u2705 graphhopper: UP (64ms)
+2025-11-22 09:37:17,097 - routing_monitor - INFO - \u2705 valhalla: UP (67ms)
+2025-11-22 09:37:17,213 - routing_monitor - INFO - \u2705 osrm: UP (93ms)
+2025-11-22 09:37:17,214 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 09:38:09,397 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:38:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:38:14,745 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:38:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:39:09,396 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:39:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:39:14,753 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:39:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:40:09,390 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:40:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:40:14,753 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:40:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:41:09,390 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:41:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:41:14,742 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:41:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:42:09,396 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:42:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:42:14,752 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:42:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:42:17,307 - routing_monitor - INFO - \u2705 graphhopper: UP (75ms)
+2025-11-22 09:42:17,401 - routing_monitor - INFO - \u2705 valhalla: UP (73ms)
+2025-11-22 09:42:17,573 - routing_monitor - INFO - \u2705 osrm: UP (153ms)
+2025-11-22 09:42:17,575 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 09:43:09,378 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:43:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:43:14,753 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:43:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:44:09,393 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:44:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:44:14,752 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:44:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:45:09,393 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:45:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:45:14,753 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:45:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:46:09,395 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:46:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:46:14,750 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:46:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:47:09,391 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:47:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:47:14,736 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:47:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:47:17,660 - routing_monitor - INFO - \u2705 graphhopper: UP (66ms)
+2025-11-22 09:47:17,735 - routing_monitor - INFO - \u2705 valhalla: UP (54ms)
+2025-11-22 09:47:17,864 - routing_monitor - INFO - \u2705 osrm: UP (105ms)
+2025-11-22 09:47:17,866 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 09:48:09,378 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:48:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:48:14,737 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:48:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:49:09,390 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:49:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:49:14,747 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:49:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:50:09,393 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:50:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:50:15,055 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:50:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:51:09,085 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:51:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:51:15,058 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:51:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:52:09,085 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:52:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:52:15,055 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:52:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:52:17,953 - routing_monitor - INFO - \u2705 graphhopper: UP (80ms)
+2025-11-22 09:52:18,052 - routing_monitor - INFO - \u2705 valhalla: UP (78ms)
+2025-11-22 09:52:18,237 - routing_monitor - INFO - \u2705 osrm: UP (158ms)
+2025-11-22 09:52:18,239 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 09:53:09,085 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:53:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:53:15,051 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:53:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:54:09,072 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:54:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:54:15,052 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:54:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:55:09,081 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:55:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:55:15,061 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:55:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:56:09,077 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:56:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:56:15,050 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:56:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:57:09,072 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:57:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:57:15,052 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:57:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:57:18,327 - routing_monitor - INFO - \u2705 graphhopper: UP (81ms)
+2025-11-22 09:57:18,412 - routing_monitor - INFO - \u2705 valhalla: UP (65ms)
+2025-11-22 09:57:18,529 - routing_monitor - INFO - \u2705 osrm: UP (93ms)
+2025-11-22 09:57:18,531 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 09:58:09,084 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:58:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:58:15,039 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:58:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:59:09,073 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:59:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 09:59:15,048 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 09:59:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:00:09,071 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:00:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:00:15,043 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:00:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:01:09,070 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:01:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:01:15,048 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:01:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:02:09,074 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:02:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:02:15,055 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:02:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:02:18,607 - routing_monitor - INFO - \u2705 graphhopper: UP (67ms)
+2025-11-22 10:02:18,693 - routing_monitor - INFO - \u2705 valhalla: UP (65ms)
+2025-11-22 10:02:18,866 - routing_monitor - INFO - \u2705 osrm: UP (151ms)
+2025-11-22 10:02:18,867 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 10:03:09,074 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:03:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:03:15,054 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:03:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:04:09,069 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:04:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:04:15,052 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:04:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:05:09,071 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:05:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:05:15,062 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:05:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:06:09,069 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:06:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:06:15,038 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:06:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:07:09,066 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:07:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:07:15,040 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:07:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:07:18,949 - routing_monitor - INFO - \u2705 graphhopper: UP (74ms)
+2025-11-22 10:07:19,036 - routing_monitor - INFO - \u2705 valhalla: UP (65ms)
+2025-11-22 10:07:19,148 - routing_monitor - INFO - \u2705 osrm: UP (94ms)
+2025-11-22 10:07:19,149 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 10:08:09,072 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:08:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:08:15,052 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:08:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:09:09,080 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:09:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:09:15,040 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:09:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:10:09,082 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:10:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:10:15,043 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:10:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:11:09,068 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:11:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:11:15,034 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:11:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:12:09,069 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:12:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:12:15,053 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:12:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:12:19,233 - routing_monitor - INFO - \u2705 graphhopper: UP (76ms)
+2025-11-22 10:12:19,331 - routing_monitor - INFO - \u2705 valhalla: UP (76ms)
+2025-11-22 10:12:19,518 - routing_monitor - INFO - \u2705 osrm: UP (165ms)
+2025-11-22 10:12:19,519 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 10:13:09,067 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:13:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:13:15,038 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:13:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:14:09,072 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:14:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:14:15,040 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:14:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:15:09,070 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:15:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:15:15,053 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:15:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:16:09,071 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:16:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:16:15,049 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:16:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:17:09,079 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:17:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:17:15,044 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:17:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:17:19,605 - routing_monitor - INFO - \u2705 graphhopper: UP (67ms)
+2025-11-22 10:17:19,712 - routing_monitor - INFO - \u2705 valhalla: UP (84ms)
+2025-11-22 10:17:19,831 - routing_monitor - INFO - \u2705 osrm: UP (97ms)
+2025-11-22 10:17:19,833 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 10:18:09,068 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:18:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:18:15,041 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:18:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:19:09,383 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:19:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:19:14,726 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:19:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:20:09,378 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:20:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:20:14,736 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:20:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:21:09,382 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:21:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:21:14,733 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:21:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:22:09,388 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:22:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:22:14,730 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:22:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:22:19,930 - routing_monitor - INFO - \u2705 graphhopper: UP (76ms)
+2025-11-22 10:22:20,027 - routing_monitor - INFO - \u2705 valhalla: UP (74ms)
+2025-11-22 10:22:20,226 - routing_monitor - INFO - \u2705 osrm: UP (178ms)
+2025-11-22 10:22:20,228 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 10:23:09,379 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:23:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:23:14,736 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:23:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:24:09,380 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:24:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:24:14,721 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:24:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:25:09,379 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:25:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:25:14,727 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:25:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:26:09,386 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:26:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:26:14,720 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:26:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:27:09,379 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:27:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:27:14,720 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:27:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:27:20,308 - routing_monitor - INFO - \u2705 graphhopper: UP (72ms)
+2025-11-22 10:27:20,410 - routing_monitor - INFO - \u2705 valhalla: UP (81ms)
+2025-11-22 10:27:20,535 - routing_monitor - INFO - \u2705 osrm: UP (104ms)
+2025-11-22 10:27:20,537 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 10:28:09,370 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:28:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:28:14,733 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:28:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:29:09,363 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:29:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:29:14,721 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:29:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:30:09,382 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:30:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:30:14,721 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:30:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:31:09,381 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:31:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:31:14,720 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:31:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:32:09,367 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:32:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:32:14,721 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:32:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:32:20,623 - routing_monitor - INFO - \u2705 graphhopper: UP (77ms)
+2025-11-22 10:32:20,728 - routing_monitor - INFO - \u2705 valhalla: UP (84ms)
+2025-11-22 10:32:20,879 - routing_monitor - INFO - \u2705 osrm: UP (132ms)
+2025-11-22 10:32:20,881 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 10:33:09,363 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:33:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:33:14,731 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:33:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:34:09,368 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:34:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:34:15,043 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:34:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:35:09,366 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:35:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:35:15,045 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:35:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:36:09,374 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:36:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:36:15,027 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:36:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:37:09,362 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:37:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:37:15,034 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:37:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:37:20,985 - routing_monitor - INFO - \u2705 graphhopper: UP (85ms)
+2025-11-22 10:37:21,076 - routing_monitor - INFO - \u2705 valhalla: UP (70ms)
+2025-11-22 10:37:21,193 - routing_monitor - INFO - \u2705 osrm: UP (96ms)
+2025-11-22 10:37:21,195 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 10:38:09,366 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:38:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:38:15,034 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:38:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:39:09,368 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:39:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:39:15,034 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:39:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:40:09,362 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:40:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:40:15,025 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:40:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:41:09,366 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:41:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:41:15,033 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:41:15] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:42:09,364 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:42:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:42:14,720 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:42:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:42:21,290 - routing_monitor - INFO - \u2705 graphhopper: UP (83ms)
+2025-11-22 10:42:21,389 - routing_monitor - INFO - \u2705 valhalla: UP (78ms)
+2025-11-22 10:42:21,543 - routing_monitor - INFO - \u2705 osrm: UP (133ms)
+2025-11-22 10:42:21,544 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 10:43:09,370 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:43:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:43:14,720 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:43:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:44:09,366 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:44:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:44:14,719 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:44:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:45:09,371 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:09] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:45:10,211 - __main__ - INFO - [ROUTE] Received request: {'start': '53.5527719,-1.4827755', 'end': '53.505844,-1.1575225', 'routing_mode': 'auto', 'vehicle_type': 'petrol_diesel', 'enable_hazard_avoidance': True}
+2025-11-22 10:45:10,213 - __main__ - INFO - [ROUTE] Validation result: is_valid=True, error=None
+2025-11-22 10:45:10,214 - __main__ - INFO - [HAZARDS] enable_hazard_avoidance=True (type=<class 'bool'>)
+2025-11-22 10:45:10,261 - __main__ - INFO - [HAZARDS] Fetched hazards in 44ms: [('speed_camera', 89), ('traffic_light_camera', 89)]
+2025-11-22 10:45:10,495 - __main__ - INFO - [HAZARDS] Route scoring complete: total_penalty=46602s, hazard_count=32
+2025-11-22 10:45:10,647 - __main__ - INFO - [HAZARDS] Route scoring complete: total_penalty=9561s, hazard_count=6
+2025-11-22 10:45:10,821 - __main__ - INFO - [HAZARDS] Route scoring complete: total_penalty=9561s, hazard_count=6
+2025-11-22 10:45:10,977 - __main__ - INFO - [HAZARDS] Route scoring complete: total_penalty=6405s, hazard_count=4
+2025-11-22 10:45:11,060 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:11] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 10:45:11,397 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:11] "GET /favicon.ico HTTP/1.1" 404 -
+2025-11-22 10:45:11,636 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:11] "GET /favicon.ico HTTP/1.1" 404 -
+2025-11-22 10:45:14,721 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:14] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:45:40,744 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:40] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:40,745 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:40] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:40,773 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:40] "GET /api/favorites HTTP/1.1" 200 -
+2025-11-22 10:45:40,776 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:40] "POST /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:40,959 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:40] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:41,007 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:41,054 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/favorites HTTP/1.1" 200 -
+2025-11-22 10:45:41,076 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:41,273 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:41,317 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:41,382 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:41,432 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/favorites HTTP/1.1" 200 -
+2025-11-22 10:45:41,433 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:41,442 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "POST /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:41,580 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:41,628 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:41,689 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/favorites HTTP/1.1" 200 -
+2025-11-22 10:45:41,749 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:41,890 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:41,936 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:41] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:42,065 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:42] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:42,201 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:42] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:44,204 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:44] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:45:47,537 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:47] "GET / HTTP/1.1" 200 -
+2025-11-22 10:45:47,835 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:47] "GET /static/css/voyagr.css HTTP/1.1" 304 -
+2025-11-22 10:45:47,887 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:47] "GET / HTTP/1.1" 200 -
+2025-11-22 10:45:47,927 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:47] "GET /static/js/app.js HTTP/1.1" 304 -
+2025-11-22 10:45:47,927 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:47] "GET /static/js/voyagr-core.js HTTP/1.1" 304 -
+2025-11-22 10:45:47,960 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:47] "GET /static/js/voyagr-app.js HTTP/1.1" 304 -
+2025-11-22 10:45:48,034 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /static/css/voyagr.css HTTP/1.1" 304 -
+2025-11-22 10:45:48,222 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /static/js/voyagr-core.js HTTP/1.1" 304 -
+2025-11-22 10:45:48,238 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /static/js/voyagr-app.js HTTP/1.1" 304 -
+2025-11-22 10:45:48,279 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:48,303 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:48,304 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /api/favorites HTTP/1.1" 200 -
+2025-11-22 10:45:48,351 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "POST /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:48,531 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /static/js/app.js HTTP/1.1" 304 -
+2025-11-22 10:45:48,550 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:48,584 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:48,613 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:48,631 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /manifest.json HTTP/1.1" 200 -
+2025-11-22 10:45:48,837 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /manifest.json HTTP/1.1" 200 -
+2025-11-22 10:45:48,882 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:48,898 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /api/favorites HTTP/1.1" 200 -
+2025-11-22 10:45:48,898 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "POST /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:48,913 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:48,928 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:48] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:49,192 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:49] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:45:49,515 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:49] "GET / HTTP/1.1" 200 -
+2025-11-22 10:45:49,516 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:49] "GET /manifest.json HTTP/1.1" 200 -
+2025-11-22 10:45:50,568 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:50] "GET /static/css/voyagr.css HTTP/1.1" 304 -
+2025-11-22 10:45:50,877 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:50] "GET /static/js/voyagr-core.js HTTP/1.1" 304 -
+2025-11-22 10:45:50,878 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:50] "GET /static/js/app.js HTTP/1.1" 304 -
+2025-11-22 10:45:50,880 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:50] "GET /static/js/voyagr-app.js HTTP/1.1" 304 -
+2025-11-22 10:45:51,191 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "GET /static/js/app.js HTTP/1.1" 304 -
+2025-11-22 10:45:51,191 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "GET /static/js/voyagr-core.js HTTP/1.1" 304 -
+2025-11-22 10:45:51,196 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "GET /static/js/voyagr-app.js HTTP/1.1" 304 -
+2025-11-22 10:45:51,220 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:51,221 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:51,227 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "GET /api/favorites HTTP/1.1" 200 -
+2025-11-22 10:45:51,502 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "POST /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:51,528 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:51,529 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:51,559 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "GET /api/favorites HTTP/1.1" 200 -
+2025-11-22 10:45:51,562 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "POST /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:51,841 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:51,843 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:51] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:52,162 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:52] "GET /api/ml-predictions HTTP/1.1" 200 -
+2025-11-22 10:45:52,163 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:52] "GET /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:53,909 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:53] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:45:56,845 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:56] "POST /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:57,147 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:57] "POST /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:58,474 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:58] "POST /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:45:58,479 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:45:58] "POST /api/app-settings HTTP/1.1" 200 -
+2025-11-22 10:46:36,008 - __main__ - INFO - [ROUTE] Received request: {'start': '53.5527719,-1.4827755', 'end': '53.505844,-1.1575225', 'routing_mode': 'auto', 'vehicle_type': 'petrol_diesel', 'enable_hazard_avoidance': True}
+2025-11-22 10:46:36,009 - __main__ - INFO - [ROUTE] Validation result: is_valid=True, error=None
+2025-11-22 10:46:36,009 - __main__ - INFO - [HAZARDS] enable_hazard_avoidance=True (type=<class 'bool'>)
+2025-11-22 10:46:36,009 - __main__ - INFO - [CACHE] HIT: Route from (53.5527719,-1.4827755) to (53.505844,-1.1575225) with hazard_avoidance=True
+2025-11-22 10:46:36,014 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:46:36] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 10:46:36,324 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:46:36] "GET /favicon.ico HTTP/1.1" 404 -
+2025-11-22 10:46:36,600 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:46:36] "GET /favicon.ico HTTP/1.1" 404 -
+2025-11-22 10:46:51,722 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:46:51] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:47:21,634 - routing_monitor - INFO - \u2705 graphhopper: UP (66ms)
+2025-11-22 10:47:21,730 - routing_monitor - INFO - \u2705 valhalla: UP (77ms)
+2025-11-22 10:47:21,845 - routing_monitor - INFO - \u2705 osrm: UP (94ms)
+2025-11-22 10:47:21,847 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 10:47:52,022 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:47:52] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:48:10,398 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:48:10] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 10:48:15,307 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:48:15] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 10:48:32,606 - __main__ - INFO - [ROUTE] Received request: {'start_lat': 53.5527719, 'start_lon': -1.4827755, 'end_lat': 53.505844, 'end_lon': -1.1575225, 'vehicle_type': 'car', 'routing_mode': 'auto'}
+2025-11-22 10:48:32,606 - __main__ - INFO - [ROUTE] Validation result: is_valid=False, error=Missing start or end location
+2025-11-22 10:48:32,607 - __main__ - WARNING - [VALIDATION] Request validation failed: Missing start or end location
+2025-11-22 10:48:32,607 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:48:32] "POST /api/route HTTP/1.1" 400 -
+2025-11-22 10:48:52,026 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:48:52] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:48:59,434 - __main__ - INFO - [ROUTE] Received request: {'start': '53.5527719,-1.4827755', 'end': '53.505844,-1.1575225', 'vehicle_type': 'car', 'routing_mode': 'auto'}
+2025-11-22 10:48:59,434 - __main__ - INFO - [ROUTE] Validation result: is_valid=False, error=Invalid vehicle_type: car
+2025-11-22 10:48:59,434 - __main__ - WARNING - [VALIDATION] Request validation failed: Invalid vehicle_type: car
+2025-11-22 10:48:59,435 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:48:59] "POST /api/route HTTP/1.1" 400 -
+2025-11-22 10:49:15,295 - __main__ - INFO - [ROUTE] Received request: {'start': '53.5527719,-1.4827755', 'end': '53.505844,-1.1575225', 'vehicle_type': 'petrol_diesel', 'routing_mode': 'auto'}
+2025-11-22 10:49:15,295 - __main__ - INFO - [ROUTE] Validation result: is_valid=True, error=None
+2025-11-22 10:49:15,295 - __main__ - INFO - [HAZARDS] enable_hazard_avoidance=False (type=<class 'bool'>)
+2025-11-22 10:49:15,295 - __main__ - INFO - [HAZARDS] Hazard avoidance disabled - skipping hazard fetch
+2025-11-22 10:49:15,451 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:49:15] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 10:49:51,721 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:49:51] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:50:52,018 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:50:52] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:51:51,714 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:51:51] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:52:21,931 - routing_monitor - INFO - \u2705 graphhopper: UP (66ms)
+2025-11-22 10:52:22,033 - routing_monitor - INFO - \u2705 valhalla: UP (81ms)
+2025-11-22 10:52:22,188 - routing_monitor - INFO - \u2705 osrm: UP (135ms)
+2025-11-22 10:52:22,190 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 10:52:52,028 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:52:52] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:53:04,231 - __main__ - INFO - [ROUTE] Received request: {'start': '53.5527719,-1.4827755', 'end': '53.505844,-1.1575225', 'vehicle_type': 'petrol_diesel', 'routing_mode': 'auto'}
+2025-11-22 10:53:04,232 - __main__ - INFO - [ROUTE] Validation result: is_valid=True, error=None
+2025-11-22 10:53:04,232 - __main__ - INFO - [HAZARDS] enable_hazard_avoidance=False (type=<class 'bool'>)
+2025-11-22 10:53:04,232 - __main__ - INFO - [CACHE] HIT: Route from (53.5527719,-1.4827755) to (53.505844,-1.1575225) with hazard_avoidance=False
+2025-11-22 10:53:04,238 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:53:04] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 10:53:33,051 - __main__ - INFO - [ROUTE] Received request: {'start': '51.5074,-0.1278', 'end': '53.4808,-2.2426', 'vehicle_type': 'petrol_diesel', 'routing_mode': 'auto'}
+2025-11-22 10:53:33,051 - __main__ - INFO - [ROUTE] Validation result: is_valid=True, error=None
+2025-11-22 10:53:33,051 - __main__ - INFO - [HAZARDS] enable_hazard_avoidance=False (type=<class 'bool'>)
+2025-11-22 10:53:33,051 - __main__ - INFO - [HAZARDS] Hazard avoidance disabled - skipping hazard fetch
+2025-11-22 10:53:43,457 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:53:43] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 10:53:53,029 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:53:53] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:54:54,035 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:54:54] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:55:21,518 - __main__ - INFO - [ROUTE] Received request: {'start': '51.5074,-0.1278', 'end': '53.4808,-2.2426', 'vehicle_type': 'petrol_diesel', 'routing_mode': 'auto'}
+2025-11-22 10:55:21,519 - __main__ - INFO - [ROUTE] Validation result: is_valid=True, error=None
+2025-11-22 10:55:21,519 - __main__ - INFO - [HAZARDS] enable_hazard_avoidance=False (type=<class 'bool'>)
+2025-11-22 10:55:21,519 - __main__ - INFO - [CACHE] HIT: Route from (51.5074,-0.1278) to (53.4808,-2.2426) with hazard_avoidance=False
+2025-11-22 10:55:21,520 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:55:21] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 10:55:55,040 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:55:55] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:56:33,650 - __main__ - INFO - [ROUTE] Received request: {'start': '51.5074,-0.1278', 'end': '53.4808,-2.2426', 'vehicle_type': 'petrol_diesel', 'routing_mode': 'auto'}
+2025-11-22 10:56:33,659 - __main__ - INFO - [ROUTE] Validation result: is_valid=True, error=None
+2025-11-22 10:56:33,660 - __main__ - INFO - [HAZARDS] enable_hazard_avoidance=False (type=<class 'bool'>)
+2025-11-22 10:56:33,662 - __main__ - INFO - [CACHE] HIT: Route from (51.5074,-0.1278) to (53.4808,-2.2426) with hazard_avoidance=False
+2025-11-22 10:56:33,701 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:56:33] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 10:56:56,273 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:56:56] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:57:17,772 - __main__ - INFO - [ROUTE] Received request: {'start': '55.9533,-3.1883', 'end': '55.8642,-4.2518', 'vehicle_type': 'petrol_diesel', 'routing_mode': 'auto'}
+2025-11-22 10:57:17,774 - __main__ - INFO - [ROUTE] Validation result: is_valid=True, error=None
+2025-11-22 10:57:17,775 - __main__ - INFO - [HAZARDS] enable_hazard_avoidance=False (type=<class 'bool'>)
+2025-11-22 10:57:17,775 - __main__ - INFO - [HAZARDS] Hazard avoidance disabled - skipping hazard fetch
+2025-11-22 10:57:18,565 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:57:18] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 10:57:22,282 - routing_monitor - INFO - \u2705 graphhopper: UP (66ms)
+2025-11-22 10:57:22,355 - routing_monitor - INFO - \u2705 valhalla: UP (61ms)
+2025-11-22 10:57:22,461 - routing_monitor - INFO - \u2705 osrm: UP (97ms)
+2025-11-22 10:57:22,465 - routing_monitor - WARNING - \u26a0\ufe0f Active alerts: 4 unresolved
+2025-11-22 10:57:57,689 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:57:57] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:58:58,193 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:58:58] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 10:58:58,295 - __main__ - INFO - [ROUTE] Received request: {'start': '55.9533,-3.1883', 'end': '55.8642,-4.2518', 'vehicle_type': 'petrol_diesel', 'routing_mode': 'auto'}
+2025-11-22 10:58:58,296 - __main__ - INFO - [ROUTE] Validation result: is_valid=True, error=None
+2025-11-22 10:58:58,296 - __main__ - INFO - [HAZARDS] enable_hazard_avoidance=False (type=<class 'bool'>)
+2025-11-22 10:58:58,298 - __main__ - INFO - [CACHE] HIT: Route from (55.9533,-3.1883) to (55.8642,-4.2518) with hazard_avoidance=False
+2025-11-22 10:58:58,319 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:58:58] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 10:59:59,234 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 10:59:59] "GET /service-worker.js HTTP/1.1" 200 -
+2025-11-22 11:00:04,400 - __main__ - INFO - [ROUTE] Received request: {'start': '54.5973,-5.9301', 'end': '53.3498,-6.2603', 'vehicle_type': 'petrol_diesel', 'routing_mode': 'auto'}
+2025-11-22 11:00:04,401 - __main__ - INFO - [ROUTE] Validation result: is_valid=True, error=None
+2025-11-22 11:00:04,402 - __main__ - INFO - [HAZARDS] enable_hazard_avoidance=False (type=<class 'bool'>)
+2025-11-22 11:00:04,403 - __main__ - INFO - [HAZARDS] Hazard avoidance disabled - skipping hazard fetch
+2025-11-22 11:00:04,544 - __main__ - WARNING - [GraphHopper] Response body: {"message":"Cannot find point 1: 53.3498,-6.2603","hints":[{"message":"Cannot find point 1: 53.3498,-6.2603","details":"com.graphhopper.util.exceptions.PointNotFoundException","point_index":1}]}
+2025-11-22 11:00:05,172 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 11:00:05] "POST /api/route HTTP/1.1" 200 -
+2025-11-22 11:01:00,156 - werkzeug - INFO - 127.0.0.1 - - [22/Nov/2025 11:01:00] "GET /service-worker.js HTTP/1.1" 200 -
