@@ -436,8 +436,8 @@ function saveAllSettings() {
         routePreferences: {
             avoidHighways: document.getElementById('avoidHighways')?.checked || false,
             preferScenic: document.getElementById('preferScenic')?.checked || false,
-            avoidTolls: localStorage.getItem('pref_tolls') === 'true',
-            avoidCAZ: localStorage.getItem('pref_caz') === 'true',
+            avoidTolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
+            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
             preferQuiet: document.getElementById('preferQuiet')?.checked || false,
             avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
             routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
@@ -446,8 +446,8 @@ function saveAllSettings() {
 
         // Hazard avoidance
         hazardPreferences: {
-            avoidTolls: localStorage.getItem('pref_tolls') === 'true',
-            avoidCAZ: localStorage.getItem('pref_caz') === 'true',
+            avoidTolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
+            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
             avoidCameras: localStorage.getItem('pref_cameras') === 'true',
             variableSpeedAlerts: localStorage.getItem('pref_variableSpeedAlerts') === 'true'
         },
@@ -2062,8 +2062,8 @@ function saveRoutePreferences() {
     const preferences = {
         avoidHighways: document.getElementById('avoidHighways').checked,
         preferScenic: document.getElementById('preferScenic').checked,
-        avoidTolls: localStorage.getItem('pref_tolls') === 'true',
-        avoidCAZ: localStorage.getItem('pref_caz') === 'true',
+        avoidTolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
+        avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
         preferQuiet: document.getElementById('preferQuiet').checked,
         avoidUnpaved: document.getElementById('avoidUnpaved').checked,
         routeOptimization: document.getElementById('routeOptimization').value,
@@ -2120,8 +2120,8 @@ function getRoutePreferences() {
     return {
         avoidHighways: false,
         preferScenic: false,
-        avoidTolls: false,
-        avoidCAZ: false,
+        avoidTolls: true,  // Default: avoid tolls
+        avoidCAZ: true,    // Default: avoid Clean Air Zones
         preferQuiet: false,
         avoidUnpaved: false,
         routeOptimization: 'fastest',
@@ -3572,8 +3572,8 @@ async function manualTrafficUpdate() {
 function buildRouteRequest(startLat, startLon, destination) {
     const enableHazardAvoidance =
         localStorage.getItem('pref_cameras') === 'true' ||
-        localStorage.getItem('pref_tolls') === 'true' ||
-        localStorage.getItem('pref_caz') === 'true';
+        localStorage.getItem('pref_tolls') !== 'false' ||  // Default: true
+        localStorage.getItem('pref_caz') !== 'false';      // Default: true
 
     return {
         start: `${startLat},${startLon}`,
@@ -3588,8 +3588,8 @@ function buildRouteRequest(startLat, startLon, destination) {
         include_caz: localStorage.getItem('includeCAZ') !== 'false',
         enable_hazard_avoidance: enableHazardAvoidance,
         avoid_cameras: localStorage.getItem('pref_cameras') === 'true',
-        avoid_tolls: localStorage.getItem('pref_tolls') === 'true',
-        avoid_caz: localStorage.getItem('pref_caz') === 'true'
+        avoid_tolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
+        avoid_caz: localStorage.getItem('pref_caz') !== 'false'       // Default: true
     };
 }
 
@@ -4682,8 +4682,8 @@ async function selectParking(parking, destinationCoords) {
                 end: `${parking.lat},${parking.lon}`,
                 routing_mode: 'auto',
                 vehicle_type: currentVehicleType,
-                include_tolls: localStorage.getItem('pref_tolls') === 'true',
-                avoid_caz: localStorage.getItem('pref_caz') === 'true',
+                include_tolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
+                avoid_caz: localStorage.getItem('pref_caz') !== 'false',        // Default: true
                 enable_hazard_avoidance: enableHazardAvoidanceParking
             })
         });
@@ -7824,8 +7824,8 @@ function logReroutingEvent(startLat, startLon, destination, route, hazardCount) 
         },
         settings: {
             avoid_cameras: localStorage.getItem('pref_cameras') === 'true',
-            avoid_tolls: localStorage.getItem('pref_tolls') === 'true',
-            avoid_caz: localStorage.getItem('pref_caz') === 'true'
+            avoid_tolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
+            avoid_caz: localStorage.getItem('pref_caz') !== 'false'       // Default: true
         }
     };
 
@@ -9532,6 +9532,9 @@ function loadPreferences() {
         'variableSpeedAlerts': 'variableSpeedAlerts'
     };
 
+    // Preferences that default to TRUE (enabled) when not set
+    const defaultEnabledPrefs = ['tolls', 'caz'];
+
     const prefs = ['tolls', 'caz', 'cameras', 'variableSpeedAlerts'];
     prefs.forEach(pref => {
         const saved = localStorage.getItem('pref_' + pref);
@@ -9539,12 +9542,17 @@ function loadPreferences() {
         const button = document.getElementById(buttonId);
 
         if (button) {
-            if (saved === 'true') {
+            // For tolls and CAZ: default to enabled (true) if not set
+            // For others: default to disabled (false) if not set
+            const isDefaultEnabled = defaultEnabledPrefs.includes(pref);
+            const isEnabled = saved === null ? isDefaultEnabled : saved === 'true';
+
+            if (isEnabled) {
                 button.classList.add('active');
                 button.style.background = '#4CAF50';
                 button.style.borderColor = '#4CAF50';
                 button.style.color = 'white';
-                console.log('[Settings] Loaded preference:', pref, '= enabled');
+                console.log('[Settings] Loaded preference:', pref, '= enabled', saved === null ? '(default)' : '');
             } else {
                 button.classList.remove('active');
                 button.style.background = '#ddd';
