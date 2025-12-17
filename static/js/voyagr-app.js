@@ -2775,6 +2775,7 @@ async function calculateRoute() {
                         polyline: decodePolyline(route.geometry || '', 6),  // Valhalla precision 6
                         geometry: route.geometry,
                         hazards: route.hazards || [],
+                        maneuvers: route.maneuvers || [],  // FIXED: Include maneuvers for turn-by-turn navigation
                         source: routeSource  // Include routing engine source in each route
                     }));
                     console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}:`, routeOptions.map(r => r.name));
@@ -2792,6 +2793,7 @@ async function calculateRoute() {
                             hazard_count: 0,
                             polyline: routePath,
                             geometry: data.geometry,
+                            maneuvers: data.maneuvers || [],  // FIXED: Include maneuvers for turn-by-turn
                             source: data.source || 'Unknown'
                         }
                     ];
