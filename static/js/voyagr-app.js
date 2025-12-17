@@ -5716,49 +5716,53 @@ function calculateDriverViewCenter(lat, lon, heading, zoomLevel) {
         return [lat, lon]; // No offset when not navigating
     }
 
-    // Calculate offset distance based on zoom level
-    // Higher zoom = smaller offset, Lower zoom = larger offset
-    // This ensures the vehicle stays in the bottom third regardless of zoom
-    const mapHeight = map.getSize().y;
+    // Calculate a simple, fixed offset based on zoom level
+    // This moves the center ahead of the vehicle so it appears in bottom 1/3 of screen
+    //
+    // At different zoom levels, we need different offsets (in degrees):
+    // Zoom 18: ~0.0002 degrees (~22m)
+    // Zoom 16: ~0.0008 degrees (~90m)
+    // Zoom 14: ~0.003 degrees (~330m)
+    // Zoom 12: ~0.012 degrees (~1.3km)
 
-    // We want to move the center point UP so the vehicle appears at bottom 1/3
-    // Offset should be about 1/3 of the visible map height in the direction of travel
-    const offsetFraction = 0.25; // Move center 25% of map height ahead
+    // Simplified formula: offset = base_offset * 2^(16-zoom)
+    // Base offset at zoom 16 is about 0.0008 degrees latitude
+    const baseOffsetDegrees = 0.0008;
+    const zoomFactor = Math.pow(2, 16 - zoomLevel);
+    const offsetDegrees = baseOffsetDegrees * zoomFactor;
 
-    // Convert screen offset to degrees based on zoom level
-    // At zoom 16, approximately 0.001 degrees per 100 pixels
-    const degreesPerPixel = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoomLevel + 8);
-    const offsetMeters = mapHeight * offsetFraction * degreesPerPixel * 111000; // Convert to meters
+    // Determine the direction of travel (bearing)
+    let bearingRad = 0;  // Default to north
 
-    // If we have heading, offset in the direction of travel
-    // Otherwise, use route direction to next point
-    let bearingRad;
-    if (heading !== null && heading !== undefined && !isNaN(heading)) {
+    if (heading !== null && heading !== undefined && !isNaN(heading) && heading > 0) {
+        // Use GPS heading if available and valid
         bearingRad = heading * Math.PI / 180;
     } else if (routePolyline && routePolyline.length > 1) {
-        // Calculate bearing to next route point
-        const nextPointIdx = findClosestRoutePointIndex([lat, lon], 0) + 5;
-        if (nextPointIdx < routePolyline.length) {
-            const nextPoint = routePolyline[nextPointIdx];
-            bearingRad = Math.atan2(
-                nextPoint[1] - lon,
-                nextPoint[0] - lat
-            );
-        } else {
-            bearingRad = 0; // Default to north if can't determine
+        // Calculate bearing from current position to next route point
+        let closestIdx = 0;
+        let minDist = Infinity;
+        for (let i = 0; i < routePolyline.length; i++) {
+            const d = Math.abs(lat - routePolyline[i][0]) + Math.abs(lon - routePolyline[i][1]);
+            if (d < minDist) {
+                minDist = d;
+                closestIdx = i;
+            }
         }
-    } else {
-        return [lat, lon]; // No offset if we can't determine direction
+        // Look ahead a few points to get direction
+        const lookAhead = Math.min(closestIdx + 10, routePolyline.length - 1);
+        if (lookAhead > closestIdx) {
+            const nextPoint = routePolyline[lookAhead];
+            const dLat = nextPoint[0] - lat;
+            const dLon = nextPoint[1] - lon;
+            bearingRad = Math.atan2(dLon, dLat);  // atan2(x, y) for bearing from north
+        }
     }
 
-    // Calculate offset in degrees
-    // 1 degree latitude ≈ 111km, 1 degree longitude ≈ 111km * cos(lat)
-    const offsetDegreesLat = (offsetMeters / 111000);
-    const offsetDegreesLon = (offsetMeters / (111000 * Math.cos(lat * Math.PI / 180)));
-
     // Apply offset in the direction of travel
-    const offsetLat = lat + offsetDegreesLat * Math.cos(bearingRad);
-    const offsetLon = lon + offsetDegreesLon * Math.sin(bearingRad);
+    // 1 degree latitude ≈ 111km everywhere
+    // 1 degree longitude ≈ 111km * cos(lat)
+    const offsetLat = lat + offsetDegrees * Math.cos(bearingRad);
+    const offsetLon = lon + offsetDegrees * Math.sin(bearingRad) / Math.cos(lat * Math.PI / 180);
 
     return [offsetLat, offsetLon];
 }
@@ -7416,10 +7420,14 @@ function announceUpcomingTurn(turnInfo) {
 
     // Check each threshold independently
     for (const announcementDistance of announcementDistances) {
-        // Announce when: (1) within range, (2) not already announced, (3) haven't passed it yet
+        // Calculate buffer size - use 40% of threshold or max 50m, whichever is smaller
+        // This ensures small thresholds like 50m still have a reasonable window (50m -> 20m buffer)
+        const bufferSize = Math.min(50, announcementDistance * 0.4);
+
+        // Announce when: (1) within range, (2) not already announced, (3) haven't passed too far
         if (distance <= announcementDistance &&
             !thresholdSet.has(announcementDistance) &&
-            distance > announcementDistance - 50) {  // 50m buffer before threshold
+            distance > announcementDistance - bufferSize) {
 
             let message = '';
             const streetInfo = streetName ? ` toward ${streetName}` : '';
