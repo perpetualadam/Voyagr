@@ -4429,13 +4429,22 @@ HTML_TEMPLATE = '''
         <!-- Turn-by-Turn Navigation Display -->
         <div id="turnInfo" style="position: absolute; top: 80px; right: 20px; z-index: 100; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); display: none; min-width: 200px;"></div>
 
-        <!-- Speed Widget -->
-        <div id="speedWidget" style="position: absolute; top: 20px; right: 20px; z-index: 100; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); display: none; min-width: 140px; text-align: center;">
-            <div style="font-size: 12px; color: #666; margin-bottom: 8px;">Current Speed</div>
-            <div id="speedValue" style="font-size: 32px; font-weight: bold; color: #333; margin-bottom: 8px;">0 <span id="speedUnit">km/h</span></div>
-            <div style="font-size: 12px; color: #666; margin-bottom: 8px;">Speed Limit</div>
-            <div id="speedLimitValue" style="font-size: 20px; font-weight: bold; color: #4CAF50; margin-bottom: 8px;">-- <span id="speedLimitUnit">km/h</span></div>
-            <div id="speedWarning" style="font-size: 14px; color: #FF5722; font-weight: bold; display: none; margin-top: 8px;">⚠️ SPEEDING</div>
+        <!-- Speed Widget - Driver-friendly speedometer with speed limit display -->
+        <div id="speedWidget" style="position: absolute; top: 20px; right: 20px; z-index: 100; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); display: none; min-width: 100px; text-align: center; border-left: 4px solid #4CAF50;">
+            <!-- Current Speed (large, prominent) -->
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <div>
+                    <div id="speedValue" style="font-size: 42px; font-weight: bold; color: #333; line-height: 1;">0</div>
+                    <div id="speedUnit" style="font-size: 12px; color: #666; margin-top: -4px;">km/h</div>
+                </div>
+                <!-- Speed Limit Circle (like road signs) -->
+                <div id="speedLimitCircle" style="width: 50px; height: 50px; border-radius: 50%; border: 4px solid #E53935; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                    <div id="speedLimitValue" style="font-size: 18px; font-weight: bold; color: #333; line-height: 1;">--</div>
+                    <div id="speedLimitUnit" style="font-size: 8px; color: #666;">km/h</div>
+                </div>
+            </div>
+            <!-- Speeding Warning -->
+            <div id="speedWarning" style="font-size: 12px; color: #FF5722; font-weight: bold; display: none; margin-top: 6px; background: #FFEBEE; padding: 4px 8px; border-radius: 4px;">⚠️ OVER LIMIT</div>
         </div>
 
         <!-- Notification Container -->
@@ -6045,6 +6054,76 @@ def calculate_route_custom():
         update_custom_router_stats(0, False)
         return jsonify({'success': False, 'error': str(e)}), 500
 
+
+def get_traffic_duration_multiplier(lat: float, lon: float) -> tuple:
+    """
+    Get traffic-based duration multiplier for more accurate ETAs.
+    Returns (multiplier, traffic_level) tuple.
+
+    Valhalla uses historical average speeds which often underestimate travel time
+    during peak hours. This function queries real-time traffic to adjust the ETA.
+    """
+    try:
+        tomtom_api_key = os.getenv('TOMTOM_API_KEY', '')
+        if not tomtom_api_key:
+            # No API key - use time-of-day based estimation
+            hour = datetime.now().hour
+            day_of_week = datetime.now().weekday()
+
+            # Peak hours: 7-9am and 4-7pm on weekdays
+            is_weekday = day_of_week < 5
+            is_morning_peak = 7 <= hour <= 9
+            is_evening_peak = 16 <= hour <= 19
+
+            if is_weekday and (is_morning_peak or is_evening_peak):
+                return (1.35, 'Peak Hours')  # 35% longer during rush hour
+            elif is_weekday and 9 < hour < 16:
+                return (1.15, 'Daytime')  # 15% longer during day
+            else:
+                return (1.0, 'Off-Peak')  # No adjustment
+
+        # Query TomTom Traffic Flow API
+        url = f"https://api.tomtom.com/traffic/services/4/flowSegmentData/relative0/10/json"
+        params = {
+            'key': tomtom_api_key,
+            'point': f"{lat},{lon}",
+            'unit': 'KMPH'
+        }
+
+        response = requests.get(url, params=params, timeout=3)
+        if response.status_code == 200:
+            data = response.json()
+            flow_data = data.get('flowSegmentData', {})
+            current_speed = flow_data.get('currentSpeed', 50)
+            free_flow_speed = flow_data.get('freeFlowSpeed', 50)
+
+            if free_flow_speed > 0 and current_speed > 0:
+                # Calculate multiplier: if current is 50% of free flow, multiply by 2
+                multiplier = min(free_flow_speed / current_speed, 2.0)  # Cap at 2x
+
+                # Determine traffic level
+                ratio = current_speed / free_flow_speed
+                if ratio >= 0.9:
+                    traffic_level = 'Free Flow'
+                elif ratio >= 0.7:
+                    traffic_level = 'Light Traffic'
+                    multiplier = max(multiplier, 1.1)  # At least 10% increase
+                elif ratio >= 0.5:
+                    traffic_level = 'Moderate Traffic'
+                    multiplier = max(multiplier, 1.25)  # At least 25% increase
+                else:
+                    traffic_level = 'Heavy Traffic'
+                    multiplier = max(multiplier, 1.5)  # At least 50% increase
+
+                logger.info(f"[TRAFFIC] Multiplier: {multiplier:.2f}x ({traffic_level}), speeds: {current_speed}/{free_flow_speed} km/h")
+                return (multiplier, traffic_level)
+
+        return (1.0, 'Unknown')
+    except Exception as e:
+        logger.warning(f"[TRAFFIC] Failed to get traffic multiplier: {e}")
+        return (1.0, 'Unknown')
+
+
 @app.route('/api/route', methods=['POST'])
 @rate_limit(route_limiter)
 def calculate_route():
@@ -6682,7 +6761,7 @@ def calculate_route():
                     distance = route_data['trip']['summary']['length']
                     duration_seconds = route_data['trip']['summary']['time']
                     distance_km = distance  # Already in km, don't divide by 1000
-                    time_minutes = duration_seconds / 60
+                    base_time_minutes = duration_seconds / 60
 
                     # Extract route geometry
                     route_geometry = None
@@ -6691,6 +6770,14 @@ def calculate_route():
                             if 'shape' in leg:
                                 route_geometry = leg['shape']
                                 break
+
+                    # ================================================================
+                    # TRAFFIC-ADJUSTED ETA: Apply real-time traffic multiplier
+                    # Valhalla uses historical averages which underestimate peak times
+                    # ================================================================
+                    traffic_multiplier, traffic_level = get_traffic_duration_multiplier(start_lat, start_lon)
+                    time_minutes = base_time_minutes * traffic_multiplier
+                    logger.info(f"[ETA] Base: {base_time_minutes:.0f}min, Traffic: {traffic_level} ({traffic_multiplier:.2f}x), Adjusted: {time_minutes:.0f}min")
 
                     # ================================================================
                     # PHASE 3 OPTIMIZATION: Use cost calculator with route coordinates
@@ -6725,10 +6812,15 @@ def calculate_route():
                                 for maneuver in leg['maneuvers']:
                                     maneuvers.append({
                                         'instruction': maneuver.get('instruction', ''),
+                                        'verbal_pre_transition_instruction': maneuver.get('verbal_pre_transition_instruction', ''),
                                         'distance': maneuver.get('length', 0),  # km
                                         'time': maneuver.get('time', 0),  # seconds
                                         'type': maneuver.get('type', 0),
-                                        'street_name': maneuver.get('street_names', [''])[0] if maneuver.get('street_names') else ''
+                                        'street_name': maneuver.get('street_names', [''])[0] if maneuver.get('street_names') else '',
+                                        'begin_street_names': maneuver.get('begin_street_names', []),
+                                        # Shape indices for accurate position on route polyline
+                                        'begin_shape_index': maneuver.get('begin_shape_index', 0),
+                                        'end_shape_index': maneuver.get('end_shape_index', 0)
                                     })
                     logger.info(f"[VALHALLA] Extracted {len(maneuvers)} maneuvers from route")
 
@@ -6737,6 +6829,9 @@ def calculate_route():
                         'name': 'Fastest',
                         'distance_km': round(distance_km, 2),
                         'duration_minutes': round(time_minutes, 0),
+                        'base_duration_minutes': round(base_time_minutes, 0),  # Original Valhalla estimate
+                        'traffic_multiplier': round(traffic_multiplier, 2),
+                        'traffic_level': traffic_level,
                         'fuel_cost': round(fuel_cost, 2),
                         'toll_cost': round(toll_cost, 2),
                         'caz_cost': round(caz_cost, 2),
@@ -6756,7 +6851,9 @@ def calculate_route():
                                 alt_duration_seconds = alt_route['trip']['summary']['time']
                                 # NOTE: Valhalla returns distance in kilometers, not meters!
                                 alt_distance_km = alt_distance  # Already in km, don't divide by 1000
-                                alt_time_minutes = alt_duration_seconds / 60
+                                alt_base_time_minutes = alt_duration_seconds / 60
+                                # Apply same traffic multiplier to alternative routes
+                                alt_time_minutes = alt_base_time_minutes * traffic_multiplier
 
                                 # Extract geometry
                                 alt_geometry = None

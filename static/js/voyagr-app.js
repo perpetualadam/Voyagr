@@ -5029,8 +5029,8 @@ function updateLaneGuidance(lat, lon, heading, maneuver) {
 
 // ===== PHASE 2 FEATURES: SPEED WARNINGS =====
 
-// Speed widget variables
-let speedWidgetEnabled = false;
+// Speed widget variables - default to enabled for safety awareness
+let speedWidgetEnabled = localStorage.getItem('speedWidgetEnabled') !== 'false';  // Default true
 let currentSpeedMph = 0;
 let currentSpeedLimitMph = 0;
 let speedLimitThreshold = 3; // mph over limit to trigger warning
@@ -5095,8 +5095,8 @@ function updateSpeedWidget(speedMph, speedLimitMph = null) {
         console.log('[Speed Widget] No speed limit available');
     }
 
-    // Show widget if tracking is active
-    if (isTrackingActive) {
+    // Show widget if tracking is active OR navigation is in progress
+    if ((isTrackingActive || routeInProgress) && speedWidgetEnabled) {
         widget.style.display = 'block';
     }
 }
@@ -5347,14 +5347,29 @@ function detectUpcomingTurn(userLat, userLon) {
         return null;
     }
 
+    // Find user's current position on the route polyline
+    let userRouteIndex = 0;
+    let minDistToRoute = Infinity;
+    for (let i = 0; i < routePolyline.length; i++) {
+        const point = routePolyline[i];
+        const dist = calculateHaversineDistance(userLat, userLon, point[0], point[1]);
+        if (dist < minDistToRoute) {
+            minDistToRoute = dist;
+            userRouteIndex = i;
+        }
+    }
+
     // If we have maneuvers from Valhalla, use them for accurate turn instructions
     if (currentRouteSteps && currentRouteSteps.length > 0) {
-        // Find the next ACTUAL turn maneuver (skip straight/continue)
-        let accumulatedDistance = 0;
-
-        for (let i = currentStepIndex; i < currentRouteSteps.length; i++) {
+        // Find the next ACTUAL turn maneuver ahead of user's position
+        for (let i = 0; i < currentRouteSteps.length; i++) {
             const maneuver = currentRouteSteps[i];
-            const maneuverDistance = (maneuver.distance || 0) * 1000; // Convert km to meters
+            const maneuverShapeIndex = maneuver.begin_shape_index || 0;
+
+            // Skip maneuvers that are behind the user
+            if (maneuverShapeIndex < userRouteIndex - 5) {
+                continue;
+            }
 
             // Map Valhalla maneuver types to our direction system
             const type = maneuver.type || 0;
@@ -5379,14 +5394,29 @@ function detectUpcomingTurn(userLat, userLon) {
             else if (type === 24) direction = 'merge';  // Merge
             else if (type === 25 || type === 26) direction = 'roundabout';  // Roundabout
 
-            // Calculate distance to this maneuver (accumulated distance to start of step)
-            const distanceToManeuver = accumulatedDistance;
+            // Skip non-turn maneuvers (straight, continue, etc.)
+            if (direction === null) continue;
 
-            // Only return actual turns (not straight/continue), within 600m
-            if (direction !== null && distanceToManeuver <= 600) {
+            // Calculate actual distance from user to maneuver point along the route
+            let distanceToManeuver = 0;
+            const targetIndex = Math.min(maneuverShapeIndex, routePolyline.length - 1);
+
+            // Sum up distance along route from user position to maneuver
+            for (let j = userRouteIndex; j < targetIndex; j++) {
+                distanceToManeuver += calculateHaversineDistance(
+                    routePolyline[j][0], routePolyline[j][1],
+                    routePolyline[j + 1][0], routePolyline[j + 1][1]
+                );
+            }
+
+            // For exits, extend the detection range to 2.5km for early announcements
+            const maxDetectionDistance = direction === 'exit' ? 2500 : 600;
+
+            // Only return turns within detection range
+            if (distanceToManeuver <= maxDetectionDistance) {
                 currentStepIndex = i;  // Update current step
 
-                console.log(`[Turn] Detected: ${direction} in ${distanceToManeuver.toFixed(0)}m (type=${type}, step=${i})`);
+                console.log(`[Turn] Detected: ${direction} in ${distanceToManeuver.toFixed(0)}m (type=${type}, step=${i}, shapeIdx=${maneuverShapeIndex})`);
 
                 return {
                     distance: distanceToManeuver,
@@ -5396,11 +5426,8 @@ function detectUpcomingTurn(userLat, userLon) {
                 };
             }
 
-            // Accumulate distance for next iteration
-            accumulatedDistance += maneuverDistance;
-
-            // Stop searching if beyond 1km
-            if (accumulatedDistance > 1000) break;
+            // Stop searching if this maneuver is too far ahead
+            if (distanceToManeuver > maxDetectionDistance) break;
         }
     }
 
@@ -5673,6 +5700,67 @@ function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urb
     }
 
     return zoomLevel;
+}
+
+/**
+ * Calculate offset center point for driver's view perspective
+ * Moves the vehicle to the bottom third of the screen with more road ahead visible
+ * @param {number} lat - Current latitude
+ * @param {number} lon - Current longitude
+ * @param {number} heading - Current heading in degrees (0 = North, 90 = East)
+ * @param {number} zoomLevel - Current zoom level
+ * @returns {Array} [offsetLat, offsetLon] - Offset center coordinates
+ */
+function calculateDriverViewCenter(lat, lon, heading, zoomLevel) {
+    if (!map || !routeInProgress) {
+        return [lat, lon]; // No offset when not navigating
+    }
+
+    // Calculate offset distance based on zoom level
+    // Higher zoom = smaller offset, Lower zoom = larger offset
+    // This ensures the vehicle stays in the bottom third regardless of zoom
+    const mapHeight = map.getSize().y;
+
+    // We want to move the center point UP so the vehicle appears at bottom 1/3
+    // Offset should be about 1/3 of the visible map height in the direction of travel
+    const offsetFraction = 0.25; // Move center 25% of map height ahead
+
+    // Convert screen offset to degrees based on zoom level
+    // At zoom 16, approximately 0.001 degrees per 100 pixels
+    const degreesPerPixel = 156543.03392 * Math.cos(lat * Math.PI / 180) / Math.pow(2, zoomLevel + 8);
+    const offsetMeters = mapHeight * offsetFraction * degreesPerPixel * 111000; // Convert to meters
+
+    // If we have heading, offset in the direction of travel
+    // Otherwise, use route direction to next point
+    let bearingRad;
+    if (heading !== null && heading !== undefined && !isNaN(heading)) {
+        bearingRad = heading * Math.PI / 180;
+    } else if (routePolyline && routePolyline.length > 1) {
+        // Calculate bearing to next route point
+        const nextPointIdx = findClosestRoutePointIndex([lat, lon], 0) + 5;
+        if (nextPointIdx < routePolyline.length) {
+            const nextPoint = routePolyline[nextPointIdx];
+            bearingRad = Math.atan2(
+                nextPoint[1] - lon,
+                nextPoint[0] - lat
+            );
+        } else {
+            bearingRad = 0; // Default to north if can't determine
+        }
+    } else {
+        return [lat, lon]; // No offset if we can't determine direction
+    }
+
+    // Calculate offset in degrees
+    // 1 degree latitude ≈ 111km, 1 degree longitude ≈ 111km * cos(lat)
+    const offsetDegreesLat = (offsetMeters / 111000);
+    const offsetDegreesLon = (offsetMeters / (111000 * Math.cos(lat * Math.PI / 180)));
+
+    // Apply offset in the direction of travel
+    const offsetLat = lat + offsetDegreesLat * Math.cos(bearingRad);
+    const offsetLon = lon + offsetDegreesLon * Math.sin(bearingRad);
+
+    return [offsetLat, offsetLon];
 }
 /**
  * applySmartZoomWithAnimation function
@@ -6937,14 +7025,18 @@ function startGPSTracking() {
                 const speedMph = speed ? (speed * 2.237) : 0;
                 const smartZoom = calculateSmartZoom(speedMph, null, 'motorway');
 
-                // Smooth animation to follow vehicle
-                map.flyTo([lat, lon], smartZoom, {
+                // Calculate driver's view offset center (vehicle in bottom third)
+                // This shows more of the road ahead like Google Maps/Waze
+                const [offsetLat, offsetLon] = calculateDriverViewCenter(lat, lon, heading, smartZoom);
+
+                // Smooth animation to follow vehicle with driver's perspective
+                map.flyTo([offsetLat, offsetLon], smartZoom, {
                     duration: 0.5,
                     easeLinearity: 0.25,
                     noMoveStart: false
                 });
 
-                console.log(`[Zoom & Follow] Following vehicle at zoom ${smartZoom}, speed ${speedMph.toFixed(1)} mph`);
+                console.log(`[Zoom & Follow] Driver view: vehicle at bottom, zoom ${smartZoom}, speed ${speedMph.toFixed(1)} mph`);
             } else if (!zoomAndFollowEnabled && !map._userPanned) {
                 // If zoom and follow is disabled but map hasn't been manually panned, still center on user
                 map.flyTo([lat, lon], 16, {
@@ -7058,6 +7150,10 @@ function stopGPSTracking() {
 // Turn announcement variables
 let announcedTurnThresholds = new Set();  // FIXED: Track each threshold independently
 const TURN_ANNOUNCEMENT_DISTANCES = [500, 200, 100, 50]; // meters
+
+// Motorway/Highway exit announcement distances (much earlier warnings at speed)
+const EXIT_ANNOUNCEMENT_DISTANCES = [2000, 800, 200, 100]; // meters (2km, 800m, 200m, 100m exit now)
+let announcedExitThresholds = new Set();  // Track exit announcements separately
 
 // Distance-to-destination announcement variables
 let lastDestinationAnnouncementDistance = Infinity;
@@ -7311,37 +7407,77 @@ function announceUpcomingTurn(turnInfo) {
     const direction = turnInfo.direction || 'straight';
     const directionText = getTurnDirectionText(direction);
     const streetName = turnInfo.streetName || '';
+    const isExit = direction === 'exit';  // Motorway/highway exit needs earlier announcements
 
-    // FIXED: Check each threshold independently using Set
-    // This ensures all thresholds are announced (500m, 200m, 100m, 50m)
-    for (const announcementDistance of TURN_ANNOUNCEMENT_DISTANCES) {
+    // Use different announcement distances for exits (earlier warnings at highway speeds)
+    const announcementDistances = isExit ? EXIT_ANNOUNCEMENT_DISTANCES : TURN_ANNOUNCEMENT_DISTANCES;
+    const thresholdSet = isExit ? announcedExitThresholds : announcedTurnThresholds;
+    const resetDistance = isExit ? 2500 : 600;  // Reset when past announcement zone
+
+    // Check each threshold independently
+    for (const announcementDistance of announcementDistances) {
         // Announce when: (1) within range, (2) not already announced, (3) haven't passed it yet
         if (distance <= announcementDistance &&
-            !announcedTurnThresholds.has(announcementDistance) &&
+            !thresholdSet.has(announcementDistance) &&
             distance > announcementDistance - 50) {  // 50m buffer before threshold
 
             let message = '';
-            const streetInfo = streetName ? ` onto ${streetName}` : '';
+            const streetInfo = streetName ? ` toward ${streetName}` : '';
 
-            if (announcementDistance === 500) {
-                message = `In 500 meters, ${directionText}${streetInfo}`;
-            } else if (announcementDistance === 200) {
-                message = `In 200 meters, ${directionText}${streetInfo}`;
-            } else if (announcementDistance === 100) {
-                message = `In 100 meters, ${directionText}${streetInfo}`;
-            } else if (announcementDistance === 50) {
-                message = `${directionText}${streetInfo}`;
+            if (isExit) {
+                // Motorway exit announcements - more advance warning
+                if (announcementDistance === 2000) {
+                    // Convert to user's preferred units
+                    if (distanceUnit === 'mi') {
+                        message = `In about 1 mile, take the exit${streetInfo}`;
+                    } else {
+                        message = `In 2 kilometers, take the exit${streetInfo}`;
+                    }
+                } else if (announcementDistance === 800) {
+                    if (distanceUnit === 'mi') {
+                        message = `In half a mile, take the exit${streetInfo}`;
+                    } else {
+                        message = `In 800 meters, prepare to exit${streetInfo}`;
+                    }
+                } else if (announcementDistance === 200) {
+                    if (distanceUnit === 'mi') {
+                        message = `Exit ahead${streetInfo}`;
+                    } else {
+                        message = `In 200 meters, exit${streetInfo}`;
+                    }
+                } else if (announcementDistance === 100) {
+                    message = `Exit now${streetInfo}`;
+                }
+            } else {
+                // Standard turn announcements
+                const streetOnto = streetName ? ` onto ${streetName}` : '';
+
+                if (announcementDistance === 500) {
+                    message = `In 500 meters, ${directionText}${streetOnto}`;
+                } else if (announcementDistance === 200) {
+                    message = `In 200 meters, ${directionText}${streetOnto}`;
+                } else if (announcementDistance === 100) {
+                    message = `In 100 meters, ${directionText}${streetOnto}`;
+                } else if (announcementDistance === 50) {
+                    message = `${directionText}${streetOnto}`;
+                }
             }
 
-            console.log(`[Voice] Announcing turn: ${message} (distance: ${distance.toFixed(0)}m, direction: ${direction})`);
-            speakMessage(message, 'high');  // High priority - bypass throttle for turns
-            announcedTurnThresholds.add(announcementDistance);
+            if (message) {
+                console.log(`[Voice] Announcing ${isExit ? 'exit' : 'turn'}: ${message} (distance: ${distance.toFixed(0)}m)`);
+                speakMessage(message, 'high');  // High priority - bypass throttle
+                thresholdSet.add(announcementDistance);
+            }
         }
     }
 
-    // FIXED: Reset when turn is completely passed
-    if (distance > 600) {
-        announcedTurnThresholds.clear();
+    // Reset when turn/exit is completely passed
+    if (distance > resetDistance) {
+        if (isExit) {
+            announcedExitThresholds.clear();
+        } else {
+            announcedTurnThresholds.clear();
+        }
     }
 }
 
@@ -8842,6 +8978,14 @@ function startTurnByTurnNavigation(routeData) {
         journeyOverviewBtn.style.display = 'block';
     }
 
+    // ===== SHOW SPEED WIDGET during navigation =====
+    // Speed widget shows current GPS speed and road speed limit for safety
+    const speedWidget = document.getElementById('speedWidget');
+    if (speedWidget && speedWidgetEnabled) {
+        speedWidget.style.display = 'block';
+        console.log('[Speed Widget] Enabled for navigation');
+    }
+
     sendNotification('Navigation Started', 'Turn-by-turn guidance activated', 'success');
     speakMessage('Navigation started. Follow the route.');
     showStatus('🧭 Turn-by-turn navigation active', 'success');
@@ -8894,6 +9038,12 @@ function stopTurnByTurnNavigation() {
         journeyOverviewBtn.style.display = 'none';
     }
     journeyOverviewActive = false;
+
+    // ===== HIDE SPEED WIDGET =====
+    const speedWidget = document.getElementById('speedWidget');
+    if (speedWidget) {
+        speedWidget.style.display = 'none';
+    }
     savedMapState = null;
 
     // ===== PHASE 2: Apply pending PWA update if available =====
