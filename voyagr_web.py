@@ -3443,9 +3443,9 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20251217f"></script>
-    <script src="/static/js/voyagr-app.js?v=20251217f"></script>
-    <script src="/static/js/app.js?v=20251217f"></script>
+    <script src="/static/js/voyagr-core.js?v=20251217g"></script>
+    <script src="/static/js/voyagr-app.js?v=20251217g"></script>
+    <script src="/static/js/app.js?v=20251217g"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -4426,8 +4426,34 @@ HTML_TEMPLATE = '''
             </div>
         </div>
 
-        <!-- Turn-by-Turn Navigation Display -->
-        <div id="turnInfo" style="position: absolute; top: 80px; right: 20px; z-index: 100; background: white; padding: 15px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.2); display: none; min-width: 200px;"></div>
+        <!-- Turn-by-Turn Navigation Display Widget -->
+        <div id="turnInstructionWidget" class="turn-instruction-widget" style="display: none;">
+            <!-- Next Turn Display (Always Visible When Navigating) -->
+            <div id="nextTurnDisplay" class="next-turn-display" onclick="toggleInstructionsList()">
+                <div class="turn-icon-container">
+                    <span id="nextTurnIcon" class="turn-icon">↑</span>
+                </div>
+                <div class="turn-info-container">
+                    <div id="nextTurnDistance" class="turn-distance">--</div>
+                    <div id="nextTurnInstruction" class="turn-instruction">Calculating route...</div>
+                    <div id="nextTurnStreet" class="turn-street"></div>
+                </div>
+                <div class="expand-indicator">
+                    <span id="expandIcon">▼</span>
+                </div>
+            </div>
+
+            <!-- Expandable Full Instructions Panel -->
+            <div id="instructionsPanel" class="instructions-panel" style="display: none;">
+                <div class="instructions-header">
+                    <span>📋 All Instructions</span>
+                    <span id="instructionsCount" class="instructions-count">0 steps</span>
+                </div>
+                <div id="instructionsList" class="instructions-list">
+                    <!-- Instructions will be populated dynamically -->
+                </div>
+            </div>
+        </div>
 
         <!-- Speed Widget - Driver-friendly speedometer with speed limit display -->
         <div id="speedWidget" style="position: absolute; top: 20px; right: 20px; z-index: 100; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); display: none; min-width: 100px; text-align: center; border-left: 4px solid #4CAF50;">

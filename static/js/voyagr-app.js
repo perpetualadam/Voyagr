@@ -6474,6 +6474,328 @@ let currentStepIndex = 0;
 let nextManeuverDistance = 0;
 let routePolyline = null;
 
+// ===== TURN INSTRUCTION WIDGET =====
+let instructionsPanelExpanded = false;
+
+/**
+ * Toggle the instructions panel expand/collapse state
+ */
+function toggleInstructionsList() {
+    const panel = document.getElementById('instructionsPanel');
+    const expandIcon = document.getElementById('expandIcon');
+    const expandIndicator = document.querySelector('.expand-indicator');
+
+    if (!panel) return;
+
+    instructionsPanelExpanded = !instructionsPanelExpanded;
+
+    if (instructionsPanelExpanded) {
+        panel.style.display = 'block';
+        expandIndicator?.classList.add('expanded');
+        expandIcon.textContent = '▲';
+        populateInstructionsList();
+    } else {
+        panel.style.display = 'none';
+        expandIndicator?.classList.remove('expanded');
+        expandIcon.textContent = '▼';
+    }
+
+    console.log('[Turn Widget] Instructions panel:', instructionsPanelExpanded ? 'expanded' : 'collapsed');
+}
+
+/**
+ * Show the turn instruction widget
+ */
+function showTurnInstructionWidget() {
+    const widget = document.getElementById('turnInstructionWidget');
+    if (widget) {
+        widget.style.display = 'block';
+        console.log('[Turn Widget] Displayed');
+    }
+}
+
+/**
+ * Hide the turn instruction widget
+ */
+function hideTurnInstructionWidget() {
+    const widget = document.getElementById('turnInstructionWidget');
+    if (widget) {
+        widget.style.display = 'none';
+        instructionsPanelExpanded = false;
+        const panel = document.getElementById('instructionsPanel');
+        if (panel) panel.style.display = 'none';
+        console.log('[Turn Widget] Hidden');
+    }
+}
+
+/**
+ * Get turn icon based on maneuver type
+ * @param {number} type - Valhalla maneuver type
+ * @returns {string} Unicode arrow or icon
+ */
+function getTurnIcon(type) {
+    // Valhalla maneuver types: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/
+    const iconMap = {
+        0: '↑',    // None/Continue
+        1: '↑',    // Start
+        2: '↑',    // Start Right
+        3: '↑',    // Start Left
+        4: '🏁',   // Destination
+        5: '🏁',   // Destination Right
+        6: '🏁',   // Destination Left
+        7: '↑',    // Becomes
+        8: '↑',    // Continue
+        9: '↱',    // Slight Right
+        10: '→',   // Right
+        11: '↳',   // Sharp Right
+        12: '↩',   // U-turn Right
+        13: '↩',   // U-turn Left
+        14: '↲',   // Sharp Left
+        15: '←',   // Left
+        16: '↰',   // Slight Left
+        17: '↑',   // Ramp Straight
+        18: '↱',   // Ramp Right
+        19: '↰',   // Ramp Left
+        20: '↗',   // Exit Right
+        21: '↖',   // Exit Left
+        22: '↑',   // Stay Straight
+        23: '↱',   // Stay Right
+        24: '↰',   // Stay Left
+        25: '⚙️',   // Merge
+        26: '🔄',  // Roundabout Enter
+        27: '↗',   // Roundabout Exit
+        28: '⛴️',   // Ferry Enter
+        29: '🚗',  // Ferry Exit
+        30: '🚇',  // Transit
+        31: '🚶',  // Transit Connection Start
+        32: '🚶',  // Transit Connection End
+        33: '🚏',  // Transit Connection Destination
+        34: '⛴️',  // Post Transit Connection Destination
+        35: '⚙️',  // Merge Right
+        36: '⚙️'   // Merge Left
+    };
+    return iconMap[type] || '↑';
+}
+
+/**
+ * Format distance for display using user's preferred units
+ * @param {number} distanceMeters - Distance in meters
+ * @returns {string} Formatted distance string
+ */
+function formatTurnDistance(distanceMeters) {
+    const useMiles = distanceUnit === 'mi';
+
+    if (useMiles) {
+        const miles = distanceMeters / 1609.34;
+        if (miles < 0.1) {
+            const feet = Math.round(distanceMeters * 3.28084);
+            return `${feet} ft`;
+        } else if (miles < 1) {
+            return `${(miles * 5280 / 100).toFixed(0) * 100} ft`;
+        } else {
+            return `${miles.toFixed(1)} mi`;
+        }
+    } else {
+        if (distanceMeters < 100) {
+            return `${Math.round(distanceMeters)} m`;
+        } else if (distanceMeters < 1000) {
+            return `${Math.round(distanceMeters / 10) * 10} m`;
+        } else {
+            return `${(distanceMeters / 1000).toFixed(1)} km`;
+        }
+    }
+}
+
+/**
+ * Update the next turn display with current turn info
+ * @param {Object} turnInfo - Turn information object
+ */
+function updateTurnInstructionDisplay(turnInfo) {
+    const distanceEl = document.getElementById('nextTurnDistance');
+    const instructionEl = document.getElementById('nextTurnInstruction');
+    const streetEl = document.getElementById('nextTurnStreet');
+    const iconEl = document.getElementById('nextTurnIcon');
+
+    if (!distanceEl || !instructionEl) return;
+
+    if (turnInfo) {
+        const formattedDistance = formatTurnDistance(turnInfo.distance);
+        distanceEl.textContent = `In ${formattedDistance}`;
+
+        // Use instruction text if available, otherwise build from direction
+        if (turnInfo.instruction) {
+            instructionEl.textContent = turnInfo.instruction;
+        } else {
+            const dirText = getTurnDirectionText(turnInfo.direction || 'straight');
+            instructionEl.textContent = dirText;
+        }
+
+        // Show street name if available
+        if (turnInfo.streetName) {
+            streetEl.textContent = `onto ${turnInfo.streetName}`;
+            streetEl.style.display = 'block';
+        } else {
+            streetEl.style.display = 'none';
+        }
+
+        // Update icon based on direction
+        const directionToType = {
+            'left': 15,
+            'right': 10,
+            'slight-left': 16,
+            'slight-right': 9,
+            'sharp-left': 14,
+            'sharp-right': 11,
+            'u-turn': 12,
+            'straight': 8,
+            'exit': 20,
+            'roundabout': 26,
+            'destination': 4
+        };
+        const type = directionToType[turnInfo.direction] || 8;
+        iconEl.textContent = getTurnIcon(type);
+
+    } else {
+        // No upcoming turn - show follow route message
+        distanceEl.textContent = 'Follow Route';
+        instructionEl.textContent = 'Continue on current road';
+        streetEl.style.display = 'none';
+        iconEl.textContent = '↑';
+    }
+
+    // Update the instructions list if expanded
+    if (instructionsPanelExpanded) {
+        populateInstructionsList();
+    }
+}
+
+/**
+ * Populate the full instructions list in the expanded panel
+ */
+function populateInstructionsList() {
+    const listEl = document.getElementById('instructionsList');
+    const countEl = document.getElementById('instructionsCount');
+
+    if (!listEl || !currentRouteSteps || currentRouteSteps.length === 0) {
+        if (listEl) listEl.innerHTML = '<div class="instruction-item"><div class="instruction-item-content"><div class="instruction-item-text">No instructions available</div></div></div>';
+        if (countEl) countEl.textContent = '0 steps';
+        return;
+    }
+
+    // Calculate remaining steps from current position
+    const remainingSteps = currentRouteSteps.length - currentStepIndex;
+    if (countEl) countEl.textContent = `${remainingSteps} steps remaining`;
+
+    let html = '';
+    let cumulativeDistance = 0;
+
+    for (let i = 0; i < currentRouteSteps.length; i++) {
+        const step = currentRouteSteps[i];
+        const isCurrent = i === currentStepIndex;
+        const isPassed = i < currentStepIndex;
+        const type = step.type || 0;
+        const icon = getTurnIcon(type);
+        const instruction = step.instruction || 'Continue';
+        const distance = step.distance || 0; // in meters
+        const streetNames = step.street_names || [];
+        const streetName = streetNames.length > 0 ? streetNames.join(', ') : '';
+
+        // Calculate cumulative distance from current position
+        if (i >= currentStepIndex) {
+            cumulativeDistance += distance;
+        }
+
+        let itemClass = 'instruction-item';
+        if (isCurrent) itemClass += ' current';
+        if (isPassed) itemClass += ' passed';
+
+        html += `
+            <div class="${itemClass}">
+                <div class="instruction-item-icon">${icon}</div>
+                <div class="instruction-item-content">
+                    <div class="instruction-item-text">${instruction}</div>
+                    ${streetName ? `<div class="instruction-item-distance">${streetName}</div>` : ''}
+                    <div class="instruction-item-cumulative">
+                        ${isPassed ? 'Passed' : formatTurnDistance(isCurrent ? 0 : cumulativeDistance)}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    listEl.innerHTML = html;
+
+    // Scroll to current instruction
+    const currentItem = listEl.querySelector('.instruction-item.current');
+    if (currentItem) {
+        currentItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+/**
+ * Update turn widget from maneuver data (called from GPS tracking)
+ * @param {number} lat - Current latitude
+ * @param {number} lon - Current longitude
+ */
+function updateTurnWidgetFromPosition(lat, lon) {
+    if (!routeInProgress || !currentRouteSteps || currentRouteSteps.length === 0) {
+        return;
+    }
+
+    // Find the next maneuver ahead of user's position
+    const userRouteIndex = findClosestRoutePointIndex(lat, lon);
+
+    for (let i = currentStepIndex; i < currentRouteSteps.length; i++) {
+        const maneuver = currentRouteSteps[i];
+        const maneuverShapeIndex = maneuver.begin_shape_index || 0;
+
+        // Skip maneuvers that are behind the user
+        if (maneuverShapeIndex < userRouteIndex - 5) {
+            // Update current step index as we pass maneuvers
+            if (i === currentStepIndex && i < currentRouteSteps.length - 1) {
+                currentStepIndex = i + 1;
+            }
+            continue;
+        }
+
+        // Calculate distance to this maneuver
+        if (routePolyline && maneuverShapeIndex < routePolyline.length) {
+            const maneuverPoint = routePolyline[maneuverShapeIndex];
+            const distanceToManeuver = calculateDistance(lat, lon, maneuverPoint[0], maneuverPoint[1]);
+
+            // Update the display with this maneuver info
+            const type = maneuver.type || 0;
+            let direction = 'straight';
+
+            // Map Valhalla types to directions
+            if ([9, 18, 23].includes(type)) direction = 'slight-right';
+            else if ([10].includes(type)) direction = 'right';
+            else if ([11].includes(type)) direction = 'sharp-right';
+            else if ([16, 19, 24].includes(type)) direction = 'slight-left';
+            else if ([15].includes(type)) direction = 'left';
+            else if ([14].includes(type)) direction = 'sharp-left';
+            else if ([12, 13].includes(type)) direction = 'u-turn';
+            else if ([20, 21].includes(type)) direction = 'exit';
+            else if ([26, 27].includes(type)) direction = 'roundabout';
+            else if ([4, 5, 6].includes(type)) direction = 'destination';
+
+            const streetNames = maneuver.street_names || [];
+
+            updateTurnInstructionDisplay({
+                distance: distanceToManeuver,
+                direction: direction,
+                instruction: maneuver.instruction || '',
+                streetName: streetNames.length > 0 ? streetNames[0] : ''
+            });
+
+            return;
+        }
+    }
+
+    // No upcoming maneuvers - near destination or following route
+    updateTurnInstructionDisplay(null);
+}
+
 // ===== NOTIFICATIONS SYSTEM =====
 let notificationQueue = [];
 let lastNotificationTime = 0;
@@ -7097,6 +7419,12 @@ function startGPSTracking() {
 
                     // FIXED: Announce upcoming turns via voice
                     announceUpcomingTurn(turnInfo);
+
+                    // Update visual turn instruction display (synced with voice)
+                    updateTurnInstructionDisplay(turnInfo);
+                } else {
+                    // Update turn widget with no upcoming turn
+                    updateTurnWidgetFromPosition(lat, lon);
                 }
 
                 // NEW: Announce distance to destination
@@ -9019,6 +9347,19 @@ function startTurnByTurnNavigation(routeData) {
         console.log('[Speed Widget] Enabled for navigation');
     }
 
+    // ===== SHOW TURN INSTRUCTION WIDGET during navigation =====
+    showTurnInstructionWidget();
+    // Initialize with first instruction if available
+    if (currentRouteSteps && currentRouteSteps.length > 0) {
+        const firstStep = currentRouteSteps[0];
+        updateTurnInstructionDisplay({
+            distance: 0,
+            direction: 'straight',
+            instruction: firstStep.instruction || 'Follow the route',
+            streetName: (firstStep.street_names || [])[0] || ''
+        });
+    }
+
     sendNotification('Navigation Started', 'Turn-by-turn guidance activated', 'success');
     speakMessage('Navigation started. Follow the route.');
     showStatus('🧭 Turn-by-turn navigation active', 'success');
@@ -9077,6 +9418,10 @@ function stopTurnByTurnNavigation() {
     if (speedWidget) {
         speedWidget.style.display = 'none';
     }
+
+    // ===== HIDE TURN INSTRUCTION WIDGET =====
+    hideTurnInstructionWidget();
+
     savedMapState = null;
 
     // ===== PHASE 2: Apply pending PWA update if available =====

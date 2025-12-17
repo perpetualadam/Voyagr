@@ -1799,3 +1799,300 @@ body.dark-mode .form-group[style*="background: #f5f5f5"] {
     background: #3a3a3a !important;
 }
 
+/* ============================================
+   Turn Instruction Widget Styles
+   ============================================ */
+
+.turn-instruction-widget {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    z-index: 100;
+    max-width: calc(100% - 180px); /* Leave room for speed widget on right */
+    min-width: 280px;
+}
+
+/* Next Turn Display - Main clickable area */
+.next-turn-display {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(25, 118, 210, 0.4);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.next-turn-display:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 25px rgba(25, 118, 210, 0.5);
+}
+
+.next-turn-display:active {
+    transform: translateY(0);
+}
+
+/* Turn Icon Container */
+.turn-icon-container {
+    width: 48px;
+    height: 48px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.turn-icon {
+    font-size: 28px;
+    font-weight: bold;
+}
+
+/* Turn Info Container */
+.turn-info-container {
+    flex: 1;
+    min-width: 0; /* Allow text truncation */
+}
+
+.turn-distance {
+    font-size: 20px;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.turn-instruction {
+    font-size: 14px;
+    font-weight: 500;
+    opacity: 0.95;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.turn-street {
+    font-size: 12px;
+    opacity: 0.8;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Expand Indicator */
+.expand-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 50%;
+    flex-shrink: 0;
+    transition: transform 0.3s ease;
+}
+
+.expand-indicator.expanded {
+    transform: rotate(180deg);
+}
+
+#expandIcon {
+    font-size: 10px;
+}
+
+/* Expandable Instructions Panel */
+.instructions-panel {
+    margin-top: 8px;
+    background: rgba(255, 255, 255, 0.98);
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    max-height: 350px;
+    overflow: hidden;
+    animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.instructions-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    background: #f5f5f5;
+    border-bottom: 1px solid #e0e0e0;
+    font-weight: 600;
+    color: #333;
+}
+
+.instructions-count {
+    font-size: 12px;
+    color: #666;
+    font-weight: 500;
+}
+
+.instructions-list {
+    max-height: 290px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* Individual Instruction Item */
+.instruction-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-bottom: 1px solid #f0f0f0;
+    transition: background 0.2s ease;
+}
+
+.instruction-item:last-child {
+    border-bottom: none;
+}
+
+.instruction-item:hover {
+    background: #f8f9fa;
+}
+
+.instruction-item.current {
+    background: #E3F2FD;
+    border-left: 3px solid #1976D2;
+}
+
+.instruction-item.passed {
+    opacity: 0.5;
+}
+
+.instruction-item-icon {
+    width: 32px;
+    height: 32px;
+    background: #e0e0e0;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.instruction-item.current .instruction-item-icon {
+    background: #1976D2;
+    color: white;
+}
+
+.instruction-item-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.instruction-item-text {
+    font-size: 14px;
+    color: #333;
+    line-height: 1.4;
+}
+
+.instruction-item-distance {
+    font-size: 12px;
+    color: #666;
+    margin-top: 2px;
+}
+
+.instruction-item-cumulative {
+    font-size: 11px;
+    color: #999;
+}
+
+/* Dark Mode Support */
+body.dark-mode .next-turn-display {
+    background: linear-gradient(135deg, #0D47A1 0%, #1565C0 100%);
+}
+
+body.dark-mode .instructions-panel {
+    background: rgba(30, 30, 30, 0.98);
+}
+
+body.dark-mode .instructions-header {
+    background: #2a2a2a;
+    border-color: #444;
+    color: #fff;
+}
+
+body.dark-mode .instructions-count {
+    color: #aaa;
+}
+
+body.dark-mode .instruction-item {
+    border-color: #333;
+}
+
+body.dark-mode .instruction-item:hover {
+    background: #333;
+}
+
+body.dark-mode .instruction-item.current {
+    background: #1a3a5c;
+}
+
+body.dark-mode .instruction-item-icon {
+    background: #444;
+}
+
+body.dark-mode .instruction-item-text {
+    color: #e0e0e0;
+}
+
+body.dark-mode .instruction-item-distance {
+    color: #aaa;
+}
+
+/* Mobile Responsive */
+@media (max-width: 480px) {
+    .turn-instruction-widget {
+        left: 10px;
+        right: 10px;
+        max-width: calc(100% - 20px);
+        min-width: unset;
+    }
+
+    .next-turn-display {
+        padding: 10px 12px;
+        gap: 10px;
+    }
+
+    .turn-icon-container {
+        width: 40px;
+        height: 40px;
+    }
+
+    .turn-icon {
+        font-size: 22px;
+    }
+
+    .turn-distance {
+        font-size: 18px;
+    }
+
+    .turn-instruction {
+        font-size: 13px;
+    }
+
+    .instructions-panel {
+        max-height: 300px;
+    }
+}
+
