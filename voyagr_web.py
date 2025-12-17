@@ -3443,9 +3443,9 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20251217g"></script>
-    <script src="/static/js/voyagr-app.js?v=20251217g"></script>
-    <script src="/static/js/app.js?v=20251217g"></script>
+    <script src="/static/js/voyagr-core.js?v=20251217h"></script>
+    <script src="/static/js/voyagr-app.js?v=20251217h"></script>
+    <script src="/static/js/app.js?v=20251217h"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -4491,6 +4491,33 @@ HTML_TEMPLATE = '''
             <button id="startNavBtn" class="fab" title="Start Navigation" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
             <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
             <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
+        </div>
+
+        <!-- Journey Summary Bar - Shows remaining distance, ETA, and time during navigation -->
+        <div id="journeySummaryBar" class="journey-summary-bar" style="display: none;">
+            <div class="journey-summary-item">
+                <span class="journey-summary-icon">📍</span>
+                <div class="journey-summary-content">
+                    <span id="remainingDistance" class="journey-summary-value">--</span>
+                    <span class="journey-summary-label">remaining</span>
+                </div>
+            </div>
+            <div class="journey-summary-divider"></div>
+            <div class="journey-summary-item">
+                <span class="journey-summary-icon">⏱️</span>
+                <div class="journey-summary-content">
+                    <span id="remainingTime" class="journey-summary-value">--</span>
+                    <span class="journey-summary-label">to go</span>
+                </div>
+            </div>
+            <div class="journey-summary-divider"></div>
+            <div class="journey-summary-item">
+                <span class="journey-summary-icon">🏁</span>
+                <div class="journey-summary-content">
+                    <span id="etaTime" class="journey-summary-value">--:--</span>
+                    <span class="journey-summary-label">arrival</span>
+                </div>
+            </div>
         </div>
     </div>
 

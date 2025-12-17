@@ -6687,7 +6687,6 @@ function populateInstructionsList() {
     if (countEl) countEl.textContent = `${remainingSteps} steps remaining`;
 
     let html = '';
-    let cumulativeDistance = 0;
 
     for (let i = 0; i < currentRouteSteps.length; i++) {
         const step = currentRouteSteps[i];
@@ -6696,28 +6695,21 @@ function populateInstructionsList() {
         const type = step.type || 0;
         const icon = getTurnIcon(type);
         const instruction = step.instruction || 'Continue';
-        const distance = step.distance || 0; // in meters
         const streetNames = step.street_names || [];
         const streetName = streetNames.length > 0 ? streetNames.join(', ') : '';
-
-        // Calculate cumulative distance from current position
-        if (i >= currentStepIndex) {
-            cumulativeDistance += distance;
-        }
 
         let itemClass = 'instruction-item';
         if (isCurrent) itemClass += ' current';
         if (isPassed) itemClass += ' passed';
 
+        // Show instruction text and street name only (no distances per user request)
         html += `
             <div class="${itemClass}">
                 <div class="instruction-item-icon">${icon}</div>
                 <div class="instruction-item-content">
                     <div class="instruction-item-text">${instruction}</div>
-                    ${streetName ? `<div class="instruction-item-distance">${streetName}</div>` : ''}
-                    <div class="instruction-item-cumulative">
-                        ${isPassed ? 'Passed' : formatTurnDistance(isCurrent ? 0 : cumulativeDistance)}
-                    </div>
+                    ${streetName ? `<div class="instruction-item-street">${streetName}</div>` : ''}
+                    ${isPassed ? '<div class="instruction-item-status">✓ Passed</div>' : (isCurrent ? '<div class="instruction-item-status current-status">→ Next</div>' : '')}
                 </div>
             </div>
         `;
@@ -6794,6 +6786,156 @@ function updateTurnWidgetFromPosition(lat, lon) {
 
     // No upcoming maneuvers - near destination or following route
     updateTurnInstructionDisplay(null);
+}
+
+// ===== JOURNEY SUMMARY BAR =====
+let journeySummaryUpdateInterval = null;
+
+/**
+ * Show the journey summary bar
+ */
+function showJourneySummaryBar() {
+    const bar = document.getElementById('journeySummaryBar');
+    if (bar) {
+        bar.style.display = 'flex';
+        console.log('[Journey Summary] Displayed');
+        // Start updates
+        startJourneySummaryUpdates();
+    }
+}
+
+/**
+ * Hide the journey summary bar
+ */
+function hideJourneySummaryBar() {
+    const bar = document.getElementById('journeySummaryBar');
+    if (bar) {
+        bar.style.display = 'none';
+        console.log('[Journey Summary] Hidden');
+    }
+    // Stop updates
+    if (journeySummaryUpdateInterval) {
+        clearInterval(journeySummaryUpdateInterval);
+        journeySummaryUpdateInterval = null;
+    }
+}
+
+/**
+ * Start periodic journey summary updates
+ */
+function startJourneySummaryUpdates() {
+    // Update immediately
+    updateJourneySummaryBar();
+
+    // Then update every 5 seconds
+    if (journeySummaryUpdateInterval) {
+        clearInterval(journeySummaryUpdateInterval);
+    }
+    journeySummaryUpdateInterval = setInterval(updateJourneySummaryBar, 5000);
+}
+
+/**
+ * Format time for ETA display
+ * @param {Date} date - Date object
+ * @returns {string} Formatted time string
+ */
+function formatETATime(date) {
+    const hours = date.getHours();
+    const minutes = date.getMinutes();
+
+    // Check user preference for 24-hour format (default to 24h)
+    const use24Hour = localStorage.getItem('use24HourFormat') !== 'false';
+
+    if (use24Hour) {
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    } else {
+        const period = hours >= 12 ? 'PM' : 'AM';
+        const hour12 = hours % 12 || 12;
+        return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
+    }
+}
+
+/**
+ * Format remaining time for display
+ * @param {number} minutes - Time in minutes
+ * @returns {string} Formatted time string (e.g., "45 min" or "2h 15min")
+ */
+function formatRemainingTime(minutes) {
+    if (minutes < 1) return '<1 min';
+    if (minutes < 60) return `${Math.round(minutes)} min`;
+
+    const hours = Math.floor(minutes / 60);
+    const mins = Math.round(minutes % 60);
+
+    if (mins === 0) return `${hours}h`;
+    return `${hours}h ${mins}min`;
+}
+
+/**
+ * Update the journey summary bar with current navigation data
+ */
+function updateJourneySummaryBar() {
+    if (!routeInProgress || !routePolyline || routePolyline.length === 0) {
+        return;
+    }
+
+    const distanceEl = document.getElementById('remainingDistance');
+    const timeEl = document.getElementById('remainingTime');
+    const etaEl = document.getElementById('etaTime');
+
+    if (!distanceEl || !timeEl || !etaEl) return;
+
+    // Calculate remaining distance from current position
+    let remainingDistanceMeters = 0;
+    const startIdx = currentStepIndex || 0;
+
+    for (let i = startIdx; i < routePolyline.length - 1; i++) {
+        remainingDistanceMeters += calculateDistance(
+            routePolyline[i][0], routePolyline[i][1],
+            routePolyline[i+1][0], routePolyline[i+1][1]
+        );
+    }
+
+    // Format remaining distance in user's preferred units
+    const useMiles = distanceUnit === 'mi';
+    let distanceText;
+    if (useMiles) {
+        const miles = remainingDistanceMeters / 1609.34;
+        distanceText = miles < 0.1 ? `${Math.round(remainingDistanceMeters * 3.28084)} ft` : `${miles.toFixed(1)} mi`;
+    } else {
+        const km = remainingDistanceMeters / 1000;
+        distanceText = km < 0.1 ? `${Math.round(remainingDistanceMeters)} m` : `${km.toFixed(1)} km`;
+    }
+    distanceEl.textContent = distanceText;
+
+    // Calculate remaining time based on route data
+    let remainingTimeMinutes = 0;
+
+    if (window.lastCalculatedRoute && window.lastCalculatedRoute.duration_minutes) {
+        // Use route duration and calculate based on progress
+        const totalDuration = window.lastCalculatedRoute.duration_minutes;
+        const totalDistance = window.lastCalculatedRoute.distance_km * 1000 || 1;
+        const progress = 1 - (remainingDistanceMeters / totalDistance);
+        remainingTimeMinutes = totalDuration * (1 - progress);
+
+        // Sanity check
+        if (remainingTimeMinutes < 0) remainingTimeMinutes = 0;
+        if (remainingTimeMinutes > 1440) remainingTimeMinutes = totalDuration; // Cap at 24h
+    } else {
+        // Fallback: estimate based on average speed (50 km/h)
+        const avgSpeedKmh = 50;
+        remainingTimeMinutes = (remainingDistanceMeters / 1000 / avgSpeedKmh) * 60;
+    }
+
+    // Format remaining time
+    timeEl.textContent = formatRemainingTime(remainingTimeMinutes);
+
+    // Calculate ETA
+    const now = new Date();
+    const eta = new Date(now.getTime() + remainingTimeMinutes * 60000);
+    etaEl.textContent = formatETATime(eta);
+
+    console.log(`[Journey Summary] Distance: ${distanceText}, Time: ${formatRemainingTime(remainingTimeMinutes)}, ETA: ${formatETATime(eta)}`);
 }
 
 // ===== NOTIFICATIONS SYSTEM =====
@@ -7417,15 +7559,13 @@ function startGPSTracking() {
                 if (turnInfo) {
                     distanceToNextTurn = turnInfo.distance;
 
-                    // FIXED: Announce upcoming turns via voice
+                    // Voice announcements (only at specific distance thresholds)
                     announceUpcomingTurn(turnInfo);
-
-                    // Update visual turn instruction display (synced with voice)
-                    updateTurnInstructionDisplay(turnInfo);
-                } else {
-                    // Update turn widget with no upcoming turn
-                    updateTurnWidgetFromPosition(lat, lon);
                 }
+
+                // Visual turn display (updates independently on every GPS update)
+                // This provides continuous visual feedback regardless of voice announcement timing
+                updateTurnWidgetFromPosition(lat, lon);
 
                 // NEW: Announce distance to destination
                 announceDistanceToDestination(lat, lon);
@@ -9360,6 +9500,9 @@ function startTurnByTurnNavigation(routeData) {
         });
     }
 
+    // ===== SHOW JOURNEY SUMMARY BAR during navigation =====
+    showJourneySummaryBar();
+
     sendNotification('Navigation Started', 'Turn-by-turn guidance activated', 'success');
     speakMessage('Navigation started. Follow the route.');
     showStatus('🧭 Turn-by-turn navigation active', 'success');
@@ -9421,6 +9564,9 @@ function stopTurnByTurnNavigation() {
 
     // ===== HIDE TURN INSTRUCTION WIDGET =====
     hideTurnInstructionWidget();
+
+    // ===== HIDE JOURNEY SUMMARY BAR =====
+    hideJourneySummaryBar();
 
     savedMapState = null;
 
