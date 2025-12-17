@@ -3443,9 +3443,9 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20251217e"></script>
-    <script src="/static/js/voyagr-app.js?v=20251217e"></script>
-    <script src="/static/js/app.js?v=20251217e"></script>
+    <script src="/static/js/voyagr-core.js?v=20251217f"></script>
+    <script src="/static/js/voyagr-app.js?v=20251217f"></script>
+    <script src="/static/js/app.js?v=20251217f"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -7244,6 +7244,62 @@ def calculate_route():
                                     'hazards': hazards_list,
                                     'maneuvers': retry_maneuvers
                                 })
+
+                                # Also request Shortest route with same reduced exclusions
+                                try:
+                                    shortest_payload = {
+                                        "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
+                                        "costing": "auto_shorter"
+                                    }
+                                    if retry_locations:
+                                        shortest_payload["exclude_locations"] = retry_locations
+                                    logger.info(f"[VALHALLA] Retry: Requesting Shortest route with {len(retry_locations)} exclusions")
+                                    sh_response = requests.post(url, json=shortest_payload, timeout=10, headers=headers)
+                                    if sh_response.status_code == 200:
+                                        sh_data = sh_response.json()
+                                        if 'trip' in sh_data and 'legs' in sh_data['trip']:
+                                            sh_geom = sh_data['trip']['legs'][0]['shape']
+                                            sh_dist = sh_data['trip']['summary']['length']
+                                            sh_time = sh_data['trip']['summary']['time']
+                                            sh_coords = decode_route_geometry(sh_geom)
+                                            sh_costs = cost_calculator.calculate_costs(
+                                                sh_dist, vehicle_type, fuel_efficiency, fuel_price,
+                                                energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+                                                route_coords=sh_coords
+                                            )
+                                            sh_hazard_penalty, sh_hazard_count = score_route_by_hazards(sh_geom, hazards) if hazards else (0, 0)
+                                            sh_hazards_list = get_hazards_on_route(sh_geom, hazards) if hazards else []
+                                            # Extract maneuvers for shortest route
+                                            sh_maneuvers = []
+                                            for leg in sh_data['trip']['legs']:
+                                                if 'maneuvers' in leg:
+                                                    for m in leg['maneuvers']:
+                                                        sh_maneuvers.append({
+                                                            'instruction': m.get('instruction', ''),
+                                                            'type': m.get('type', 0),
+                                                            'distance': m.get('length', 0) * 1000,
+                                                            'time': m.get('time', 0),
+                                                            'street_names': m.get('street_names', []),
+                                                            'begin_shape_index': m.get('begin_shape_index', 0),
+                                                            'end_shape_index': m.get('end_shape_index', 0)
+                                                        })
+                                            routes.append({
+                                                'id': 2,
+                                                'name': '📏 Shortest',
+                                                'distance_km': round(sh_dist, 2),
+                                                'duration_minutes': round(sh_time / 60, 0),
+                                                'fuel_cost': round(sh_costs['fuel_cost'], 2),
+                                                'toll_cost': round(sh_costs['toll_cost'], 2),
+                                                'caz_cost': round(sh_costs['caz_cost'], 2),
+                                                'geometry': sh_geom,
+                                                'hazard_penalty_seconds': round(sh_hazard_penalty, 0),
+                                                'hazard_count': sh_hazard_count,
+                                                'hazards': sh_hazards_list,
+                                                'maneuvers': sh_maneuvers
+                                            })
+                                            logger.info(f"[VALHALLA] Retry: Added Shortest route: {sh_dist:.1f}km")
+                                except Exception as e:
+                                    logger.warning(f"[VALHALLA] Retry Shortest route failed: {e}")
 
                                 print(f"[Valhalla] RETRY SUCCESS: {len(routes)} routes found")
 
