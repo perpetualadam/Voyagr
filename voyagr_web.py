@@ -3443,9 +3443,9 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20251217"></script>
-    <script src="/static/js/voyagr-app.js?v=20251217"></script>
-    <script src="/static/js/app.js?v=20251217"></script>
+    <script src="/static/js/voyagr-core.js?v=20251217b"></script>
+    <script src="/static/js/voyagr-app.js?v=20251217b"></script>
+    <script src="/static/js/app.js?v=20251217b"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -6543,6 +6543,7 @@ def calculate_route():
                     total_distance = 0
                     total_duration = 0
                     all_geometries = []
+                    all_maneuvers = []  # Collect maneuvers from all segments
 
                     logger.info(f"[VALHALLA] Step 2: Calculating {num_segments} segments with real waypoints")
 
@@ -6599,6 +6600,23 @@ def calculate_route():
                                 total_duration += seg_duration
                                 all_geometries.append(seg_geometry)
 
+                                # Extract maneuvers from this segment
+                                for leg in seg_data['trip']['legs']:
+                                    if 'maneuvers' in leg:
+                                        for m in leg['maneuvers']:
+                                            all_maneuvers.append({
+                                                'instruction': m.get('instruction', ''),
+                                                'type': m.get('type', 0),
+                                                'distance': m.get('length', 0) * 1000,  # km to m
+                                                'time': m.get('time', 0),
+                                                'lat': m.get('begin_shape_index', 0),
+                                                'lon': m.get('end_shape_index', 0),
+                                                'street_names': m.get('street_names', []),
+                                                'begin_street_names': m.get('begin_street_names', []),
+                                                'begin_shape_index': m.get('begin_shape_index', 0),
+                                                'end_shape_index': m.get('end_shape_index', 0)
+                                            })
+
                                 logger.info(f"[VALHALLA] Segment {i+1} SUCCESS: {seg_distance:.2f}km, {seg_duration/60:.0f}min")
                             else:
                                 logger.error(f"[VALHALLA] Segment {i+1} FAILED: Invalid response structure")
@@ -6651,6 +6669,7 @@ def calculate_route():
                         logger.info(f"[HAZARDS] Segmented route scoring complete: total_penalty={hazard_penalty}s, hazard_count={hazard_count}")
 
                         # Build combined route response - include camera-avoiding route + alternatives
+                        logger.info(f"[VALHALLA] Combined route has {len(all_maneuvers)} maneuvers from all segments")
                         routes = [{
                             'name': 'Camera Avoiding Route',
                             'distance_km': total_distance,
@@ -6663,7 +6682,8 @@ def calculate_route():
                             'total_cost': fuel_cost + toll_cost + caz_cost + energy_cost,
                             'hazard_penalty_seconds': hazard_penalty,
                             'hazard_count': hazard_count,
-                            'hazards': hazards_on_route
+                            'hazards': hazards_on_route,
+                            'maneuvers': all_maneuvers
                         }]
 
                         # Add alternative routes from baseline (may have cameras but different paths)
@@ -6922,7 +6942,7 @@ def calculate_route():
                                 logger.warning(f"[VALHALLA] Failed to build alt exclude_locations: {e}")
 
                         # Helper function to build a route entry for standard routing
-                        def build_std_route_entry(name, geometry, distance_km, duration_sec, route_id):
+                        def build_std_route_entry(name, geometry, distance_km, duration_sec, route_id, valhalla_data=None):
                             coords = polyline.decode(geometry, precision=6)
                             penalty, haz_count = score_route_by_hazards(coords, hazards)
                             hazards_list = get_hazards_on_route(coords, hazards)
@@ -6931,6 +6951,26 @@ def calculate_route():
                                 energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
                                 route_coords=coords
                             )
+
+                            # Extract maneuvers from Valhalla response if available
+                            route_maneuvers = []
+                            if valhalla_data and 'trip' in valhalla_data and 'legs' in valhalla_data['trip']:
+                                for leg in valhalla_data['trip']['legs']:
+                                    if 'maneuvers' in leg:
+                                        for m in leg['maneuvers']:
+                                            route_maneuvers.append({
+                                                'instruction': m.get('instruction', ''),
+                                                'type': m.get('type', 0),
+                                                'distance': m.get('length', 0) * 1000,  # km to m
+                                                'time': m.get('time', 0),
+                                                'lat': m.get('begin_shape_index', 0),
+                                                'lon': m.get('end_shape_index', 0),
+                                                'street_names': m.get('street_names', []),
+                                                'begin_street_names': m.get('begin_street_names', []),
+                                                'begin_shape_index': m.get('begin_shape_index', 0),
+                                                'end_shape_index': m.get('end_shape_index', 0)
+                                            })
+
                             return {
                                 'id': route_id,
                                 'name': name,
@@ -6942,7 +6982,8 @@ def calculate_route():
                                 'geometry': geometry,
                                 'hazard_penalty_seconds': round(penalty, 0),
                                 'hazard_count': haz_count,
-                                'hazards': hazards_list
+                                'hazards': hazards_list,
+                                'maneuvers': route_maneuvers
                             }
 
                         next_route_id = len(routes) + 1
@@ -6962,7 +7003,7 @@ def calculate_route():
                                     sh_geom = sh_data['trip']['legs'][0]['shape']
                                     sh_dist = sh_data['trip']['summary']['length']
                                     sh_time = sh_data['trip']['summary']['time']
-                                    routes.append(build_std_route_entry('📏 Shortest', sh_geom, sh_dist, sh_time, next_route_id))
+                                    routes.append(build_std_route_entry('📏 Shortest', sh_geom, sh_dist, sh_time, next_route_id, sh_data))
                                     next_route_id += 1
                                     logger.info(f"[VALHALLA] Added Shortest route: {sh_dist:.1f}km")
                         except Exception as e:
@@ -6993,7 +7034,7 @@ def calculate_route():
                                             disc_geom = disc_data['trip']['legs'][0]['shape']
                                             disc_dist = disc_data['trip']['summary']['length']
                                             disc_time = disc_data['trip']['summary']['time']
-                                            route_entry = build_std_route_entry('🛡️ Camera-Free', disc_geom, disc_dist, disc_time, next_route_id)
+                                            route_entry = build_std_route_entry('🛡️ Camera-Free', disc_geom, disc_dist, disc_time, next_route_id, disc_data)
                                             if route_entry['hazard_count'] < hazard_count:
                                                 routes.append(route_entry)
                                                 logger.info(f"[VALHALLA] Added Camera-Free route: {disc_dist:.1f}km, {route_entry['hazard_count']} cameras")
