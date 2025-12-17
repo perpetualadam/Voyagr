@@ -5713,30 +5713,34 @@ function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urb
  */
 function calculateDriverViewCenter(lat, lon, heading, zoomLevel) {
     if (!map || !routeInProgress) {
+        console.log(`[Driver View] Skipped: map=${!!map}, routeInProgress=${routeInProgress}`);
         return [lat, lon]; // No offset when not navigating
     }
 
-    // Calculate a simple, fixed offset based on zoom level
-    // This moves the center ahead of the vehicle so it appears in bottom 1/3 of screen
+    // Calculate offset to position vehicle in bottom 1/3 of screen
+    // The offset needs to be approximately 1/3 of the visible map height
     //
-    // At different zoom levels, we need different offsets (in degrees):
-    // Zoom 18: ~0.0002 degrees (~22m)
-    // Zoom 16: ~0.0008 degrees (~90m)
-    // Zoom 14: ~0.003 degrees (~330m)
-    // Zoom 12: ~0.012 degrees (~1.3km)
-
-    // Simplified formula: offset = base_offset * 2^(16-zoom)
-    // Base offset at zoom 16 is about 0.0008 degrees latitude
-    const baseOffsetDegrees = 0.0008;
+    // Visible map dimensions at different zoom levels (approximate):
+    // Zoom 18: ~150m visible height -> offset ~50m (0.00045 deg)
+    // Zoom 16: ~600m visible height -> offset ~200m (0.0018 deg)
+    // Zoom 14: ~2.4km visible height -> offset ~800m (0.0072 deg)
+    // Zoom 12: ~10km visible height -> offset ~3.3km (0.03 deg)
+    //
+    // Formula: offset = baseOffset * 2^(16 - zoomLevel)
+    // Using baseOffset = 0.0018 degrees at zoom 16 (~200m offset)
+    const baseOffsetDegrees = 0.0018;  // ~200m at zoom 16
     const zoomFactor = Math.pow(2, 16 - zoomLevel);
     const offsetDegrees = baseOffsetDegrees * zoomFactor;
+    const offsetMeters = offsetDegrees * 111000;  // For debug logging
 
-    // Determine the direction of travel (bearing)
+    // Determine the direction of travel (bearing in radians)
     let bearingRad = 0;  // Default to north
+    let bearingSource = 'default';
 
     if (heading !== null && heading !== undefined && !isNaN(heading) && heading > 0) {
         // Use GPS heading if available and valid
         bearingRad = heading * Math.PI / 180;
+        bearingSource = 'GPS';
     } else if (routePolyline && routePolyline.length > 1) {
         // Calculate bearing from current position to next route point
         let closestIdx = 0;
@@ -5748,21 +5752,29 @@ function calculateDriverViewCenter(lat, lon, heading, zoomLevel) {
                 closestIdx = i;
             }
         }
-        // Look ahead a few points to get direction
-        const lookAhead = Math.min(closestIdx + 10, routePolyline.length - 1);
+        // Look ahead several points to get stable direction (more points at low zoom)
+        const lookAheadPoints = Math.max(10, Math.floor(20 * zoomFactor));
+        const lookAhead = Math.min(closestIdx + lookAheadPoints, routePolyline.length - 1);
         if (lookAhead > closestIdx) {
             const nextPoint = routePolyline[lookAhead];
             const dLat = nextPoint[0] - lat;
             const dLon = nextPoint[1] - lon;
             bearingRad = Math.atan2(dLon, dLat);  // atan2(x, y) for bearing from north
+            bearingSource = 'route';
         }
     }
+
+    const bearingDegrees = (bearingRad * 180 / Math.PI + 360) % 360;
 
     // Apply offset in the direction of travel
     // 1 degree latitude ≈ 111km everywhere
     // 1 degree longitude ≈ 111km * cos(lat)
     const offsetLat = lat + offsetDegrees * Math.cos(bearingRad);
     const offsetLon = lon + offsetDegrees * Math.sin(bearingRad) / Math.cos(lat * Math.PI / 180);
+
+    // Debug logging
+    console.log(`[Driver View] Offset applied: ${offsetMeters.toFixed(0)}m ahead at bearing ${bearingDegrees.toFixed(0)}° (${bearingSource}), zoom ${zoomLevel}`);
+    console.log(`[Driver View] Vehicle: [${lat.toFixed(6)}, ${lon.toFixed(6)}] -> Map center: [${offsetLat.toFixed(6)}, ${offsetLon.toFixed(6)}]`);
 
     return [offsetLat, offsetLon];
 }
