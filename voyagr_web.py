@@ -3443,9 +3443,9 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20251217d"></script>
-    <script src="/static/js/voyagr-app.js?v=20251217d"></script>
-    <script src="/static/js/app.js?v=20251217d"></script>
+    <script src="/static/js/voyagr-core.js?v=20251217e"></script>
+    <script src="/static/js/voyagr-app.js?v=20251217e"></script>
+    <script src="/static/js/app.js?v=20251217e"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -7083,6 +7083,7 @@ def calculate_route():
                         'toll_cost': routes[0]['toll_cost'],
                         'caz_cost': routes[0]['caz_cost'],
                         'caz_details': routes[0].get('caz_details', {}),
+                        'maneuvers': routes[0].get('maneuvers', []),
                         'cached': False,
                         'start_lat': start_lat,
                         'start_lon': start_lon,
@@ -7212,6 +7213,23 @@ def calculate_route():
                                     hazards_list = get_hazards_on_route(route_geometry, hazards)
                                     logger.info(f"[HAZARDS] Valhalla retry route: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
 
+                                # Extract maneuvers from retry response
+                                retry_maneuvers = []
+                                if 'trip' in retry_data and 'legs' in retry_data['trip']:
+                                    for leg in retry_data['trip']['legs']:
+                                        if 'maneuvers' in leg:
+                                            for m in leg['maneuvers']:
+                                                retry_maneuvers.append({
+                                                    'instruction': m.get('instruction', ''),
+                                                    'type': m.get('type', 0),
+                                                    'distance': m.get('length', 0) * 1000,  # km to m
+                                                    'time': m.get('time', 0),
+                                                    'street_names': m.get('street_names', []),
+                                                    'begin_shape_index': m.get('begin_shape_index', 0),
+                                                    'end_shape_index': m.get('end_shape_index', 0)
+                                                })
+                                logger.info(f"[VALHALLA] Retry route has {len(retry_maneuvers)} maneuvers")
+
                                 routes.append({
                                     'id': 1,
                                     'name': 'Fastest',
@@ -7223,7 +7241,8 @@ def calculate_route():
                                     'geometry': route_geometry,
                                     'hazard_penalty_seconds': round(hazard_penalty, 0),
                                     'hazard_count': hazard_count,
-                                    'hazards': hazards_list
+                                    'hazards': hazards_list,
+                                    'maneuvers': retry_maneuvers
                                 })
 
                                 print(f"[Valhalla] RETRY SUCCESS: {len(routes)} routes found")
@@ -7243,6 +7262,7 @@ def calculate_route():
                                     'fuel_cost': routes[0]['fuel_cost'],
                                     'toll_cost': routes[0]['toll_cost'],
                                     'caz_cost': routes[0]['caz_cost'],
+                                    'maneuvers': routes[0].get('maneuvers', []),
                                     'cached': False,
                                     'start_lat': start_lat,
                                     'start_lon': start_lon,
