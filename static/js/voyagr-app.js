@@ -1628,6 +1628,17 @@ function selectRoute(index) {
 
     // Update the route list display
     displayRouteComparison();
+
+    // CRITICAL: Update window.lastCalculatedRoute with the selected route
+    // This ensures maneuvers and all route data are available for navigation
+    if (routeOptions && routeOptions[index]) {
+        const selectedRoute = routeOptions[index];
+        window.lastCalculatedRoute = selectedRoute;
+        console.log(`[Routes] Selected route "${selectedRoute.name}" with ${(selectedRoute.maneuvers || []).length} maneuvers`);
+
+        // Update the route preview with the selected route data
+        showRoutePreview(selectedRoute);
+    }
 }
 
 /**
