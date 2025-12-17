@@ -5062,7 +5062,7 @@ function updateSpeedWidget(speedMph, speedLimitMph = null) {
 
     // Update current speed
     document.getElementById('speedValue').textContent = Math.round(displaySpeed);
-    document.getElementById('speedUnit').textContent = displaySpeedUnit;
+    document.getElementById('speedUnitDisplay').textContent = displaySpeedUnit;
 
     // Update speed limit if provided
     if (speedLimitMph !== null && speedLimitMph > 0) {

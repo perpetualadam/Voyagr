@@ -4435,7 +4435,7 @@ HTML_TEMPLATE = '''
             <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
                 <div>
                     <div id="speedValue" style="font-size: 42px; font-weight: bold; color: #333; line-height: 1;">0</div>
-                    <div id="speedUnit" style="font-size: 12px; color: #666; margin-top: -4px;">km/h</div>
+                    <div id="speedUnitDisplay" style="font-size: 12px; color: #666; margin-top: -4px;">km/h</div>
                 </div>
                 <!-- Speed Limit Circle (like road signs) -->
                 <div id="speedLimitCircle" style="width: 50px; height: 50px; border-radius: 50%; border: 4px solid #E53935; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center;">
