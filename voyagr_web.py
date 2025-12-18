@@ -3443,9 +3443,9 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20251217i"></script>
-    <script src="/static/js/voyagr-app.js?v=20251217i"></script>
-    <script src="/static/js/app.js?v=20251217i"></script>
+    <script src="/static/js/voyagr-core.js?v=20251217j"></script>
+    <script src="/static/js/voyagr-app.js?v=20251217j"></script>
+    <script src="/static/js/app.js?v=20251217j"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -6928,13 +6928,28 @@ def calculate_route():
                                 # Apply same traffic multiplier to alternative routes
                                 alt_time_minutes = alt_base_time_minutes * traffic_multiplier
 
-                                # Extract geometry
+                                # Extract geometry AND maneuvers from alternative routes
                                 alt_geometry = None
+                                alt_maneuvers = []
                                 if 'legs' in alt_route['trip']:
                                     for leg in alt_route['trip']['legs']:
-                                        if 'shape' in leg:
+                                        if 'shape' in leg and alt_geometry is None:
                                             alt_geometry = leg['shape']
-                                            break
+                                        # Extract maneuvers for this alternative route
+                                        if 'maneuvers' in leg:
+                                            for m in leg['maneuvers']:
+                                                alt_maneuvers.append({
+                                                    'instruction': m.get('instruction', ''),
+                                                    'verbal_pre_transition_instruction': m.get('verbal_pre_transition_instruction', ''),
+                                                    'distance': m.get('length', 0),  # km
+                                                    'time': m.get('time', 0),  # seconds
+                                                    'type': m.get('type', 0),
+                                                    'street_names': m.get('street_names', []),
+                                                    'begin_street_names': m.get('begin_street_names', []),
+                                                    'begin_shape_index': m.get('begin_shape_index', 0),
+                                                    'end_shape_index': m.get('end_shape_index', 0)
+                                                })
+                                logger.info(f"[VALHALLA] Alt route {idx+1}: Extracted {len(alt_maneuvers)} maneuvers")
 
                                 # ================================================================
                                 # PHASE 3 OPTIMIZATION: Use cost calculator with route coordinates
@@ -6972,7 +6987,8 @@ def calculate_route():
                                     'geometry': alt_geometry,
                                     'hazard_penalty_seconds': round(alt_hazard_penalty, 0),
                                     'hazard_count': alt_hazard_count,
-                                    'hazards': alt_hazards_list
+                                    'hazards': alt_hazards_list,
+                                    'maneuvers': alt_maneuvers
                                 })
 
                     # ================================================================
