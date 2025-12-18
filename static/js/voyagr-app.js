@@ -2630,7 +2630,20 @@ async function calculateRoute() {
             // Read as text first to get the error message
             return response.text().then(text => {
                 console.error('[calculateRoute] Response text:', text.substring(0, 200));
-                throw new Error('Server returned an error page. The route may be too long or the server timed out. Please try a shorter route or try again later.');
+
+                // Detect specific error types
+                let errorMsg = `Server error (HTTP ${response.status})`;
+                if (response.status === 504) {
+                    errorMsg = 'Gateway Timeout (504): The route is too complex or the server is busy. Try a shorter route.';
+                } else if (response.status === 502) {
+                    errorMsg = 'Bad Gateway (502): Server communication error. Please try again.';
+                } else if (response.status === 500) {
+                    errorMsg = 'Internal Server Error (500). Please check server logs.';
+                } else if (text.includes('timeout') || text.includes('Timeout')) {
+                    errorMsg = 'Request timed out. The route may be too long. Try a shorter route.';
+                }
+
+                throw new Error(errorMsg);
             });
         }
 
