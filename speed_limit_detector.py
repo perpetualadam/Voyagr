@@ -144,71 +144,83 @@ class SpeedLimitDetector:
     
     def _get_osm_speed_limit(self, lat: float, lon: float, road_type: str) -> int:
         """Get speed limit - try TomTom first (faster), then fall back to OSM/defaults."""
+        import os
+
+        # Check cache first
+        cache_key = f"{lat:.4f},{lon:.4f}"
         try:
-            # Check cache first
-            cache_key = f"{lat:.4f},{lon:.4f}"
             if cache_key in self.speed_limit_cache:
                 cached_data = self.speed_limit_cache[cache_key]
                 if time.time() - cached_data['timestamp'] < self.cache_expiry:
+                    print(f"[Speed Limit] Cache hit: {cached_data['speed_limit']} mph (source: {cached_data.get('source', 'unknown')})")
                     return cached_data['speed_limit']
+        except Exception as e:
+            print(f"[Speed Limit] Cache check failed: {e}")
 
-            # Try TomTom Traffic Flow API first - uses freeFlowSpeed as speed limit proxy
-            import os
-            tomtom_api_key = os.getenv('TOMTOM_API_KEY')
-            if tomtom_api_key:
-                try:
-                    tomtom_url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
-                    params = {
-                        'key': tomtom_api_key,
-                        'point': f"{lat},{lon}",
-                        'unit': 'KMPH'
-                    }
-                    response = requests.get(tomtom_url, params=params, timeout=3)
-
-                    if response.status_code == 200:
-                        flow_data = response.json().get('flowSegmentData', {})
-                        free_flow_speed_kmh = flow_data.get('freeFlowSpeed', 0)
-
-                        if free_flow_speed_kmh > 0:
-                            # Convert km/h to mph (UK uses mph)
-                            speed_mph = int(round(free_flow_speed_kmh * 0.621371))
-
-                            # Round to nearest common UK speed limit (20, 30, 40, 50, 60, 70)
-                            uk_limits = [20, 30, 40, 50, 60, 70]
-                            speed_limit = min(uk_limits, key=lambda x: abs(x - speed_mph))
-
-                            # Cache the result
-                            self.speed_limit_cache[cache_key] = {
-                                'speed_limit': speed_limit,
-                                'timestamp': time.time(),
-                                'source': 'TomTom'
-                            }
-                            print(f"[Speed Limit] TomTom: {free_flow_speed_kmh} km/h -> {speed_limit} mph")
-                            return speed_limit
-                except Exception as e:
-                    print(f"TomTom speed limit failed: {e}")
-
-            # Fallback: Query Overpass API for maxspeed tag (slower but explicit)
+        # Try TomTom Traffic Flow API first - uses freeFlowSpeed as speed limit proxy
+        tomtom_api_key = os.getenv('TOMTOM_API_KEY')
+        if tomtom_api_key:
             try:
-                overpass_url = "http://overpass-api.de/api/interpreter"
-                query = f"""
-                [bbox:{lat-0.005},{lon-0.005},{lat+0.005},{lon+0.005}];
-                way[maxspeed];
-                out tags;
-                """
-
-                response = requests.get(overpass_url, params={'data': query}, timeout=3)
+                tomtom_url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
+                params = {
+                    'key': tomtom_api_key,
+                    'point': f"{lat},{lon}",
+                    'unit': 'KMPH'
+                }
+                response = requests.get(tomtom_url, params=params, timeout=3)
 
                 if response.status_code == 200:
-                    data = response.json()
-                    if data.get('elements'):
-                        for element in data['elements']:
-                            if 'tags' in element and 'maxspeed' in element['tags']:
-                                speed_str = element['tags']['maxspeed']
-                                # Parse speed (handle "70 mph" or "50" format)
-                                speed_parts = speed_str.replace('mph', '').strip().split()
-                                speed = int(speed_parts[0])
+                    flow_data = response.json().get('flowSegmentData', {})
+                    free_flow_speed_kmh = flow_data.get('freeFlowSpeed', 0)
 
+                    if free_flow_speed_kmh > 0:
+                        # Convert km/h to mph (UK uses mph)
+                        speed_mph = int(round(free_flow_speed_kmh * 0.621371))
+
+                        # Round to nearest common UK speed limit (20, 30, 40, 50, 60, 70)
+                        uk_limits = [20, 30, 40, 50, 60, 70]
+                        speed_limit = min(uk_limits, key=lambda x: abs(x - speed_mph))
+
+                        # Cache the result
+                        self.speed_limit_cache[cache_key] = {
+                            'speed_limit': speed_limit,
+                            'timestamp': time.time(),
+                            'source': 'TomTom'
+                        }
+                        print(f"[Speed Limit] TomTom: {free_flow_speed_kmh} km/h -> {speed_limit} mph")
+                        return speed_limit
+                    else:
+                        print(f"[Speed Limit] TomTom returned freeFlowSpeed=0")
+                else:
+                    print(f"[Speed Limit] TomTom API error: status={response.status_code}")
+            except requests.exceptions.Timeout:
+                print("[Speed Limit] TomTom API timeout (3s)")
+            except Exception as e:
+                print(f"[Speed Limit] TomTom failed: {e}")
+        else:
+            print("[Speed Limit] No TOMTOM_API_KEY configured, skipping TomTom")
+
+        # Fallback: Query Overpass API for maxspeed tag (slower but explicit)
+        try:
+            overpass_url = "http://overpass-api.de/api/interpreter"
+            query = f"""
+            [bbox:{lat-0.005},{lon-0.005},{lat+0.005},{lon+0.005}];
+            way[maxspeed];
+            out tags;
+            """
+
+            response = requests.get(overpass_url, params={'data': query}, timeout=3)
+
+            if response.status_code == 200:
+                data = response.json()
+                if data.get('elements'):
+                    for element in data['elements']:
+                        if 'tags' in element and 'maxspeed' in element['tags']:
+                            speed_str = element['tags']['maxspeed']
+                            # Parse speed (handle "70 mph", "50", "30 mph" formats)
+                            speed_parts = speed_str.replace('mph', '').strip().split()
+                            try:
+                                speed = int(speed_parts[0])
                                 # Cache the result
                                 self.speed_limit_cache[cache_key] = {
                                     'speed_limit': speed,
@@ -217,16 +229,29 @@ class SpeedLimitDetector:
                                 }
                                 print(f"[Speed Limit] OSM: {speed} mph")
                                 return speed
-            except Exception as e:
-                print(f"OSM speed limit failed: {e}")
-
-            # Final fallback to default speed limit for road type
-            default_limit = DEFAULT_SPEED_LIMITS.get(road_type, 30)
-            print(f"[Speed Limit] Using default for {road_type}: {default_limit} mph")
-            return default_limit
+                            except ValueError:
+                                print(f"[Speed Limit] OSM parse error: '{speed_str}'")
+                else:
+                    print(f"[Speed Limit] OSM returned no elements for bbox")
+            else:
+                print(f"[Speed Limit] OSM API error: status={response.status_code}")
+        except requests.exceptions.Timeout:
+            print("[Speed Limit] OSM API timeout (3s)")
         except Exception as e:
-            print(f"Error querying speed limit: {e}")
-            return DEFAULT_SPEED_LIMITS.get(road_type, 30)
+            print(f"[Speed Limit] OSM failed: {e}")
+
+        # Final fallback to default speed limit for road type
+        default_limit = DEFAULT_SPEED_LIMITS.get(road_type, 30)
+
+        # Cache the default too to avoid repeated API calls
+        self.speed_limit_cache[cache_key] = {
+            'speed_limit': default_limit,
+            'timestamp': time.time(),
+            'source': 'default'
+        }
+
+        print(f"[Speed Limit] Using default for {road_type}: {default_limit} mph")
+        return default_limit
     
     def _update_speed_limit(self, new_speed_limit: int):
         """Update current speed limit and detect changes."""

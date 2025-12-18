@@ -8933,6 +8933,76 @@ function setCurrentLocation(field) {
     );
 }
 
+/**
+ * Swap start and destination locations
+ * @function swapStartAndDestination
+ * @returns {void}
+ */
+function swapStartAndDestination() {
+    const startInput = document.getElementById('start');
+    const endInput = document.getElementById('end');
+
+    if (!startInput || !endInput) {
+        showStatus('Error: Location inputs not found', 'error');
+        return;
+    }
+
+    // Store start values
+    const startValue = startInput.value;
+    const startLat = startInput.dataset.lat;
+    const startLon = startInput.dataset.lon;
+    const startDisplayName = startInput.dataset.displayName;
+
+    // Store end values
+    const endValue = endInput.value;
+    const endLat = endInput.dataset.lat;
+    const endLon = endInput.dataset.lon;
+    const endDisplayName = endInput.dataset.displayName;
+
+    // Swap values
+    startInput.value = endValue || '';
+    startInput.dataset.lat = endLat || '';
+    startInput.dataset.lon = endLon || '';
+    startInput.dataset.displayName = endDisplayName || '';
+
+    endInput.value = startValue || '';
+    endInput.dataset.lat = startLat || '';
+    endInput.dataset.lon = startLon || '';
+    endInput.dataset.displayName = startDisplayName || '';
+
+    // Swap markers on the map if they exist
+    if (startMarker && endMarker) {
+        const startLatLng = startMarker.getLatLng();
+        const endLatLng = endMarker.getLatLng();
+        startMarker.setLatLng(endLatLng);
+        endMarker.setLatLng(startLatLng);
+    }
+
+    // Visual feedback on the button
+    const swapBtn = document.getElementById('swapLocationsBtn');
+    if (swapBtn) {
+        swapBtn.style.background = '#e3f2fd';
+        swapBtn.style.borderColor = '#2196F3';
+        setTimeout(() => {
+            swapBtn.style.background = '#f5f5f5';
+            swapBtn.style.borderColor = '#ddd';
+        }, 300);
+    }
+
+    showStatus('🔄 Start and destination swapped', 'success');
+
+    // Recalculate route if both locations have coordinates and a route exists
+    const hasStart = startInput.value && startInput.dataset.lat && startInput.dataset.lon;
+    const hasEnd = endInput.value && endInput.dataset.lat && endInput.dataset.lon;
+
+    if (hasStart && hasEnd && routeLayer) {
+        console.log('[Swap] Recalculating route after swap...');
+        setTimeout(() => {
+            calculateRoute();
+        }, 100);
+    }
+}
+
 // ===== AUTO GPS LOCATION FEATURE =====
 /**
  * toggleAutoGpsLocation function

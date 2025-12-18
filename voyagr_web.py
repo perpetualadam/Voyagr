@@ -3443,9 +3443,9 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20251217j"></script>
-    <script src="/static/js/voyagr-app.js?v=20251217j"></script>
-    <script src="/static/js/app.js?v=20251217j"></script>
+    <script src="/static/js/voyagr-core.js?v=20251217k"></script>
+    <script src="/static/js/voyagr-app.js?v=20251217k"></script>
+    <script src="/static/js/app.js?v=20251217k"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -3493,6 +3493,14 @@ HTML_TEMPLATE = '''
                         </div>
                         <div class="autocomplete-dropdown" id="autocompleteStart"></div>
                     </div>
+                </div>
+
+                <!-- Swap Start/Destination Button -->
+                <div style="display: flex; justify-content: center; margin: -5px 0 5px 0;">
+                    <button type="button" id="swapLocationsBtn" onclick="swapStartAndDestination()" style="padding: 6px 16px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 20px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease;" title="Swap start and destination">
+                        <span style="font-size: 16px;">⇅</span>
+                        <span style="font-size: 12px; color: #666;">Swap</span>
+                    </button>
                 </div>
 
                 <div class="form-group">
