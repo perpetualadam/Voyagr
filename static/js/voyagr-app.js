@@ -6735,7 +6735,8 @@ function updateTurnWidgetFromPosition(lat, lon) {
     }
 
     // Find the next maneuver ahead of user's position
-    const userRouteIndex = findClosestRoutePointIndex(lat, lon);
+    // FIX: Pass [lat, lon] as array, not separate arguments
+    const userRouteIndex = findClosestRoutePointIndex([lat, lon], 0);
 
     for (let i = currentStepIndex; i < currentRouteSteps.length; i++) {
         const maneuver = currentRouteSteps[i];
@@ -9489,11 +9490,22 @@ function startTurnByTurnNavigation(routeData) {
 
     // ===== SHOW TURN INSTRUCTION WIDGET during navigation =====
     showTurnInstructionWidget();
-    // Initialize with first instruction if available
-    if (currentRouteSteps && currentRouteSteps.length > 0) {
+    // Initialize with first instruction if available - calculate actual distance
+    if (currentRouteSteps && currentRouteSteps.length > 0 && routePolyline && routePolyline.length > 0) {
         const firstStep = currentRouteSteps[0];
+        // Calculate distance to first maneuver from start
+        const firstManeuverIndex = firstStep.begin_shape_index || 0;
+        let distanceToFirst = 0;
+        if (firstManeuverIndex > 0 && firstManeuverIndex < routePolyline.length) {
+            const startPoint = routePolyline[0];
+            const firstManeuverPoint = routePolyline[firstManeuverIndex];
+            distanceToFirst = calculateDistance(startPoint[0], startPoint[1], firstManeuverPoint[0], firstManeuverPoint[1]);
+        } else {
+            // Use the step's distance if available
+            distanceToFirst = firstStep.distance || 0;
+        }
         updateTurnInstructionDisplay({
-            distance: 0,
+            distance: distanceToFirst,
             direction: 'straight',
             instruction: firstStep.instruction || 'Follow the route',
             streetName: (firstStep.street_names || [])[0] || ''

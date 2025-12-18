@@ -3443,9 +3443,9 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20251217h"></script>
-    <script src="/static/js/voyagr-app.js?v=20251217h"></script>
-    <script src="/static/js/app.js?v=20251217h"></script>
+    <script src="/static/js/voyagr-core.js?v=20251217i"></script>
+    <script src="/static/js/voyagr-app.js?v=20251217i"></script>
+    <script src="/static/js/app.js?v=20251217i"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
