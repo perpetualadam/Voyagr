@@ -3443,9 +3443,9 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20251217m"></script>
-    <script src="/static/js/voyagr-app.js?v=20251217m"></script>
-    <script src="/static/js/app.js?v=20251217m"></script>
+    <script src="/static/js/voyagr-core.js?v=20251217n"></script>
+    <script src="/static/js/voyagr-app.js?v=20251217n"></script>
+    <script src="/static/js/app.js?v=20251217n"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -6340,10 +6340,12 @@ def calculate_route():
                     # Use 500 max to cover all cameras in route area (typically 50-100)
                     # This will be reduced if Valhalla can't find a route
                     # Pass route coordinates for distance-based prioritization
+                    # NOTE: Valhalla has a hard limit of 50 exclude_locations
+                    # Exceeding this returns error 157: "Exceeded max avoid locations: 50"
                     exclude_locations = build_valhalla_exclude_locations(
                         hazards,
                         route_bbox=route_bbox,
-                        max_hazards=500,
+                        max_hazards=50,  # Valhalla's max limit
                         start_lat=start_lat,
                         start_lon=start_lon,
                         end_lat=end_lat,
@@ -6411,14 +6413,17 @@ def calculate_route():
                 logger.info(f"[ROUTE] Multi-stop route with {len(route_locations)} locations")
 
             # ================================================================
-            # SEGMENTED ROUTING FOR HIGH-DENSITY ROUTES
+            # SEGMENTED ROUTING - DISABLED
             # ================================================================
-            # If we have >75 cameras, use segmented routing with separate API calls
-            # Each segment gets its own 50 exclude_locations
+            # NOTE: Valhalla has a hard limit of 50 exclude_locations (error 157)
+            # Segmented routing was designed to work around this, but it causes
+            # "No path could be found" errors when segments are blocked.
+            # We now respect the 50 limit from the start.
             use_segmented_routing = False
             num_segments = 1
 
-            if enable_hazard_avoidance and len(exclude_locations) > 75:
+            # Segmented routing disabled - use standard routing with max 50 exclusions
+            if False and enable_hazard_avoidance and len(exclude_locations) > 75:
                 # Determine number of segments based on camera density
                 if len(exclude_locations) > 150:
                     num_segments = 3  # 150 total exclusions
