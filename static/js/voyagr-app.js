@@ -2622,6 +2622,27 @@ async function calculateRoute() {
     })
     .then(response => {
         console.log('[calculateRoute] API response status:', response.status);
+
+        // Check content-type to detect HTML error pages
+        const contentType = response.headers.get('content-type');
+        if (!contentType || !contentType.includes('application/json')) {
+            console.error('[calculateRoute] Non-JSON response received:', contentType);
+            // Read as text first to get the error message
+            return response.text().then(text => {
+                console.error('[calculateRoute] Response text:', text.substring(0, 200));
+                throw new Error('Server returned an error page. The route may be too long or the server timed out. Please try a shorter route or try again later.');
+            });
+        }
+
+        // Check for error status codes
+        if (!response.ok) {
+            return response.json().then(data => {
+                throw new Error(data.error || `Server error: ${response.status}`);
+            }).catch(() => {
+                throw new Error(`Server error: ${response.status}. Please try again.`);
+            });
+        }
+
         return response.json();
     })
     .then(data => {

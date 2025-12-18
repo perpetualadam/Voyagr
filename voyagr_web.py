@@ -3443,9 +3443,9 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20251217k"></script>
-    <script src="/static/js/voyagr-app.js?v=20251217k"></script>
-    <script src="/static/js/app.js?v=20251217k"></script>
+    <script src="/static/js/voyagr-core.js?v=20251217l"></script>
+    <script src="/static/js/voyagr-app.js?v=20251217l"></script>
+    <script src="/static/js/app.js?v=20251217l"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -6812,10 +6812,16 @@ def calculate_route():
                 payload["exclude_locations"] = exclude_locations
                 logger.debug(f"[VALHALLA] Added {len(exclude_locations)} exclude_locations to request")
 
+            # Calculate distance to determine appropriate timeout
+            # Longer routes need more time (Valhalla can take 30+ seconds for 500+ km routes)
+            straight_line_km = ((end_lat - start_lat)**2 + (end_lon - start_lon)**2)**0.5 * 111  # ~111 km per degree
+            route_timeout = max(15, min(60, int(10 + straight_line_km / 50)))  # 15-60 seconds based on distance
+
             print(f"[Valhalla] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
             print(f"[Valhalla] URL: {url}")
             print(f"[Valhalla] Hazard avoidance: {enable_hazard_avoidance}, Locations: {len(exclude_locations) if exclude_locations else 0}")
-            response = requests.post(url, json=payload, timeout=10, headers=headers)
+            print(f"[Valhalla] Estimated distance: {straight_line_km:.0f} km, Timeout: {route_timeout}s")
+            response = requests.post(url, json=payload, timeout=route_timeout, headers=headers)
             print(f"[Valhalla] Response status: {response.status_code}", flush=True)
             if response.status_code != 200:
                 print(f"[Valhalla] Response body: {response.text[:500]}", flush=True)
