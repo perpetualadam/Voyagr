@@ -4863,13 +4863,18 @@ HTML_TEMPLATE = '''
             }
         }
     </script>
+    <!-- API Keys injected from server -->
+    <script>
+        window.TOMTOM_API_KEY = '{{ tomtom_api_key }}';
+    </script>
 </body>
 </html>
 '''
 
 @app.route('/')
 def index():
-    return render_template_string(HTML_TEMPLATE)
+    tomtom_key = os.getenv('TOMTOM_API_KEY', '')
+    return render_template_string(HTML_TEMPLATE, tomtom_api_key=tomtom_key)
 
 @app.route('/monitoring')
 def monitoring_dashboard():
