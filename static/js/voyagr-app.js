@@ -3026,7 +3026,7 @@ function addTrafficLayer() {
     // TomTom Traffic Flow Tiles - relative speed coloring
     // Green = free flow, Yellow = slow, Red = congested, Black = blocked
     // Using 'relative0' style which shows all roads with traffic coloring
-    const tomtomApiKey = window.TOMTOM_API_KEY || '';
+    let tomtomApiKey = window.TOMTOM_API_KEY || '';
 
     // Debug: Log API key availability
     console.log('[Traffic] API key check:', {
@@ -3035,9 +3035,21 @@ function addTrafficLayer() {
         hasKey: !!tomtomApiKey
     });
 
+    // If key not available from inline script, try fetching from API
     if (!tomtomApiKey) {
-        console.log('[Traffic] TomTom API key not available - using route-level traffic only');
-        // Note: Route-level traffic still works via backend API
+        console.log('[Traffic] Fetching API key from server...');
+        fetch('/api/config')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.tomtom_api_key) {
+                    window.TOMTOM_API_KEY = data.tomtom_api_key;
+                    console.log('[Traffic] API key loaded from server, reinitializing...');
+                    addTrafficLayer(); // Retry with new key
+                } else {
+                    console.log('[Traffic] No API key from server - using route-level traffic only');
+                }
+            })
+            .catch(err => console.log('[Traffic] Failed to fetch config:', err));
         return;
     }
 

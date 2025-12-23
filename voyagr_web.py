@@ -5025,6 +5025,20 @@ def index():
     tomtom_key = os.getenv('TOMTOM_API_KEY', '')
     return render_template_string(HTML_TEMPLATE, tomtom_api_key=tomtom_key)
 
+@app.route('/api/config')
+def get_config():
+    """Return client-side configuration including API keys.
+    This endpoint bypasses HTML caching issues."""
+    response = jsonify({
+        'tomtom_api_key': os.getenv('TOMTOM_API_KEY', ''),
+        'success': True
+    })
+    # Prevent caching
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
+
 @app.route('/monitoring')
 def monitoring_dashboard():
     """Monitoring dashboard for routing engines."""
