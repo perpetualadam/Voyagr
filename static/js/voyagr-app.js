@@ -2952,8 +2952,9 @@ function displayHazardMarkers(hazards) {
 function clearHazardMarkers() {
     if (window.hazardMarkers) {
         window.hazardMarkers.forEach(marker => {
-            if (map.hasLayer(marker)) {
-                map.removeLayer(marker);
+            // MapLibre markers use remove() method instead of Leaflet's removeLayer
+            if (marker && typeof marker.remove === 'function') {
+                marker.remove();
             }
         });
     }
