@@ -3798,8 +3798,8 @@ function fetchAndDisplayCameras() {
     const bounds = map.getBounds();
     const zoom = map.getZoom();
 
-    // Only show cameras at zoom level 12 or higher to avoid overload
-    if (zoom < 12) {
+    // Only show cameras at zoom level 10 or higher for better mobile visibility
+    if (zoom < 10) {
         clearCameraMarkers();
         console.log('[Cameras] Zoom level too low, hiding cameras');
         return;
@@ -3872,16 +3872,17 @@ function displayCameraMarkers(cameras) {
                 background: ${config.bgColor};
                 border: 2px solid ${config.color};
                 border-radius: 4px;
-                width: 26px;
-                height: 26px;
+                width: 32px;
+                height: 32px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                box-shadow: 0 4px 10px rgba(0,0,0,0.4);
                 cursor: pointer;
-            ">${config.svg}</div>`,
-            iconSize: [26, 26],
-            iconAnchor: [13, 13],
+                transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            ">${config.svg.replace('width="18"', 'width="24"').replace('height="18"', 'height="24"')}</div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
             popup: `
                 <div style="text-align: center; min-width: 140px;">
                     <div style="margin-bottom: 8px; display: flex; justify-content: center;">${config.svg.replace('width="18"', 'width="32"').replace('height="18"', 'height="32"')}</div>

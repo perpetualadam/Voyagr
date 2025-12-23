@@ -56,9 +56,29 @@ function initializeMap() {
     map = new maplibregl.Map({
         container: 'map',
         style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-        center: [-0.1278, 51.5074], // [lon, lat]
+        center: [-0.1278, 51.5074], // Default: London [lon, lat]
         zoom: 13
     });
+
+    // Attempt to center on current location on load
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (position) => {
+                const lat = position.coords.latitude;
+                const lon = position.coords.longitude;
+                console.log(`[Init] Centering on user: [${lat}, ${lon}]`);
+                map.flyTo({
+                    center: [lon, lat],
+                    zoom: 15,
+                    duration: 2000
+                });
+            },
+            (error) => {
+                console.log('[Init] Geolocation failed or denied:', error.message);
+            },
+            { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
+        );
+    }
     // Add navigation controls (zoom and rotation)
     map.addControl(new maplibregl.NavigationControl());
 

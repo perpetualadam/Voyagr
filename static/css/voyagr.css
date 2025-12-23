@@ -17,10 +17,12 @@ html {
     --safe-area-inset-right: env(safe-area-inset-right, 0px);
 }
 
-html, body {
+html,
+body {
     width: 100%;
     height: 100%;
-    height: 100dvh; /* Dynamic viewport height for mobile */
+    height: 100dvh;
+    /* Dynamic viewport height for mobile */
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background: #f5f5f5;
     overflow: hidden;
@@ -77,7 +79,7 @@ body {
     border-radius: 50%;
     background: white;
     border: none;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     cursor: pointer;
     display: flex;
     align-items: center;
@@ -93,12 +95,12 @@ body {
 
 .fab:hover {
     transform: scale(1.08);
-    box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
 }
 
 .fab:active {
     transform: scale(0.92);
-    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
 /* Haptic feedback visual indicator */
@@ -107,9 +109,17 @@ body {
 }
 
 @keyframes hapticPulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(0.88); }
-    100% { transform: scale(1); }
+    0% {
+        transform: scale(1);
+    }
+
+    50% {
+        transform: scale(0.88);
+    }
+
+    100% {
+        transform: scale(1);
+    }
 }
 
 /* Bottom sheet drawer */
@@ -120,12 +130,13 @@ body {
     right: 0;
     background: white;
     border-radius: 24px 24px 0 0;
-    box-shadow: 0 -4px 24px rgba(0,0,0,0.12);
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
     z-index: 50;
     max-height: 90vh;
-    max-height: 90dvh; /* Dynamic viewport for mobile */
+    max-height: 90dvh;
+    /* Dynamic viewport for mobile */
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    transform: translateY(calc(100% - 80px - var(--safe-area-inset-bottom, 0px)));
+    transform: translateY(calc(100% - 110px - var(--safe-area-inset-bottom, 0px)));
     /* GPU acceleration */
     will-change: transform;
     /* Prevent content from going behind notch */
@@ -135,7 +146,19 @@ body {
 }
 
 .bottom-sheet.expanded {
-    transform: translateY(0);
+    transform: translateY(0) !important;
+}
+
+/* Speed Camera Markers */
+.camera-marker {
+    z-index: 100 !important;
+    transition: transform 0.2s ease;
+}
+
+.camera-marker>div {
+    cursor: pointer !important;
+    background: white !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5) !important;
 }
 
 .bottom-sheet-handle {
@@ -228,7 +251,8 @@ label {
     font-size: 14px;
 }
 
-input, select {
+input,
+select {
     width: 100%;
     padding: 12px;
     border: 2px solid #e0e0e0;
@@ -238,7 +262,8 @@ input, select {
     font-family: inherit;
 }
 
-input:focus, select:focus {
+input:focus,
+select:focus {
     outline: none;
     border-color: #667eea;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
@@ -250,7 +275,8 @@ input:focus, select:focus {
 }
 
 .location-input-group input {
-    padding-right: 90px; /* Space for two buttons (40px each + gap) */
+    padding-right: 90px;
+    /* Space for two buttons (40px each + gap) */
 }
 
 /* Container for location buttons - positioned to not block input touch area */
@@ -261,7 +287,8 @@ input:focus, select:focus {
     transform: translateY(-50%);
     display: flex;
     gap: 4px;
-    pointer-events: none; /* Let touches pass through to input */
+    pointer-events: none;
+    /* Let touches pass through to input */
 }
 
 .location-btn {
@@ -277,7 +304,8 @@ input:focus, select:focus {
     display: flex;
     align-items: center;
     justify-content: center;
-    pointer-events: auto; /* Re-enable touch on buttons themselves */
+    pointer-events: auto;
+    /* Re-enable touch on buttons themselves */
 }
 
 .location-btn:hover {
@@ -541,8 +569,15 @@ button {
 }
 
 @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.7; }
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.7;
+    }
 }
 
 .btn-voice-secondary {
@@ -593,13 +628,21 @@ button {
     }
 
     /* Larger touch targets for accessibility (min 44px) */
-    button, .btn, .fab, input, select, .toggle-btn {
+    button,
+    .btn,
+    .fab,
+    input,
+    select,
+    .toggle-btn {
         min-height: 44px;
         min-width: 44px;
     }
 
-    input, select, textarea {
-        font-size: 16px; /* Prevents iOS zoom on focus */
+    input,
+    select,
+    textarea {
+        font-size: 16px;
+        /* Prevents iOS zoom on focus */
     }
 }
 
@@ -655,18 +698,25 @@ button {
 
 /* High contrast mode support */
 @media (prefers-contrast: high) {
-    .btn, .fab {
+
+    .btn,
+    .fab {
         border: 2px solid currentColor;
     }
 
-    input, select, textarea {
+    input,
+    select,
+    textarea {
         border-width: 2px;
     }
 }
 
 /* Reduced motion preference */
 @media (prefers-reduced-motion: reduce) {
-    *, *::before, *::after {
+
+    *,
+    *::before,
+    *::after {
         animation-duration: 0.01ms !important;
         animation-iteration-count: 1 !important;
         transition-duration: 0.01ms !important;
@@ -1178,6 +1228,7 @@ h1 {
         transform: translate(-50%, -50%) scale(0.5);
         opacity: 1;
     }
+
     100% {
         transform: translate(-50%, -50%) scale(1.5);
         opacity: 0;
@@ -1391,7 +1442,7 @@ h1 {
 }
 
 /* Ensure smooth rotation and pitching transitions */
-.vehicle-marker-icon > div {
+.vehicle-marker-icon>div {
     transition: transform 0.1s ease-out !important;
     will-change: transform;
     backface-visibility: hidden;
@@ -1412,7 +1463,7 @@ body.dark-mode html {
 /* Bottom Sheet Dark Mode */
 body.dark-mode .bottom-sheet {
     background: #2d2d2d;
-    box-shadow: 0 -4px 20px rgba(0,0,0,0.5);
+    box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
 }
 
 body.dark-mode .bottom-sheet-handle::before {
@@ -1512,11 +1563,11 @@ body.dark-mode .routing-mode-btn.active {
 body.dark-mode .fab {
     background: #3a3a3a;
     color: #e0e0e0;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 body.dark-mode .fab:hover {
-    box-shadow: 0 6px 16px rgba(0,0,0,0.5);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
 }
 
 /* Status Messages Dark Mode */
@@ -1678,7 +1729,7 @@ body.dark-mode .autocomplete-dropdown,
 body.dark-mode .search-history-dropdown {
     background: #3a3a3a;
     border-color: #555;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
 body.dark-mode .autocomplete-item,
@@ -1810,7 +1861,8 @@ body.dark-mode .form-group[style*="background: #f5f5f5"] {
     top: 20px;
     left: 20px;
     z-index: 100;
-    max-width: calc(100% - 180px); /* Leave room for speed widget on right */
+    max-width: calc(100% - 180px);
+    /* Leave room for speed widget on right */
     min-width: 280px;
 }
 
@@ -1859,7 +1911,8 @@ body.dark-mode .form-group[style*="background: #f5f5f5"] {
 /* Turn Info Container */
 .turn-info-container {
     flex: 1;
-    min-width: 0; /* Allow text truncation */
+    min-width: 0;
+    /* Allow text truncation */
 }
 
 .turn-distance {
@@ -1924,6 +1977,7 @@ body.dark-mode .form-group[style*="background: #f5f5f5"] {
         opacity: 0;
         transform: translateY(-10px);
     }
+
     to {
         opacity: 1;
         transform: translateY(0);
@@ -2193,4 +2247,3 @@ body.dark-mode .journey-summary-bar {
         height: 30px;
     }
 }
-
