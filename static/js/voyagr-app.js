@@ -467,7 +467,7 @@ function saveAllSettings() {
         hazardPreferences: {
             avoidTolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
             avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
-            avoidCameras: localStorage.getItem('pref_cameras') === 'true',
+            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',  // Default: true (avoid cameras)
             variableSpeedAlerts: localStorage.getItem('pref_variableSpeedAlerts') === 'true'
         },
 
@@ -2548,7 +2548,7 @@ async function calculateRoute() {
 
     // Check if hazard avoidance is enabled (any hazard type selected)
     const enableHazardAvoidance =
-        localStorage.getItem('pref_cameras') === 'true' ||
+        localStorage.getItem('pref_cameras') !== 'false' ||  // Default: true
         localStorage.getItem('pref_police') === 'true' ||
         localStorage.getItem('pref_roadworks') === 'true' ||
         localStorage.getItem('pref_accidents') === 'true';
@@ -3564,9 +3564,9 @@ async function manualTrafficUpdate() {
  */
 function buildRouteRequest(startLat, startLon, destination) {
     const enableHazardAvoidance =
-        localStorage.getItem('pref_cameras') === 'true' ||
-        localStorage.getItem('pref_tolls') !== 'false' ||  // Default: true
-        localStorage.getItem('pref_caz') !== 'false';      // Default: true
+        localStorage.getItem('pref_cameras') !== 'false' ||  // Default: true
+        localStorage.getItem('pref_tolls') !== 'false' ||    // Default: true
+        localStorage.getItem('pref_caz') !== 'false';        // Default: true
 
     return {
         start: `${startLat},${startLon}`,
@@ -3580,9 +3580,9 @@ function buildRouteRequest(startLat, startLon, destination) {
         include_tolls: localStorage.getItem('includeTolls') !== 'false',
         include_caz: localStorage.getItem('includeCAZ') !== 'false',
         enable_hazard_avoidance: enableHazardAvoidance,
-        avoid_cameras: localStorage.getItem('pref_cameras') === 'true',
-        avoid_tolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
-        avoid_caz: localStorage.getItem('pref_caz') !== 'false'       // Default: true
+        avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',  // Default: true
+        avoid_tolls: localStorage.getItem('pref_tolls') !== 'false',      // Default: true
+        avoid_caz: localStorage.getItem('pref_caz') !== 'false'           // Default: true
     };
 }
 
@@ -4652,7 +4652,7 @@ async function selectParking(parking, destinationCoords) {
 
         // Calculate driving route to parking
         const enableHazardAvoidanceParking =
-            localStorage.getItem('pref_cameras') === 'true' ||
+            localStorage.getItem('pref_cameras') !== 'false' ||  // Default: true
             localStorage.getItem('pref_police') === 'true' ||
             localStorage.getItem('pref_roadworks') === 'true' ||
             localStorage.getItem('pref_accidents') === 'true';
@@ -4679,7 +4679,7 @@ async function selectParking(parking, destinationCoords) {
 
         // Calculate walking route from parking to destination
         const enableHazardAvoidanceWalking =
-            localStorage.getItem('pref_cameras') === 'true' ||
+            localStorage.getItem('pref_cameras') !== 'false' ||  // Default: true
             localStorage.getItem('pref_police') === 'true' ||
             localStorage.getItem('pref_roadworks') === 'true' ||
             localStorage.getItem('pref_accidents') === 'true';
@@ -8197,9 +8197,9 @@ function logReroutingEvent(startLat, startLon, destination, route, hazardCount) 
             hazard_count: hazardCount
         },
         settings: {
-            avoid_cameras: localStorage.getItem('pref_cameras') === 'true',
-            avoid_tolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
-            avoid_caz: localStorage.getItem('pref_caz') !== 'false'       // Default: true
+            avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',  // Default: true
+            avoid_tolls: localStorage.getItem('pref_tolls') !== 'false',      // Default: true
+            avoid_caz: localStorage.getItem('pref_caz') !== 'false'           // Default: true
         }
     };
 
@@ -10011,7 +10011,7 @@ function loadPreferences() {
     };
 
     // Preferences that default to TRUE (enabled) when not set
-    const defaultEnabledPrefs = ['tolls', 'caz'];
+    const defaultEnabledPrefs = ['tolls', 'caz', 'cameras'];
 
     const prefs = ['tolls', 'caz', 'cameras', 'variableSpeedAlerts'];
     prefs.forEach(pref => {

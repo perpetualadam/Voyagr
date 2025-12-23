@@ -16,9 +16,9 @@ let zoomAndFollowEnabled = localStorage.getItem('zoomAndFollowEnabled') === 'tru
 let mapFollowingActive = false; // Whether we're currently following the vehicle
 
 // ===== UNIT CONVERSION VARIABLES =====
-let distanceUnit = localStorage.getItem('unit_distance') || 'km';
+let distanceUnit = localStorage.getItem('unit_distance') || 'mi';  // Default: miles
 let currencyUnit = localStorage.getItem('unit_currency') || 'GBP';
-let speedUnit = localStorage.getItem('unit_speed') || 'kmh';
+let speedUnit = localStorage.getItem('unit_speed') || 'mph';  // Default: mph
 let temperatureUnit = localStorage.getItem('unit_temperature') || 'celsius';
 
 const currencySymbols = {
