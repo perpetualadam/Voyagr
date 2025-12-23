@@ -1,14 +1,14 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
-// Version: 4.0 - Increased cache size, reduced log noise
-const CACHE_VERSION = 'v4';
+// Version: 5.0 - Network-first for root HTML, cache JS/CSS
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
 const ROUTE_CACHE = `voyagr-routes-${CACHE_VERSION}`;
 
 // Core assets to cache immediately
+// NOTE: '/' is NOT cached - it uses network-first to get fresh API keys
 const STATIC_ASSETS = [
-  '/',
   '/manifest.json',
   '/static/css/voyagr.css',
   '/static/js/voyagr-core.js',
@@ -40,7 +40,7 @@ async function trimCache(cacheName, maxSize) {
 
 // Install event - cache static assets
 self.addEventListener('install', event => {
-  console.log('[Service Worker] Installing v3...');
+  console.log('[Service Worker] Installing v5...');
   event.waitUntil(
     caches.open(STATIC_CACHE).then(cache => {
       console.log('[Service Worker] Caching static assets');
@@ -58,7 +58,7 @@ self.addEventListener('install', event => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
-  console.log('[Service Worker] Activating v3...');
+  console.log('[Service Worker] Activating v5...');
   const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, ROUTE_CACHE, CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -171,6 +171,31 @@ self.addEventListener('fetch', event => {
 
         return cachedResponse || fetchPromise;
       })
+    );
+    return;
+  }
+
+  // Root HTML page - NETWORK FIRST to always get fresh API keys
+  // This ensures TomTom and other API keys are always current
+  if (url.pathname === '/' || url.pathname === '/index.html') {
+    event.respondWith(
+      fetch(request)
+        .then(response => {
+          // Cache the fresh response for offline use
+          if (response.ok) {
+            const responseClone = response.clone();
+            caches.open(DYNAMIC_CACHE).then(cache => {
+              cache.put(request, responseClone);
+            });
+          }
+          return response;
+        })
+        .catch(() => {
+          // Fallback to cache only if network fails
+          return caches.match(request).then(response => {
+            return response || new Response('Offline - please reconnect');
+          });
+        })
     );
     return;
   }
