@@ -3140,8 +3140,17 @@ function toggleRouteTraffic() {
  */
 function clearRouteTrafficLayers() {
     routeTrafficLayers.forEach(layer => {
-        if (map && layer) {
-            map.removeLayer(layer);
+        if (layer) {
+            // MapLibre layers have a remove() method
+            if (typeof layer.remove === 'function') {
+                layer.remove();
+            } else if (map && layer.id && map.getLayer(layer.id)) {
+                // Fallback: remove by layer ID
+                map.removeLayer(layer.id);
+                if (map.getSource(layer.id)) {
+                    map.removeSource(layer.id);
+                }
+            }
         }
     });
     routeTrafficLayers = [];
