@@ -145,8 +145,10 @@ let currentUserMarker = null;
 let trackingHistory = [];
 let lastZoomLevel = 13;
 let smartZoomEnabled = localStorage.getItem('smartZoomEnabled') === '1' || true;
-let zoomAndFollowEnabled = localStorage.getItem('zoomAndFollowEnabled') === '1' || true;
-let mapFollowingActive = false;
+// Navigation tracking state (global)
+// These are now initialized in voyagr-core.js to prevent redeclaration errors
+// let zoomAndFollowEnabled = ...;
+// let mapFollowingActive = ...;
 let navigationActive = false;
 let paddingBottom = window.innerHeight * 0.55; // For driver's perspective
 
@@ -2400,8 +2402,9 @@ function setupMapClickHandler() {
         }
 
         if (mapPickerMode) {
-            const lat = e.latlng.lat;
-            const lon = e.latlng.lng;
+            // MapLibre uses e.lngLat (not e.latlng like Leaflet)
+            const lat = e.lngLat.lat;
+            const lon = e.lngLat.lng;
             document.getElementById(mapPickerMode).value = `${lat},${lon}`;
 
             // Add marker
@@ -10248,8 +10251,9 @@ function initMobileEnhancements() {
         console.log('[Mobile] Orientation changed:', screen.orientation?.type || window.orientation);
         // Delay to allow DOM to update
         setTimeout(() => {
-            if (map) {
-                map.invalidateSize();
+            // MapLibre uses resize() instead of Leaflet's invalidateSize()
+            if (map && typeof map.resize === 'function') {
+                map.resize();
             }
         }, 200);
     });
@@ -10258,9 +10262,9 @@ function initMobileEnhancements() {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
             console.log('[Mobile] App came to foreground');
-            // Refresh map if needed
-            if (map) {
-                map.invalidateSize();
+            // Refresh map if needed - MapLibre uses resize() instead of Leaflet's invalidateSize()
+            if (map && typeof map.resize === 'function') {
+                map.resize();
             }
             // Resume GPS tracking if it was active
             if (isTrackingActive && !gpsWatchId) {

@@ -1,6 +1,6 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
-// Version: 3.0 - Modern PWA with offline-first strategy
-const CACHE_VERSION = 'v3';
+// Version: 4.0 - Increased cache size, reduced log noise
+const CACHE_VERSION = 'v4';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
@@ -19,18 +19,22 @@ const STATIC_ASSETS = [
 ];
 
 // Max cache sizes (in items)
-const MAX_DYNAMIC_CACHE_SIZE = 50;
+const MAX_DYNAMIC_CACHE_SIZE = 150;
 const MAX_ROUTE_CACHE_SIZE = 20;
 const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
-// Helper: Limit cache size
+// Helper: Limit cache size (with single summary log)
 async function trimCache(cacheName, maxSize) {
   const cache = await caches.open(cacheName);
   const keys = await cache.keys();
   if (keys.length > maxSize) {
-    console.log(`[SW] Trimming ${cacheName}: ${keys.length} > ${maxSize}`);
-    await cache.delete(keys[0]);
-    await trimCache(cacheName, maxSize);
+    const originalSize = keys.length;
+    // Delete oldest items until we're at maxSize
+    const itemsToDelete = keys.length - maxSize;
+    for (let i = 0; i < itemsToDelete; i++) {
+      await cache.delete(keys[i]);
+    }
+    console.log(`[SW] Trimmed ${cacheName}: ${originalSize} → ${maxSize} items`);
   }
 }
 

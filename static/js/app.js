@@ -141,22 +141,19 @@ function setupEventListeners() {
         temperatureSelect.addEventListener('change', updateTemperatureUnit);
     }
     
-    // Map click for location picker
-    if (map) {
-        map.on('click', (e) => {
-            if (mapPickerMode) {
-                selectAutocompleteResult(mapPickerMode, e.latlng.lat, e.latlng.lng, 'Selected Location');
-                mapPickerMode = null;
-            }
-        });
-    }
-    
+    // Map click for location picker - handled by setupMapClickHandler in voyagr-app.js
+    // MapLibre uses e.lngLat instead of e.latlng
+
     console.log('[App] Event listeners setup complete');
 }
 
 // Initialize app when DOM is ready
 document.addEventListener('DOMContentLoaded', initializeApp);
 
-// Save app state before unload
-window.addEventListener('beforeunload', saveAppState);
+// Save app state before unload - defer registration until saveAppState is available
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof saveAppState === 'function') {
+        window.addEventListener('beforeunload', saveAppState);
+    }
+});
 

@@ -319,47 +319,77 @@ function add3DBuildings(mapInstance) {
     if (!mapInstance) return;
 
     const addBuildingLayer = () => {
-        // Find the first symbol layer to insert buildings below
-        const layers = mapInstance.getStyle().layers;
-        let labelLayerId;
-        for (let i = 0; i < layers.length; i++) {
-            if (layers[i].type === 'symbol' && layers[i].layout['text-field']) {
-                labelLayerId = layers[i].id;
-                break;
+        try {
+            // Find the first symbol layer to insert buildings below
+            const style = mapInstance.getStyle();
+            if (!style || !style.layers) {
+                console.log('[MapLibre] Style not ready for 3D buildings');
+                return;
             }
-        }
 
-        if (mapInstance.getLayer('3d-buildings')) return;
-
-        mapInstance.addLayer(
-            {
-                'id': '3d-buildings',
-                'source': 'composite',
-                'source-layer': 'building',
-                'filter': ['==', 'extrude', 'true'],
-                'type': 'fill-extrusion',
-                'minzoom': 15,
-                'paint': {
-                    'fill-extrusion-color': '#aaa',
-                    'fill-extrusion-height': [
-                        'interpolate',
-                        ['linear'],
-                        ['zoom'],
-                        15, 0,
-                        15.05, ['get', 'height']
-                    ],
-                    'fill-extrusion-base': [
-                        'interpolate',
-                        ['linear'],
-                        ['zoom'],
-                        15, 0,
-                        15.05, ['get', 'min_height']
-                    ],
-                    'fill-extrusion-opacity': 0.6
+            const layers = style.layers;
+            let labelLayerId;
+            for (let i = 0; i < layers.length; i++) {
+                if (layers[i].type === 'symbol' && layers[i].layout && layers[i].layout['text-field']) {
+                    labelLayerId = layers[i].id;
+                    break;
                 }
-            },
-            labelLayerId
-        );
+            }
+
+            if (mapInstance.getLayer('3d-buildings')) return;
+
+            // Check if common sources exist
+            const sources = style.sources || {};
+            let buildingSource = null;
+            let buildingSourceLayer = 'building';
+
+            if (sources.composite) {
+                buildingSource = 'composite';
+            } else if (sources.openmaptiles) {
+                buildingSource = 'openmaptiles';
+            } else if (sources.carto) {
+                buildingSource = 'carto';
+            } else {
+                // Carto Positron and similar styles don't have building extrusion data
+                // This is expected for many vector tile styles
+                console.log('[MapLibre] 3D buildings not available for this map style (no compatible source found)');
+                return;
+            }
+
+            mapInstance.addLayer(
+                {
+                    'id': '3d-buildings',
+                    'source': buildingSource,
+                    'source-layer': buildingSourceLayer,
+                    'filter': ['==', 'extrude', 'true'],
+                    'type': 'fill-extrusion',
+                    'minzoom': 15,
+                    'paint': {
+                        'fill-extrusion-color': '#aaa',
+                        'fill-extrusion-height': [
+                            'interpolate',
+                            ['linear'],
+                            ['zoom'],
+                            15, 0,
+                            15.05, ['get', 'height']
+                        ],
+                        'fill-extrusion-base': [
+                            'interpolate',
+                            ['linear'],
+                            ['zoom'],
+                            15, 0,
+                            15.05, ['get', 'min_height']
+                        ],
+                        'fill-extrusion-opacity': 0.6
+                    }
+                },
+                labelLayerId
+            );
+            console.log('[MapLibre] 3D buildings layer added');
+        } catch (error) {
+            // Silently handle errors - 3D buildings are a nice-to-have feature
+            console.log('[MapLibre] 3D buildings not available:', error.message);
+        }
     };
 
     if (mapInstance.isStyleLoaded()) {
