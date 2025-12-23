@@ -35,7 +35,7 @@ pip install -r requirements-railway.txt
 echo "[5/7] Configuring environment..."
 cp .env.example .env 2>/dev/null || cp .env .env.backup
 cat > .env << 'EOF'
-VALHALLA_URL=http://141.147.102.102:8002
+VALHALLA_URL=http://localhost:8002
 GRAPHHOPPER_URL=http://localhost:8989
 GRAPHHOPPER_TIMEOUT=30
 VALHALLA_TIMEOUT=30

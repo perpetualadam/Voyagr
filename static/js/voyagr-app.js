@@ -75,7 +75,7 @@ function getSpeedUnit() {
  */
 function convertTemperature(celsius) {
     if (temperatureUnit === 'fahrenheit') {
-        return ((celsius * 9/5) + 32).toFixed(1);
+        return ((celsius * 9 / 5) + 32).toFixed(1);
     }
     return celsius.toFixed(1);
 }
@@ -958,7 +958,7 @@ function displayTripHistory(trips) {
 
     listContainer.innerHTML = trips.map((trip, index) => {
         const date = new Date(trip.timestamp);
-        const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+        const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const distance = convertDistance(trip.distance_km);
         const distUnit = getDistanceUnit();
         const totalCost = (parseFloat(trip.fuel_cost || 0) + parseFloat(trip.toll_cost || 0) + parseFloat(trip.caz_cost || 0)).toFixed(2);
@@ -1056,61 +1056,68 @@ const ROUTE_COLORS = ['#667eea', '#e53935', '#43a047', '#fb8c00', '#8e24aa'];
  */
 function displayAllRoutesOnMap() {
     // Clear the main routeLayer if it exists
-    if (routeLayer && map.hasLayer(routeLayer)) {
-        map.removeLayer(routeLayer);
+    if (routeLayer && typeof routeLayer.remove === 'function') {
+        routeLayer.remove();
         routeLayer = null;
     }
 
     // Clear previous route layers
     allRouteLayers.forEach(layer => {
-        if (layer && map.hasLayer(layer)) {
-            map.removeLayer(layer);
+        if (layer && typeof layer.remove === 'function') {
+            layer.remove();
         }
     });
     allRouteLayers = [];
 
     if (!routeOptions || routeOptions.length === 0) return;
 
-    // Draw all routes (in reverse order so first route is on top)
-    for (let i = routeOptions.length - 1; i >= 0; i--) {
-        const route = routeOptions[i];
-        const polylinePoints = route.polyline || [];
+    // Wait for map to be ready
+    const drawRoutes = () => {
+        // Draw all routes (in reverse order so first route is on top)
+        for (let i = routeOptions.length - 1; i >= 0; i--) {
+            const route = routeOptions[i];
+            const polylinePoints = route.polyline || [];
 
-        if (polylinePoints.length > 0) {
-            const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
-            const weight = (i === selectedRouteIndex) ? 6 : 4;
-            const opacity = (i === selectedRouteIndex) ? 0.9 : 0.6;
+            if (polylinePoints.length > 0) {
+                const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
+                const weight = (i === selectedRouteIndex) ? 6 : 4;
+                const opacity = (i === selectedRouteIndex) ? 0.9 : 0.6;
 
-            const layer = L.polyline(polylinePoints, {
-                color: color,
-                weight: weight,
-                opacity: opacity
-            }).addTo(map);
+                const layer = MapLibreHelpers.addPolyline(map, polylinePoints, {
+                    color: color,
+                    weight: weight,
+                    opacity: opacity
+                });
 
-            // Add popup with route info
-            const routeName = route.name || `Route ${i + 1}`;
-            const hazardCount = route.hazard_count || 0;
-            layer.bindPopup(`<b>${routeName}</b><br>📷 ${hazardCount} cameras<br>⏱️ ${route.duration_minutes} min`);
-
-            allRouteLayers.unshift(layer); // Add to front so indices match
+                allRouteLayers.unshift(layer); // Add to front so indices match
+            }
         }
+
+        // Fit map to show all routes
+        if (allRouteLayers.length > 0 && routeOptions[0] && routeOptions[0].polyline) {
+            // Combine all coordinates for bounds
+            const allCoords = routeOptions.flatMap(r => r.polyline || []);
+            if (allCoords.length > 0) {
+                MapLibreHelpers.fitMapBounds(map, allCoords, { padding: 50 });
+            }
+        }
+
+        // Display hazards from all routes
+        displayAllRouteHazards();
+
+        // Ensure traffic layer stays visible if enabled
+        if (showTrafficEnabled && !trafficLayer) {
+            addTrafficLayer();
+        }
+
+        console.log(`[Routes] Displayed ${allRouteLayers.length} routes on map`);
+    };
+
+    if (map.isStyleLoaded()) {
+        drawRoutes();
+    } else {
+        map.on('load', drawRoutes);
     }
-
-    // Fit map to show all routes
-    if (allRouteLayers.length > 0) {
-        const allBounds = L.featureGroup(allRouteLayers).getBounds();
-        map.fitBounds(allBounds.pad(0.1));
-    }
-
-    // Display hazards from all routes
-    displayAllRouteHazards();
-
-    // Ensure traffic layer stays visible if enabled
-    if (showTrafficEnabled && !trafficLayer) {
-        addTrafficLayer();
-    }
-
-    console.log(`[Routes] Displayed ${allRouteLayers.length} routes on map`);
 }
 
 // ===== DRAGGABLE ROUTE EDITING =====
@@ -1145,33 +1152,23 @@ function enableRouteEditing() {
  * Add a draggable marker for route editing
  */
 function addRouteDragMarker(lat, lon, routeIndex) {
-    const marker = L.marker([lat, lon], {
-        icon: L.divIcon({
-            className: 'route-drag-marker',
-            html: `<div style="background: #FF9800; border: 3px solid white; border-radius: 50%; width: 20px; height: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.4); cursor: grab;"></div>`,
-            iconSize: [20, 20],
-            iconAnchor: [10, 10]
-        }),
-        draggable: true
+    const marker = MapLibreHelpers.createMarker(lat, lon, {
+        className: 'route-drag-marker',
+        html: `<div style="background: #FF9800; border: 3px solid white; border-radius: 50%; width: 20px; height: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.4); cursor: grab;"></div>`,
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
     }).addTo(map);
+
+    // Note: MapLibre markers are not natively draggable like Leaflet
+    // We'll use custom drag handling
+    const el = marker.getElement();
+    if (el) {
+        el.style.cursor = 'grab';
+    }
 
     marker.routeIndex = routeIndex;
     marker.originalLat = lat;
     marker.originalLon = lon;
-
-    // Handle drag end - recalculate route with new via-point
-    marker.on('dragend', async function(e) {
-        const newPos = e.target.getLatLng();
-        console.log(`[Route Edit] Marker dragged from [${lat}, ${lon}] to [${newPos.lat}, ${newPos.lng}]`);
-
-        // Add this as a via-point and recalculate
-        await addDraggedViaPoint(newPos.lat, newPos.lng);
-    });
-
-    // Visual feedback on drag start
-    marker.on('dragstart', function() {
-        marker.getElement().style.cursor = 'grabbing';
-    });
 
     routeDragMarkers.push(marker);
 }
@@ -1189,24 +1186,20 @@ async function addDraggedViaPoint(lat, lon) {
     };
     viaPoints.push(viaPoint);
 
-    // Add visual marker
-    const marker = L.marker([lat, lon], {
-        icon: L.divIcon({
-            className: 'via-point-marker',
-            html: `<div style="background: #4CAF50; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">✓</div>`,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14]
-        }),
-        draggable: true
+    // Add visual marker with MapLibre
+    const marker = MapLibreHelpers.createMarker(lat, lon, {
+        className: 'via-point-marker',
+        html: `<div style="background: #4CAF50; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">✓</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        popup: `
+            <div style="text-align: center;">
+                <strong>Via Point</strong><br>
+                <small>Drag to adjust</small><br>
+                <button onclick="removeViaPoint(${viaPoints.length - 1})" style="background: #F44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; margin-top: 6px; cursor: pointer;">Remove</button>
+            </div>
+        `
     }).addTo(map);
-
-    marker.bindPopup(`
-        <div style="text-align: center;">
-            <strong>Via Point</strong><br>
-            <small>Drag to adjust</small><br>
-            <button onclick="removeViaPoint(${viaPoints.length - 1})" style="background: #F44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; margin-top: 6px; cursor: pointer;">Remove</button>
-        </div>
-    `);
 
     viaPointMarkers.push(marker);
     updateWaypointsList();
@@ -1224,8 +1217,8 @@ async function addDraggedViaPoint(lat, lon) {
  */
 function clearRouteDragMarkers() {
     routeDragMarkers.forEach(marker => {
-        if (marker && map.hasLayer(marker)) {
-            map.removeLayer(marker);
+        if (marker && typeof marker.remove === 'function') {
+            marker.remove();
         }
     });
     routeDragMarkers = [];
@@ -1393,27 +1386,14 @@ function addViaPoint(lat, lon, name = null) {
     const pointName = name || `Via-point ${viaPoints.length + 1}`;
     viaPoints.push({ lat, lon, name: pointName, type: 'via' });
 
-    // Add marker to map
-    const marker = L.marker([lat, lon], {
-        icon: L.divIcon({
-            className: 'via-point-marker',
-            html: `<div style="background: #FF9800; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${viaPoints.length}</div>`,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14]
-        }),
-        draggable: true
+    // Add marker to map with MapLibre
+    const marker = MapLibreHelpers.createMarker(lat, lon, {
+        className: 'via-point-marker',
+        html: `<div style="background: #FF9800; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${viaPoints.length}</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        popup: `<b>${pointName}</b><br><button onclick="removeViaPoint(${viaPoints.length - 1})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>`
     }).addTo(map);
-
-    marker.bindPopup(`<b>${pointName}</b><br><button onclick="removeViaPoint(${viaPoints.length - 1})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>`);
-
-    // Handle drag
-    marker.on('dragend', function(e) {
-        const idx = viaPointMarkers.indexOf(marker);
-        if (idx >= 0) {
-            viaPoints[idx].lat = e.target.getLatLng().lat;
-            viaPoints[idx].lon = e.target.getLatLng().lng;
-        }
-    });
 
     viaPointMarkers.push(marker);
     updateWaypointsList();
@@ -1427,27 +1407,14 @@ function addStop(lat, lon, name = null, duration = 15) {
     const stopName = name || `Stop ${stops.length + 1}`;
     stops.push({ lat, lon, name: stopName, type: 'stop', duration });
 
-    // Add marker to map
-    const marker = L.marker([lat, lon], {
-        icon: L.divIcon({
-            className: 'stop-marker',
-            html: `<div style="background: #E91E63; color: white; border-radius: 4px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>`,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14]
-        }),
-        draggable: true
+    // Add marker to map with MapLibre
+    const marker = MapLibreHelpers.createMarker(lat, lon, {
+        className: 'stop-marker',
+        html: `<div style="background: #E91E63; color: white; border-radius: 4px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>`,
+        iconSize: [28, 28],
+        iconAnchor: [14, 14],
+        popup: `<b>${stopName}</b><br>Duration: ${duration} min<br><button onclick="removeStop(${stops.length - 1})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>`
     }).addTo(map);
-
-    marker.bindPopup(`<b>${stopName}</b><br>Duration: ${duration} min<br><button onclick="removeStop(${stops.length - 1})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>`);
-
-    // Handle drag
-    marker.on('dragend', function(e) {
-        const idx = stopMarkers.indexOf(marker);
-        if (idx >= 0) {
-            stops[idx].lat = e.target.getLatLng().lat;
-            stops[idx].lon = e.target.getLatLng().lng;
-        }
-    });
 
     stopMarkers.push(marker);
     updateWaypointsList();
@@ -1460,8 +1427,8 @@ function addStop(lat, lon, name = null, duration = 15) {
 function removeViaPoint(index) {
     if (index >= 0 && index < viaPoints.length) {
         viaPoints.splice(index, 1);
-        if (viaPointMarkers[index]) {
-            map.removeLayer(viaPointMarkers[index]);
+        if (viaPointMarkers[index] && typeof viaPointMarkers[index].remove === 'function') {
+            viaPointMarkers[index].remove();
         }
         viaPointMarkers.splice(index, 1);
         updateWaypointsList();
@@ -1476,8 +1443,8 @@ function removeViaPoint(index) {
 function removeStop(index) {
     if (index >= 0 && index < stops.length) {
         stops.splice(index, 1);
-        if (stopMarkers[index]) {
-            map.removeLayer(stopMarkers[index]);
+        if (stopMarkers[index] && typeof stopMarkers[index].remove === 'function') {
+            stopMarkers[index].remove();
         }
         stopMarkers.splice(index, 1);
         updateWaypointsList();
@@ -1490,24 +1457,21 @@ function removeStop(index) {
  */
 function refreshViaPointMarkers() {
     viaPointMarkers.forEach((marker, idx) => {
-        if (marker) {
-            map.removeLayer(marker);
+        if (marker && typeof marker.remove === 'function') {
+            marker.remove();
         }
     });
     viaPointMarkers = [];
 
     viaPoints.forEach((point, idx) => {
-        const marker = L.marker([point.lat, point.lon], {
-            icon: L.divIcon({
-                className: 'via-point-marker',
-                html: `<div style="background: #FF9800; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${idx + 1}</div>`,
-                iconSize: [28, 28],
-                iconAnchor: [14, 14]
-            }),
-            draggable: true
+        const marker = MapLibreHelpers.createMarker(point.lat, point.lon, {
+            className: 'via-point-marker',
+            html: `<div style="background: #FF9800; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${idx + 1}</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
+            popup: `<b>${point.name}</b><br><button onclick="removeViaPoint(${idx})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>`
         }).addTo(map);
 
-        marker.bindPopup(`<b>${point.name}</b><br><button onclick="removeViaPoint(${idx})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>`);
         viaPointMarkers.push(marker);
     });
 }
@@ -1518,8 +1482,8 @@ function refreshViaPointMarkers() {
 function clearAllWaypoints() {
     viaPoints = [];
     stops = [];
-    viaPointMarkers.forEach(m => map.removeLayer(m));
-    stopMarkers.forEach(m => map.removeLayer(m));
+    viaPointMarkers.forEach(m => { if (m && typeof m.remove === 'function') m.remove(); });
+    stopMarkers.forEach(m => { if (m && typeof m.remove === 'function') m.remove(); });
     viaPointMarkers = [];
     stopMarkers = [];
     updateWaypointsList();
@@ -1648,14 +1612,14 @@ function selectRoute(index) {
 function displaySingleRoute(index) {
     // Clear the main routeLayer if it exists
     if (routeLayer && map.hasLayer(routeLayer)) {
-        map.removeLayer(routeLayer);
+        if (typeof routeLayer.remove === 'function') routeLayer.remove();
         routeLayer = null;
     }
 
     // Clear all route layers
     allRouteLayers.forEach(layer => {
-        if (layer && map.hasLayer(layer)) {
-            map.removeLayer(layer);
+        if (layer && typeof layer.remove === 'function') {
+            layer.remove();
         }
     });
     allRouteLayers = [];
@@ -1667,20 +1631,16 @@ function displaySingleRoute(index) {
 
     if (polylinePoints.length > 0) {
         const color = ROUTE_COLORS[index % ROUTE_COLORS.length];
-        const layer = L.polyline(polylinePoints, {
+        const layer = MapLibreHelpers.addPolyline(map, polylinePoints, {
             color: color,
             weight: 6,
             opacity: 0.9
-        }).addTo(map);
-
-        const routeName = route.name || `Route ${index + 1}`;
-        const hazardCount = route.hazard_count || 0;
-        layer.bindPopup(`<b>${routeName}</b><br>📷 ${hazardCount} cameras<br>⏱️ ${route.duration_minutes} min`);
+        });
 
         allRouteLayers.push(layer);
 
         // Fit map to the selected route
-        map.fitBounds(layer.getBounds().pad(0.1));
+        MapLibreHelpers.fitMapBounds(map, polylinePoints, { padding: 50 });
     }
 
     // Display hazards for the selected route only
@@ -1717,26 +1677,20 @@ function useRoute(index) {
 
     // Update the map to show this route
     if (routeLayer) {
-        map.removeLayer(routeLayer);
+        if (typeof routeLayer.remove === 'function') routeLayer.remove();
     }
 
     // Draw the selected route on map
     const polylinePoints = route.polyline || [];
     if (polylinePoints.length > 0) {
-        routeLayer = L.polyline(polylinePoints, {
+        routeLayer = MapLibreHelpers.addPolyline(map, polylinePoints, {
             color: '#667eea',
             weight: 5,
-            opacity: 0.8,
-            dashArray: '5, 5'
-        }).addTo(map);
-
-        const bounds = routeLayer.getBounds().pad(0.1);
-        const center = bounds.getCenter();
-        const zoomLevel = map.getBoundsZoom(bounds);
-        map.flyTo(center, zoomLevel, {
-            duration: 0.5,
-            easeLinearity: 0.25
+            opacity: 0.8
         });
+
+        // Fit map to route bounds
+        MapLibreHelpers.fitMapBounds(map, polylinePoints, { padding: 50 });
     }
 
     // Update trip info with unit-adjusted costs
@@ -2313,18 +2267,18 @@ function updateTrafficConditions() {
             end: endInput
         })
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            displayTrafficUpdate(data);
-        } else {
-            showStatus('Could not fetch traffic data', 'error');
-        }
-    })
-    .catch(error => {
-        console.error('Traffic update error:', error);
-        showStatus('Error updating traffic conditions', 'error');
-    });
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                displayTrafficUpdate(data);
+            } else {
+                showStatus('Could not fetch traffic data', 'error');
+            }
+        })
+        .catch(error => {
+            console.error('Traffic update error:', error);
+            showStatus('Error updating traffic conditions', 'error');
+        });
 }
 /**
  * displayTrafficUpdate function
@@ -2434,15 +2388,14 @@ function setupMapClickHandler() {
             document.getElementById(mapPickerMode).value = `${lat},${lon}`;
 
             // Add marker
-            if (mapPickerMode === 'start' && startMarker) map.removeLayer(startMarker);
-            if (mapPickerMode === 'end' && endMarker) map.removeLayer(endMarker);
+            if (mapPickerMode === 'start' && startMarker && typeof startMarker.remove === 'function') startMarker.remove();
+            if (mapPickerMode === 'end' && endMarker && typeof endMarker.remove === 'function') endMarker.remove();
 
-            const marker = L.circleMarker([lat, lon], {
+            const marker = MapLibreHelpers.createCircleMarker(lat, lon, {
                 radius: 8,
                 fillColor: mapPickerMode === 'start' ? '#00ff00' : '#ff0000',
                 color: '#000',
                 weight: 2,
-                opacity: 1,
                 fillOpacity: 0.8
             }).addTo(map);
 
@@ -2501,7 +2454,7 @@ function decodePolyline(encoded, precision = 6) {
         console.log(`[decodePolyline] Decoded ${decoded.length} points with precision ${precision}`);
         if (decoded.length > 0) {
             console.log(`[decodePolyline] First point: [${decoded[0][0]}, ${decoded[0][1]}]`);
-            console.log(`[decodePolyline] Last point: [${decoded[decoded.length-1][0]}, ${decoded[decoded.length-1][1]}]`);
+            console.log(`[decodePolyline] Last point: [${decoded[decoded.length - 1][0]}, ${decoded[decoded.length - 1][1]}]`);
         }
 
         return decoded;
@@ -2620,272 +2573,267 @@ async function calculateRoute() {
         },
         body: JSON.stringify(requestBody)
     })
-    .then(response => {
-        console.log('[calculateRoute] API response status:', response.status);
+        .then(response => {
+            console.log('[calculateRoute] API response status:', response.status);
 
-        // Check content-type to detect HTML error pages
-        const contentType = response.headers.get('content-type');
-        if (!contentType || !contentType.includes('application/json')) {
-            console.error('[calculateRoute] Non-JSON response received:', contentType);
-            // Read as text first to get the error message
-            return response.text().then(text => {
-                console.error('[calculateRoute] Response text:', text.substring(0, 200));
+            // Check content-type to detect HTML error pages
+            const contentType = response.headers.get('content-type');
+            if (!contentType || !contentType.includes('application/json')) {
+                console.error('[calculateRoute] Non-JSON response received:', contentType);
+                // Read as text first to get the error message
+                return response.text().then(text => {
+                    console.error('[calculateRoute] Response text:', text.substring(0, 200));
 
-                // Detect specific error types
-                let errorMsg = `Server error (HTTP ${response.status})`;
-                if (response.status === 504) {
-                    errorMsg = 'Gateway Timeout (504): The route is too complex or the server is busy. Try a shorter route.';
-                } else if (response.status === 502) {
-                    errorMsg = 'Bad Gateway (502): Server communication error. Please try again.';
-                } else if (response.status === 500) {
-                    errorMsg = 'Internal Server Error (500). Please check server logs.';
-                } else if (text.includes('timeout') || text.includes('Timeout')) {
-                    errorMsg = 'Request timed out. The route may be too long. Try a shorter route.';
-                }
-
-                throw new Error(errorMsg);
-            });
-        }
-
-        // Check for error status codes
-        if (!response.ok) {
-            return response.json().then(data => {
-                throw new Error(data.error || `Server error: ${response.status}`);
-            }).catch(() => {
-                throw new Error(`Server error: ${response.status}. Please try again.`);
-            });
-        }
-
-        return response.json();
-    })
-    .then(data => {
-        console.log('[Route API] Response received:', {
-            success: data.success,
-            source: data.source,
-            hasGeometry: !!data.geometry,
-            geometryLength: data.geometry ? data.geometry.length : 0,
-            distance: data.distance,
-            time: data.time,
-            routesCount: data.routes ? data.routes.length : 0
-        });
-
-        if (data.success) {
-            // Parse coordinates
-            try {
-                const startParts = geocodedStart.split(',');
-                const endParts = geocodedEnd.split(',');
-
-                if (startParts.length < 2 || endParts.length < 2) {
-                    showStatus('Error: Invalid coordinates format', 'error');
-                    return;
-                }
-
-                const startCoords = [parseFloat(startParts[0].trim()), parseFloat(startParts[1].trim())];
-                const endCoords = [parseFloat(endParts[0].trim()), parseFloat(endParts[1].trim())];
-
-                if (isNaN(startCoords[0]) || isNaN(startCoords[1]) || isNaN(endCoords[0]) || isNaN(endCoords[1])) {
-                    showStatus('Error: Invalid coordinates', 'error');
-                    return;
-                }
-
-                // Clear previous markers and route
-                if (startMarker) map.removeLayer(startMarker);
-                if (endMarker) map.removeLayer(endMarker);
-                if (routeLayer) map.removeLayer(routeLayer);
-
-                // Add markers
-                startMarker = L.circleMarker([startCoords[0], startCoords[1]], {
-                    radius: 8,
-                    fillColor: '#00ff00',
-                    color: '#000',
-                    weight: 2,
-                    opacity: 1,
-                    fillOpacity: 0.8
-                }).addTo(map).bindPopup('Start Location');
-
-                endMarker = L.circleMarker([endCoords[0], endCoords[1]], {
-                    radius: 8,
-                    fillColor: '#ff0000',
-                    color: '#000',
-                    weight: 2,
-                    opacity: 1,
-                    fillOpacity: 0.8
-                }).addTo(map).bindPopup('End Location');
-
-                // Draw route line
-                let routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
-
-                // If we have geometry from the routing service, use it
-                if (data.geometry) {
-                    try {
-                        // Decode polyline geometry (Valhalla uses precision 6)
-                        routePath = decodePolyline(data.geometry, 6);
-                        console.log('Route path decoded:', routePath.length, 'points');
-
-                        // Validate decoded coordinates
-                        if (routePath.length === 0) {
-                            console.error('[Route] Decoded polyline is empty, using straight line');
-                            routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
-                        } else {
-                            // Check if coordinates are valid (not [0,0] or NaN)
-                            const firstPoint = routePath[0];
-                            if (!firstPoint || isNaN(firstPoint[0]) || isNaN(firstPoint[1]) ||
-                                (firstPoint[0] === 0 && firstPoint[1] === 0)) {
-                                console.error('[Route] Invalid decoded coordinates, using straight line');
-                                routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
-                            }
-                        }
-                    } catch (e) {
-                        console.error('Could not decode geometry, using straight line:', e);
-                        routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
+                    // Detect specific error types
+                    let errorMsg = `Server error (HTTP ${response.status})`;
+                    if (response.status === 504) {
+                        errorMsg = 'Gateway Timeout (504): The route is too complex or the server is busy. Try a shorter route.';
+                    } else if (response.status === 502) {
+                        errorMsg = 'Bad Gateway (502): Server communication error. Please try again.';
+                    } else if (response.status === 500) {
+                        errorMsg = 'Internal Server Error (500). Please check server logs.';
+                    } else if (text.includes('timeout') || text.includes('Timeout')) {
+                        errorMsg = 'Request timed out. The route may be too long. Try a shorter route.';
                     }
-                }
 
-                routeLayer = L.polyline(routePath, {
-                    color: '#667eea',
-                    weight: 4,
-                    opacity: 0.8
-                }).addTo(map);
-
-                // Fit map to route with smooth animation
-                const bounds = routeLayer.getBounds().pad(0.1);
-                const center = bounds.getCenter();
-                const zoomLevel = map.getBoundsZoom(bounds);
-
-                // Use smooth animation to fit route
-                map.flyTo(center, zoomLevel, {
-                    duration: ZOOM_ANIMATION_DURATION,
-                    easeLinearity: 0.25
+                    throw new Error(errorMsg);
                 });
-
-                lastZoomLevel = zoomLevel;
-
-                // Update info - include stop time if present
-                let displayTime = data.time;
-                if (data.total_stop_time && data.total_stop_time > 0) {
-                    displayTime = data.total_time_with_stops || data.time;
-                    console.log(`[Route] Total time with ${data.stops_count} stops: ${displayTime}`);
-                }
-                updateTripInfo(data.distance, displayTime, data.fuel_cost || '-', data.toll_cost || '-');
-
-                // Show custom router performance if available
-                let statusMsg = 'Route calculated successfully! (' + data.source + ')';
-                if (data.response_time_ms) {
-                    statusMsg += ` - ${data.response_time_ms.toFixed(0)}ms`;
-                }
-                if (data.source && data.source.includes('Custom Router')) {
-                    statusMsg += ' ⚡ Ultra-fast!';
-                }
-                if (data.via_points_count > 0 || data.stops_count > 0) {
-                    statusMsg += ` 📍 ${data.via_points_count || 0} via-points, ${data.stops_count || 0} stops`;
-                }
-                showStatus(statusMsg, 'success');
-
-                // Store route data for navigation (including destination for rerouting)
-                // FIXED: Store geocoded coordinates instead of raw input text
-                // FIXED: Ensure duration_minutes is set at top level for ETA calculations
-                const durationMinutes = (data.routes && data.routes.length > 0)
-                    ? data.routes[0].duration_minutes
-                    : (data.time ? parseInt(data.time) : 0);
-
-                window.lastCalculatedRoute = {
-                    ...data,
-                    duration_minutes: durationMinutes,  // FIXED: Ensure duration_minutes is at top level
-                    destination: geocodedEnd,  // Store geocoded coordinates for automatic rerouting
-                    destinationName: end  // Store human-readable name for display
-                };
-
-                console.log(`[Route] Stored route with duration_minutes: ${durationMinutes}`);
-
-                // Display hazard markers if hazards are present
-                if (data.routes && data.routes.length > 0 && data.routes[0].hazards) {
-                    displayHazardMarkers(data.routes[0].hazards);
-                }
-
-                // IMPORTANT: Populate routeOptions BEFORE showing route preview
-                // so that displayAllRoutesOnMap() has routes to display
-                if (data.routes && data.routes.length > 0) {
-                    // Real routes from routing engine - include source from response
-                    const routeSource = data.source || 'Unknown';
-                    console.log(`[Route API] Received ${data.routes.length} routes from backend:`, data.routes.map(r => r.name));
-                    routeOptions = data.routes.map(route => ({
-                        id: route.id,
-                        name: route.name,
-                        distance_km: route.distance_km,
-                        duration_minutes: route.duration_minutes,
-                        fuel_cost: route.fuel_cost,
-                        toll_cost: route.toll_cost,
-                        caz_cost: route.caz_cost,
-                        hazard_count: route.hazard_count || 0,
-                        polyline: decodePolyline(route.geometry || '', 6),  // Valhalla precision 6
-                        geometry: route.geometry,
-                        hazards: route.hazards || [],
-                        maneuvers: route.maneuvers || [],  // FIXED: Include maneuvers for turn-by-turn navigation
-                        source: routeSource  // Include routing engine source in each route
-                    }));
-                    console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}:`, routeOptions.map(r => r.name));
-                } else {
-                    // Fallback: single route (for backward compatibility)
-                    routeOptions = [
-                        {
-                            id: 1,
-                            name: 'Route',
-                            distance_km: parseFloat(data.distance) || 0,
-                            duration_minutes: parseInt(data.time) || 0,
-                            fuel_cost: data.fuel_cost || 0,
-                            toll_cost: data.toll_cost || 0,
-                            caz_cost: data.caz_cost || 0,
-                            hazard_count: 0,
-                            polyline: routePath,
-                            geometry: data.geometry,
-                            maneuvers: data.maneuvers || [],  // FIXED: Include maneuvers for turn-by-turn
-                            source: data.source || 'Unknown'
-                        }
-                    ];
-                    console.log('[Route Comparison] Using single route (fallback)');
-                }
-
-                // Routes are already sorted by hazard count from backend
-                // Display all routes on map immediately
-                if (routeOptions.length > 1) {
-                    displayAllRoutesOnMap();
-                    console.log(`[Routes] Displayed ${routeOptions.length} routes on map with different colors`);
-                }
-
-                // Show route preview AFTER routeOptions is populated
-                setTimeout(() => {
-                    showRoutePreview(data);
-                }, 300);
-
-                // Show start navigation buttons (both in FAB and in bottom sheet)
-                const startNavBtn = document.getElementById('startNavBtn');
-                const startNavBtnSheet = document.getElementById('startNavBtnSheet');
-                if (startNavBtn) {
-                    startNavBtn.style.display = 'block';
-                }
-                if (startNavBtnSheet) {
-                    startNavBtnSheet.style.display = 'block';
-                }
-
-                // Send notification with proper unit conversion
-                const distanceKm = parseFloat(data.distance_km || data.distance) || 0;
-                const distUnit = getDistanceUnit();
-                const displayDistance = convertDistance(distanceKm);
-                const notificationMessage = `${displayDistance} ${distUnit} in ${data.time}. Ready to navigate?`;
-                console.log('[Route] Route ready notification:', notificationMessage);
-                sendNotification('Route Ready', notificationMessage, 'success');
-            } catch (e) {
-                showStatus('Error parsing coordinates: ' + e.message, 'error');
-                console.error('Coordinate parsing error:', e);
             }
-        } else {
-            showStatus('Error: ' + data.error, 'error');
-        }
-    })
-    .catch(error => {
-        showStatus('Error: ' + error.message, 'error');
-        console.error('[Route] Fetch error:', error);
-    });
+
+            // Check for error status codes
+            if (!response.ok) {
+                return response.json().then(data => {
+                    throw new Error(data.error || `Server error: ${response.status}`);
+                }).catch(() => {
+                    throw new Error(`Server error: ${response.status}. Please try again.`);
+                });
+            }
+
+            return response.json();
+        })
+        .then(data => {
+            console.log('[Route API] Response received:', {
+                success: data.success,
+                source: data.source,
+                hasGeometry: !!data.geometry,
+                geometryLength: data.geometry ? data.geometry.length : 0,
+                distance: data.distance,
+                time: data.time,
+                routesCount: data.routes ? data.routes.length : 0
+            });
+
+            if (data.success) {
+                // Parse coordinates
+                try {
+                    const startParts = geocodedStart.split(',');
+                    const endParts = geocodedEnd.split(',');
+
+                    if (startParts.length < 2 || endParts.length < 2) {
+                        showStatus('Error: Invalid coordinates format', 'error');
+                        return;
+                    }
+
+                    const startCoords = [parseFloat(startParts[0].trim()), parseFloat(startParts[1].trim())];
+                    const endCoords = [parseFloat(endParts[0].trim()), parseFloat(endParts[1].trim())];
+
+                    if (isNaN(startCoords[0]) || isNaN(startCoords[1]) || isNaN(endCoords[0]) || isNaN(endCoords[1])) {
+                        showStatus('Error: Invalid coordinates', 'error');
+                        return;
+                    }
+
+                    // Clear previous markers and route
+                    if (startMarker && typeof startMarker.remove === 'function') startMarker.remove();
+                    if (endMarker && typeof endMarker.remove === 'function') endMarker.remove();
+                    if (routeLayer && typeof routeLayer.remove === 'function') routeLayer.remove();
+
+                    // Add markers with MapLibre
+                    startMarker = MapLibreHelpers.createCircleMarker(startCoords[0], startCoords[1], {
+                        radius: 8,
+                        fillColor: '#00ff00',
+                        color: '#000',
+                        weight: 2,
+                        fillOpacity: 0.8
+                    }).addTo(map);
+                    startMarker.bindPopup('Start Location');
+
+                    endMarker = MapLibreHelpers.createCircleMarker(endCoords[0], endCoords[1], {
+                        radius: 8,
+                        fillColor: '#ff0000',
+                        color: '#000',
+                        weight: 2,
+                        fillOpacity: 0.8
+                    }).addTo(map);
+                    endMarker.bindPopup('End Location');
+
+                    // Draw route line
+                    let routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
+
+                    // If we have geometry from the routing service, use it
+                    if (data.geometry) {
+                        try {
+                            // Decode polyline geometry - OSRM uses precision 5, Valhalla uses precision 6
+                            const precision = (data.source || '').toLowerCase().includes('osrm') ? 5 : 6;
+                            routePath = decodePolyline(data.geometry, precision);
+                            console.log(`Route path decoded: ${routePath.length} points with precision ${precision} (source: ${data.source})`);
+
+                            // Validate decoded coordinates
+                            if (routePath.length === 0) {
+                                console.error('[Route] Decoded polyline is empty, using straight line');
+                                routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
+                            } else {
+                                // Check if coordinates are valid (not [0,0] or NaN)
+                                const firstPoint = routePath[0];
+                                if (!firstPoint || isNaN(firstPoint[0]) || isNaN(firstPoint[1]) ||
+                                    (firstPoint[0] === 0 && firstPoint[1] === 0)) {
+                                    console.error('[Route] Invalid decoded coordinates, using straight line');
+                                    routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
+                                }
+                            }
+                        } catch (e) {
+                            console.error('Could not decode geometry, using straight line:', e);
+                            routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
+                        }
+                    }
+
+                    routeLayer = MapLibreHelpers.addPolyline(map, routePath, {
+                        color: '#667eea',
+                        weight: 4,
+                        opacity: 0.8
+                    });
+
+                    // Fit map to route with smooth animation
+                    MapLibreHelpers.fitMapBounds(map, routePath, { padding: 50 });
+
+                    lastZoomLevel = map.getZoom();
+
+                    // Update info - include stop time if present
+                    let displayTime = data.time;
+                    if (data.total_stop_time && data.total_stop_time > 0) {
+                        displayTime = data.total_time_with_stops || data.time;
+                        console.log(`[Route] Total time with ${data.stops_count} stops: ${displayTime}`);
+                    }
+                    updateTripInfo(data.distance, displayTime, data.fuel_cost || '-', data.toll_cost || '-');
+
+                    // Show custom router performance if available
+                    let statusMsg = 'Route calculated successfully! (' + data.source + ')';
+                    if (data.response_time_ms) {
+                        statusMsg += ` - ${data.response_time_ms.toFixed(0)}ms`;
+                    }
+                    if (data.source && data.source.includes('Custom Router')) {
+                        statusMsg += ' ⚡ Ultra-fast!';
+                    }
+                    if (data.via_points_count > 0 || data.stops_count > 0) {
+                        statusMsg += ` 📍 ${data.via_points_count || 0} via-points, ${data.stops_count || 0} stops`;
+                    }
+                    showStatus(statusMsg, 'success');
+
+                    // Store route data for navigation (including destination for rerouting)
+                    // FIXED: Store geocoded coordinates instead of raw input text
+                    // FIXED: Ensure duration_minutes is set at top level for ETA calculations
+                    const durationMinutes = (data.routes && data.routes.length > 0)
+                        ? data.routes[0].duration_minutes
+                        : (data.time ? parseInt(data.time) : 0);
+
+                    window.lastCalculatedRoute = {
+                        ...data,
+                        duration_minutes: durationMinutes,  // FIXED: Ensure duration_minutes is at top level
+                        destination: geocodedEnd,  // Store geocoded coordinates for automatic rerouting
+                        destinationName: end  // Store human-readable name for display
+                    };
+
+                    console.log(`[Route] Stored route with duration_minutes: ${durationMinutes}`);
+
+                    // Display hazard markers if hazards are present
+                    if (data.routes && data.routes.length > 0 && data.routes[0].hazards) {
+                        displayHazardMarkers(data.routes[0].hazards);
+                    }
+
+                    // IMPORTANT: Populate routeOptions BEFORE showing route preview
+                    // so that displayAllRoutesOnMap() has routes to display
+                    if (data.routes && data.routes.length > 0) {
+                        // Real routes from routing engine - include source from response
+                        const routeSource = data.source || 'Unknown';
+                        // OSRM uses precision 5, Valhalla uses precision 6
+                        const polylinePrecision = routeSource.toLowerCase().includes('osrm') ? 5 : 6;
+                        console.log(`[Route API] Received ${data.routes.length} routes from ${routeSource}, using polyline precision ${polylinePrecision}`);
+                        routeOptions = data.routes.map(route => ({
+                            id: route.id,
+                            name: route.name,
+                            distance_km: route.distance_km,
+                            duration_minutes: route.duration_minutes,
+                            fuel_cost: route.fuel_cost,
+                            toll_cost: route.toll_cost,
+                            caz_cost: route.caz_cost,
+                            hazard_count: route.hazard_count || 0,
+                            polyline: decodePolyline(route.geometry || '', polylinePrecision),
+                            geometry: route.geometry,
+                            hazards: route.hazards || [],
+                            maneuvers: route.maneuvers || [],  // FIXED: Include maneuvers for turn-by-turn navigation
+                            source: routeSource  // Include routing engine source in each route
+                        }));
+                        console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}:`, routeOptions.map(r => r.name));
+                    } else {
+                        // Fallback: single route (for backward compatibility)
+                        routeOptions = [
+                            {
+                                id: 1,
+                                name: 'Route',
+                                distance_km: parseFloat(data.distance) || 0,
+                                duration_minutes: parseInt(data.time) || 0,
+                                fuel_cost: data.fuel_cost || 0,
+                                toll_cost: data.toll_cost || 0,
+                                caz_cost: data.caz_cost || 0,
+                                hazard_count: 0,
+                                polyline: routePath,
+                                geometry: data.geometry,
+                                maneuvers: data.maneuvers || [],  // FIXED: Include maneuvers for turn-by-turn
+                                source: data.source || 'Unknown'
+                            }
+                        ];
+                        console.log('[Route Comparison] Using single route (fallback)');
+                    }
+
+                    // Routes are already sorted by hazard count from backend
+                    // Display all routes on map immediately
+                    if (routeOptions.length > 1) {
+                        displayAllRoutesOnMap();
+                        console.log(`[Routes] Displayed ${routeOptions.length} routes on map with different colors`);
+                    }
+
+                    // Show route preview AFTER routeOptions is populated
+                    setTimeout(() => {
+                        showRoutePreview(data);
+                    }, 300);
+
+                    // Show start navigation buttons (both in FAB and in bottom sheet)
+                    const startNavBtn = document.getElementById('startNavBtn');
+                    const startNavBtnSheet = document.getElementById('startNavBtnSheet');
+                    if (startNavBtn) {
+                        startNavBtn.style.display = 'block';
+                    }
+                    if (startNavBtnSheet) {
+                        startNavBtnSheet.style.display = 'block';
+                    }
+
+                    // Send notification with proper unit conversion
+                    const distanceKm = parseFloat(data.distance_km || data.distance) || 0;
+                    const distUnit = getDistanceUnit();
+                    const displayDistance = convertDistance(distanceKm);
+                    const notificationMessage = `${displayDistance} ${distUnit} in ${data.time}. Ready to navigate?`;
+                    console.log('[Route] Route ready notification:', notificationMessage);
+                    sendNotification('Route Ready', notificationMessage, 'success');
+                } catch (e) {
+                    showStatus('Error parsing coordinates: ' + e.message, 'error');
+                    console.error('Coordinate parsing error:', e);
+                }
+            } else {
+                showStatus('Error: ' + data.error, 'error');
+            }
+        })
+        .catch(error => {
+            showStatus('Error: ' + error.message, 'error');
+            console.error('[Route] Fetch error:', error);
+        });
 }
 
 /**
@@ -2936,8 +2884,8 @@ function displayHazardMarkers(hazards) {
         const iconContent = config.svg || config.emoji;
         const isCamera = !!config.svg;
 
-        // Create custom HTML icon (square for cameras, round for other hazards)
-        const icon = L.divIcon({
+        // Create custom HTML marker with MapLibre
+        const marker = MapLibreHelpers.createMarker(hazard.lat, hazard.lon, {
             className: 'hazard-marker',
             html: `<div style="
                 background: ${config.bgColor};
@@ -2953,33 +2901,16 @@ function displayHazardMarkers(hazards) {
                 cursor: pointer;
             ">${iconContent}</div>`,
             iconSize: [28, 28],
-            iconAnchor: [14, 14]
-        });
-
-        // Popup content - larger SVG for cameras
-        const popupIcon = config.svg
-            ? config.svg.replace('width="20"', 'width="36"').replace('height="20"', 'height="36"')
-            : `<span style="font-size: 32px;">${config.emoji}</span>`;
-
-        // Convert hazard distance based on user's unit preference
-        let hazardDistanceText = '';
-        if (hazard.distance_m) {
-            const distKm = hazard.distance_m / 1000;
-            const displayDist = convertDistance(distKm);
-            const distUnit = getDistanceUnit();
-            hazardDistanceText = `<div style="font-size: 11px; color: #999; margin-top: 5px;">📍 ${displayDist} ${distUnit} from route</div>`;
-        }
-
-        const marker = L.marker([hazard.lat, hazard.lon], { icon })
-            .bindPopup(`
+            iconAnchor: [14, 14],
+            popup: `
                 <div style="text-align: center; min-width: 150px;">
                     <div style="margin-bottom: 8px; display: flex; justify-content: center;">${popupIcon}</div>
                     <div style="font-weight: bold; color: ${config.color}; margin-bottom: 5px;">${config.label}</div>
                     ${hazard.description ? `<div style="font-size: 12px; color: #666;">${hazard.description}</div>` : ''}
                     ${hazardDistanceText}
                 </div>
-            `)
-            .addTo(map);
+            `
+        }).addTo(map);
 
         window.hazardMarkers.push(marker);
     });
@@ -3074,17 +3005,25 @@ function addTrafficLayer() {
         return;
     }
 
-    trafficLayer = L.tileLayer(
-        `https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${tomtomApiKey}&tileSize=256`,
-        {
-            maxZoom: 22,
-            opacity: 0.7,
-            attribution: '© TomTom Traffic',
-            zIndex: 400  // Above base tiles, below markers
-        }
-    );
+    // MapLibre raster tile source for traffic
+    if (!map.getSource('traffic-source')) {
+        map.addSource('traffic-source', {
+            type: 'raster',
+            tiles: [`https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${tomtomApiKey}&tileSize=256`],
+            tileSize: 256
+        });
+    }
 
-    trafficLayer.addTo(map);
+    if (!map.getLayer('traffic-layer')) {
+        map.addLayer({
+            id: 'traffic-layer',
+            type: 'raster',
+            source: 'traffic-source',
+            paint: { 'raster-opacity': 0.7 }
+        });
+    }
+
+    trafficLayer = { id: 'traffic-layer' };
     console.log('[Traffic] TomTom traffic layer added');
 }
 
@@ -3093,7 +3032,12 @@ function addTrafficLayer() {
  */
 function removeTrafficLayer() {
     if (trafficLayer && map) {
-        map.removeLayer(trafficLayer);
+        if (map.getLayer('traffic-layer')) {
+            map.removeLayer('traffic-layer');
+        }
+        if (map.getSource('traffic-source')) {
+            map.removeSource('traffic-source');
+        }
         trafficLayer = null;
         console.log('[Traffic] Traffic layer removed');
     }
@@ -3280,48 +3224,14 @@ function displayRouteTrafficEdges(segments) {
         // Update lastEndIdx for next segment
         lastEndIdx = endIdx;
 
-        // Create the traffic edge polyline following the route geometry
-        const trafficLine = L.polyline(
-            segmentPoints,
-            {
-                color: color,
-                weight: 10,           // Thick line for visibility
-                opacity: 0.8,
-                lineCap: 'round',
-                lineJoin: 'round',
-                pane: 'overlayPane'   // Ensure traffic renders on top
-            }
-        );
+        // Create the traffic edge polyline following the route geometry with MapLibre
+        const trafficLine = MapLibreHelpers.addPolyline(map, segmentPoints, {
+            color: color,
+            weight: 10,           // Thick line for visibility
+            opacity: 0.8
+        });
 
-        trafficLine.addTo(map);
-        trafficLine.bringToFront();  // Ensure it's on top of other layers
         routeTrafficLayers.push(trafficLine);
-
-        // Add popup with traffic info (convert speeds based on user preference)
-        let speedInfo = 'N/A';
-        if (segment.current_speed && segment.free_flow_speed) {
-            if (speedUnit === 'mph') {
-                const currentMph = Math.round(segment.current_speed * 0.621371);
-                const freeFlowMph = Math.round(segment.free_flow_speed * 0.621371);
-                speedInfo = `${currentMph}/${freeFlowMph} mph`;
-            } else {
-                speedInfo = `${segment.current_speed}/${segment.free_flow_speed} km/h`;
-            }
-        }
-        const congestionInfo = segment.congestion_percent !== undefined
-            ? `${segment.congestion_percent}%`
-            : 'N/A';
-
-        trafficLine.bindPopup(`
-            <div style="text-align: center;">
-                <strong style="color: ${color};">
-                    ${segment.traffic_level === 'green' ? '🟢 Free Flow' :
-                      segment.traffic_level === 'orange' ? '🟠 Moderate' :
-                      segment.traffic_level === 'red' ? '🔴 Heavy' : '⚫ Blocked'}
-                </strong><br>
-                <small>Speed: ${speedInfo}<br>Congestion: ${congestionInfo}</small>
-            </div>
-        `);
     });
 
     console.log(`[Route Traffic] Added ${routeTrafficLayers.length} traffic edge layers`);
@@ -3643,20 +3553,20 @@ function buildRouteRequest(startLat, startLon, destination) {
  */
 function updateRouteOnMap(newRoute) {
     // Remove old route layer
-    if (routeLayer) {
-        map.removeLayer(routeLayer);
+    if (routeLayer && typeof routeLayer.remove === 'function') {
+        routeLayer.remove();
     }
 
     // Decode new route geometry
     routePolyline = decodePolyline(newRoute.geometry, 6);
     console.log(`[Reroute] Route polyline decoded: ${routePolyline.length} points`);
 
-    // Draw new route on map
-    routeLayer = L.polyline(routePolyline, {
+    // Draw new route on map with MapLibre
+    routeLayer = MapLibreHelpers.addPolyline(map, routePolyline, {
         color: '#667eea',
         weight: 5,
         opacity: 0.8
-    }).addTo(map);
+    });
 
     // Update trip info
     updateTripInfo(newRoute.distance_km, newRoute.duration_minutes, newRoute.fuel_cost, newRoute.toll_cost);
@@ -3854,8 +3764,8 @@ function toggleShowCameras() {
 function clearCameraMarkers() {
     if (window.cameraMarkers) {
         window.cameraMarkers.forEach(marker => {
-            if (map && map.hasLayer(marker)) {
-                map.removeLayer(marker);
+            if (marker && typeof marker.remove === 'function') {
+                marker.remove();
             }
         });
     }
@@ -3938,8 +3848,8 @@ function displayCameraMarkers(cameras) {
 
         const config = cameraConfig[camera.type] || cameraConfig['speed_camera'];
 
-        // Create custom HTML icon with SVG
-        const icon = L.divIcon({
+        // Create custom HTML marker with MapLibre
+        const marker = MapLibreHelpers.createMarker(camera.lat, camera.lon, {
             className: 'camera-marker',
             html: `<div style="
                 background: ${config.bgColor};
@@ -3954,18 +3864,15 @@ function displayCameraMarkers(cameras) {
                 cursor: pointer;
             ">${config.svg}</div>`,
             iconSize: [26, 26],
-            iconAnchor: [13, 13]
-        });
-
-        const marker = L.marker([camera.lat, camera.lon], { icon })
-            .bindPopup(`
+            iconAnchor: [13, 13],
+            popup: `
                 <div style="text-align: center; min-width: 140px;">
                     <div style="margin-bottom: 8px; display: flex; justify-content: center;">${config.svg.replace('width="18"', 'width="32"').replace('height="18"', 'height="32"')}</div>
                     <div style="font-weight: bold; color: ${config.color}; margin-bottom: 5px;">${config.label}</div>
                     ${camera.description ? `<div style="font-size: 11px; color: #666;">${camera.description}</div>` : ''}
                 </div>
-            `)
-            .addTo(map);
+            `
+        }).addTo(map);
 
         window.cameraMarkers.push(marker);
     });
@@ -4634,7 +4541,7 @@ async function findParkingNearDestination() {
  */
 function displayParkingOptions(parkingList, destinationCoords) {
     // Clear previous markers
-    parkingMarkers.forEach(marker => map.removeLayer(marker));
+    parkingMarkers.forEach(marker => { if (marker && typeof marker.remove === 'function') marker.remove(); });
     parkingMarkers = [];
 
     const parkingSection = document.getElementById('parkingSection');
@@ -4646,21 +4553,13 @@ function displayParkingOptions(parkingList, destinationCoords) {
 
     // Display top 5 parking options
     parkingList.slice(0, 5).forEach((parking, index) => {
-        // Add marker to map
-        const icon = L.divIcon({
+        // Add marker to map with MapLibre
+        const marker = MapLibreHelpers.createMarker(parking.lat, parking.lon, {
             html: `<div style="background: #FF9800; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>`,
             iconSize: [32, 32],
-            className: 'parking-marker'
-        });
-
-        // Convert parking distance based on user's unit preference
-        const parkingDistKm = parking.distance_m / 1000;
-        const parkingDisplayDist = convertDistance(parkingDistKm);
-        const parkingDistUnit = getDistanceUnit();
-
-        const marker = L.marker([parking.lat, parking.lon], { icon })
-            .bindPopup(`<strong>${parking.name}</strong><br>Distance: ${parkingDisplayDist} ${parkingDistUnit}`)
-            .addTo(map);
+            className: 'parking-marker',
+            popup: `<strong>${parking.name}</strong><br>Distance: ${parkingDisplayDist} ${parkingDistUnit}`
+        }).addTo(map);
 
         marker.parkingData = parking;
         marker.on('click', () => selectParking(parking, destinationCoords));
@@ -4788,37 +4687,35 @@ async function selectParking(parking, destinationCoords) {
  */
 function displayParkingRoutes(drivingData, walkingData, parking, destination) {
     // Remove previous parking routes
-    if (parkingDrivingRoute) map.removeLayer(parkingDrivingRoute);
-    if (parkingWalkingRoute) map.removeLayer(parkingWalkingRoute);
+    if (parkingDrivingRoute && typeof parkingDrivingRoute.remove === 'function') parkingDrivingRoute.remove();
+    if (parkingWalkingRoute && typeof parkingWalkingRoute.remove === 'function') parkingWalkingRoute.remove();
 
-    // Decode and display driving route (blue)
+    // Decode and display driving route (blue) with MapLibre
     if (drivingData.geometry) {
         const drivingCoords = polyline.decode(drivingData.geometry);
-        parkingDrivingRoute = L.polyline(drivingCoords, {
+        parkingDrivingRoute = MapLibreHelpers.addPolyline(map, drivingCoords, {
             color: '#2196F3',
             weight: 5,
-            opacity: 0.8,
-            dashArray: '5, 5'
-        }).addTo(map);
+            opacity: 0.8
+        });
     }
 
-    // Decode and display walking route (green)
+    // Decode and display walking route (green) with MapLibre
     if (walkingData.geometry) {
         const walkingCoords = polyline.decode(walkingData.geometry);
-        parkingWalkingRoute = L.polyline(walkingCoords, {
+        parkingWalkingRoute = MapLibreHelpers.addPolyline(map, walkingCoords, {
             color: '#4CAF50',
             weight: 4,
             opacity: 0.7
-        }).addTo(map);
+        });
     }
 
     // Fit map to show both routes
     const allCoords = [];
-    if (parkingDrivingRoute) allCoords.push(...parkingDrivingRoute.getLatLngs());
-    if (parkingWalkingRoute) allCoords.push(...parkingWalkingRoute.getLatLngs());
+    if (drivingData.geometry) allCoords.push(...polyline.decode(drivingData.geometry));
+    if (walkingData.geometry) allCoords.push(...polyline.decode(walkingData.geometry));
     if (allCoords.length > 0) {
-        const bounds = L.latLngBounds(allCoords);
-        map.fitBounds(bounds, { padding: [50, 50] });
+        MapLibreHelpers.fitMapBounds(map, allCoords, { padding: 50 });
     }
 }
 /**
@@ -4868,9 +4765,9 @@ function updateParkingPreview(drivingData, walkingData, parking) {
  */
 function clearParkingSelection() {
     selectedParking = null;
-    if (parkingDrivingRoute) map.removeLayer(parkingDrivingRoute);
-    if (parkingWalkingRoute) map.removeLayer(parkingWalkingRoute);
-    parkingMarkers.forEach(marker => map.removeLayer(marker));
+    if (parkingDrivingRoute && typeof parkingDrivingRoute.remove === 'function') parkingDrivingRoute.remove();
+    if (parkingWalkingRoute && typeof parkingWalkingRoute.remove === 'function') parkingWalkingRoute.remove();
+    parkingMarkers.forEach(marker => { if (marker && typeof marker.remove === 'function') marker.remove(); });
     parkingMarkers = [];
 
     document.getElementById('parkingSection').style.display = 'none';
@@ -4895,17 +4792,18 @@ function clearForm() {
     document.getElementById('result').classList.remove('show');
     document.getElementById('status').className = 'status';
 
-    if (startMarker) map.removeLayer(startMarker);
-    if (endMarker) map.removeLayer(endMarker);
-    if (routeLayer) map.removeLayer(routeLayer);
+    if (startMarker && typeof startMarker.remove === 'function') startMarker.remove();
+    if (endMarker && typeof endMarker.remove === 'function') endMarker.remove();
+    if (routeLayer && typeof routeLayer.remove === 'function') routeLayer.remove();
 
     // Clear parking
     clearParkingSelection();
 
-    // Use smooth animation to return to default view
-    map.flyTo([51.5074, -0.1278], 13, {
-        duration: ZOOM_ANIMATION_DURATION,
-        easeLinearity: 0.25
+    // Use smooth animation to return to default view (MapLibre flyTo)
+    map.flyTo({
+        center: [-0.1278, 51.5074],
+        zoom: 13,
+        duration: ZOOM_ANIMATION_DURATION * 1000
     });
     lastZoomLevel = 13;
 }
@@ -4962,7 +4860,7 @@ function addToSearchHistory(query, resultName, lat, lon) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, result_name: resultName, lat, lon })
     })
-    .catch(error => console.error('Error adding to search history:', error));
+        .catch(error => console.error('Error adding to search history:', error));
 }
 
 // Load and display favorite locations
@@ -5024,18 +4922,18 @@ function addCurrentToFavorites() {
             category: category || 'location'
         })
     })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            showStatus(`Added ${name} to favorites!`, 'success');
-            loadFavorites();
-        } else {
-            showStatus('Error adding to favorites', 'error');
-        }
-    })
-    .catch(error => {
-        showStatus('Error: ' + error.message, 'error');
-    });
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                showStatus(`Added ${name} to favorites!`, 'success');
+                loadFavorites();
+            } else {
+                showStatus('Error adding to favorites', 'error');
+            }
+        })
+        .catch(error => {
+            showStatus('Error: ' + error.message, 'error');
+        });
 }
 
 // ===== PHASE 2 FEATURES: LANE GUIDANCE =====
@@ -5230,19 +5128,14 @@ function toggleJourneyOverview() {
         // Temporarily disable zoom and follow
         mapFollowingActive = false;
 
-        // Fit map to show entire route
-        if (allRouteLayers.length > 0) {
-            const allBounds = L.featureGroup(allRouteLayers).getBounds();
-            map.fitBounds(allBounds.pad(0.15), {
-                duration: 0.5,
-                easeLinearity: 0.25
-            });
+        // Fit map to show entire route using MapLibre helpers
+        if (allRouteLayers.length > 0 && routeOptions && routeOptions[0] && routeOptions[0].polyline) {
+            const allCoords = routeOptions.flatMap(r => r.polyline || []);
+            if (allCoords.length > 0) {
+                MapLibreHelpers.fitMapBounds(map, allCoords, { padding: 50 });
+            }
         } else if (routePolyline.length > 0) {
-            const routeBounds = L.latLngBounds(routePolyline);
-            map.fitBounds(routeBounds.pad(0.15), {
-                duration: 0.5,
-                easeLinearity: 0.25
-            });
+            MapLibreHelpers.fitMapBounds(map, routePolyline, { padding: 50 });
         }
 
         journeyOverviewActive = true;
@@ -5334,8 +5227,8 @@ function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
 }
@@ -5631,7 +5524,7 @@ function updateUserMarkerIcon() {
 
     // Update the marker if it exists
     if (currentUserMarker) {
-        map.removeLayer(currentUserMarker);
+        if (typeof currentUserMarker.remove === 'function') currentUserMarker.remove();
         currentUserMarker = null;
     }
 
@@ -5678,22 +5571,17 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
 
     markerDiv.appendChild(imgElement);
 
-    // Create custom icon with the rotated SVG
-    const customIcon = L.divIcon({
-        html: markerDiv.outerHTML,
-        iconSize: [50, 50],
-        iconAnchor: [25, 25],
-        popupAnchor: [0, -25],
-        className: 'vehicle-marker-icon'
-    });
-
-    // Create marker with custom icon
+    // Create custom marker with MapLibre
     const speedKmh = speed ? (speed * 3.6).toFixed(1) : 0;
     const speedUnit = getSpeedUnit();
     const displaySpeed = convertSpeed(speedKmh);
 
-    const marker = L.marker([lat, lon], { icon: customIcon, zIndexOffset: 1000 })
-        .bindPopup(`
+    const marker = MapLibreHelpers.createMarker(lat, lon, {
+        html: markerDiv.outerHTML,
+        iconSize: [50, 50],
+        iconAnchor: [25, 25],
+        className: 'vehicle-marker-icon',
+        popup: `
             <div style="font-family: Arial, sans-serif; font-size: 13px; min-width: 180px;">
                 <strong style="font-size: 14px;">${iconEmoji} Current Position</strong><br>
                 <div style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 8px;">
@@ -5702,7 +5590,8 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
                     <div>Accuracy: <strong>±${accuracy.toFixed(0)}m</strong></div>
                 </div>
             </div>
-        `);
+        `
+    });
 
     // Store heading and speed for later updates
     marker.heading = heading;
@@ -6320,25 +6209,15 @@ function setMapTheme(themeOrEvent) {
         activeBtn.classList.add('active');
     }
 
-    // Apply theme to map
-    const tileUrls = {
-        'standard': 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-        'satellite': 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-        'dark': 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+    // MapLibre style switching - using Carto free tiles
+    const styleUrls = {
+        'standard': 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+        'satellite': 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', // No free satellite, using positron
+        'dark': 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
     };
 
-    // Remove existing tile layer
-    map.eachLayer(layer => {
-        if (layer instanceof L.TileLayer) {
-            map.removeLayer(layer);
-        }
-    });
-
-    // Add new tile layer
-    L.tileLayer(tileUrls[theme], {
-        attribution: '© Map contributors',
-        maxZoom: 19
-    }).addTo(map);
+    // Change map style
+    map.setStyle(styleUrls[theme] || styleUrls['standard']);
 
     showStatus(`🗺️ Map theme changed to ${theme}`, 'success');
     saveAllSettings();
@@ -6927,7 +6806,7 @@ function updateJourneySummaryBar() {
     for (let i = startIdx; i < routePolyline.length - 1; i++) {
         remainingDistanceMeters += calculateDistance(
             routePolyline[i][0], routePolyline[i][1],
-            routePolyline[i+1][0], routePolyline[i+1][1]
+            routePolyline[i + 1][0], routePolyline[i + 1][1]
         );
     }
 
@@ -7184,7 +7063,7 @@ function setupVoiceCommandProcessing() {
     if (!voiceRecognition) return;
 
     const originalOnEnd = voiceRecognition.onend;
-    voiceRecognition.onend = function() {
+    voiceRecognition.onend = function () {
         originalOnEnd.call(this);
 
         // Get the final transcript
@@ -7217,23 +7096,23 @@ function processVoiceCommand(command) {
             lon: currentLon
         })
     })
-    .then(response => response.json())
-    .then(data => {
-        console.log('[Voice] Command result:', data);
+        .then(response => response.json())
+        .then(data => {
+            console.log('[Voice] Command result:', data);
 
-        if (data.success) {
-            handleVoiceAction(data);
-            speakText(data.message);
-        } else {
-            speakText(data.message || 'Command not recognized');
-            document.getElementById('voiceStatus').textContent = '❌ ' + (data.message || 'Command failed');
-        }
-    })
-    .catch(error => {
-        console.log('[Voice] Error:', error);
-        speakText('Error processing command');
-        document.getElementById('voiceStatus').textContent = '❌ Error: ' + error.message;
-    });
+            if (data.success) {
+                handleVoiceAction(data);
+                speakText(data.message);
+            } else {
+                speakText(data.message || 'Command not recognized');
+                document.getElementById('voiceStatus').textContent = '❌ ' + (data.message || 'Command failed');
+            }
+        })
+        .catch(error => {
+            console.log('[Voice] Error:', error);
+            speakText('Error processing command');
+            document.getElementById('voiceStatus').textContent = '❌ Error: ' + error.message;
+        });
 }
 /**
  * handleVoiceAction function
@@ -7244,7 +7123,7 @@ function processVoiceCommand(command) {
 function handleVoiceAction(data) {
     const action = data.action;
 
-    switch(action) {
+    switch (action) {
         case 'navigate':
             document.getElementById('end').value = data.location;
             calculateRoute();
@@ -7282,8 +7161,8 @@ function handleVoiceAction(data) {
                     severity: 'medium'
                 })
             })
-            .then(r => r.json())
-            .then(r => console.log('[Voice] Hazard reported:', r));
+                .then(r => r.json())
+                .then(r => console.log('[Voice] Hazard reported:', r));
             break;
 
         case 'reroute':
@@ -7541,7 +7420,7 @@ function startGPSTracking() {
 
             // Update user marker on map with vehicle icon and heading
             if (currentUserMarker) {
-                map.removeLayer(currentUserMarker);
+                if (typeof currentUserMarker.remove === 'function') currentUserMarker.remove();
             }
 
             currentUserMarker = createVehicleMarker(lat, lon, speed, accuracy, heading);
@@ -7757,7 +7636,7 @@ function announceDistanceToDestination(currentLat, currentLon) {
     for (let i = closestIndex; i < routePolyline.length - 1; i++) {
         remainingDistance += calculateDistance(
             routePolyline[i][0], routePolyline[i][1],
-            routePolyline[i+1][0], routePolyline[i+1][1]
+            routePolyline[i + 1][0], routePolyline[i + 1][1]
         );
     }
 
@@ -7838,7 +7717,7 @@ function announceETAUpdate(currentLat, currentLon) {
     for (let i = closestIndex; i < routePolyline.length - 1; i++) {
         remainingDistance += calculateDistance(
             routePolyline[i][0], routePolyline[i][1],
-            routePolyline[i+1][0], routePolyline[i+1][1]
+            routePolyline[i + 1][0], routePolyline[i + 1][1]
         );
     }
 
@@ -8066,7 +7945,7 @@ function checkRouteDeviation(lat, lon) {
             // Only reroute if enough time has passed (debounce)
             if (timeSinceLastReroute > REROUTE_DEBOUNCE_MS) {
                 rerouteAttemptCount++;
-                console.log(`[Rerouting] Deviation confirmed: ${minDistance.toFixed(0)}m for ${(deviationDuration/1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
+                console.log(`[Rerouting] Deviation confirmed: ${minDistance.toFixed(0)}m for ${(deviationDuration / 1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
 
                 // Convert deviation distance to user's preferred units
                 let deviationDisplay;
@@ -8078,15 +7957,15 @@ function checkRouteDeviation(lat, lon) {
                     deviationDisplay = `${minDistance.toFixed(0)} m`;
                 }
 
-                sendNotification('🔄 Route Deviation', `You are ${deviationDisplay} off route for ${(deviationDuration/1000).toFixed(0)}s. Recalculating...`, 'warning');
+                sendNotification('🔄 Route Deviation', `You are ${deviationDisplay} off route for ${(deviationDuration / 1000).toFixed(0)}s. Recalculating...`, 'warning');
                 triggerAutomaticRerouteWithHazardHandling(lat, lon);
                 lastRerouteTime = now;
                 deviationStartTimeCheck = null; // Reset after reroute
             } else {
-                console.log(`[Rerouting] Deviation ${minDistance.toFixed(0)}m for ${(deviationDuration/1000).toFixed(1)}s - debouncing (${(REROUTE_DEBOUNCE_MS - timeSinceLastReroute).toFixed(0)}ms remaining)`);
+                console.log(`[Rerouting] Deviation ${minDistance.toFixed(0)}m for ${(deviationDuration / 1000).toFixed(1)}s - debouncing (${(REROUTE_DEBOUNCE_MS - timeSinceLastReroute).toFixed(0)}ms remaining)`);
             }
         } else {
-            console.log(`[Rerouting] Deviation ${minDistance.toFixed(0)}m - waiting for ${((DEVIATION_TIME_THRESHOLD_MS - deviationDuration)/1000).toFixed(1)}s more`);
+            console.log(`[Rerouting] Deviation ${minDistance.toFixed(0)}m - waiting for ${((DEVIATION_TIME_THRESHOLD_MS - deviationDuration) / 1000).toFixed(1)}s more`);
         }
 
         lastRerouteDeviation = minDistance;
@@ -8370,8 +8249,8 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon / 2) * Math.sin(dLon / 2);
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c * 1000; // Return in meters
 }
@@ -8509,7 +8388,7 @@ function updateETACalculation() {
 
     // Get original route duration from the calculated route
     let originalDurationMinutes = window.lastCalculatedRoute.duration_minutes ||
-                                   (window.lastCalculatedRoute.time ? parseInt(window.lastCalculatedRoute.time) : 0);
+        (window.lastCalculatedRoute.time ? parseInt(window.lastCalculatedRoute.time) : 0);
 
     // FIXED: Sanity check - duration should be reasonable (< 24 hours = 1440 minutes)
     // If duration is > 1440, it might be in seconds instead of minutes
@@ -8531,7 +8410,7 @@ function updateETACalculation() {
         for (let i = currentStepIndex; i < routePolyline.length - 1; i++) {
             remainingDistance += calculateDistance(
                 routePolyline[i][0], routePolyline[i][1],
-                routePolyline[i+1][0], routePolyline[i+1][1]
+                routePolyline[i + 1][0], routePolyline[i + 1][1]
             );
         }
     }
@@ -8541,7 +8420,7 @@ function updateETACalculation() {
     for (let i = 0; i < routePolyline.length - 1; i++) {
         totalDistance += calculateDistance(
             routePolyline[i][0], routePolyline[i][1],
-            routePolyline[i+1][0], routePolyline[i+1][1]
+            routePolyline[i + 1][0], routePolyline[i + 1][1]
         );
     }
 
@@ -8571,7 +8450,7 @@ function updateETACalculation() {
             <div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
                 <div style="font-size: 12px; color: #666;">ETA</div>
                 <div style="font-size: 18px; font-weight: bold; color: #333;">
-                    ${eta.toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'})}
+                    ${eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </div>
                 <div style="font-size: 12px; color: #999; margin-top: 5px;">
                     ${timeRemainingMinutes} min remaining (${progressPercent.toFixed(0)}% complete)
@@ -8598,7 +8477,7 @@ function announceETAIfNeeded() {
     if (timeSinceLastAnnouncement > ETA_ANNOUNCEMENT_INTERVAL_MS) {
         // Get original route duration from the calculated route
         let originalDurationMinutes = window.lastCalculatedRoute.duration_minutes ||
-                                       (window.lastCalculatedRoute.time ? parseInt(window.lastCalculatedRoute.time) : 0);
+            (window.lastCalculatedRoute.time ? parseInt(window.lastCalculatedRoute.time) : 0);
 
         // FIXED: Sanity check - duration should be reasonable (< 24 hours = 1440 minutes)
         // If duration is > 1440, it might be in seconds instead of minutes
@@ -8618,7 +8497,7 @@ function announceETAIfNeeded() {
             for (let i = currentStepIndex; i < routePolyline.length - 1; i++) {
                 remainingDistance += calculateDistance(
                     routePolyline[i][0], routePolyline[i][1],
-                    routePolyline[i+1][0], routePolyline[i+1][1]
+                    routePolyline[i + 1][0], routePolyline[i + 1][1]
                 );
             }
         }
@@ -8629,7 +8508,7 @@ function announceETAIfNeeded() {
             for (let i = 0; i < routePolyline.length - 1; i++) {
                 totalDistance += calculateDistance(
                     routePolyline[i][0], routePolyline[i][1],
-                    routePolyline[i+1][0], routePolyline[i+1][1]
+                    routePolyline[i + 1][0], routePolyline[i + 1][1]
                 );
             }
         }
@@ -8914,16 +8793,16 @@ function getCurrentLocation() {
                 easeLinearity: 0.25
             });
 
-            // Add marker
-            if (startMarker) map.removeLayer(startMarker);
-            startMarker = L.circleMarker([lat, lon], {
+            // Add marker with MapLibre
+            if (startMarker && typeof startMarker.remove === 'function') startMarker.remove();
+            startMarker = MapLibreHelpers.createCircleMarker(lat, lon, {
                 radius: 8,
                 fillColor: '#667eea',
                 color: '#fff',
                 weight: 2,
-                opacity: 1,
                 fillOpacity: 0.8
-            }).addTo(map).bindPopup('Current Location');
+            }).addTo(map);
+            startMarker.bindPopup('Current Location');
 
             showStatus('Location found!', 'success');
         },
@@ -10260,14 +10139,14 @@ function updateTripInfo(distance, time, fuelCost, tollCost) {
 
 // Update clearForm to also hide trip info
 const originalClearForm = clearForm;
-clearForm = function() {
+clearForm = function () {
     originalClearForm();
     document.getElementById('tripInfo').classList.remove('show');
 };
 
 // Update calculateRoute to show trip info
 const originalCalculateRoute = calculateRoute;
-calculateRoute = function() {
+calculateRoute = function () {
     originalCalculateRoute();
     // Trip info will be updated when route is calculated
 }
@@ -10279,8 +10158,8 @@ calculateRoute = function() {
  */
 function isStandalonePWA() {
     return (window.matchMedia('(display-mode: standalone)').matches) ||
-           (window.navigator.standalone === true) ||
-           document.referrer.includes('android-app://');
+        (window.navigator.standalone === true) ||
+        document.referrer.includes('android-app://');
 }
 
 /**

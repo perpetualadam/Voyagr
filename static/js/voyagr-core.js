@@ -52,12 +52,15 @@ function initializeMap() {
         }
     }
 
-    // Initialize map
-    map = L.map('map').setView([51.5074, -0.1278], 13);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
-    }).addTo(map);
+    // Initialize map with MapLibre GL JS
+    map = new maplibregl.Map({
+        container: 'map',
+        style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+        center: [-0.1278, 51.5074], // [lon, lat]
+        zoom: 13
+    });
+    // Add navigation controls (zoom and rotation)
+    map.addControl(new maplibregl.NavigationControl());
     console.log('[Init] Map initialized successfully');
 }
 
@@ -113,7 +116,7 @@ function getSpeedUnit() {
  */
 function convertTemperature(celsius) {
     if (temperatureUnit === 'fahrenheit') {
-        return ((celsius * 9/5) + 32).toFixed(1);
+        return ((celsius * 9 / 5) + 32).toFixed(1);
     }
     return celsius.toFixed(1);
 }
@@ -140,10 +143,10 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
     const R = 6371; // Earth's radius in km
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-              Math.sin(dLon/2) * Math.sin(dLon/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
 }
 

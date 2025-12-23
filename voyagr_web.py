@@ -1856,11 +1856,12 @@ def invalidate_route_cache():
         return False
 
 # Cost calculation functions
-def decode_route_geometry(geometry: str) -> List[Tuple[float, float]]:
+def decode_route_geometry(geometry: str, precision: int = 5) -> List[Tuple[float, float]]:
     """Decode route geometry (polyline) to list of coordinates.
 
     Args:
         geometry: Encoded polyline string or list of coordinates
+        precision: Polyline precision (5 for OSRM/GraphHopper, 6 for Valhalla)
 
     Returns:
         List of (lat, lon) tuples
@@ -1874,9 +1875,9 @@ def decode_route_geometry(geometry: str) -> List[Tuple[float, float]]:
             return geometry
 
         # If it's a string, try to decode as polyline
-        # Valhalla uses precision 6, GraphHopper uses precision 5
+        # OSRM and GraphHopper use precision 5, Valhalla uses precision 6
         if isinstance(geometry, str) and polyline:
-            decoded = polyline.decode(geometry, 6)  # Valhalla precision
+            decoded = polyline.decode(geometry, precision)
             return decoded
     except Exception as e:
         logger.warning(f"Error decoding geometry: {e}")
@@ -3439,13 +3440,14 @@ HTML_TEMPLATE = '''
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23667eea' width='192' height='192'/><text x='50%' y='50%' font-size='100' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'>V</text></svg>">
     <link rel="manifest" href="/manifest.json">
     <title>Voyagr Navigation</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+    <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="/static/css/voyagr.css" />
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
+    <script src="/static/js/maplibre-helpers.js?v=20251223"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20251217n"></script>
-    <script src="/static/js/voyagr-app.js?v=20251217n"></script>
-    <script src="/static/js/app.js?v=20251217n"></script>
+    <script src="/static/js/voyagr-core.js?v=20251223"></script>
+    <script src="/static/js/voyagr-app.js?v=20251223"></script>
+    <script src="/static/js/app.js?v=20251223"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -6875,7 +6877,7 @@ def calculate_route():
                     # PHASE 3 OPTIMIZATION: Use cost calculator with route coordinates
                     # ================================================================
                     # Valhalla returns shape as encoded polyline string
-                    route_coords = decode_route_geometry(route_geometry)
+                    route_coords = decode_route_geometry(route_geometry, precision=6)
 
                     costs = cost_calculator.calculate_costs(
                         distance_km, vehicle_type, fuel_efficiency, fuel_price,
@@ -6974,7 +6976,7 @@ def calculate_route():
                                 # PHASE 3 OPTIMIZATION: Use cost calculator with route coordinates
                                 # ================================================================
                                 # Decode alternative route geometry
-                                alt_route_coords = decode_route_geometry(alt_geometry)
+                                alt_route_coords = decode_route_geometry(alt_geometry, precision=6)
 
                                 alt_costs = cost_calculator.calculate_costs(
                                     alt_distance_km, vehicle_type, fuel_efficiency, fuel_price,
@@ -7280,7 +7282,7 @@ def calculate_route():
                                             break
 
                                 # Decode route geometry
-                                route_coords = decode_route_geometry(route_geometry)
+                                route_coords = decode_route_geometry(route_geometry, precision=6)
 
                                 # Calculate costs
                                 costs = cost_calculator.calculate_costs(
@@ -7349,7 +7351,7 @@ def calculate_route():
                                             sh_geom = sh_data['trip']['legs'][0]['shape']
                                             sh_dist = sh_data['trip']['summary']['length']
                                             sh_time = sh_data['trip']['summary']['time']
-                                            sh_coords = decode_route_geometry(sh_geom)
+                                            sh_coords = decode_route_geometry(sh_geom, precision=6)
                                             sh_costs = cost_calculator.calculate_costs(
                                                 sh_dist, vehicle_type, fuel_efficiency, fuel_price,
                                                 energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
