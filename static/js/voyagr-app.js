@@ -138,6 +138,23 @@ function getFuelEfficiencyLabel() {
     return distanceUnit === 'mi' ? 'MPG' : 'L/100km';
 }
 
+// ===== NAVIGATION VARIABLES =====
+let isTrackingActive = false;
+let gpsWatchId = null;
+let currentUserMarker = null;
+let trackingHistory = [];
+let lastZoomLevel = 13;
+let smartZoomEnabled = localStorage.getItem('smartZoomEnabled') === '1' || true;
+let zoomAndFollowEnabled = localStorage.getItem('zoomAndFollowEnabled') === '1' || true;
+let mapFollowingActive = false;
+let navigationActive = false;
+let paddingBottom = window.innerHeight * 0.55; // For driver's perspective
+
+window.addEventListener('resize', () => {
+    paddingBottom = window.innerHeight * 0.55;
+    console.log(`[Viewport] Padding updated: ${paddingBottom.toFixed(0)}px`);
+});
+
 // ===== DARK MODE FUNCTIONS =====
 let currentTheme = localStorage.getItem('ui_theme') || 'light';
 
@@ -5090,9 +5107,10 @@ function toggleZoomAndFollow() {
 
         // Immediately center on current position if available
         if (currentLat && currentLon && map) {
-            map.flyTo([currentLat, currentLon], 17, {
-                duration: 0.5,
-                easeLinearity: 0.25
+            map.flyTo({
+                center: [currentLon, currentLat],
+                zoom: 17,
+                duration: 500
             });
         }
     } else {
@@ -5155,11 +5173,14 @@ function toggleJourneyOverview() {
             mapFollowingActive = true;
         }
 
-        // Return to saved position or follow current location
+        // Return to navigation view
         if (savedMapState) {
-            map.flyTo(savedMapState.center, savedMapState.zoom, {
-                duration: 0.5,
-                easeLinearity: 0.25
+            map.flyTo({
+                center: [savedMapState.center.lng, savedMapState.center.lat],
+                zoom: savedMapState.zoom,
+                pitch: 55, // Restore 3D view
+                duration: 1000,
+                essential: true
             });
             savedMapState = null;
         }
@@ -5580,7 +5601,9 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
         html: markerDiv.outerHTML,
         iconSize: [50, 50],
         iconAnchor: [25, 25],
-        className: 'vehicle-marker-icon',
+        className: 'vehicle-marker-icon', // Use the class for CSS transitions
+        rotationAlignment: 'map',        // Align with map rotation
+        pitchAlignment: 'map',           // Align with map pitch
         popup: `
             <div style="font-family: Arial, sans-serif; font-size: 13px; min-width: 180px;">
                 <strong style="font-size: 14px;">${iconEmoji} Current Position</strong><br>
@@ -5648,71 +5671,8 @@ function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urb
  * @returns {Array} [offsetLat, offsetLon] - Offset center coordinates
  */
 function calculateDriverViewCenter(lat, lon, heading, zoomLevel) {
-    if (!map || !routeInProgress) {
-        console.log(`[Driver View] Skipped: map=${!!map}, routeInProgress=${routeInProgress}`);
-        return [lat, lon]; // No offset when not navigating
-    }
-
-    // Calculate offset to position vehicle in bottom 1/3 of screen
-    // The offset needs to be approximately 1/3 of the visible map height
-    //
-    // Visible map dimensions at different zoom levels (approximate):
-    // Zoom 18: ~150m visible height -> offset ~50m (0.00045 deg)
-    // Zoom 16: ~600m visible height -> offset ~200m (0.0018 deg)
-    // Zoom 14: ~2.4km visible height -> offset ~800m (0.0072 deg)
-    // Zoom 12: ~10km visible height -> offset ~3.3km (0.03 deg)
-    //
-    // Formula: offset = baseOffset * 2^(16 - zoomLevel)
-    // Using baseOffset = 0.0018 degrees at zoom 16 (~200m offset)
-    const baseOffsetDegrees = 0.0018;  // ~200m at zoom 16
-    const zoomFactor = Math.pow(2, 16 - zoomLevel);
-    const offsetDegrees = baseOffsetDegrees * zoomFactor;
-    const offsetMeters = offsetDegrees * 111000;  // For debug logging
-
-    // Determine the direction of travel (bearing in radians)
-    let bearingRad = 0;  // Default to north
-    let bearingSource = 'default';
-
-    if (heading !== null && heading !== undefined && !isNaN(heading) && heading > 0) {
-        // Use GPS heading if available and valid
-        bearingRad = heading * Math.PI / 180;
-        bearingSource = 'GPS';
-    } else if (routePolyline && routePolyline.length > 1) {
-        // Calculate bearing from current position to next route point
-        let closestIdx = 0;
-        let minDist = Infinity;
-        for (let i = 0; i < routePolyline.length; i++) {
-            const d = Math.abs(lat - routePolyline[i][0]) + Math.abs(lon - routePolyline[i][1]);
-            if (d < minDist) {
-                minDist = d;
-                closestIdx = i;
-            }
-        }
-        // Look ahead several points to get stable direction (more points at low zoom)
-        const lookAheadPoints = Math.max(10, Math.floor(20 * zoomFactor));
-        const lookAhead = Math.min(closestIdx + lookAheadPoints, routePolyline.length - 1);
-        if (lookAhead > closestIdx) {
-            const nextPoint = routePolyline[lookAhead];
-            const dLat = nextPoint[0] - lat;
-            const dLon = nextPoint[1] - lon;
-            bearingRad = Math.atan2(dLon, dLat);  // atan2(x, y) for bearing from north
-            bearingSource = 'route';
-        }
-    }
-
-    const bearingDegrees = (bearingRad * 180 / Math.PI + 360) % 360;
-
-    // Apply offset in the direction of travel
-    // 1 degree latitude ≈ 111km everywhere
-    // 1 degree longitude ≈ 111km * cos(lat)
-    const offsetLat = lat + offsetDegrees * Math.cos(bearingRad);
-    const offsetLon = lon + offsetDegrees * Math.sin(bearingRad) / Math.cos(lat * Math.PI / 180);
-
-    // Debug logging
-    console.log(`[Driver View] Offset applied: ${offsetMeters.toFixed(0)}m ahead at bearing ${bearingDegrees.toFixed(0)}° (${bearingSource}), zoom ${zoomLevel}`);
-    console.log(`[Driver View] Vehicle: [${lat.toFixed(6)}, ${lon.toFixed(6)}] -> Map center: [${offsetLat.toFixed(6)}, ${offsetLon.toFixed(6)}]`);
-
-    return [offsetLat, offsetLon];
+    // MapLibre native: We use padding to offset the center, so we return the raw coords here.
+    return [lat, lon];
 }
 /**
  * applySmartZoomWithAnimation function
@@ -5733,9 +5693,11 @@ function applySmartZoomWithAnimation(speedMph, distanceToNextTurn = null, roadTy
     if (Math.abs(newZoomLevel - lastZoomLevel) >= 1) {
         // Use smooth animation with flyTo
         if (userLat !== null && userLon !== null) {
-            map.flyTo([userLat, userLon], newZoomLevel, {
+            map.flyTo({
+                center: [userLon, userLat],
+                zoom: newZoomLevel,
                 duration: ZOOM_ANIMATION_DURATION,
-                easeLinearity: 0.25
+                essential: true
             });
         } else {
             // Fallback if coordinates not provided
@@ -6371,10 +6333,7 @@ window.addEventListener('load', () => {
 initBatteryMonitoring();
 
 // ===== GPS TRACKING SYSTEM =====
-let gpsWatchId = null;
-let currentUserMarker = null;
-let isTrackingActive = false;
-let trackingHistory = [];
+// Variables initialized at the top level
 let routeStarted = false;
 let routeInProgress = false;
 
@@ -6919,9 +6878,7 @@ const vehicleIconEmojis = {
     'pedestrian': '🚶'
 };
 
-// ===== SMART ZOOM VARIABLES =====
-let smartZoomEnabled = true;
-let lastZoomLevel = 16;
+// Variables initialized at the top level
 let lastTurnZoomApplied = false;
 const ZOOM_LEVELS = {
     'motorway_high_speed': 14,      // > 100 km/h
@@ -7432,23 +7389,25 @@ function startGPSTracking() {
                 const speedMph = speed ? (speed * 2.237) : 0;
                 const smartZoom = calculateSmartZoom(speedMph, null, 'motorway');
 
-                // Calculate driver's view offset center (vehicle in bottom third)
-                // This shows more of the road ahead like Google Maps/Waze
-                const [offsetLat, offsetLon] = calculateDriverViewCenter(lat, lon, heading, smartZoom);
-
                 // Smooth animation to follow vehicle with driver's perspective
-                map.flyTo([offsetLat, offsetLon], smartZoom, {
-                    duration: 0.5,
-                    easeLinearity: 0.25,
-                    noMoveStart: false
+                // We use native padding to push the vehicle to the bottom of the screen
+                map.easeTo({
+                    center: [lon, lat], // MapLibre uses [lon, lat]
+                    zoom: smartZoom,
+                    bearing: heading || map.getBearing(),
+                    pitch: 55, // 3D Tilt
+                    padding: { top: 50, bottom: paddingBottom, left: 50, right: 50 },
+                    duration: 1000,
+                    essential: true
                 });
 
-                console.log(`[Zoom & Follow] Driver view: vehicle at bottom, zoom ${smartZoom}, speed ${speedMph.toFixed(1)} mph`);
+                console.log(`[Navigation] Driver view: pitch 55, bearing ${Math.round(heading)}°, zoom ${smartZoom.toFixed(1)}`);
             } else if (!zoomAndFollowEnabled && !map._userPanned) {
                 // If zoom and follow is disabled but map hasn't been manually panned, still center on user
-                map.flyTo([lat, lon], 16, {
-                    duration: 0.3,
-                    easeLinearity: 0.25
+                map.easeTo({
+                    center: [lon, lat],
+                    zoom: 16,
+                    duration: 1000
                 });
             }
 

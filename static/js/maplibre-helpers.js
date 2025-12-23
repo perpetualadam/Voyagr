@@ -311,6 +311,64 @@ function removeLayer(mapInstance, layer) {
     }
 }
 
+/**
+ * Add 3D building extrusion layer to the map (if style supports it)
+ * @param {maplibregl.Map} mapInstance - Map instance
+ */
+function add3DBuildings(mapInstance) {
+    if (!mapInstance) return;
+
+    const addBuildingLayer = () => {
+        // Find the first symbol layer to insert buildings below
+        const layers = mapInstance.getStyle().layers;
+        let labelLayerId;
+        for (let i = 0; i < layers.length; i++) {
+            if (layers[i].type === 'symbol' && layers[i].layout['text-field']) {
+                labelLayerId = layers[i].id;
+                break;
+            }
+        }
+
+        if (mapInstance.getLayer('3d-buildings')) return;
+
+        mapInstance.addLayer(
+            {
+                'id': '3d-buildings',
+                'source': 'composite',
+                'source-layer': 'building',
+                'filter': ['==', 'extrude', 'true'],
+                'type': 'fill-extrusion',
+                'minzoom': 15,
+                'paint': {
+                    'fill-extrusion-color': '#aaa',
+                    'fill-extrusion-height': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        15, 0,
+                        15.05, ['get', 'height']
+                    ],
+                    'fill-extrusion-base': [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        15, 0,
+                        15.05, ['get', 'min_height']
+                    ],
+                    'fill-extrusion-opacity': 0.6
+                }
+            },
+            labelLayerId
+        );
+    };
+
+    if (mapInstance.isStyleLoaded()) {
+        addBuildingLayer();
+    } else {
+        mapInstance.on('load', addBuildingLayer);
+    }
+}
+
 // ===== FEATURE GROUP SHIM =====
 
 /**
@@ -358,6 +416,7 @@ window.MapLibreHelpers = {
     fitMapBounds,
     hasLayer,
     removeLayer,
+    add3DBuildings,
     featureGroup,
     activeLayers,
     activeMarkers

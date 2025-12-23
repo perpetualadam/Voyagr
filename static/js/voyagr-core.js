@@ -61,6 +61,10 @@ function initializeMap() {
     });
     // Add navigation controls (zoom and rotation)
     map.addControl(new maplibregl.NavigationControl());
+
+    // Enable 3D buildings
+    MapLibreHelpers.add3DBuildings(map);
+
     console.log('[Init] Map initialized successfully');
 }
 

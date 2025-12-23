@@ -1390,9 +1390,11 @@ h1 {
     pointer-events: none;
 }
 
-/* Ensure smooth rotation transitions */
+/* Ensure smooth rotation and pitching transitions */
 .vehicle-marker-icon > div {
-    transition: transform 0.3s ease-out !important;
+    transition: transform 0.1s ease-out !important;
+    will-change: transform;
+    backface-visibility: hidden;
 }
 
 /* ===== DARK MODE STYLES ===== */
