@@ -1629,8 +1629,8 @@ function selectRoute(index) {
  * @param {number} index - Route index to display
  */
 function displaySingleRoute(index) {
-    // Clear the main routeLayer if it exists
-    if (routeLayer && map.hasLayer(routeLayer)) {
+    // Clear the main routeLayer if it exists (MapLibre compatible)
+    if (routeLayer) {
         if (typeof routeLayer.remove === 'function') routeLayer.remove();
         routeLayer = null;
     }

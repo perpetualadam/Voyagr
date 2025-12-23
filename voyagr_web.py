@@ -63,7 +63,10 @@ except ImportError:
     initialize_router = None  # type: ignore
     get_router_service = None  # type: ignore
 
-load_dotenv()
+# Load .env from the same directory as this script (important for gunicorn)
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_env_path = os.path.join(_script_dir, '.env')
+load_dotenv(_env_path)
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
