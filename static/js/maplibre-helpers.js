@@ -41,7 +41,7 @@ function addPolyline(mapInstance, coords, options = {}) {
             }
         });
 
-        mapInstance.addLayer({
+        const layerConfig = {
             id: id,
             type: 'line',
             source: id,
@@ -54,7 +54,15 @@ function addPolyline(mapInstance, coords, options = {}) {
                 'line-width': options.weight || 4,
                 'line-opacity': options.opacity || 0.8
             }
-        });
+        };
+
+        // Add layer - optionally before a specific layer for z-ordering
+        // If 'aboveRoutes' is true, don't specify beforeId to add on top
+        if (options.beforeId && mapInstance.getLayer(options.beforeId)) {
+            mapInstance.addLayer(layerConfig, options.beforeId);
+        } else {
+            mapInstance.addLayer(layerConfig);
+        }
     };
 
     if (mapInstance.isStyleLoaded()) {

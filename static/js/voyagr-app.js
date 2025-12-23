@@ -3028,9 +3028,16 @@ function addTrafficLayer() {
     // Using 'relative0' style which shows all roads with traffic coloring
     const tomtomApiKey = window.TOMTOM_API_KEY || '';
 
+    // Debug: Log API key availability
+    console.log('[Traffic] API key check:', {
+        windowKey: typeof window.TOMTOM_API_KEY,
+        keyLength: tomtomApiKey ? tomtomApiKey.length : 0,
+        hasKey: !!tomtomApiKey
+    });
+
     if (!tomtomApiKey) {
-        console.log('[Traffic] TomTom API key not available, using fallback');
-        showStatus('⚠️ Traffic layer requires API key', 'warning');
+        console.log('[Traffic] TomTom API key not available - using route-level traffic only');
+        // Note: Route-level traffic still works via backend API
         return;
     }
 
@@ -3218,6 +3225,7 @@ function findClosestRoutePointIndex(targetPoint, startSearchIdx = 0) {
 /**
  * Display traffic-colored edges along the route
  * Creates polylines that follow the actual route geometry (not straight lines)
+ * Traffic edges are drawn ON TOP of the route with thick, visible lines
  */
 function displayRouteTrafficEdges(segments) {
     // Clear existing traffic layers
@@ -3234,9 +3242,8 @@ function displayRouteTrafficEdges(segments) {
     console.log('[Route Traffic] Segment levels:', levelCounts);
 
     let lastEndIdx = 0;  // Track position along route to ensure segments are in order
-    let displayedCount = 0;
 
-    segments.forEach(segment => {
+    segments.forEach((segment, idx) => {
         const color = TRAFFIC_COLORS[segment.traffic_level] || TRAFFIC_COLORS['green'];
 
         // Show ALL traffic segments including green (free flow)
@@ -3248,31 +3255,33 @@ function displayRouteTrafficEdges(segments) {
 
         // Skip invalid segments
         if (startIdx < 0 || endIdx < 0 || endIdx <= startIdx) {
+            console.log(`[Route Traffic] Skipping invalid segment ${idx}: startIdx=${startIdx}, endIdx=${endIdx}`);
             return;
         }
 
         // Extract all route points between start and end to follow the curved road geometry
-        const segmentPoints = routePolyline.slice(startIdx, endIdx + 1);
+        let segmentPoints = routePolyline.slice(startIdx, endIdx + 1);
 
         if (segmentPoints.length < 2) {
             // Fallback to direct line if not enough points
-            segmentPoints.push(segment.start, segment.end);
+            segmentPoints = [segment.start, segment.end];
         }
 
         // Update lastEndIdx for next segment
         lastEndIdx = endIdx;
 
         // Create the traffic edge polyline following the route geometry with MapLibre
+        // Use thick line width (8px) for high visibility on top of route
         const trafficLine = MapLibreHelpers.addPolyline(map, segmentPoints, {
             color: color,
-            weight: 10,           // Thick line for visibility
-            opacity: 0.8
+            weight: 8,            // Thick line for visibility
+            opacity: 0.9          // High opacity
         });
 
         routeTrafficLayers.push(trafficLine);
     });
 
-    console.log(`[Route Traffic] Added ${routeTrafficLayers.length} traffic edge layers`);
+    console.log(`[Route Traffic] Added ${routeTrafficLayers.length} traffic edge layers (valid segments)`);
 }
 
 /**
