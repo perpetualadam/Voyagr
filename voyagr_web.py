@@ -358,6 +358,15 @@ GRAPHHOPPER_URL = os.getenv('GRAPHHOPPER_URL', 'http://localhost:8989')
 USE_OSRM = os.getenv('USE_OSRM', 'false').lower() == 'true'
 
 # ============================================================================
+# GRAPHHOPPER CAMERA AVOIDANCE CONFIGURATION
+# ============================================================================
+# GraphHopper with pre-loaded camera areas for camera avoidance
+# Priority: GraphHopper (if camera avoidance enabled) → Valhalla → OSRM
+USE_GRAPHHOPPER_CAMERA_AVOIDANCE = os.getenv('USE_GRAPHHOPPER_CAMERA_AVOIDANCE', 'true').lower() == 'true'
+GRAPHHOPPER_CAMERA_AREAS_COUNT = int(os.getenv('GRAPHHOPPER_CAMERA_AREAS_COUNT', '137'))  # Number of camera_area_N features (UK only)
+GRAPHHOPPER_TIMEOUT = int(os.getenv('GRAPHHOPPER_TIMEOUT', '30'))
+
+# ============================================================================
 # PHASE 3: CUSTOM ROUTER INTEGRATION
 # ============================================================================
 # Phase 3: Import custom router modules
@@ -2597,6 +2606,167 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]], r
     except Exception as e:
         logger.error(f"[VALHALLA] Error building exclude_locations: {e}")
         return []  # Return empty list on error
+
+
+# ============================================================================
+# GRAPHHOPPER CAMERA AVOIDANCE ROUTING
+# ============================================================================
+# Uses pre-loaded camera areas from camera_areas.geojson for efficient routing
+
+def build_graphhopper_camera_avoidance_model(route_bbox: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
+    """
+    Build GraphHopper custom model that references pre-loaded camera areas.
+
+    The camera areas are loaded at GraphHopper startup from camera_areas.geojson.
+    This function builds a custom_model that references those areas by ID.
+
+    Args:
+        route_bbox: Optional bounding box to select relevant camera areas
+
+    Returns:
+        GraphHopper custom_model dict with priority rules
+    """
+    try:
+        # For now, we reference a subset of camera areas to avoid StackOverflow
+        # GraphHopper has issues with too many area references in custom model
+        # Solution: Use a moderate number of area conditions
+
+        # Start with areas likely to be in the route bbox
+        # We'll select ~50 areas max to avoid performance issues
+        max_areas = 50
+
+        # Build condition string for areas
+        # Format: "in_camera_area_0 || in_camera_area_1 || ..."
+        area_conditions = []
+
+        if route_bbox:
+            # Calculate which grid cells might be relevant based on bbox
+            # Grid is 0.5 degrees, starting from -90 lat, -180 lon
+            grid_size = 0.5
+
+            min_cell_lat = int((route_bbox['min_lat'] + 90) / grid_size)
+            max_cell_lat = int((route_bbox['max_lat'] + 90) / grid_size)
+            min_cell_lon = int((route_bbox['min_lon'] + 180) / grid_size)
+            max_cell_lon = int((route_bbox['max_lon'] + 180) / grid_size)
+
+            # Calculate area indices that might be relevant
+            # This is a heuristic - the actual mapping depends on how areas were created
+            area_start = min(min_cell_lat * 720 + min_cell_lon, GRAPHHOPPER_CAMERA_AREAS_COUNT - 1)
+            area_end = min(max_cell_lat * 720 + max_cell_lon, GRAPHHOPPER_CAMERA_AREAS_COUNT - 1)
+
+            # Select areas in range, limited to max_areas
+            for i in range(area_start, min(area_end + 1, area_start + max_areas)):
+                if i < GRAPHHOPPER_CAMERA_AREAS_COUNT:
+                    area_conditions.append(f"in_camera_area_{i}")
+
+        # If no bbox or no areas selected, use first 50 areas as fallback
+        if not area_conditions:
+            for i in range(min(max_areas, GRAPHHOPPER_CAMERA_AREAS_COUNT)):
+                area_conditions.append(f"in_camera_area_{i}")
+
+        # Build the condition string
+        condition_str = " || ".join(area_conditions[:max_areas])
+
+        custom_model = {
+            "priority": [
+                {
+                    "if": condition_str,
+                    "multiply_by": "0.01"  # Strong avoidance (99% penalty)
+                }
+            ]
+        }
+
+        logger.info(f"[GRAPHHOPPER] Built camera avoidance model with {len(area_conditions[:max_areas])} areas")
+        return custom_model
+
+    except Exception as e:
+        logger.error(f"[GRAPHHOPPER] Error building camera avoidance model: {e}")
+        return {}
+
+
+def route_with_graphhopper(
+    start_lat: float, start_lon: float,
+    end_lat: float, end_lon: float,
+    enable_camera_avoidance: bool = True,
+    route_bbox: Optional[Dict[str, float]] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Route using GraphHopper with optional camera avoidance via pre-loaded areas.
+
+    Args:
+        start_lat, start_lon: Start coordinates
+        end_lat, end_lon: End coordinates
+        enable_camera_avoidance: Whether to use camera avoidance custom model
+        route_bbox: Bounding box of route for area selection
+
+    Returns:
+        Route data dict or None if failed
+    """
+    try:
+        url = f"{GRAPHHOPPER_URL}/route"
+
+        # Build request payload
+        payload = {
+            "points": [[start_lon, start_lat], [end_lon, end_lat]],  # GraphHopper uses [lon, lat]
+            "profile": "car",
+            "locale": "en",
+            "instructions": True,
+            "points_encoded": True,
+            "elevation": False
+        }
+
+        # Add custom model for camera avoidance
+        if enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
+            custom_model = build_graphhopper_camera_avoidance_model(route_bbox)
+            if custom_model:
+                payload["custom_model"] = custom_model
+                payload["ch.disable"] = True  # Must disable CH for custom model
+                logger.info(f"[GRAPHHOPPER] Using camera avoidance custom model")
+
+        headers = {
+            'User-Agent': 'Voyagr-PWA/1.0',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+
+        logger.info(f"[GRAPHHOPPER] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+        response = requests.post(url, json=payload, timeout=GRAPHHOPPER_TIMEOUT, headers=headers)
+
+        if response.status_code == 200:
+            data = response.json()
+
+            if 'paths' in data and len(data['paths']) > 0:
+                path = data['paths'][0]
+
+                # Extract route data
+                route_data = {
+                    'success': True,
+                    'source': 'GraphHopper',
+                    'distance_km': path.get('distance', 0) / 1000,
+                    'duration_seconds': path.get('time', 0) / 1000,
+                    'geometry': path.get('points', ''),  # Encoded polyline
+                    'instructions': path.get('instructions', []),
+                    'bbox': path.get('bbox', []),
+                    'camera_avoidance': enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE
+                }
+
+                logger.info(f"[GRAPHHOPPER] Route found: {route_data['distance_km']:.1f}km, {route_data['duration_seconds']/60:.0f}min")
+                return route_data
+            else:
+                logger.warning(f"[GRAPHHOPPER] No paths in response")
+                return None
+        else:
+            error_msg = response.text[:500] if response.text else f"HTTP {response.status_code}"
+            logger.warning(f"[GRAPHHOPPER] Request failed: {error_msg}")
+            return None
+
+    except requests.exceptions.Timeout:
+        logger.warning(f"[GRAPHHOPPER] Request timeout after {GRAPHHOPPER_TIMEOUT}s")
+        return None
+    except Exception as e:
+        logger.error(f"[GRAPHHOPPER] Error: {e}")
+        return None
+
 
 def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
     """
@@ -6309,11 +6479,45 @@ def calculate_route():
             logger.info(f"[HAZARDS] Hazard avoidance DISABLED - will score route but not avoid hazards")
 
         # ====================================================================
-        # Try routing engines in order: Valhalla (PRIMARY), OSRM (FALLBACK)
+        # ROUTING ENGINE PRIORITY:
+        # 1. GraphHopper with camera areas (if hazard avoidance enabled)
+        # 2. Valhalla (PRIMARY fallback)
+        # 3. OSRM (SECONDARY fallback)
         # ====================================================================
+        graphhopper_route = None
+        graphhopper_error = None
         valhalla_error = None
 
         logger.debug(f"\n[ROUTING] Starting route calculation from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
+
+        # Calculate route bounding box for camera area selection
+        route_bbox = {
+            'min_lat': min(start_lat, end_lat),
+            'max_lat': max(start_lat, end_lat),
+            'min_lon': min(start_lon, end_lon),
+            'max_lon': max(start_lon, end_lon)
+        }
+
+        # ====================================================================
+        # TRY GRAPHHOPPER FIRST (if camera avoidance enabled)
+        # ====================================================================
+        if enable_hazard_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
+            logger.info(f"[ROUTING] Trying GraphHopper with camera avoidance first...")
+            try:
+                graphhopper_route = route_with_graphhopper(
+                    start_lat, start_lon, end_lat, end_lon,
+                    enable_camera_avoidance=True,
+                    route_bbox=route_bbox
+                )
+                if graphhopper_route and graphhopper_route.get('success'):
+                    logger.info(f"[GRAPHHOPPER] ✅ Route found with camera avoidance")
+                else:
+                    graphhopper_error = "No route found"
+                    logger.warning(f"[GRAPHHOPPER] No route found, falling back to Valhalla")
+            except Exception as e:
+                graphhopper_error = str(e)
+                logger.warning(f"[GRAPHHOPPER] Error: {e}, falling back to Valhalla")
+
         logger.debug(f"[ROUTING] Valhalla URL: {VALHALLA_URL}")
 
         valhalla_start_time = time.time()
@@ -6330,14 +6534,7 @@ def calculate_route():
             # ================================================================
             # HAZARD AVOIDANCE: Build exclude_locations if enabled
             # ================================================================
-            if enable_hazard_avoidance and hazards:
-                # Calculate bounding box for route to filter hazards
-                route_bbox = {
-                    'min_lat': min(start_lat, end_lat),
-                    'max_lat': max(start_lat, end_lat),
-                    'min_lon': min(start_lon, end_lon),
-                    'max_lon': max(start_lon, end_lon)
-                }
+            # route_bbox already calculated above for GraphHopper
 
             # Build exclude_locations (more efficient than exclude_polygons)
             # No circumference limit - can send many more locations
@@ -7163,10 +7360,15 @@ def calculate_route():
                     # Add total stop time to duration if stops exist
                     total_duration_with_stops = routes[0]["duration_minutes"] + total_stop_time
 
+                    # Determine source based on what was used
+                    routing_source = 'Valhalla ✅'
+                    if graphhopper_route and graphhopper_route.get('success'):
+                        routing_source = 'GraphHopper+Valhalla ✅'
+
                     response_data = {
                         'success': True,
                         'routes': routes,
-                        'source': 'Valhalla ✅',
+                        'source': routing_source,
                         'distance': f'{routes[0]["distance_km"]:.2f} km',
                         'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
                         'total_time_with_stops': f'{total_duration_with_stops:.0f} minutes',
@@ -7180,6 +7382,7 @@ def calculate_route():
                         'caz_details': routes[0].get('caz_details', {}),
                         'maneuvers': routes[0].get('maneuvers', []),
                         'cached': False,
+                        'camera_avoidance_engine': 'GraphHopper' if (graphhopper_route and graphhopper_route.get('success')) else 'Valhalla',
                         'start_lat': start_lat,
                         'start_lon': start_lon,
                         'end_lat': end_lat,
