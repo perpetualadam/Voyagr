@@ -3116,9 +3116,9 @@ let routeTrafficUpdateInterval = null;
 const ROUTE_TRAFFIC_UPDATE_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
 // Traffic level colors (matching traffic light colors)
-// Note: Green segments are filtered out and not displayed
+// These overlay on top of the route to show real-time traffic conditions
 const TRAFFIC_COLORS = {
-    'green': '#00AA00',   // Free flow - NOT DISPLAYED (filtered out)
+    'green': '#22CC22',   // Free flow - bright green for visibility
     'orange': '#FF8C00',  // Moderate congestion - orange
     'red': '#FF0000',     // Heavy congestion - red
     'black': '#333333'    // Blocked/severe - dark
@@ -3283,13 +3283,20 @@ function displayRouteTrafficEdges(segments) {
         lastEndIdx = endIdx;
 
         // Create the traffic edge polyline following the route geometry with MapLibre
-        // Use thick line width (8px) for high visibility on top of route
+        // First add a dark casing/outline for visibility
+        const casingLine = MapLibreHelpers.addPolyline(map, segmentPoints, {
+            color: '#000000',     // Black casing
+            weight: 12,           // Wider than traffic line
+            opacity: 0.4          // Semi-transparent
+        });
+        routeTrafficLayers.push(casingLine);
+
+        // Then add the colored traffic line on top
         const trafficLine = MapLibreHelpers.addPolyline(map, segmentPoints, {
             color: color,
             weight: 8,            // Thick line for visibility
-            opacity: 0.9          // High opacity
+            opacity: 0.95         // Very high opacity
         });
-
         routeTrafficLayers.push(trafficLine);
     });
 
