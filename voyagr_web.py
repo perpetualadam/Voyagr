@@ -7341,6 +7341,57 @@ def calculate_route():
                     print(f"[Valhalla] SUCCESS: {len(routes)} routes found")
 
                     # ================================================================
+                    # GRAPHHOPPER CAMERA-AVOIDING ROUTE: Add as priority option
+                    # ================================================================
+                    if graphhopper_route and graphhopper_route.get('success') and enable_hazard_avoidance:
+                        try:
+                            gh_distance_km = graphhopper_route.get('distance_km', 0)
+                            gh_duration_min = graphhopper_route.get('duration_seconds', 0) / 60
+                            gh_geometry = graphhopper_route.get('geometry', '')
+
+                            # GraphHopper uses precision 5
+                            if gh_geometry and polyline:
+                                gh_coords = polyline.decode(gh_geometry, precision=5)
+                                # Re-encode with precision 6 for consistency with Valhalla
+                                gh_geometry_p6 = polyline.encode(gh_coords, precision=6)
+
+                                # Calculate costs for GraphHopper route
+                                gh_costs = cost_calculator.calculate_costs(
+                                    gh_distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                                    energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+                                    route_coords=gh_coords
+                                )
+
+                                # Score for hazards (should be very low since GraphHopper avoided them)
+                                gh_hazard_penalty, gh_hazard_count = score_route_by_hazards(gh_coords, hazards)
+                                gh_hazards_list = get_hazards_on_route(gh_coords, hazards)
+
+                                # Apply traffic multiplier
+                                gh_duration_min = gh_duration_min * traffic_multiplier
+
+                                gh_route_entry = {
+                                    'id': 0,  # Will be renumbered
+                                    'name': '📷 Camera-Safe',
+                                    'distance_km': round(gh_distance_km, 2),
+                                    'duration_minutes': round(gh_duration_min, 0),
+                                    'fuel_cost': round(gh_costs['fuel_cost'], 2),
+                                    'toll_cost': round(gh_costs['toll_cost'], 2),
+                                    'caz_cost': round(gh_costs['caz_cost'], 2),
+                                    'geometry': gh_geometry_p6,
+                                    'hazard_penalty_seconds': round(gh_hazard_penalty, 0),
+                                    'hazard_count': gh_hazard_count,
+                                    'hazards': gh_hazards_list,
+                                    'maneuvers': [],  # GraphHopper maneuvers could be added later
+                                    'source': 'GraphHopper'
+                                }
+
+                                # Insert at the beginning as the camera-safe option
+                                routes.insert(0, gh_route_entry)
+                                logger.info(f"[GRAPHHOPPER] Added Camera-Safe route: {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
+                        except Exception as e:
+                            logger.warning(f"[GRAPHHOPPER] Failed to add GraphHopper route: {e}")
+
+                    # ================================================================
                     # HAZARD AVOIDANCE: Reorder routes by hazard penalty if enabled
                     # ================================================================
                     if enable_hazard_avoidance and hazards:
@@ -7350,6 +7401,10 @@ def calculate_route():
                         for idx, route in enumerate(routes_sorted):
                             print(f"  Route {idx+1}: {route['name']} - Hazard penalty: {route.get('hazard_penalty_seconds', 0):.0f}s, Count: {route.get('hazard_count', 0)}")
                         routes = routes_sorted
+
+                        # Renumber route IDs
+                        for idx, route in enumerate(routes):
+                            route['id'] = idx + 1
 
                     # ================================================================
                     # PHASE 5: Record success in fallback chain optimizer
