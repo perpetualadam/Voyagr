@@ -2904,6 +2904,14 @@ function displayHazardMarkers(hazards) {
         const iconContent = config.svg || config.emoji;
         const isCamera = !!config.svg;
 
+        // Create popup icon (larger version for popup)
+        const popupIcon = config.svg || `<span style="font-size: 24px;">${config.emoji}</span>`;
+
+        // Create distance text if available
+        const hazardDistanceText = hazard.distance_km
+            ? `<div style="font-size: 11px; color: #888; margin-top: 5px;">${hazard.distance_km.toFixed(1)} km ahead</div>`
+            : '';
+
         // Create custom HTML marker with MapLibre
         const marker = MapLibreHelpers.createMarker(hazard.lat, hazard.lon, {
             className: 'hazard-marker',
