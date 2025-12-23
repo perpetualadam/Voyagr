@@ -2618,57 +2618,33 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]], r
 
 def build_graphhopper_camera_avoidance_model(route_bbox: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
     """
-    Build GraphHopper custom model that references pre-loaded camera areas.
+    Build GraphHopper custom model that references ALL pre-loaded camera areas.
 
     The camera areas are loaded at GraphHopper startup from camera_areas.geojson.
-    This function builds a custom_model that references those areas by ID.
+    This function builds a custom_model that references ALL 137 camera areas.
+    GraphHopper will only apply the penalty to roads that actually intersect
+    with the areas, so including all areas is safe and ensures complete coverage.
 
     Args:
-        route_bbox: Optional bounding box to select relevant camera areas
+        route_bbox: Optional bounding box (not used - we include ALL areas)
 
     Returns:
         GraphHopper custom_model dict with priority rules
     """
     try:
-        # For now, we reference a subset of camera areas to avoid StackOverflow
-        # GraphHopper has issues with too many area references in custom model
-        # Solution: Use a moderate number of area conditions
+        # Include ALL camera areas in the model
+        # GraphHopper efficiently checks which areas the route intersects
+        # This ensures we avoid ALL cameras, not just a subset
 
-        # Start with areas likely to be in the route bbox
-        # We'll select ~50 areas max to avoid performance issues
-        max_areas = 50
-
-        # Build condition string for areas
-        # Format: "in_camera_area_0 || in_camera_area_1 || ..."
+        # Build condition string for ALL areas
+        # Format: "in_camera_area_0 || in_camera_area_1 || ... || in_camera_area_136"
         area_conditions = []
 
-        if route_bbox:
-            # Calculate which grid cells might be relevant based on bbox
-            # Grid is 0.5 degrees, starting from -90 lat, -180 lon
-            grid_size = 0.5
+        for i in range(GRAPHHOPPER_CAMERA_AREAS_COUNT):
+            area_conditions.append(f"in_camera_area_{i}")
 
-            min_cell_lat = int((route_bbox['min_lat'] + 90) / grid_size)
-            max_cell_lat = int((route_bbox['max_lat'] + 90) / grid_size)
-            min_cell_lon = int((route_bbox['min_lon'] + 180) / grid_size)
-            max_cell_lon = int((route_bbox['max_lon'] + 180) / grid_size)
-
-            # Calculate area indices that might be relevant
-            # This is a heuristic - the actual mapping depends on how areas were created
-            area_start = min(min_cell_lat * 720 + min_cell_lon, GRAPHHOPPER_CAMERA_AREAS_COUNT - 1)
-            area_end = min(max_cell_lat * 720 + max_cell_lon, GRAPHHOPPER_CAMERA_AREAS_COUNT - 1)
-
-            # Select areas in range, limited to max_areas
-            for i in range(area_start, min(area_end + 1, area_start + max_areas)):
-                if i < GRAPHHOPPER_CAMERA_AREAS_COUNT:
-                    area_conditions.append(f"in_camera_area_{i}")
-
-        # If no bbox or no areas selected, use first 50 areas as fallback
-        if not area_conditions:
-            for i in range(min(max_areas, GRAPHHOPPER_CAMERA_AREAS_COUNT)):
-                area_conditions.append(f"in_camera_area_{i}")
-
-        # Build the condition string
-        condition_str = " || ".join(area_conditions[:max_areas])
+        # Build the condition string with all areas
+        condition_str = " || ".join(area_conditions)
 
         custom_model = {
             "priority": [
@@ -2679,7 +2655,7 @@ def build_graphhopper_camera_avoidance_model(route_bbox: Optional[Dict[str, floa
             ]
         }
 
-        logger.info(f"[GRAPHHOPPER] Built camera avoidance model with {len(area_conditions[:max_areas])} areas")
+        logger.info(f"[GRAPHHOPPER] Built camera avoidance model with ALL {len(area_conditions)} areas")
         return custom_model
 
     except Exception as e:
