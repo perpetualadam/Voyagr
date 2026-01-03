@@ -63,6 +63,17 @@ except ImportError:
     initialize_router = None  # type: ignore
     get_router_service = None  # type: ignore
 
+# Import Overpass API helper with caching and retry logic
+try:
+    from overpass_helper import query_overpass, build_traffic_signals_query, build_poi_query, get_overpass_cache_stats
+    OVERPASS_HELPER_AVAILABLE = True
+except ImportError:
+    query_overpass = None  # type: ignore
+    build_traffic_signals_query = None  # type: ignore
+    build_poi_query = None  # type: ignore
+    get_overpass_cache_stats = None  # type: ignore
+    OVERPASS_HELPER_AVAILABLE = False
+
 # Load .env from the same directory as this script (important for gunicorn)
 _script_dir = os.path.dirname(os.path.abspath(__file__))
 _env_path = os.path.join(_script_dir, '.env')
@@ -8344,26 +8355,34 @@ def get_traffic_lights():
         min_lng = min(lngs) - buffer
         max_lng = max(lngs) + buffer
         
-        # Query Overpass API for traffic signals in the bounding box
-        overpass_url = 'https://overpass-api.de/api/interpreter'
-        
-        # Overpass query for traffic signals
-        query = f'''
-        [out:json][timeout:15];
-        (
-            node["highway"="traffic_signals"]({min_lat},{min_lng},{max_lat},{max_lng});
-            node["crossing"="traffic_signals"]({min_lat},{min_lng},{max_lat},{max_lng});
-        );
-        out body;
-        '''
-        
-        response = requests.post(overpass_url, data={'data': query}, timeout=20)
-        
-        if response.status_code != 200:
-            logger.warning(f"[Traffic Lights] Overpass API error: {response.status_code}")
-            return jsonify({'success': False, 'error': 'Traffic signal data temporarily unavailable'})
-        
-        elements = response.json().get('elements', [])
+        # Use Overpass helper with caching, retry logic, and fallback endpoints
+        if OVERPASS_HELPER_AVAILABLE:
+            query = build_traffic_signals_query(min_lat, min_lng, max_lat, max_lng)
+            cache_key = f"traffic_lights_{min_lat:.4f}_{min_lng:.4f}_{max_lat:.4f}_{max_lng:.4f}"
+            result = query_overpass(query, cache_key=cache_key, cache_ttl=300)  # 5 min cache
+            
+            if not result.get('success'):
+                logger.warning(f"[Traffic Lights] Overpass query failed: {result.get('error')}")
+                return jsonify({'success': False, 'error': 'Traffic signal data temporarily unavailable'})
+            
+            elements = result.get('elements', [])
+            cached = result.get('cached', False)
+        else:
+            # Fallback to direct API call if helper not available
+            overpass_url = 'https://overpass-api.de/api/interpreter'
+            query = f'''
+            [out:json][timeout:15];
+            (
+                node["highway"="traffic_signals"]({min_lat},{min_lng},{max_lat},{max_lng});
+                node["crossing"="traffic_signals"]({min_lat},{min_lng},{max_lat},{max_lng});
+            );
+            out body;
+            '''
+            response = requests.post(overpass_url, data={'data': query}, timeout=20)
+            if response.status_code != 200:
+                return jsonify({'success': False, 'error': 'Traffic signal data temporarily unavailable'})
+            elements = response.json().get('elements', [])
+            cached = False
         
         # Process traffic signal nodes
         lights = []
@@ -8381,12 +8400,10 @@ def get_traffic_lights():
                 tags = element.get('tags', {})
                 
                 # Check if this signal is close to the route (within ~50m)
-                # Simple proximity check - find minimum distance to any route point
                 is_near_route = False
                 for coord in coordinates:
                     if len(coord) >= 2:
                         route_lng, route_lat = coord[0], coord[1]
-                        # Approximate distance in degrees (rough check)
                         dist = math.sqrt((lat - route_lat)**2 + (lng - route_lng)**2)
                         if dist < 0.0005:  # Approximately 50m
                             is_near_route = True
@@ -8399,7 +8416,7 @@ def get_traffic_lights():
                     'id': f'osm_{osm_id}',
                     'lat': lat,
                     'lng': lng,
-                    'state': 'unknown',  # Real-time state not available from OSM
+                    'state': 'unknown',
                     'name': tags.get('name', ''),
                     'crossing': tags.get('crossing', ''),
                     'button_operated': tags.get('button_operated', ''),
@@ -8409,18 +8426,16 @@ def get_traffic_lights():
                 logger.debug(f"[Traffic Lights] Error processing element: {e}")
                 continue
         
-        logger.info(f"[Traffic Lights] Found {len(lights)} traffic signals along route from OSM")
+        logger.info(f"[Traffic Lights] Found {len(lights)} traffic signals (cached={cached})")
         
         return jsonify({
             'success': True,
             'lights': lights,
             'count': len(lights),
-            'source': 'openstreetmap'
+            'source': 'openstreetmap',
+            'cached': cached
         })
         
-    except requests.exceptions.Timeout:
-        logger.warning("[Traffic Lights] Overpass API timeout")
-        return jsonify({'success': False, 'error': 'Traffic signal request timed out'})
     except Exception as e:
         logger.error(f"[Traffic Lights] Error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
@@ -8541,30 +8556,36 @@ def search_poi():
 
         amenities = poi_mapping.get(poi_type, ['fuel'])
 
-        # Use Overpass API for accurate POI search
-        overpass_url = 'https://overpass-api.de/api/interpreter'
-
-        # Build Overpass query for the amenities
-        amenity_queries = ''.join([
-            f'node["amenity"="{a}"](around:{radius},{lat},{lon});' for a in amenities
-        ])
-
-        query = f'''
-        [out:json][timeout:10];
-        (
-            {amenity_queries}
-        );
-        out body;
-        '''
-
-        response = requests.post(overpass_url, data={'data': query}, timeout=15)
-
-        if response.status_code != 200:
-            logger.warning(f"[POI] Overpass API error: {response.status_code}")
-            # Fallback to Nominatim
-            return _nominatim_poi_fallback(lat, lon, poi_type, radius)
-
-        results = response.json().get('elements', [])
+        # Use Overpass helper with caching, retry logic, and fallback endpoints
+        if OVERPASS_HELPER_AVAILABLE:
+            query = build_poi_query(lat, lon, radius, amenities)
+            cache_key = f"poi_{poi_type}_{lat:.4f}_{lon:.4f}_{radius}"
+            result = query_overpass(query, cache_key=cache_key, cache_ttl=300)  # 5 min cache
+            
+            if not result.get('success'):
+                logger.warning(f"[POI] Overpass query failed: {result.get('error')}")
+                return _nominatim_poi_fallback(lat, lon, poi_type, radius)
+            
+            results = result.get('elements', [])
+            cached = result.get('cached', False)
+        else:
+            # Fallback to direct API call if helper not available
+            overpass_url = 'https://overpass-api.de/api/interpreter'
+            amenity_queries = ''.join([
+                f'node["amenity"="{a}"](around:{radius},{lat},{lon});' for a in amenities
+            ])
+            query = f'''
+            [out:json][timeout:10];
+            (
+                {amenity_queries}
+            );
+            out body;
+            '''
+            response = requests.post(overpass_url, data={'data': query}, timeout=15)
+            if response.status_code != 200:
+                return _nominatim_poi_fallback(lat, lon, poi_type, radius)
+            results = response.json().get('elements', [])
+            cached = False
 
         if not results:
             return jsonify({'success': True, 'results': [], 'message': f'No {poi_type} found nearby'})
@@ -8598,8 +8619,8 @@ def search_poi():
         # Sort by distance
         poi_list.sort(key=lambda x: x['distance_m'])
 
-        logger.info(f"[POI] Found {len(poi_list)} {poi_type} locations near ({lat},{lon})")
-        return jsonify({'success': True, 'results': poi_list[:15], 'type': poi_type})
+        logger.info(f"[POI] Found {len(poi_list)} {poi_type} locations (cached={cached})")
+        return jsonify({'success': True, 'results': poi_list[:15], 'type': poi_type, 'cached': cached})
 
     except Exception as e:
         logger.error(f"[POI] Error: {str(e)}")
