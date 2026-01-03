@@ -2986,6 +2986,62 @@ function displayAllRouteHazards() {
 let trafficLayer = null;
 let showTrafficEnabled = localStorage.getItem('showTrafficEnabled') !== 'false'; // Default: enabled
 
+// ===== 3D BUILDINGS TOGGLE =====
+// Controls fill-extrusion 3D building visibility
+let buildings3DEnabled = localStorage.getItem('buildings3DEnabled') !== 'false'; // Default: enabled
+let buildings3DHeightMultiplier = parseFloat(localStorage.getItem('buildings3DHeight')) || 1.0; // Height exaggeration
+let buildings3DOpacity = parseFloat(localStorage.getItem('buildings3DOpacity')) || 0.6; // Transparency
+
+/**
+ * Toggle 3D buildings layer on/off
+ * @function toggle3DBuildings
+ */
+function toggle3DBuildings() {
+    buildings3DEnabled = !buildings3DEnabled;
+    localStorage.setItem('buildings3DEnabled', buildings3DEnabled ? 'true' : 'false');
+
+    const toggle = document.getElementById('buildings3DToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', buildings3DEnabled);
+    }
+
+    if (buildings3DEnabled) {
+        MapLibreHelpers.add3DBuildings(map);
+        showStatus('🏢 3D Buildings enabled', 'success');
+        console.log('[3D Buildings] Enabled');
+    } else {
+        MapLibreHelpers.remove3DBuildings(map);
+        showStatus('🏢 3D Buildings disabled', 'info');
+        console.log('[3D Buildings] Disabled');
+    }
+
+    saveAllSettings();
+}
+
+/**
+ * Set 3D building height exaggeration
+ * @function set3DBuildingHeight
+ * @param {number} multiplier - Height multiplier (1.0 = normal, 2.0 = double height)
+ */
+function set3DBuildingHeight(multiplier) {
+    buildings3DHeightMultiplier = Math.max(0.5, Math.min(3.0, multiplier));
+    localStorage.setItem('buildings3DHeight', buildings3DHeightMultiplier.toString());
+    MapLibreHelpers.set3DBuildingHeight(map, buildings3DHeightMultiplier);
+    console.log(`[3D Buildings] Height multiplier set to ${buildings3DHeightMultiplier}`);
+}
+
+/**
+ * Set 3D building opacity/transparency
+ * @function set3DBuildingOpacity
+ * @param {number} opacity - Opacity value (0.0 = transparent, 1.0 = opaque)
+ */
+function set3DBuildingOpacity(opacity) {
+    buildings3DOpacity = Math.max(0.1, Math.min(1.0, opacity));
+    localStorage.setItem('buildings3DOpacity', buildings3DOpacity.toString());
+    MapLibreHelpers.set3DBuildingOpacity(map, buildings3DOpacity);
+    console.log(`[3D Buildings] Opacity set to ${buildings3DOpacity}`);
+}
+
 /**
  * Toggle TomTom traffic flow layer on/off
  */
@@ -6221,15 +6277,22 @@ function setMapTheme(themeOrEvent) {
         activeBtn.classList.add('active');
     }
 
-    // MapLibre style switching - using Carto free tiles
+    // MapLibre style switching - using OpenFreeMap for 3D building support
     const styleUrls = {
-        'standard': 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-        'satellite': 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json', // No free satellite, using positron
-        'dark': 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json'
+        'standard': 'https://tiles.openfreemap.org/styles/liberty',
+        'satellite': 'https://tiles.openfreemap.org/styles/liberty', // Satellite not available in free tier
+        'dark': 'https://tiles.openfreemap.org/styles/positron' // Using positron as dark alternative
     };
 
     // Change map style
     map.setStyle(styleUrls[theme] || styleUrls['standard']);
+
+    // Re-add 3D buildings after style change (style resets layers)
+    map.once('style.load', () => {
+        if (typeof buildings3DEnabled !== 'undefined' && buildings3DEnabled) {
+            MapLibreHelpers.add3DBuildings(map);
+        }
+    });
 
     showStatus(`🗺️ Map theme changed to ${theme}`, 'success');
     saveAllSettings();
@@ -7445,13 +7508,13 @@ function startGPSTracking() {
                     center: [lon, lat], // MapLibre uses [lon, lat]
                     zoom: smartZoom,
                     bearing: heading || map.getBearing(),
-                    pitch: 55, // 3D Tilt
+                    pitch: 65, // Enhanced 3D driver's perspective tilt
                     padding: { top: 50, bottom: paddingBottom, left: 50, right: 50 },
                     duration: 1000,
                     essential: true
                 });
 
-                console.log(`[Navigation] Driver view: pitch 55, bearing ${Math.round(heading)}°, zoom ${smartZoom.toFixed(1)}`);
+                console.log(`[Navigation] Driver view: pitch 65, bearing ${Math.round(heading)}°, zoom ${smartZoom.toFixed(1)}`);
             } else if (!zoomAndFollowEnabled && !map._userPanned) {
                 // If zoom and follow is disabled but map hasn't been manually panned, still center on user
                 map.easeTo({

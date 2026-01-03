@@ -8297,6 +8297,95 @@ def get_cameras_in_area():
 # ============================================================================
 
 # ============================================================================
+# TRAFFIC LIGHTS API
+# ============================================================================
+
+@app.route('/api/traffic-lights', methods=['POST'])
+@rate_limit(api_limiter)
+def get_traffic_lights():
+    """Get traffic lights along a route.
+    
+    Accepts a GeoJSON LineString route and returns simulated traffic light data.
+    In production, this would integrate with real traffic signal APIs.
+    
+    Request body:
+        route: GeoJSON LineString with coordinates [[lng, lat], ...]
+    
+    Response:
+        success: bool
+        lights: Array of traffic light objects with:
+            - id: Unique identifier
+            - lat: Latitude
+            - lng: Longitude
+            - state: 'red', 'yellow', 'green', or 'unknown'
+            - duration: Seconds until state change
+            - lastChanged: ISO timestamp of last state change
+    """
+    try:
+        data = request.json
+        route_geojson = data.get('route', {})
+        
+        if not route_geojson or route_geojson.get('type') != 'LineString':
+            return jsonify({'success': False, 'error': 'Invalid route GeoJSON'})
+        
+        coordinates = route_geojson.get('coordinates', [])
+        if len(coordinates) < 2:
+            return jsonify({'success': False, 'error': 'Route must have at least 2 coordinates'})
+        
+        # Simulate traffic lights along the route
+        # In production, query real traffic signal database or API
+        lights = []
+        
+        # Sample traffic lights at approximately every 500m along the route
+        import random
+        from datetime import datetime, timedelta
+        
+        total_points = len(coordinates)
+        step = max(1, total_points // 10)  # Sample ~10 lights max
+        
+        states = ['red', 'yellow', 'green', 'green', 'green']  # More greens
+        
+        for i in range(0, total_points, step):
+            if i == 0:
+                continue  # Skip first point
+            
+            coord = coordinates[i]
+            if len(coord) >= 2:
+                lng, lat = coord[0], coord[1]
+                
+                # Simulate random state and timing
+                state = random.choice(states)
+                if state == 'red':
+                    duration = random.randint(30, 90)
+                elif state == 'yellow':
+                    duration = random.randint(3, 5)
+                else:
+                    duration = random.randint(30, 60)
+                
+                # Last changed is random time in past (within duration)
+                elapsed = random.randint(0, min(duration - 1, 30))
+                last_changed = (datetime.now() - timedelta(seconds=elapsed)).isoformat()
+                
+                lights.append({
+                    'id': f'tl_{i}_{int(lat*1000)}_{int(lng*1000)}',
+                    'lat': lat,
+                    'lng': lng,
+                    'state': state,
+                    'duration': duration,
+                    'lastChanged': last_changed
+                })
+        
+        return jsonify({
+            'success': True,
+            'lights': lights,
+            'count': len(lights)
+        })
+        
+    except Exception as e:
+        logger.error(f"[Traffic Lights] Error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
+
+# ============================================================================
 # PARKING INTEGRATION FEATURE
 # ============================================================================
 

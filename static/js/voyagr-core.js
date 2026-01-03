@@ -52,12 +52,16 @@ function initializeMap() {
         }
     }
 
-    // Initialize map with MapLibre GL JS
+    // Initialize map with MapLibre GL JS - Using OpenFreeMap for 3D building support
     map = new maplibregl.Map({
         container: 'map',
-        style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+        style: 'https://tiles.openfreemap.org/styles/liberty',
         center: [-0.1278, 51.5074], // Default: London [lon, lat]
-        zoom: 13
+        zoom: 13,
+        pitch: 0, // Start flat, will tilt for driving mode
+        bearing: 0,
+        maxPitch: 85, // Allow steep pitch for driving perspective
+        pitchWithRotate: true // Enable pitch control with mouse/touch
     });
 
     // Attempt to center on current location on load

@@ -321,13 +321,24 @@ function removeLayer(mapInstance, layer) {
 
 /**
  * Add 3D building extrusion layer to the map (if style supports it)
+ * Works with OpenFreeMap, OpenMapTiles, MapTiler, and similar vector tile sources
  * @param {maplibregl.Map} mapInstance - Map instance
+ * @param {Object} options - Optional configuration (opacity, heightMultiplier)
  */
-function add3DBuildings(mapInstance) {
+function add3DBuildings(mapInstance, options = {}) {
     if (!mapInstance) return;
+
+    const opacity = options.opacity || 0.6;
+    const heightMultiplier = options.heightMultiplier || 1.0;
 
     const addBuildingLayer = () => {
         try {
+            // Remove existing layer if present
+            if (mapInstance.getLayer('3d-buildings')) {
+                console.log('[MapLibre] 3D buildings layer already exists');
+                return;
+            }
+
             // Find the first symbol layer to insert buildings below
             const style = mapInstance.getStyle();
             if (!style || !style.layers) {
@@ -344,58 +355,71 @@ function add3DBuildings(mapInstance) {
                 }
             }
 
-            if (mapInstance.getLayer('3d-buildings')) return;
-
-            // Check if common sources exist
+            // Check if common vector tile sources exist
             const sources = style.sources || {};
             let buildingSource = null;
             let buildingSourceLayer = 'building';
 
-            if (sources.composite) {
-                buildingSource = 'composite';
-            } else if (sources.openmaptiles) {
+            // OpenFreeMap / OpenMapTiles use 'openmaptiles' source
+            if (sources.openmaptiles) {
                 buildingSource = 'openmaptiles';
-            } else if (sources.carto) {
-                buildingSource = 'carto';
+            } else if (sources.composite) {
+                buildingSource = 'composite';
+            } else if (sources.maptiler) {
+                buildingSource = 'maptiler';
             } else {
-                // Carto Positron and similar styles don't have building extrusion data
-                // This is expected for many vector tile styles
-                console.log('[MapLibre] 3D buildings not available for this map style (no compatible source found)');
+                // Try to find any source with building data
+                for (const sourceName of Object.keys(sources)) {
+                    if (sources[sourceName].type === 'vector') {
+                        buildingSource = sourceName;
+                        console.log(`[MapLibre] Using vector source "${sourceName}" for 3D buildings`);
+                        break;
+                    }
+                }
+            }
+
+            if (!buildingSource) {
+                console.log('[MapLibre] No compatible vector tile source found for 3D buildings');
                 return;
             }
 
+            // Add 3D extrusion layer for buildings
             mapInstance.addLayer(
                 {
                     'id': '3d-buildings',
                     'source': buildingSource,
                     'source-layer': buildingSourceLayer,
-                    'filter': ['==', 'extrude', 'true'],
                     'type': 'fill-extrusion',
-                    'minzoom': 15,
+                    'minzoom': 14,
                     'paint': {
-                        'fill-extrusion-color': '#aaa',
+                        'fill-extrusion-color': [
+                            'interpolate',
+                            ['linear'],
+                            ['get', 'render_height'],
+                            0, '#d4d4d4',
+                            50, '#b8b8b8',
+                            100, '#9c9c9c'
+                        ],
                         'fill-extrusion-height': [
                             'interpolate',
                             ['linear'],
                             ['zoom'],
-                            15, 0,
-                            15.05, ['get', 'height']
+                            14, 0,
+                            14.5, ['*', heightMultiplier, ['coalesce', ['get', 'render_height'], ['get', 'height'], 10]]
                         ],
                         'fill-extrusion-base': [
-                            'interpolate',
-                            ['linear'],
-                            ['zoom'],
-                            15, 0,
-                            15.05, ['get', 'min_height']
+                            'case',
+                            ['has', 'render_min_height'],
+                            ['get', 'render_min_height'],
+                            0
                         ],
-                        'fill-extrusion-opacity': 0.6
+                        'fill-extrusion-opacity': opacity
                     }
                 },
                 labelLayerId
             );
-            console.log('[MapLibre] 3D buildings layer added');
+            console.log(`[MapLibre] 3D buildings layer added (source: ${buildingSource})`);
         } catch (error) {
-            // Silently handle errors - 3D buildings are a nice-to-have feature
             console.log('[MapLibre] 3D buildings not available:', error.message);
         }
     };
@@ -403,7 +427,79 @@ function add3DBuildings(mapInstance) {
     if (mapInstance.isStyleLoaded()) {
         addBuildingLayer();
     } else {
-        mapInstance.on('load', addBuildingLayer);
+        mapInstance.once('load', addBuildingLayer);
+    }
+}
+
+/**
+ * Remove 3D buildings layer from the map
+ * @param {maplibregl.Map} mapInstance - Map instance
+ */
+function remove3DBuildings(mapInstance) {
+    if (!mapInstance) return;
+    try {
+        if (mapInstance.getLayer('3d-buildings')) {
+            mapInstance.removeLayer('3d-buildings');
+            console.log('[MapLibre] 3D buildings layer removed');
+        }
+    } catch (error) {
+        console.log('[MapLibre] Error removing 3D buildings:', error.message);
+    }
+}
+
+/**
+ * Toggle 3D buildings visibility
+ * @param {maplibregl.Map} mapInstance - Map instance
+ * @param {boolean} visible - Whether buildings should be visible
+ */
+function toggle3DBuildings(mapInstance, visible) {
+    if (!mapInstance) return;
+    if (visible) {
+        if (!mapInstance.getLayer('3d-buildings')) {
+            add3DBuildings(mapInstance);
+        } else {
+            mapInstance.setLayoutProperty('3d-buildings', 'visibility', 'visible');
+        }
+    } else {
+        if (mapInstance.getLayer('3d-buildings')) {
+            mapInstance.setLayoutProperty('3d-buildings', 'visibility', 'none');
+        }
+    }
+}
+
+/**
+ * Set 3D building height exaggeration
+ * @param {maplibregl.Map} mapInstance - Map instance
+ * @param {number} multiplier - Height multiplier (1.0 = normal, 2.0 = double)
+ */
+function set3DBuildingHeight(mapInstance, multiplier) {
+    if (!mapInstance || !mapInstance.getLayer('3d-buildings')) return;
+    try {
+        mapInstance.setPaintProperty('3d-buildings', 'fill-extrusion-height', [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            14, 0,
+            14.5, ['*', multiplier, ['coalesce', ['get', 'render_height'], ['get', 'height'], 10]]
+        ]);
+        console.log(`[MapLibre] 3D building height set to ${multiplier}x`);
+    } catch (error) {
+        console.log('[MapLibre] Error setting building height:', error.message);
+    }
+}
+
+/**
+ * Set 3D building opacity/transparency
+ * @param {maplibregl.Map} mapInstance - Map instance
+ * @param {number} opacity - Opacity value (0.0 = transparent, 1.0 = opaque)
+ */
+function set3DBuildingOpacity(mapInstance, opacity) {
+    if (!mapInstance || !mapInstance.getLayer('3d-buildings')) return;
+    try {
+        mapInstance.setPaintProperty('3d-buildings', 'fill-extrusion-opacity', opacity);
+        console.log(`[MapLibre] 3D building opacity set to ${opacity}`);
+    } catch (error) {
+        console.log('[MapLibre] Error setting building opacity:', error.message);
     }
 }
 
@@ -455,6 +551,10 @@ window.MapLibreHelpers = {
     hasLayer,
     removeLayer,
     add3DBuildings,
+    remove3DBuildings,
+    toggle3DBuildings,
+    set3DBuildingHeight,
+    set3DBuildingOpacity,
     featureGroup,
     activeLayers,
     activeMarkers
