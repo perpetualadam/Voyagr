@@ -8303,10 +8303,9 @@ def get_cameras_in_area():
 @app.route('/api/traffic-lights', methods=['POST'])
 @rate_limit(api_limiter)
 def get_traffic_lights():
-    """Get traffic lights along a route.
+    """Get traffic lights along a route from OpenStreetMap via Overpass API.
     
-    Accepts a GeoJSON LineString route and returns simulated traffic light data.
-    In production, this would integrate with real traffic signal APIs.
+    Accepts a GeoJSON LineString route and returns real traffic signal locations.
     
     Request body:
         route: GeoJSON LineString with coordinates [[lng, lat], ...]
@@ -8314,12 +8313,11 @@ def get_traffic_lights():
     Response:
         success: bool
         lights: Array of traffic light objects with:
-            - id: Unique identifier
+            - id: Unique identifier (OSM node ID)
             - lat: Latitude
             - lng: Longitude
-            - state: 'red', 'yellow', 'green', or 'unknown'
-            - duration: Seconds until state change
-            - lastChanged: ISO timestamp of last state change
+            - state: 'unknown' (real-time state not available from OSM)
+            - name: Optional name from OSM tags
     """
     try:
         data = request.json
@@ -8332,55 +8330,97 @@ def get_traffic_lights():
         if len(coordinates) < 2:
             return jsonify({'success': False, 'error': 'Route must have at least 2 coordinates'})
         
-        # Simulate traffic lights along the route
-        # In production, query real traffic signal database or API
+        # Calculate bounding box from route coordinates with buffer
+        lngs = [c[0] for c in coordinates if len(c) >= 2]
+        lats = [c[1] for c in coordinates if len(c) >= 2]
+        
+        if not lngs or not lats:
+            return jsonify({'success': False, 'error': 'No valid coordinates in route'})
+        
+        # Add ~100m buffer to bounding box (approx 0.001 degrees)
+        buffer = 0.001
+        min_lat = min(lats) - buffer
+        max_lat = max(lats) + buffer
+        min_lng = min(lngs) - buffer
+        max_lng = max(lngs) + buffer
+        
+        # Query Overpass API for traffic signals in the bounding box
+        overpass_url = 'https://overpass-api.de/api/interpreter'
+        
+        # Overpass query for traffic signals
+        query = f'''
+        [out:json][timeout:15];
+        (
+            node["highway"="traffic_signals"]({min_lat},{min_lng},{max_lat},{max_lng});
+            node["crossing"="traffic_signals"]({min_lat},{min_lng},{max_lat},{max_lng});
+        );
+        out body;
+        '''
+        
+        response = requests.post(overpass_url, data={'data': query}, timeout=20)
+        
+        if response.status_code != 200:
+            logger.warning(f"[Traffic Lights] Overpass API error: {response.status_code}")
+            return jsonify({'success': False, 'error': 'Traffic signal data temporarily unavailable'})
+        
+        elements = response.json().get('elements', [])
+        
+        # Process traffic signal nodes
         lights = []
+        seen_ids = set()
         
-        # Sample traffic lights at approximately every 500m along the route
-        import random
-        from datetime import datetime, timedelta
-        
-        total_points = len(coordinates)
-        step = max(1, total_points // 10)  # Sample ~10 lights max
-        
-        states = ['red', 'yellow', 'green', 'green', 'green']  # More greens
-        
-        for i in range(0, total_points, step):
-            if i == 0:
-                continue  # Skip first point
-            
-            coord = coordinates[i]
-            if len(coord) >= 2:
-                lng, lat = coord[0], coord[1]
+        for element in elements:
+            try:
+                osm_id = element.get('id')
+                if osm_id in seen_ids:
+                    continue
+                seen_ids.add(osm_id)
                 
-                # Simulate random state and timing
-                state = random.choice(states)
-                if state == 'red':
-                    duration = random.randint(30, 90)
-                elif state == 'yellow':
-                    duration = random.randint(3, 5)
-                else:
-                    duration = random.randint(30, 60)
+                lat = float(element.get('lat', 0))
+                lng = float(element.get('lon', 0))
+                tags = element.get('tags', {})
                 
-                # Last changed is random time in past (within duration)
-                elapsed = random.randint(0, min(duration - 1, 30))
-                last_changed = (datetime.now() - timedelta(seconds=elapsed)).isoformat()
+                # Check if this signal is close to the route (within ~50m)
+                # Simple proximity check - find minimum distance to any route point
+                is_near_route = False
+                for coord in coordinates:
+                    if len(coord) >= 2:
+                        route_lng, route_lat = coord[0], coord[1]
+                        # Approximate distance in degrees (rough check)
+                        dist = math.sqrt((lat - route_lat)**2 + (lng - route_lng)**2)
+                        if dist < 0.0005:  # Approximately 50m
+                            is_near_route = True
+                            break
+                
+                if not is_near_route:
+                    continue
                 
                 lights.append({
-                    'id': f'tl_{i}_{int(lat*1000)}_{int(lng*1000)}',
+                    'id': f'osm_{osm_id}',
                     'lat': lat,
                     'lng': lng,
-                    'state': state,
-                    'duration': duration,
-                    'lastChanged': last_changed
+                    'state': 'unknown',  # Real-time state not available from OSM
+                    'name': tags.get('name', ''),
+                    'crossing': tags.get('crossing', ''),
+                    'button_operated': tags.get('button_operated', ''),
+                    'source': 'openstreetmap'
                 })
+            except (ValueError, KeyError) as e:
+                logger.debug(f"[Traffic Lights] Error processing element: {e}")
+                continue
+        
+        logger.info(f"[Traffic Lights] Found {len(lights)} traffic signals along route from OSM")
         
         return jsonify({
             'success': True,
             'lights': lights,
-            'count': len(lights)
+            'count': len(lights),
+            'source': 'openstreetmap'
         })
         
+    except requests.exceptions.Timeout:
+        logger.warning("[Traffic Lights] Overpass API timeout")
+        return jsonify({'success': False, 'error': 'Traffic signal request timed out'})
     except Exception as e:
         logger.error(f"[Traffic Lights] Error: {str(e)}")
         return jsonify({'success': False, 'error': str(e)})
