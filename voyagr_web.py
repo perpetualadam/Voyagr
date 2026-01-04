@@ -372,6 +372,9 @@ GRAPHHOPPER_URL = os.getenv('GRAPHHOPPER_URL', 'http://localhost:8989')
 OSRM_URL = os.getenv('OSRM_URL', 'http://router.project-osrm.org/route/v1')
 USE_OSRM = os.getenv('USE_OSRM', 'false').lower() == 'true'
 
+# Log routing configuration on startup
+logger.info(f"[ROUTING] Valhalla: {VALHALLA_URL}, GraphHopper: {GRAPHHOPPER_URL}")
+
 # ============================================================================
 # GRAPHHOPPER CAMERA AVOIDANCE CONFIGURATION
 # ============================================================================

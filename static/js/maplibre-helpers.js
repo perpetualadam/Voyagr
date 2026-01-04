@@ -384,6 +384,7 @@ function add3DBuildings(mapInstance, options = {}) {
             }
 
             // Add 3D extrusion layer for buildings
+            // Use 'coalesce' to handle null values: try render_height, then height, then default to 10
             mapInstance.addLayer(
                 {
                     'id': '3d-buildings',
@@ -391,11 +392,15 @@ function add3DBuildings(mapInstance, options = {}) {
                     'source-layer': buildingSourceLayer,
                     'type': 'fill-extrusion',
                     'minzoom': 14,
+                    'filter': ['all',
+                        ['has', 'render_height'],  // Only include features with height data
+                        ['>', ['get', 'render_height'], 0]  // Height must be greater than 0
+                    ],
                     'paint': {
                         'fill-extrusion-color': [
                             'interpolate',
                             ['linear'],
-                            ['to-number', ['get', 'render_height'], 0],
+                            ['coalesce', ['get', 'render_height'], ['get', 'height'], 10],
                             0, '#d4d4d4',
                             50, '#b8b8b8',
                             100, '#9c9c9c'
@@ -405,10 +410,10 @@ function add3DBuildings(mapInstance, options = {}) {
                             ['linear'],
                             ['zoom'],
                             14, 0,
-                            14.5, ['*', heightMultiplier, ['to-number', ['get', 'render_height'], 0]]
+                            14.5, ['*', heightMultiplier, ['coalesce', ['get', 'render_height'], ['get', 'height'], 10]]
                         ],
                         'fill-extrusion-base': [
-                            'to-number', ['get', 'render_min_height'], 0
+                            'coalesce', ['get', 'render_min_height'], 0
                         ],
                         'fill-extrusion-opacity': opacity
                     }
@@ -472,6 +477,7 @@ function toggle3DBuildings(mapInstance, visible) {
 function set3DBuildingHeight(mapInstance, multiplier) {
     if (!mapInstance || !mapInstance.getLayer('3d-buildings')) return;
     try {
+        // Use coalesce to safely handle null/missing height properties
         mapInstance.setPaintProperty('3d-buildings', 'fill-extrusion-height', [
             'interpolate',
             ['linear'],
