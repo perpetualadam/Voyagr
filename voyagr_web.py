@@ -2199,7 +2199,8 @@ def fetch_tomtom_incidents(bbox: Dict[str, float], incident_types: Optional[List
 
         logger.info(f"[TOMTOM] Fetching incidents for bbox: {bbox_str}")
 
-        response = requests.get(url, params=params, timeout=10)
+        # Reduce timeout to 3s to prevent route calculation delays
+        response = requests.get(url, params=params, timeout=3)
 
         if response.status_code == 200:
             data = response.json()
@@ -7079,18 +7080,27 @@ def calculate_route():
             # Calculate distance to determine appropriate timeout
             # Longer routes need more time (Valhalla can take 30+ seconds for 500+ km routes)
             straight_line_km = ((end_lat - start_lat)**2 + (end_lon - start_lon)**2)**0.5 * 111  # ~111 km per degree
-            route_timeout = max(15, min(25, int(10 + straight_line_km / 50)))  # 15-25 seconds to avoid 504 Gateway Timeout
+            # PHASE 4 OPTIMIZATION: Reduce timeout to max 15s to fit within Gateway limits
+            route_timeout = max(10, min(15, int(5 + straight_line_km / 100)))  # 10-15 seconds cap
 
             print(f"[Valhalla] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
             print(f"[Valhalla] URL: {url}")
             print(f"[Valhalla] Hazard avoidance: {enable_hazard_avoidance}, Locations: {len(exclude_locations) if exclude_locations else 0}")
-            print(f"[Valhalla] Estimated distance: {straight_line_km:.0f} km, Timeout: {route_timeout}s")
-            response = requests.post(url, json=payload, timeout=route_timeout, headers=headers)
-            print(f"[Valhalla] Response status: {response.status_code}", flush=True)
-            if response.status_code != 200:
+            try:
+                print(f"[Valhalla] Estimated distance: {straight_line_km:.0f} km, Timeout: {route_timeout}s")
+                response = requests.post(url, json=payload, timeout=route_timeout, headers=headers)
+                print(f"[Valhalla] Response status: {response.status_code}", flush=True)
+            except requests.exceptions.Timeout:
+                print(f"[Valhalla] Request timed out after {route_timeout}s")
+                return jsonify({'error': 'Route calculation timed out. Try a shorter route or moving start/end points closer.'}), 408
+            except requests.exceptions.RequestException as e:
+                print(f"[Valhalla] Request failed: {e}")
+                valhalla_error = f"Routing service unreachable: {str(e)}"
+                response = None
+            if response and response.status_code != 200:
                 print(f"[Valhalla] Response body: {response.text[:500]}", flush=True)
 
-            if response.status_code == 200:
+            if response and response.status_code == 200:
                 route_data = response.json()
                 print(f"[Valhalla] Response keys: {route_data.keys()}", flush=True)
 
