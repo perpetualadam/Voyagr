@@ -65,7 +65,7 @@ except ImportError:
 
 # Import Overpass API helper with caching and retry logic
 try:
-    from overpass_helper import query_overpass, build_traffic_signals_query, build_poi_query, get_overpass_cache_stats
+    from overpass_helper import query_overpass, build_traffic_signals_query, build_corridor_traffic_signals_query, build_poi_query, get_overpass_cache_stats
     OVERPASS_HELPER_AVAILABLE = True
 except ImportError:
     query_overpass = None  # type: ignore
@@ -3620,8 +3620,7 @@ HTML_TEMPLATE = '''
         <div class="fab-container">
             <button class="fab" title="Current Location" onclick="getCurrentLocation()">📍</button>
             <button class="fab" title="Voice Control" id="voiceFab" onclick="toggleVoiceInput()">🎤</button>
-            <button class="fab" id="arModeBtn" title="AR Navigation" onclick="toggleARMode()" style="display: none; background: #9C27B0;">📷</button>
-            <button class="fab" id="driverPerspectiveToggle" title="3D Driver View" onclick="toggleDriverPerspective()" style="display: none; background: #FF5722;">🚗</button>
+
         </div>
 
         <!-- Bottom Sheet Drawer -->
@@ -4042,6 +4041,18 @@ HTML_TEMPLATE = '''
                             <button class="toggle-switch active" id="routeTrafficToggle" onclick="toggleRouteTraffic()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Show traffic conditions as colored edges along your route (green/orange/red/black)</p>
+
+                        <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-top: 15px;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📷 AR & 3D View</h4>
+                            <div class="preference-item">
+                                <span class="preference-label">👓 AR Navigation</span>
+                                <button class="toggle-switch" id="arModeBtn" onclick="toggleARMode()"></button>
+                            </div>
+                            <div class="preference-item">
+                                <span class="preference-label">🚗 3D Driver View</span>
+                                <button class="toggle-switch" id="driverPerspectiveToggle" onclick="toggleDriverPerspective()"></button>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Parking Preferences Section -->
@@ -4081,8 +4092,9 @@ HTML_TEMPLATE = '''
                     <div class="preferences-section">
                         <h3>🎤 Voice Preferences</h3>
 
-                        <div class="preference-item">
-                            <span class="preference-label">Turn Announcement Distance (1st)</span>
+
+
+                        <!-- Turn Announcement Distance (1st) -->
                             <select id="voiceTurnDistance1" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="300">300 meters</option>
                                 <option value="500" selected>500 meters</option>
@@ -4412,11 +4424,7 @@ HTML_TEMPLATE = '''
                             </div>
                         </div>
 
-                        <!-- Augmented Reality Settings -->
-                        <div class="preference-item">
-                            <span class="preference-label">👓 Enable AR Navigation</span>
-                            <button class="toggle-switch" id="arToggleBtn" onclick="toggleARSetting()" aria-label="Toggle AR Navigation"></button>
-                        </div>
+
 
                         <!-- Time Statistics -->
                         <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; font-size: 13px;">
@@ -4570,14 +4578,48 @@ HTML_TEMPLATE = '''
                             </button>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
-                            <button onclick="switchTab('routeComparison')" style="background: #2196F3; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                                🛣️ View Options
+                            <button onclick="switchTab('settings')" style="background: #2196F3; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
+                                ⚙️ Route Settings
                             </button>
                             <button onclick="switchTab('navigation')" style="background: #999; color: white; border: none; padding: 10px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 13px;">
                                 ✏️ Modify Route
                             </button>
                         </div>
                     </div>
+                </div>
+
+                <!-- JOURNEY SUMMARY MODAL (NEW) -->
+                <div id="journeySummaryModal" style="display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 2000; padding: 20px; box-sizing: border-box; overflow-y: auto;">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <div style="font-size: 40px; margin-bottom: 10px;">🏁</div>
+                        <h2 style="margin: 0; color: #333;">Journey Complete!</h2>
+                        <p style="color: #666; margin: 5px 0;">You have arrived at your destination.</p>
+                    </div>
+
+                    <div style="background: #f8f9fa; border-radius: 12px; padding: 20px; margin-bottom: 20px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #2196F3;" id="summaryDistance">-</div>
+                                <div style="font-size: 12px; color: #666;">Total Distance</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #4CAF50;" id="summaryTime">-</div>
+                                <div style="font-size: 12px; color: #666;">Total Time</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #FF9800;" id="summaryCost">-</div>
+                                <div style="font-size: 12px; color: #666;">Estimated Cost</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 24px; font-weight: bold; color: #9C27B0;" id="summaryAvgSpeed">-</div>
+                                <div style="font-size: 12px; color: #666;">Avg Speed</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <button onclick="closeJourneySummary()" style="width: 100%; padding: 15px; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: 600; cursor: pointer;">
+                        Done
+                    </button>
                 </div>
 
                 <!-- ROUTE COMPARISON TAB (NEW FEATURE) -->
@@ -8364,21 +8406,72 @@ def get_traffic_lights():
         min_lng = min(lngs) - buffer
         max_lng = max(lngs) + buffer
         
+        # Calculate bounding box dimensions (approximate)
+        lat_diff = abs(max_lat - min_lat)
+        lon_diff = abs(max_lng - min_lng)
+        
+        # Calculate approximate diagonal distance in degrees
+        # 1 degree lat ~= 111km, 1 degree lon ~= 111km * cos(lat)
+        # 0.13 degrees is roughly 14.5km
+        diagonal_sq = (lat_diff * lat_diff) + (lon_diff * lon_diff * 0.6) # Approx cos(51)
+        
+        # Limit query area to prevent timeouts (even on self-hosted)
+        # Threshold: ~0.02 (approx 15km diagonal or 10x10km box)
+        is_long_route = diagonal_sq > 0.025
+        
         # Use Overpass helper with caching, retry logic, and fallback endpoints
         if OVERPASS_HELPER_AVAILABLE:
-            query = build_traffic_signals_query(min_lat, min_lng, max_lat, max_lng)
-            cache_key = f"traffic_lights_{min_lat:.4f}_{min_lng:.4f}_{max_lat:.4f}_{max_lng:.4f}"
+            from overpass_helper import get_client
+            # Log active endpoint for debugging
+            active_endpoint = get_client()._get_next_endpoint()
+            
+            if is_long_route:
+                # CORRIDOR SEARCH (for long routes)
+                # Sample points along the route to create a search corridor
+                # Aim for 1 point every ~500m to keep query string manageable
+                # Total points limit: ~50-100 to avoid URL length issues
+                
+                # Convert coordinates to (lat, lon) list
+                route_points = [(c[1], c[0]) for c in coordinates]
+                total_points = len(route_points)
+                
+                # Simple decimation - take every Nth point
+                # If we have 1000 points, take every 20th to get 50 points
+                step = max(1, int(total_points / 50))
+                sampled_points = route_points[::step]
+                
+                # Ensure start and end are included
+                if route_points[-1] != sampled_points[-1]:
+                    sampled_points.append(route_points[-1])
+
+                logger.info(f"[Traffic Lights] Long route detected (diag_sq={diagonal_sq:.4f}). Using corridor search with {len(sampled_points)} points via {active_endpoint}")
+                
+                query = build_corridor_traffic_signals_query(sampled_points, radius=200) # 200m radius
+                cache_key = f"traffic_lights_corridor_{hash(tuple(sampled_points))}"
+            else:
+                # BBOX SEARCH (for short routes)
+                # More efficient for dense city driving
+                logger.info(f"[Traffic Lights] Querying BBox via {active_endpoint} (diag_sq={diagonal_sq:.4f})")
+                query = build_traffic_signals_query(min_lat, min_lng, max_lat, max_lng)
+                cache_key = f"traffic_lights_{min_lat:.4f}_{min_lng:.4f}_{max_lat:.4f}_{max_lng:.4f}"
+            
             result = query_overpass(query, cache_key=cache_key, cache_ttl=300)  # 5 min cache
             
             if not result.get('success'):
                 logger.warning(f"[Traffic Lights] Overpass query failed: {result.get('error')}")
-                return jsonify({'success': False, 'error': 'Traffic signal data temporarily unavailable'})
+                return jsonify({'success': True, 'lights': [], 'warning': 'Traffic signal data unavailable', 'count': 0})
             
             elements = result.get('elements', [])
             cached = result.get('cached', False)
         else:
             # Fallback to direct API call if helper not available
-            overpass_url = 'https://overpass-api.de/api/interpreter'
+            overpass_url = os.getenv('OVERPASS_API_URL', 'https://overpass-api.de/api/interpreter')
+            logger.info(f"[Traffic Lights] Querying Overpass (Direct): {overpass_url}")
+            
+            if is_long_route:
+                 # Direct fallback logic for long routes - just skip to avoid complexity
+                 return jsonify({'success': True, 'lights': [], 'warning': 'Route too long for direct API fallback', 'count': 0})
+
             query = f'''
             [out:json][timeout:15];
             (
@@ -8387,11 +8480,16 @@ def get_traffic_lights():
             );
             out body;
             '''
-            response = requests.post(overpass_url, data={'data': query}, timeout=20)
-            if response.status_code != 200:
-                return jsonify({'success': False, 'error': 'Traffic signal data temporarily unavailable'})
-            elements = response.json().get('elements', [])
-            cached = False
+            try:
+                response = requests.post(overpass_url, data={'data': query}, timeout=10)
+                if response.status_code != 200:
+                   logger.warning(f"[Traffic Lights] Direct query failed: {response.status_code}")
+                   return jsonify({'success': True, 'lights': [], 'warning': 'Traffic signal data unavailable', 'count': 0})
+                elements = response.json().get('elements', [])
+                cached = False
+            except Exception as e:
+                logger.error(f"[Traffic Lights] Direct query error: {e}")
+                return jsonify({'success': True, 'lights': [], 'warning': 'Traffic signal data unavailable', 'count': 0})
         
         # Process traffic signal nodes
         lights = []

@@ -17,10 +17,11 @@ if (typeof window !== 'undefined' && window.ethereum) {
 // Unit variables: distanceUnit, currencyUnit, speedUnit, temperatureUnit
 // Currency symbols: currencySymbols
 
+// Note: All global variables are declared below
 // ===== BOTTOM SHEET VARIABLES =====
 let bottomSheetStartY = 0;
 let bottomSheetCurrentY = 0;
-let bottomSheetIsExpanded = false;
+let bottomSheetIsExpanded = false; // Tracks logical state (expanded or collapsed)
 
 // ===== UNIT CONVERSION FUNCTIONS =====
 /**
@@ -3083,6 +3084,128 @@ function displayAllRouteHazards() {
     if (allHazards.length > 0) {
         displayHazardMarkers(allHazards);
         console.log(`[Hazards] Displaying hazards from all ${routeOptions.length} routes: ${allHazards.length} total`);
+    }
+}
+
+// ===== BOTTOM SHEET CONTROL =====
+
+/**
+ * Initialize bottom sheet interactions (drag, toggle, scroll)
+ */
+function initBottomSheetLogic() {
+    const bottomSheet = document.getElementById('bottomSheet');
+    const handle = document.querySelector('.bottom-sheet-handle');
+    const header = document.querySelector('.bottom-sheet-header');
+
+    if (!bottomSheet || !handle) {
+        console.warn('Bottom Sheet elements not found');
+        return;
+    }
+
+    let startY = 0;
+    let currentY = 0;
+    let isDragging = false;
+    const DRAG_THRESHOLD = 50; // px to trigger state change
+
+    const onDragStart = (e) => {
+        // Only allow dragging from handle or header (unless content is scrolled to top)
+        if (!e.target.closest('.bottom-sheet-handle') && !e.target.closest('.bottom-sheet-header')) {
+            return;
+        }
+
+        isDragging = true;
+        startY = e.touches ? e.touches[0].clientY : e.clientY;
+        bottomSheet.style.transition = 'none'; // Disable transition during drag
+    };
+
+    const onDragMove = (e) => {
+        if (!isDragging) return;
+
+        const y = e.touches ? e.touches[0].clientY : e.clientY;
+        const deltaY = y - startY;
+
+        // Simple resistance/follow logic could go here
+        // For now, we'll just track if the drag is significant
+        currentY = deltaY;
+    };
+
+    const onDragEnd = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        bottomSheet.style.transition = ''; // Re-enable transitions
+
+        // Determine snap direction
+        if (currentY < -DRAG_THRESHOLD) {
+            expandBottomSheet();
+        } else if (currentY > DRAG_THRESHOLD) {
+            collapseBottomSheet();
+        } else {
+            // Revert to current state if drag wasn't far enough
+            if (bottomSheetIsExpanded) {
+                expandBottomSheet();
+            } else {
+                collapseBottomSheet();
+            }
+        }
+        currentY = 0;
+    };
+
+    // Touch events
+    try {
+        handle.addEventListener('touchstart', onDragStart, { passive: true });
+        if (header) header.addEventListener('touchstart', onDragStart, { passive: true });
+        document.addEventListener('touchmove', onDragMove, { passive: true });
+        document.addEventListener('touchend', onDragEnd);
+
+        // Mouse events for testing
+        handle.addEventListener('mousedown', onDragStart);
+        if (header) header.addEventListener('mousedown', onDragStart);
+        document.addEventListener('mousemove', onDragMove);
+        document.addEventListener('mouseup', onDragEnd);
+
+        // Click to toggle
+        handle.addEventListener('click', toggleBottomSheet);
+    } catch (err) {
+        console.error('Error initializing bottom sheet listeners:', err);
+    }
+}
+
+/**
+ * Expand the bottom sheet
+ */
+function expandBottomSheet() {
+    const bottomSheet = document.getElementById('bottomSheet');
+    if (bottomSheet) {
+        bottomSheet.classList.add('expanded');
+        bottomSheet.setAttribute('aria-expanded', 'true');
+        bottomSheetIsExpanded = true;
+    }
+}
+
+/**
+ * Collapse the bottom sheet
+ */
+function collapseBottomSheet() {
+    const bottomSheet = document.getElementById('bottomSheet');
+    if (bottomSheet) {
+        bottomSheet.classList.remove('expanded');
+        bottomSheet.setAttribute('aria-expanded', 'false');
+        bottomSheetIsExpanded = false;
+
+        // Scroll content to top on collapse
+        const content = bottomSheet.querySelector('.bottom-sheet-content');
+        if (content) content.scrollTop = 0;
+    }
+}
+
+/**
+ * Toggle bottom sheet state
+ */
+function toggleBottomSheet() {
+    if (bottomSheetIsExpanded) {
+        collapseBottomSheet();
+    } else {
+        expandBottomSheet();
     }
 }
 
@@ -10073,6 +10196,11 @@ function startTurnByTurnNavigation(routeData) {
  * @returns {*} Return value description
  */
 function stopTurnByTurnNavigation() {
+    // Show summary if we have a valid route and were actually navigating
+    if (window.lastCalculatedRoute && routeInProgress) {
+        showJourneySummary(window.lastCalculatedRoute);
+    }
+
     routeInProgress = false;
     currentStepIndex = 0;
     currentRouteSteps = [];
@@ -10840,12 +10968,21 @@ function initMobileEnhancements() {
         }
     }, { passive: false });
 
-    // Improve touch scrolling in bottom sheet
+    // Improve touch scrolling in bottom sheet and fix locking
     const bottomSheetContent = document.querySelector('.bottom-sheet-content');
-    if (bottomSheetContent) {
+    const bottomSheetElement = document.getElementById('bottomSheet');
+
+    if (bottomSheetContent && bottomSheetElement) {
         let startY = 0;
+        let isDraggingSheet = false;
+
+        // Listeners for content scrolling vs sheet dragging
         bottomSheetContent.addEventListener('touchstart', (e) => {
             startY = e.touches[0].clientY;
+            isDraggingSheet = false;
+
+            // If we are at the top and pulling down, we might want to drag the sheet instead of scroll
+            // provided the sheet handles that logic.
         }, { passive: true });
 
         bottomSheetContent.addEventListener('touchmove', (e) => {
@@ -10853,17 +10990,27 @@ function initMobileEnhancements() {
             const scrollTop = bottomSheetContent.scrollTop;
             const scrollHeight = bottomSheetContent.scrollHeight;
             const clientHeight = bottomSheetContent.clientHeight;
+            const isAtTop = scrollTop <= 0;
+            const isAtBottom = scrollTop + clientHeight >= scrollHeight;
+            const isPullingDown = currentY > startY;
+            const isPullingUp = currentY < startY;
 
-            // Prevent overscroll at top
-            if (scrollTop <= 0 && currentY > startY) {
-                e.preventDefault();
+            // CRITICAL FIX: Do NOT prevent default if we are at the top and pulling down.
+            // Instead, let the event propagate so the sheet drag handler (if active) can pick it up.
+            // OR if strictly scrolling, we just let it hit the boundary.
+
+            // Prevent overscroll chaining ONLY if capturing scroll
+            if ((isAtTop && isPullingDown) || (isAtBottom && isPullingUp)) {
+                // If we want the sheet to drag when pulling down at the top, we shouldn't prevent default blindly
+                // unless we are NOT in a draggable state.
+                // For now, removing the aggressive preventDefault allows the UI to 'breathe' and potentially
+                // pass events to parent handlers.
             }
-            // Prevent overscroll at bottom
-            if (scrollTop + clientHeight >= scrollHeight && currentY < startY) {
-                e.preventDefault();
-            }
-        }, { passive: false });
+        }, { passive: true });
     }
+
+    // Initialize Bottom Sheet Drag & Toggle Logic
+    initBottomSheetLogic();
 
     // Handle orientation changes
     window.addEventListener('orientationchange', () => {
@@ -10935,3 +11082,136 @@ window.addEventListener('load', () => {
     requestPersistentStorage();
     checkStorageUsage();
 });
+
+// ===== JOURNEY SUMMARY & SETTINGS CONSOLIDATION =====
+
+/**
+ * showJourneySummary function
+ * Displays a summary of the completed journey
+ * @param {Object} routeData - The route data (from window.lastCalculatedRoute)
+ */
+function showJourneySummary(routeData) {
+    if (!routeData) return;
+
+    const modal = document.getElementById('journeySummaryModal');
+    if (!modal) return;
+
+    // Populate data
+    const distanceKm = routeData.distance_km || 0;
+    const durationMin = routeData.duration_minutes || 0;
+    const cost = routeData.total_cost || 0;
+
+    // Calculate average speed (km/h)
+    let avgSpeed = 0;
+    if (durationMin > 0) {
+        avgSpeed = distanceKm / (durationMin / 60);
+    }
+
+    const distUnit = getDistanceUnit();
+    const displayDist = convertDistance(distanceKm);
+
+    document.getElementById('summaryDistance').textContent = `${displayDist} ${distUnit}`;
+    document.getElementById('summaryTime').textContent = `${Math.round(durationMin)} min`;
+    document.getElementById('summaryCost').textContent = `${getCurrencySymbol()}${adjustCostForUnits(cost).toFixed(2)}`;
+    document.getElementById('summaryAvgSpeed').textContent = `${convertSpeed(avgSpeed)} ${getSpeedUnit()}`;
+
+    // Show modal
+    modal.style.display = 'block';
+
+    // Expand bottom sheet to show the modal properly
+    expandBottomSheet();
+
+    console.log('[Journey Summary] Displayed summary');
+}
+
+/**
+ * closeJourneySummary function
+ * Closes the journey summary modal
+ */
+function closeJourneySummary() {
+    const modal = document.getElementById('journeySummaryModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+    // Return to navigation input
+    switchTab('navigation');
+
+    // Reset view
+    clearForm();
+}
+
+/**
+ * Updated AR Mode Toggle
+ * Handles both the new toggle switch and legacy calls
+ */
+function toggleARMode() {
+    // If not defined globally, define it
+    if (typeof window.arModeActive === 'undefined') window.arModeActive = false;
+
+    window.arModeActive = !window.arModeActive;
+
+    // Update button state (both FAB if exists and Toggle Switch)
+    const toggleBtn = document.getElementById('arModeBtn');    // New Toggle
+
+    if (toggleBtn) {
+        toggleBtn.classList.toggle('active', window.arModeActive);
+        // Correct styling for toggle switch
+        if (window.arModeActive) {
+            toggleBtn.style.background = '#4CAF50';
+            toggleBtn.style.borderColor = '#4CAF50';
+        } else {
+            toggleBtn.style.background = '#ddd';
+            toggleBtn.style.borderColor = '#999';
+        }
+    }
+
+    if (window.arModeActive) {
+        if (typeof startARMode === 'function') startARMode();
+        showStatus('📷 AR Navigation Enabled', 'success');
+    } else {
+        if (typeof stopARMode === 'function') stopARMode();
+        showStatus('📷 AR Navigation Disabled', 'info');
+    }
+}
+
+/**
+ * Updated Driver Perspective Toggle
+ * Handles both the new toggle switch and legacy calls
+ */
+function toggleDriverPerspective() {
+    // If not defined globally, define it
+    if (typeof window.driverPerspectiveEnabled === 'undefined') window.driverPerspectiveEnabled = false;
+
+    window.driverPerspectiveEnabled = !window.driverPerspectiveEnabled;
+
+    const toggleBtn = document.getElementById('driverPerspectiveToggle');
+
+    if (toggleBtn) {
+        toggleBtn.classList.toggle('active', window.driverPerspectiveEnabled);
+        // Correct styling for toggle switch
+        if (window.driverPerspectiveEnabled) {
+            toggleBtn.style.background = '#4CAF50';
+            toggleBtn.style.borderColor = '#4CAF50';
+        } else {
+            toggleBtn.style.background = '#ddd';
+            toggleBtn.style.borderColor = '#999';
+        }
+    }
+
+    if (window.driverPerspectiveEnabled) {
+        // Apply 3D pitch immediately if map exists
+        if (typeof map !== 'undefined' && map) {
+            const currentPitch = map.getPitch();
+            if (currentPitch < 60) {
+                map.easeTo({ pitch: 60, duration: 1000 });
+            }
+        }
+        showStatus('🚗 3D Driver View Enabled', 'success');
+    } else {
+        // Reset pitch
+        if (typeof map !== 'undefined' && map) {
+            map.easeTo({ pitch: 0, duration: 1000 });
+        }
+        showStatus('🚗 3D Driver View Disabled', 'info');
+    }
+}

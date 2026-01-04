@@ -19,7 +19,7 @@ import hashlib
 import json
 import logging
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 import requests
 from functools import lru_cache
 
@@ -374,6 +374,40 @@ def build_traffic_signals_query(
     (
         node["highway"="traffic_signals"]({min_lat},{min_lng},{max_lat},{max_lng});
         node["crossing"="traffic_signals"]({min_lat},{min_lng},{max_lat},{max_lng});
+    );
+    out body;
+    '''
+
+def build_corridor_traffic_signals_query(
+    points: List[Tuple[float, float]],
+    radius: int = 100
+) -> str:
+    """
+    Build a query for traffic signals along a corridor (polyline).
+    Uses the 'around' filter to find nodes within radius of the path.
+    
+    Args:
+        points: List of (lat, lon) tuples defining the path
+        radius: Search radius in meters around the path points
+    """
+    # Format points for the query: "lat1,lon1,lat2,lon2..."
+    # Limit precision to 5 decimal places to save space
+    flat_points = []
+    for point in points:
+        # Handle both [lon, lat] (GeoJSON) and (lat, lon) formats
+        if isinstance(point, (list, tuple)) and len(point) >= 2:
+            # Assume input is [lon, lat] from GeoJSON by default, but check context
+            # The calling function passes [c[1], c[0]] which is [lat, lon]
+            lat, lon = point[0], point[1]
+            flat_points.append(f"{lat:.5f},{lon:.5f}")
+    
+    poly_str = ",".join(flat_points)
+    
+    return f'''
+    [out:json][timeout:30];
+    (
+        node["highway"="traffic_signals"](around:{radius},{poly_str});
+        node["crossing"="traffic_signals"](around:{radius},{poly_str});
     );
     out body;
     '''
