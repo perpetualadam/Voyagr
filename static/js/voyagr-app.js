@@ -2546,6 +2546,9 @@ async function calculateRoute() {
 
     showStatus('📍 Calculating route...', 'loading');
 
+    // Show route calculation progress bar
+    showRouteProgressBar();
+
     // Check if hazard avoidance is enabled (any hazard type selected)
     const enableHazardAvoidance =
         localStorage.getItem('pref_cameras') !== 'false' ||  // Default: true
@@ -2823,7 +2826,12 @@ async function calculateRoute() {
                     // Show route preview AFTER routeOptions is populated
                     setTimeout(() => {
                         showRoutePreview(data);
+                        // Auto-collapse bottom sheet to show map with route
+                        collapseBottomSheetForRoutePreview();
                     }, 300);
+
+                    // Hide progress bar on success
+                    hideRouteProgressBar();
 
                     // Show start navigation buttons (both in FAB and in bottom sheet)
                     const startNavBtn = document.getElementById('startNavBtn');
@@ -2845,15 +2853,109 @@ async function calculateRoute() {
                 } catch (e) {
                     showStatus('Error parsing coordinates: ' + e.message, 'error');
                     console.error('Coordinate parsing error:', e);
+                    hideRouteProgressBar();
                 }
             } else {
                 showStatus('Error: ' + data.error, 'error');
+                hideRouteProgressBar();
             }
         })
         .catch(error => {
             showStatus('Error: ' + error.message, 'error');
             console.error('[Route] Fetch error:', error);
+            hideRouteProgressBar();
         });
+}
+
+/**
+ * Show route calculation progress bar
+ */
+function showRouteProgressBar() {
+    let progressContainer = document.getElementById('routeProgressContainer');
+
+    if (!progressContainer) {
+        // Create progress bar container
+        progressContainer = document.createElement('div');
+        progressContainer.id = 'routeProgressContainer';
+        progressContainer.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 9999;
+            background: rgba(102, 126, 234, 0.1);
+            padding: 0;
+        `;
+
+        progressContainer.innerHTML = `
+            <div id="routeProgressBar" style="
+                height: 4px;
+                background: linear-gradient(90deg, #667eea, #764ba2, #667eea);
+                background-size: 200% 100%;
+                animation: progressGradient 1.5s ease-in-out infinite;
+                width: 100%;
+            "></div>
+            <div style="
+                text-align: center;
+                padding: 8px;
+                font-size: 13px;
+                color: #667eea;
+                font-weight: 500;
+            ">
+                <span id="routeProgressText">📍 Calculating route...</span>
+            </div>
+        `;
+
+        // Add animation keyframes if not already present
+        if (!document.getElementById('progressAnimationStyle')) {
+            const style = document.createElement('style');
+            style.id = 'progressAnimationStyle';
+            style.textContent = `
+                @keyframes progressGradient {
+                    0% { background-position: 0% 50%; }
+                    50% { background-position: 100% 50%; }
+                    100% { background-position: 0% 50%; }
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        document.body.appendChild(progressContainer);
+    }
+
+    progressContainer.style.display = 'block';
+    console.log('[Route Progress] Showing progress bar');
+}
+
+/**
+ * Hide route calculation progress bar
+ */
+function hideRouteProgressBar() {
+    const progressContainer = document.getElementById('routeProgressContainer');
+    if (progressContainer) {
+        progressContainer.style.display = 'none';
+    }
+    console.log('[Route Progress] Hiding progress bar');
+}
+
+/**
+ * Collapse bottom sheet to show map with route preview
+ */
+function collapseBottomSheetForRoutePreview() {
+    const bottomSheet = document.querySelector('.bottom-sheet');
+    if (!bottomSheet) return;
+
+    // Collapse to minimum height to show more map
+    bottomSheet.style.transition = 'height 0.3s ease-out';
+    bottomSheet.style.height = '120px';
+
+    // Show a "swipe up for details" indicator
+    const handle = bottomSheet.querySelector('.bottom-sheet-handle');
+    if (handle) {
+        handle.title = 'Swipe up to see route details';
+    }
+
+    console.log('[Route Preview] Collapsed bottom sheet to show map');
 }
 
 /**
@@ -4181,9 +4283,9 @@ function showRoutePreview(routeData) {
     console.log('[Route Preview] Switching to routePreview tab');
     switchTab('routePreview');
 
-    // Expand bottom sheet to show preview
-    console.log('[Route Preview] Expanding bottom sheet');
-    expandBottomSheet();
+    // Collapse bottom sheet to show map with route preview
+    console.log('[Route Preview] Collapsing bottom sheet to show map');
+    collapseBottomSheetForRoutePreview();
 
     // Ensure traffic layer stays visible if enabled
     if (showTrafficEnabled && !trafficLayer) {
@@ -9793,13 +9895,23 @@ function startTurnByTurnNavigation(routeData) {
         startGPSTracking();
     }
 
-    // ===== DRIVER'S PERSPECTIVE: Apply 3D camera view if enabled =====
+    // ===== DRIVER'S PERSPECTIVE: Apply 3D camera view during navigation =====
+    // Always apply some tilt during navigation for better forward view
     // Wait for first GPS position, then apply perspective
-    if (driverPerspectiveEnabled) {
-        setTimeout(() => {
-            applyDriverPerspective();
-        }, 1500);  // Delay to allow GPS to get first position
-    }
+    setTimeout(() => {
+        if (map && currentLat && currentLon) {
+            const heading = currentUserMarker?.heading || 0;
+            const pitch = driverPerspectiveEnabled ? 60 : 45;  // Higher tilt when driver perspective enabled
+            map.easeTo({
+                pitch: pitch,
+                bearing: heading,
+                center: [currentLon, currentLat],
+                padding: { top: 0, bottom: window.innerHeight * 0.3, left: 0, right: 0 },
+                duration: 1000
+            });
+            console.log(`[Driver View] Applied 3D perspective (pitch: ${pitch}°)`);
+        }
+    }, 1500);  // Delay to allow GPS to get first position
 
     // ===== PHASE 1: Start live data refresh =====
     startLiveDataRefresh();
@@ -9873,6 +9985,17 @@ function startTurnByTurnNavigation(routeData) {
     // ===== SHOW JOURNEY SUMMARY BAR during navigation =====
     showJourneySummaryBar();
 
+    // ===== SHOW AR AND 3D VIEW BUTTONS during navigation =====
+    const arModeBtn = document.getElementById('arModeBtn');
+    if (arModeBtn) {
+        arModeBtn.style.display = 'flex';
+    }
+    const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
+    if (driverPerspectiveBtn) {
+        driverPerspectiveBtn.style.display = 'flex';
+        driverPerspectiveBtn.classList.toggle('active', driverPerspectiveEnabled);
+    }
+
     sendNotification('Navigation Started', 'Turn-by-turn guidance activated', 'success');
     speakMessage('Navigation started. Follow the route.');
     showStatus('🧭 Turn-by-turn navigation active', 'success');
@@ -9937,6 +10060,24 @@ function stopTurnByTurnNavigation() {
 
     // ===== HIDE JOURNEY SUMMARY BAR =====
     hideJourneySummaryBar();
+
+    // ===== HIDE AR AND 3D VIEW BUTTONS =====
+    const arModeBtn = document.getElementById('arModeBtn');
+    if (arModeBtn) {
+        arModeBtn.style.display = 'none';
+    }
+    const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
+    if (driverPerspectiveBtn) {
+        driverPerspectiveBtn.style.display = 'none';
+    }
+    // Stop AR mode if active
+    if (arModeActive) {
+        stopARMode();
+    }
+    // Reset map pitch to standard view
+    if (map) {
+        map.easeTo({ pitch: 0, bearing: 0, duration: 500 });
+    }
 
     savedMapState = null;
 

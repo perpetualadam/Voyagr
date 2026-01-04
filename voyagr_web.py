@@ -3603,11 +3603,11 @@ HTML_TEMPLATE = '''
     <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="/static/css/voyagr.css" />
     <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
-    <script src="/static/js/maplibre-helpers.js?v=20251223"></script>
+    <script src="/static/js/maplibre-helpers.js?v=20260104"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20251223"></script>
-    <script src="/static/js/voyagr-app.js?v=20251223"></script>
-    <script src="/static/js/app.js?v=20251223"></script>
+    <script src="/static/js/voyagr-core.js?v=20260104"></script>
+    <script src="/static/js/voyagr-app.js?v=20260104"></script>
+    <script src="/static/js/app.js?v=20260104"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -3619,6 +3619,8 @@ HTML_TEMPLATE = '''
         <div class="fab-container">
             <button class="fab" title="Current Location" onclick="getCurrentLocation()">📍</button>
             <button class="fab" title="Voice Control" id="voiceFab" onclick="toggleVoiceInput()">🎤</button>
+            <button class="fab" id="arModeBtn" title="AR Navigation" onclick="toggleARMode()" style="display: none; background: #9C27B0;">📷</button>
+            <button class="fab" id="driverPerspectiveToggle" title="3D Driver View" onclick="toggleDriverPerspective()" style="display: none; background: #FF5722;">🚗</button>
         </div>
 
         <!-- Bottom Sheet Drawer -->
