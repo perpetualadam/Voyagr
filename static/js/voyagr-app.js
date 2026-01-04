@@ -1067,7 +1067,14 @@ let selectedRouteIndex = 0;
 let allRouteLayers = []; // Store all route polylines for multi-route display
 
 // Route colors for multi-route display
-const ROUTE_COLORS = ['#667eea', '#e53935', '#43a047', '#fb8c00', '#8e24aa'];
+// Use high-contrast colors that stand out against map tiles and traffic overlay
+const ROUTE_COLORS = [
+    '#0066CC',  // Strong blue - main route (contrasts with green/orange traffic)
+    '#CC0066',  // Magenta/Pink - highly visible alternate
+    '#00CC66',  // Bright green - alternate
+    '#CC6600',  // Burnt orange - alternate
+    '#6600CC'   // Purple - alternate
+];
 
 /**
  * Display all routes on map with different colors
@@ -1100,8 +1107,9 @@ function displayAllRoutesOnMap() {
 
             if (polylinePoints.length > 0) {
                 const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
-                const weight = (i === selectedRouteIndex) ? 6 : 4;
-                const opacity = (i === selectedRouteIndex) ? 0.9 : 0.6;
+                // Thicker lines for better visibility over traffic layer
+                const weight = (i === selectedRouteIndex) ? 8 : 5;
+                const opacity = (i === selectedRouteIndex) ? 1.0 : 0.75;
 
                 const layer = MapLibreHelpers.addPolyline(map, polylinePoints, {
                     color: color,
@@ -1656,8 +1664,8 @@ function displaySingleRoute(index) {
         const color = ROUTE_COLORS[index % ROUTE_COLORS.length];
         const layer = MapLibreHelpers.addPolyline(map, polylinePoints, {
             color: color,
-            weight: 6,
-            opacity: 0.9
+            weight: 8,
+            opacity: 1.0
         });
 
         allRouteLayers.push(layer);
@@ -1707,9 +1715,9 @@ function useRoute(index) {
     const polylinePoints = route.polyline || [];
     if (polylinePoints.length > 0) {
         routeLayer = MapLibreHelpers.addPolyline(map, polylinePoints, {
-            color: '#667eea',
-            weight: 5,
-            opacity: 0.8
+            color: '#0066CC',  // Strong blue - contrasts with traffic overlay
+            weight: 8,
+            opacity: 1.0
         });
 
         // Fit map to route bounds
@@ -2723,9 +2731,9 @@ async function calculateRoute() {
                     }
 
                     routeLayer = MapLibreHelpers.addPolyline(map, routePath, {
-                        color: '#667eea',
-                        weight: 4,
-                        opacity: 0.8
+                        color: '#0066CC',  // Strong blue - contrasts with traffic overlay
+                        weight: 8,
+                        opacity: 1.0
                     });
 
                     // Fit map to route with smooth animation
