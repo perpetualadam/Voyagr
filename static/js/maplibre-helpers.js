@@ -395,7 +395,7 @@ function add3DBuildings(mapInstance, options = {}) {
                         'fill-extrusion-color': [
                             'interpolate',
                             ['linear'],
-                            ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height'], 0]],
+                            ['to-number', ['get', 'render_height'], 0],
                             0, '#d4d4d4',
                             50, '#b8b8b8',
                             100, '#9c9c9c'
@@ -405,10 +405,10 @@ function add3DBuildings(mapInstance, options = {}) {
                             ['linear'],
                             ['zoom'],
                             14, 0,
-                            14.5, ['*', heightMultiplier, ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height'], 10]]]
+                            14.5, ['*', heightMultiplier, ['to-number', ['get', 'render_height'], 0]]
                         ],
                         'fill-extrusion-base': [
-                            'to-number', ['coalesce', ['get', 'render_min_height'], 0]
+                            'to-number', ['get', 'render_min_height'], 0
                         ],
                         'fill-extrusion-opacity': opacity
                     }

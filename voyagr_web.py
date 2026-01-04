@@ -379,7 +379,7 @@ USE_OSRM = os.getenv('USE_OSRM', 'false').lower() == 'true'
 # Priority: GraphHopper (if camera avoidance enabled) → Valhalla → OSRM
 USE_GRAPHHOPPER_CAMERA_AVOIDANCE = os.getenv('USE_GRAPHHOPPER_CAMERA_AVOIDANCE', 'true').lower() == 'true'
 GRAPHHOPPER_CAMERA_AREAS_COUNT = int(os.getenv('GRAPHHOPPER_CAMERA_AREAS_COUNT', '137'))  # Number of camera_area_N features (UK only)
-GRAPHHOPPER_TIMEOUT = int(os.getenv('GRAPHHOPPER_TIMEOUT', '25'))
+GRAPHHOPPER_TIMEOUT = int(os.getenv('GRAPHHOPPER_TIMEOUT', '5'))
 
 # ============================================================================
 # PHASE 3: CUSTOM ROUTER INTEGRATION
@@ -7080,8 +7080,8 @@ def calculate_route():
             # Calculate distance to determine appropriate timeout
             # Longer routes need more time (Valhalla can take 30+ seconds for 500+ km routes)
             straight_line_km = ((end_lat - start_lat)**2 + (end_lon - start_lon)**2)**0.5 * 111  # ~111 km per degree
-            # PHASE 4 OPTIMIZATION: Reduce timeout to max 15s to fit within Gateway limits
-            route_timeout = max(10, min(15, int(5 + straight_line_km / 100)))  # 10-15 seconds cap
+            # PHASE 4 OPTIMIZATION: Reduce timeout to max 10s to fit within Gateway limits
+            route_timeout = max(5, min(10, int(3 + straight_line_km / 100)))  # 5-10 seconds cap
 
             print(f"[Valhalla] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
             print(f"[Valhalla] URL: {url}")
