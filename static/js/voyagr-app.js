@@ -2829,7 +2829,8 @@ async function calculateRoute() {
                     // Show route preview AFTER routeOptions is populated
                     setTimeout(() => {
                         showRoutePreview(data);
-                        // MOVED: Auto-collapse moved to selectRoute()
+                        // Make sure AR button visibility is updated
+                        updateARButtonVisibility();
                     }, 300);
 
                     // Hide progress bar on success
@@ -4151,11 +4152,16 @@ function startNavigation() {
         return;
     }
     startTurnByTurnNavigation(window.lastCalculatedRoute);
+
+    // UI Updates
     document.getElementById('startNavBtn').style.display = 'none';
     const startNavBtnSheet = document.getElementById('startNavBtnSheet');
     if (startNavBtnSheet) {
         startNavBtnSheet.style.display = 'none';
     }
+
+    // FIX: Collapse bottom sheet to ensure map is interactive
+    collapseBottomSheet();
 }
 
 // ===== ROUTE PREVIEW FEATURE =====
@@ -6078,7 +6084,15 @@ function initPhase3Features() {
     }
 
     // Load ML predictions
+    // Load ML predictions
     loadMLPredictions();
+
+    // Load AR setting
+    isAREnabled = localStorage.getItem('voyagr_ar_enabled') === 'true';
+    const arToggleBtn = document.getElementById('arToggleBtn');
+    if (arToggleBtn && isAREnabled) {
+        arToggleBtn.classList.add('active');
+    }
 }
 /**
  * handleDeviceMotion function
@@ -6623,6 +6637,48 @@ function applyDriverPerspective() {
 // ===== AR NAVIGATION MODE =====
 let arNavigator = null;
 let arModeActive = false;
+let isAREnabled = false; // Global flag for preference
+
+/**
+ * Toggle AR Setting (from Preferences)
+ */
+function toggleARSetting() {
+    const btn = document.getElementById('arToggleBtn');
+    if (btn) {
+        btn.classList.toggle('active');
+        isAREnabled = btn.classList.contains('active');
+        localStorage.setItem('voyagr_ar_enabled', isAREnabled);
+
+        updateARButtonVisibility();
+
+        if (isAREnabled) {
+            showStatus('AR Navigation enabled', 'success');
+        } else {
+            showStatus('AR Navigation disabled', 'info');
+            // If AR mode was active, stop it
+            if (arModeActive) stopARMode();
+        }
+    }
+}
+
+/**
+ * Update AR FAB Visibility based on settings and route state
+ */
+function updateARButtonVisibility() {
+    const arFab = document.getElementById('arModeBtn');
+    if (!arFab) return;
+
+    // improved logic: Only show if enabled AND (route calculated OR navigation active)
+    const hasRoute = window.lastCalculatedRoute !== null;
+
+    if (isAREnabled && (hasRoute || routeInProgress)) {
+        arFab.style.display = 'flex';
+        arFab.textContent = '👓'; // Use Glasses icon as requested
+    } else {
+        arFab.style.display = 'none';
+    }
+}
+
 
 /**
  * Toggle AR navigation mode

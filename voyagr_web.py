@@ -4412,6 +4412,12 @@ HTML_TEMPLATE = '''
                             </div>
                         </div>
 
+                        <!-- Augmented Reality Settings -->
+                        <div class="preference-item">
+                            <span class="preference-label">👓 Enable AR Navigation</span>
+                            <button class="toggle-switch" id="arToggleBtn" onclick="toggleARSetting()" aria-label="Toggle AR Navigation"></button>
+                        </div>
+
                         <!-- Time Statistics -->
                         <div style="background: #f5f5f5; padding: 12px; border-radius: 6px; font-size: 13px;">
                             <h4 style="margin: 0 0 10px 0; font-size: 14px;">⏱️ Time Statistics</h4>
