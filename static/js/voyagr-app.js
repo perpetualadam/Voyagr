@@ -1621,6 +1621,9 @@ function selectRoute(index) {
 
         // Update the route preview with the selected route data
         showRoutePreview(selectedRoute);
+
+        // Auto-collapse bottom sheet when a route is selected to show the map
+        collapseBottomSheet();
     }
 }
 
@@ -2826,8 +2829,7 @@ async function calculateRoute() {
                     // Show route preview AFTER routeOptions is populated
                     setTimeout(() => {
                         showRoutePreview(data);
-                        // Auto-collapse bottom sheet to show map with route
-                        collapseBottomSheetForRoutePreview();
+                        // MOVED: Auto-collapse moved to selectRoute()
                     }, 300);
 
                     // Hide progress bar on success
@@ -7708,6 +7710,14 @@ function initBottomSheet() {
             }
         });
     }
+
+    // NEW: Allow expanding by clicking anywhere on the bottom sheet when collapsed
+    bottomSheet.addEventListener('click', (e) => {
+        if (!bottomSheetIsExpanded) {
+            console.log('[BottomSheet] Sheet clicked while collapsed - Expanding');
+            expandBottomSheet();
+        }
+    });
 
     // Touch events for dragging
     handle.addEventListener('touchstart', (e) => {
