@@ -200,48 +200,98 @@ class SpeedLimitDetector:
         else:
             print("[Speed Limit] No TOMTOM_API_KEY configured, skipping TomTom")
 
-        # Fallback: Query Overpass API for maxspeed tag (slower but explicit)
+        # Fallback: Query Overpass API for maxspeed tag and road type (slower but explicit)
+        # IMPROVED: Expanded bbox and query for both maxspeed and highway tags
         try:
             overpass_url = "http://overpass-api.de/api/interpreter"
+            # Expanded bbox from 0.005 to 0.001 degrees (~100m) for more precise matching
+            # Also query all nearby ways with highway tag to detect road type
             query = f"""
-            [bbox:{lat-0.005},{lon-0.005},{lat+0.005},{lon+0.005}];
-            way[maxspeed];
+            [out:json][timeout:5];
+            way(around:50,{lat},{lon})[highway];
             out tags;
             """
 
-            response = requests.get(overpass_url, params={'data': query}, timeout=3)
+            response = requests.get(overpass_url, params={'data': query}, timeout=5)
 
             if response.status_code == 200:
                 data = response.json()
-                if data.get('elements'):
-                    for element in data['elements']:
-                        if 'tags' in element and 'maxspeed' in element['tags']:
-                            speed_str = element['tags']['maxspeed']
-                            # Parse speed (handle "70 mph", "50", "30 mph" formats)
-                            speed_parts = speed_str.replace('mph', '').strip().split()
+                elements = data.get('elements', [])
+                
+                if elements:
+                    # Find the closest/most relevant way
+                    for element in elements:
+                        tags = element.get('tags', {})
+                        
+                        # Priority 1: Explicit maxspeed tag
+                        if 'maxspeed' in tags:
+                            speed_str = tags['maxspeed']
+                            # Parse speed (handle "70 mph", "50", "30 mph", "70" formats)
+                            speed_str_clean = speed_str.replace('mph', '').replace('km/h', '').strip()
                             try:
-                                speed = int(speed_parts[0])
+                                speed = int(speed_str_clean.split()[0])
+                                # If it was in km/h, convert to mph
+                                if 'km/h' in speed_str:
+                                    speed = int(round(speed * 0.621371))
                                 # Cache the result
                                 self.speed_limit_cache[cache_key] = {
                                     'speed_limit': speed,
                                     'timestamp': time.time(),
-                                    'source': 'OSM'
+                                    'source': 'OSM-maxspeed'
                                 }
-                                print(f"[Speed Limit] OSM: {speed} mph")
+                                print(f"[Speed Limit] OSM maxspeed: {speed} mph")
                                 return speed
-                            except ValueError:
+                            except (ValueError, IndexError):
                                 print(f"[Speed Limit] OSM parse error: '{speed_str}'")
+                        
+                        # Priority 2: Infer from highway type (UK defaults)
+                        highway_type = tags.get('highway', '')
+                        highway_speed_map = {
+                            'motorway': 70,
+                            'motorway_link': 50,
+                            'trunk': 70,
+                            'trunk_link': 50,
+                            'primary': 60,
+                            'primary_link': 40,
+                            'secondary': 60,
+                            'secondary_link': 40,
+                            'tertiary': 40,
+                            'tertiary_link': 30,
+                            'unclassified': 30,
+                            'residential': 30,
+                            'living_street': 20,
+                            'service': 20,
+                            'pedestrian': 10,
+                            'track': 20,
+                        }
+                        
+                        if highway_type in highway_speed_map:
+                            inferred_speed = highway_speed_map[highway_type]
+                            self.speed_limit_cache[cache_key] = {
+                                'speed_limit': inferred_speed,
+                                'timestamp': time.time(),
+                                'source': f'OSM-highway-{highway_type}'
+                            }
+                            print(f"[Speed Limit] Inferred from highway={highway_type}: {inferred_speed} mph")
+                            return inferred_speed
                 else:
-                    print(f"[Speed Limit] OSM returned no elements for bbox")
+                    print(f"[Speed Limit] OSM returned no highway elements nearby")
             else:
                 print(f"[Speed Limit] OSM API error: status={response.status_code}")
         except requests.exceptions.Timeout:
-            print("[Speed Limit] OSM API timeout (3s)")
+            print("[Speed Limit] OSM API timeout (5s)")
         except Exception as e:
             print(f"[Speed Limit] OSM failed: {e}")
 
-        # Final fallback to default speed limit for road type
+        # IMPROVED: Final fallback uses 'residential' (30mph) as safer default
+        # instead of the passed road_type which often defaults to 'motorway'
         default_limit = DEFAULT_SPEED_LIMITS.get(road_type, 30)
+        if road_type == 'motorway' and not self.cursor:
+            # If we're defaulting to motorway without real data, use residential (safer)
+            default_limit = 30
+            print(f"[Speed Limit] Using safer default (no OSM data): {default_limit} mph")
+        else:
+            print(f"[Speed Limit] Using default for {road_type}: {default_limit} mph")
 
         # Cache the default too to avoid repeated API calls
         self.speed_limit_cache[cache_key] = {
@@ -250,7 +300,6 @@ class SpeedLimitDetector:
             'source': 'default'
         }
 
-        print(f"[Speed Limit] Using default for {road_type}: {default_limit} mph")
         return default_limit
     
     def _update_speed_limit(self, new_speed_limit: int):

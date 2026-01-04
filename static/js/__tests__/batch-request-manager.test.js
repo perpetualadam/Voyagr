@@ -8,11 +8,18 @@ describe('BatchRequestManager', () => {
     beforeEach(() => {
         batcher = new BatchRequestManager({ batchTimeout: 50, maxBatchSize: 3 });
         jest.useFakeTimers();
+
+        // Mock fetch for flush() calls
+        global.fetch = jest.fn().mockResolvedValue({
+            ok: true,
+            json: async () => ({ responses: [] })
+        });
     });
 
     afterEach(() => {
         jest.runOnlyPendingTimers();
         jest.useRealTimers();
+        jest.clearAllMocks();
     });
 
     test('should create instance with default config', () => {
@@ -39,11 +46,11 @@ describe('BatchRequestManager', () => {
 
     test('should flush when batch is full', () => {
         const flushSpy = jest.spyOn(batcher, 'flush');
-        
+
         batcher.add('/api/route', { test: 1 });
         batcher.add('/api/route', { test: 2 });
         batcher.add('/api/route', { test: 3 });
-        
+
         expect(flushSpy).toHaveBeenCalled();
         flushSpy.mockRestore();
     });
@@ -56,17 +63,17 @@ describe('BatchRequestManager', () => {
     test('should clear queue and cancel requests', async () => {
         const promise = batcher.add('/api/route', { test: 1 });
         batcher.clear();
-        
+
         expect(batcher.queue.length).toBe(0);
         expect(batcher.batchTimer).toBeNull();
-        
+
         await expect(promise).rejects.toThrow('Batch manager cleared');
     });
 
     test('should calculate efficiency', () => {
         batcher.stats.requests = 10;
         batcher.stats.saved = 5;
-        
+
         const stats = batcher.getStats();
         expect(stats.efficiency).toBe('50.00%');
     });
@@ -75,7 +82,7 @@ describe('BatchRequestManager', () => {
         batcher.stats.requests = 10;
         batcher.stats.batches = 5;
         batcher.resetStats();
-        
+
         expect(batcher.stats.requests).toBe(0);
         expect(batcher.stats.batches).toBe(0);
     });
@@ -83,7 +90,7 @@ describe('BatchRequestManager', () => {
     test('should track queue size', () => {
         batcher.add('/api/route', { test: 1 });
         batcher.add('/api/route', { test: 2 });
-        
+
         const stats = batcher.getStats();
         expect(stats.queueSize).toBe(2);
     });

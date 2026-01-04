@@ -4,22 +4,28 @@
  */
 
 /**
- * VoiceNavigator class - Handles voice guidance
+ * VoiceNavigator class - Handles voice guidance with enhanced features
  * @class VoiceNavigator
  */
 export class VoiceNavigator {
     constructor(config = {}) {
         this.enabled = config.enabled !== false;
-        this.language = config.language || 'en-US';
+        this.language = config.language || 'en-GB';  // UK English default
         this.rate = config.rate || 1.0;
         this.pitch = config.pitch || 1.0;
         this.volume = config.volume || 1.0;
         this.synth = window.speechSynthesis || null;
         this.isSpeaking = false;
+
+        // Enhanced features
+        this.preferredVoiceName = config.voiceName || null;  // User's selected voice
+        this.lastSpokenText = null;  // For repeat functionality
+        this.advanceWarningEnabled = config.advanceWarningEnabled !== false;
+        this.confirmationEnabled = config.confirmationEnabled !== false;
     }
 
     /**
-     * Speak text
+     * Speak text with voice selection
      * @param {string} text - Text to speak
      * @param {Object} options - Speech options
      */
@@ -35,6 +41,15 @@ export class VoiceNavigator {
         utterance.pitch = options.pitch || this.pitch;
         utterance.volume = options.volume || this.volume;
 
+        // Apply preferred voice if set
+        if (this.preferredVoiceName) {
+            const voices = this.synth.getVoices();
+            const preferredVoice = voices.find(v => v.name === this.preferredVoiceName);
+            if (preferredVoice) {
+                utterance.voice = preferredVoice;
+            }
+        }
+
         utterance.onstart = () => {
             this.isSpeaking = true;
         };
@@ -48,18 +63,104 @@ export class VoiceNavigator {
             this.isSpeaking = false;
         };
 
+        this.lastSpokenText = text;  // Store for repeat
         this.synth.speak(utterance);
     }
 
     /**
-     * Announce turn
+     * Announce turn with improved phrasing
      * @param {Object} instruction - Turn instruction
      */
     announceTurn(instruction) {
         if (!this.enabled) return;
 
-        const text = `${instruction.text}. Distance: ${instruction.distance} meters`;
+        // More natural phrasing
+        const direction = instruction.direction || instruction.text;
+        const distance = instruction.distance || 0;
+        const street = instruction.streetName || '';
+
+        let text = '';
+        if (distance > 0) {
+            const distanceText = this.formatDistance(distance);
+            if (street) {
+                text = `In ${distanceText}, ${direction} onto ${street}`;
+            } else {
+                text = `In ${distanceText}, ${direction}`;
+            }
+        } else {
+            text = direction;
+        }
+
         this.speak(text);
+    }
+
+    /**
+     * Announce preparation/advance warning
+     * @param {Object} instruction - Upcoming instruction
+     */
+    announcePreparation(instruction) {
+        if (!this.enabled || !this.advanceWarningEnabled) return;
+
+        const direction = instruction.direction || instruction.text || 'turn';
+        const distance = instruction.distance || 0;
+        const street = instruction.streetName || '';
+
+        let text = '';
+        if (distance > 200) {
+            const distanceText = this.formatDistance(distance);
+            if (street) {
+                text = `Prepare to ${direction} in ${distanceText} onto ${street}`;
+            } else {
+                text = `Prepare to ${direction} in ${distanceText}`;
+            }
+            this.speak(text);
+        }
+    }
+
+    /**
+     * Announce confirmation after completing maneuver
+     * @param {string} maneuver - Completed maneuver type
+     */
+    announceConfirmation(maneuver) {
+        if (!this.enabled || !this.confirmationEnabled) return;
+
+        const confirmations = {
+            'left': 'You have turned left',
+            'right': 'You have turned right',
+            'straight': 'Continue straight',
+            'uturn': 'You have made a U-turn',
+            'merge': 'Merge complete',
+            'exit': 'You have taken the exit',
+            'roundabout': 'Exiting roundabout'
+        };
+
+        const text = confirmations[maneuver] || `${maneuver} complete`;
+        this.speak(text);
+    }
+
+    /**
+     * Repeat last instruction
+     */
+    repeatLastInstruction() {
+        if (this.lastSpokenText) {
+            this.speak(this.lastSpokenText);
+        }
+    }
+
+    /**
+     * Format distance for speech
+     * @param {number} meters - Distance in meters
+     * @returns {string} Formatted distance
+     */
+    formatDistance(meters) {
+        if (meters >= 1000) {
+            const km = (meters / 1000).toFixed(1);
+            return `${km} kilometres`;
+        } else if (meters >= 100) {
+            return `${Math.round(meters / 10) * 10} metres`;
+        } else {
+            return `${Math.round(meters)} metres`;
+        }
     }
 
     /**
@@ -69,7 +170,7 @@ export class VoiceNavigator {
     announceArrival(destination) {
         if (!this.enabled) return;
 
-        const text = `You have arrived at ${destination}`;
+        const text = `You have arrived at your destination${destination ? ': ' + destination : ''}`;
         this.speak(text);
     }
 
@@ -80,7 +181,7 @@ export class VoiceNavigator {
     announceReroute(reason) {
         if (!this.enabled) return;
 
-        const text = `Recalculating route. ${reason}`;
+        const text = `Recalculating route${reason ? '. ' + reason : ''}`;
         this.speak(text);
     }
 
@@ -128,6 +229,22 @@ export class VoiceNavigator {
     }
 
     /**
+     * Set speech rate
+     * @param {number} rate - Rate 0.5 to 2.0
+     */
+    setRate(rate) {
+        this.rate = Math.max(0.5, Math.min(2.0, rate));
+    }
+
+    /**
+     * Set preferred voice by name
+     * @param {string} voiceName - Voice name
+     */
+    setVoice(voiceName) {
+        this.preferredVoiceName = voiceName;
+    }
+
+    /**
      * Set language
      * @param {string} language - Language code
      */
@@ -136,12 +253,17 @@ export class VoiceNavigator {
     }
 
     /**
-     * Get available voices
+     * Get available voices filtered by language
+     * @param {string} lang - Optional language filter (e.g., 'en')
      * @returns {Array} Available voices
      */
-    getAvailableVoices() {
+    getAvailableVoices(lang = null) {
         if (!this.synth) return [];
-        return this.synth.getVoices();
+        const voices = this.synth.getVoices();
+        if (lang) {
+            return voices.filter(v => v.lang.startsWith(lang));
+        }
+        return voices;
     }
 
     /**
@@ -152,4 +274,5 @@ export class VoiceNavigator {
         return this.isSpeaking;
     }
 }
+
 

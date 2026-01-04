@@ -3,6 +3,17 @@
  * Configures test environment and global mocks
  */
 
+// Import and expose test classes globally
+const RequestDeduplicator = require('./static/js/request-deduplicator.js');
+const CacheManager = require('./static/js/cache-manager.js');
+const BatchRequestManager = require('./static/js/batch-request-manager.js');
+const APIClient = require('./static/js/api-client.js');
+
+global.RequestDeduplicator = RequestDeduplicator;
+global.CacheManager = CacheManager;
+global.BatchRequestManager = BatchRequestManager;
+global.APIClient = APIClient;
+
 // Mock localStorage
 const localStorageMock = {
     getItem: jest.fn(),
@@ -60,13 +71,13 @@ Object.defineProperty(global.navigator, 'geolocation', {
 
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
-    constructor() {}
-    disconnect() {}
-    observe() {}
+    constructor() { }
+    disconnect() { }
+    observe() { }
     takeRecords() {
         return [];
     }
-    unobserve() {}
+    unobserve() { }
 };
 
 // Suppress console output during tests

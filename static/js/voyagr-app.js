@@ -6459,6 +6459,178 @@ let currentStepIndex = 0;
 let nextManeuverDistance = 0;
 let routePolyline = null;
 
+// ===== DRIVER'S PERSPECTIVE MODE (Optional 3D view) =====
+// When enabled, tilts map to 60° and positions vehicle at bottom third of screen
+let driverPerspectiveEnabled = localStorage.getItem('driverPerspectiveEnabled') === 'true';  // Default false (opt-in)
+
+/**
+ * Toggle driver's perspective (3D view) setting
+ */
+function toggleDriverPerspective() {
+    driverPerspectiveEnabled = !driverPerspectiveEnabled;
+    localStorage.setItem('driverPerspectiveEnabled', driverPerspectiveEnabled);
+
+    const btn = document.getElementById('driverPerspectiveToggle');
+    if (btn) {
+        btn.classList.toggle('active', driverPerspectiveEnabled);
+    }
+
+    // Apply immediately if navigation is in progress
+    if (routeInProgress && map && currentLat && currentLon) {
+        applyDriverPerspective();
+    }
+
+    showStatus(driverPerspectiveEnabled ? '🚗 Driver\'s view enabled' : '🗺️ Standard view', 'info');
+    saveAllSettings();
+}
+
+/**
+ * Apply driver's perspective camera view if enabled
+ * Uses 60° pitch, heading-aligned bearing, and bottom padding
+ */
+function applyDriverPerspective() {
+    if (!map || !currentLat || !currentLon) return;
+
+    // Get current heading from last GPS update or vehicle marker
+    const heading = currentUserMarker?.heading || 0;
+
+    if (driverPerspectiveEnabled) {
+        // 3D driver's eye view
+        map.easeTo({
+            pitch: 60,
+            bearing: heading,
+            center: [currentLon, currentLat],
+            padding: { top: 0, bottom: window.innerHeight * 0.5, left: 0, right: 0 },
+            duration: 1000
+        });
+        console.log('[Driver View] Applied 3D perspective (pitch: 60°, padding: 50% bottom)');
+    } else {
+        // Standard top-down view
+        map.easeTo({
+            pitch: 0,
+            bearing: 0,
+            padding: { top: 50, bottom: 200, left: 50, right: 50 },
+            duration: 500
+        });
+        console.log('[Driver View] Reverted to standard view');
+    }
+}
+
+// ===== AR NAVIGATION MODE =====
+let arNavigator = null;
+let arModeActive = false;
+
+/**
+ * Toggle AR navigation mode
+ * Uses WebXR if available, falls back to camera overlay
+ */
+async function toggleARMode() {
+    if (arModeActive) {
+        await stopARMode();
+        return;
+    }
+
+    // Dynamically import AR module
+    try {
+        const { ARNavigator } = await import('./modules/ar-navigation.js');
+
+        if (!arNavigator) {
+            arNavigator = new ARNavigator({
+                onError: (err) => {
+                    showStatus(`AR Error: ${err.message}`, 'error');
+                },
+                onStatusChange: (status) => {
+                    console.log('[AR] Status:', status);
+                    updateARButtonState(status);
+                }
+            });
+        }
+
+        showStatus('📸 Starting AR mode...', 'info');
+
+        const result = await arNavigator.start();
+
+        if (result.success) {
+            arModeActive = true;
+            showStatus(`📷 AR mode active (${result.mode})`, 'success');
+
+            // Sync current instruction to AR
+            if (currentRouteSteps && currentStepIndex < currentRouteSteps.length) {
+                const step = currentRouteSteps[currentStepIndex];
+                arNavigator.updateInstruction({
+                    instruction: step.instruction,
+                    direction: getDirectionFromType(step.type),
+                    distance: nextManeuverDistance
+                });
+            }
+        } else {
+            showStatus(`AR not available: ${result.error}`, 'error');
+        }
+    } catch (err) {
+        console.error('[AR] Failed to load module:', err);
+        showStatus('AR module failed to load', 'error');
+    }
+}
+
+/**
+ * Stop AR mode
+ */
+async function stopARMode() {
+    if (arNavigator) {
+        await arNavigator.stop();
+    }
+    arModeActive = false;
+    showStatus('🗺️ Returned to map view', 'info');
+}
+
+/**
+ * Update AR button visual state
+ */
+function updateARButtonState(status) {
+    const btn = document.getElementById('arModeBtn');
+    if (!btn) return;
+
+    if (status === 'active' || status === 'active-fallback') {
+        btn.classList.add('active');
+        btn.innerHTML = '🎯 Exit AR';
+    } else {
+        btn.classList.remove('active');
+        btn.innerHTML = '📷 AR View';
+    }
+}
+
+/**
+ * Update AR overlay with current navigation instruction
+ */
+function updateARInstruction(turnInfo) {
+    if (!arModeActive || !arNavigator) return;
+
+    arNavigator.updateInstruction({
+        instruction: turnInfo?.instruction || 'Follow route',
+        direction: turnInfo?.direction || 'straight',
+        distance: turnInfo?.distance || 0
+    });
+}
+
+/**
+ * Get direction string from Valhalla maneuver type
+ */
+function getDirectionFromType(type) {
+    const typeMap = {
+        9: 'slight-right', 18: 'slight-right', 23: 'slight-right',
+        10: 'right',
+        11: 'sharp-right',
+        16: 'slight-left', 19: 'slight-left', 24: 'slight-left',
+        15: 'left',
+        14: 'sharp-left',
+        12: 'u-turn', 13: 'u-turn',
+        20: 'exit', 21: 'exit',
+        26: 'roundabout', 27: 'roundabout',
+        4: 'destination', 5: 'destination', 6: 'destination'
+    };
+    return typeMap[type] || 'straight';
+}
+
 // ===== TURN INSTRUCTION WIDGET =====
 let instructionsPanelExpanded = false;
 
@@ -6652,10 +6824,14 @@ function updateTurnInstructionDisplay(turnInfo) {
     if (instructionsPanelExpanded) {
         populateInstructionsList();
     }
+
+    // Sync with AR overlay if active
+    updateARInstruction(turnInfo);
 }
 
 /**
  * Populate the full instructions list in the expanded panel
+ * Enhanced with click-to-preview functionality
  */
 function populateInstructionsList() {
     const listEl = document.getElementById('instructionsList');
@@ -6669,7 +6845,7 @@ function populateInstructionsList() {
 
     // Calculate remaining steps from current position
     const remainingSteps = currentRouteSteps.length - currentStepIndex;
-    if (countEl) countEl.textContent = `${remainingSteps} steps remaining`;
+    if (countEl) countEl.textContent = `${remainingSteps} of ${currentRouteSteps.length} steps remaining`;
 
     let html = '';
 
@@ -6682,20 +6858,22 @@ function populateInstructionsList() {
         const instruction = step.instruction || 'Continue';
         const streetNames = step.street_names || [];
         const streetName = streetNames.length > 0 ? streetNames.join(', ') : '';
+        const shapeIndex = step.begin_shape_index || 0;
 
         let itemClass = 'instruction-item';
         if (isCurrent) itemClass += ' current';
         if (isPassed) itemClass += ' passed';
 
-        // Show instruction text and street name only (no distances per user request)
+        // Add data attributes for click-to-preview
         html += `
-            <div class="${itemClass}">
+            <div class="${itemClass}" data-step-index="${i}" data-shape-index="${shapeIndex}" onclick="previewInstructionOnMap(${i}, ${shapeIndex})">
                 <div class="instruction-item-icon">${icon}</div>
                 <div class="instruction-item-content">
                     <div class="instruction-item-text">${instruction}</div>
                     ${streetName ? `<div class="instruction-item-street">${streetName}</div>` : ''}
                     ${isPassed ? '<div class="instruction-item-status">✓ Passed</div>' : (isCurrent ? '<div class="instruction-item-status current-status">→ Next</div>' : '')}
                 </div>
+                <div class="instruction-item-preview" title="Click to preview on map">👁️</div>
             </div>
         `;
     }
@@ -6706,6 +6884,93 @@ function populateInstructionsList() {
     const currentItem = listEl.querySelector('.instruction-item.current');
     if (currentItem) {
         currentItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+}
+
+/**
+ * Preview instruction location on map when clicked
+ * @param {number} stepIndex - Index of the step in currentRouteSteps
+ * @param {number} shapeIndex - Index in the route polyline
+ */
+function previewInstructionOnMap(stepIndex, shapeIndex) {
+    if (!routePolyline || shapeIndex >= routePolyline.length) {
+        console.log('[Instructions] Cannot preview: invalid polyline index');
+        return;
+    }
+
+    const point = routePolyline[shapeIndex];
+    if (!point) return;
+
+    const step = currentRouteSteps[stepIndex];
+    const instruction = step?.instruction || 'Maneuver';
+
+    console.log(`[Instructions] Previewing step ${stepIndex}: "${instruction}" at [${point[0].toFixed(4)}, ${point[1].toFixed(4)}]`);
+
+    // Temporarily disable map following
+    const wasFollowing = mapFollowingActive;
+    mapFollowingActive = false;
+
+    // Fly to the maneuver location
+    if (map) {
+        map.flyTo({
+            center: [point[1], point[0]],  // MapLibre uses [lng, lat]
+            zoom: 17,
+            duration: 1000
+        });
+
+        // Show a temporary marker at the preview location
+        showPreviewMarker(point[0], point[1], instruction);
+    }
+
+    // Re-enable following after 5 seconds
+    setTimeout(() => {
+        if (wasFollowing) {
+            mapFollowingActive = true;
+            hidePreviewMarker();
+        }
+    }, 5000);
+
+    showStatus(`📍 Previewing: ${instruction}`, 'info');
+}
+
+// Preview marker reference
+let previewMarker = null;
+
+/**
+ * Show a temporary preview marker on the map
+ */
+function showPreviewMarker(lat, lon, label) {
+    hidePreviewMarker();  // Remove existing
+
+    if (!map) return;
+
+    // Create preview marker element
+    const el = document.createElement('div');
+    el.className = 'preview-marker';
+    el.innerHTML = `
+        <div class="preview-marker-icon">📍</div>
+        <div class="preview-marker-label">${label}</div>
+    `;
+    el.style.cssText = `
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transform: translateY(-50%);
+    `;
+
+    // Create MapLibre marker
+    previewMarker = new maplibregl.Marker({ element: el })
+        .setLngLat([lon, lat])
+        .addTo(map);
+}
+
+/**
+ * Hide the preview marker
+ */
+function hidePreviewMarker() {
+    if (previewMarker) {
+        previewMarker.remove();
+        previewMarker = null;
     }
 }
 
@@ -7655,6 +7920,33 @@ const VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = 5000; // Minimum 5 seconds between AN
 
 // Voice announcements enabled flag (FIXED: separate from Web Speech API object)
 let voiceAnnouncementsEnabled = true;
+
+/**
+ * Find the nearest point on the route polyline to the current GPS position.
+ * Used for accurate ETA calculation based on actual driver progress.
+ * @param {number} lat - Current latitude
+ * @param {number} lon - Current longitude
+ * @param {Array} polyline - Route polyline as array of [lat, lon] coordinates
+ * @returns {number} Index of nearest point on route, or 0 if not found
+ */
+function findNearestRouteIndex(lat, lon, polyline) {
+    if (!polyline || polyline.length === 0) return 0;
+
+    let minDistance = Infinity;
+    let nearestIndex = 0;
+
+    for (let i = 0; i < polyline.length; i++) {
+        const routePoint = polyline[i];
+        const distance = calculateDistance(lat, lon, routePoint[0], routePoint[1]);
+        if (distance < minDistance) {
+            minDistance = distance;
+            nearestIndex = i;
+        }
+    }
+
+    console.log(`[ETA] Found nearest route point at index ${nearestIndex} (${minDistance.toFixed(0)}m away)`);
+    return nearestIndex;
+}
 /**
  * getTurnDirectionText function
  * @function getTurnDirectionText
@@ -8563,10 +8855,13 @@ function announceETAIfNeeded() {
             return;
         }
 
-        // Calculate remaining distance to estimate progress
+        // FIXED: Calculate remaining distance from ACTUAL GPS position on route
+        // Previously used currentStepIndex (maneuver index) which doesn't correspond to polyline indices
         let remainingDistance = 0;
-        if (routePolyline && currentStepIndex !== undefined) {
-            for (let i = currentStepIndex; i < routePolyline.length - 1; i++) {
+        if (routePolyline && currentLat && currentLon) {
+            // Find where the driver actually is on the route polyline
+            const userRouteIndex = findNearestRouteIndex(currentLat, currentLon, routePolyline);
+            for (let i = userRouteIndex; i < routePolyline.length - 1; i++) {
                 remainingDistance += calculateDistance(
                     routePolyline[i][0], routePolyline[i][1],
                     routePolyline[i + 1][0], routePolyline[i + 1][1]
@@ -9496,6 +9791,14 @@ function startTurnByTurnNavigation(routeData) {
     // Start GPS tracking if not already active
     if (!isTrackingActive) {
         startGPSTracking();
+    }
+
+    // ===== DRIVER'S PERSPECTIVE: Apply 3D camera view if enabled =====
+    // Wait for first GPS position, then apply perspective
+    if (driverPerspectiveEnabled) {
+        setTimeout(() => {
+            applyDriverPerspective();
+        }, 1500);  // Delay to allow GPS to get first position
     }
 
     // ===== PHASE 1: Start live data refresh =====
