@@ -14,6 +14,7 @@ Usage:
     result = client.query(query_string, cache_key="my_query", cache_ttl=300)
 """
 
+import os
 import hashlib
 import json
 import logging
@@ -28,12 +29,20 @@ logger = logging.getLogger(__name__)
 # OVERPASS API ENDPOINTS (with fallbacks)
 # ============================================================================
 
+# Allow overriding/prepending a custom endpoint via environment variable
+CUSTOM_OVERPASS_URL = os.getenv('OVERPASS_API_URL')
+
 OVERPASS_ENDPOINTS = [
     "https://overpass-api.de/api/interpreter",
     "https://lz4.overpass-api.de/api/interpreter",
     "https://z.overpass-api.de/api/interpreter",
     "https://overpass.kumi.systems/api/interpreter",
 ]
+
+if CUSTOM_OVERPASS_URL:
+    # Prepend the custom URL so it's tried first
+    if CUSTOM_OVERPASS_URL not in OVERPASS_ENDPOINTS:
+        OVERPASS_ENDPOINTS.insert(0, CUSTOM_OVERPASS_URL)
 
 # ============================================================================
 # IN-MEMORY CACHE

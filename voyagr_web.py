@@ -369,6 +369,7 @@ else:
 
 VALHALLA_URL = os.getenv('VALHALLA_URL', 'http://localhost:8002')
 GRAPHHOPPER_URL = os.getenv('GRAPHHOPPER_URL', 'http://localhost:8989')
+OSRM_URL = os.getenv('OSRM_URL', 'http://router.project-osrm.org/route/v1')
 USE_OSRM = os.getenv('USE_OSRM', 'false').lower() == 'true'
 
 # ============================================================================
@@ -5891,17 +5892,17 @@ def test_routing_engines():
 
     # Test OSRM
     try:
-        response = requests.get("http://router.project-osrm.org/route/v1/driving/13.388860,52.517037;13.385983,52.496891", timeout=5)
+        response = requests.get(f"{OSRM_URL}/driving/13.388860,52.517037;13.385983,52.496891", timeout=5)
         results['osrm'] = {
             'status': 'OK' if response.status_code == 200 else f'HTTP {response.status_code}',
-            'url': 'http://router.project-osrm.org',
+            'url': OSRM_URL,
             'accessible': response.status_code == 200,
             'response_time_ms': response.elapsed.total_seconds() * 1000
         }
     except Exception as e:
         results['osrm'] = {
             'status': f'Error: {str(e)}',
-            'url': 'http://router.project-osrm.org',
+            'url': OSRM_URL,
             'accessible': False,
             'error_type': type(e).__name__
         }
@@ -5963,7 +5964,7 @@ def debug_route():
 
         # Test OSRM
         try:
-            osrm_url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}"
+            osrm_url = f"{OSRM_URL}/driving/{start_lon},{start_lat};{end_lon},{end_lat}"
             response = requests.get(osrm_url, timeout=10)
             debug_info['routing_engines']['osrm']['status'] = f'HTTP {response.status_code}'
             debug_info['routing_engines']['osrm']['response_time_ms'] = response.elapsed.total_seconds() * 1000
@@ -6149,7 +6150,7 @@ class ParallelRoutingEngine:
         """Request route from OSRM in parallel."""
         try:
             start_time = time.time()
-            url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}"
+            url = f"{OSRM_URL}/driving/{start_lon},{start_lat};{end_lon},{end_lat}"
             params = {
                 'overview': 'full',
                 'alternatives': 'true',
@@ -7714,7 +7715,7 @@ def calculate_route():
         else:
             # Fallback to OSRM (public service)
             logger.info(f"[OSRM] Trying fallback with ({start_lon},{start_lat}) to ({end_lon},{end_lat})")
-            osrm_url = f"http://router.project-osrm.org/route/v1/driving/{start_lon},{start_lat};{end_lon},{end_lat}?alternatives=true&overview=full&steps=true"
+            osrm_url = f"{OSRM_URL}/driving/{start_lon},{start_lat};{end_lon},{end_lat}?alternatives=true&overview=full&steps=true"
             try:
                 headers = {
                     'User-Agent': 'Voyagr-PWA/1.0',
@@ -7939,7 +7940,7 @@ def calculate_multi_stop_route():
         total_time = 0
 
         for i in range(len(coords) - 1):
-            osrm_url = f"http://router.project-osrm.org/route/v1/driving/{coords[i]['lon']},{coords[i]['lat']};{coords[i+1]['lon']},{coords[i+1]['lat']}"
+            osrm_url = f"{OSRM_URL}/driving/{coords[i]['lon']},{coords[i]['lat']};{coords[i+1]['lon']},{coords[i+1]['lat']}"
             response = requests.get(osrm_url, timeout=10)
 
             if response.status_code == 200:
