@@ -2952,14 +2952,19 @@ function hideRouteProgressBar() {
 
 /**
  * Collapse bottom sheet to show map with route preview
+ * Uses the standard collapse mechanism instead of inline styles
  */
 function collapseBottomSheetForRoutePreview() {
-    const bottomSheet = document.querySelector('.bottom-sheet');
+    const bottomSheet = document.getElementById('bottomSheet');
     if (!bottomSheet) return;
 
-    // Collapse to minimum height to show more map
-    bottomSheet.style.transition = 'height 0.3s ease-out';
-    bottomSheet.style.height = '120px';
+    // Clear any inline styles that might interfere
+    bottomSheet.style.height = '';
+    bottomSheet.style.transition = '';
+    bottomSheet.style.transform = '';
+
+    // Use the standard collapse function
+    collapseBottomSheet();
 
     // Show a "swipe up for details" indicator
     const handle = bottomSheet.querySelector('.bottom-sheet-handle');
@@ -7988,7 +7993,15 @@ function initBottomSheet() {
  */
 function expandBottomSheet() {
     const bottomSheet = document.getElementById('bottomSheet');
+    if (!bottomSheet) return;
+
     console.log('[BottomSheet] Expanding...');
+
+    // Clear any inline styles that might interfere with CSS-based expand
+    bottomSheet.style.height = '';
+    bottomSheet.style.transform = '';
+    bottomSheet.style.transition = '';
+
     bottomSheet.classList.add('expanded');
     bottomSheetIsExpanded = true;
     console.log('[BottomSheet] Expanded, classes:', bottomSheet.className);
@@ -8001,7 +8014,15 @@ function expandBottomSheet() {
  */
 function collapseBottomSheet() {
     const bottomSheet = document.getElementById('bottomSheet');
+    if (!bottomSheet) return;
+
     console.log('[BottomSheet] Collapsing...');
+
+    // Clear any inline styles that might interfere with CSS-based collapse
+    bottomSheet.style.height = '';
+    bottomSheet.style.transform = '';
+    bottomSheet.style.transition = '';
+
     bottomSheet.classList.remove('expanded');
     bottomSheetIsExpanded = false;
 }
@@ -11022,8 +11043,8 @@ function initMobileEnhancements() {
         }, { passive: true });
     }
 
-    // Initialize Bottom Sheet Drag & Toggle Logic
-    initBottomSheetLogic();
+    // NOTE: initBottomSheetLogic() removed - initBottomSheet() handles all bottom sheet events
+    // Having both caused duplicate event listeners and state conflicts
 
     // Handle orientation changes
     window.addEventListener('orientationchange', () => {
