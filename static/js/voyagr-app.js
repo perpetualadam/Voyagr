@@ -1623,8 +1623,8 @@ function selectRoute(index) {
         // Update the route preview with the selected route data
         showRoutePreview(selectedRoute);
 
-        // Auto-collapse bottom sheet when a route is selected to show the map
-        collapseBottomSheet();
+        // Auto-collapse logic removed to keep Route Preview visible
+        // collapseBottomSheet();
     }
 }
 
@@ -1756,7 +1756,7 @@ function useRoute(index) {
     }
 
     showStatus('Route selected. Ready to navigate!', 'success');
-    switchTab('navigation');
+    // switchTab('navigation'); // Removed to keep current tab (e.g. Preview) active
 }
 
 // ===== ROUTE SHARING FUNCTIONS =====
@@ -4435,6 +4435,11 @@ function showRoutePreview(routeData) {
     }
 
     console.log('[Route Preview] Route preview displayed successfully');
+
+    // Switch to route preview tab and expand bottom sheet to show results
+    switchTab('routePreview');
+    expandBottomSheet();
+
     showStatus('📍 Review your route before starting navigation', 'success');
 }
 

@@ -64,6 +64,19 @@ function initializeMap() {
         pitchWithRotate: true // Enable pitch control with mouse/touch
     });
 
+    // Handle missing images (POI icons) by providing a transparent placeholder
+    // This suppresses "Image 'x' could not be loaded" errors in the console
+    map.on('styleimagemissing', (e) => {
+        const id = e.id;
+        if (!map.hasImage(id)) {
+            // Create a 1x1 transparent image
+            const width = 1;
+            const height = 1;
+            const bytes = new Uint8Array(width * height * 4); // RGBA
+            map.addImage(id, { width, height, data: bytes });
+        }
+    });
+
     // Attempt to center on current location on load
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(

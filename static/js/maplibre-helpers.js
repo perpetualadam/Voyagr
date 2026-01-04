@@ -395,7 +395,7 @@ function add3DBuildings(mapInstance, options = {}) {
                         'fill-extrusion-color': [
                             'interpolate',
                             ['linear'],
-                            ['get', 'render_height'],
+                            ['coalesce', ['get', 'render_height'], ['get', 'height'], 0],
                             0, '#d4d4d4',
                             50, '#b8b8b8',
                             100, '#9c9c9c'
