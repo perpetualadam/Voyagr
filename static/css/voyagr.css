@@ -184,6 +184,8 @@ body {
     overflow: visible !important;
     /* Ensure tabs don't block touch events */
     touch-action: pan-y;
+    /* Prevent stacking issues */
+    position: relative;
 }
 
 /* Route Preview Tab - ensure content is scrollable */
@@ -193,6 +195,15 @@ body {
 #navigationTab {
     /* Allow normal overflow - parent handles scrolling */
     overflow: visible !important;
+}
+
+/* Fix: Hidden tabs should not take up space or be scrollable */
+.bottom-sheet-content > div[id$="Tab"][style*="display: none"] {
+    visibility: hidden !important;
+    height: 0 !important;
+    overflow: hidden !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 /* Speed Camera Markers */

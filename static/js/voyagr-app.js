@@ -327,8 +327,14 @@ function switchTab(tab) {
     const savedRoutesTab = document.getElementById('savedRoutesTab');
     const routePreviewTab = document.getElementById('routePreviewTab');
     const sheetTitle = document.getElementById('sheetTitle');
+    const bottomSheetContent = document.querySelector('.bottom-sheet-content');
 
     console.log('[SwitchTab] Switching to tab:', tab);
+
+    // Scroll to top when switching tabs to prevent scroll position issues
+    if (bottomSheetContent) {
+        bottomSheetContent.scrollTop = 0;
+    }
 
     // Hide all tabs
     if (navigationTab) navigationTab.style.display = 'none';
@@ -1153,6 +1159,19 @@ function displayAllRoutesOnMap() {
         return;
     }
 
+    // Ensure all routes have valid polylines - try decoding geometry if polyline is empty
+    for (let i = 0; i < routeOptions.length; i++) {
+        const route = routeOptions[i];
+        if ((!route.polyline || route.polyline.length === 0) && route.geometry) {
+            // Try to decode the geometry with appropriate precision
+            const source = (route.source || '').toLowerCase();
+            const precision = source.includes('osrm') ? 5 : 6;
+            console.log(`[Routes] Route ${i} has no polyline but has geometry, decoding with precision ${precision}...`);
+            route.polyline = decodePolyline(route.geometry, precision);
+            console.log(`[Routes] Route ${i} decoded: ${route.polyline.length} points`);
+        }
+    }
+
     // Draw routes immediately - MapLibreHelpers.addPolyline handles map readiness internally
     for (let i = routeOptions.length - 1; i >= 0; i--) {
         const route = routeOptions[i];
@@ -1177,7 +1196,7 @@ function displayAllRoutesOnMap() {
             allRouteLayers.unshift(layer); // Add to front so indices match
             console.log(`[Routes] Route ${i} layer added:`, layer ? layer.id : 'null');
         } else {
-            console.warn(`[Routes] Route ${i} has no polyline points!`);
+            console.warn(`[Routes] Route ${i} has no polyline points! geometry:`, route.geometry ? 'present' : 'missing');
         }
     }
 
