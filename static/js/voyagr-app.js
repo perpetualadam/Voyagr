@@ -1137,6 +1137,67 @@ const ROUTE_COLORS = [
 ];
 
 /**
+ * Clear ALL route layers from the map (including any orphaned layers)
+ * This ensures no route artifacts remain when switching between routes
+ */
+function clearAllRouteLayersFromMap() {
+    if (!map) return;
+
+    try {
+        const style = map.getStyle();
+        if (!style || !style.layers) return;
+
+        // Find and remove all route-related layers and sources
+        const layersToRemove = [];
+        const sourcesToRemove = [];
+
+        style.layers.forEach(layer => {
+            // Match route-layer-X, polyline-X patterns
+            if (layer.id && (
+                layer.id.startsWith('route-layer-') ||
+                layer.id.startsWith('polyline-')
+            )) {
+                layersToRemove.push(layer.id);
+            }
+        });
+
+        // Remove layers first
+        layersToRemove.forEach(layerId => {
+            try {
+                if (map.getLayer(layerId)) {
+                    map.removeLayer(layerId);
+                }
+            } catch (e) {
+                console.warn(`[Routes] Error removing layer ${layerId}:`, e.message);
+            }
+        });
+
+        // Then remove sources
+        Object.keys(style.sources || {}).forEach(sourceId => {
+            if (sourceId.startsWith('route-layer-') || sourceId.startsWith('polyline-')) {
+                sourcesToRemove.push(sourceId);
+            }
+        });
+
+        sourcesToRemove.forEach(sourceId => {
+            try {
+                if (map.getSource(sourceId)) {
+                    map.removeSource(sourceId);
+                }
+            } catch (e) {
+                console.warn(`[Routes] Error removing source ${sourceId}:`, e.message);
+            }
+        });
+
+        if (layersToRemove.length > 0 || sourcesToRemove.length > 0) {
+            console.log(`[Routes] Cleared ${layersToRemove.length} layers and ${sourcesToRemove.length} sources from map`);
+        }
+    } catch (e) {
+        console.error('[Routes] Error clearing route layers:', e);
+    }
+}
+
+/**
  * Display all routes on map with different colors
  * @function displayAllRoutesOnMap
  * @returns {void}
@@ -1158,6 +1219,9 @@ function displayAllRoutesOnMap() {
         }
     });
     allRouteLayers = [];
+
+    // CRITICAL: Clear any orphaned route layers from the map
+    clearAllRouteLayersFromMap();
 
     if (!routeOptions || routeOptions.length === 0) {
         console.warn('[Routes] No routeOptions available!');
@@ -1883,19 +1947,25 @@ function selectRoute(index) {
  * @param {number} index - Route index to display
  */
 function displaySingleRoute(index) {
+    console.log(`[Routes] displaySingleRoute(${index}) - clearing all existing routes`);
+
     // Clear the main routeLayer if it exists (MapLibre compatible)
     if (routeLayer) {
         if (typeof routeLayer.remove === 'function') routeLayer.remove();
         routeLayer = null;
     }
 
-    // Clear all route layers
+    // Clear all tracked route layers
     allRouteLayers.forEach(layer => {
         if (layer && typeof layer.remove === 'function') {
             layer.remove();
         }
     });
     allRouteLayers = [];
+
+    // CRITICAL: Also remove any route layers directly from MapLibre
+    // This catches any layers that weren't properly tracked
+    clearAllRouteLayersFromMap();
 
     if (!routeOptions || !routeOptions[index]) return;
 
