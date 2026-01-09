@@ -1,6 +1,6 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
-// Version: 5.0 - Network-first for root HTML, cache JS/CSS
-const CACHE_VERSION = 'v5';
+// Version: 6.0 - Network-first for root HTML, cache JS/CSS
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
@@ -40,7 +40,7 @@ async function trimCache(cacheName, maxSize) {
 
 // Install event - cache static assets
 self.addEventListener('install', event => {
-  console.log('[Service Worker] Installing v5...');
+  console.log('[Service Worker] Installing v6...');
   event.waitUntil(
     caches.open(STATIC_CACHE).then(cache => {
       console.log('[Service Worker] Caching static assets');

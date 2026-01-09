@@ -136,74 +136,71 @@ body {
     border-radius: 28px 28px 0 0;
     box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.1);
     z-index: 50;
-    /* Set explicit height for proper content scrolling */
     height: 92vh;
     height: 92dvh;
-    /* Dynamic viewport for mobile */
     transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
     transform: translateY(calc(100% - 110px - var(--safe-area-inset-bottom, 0px)));
-    /* GPU acceleration */
     will-change: transform;
-    /* Prevent content from going behind notch */
     padding-bottom: var(--safe-area-inset-bottom, 0px);
     display: flex;
     flex-direction: column;
+    overflow: hidden !important;
     border: 1px solid rgba(255, 255, 255, 0.3);
     border-bottom: none;
 }
 
 .bottom-sheet.expanded {
     transform: translateY(0) !important;
-    /* Ensure height is set when expanded */
     height: 92vh;
     height: 92dvh;
 }
 
 .bottom-sheet-content {
-    /* Fill remaining space in flex container */
-    flex: 1 1 auto;
-    /* Enable scrolling */
+    /* CRITICAL: Use viewport height directly since flex isn't working */
+    height: calc(92vh - 110px) !important;
+    height: calc(92dvh - 110px) !important;
     overflow-y: auto !important;
-    overflow-x: hidden;
+    overflow-x: hidden !important;
     -webkit-overflow-scrolling: touch;
     padding: 20px;
-    /* Critical: min-height: 0 allows flex item to shrink below content size */
-    min-height: 0;
-    /* Explicit height calculation - bottom sheet is 92vh, handle ~50px, header ~70px */
-    height: calc(100% - 120px);
-    /* Allow touch scrolling */
+    padding-bottom: 100px;
     touch-action: pan-y;
-    /* Prevent event capture issues */
     pointer-events: auto;
-    /* Ensure box-sizing includes padding */
     box-sizing: border-box;
 }
 
-/* Tab containers inside bottom sheet - let parent scroll */
-.bottom-sheet-content > div[id$="Tab"] {
+/* ALL elements inside bottom-sheet-content: no overflow, no height limits */
+.bottom-sheet-content *,
+.bottom-sheet-content div,
+.bottom-sheet-content div[id$="Tab"],
+.bottom-sheet-content .preferences-section {
     overflow: visible !important;
-    /* Ensure tabs don't block touch events */
-    touch-action: pan-y;
-    /* Prevent stacking issues */
-    position: relative;
+    max-height: none !important;
 }
 
-/* Route Preview Tab - ensure content is scrollable */
-#routePreviewTab,
-#routeComparisonTab,
-#settingsTab,
-#navigationTab {
-    /* Allow normal overflow - parent handles scrolling */
-    overflow: visible !important;
+/* Specific elements that need their own scroll */
+.bottom-sheet-content .instructions-list {
+    overflow-y: auto !important;
+    max-height: 300px !important;
+}
+.bottom-sheet-content .search-history-dropdown,
+.bottom-sheet-content .autocomplete-dropdown {
+    overflow-y: auto !important;
+    max-height: 250px !important;
 }
 
-/* Fix: Hidden tabs should not take up space or be scrollable */
-.bottom-sheet-content > div[id$="Tab"][style*="display: none"] {
-    visibility: hidden !important;
-    height: 0 !important;
-    overflow: hidden !important;
-    margin: 0 !important;
-    padding: 0 !important;
+/* Remove top border/margin from first preferences-section in tabs */
+#routePreviewTab > .preferences-section:first-child,
+#settingsTab > .preferences-section:first-child,
+#routeComparisonTab > .preferences-section:first-child,
+#tripHistoryTab > .preferences-section:first-child,
+#savedRoutesTab > .preferences-section:first-child,
+#routeSharingTab > .preferences-section:first-child,
+#routeAnalyticsTab > .preferences-section:first-child,
+#dashcamTab > .preferences-section:first-child {
+    border-top: none;
+    margin-top: 0;
+    padding-top: 0;
 }
 
 /* Speed Camera Markers */

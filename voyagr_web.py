@@ -3606,13 +3606,13 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>Voyagr Navigation</title>
     <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260109b" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260109m" />
     <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
-    <script src="/static/js/maplibre-helpers.js?v=20260109b"></script>
+    <script src="/static/js/maplibre-helpers.js?v=20260109m"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20260109b"></script>
-    <script src="/static/js/voyagr-app.js?v=20260109b"></script>
-    <script src="/static/js/app.js?v=20260109b"></script>
+    <script src="/static/js/voyagr-core.js?v=20260109m"></script>
+    <script src="/static/js/voyagr-app.js?v=20260109m"></script>
+    <script src="/static/js/app.js?v=20260109m"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -4098,7 +4098,8 @@ HTML_TEMPLATE = '''
 
 
 
-                        <!-- Turn Announcement Distance (1st) -->
+                        <div class="preference-item">
+                            <span class="preference-label">Turn Announcement Distance (1st)</span>
                             <select id="voiceTurnDistance1" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="300">300 meters</option>
                                 <option value="500" selected>500 meters</option>

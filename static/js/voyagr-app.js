@@ -326,6 +326,7 @@ function switchTab(tab) {
     const routeAnalyticsTab = document.getElementById('routeAnalyticsTab');
     const savedRoutesTab = document.getElementById('savedRoutesTab');
     const routePreviewTab = document.getElementById('routePreviewTab');
+    const dashcamTab = document.getElementById('dashcamTab');
     const sheetTitle = document.getElementById('sheetTitle');
     const bottomSheetContent = document.querySelector('.bottom-sheet-content');
 
@@ -345,6 +346,7 @@ function switchTab(tab) {
     if (routeAnalyticsTab) routeAnalyticsTab.style.display = 'none';
     if (savedRoutesTab) savedRoutesTab.style.display = 'none';
     if (routePreviewTab) routePreviewTab.style.display = 'none';
+    if (dashcamTab) dashcamTab.style.display = 'none';
 
     if (tab === 'settings') {
         settingsTab.style.display = 'block';
@@ -381,6 +383,9 @@ function switchTab(tab) {
         savedRoutesTab.style.display = 'block';
         sheetTitle.textContent = '⭐ Saved Routes';
         loadSavedRoutes();
+    } else if (tab === 'dashcam') {
+        if (dashcamTab) dashcamTab.style.display = 'block';
+        sheetTitle.textContent = '📹 Dashcam';
     } else if (tab === 'navigation') {
         if (navigationTab) navigationTab.style.display = 'block';
         sheetTitle.textContent = '🗺️ Navigation';
@@ -1136,8 +1141,14 @@ const ROUTE_COLORS = [
  * @returns {void}
  */
 function displayAllRoutesOnMap() {
-    console.log('[Routes] displayAllRoutesOnMap called');
+    console.log('[Routes] ===== displayAllRoutesOnMap called =====');
     console.log('[Routes] routeOptions:', routeOptions ? routeOptions.length : 0, 'routes');
+    console.log('[Routes] routeOptions details:', routeOptions ? routeOptions.map((r, i) => ({
+        index: i,
+        name: r.name,
+        polylineLength: r.polyline ? r.polyline.length : 0,
+        hasGeometry: !!r.geometry
+    })) : 'null');
 
     // Clear the main routeLayer if it exists
     if (routeLayer && typeof routeLayer.remove === 'function') {
@@ -1172,7 +1183,10 @@ function displayAllRoutesOnMap() {
         }
     }
 
-    // Draw routes immediately - MapLibreHelpers.addPolyline handles map readiness internally
+    // Draw routes - add each layer directly to MapLibre using native API
+    console.log(`[Routes] Map instance available: ${!!map}, isStyleLoaded: ${map?.isStyleLoaded()}`);
+
+    // Add all routes using direct MapLibre API to avoid any wrapper issues
     for (let i = routeOptions.length - 1; i >= 0; i--) {
         const route = routeOptions[i];
         const polylinePoints = route.polyline || [];
@@ -1181,22 +1195,82 @@ function displayAllRoutesOnMap() {
 
         if (polylinePoints.length > 0) {
             const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
-            // Thicker lines for better visibility over traffic layer
-            const weight = (i === selectedRouteIndex) ? 8 : 5;
-            const opacity = (i === selectedRouteIndex) ? 1.0 : 0.75;
+            const weight = (i === selectedRouteIndex) ? 10 : (i === 0 ? 8 : 6);
+            const opacity = (i === selectedRouteIndex) ? 1.0 : 0.85;
 
             console.log(`[Routes] Drawing route ${i} with color ${color}, weight ${weight}`);
 
-            const layer = MapLibreHelpers.addPolyline(map, polylinePoints, {
-                color: color,
-                weight: weight,
-                opacity: opacity
-            });
+            // Convert to [lon, lat] for MapLibre and validate
+            const lngLatCoords = [];
+            for (const p of polylinePoints) {
+                if (Array.isArray(p) && p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1])) {
+                    lngLatCoords.push([p[1], p[0]]); // [lat, lon] -> [lon, lat]
+                }
+            }
 
-            allRouteLayers.unshift(layer); // Add to front so indices match
-            console.log(`[Routes] Route ${i} layer added:`, layer ? layer.id : 'null');
+            if (lngLatCoords.length < 2) {
+                console.error(`[Routes] Route ${i}: Not enough valid points (${lngLatCoords.length})`);
+                continue;
+            }
+
+            // Use direct MapLibre API to add the layer
+            const layerId = `route-layer-${i}`;
+            const sourceId = `route-source-${i}`;
+
+            try {
+                // Remove existing layer/source if present
+                if (map.getLayer(layerId)) {
+                    map.removeLayer(layerId);
+                }
+                if (map.getSource(sourceId)) {
+                    map.removeSource(sourceId);
+                }
+
+                // Add source
+                map.addSource(sourceId, {
+                    type: 'geojson',
+                    data: {
+                        type: 'Feature',
+                        geometry: {
+                            type: 'LineString',
+                            coordinates: lngLatCoords
+                        }
+                    }
+                });
+
+                // Add layer
+                map.addLayer({
+                    id: layerId,
+                    type: 'line',
+                    source: sourceId,
+                    layout: {
+                        'line-join': 'round',
+                        'line-cap': 'round'
+                    },
+                    paint: {
+                        'line-color': color,
+                        'line-width': weight,
+                        'line-opacity': opacity
+                    }
+                });
+
+                console.log(`[Routes] ✓ Route ${i} layer added directly: ${layerId}`);
+
+                // Create a simple layer object for tracking
+                const layer = {
+                    id: layerId,
+                    remove: () => {
+                        if (map.getLayer(layerId)) map.removeLayer(layerId);
+                        if (map.getSource(sourceId)) map.removeSource(sourceId);
+                    }
+                };
+                allRouteLayers.unshift(layer);
+
+            } catch (e) {
+                console.error(`[Routes] ✗ Error adding route ${i}:`, e);
+            }
         } else {
-            console.warn(`[Routes] Route ${i} has no polyline points! geometry:`, route.geometry ? 'present' : 'missing');
+            console.warn(`[Routes] Route ${i} has no polyline points!`);
         }
     }
 
@@ -1221,15 +1295,24 @@ function displayAllRoutesOnMap() {
     // Wait for all layers to be added before bringing them to top
     bringRoutesToTop();
 
+    // Debug: Check what layers exist in MapLibre
+    setTimeout(() => {
+        const style = map.getStyle();
+        if (style && style.layers) {
+            const routeLayers = style.layers.filter(l => l.id.startsWith('route-layer-'));
+            console.log('[Routes] DEBUG: MapLibre has these route layers:',
+                routeLayers.map(l => ({ id: l.id, color: l.paint?.['line-color'] })));
+        }
+    }, 200);
+
     console.log(`[Routes] Displayed ${allRouteLayers.length} routes on map`);
 }
 
 /**
  * Bring all route layers to the top of the map rendering order
  * This ensures routes are visible above traffic edges and other overlays
- * Uses Promise-based waiting to ensure layers are fully added before reordering
  */
-async function bringRoutesToTop() {
+function bringRoutesToTop() {
     console.log('[Routes] bringRoutesToTop called, allRouteLayers:', allRouteLayers?.length || 0);
 
     if (!map) {
@@ -1241,41 +1324,25 @@ async function bringRoutesToTop() {
         return;
     }
 
-    // Wait for all layers to be added to the map
-    try {
-        const waitPromises = allRouteLayers
-            .filter(layer => layer && layer.waitForAdded)
-            .map(layer => layer.waitForAdded());
-
-        if (waitPromises.length > 0) {
-            await Promise.all(waitPromises);
-            console.log('[Routes] All route layers confirmed added');
-        }
-    } catch (e) {
-        console.warn('[Routes] Error waiting for layers:', e);
-    }
-
-    // Small additional delay to ensure MapLibre has processed all layers
-    await new Promise(resolve => setTimeout(resolve, 50));
-
     // Function to actually move the layers with retry logic
     const moveLayersToTop = (retryCount = 0) => {
         const maxRetries = 5;
         let allFound = true;
+        const layerIds = allRouteLayers.map(l => l ? l.id : 'null');
+        console.log(`[Routes] moveLayersToTop attempt ${retryCount}, layers:`, layerIds);
 
         try {
             // Move each route layer to the top using MapLibre's moveLayer
             allRouteLayers.forEach((layer, idx) => {
                 if (layer && layer.id) {
-                    if (map.getLayer(layer.id)) {
+                    const exists = map.getLayer(layer.id);
+                    if (exists) {
                         // moveLayer with no second argument moves layer to top
                         map.moveLayer(layer.id);
                         console.log(`[Routes] Moved layer ${layer.id} to top`);
                     } else {
                         allFound = false;
-                        if (retryCount >= maxRetries) {
-                            console.warn(`[Routes] Layer ${layer.id} not found after ${maxRetries} retries`);
-                        }
+                        console.log(`[Routes] Layer ${layer.id} not found in map yet`);
                     }
                 }
             });
@@ -1285,18 +1352,23 @@ async function bringRoutesToTop() {
                 setTimeout(() => moveLayersToTop(retryCount + 1), 100);
             } else if (allFound) {
                 console.log('[Routes] All route layers successfully moved to top');
+            } else {
+                console.warn('[Routes] Some layers not found after retries');
             }
         } catch (e) {
             console.warn('[Routes] Error bringing routes to top:', e);
         }
     };
 
-    // If style is loaded, move layers now, otherwise wait for idle
-    if (map.isStyleLoaded()) {
-        moveLayersToTop(0);
-    } else {
-        map.once('idle', () => moveLayersToTop(0));
-    }
+    // Use a small delay to let MapLibre process the layers, then move them
+    setTimeout(() => {
+        if (map.isStyleLoaded()) {
+            moveLayersToTop(0);
+        } else {
+            console.log('[Routes] Waiting for map idle...');
+            map.once('idle', () => moveLayersToTop(0));
+        }
+    }, 100);
 }
 
 // ===== DRAGGABLE ROUTE EDITING =====
@@ -1780,7 +1852,8 @@ function selectRoute(index) {
         console.log(`[Routes] Selected route "${selectedRoute.name}" with ${(selectedRoute.maneuvers || []).length} maneuvers`);
 
         // Update the route preview with the selected route data
-        showRoutePreview(selectedRoute);
+        // Pass skipMapDisplay=true since displaySingleRoute already handled the map
+        showRoutePreview(selectedRoute, true);
 
         // Auto-collapse logic removed to keep Route Preview visible
         // collapseBottomSheet();
@@ -1857,23 +1930,8 @@ function useRoute(index) {
     const route = routeOptions[index];
     if (!route) return;
 
-    // Update the map to show this route
-    if (routeLayer) {
-        if (typeof routeLayer.remove === 'function') routeLayer.remove();
-    }
-
-    // Draw the selected route on map
-    const polylinePoints = route.polyline || [];
-    if (polylinePoints.length > 0) {
-        routeLayer = MapLibreHelpers.addPolyline(map, polylinePoints, {
-            color: '#0066CC',  // Strong blue - contrasts with traffic overlay
-            weight: 8,
-            opacity: 1.0
-        });
-
-        // Fit map to route bounds
-        MapLibreHelpers.fitMapBounds(map, polylinePoints, { padding: 50 });
-    }
+    // NOTE: Don't draw route here - displaySingleRoute() handles map display
+    // This function now just updates trip info and stores the selected route
 
     // Update trip info with unit-adjusted costs
     const distance = convertDistance(route.distance_km);
@@ -1909,6 +1967,7 @@ function useRoute(index) {
     window.lastCalculatedRoute = route;
 
     // Display traffic edges on selected route if enabled
+    const polylinePoints = route.polyline || [];
     if (routeTrafficEnabled && polylinePoints.length > 0) {
         routePolyline = polylinePoints; // Temporarily set for traffic display
         fetchAndDisplayRouteTraffic();
@@ -2881,11 +2940,14 @@ async function calculateRoute() {
                         }
                     }
 
-                    routeLayer = MapLibreHelpers.addPolyline(map, routePath, {
-                        color: '#0066CC',  // Strong blue - contrasts with traffic overlay
-                        weight: 8,
-                        opacity: 1.0
-                    });
+                    if (!map) {
+                        console.error('[Route] Map not initialized');
+                        showStatus('Error: Map not initialized', 'error');
+                        return;
+                    }
+
+                    // NOTE: Don't draw route here - displayAllRoutesOnMap() in showRoutePreview() will handle it
+                    // This prevents duplicate routes and ensures consistent multi-route display
 
                     // Fit map to route with smooth animation
                     MapLibreHelpers.fitMapBounds(map, routePath, { padding: 50 });
@@ -3728,19 +3790,12 @@ function displayRouteTrafficEdges(segments) {
         lastEndIdx = endIdx;
 
         // Create the traffic edge polyline following the route geometry with MapLibre
-        // First add a dark casing/outline for visibility
-        const casingLine = MapLibreHelpers.addPolyline(map, segmentPoints, {
-            color: '#000000',     // Black casing
-            weight: 12,           // Wider than traffic line
-            opacity: 0.4          // Semi-transparent
-        });
-        routeTrafficLayers.push(casingLine);
-
-        // Then add the colored traffic line on top
+        // Use thinner lines so they don't cover the route colors
+        // NOTE: Traffic overlay is drawn UNDER routes - routes are brought to top after
         const trafficLine = MapLibreHelpers.addPolyline(map, segmentPoints, {
             color: color,
-            weight: 8,            // Thick line for visibility
-            opacity: 0.95         // Very high opacity
+            weight: 4,            // Thinner line - routes should be on top
+            opacity: 0.8          // Semi-transparent so route color shows through
         });
         routeTrafficLayers.push(trafficLine);
     });
@@ -4455,11 +4510,12 @@ function startNavigation() {
 /**
  * showRoutePreview function
  * @function showRoutePreview
- * @param {*} routeData - Parameter description
+ * @param {*} routeData - Route data to display in preview
+ * @param {boolean} skipMapDisplay - If true, skip displayAllRoutesOnMap (used when selecting a specific route)
  * @returns {*} Return value description
  */
-function showRoutePreview(routeData) {
-    console.log('[Route Preview] showRoutePreview called with data:', routeData);
+function showRoutePreview(routeData, skipMapDisplay = false) {
+    console.log('[Route Preview] showRoutePreview called with data:', routeData, 'skipMapDisplay:', skipMapDisplay);
 
     if (!routeData) {
         showStatus('No route data available', 'error');
@@ -4573,8 +4629,8 @@ function showRoutePreview(routeData) {
         document.getElementById('previewAlternativeRoutesContainer').style.display = 'none';
     }
 
-    // Always display routes on the map (single or multiple)
-    if (routeOptions && routeOptions.length > 0) {
+    // Display routes on the map (unless skipMapDisplay is true - e.g., when selecting a specific route)
+    if (!skipMapDisplay && routeOptions && routeOptions.length > 0) {
         displayAllRoutesOnMap();
         console.log(`[Route Preview] Displayed ${routeOptions.length} route(s) on map`);
     }
@@ -4655,9 +4711,10 @@ function showAlternativeRoutesInPreview() {
         div.onmouseout = () => { div.style.borderColor = '#ddd'; div.style.background = 'white'; };
         div.onclick = () => {
             selectedRouteIndex = index;
-            displaySingleRoute(index);  // Show only the selected route
+            displaySingleRoute(index);  // Show only the selected route on map
             useRoute(index);
-            showRoutePreview(routeOptions[index]);
+            // Pass skipMapDisplay=true since displaySingleRoute already handled the map
+            showRoutePreview(routeOptions[index], true);
         };
         container.appendChild(div);
     });
