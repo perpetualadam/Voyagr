@@ -11150,6 +11150,61 @@ window.addEventListener('load', () => {
     checkStorageUsage();
 });
 
+/**
+ * Debug function to diagnose scroll issues
+ * Run in console: debugScrollIssue()
+ */
+window.debugScrollIssue = function() {
+    const bottomSheet = document.getElementById('bottomSheet');
+    const content = document.querySelector('.bottom-sheet-content');
+    const activeTab = document.querySelector('.bottom-sheet-content > div[style*="display: block"], .bottom-sheet-content > div:not([style*="display: none"])');
+
+    console.log('=== SCROLL DEBUG ===');
+    console.log('Bottom Sheet:', {
+        element: bottomSheet,
+        classes: bottomSheet?.className,
+        height: bottomSheet?.offsetHeight,
+        style: bottomSheet?.style.cssText
+    });
+
+    console.log('Content Area:', {
+        element: content,
+        scrollHeight: content?.scrollHeight,
+        clientHeight: content?.clientHeight,
+        offsetHeight: content?.offsetHeight,
+        scrollTop: content?.scrollTop,
+        overflowY: content ? getComputedStyle(content).overflowY : null,
+        maxHeight: content ? getComputedStyle(content).maxHeight : null,
+        touchAction: content ? getComputedStyle(content).touchAction : null
+    });
+
+    console.log('Active Tab:', {
+        element: activeTab,
+        id: activeTab?.id,
+        offsetHeight: activeTab?.offsetHeight,
+        scrollHeight: activeTab?.scrollHeight
+    });
+
+    console.log('Can Scroll?:', content?.scrollHeight > content?.clientHeight ? 'YES' : 'NO');
+
+    // Try scrolling programmatically
+    if (content) {
+        const oldScroll = content.scrollTop;
+        content.scrollTop = 100;
+        console.log('Programmatic scroll test:', {
+            before: oldScroll,
+            after: content.scrollTop,
+            worked: content.scrollTop !== oldScroll
+        });
+    }
+
+    return {
+        canScroll: content?.scrollHeight > content?.clientHeight,
+        scrollHeight: content?.scrollHeight,
+        clientHeight: content?.clientHeight
+    };
+};
+
 // ===== JOURNEY SUMMARY & SETTINGS CONSOLIDATION =====
 
 /**
