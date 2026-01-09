@@ -1922,9 +1922,15 @@ function displaySingleRoute(index) {
         clearHazardMarkers();
     }
 
-    // Ensure traffic layer stays visible if enabled
+    // Ensure TomTom traffic layer stays visible if enabled (surrounding area traffic)
     if (showTrafficEnabled && !trafficLayer) {
         addTrafficLayer();
+    }
+
+    // Display route-specific traffic edges if enabled
+    if (routeTrafficEnabled && polylinePoints.length > 0) {
+        routePolyline = polylinePoints;
+        fetchAndDisplayRouteTraffic();
     }
 
     console.log(`[Routes] Showing only route ${index + 1}: ${route.name}`);
