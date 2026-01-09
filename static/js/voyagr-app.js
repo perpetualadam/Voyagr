@@ -1240,8 +1240,11 @@ function bringRoutesToTop() {
         return;
     }
 
-    // Function to actually move the layers
-    const moveLayersToTop = () => {
+    // Function to actually move the layers with retry logic
+    const moveLayersToTop = (retryCount = 0) => {
+        const maxRetries = 5;
+        let allFound = true;
+
         try {
             // Move each route layer to the top using MapLibre's moveLayer
             allRouteLayers.forEach((layer, idx) => {
@@ -1251,21 +1254,29 @@ function bringRoutesToTop() {
                         map.moveLayer(layer.id);
                         console.log(`[Routes] Moved layer ${layer.id} to top`);
                     } else {
-                        console.warn(`[Routes] Layer ${layer.id} not found on map yet`);
+                        allFound = false;
+                        if (retryCount >= maxRetries) {
+                            console.warn(`[Routes] Layer ${layer.id} not found after ${maxRetries} retries`);
+                        }
                     }
                 }
             });
+
+            // If not all layers were found and we haven't exceeded retries, try again
+            if (!allFound && retryCount < maxRetries) {
+                setTimeout(() => moveLayersToTop(retryCount + 1), 100);
+            }
         } catch (e) {
             console.warn('[Routes] Error bringing routes to top:', e);
         }
     };
 
-    // If style is loaded, move immediately, otherwise wait
+    // If style is loaded, move after a delay, otherwise wait for idle
     if (map.isStyleLoaded()) {
-        // Small delay to ensure layers are fully added
-        setTimeout(moveLayersToTop, 50);
+        // Longer delay to ensure layers are fully added (MapLibre is async)
+        setTimeout(() => moveLayersToTop(0), 200);
     } else {
-        map.once('idle', moveLayersToTop);
+        map.once('idle', () => moveLayersToTop(0));
     }
 }
 

@@ -3606,13 +3606,13 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>Voyagr Navigation</title>
     <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260109" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260109b" />
     <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
-    <script src="/static/js/maplibre-helpers.js?v=20260109"></script>
+    <script src="/static/js/maplibre-helpers.js?v=20260109b"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20260109"></script>
-    <script src="/static/js/voyagr-app.js?v=20260109"></script>
-    <script src="/static/js/app.js?v=20260109"></script>
+    <script src="/static/js/voyagr-core.js?v=20260109b"></script>
+    <script src="/static/js/voyagr-app.js?v=20260109b"></script>
+    <script src="/static/js/app.js?v=20260109b"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
