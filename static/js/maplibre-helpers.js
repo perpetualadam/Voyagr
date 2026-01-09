@@ -12,130 +12,144 @@ const activeMarkers = new Map();
 // ===== POLYLINE FUNCTIONS =====
 
 /**
- * Add a polyline to the map
- * @param {maplibregl.Map} map - The map instance
- * @param {Array<[number, number]>} coords - Array of [lat, lon] coordinates
+ * Add a polyline to the map using direct MapLibre API
+ * @param {maplibregl.Map} mapInstance - The map instance
+ * @param {Array} coords - Array of [lat, lon] coordinates (arrays or objects)
  * @param {Object} options - Style options (color, weight, opacity)
- * @returns {Object} Layer object with id, remove() method, and waitForAdded() Promise
+ * @returns {Object} Layer object with id, remove() method
  */
 function addPolyline(mapInstance, coords, options = {}) {
     const id = `polyline-${++layerCounter}`;
 
-    try {
-        console.log(`[MapLibre] addPolyline START: id=${id}, coords=${coords?.length || 0}, color=${options?.color}`);
-
-        // Validate inputs
-        if (!mapInstance) {
-            console.error(`[MapLibre] addPolyline: map is null for ${id}`);
-            return null;
-        }
-
-        if (!coords || coords.length === 0) {
-            console.error(`[MapLibre] addPolyline: no coordinates for ${id}`);
-            return null;
-        }
-
-        // Convert [lat, lon] to [lon, lat] for MapLibre
-        let lngLatCoords;
-        try {
-            lngLatCoords = coords.map((c, idx) => {
-                if (Array.isArray(c)) {
-                    return [c[1], c[0]]; // [lat, lon] -> [lon, lat]
-                }
-                if (c && typeof c === 'object') {
-                    return [c.lng || c.lon || c[1], c.lat || c[0]];
-                }
-                console.warn(`[MapLibre] ${id}: Invalid coord at index ${idx}:`, c);
-                return [0, 0];
-            });
-            console.log(`[MapLibre] ${id}: converted ${lngLatCoords.length} coords, first: [${lngLatCoords[0]}]`);
-        } catch (e) {
-            console.error(`[MapLibre] ${id}: Error converting coordinates:`, e);
-            return null;
-        }
-
-        // Track whether layer has been added
-        let layerAdded = false;
-
-        // SIMPLIFIED: Always add layer synchronously if style is loaded
-        // This avoids race conditions with async waiting
-        const addLayerNow = () => {
-            if (mapInstance.getSource(id)) {
-                console.log(`[MapLibre] Source ${id} already exists`);
-                layerAdded = true;
-                return true;
-            }
-
-            try {
-                mapInstance.addSource(id, {
-                    type: 'geojson',
-                    data: {
-                        type: 'Feature',
-                        geometry: { type: 'LineString', coordinates: lngLatCoords }
-                    }
-                });
-
-                mapInstance.addLayer({
-                    id: id,
-                    type: 'line',
-                    source: id,
-                    layout: {
-                        'line-join': 'round',
-                        'line-cap': 'round'
-                    },
-                    paint: {
-                        'line-color': options.color || '#667eea',
-                        'line-width': options.weight || 4,
-                        'line-opacity': options.opacity || 0.8
-                    }
-                });
-
-                layerAdded = true;
-                console.log(`[MapLibre] ✓ Layer ${id} added (color: ${options.color})`);
-                return true;
-            } catch (e) {
-                console.error(`[MapLibre] ✗ Error adding layer ${id}:`, e);
-                return false;
-            }
-        };
-
-        // Try to add immediately if style is loaded
-        console.log(`[MapLibre] ${id}: isStyleLoaded = ${mapInstance.isStyleLoaded()}`);
-        if (mapInstance.isStyleLoaded()) {
-            addLayerNow();
-        } else {
-            // Wait for style to load, then add
-            console.log(`[MapLibre] ${id}: Waiting for style to load...`);
-            const tryAdd = () => {
-                if (!layerAdded && mapInstance.isStyleLoaded()) {
-                    addLayerNow();
-                }
-            };
-            mapInstance.once('style.load', tryAdd);
-            mapInstance.once('load', tryAdd);
-            // Fallback timeout
-            setTimeout(tryAdd, 500);
-        }
-
-        const layer = {
-            id: id,
-            _coords: lngLatCoords,
-            _added: () => layerAdded,
-            waitForAdded: () => Promise.resolve(), // Simplified - layers added synchronously
-            addTo: function (m) { return this; },
-            remove: function () { removeMapLayer(mapInstance, id); },
-            getBounds: function () {
-                return computeBounds(lngLatCoords);
-            }
-        };
-
-        activeLayers.set(id, layer);
-        return layer;
-
-    } catch (outerError) {
-        console.error(`[MapLibre] addPolyline FATAL ERROR for ${id}:`, outerError);
-        return null;
+    // Validate inputs early
+    if (!mapInstance) {
+        console.error(`[MapLibre] addPolyline: map is null for ${id}`);
+        return createErrorLayer(id);
     }
+
+    if (!coords || !Array.isArray(coords) || coords.length < 2) {
+        console.error(`[MapLibre] addPolyline: invalid coordinates for ${id}`, coords?.length);
+        return createErrorLayer(id);
+    }
+
+    // Convert coordinates to [lon, lat] format for MapLibre
+    const lngLatCoords = [];
+    for (let i = 0; i < coords.length; i++) {
+        const c = coords[i];
+        let lon, lat;
+
+        if (Array.isArray(c) && c.length >= 2) {
+            // [lat, lon] format
+            lat = c[0];
+            lon = c[1];
+        } else if (c && typeof c === 'object') {
+            // {lat, lng/lon} format
+            lat = c.lat;
+            lon = c.lng !== undefined ? c.lng : c.lon;
+        } else {
+            continue; // Skip invalid coordinate
+        }
+
+        // Validate the coordinate values
+        if (typeof lat === 'number' && typeof lon === 'number' &&
+            isFinite(lat) && isFinite(lon) &&
+            lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180) {
+            lngLatCoords.push([lon, lat]);
+        }
+    }
+
+    if (lngLatCoords.length < 2) {
+        console.error(`[MapLibre] addPolyline: not enough valid coords for ${id} (${lngLatCoords.length})`);
+        return createErrorLayer(id);
+    }
+
+    // Check if map style is loaded
+    if (!mapInstance.isStyleLoaded()) {
+        // Queue for later when style loads
+        const layer = createPendingLayer(mapInstance, id, lngLatCoords, options);
+        mapInstance.once('style.load', () => addLayerToMap(mapInstance, id, lngLatCoords, options));
+        mapInstance.once('load', () => addLayerToMap(mapInstance, id, lngLatCoords, options));
+        setTimeout(() => addLayerToMap(mapInstance, id, lngLatCoords, options), 500);
+        return layer;
+    }
+
+    // Add directly
+    const success = addLayerToMap(mapInstance, id, lngLatCoords, options);
+
+    const layer = {
+        id: id,
+        _coords: lngLatCoords,
+        _added: success,
+        remove: function() { removeMapLayer(mapInstance, id); },
+        getBounds: function() { return computeBounds(lngLatCoords); }
+    };
+
+    activeLayers.set(id, layer);
+    return layer;
+}
+
+/**
+ * Actually add the layer to MapLibre
+ */
+function addLayerToMap(mapInstance, id, lngLatCoords, options) {
+    try {
+        // Check if already added
+        if (mapInstance.getSource(id)) {
+            return true;
+        }
+
+        mapInstance.addSource(id, {
+            type: 'geojson',
+            data: {
+                type: 'Feature',
+                geometry: { type: 'LineString', coordinates: lngLatCoords }
+            }
+        });
+
+        mapInstance.addLayer({
+            id: id,
+            type: 'line',
+            source: id,
+            layout: { 'line-join': 'round', 'line-cap': 'round' },
+            paint: {
+                'line-color': options.color || '#667eea',
+                'line-width': options.weight || 4,
+                'line-opacity': options.opacity || 0.8
+            }
+        });
+
+        return true;
+    } catch (e) {
+        console.error(`[MapLibre] Error adding layer ${id}:`, e.message);
+        return false;
+    }
+}
+
+/**
+ * Create an error/noop layer object
+ */
+function createErrorLayer(id) {
+    return {
+        id: id,
+        _added: false,
+        remove: function() {},
+        getBounds: function() { return null; }
+    };
+}
+
+/**
+ * Create a pending layer object (for when style isn't loaded)
+ */
+function createPendingLayer(mapInstance, id, lngLatCoords, options) {
+    const layer = {
+        id: id,
+        _coords: lngLatCoords,
+        _added: false,
+        remove: function() { removeMapLayer(mapInstance, id); },
+        getBounds: function() { return computeBounds(lngLatCoords); }
+    };
+    activeLayers.set(id, layer);
+    return layer;
 }
 
 /**

@@ -1143,18 +1143,11 @@ const ROUTE_COLORS = [
 function displayAllRoutesOnMap() {
     console.log('[Routes] ===== displayAllRoutesOnMap called =====');
     console.log('[Routes] routeOptions:', routeOptions ? routeOptions.length : 0, 'routes');
-    console.log('[Routes] routeOptions details:', routeOptions ? routeOptions.map((r, i) => ({
-        index: i,
-        name: r.name,
-        polylineLength: r.polyline ? r.polyline.length : 0,
-        hasGeometry: !!r.geometry
-    })) : 'null');
 
     // Clear the main routeLayer if it exists
     if (routeLayer && typeof routeLayer.remove === 'function') {
         routeLayer.remove();
         routeLayer = null;
-        console.log('[Routes] Cleared main routeLayer');
     }
 
     // Clear previous route layers
@@ -1170,23 +1163,47 @@ function displayAllRoutesOnMap() {
         return;
     }
 
-    // Ensure all routes have valid polylines - try decoding geometry if polyline is empty
+    // Ensure all routes have valid polylines
     for (let i = 0; i < routeOptions.length; i++) {
         const route = routeOptions[i];
         if ((!route.polyline || route.polyline.length === 0) && route.geometry) {
-            // Try to decode the geometry with appropriate precision
             const source = (route.source || '').toLowerCase();
             const precision = source.includes('osrm') ? 5 : 6;
-            console.log(`[Routes] Route ${i} has no polyline but has geometry, decoding with precision ${precision}...`);
             route.polyline = decodePolyline(route.geometry, precision);
-            console.log(`[Routes] Route ${i} decoded: ${route.polyline.length} points`);
         }
     }
 
-    // Draw routes - add each layer directly to MapLibre using native API
-    console.log(`[Routes] Map instance available: ${!!map}, isStyleLoaded: ${map?.isStyleLoaded()}`);
+    // Wait for style to load before adding layers
+    const addRouteLayers = () => {
+        console.log(`[Routes] Adding route layers (isStyleLoaded: ${map?.isStyleLoaded()})`);
+        doAddRouteLayers();
+    };
 
-    // Add all routes using direct MapLibre API to avoid any wrapper issues
+    if (!map) {
+        console.error('[Routes] Map not available');
+        return;
+    }
+
+    if (map.isStyleLoaded()) {
+        addRouteLayers();
+    } else {
+        console.log('[Routes] Waiting for style to load...');
+        map.once('style.load', addRouteLayers);
+        // Also add a fallback timeout
+        setTimeout(() => {
+            if (allRouteLayers.length === 0) {
+                console.log('[Routes] Fallback: adding layers after timeout');
+                addRouteLayers();
+            }
+        }, 1000);
+    }
+}
+
+/**
+ * Actually add route layers to the map (called after style is loaded)
+ */
+function doAddRouteLayers() {
+    // Add all routes using direct MapLibre API
     for (let i = routeOptions.length - 1; i >= 0; i--) {
         const route = routeOptions[i];
         const polylinePoints = route.polyline || [];
