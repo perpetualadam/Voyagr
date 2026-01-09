@@ -1222,17 +1222,13 @@ function bringRoutesToTop() {
     }
 
     try {
-        // Move each route layer to the top
+        // For Leaflet layers, use bringToFront() method
         allRouteLayers.forEach((layer, idx) => {
-            if (layer && layer.id) {
-                if (map.getLayer(layer.id)) {
-                    map.moveLayer(layer.id);
-                    console.log(`[Routes] Moved layer ${layer.id} to top`);
-                } else {
-                    console.warn(`[Routes] Layer ${layer.id} not found on map`);
-                }
+            if (layer && typeof layer.bringToFront === 'function') {
+                layer.bringToFront();
+                console.log(`[Routes] Brought layer ${idx} to front`);
             } else {
-                console.warn(`[Routes] Layer at index ${idx} has no id:`, layer);
+                console.warn(`[Routes] Layer at index ${idx} has no bringToFront method`);
             }
         });
     } catch (e) {
