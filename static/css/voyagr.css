@@ -173,9 +173,20 @@ body {
     pointer-events: auto;
 }
 
-/* Tab containers inside bottom sheet - no overflow, let parent scroll */
+/* Tab containers inside bottom sheet - let parent scroll */
 .bottom-sheet-content > div[id$="Tab"] {
     overflow: visible;
+    /* Ensure tabs don't block touch events */
+    touch-action: pan-y;
+}
+
+/* Route Preview Tab - ensure content is scrollable */
+#routePreviewTab,
+#routeComparisonTab,
+#settingsTab,
+#navigationTab {
+    /* Allow normal overflow - parent handles scrolling */
+    overflow: visible !important;
 }
 
 /* Speed Camera Markers */
