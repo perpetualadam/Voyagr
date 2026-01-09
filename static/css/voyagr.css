@@ -157,17 +157,25 @@ body {
 }
 
 .bottom-sheet-content {
-    flex: 1;
+    flex: 1 1 0;
     overflow-y: auto !important;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     padding: 20px;
-    /* Ensure content can scroll by having explicit min-height */
+    /* Critical: min-height: 0 allows flex item to shrink below content size */
     min-height: 0;
+    /* Max height as fallback - header is ~120px (handle 50px + header ~70px) */
+    max-height: calc(92vh - 130px);
+    max-height: calc(92dvh - 130px);
     /* Allow touch scrolling */
     touch-action: pan-y;
     /* Prevent event capture issues */
     pointer-events: auto;
+}
+
+/* Tab containers inside bottom sheet - no overflow, let parent scroll */
+.bottom-sheet-content > div[id$="Tab"] {
+    overflow: visible;
 }
 
 /* Speed Camera Markers */
@@ -191,6 +199,7 @@ body {
     cursor: grab;
     display: flex;
     align-items: center;
+    flex-shrink: 0;
     justify-content: center;
     position: relative;
     z-index: 10;
@@ -219,6 +228,7 @@ body {
     position: relative;
     z-index: 5;
     cursor: pointer;
+    flex-shrink: 0;
     user-select: none;
     min-height: 60px;
 }
