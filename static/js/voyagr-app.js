@@ -1150,7 +1150,31 @@ function displayAllRoutesOnMap() {
         addTrafficLayer();
     }
 
+    // CRITICAL: Move route layers to top of rendering order
+    // This ensures they're visible above traffic edges and other layers
+    bringRoutesToTop();
+
     console.log(`[Routes] Displayed ${allRouteLayers.length} routes on map`);
+}
+
+/**
+ * Bring all route layers to the top of the map rendering order
+ * This ensures routes are visible above traffic edges and other overlays
+ */
+function bringRoutesToTop() {
+    if (!map || !allRouteLayers || allRouteLayers.length === 0) return;
+
+    try {
+        // Move each route layer to the top
+        allRouteLayers.forEach((layer, idx) => {
+            if (layer && layer.id && map.getLayer(layer.id)) {
+                map.moveLayer(layer.id);
+                console.log(`[Routes] Moved layer ${layer.id} to top`);
+            }
+        });
+    } catch (e) {
+        console.warn('[Routes] Error bringing routes to top:', e);
+    }
 }
 
 // ===== DRAGGABLE ROUTE EDITING =====
@@ -3600,6 +3624,9 @@ function displayRouteTrafficEdges(segments) {
     });
 
     console.log(`[Route Traffic] Added ${routeTrafficLayers.length} traffic edge layers (valid segments)`);
+
+    // CRITICAL: Bring route layers back to top after adding traffic edges
+    bringRoutesToTop();
 }
 
 /**
