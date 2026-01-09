@@ -1162,14 +1162,29 @@ function displayAllRoutesOnMap() {
  * This ensures routes are visible above traffic edges and other overlays
  */
 function bringRoutesToTop() {
-    if (!map || !allRouteLayers || allRouteLayers.length === 0) return;
+    console.log('[Routes] bringRoutesToTop called, allRouteLayers:', allRouteLayers?.length || 0);
+
+    if (!map) {
+        console.warn('[Routes] bringRoutesToTop: map not available');
+        return;
+    }
+    if (!allRouteLayers || allRouteLayers.length === 0) {
+        console.warn('[Routes] bringRoutesToTop: no route layers to move');
+        return;
+    }
 
     try {
         // Move each route layer to the top
         allRouteLayers.forEach((layer, idx) => {
-            if (layer && layer.id && map.getLayer(layer.id)) {
-                map.moveLayer(layer.id);
-                console.log(`[Routes] Moved layer ${layer.id} to top`);
+            if (layer && layer.id) {
+                if (map.getLayer(layer.id)) {
+                    map.moveLayer(layer.id);
+                    console.log(`[Routes] Moved layer ${layer.id} to top`);
+                } else {
+                    console.warn(`[Routes] Layer ${layer.id} not found on map`);
+                }
+            } else {
+                console.warn(`[Routes] Layer at index ${idx} has no id:`, layer);
             }
         });
     } catch (e) {
