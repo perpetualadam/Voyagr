@@ -3695,7 +3695,7 @@ HTML_TEMPLATE = '''
                     <div style="margin-bottom: 10px;">
                         <button id="editRouteBtn" onclick="toggleRouteEditing()" style="width: 100%; padding: 10px 12px; border: 2px solid #4CAF50; background: white; border-radius: 6px; cursor: pointer; font-size: 13px; color: #4CAF50; font-weight: 600;">✏️ Edit Route (Drag to modify)</button>
                     </div>
-                    <div id="waypointsList" style="max-height: 150px; overflow-y: auto;">
+                    <div id="waypointsList">
                         <div style="color: #999; font-size: 12px; padding: 10px;">No waypoints added. Click buttons above to add via-points or stops.</div>
                     </div>
                     <div style="font-size: 11px; color: #888; margin-top: 8px;">
@@ -3942,7 +3942,7 @@ HTML_TEMPLATE = '''
                             📋 View CAZ Zones & Pricing
                         </button>
 
-                        <div id="cazInfoContainer" style="display: none; max-height: 300px; overflow-y: auto; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;"></div>
+                        <div id="cazInfoContainer" style="display: none; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;"></div>
                     </div>
 
                     <!-- Route Preferences Section -->
@@ -4215,7 +4215,7 @@ HTML_TEMPLATE = '''
                         </div>
 
                         <!-- Trip List -->
-                        <div id="tripHistoryList" style="max-height: 400px; overflow-y: auto;">
+                        <div id="tripHistoryList">
                             <div style="text-align: center; padding: 20px; color: #999;">Loading trips...</div>
                         </div>
                     </div>
@@ -4312,7 +4312,7 @@ HTML_TEMPLATE = '''
                         <!-- Recordings List -->
                         <div style="margin-bottom: 15px;">
                             <h4 style="margin: 0 0 10px 0; font-size: 14px;">📹 Recent Recordings</h4>
-                            <div id="dashcamRecordingsList" style="max-height: 300px; overflow-y: auto;">
+                            <div id="dashcamRecordingsList">
                                 <div style="text-align: center; padding: 20px; color: #999;">No recordings yet</div>
                             </div>
                         </div>
@@ -4404,7 +4404,7 @@ HTML_TEMPLATE = '''
                         <!-- Most Frequent Routes -->
                         <div style="margin-bottom: 15px;">
                             <h4 style="margin: 0 0 10px 0; font-size: 14px;">🔄 Most Frequent Routes</h4>
-                            <div id="frequentRoutesList" style="max-height: 200px; overflow-y: auto;">
+                            <div id="frequentRoutesList">
                                 <div style="text-align: center; padding: 20px; color: #999;">Loading...</div>
                             </div>
                         </div>
@@ -4459,7 +4459,7 @@ HTML_TEMPLATE = '''
                         </div>
 
                         <!-- Saved Routes List -->
-                        <div id="savedRoutesList" style="max-height: 400px; overflow-y: auto;">
+                        <div id="savedRoutesList">
                             <div style="text-align: center; padding: 20px; color: #999;">No saved routes yet</div>
                         </div>
                     </div>
@@ -4552,13 +4552,13 @@ HTML_TEMPLATE = '''
                         <!-- Alternative Routes (if available) -->
                         <div id="previewAlternativeRoutesContainer" style="display: none; margin-bottom: 15px;">
                             <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">🛣️ Alternative Routes</h4>
-                            <div id="previewAlternativeRoutesList" style="max-height: 200px; overflow-y: auto;"></div>
+                            <div id="previewAlternativeRoutesList"></div>
                         </div>
 
                         <!-- Parking Section -->
                         <div id="parkingSection" style="display: none; background: #FFF3E0; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #FF9800;">
                             <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #E65100;">🅿️ Parking Options</h4>
-                            <div id="parkingList" style="max-height: 250px; overflow-y: auto; margin-bottom: 10px;"></div>
+                            <div id="parkingList" style="margin-bottom: 10px;"></div>
                             <button onclick="clearParkingSelection()" style="width: 100%; background: #FF9800; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">
                                 ✕ Clear Parking Selection
                             </button>
@@ -4633,7 +4633,7 @@ HTML_TEMPLATE = '''
                         <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Compare different route types with hazard counts</p>
 
                         <!-- Route Comparison List -->
-                        <div id="routeComparisonList" style="max-height: 400px; overflow-y: auto;">
+                        <div id="routeComparisonList">
                             <div style="text-align: center; padding: 20px; color: #999;">Calculate a route to see options</div>
                         </div>
 

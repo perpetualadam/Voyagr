@@ -16,7 +16,7 @@ const activeMarkers = new Map();
  * @param {maplibregl.Map} map - The map instance
  * @param {Array<[number, number]>} coords - Array of [lat, lon] coordinates
  * @param {Object} options - Style options (color, weight, opacity)
- * @returns {Object} Layer object with id and remove() method
+ * @returns {Object} Layer object with id, remove() method, and waitForAdded() Promise
  */
 function addPolyline(mapInstance, coords, options = {}) {
     const id = `polyline-${++layerCounter}`;
@@ -29,40 +29,57 @@ function addPolyline(mapInstance, coords, options = {}) {
         return [c.lng || c.lon, c.lat];
     });
 
+    // Track whether layer has been added
+    let layerAdded = false;
+    let resolveAdded;
+    const addedPromise = new Promise(resolve => { resolveAdded = resolve; });
+
     // Wait for map to be ready
     const addLayerFn = () => {
-        if (mapInstance.getSource(id)) return; // Already exists
-
-        mapInstance.addSource(id, {
-            type: 'geojson',
-            data: {
-                type: 'Feature',
-                geometry: { type: 'LineString', coordinates: lngLatCoords }
-            }
-        });
-
-        const layerConfig = {
-            id: id,
-            type: 'line',
-            source: id,
-            layout: {
-                'line-join': 'round',
-                'line-cap': 'round'
-            },
-            paint: {
-                'line-color': options.color || '#667eea',
-                'line-width': options.weight || 4,
-                'line-opacity': options.opacity || 0.8
-            }
-        };
-
-        // Add layer - optionally before a specific layer for z-ordering
-        // If 'aboveRoutes' is true, don't specify beforeId to add on top
-        if (options.beforeId && mapInstance.getLayer(options.beforeId)) {
-            mapInstance.addLayer(layerConfig, options.beforeId);
-        } else {
-            mapInstance.addLayer(layerConfig);
+        if (mapInstance.getSource(id)) {
+            layerAdded = true;
+            resolveAdded();
+            return; // Already exists
         }
+
+        try {
+            mapInstance.addSource(id, {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    geometry: { type: 'LineString', coordinates: lngLatCoords }
+                }
+            });
+
+            const layerConfig = {
+                id: id,
+                type: 'line',
+                source: id,
+                layout: {
+                    'line-join': 'round',
+                    'line-cap': 'round'
+                },
+                paint: {
+                    'line-color': options.color || '#667eea',
+                    'line-width': options.weight || 4,
+                    'line-opacity': options.opacity || 0.8
+                }
+            };
+
+            // Add layer - optionally before a specific layer for z-ordering
+            // If 'aboveRoutes' is true, don't specify beforeId to add on top
+            if (options.beforeId && mapInstance.getLayer(options.beforeId)) {
+                mapInstance.addLayer(layerConfig, options.beforeId);
+            } else {
+                mapInstance.addLayer(layerConfig);
+            }
+
+            layerAdded = true;
+            console.log(`[MapLibre] Polyline ${id} added successfully`);
+        } catch (e) {
+            console.error(`[MapLibre] Error adding polyline ${id}:`, e);
+        }
+        resolveAdded();
     };
 
     if (mapInstance.isStyleLoaded()) {
@@ -74,6 +91,8 @@ function addPolyline(mapInstance, coords, options = {}) {
     const layer = {
         id: id,
         _coords: lngLatCoords,
+        _added: () => layerAdded,
+        waitForAdded: () => addedPromise,
         addTo: function (m) { return this; },
         remove: function () { removeMapLayer(mapInstance, id); },
         getBounds: function () {

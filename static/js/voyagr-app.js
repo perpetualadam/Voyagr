@@ -1218,7 +1218,7 @@ function displayAllRoutesOnMap() {
     }
 
     // CRITICAL: Move route layers to top of rendering order
-    // This ensures they're visible above traffic edges and other layers
+    // Wait for all layers to be added before bringing them to top
     bringRoutesToTop();
 
     console.log(`[Routes] Displayed ${allRouteLayers.length} routes on map`);
@@ -1227,8 +1227,9 @@ function displayAllRoutesOnMap() {
 /**
  * Bring all route layers to the top of the map rendering order
  * This ensures routes are visible above traffic edges and other overlays
+ * Uses Promise-based waiting to ensure layers are fully added before reordering
  */
-function bringRoutesToTop() {
+async function bringRoutesToTop() {
     console.log('[Routes] bringRoutesToTop called, allRouteLayers:', allRouteLayers?.length || 0);
 
     if (!map) {
@@ -1239,6 +1240,23 @@ function bringRoutesToTop() {
         console.warn('[Routes] bringRoutesToTop: no route layers to move');
         return;
     }
+
+    // Wait for all layers to be added to the map
+    try {
+        const waitPromises = allRouteLayers
+            .filter(layer => layer && layer.waitForAdded)
+            .map(layer => layer.waitForAdded());
+
+        if (waitPromises.length > 0) {
+            await Promise.all(waitPromises);
+            console.log('[Routes] All route layers confirmed added');
+        }
+    } catch (e) {
+        console.warn('[Routes] Error waiting for layers:', e);
+    }
+
+    // Small additional delay to ensure MapLibre has processed all layers
+    await new Promise(resolve => setTimeout(resolve, 50));
 
     // Function to actually move the layers with retry logic
     const moveLayersToTop = (retryCount = 0) => {
@@ -1265,16 +1283,17 @@ function bringRoutesToTop() {
             // If not all layers were found and we haven't exceeded retries, try again
             if (!allFound && retryCount < maxRetries) {
                 setTimeout(() => moveLayersToTop(retryCount + 1), 100);
+            } else if (allFound) {
+                console.log('[Routes] All route layers successfully moved to top');
             }
         } catch (e) {
             console.warn('[Routes] Error bringing routes to top:', e);
         }
     };
 
-    // If style is loaded, move after a delay, otherwise wait for idle
+    // If style is loaded, move layers now, otherwise wait for idle
     if (map.isStyleLoaded()) {
-        // Longer delay to ensure layers are fully added (MapLibre is async)
-        setTimeout(() => moveLayersToTop(0), 200);
+        moveLayersToTop(0);
     } else {
         map.once('idle', () => moveLayersToTop(0));
     }
