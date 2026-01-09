@@ -4417,8 +4417,9 @@ function showRoutePreview(routeData) {
     // Show alternative routes if available
     if (routeOptions && routeOptions.length > 1) {
         showAlternativeRoutesInPreview();
-        // NOTE: Don't call displayAllRoutesOnMap() here - it's controlled by selectRoute/showAllRoutes
-        // The map display is already set correctly before this function is called
+        // Display all routes on the map for comparison
+        displayAllRoutesOnMap();
+        console.log('[Route Preview] Displayed all alternative routes on map');
     } else {
         document.getElementById('previewAlternativeRoutesContainer').style.display = 'none';
     }
@@ -4427,9 +4428,8 @@ function showRoutePreview(routeData) {
     console.log('[Route Preview] Switching to routePreview tab');
     switchTab('routePreview');
 
-    // Collapse bottom sheet to show map with route preview
-    console.log('[Route Preview] Collapsing bottom sheet to show map');
-    collapseBottomSheetForRoutePreview();
+    // Expand bottom sheet to show route preview results (user can scroll to see more)
+    expandBottomSheet();
 
     // Ensure traffic layer stays visible if enabled
     if (showTrafficEnabled && !trafficLayer) {
@@ -4448,11 +4448,6 @@ function showRoutePreview(routeData) {
     }
 
     console.log('[Route Preview] Route preview displayed successfully');
-
-    // Switch to route preview tab and expand bottom sheet to show results
-    switchTab('routePreview');
-    expandBottomSheet();
-
     showStatus('📍 Review your route before starting navigation', 'success');
 }
 
