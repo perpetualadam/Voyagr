@@ -1082,10 +1082,14 @@ const ROUTE_COLORS = [
  * @returns {void}
  */
 function displayAllRoutesOnMap() {
+    console.log('[Routes] displayAllRoutesOnMap called');
+    console.log('[Routes] routeOptions:', routeOptions ? routeOptions.length : 0, 'routes');
+
     // Clear the main routeLayer if it exists
     if (routeLayer && typeof routeLayer.remove === 'function') {
         routeLayer.remove();
         routeLayer = null;
+        console.log('[Routes] Cleared main routeLayer');
     }
 
     // Clear previous route layers
@@ -1096,56 +1100,57 @@ function displayAllRoutesOnMap() {
     });
     allRouteLayers = [];
 
-    if (!routeOptions || routeOptions.length === 0) return;
-
-    // Wait for map to be ready
-    const drawRoutes = () => {
-        // Draw all routes (in reverse order so first route is on top)
-        for (let i = routeOptions.length - 1; i >= 0; i--) {
-            const route = routeOptions[i];
-            const polylinePoints = route.polyline || [];
-
-            if (polylinePoints.length > 0) {
-                const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
-                // Thicker lines for better visibility over traffic layer
-                const weight = (i === selectedRouteIndex) ? 8 : 5;
-                const opacity = (i === selectedRouteIndex) ? 1.0 : 0.75;
-
-                const layer = MapLibreHelpers.addPolyline(map, polylinePoints, {
-                    color: color,
-                    weight: weight,
-                    opacity: opacity
-                });
-
-                allRouteLayers.unshift(layer); // Add to front so indices match
-            }
-        }
-
-        // Fit map to show all routes
-        if (allRouteLayers.length > 0 && routeOptions[0] && routeOptions[0].polyline) {
-            // Combine all coordinates for bounds
-            const allCoords = routeOptions.flatMap(r => r.polyline || []);
-            if (allCoords.length > 0) {
-                MapLibreHelpers.fitMapBounds(map, allCoords, { padding: 50 });
-            }
-        }
-
-        // Display hazards from all routes
-        displayAllRouteHazards();
-
-        // Ensure traffic layer stays visible if enabled
-        if (showTrafficEnabled && !trafficLayer) {
-            addTrafficLayer();
-        }
-
-        console.log(`[Routes] Displayed ${allRouteLayers.length} routes on map`);
-    };
-
-    if (map.isStyleLoaded()) {
-        drawRoutes();
-    } else {
-        map.on('load', drawRoutes);
+    if (!routeOptions || routeOptions.length === 0) {
+        console.warn('[Routes] No routeOptions available!');
+        return;
     }
+
+    // Draw routes immediately - MapLibreHelpers.addPolyline handles map readiness internally
+    for (let i = routeOptions.length - 1; i >= 0; i--) {
+        const route = routeOptions[i];
+        const polylinePoints = route.polyline || [];
+
+        console.log(`[Routes] Route ${i}: "${route.name}", polyline points: ${polylinePoints.length}`);
+
+        if (polylinePoints.length > 0) {
+            const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
+            // Thicker lines for better visibility over traffic layer
+            const weight = (i === selectedRouteIndex) ? 8 : 5;
+            const opacity = (i === selectedRouteIndex) ? 1.0 : 0.75;
+
+            console.log(`[Routes] Drawing route ${i} with color ${color}, weight ${weight}`);
+
+            const layer = MapLibreHelpers.addPolyline(map, polylinePoints, {
+                color: color,
+                weight: weight,
+                opacity: opacity
+            });
+
+            allRouteLayers.unshift(layer); // Add to front so indices match
+            console.log(`[Routes] Route ${i} layer added:`, layer ? layer.id : 'null');
+        } else {
+            console.warn(`[Routes] Route ${i} has no polyline points!`);
+        }
+    }
+
+    // Fit map to show all routes
+    if (allRouteLayers.length > 0 && routeOptions[0] && routeOptions[0].polyline) {
+        // Combine all coordinates for bounds
+        const allCoords = routeOptions.flatMap(r => r.polyline || []);
+        if (allCoords.length > 0) {
+            MapLibreHelpers.fitMapBounds(map, allCoords, { padding: 50 });
+        }
+    }
+
+    // Display hazards from all routes
+    displayAllRouteHazards();
+
+    // Ensure traffic layer stays visible if enabled
+    if (showTrafficEnabled && !trafficLayer) {
+        addTrafficLayer();
+    }
+
+    console.log(`[Routes] Displayed ${allRouteLayers.length} routes on map`);
 }
 
 // ===== DRAGGABLE ROUTE EDITING =====
