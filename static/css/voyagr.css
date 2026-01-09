@@ -154,23 +154,29 @@ body {
 
 .bottom-sheet.expanded {
     transform: translateY(0) !important;
+    /* Ensure height is set when expanded */
+    height: 92vh;
+    height: 92dvh;
 }
 
 .bottom-sheet-content {
-    flex: 1 1 0;
+    /* Fill remaining space in flex container */
+    flex: 1 1 auto;
+    /* Enable scrolling */
     overflow-y: auto !important;
     overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     padding: 20px;
     /* Critical: min-height: 0 allows flex item to shrink below content size */
     min-height: 0;
-    /* Max height as fallback - header is ~120px (handle 50px + header ~70px) */
-    max-height: calc(92vh - 130px);
-    max-height: calc(92dvh - 130px);
+    /* Explicit height calculation - bottom sheet is 92vh, handle ~50px, header ~70px */
+    height: calc(100% - 120px);
     /* Allow touch scrolling */
     touch-action: pan-y;
     /* Prevent event capture issues */
     pointer-events: auto;
+    /* Ensure box-sizing includes padding */
+    box-sizing: border-box;
 }
 
 /* Tab containers inside bottom sheet - let parent scroll */
