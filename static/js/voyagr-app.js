@@ -3577,26 +3577,45 @@ function addTrafficLayer() {
         return;
     }
 
-    // MapLibre raster tile source for traffic
-    if (!map.getSource('traffic-source')) {
-        map.addSource('traffic-source', {
-            type: 'raster',
-            tiles: [`https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${tomtomApiKey}&tileSize=256`],
-            tileSize: 256
-        });
-    }
+    // Wait for style to load before adding traffic layer
+    const addTrafficLayerNow = () => {
+        try {
+            // MapLibre raster tile source for traffic
+            if (!map.getSource('traffic-source')) {
+                map.addSource('traffic-source', {
+                    type: 'raster',
+                    tiles: [`https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${tomtomApiKey}&tileSize=256`],
+                    tileSize: 256
+                });
+            }
 
-    if (!map.getLayer('traffic-layer')) {
-        map.addLayer({
-            id: 'traffic-layer',
-            type: 'raster',
-            source: 'traffic-source',
-            paint: { 'raster-opacity': 0.7 }
-        });
-    }
+            if (!map.getLayer('traffic-layer')) {
+                // Add traffic layer below route layers
+                map.addLayer({
+                    id: 'traffic-layer',
+                    type: 'raster',
+                    source: 'traffic-source',
+                    paint: { 'raster-opacity': 0.6 }
+                });
+            }
 
-    trafficLayer = { id: 'traffic-layer' };
-    console.log('[Traffic] TomTom traffic layer added');
+            trafficLayer = { id: 'traffic-layer' };
+            console.log('[Traffic] TomTom traffic layer added successfully');
+
+            // Ensure routes stay on top of traffic
+            bringRoutesToTop();
+        } catch (e) {
+            console.error('[Traffic] Error adding traffic layer:', e);
+        }
+    };
+
+    if (map.isStyleLoaded()) {
+        addTrafficLayerNow();
+    } else {
+        console.log('[Traffic] Waiting for style to load...');
+        map.once('style.load', addTrafficLayerNow);
+        setTimeout(addTrafficLayerNow, 1000);
+    }
 }
 
 /**
