@@ -1221,18 +1221,32 @@ function bringRoutesToTop() {
         return;
     }
 
-    try {
-        // For Leaflet layers, use bringToFront() method
-        allRouteLayers.forEach((layer, idx) => {
-            if (layer && typeof layer.bringToFront === 'function') {
-                layer.bringToFront();
-                console.log(`[Routes] Brought layer ${idx} to front`);
-            } else {
-                console.warn(`[Routes] Layer at index ${idx} has no bringToFront method`);
-            }
-        });
-    } catch (e) {
-        console.warn('[Routes] Error bringing routes to top:', e);
+    // Function to actually move the layers
+    const moveLayersToTop = () => {
+        try {
+            // Move each route layer to the top using MapLibre's moveLayer
+            allRouteLayers.forEach((layer, idx) => {
+                if (layer && layer.id) {
+                    if (map.getLayer(layer.id)) {
+                        // moveLayer with no second argument moves layer to top
+                        map.moveLayer(layer.id);
+                        console.log(`[Routes] Moved layer ${layer.id} to top`);
+                    } else {
+                        console.warn(`[Routes] Layer ${layer.id} not found on map yet`);
+                    }
+                }
+            });
+        } catch (e) {
+            console.warn('[Routes] Error bringing routes to top:', e);
+        }
+    };
+
+    // If style is loaded, move immediately, otherwise wait
+    if (map.isStyleLoaded()) {
+        // Small delay to ensure layers are fully added
+        setTimeout(moveLayersToTop, 50);
+    } else {
+        map.once('idle', moveLayersToTop);
     }
 }
 
