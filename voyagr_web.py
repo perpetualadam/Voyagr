@@ -3606,13 +3606,13 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>Voyagr Navigation</title>
     <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260109r" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260109s" />
     <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
-    <script src="/static/js/maplibre-helpers.js?v=20260109r"></script>
+    <script src="/static/js/maplibre-helpers.js?v=20260109s"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/voyagr-core.js?v=20260109r"></script>
-    <script src="/static/js/voyagr-app.js?v=20260109r"></script>
-    <script src="/static/js/app.js?v=20260109r"></script>
+    <script src="/static/js/voyagr-core.js?v=20260109s"></script>
+    <script src="/static/js/voyagr-app.js?v=20260109s"></script>
+    <script src="/static/js/app.js?v=20260109s"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -8864,10 +8864,10 @@ def manage_search_history():
         if conn:
             return_db_connection(conn)
 
-@app.route('/api/favorites', methods=['GET', 'POST', 'DELETE'])
+@app.route('/api/favorites', methods=['GET', 'POST', 'PUT', 'DELETE'])
 @rate_limit(api_limiter)
 def manage_favorites():
-    """Get, add, or remove favorite locations."""
+    """Get, add, update, or remove favorite locations."""
     conn = None
     try:
         conn = get_db_connection()
@@ -8909,6 +8909,24 @@ def manage_favorites():
             fav_id = cursor.lastrowid
             conn.commit()
             return jsonify({'success': True, 'favorite_id': fav_id, 'message': f'Added {name} to favorites'})
+
+        elif request.method == 'PUT':
+            # Update existing favorite location
+            data = request.json
+            fav_id = data.get('id')
+            name = sanitize_string(data.get('name', '').strip(), max_length=100)
+            address = sanitize_string(data.get('address', '').strip(), max_length=200) or ''
+            category = sanitize_string(data.get('category', 'location').strip(), max_length=50) or 'location'
+
+            if not fav_id or not name:
+                return jsonify({'success': False, 'error': 'ID and name required'})
+
+            cursor.execute(
+                'UPDATE favorite_locations SET name = ?, address = ?, category = ? WHERE id = ?',
+                (name, address, category, fav_id)
+            )
+            conn.commit()
+            return jsonify({'success': True, 'message': f'Updated {name}'})
 
         elif request.method == 'DELETE':
             # Remove favorite location

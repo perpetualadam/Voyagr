@@ -1126,13 +1126,14 @@ let selectedRouteIndex = 0;
 let allRouteLayers = []; // Store all route polylines for multi-route display
 
 // Route colors for multi-route display
-// Use high-contrast colors that stand out against map tiles and traffic overlay
+// AVOID traffic colors (green, orange/amber, red) to prevent confusion
+// Use blues, purples, pinks, and cyans that contrast with traffic overlay
 const ROUTE_COLORS = [
-    '#0066CC',  // Strong blue - main route (contrasts with green/orange traffic)
-    '#CC0066',  // Magenta/Pink - highly visible alternate
-    '#00CC66',  // Bright green - alternate
-    '#CC6600',  // Burnt orange - alternate
-    '#6600CC'   // Purple - alternate
+    '#2563EB',  // Bright blue - main route (Camera-Safe)
+    '#7C3AED',  // Purple - Shortest
+    '#EC4899',  // Pink/Magenta - Fastest
+    '#06B6D4',  // Cyan/Teal - Balanced
+    '#8B5CF6'   // Violet - additional routes
 ];
 
 /**
@@ -3832,20 +3833,37 @@ function displayRouteTrafficEdges(segments) {
         lastEndIdx = endIdx;
 
         // Create the traffic edge polyline following the route geometry with MapLibre
-        // Use thinner lines so they don't cover the route colors
-        // NOTE: Traffic overlay is drawn UNDER routes - routes are brought to top after
+        // Traffic edges are drawn ON TOP of the route line so they're visible
         const trafficLine = MapLibreHelpers.addPolyline(map, segmentPoints, {
             color: color,
-            weight: 4,            // Thinner line - routes should be on top
-            opacity: 0.8          // Semi-transparent so route color shows through
+            weight: 6,            // Slightly thinner than route but still visible
+            opacity: 0.9          // High opacity to clearly show traffic
         });
         routeTrafficLayers.push(trafficLine);
     });
 
     console.log(`[Route Traffic] Added ${routeTrafficLayers.length} traffic edge layers (valid segments)`);
 
-    // CRITICAL: Bring route layers back to top after adding traffic edges
-    bringRoutesToTop();
+    // Bring traffic layers to top so they're visible above routes
+    bringTrafficEdgesToTop();
+}
+
+/**
+ * Bring traffic edge layers to top of map rendering order
+ */
+function bringTrafficEdgesToTop() {
+    if (!map || routeTrafficLayers.length === 0) return;
+
+    try {
+        routeTrafficLayers.forEach(layer => {
+            if (layer && layer.id && map.getLayer(layer.id)) {
+                map.moveLayer(layer.id);
+            }
+        });
+        console.log('[Route Traffic] Traffic edge layers moved to top');
+    } catch (e) {
+        console.log('[Route Traffic] Error moving traffic layers to top:', e.message);
+    }
 }
 
 /**
@@ -5486,7 +5504,7 @@ function addToSearchHistory(query, resultName, lat, lon) {
         .catch(error => console.error('Error adding to search history:', error));
 }
 
-// Load and display favorite locations
+// Load and display favorite locations with edit/delete options
 /**
  * loadFavorites function
  * @function loadFavorites
@@ -5496,30 +5514,126 @@ function loadFavorites() {
     fetch('/api/favorites')
         .then(response => response.json())
         .then(data => {
-            if (data.success && data.favorites.length > 0) {
-                const section = document.getElementById('favoritesSection');
-                const grid = document.getElementById('favoritesGrid');
-                grid.innerHTML = '';
+            const section = document.getElementById('favoritesSection');
+            const grid = document.getElementById('favoritesGrid');
+            grid.innerHTML = '';
 
+            if (data.success && data.favorites.length > 0) {
                 data.favorites.forEach(fav => {
+                    const container = document.createElement('div');
+                    container.className = 'favorite-item';
+                    container.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 8px;';
+
+                    // Main button to use favorite as destination
                     const btn = document.createElement('button');
                     btn.className = 'favorite-btn';
+                    btn.style.cssText = 'flex: 1; text-align: left;';
                     btn.innerHTML = `
                         <span class="favorite-btn-name">${fav.name}</span>
                         <span class="favorite-btn-category">${fav.category}</span>
                     `;
                     btn.onclick = () => {
-                        document.getElementById('end').value = `${fav.lat},${fav.lon}`;
+                        document.getElementById('end').value = fav.name;
+                        document.getElementById('end').dataset.lat = fav.lat;
+                        document.getElementById('end').dataset.lon = fav.lon;
+                        document.getElementById('end').dataset.displayName = fav.name;
                         addToSearchHistory(fav.name, fav.name, fav.lat, fav.lon);
                         expandBottomSheet();
+                        showStatus(`📍 Destination set to ${fav.name}`, 'success');
                     };
-                    grid.appendChild(btn);
+
+                    // Edit button
+                    const editBtn = document.createElement('button');
+                    editBtn.innerHTML = '✏️';
+                    editBtn.title = 'Edit';
+                    editBtn.style.cssText = 'width: 36px; height: 36px; border: none; border-radius: 50%; background: #667eea; color: white; cursor: pointer; font-size: 16px;';
+                    editBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        editFavorite(fav);
+                    };
+
+                    // Delete button
+                    const delBtn = document.createElement('button');
+                    delBtn.innerHTML = '🗑️';
+                    delBtn.title = 'Delete';
+                    delBtn.style.cssText = 'width: 36px; height: 36px; border: none; border-radius: 50%; background: #F44336; color: white; cursor: pointer; font-size: 16px;';
+                    delBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        deleteFavorite(fav);
+                    };
+
+                    container.appendChild(btn);
+                    container.appendChild(editBtn);
+                    container.appendChild(delBtn);
+                    grid.appendChild(container);
                 });
 
                 section.style.display = 'block';
+            } else {
+                section.style.display = 'none';
             }
         })
         .catch(error => console.error('Error loading favorites:', error));
+}
+
+/**
+ * Edit a favorite location
+ */
+function editFavorite(fav) {
+    const newName = prompt('Edit name:', fav.name);
+    if (!newName || newName === fav.name) return;
+
+    const newCategory = prompt('Edit category:', fav.category);
+
+    fetch('/api/favorites', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            id: fav.id,
+            name: newName,
+            address: fav.address,
+            category: newCategory || fav.category
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showStatus(`✅ Updated ${newName}`, 'success');
+            loadFavorites();
+        } else {
+            showStatus(`❌ Error: ${data.error}`, 'error');
+        }
+    })
+    .catch(err => {
+        console.error('Error updating favorite:', err);
+        showStatus('❌ Failed to update favorite', 'error');
+    });
+}
+
+/**
+ * Delete a favorite location
+ */
+function deleteFavorite(fav) {
+    if (!confirm(`Delete "${fav.name}" from favorites?`)) return;
+
+    fetch('/api/favorites', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: fav.id })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            showStatus(`🗑️ Removed ${fav.name}`, 'success');
+            loadFavorites();
+        } else {
+            showStatus(`❌ Error: ${data.error}`, 'error');
+        }
+    })
+    .catch(err => {
+        console.error('Error deleting favorite:', err);
+        showStatus('❌ Failed to delete favorite', 'error');
+    });
 }
 
 // Add current location to favorites
