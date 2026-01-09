@@ -158,11 +158,16 @@ body {
 
 .bottom-sheet-content {
     flex: 1;
-    overflow-y: auto;
+    overflow-y: auto !important;
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     padding: 20px;
     /* Ensure content can scroll by having explicit min-height */
     min-height: 0;
+    /* Allow touch scrolling */
+    touch-action: pan-y;
+    /* Prevent event capture issues */
+    pointer-events: auto;
 }
 
 /* Speed Camera Markers */

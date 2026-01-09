@@ -2829,11 +2829,8 @@ async function calculateRoute() {
                     }
 
                     // Routes are already sorted by hazard count from backend
-                    // Display all routes on map immediately
-                    if (routeOptions.length > 1) {
-                        displayAllRoutesOnMap();
-                        console.log(`[Routes] Displayed ${routeOptions.length} routes on map with different colors`);
-                    }
+                    // NOTE: Don't display routes here - showRoutePreview() will handle it
+                    // This prevents double-drawing and ensures consistent display
 
                     // Show route preview AFTER routeOptions is populated
                     setTimeout(() => {
@@ -4417,11 +4414,15 @@ function showRoutePreview(routeData) {
     // Show alternative routes if available
     if (routeOptions && routeOptions.length > 1) {
         showAlternativeRoutesInPreview();
-        // Display all routes on the map for comparison
-        displayAllRoutesOnMap();
-        console.log('[Route Preview] Displayed all alternative routes on map');
+        console.log('[Route Preview] Showing alternative routes panel');
     } else {
         document.getElementById('previewAlternativeRoutesContainer').style.display = 'none';
+    }
+
+    // Always display routes on the map (single or multiple)
+    if (routeOptions && routeOptions.length > 0) {
+        displayAllRoutesOnMap();
+        console.log(`[Route Preview] Displayed ${routeOptions.length} route(s) on map`);
     }
 
     // Switch to route preview tab
@@ -7904,7 +7905,12 @@ function initBottomSheet() {
     }
 
     // NEW: Allow expanding by clicking anywhere on the bottom sheet when collapsed
+    // But only if clicking on handle/header, not on content (to allow scrolling)
     bottomSheet.addEventListener('click', (e) => {
+        // Don't expand if clicking inside the content area (allows interaction with buttons, scroll, etc.)
+        if (e.target.closest('.bottom-sheet-content')) {
+            return;
+        }
         if (!bottomSheetIsExpanded) {
             console.log('[BottomSheet] Sheet clicked while collapsed - Expanding');
             expandBottomSheet();
