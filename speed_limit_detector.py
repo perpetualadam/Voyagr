@@ -8,10 +8,14 @@ import time
 import requests
 import math
 import os
+import logging
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple
 from collections import OrderedDict
 from functools import lru_cache
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 # UK Smart Motorways with variable speed limits
 SMART_MOTORWAYS = {
@@ -101,7 +105,7 @@ class SpeedLimitDetector:
         while len(self.speed_limit_cache) >= self.cache_max_size:
             oldest_key = next(iter(self.speed_limit_cache))
             del self.speed_limit_cache[oldest_key]
-            print(f"[Speed Limit Cache] Removed oldest entry: {oldest_key}")
+            logger.info(f"[Speed Limit Cache] Removed oldest entry: {oldest_key}")
 
         # Add new entry (or move to end if updating)
         if key in self.speed_limit_cache:
@@ -122,7 +126,7 @@ class SpeedLimitDetector:
             del self.speed_limit_cache[key]
 
         if expired_keys:
-            print(f"[Speed Limit Cache] Cleaned up {len(expired_keys)} expired entries")
+            logger.info(f"[Speed Limit Cache] Cleaned up {len(expired_keys)} expired entries")
 
     def _wait_for_overpass_rate_limit(self) -> None:
         """
@@ -134,7 +138,7 @@ class SpeedLimitDetector:
 
         if time_since_last < self.overpass_min_interval:
             sleep_time = self.overpass_min_interval - time_since_last
-            print(f"[Overpass Rate Limit] Waiting {sleep_time:.2f}s (limit: {self.overpass_rate_limit} req/s)")
+            logger.info(f"[Overpass Rate Limit] Waiting {sleep_time:.2f}s (limit: {self.overpass_rate_limit} req/s)")
             time.sleep(sleep_time)
 
         self.overpass_last_request = time.time()
@@ -185,7 +189,7 @@ class SpeedLimitDetector:
                 'timestamp': int(time.time())
             }
         except Exception as e:
-            print(f"Error getting speed limit: {e}")
+            logger.error(f"Error getting speed limit: {e}")
             return {'speed_limit_mph': 70, 'speed_limit_kmh': 112.7, 'error': str(e)}
     
     def _check_smart_motorway(self, lat: float, lon: float) -> Dict:
@@ -203,7 +207,7 @@ class SpeedLimitDetector:
                     distance_km = self._haversine_distance(lat, lon, section[0], section[1])
 
                     if distance_km < DETECTION_RADIUS_KM:
-                        print(f"[Smart Motorway] Detected {motorway_name} at {distance_km*1000:.0f}m")
+                        logger.info(f"[Smart Motorway] Detected {motorway_name} at {distance_km*1000:.0f}m")
                         return {
                             'is_smart_motorway': True,
                             'motorway_name': motorway_name
@@ -230,7 +234,7 @@ class SpeedLimitDetector:
                 # Night - normal speed limit
                 return 70
         except Exception as e:
-            print(f"Error getting smart motorway speed limit: {e}")
+            logger.error(f"Error getting smart motorway speed limit: {e}")
             return 70
     
     def _get_osm_speed_limit(self, lat: float, lon: float, road_type: str) -> int:
@@ -247,13 +251,13 @@ class SpeedLimitDetector:
                 if time.time() - cached_data['timestamp'] < self.cache_expiry:
                     # Move to end (most recently used)
                     self.speed_limit_cache.move_to_end(cache_key)
-                    print(f"[Speed Limit] Cache hit: {cached_data['speed_limit']} mph (source: {cached_data.get('source', 'unknown')})")
+                    logger.info(f"[Speed Limit] Cache hit: {cached_data['speed_limit']} mph (source: {cached_data.get('source', 'unknown')})")
                     return cached_data['speed_limit']
                 else:
                     # Expired, remove it
                     del self.speed_limit_cache[cache_key]
         except Exception as e:
-            print(f"[Speed Limit] Cache check failed: {e}")
+            logger.error(f"[Speed Limit] Cache check failed: {e}")
 
         # Try TomTom Traffic Flow API first - uses freeFlowSpeed as speed limit proxy
         tomtom_api_key = os.getenv('TOMTOM_API_KEY')
@@ -285,18 +289,18 @@ class SpeedLimitDetector:
                             'timestamp': time.time(),
                             'source': 'TomTom'
                         })
-                        print(f"[Speed Limit] TomTom: {free_flow_speed_kmh} km/h -> {speed_limit} mph")
+                        logger.info(f"[Speed Limit] TomTom: {free_flow_speed_kmh} km/h -> {speed_limit} mph")
                         return speed_limit
                     else:
-                        print(f"[Speed Limit] TomTom returned freeFlowSpeed=0")
+                        logger.warning(f"[Speed Limit] TomTom returned freeFlowSpeed=0")
                 else:
-                    print(f"[Speed Limit] TomTom API error: status={response.status_code}")
+                    logger.warning(f"[Speed Limit] TomTom API error: status={response.status_code}")
             except requests.exceptions.Timeout:
-                print("[Speed Limit] TomTom API timeout (3s)")
+                logger.warning("[Speed Limit] TomTom API timeout (3s)")
             except Exception as e:
-                print(f"[Speed Limit] TomTom failed: {e}")
+                logger.error(f"[Speed Limit] TomTom failed: {e}")
         else:
-            print("[Speed Limit] No TOMTOM_API_KEY configured, skipping TomTom")
+            logger.info("[Speed Limit] No TOMTOM_API_KEY configured, skipping TomTom")
 
         # Fallback: Query Overpass API for maxspeed tag and road type (slower but explicit)
         # FIX: Use self-hosted Overpass on Contabo with rate limiting
@@ -343,10 +347,10 @@ class SpeedLimitDetector:
                                     'timestamp': time.time(),
                                     'source': 'OSM-maxspeed'
                                 })
-                                print(f"[Speed Limit] OSM maxspeed: {speed} mph")
+                                logger.info(f"[Speed Limit] OSM maxspeed: {speed} mph")
                                 return speed
                             except (ValueError, IndexError):
-                                print(f"[Speed Limit] OSM parse error: '{speed_str}'")
+                                logger.warning(f"[Speed Limit] OSM parse error: '{speed_str}'")
                         
                         # Priority 2: Infer from highway type (UK defaults)
                         highway_type = tags.get('highway', '')
@@ -376,21 +380,21 @@ class SpeedLimitDetector:
                                 'timestamp': time.time(),
                                 'source': f'OSM-highway-{highway_type}'
                             })
-                            print(f"[Speed Limit] Inferred from highway={highway_type}: {inferred_speed} mph")
+                            logger.info(f"[Speed Limit] Inferred from highway={highway_type}: {inferred_speed} mph")
                             return inferred_speed
                 else:
-                    print(f"[Speed Limit] OSM returned no highway elements nearby")
+                    logger.warning(f"[Speed Limit] OSM returned no highway elements nearby")
             else:
-                print(f"[Speed Limit] OSM API error: status={response.status_code}")
+                logger.warning(f"[Speed Limit] OSM API error: status={response.status_code}")
         except requests.exceptions.Timeout:
-            print("[Speed Limit] OSM API timeout (5s)")
+            logger.warning("[Speed Limit] OSM API timeout (5s)")
         except Exception as e:
-            print(f"[Speed Limit] OSM failed: {e}")
+            logger.error(f"[Speed Limit] OSM failed: {e}")
 
         # FIX: Use road_type parameter (now defaults to 'residential' from API)
         # Fallback to residential (30mph) as safer default
         default_limit = DEFAULT_SPEED_LIMITS.get(road_type, 30)
-        print(f"[Speed Limit] Using default for {road_type}: {default_limit} mph")
+        logger.info(f"[Speed Limit] Using default for {road_type}: {default_limit} mph")
 
         # Cache the default too to avoid repeated API calls
         self._add_to_cache(cache_key, {
@@ -449,15 +453,15 @@ class SpeedLimitDetector:
                 'warning_threshold_mph': warning_threshold_mph
             }
         except Exception as e:
-            print(f"Error checking speed violation: {e}")
+            logger.error(f"Error checking speed violation: {e}")
             return {'status': 'unknown', 'error': str(e)}
-    
+
     def get_speed_limit_changed(self) -> bool:
         """Check if speed limit has changed."""
         return self.speed_limit_changed
-    
+
     def clear_cache(self):
         """Clear speed limit cache."""
         self.speed_limit_cache.clear()
-        print("[OK] Speed limit cache cleared")
+        logger.info("[OK] Speed limit cache cleared")
 
