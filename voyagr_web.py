@@ -4660,8 +4660,8 @@ HTML_TEMPLATE = '''
                     <span id="nextTurnIcon" class="turn-icon">↑</span>
                 </div>
                 <div class="turn-info-container">
-                    <div id="nextTurnDistance" class="turn-distance">--</div>
-                    <div id="nextTurnInstruction" class="turn-instruction">Calculating route...</div>
+                    <div id="nextTurnDistance" class="turn-distance">Follow Route</div>
+                    <div id="nextTurnInstruction" class="turn-instruction">Continue on current road</div>
                     <div id="nextTurnStreet" class="turn-street"></div>
                 </div>
                 <div class="expand-indicator">
@@ -8124,7 +8124,8 @@ def check_speed_violation():
 
         data = request.json
         current_speed_mph = float(data.get('current_speed_mph', 0))
-        speed_limit_mph = int(data.get('speed_limit_mph', 70))
+        # FIX: Changed default from 70mph (motorway) to 30mph (residential) for safety
+        speed_limit_mph = int(data.get('speed_limit_mph', 30))
         warning_threshold_mph = int(data.get('warning_threshold_mph', 5))
 
         result = speed_limit_detector.check_speed_violation(

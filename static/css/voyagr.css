@@ -1287,7 +1287,7 @@ h1 {
 
 .battery-indicator {
     position: fixed;
-    top: 10px;
+    top: 90px;  /* Moved down from 10px to avoid blocking speed widget */
     right: 10px;
     background: white;
     border: 2px solid #667eea;
