@@ -8028,7 +8028,60 @@ function formatRemainingTime(minutes) {
 }
 
 /**
+ * Detect if the user has actually started moving.
+ * Checks GPS position changes and speed to avoid false progress calculations.
+ * @returns {boolean} True if user has started moving, false otherwise
+ */
+function hasUserStartedMoving() {
+    // Need at least 3 tracking points to detect movement
+    if (trackingHistory.length < 3) {
+        return false;
+    }
+
+    // Check recent tracking history (last 30 seconds)
+    const now = Date.now();
+    const recentHistory = trackingHistory.filter(point => {
+        const age = now - point.timestamp.getTime();
+        return age <= 30000; // Last 30 seconds
+    });
+
+    if (recentHistory.length < 2) {
+        return false;
+    }
+
+    // Method 1: Check if speed is consistently above threshold (2 km/h = 0.56 m/s)
+    const SPEED_THRESHOLD_MS = 0.56; // 2 km/h in m/s
+    const speedReadings = recentHistory
+        .map(point => point.speed || 0)
+        .filter(speed => speed > SPEED_THRESHOLD_MS);
+
+    if (speedReadings.length >= 2) {
+        console.log('[Movement Detection] User is moving (speed detected)');
+        return true;
+    }
+
+    // Method 2: Check if position has changed significantly (moved > 50 meters)
+    const DISTANCE_THRESHOLD_M = 50; // 50 meters
+    const firstPoint = recentHistory[0];
+    const lastPoint = recentHistory[recentHistory.length - 1];
+
+    const distanceMoved = calculateDistance(
+        firstPoint.lat, firstPoint.lon,
+        lastPoint.lat, lastPoint.lon
+    );
+
+    if (distanceMoved > DISTANCE_THRESHOLD_M) {
+        console.log(`[Movement Detection] User is moving (moved ${distanceMoved.toFixed(0)}m)`);
+        return true;
+    }
+
+    console.log('[Movement Detection] User has not started moving yet');
+    return false;
+}
+
+/**
  * Update the journey summary bar with current navigation data
+ * FIX: Added movement detection to prevent incorrect ETA before journey starts
  */
 function updateJourneySummaryBar() {
     if (!routeInProgress || !routePolyline || routePolyline.length === 0) {
@@ -8067,16 +8120,29 @@ function updateJourneySummaryBar() {
     // Calculate remaining time based on route data
     let remainingTimeMinutes = 0;
 
+    // FIX: Only use progress-based calculation if user has actually started moving
+    const userHasStartedMoving = hasUserStartedMoving();
+
     if (window.lastCalculatedRoute && window.lastCalculatedRoute.duration_minutes) {
-        // Use route duration and calculate based on progress
         const totalDuration = window.lastCalculatedRoute.duration_minutes;
         const totalDistance = window.lastCalculatedRoute.distance_km * 1000 || 1;
-        const progress = 1 - (remainingDistanceMeters / totalDistance);
-        remainingTimeMinutes = totalDuration * (1 - progress);
 
-        // Sanity check
-        if (remainingTimeMinutes < 0) remainingTimeMinutes = 0;
-        if (remainingTimeMinutes > 1440) remainingTimeMinutes = totalDuration; // Cap at 24h
+        if (userHasStartedMoving) {
+            // User is moving: Use progress-based calculation
+            const progress = 1 - (remainingDistanceMeters / totalDistance);
+            remainingTimeMinutes = totalDuration * (1 - progress);
+
+            // Sanity check
+            if (remainingTimeMinutes < 0) remainingTimeMinutes = 0;
+            if (remainingTimeMinutes > 1440) remainingTimeMinutes = totalDuration; // Cap at 24h
+
+            console.log(`[ETA] Progress-based: ${progress.toFixed(2)} complete, ${remainingTimeMinutes.toFixed(1)} min remaining`);
+        } else {
+            // User hasn't started moving: Use original route duration
+            // This prevents GPS inaccuracy from showing incorrect progress
+            remainingTimeMinutes = totalDuration;
+            console.log(`[ETA] Pre-movement: Using original duration ${totalDuration.toFixed(1)} min`);
+        }
     } else {
         // Fallback: estimate based on average speed (50 km/h)
         const avgSpeedKmh = 50;
@@ -9745,6 +9811,7 @@ function updateETACalculation() {
  * announceETAIfNeeded function
  * @function announceETAIfNeeded
  * @returns {*} Return value description
+ * FIX: Added movement detection to prevent incorrect ETA announcements before journey starts
  */
 function announceETAIfNeeded() {
     // FIXED: Announce ETA only when needed (every 10 minutes)
@@ -9772,45 +9839,59 @@ function announceETAIfNeeded() {
             return;
         }
 
-        // FIXED: Calculate remaining distance from ACTUAL GPS position on route
-        // Previously used currentStepIndex (maneuver index) which doesn't correspond to polyline indices
-        let remainingDistance = 0;
-        if (routePolyline && currentLat && currentLon) {
-            // Find where the driver actually is on the route polyline
-            const userRouteIndex = findNearestRouteIndex(currentLat, currentLon, routePolyline);
-            for (let i = userRouteIndex; i < routePolyline.length - 1; i++) {
-                remainingDistance += calculateDistance(
-                    routePolyline[i][0], routePolyline[i][1],
-                    routePolyline[i + 1][0], routePolyline[i + 1][1]
-                );
+        // FIX: Check if user has actually started moving
+        const userHasStartedMoving = hasUserStartedMoving();
+        let timeRemainingMinutes;
+
+        if (userHasStartedMoving) {
+            // User is moving: Calculate progress-based ETA
+            // FIXED: Calculate remaining distance from ACTUAL GPS position on route
+            // Previously used currentStepIndex (maneuver index) which doesn't correspond to polyline indices
+            let remainingDistance = 0;
+            if (routePolyline && currentLat && currentLon) {
+                // Find where the driver actually is on the route polyline
+                const userRouteIndex = findNearestRouteIndex(currentLat, currentLon, routePolyline);
+                for (let i = userRouteIndex; i < routePolyline.length - 1; i++) {
+                    remainingDistance += calculateDistance(
+                        routePolyline[i][0], routePolyline[i][1],
+                        routePolyline[i + 1][0], routePolyline[i + 1][1]
+                    );
+                }
             }
-        }
 
-        // Calculate total route distance
-        let totalDistance = 0;
-        if (routePolyline) {
-            for (let i = 0; i < routePolyline.length - 1; i++) {
-                totalDistance += calculateDistance(
-                    routePolyline[i][0], routePolyline[i][1],
-                    routePolyline[i + 1][0], routePolyline[i + 1][1]
-                );
+            // Calculate total route distance
+            let totalDistance = 0;
+            if (routePolyline) {
+                for (let i = 0; i < routePolyline.length - 1; i++) {
+                    totalDistance += calculateDistance(
+                        routePolyline[i][0], routePolyline[i][1],
+                        routePolyline[i + 1][0], routePolyline[i + 1][1]
+                    );
+                }
             }
-        }
 
-        // Calculate progress percentage (0-100)
-        let progressPercent = 0;
-        if (totalDistance > 0) {
-            progressPercent = Math.max(0, Math.min(100, ((totalDistance - remainingDistance) / totalDistance) * 100));
-        }
+            // Calculate progress percentage (0-100)
+            let progressPercent = 0;
+            if (totalDistance > 0) {
+                progressPercent = Math.max(0, Math.min(100, ((totalDistance - remainingDistance) / totalDistance) * 100));
+            }
 
-        // Calculate time remaining based on progress
-        // If we've completed X% of the route, we have (100-X)% of time remaining
-        const timeRemainingMinutes = Math.round(originalDurationMinutes * (1 - (progressPercent / 100)));
+            // Calculate time remaining based on progress
+            // If we've completed X% of the route, we have (100-X)% of time remaining
+            timeRemainingMinutes = Math.round(originalDurationMinutes * (1 - (progressPercent / 100)));
 
-        // Sanity check: time remaining should be positive and less than original duration
-        if (timeRemainingMinutes < 0 || timeRemainingMinutes > originalDurationMinutes) {
-            console.warn('[ETA] Invalid time remaining calculated:', timeRemainingMinutes, 'original:', originalDurationMinutes);
-            return;
+            // Sanity check: time remaining should be positive and less than original duration
+            if (timeRemainingMinutes < 0 || timeRemainingMinutes > originalDurationMinutes) {
+                console.warn('[ETA] Invalid time remaining calculated:', timeRemainingMinutes, 'original:', originalDurationMinutes);
+                return;
+            }
+
+            console.log(`[Voice] ETA (moving): progress ${progressPercent.toFixed(1)}%, remaining ${(remainingDistance / 1000).toFixed(1)}km, time ${timeRemainingMinutes}min`);
+        } else {
+            // User hasn't started moving: Use original route duration
+            // This prevents GPS inaccuracy from announcing incorrect ETA
+            timeRemainingMinutes = originalDurationMinutes;
+            console.log(`[Voice] ETA (pre-movement): Using original duration ${originalDurationMinutes}min`);
         }
 
         const eta = new Date(now + timeRemainingMinutes * 60000);
@@ -9826,7 +9907,7 @@ function announceETAIfNeeded() {
             message = `You will arrive in ${timeRemainingMinutes} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
         }
 
-        console.log(`[Voice] ETA announcement: ${message} (progress: ${progressPercent.toFixed(1)}%, remaining: ${(remainingDistance / 1000).toFixed(1)}km, time: ${timeRemainingMinutes}min)`);
+        console.log(`[Voice] ETA announcement: ${message}`);
         speakMessage(message);
         lastETAAnnouncementTime = now;
         lastAnnouncedETA = eta;
