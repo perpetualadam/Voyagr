@@ -8138,6 +8138,42 @@ def check_speed_violation():
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
+@app.route('/api/speed-limit/metrics', methods=['GET'])
+def get_speed_limit_metrics():
+    """Get speed limit API usage metrics and statistics."""
+    try:
+        if not speed_limit_detector:
+            return jsonify({'success': False, 'error': 'Speed limit detector not available'})
+
+        metrics = speed_limit_detector.get_metrics()
+        return jsonify({'success': True, 'data': metrics})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/speed-limit/quota', methods=['GET'])
+def get_tomtom_quota():
+    """Get TomTom API quota and cost information."""
+    try:
+        if not speed_limit_detector:
+            return jsonify({'success': False, 'error': 'Speed limit detector not available'})
+
+        quota = speed_limit_detector.get_tomtom_quota()
+        return jsonify({'success': True, 'data': quota})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/api/speed-limit/metrics/reset', methods=['POST'])
+def reset_speed_limit_metrics():
+    """Reset speed limit metrics counters."""
+    try:
+        if not speed_limit_detector:
+            return jsonify({'success': False, 'error': 'Speed limit detector not available'})
+
+        speed_limit_detector.reset_metrics()
+        return jsonify({'success': True, 'message': 'Metrics reset successfully'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
 # ============================================================================
 # HAZARD AVOIDANCE ENDPOINTS
 # ============================================================================

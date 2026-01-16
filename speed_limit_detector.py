@@ -60,15 +60,53 @@ class SpeedLimitDetector:
         self.speed_limit_cache: OrderedDict = OrderedDict()
         self.cache_max_size = 1000  # Maximum cache entries
         self.last_update = 0
-        self.cache_expiry = 300  # 5 minutes
+        self.cache_expiry = 600  # 10 minutes (increased from 5)
         self.current_speed_limit = None
         self.previous_speed_limit = None
         self.speed_limit_changed = False
 
-        # Overpass API rate limiting (configurable for self-hosted)
-        self.overpass_rate_limit = float(os.getenv('OVERPASS_RATE_LIMIT', '2.0'))  # requests per second
+        # Overpass API rate limiting - disable for local instances
+        overpass_url = os.getenv('OVERPASS_API_URL', 'http://overpass-api.de/api/interpreter')
+        is_local_overpass = 'localhost' in overpass_url or '127.0.0.1' in overpass_url or '81.0.246.97' in overpass_url
+
+        if is_local_overpass:
+            self.overpass_rate_limit = 0.0  # No rate limiting for local instance
+            self.overpass_min_interval = 0.0
+            logger.info("[Speed Limit] Local Overpass detected - rate limiting disabled")
+        else:
+            self.overpass_rate_limit = float(os.getenv('OVERPASS_RATE_LIMIT', '2.0'))  # requests per second
+            self.overpass_min_interval = 1.0 / self.overpass_rate_limit
+            logger.info(f"[Speed Limit] Public Overpass - rate limit: {self.overpass_rate_limit} req/s")
+
         self.overpass_last_request = 0
-        self.overpass_min_interval = 1.0 / self.overpass_rate_limit  # seconds between requests
+
+        # Speed limit change detection
+        self.last_location = None  # (lat, lon) tuple for change detection
+
+        # API Usage Metrics
+        self.metrics = {
+            'tomtom_calls': 0,
+            'tomtom_success': 0,
+            'tomtom_failures': 0,
+            'overpass_calls': 0,
+            'overpass_maxspeed_hits': 0,
+            'overpass_highway_inferred': 0,
+            'overpass_failures': 0,
+            'cache_hits': 0,
+            'cache_misses': 0,
+            'default_fallbacks': 0,
+            'speed_limit_changes': 0,
+            'total_requests': 0
+        }
+
+        # TomTom API quota tracking (most plans have monthly limits)
+        self.tomtom_quota = {
+            'daily_calls': 0,
+            'monthly_calls': 0,
+            'last_reset_day': datetime.now().day,
+            'last_reset_month': datetime.now().month,
+            'estimated_cost': 0.0  # Track estimated API costs
+        }
         
     def _haversine_distance(self, lat1: float, lon1: float, lat2: float, lon2: float) -> float:
         """
@@ -128,11 +166,53 @@ class SpeedLimitDetector:
         if expired_keys:
             logger.info(f"[Speed Limit Cache] Cleaned up {len(expired_keys)} expired entries")
 
+    def _reset_tomtom_quota_if_needed(self) -> None:
+        """Reset TomTom quota counters daily/monthly."""
+        now = datetime.now()
+
+        # Reset daily counter
+        if now.day != self.tomtom_quota['last_reset_day']:
+            logger.info(f"[TomTom Quota] Daily reset - Previous: {self.tomtom_quota['daily_calls']} calls")
+            self.tomtom_quota['daily_calls'] = 0
+            self.tomtom_quota['last_reset_day'] = now.day
+
+        # Reset monthly counter
+        if now.month != self.tomtom_quota['last_reset_month']:
+            logger.info(f"[TomTom Quota] Monthly reset - Previous: {self.tomtom_quota['monthly_calls']} calls, Cost: ${self.tomtom_quota['estimated_cost']:.2f}")
+            self.tomtom_quota['monthly_calls'] = 0
+            self.tomtom_quota['estimated_cost'] = 0.0
+            self.tomtom_quota['last_reset_month'] = now.month
+
+    def _track_tomtom_call(self, success: bool = True) -> None:
+        """Track TomTom API usage and estimated costs."""
+        self._reset_tomtom_quota_if_needed()
+
+        self.tomtom_quota['daily_calls'] += 1
+        self.tomtom_quota['monthly_calls'] += 1
+
+        # Estimate cost (typical pricing: $0.50 per 1000 calls for Traffic Flow API)
+        # Adjust this based on your actual TomTom plan
+        cost_per_call = 0.0005  # $0.50 / 1000 calls
+        self.tomtom_quota['estimated_cost'] += cost_per_call
+
+        if success:
+            self.metrics['tomtom_success'] += 1
+        else:
+            self.metrics['tomtom_failures'] += 1
+
+        # Log warning if approaching typical free tier limits (2500 calls/day)
+        if self.tomtom_quota['daily_calls'] % 500 == 0:
+            logger.info(f"[TomTom Quota] Daily: {self.tomtom_quota['daily_calls']} calls, Monthly: {self.tomtom_quota['monthly_calls']}, Est. Cost: ${self.tomtom_quota['estimated_cost']:.2f}")
+
     def _wait_for_overpass_rate_limit(self) -> None:
         """
         Enforce rate limiting for Overpass API calls.
-        Configurable for self-hosted instances via OVERPASS_RATE_LIMIT env var.
+        Skipped for local instances (rate_limit = 0).
         """
+        # Skip rate limiting for local Overpass instances
+        if self.overpass_rate_limit == 0.0:
+            return
+
         current_time = time.time()
         time_since_last = current_time - self.overpass_last_request
 
@@ -148,20 +228,23 @@ class SpeedLimitDetector:
                                      vehicle_type: str = 'car') -> Dict:
         """
         Get speed limit for a specific location.
-        
+
         Args:
             lat: Latitude
             lon: Longitude
             road_type: Type of road (motorway, trunk_road, primary_road, etc.)
             vehicle_type: Type of vehicle (car, truck, motorcycle, etc.)
-            
+
         Returns:
-            dict: Speed limit information
+            dict: Speed limit information with change detection
         """
         try:
+            # Track total requests
+            self.metrics['total_requests'] += 1
+
             # Check if location is on smart motorway
             smart_motorway_info = self._check_smart_motorway(lat, lon)
-            
+
             if smart_motorway_info['is_smart_motorway']:
                 # Get variable speed limit from smart motorway
                 speed_limit = self._get_smart_motorway_speed_limit(
@@ -170,15 +253,23 @@ class SpeedLimitDetector:
             else:
                 # Get default speed limit from OSM
                 speed_limit = self._get_osm_speed_limit(lat, lon, road_type)
-            
+
             # Apply vehicle-specific limits
             vehicle_limit = VEHICLE_SPEED_LIMITS.get(vehicle_type, {}).get(road_type)
             if vehicle_limit and vehicle_limit < speed_limit:
                 speed_limit = vehicle_limit
-            
+
+            # Detect speed limit changes
+            speed_limit_changed = False
+            if self.current_speed_limit is not None and self.current_speed_limit != speed_limit:
+                speed_limit_changed = True
+                self.metrics['speed_limit_changes'] += 1
+                logger.warning(f"[Speed Limit Change] {self.current_speed_limit} mph → {speed_limit} mph at ({lat:.4f}, {lon:.4f})")
+
             # Update current speed limit
             self._update_speed_limit(speed_limit)
-            
+            self.last_location = (lat, lon)
+
             return {
                 'speed_limit_mph': speed_limit,
                 'speed_limit_kmh': round(speed_limit * 1.60934, 1),
@@ -186,6 +277,8 @@ class SpeedLimitDetector:
                 'vehicle_type': vehicle_type,
                 'is_smart_motorway': smart_motorway_info['is_smart_motorway'],
                 'motorway_name': smart_motorway_info.get('motorway_name'),
+                'speed_limit_changed': speed_limit_changed,
+                'previous_speed_limit_mph': self.previous_speed_limit,
                 'timestamp': int(time.time())
             }
         except Exception as e:
@@ -251,6 +344,7 @@ class SpeedLimitDetector:
                 if time.time() - cached_data['timestamp'] < self.cache_expiry:
                     # Move to end (most recently used)
                     self.speed_limit_cache.move_to_end(cache_key)
+                    self.metrics['cache_hits'] += 1
                     logger.info(f"[Speed Limit] Cache hit: {cached_data['speed_limit']} mph (source: {cached_data.get('source', 'unknown')})")
                     return cached_data['speed_limit']
                 else:
@@ -259,10 +353,14 @@ class SpeedLimitDetector:
         except Exception as e:
             logger.error(f"[Speed Limit] Cache check failed: {e}")
 
+        # Cache miss
+        self.metrics['cache_misses'] += 1
+
         # Try TomTom Traffic Flow API first - uses freeFlowSpeed as speed limit proxy
         tomtom_api_key = os.getenv('TOMTOM_API_KEY')
         if tomtom_api_key:
             try:
+                self.metrics['tomtom_calls'] += 1
                 tomtom_url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
                 params = {
                     'key': tomtom_api_key,
@@ -283,6 +381,9 @@ class SpeedLimitDetector:
                         uk_limits = [20, 30, 40, 50, 60, 70]
                         speed_limit = min(uk_limits, key=lambda x: abs(x - speed_mph))
 
+                        # Track successful TomTom call
+                        self._track_tomtom_call(success=True)
+
                         # Cache the result using LRU method
                         self._add_to_cache(cache_key, {
                             'speed_limit': speed_limit,
@@ -292,12 +393,16 @@ class SpeedLimitDetector:
                         logger.info(f"[Speed Limit] TomTom: {free_flow_speed_kmh} km/h -> {speed_limit} mph")
                         return speed_limit
                     else:
+                        self._track_tomtom_call(success=False)
                         logger.warning(f"[Speed Limit] TomTom returned freeFlowSpeed=0")
                 else:
+                    self._track_tomtom_call(success=False)
                     logger.warning(f"[Speed Limit] TomTom API error: status={response.status_code}")
             except requests.exceptions.Timeout:
+                self._track_tomtom_call(success=False)
                 logger.warning("[Speed Limit] TomTom API timeout (3s)")
             except Exception as e:
+                self._track_tomtom_call(success=False)
                 logger.error(f"[Speed Limit] TomTom failed: {e}")
         else:
             logger.info("[Speed Limit] No TOMTOM_API_KEY configured, skipping TomTom")
@@ -305,11 +410,13 @@ class SpeedLimitDetector:
         # Fallback: Query Overpass API for maxspeed tag and road type (slower but explicit)
         # FIX: Use self-hosted Overpass on Contabo with rate limiting
         try:
+            self.metrics['overpass_calls'] += 1
+
             # Use self-hosted Overpass if configured, otherwise public
             # OVERPASS_API_URL is set in .env to Contabo server: http://81.0.246.97:12345/api/interpreter
             overpass_url = os.getenv('OVERPASS_API_URL', 'http://overpass-api.de/api/interpreter')
 
-            # Enforce rate limiting
+            # Enforce rate limiting (skipped for local instances)
             self._wait_for_overpass_rate_limit()
 
             # Expanded bbox from 0.005 to 0.001 degrees (~100m) for more precise matching
@@ -341,6 +448,10 @@ class SpeedLimitDetector:
                                 # If it was in km/h, convert to mph
                                 if 'km/h' in speed_str:
                                     speed = int(round(speed * 0.621371))
+
+                                # Track Overpass maxspeed hit
+                                self.metrics['overpass_maxspeed_hits'] += 1
+
                                 # Cache the result using LRU method
                                 self._add_to_cache(cache_key, {
                                     'speed_limit': speed,
@@ -375,6 +486,10 @@ class SpeedLimitDetector:
                         
                         if highway_type in highway_speed_map:
                             inferred_speed = highway_speed_map[highway_type]
+
+                            # Track Overpass highway inference
+                            self.metrics['overpass_highway_inferred'] += 1
+
                             self._add_to_cache(cache_key, {
                                 'speed_limit': inferred_speed,
                                 'timestamp': time.time(),
@@ -383,16 +498,21 @@ class SpeedLimitDetector:
                             logger.info(f"[Speed Limit] Inferred from highway={highway_type}: {inferred_speed} mph")
                             return inferred_speed
                 else:
+                    self.metrics['overpass_failures'] += 1
                     logger.warning(f"[Speed Limit] OSM returned no highway elements nearby")
             else:
+                self.metrics['overpass_failures'] += 1
                 logger.warning(f"[Speed Limit] OSM API error: status={response.status_code}")
         except requests.exceptions.Timeout:
+            self.metrics['overpass_failures'] += 1
             logger.warning("[Speed Limit] OSM API timeout (5s)")
         except Exception as e:
+            self.metrics['overpass_failures'] += 1
             logger.error(f"[Speed Limit] OSM failed: {e}")
 
         # FIX: Use road_type parameter (now defaults to 'residential' from API)
         # Fallback to residential (30mph) as safer default
+        self.metrics['default_fallbacks'] += 1
         default_limit = DEFAULT_SPEED_LIMITS.get(road_type, 30)
         logger.info(f"[Speed Limit] Using default for {road_type}: {default_limit} mph")
 
@@ -464,4 +584,85 @@ class SpeedLimitDetector:
         """Clear speed limit cache."""
         self.speed_limit_cache.clear()
         logger.info("[OK] Speed limit cache cleared")
+
+    def get_metrics(self) -> Dict:
+        """
+        Get API usage metrics and statistics.
+
+        Returns:
+            dict: Comprehensive metrics including source usage, cache performance, and costs
+        """
+        total = self.metrics['total_requests']
+        cache_total = self.metrics['cache_hits'] + self.metrics['cache_misses']
+
+        return {
+            'total_requests': total,
+            'cache': {
+                'hits': self.metrics['cache_hits'],
+                'misses': self.metrics['cache_misses'],
+                'hit_rate': round(self.metrics['cache_hits'] / cache_total * 100, 1) if cache_total > 0 else 0,
+                'size': len(self.speed_limit_cache),
+                'max_size': self.cache_max_size,
+                'ttl_seconds': self.cache_expiry
+            },
+            'tomtom': {
+                'total_calls': self.metrics['tomtom_calls'],
+                'successful': self.metrics['tomtom_success'],
+                'failures': self.metrics['tomtom_failures'],
+                'success_rate': round(self.metrics['tomtom_success'] / self.metrics['tomtom_calls'] * 100, 1) if self.metrics['tomtom_calls'] > 0 else 0,
+                'daily_calls': self.tomtom_quota['daily_calls'],
+                'monthly_calls': self.tomtom_quota['monthly_calls'],
+                'estimated_cost_usd': round(self.tomtom_quota['estimated_cost'], 2)
+            },
+            'overpass': {
+                'total_calls': self.metrics['overpass_calls'],
+                'maxspeed_hits': self.metrics['overpass_maxspeed_hits'],
+                'highway_inferred': self.metrics['overpass_highway_inferred'],
+                'failures': self.metrics['overpass_failures'],
+                'success_rate': round((self.metrics['overpass_maxspeed_hits'] + self.metrics['overpass_highway_inferred']) / self.metrics['overpass_calls'] * 100, 1) if self.metrics['overpass_calls'] > 0 else 0,
+                'rate_limit': self.overpass_rate_limit,
+                'is_local': self.overpass_rate_limit == 0.0
+            },
+            'sources': {
+                'tomtom_percentage': round(self.metrics['tomtom_success'] / total * 100, 1) if total > 0 else 0,
+                'overpass_maxspeed_percentage': round(self.metrics['overpass_maxspeed_hits'] / total * 100, 1) if total > 0 else 0,
+                'overpass_inferred_percentage': round(self.metrics['overpass_highway_inferred'] / total * 100, 1) if total > 0 else 0,
+                'default_fallback_percentage': round(self.metrics['default_fallbacks'] / total * 100, 1) if total > 0 else 0
+            },
+            'speed_limit_changes': self.metrics['speed_limit_changes']
+        }
+
+    def get_tomtom_quota(self) -> Dict:
+        """
+        Get TomTom API quota and cost information.
+
+        Returns:
+            dict: TomTom quota details
+        """
+        self._reset_tomtom_quota_if_needed()
+        return {
+            'daily_calls': self.tomtom_quota['daily_calls'],
+            'monthly_calls': self.tomtom_quota['monthly_calls'],
+            'estimated_monthly_cost_usd': round(self.tomtom_quota['estimated_cost'], 2),
+            'last_reset_day': self.tomtom_quota['last_reset_day'],
+            'last_reset_month': self.tomtom_quota['last_reset_month']
+        }
+
+    def reset_metrics(self):
+        """Reset all metrics counters (useful for testing or periodic resets)."""
+        self.metrics = {
+            'tomtom_calls': 0,
+            'tomtom_success': 0,
+            'tomtom_failures': 0,
+            'overpass_calls': 0,
+            'overpass_maxspeed_hits': 0,
+            'overpass_highway_inferred': 0,
+            'overpass_failures': 0,
+            'cache_hits': 0,
+            'cache_misses': 0,
+            'default_fallbacks': 0,
+            'speed_limit_changes': 0,
+            'total_requests': 0
+        }
+        logger.info("[Metrics] All metrics reset to zero")
 
