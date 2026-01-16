@@ -9,7 +9,11 @@
 
 ### 1. ✅ Remaining 70 mph Default Speed Limit
 
-**Issue**: The `/api/speed-violation` endpoint still had a default of 70 mph (motorway) instead of 30 mph (residential).
+**Issue**: The `/api/speed-violation` endpoint still had a hardcoded default of 70 mph, even though the earlier fix (commit 20dd787) changed `/api/speed-limit` to default to 'residential' (30 mph).
+
+**Context**:
+- **Earlier fix (20dd787)**: Changed `/api/speed-limit` road_type default from 'motorway' → 'residential'
+- **This fix**: Changed `/api/speed-violation` speed_limit_mph parameter default from 70 → 30
 
 **Location**: `voyagr_web.py` line 8127
 
@@ -24,10 +28,11 @@ speed_limit_mph = int(data.get('speed_limit_mph', 70))
 speed_limit_mph = int(data.get('speed_limit_mph', 30))
 ```
 
-**Impact**: 
+**Impact**:
 - Safer default when speed limit data is missing
-- Consistent with other endpoints that now default to 30 mph
+- Consistent with `/api/speed-limit` endpoint that now defaults to 30 mph
 - Prevents false "safe" readings on residential roads
+- Completes the speed limit default standardization across all endpoints
 
 ---
 
@@ -114,8 +119,8 @@ speed_limit_mph = int(data.get('speed_limit_mph', 30))
 
 ### Speed Limit Defaults
 All endpoints now consistently default to 30 mph (residential):
-- ✅ `/api/speed-limit` - line 8107 (already fixed)
-- ✅ `/api/speed-violation` - line 8127 (fixed in this update)
+- ✅ `/api/speed-limit` - line 8107 (fixed in commit 20dd787: road_type default 'motorway' → 'residential')
+- ✅ `/api/speed-violation` - line 8127 (fixed in this commit: speed_limit_mph default 70 → 30)
 - ✅ `/api/speed-warning` - line 8996 (uses lookup table with 30 mph fallback)
 
 ### Widget Positioning
