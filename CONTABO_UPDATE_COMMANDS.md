@@ -12,13 +12,13 @@
 Copy and paste these commands into your Contabo SSH session:
 
 ```bash
-# 1. Navigate to the Voyagr directory
-cd /root/Voyagr
+# 1. Navigate to the voyagr directory
+cd /root/voyagr
 
 # 2. Pull the latest changes from GitHub
 git pull origin main
 
-# 3. Restart the Voyagr service to apply changes
+# 3. Restart the voyagr service to apply changes
 systemctl restart voyagr
 
 # 4. Check service status
@@ -44,10 +44,10 @@ curl -I http://localhost:5000
 ssh root@your-contabo-ip
 ```
 
-### Step 2: Navigate to Voyagr Directory
+### Step 2: Navigate to voyagr Directory
 
 ```bash
-cd /root/Voyagr
+cd /root/voyagr
 ```
 
 ### Step 3: Check Current Status
@@ -70,13 +70,15 @@ git pull origin main
 
 **Expected Output**:
 ```
-Updating 3443a3b..4a2395a
+Updating 3443a3b..f1ddd19
 Fast-forward
- UI_FIXES_SUMMARY.md     | 151 +++++++++++++++++++++++++++++++++++++++++++++
- static/css/voyagr.css   |   2 +-
- voyagr_web.py           |   4 +-
- 3 files changed, 154 insertions(+), 3 deletions(-)
- create mode 100644 UI_FIXES_SUMMARY.md
+ ANDROID_APP_DEPENDENCIES_ANALYSIS.md | 267 ++++++++++++++++++++++++++++++
+ CONTABO_UPDATE_COMMANDS.md           | 262 +++++++++++++++++++++++++++++
+ DEPLOYMENT_SUMMARY_2026_01_16.md     | 220 ++++++++++++++++++++++++
+ UI_FIXES_SUMMARY.md                  | 151 +++++++++++++++++
+ static/css/voyagr.css                |   2 +-
+ voyagr_web.py                        |   4 +-
+ 6 files changed, 904 insertions(+), 2 deletions(-)
 ```
 
 ### Step 5: Restart Voyagr Service
@@ -159,7 +161,7 @@ journalctl -u voyagr -n 100 --no-pager
 netstat -tulpn | grep 5000
 
 # Manually test the app
-cd /root/Voyagr
+cd /root/voyagr
 python3 voyagr_web.py
 # Press Ctrl+C to stop, then restart service
 ```
@@ -198,7 +200,7 @@ systemctl start voyagr
 
 You'll know the deployment was successful when:
 
-1. ✅ `git log --oneline -1` shows: `4a2395a Update UI_FIXES_SUMMARY.md to clarify speed limit fix context`
+1. ✅ `git log --oneline -1` shows: `f1ddd19 Add deployment summary for 2026-01-16`
 2. ✅ `systemctl status voyagr` shows: `active (running)`
 3. ✅ `curl -I http://localhost:5000` returns: `HTTP/1.1 200 OK`
 4. ✅ No errors in `journalctl -u voyagr -n 50`

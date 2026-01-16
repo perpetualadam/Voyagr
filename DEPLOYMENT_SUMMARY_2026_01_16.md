@@ -32,8 +32,8 @@
 # 1. Connect to Contabo
 ssh root@your-contabo-ip
 
-# 2. Navigate to Voyagr directory
-cd /root/Voyagr
+# 2. Navigate to voyagr directory
+cd /root/voyagr
 
 # 3. Pull latest changes
 git pull origin main
@@ -54,14 +54,15 @@ curl -I http://localhost:5000
 ### Expected Output After Pull
 
 ```
-Updating 3443a3b..b287411
+Updating 3443a3b..f1ddd19
 Fast-forward
  ANDROID_APP_DEPENDENCIES_ANALYSIS.md | 267 ++++++++++++++++++++++++++++++
  CONTABO_UPDATE_COMMANDS.md           | 262 +++++++++++++++++++++++++++++
+ DEPLOYMENT_SUMMARY_2026_01_16.md     | 220 ++++++++++++++++++++++++
  UI_FIXES_SUMMARY.md                  | 151 +++++++++++++++++
  static/css/voyagr.css                |   2 +-
  voyagr_web.py                        |   4 +-
- 5 files changed, 684 insertions(+), 2 deletions(-)
+ 6 files changed, 904 insertions(+), 2 deletions(-)
 ```
 
 ---
@@ -192,7 +193,7 @@ git status                  # Check working directory status
 
 You'll know the deployment was successful when:
 
-1. ✅ `git log --oneline -1` shows: `b287411 Add Contabo deployment commands and Android app dependencies analysis`
+1. ✅ `git log --oneline -1` shows: `f1ddd19 Add deployment summary for 2026-01-16`
 2. ✅ `systemctl status voyagr` shows: `active (running)`
 3. ✅ `curl -I http://localhost:5000` returns: `HTTP/1.1 200 OK`
 4. ✅ No errors in `journalctl -u voyagr -n 50`
