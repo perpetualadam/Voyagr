@@ -33,7 +33,7 @@
 ssh root@your-contabo-ip
 
 # 2. Navigate to voyagr directory
-cd /root/voyagr
+cd /opt/voyagr
 
 # 3. Pull latest changes
 git pull origin main

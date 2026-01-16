@@ -13,7 +13,7 @@ Copy and paste these commands into your Contabo SSH session:
 
 ```bash
 # 1. Navigate to the voyagr directory
-cd /root/voyagr
+cd /opt/voyagr
 
 # 2. Pull the latest changes from GitHub
 git pull origin main
@@ -47,7 +47,7 @@ ssh root@your-contabo-ip
 ### Step 2: Navigate to voyagr Directory
 
 ```bash
-cd /root/voyagr
+cd /opt/voyagr
 ```
 
 ### Step 3: Check Current Status
@@ -161,7 +161,7 @@ journalctl -u voyagr -n 100 --no-pager
 netstat -tulpn | grep 5000
 
 # Manually test the app
-cd /root/voyagr
+cd /opt/voyagr
 python3 voyagr_web.py
 # Press Ctrl+C to stop, then restart service
 ```
