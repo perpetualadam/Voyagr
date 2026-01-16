@@ -5786,50 +5786,70 @@ let speedWidgetEnabled = localStorage.getItem('speedWidgetEnabled') !== 'false';
 let currentSpeedMph = 0;
 let currentSpeedLimitMph = 0;
 let speedLimitThreshold = 3; // mph over limit to trigger warning
+
+// GPS speed tracking (FIX: Global variable to store current GPS speed)
+let currentGpsSpeedMph = 0;
+let currentGpsSpeedKmh = 0;
+
+// Speed limit API throttling (FIX: Prevent API spam)
+let lastSpeedLimitFetch = 0;
+let lastSpeedLimitPosition = null;
+const SPEED_LIMIT_FETCH_INTERVAL = 10000;  // 10 seconds
+const SPEED_LIMIT_DISTANCE_THRESHOLD = 100;  // 100 meters
+
+// Speed limit API error handling
+let speedLimitRetryCount = 0;
+const SPEED_LIMIT_MAX_RETRIES = 3;
+let speedLimitRetryTimeout = null;
 /**
  * updateSpeedWidget function
  * @function updateSpeedWidget
- * @param {*} speedMph - Current speed in MPH (from GPS)
- * @param {*} speedLimitMph - Speed limit in MPH (from API)
- * @returns {*} Return value description
+ * @param {number} currentSpeedInMph - Current GPS speed in MPH (always MPH internally)
+ * @param {number|null} speedLimitInMph - Speed limit in MPH (from API, can be null)
+ * @returns {void}
  */
-function updateSpeedWidget(speedMph, speedLimitMph = null) {
+function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
     const widget = document.getElementById('speedWidget');
     if (!widget) return;
+
+    // Store in global variable for other functions to access
+    currentGpsSpeedMph = currentSpeedInMph;
+    currentGpsSpeedKmh = currentSpeedInMph * 1.60934;
 
     // Get user's preferred unit using global speedUnit variable
     const displaySpeedUnit = getSpeedUnit();
 
     // Convert from MPH to user's preferred unit
-    // speedMph is already in mph, so:
-    // - If user wants mph: display as-is
-    // - If user wants km/h: convert mph to km/h (multiply by 1.60934)
+    // currentSpeedInMph is always in mph internally, convert for display
     let displaySpeed;
     if (speedUnit === 'mph') {
-        displaySpeed = speedMph;
+        displaySpeed = currentSpeedInMph;
     } else {
         // Convert mph to km/h
-        displaySpeed = speedMph * 1.60934;
+        displaySpeed = currentSpeedInMph * 1.60934;
     }
 
-    // Update current speed
+    // Update current speed display
     document.getElementById('speedValue').textContent = Math.round(displaySpeed);
     document.getElementById('speedUnitDisplay').textContent = displaySpeedUnit;
 
     // Update speed limit if provided
-    if (speedLimitMph !== null && speedLimitMph > 0) {
+    if (speedLimitInMph !== null && speedLimitInMph > 0) {
+        // Store in global variable
+        currentSpeedLimitMph = speedLimitInMph;
+
         let displaySpeedLimit;
         if (speedUnit === 'mph') {
-            displaySpeedLimit = speedLimitMph;
+            displaySpeedLimit = speedLimitInMph;
         } else {
             // Convert mph to km/h
-            displaySpeedLimit = speedLimitMph * 1.60934;
+            displaySpeedLimit = speedLimitInMph * 1.60934;
         }
         document.getElementById('speedLimitValue').textContent = Math.round(displaySpeedLimit);
         document.getElementById('speedLimitUnit').textContent = displaySpeedUnit;
 
         // Check if speeding (compare in same units - mph)
-        const speedDiff = speedMph - speedLimitMph;
+        const speedDiff = currentSpeedInMph - speedLimitInMph;
         const warningElement = document.getElementById('speedWarning');
         if (speedDiff > speedLimitThreshold) {
             warningElement.style.display = 'block';
@@ -5847,10 +5867,161 @@ function updateSpeedWidget(speedMph, speedLimitMph = null) {
         console.log('[Speed Widget] No speed limit available');
     }
 
-    // Show widget if tracking is active OR navigation is in progress
-    if ((isTrackingActive || routeInProgress) && speedWidgetEnabled) {
-        widget.style.display = 'block';
+    // Use consolidated visibility function
+    updateSpeedWidgetVisibility();
+}
+
+/**
+ * Consolidated function to manage speed widget visibility
+ * Shows widget when: tracking is active OR navigation is in progress AND widget is enabled
+ * @returns {void}
+ */
+function updateSpeedWidgetVisibility() {
+    const widget = document.getElementById('speedWidget');
+    if (!widget) return;
+
+    const shouldShow = (isTrackingActive || routeInProgress) && speedWidgetEnabled;
+    widget.style.display = shouldShow ? 'block' : 'none';
+
+    if (shouldShow) {
+        console.log('[Speed Widget] Visible (tracking:', isTrackingActive, 'route:', routeInProgress, 'enabled:', speedWidgetEnabled, ')');
+    } else {
+        console.log('[Speed Widget] Hidden (tracking:', isTrackingActive, 'route:', routeInProgress, 'enabled:', speedWidgetEnabled, ')');
     }
+}
+
+/**
+ * Calculate distance between two coordinates in meters (Haversine formula)
+ * @param {number} lat1 - Latitude of first point
+ * @param {number} lon1 - Longitude of first point
+ * @param {number} lat2 - Latitude of second point
+ * @param {number} lon2 - Longitude of second point
+ * @returns {number} Distance in meters
+ */
+function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000; // Earth's radius in meters
+    const φ1 = lat1 * Math.PI / 180;
+    const φ2 = lat2 * Math.PI / 180;
+    const Δφ = (lat2 - lat1) * Math.PI / 180;
+    const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+              Math.cos(φ1) * Math.cos(φ2) *
+              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+    return R * c; // Distance in meters
+}
+
+/**
+ * Fetch speed limit with throttling and retry logic
+ * @param {number} lat - Current latitude
+ * @param {number} lon - Current longitude
+ * @param {number} currentSpeedMph - Current GPS speed in mph
+ * @param {string} roadType - Type of road (residential, motorway, etc.)
+ * @param {number} retryAttempt - Current retry attempt (for exponential backoff)
+ * @returns {void}
+ */
+function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residential', retryAttempt = 0) {
+    const now = Date.now();
+    const timeSinceLastFetch = now - lastSpeedLimitFetch;
+
+    // Calculate distance moved since last fetch
+    let distanceMoved = 999; // Default to large value to trigger first fetch
+    if (lastSpeedLimitPosition) {
+        distanceMoved = calculateDistanceMeters(
+            lat, lon,
+            lastSpeedLimitPosition.lat,
+            lastSpeedLimitPosition.lon
+        );
+    }
+
+    // Only fetch if enough time has passed OR moved significant distance
+    if (timeSinceLastFetch > SPEED_LIMIT_FETCH_INTERVAL || distanceMoved > SPEED_LIMIT_DISTANCE_THRESHOLD) {
+        console.log(`[Speed Limit] Fetching (time: ${timeSinceLastFetch}ms, distance: ${distanceMoved.toFixed(0)}m, attempt: ${retryAttempt + 1})`);
+
+        fetch(`/api/speed-limit?lat=${lat}&lon=${lon}&road_type=${roadType}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                if (data.success && data.data) {
+                    const speedLimitMph = data.data.speed_limit_mph || data.data.speed_limit;
+                    console.log('[Speed Limit] API response:', data.data, 'Extracted limit:', speedLimitMph);
+
+                    // Update widget with current GPS speed and fetched limit
+                    updateSpeedWidget(currentSpeedMph, speedLimitMph);
+
+                    // Update throttling state
+                    lastSpeedLimitFetch = now;
+                    lastSpeedLimitPosition = { lat, lon };
+
+                    // Reset retry count on success
+                    speedLimitRetryCount = 0;
+                } else {
+                    console.warn('[Speed Limit] No data in response:', data);
+                    updateSpeedWidget(currentSpeedMph, null);
+                }
+            })
+            .catch(err => {
+                console.error('[Speed Limit] API error:', err);
+
+                // Implement exponential backoff retry
+                if (retryAttempt < SPEED_LIMIT_MAX_RETRIES) {
+                    const backoffDelay = Math.pow(2, retryAttempt) * 1000; // 1s, 2s, 4s
+                    console.log(`[Speed Limit] Retrying in ${backoffDelay}ms (attempt ${retryAttempt + 1}/${SPEED_LIMIT_MAX_RETRIES})`);
+
+                    // Clear any existing retry timeout
+                    if (speedLimitRetryTimeout) {
+                        clearTimeout(speedLimitRetryTimeout);
+                    }
+
+                    // Schedule retry with exponential backoff
+                    speedLimitRetryTimeout = setTimeout(() => {
+                        fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, retryAttempt + 1);
+                    }, backoffDelay);
+                } else {
+                    console.error('[Speed Limit] Max retries reached, giving up');
+                    updateSpeedWidget(currentSpeedMph, null);
+                    speedLimitRetryCount = 0;
+                }
+            });
+    } else {
+        // Just update speed display without fetching new limit
+        updateSpeedWidget(currentSpeedMph, currentSpeedLimitMph || null);
+    }
+}
+
+/**
+ * Get current road type from route data or default to safe value
+ * @returns {string} Road type (residential, motorway, primary, etc.)
+ */
+function getCurrentRoadType() {
+    // Try to get road type from current route step
+    if (currentRouteSteps && currentStepIndex >= 0 && currentStepIndex < currentRouteSteps.length) {
+        const currentStep = currentRouteSteps[currentStepIndex];
+
+        // Check for road_class or highway type in step data
+        if (currentStep.road_class) {
+            return currentStep.road_class;
+        }
+
+        // Infer from instruction text (fallback)
+        const instruction = (currentStep.instruction || '').toLowerCase();
+        if (instruction.includes('motorway') || instruction.includes('m1') || instruction.includes('m25')) {
+            return 'motorway';
+        } else if (instruction.includes('a-road') || instruction.includes('a road')) {
+            return 'primary';
+        } else if (instruction.includes('b-road') || instruction.includes('b road')) {
+            return 'secondary';
+        }
+    }
+
+    // Safe default: residential (30 mph in UK) instead of motorway (70 mph)
+    return 'residential';
 }
 
 /**
@@ -8607,25 +8778,11 @@ function startGPSTracking() {
             // Update speed warnings (assume local roads by default)
             updateSpeedWarning(lat, lon, speedMph, 'local');
 
-            // ===== UPDATE SPEED WIDGET =====
-            // Fetch speed limit for current location and update widget
-            fetch(`/api/speed-limit?lat=${lat}&lon=${lon}`)
-                .then(response => response.json())
-                .then(data => {
-                    if (data.success && data.data) {
-                        // FIXED: Extract speed_limit_mph from data.data object
-                        const speedLimitMph = data.data.speed_limit_mph || data.data.speed_limit;
-                        console.log('[Speed Limit] API response:', data.data, 'Extracted limit:', speedLimitMph);
-                        updateSpeedWidget(speedMph, speedLimitMph);
-                    } else {
-                        console.log('[Speed Limit] No data in response:', data);
-                        updateSpeedWidget(speedMph, null);
-                    }
-                })
-                .catch(err => {
-                    console.log('[Speed Limit] API error:', err);
-                    updateSpeedWidget(speedMph, null);
-                });
+            // ===== UPDATE SPEED WIDGET WITH THROTTLED API CALLS =====
+            // FIX: Use throttled fetch to prevent API spam
+            // Get current road type from route data (defaults to residential for safety)
+            const roadType = getCurrentRoadType();
+            fetchSpeedLimitThrottled(lat, lon, speedMph, roadType);
         },
         (error) => {
             showStatus('GPS Error: ' + error.message, 'error');
@@ -8650,11 +8807,8 @@ function stopGPSTracking() {
         gpsWatchId = null;
     }
     isTrackingActive = false;
-    // Hide speed widget when tracking stops
-    const speedWidget = document.getElementById('speedWidget');
-    if (speedWidget) {
-        speedWidget.style.display = 'none';
-    }
+    // Hide speed widget when tracking stops (use consolidated function)
+    updateSpeedWidgetVisibility();
     showStatus('🛑 GPS Tracking stopped', 'info');
 }
 
@@ -10612,12 +10766,8 @@ function startTurnByTurnNavigation(routeData) {
     }
 
     // ===== SHOW SPEED WIDGET during navigation =====
-    // Speed widget shows current GPS speed and road speed limit for safety
-    const speedWidget = document.getElementById('speedWidget');
-    if (speedWidget && speedWidgetEnabled) {
-        speedWidget.style.display = 'block';
-        console.log('[Speed Widget] Enabled for navigation');
-    }
+    // Speed widget shows current GPS speed and road speed limit for safety (use consolidated function)
+    updateSpeedWidgetVisibility();
 
     // ===== SHOW TURN INSTRUCTION WIDGET during navigation =====
     showTurnInstructionWidget();
@@ -10715,11 +10865,8 @@ function stopTurnByTurnNavigation() {
     }
     journeyOverviewActive = false;
 
-    // ===== HIDE SPEED WIDGET =====
-    const speedWidget = document.getElementById('speedWidget');
-    if (speedWidget) {
-        speedWidget.style.display = 'none';
-    }
+    // ===== HIDE SPEED WIDGET (use consolidated function) =====
+    updateSpeedWidgetVisibility();
 
     // ===== HIDE TURN INSTRUCTION WIDGET =====
     hideTurnInstructionWidget();

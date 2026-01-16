@@ -8103,7 +8103,8 @@ def get_speed_limit():
 
         lat = float(request.args.get('lat', 51.5074))
         lon = float(request.args.get('lon', -0.1278))
-        road_type = request.args.get('road_type', 'motorway')
+        # FIX: Changed default from 'motorway' (70mph) to 'residential' (30mph) for safety
+        road_type = request.args.get('road_type', 'residential')
         vehicle_type = request.args.get('vehicle_type', 'car')
 
         result = speed_limit_detector.get_speed_limit_for_location(
