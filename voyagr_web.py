@@ -4200,7 +4200,8 @@ HTML_TEMPLATE = '''
                             <span class="preference-label">Price Preference</span>
                             <select id="parkingPricePreference" onchange="saveParkingPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="any" selected>Any Price</option>
-                                <option value="free">Free Only</option>
+                                <option value="free">Free Only (Any Type)</option>
+                                <option value="free_street">🆓 Free Street Parking</option>
                                 <option value="paid">Paid Parking</option>
                             </select>
                         </div>
@@ -8804,10 +8805,27 @@ def search_parking():
                 # Filter by price preference if specified
                 if price_pref != 'any':
                     fee_tag = tags.get('fee', '').lower()
+                    access_tag = tags.get('access', '').lower()
+                    supervised_tag = tags.get('supervised', '').lower()
+                    parking_subtype = tags.get('parking', '').lower()
 
                     if price_pref == 'free':
                         # Only include if explicitly marked as free (fee=no)
                         if fee_tag != 'no':
+                            continue
+                    elif price_pref == 'free_street':
+                        # Free street parking: must be street parking + free + publicly accessible
+                        # 1. Must be street parking
+                        if parking_subtype not in ['street_side', 'lane', 'on_street']:
+                            continue
+                        # 2. Must be free (fee=no)
+                        if fee_tag != 'no':
+                            continue
+                        # 3. Must NOT be restricted access (no permits/residents only)
+                        if access_tag in ['private', 'permit', 'residents', 'permissive', 'customers']:
+                            continue
+                        # 4. Optionally avoid supervised/patrolled parking
+                        if supervised_tag == 'yes':
                             continue
                     elif price_pref == 'paid':
                         # Only include if explicitly marked as paid (fee=yes)
@@ -8823,19 +8841,47 @@ def search_parking():
                         name = 'Multi-Storey Car Park'
                     elif parking_subtype == 'underground':
                         name = 'Underground Parking'
-                    elif parking_subtype == 'street_side' or parking_subtype == 'lane':
+                    elif parking_subtype == 'street_side' or parking_subtype == 'lane' or parking_subtype == 'on_street':
                         name = 'Street Parking'
                     elif parking_subtype == 'surface':
                         name = 'Parking Lot'
                     else:
                         name = 'Parking'
 
-                # Add fee info to name if available
+                # Add fee info and restrictions to name
                 fee_tag = tags.get('fee', '')
+                access_tag = tags.get('access', '')
+                maxstay_tag = tags.get('maxstay', '')
+                supervised_tag = tags.get('supervised', '')
+
+                # Build suffix with relevant info
+                suffix_parts = []
+
                 if fee_tag == 'no':
-                    name += ' (Free)'
+                    suffix_parts.append('Free')
                 elif fee_tag == 'yes':
-                    name += ' (Paid)'
+                    suffix_parts.append('Paid')
+
+                # Add time limit if present
+                if maxstay_tag:
+                    suffix_parts.append(f'{maxstay_tag} max')
+
+                # Add access restrictions
+                if access_tag == 'permit':
+                    suffix_parts.append('Permit Only')
+                elif access_tag == 'residents':
+                    suffix_parts.append('Residents Only')
+                elif access_tag == 'customers':
+                    suffix_parts.append('Customers Only')
+
+                # Add supervision status for free street parking
+                if parking_subtype in ['street_side', 'lane', 'on_street'] and fee_tag == 'no':
+                    if supervised_tag == 'no':
+                        suffix_parts.append('Unpatrolled')
+
+                # Combine suffix
+                if suffix_parts:
+                    name += ' (' + ', '.join(suffix_parts) + ')'
 
                 parking_list.append({
                     'name': name,
@@ -8845,7 +8891,12 @@ def search_parking():
                     'address': tags.get('addr:street', '') or tags.get('operator', '') or 'Unknown',
                     'type': 'parking',
                     'fee': fee_tag,
-                    'parking_type': tags.get('parking', 'unknown')
+                    'parking_type': tags.get('parking', 'unknown'),
+                    'access': access_tag,
+                    'maxstay': maxstay_tag,
+                    'supervised': supervised_tag,
+                    'capacity': tags.get('capacity', ''),
+                    'surface': tags.get('surface', '')
                 })
             except (ValueError, KeyError) as e:
                 print(f"[Parking] Error processing element: {e}")
