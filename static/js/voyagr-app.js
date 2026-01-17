@@ -2040,6 +2040,12 @@ function displaySingleRoute(index) {
         fetchAndDisplayRouteTraffic();
     }
 
+    // Plot traffic lights on the route if enabled
+    if (typeof plotTrafficLightsOnRoute === 'function' && polylinePoints.length > 0) {
+        console.log('[Routes] Plotting traffic lights on selected route');
+        plotTrafficLightsOnRoute(polylinePoints);
+    }
+
     console.log(`[Routes] Showing only route ${index + 1}: ${route.name}`);
 }
 
@@ -5561,13 +5567,20 @@ async function selectParking(parking, destinationCoords) {
  * @returns {*} Return value description
  */
 function displayParkingRoutes(drivingData, walkingData, parking, destination) {
+    console.log('[Parking] displayParkingRoutes called');
+    console.log('[Parking] drivingData:', drivingData);
+    console.log('[Parking] walkingData:', walkingData);
+
     // Remove previous parking routes
     if (parkingDrivingRoute && typeof parkingDrivingRoute.remove === 'function') parkingDrivingRoute.remove();
     if (parkingWalkingRoute && typeof parkingWalkingRoute.remove === 'function') parkingWalkingRoute.remove();
 
     // Decode and display driving route (blue) with MapLibre
-    if (drivingData.geometry) {
-        const drivingCoords = polyline.decode(drivingData.geometry);
+    if (drivingData && drivingData.geometry) {
+        console.log('[Parking] Decoding driving route geometry');
+        // Use precision 5 for OSRM/GraphHopper
+        const drivingCoords = decodePolyline(drivingData.geometry, 5);
+        console.log('[Parking] Driving route has', drivingCoords.length, 'points');
         parkingDrivingRoute = MapLibreHelpers.addPolyline(map, drivingCoords, {
             color: '#2196F3',
             weight: 5,
@@ -5576,8 +5589,10 @@ function displayParkingRoutes(drivingData, walkingData, parking, destination) {
     }
 
     // Decode and display walking route (green) with MapLibre
-    if (walkingData.geometry) {
-        const walkingCoords = polyline.decode(walkingData.geometry);
+    if (walkingData && walkingData.geometry) {
+        console.log('[Parking] Decoding walking route geometry');
+        const walkingCoords = decodePolyline(walkingData.geometry, 5);
+        console.log('[Parking] Walking route has', walkingCoords.length, 'points');
         parkingWalkingRoute = MapLibreHelpers.addPolyline(map, walkingCoords, {
             color: '#4CAF50',
             weight: 4,
@@ -5587,9 +5602,14 @@ function displayParkingRoutes(drivingData, walkingData, parking, destination) {
 
     // Fit map to show both routes
     const allCoords = [];
-    if (drivingData.geometry) allCoords.push(...polyline.decode(drivingData.geometry));
-    if (walkingData.geometry) allCoords.push(...polyline.decode(walkingData.geometry));
+    if (drivingData && drivingData.geometry) {
+        allCoords.push(...decodePolyline(drivingData.geometry, 5));
+    }
+    if (walkingData && walkingData.geometry) {
+        allCoords.push(...decodePolyline(walkingData.geometry, 5));
+    }
     if (allCoords.length > 0) {
+        console.log('[Parking] Fitting map to', allCoords.length, 'total points');
         MapLibreHelpers.fitMapBounds(map, allCoords, { padding: 50 });
     }
 }
