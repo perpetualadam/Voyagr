@@ -377,6 +377,8 @@ class SpeedLimitDetector:
                 params = {
                     'key': tomtom_api_key,
                     'points': points_str,
+                    'headings': '0;0',  # Required parameter
+                    'timestamps': '2021-01-01T00:00:00Z;2021-01-01T00:01:00Z',  # Required parameter
                     'fields': '{route{properties{speedLimits{value,unit,type}}}}',
                     'vehicleType': 'PassengerCar',
                     'measurementSystem': 'metric'
