@@ -390,16 +390,16 @@ class SpeedLimitDetector:
                     snap_data = response.json()
 
                     # Parse response: route -> properties -> speedLimits
+                    # Response structure: {"route": [{"properties": {"speedLimits": {"value": 70, "unit": "kmph"}}}]}
                     if 'route' in snap_data:
                         route_features = snap_data['route']
                         if isinstance(route_features, list) and len(route_features) > 0:
                             # Get first route segment
                             segment = route_features[0]
                             if 'properties' in segment and 'speedLimits' in segment['properties']:
-                                speed_limits = segment['properties']['speedLimits']
-                                if isinstance(speed_limits, list) and len(speed_limits) > 0:
-                                    # Get first speed limit
-                                    speed_limit_data = speed_limits[0]
+                                # speedLimits is an object, not an array
+                                speed_limit_data = segment['properties']['speedLimits']
+                                if isinstance(speed_limit_data, dict):
                                     speed_limit_kmh = speed_limit_data.get('value', 0)
 
                                     if speed_limit_kmh > 0:
