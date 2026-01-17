@@ -11425,8 +11425,8 @@ function togglePreference(pref) {
         console.log('[Settings] Variable speed alerts:', isActive ? 'enabled' : 'disabled');
         showStatus(`📊 Variable speed alerts ${isActive ? 'enabled' : 'disabled'}`, 'info');
     } else if (pref === 'cameras') {
-        console.log('[Settings] Camera avoidance:', isActive ? 'enabled' : 'disabled');
-        showStatus(`📷 Camera avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
+        console.log('[Settings] Optimised routing:', isActive ? 'enabled' : 'disabled');
+        showStatus(`⚡ Optimised routing ${isActive ? 'enabled' : 'disabled'}`, 'info');
     }
 
     // Save all settings to persistent storage

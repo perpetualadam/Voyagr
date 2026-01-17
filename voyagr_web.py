@@ -4012,7 +4012,7 @@ HTML_TEMPLATE = '''
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">📷 Avoid Cameras</span>
+                            <span class="preference-label">⚡ Optimised Routing</span>
                             <button class="toggle-switch" id="avoidCameras" data-pref="cameras" onclick="togglePreference('cameras')"></button>
                         </div>
 
