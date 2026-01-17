@@ -187,7 +187,12 @@ class SpeedLimitDetector:
             self.tomtom_quota['last_reset_month'] = now.month
 
     def _track_tomtom_call(self, success: bool = True) -> None:
-        """Track TomTom API usage and estimated costs."""
+        """
+        Track TomTom API usage and estimated costs.
+        Note: Individual API success/failure metrics are tracked separately
+        in tomtom_snap_to_roads_* and tomtom_traffic_flow_* metrics.
+        This method only tracks combined quota usage.
+        """
         self._reset_tomtom_quota_if_needed()
 
         self.tomtom_quota['daily_calls'] += 1
@@ -197,11 +202,6 @@ class SpeedLimitDetector:
         # Adjust this based on your actual TomTom plan
         cost_per_call = 0.0005  # $0.50 / 1000 calls
         self.tomtom_quota['estimated_cost'] += cost_per_call
-
-        if success:
-            self.metrics['tomtom_success'] += 1
-        else:
-            self.metrics['tomtom_failures'] += 1
 
         # Log warning if approaching typical free tier limits (2500 calls/day)
         if self.tomtom_quota['daily_calls'] % 500 == 0:
