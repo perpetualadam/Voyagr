@@ -4965,12 +4965,23 @@ async function showRouteComparison() {
  * @returns {*} Return value description
  */
 function overviewRoute() {
-    if (!routePath || routePath.length === 0) {
+    // Check if we have a calculated route
+    if (!window.lastCalculatedRoute || !window.lastCalculatedRoute.geometry) {
         showStatus('No route to overview', 'error');
+        console.error('[Route] No route available for overview');
         return;
     }
 
     try {
+        // Decode the route geometry to get the path
+        const precision = (window.lastCalculatedRoute.source || '').toLowerCase().includes('osrm') ? 5 : 6;
+        const routePath = decodePolyline(window.lastCalculatedRoute.geometry, precision);
+
+        if (!routePath || routePath.length === 0) {
+            showStatus('No route path available', 'error');
+            return;
+        }
+
         // Calculate bounds from route polyline
         let minLat = routePath[0][0];
         let maxLat = routePath[0][0];
