@@ -3902,6 +3902,10 @@ HTML_TEMPLATE = '''
                         <span class="quick-search-btn-icon">🍔</span>
                         <span>Food</span>
                     </button>
+                    <button class="quick-search-btn" onclick="quickSearch('hospital')">
+                        <span class="quick-search-btn-icon">🏥</span>
+                        <span>Hospital</span>
+                    </button>
                 </div>
 
                 <!-- Trip Info -->
@@ -4702,6 +4706,11 @@ HTML_TEMPLATE = '''
                             </button>
                             <button onclick="showRouteComparison()" style="background: #FF5722; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                                 📊 Compare Routes
+                            </button>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px;">
+                            <button onclick="showAllRoutes()" style="background: #667eea; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                🗺️ Show All Routes on Map
                             </button>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
