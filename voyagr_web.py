@@ -2954,12 +2954,16 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
                     logger.warning("polyline module not available, cannot decode route points")
                     return 0, 0
                 decoded_points = polyline.decode(route_points, 6)  # Valhalla precision
-                logger.debug(f"[HAZARDS] Decoded {len(decoded_points)} route points from polyline")
+                logger.info(f"[HAZARDS] Decoded {len(decoded_points)} route points from polyline string")
             else:
                 decoded_points = route_points
-                logger.debug(f"[HAZARDS] Using {len(decoded_points)} route points directly")
+                logger.info(f"[HAZARDS] Using {len(decoded_points)} route points directly (type: {type(route_points)})")
         except Exception as e:
-            logger.error(f"Error decoding polyline: {e}")
+            logger.error(f"[HAZARDS] Error decoding polyline: {e}")
+            return 0, 0
+
+        if not decoded_points or len(decoded_points) == 0:
+            logger.warning(f"[HAZARDS] No route points to score!")
             return 0, 0
 
         # Check each hazard against route
@@ -2976,7 +2980,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
             threshold = pref['threshold']
             penalty = pref['penalty']
 
-            logger.debug(f"[HAZARDS] Processing {len(hazard_list)} {hazard_type} hazards (threshold={threshold}m, penalty={penalty}s)")
+            logger.info(f"[HAZARDS] Processing {len(hazard_list)} {hazard_type} hazards (threshold={threshold}m, penalty={penalty}s)")
 
             # OPTIMIZATION: Sample route points for faster scoring (every 10th point for long routes)
             sample_interval = max(1, len(decoded_points) // 100)  # Max 100 sample points
