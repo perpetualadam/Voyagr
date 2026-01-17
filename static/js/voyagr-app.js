@@ -5274,7 +5274,8 @@ async function findParkingNearDestination() {
                 lat: endCoords.lat,
                 lon: endCoords.lon,
                 radius: radiusMeters,
-                type: document.getElementById('parkingPreferredType').value
+                type: document.getElementById('parkingPreferredType').value,
+                price: document.getElementById('parkingPricePreference').value
             })
         });
 

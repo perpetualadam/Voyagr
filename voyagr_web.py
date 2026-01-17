@@ -8722,83 +8722,139 @@ def get_traffic_lights():
 
 @app.route('/api/parking-search', methods=['POST'])
 def search_parking():
-    """Search for parking near a destination using Nominatim/OSM."""
+    """Search for parking near a destination using Overpass API (OSM)."""
     try:
         data = request.json
         lat = float(data.get('lat', 0))
         lon = float(data.get('lon', 0))
         radius = int(data.get('radius', 800))  # Default 800m
         parking_type = data.get('type', 'any')
+        price_pref = data.get('price', 'any')
 
         if lat == 0 or lon == 0:
             return jsonify({'success': False, 'error': 'Invalid coordinates'})
 
-        # Search for parking amenities using Nominatim Overpass API
-        # Using Nominatim search with amenity=parking filter
-        url = 'https://nominatim.openstreetmap.org/search'
+        # Use Overpass API for detailed OSM parking data with tags
+        url = 'https://overpass-api.de/api/interpreter'
 
-        # Build search query for parking
-        search_query = f'parking near {lat},{lon}'
+        # Build Overpass QL query for parking amenities
+        # This gets all parking within radius with detailed tags
+        overpass_query = f"""
+        [out:json][timeout:10];
+        (
+          node["amenity"="parking"](around:{radius},{lat},{lon});
+          way["amenity"="parking"](around:{radius},{lat},{lon});
+        );
+        out center tags;
+        """
 
-        params = {
-            'q': search_query,
-            'format': 'json',
-            'limit': 20,
-            'addressdetails': 1
-        }
-
-        headers = {'User-Agent': 'Voyagr-PWA/1.0'}
-        response = requests.get(url, params=params, headers=headers, timeout=10)
+        response = requests.post(url, data={'data': overpass_query}, timeout=15)
 
         if response.status_code != 200:
-            print(f"[Parking] Nominatim error: {response.status_code}")
+            print(f"[Parking] Overpass API error: {response.status_code}")
             return jsonify({'success': False, 'error': 'Parking search failed'})
 
         results = response.json()
+        elements = results.get('elements', [])
 
-        if not results:
+        if not elements:
             return jsonify({'success': True, 'parking': []})
 
         # Filter and process results
         parking_list = []
-        for result in results:
+        for element in elements:
             try:
-                p_lat = float(result.get('lat', 0))
-                p_lon = float(result.get('lon', 0))
+                tags = element.get('tags', {})
+
+                # Get coordinates (use center for ways)
+                if element.get('type') == 'node':
+                    p_lat = float(element.get('lat', 0))
+                    p_lon = float(element.get('lon', 0))
+                elif element.get('type') == 'way' and 'center' in element:
+                    p_lat = float(element['center'].get('lat', 0))
+                    p_lon = float(element['center'].get('lon', 0))
+                else:
+                    continue
 
                 # Calculate distance from destination
-                distance_m = math.sqrt((p_lat - lat)**2 + (p_lon - lon)**2) * 111000  # Rough conversion to meters
+                distance_m = math.sqrt((p_lat - lat)**2 + (p_lon - lon)**2) * 111000
 
-                # Filter by radius
+                # Filter by radius (double-check since Overpass uses approximate)
                 if distance_m > radius:
                     continue
 
-                # Filter by type if specified
+                # Filter by parking type if specified
                 if parking_type != 'any':
-                    name_lower = result.get('name', '').lower()
-                    if parking_type == 'garage' and 'garage' not in name_lower:
-                        continue
-                    elif parking_type == 'street' and 'street' not in name_lower:
-                        continue
-                    elif parking_type == 'lot' and 'lot' not in name_lower:
-                        continue
+                    parking_subtype = tags.get('parking', '').lower()
+                    name_lower = tags.get('name', '').lower()
+
+                    if parking_type == 'garage':
+                        # Multi-storey, underground, or name contains "garage"
+                        if not (parking_subtype in ['multi-storey', 'underground'] or 'garage' in name_lower):
+                            continue
+                    elif parking_type == 'street':
+                        # Street-side, lane, or name contains "street"
+                        if not (parking_subtype in ['street_side', 'lane', 'on_street'] or 'street' in name_lower):
+                            continue
+                    elif parking_type == 'lot':
+                        # Surface parking or name contains "lot"
+                        if not (parking_subtype in ['surface', 'lot'] or 'lot' in name_lower or 'car park' in name_lower):
+                            continue
+
+                # Filter by price preference if specified
+                if price_pref != 'any':
+                    fee_tag = tags.get('fee', '').lower()
+
+                    if price_pref == 'free':
+                        # Only include if explicitly marked as free (fee=no)
+                        if fee_tag != 'no':
+                            continue
+                    elif price_pref == 'paid':
+                        # Only include if explicitly marked as paid (fee=yes)
+                        if fee_tag != 'yes':
+                            continue
+
+                # Determine parking name
+                name = tags.get('name', '')
+                if not name:
+                    # Generate descriptive name based on type
+                    parking_subtype = tags.get('parking', '')
+                    if parking_subtype == 'multi-storey':
+                        name = 'Multi-Storey Car Park'
+                    elif parking_subtype == 'underground':
+                        name = 'Underground Parking'
+                    elif parking_subtype == 'street_side' or parking_subtype == 'lane':
+                        name = 'Street Parking'
+                    elif parking_subtype == 'surface':
+                        name = 'Parking Lot'
+                    else:
+                        name = 'Parking'
+
+                # Add fee info to name if available
+                fee_tag = tags.get('fee', '')
+                if fee_tag == 'no':
+                    name += ' (Free)'
+                elif fee_tag == 'yes':
+                    name += ' (Paid)'
 
                 parking_list.append({
-                    'name': result.get('name', 'Parking'),
+                    'name': name,
                     'lat': p_lat,
                     'lon': p_lon,
                     'distance_m': distance_m,
-                    'address': result.get('display_name', ''),
-                    'type': 'parking'
+                    'address': tags.get('addr:street', '') or tags.get('operator', '') or 'Unknown',
+                    'type': 'parking',
+                    'fee': fee_tag,
+                    'parking_type': tags.get('parking', 'unknown')
                 })
             except (ValueError, KeyError) as e:
-                print(f"[Parking] Error processing result: {e}")
+                print(f"[Parking] Error processing element: {e}")
                 continue
 
         # Sort by distance
         parking_list.sort(key=lambda x: x['distance_m'])
 
-        print(f"[Parking] Found {len(parking_list)} parking options near ({lat},{lon})")
+        print(f"[Parking] Found {len(parking_list)} parking options near ({lat},{lon}) with filters: type={parking_type}, price={price_pref}")
         return jsonify({'success': True, 'parking': parking_list[:10]})  # Return top 10
 
     except Exception as e:
