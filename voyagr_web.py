@@ -8602,49 +8602,51 @@ def get_traffic_lights():
         # Calculate bounding box dimensions (approximate)
         lat_diff = abs(max_lat - min_lat)
         lon_diff = abs(max_lng - min_lng)
-        
+
         # Calculate approximate diagonal distance in degrees
         # 1 degree lat ~= 111km, 1 degree lon ~= 111km * cos(lat)
-        # 0.13 degrees is roughly 14.5km
         diagonal_sq = (lat_diff * lat_diff) + (lon_diff * lon_diff * 0.6) # Approx cos(51)
-        
-        # Limit query area to prevent timeouts (even on self-hosted)
-        # Threshold: ~0.02 (approx 15km diagonal or 10x10km box)
-        is_long_route = diagonal_sq > 0.025
-        
+
+        # Determine search strategy based on route length
+        # Self-hosted Overpass has no rate limits, so we can handle longer routes
+        # Use corridor search for very long routes (> 50km) to reduce data volume
+        # Use bbox search for shorter routes (< 50km) for better coverage
+        is_very_long_route = diagonal_sq > 0.25  # ~50km diagonal
+
         # Use Overpass helper with caching, retry logic, and fallback endpoints
         if OVERPASS_HELPER_AVAILABLE:
             from overpass_helper import get_client
             # Log active endpoint for debugging
             active_endpoint = get_client()._get_next_endpoint()
-            
-            if is_long_route:
-                # CORRIDOR SEARCH (for long routes)
+
+            if is_very_long_route:
+                # CORRIDOR SEARCH (for very long routes > 50km)
                 # Sample points along the route to create a search corridor
-                # Aim for 1 point every ~500m to keep query string manageable
-                # Total points limit: ~50-100 to avoid URL length issues
-                
+                # This reduces data volume while still covering the route
+
                 # Convert coordinates to (lat, lon) list
                 route_points = [(c[1], c[0]) for c in coordinates]
                 total_points = len(route_points)
-                
-                # Simple decimation - take every Nth point
-                # If we have 1000 points, take every 20th to get 50 points
-                step = max(1, int(total_points / 50))
+
+                # Adaptive sampling: more points for longer routes
+                # Target: 1 sample point per ~1km of route
+                # Max 100 points to keep query manageable
+                target_samples = min(100, max(50, int(diagonal_sq * 10)))
+                step = max(1, int(total_points / target_samples))
                 sampled_points = route_points[::step]
-                
+
                 # Ensure start and end are included
                 if route_points[-1] != sampled_points[-1]:
                     sampled_points.append(route_points[-1])
 
-                logger.info(f"[Traffic Lights] Long route detected (diag_sq={diagonal_sq:.4f}). Using corridor search with {len(sampled_points)} points via {active_endpoint}")
-                
-                query = build_corridor_traffic_signals_query(sampled_points, radius=200) # 200m radius
+                logger.info(f"[Traffic Lights] Very long route (diag_sq={diagonal_sq:.4f}). Using corridor search with {len(sampled_points)} points, 300m radius via {active_endpoint}")
+
+                query = build_corridor_traffic_signals_query(sampled_points, radius=300) # 300m radius for long routes
                 cache_key = f"traffic_lights_corridor_{hash(tuple(sampled_points))}"
             else:
-                # BBOX SEARCH (for short routes)
-                # More efficient for dense city driving
-                logger.info(f"[Traffic Lights] Querying BBox via {active_endpoint} (diag_sq={diagonal_sq:.4f})")
+                # BBOX SEARCH (for routes < 50km)
+                # More efficient and provides better coverage for city/regional routes
+                logger.info(f"[Traffic Lights] Standard route (diag_sq={diagonal_sq:.4f}). Using BBox search via {active_endpoint}")
                 query = build_traffic_signals_query(min_lat, min_lng, max_lat, max_lng)
                 cache_key = f"traffic_lights_{min_lat:.4f}_{min_lng:.4f}_{max_lat:.4f}_{max_lng:.4f}"
             
@@ -8660,13 +8662,11 @@ def get_traffic_lights():
             # Fallback to direct API call if helper not available
             overpass_url = os.getenv('OVERPASS_API_URL', 'https://overpass-api.de/api/interpreter')
             logger.info(f"[Traffic Lights] Querying Overpass (Direct): {overpass_url}")
-            
-            if is_long_route:
-                 # Direct fallback logic for long routes - just skip to avoid complexity
-                 return jsonify({'success': True, 'lights': [], 'warning': 'Route too long for direct API fallback', 'count': 0})
 
+            # Use bbox search for all routes when using direct API
+            # Self-hosted Overpass can handle larger queries
             query = f'''
-            [out:json][timeout:15];
+            [out:json][timeout:30];
             (
                 node["highway"="traffic_signals"]({min_lat},{min_lng},{max_lat},{max_lng});
                 node["crossing"="traffic_signals"]({min_lat},{min_lng},{max_lat},{max_lng});
@@ -8674,7 +8674,7 @@ def get_traffic_lights():
             out body;
             '''
             try:
-                response = requests.post(overpass_url, data={'data': query}, timeout=10)
+                response = requests.post(overpass_url, data={'data': query}, timeout=30)
                 if response.status_code != 200:
                    logger.warning(f"[Traffic Lights] Direct query failed: {response.status_code}")
                    return jsonify({'success': True, 'lights': [], 'warning': 'Traffic signal data unavailable', 'count': 0})
@@ -8699,16 +8699,21 @@ def get_traffic_lights():
                 lng = float(element.get('lon', 0))
                 tags = element.get('tags', {})
                 
-                # Check if this signal is close to the route (within ~50m)
+                # Check if this signal is close to the route
+                # Use adaptive distance based on route length
+                # Longer routes: 200m tolerance (to catch signals near highways)
+                # Shorter routes: 100m tolerance (for city streets)
+                proximity_threshold = 0.002 if is_very_long_route else 0.001  # ~200m or ~100m
+
                 is_near_route = False
                 for coord in coordinates:
                     if len(coord) >= 2:
                         route_lng, route_lat = coord[0], coord[1]
                         dist = math.sqrt((lat - route_lat)**2 + (lng - route_lng)**2)
-                        if dist < 0.0005:  # Approximately 50m
+                        if dist < proximity_threshold:
                             is_near_route = True
                             break
-                
+
                 if not is_near_route:
                     continue
                 
