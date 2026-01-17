@@ -11,11 +11,65 @@ let trafficLightUpdateInterval = null;
 
 // Traffic light states and colors
 const TRAFFIC_LIGHT_STATES = {
-    'red': { color: '#ef4444', icon: '🔴', label: 'Stop' },
-    'yellow': { color: '#f59e0b', icon: '🟡', label: 'Caution' },
-    'green': { color: '#22c55e', icon: '🟢', label: 'Go' },
-    'unknown': { color: '#6b7280', icon: '⚪', label: 'Unknown' }
+    'red': { color: '#ef4444', activeLight: 'red', label: 'Stop' },
+    'yellow': { color: '#f59e0b', activeLight: 'yellow', label: 'Caution' },
+    'green': { color: '#22c55e', activeLight: 'green', label: 'Go' },
+    'unknown': { color: '#6b7280', activeLight: 'none', label: 'Unknown' }
 };
+
+/**
+ * Create SVG traffic light icon
+ * @param {string} activeLight - Which light is active: 'red', 'yellow', 'green', or 'none'
+ * @returns {string} SVG HTML string
+ */
+function createTrafficLightSVG(activeLight) {
+    return `
+        <svg width="24" height="48" viewBox="0 0 24 48" xmlns="http://www.w3.org/2000/svg">
+            <!-- Traffic light housing -->
+            <rect x="2" y="0" width="20" height="48" rx="3" fill="#1a1a1a" stroke="#333" stroke-width="1"/>
+
+            <!-- Red light -->
+            <circle cx="12" cy="10" r="6"
+                fill="${activeLight === 'red' ? '#ef4444' : '#4a1a1a'}"
+                stroke="#666" stroke-width="0.5"
+                opacity="${activeLight === 'red' ? '1' : '0.4'}"/>
+            ${activeLight === 'red' ? '<circle cx="12" cy="10" r="6" fill="url(#redGlow)"/>' : ''}
+
+            <!-- Yellow light -->
+            <circle cx="12" cy="24" r="6"
+                fill="${activeLight === 'yellow' ? '#f59e0b' : '#4a3a1a'}"
+                stroke="#666" stroke-width="0.5"
+                opacity="${activeLight === 'yellow' ? '1' : '0.4'}"/>
+            ${activeLight === 'yellow' ? '<circle cx="12" cy="24" r="6" fill="url(#yellowGlow)"/>' : ''}
+
+            <!-- Green light -->
+            <circle cx="12" cy="38" r="6"
+                fill="${activeLight === 'green' ? '#22c55e' : '#1a4a2a'}"
+                stroke="#666" stroke-width="0.5"
+                opacity="${activeLight === 'green' ? '1' : '0.4'}"/>
+            ${activeLight === 'green' ? '<circle cx="12" cy="38" r="6" fill="url(#greenGlow)"/>' : ''}
+
+            <!-- Glow effects -->
+            <defs>
+                <radialGradient id="redGlow">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
+                    <stop offset="50%" stop-color="#ef4444" stop-opacity="0.8"/>
+                    <stop offset="100%" stop-color="#ef4444" stop-opacity="0"/>
+                </radialGradient>
+                <radialGradient id="yellowGlow">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
+                    <stop offset="50%" stop-color="#f59e0b" stop-opacity="0.8"/>
+                    <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
+                </radialGradient>
+                <radialGradient id="greenGlow">
+                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
+                    <stop offset="50%" stop-color="#22c55e" stop-opacity="0.8"/>
+                    <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
+                </radialGradient>
+            </defs>
+        </svg>
+    `;
+}
 
 /**
  * Create a traffic light marker element
@@ -40,8 +94,8 @@ function createTrafficLightElement(light) {
     }
 
     el.innerHTML = `
-        <div class="traffic-light-container" style="--light-color: ${stateInfo.color}">
-            <div class="traffic-light-icon">${stateInfo.icon}</div>
+        <div class="traffic-light-container">
+            <div class="traffic-light-icon">${createTrafficLightSVG(stateInfo.activeLight)}</div>
             ${countdown}
         </div>
     `;
@@ -77,9 +131,15 @@ function addTrafficLight(light) {
     const popup = new maplibregl.Popup({ offset: 25, closeButton: false })
         .setHTML(`
             <div class="traffic-light-popup">
-                <strong>Traffic Light</strong><br>
-                State: ${stateInfo.label} ${stateInfo.icon}<br>
-                ${light.duration ? `Duration: ${light.duration}s` : ''}
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <div style="width: 20px; height: 40px;">
+                        ${createTrafficLightSVG(stateInfo.activeLight)}
+                    </div>
+                    <strong>Traffic Light</strong>
+                </div>
+                State: <span style="color: ${stateInfo.color}; font-weight: bold;">${stateInfo.label}</span><br>
+                ${light.duration ? `Duration: ${light.duration}s<br>` : ''}
+                ${light.name ? `Name: ${light.name}<br>` : ''}
             </div>
         `);
     marker.setPopup(popup);
@@ -111,10 +171,10 @@ function updateTrafficLight(id, updates) {
     const el = entry.marker.getElement();
     const stateInfo = TRAFFIC_LIGHT_STATES[updatedLight.state] || TRAFFIC_LIGHT_STATES.unknown;
 
-    // Update icon
+    // Update icon with new SVG
     const iconEl = el.querySelector('.traffic-light-icon');
     if (iconEl) {
-        iconEl.textContent = stateInfo.icon;
+        iconEl.innerHTML = createTrafficLightSVG(stateInfo.activeLight);
     }
 
     // Update countdown
@@ -134,11 +194,7 @@ function updateTrafficLight(id, updates) {
         }
     }
 
-    // Update container color
-    const container = el.querySelector('.traffic-light-container');
-    if (container) {
-        container.style.setProperty('--light-color', stateInfo.color);
-    }
+    // Container styling is now handled by CSS (no dynamic color needed)
 
     // Update stored data
     entry.data = updatedLight;
@@ -324,28 +380,40 @@ if (typeof document !== 'undefined') {
             display: flex;
             flex-direction: column;
             align-items: center;
-            background: rgba(0, 0, 0, 0.7);
-            border-radius: 8px;
-            padding: 4px 6px;
-            border: 2px solid var(--light-color, #6b7280);
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 6px;
+            padding: 4px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(0, 0, 0, 0.2);
         }
-        
+
         .traffic-light-icon {
-            font-size: 18px;
-            line-height: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 0;
         }
-        
+
+        .traffic-light-icon svg {
+            filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
+        }
+
         .traffic-light-container .countdown {
-            font-size: 10px;
-            color: white;
+            font-size: 9px;
+            color: #1a1a1a;
             font-weight: bold;
             margin-top: 2px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 1px 4px;
+            border-radius: 3px;
         }
-        
+
         .traffic-light-popup {
             font-size: 12px;
-            line-height: 1.4;
+            line-height: 1.6;
+        }
+
+        .traffic-light-popup svg {
+            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
         }
     `;
     document.head.appendChild(style);
