@@ -5460,11 +5460,20 @@ function displayParkingOptions(parkingList, destinationCoords) {
                 📍 ${parkingDisplayDist} ${parkingDistUnit} away
                 <br>🚶 ${walkingMinutes} min walk
             </div>
+            <div style="display: flex; gap: 6px; margin-top: 8px;">
+                <button onclick="event.stopPropagation(); selectParking(${JSON.stringify(parking).replace(/"/g, '&quot;')}, ${JSON.stringify(destinationCoords).replace(/"/g, '&quot;')})"
+                        style="flex: 1; background: #2196F3; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer;">
+                    🗺️ Show Route
+                </button>
+                <button onclick="event.stopPropagation(); setParkingAsDestination(${JSON.stringify(parking).replace(/"/g, '&quot;')})"
+                        style="flex: 1; background: #4CAF50; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer;">
+                    📍 Set as Destination
+                </button>
+            </div>
         `;
 
         item.onmouseover = () => item.style.background = '#FFF3E0';
         item.onmouseout = () => item.style.background = 'white';
-        item.onclick = () => selectParking(parking, destinationCoords);
 
         parkingListDiv.appendChild(item);
     });
@@ -5674,6 +5683,47 @@ function clearParkingSelection() {
     }
 
     showStatus('🗺️ Parking selection cleared', 'info');
+}
+
+/**
+ * Set a parking location as the new destination and recalculate route
+ * @param {Object} parking - Parking location data
+ */
+async function setParkingAsDestination(parking) {
+    console.log('[Parking] Setting parking as destination:', parking);
+
+    try {
+        // Set the destination input to the parking coordinates
+        const endInput = document.getElementById('end');
+        if (!endInput) {
+            showStatus('Error: Destination input not found', 'error');
+            return;
+        }
+
+        // Set destination to parking name and coordinates
+        endInput.value = `${parking.name} (${parking.lat.toFixed(5)}, ${parking.lon.toFixed(5)})`;
+
+        // Store the parking coordinates for geocoding
+        window.parkingDestination = {
+            lat: parking.lat,
+            lon: parking.lon,
+            name: parking.name
+        };
+
+        showStatus('🅿️ Recalculating route to parking...', 'loading');
+
+        // Clear parking selection
+        clearParkingSelection();
+
+        // Recalculate route to the parking location
+        await calculateRoute();
+
+        showStatus(`✅ Route calculated to ${parking.name}`, 'success');
+
+    } catch (error) {
+        console.error('[Parking] Error setting parking as destination:', error);
+        showStatus('Error: ' + error.message, 'error');
+    }
 }
 
 /**
