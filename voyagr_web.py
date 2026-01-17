@@ -4167,6 +4167,12 @@ HTML_TEMPLATE = '''
                         </div>
 
                         <div class="preference-item">
+                            <span class="preference-label">🚥 Show Traffic Lights</span>
+                            <button class="toggle-switch active" id="trafficLightsToggle" onclick="toggleTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Display traffic signal markers (🔴🟡🟢) along your route</p>
+
+                        <div class="preference-item">
                             <span class="preference-label">🛤️ Route Traffic Edges</span>
                             <button class="toggle-switch active" id="routeTrafficToggle" onclick="toggleRouteTraffic()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
