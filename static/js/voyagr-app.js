@@ -6529,9 +6529,10 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
     const iconEmoji = vehicleIconEmojis[currentRoutingMode] || vehicleIconEmojis[currentVehicleType] || '🚗';
 
     // Create a div element for the marker with custom SVG icon
+    // Larger size for better visibility in 3D aerial view
     const markerDiv = document.createElement('div');
-    markerDiv.style.width = '50px';
-    markerDiv.style.height = '50px';
+    markerDiv.style.width = '60px';
+    markerDiv.style.height = '60px';
     markerDiv.style.display = 'flex';
     markerDiv.style.alignItems = 'center';
     markerDiv.style.justifyContent = 'center';
@@ -6541,8 +6542,11 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
     markerDiv.style.transform = `rotate(${heading}deg)`;
     markerDiv.style.transition = 'transform 0.3s ease-out';
 
-    // Add drop shadow for better visibility
-    markerDiv.style.filter = 'drop-shadow(0 3px 6px rgba(0, 0, 0, 0.4))';
+    // 3D effect: Add layered shadows for depth perception
+    markerDiv.style.filter = 'drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3)) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2))';
+
+    // Enable 3D transforms
+    markerDiv.style.transformStyle = 'preserve-3d';
 
     // Create the SVG image element
     const imgElement = document.createElement('img');
@@ -6558,15 +6562,16 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
     const speedUnit = getSpeedUnit();
     const displaySpeed = convertSpeed(speedKmh);
 
-    // FIX: Use 'viewport' for pitchAlignment to ensure marker stays on polyline in 3D view
-    // 'map' alignment causes the marker to appear offset when the map is tilted
+    // 3D AERIAL VIEW: Use 'map' for pitchAlignment so the icon tilts with the map
+    // This creates a realistic 3D effect where the aerial view icon appears to lay flat on the map
+    // The icon will tilt when the map is pitched, giving a true top-down perspective
     const marker = MapLibreHelpers.createMarker(lat, lon, {
         html: markerDiv.outerHTML,
-        iconSize: [50, 50],
-        iconAnchor: [25, 25],
+        iconSize: [60, 60],              // Larger size for better visibility in 3D
+        iconAnchor: [30, 30],            // Center anchor point
         className: 'vehicle-marker-icon', // Use the class for CSS transitions
         rotationAlignment: 'map',        // Align with map rotation (keeps heading correct)
-        pitchAlignment: 'viewport',      // FIX: Align with viewport (not map) for correct 3D positioning
+        pitchAlignment: 'map',           // 3D: Align with map pitch for realistic aerial perspective
         popup: `
             <div style="font-family: Arial, sans-serif; font-size: 13px; min-width: 180px;">
                 <strong style="font-size: 14px;">${iconEmoji} Current Position</strong><br>

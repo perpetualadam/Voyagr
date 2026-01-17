@@ -1476,9 +1476,10 @@ h1 {
 }
 
 /* Vehicle Marker Icon - Custom SVG with directional indicator */
+/* 3D Aerial View: Icon tilts with map for realistic top-down perspective */
 .vehicle-marker-icon {
-    width: 50px !important;
-    height: 50px !important;
+    width: 60px !important;
+    height: 60px !important;
     background: none !important;
     border: none !important;
     box-shadow: none !important;
@@ -1489,13 +1490,38 @@ h1 {
     height: 100%;
     object-fit: contain;
     pointer-events: none;
+    /* Add subtle 3D depth effect */
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3))
+            drop-shadow(0 4px 8px rgba(0, 0, 0, 0.2));
 }
 
 /* Ensure smooth rotation and pitching transitions */
 .vehicle-marker-icon>div {
-    transition: transform 0.1s ease-out !important;
+    transition: transform 0.3s ease-out !important;
     will-change: transform;
     backface-visibility: hidden;
+    /* Enable 3D transforms */
+    transform-style: preserve-3d;
+}
+
+/* MapLibre marker container - ensure 3D transforms work */
+.maplibregl-marker {
+    transform-style: preserve-3d !important;
+}
+
+/* Add dynamic shadow that appears when map is pitched (3D view) */
+.maplibregl-marker.vehicle-marker-icon::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 40px;
+    height: 8px;
+    background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.4) 0%, transparent 70%);
+    border-radius: 50%;
+    opacity: 0.6;
+    pointer-events: none;
 }
 
 /* ===== DARK MODE STYLES ===== */
