@@ -8629,9 +8629,10 @@ def get_traffic_lights():
                 total_points = len(route_points)
 
                 # Adaptive sampling: more points for longer routes
-                # Target: 1 sample point per ~1km of route
-                # Max 100 points to keep query manageable
-                target_samples = min(100, max(50, int(diagonal_sq * 10)))
+                # Target: 1 sample point per ~500m of route
+                # Max 150 points (self-hosted Overpass can handle it)
+                # Formula: sqrt(diagonal_sq) * 20 gives ~90 points for 75km route
+                target_samples = min(150, max(60, int(math.sqrt(diagonal_sq) * 20)))
                 step = max(1, int(total_points / target_samples))
                 sampled_points = route_points[::step]
 
@@ -8639,25 +8640,26 @@ def get_traffic_lights():
                 if route_points[-1] != sampled_points[-1]:
                     sampled_points.append(route_points[-1])
 
-                logger.info(f"[Traffic Lights] Very long route (diag_sq={diagonal_sq:.4f}). Using corridor search with {len(sampled_points)} points, 300m radius via {active_endpoint}")
+                logger.info(f"[Traffic Lights] Very long route (diag_sq={diagonal_sq:.4f}, ~{int(math.sqrt(diagonal_sq)*111)}km). Using corridor search with {len(sampled_points)} points, 300m radius via {active_endpoint}")
 
                 query = build_corridor_traffic_signals_query(sampled_points, radius=300) # 300m radius for long routes
                 cache_key = f"traffic_lights_corridor_{hash(tuple(sampled_points))}"
             else:
                 # BBOX SEARCH (for routes < 50km)
                 # More efficient and provides better coverage for city/regional routes
-                logger.info(f"[Traffic Lights] Standard route (diag_sq={diagonal_sq:.4f}). Using BBox search via {active_endpoint}")
+                logger.info(f"[Traffic Lights] Standard route (diag_sq={diagonal_sq:.4f}, ~{int(math.sqrt(diagonal_sq)*111)}km). Using BBox search via {active_endpoint}")
                 query = build_traffic_signals_query(min_lat, min_lng, max_lat, max_lng)
                 cache_key = f"traffic_lights_{min_lat:.4f}_{min_lng:.4f}_{max_lat:.4f}_{max_lng:.4f}"
-            
+
             result = query_overpass(query, cache_key=cache_key, cache_ttl=300)  # 5 min cache
-            
+
             if not result.get('success'):
                 logger.warning(f"[Traffic Lights] Overpass query failed: {result.get('error')}")
                 return jsonify({'success': True, 'lights': [], 'warning': 'Traffic signal data unavailable', 'count': 0})
-            
+
             elements = result.get('elements', [])
             cached = result.get('cached', False)
+            logger.info(f"[Traffic Lights] Query returned {len(elements)} raw elements (cached={cached})")
         else:
             # Fallback to direct API call if helper not available
             overpass_url = os.getenv('OVERPASS_API_URL', 'https://overpass-api.de/api/interpreter')
