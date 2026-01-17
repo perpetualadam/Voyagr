@@ -20,34 +20,40 @@ const TRAFFIC_LIGHT_STATES = {
 /**
  * Create SVG traffic light icon
  * @param {string} activeLight - Which light is active: 'red', 'yellow', 'green', or 'none'
+ * @param {number} width - Width of SVG (default: 16)
+ * @param {number} height - Height of SVG (default: 32)
  * @returns {string} SVG HTML string
  */
-function createTrafficLightSVG(activeLight) {
+function createTrafficLightSVG(activeLight, width = 16, height = 32) {
+    // Scale factors for different sizes
+    const scaleX = width / 16;
+    const scaleY = height / 32;
+
     return `
-        <svg width="24" height="48" viewBox="0 0 24 48" xmlns="http://www.w3.org/2000/svg">
+        <svg width="${width}" height="${height}" viewBox="0 0 16 32" xmlns="http://www.w3.org/2000/svg">
             <!-- Traffic light housing -->
-            <rect x="2" y="0" width="20" height="48" rx="3" fill="#1a1a1a" stroke="#333" stroke-width="1"/>
+            <rect x="1" y="0" width="14" height="32" rx="2" fill="#1a1a1a" stroke="#333" stroke-width="0.5"/>
 
             <!-- Red light -->
-            <circle cx="12" cy="10" r="6"
+            <circle cx="8" cy="6" r="4"
                 fill="${activeLight === 'red' ? '#ef4444' : '#4a1a1a'}"
-                stroke="#666" stroke-width="0.5"
+                stroke="#666" stroke-width="0.3"
                 opacity="${activeLight === 'red' ? '1' : '0.4'}"/>
-            ${activeLight === 'red' ? '<circle cx="12" cy="10" r="6" fill="url(#redGlow)"/>' : ''}
+            ${activeLight === 'red' ? '<circle cx="8" cy="6" r="4" fill="url(#redGlow)"/>' : ''}
 
             <!-- Yellow light -->
-            <circle cx="12" cy="24" r="6"
+            <circle cx="8" cy="16" r="4"
                 fill="${activeLight === 'yellow' ? '#f59e0b' : '#4a3a1a'}"
-                stroke="#666" stroke-width="0.5"
+                stroke="#666" stroke-width="0.3"
                 opacity="${activeLight === 'yellow' ? '1' : '0.4'}"/>
-            ${activeLight === 'yellow' ? '<circle cx="12" cy="24" r="6" fill="url(#yellowGlow)"/>' : ''}
+            ${activeLight === 'yellow' ? '<circle cx="8" cy="16" r="4" fill="url(#yellowGlow)"/>' : ''}
 
             <!-- Green light -->
-            <circle cx="12" cy="38" r="6"
+            <circle cx="8" cy="26" r="4"
                 fill="${activeLight === 'green' ? '#22c55e' : '#1a4a2a'}"
-                stroke="#666" stroke-width="0.5"
+                stroke="#666" stroke-width="0.3"
                 opacity="${activeLight === 'green' ? '1' : '0.4'}"/>
-            ${activeLight === 'green' ? '<circle cx="12" cy="38" r="6" fill="url(#greenGlow)"/>' : ''}
+            ${activeLight === 'green' ? '<circle cx="8" cy="26" r="4" fill="url(#greenGlow)"/>' : ''}
 
             <!-- Glow effects -->
             <defs>
@@ -128,12 +134,12 @@ function addTrafficLight(light) {
 
     // Add popup with details
     const stateInfo = TRAFFIC_LIGHT_STATES[light.state] || TRAFFIC_LIGHT_STATES.unknown;
-    const popup = new maplibregl.Popup({ offset: 25, closeButton: false })
+    const popup = new maplibregl.Popup({ offset: 20, closeButton: false })
         .setHTML(`
             <div class="traffic-light-popup">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
-                    <div style="width: 20px; height: 40px;">
-                        ${createTrafficLightSVG(stateInfo.activeLight)}
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                    <div style="width: 14px; height: 28px;">
+                        ${createTrafficLightSVG(stateInfo.activeLight, 14, 28)}
                     </div>
                     <strong>Traffic Light</strong>
                 </div>
@@ -393,9 +399,9 @@ if (typeof document !== 'undefined') {
             flex-direction: column;
             align-items: center;
             background: rgba(255, 255, 255, 0.95);
-            border-radius: 6px;
-            padding: 4px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(0, 0, 0, 0.2);
+            border-radius: 4px;
+            padding: 3px;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.2);
         }
 
         .traffic-light-icon {
@@ -406,17 +412,17 @@ if (typeof document !== 'undefined') {
         }
 
         .traffic-light-icon svg {
-            filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.3));
+            filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
         }
 
         .traffic-light-container .countdown {
-            font-size: 9px;
+            font-size: 8px;
             color: #1a1a1a;
             font-weight: bold;
-            margin-top: 2px;
+            margin-top: 1px;
             background: rgba(255, 255, 255, 0.9);
-            padding: 1px 4px;
-            border-radius: 3px;
+            padding: 0px 3px;
+            border-radius: 2px;
         }
 
         .traffic-light-popup {
