@@ -8606,12 +8606,12 @@ def get_traffic_lights():
         # Calculate approximate diagonal distance in degrees
         # 1 degree lat ~= 111km, 1 degree lon ~= 111km * cos(lat)
         diagonal_sq = (lat_diff * lat_diff) + (lon_diff * lon_diff * 0.6) # Approx cos(51)
+        estimated_km = int(math.sqrt(diagonal_sq) * 111)
 
-        # Determine search strategy based on route length
-        # Self-hosted Overpass has no rate limits, so we can handle longer routes
-        # Use corridor search for very long routes (> 50km) to reduce data volume
-        # Use bbox search for shorter routes (< 50km) for better coverage
-        is_very_long_route = diagonal_sq > 0.25  # ~50km diagonal
+        # Strategy: Use simple BBox search for ALL routes
+        # Self-hosted Overpass can handle large bbox queries much faster than corridor queries
+        # BBox queries are simpler and don't timeout like corridor queries
+        # The proximity filter will remove traffic lights far from the route anyway
 
         # Use Overpass helper with caching, retry logic, and fallback endpoints
         if OVERPASS_HELPER_AVAILABLE:
@@ -8619,37 +8619,12 @@ def get_traffic_lights():
             # Log active endpoint for debugging
             active_endpoint = get_client()._get_next_endpoint()
 
-            if is_very_long_route:
-                # CORRIDOR SEARCH (for very long routes > 50km)
-                # Sample points along the route to create a search corridor
-                # This reduces data volume while still covering the route
-
-                # Convert coordinates to (lat, lon) list
-                route_points = [(c[1], c[0]) for c in coordinates]
-                total_points = len(route_points)
-
-                # Adaptive sampling: more points for longer routes
-                # Target: 1 sample point per ~500m of route
-                # Max 150 points (self-hosted Overpass can handle it)
-                # Formula: sqrt(diagonal_sq) * 20 gives ~90 points for 75km route
-                target_samples = min(150, max(60, int(math.sqrt(diagonal_sq) * 20)))
-                step = max(1, int(total_points / target_samples))
-                sampled_points = route_points[::step]
-
-                # Ensure start and end are included
-                if route_points[-1] != sampled_points[-1]:
-                    sampled_points.append(route_points[-1])
-
-                logger.info(f"[Traffic Lights] Very long route (diag_sq={diagonal_sq:.4f}, ~{int(math.sqrt(diagonal_sq)*111)}km). Using corridor search with {len(sampled_points)} points, 300m radius via {active_endpoint}")
-
-                query = build_corridor_traffic_signals_query(sampled_points, radius=300) # 300m radius for long routes
-                cache_key = f"traffic_lights_corridor_{hash(tuple(sampled_points))}"
-            else:
-                # BBOX SEARCH (for routes < 50km)
-                # More efficient and provides better coverage for city/regional routes
-                logger.info(f"[Traffic Lights] Standard route (diag_sq={diagonal_sq:.4f}, ~{int(math.sqrt(diagonal_sq)*111)}km). Using BBox search via {active_endpoint}")
-                query = build_traffic_signals_query(min_lat, min_lng, max_lat, max_lng)
-                cache_key = f"traffic_lights_{min_lat:.4f}_{min_lng:.4f}_{max_lat:.4f}_{max_lng:.4f}"
+            # BBOX SEARCH for all routes (simpler, faster, no timeouts)
+            # Self-hosted Overpass handles large bbox queries efficiently
+            # Proximity filter will remove traffic lights far from route
+            logger.info(f"[Traffic Lights] Route (diag_sq={diagonal_sq:.4f}, ~{estimated_km}km). Using BBox search via {active_endpoint}")
+            query = build_traffic_signals_query(min_lat, min_lng, max_lat, max_lng)
+            cache_key = f"traffic_lights_{min_lat:.4f}_{min_lng:.4f}_{max_lat:.4f}_{max_lng:.4f}"
 
             result = query_overpass(query, cache_key=cache_key, cache_ttl=300)  # 5 min cache
 
@@ -8703,9 +8678,15 @@ def get_traffic_lights():
                 
                 # Check if this signal is close to the route
                 # Use adaptive distance based on route length
-                # Longer routes: 200m tolerance (to catch signals near highways)
-                # Shorter routes: 100m tolerance (for city streets)
-                proximity_threshold = 0.002 if is_very_long_route else 0.001  # ~200m or ~100m
+                # Very long routes (> 100km): 500m tolerance (motorways, wide roads)
+                # Long routes (50-100km): 300m tolerance (A-roads, highways)
+                # Short routes (< 50km): 150m tolerance (city streets)
+                if diagonal_sq > 1.0:  # > 100km
+                    proximity_threshold = 0.005  # ~500m
+                elif diagonal_sq > 0.25:  # 50-100km
+                    proximity_threshold = 0.003  # ~300m
+                else:  # < 50km
+                    proximity_threshold = 0.0015  # ~150m
 
                 is_near_route = False
                 for coord in coordinates:

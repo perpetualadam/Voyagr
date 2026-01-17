@@ -402,9 +402,11 @@ def build_corridor_traffic_signals_query(
             flat_points.append(f"{lat:.5f},{lon:.5f}")
     
     poly_str = ",".join(flat_points)
-    
+
+    # Use longer timeout for corridor queries (they're more complex)
+    # Self-hosted Overpass can handle 60s timeout
     return f'''
-    [out:json][timeout:30];
+    [out:json][timeout:60];
     (
         node["highway"="traffic_signals"](around:{radius},{poly_str});
         node["crossing"="traffic_signals"](around:{radius},{poly_str});
