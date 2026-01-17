@@ -2911,9 +2911,24 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
         total_penalty = 0
         hazard_count = 0
 
-        # Get hazard preferences
-        cursor.execute("SELECT hazard_type, penalty_seconds, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
-        preferences = {row[0]: {'penalty': row[1], 'threshold': row[2]} for row in cursor.fetchall()}
+        # Get hazard preferences from database, or use defaults if table doesn't exist
+        try:
+            cursor.execute("SELECT hazard_type, penalty_seconds, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
+            preferences = {row[0]: {'penalty': row[1], 'threshold': row[2]} for row in cursor.fetchall()}
+        except Exception as e:
+            # Table doesn't exist - use default preferences for all camera types
+            logger.debug(f"[HAZARDS] hazard_preferences table not found, using defaults: {e}")
+            preferences = {
+                'speed_camera': {'penalty': 60, 'threshold': 500},
+                'average_speed_camera': {'penalty': 60, 'threshold': 500},
+                'traffic_light_camera': {'penalty': 90, 'threshold': 500},
+                'red_light_camera': {'penalty': 90, 'threshold': 500},
+                'mobile_camera': {'penalty': 60, 'threshold': 500},
+                'police': {'penalty': 30, 'threshold': 1000},
+                'roadworks': {'penalty': 15, 'threshold': 500},
+                'accident': {'penalty': 30, 'threshold': 500}
+            }
+
         return_db_connection(conn)
 
         logger.debug(f"[HAZARDS] Preferences loaded: {list(preferences.keys())}")
