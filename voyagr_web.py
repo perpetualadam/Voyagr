@@ -6926,7 +6926,7 @@ def calculate_route():
                         except Exception as e:
                             logger.warning(f"[VALHALLA] Fastest route failed: {e}")
 
-                        # Route 4: Camera-Free Discovery - Aggressively exclude all route cameras
+                        # Route 4: Optimised Discovery - Aggressively exclude all route cameras
                         # This finds routes that completely avoid camera-heavy roads
                         try:
                             # Get cameras that are ON the baseline route (within 100m)
@@ -6946,7 +6946,7 @@ def calculate_route():
                                     "exclude_locations": baseline_cameras[:50]
                                 }
 
-                                logger.info(f"[DISCOVERY] Requesting camera-free route excluding {len(baseline_cameras)} baseline cameras")
+                                logger.info(f"[DISCOVERY] Requesting optimised route excluding {len(baseline_cameras)} baseline cameras")
                                 disc_response = requests.post(url, json=discovery_payload, timeout=10, headers=headers)
 
                                 if disc_response.status_code == 200:
@@ -6955,14 +6955,14 @@ def calculate_route():
                                         disc_geom = disc_data['trip']['legs'][0]['shape']
                                         disc_dist = disc_data['trip']['summary']['length']
                                         disc_time = disc_data['trip']['summary']['time']
-                                        route_entry = build_route_entry('🛡️ Camera-Free Discovery', disc_geom, disc_dist, disc_time)
+                                        route_entry = build_route_entry('⚡ Optimised Discovery', disc_geom, disc_dist, disc_time)
 
                                         # Only add if it has fewer cameras than baseline
                                         if route_entry['hazard_count'] < len(baseline_cameras):
                                             alternative_routes.append(route_entry)
-                                            logger.info(f"[DISCOVERY] Camera-Free: {disc_dist:.1f}km, {route_entry['hazard_count']} cameras (was {len(baseline_cameras)})")
+                                            logger.info(f"[DISCOVERY] Optimised: {disc_dist:.1f}km, {route_entry['hazard_count']} cameras (was {len(baseline_cameras)})")
                         except Exception as e:
-                            logger.warning(f"[DISCOVERY] Camera-free discovery failed: {e}")
+                            logger.warning(f"[DISCOVERY] Optimised discovery failed: {e}")
 
                         # Extract waypoints at equal intervals along the route
                         waypoints = []
@@ -7401,7 +7401,7 @@ def calculate_route():
                                 })
 
                     # ================================================================
-                    # REQUEST ADDITIONAL DISTINCT ROUTE TYPES (Shortest, Camera-Free)
+                    # REQUEST ADDITIONAL DISTINCT ROUTE TYPES (Shortest, Optimised)
                     # Only for standard routing when no alternates were returned
                     # ================================================================
                     if enable_hazard_avoidance and len(routes) < 3:
@@ -7487,7 +7487,7 @@ def calculate_route():
                         except Exception as e:
                             logger.warning(f"[VALHALLA] Shortest route failed: {e}")
 
-                        # Route: Camera-Free Discovery (aggressive camera avoidance)
+                        # Route: Optimised Discovery (aggressive camera avoidance)
                         try:
                             if route_geometry:
                                 baseline_coords = polyline.decode(route_geometry, precision=6)
@@ -7512,12 +7512,12 @@ def calculate_route():
                                             disc_geom = disc_data['trip']['legs'][0]['shape']
                                             disc_dist = disc_data['trip']['summary']['length']
                                             disc_time = disc_data['trip']['summary']['time']
-                                            route_entry = build_std_route_entry('🛡️ Camera-Free', disc_geom, disc_dist, disc_time, next_route_id, disc_data)
+                                            route_entry = build_std_route_entry('⚡ Optimised', disc_geom, disc_dist, disc_time, next_route_id, disc_data)
                                             if route_entry['hazard_count'] < hazard_count:
                                                 routes.append(route_entry)
-                                                logger.info(f"[VALHALLA] Added Camera-Free route: {disc_dist:.1f}km, {route_entry['hazard_count']} cameras")
+                                                logger.info(f"[VALHALLA] Added Optimised route: {disc_dist:.1f}km, {route_entry['hazard_count']} cameras")
                         except Exception as e:
-                            logger.warning(f"[VALHALLA] Camera-Free route failed: {e}")
+                            logger.warning(f"[VALHALLA] Optimised route failed: {e}")
 
                         logger.info(f"[VALHALLA] Final route count: {len(routes)}")
 
@@ -7554,7 +7554,7 @@ def calculate_route():
 
                                 gh_route_entry = {
                                     'id': 0,  # Will be renumbered
-                                    'name': '📷 Camera-Safe',
+                                    'name': '⚡ Optimised',
                                     'distance_km': round(gh_distance_km, 2),
                                     'duration_minutes': round(gh_duration_min, 0),
                                     'fuel_cost': round(gh_costs['fuel_cost'], 2),
@@ -7568,9 +7568,9 @@ def calculate_route():
                                     'source': 'GraphHopper'
                                 }
 
-                                # Insert at the beginning as the camera-safe option
+                                # Insert at the beginning as the optimised option
                                 routes.insert(0, gh_route_entry)
-                                logger.info(f"[GRAPHHOPPER] Added Camera-Safe route: {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
+                                logger.info(f"[GRAPHHOPPER] Added Optimised route: {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
                         except Exception as e:
                             logger.warning(f"[GRAPHHOPPER] Failed to add GraphHopper route: {e}")
 
