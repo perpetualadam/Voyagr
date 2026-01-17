@@ -2982,8 +2982,9 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
 
             logger.info(f"[HAZARDS] Processing {len(hazard_list)} {hazard_type} hazards (threshold={threshold}m, penalty={penalty}s)")
 
-            # OPTIMIZATION: Sample route points for faster scoring (every 10th point for long routes)
-            sample_interval = max(1, len(decoded_points) // 100)  # Max 100 sample points
+            # OPTIMIZATION: Sample route points for faster scoring
+            # Use 500 sample points to ensure cameras aren't missed (avg ~500m between samples for 250km route)
+            sample_interval = max(1, len(decoded_points) // 500)  # Max 500 sample points
             sampled_points = decoded_points[::sample_interval]
             logger.info(f"[HAZARDS] Sampling {len(sampled_points)} points from {len(decoded_points)} total (interval={sample_interval})")
 
