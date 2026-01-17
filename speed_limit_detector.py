@@ -85,9 +85,12 @@ class SpeedLimitDetector:
 
         # API Usage Metrics
         self.metrics = {
-            'tomtom_calls': 0,
-            'tomtom_success': 0,
-            'tomtom_failures': 0,
+            'tomtom_snap_to_roads_calls': 0,
+            'tomtom_snap_to_roads_success': 0,
+            'tomtom_snap_to_roads_failures': 0,
+            'tomtom_traffic_flow_calls': 0,
+            'tomtom_traffic_flow_success': 0,
+            'tomtom_traffic_flow_failures': 0,
             'overpass_calls': 0,
             'overpass_maxspeed_hits': 0,
             'overpass_highway_inferred': 0,
@@ -356,11 +359,84 @@ class SpeedLimitDetector:
         # Cache miss
         self.metrics['cache_misses'] += 1
 
-        # Try TomTom Traffic Flow API first - uses freeFlowSpeed as speed limit proxy
+        # Try TomTom Snap to Roads API first - provides actual speed limits
         tomtom_api_key = os.getenv('TOMTOM_API_KEY')
         if tomtom_api_key:
             try:
-                self.metrics['tomtom_calls'] += 1
+                self.metrics['tomtom_snap_to_roads_calls'] += 1
+
+                # Snap to Roads API requires a route with at least 2 points
+                # We'll create a small route around the point (50m radius)
+                # This is a workaround since we only have a single point
+                offset = 0.0005  # ~50 meters
+                points = [
+                    {"lat": lat - offset, "lon": lon},
+                    {"lat": lat, "lon": lon},
+                    {"lat": lat + offset, "lon": lon}
+                ]
+
+                snap_url = "https://api.tomtom.com/routing/1/snapToRoads/sync/json"
+                params = {
+                    'key': tomtom_api_key,
+                    'fields': '{speedLimits}'  # Request speed limit data
+                }
+
+                # Build the request body with points
+                request_body = {
+                    "points": [{"latitude": p["lat"], "longitude": p["lon"]} for p in points]
+                }
+
+                response = requests.post(snap_url, params=params, json=request_body, timeout=3)
+
+                if response.status_code == 200:
+                    snap_data = response.json()
+
+                    # Extract speed limit from the middle point (our actual location)
+                    if 'routes' in snap_data and len(snap_data['routes']) > 0:
+                        route = snap_data['routes'][0]
+                        if 'legs' in route and len(route['legs']) > 0:
+                            # Get speed limit from the first leg (closest to our point)
+                            leg = route['legs'][0]
+                            if 'speedLimitInKmh' in leg:
+                                speed_limit_kmh = leg['speedLimitInKmh']
+
+                                # Convert km/h to mph (UK uses mph)
+                                speed_limit_mph = int(round(speed_limit_kmh * 0.621371))
+
+                                # Round to nearest common UK speed limit
+                                uk_limits = [20, 30, 40, 50, 60, 70]
+                                speed_limit = min(uk_limits, key=lambda x: abs(x - speed_limit_mph))
+
+                                # Track successful call
+                                self.metrics['tomtom_snap_to_roads_success'] += 1
+                                self._track_tomtom_call(success=True)
+
+                                # Cache the result
+                                self._add_to_cache(cache_key, {
+                                    'speed_limit': speed_limit,
+                                    'timestamp': time.time(),
+                                    'source': 'TomTom-SnapToRoads'
+                                })
+                                logger.info(f"[Speed Limit] TomTom Snap to Roads: {speed_limit_kmh} km/h -> {speed_limit} mph")
+                                return speed_limit
+
+                    # If we got here, no speed limit data was returned
+                    self.metrics['tomtom_snap_to_roads_failures'] += 1
+                    logger.warning("[Speed Limit] TomTom Snap to Roads returned no speed limit data")
+                else:
+                    self.metrics['tomtom_snap_to_roads_failures'] += 1
+                    logger.warning(f"[Speed Limit] TomTom Snap to Roads API error: status={response.status_code}")
+            except requests.exceptions.Timeout:
+                self.metrics['tomtom_snap_to_roads_failures'] += 1
+                logger.warning("[Speed Limit] TomTom Snap to Roads API timeout (3s)")
+            except Exception as e:
+                self.metrics['tomtom_snap_to_roads_failures'] += 1
+                logger.error(f"[Speed Limit] TomTom Snap to Roads failed: {e}")
+
+        # Fallback: Try TomTom Traffic Flow API - uses freeFlowSpeed as speed limit proxy
+        if tomtom_api_key:
+            try:
+                self.metrics['tomtom_traffic_flow_calls'] += 1
                 tomtom_url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
                 params = {
                     'key': tomtom_api_key,
@@ -374,36 +450,57 @@ class SpeedLimitDetector:
                     free_flow_speed_kmh = flow_data.get('freeFlowSpeed', 0)
 
                     if free_flow_speed_kmh > 0:
+                        # FIX: freeFlowSpeed is NOT the speed limit - it's the average traffic speed
+                        # People typically drive 5-15 mph faster than the speed limit
+                        # We need to estimate the actual speed limit by reducing freeFlowSpeed
+
                         # Convert km/h to mph (UK uses mph)
-                        speed_mph = int(round(free_flow_speed_kmh * 0.621371))
+                        free_flow_mph = free_flow_speed_kmh * 0.621371
+
+                        # Estimate actual speed limit by reducing free flow speed
+                        # Typical relationship: freeFlowSpeed ≈ speedLimit + 10-15 mph
+                        # Use a conservative 12 mph reduction
+                        estimated_speed_mph = free_flow_mph - 12
 
                         # Round to nearest common UK speed limit (20, 30, 40, 50, 60, 70)
                         uk_limits = [20, 30, 40, 50, 60, 70]
-                        speed_limit = min(uk_limits, key=lambda x: abs(x - speed_mph))
+                        speed_limit = min(uk_limits, key=lambda x: abs(x - estimated_speed_mph))
 
-                        # Track successful TomTom call
+                        # Additional validation: if free flow is very high (>80 mph), it's likely a motorway
+                        if free_flow_mph > 80:
+                            speed_limit = 70  # UK motorway limit
+                        # If free flow is very low (<30 mph), it's likely a 20 or 30 zone
+                        elif free_flow_mph < 30:
+                            speed_limit = min(uk_limits, key=lambda x: abs(x - free_flow_mph))
+
+                        # Track successful TomTom Traffic Flow call
+                        self.metrics['tomtom_traffic_flow_success'] += 1
                         self._track_tomtom_call(success=True)
 
                         # Cache the result using LRU method
                         self._add_to_cache(cache_key, {
                             'speed_limit': speed_limit,
                             'timestamp': time.time(),
-                            'source': 'TomTom'
+                            'source': 'TomTom-TrafficFlow-estimated'
                         })
-                        logger.info(f"[Speed Limit] TomTom: {free_flow_speed_kmh} km/h -> {speed_limit} mph")
+                        logger.info(f"[Speed Limit] TomTom Traffic Flow: {free_flow_speed_kmh} km/h ({free_flow_mph:.0f} mph free flow) -> estimated {speed_limit} mph limit")
                         return speed_limit
                     else:
+                        self.metrics['tomtom_traffic_flow_failures'] += 1
                         self._track_tomtom_call(success=False)
-                        logger.warning(f"[Speed Limit] TomTom returned freeFlowSpeed=0")
+                        logger.warning(f"[Speed Limit] TomTom Traffic Flow returned freeFlowSpeed=0")
                 else:
+                    self.metrics['tomtom_traffic_flow_failures'] += 1
                     self._track_tomtom_call(success=False)
-                    logger.warning(f"[Speed Limit] TomTom API error: status={response.status_code}")
+                    logger.warning(f"[Speed Limit] TomTom Traffic Flow API error: status={response.status_code}")
             except requests.exceptions.Timeout:
+                self.metrics['tomtom_traffic_flow_failures'] += 1
                 self._track_tomtom_call(success=False)
-                logger.warning("[Speed Limit] TomTom API timeout (3s)")
+                logger.warning("[Speed Limit] TomTom Traffic Flow API timeout (3s)")
             except Exception as e:
+                self.metrics['tomtom_traffic_flow_failures'] += 1
                 self._track_tomtom_call(success=False)
-                logger.error(f"[Speed Limit] TomTom failed: {e}")
+                logger.error(f"[Speed Limit] TomTom Traffic Flow failed: {e}")
         else:
             logger.info("[Speed Limit] No TOMTOM_API_KEY configured, skipping TomTom")
 
@@ -605,11 +702,19 @@ class SpeedLimitDetector:
                 'max_size': self.cache_max_size,
                 'ttl_seconds': self.cache_expiry
             },
-            'tomtom': {
-                'total_calls': self.metrics['tomtom_calls'],
-                'successful': self.metrics['tomtom_success'],
-                'failures': self.metrics['tomtom_failures'],
-                'success_rate': round(self.metrics['tomtom_success'] / self.metrics['tomtom_calls'] * 100, 1) if self.metrics['tomtom_calls'] > 0 else 0,
+            'tomtom_snap_to_roads': {
+                'total_calls': self.metrics['tomtom_snap_to_roads_calls'],
+                'successful': self.metrics['tomtom_snap_to_roads_success'],
+                'failures': self.metrics['tomtom_snap_to_roads_failures'],
+                'success_rate': round(self.metrics['tomtom_snap_to_roads_success'] / self.metrics['tomtom_snap_to_roads_calls'] * 100, 1) if self.metrics['tomtom_snap_to_roads_calls'] > 0 else 0
+            },
+            'tomtom_traffic_flow': {
+                'total_calls': self.metrics['tomtom_traffic_flow_calls'],
+                'successful': self.metrics['tomtom_traffic_flow_success'],
+                'failures': self.metrics['tomtom_traffic_flow_failures'],
+                'success_rate': round(self.metrics['tomtom_traffic_flow_success'] / self.metrics['tomtom_traffic_flow_calls'] * 100, 1) if self.metrics['tomtom_traffic_flow_calls'] > 0 else 0
+            },
+            'tomtom_combined': {
                 'daily_calls': self.tomtom_quota['daily_calls'],
                 'monthly_calls': self.tomtom_quota['monthly_calls'],
                 'estimated_cost_usd': round(self.tomtom_quota['estimated_cost'], 2)
@@ -624,7 +729,8 @@ class SpeedLimitDetector:
                 'is_local': self.overpass_rate_limit == 0.0
             },
             'sources': {
-                'tomtom_percentage': round(self.metrics['tomtom_success'] / total * 100, 1) if total > 0 else 0,
+                'tomtom_snap_to_roads_percentage': round(self.metrics['tomtom_snap_to_roads_success'] / total * 100, 1) if total > 0 else 0,
+                'tomtom_traffic_flow_percentage': round(self.metrics['tomtom_traffic_flow_success'] / total * 100, 1) if total > 0 else 0,
                 'overpass_maxspeed_percentage': round(self.metrics['overpass_maxspeed_hits'] / total * 100, 1) if total > 0 else 0,
                 'overpass_inferred_percentage': round(self.metrics['overpass_highway_inferred'] / total * 100, 1) if total > 0 else 0,
                 'default_fallback_percentage': round(self.metrics['default_fallbacks'] / total * 100, 1) if total > 0 else 0
@@ -651,9 +757,12 @@ class SpeedLimitDetector:
     def reset_metrics(self):
         """Reset all metrics counters (useful for testing or periodic resets)."""
         self.metrics = {
-            'tomtom_calls': 0,
-            'tomtom_success': 0,
-            'tomtom_failures': 0,
+            'tomtom_snap_to_roads_calls': 0,
+            'tomtom_snap_to_roads_success': 0,
+            'tomtom_snap_to_roads_failures': 0,
+            'tomtom_traffic_flow_calls': 0,
+            'tomtom_traffic_flow_success': 0,
+            'tomtom_traffic_flow_failures': 0,
             'overpass_calls': 0,
             'overpass_maxspeed_hits': 0,
             'overpass_highway_inferred': 0,

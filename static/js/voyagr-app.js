@@ -6558,13 +6558,15 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
     const speedUnit = getSpeedUnit();
     const displaySpeed = convertSpeed(speedKmh);
 
+    // FIX: Use 'viewport' for pitchAlignment to ensure marker stays on polyline in 3D view
+    // 'map' alignment causes the marker to appear offset when the map is tilted
     const marker = MapLibreHelpers.createMarker(lat, lon, {
         html: markerDiv.outerHTML,
         iconSize: [50, 50],
         iconAnchor: [25, 25],
         className: 'vehicle-marker-icon', // Use the class for CSS transitions
-        rotationAlignment: 'map',        // Align with map rotation
-        pitchAlignment: 'map',           // Align with map pitch
+        rotationAlignment: 'map',        // Align with map rotation (keeps heading correct)
+        pitchAlignment: 'viewport',      // FIX: Align with viewport (not map) for correct 3D positioning
         popup: `
             <div style="font-family: Arial, sans-serif; font-size: 13px; min-width: 180px;">
                 <strong style="font-size: 14px;">${iconEmoji} Current Position</strong><br>
