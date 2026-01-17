@@ -2915,9 +2915,22 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
         try:
             cursor.execute("SELECT hazard_type, penalty_seconds, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
             preferences = {row[0]: {'penalty': row[1], 'threshold': row[2]} for row in cursor.fetchall()}
+            if not preferences:
+                # Table exists but is empty - use defaults
+                logger.info(f"[HAZARDS] hazard_preferences table is empty, using defaults")
+                preferences = {
+                    'speed_camera': {'penalty': 60, 'threshold': 500},
+                    'average_speed_camera': {'penalty': 60, 'threshold': 500},
+                    'traffic_light_camera': {'penalty': 90, 'threshold': 500},
+                    'red_light_camera': {'penalty': 90, 'threshold': 500},
+                    'mobile_camera': {'penalty': 60, 'threshold': 500},
+                    'police': {'penalty': 30, 'threshold': 1000},
+                    'roadworks': {'penalty': 15, 'threshold': 500},
+                    'accident': {'penalty': 30, 'threshold': 500}
+                }
         except Exception as e:
             # Table doesn't exist - use default preferences for all camera types
-            logger.debug(f"[HAZARDS] hazard_preferences table not found, using defaults: {e}")
+            logger.info(f"[HAZARDS] hazard_preferences table not found, using defaults: {e}")
             preferences = {
                 'speed_camera': {'penalty': 60, 'threshold': 500},
                 'average_speed_camera': {'penalty': 60, 'threshold': 500},
@@ -2931,8 +2944,8 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
 
         return_db_connection(conn)
 
-        logger.debug(f"[HAZARDS] Preferences loaded: {list(preferences.keys())}")
-        logger.debug(f"[HAZARDS] Hazards to score: {[(k, len(v)) for k, v in hazards.items() if v]}")
+        logger.info(f"[HAZARDS] Scoring with preferences: {list(preferences.keys())}")
+        logger.info(f"[HAZARDS] Hazards to score: {[(k, len(v)) for k, v in hazards.items() if v]}")
 
         # Decode polyline to get route points
         try:
