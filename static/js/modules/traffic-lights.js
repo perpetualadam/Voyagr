@@ -152,7 +152,11 @@ function addTrafficLight(light) {
         data: light
     });
 
-    console.log(`[Traffic Lights] Added light ${light.id} (${light.state})`);
+    // Reduced logging - only log every 50th light to avoid console spam
+    const lightCount = trafficLightMarkers.size;
+    if (lightCount % 50 === 0 || lightCount === 1) {
+        console.log(`[Traffic Lights] Added ${lightCount} lights so far...`);
+    }
 }
 
 /**
@@ -252,10 +256,18 @@ async function plotTrafficLightsOnRoute(route) {
             // Clear existing lights
             clearAllTrafficLights();
 
-            // Add new lights
-            data.lights.forEach(light => addTrafficLight(light));
+            // Limit to 200 traffic lights to prevent performance issues
+            const MAX_LIGHTS = 200;
+            const lightsToShow = data.lights.slice(0, MAX_LIGHTS);
 
-            console.log(`[Traffic Lights] Plotted ${data.lights.length} lights on route`);
+            if (data.lights.length > MAX_LIGHTS) {
+                console.log(`[Traffic Lights] Limiting to ${MAX_LIGHTS} of ${data.lights.length} lights (performance)`);
+            }
+
+            // Add new lights
+            lightsToShow.forEach(light => addTrafficLight(light));
+
+            console.log(`[Traffic Lights] Plotted ${lightsToShow.length} lights on route${data.lights.length > MAX_LIGHTS ? ` (${data.lights.length - MAX_LIGHTS} hidden)` : ''}`);
 
             // Start countdown update interval
             startCountdownUpdates();
