@@ -8745,49 +8745,90 @@ def search_parking():
         # Use Overpass API for detailed OSM parking data with tags
         url = 'https://overpass-api.de/api/interpreter'
 
-        # Build Overpass QL query for parking amenities
-        # This gets all parking within radius with detailed tags
+        # Build simplified Overpass QL query for parking amenities
+        # Reduced timeout and simpler query to avoid 504 errors
         overpass_query = f"""
-        [out:json][timeout:10];
+        [out:json][timeout:5];
         (
           node["amenity"="parking"](around:{radius},{lat},{lon});
           way["amenity"="parking"](around:{radius},{lat},{lon});
         );
-        out center tags;
+        out center tags {min(20, radius // 50)};
         """
 
         print(f"[Parking] Querying Overpass API for parking near ({lat},{lon}) radius={radius}m")
 
+        elements = []
         try:
-            response = requests.post(url, data={'data': overpass_query}, timeout=15)
+            response = requests.post(url, data={'data': overpass_query}, timeout=10)
 
             if response.status_code == 429:
                 # Rate limited - wait and retry once
                 print(f"[Parking] Overpass API rate limited, waiting 2 seconds...")
                 import time
                 time.sleep(2)
-                response = requests.post(url, data={'data': overpass_query}, timeout=15)
+                response = requests.post(url, data={'data': overpass_query}, timeout=10)
 
-            if response.status_code != 200:
-                error_msg = f"Overpass API returned status {response.status_code}"
-                try:
-                    error_detail = response.text[:200]  # First 200 chars of error
-                    print(f"[Parking] Overpass API error: {response.status_code} - {error_detail}")
-                    error_msg += f": {error_detail}"
-                except:
-                    print(f"[Parking] Overpass API error: {response.status_code}")
-                return jsonify({'success': False, 'error': error_msg})
-
-            results = response.json()
-            elements = results.get('elements', [])
-            print(f"[Parking] Overpass API returned {len(elements)} elements")
+            if response.status_code == 200:
+                results = response.json()
+                elements = results.get('elements', [])
+                print(f"[Parking] Overpass API returned {len(elements)} elements")
+            else:
+                error_detail = response.text[:200] if response.text else "No error details"
+                print(f"[Parking] Overpass API error: {response.status_code} - {error_detail}")
+                # Don't return error yet - try Nominatim fallback below
 
         except requests.exceptions.Timeout:
-            print(f"[Parking] Overpass API timeout")
-            return jsonify({'success': False, 'error': 'Parking search timed out. Try again or reduce search radius.'})
+            print(f"[Parking] Overpass API timeout - will try Nominatim fallback")
         except requests.exceptions.RequestException as e:
-            print(f"[Parking] Overpass API request failed: {str(e)}")
-            return jsonify({'success': False, 'error': f'Parking search failed: {str(e)}'})
+            print(f"[Parking] Overpass API request failed: {str(e)} - will try Nominatim fallback")
+
+        # Fallback to Nominatim if Overpass failed or returned no results
+        if not elements:
+            print(f"[Parking] Trying Nominatim fallback for parking search")
+            try:
+                nominatim_url = f"https://nominatim.openstreetmap.org/search"
+                params = {
+                    'format': 'json',
+                    'q': 'parking',
+                    'lat': lat,
+                    'lon': lon,
+                    'radius': radius,
+                    'limit': 20,
+                    'addressdetails': 1,
+                    'extratags': 1
+                }
+                headers = {'User-Agent': 'Voyagr/1.0'}
+                nom_response = requests.get(nominatim_url, params=params, headers=headers, timeout=10)
+
+                if nom_response.status_code == 200:
+                    nom_results = nom_response.json()
+                    print(f"[Parking] Nominatim returned {len(nom_results)} results")
+
+                    # Convert Nominatim results to Overpass-like format
+                    for result in nom_results:
+                        if 'parking' in result.get('display_name', '').lower() or result.get('type') == 'parking':
+                            elements.append({
+                                'type': 'node',
+                                'lat': float(result['lat']),
+                                'lon': float(result['lon']),
+                                'tags': {
+                                    'name': result.get('display_name', 'Parking'),
+                                    'amenity': 'parking',
+                                    'fee': result.get('extratags', {}).get('fee', ''),
+                                    'parking': result.get('extratags', {}).get('parking', ''),
+                                    'access': result.get('extratags', {}).get('access', '')
+                                }
+                            })
+                else:
+                    print(f"[Parking] Nominatim also failed: {nom_response.status_code}")
+            except Exception as e:
+                print(f"[Parking] Nominatim fallback failed: {str(e)}")
+
+        # If still no results, return empty list
+        if not elements:
+            print(f"[Parking] No parking found from any source")
+            return jsonify({'success': True, 'parking': []})
 
         if not elements:
             return jsonify({'success': True, 'parking': []})
