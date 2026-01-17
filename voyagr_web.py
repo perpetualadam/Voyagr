@@ -2791,6 +2791,10 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[
             logger.error(f"Error decoding polyline: {e}")
             return []
 
+        # OPTIMIZATION: Sample route points for faster hazard detection
+        sample_interval = max(1, len(decoded_points) // 100)  # Max 100 sample points
+        sampled_points = decoded_points[::sample_interval]
+
         # Check each hazard against route
         for hazard_type, hazard_list in hazards.items():
             if hazard_type not in preferences:
@@ -2805,11 +2809,14 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[
                 hazard_lat = hazard.get('lat')
                 hazard_lon = hazard.get('lon')
 
-                # Find minimum distance to route
+                # OPTIMIZATION: Find minimum distance using sampled points (10-100x faster)
                 min_distance = float('inf')
-                for point_lat, point_lon in decoded_points:
+                for point_lat, point_lon in sampled_points:
                     distance = get_distance_between_points(hazard_lat, hazard_lon, point_lat, point_lon)
                     min_distance = min(min_distance, distance)
+                    # Early exit if already beyond threshold
+                    if min_distance > threshold * 2:
+                        break
 
                 # If hazard is within threshold, add to list
                 if min_distance <= threshold:
@@ -2881,15 +2888,23 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
 
             logger.debug(f"[HAZARDS] Processing {len(hazard_list)} {hazard_type} hazards (threshold={threshold}m, penalty={penalty}s)")
 
+            # OPTIMIZATION: Sample route points for faster scoring (every 10th point for long routes)
+            sample_interval = max(1, len(decoded_points) // 100)  # Max 100 sample points
+            sampled_points = decoded_points[::sample_interval]
+            logger.debug(f"[HAZARDS] Sampling {len(sampled_points)} points from {len(decoded_points)} total (interval={sample_interval})")
+
             for idx, hazard in enumerate(hazard_list):
                 hazard_lat = hazard.get('lat')
                 hazard_lon = hazard.get('lon')
 
-                # Find minimum distance to route
+                # OPTIMIZATION: Find minimum distance using sampled points (10-100x faster)
                 min_distance = float('inf')
-                for point_lat, point_lon in decoded_points:
+                for point_lat, point_lon in sampled_points:
                     distance = get_distance_between_points(hazard_lat, hazard_lon, point_lat, point_lon)
                     min_distance = min(min_distance, distance)
+                    # Early exit if already beyond threshold
+                    if min_distance > threshold * 2:
+                        break
 
                 # If hazard is within threshold, add penalty
                 if min_distance <= threshold:
@@ -6560,8 +6575,12 @@ def calculate_route():
 
         # ====================================================================
         # TRY GRAPHHOPPER FIRST (if camera avoidance enabled)
+        # OPTIMIZATION: Skip GraphHopper for long routes (>100km) as it times out
         # ====================================================================
-        if enable_hazard_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
+        straight_line_km = ((end_lat - start_lat)**2 + (end_lon - start_lon)**2)**0.5 * 111
+        skip_graphhopper = straight_line_km > 100  # Skip for routes >100km
+
+        if enable_hazard_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE and not skip_graphhopper:
             logger.info(f"[ROUTING] Trying GraphHopper with camera avoidance first...")
             try:
                 graphhopper_route = route_with_graphhopper(
@@ -6577,6 +6596,8 @@ def calculate_route():
             except Exception as e:
                 graphhopper_error = str(e)
                 logger.warning(f"[GRAPHHOPPER] Error: {e}, falling back to Valhalla")
+        elif skip_graphhopper:
+            logger.info(f"[ROUTING] Skipping GraphHopper for long route ({straight_line_km:.0f}km), using Valhalla directly")
 
         logger.debug(f"[ROUTING] Valhalla URL: {VALHALLA_URL}")
 
