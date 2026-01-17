@@ -8756,14 +8756,38 @@ def search_parking():
         out center tags;
         """
 
-        response = requests.post(url, data={'data': overpass_query}, timeout=15)
+        print(f"[Parking] Querying Overpass API for parking near ({lat},{lon}) radius={radius}m")
 
-        if response.status_code != 200:
-            print(f"[Parking] Overpass API error: {response.status_code}")
-            return jsonify({'success': False, 'error': 'Parking search failed'})
+        try:
+            response = requests.post(url, data={'data': overpass_query}, timeout=15)
 
-        results = response.json()
-        elements = results.get('elements', [])
+            if response.status_code == 429:
+                # Rate limited - wait and retry once
+                print(f"[Parking] Overpass API rate limited, waiting 2 seconds...")
+                import time
+                time.sleep(2)
+                response = requests.post(url, data={'data': overpass_query}, timeout=15)
+
+            if response.status_code != 200:
+                error_msg = f"Overpass API returned status {response.status_code}"
+                try:
+                    error_detail = response.text[:200]  # First 200 chars of error
+                    print(f"[Parking] Overpass API error: {response.status_code} - {error_detail}")
+                    error_msg += f": {error_detail}"
+                except:
+                    print(f"[Parking] Overpass API error: {response.status_code}")
+                return jsonify({'success': False, 'error': error_msg})
+
+            results = response.json()
+            elements = results.get('elements', [])
+            print(f"[Parking] Overpass API returned {len(elements)} elements")
+
+        except requests.exceptions.Timeout:
+            print(f"[Parking] Overpass API timeout")
+            return jsonify({'success': False, 'error': 'Parking search timed out. Try again or reduce search radius.'})
+        except requests.exceptions.RequestException as e:
+            print(f"[Parking] Overpass API request failed: {str(e)}")
+            return jsonify({'success': False, 'error': f'Parking search failed: {str(e)}'})
 
         if not elements:
             return jsonify({'success': True, 'parking': []})

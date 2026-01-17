@@ -5293,11 +5293,29 @@ async function findParkingNearDestination() {
         } else if (window.lastCalculatedRoute.polyline && window.lastCalculatedRoute.polyline.length > 0) {
             // Method 4: Get last point from polyline (destination)
             const lastPoint = window.lastCalculatedRoute.polyline[window.lastCalculatedRoute.polyline.length - 1];
-            endCoords = {
-                lat: lastPoint.lat,
-                lon: lastPoint.lon
-            };
-            console.log('[Parking] Method 4: Got coords from last polyline point');
+            console.log('[Parking] Method 4: Last polyline point:', lastPoint);
+
+            // Handle both {lat, lon} and [lat, lon] formats
+            if (lastPoint.lat !== undefined && lastPoint.lon !== undefined) {
+                endCoords = {
+                    lat: lastPoint.lat,
+                    lon: lastPoint.lon
+                };
+            } else if (Array.isArray(lastPoint) && lastPoint.length >= 2) {
+                endCoords = {
+                    lat: lastPoint[0],
+                    lon: lastPoint[1]
+                };
+            } else if (lastPoint[0] !== undefined && lastPoint[1] !== undefined) {
+                endCoords = {
+                    lat: lastPoint[0],
+                    lon: lastPoint[1]
+                };
+            }
+
+            if (endCoords) {
+                console.log('[Parking] Method 4: Got coords from last polyline point');
+            }
         } else {
             // Method 5: Geocode the destination input field
             console.log('[Parking] Method 5: Attempting to geocode destination input');
