@@ -2985,7 +2985,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
             # OPTIMIZATION: Sample route points for faster scoring (every 10th point for long routes)
             sample_interval = max(1, len(decoded_points) // 100)  # Max 100 sample points
             sampled_points = decoded_points[::sample_interval]
-            logger.debug(f"[HAZARDS] Sampling {len(sampled_points)} points from {len(decoded_points)} total (interval={sample_interval})")
+            logger.info(f"[HAZARDS] Sampling {len(sampled_points)} points from {len(decoded_points)} total (interval={sample_interval})")
 
             for idx, hazard in enumerate(hazard_list):
                 hazard_lat = hazard.get('lat')
@@ -3017,6 +3017,10 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
 
                     total_penalty += applied_penalty
                     hazard_count += 1
+
+                    # Log first few cameras found for debugging
+                    if hazard_count <= 3:
+                        logger.info(f"[HAZARDS] Camera #{hazard_count} found: {min_distance:.0f}m from route, penalty={applied_penalty:.0f}s")
 
                     if idx < 3:  # Log first 3 hazards
                         logger.debug(f"[HAZARDS]   Hazard {idx+1}: distance={min_distance:.0f}m, penalty={applied_penalty:.0f}s")
