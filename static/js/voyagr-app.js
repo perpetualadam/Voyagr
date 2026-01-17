@@ -5701,14 +5701,12 @@ async function setParkingAsDestination(parking) {
         }
 
         // Set destination to parking name and coordinates
-        endInput.value = `${parking.name} (${parking.lat.toFixed(5)}, ${parking.lon.toFixed(5)})`;
+        endInput.value = `${parking.name}`;
 
-        // Store the parking coordinates for geocoding
-        window.parkingDestination = {
-            lat: parking.lat,
-            lon: parking.lon,
-            name: parking.name
-        };
+        // CRITICAL: Store coordinates in dataset for geocoding to use
+        endInput.dataset.lat = parking.lat;
+        endInput.dataset.lon = parking.lon;
+        endInput.dataset.displayName = parking.name;
 
         showStatus('🅿️ Recalculating route to parking...', 'loading');
 

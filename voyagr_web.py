@@ -3724,6 +3724,7 @@ HTML_TEMPLATE = '''
     <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
     <script src="/static/js/maplibre-helpers.js?v=20260109t"></script>
     <!-- External JavaScript modules -->
+    <script src="/static/js/modules/traffic-lights.js?v=20260109t"></script>
     <script src="/static/js/voyagr-core.js?v=20260109t"></script>
     <script src="/static/js/voyagr-app.js?v=20260109t"></script>
     <script src="/static/js/app.js?v=20260109t"></script>
