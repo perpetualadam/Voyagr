@@ -5224,14 +5224,40 @@ async function findParkingNearDestination() {
 
     try {
         // Get destination coordinates from last route
-        const endCoords = window.lastCalculatedRoute.end_lat && window.lastCalculatedRoute.end_lon
-            ? { lat: window.lastCalculatedRoute.end_lat, lon: window.lastCalculatedRoute.end_lon }
-            : null;
+        let endCoords = null;
+
+        // Try multiple ways to get destination coordinates
+        if (window.lastCalculatedRoute.end_lat && window.lastCalculatedRoute.end_lon) {
+            // Method 1: Direct lat/lon properties
+            endCoords = {
+                lat: window.lastCalculatedRoute.end_lat,
+                lon: window.lastCalculatedRoute.end_lon
+            };
+        } else if (window.lastCalculatedRoute.destination) {
+            // Method 2: Parse from destination string "lat,lon"
+            const parts = window.lastCalculatedRoute.destination.split(',');
+            if (parts.length === 2) {
+                endCoords = {
+                    lat: parseFloat(parts[0]),
+                    lon: parseFloat(parts[1])
+                };
+            }
+        } else if (window.lastCalculatedRoute.routes && window.lastCalculatedRoute.routes[0]) {
+            // Method 3: Get from first route's end coordinates
+            const route = window.lastCalculatedRoute.routes[0];
+            if (route.end_lat && route.end_lon) {
+                endCoords = {
+                    lat: route.end_lat,
+                    lon: route.end_lon
+                };
+            }
+        }
 
         console.log('[Parking] End coordinates:', endCoords);
 
-        if (!endCoords) {
+        if (!endCoords || isNaN(endCoords.lat) || isNaN(endCoords.lon)) {
             console.error('[Parking] Could not determine destination coordinates');
+            console.error('[Parking] lastCalculatedRoute:', window.lastCalculatedRoute);
             showStatus('Could not determine destination coordinates', 'error');
             return;
         }
