@@ -365,60 +365,61 @@ class SpeedLimitDetector:
             try:
                 self.metrics['tomtom_snap_to_roads_calls'] += 1
 
-                # Snap to Roads API requires a route with at least 2 points
-                # We'll create a small route around the point (50m radius)
-                # This is a workaround since we only have a single point
+                # Snap to Roads API requires at least 2 points
+                # Create a small route around the point (~50m radius)
                 offset = 0.0005  # ~50 meters
-                points = [
-                    {"lat": lat - offset, "lon": lon},
-                    {"lat": lat, "lon": lon},
-                    {"lat": lat + offset, "lon": lon}
-                ]
 
-                snap_url = "https://api.tomtom.com/routing/1/snapToRoads/sync/json"
+                # Format: lon,lat;lon,lat (semicolon-separated)
+                points_str = f"{lon},{lat};{lon+offset},{lat+offset}"
+
+                # Correct endpoint format from TomTom documentation
+                snap_url = "https://api.tomtom.com/snapToRoads/1"
                 params = {
                     'key': tomtom_api_key,
-                    'fields': '{speedLimits}'  # Request speed limit data
+                    'points': points_str,
+                    'fields': '{route{properties{speedLimits{value,unit,type}}}}',
+                    'vehicleType': 'PassengerCar',
+                    'measurementSystem': 'metric'
                 }
 
-                # Build the request body with points
-                request_body = {
-                    "points": [{"latitude": p["lat"], "longitude": p["lon"]} for p in points]
-                }
-
-                response = requests.post(snap_url, params=params, json=request_body, timeout=3)
+                response = requests.get(snap_url, params=params, timeout=3)
 
                 if response.status_code == 200:
                     snap_data = response.json()
 
-                    # Extract speed limit from the middle point (our actual location)
-                    if 'routes' in snap_data and len(snap_data['routes']) > 0:
-                        route = snap_data['routes'][0]
-                        if 'legs' in route and len(route['legs']) > 0:
-                            # Get speed limit from the first leg (closest to our point)
-                            leg = route['legs'][0]
-                            if 'speedLimitInKmh' in leg:
-                                speed_limit_kmh = leg['speedLimitInKmh']
+                    # Parse response: route -> properties -> speedLimits
+                    if 'route' in snap_data:
+                        route_features = snap_data['route']
+                        if isinstance(route_features, list) and len(route_features) > 0:
+                            # Get first route segment
+                            segment = route_features[0]
+                            if 'properties' in segment and 'speedLimits' in segment['properties']:
+                                speed_limits = segment['properties']['speedLimits']
+                                if isinstance(speed_limits, list) and len(speed_limits) > 0:
+                                    # Get first speed limit
+                                    speed_limit_data = speed_limits[0]
+                                    speed_limit_kmh = speed_limit_data.get('value', 0)
 
-                                # Convert km/h to mph (UK uses mph)
-                                speed_limit_mph = int(round(speed_limit_kmh * 0.621371))
+                                    if speed_limit_kmh > 0:
+                                        # Convert km/h to mph (UK uses mph)
+                                        speed_limit_mph = int(round(speed_limit_kmh * 0.621371))
 
-                                # Round to nearest common UK speed limit
-                                uk_limits = [20, 30, 40, 50, 60, 70]
-                                speed_limit = min(uk_limits, key=lambda x: abs(x - speed_limit_mph))
+                                        # Round to nearest common UK speed limit
+                                        uk_limits = [20, 30, 40, 50, 60, 70]
+                                        speed_limit = min(uk_limits, key=lambda x: abs(x - speed_limit_mph))
 
-                                # Track successful call
-                                self.metrics['tomtom_snap_to_roads_success'] += 1
-                                self._track_tomtom_call(success=True)
+                                        # Track successful call
+                                        self.metrics['tomtom_snap_to_roads_success'] += 1
+                                        self._track_tomtom_call(success=True)
 
-                                # Cache the result
-                                self._add_to_cache(cache_key, {
-                                    'speed_limit': speed_limit,
-                                    'timestamp': time.time(),
-                                    'source': 'TomTom-SnapToRoads'
-                                })
-                                logger.info(f"[Speed Limit] TomTom Snap to Roads: {speed_limit_kmh} km/h -> {speed_limit} mph")
-                                return speed_limit
+                                        # Cache the result
+                                        self._add_to_cache(cache_key, {
+                                            'speed_limit': speed_limit,
+                                            'timestamp': time.time(),
+                                            'source': 'TomTom-SnapToRoads'
+                                        })
+                                        logger.info(f"[Speed Limit] TomTom Snap to Roads: {speed_limit_kmh} km/h -> {speed_limit} mph")
+                                        return speed_limit
 
                     # If we got here, no speed limit data was returned
                     self.metrics['tomtom_snap_to_roads_failures'] += 1
