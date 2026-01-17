@@ -3959,6 +3959,13 @@ HTML_TEMPLATE = '''
 
                 <!-- UNIFIED SETTINGS TAB -->
                 <div id="settingsTab" style="display: none;">
+                    <!-- Back Button -->
+                    <div style="margin-bottom: 15px;">
+                        <button onclick="goBackToPreviousTab()" style="background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 8px;">
+                            ← Back
+                        </button>
+                    </div>
+
                     <!-- Unit Preferences Section -->
                     <div class="preferences-section">
                         <h3>📏 Unit Preferences</h3>

@@ -310,6 +310,9 @@ function updateThemeButtons() {
     console.log('[Dark Mode] Theme buttons updated for theme:', currentTheme);
 }
 
+// Track previous tab for back navigation
+let previousTab = 'navigation';
+
 // Tab switching function
 /**
  * switchTab function
@@ -331,6 +334,13 @@ function switchTab(tab) {
     const bottomSheetContent = document.querySelector('.bottom-sheet-content');
 
     console.log('[SwitchTab] Switching to tab:', tab);
+
+    // Store current visible tab as previous tab (before switching)
+    const currentTab = getCurrentVisibleTab();
+    if (currentTab && currentTab !== tab) {
+        previousTab = currentTab;
+        console.log('[SwitchTab] Previous tab stored:', previousTab);
+    }
 
     // Scroll to top when switching tabs to prevent scroll position issues
     if (bottomSheetContent) {
@@ -394,6 +404,32 @@ function switchTab(tab) {
         if (navigationTab) navigationTab.style.display = 'block';
         sheetTitle.textContent = '🗺️ Navigation';
     }
+}
+
+/**
+ * Get the currently visible tab
+ * @returns {string} The ID of the currently visible tab
+ */
+function getCurrentVisibleTab() {
+    const tabs = ['navigationTab', 'settingsTab', 'tripHistoryTab', 'routeComparisonTab',
+                  'routeSharingTab', 'routeAnalyticsTab', 'savedRoutesTab', 'routePreviewTab', 'dashcamTab'];
+
+    for (const tabId of tabs) {
+        const tab = document.getElementById(tabId);
+        if (tab && tab.style.display !== 'none') {
+            // Return the tab name without 'Tab' suffix
+            return tabId.replace('Tab', '');
+        }
+    }
+    return 'navigation'; // Default
+}
+
+/**
+ * Go back to the previous tab
+ */
+function goBackToPreviousTab() {
+    console.log('[GoBack] Returning to previous tab:', previousTab);
+    switchTab(previousTab);
 }
 
 // Load unit preferences from localStorage
@@ -5290,6 +5326,10 @@ async function findParkingNearDestination() {
         displayParkingOptions(data.parking, endCoords);
         showStatus(`✅ Found ${data.parking.length} parking options`, 'success');
 
+        // Switch to route preview tab to show parking options
+        console.log('[Parking] Switching to route preview to show parking options');
+        switchTab('routePreview');
+
     } catch (error) {
         console.error('[Parking] Error:', error);
         showStatus('Error searching for parking: ' + error.message, 'error');
@@ -5303,16 +5343,25 @@ async function findParkingNearDestination() {
  * @returns {*} Return value description
  */
 function displayParkingOptions(parkingList, destinationCoords) {
+    console.log('[Parking] displayParkingOptions called with', parkingList.length, 'parking options');
+
     // Clear previous markers
     parkingMarkers.forEach(marker => { if (marker && typeof marker.remove === 'function') marker.remove(); });
     parkingMarkers = [];
 
     const parkingSection = document.getElementById('parkingSection');
     const parkingListDiv = document.getElementById('parkingList');
+
+    if (!parkingSection || !parkingListDiv) {
+        console.error('[Parking] parkingSection or parkingListDiv not found!');
+        return;
+    }
+
     parkingListDiv.innerHTML = '';
 
     // Sort by distance
     parkingList.sort((a, b) => a.distance_m - b.distance_m);
+    console.log('[Parking] Displaying top 5 parking options');
 
     // Display top 5 parking options
     parkingList.slice(0, 5).forEach((parking, index) => {
@@ -5353,6 +5402,7 @@ function displayParkingOptions(parkingList, destinationCoords) {
     });
 
     parkingSection.style.display = 'block';
+    console.log('[Parking] Parking section displayed with', parkingList.slice(0, 5).length, 'options');
 }
 
 async function selectParking(parking, destinationCoords) {
