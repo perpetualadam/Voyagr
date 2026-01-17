@@ -3662,7 +3662,10 @@ function addTrafficLayer() {
                 map.addSource('traffic-source', {
                     type: 'raster',
                     tiles: [`https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${tomtomApiKey}&tileSize=256`],
-                    tileSize: 256
+                    tileSize: 256,
+                    minzoom: 0,
+                    maxzoom: 22,
+                    bounds: [-180, -85.0511, 180, 85.0511]
                 });
             }
 
@@ -3672,6 +3675,8 @@ function addTrafficLayer() {
                     id: 'traffic-layer',
                     type: 'raster',
                     source: 'traffic-source',
+                    minzoom: 0,
+                    maxzoom: 22,
                     paint: { 'raster-opacity': 0.6 }
                 });
             }
