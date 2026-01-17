@@ -5269,6 +5269,7 @@ async function findParkingNearDestination() {
                 lat: window.lastCalculatedRoute.end_lat,
                 lon: window.lastCalculatedRoute.end_lon
             };
+            console.log('[Parking] Method 1: Got coords from end_lat/end_lon');
         } else if (window.lastCalculatedRoute.destination) {
             // Method 2: Parse from destination string "lat,lon"
             const parts = window.lastCalculatedRoute.destination.split(',');
@@ -5277,6 +5278,7 @@ async function findParkingNearDestination() {
                     lat: parseFloat(parts[0]),
                     lon: parseFloat(parts[1])
                 };
+                console.log('[Parking] Method 2: Got coords from destination string');
             }
         } else if (window.lastCalculatedRoute.routes && window.lastCalculatedRoute.routes[0]) {
             // Method 3: Get from first route's end coordinates
@@ -5286,6 +5288,29 @@ async function findParkingNearDestination() {
                     lat: route.end_lat,
                     lon: route.end_lon
                 };
+                console.log('[Parking] Method 3: Got coords from routes[0]');
+            }
+        } else if (window.lastCalculatedRoute.polyline && window.lastCalculatedRoute.polyline.length > 0) {
+            // Method 4: Get last point from polyline (destination)
+            const lastPoint = window.lastCalculatedRoute.polyline[window.lastCalculatedRoute.polyline.length - 1];
+            endCoords = {
+                lat: lastPoint.lat,
+                lon: lastPoint.lon
+            };
+            console.log('[Parking] Method 4: Got coords from last polyline point');
+        } else {
+            // Method 5: Geocode the destination input field
+            console.log('[Parking] Method 5: Attempting to geocode destination input');
+            const geocoded = await geocodeLocations('', endInput);
+            if (geocoded && geocoded.end) {
+                const parts = geocoded.end.split(',');
+                if (parts.length === 2) {
+                    endCoords = {
+                        lat: parseFloat(parts[0]),
+                        lon: parseFloat(parts[1])
+                    };
+                    console.log('[Parking] Method 5: Got coords from geocoding');
+                }
             }
         }
 
