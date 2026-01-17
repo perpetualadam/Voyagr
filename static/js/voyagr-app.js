@@ -4943,19 +4943,28 @@ async function showRouteComparison() {
 
         // Display in a modal or alert
         const modal = document.createElement('div');
+        modal.id = 'routeComparisonModal';
         modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;';
         modal.innerHTML = `
             <div style="background: white; padding: 20px; border-radius: 12px; max-width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                     <h3 style="margin: 0; color: #333;">Route Comparison</h3>
-                    <button onclick="this.closest('div').parentElement.remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">×</button>
+                    <button onclick="document.getElementById('routeComparisonModal').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">×</button>
                 </div>
                 ${comparisonHTML}
                 <div style="margin-top: 15px; display: flex; gap: 10px;">
-                    <button onclick="this.closest('div').parentElement.remove()" style="flex: 1; padding: 10px; background: #ddd; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Close</button>
+                    <button onclick="document.getElementById('routeComparisonModal').remove()" style="flex: 1; padding: 10px; background: #ddd; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Close</button>
                 </div>
             </div>
         `;
+
+        // Close modal when clicking outside the white box
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                modal.remove();
+            }
+        });
+
         document.body.appendChild(modal);
         showStatus('📊 Route comparison displayed', 'success');
     } catch (error) {
