@@ -5303,24 +5303,39 @@ async function findParkingNearDestination() {
         const radiusMeters = maxWalkingDist * 80; // Approximate: 1 min walk ≈ 80m
 
         // Search for parking
+        const searchParams = {
+            lat: endCoords.lat,
+            lon: endCoords.lon,
+            radius: radiusMeters,
+            type: document.getElementById('parkingPreferredType').value,
+            price: document.getElementById('parkingPricePreference').value
+        };
+
+        console.log('[Parking] Search parameters:', searchParams);
+
         const response = await fetch('/api/parking-search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                lat: endCoords.lat,
-                lon: endCoords.lon,
-                radius: radiusMeters,
-                type: document.getElementById('parkingPreferredType').value,
-                price: document.getElementById('parkingPricePreference').value
-            })
+            body: JSON.stringify(searchParams)
         });
 
+        console.log('[Parking] Response status:', response.status);
         const data = await response.json();
+        console.log('[Parking] Response data:', data);
 
-        if (!data.success || !data.parking || data.parking.length === 0) {
-            showStatus('No parking found nearby. Try adjusting your search radius.', 'warning');
+        if (!data.success) {
+            console.error('[Parking] API returned success=false:', data.error);
+            showStatus('Parking search failed: ' + (data.error || 'Unknown error'), 'error');
             return;
         }
+
+        if (!data.parking || data.parking.length === 0) {
+            console.warn('[Parking] No parking found in response');
+            showStatus('No parking found nearby. Try adjusting your search radius or price filter.', 'warning');
+            return;
+        }
+
+        console.log('[Parking] Found', data.parking.length, 'parking options');
 
         // Display parking options
         displayParkingOptions(data.parking, endCoords);
@@ -5365,6 +5380,10 @@ function displayParkingOptions(parkingList, destinationCoords) {
 
     // Display top 5 parking options
     parkingList.slice(0, 5).forEach((parking, index) => {
+        // Convert distance to display units
+        const parkingDisplayDist = convertDistance(parking.distance_m / 1000); // Convert m to km first
+        const parkingDistUnit = getDistanceUnit();
+
         // Add marker to map with MapLibre
         const marker = MapLibreHelpers.createMarker(parking.lat, parking.lon, {
             html: `<div style="background: #FF9800; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>`,
