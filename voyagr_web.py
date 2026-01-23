@@ -7385,6 +7385,43 @@ def calculate_route():
                                 # Apply traffic multiplier
                                 gh_duration_min = gh_duration_min * traffic_multiplier
 
+                                # Convert GraphHopper instructions to Valhalla-compatible maneuvers
+                                gh_instructions = graphhopper_route.get('instructions', [])
+                                gh_maneuvers = []
+
+                                # GraphHopper sign values to Valhalla type mapping
+                                # GraphHopper signs: -3=sharp left, -2=left, -1=slight left, 0=straight,
+                                #                   1=slight right, 2=right, 3=sharp right, 4=finish,
+                                #                   5=via, 6=roundabout
+                                gh_sign_to_valhalla = {
+                                    -3: 15,  # Sharp left -> Valhalla sharp left (15)
+                                    -2: 16,  # Left -> Valhalla left (16)
+                                    -1: 17,  # Slight left -> Valhalla slight left (17)
+                                    0: 8,    # Straight -> Valhalla continue (8)
+                                    1: 9,    # Slight right -> Valhalla slight right (9)
+                                    2: 10,   # Right -> Valhalla right (10)
+                                    3: 11,   # Sharp right -> Valhalla sharp right (11)
+                                    4: 4,    # Finish -> Valhalla destination (4)
+                                    5: 0,    # Via -> Valhalla none (0)
+                                    6: 26,   # Roundabout -> Valhalla enter roundabout (26)
+                                }
+
+                                for instr in gh_instructions:
+                                    sign = instr.get('sign', 0)
+                                    valhalla_type = gh_sign_to_valhalla.get(sign, 8)  # Default to continue
+
+                                    gh_maneuvers.append({
+                                        'instruction': instr.get('text', ''),
+                                        'distance': instr.get('distance', 0) / 1000,  # meters to km
+                                        'time': instr.get('time', 0) / 1000,  # ms to seconds
+                                        'type': valhalla_type,
+                                        'street_names': [instr.get('street_name', '')] if instr.get('street_name') else [],
+                                        'begin_shape_index': instr.get('interval', [0])[0] if instr.get('interval') else 0,
+                                        'end_shape_index': instr.get('interval', [0, 0])[1] if instr.get('interval') and len(instr.get('interval', [])) > 1 else 0
+                                    })
+
+                                logger.info(f"[GRAPHHOPPER] Converted {len(gh_maneuvers)} instructions to maneuvers")
+
                                 gh_route_entry = {
                                     'id': 0,  # Will be renumbered
                                     'name': '⚡ Optimised',
@@ -7397,7 +7434,7 @@ def calculate_route():
                                     'hazard_penalty_seconds': round(gh_hazard_penalty, 0),
                                     'hazard_count': gh_hazard_count,
                                     'hazards': gh_hazards_list,
-                                    'maneuvers': [],  # GraphHopper maneuvers could be added later
+                                    'maneuvers': gh_maneuvers,
                                     'source': 'GraphHopper'
                                 }
 

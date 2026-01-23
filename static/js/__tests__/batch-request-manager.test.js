@@ -9,10 +9,19 @@ describe('BatchRequestManager', () => {
         batcher = new BatchRequestManager({ batchTimeout: 50, maxBatchSize: 3 });
         jest.useFakeTimers();
 
-        // Mock fetch for flush() calls
-        global.fetch = jest.fn().mockResolvedValue({
-            ok: true,
-            json: async () => ({ responses: [] })
+        // Mock fetch for flush() calls - return matching responses for queued requests
+        global.fetch = jest.fn().mockImplementation(async (url, options) => {
+            const body = JSON.parse(options.body || '{}');
+            const requests = body.requests || [];
+            const responses = requests.map(req => ({
+                id: req.id,
+                success: true,
+                data: { mocked: true }
+            }));
+            return {
+                ok: true,
+                json: async () => ({ responses })
+            };
         });
     });
 

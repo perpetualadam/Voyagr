@@ -1470,6 +1470,8 @@ function bringRoutesToTop() {
                 setTimeout(() => moveLayersToTop(retryCount + 1), 100);
             } else if (allFound) {
                 console.log('[Routes] All route layers successfully moved to top');
+                // CRITICAL: Ensure labels stay on top of route layers
+                ensureLabelsOnTop();
             } else {
                 console.warn('[Routes] Some layers not found after retries');
             }
@@ -4041,8 +4043,51 @@ function bringTrafficEdgesToTop() {
             }
         });
         console.log('[Route Traffic] Traffic edge layers moved to top');
+
+        // CRITICAL: Ensure labels stay on top of traffic layers
+        ensureLabelsOnTop();
     } catch (e) {
         console.log('[Route Traffic] Error moving traffic layers to top:', e.message);
+    }
+}
+
+/**
+ * Ensure road labels are always rendered above route and traffic layers
+ * This function moves all symbol layers with text-field to the top of the layer stack
+ */
+function ensureLabelsOnTop() {
+    if (!map) return;
+
+    try {
+        const style = map.getStyle();
+        if (!style || !style.layers) return;
+
+        // Find all label/symbol layers with text content
+        const labelLayers = style.layers.filter(layer =>
+            layer.type === 'symbol' &&
+            layer.layout &&
+            layer.layout['text-field']
+        );
+
+        if (labelLayers.length === 0) {
+            console.log('[Labels] No label layers found');
+            return;
+        }
+
+        // Move each label layer to the top
+        labelLayers.forEach(layer => {
+            try {
+                if (map.getLayer(layer.id)) {
+                    map.moveLayer(layer.id);
+                }
+            } catch (e) {
+                // Silently skip layers that can't be moved
+            }
+        });
+
+        console.log(`[Labels] Moved ${labelLayers.length} label layers to top`);
+    } catch (e) {
+        console.log('[Labels] Error ensuring labels on top:', e.message);
     }
 }
 
@@ -8925,43 +8970,58 @@ function initBottomSheet() {
         }
     });
 
-    // Touch events for dragging
+    // Touch events for dragging - supports BOTH expand (swipe up) and collapse (swipe down)
     handle.addEventListener('touchstart', (e) => {
         isDragging = true;
         bottomSheetStartY = e.touches[0].clientY;
         bottomSheetCurrentY = bottomSheetStartY;
-    });
+        bottomSheet.style.transition = 'none'; // Disable transitions during drag
+    }, { passive: true });
 
     handle.addEventListener('touchmove', (e) => {
         if (!isDragging) return;
         bottomSheetCurrentY = e.touches[0].clientY;
         const diff = bottomSheetCurrentY - bottomSheetStartY;
 
+        // Visual feedback during drag
         if (bottomSheetIsExpanded && diff > 0) {
-            // Dragging down while expanded
+            // Dragging down while expanded - allow collapse gesture
             bottomSheet.style.transform = `translateY(${diff}px)`;
+        } else if (!bottomSheetIsExpanded && diff < 0) {
+            // Dragging up while collapsed - show preview of expansion
+            // Limit the visual feedback to prevent over-dragging
+            const clampedDiff = Math.max(diff, -100);
+            bottomSheet.style.transform = `translateY(${clampedDiff}px)`;
         }
-    });
+    }, { passive: true });
 
     handle.addEventListener('touchend', () => {
+        if (!isDragging) return;
         isDragging = false;
         const diff = bottomSheetCurrentY - bottomSheetStartY;
-        const threshold = 100; // pixels
+        const threshold = 50; // Reduced threshold for better responsiveness
+
+        // Re-enable transitions for smooth animation
+        bottomSheet.style.transition = '';
+        bottomSheet.style.transform = '';
 
         if (bottomSheetIsExpanded && diff > threshold) {
-            // Collapse
+            // Swiped down while expanded - collapse
             collapseBottomSheet();
-        } else {
-            // Snap back
-            bottomSheet.style.transform = '';
+            console.log('[BottomSheet] Collapsed via swipe down');
+        } else if (!bottomSheetIsExpanded && diff < -threshold) {
+            // Swiped up while collapsed - expand
+            expandBottomSheet();
+            console.log('[BottomSheet] Expanded via swipe up');
         }
-    });
+    }, { passive: true });
 
-    // Mouse events for desktop browsers
+    // Mouse events for desktop browsers - supports BOTH expand and collapse
     handle.addEventListener('mousedown', (e) => {
         isDragging = true;
         bottomSheetStartY = e.clientY;
         bottomSheetCurrentY = bottomSheetStartY;
+        bottomSheet.style.transition = 'none';
     });
 
     document.addEventListener('mousemove', (e) => {
@@ -8972,6 +9032,10 @@ function initBottomSheet() {
         if (bottomSheetIsExpanded && diff > 0) {
             // Dragging down while expanded
             bottomSheet.style.transform = `translateY(${diff}px)`;
+        } else if (!bottomSheetIsExpanded && diff < 0) {
+            // Dragging up while collapsed
+            const clampedDiff = Math.max(diff, -100);
+            bottomSheet.style.transform = `translateY(${clampedDiff}px)`;
         }
     });
 
@@ -8979,14 +9043,17 @@ function initBottomSheet() {
         if (!isDragging) return;
         isDragging = false;
         const diff = bottomSheetCurrentY - bottomSheetStartY;
-        const threshold = 100; // pixels
+        const threshold = 50; // pixels
+
+        bottomSheet.style.transition = '';
+        bottomSheet.style.transform = '';
 
         if (bottomSheetIsExpanded && diff > threshold) {
             // Collapse
             collapseBottomSheet();
-        } else {
-            // Snap back
-            bottomSheet.style.transform = '';
+        } else if (!bottomSheetIsExpanded && diff < -threshold) {
+            // Expand
+            expandBottomSheet();
         }
     });
 
