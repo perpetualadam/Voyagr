@@ -3723,6 +3723,8 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="/static/css/voyagr.css?v=20260109t" />
     <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
     <script src="/static/js/maplibre-helpers.js?v=20260117t"></script>
+    <!-- Google Plus Codes Service -->
+    <script src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
     <script src="/static/js/modules/traffic-lights.js?v=20260117t"></script>
     <script src="/static/js/voyagr-core.js?v=20260117t"></script>
@@ -4177,6 +4179,24 @@ HTML_TEMPLATE = '''
                             <button class="toggle-switch active" id="routeTrafficToggle" onclick="toggleRouteTraffic()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Show traffic conditions as colored edges along your route (green/orange/red/black)</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🛣️ Road Name Labels</span>
+                            <button class="toggle-switch active" id="roadLabelsToggle" onclick="toggleRoadLabels()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Display motorway, A-road, and street names on the map</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🏢 3D Buildings</span>
+                            <button class="toggle-switch active" id="buildings3DToggle" onclick="toggle3DBuildings()" style="background: #4CAF50; border-color: #4CAF50;"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Show 3D building extrusions on the map</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">📍 Google Plus Codes</span>
+                            <button class="toggle-switch" id="googlePlusCodesToggle" onclick="toggleGooglePlusCodes()"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Enable Plus Code input for destination search (free, offline-capable)</p>
 
                         <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-top: 15px;">
                             <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📷 AR & 3D View</h4>

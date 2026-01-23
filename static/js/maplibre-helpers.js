@@ -608,6 +608,220 @@ function featureGroup(layers) {
     };
 }
 
+// ===== ROAD LABEL MANAGEMENT =====
+
+/**
+ * Configure road name labels visibility and styling
+ * Works with Liberty style from OpenFreeMap which includes road labels
+ * @param {maplibregl.Map} mapInstance - The map instance
+ * @param {Object} options - Configuration options
+ *   - enabled: boolean (default: true)
+ *   - minZoom: number (default: 10) - Minimum zoom to show labels
+ *   - maxZoom: number (default: 22) - Maximum zoom to show labels
+ *   - textColor: string (default: '#000000') - Label text color
+ *   - textHaloColor: string (default: '#ffffff') - Text halo/outline color
+ *   - textHaloWidth: number (default: 1) - Halo width in pixels
+ *   - textSize: number (default: 12) - Base text size
+ */
+function configureRoadLabels(mapInstance, options = {}) {
+    if (!mapInstance) {
+        console.error('[MapLibre] configureRoadLabels: map is null');
+        return;
+    }
+
+    const config = {
+        enabled: options.enabled !== false,
+        minZoom: options.minZoom || 10,
+        maxZoom: options.maxZoom || 22,
+        textColor: options.textColor || '#000000',
+        textHaloColor: options.textHaloColor || '#ffffff',
+        textHaloWidth: options.textHaloWidth || 1,
+        textSize: options.textSize || 12
+    };
+
+    const applyLabelConfig = () => {
+        try {
+            const style = mapInstance.getStyle();
+            if (!style || !style.layers) {
+                console.log('[MapLibre] Style not ready for label configuration');
+                return;
+            }
+
+            // Find all text/symbol layers that contain road labels
+            // Liberty style uses layers like: 'road-label', 'motorway-label', 'street-label', etc.
+            const labelLayers = style.layers.filter(layer =>
+                layer.type === 'symbol' &&
+                layer.layout &&
+                layer.layout['text-field'] &&
+                (layer.id.includes('label') || layer.id.includes('text'))
+            );
+
+            console.log(`[MapLibre] Found ${labelLayers.length} label layers to configure`);
+
+            labelLayers.forEach(layer => {
+                try {
+                    // Set visibility
+                    mapInstance.setLayoutProperty(
+                        layer.id,
+                        'visibility',
+                        config.enabled ? 'visible' : 'hidden'
+                    );
+
+                    // Set text color
+                    mapInstance.setPaintProperty(
+                        layer.id,
+                        'text-color',
+                        config.textColor
+                    );
+
+                    // Set text halo (outline) for readability
+                    mapInstance.setPaintProperty(
+                        layer.id,
+                        'text-halo-color',
+                        config.textHaloColor
+                    );
+
+                    mapInstance.setPaintProperty(
+                        layer.id,
+                        'text-halo-width',
+                        config.textHaloWidth
+                    );
+
+                    // Optionally adjust text size based on zoom
+                    // Use interpolation for smooth scaling
+                    mapInstance.setLayoutProperty(
+                        layer.id,
+                        'text-size',
+                        [
+                            'interpolate',
+                            ['linear'],
+                            ['zoom'],
+                            10, config.textSize * 0.8,      // Smaller at zoom 10
+                            15, config.textSize,             // Normal at zoom 15
+                            20, config.textSize * 1.3        // Larger at zoom 20
+                        ]
+                    );
+
+                    console.log(`[MapLibre] Configured label layer: ${layer.id}`);
+                } catch (e) {
+                    console.warn(`[MapLibre] Error configuring label layer ${layer.id}:`, e.message);
+                }
+            });
+
+            console.log('[MapLibre] Road labels configured successfully');
+        } catch (e) {
+            console.error('[MapLibre] Error configuring road labels:', e.message);
+        }
+    };
+
+    // Apply configuration when style is loaded
+    if (mapInstance.isStyleLoaded()) {
+        applyLabelConfig();
+    } else {
+        mapInstance.once('style.load', applyLabelConfig);
+    }
+}
+
+/**
+ * Toggle road label visibility on/off
+ * @param {maplibregl.Map} mapInstance - The map instance
+ * @param {boolean} visible - Whether labels should be visible
+ */
+function toggleRoadLabels(mapInstance, visible) {
+    if (!mapInstance) return;
+
+    const toggleLabels = () => {
+        try {
+            const style = mapInstance.getStyle();
+            if (!style || !style.layers) return;
+
+            const labelLayers = style.layers.filter(layer =>
+                layer.type === 'symbol' &&
+                layer.layout &&
+                layer.layout['text-field']
+            );
+
+            labelLayers.forEach(layer => {
+                try {
+                    mapInstance.setLayoutProperty(
+                        layer.id,
+                        'visibility',
+                        visible ? 'visible' : 'hidden'
+                    );
+                } catch (e) {
+                    // Silently skip layers that can't be modified
+                }
+            });
+
+            console.log(`[MapLibre] Road labels ${visible ? 'shown' : 'hidden'}`);
+        } catch (e) {
+            console.error('[MapLibre] Error toggling road labels:', e.message);
+        }
+    };
+
+    if (mapInstance.isStyleLoaded()) {
+        toggleLabels();
+    } else {
+        mapInstance.once('style.load', toggleLabels);
+    }
+}
+
+/**
+ * Set zoom-level-based road label filtering
+ * Shows different road types at different zoom levels
+ * @param {maplibregl.Map} mapInstance - The map instance
+ * @param {Object} options - Zoom level configuration
+ *   - motorwayMinZoom: number (default: 5) - Show motorways from this zoom
+ *   - mainRoadMinZoom: number (default: 10) - Show A/B roads from this zoom
+ *   - streetMinZoom: number (default: 14) - Show all streets from this zoom
+ */
+function setRoadLabelZoomFilters(mapInstance, options = {}) {
+    if (!mapInstance) return;
+
+    const config = {
+        motorwayMinZoom: options.motorwayMinZoom || 5,
+        mainRoadMinZoom: options.mainRoadMinZoom || 10,
+        streetMinZoom: options.streetMinZoom || 14
+    };
+
+    const applyFilters = () => {
+        try {
+            const style = mapInstance.getStyle();
+            if (!style || !style.layers) return;
+
+            style.layers.forEach(layer => {
+                if (layer.type !== 'symbol' || !layer.layout || !layer.layout['text-field']) return;
+
+                try {
+                    // Determine which zoom level applies to this layer
+                    let minZoom = config.streetMinZoom;
+
+                    if (layer.id.includes('motorway')) {
+                        minZoom = config.motorwayMinZoom;
+                    } else if (layer.id.includes('trunk') || layer.id.includes('primary') || layer.id.includes('secondary')) {
+                        minZoom = config.mainRoadMinZoom;
+                    }
+
+                    // Set min/max zoom for the layer
+                    mapInstance.setLayerZoomRange(layer.id, minZoom, 24);
+                } catch (e) {
+                    // Silently skip layers that don't support zoom ranges
+                }
+            });
+
+            console.log('[MapLibre] Road label zoom filters applied');
+        } catch (e) {
+            console.error('[MapLibre] Error setting zoom filters:', e.message);
+        }
+    };
+
+    if (mapInstance.isStyleLoaded()) {
+        applyFilters();
+    } else {
+        mapInstance.once('style.load', applyFilters);
+    }
+}
+
 // ===== EXPORTS (global scope) =====
 window.MapLibreHelpers = {
     addPolyline,
@@ -625,6 +839,9 @@ window.MapLibreHelpers = {
     toggle3DBuildings,
     set3DBuildingHeight,
     set3DBuildingOpacity,
+    configureRoadLabels,
+    toggleRoadLabels,
+    setRoadLabelZoomFilters,
     featureGroup,
     activeLayers,
     activeMarkers

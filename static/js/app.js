@@ -54,6 +54,10 @@ function initializeApp() {
         initializeCameraLayer();
         console.log('[App] Camera layer initialized');
 
+        // Initialize road labels
+        initializeRoadLabels();
+        console.log('[App] Road labels initialized');
+
         // Setup event listeners
         setupEventListeners();
         console.log('[App] Event listeners setup');

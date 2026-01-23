@@ -3605,6 +3605,69 @@ function toggle3DBuildings() {
     saveAllSettings();
 }
 
+// ===== ROAD LABELS TOGGLE =====
+// Controls road name label visibility on the map
+let roadLabelsEnabled = localStorage.getItem('roadLabelsEnabled') !== 'false'; // Default: enabled
+
+/**
+ * Toggle road name labels on/off
+ * @function toggleRoadLabels
+ */
+function toggleRoadLabels() {
+    roadLabelsEnabled = !roadLabelsEnabled;
+    localStorage.setItem('roadLabelsEnabled', roadLabelsEnabled ? 'true' : 'false');
+
+    const toggle = document.getElementById('roadLabelsToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', roadLabelsEnabled);
+        if (roadLabelsEnabled) {
+            toggle.style.background = '#4CAF50';
+            toggle.style.borderColor = '#4CAF50';
+        } else {
+            toggle.style.background = '#ccc';
+            toggle.style.borderColor = '#ccc';
+        }
+    }
+
+    if (map) {
+        MapLibreHelpers.toggleRoadLabels(map, roadLabelsEnabled);
+        showStatus(roadLabelsEnabled ? '🛣️ Road labels enabled' : '🛣️ Road labels disabled', 'info');
+        console.log(`[Road Labels] ${roadLabelsEnabled ? 'Enabled' : 'Disabled'}`);
+    }
+
+    saveAllSettings();
+}
+
+// ===== GOOGLE PLUS CODES TOGGLE =====
+// Controls Google Plus Codes input for destination search
+let googlePlusCodesEnabled = localStorage.getItem('googlePlusCodesEnabled') === 'true'; // Default: disabled
+
+/**
+ * Toggle Google Plus Codes input on/off
+ * @function toggleGooglePlusCodes
+ */
+function toggleGooglePlusCodes() {
+    googlePlusCodesEnabled = !googlePlusCodesEnabled;
+    localStorage.setItem('googlePlusCodesEnabled', googlePlusCodesEnabled ? 'true' : 'false');
+
+    const toggle = document.getElementById('googlePlusCodesToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', googlePlusCodesEnabled);
+        if (googlePlusCodesEnabled) {
+            toggle.style.background = '#4CAF50';
+            toggle.style.borderColor = '#4CAF50';
+        } else {
+            toggle.style.background = '#ccc';
+            toggle.style.borderColor = '#ccc';
+        }
+    }
+
+    showStatus(googlePlusCodesEnabled ? '📍 Google Plus Codes enabled' : '📍 Google Plus Codes disabled', 'info');
+    console.log(`[Google Plus Codes] ${googlePlusCodesEnabled ? 'Enabled' : 'Disabled'}`);
+
+    saveAllSettings();
+}
+
 /**
  * Set 3D building height exaggeration
  * @function set3DBuildingHeight
@@ -4658,6 +4721,38 @@ function initializeCameraLayer() {
     }
 
     console.log('[Cameras] Camera layer initialized');
+}
+
+/**
+ * Initialize road labels - called after map is ready
+ */
+function initializeRoadLabels() {
+    if (!map) {
+        console.log('[Road Labels] Map not ready, deferring road labels init');
+        return;
+    }
+
+    // Set toggle state based on saved preference
+    const toggle = document.getElementById('roadLabelsToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', roadLabelsEnabled);
+        if (roadLabelsEnabled) {
+            toggle.style.background = '#4CAF50';
+            toggle.style.borderColor = '#4CAF50';
+        } else {
+            toggle.style.background = '#ccc';
+            toggle.style.borderColor = '#ccc';
+        }
+    }
+
+    // Apply initial road labels visibility
+    if (roadLabelsEnabled) {
+        MapLibreHelpers.toggleRoadLabels(map, true);
+    } else {
+        MapLibreHelpers.toggleRoadLabels(map, false);
+    }
+
+    console.log('[Road Labels] Road labels initialized');
 }
 
 /**
@@ -10853,6 +10948,28 @@ async function geocodeAddress(address) {
         const lon = parseFloat(parts[1].trim());
         console.log('[Geocoding] Input is already coordinates:', lat, lon);
         return { lat, lon, display_name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, cached: false };
+    }
+
+    // Check if Plus Codes are enabled and input is a Plus Code
+    const plusCodesEnabled = localStorage.getItem('googlePlusCodesEnabled') === 'true';
+    if (plusCodesEnabled && typeof GooglePlusCodesService !== 'undefined') {
+        try {
+            const service = new GooglePlusCodesService();
+            if (service.isValidCode(trimmedAddress)) {
+                console.log('[Geocoding] Detected Plus Code:', trimmedAddress);
+                const decoded = service.decode(trimmedAddress);
+                console.log('[Geocoding] Decoded Plus Code to:', decoded.lat, decoded.lon);
+                return {
+                    lat: decoded.lat,
+                    lon: decoded.lon,
+                    display_name: `Plus Code: ${trimmedAddress}`,
+                    cached: false
+                };
+            }
+        } catch (error) {
+            console.log('[Geocoding] Plus Code decode error:', error.message);
+            // Fall through to normal geocoding
+        }
     }
 
     // Check cache first

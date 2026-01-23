@@ -102,6 +102,25 @@ function initializeMap() {
     // Enable 3D buildings
     MapLibreHelpers.add3DBuildings(map);
 
+    // Configure road name labels with zoom-level-based visibility
+    // Labels will be visible during navigation and remain readable at 65° pitch
+    MapLibreHelpers.configureRoadLabels(map, {
+        enabled: true,
+        minZoom: 10,
+        maxZoom: 22,
+        textColor: '#000000',
+        textHaloColor: '#ffffff',
+        textHaloWidth: 1.5,
+        textSize: 12
+    });
+
+    // Set zoom-level-based filtering for different road types
+    MapLibreHelpers.setRoadLabelZoomFilters(map, {
+        motorwayMinZoom: 5,      // Show motorways from zoom 5+
+        mainRoadMinZoom: 10,     // Show A/B roads from zoom 10+
+        streetMinZoom: 14        // Show all streets from zoom 14+
+    });
+
     console.log('[Init] Map initialized successfully');
 }
 

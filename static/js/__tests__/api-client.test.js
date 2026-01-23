@@ -40,7 +40,8 @@ describe('APIClient', () => {
     test('should track request statistics', async () => {
         global.fetch.mockResolvedValueOnce({
             ok: true,
-            json: async () => ({ success: true })
+            json: async () => ({ success: true }),
+            clone: function() { return this; }
         });
 
         await api.get('/api/route', {});
@@ -50,7 +51,8 @@ describe('APIClient', () => {
     test('should cache GET responses', async () => {
         global.fetch.mockResolvedValueOnce({
             ok: true,
-            json: async () => ({ data: 'test' })
+            json: async () => ({ data: 'test' }),
+            clone: function() { return this; }
         });
 
         await api.get('/api/route', {});
@@ -92,7 +94,8 @@ describe('APIClient', () => {
     test('should handle POST requests', async () => {
         global.fetch.mockResolvedValueOnce({
             ok: true,
-            json: async () => ({ success: true })
+            json: async () => ({ success: true }),
+            clone: function() { return this; }
         });
 
         const result = await api.post('/api/route', { start: '51.5,-0.1' });
