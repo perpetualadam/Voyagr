@@ -67,7 +67,8 @@ body {
     position: absolute;
     bottom: calc(100px + var(--safe-area-inset-bottom, 0px));
     right: calc(20px + var(--safe-area-inset-right, 0px));
-    z-index: 100;
+    z-index: 150;
+    /* z-index: 150 in mobile layout hierarchy */
     display: flex;
     flex-direction: column;
     gap: 12px;
@@ -2376,4 +2377,181 @@ body.dark-mode .journey-summary-bar {
     .journey-summary-divider {
         height: 30px;
     }
+}
+
+/* ============================================
+   Mobile UI Layout Reorganization
+   Fixes overlapping elements for better usability
+   ============================================ */
+
+/* Z-Index Hierarchy (organized layers):
+   1     - Map base
+   10    - Route overlays, markers
+   50    - Bottom sheet
+   100   - Journey summary bar
+   150   - FAB container
+   200   - Navigation control buttons
+   250   - Turn instruction widget
+   300   - Speed widget
+   350   - Battery indicator
+   400   - MapLibre controls (positioned bottom-left)
+   500   - Notification container
+   600   - Gesture indicator
+   1000+ - Dropdowns/modals
+*/
+
+/* Update z-index for turn instruction widget */
+.turn-instruction-widget {
+    z-index: 250 !important;
+}
+
+/* Update z-index for battery indicator */
+.battery-indicator {
+    z-index: 350 !important;
+}
+
+/* Update z-index for gesture indicator */
+.gesture-indicator {
+    z-index: 600 !important;
+}
+
+/* MapLibre navigation controls - ensure proper z-index and touch targets */
+.maplibregl-ctrl-group {
+    z-index: 400 !important;
+}
+
+.maplibregl-ctrl-group button {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    width: 44px !important;
+    height: 44px !important;
+}
+
+/* ============================================
+   Mobile Layout - 768px Breakpoint
+   ============================================ */
+@media (max-width: 768px) {
+    /* Turn instruction widget - constrain width to leave room for speed widget */
+    .turn-instruction-widget {
+        max-width: calc(100% - 140px);
+        left: 10px;
+    }
+
+    /* Battery indicator - move to left side, above journey bar */
+    .battery-indicator {
+        top: auto !important;
+        bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+        left: 10px;
+        right: auto !important;
+    }
+
+    /* MapLibre controls - ensure adequate spacing from bottom sheet */
+    .maplibregl-ctrl-bottom-left {
+        bottom: calc(120px + env(safe-area-inset-bottom, 0px)) !important;
+        left: 10px !important;
+    }
+}
+
+/* ============================================
+   Mobile Layout - 480px Breakpoint (Small Phones)
+   ============================================ */
+@media (max-width: 480px) {
+    /* Turn instruction widget - full width but leave gap at top-right for speed */
+    .turn-instruction-widget {
+        top: 10px;
+        left: 10px;
+        right: auto;
+        max-width: calc(100% - 120px);
+    }
+
+    /* Speed widget - scale down slightly on small screens */
+    .speed-widget {
+        top: 10px !important;
+        right: 10px !important;
+        padding: 8px !important;
+        min-width: 90px !important;
+        transform: scale(0.9);
+        transform-origin: top right;
+    }
+
+    /* Battery indicator - compact positioning */
+    .battery-indicator {
+        bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+        left: 10px;
+        padding: 6px 10px;
+        font-size: 11px;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+
+    /* Notification container - center on mobile for better visibility */
+    .notification-container {
+        top: 10px !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        max-width: calc(100% - 20px) !important;
+        width: auto !important;
+    }
+
+    /* Navigation control buttons - adjust for small screens */
+    .nav-control-buttons {
+        bottom: calc(130px + env(safe-area-inset-bottom, 0px)) !important;
+        right: 10px !important;
+    }
+
+    /* MapLibre controls - move up to avoid FAB overlap */
+    .maplibregl-ctrl-bottom-left {
+        bottom: calc(180px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+
+    /* Ensure FAB buttons don't overlap with journey bar */
+    .fab-container {
+        bottom: calc(130px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+/* ============================================
+   Speed Widget Styles
+   ============================================ */
+.speed-widget {
+    z-index: 300 !important;
+    transition: transform 0.2s ease;
+}
+
+/* Notification Container Styles */
+.notification-container {
+    z-index: 500 !important;
+    pointer-events: none;
+}
+
+.notification-container > * {
+    pointer-events: auto;
+}
+
+/* Navigation Control Buttons */
+.nav-control-buttons {
+    z-index: 200 !important;
+}
+
+/* ============================================
+   Dark Mode Support for Mobile Layout
+   ============================================ */
+body.dark-mode .speed-widget {
+    background: rgba(30, 30, 30, 0.95) !important;
+    border-left-color: #66BB6A !important;
+}
+
+body.dark-mode .speed-widget #speedValue {
+    color: #e0e0e0 !important;
+}
+
+body.dark-mode .speed-widget #speedLimitCircle {
+    background: #2a2a2a !important;
+    border-color: #EF5350 !important;
+}
+
+body.dark-mode .speed-widget #speedLimitValue {
+    color: #e0e0e0 !important;
 }

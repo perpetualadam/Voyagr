@@ -96,8 +96,9 @@ function initializeMap() {
             { enableHighAccuracy: false, timeout: 5000, maximumAge: 600000 }
         );
     }
-    // Add navigation controls (zoom and rotation)
-    map.addControl(new maplibregl.NavigationControl());
+    // Add navigation controls (zoom and rotation) - positioned bottom-left to avoid
+    // collision with speed widget, battery indicator, and notifications in top-right
+    map.addControl(new maplibregl.NavigationControl(), 'bottom-left');
 
     // Enable 3D buildings
     MapLibreHelpers.add3DBuildings(map);
