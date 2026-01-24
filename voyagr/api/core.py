@@ -29,6 +29,7 @@ def get_config():
     This endpoint bypasses HTML caching issues."""
     response = jsonify({
         'tomtom_api_key': os.getenv('TOMTOM_API_KEY', ''),
+        'openweathermap_api_key': os.getenv('OPENWEATHERMAP_API_KEY', ''),
         'success': True
     })
     # Prevent caching

@@ -3837,6 +3837,188 @@ function initTrafficLayer() {
     }
 }
 
+// ===== WEATHER LAYER (OpenWeatherMap Tiles) =====
+// Real-time weather visualization overlay showing precipitation/clouds/temperature
+let weatherLayer = null;
+let showWeatherEnabled = localStorage.getItem('showWeatherEnabled') === 'true'; // Default: disabled
+let weatherLayerType = localStorage.getItem('weatherLayerType') || 'precipitation_new'; // precipitation_new, clouds_new, temp_new
+
+/**
+ * Toggle weather layer on/off
+ */
+function toggleWeatherLayer() {
+    showWeatherEnabled = !showWeatherEnabled;
+    localStorage.setItem('showWeatherEnabled', showWeatherEnabled ? 'true' : 'false');
+
+    const toggle = document.getElementById('showWeatherToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', showWeatherEnabled);
+        if (showWeatherEnabled) {
+            toggle.style.background = '#4CAF50';
+            toggle.style.borderColor = '#4CAF50';
+        } else {
+            toggle.style.background = '#ddd';
+            toggle.style.borderColor = '#999';
+        }
+    }
+
+    if (showWeatherEnabled) {
+        addWeatherLayer();
+        showStatus('🌧️ Weather layer enabled', 'success');
+        console.log('[Weather] Weather layer enabled');
+    } else {
+        removeWeatherLayer();
+        showStatus('🌧️ Weather layer disabled', 'info');
+        console.log('[Weather] Weather layer disabled');
+    }
+
+    saveAllSettings();
+}
+
+/**
+ * Set weather layer type (precipitation, clouds, temperature)
+ * @param {string} type - Layer type: 'precipitation_new', 'clouds_new', 'temp_new', 'wind_new'
+ */
+function setWeatherLayerType(type) {
+    weatherLayerType = type;
+    localStorage.setItem('weatherLayerType', type);
+
+    // If weather layer is enabled, refresh it with new type
+    if (showWeatherEnabled && map) {
+        removeWeatherLayer();
+        addWeatherLayer();
+    }
+
+    const typeNames = {
+        'precipitation_new': 'Precipitation',
+        'clouds_new': 'Clouds',
+        'temp_new': 'Temperature',
+        'wind_new': 'Wind'
+    };
+    showStatus(`🌧️ Weather layer: ${typeNames[type] || type}`, 'info');
+}
+
+/**
+ * Add OpenWeatherMap weather tile layer to map
+ * Uses OpenWeatherMap's free weather tile API
+ */
+function addWeatherLayer() {
+    if (!map) {
+        console.log('[Weather] Map not ready');
+        return;
+    }
+
+    // Remove existing weather layer if any
+    removeWeatherLayer();
+
+    // Get OpenWeatherMap API key (same as used for weather data)
+    let owmApiKey = window.OPENWEATHERMAP_API_KEY || '';
+
+    // If key not available from inline script, try fetching from API
+    if (!owmApiKey) {
+        console.log('[Weather] Fetching API key from server...');
+        fetch('/api/config')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.openweathermap_api_key) {
+                    window.OPENWEATHERMAP_API_KEY = data.openweathermap_api_key;
+                    console.log('[Weather] API key loaded from server, reinitializing...');
+                    addWeatherLayer(); // Retry with new key
+                } else {
+                    console.log('[Weather] No API key from server - weather layer unavailable');
+                    showStatus('⚠️ Weather layer requires API key', 'warning');
+                }
+            })
+            .catch(err => console.log('[Weather] Failed to fetch config:', err));
+        return;
+    }
+
+    // Wait for style to load before adding weather layer
+    const addWeatherLayerNow = () => {
+        try {
+            // OpenWeatherMap weather tiles
+            // Available layers: precipitation_new, clouds_new, temp_new, wind_new, pressure_new
+            const tileUrl = `https://tile.openweathermap.org/map/${weatherLayerType}/{z}/{x}/{y}.png?appid=${owmApiKey}`;
+
+            if (!map.getSource('weather-source')) {
+                map.addSource('weather-source', {
+                    type: 'raster',
+                    tiles: [tileUrl],
+                    tileSize: 256,
+                    minzoom: 1,
+                    maxzoom: 18,
+                    bounds: [-180, -85.0511, 180, 85.0511]
+                });
+            }
+
+            if (!map.getLayer('weather-layer')) {
+                // Add weather layer below route layers but above base map
+                map.addLayer({
+                    id: 'weather-layer',
+                    type: 'raster',
+                    source: 'weather-source',
+                    minzoom: 1,
+                    maxzoom: 18,
+                    paint: { 'raster-opacity': 0.7 }
+                });
+            }
+
+            weatherLayer = { id: 'weather-layer' };
+            console.log(`[Weather] OpenWeatherMap ${weatherLayerType} layer added successfully`);
+
+            // Ensure routes stay on top of weather
+            bringRoutesToTop();
+        } catch (e) {
+            console.error('[Weather] Error adding weather layer:', e);
+        }
+    };
+
+    if (map.isStyleLoaded()) {
+        addWeatherLayerNow();
+    } else {
+        console.log('[Weather] Waiting for style to load...');
+        map.once('style.load', addWeatherLayerNow);
+        setTimeout(addWeatherLayerNow, 1000);
+    }
+}
+
+/**
+ * Remove weather layer from map
+ */
+function removeWeatherLayer() {
+    if (weatherLayer && map) {
+        if (map.getLayer('weather-layer')) {
+            map.removeLayer('weather-layer');
+        }
+        if (map.getSource('weather-source')) {
+            map.removeSource('weather-source');
+        }
+        weatherLayer = null;
+        console.log('[Weather] Weather layer removed');
+    }
+}
+
+/**
+ * Initialize weather layer based on saved preference
+ */
+function initWeatherLayer() {
+    const toggle = document.getElementById('showWeatherToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', showWeatherEnabled);
+        if (showWeatherEnabled) {
+            toggle.style.background = '#4CAF50';
+            toggle.style.borderColor = '#4CAF50';
+        } else {
+            toggle.style.background = '#ddd';
+            toggle.style.borderColor = '#999';
+        }
+    }
+
+    if (showWeatherEnabled && map) {
+        addWeatherLayer();
+    }
+}
+
 // ===== ROUTE TRAFFIC EDGE COLORING =====
 // Displays traffic congestion as colored edges along the active route
 // Only shows congested segments (orange/red/black) - green segments are hidden to reduce clutter
@@ -7529,10 +7711,14 @@ function setMapTheme(themeOrEvent) {
     // Change map style
     map.setStyle(styleUrls[theme] || styleUrls['standard']);
 
-    // Re-add 3D buildings after style change (style resets layers)
+    // Re-add 3D buildings and road labels after style change (style resets layers)
     map.once('style.load', () => {
         if (typeof buildings3DEnabled !== 'undefined' && buildings3DEnabled) {
             MapLibreHelpers.add3DBuildings(map);
+        }
+        // Re-initialize road labels after theme change
+        if (typeof initializeRoadLabels === 'function') {
+            initializeRoadLabels();
         }
     });
 
@@ -7707,18 +7893,28 @@ let driverPerspectiveEnabled = localStorage.getItem('driverPerspectiveEnabled') 
 
 /**
  * Toggle driver's perspective (3D view) setting
+ * When enabled: 60° pitch with heading-aligned bearing and bottom padding
+ * When disabled: 0° pitch for standard top-down view
  */
 function toggleDriverPerspective() {
     driverPerspectiveEnabled = !driverPerspectiveEnabled;
-    localStorage.setItem('driverPerspectiveEnabled', driverPerspectiveEnabled);
+    localStorage.setItem('driverPerspectiveEnabled', driverPerspectiveEnabled.toString());
 
     const btn = document.getElementById('driverPerspectiveToggle');
     if (btn) {
         btn.classList.toggle('active', driverPerspectiveEnabled);
+        // Update button styling to match toggle state
+        if (driverPerspectiveEnabled) {
+            btn.style.background = '#4CAF50';
+            btn.style.borderColor = '#4CAF50';
+        } else {
+            btn.style.background = '#ddd';
+            btn.style.borderColor = '#999';
+        }
     }
 
-    // Apply immediately if navigation is in progress
-    if (routeInProgress && map && currentLat && currentLon) {
+    // Apply immediately if map exists
+    if (map) {
         applyDriverPerspective();
     }
 
@@ -7731,29 +7927,37 @@ function toggleDriverPerspective() {
  * Uses 60° pitch, heading-aligned bearing, and bottom padding
  */
 function applyDriverPerspective() {
-    if (!map || !currentLat || !currentLon) return;
+    if (!map) return;
 
     // Get current heading from last GPS update or vehicle marker
     const heading = currentUserMarker?.heading || 0;
 
+    // Build easeTo options - only include center if we have coordinates
+    const easeOptions = {
+        duration: 1000
+    };
+
     if (driverPerspectiveEnabled) {
         // 3D driver's eye view
-        map.easeTo({
-            pitch: 60,
-            bearing: heading,
-            center: [currentLon, currentLat],
-            padding: { top: 0, bottom: window.innerHeight * 0.5, left: 0, right: 0 },
-            duration: 1000
-        });
+        easeOptions.pitch = 60;
+        easeOptions.bearing = heading;
+        easeOptions.padding = { top: 0, bottom: window.innerHeight * 0.5, left: 0, right: 0 };
+
+        // Only set center if we have valid coordinates
+        if (currentLat && currentLon) {
+            easeOptions.center = [currentLon, currentLat];
+        }
+
+        map.easeTo(easeOptions);
         console.log('[Driver View] Applied 3D perspective (pitch: 60°, padding: 50% bottom)');
     } else {
         // Standard top-down view
-        map.easeTo({
-            pitch: 0,
-            bearing: 0,
-            padding: { top: 50, bottom: 200, left: 50, right: 50 },
-            duration: 500
-        });
+        easeOptions.pitch = 0;
+        easeOptions.bearing = 0;
+        easeOptions.padding = { top: 50, bottom: 200, left: 50, right: 50 };
+        easeOptions.duration = 500;
+
+        map.easeTo(easeOptions);
         console.log('[Driver View] Reverted to standard view');
     }
 }
@@ -8910,6 +9114,29 @@ window.addEventListener('load', () => {
     console.log('[Traffic] Initializing traffic layer...');
     initTrafficLayer();
 
+    // Initialize weather layer based on saved preference
+    console.log('[Weather] Initializing weather layer...');
+    initWeatherLayer();
+
+    // Initialize road labels after map is ready
+    console.log('[Road Labels] Initializing road labels...');
+    if (typeof map !== 'undefined' && map) {
+        if (map.isStyleLoaded()) {
+            initializeRoadLabels();
+        } else {
+            map.once('style.load', () => {
+                initializeRoadLabels();
+            });
+        }
+    } else {
+        // Map not ready yet, wait a bit and try again
+        setTimeout(() => {
+            if (typeof map !== 'undefined' && map) {
+                initializeRoadLabels();
+            }
+        }, 1000);
+    }
+
     console.log('[Init] Vehicle Type:', currentVehicleType, 'Routing Mode:', currentRoutingMode, 'Smart Zoom:', smartZoomEnabled);
     console.log('[Init] All settings loaded and applied successfully');
 });
@@ -9168,19 +9395,27 @@ function startGPSTracking() {
                 const speedMph = speed ? (speed * 2.237) : 0;
                 const smartZoom = calculateSmartZoom(speedMph, null, 'motorway');
 
-                // Smooth animation to follow vehicle with driver's perspective
-                // We use native padding to push the vehicle to the bottom of the screen
+                // Respect driver's perspective setting for pitch
+                // When enabled: 60° pitch with bottom padding for driver's eye view
+                // When disabled: 0° pitch for standard top-down view
+                const pitch = driverPerspectiveEnabled ? 60 : 0;
+                const padding = driverPerspectiveEnabled
+                    ? { top: 0, bottom: window.innerHeight * 0.5, left: 0, right: 0 }
+                    : { top: 50, bottom: paddingBottom, left: 50, right: 50 };
+                const bearing = driverPerspectiveEnabled ? (heading || map.getBearing()) : 0;
+
+                // Smooth animation to follow vehicle
                 map.easeTo({
                     center: [lon, lat], // MapLibre uses [lon, lat]
                     zoom: smartZoom,
-                    bearing: heading || map.getBearing(),
-                    pitch: 65, // Enhanced 3D driver's perspective tilt
-                    padding: { top: 50, bottom: paddingBottom, left: 50, right: 50 },
+                    bearing: bearing,
+                    pitch: pitch,
+                    padding: padding,
                     duration: 1000,
                     essential: true
                 });
 
-                console.log(`[Navigation] Driver view: pitch 65, bearing ${Math.round(heading)}°, zoom ${smartZoom.toFixed(1)}`);
+                console.log(`[Navigation] View: pitch ${pitch}°, bearing ${Math.round(bearing)}°, zoom ${smartZoom.toFixed(1)}, driverPerspective: ${driverPerspectiveEnabled}`);
             } else if (!zoomAndFollowEnabled && !map._userPanned) {
                 // If zoom and follow is disabled but map hasn't been manually panned, still center on user
                 map.easeTo({
@@ -12352,44 +12587,5 @@ function toggleARMode() {
     }
 }
 
-/**
- * Updated Driver Perspective Toggle
- * Handles both the new toggle switch and legacy calls
- */
-function toggleDriverPerspective() {
-    // If not defined globally, define it
-    if (typeof window.driverPerspectiveEnabled === 'undefined') window.driverPerspectiveEnabled = false;
-
-    window.driverPerspectiveEnabled = !window.driverPerspectiveEnabled;
-
-    const toggleBtn = document.getElementById('driverPerspectiveToggle');
-
-    if (toggleBtn) {
-        toggleBtn.classList.toggle('active', window.driverPerspectiveEnabled);
-        // Correct styling for toggle switch
-        if (window.driverPerspectiveEnabled) {
-            toggleBtn.style.background = '#4CAF50';
-            toggleBtn.style.borderColor = '#4CAF50';
-        } else {
-            toggleBtn.style.background = '#ddd';
-            toggleBtn.style.borderColor = '#999';
-        }
-    }
-
-    if (window.driverPerspectiveEnabled) {
-        // Apply 3D pitch immediately if map exists
-        if (typeof map !== 'undefined' && map) {
-            const currentPitch = map.getPitch();
-            if (currentPitch < 60) {
-                map.easeTo({ pitch: 60, duration: 1000 });
-            }
-        }
-        showStatus('🚗 3D Driver View Enabled', 'success');
-    } else {
-        // Reset pitch
-        if (typeof map !== 'undefined' && map) {
-            map.easeTo({ pitch: 0, duration: 1000 });
-        }
-        showStatus('🚗 3D Driver View Disabled', 'info');
-    }
-}
+// NOTE: toggleDriverPerspective is defined earlier in the file (around line 7711)
+// This duplicate was removed to fix the driver's perspective mode conflict

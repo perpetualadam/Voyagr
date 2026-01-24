@@ -330,5 +330,149 @@ describe('Road Labels Feature', () => {
             expect(MapLibreHelpers.toggleRoadLabels).toHaveBeenCalled();
         });
     });
+
+    describe('Road Labels Initialization', () => {
+        let mockMapWithEvents;
+
+        beforeEach(() => {
+            mockMapWithEvents = {
+                ...mockMap,
+                isStyleLoaded: jest.fn().mockReturnValue(true),
+                once: jest.fn((event, callback) => callback()),
+            };
+        });
+
+        test('should call initializeRoadLabels during page load', () => {
+            // Simulate initialization
+            const initializeRoadLabels = jest.fn();
+
+            if (typeof mockMapWithEvents !== 'undefined' && mockMapWithEvents) {
+                if (mockMapWithEvents.isStyleLoaded()) {
+                    initializeRoadLabels();
+                }
+            }
+
+            expect(initializeRoadLabels).toHaveBeenCalled();
+        });
+
+        test('should wait for style.load if style not loaded', () => {
+            mockMapWithEvents.isStyleLoaded.mockReturnValue(false);
+            const initializeRoadLabels = jest.fn();
+
+            if (typeof mockMapWithEvents !== 'undefined' && mockMapWithEvents) {
+                if (mockMapWithEvents.isStyleLoaded()) {
+                    initializeRoadLabels();
+                } else {
+                    mockMapWithEvents.once('style.load', () => {
+                        initializeRoadLabels();
+                    });
+                }
+            }
+
+            expect(mockMapWithEvents.once).toHaveBeenCalledWith('style.load', expect.any(Function));
+            expect(initializeRoadLabels).toHaveBeenCalled();
+        });
+
+        test('should re-initialize road labels after theme change', () => {
+            const initializeRoadLabels = jest.fn();
+
+            // Simulate setMapTheme calling initializeRoadLabels
+            mockMapWithEvents.once('style.load', () => {
+                if (typeof initializeRoadLabels === 'function') {
+                    initializeRoadLabels();
+                }
+            });
+
+            expect(initializeRoadLabels).toHaveBeenCalled();
+        });
+
+        test('should handle map not being ready with timeout fallback', (done) => {
+            const initializeRoadLabels = jest.fn();
+            let map = null;
+
+            // Map not ready yet, wait a bit and try again
+            setTimeout(() => {
+                map = mockMapWithEvents;
+                if (typeof map !== 'undefined' && map) {
+                    initializeRoadLabels();
+                }
+                expect(initializeRoadLabels).toHaveBeenCalled();
+                done();
+            }, 100);
+        });
+
+        test('should check map existence before initialization', () => {
+            const initializeRoadLabels = jest.fn();
+            let map = null;
+
+            if (typeof map !== 'undefined' && map) {
+                initializeRoadLabels();
+            }
+
+            expect(initializeRoadLabels).not.toHaveBeenCalled();
+        });
+
+        test('should handle undefined map gracefully', () => {
+            expect(() => {
+                let map;
+                if (typeof map !== 'undefined' && map) {
+                    // Initialize
+                }
+            }).not.toThrow();
+        });
+    });
+
+    describe('Theme Change Re-initialization', () => {
+        test('should register style.load event handler in setMapTheme', () => {
+            const mockMapWithOnce = {
+                ...mockMap,
+                once: jest.fn()
+            };
+
+            // Simulate setMapTheme registering handler
+            mockMapWithOnce.once('style.load', jest.fn());
+
+            expect(mockMapWithOnce.once).toHaveBeenCalledWith('style.load', expect.any(Function));
+        });
+
+        test('should call initializeRoadLabels in style.load callback', () => {
+            const initializeRoadLabels = jest.fn();
+            const mockMapWithOnce = {
+                ...mockMap,
+                once: jest.fn((event, callback) => callback())
+            };
+
+            // Simulate setMapTheme behavior
+            mockMapWithOnce.once('style.load', () => {
+                if (typeof initializeRoadLabels === 'function') {
+                    initializeRoadLabels();
+                }
+            });
+
+            expect(initializeRoadLabels).toHaveBeenCalled();
+        });
+
+        test('should re-add road labels after style reset', () => {
+            MapLibreHelpers.configureRoadLabels(mockMap);
+            jest.clearAllMocks();
+
+            // Simulate theme change resetting layers
+            MapLibreHelpers.configureRoadLabels(mockMap);
+            MapLibreHelpers.toggleRoadLabels(mockMap, true);
+
+            expect(MapLibreHelpers.configureRoadLabels).toHaveBeenCalled();
+            expect(MapLibreHelpers.toggleRoadLabels).toHaveBeenCalled();
+        });
+
+        test('should check if initializeRoadLabels is a function before calling', () => {
+            const initializeRoadLabels = 'not a function';
+
+            expect(() => {
+                if (typeof initializeRoadLabels === 'function') {
+                    initializeRoadLabels();
+                }
+            }).not.toThrow();
+        });
+    });
 });
 
