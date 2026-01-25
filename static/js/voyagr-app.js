@@ -1356,7 +1356,22 @@ function doAddRouteLayers() {
                     }
                 });
 
-                // Add layer
+                // Find the first symbol layer to insert route before it
+                // This ensures routes render BELOW labels/text
+                const style = map.getStyle();
+                let beforeId = undefined;
+                if (style && style.layers) {
+                    const symbolLayer = style.layers.find(layer =>
+                        layer.type === 'symbol' &&
+                        layer.layout &&
+                        layer.layout['text-field']
+                    );
+                    if (symbolLayer) {
+                        beforeId = symbolLayer.id;
+                    }
+                }
+
+                // Add layer before symbol layers to keep labels on top
                 map.addLayer({
                     id: layerId,
                     type: 'line',
@@ -1370,9 +1385,9 @@ function doAddRouteLayers() {
                         'line-width': weight,
                         'line-opacity': opacity
                     }
-                });
+                }, beforeId);
 
-                console.log(`[Routes] ✓ Route ${i} layer added directly: ${layerId}`);
+                console.log(`[Routes] ✓ Route ${i} layer added directly: ${layerId}${beforeId ? ` (before ${beforeId})` : ''}`);
 
                 // Create a simple layer object for tracking
                 const layer = {
@@ -1429,6 +1444,8 @@ function doAddRouteLayers() {
 /**
  * Bring all route layers to the top of the map rendering order
  * This ensures routes are visible above traffic edges and other overlays
+ * NOTE: Routes are now inserted before symbol layers by default (via beforeId parameter),
+ * so this function primarily ensures routes are above traffic/weather layers
  */
 function bringRoutesToTop() {
     console.log('[Routes] bringRoutesToTop called, allRouteLayers:', allRouteLayers?.length || 0);
@@ -1451,13 +1468,28 @@ function bringRoutesToTop() {
 
         try {
             // Move each route layer to the top using MapLibre's moveLayer
+            // This moves routes above traffic/weather but still below symbol layers
             allRouteLayers.forEach((layer, idx) => {
                 if (layer && layer.id) {
                     const exists = map.getLayer(layer.id);
                     if (exists) {
-                        // moveLayer with no second argument moves layer to top
-                        map.moveLayer(layer.id);
-                        console.log(`[Routes] Moved layer ${layer.id} to top`);
+                        // Find first symbol layer to insert before
+                        const style = map.getStyle();
+                        let beforeId = undefined;
+                        if (style && style.layers) {
+                            const symbolLayer = style.layers.find(l =>
+                                l.type === 'symbol' &&
+                                l.layout &&
+                                l.layout['text-field']
+                            );
+                            if (symbolLayer) {
+                                beforeId = symbolLayer.id;
+                            }
+                        }
+
+                        // Move layer to just before symbol layers
+                        map.moveLayer(layer.id, beforeId);
+                        console.log(`[Routes] Moved layer ${layer.id}${beforeId ? ` before ${beforeId}` : ' to top'}`);
                     } else {
                         allFound = false;
                         console.log(`[Routes] Layer ${layer.id} not found in map yet`);
@@ -1469,8 +1501,8 @@ function bringRoutesToTop() {
             if (!allFound && retryCount < maxRetries) {
                 setTimeout(() => moveLayersToTop(retryCount + 1), 100);
             } else if (allFound) {
-                console.log('[Routes] All route layers successfully moved to top');
-                // CRITICAL: Ensure labels stay on top of route layers
+                console.log('[Routes] All route layers successfully positioned');
+                // Ensure labels stay on top as a safety measure
                 ensureLabelsOnTop();
             } else {
                 console.warn('[Routes] Some layers not found after retries');
@@ -4233,44 +4265,52 @@ function bringTrafficEdgesToTop() {
     }
 }
 
+// Debounce timer for ensureLabelsOnTop to prevent excessive calls
+let ensureLabelsTimeout = null;
+
 /**
  * Ensure road labels are always rendered above route and traffic layers
  * This function moves all symbol layers with text-field to the top of the layer stack
+ * Debounced to prevent excessive calls during rapid layer additions
  */
 function ensureLabelsOnTop() {
     if (!map) return;
 
-    try {
-        const style = map.getStyle();
-        if (!style || !style.layers) return;
+    // Debounce to prevent excessive calls
+    clearTimeout(ensureLabelsTimeout);
+    ensureLabelsTimeout = setTimeout(() => {
+        try {
+            const style = map.getStyle();
+            if (!style || !style.layers) return;
 
-        // Find all label/symbol layers with text content
-        const labelLayers = style.layers.filter(layer =>
-            layer.type === 'symbol' &&
-            layer.layout &&
-            layer.layout['text-field']
-        );
+            // Find all label/symbol layers with text content
+            const labelLayers = style.layers.filter(layer =>
+                layer.type === 'symbol' &&
+                layer.layout &&
+                layer.layout['text-field']
+            );
 
-        if (labelLayers.length === 0) {
-            console.log('[Labels] No label layers found');
-            return;
-        }
-
-        // Move each label layer to the top
-        labelLayers.forEach(layer => {
-            try {
-                if (map.getLayer(layer.id)) {
-                    map.moveLayer(layer.id);
-                }
-            } catch (e) {
-                // Silently skip layers that can't be moved
+            if (labelLayers.length === 0) {
+                console.log('[Labels] No label layers found');
+                return;
             }
-        });
 
-        console.log(`[Labels] Moved ${labelLayers.length} label layers to top`);
-    } catch (e) {
-        console.log('[Labels] Error ensuring labels on top:', e.message);
-    }
+            // Move each label layer to the top
+            labelLayers.forEach(layer => {
+                try {
+                    if (map.getLayer(layer.id)) {
+                        map.moveLayer(layer.id);
+                    }
+                } catch (e) {
+                    // Silently skip layers that can't be moved
+                }
+            });
+
+            console.log(`[Labels] Moved ${labelLayers.length} label layers to top`);
+        } catch (e) {
+            console.log('[Labels] Error ensuring labels on top:', e.message);
+        }
+    }, 50);  // 50ms debounce delay
 }
 
 /**

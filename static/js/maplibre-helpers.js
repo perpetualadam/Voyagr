@@ -106,6 +106,22 @@ function addLayerToMap(mapInstance, id, lngLatCoords, options) {
             }
         });
 
+        // Find the first symbol layer to insert polyline before it
+        // This ensures polylines render BELOW labels/text
+        const style = mapInstance.getStyle();
+        let beforeId = undefined;
+        if (style && style.layers) {
+            const symbolLayer = style.layers.find(layer =>
+                layer.type === 'symbol' &&
+                layer.layout &&
+                layer.layout['text-field']
+            );
+            if (symbolLayer) {
+                beforeId = symbolLayer.id;
+                console.log(`[MapLibre] Inserting polyline ${id} before symbol layer ${beforeId}`);
+            }
+        }
+
         mapInstance.addLayer({
             id: id,
             type: 'line',
@@ -116,7 +132,7 @@ function addLayerToMap(mapInstance, id, lngLatCoords, options) {
                 'line-width': options.weight || 4,
                 'line-opacity': options.opacity || 0.8
             }
-        });
+        }, beforeId);  // Insert before symbol layers to keep labels on top
 
         return true;
     } catch (e) {
