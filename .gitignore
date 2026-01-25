@@ -77,6 +77,10 @@ Thumbs.db
 satnav.db
 test_*.db
 *.ppn
+voyagr_web_old.py
+voyagr_web_backup.py
+voyagr_web_backup*.py
+.tmp.driveupload/
 
 # Environment variables (contains sensitive API keys and server IPs)
 .env
