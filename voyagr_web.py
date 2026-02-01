@@ -5496,6 +5496,8 @@ def calculate_route():
         start = data.get('start', '').strip()
         end = data.get('end', '').strip()
         routing_mode = data.get('routing_mode', 'auto')
+        # Valhalla costing: must be auto, pedestrian, or bicycle for correct routes/ETAs
+        valhalla_costing = routing_mode if routing_mode in ('auto', 'pedestrian', 'bicycle') else 'auto'
         vehicle_type = data.get('vehicle_type', 'petrol_diesel')
         fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
         fuel_price = float(data.get('fuel_price', 1.40))
@@ -5602,7 +5604,8 @@ def calculate_route():
         # ====================================================================
         straight_line_km = ((end_lat - start_lat)**2 + (end_lon - start_lon)**2)**0.5 * 111
 
-        if enable_hazard_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
+        # GraphHopper is car-only; skip for pedestrian/bicycle
+        if enable_hazard_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE and routing_mode == 'auto':
             logger.info(f"[ROUTING] Trying GraphHopper with camera avoidance (route: {straight_line_km:.0f}km)...")
             try:
                 graphhopper_route = route_with_graphhopper(
@@ -6108,14 +6111,20 @@ def calculate_route():
                     use_segmented_routing = False
 
             # Build request payload (standard 2-point routing)
+            # Use requested costing so pedestrian/bicycle get correct routes and ETAs
             payload = {
                 "locations": [
                     {"lat": start_lat, "lon": start_lon},
                     {"lat": end_lat, "lon": end_lon}
                 ],
-                "costing": "auto",
-                "alternates": 3  # Request up to 3 alternative routes
+                "costing": valhalla_costing,
+                "alternates": 3 if valhalla_costing == 'auto' else 0  # Alternates only for auto
             }
+            # Optional costing_options for walk/bike speeds (Valhalla uses these for ETA)
+            if valhalla_costing == 'pedestrian':
+                payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": True}}
+            elif valhalla_costing == 'bicycle':
+                payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": True}}
 
             # Add exclude_locations if hazard avoidance is enabled
             if exclude_locations:
@@ -6178,12 +6187,17 @@ def calculate_route():
                                 break
 
                     # ================================================================
-                    # TRAFFIC-ADJUSTED ETA: Apply real-time traffic multiplier
-                    # Valhalla uses historical averages which underestimate peak times
+                    # TRAFFIC-ADJUSTED ETA: Apply only for auto (car) mode
+                    # Walking/cycling times should not be adjusted by road traffic
                     # ================================================================
-                    traffic_multiplier, traffic_level = get_traffic_duration_multiplier(start_lat, start_lon)
-                    time_minutes = base_time_minutes * traffic_multiplier
-                    logger.info(f"[ETA] Base: {base_time_minutes:.0f}min, Traffic: {traffic_level} ({traffic_multiplier:.2f}x), Adjusted: {time_minutes:.0f}min")
+                    if valhalla_costing == 'auto':
+                        traffic_multiplier, traffic_level = get_traffic_duration_multiplier(start_lat, start_lon)
+                        time_minutes = base_time_minutes * traffic_multiplier
+                        logger.info(f"[ETA] Base: {base_time_minutes:.0f}min, Traffic: {traffic_level} ({traffic_multiplier:.2f}x), Adjusted: {time_minutes:.0f}min")
+                    else:
+                        traffic_multiplier, traffic_level = 1.0, 'N/A'
+                        time_minutes = base_time_minutes
+                        logger.info(f"[ETA] {valhalla_costing}: {base_time_minutes:.0f} min (no traffic adjustment)")
 
                     # ================================================================
                     # PHASE 3 OPTIMIZATION: Use cost calculator with route coordinates
@@ -6326,9 +6340,9 @@ def calculate_route():
 
                     # ================================================================
                     # REQUEST ADDITIONAL DISTINCT ROUTE TYPES (Shortest, Optimised)
-                    # Only for standard routing when no alternates were returned
+                    # Only for auto mode; pedestrian/bicycle use single costing
                     # ================================================================
-                    if enable_hazard_avoidance and len(routes) < 3:
+                    if valhalla_costing == 'auto' and enable_hazard_avoidance and len(routes) < 3:
                         logger.info(f"[VALHALLA] Standard routing: Adding distinct route types ({len(routes)} routes so far)")
 
                         # Build exclude_locations for alternative routes (use top 50 cameras closest to route)
@@ -6655,16 +6669,20 @@ def calculate_route():
                             end_lon=end_lon
                         )
 
-                        # Build retry payload
+                        # Build retry payload (use same costing as initial request)
                         retry_payload = {
                             "locations": [
                                 {"lat": start_lat, "lon": start_lon},
                                 {"lat": end_lat, "lon": end_lon}
                             ],
-                            "costing": "auto",
-                            "alternates": 3,
+                            "costing": valhalla_costing,
+                            "alternates": 3 if valhalla_costing == 'auto' else 0,
                             "exclude_locations": retry_locations
                         }
+                        if valhalla_costing == 'pedestrian':
+                            retry_payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": True}}
+                        elif valhalla_costing == 'bicycle':
+                            retry_payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": True}}
 
                         retry_response = requests.post(url, json=retry_payload, timeout=10, headers=headers)
 
@@ -6853,9 +6871,10 @@ def calculate_route():
             # Valhalla succeeded (either first attempt or retry) - skip OSRM fallback
             logger.info(f"[ROUTING] Valhalla succeeded, skipping OSRM fallback")
         else:
-            # Fallback to OSRM (public service)
-            logger.info(f"[OSRM] Trying fallback with ({start_lon},{start_lat}) to ({end_lon},{end_lat})")
-            osrm_url = f"{OSRM_URL}/driving/{start_lon},{start_lat};{end_lon},{end_lat}?alternatives=true&overview=full&steps=true"
+            # Fallback to OSRM (public service); use profile matching routing mode
+            osrm_profile = 'driving' if valhalla_costing == 'auto' else ('foot' if valhalla_costing == 'pedestrian' else 'bike')
+            logger.info(f"[OSRM] Trying fallback with profile={osrm_profile} ({start_lon},{start_lat}) to ({end_lon},{end_lat})")
+            osrm_url = f"{OSRM_URL}/{osrm_profile}/{start_lon},{start_lat};{end_lon},{end_lat}?alternatives=true&overview=full&steps=true"
             try:
                 headers = {
                     'User-Agent': 'Voyagr-PWA/1.0',
