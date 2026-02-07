@@ -117,9 +117,9 @@ function initializeMap() {
 
     // Set zoom-level-based filtering for different road types
     MapLibreHelpers.setRoadLabelZoomFilters(map, {
-        motorwayMinZoom: 5,      // Show motorways from zoom 5+
-        mainRoadMinZoom: 10,     // Show A/B roads from zoom 10+
-        streetMinZoom: 14        // Show all streets from zoom 14+
+        motorwayMinZoom: 4,      // Show motorways from zoom 4+
+        mainRoadMinZoom: 8,      // Show A/B roads from zoom 8+
+        streetMinZoom: 10        // Show all streets from zoom 10+
     });
 
     console.log('[Init] Map initialized successfully');

@@ -5751,7 +5751,8 @@ def calculate_route():
                     baseline_payload = {
                         "locations": route_locations,  # Use locations with via-points
                         "costing": "auto",
-                        "alternates": 3 if not has_waypoints else 0  # No alternates for multi-stop
+                        "alternates": 3 if not has_waypoints else 0,  # No alternates for multi-stop
+                        "directions_options": {"generalize": 0}  # Full geometry - follow roads on bends
                     }
 
                     baseline_response = requests.post(url, json=baseline_payload, timeout=10, headers=headers)
@@ -5836,7 +5837,8 @@ def calculate_route():
                         try:
                             fastest_payload = {
                                 "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
-                                "costing": "auto"
+                                "costing": "auto",
+                                "directions_options": {"generalize": 0}
                             }
                             if alt_exclude:
                                 fastest_payload["exclude_locations"] = alt_exclude
@@ -5870,7 +5872,8 @@ def calculate_route():
                                 discovery_payload = {
                                     "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
                                     "costing": "auto",
-                                    "exclude_locations": baseline_cameras[:50]
+                                    "exclude_locations": baseline_cameras[:50],
+                                    "directions_options": {"generalize": 0}
                                 }
 
                                 logger.info(f"[DISCOVERY] Requesting optimised route excluding {len(baseline_cameras)} baseline cameras")
@@ -5953,7 +5956,8 @@ def calculate_route():
                         seg_payload = {
                             "locations": [seg_start, seg_end],
                             "costing": "auto",
-                            "alternatives": False
+                            "alternatives": False,
+                            "directions_options": {"generalize": 0}
                         }
 
                         if seg_exclude:
@@ -6118,7 +6122,8 @@ def calculate_route():
                     {"lat": end_lat, "lon": end_lon}
                 ],
                 "costing": valhalla_costing,
-                "alternates": 3 if valhalla_costing == 'auto' else 0  # Alternates only for auto
+                "alternates": 3 if valhalla_costing == 'auto' else 0,  # Alternates only for auto
+                "directions_options": {"generalize": 0}  # Full geometry - follow roads on bends/corners
             }
             # Optional costing_options for walk/bike speeds (Valhalla uses these for ETA)
             if valhalla_costing == 'pedestrian':
@@ -6408,7 +6413,8 @@ def calculate_route():
                         try:
                             shortest_payload = {
                                 "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
-                                "costing": "auto_shorter"
+                                "costing": "auto_shorter",
+                                "directions_options": {"generalize": 0}
                             }
                             if alt_exclude:
                                 shortest_payload["exclude_locations"] = alt_exclude
@@ -6441,7 +6447,8 @@ def calculate_route():
                                     disc_payload = {
                                         "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
                                         "costing": "auto",
-                                        "exclude_locations": baseline_cameras[:50]
+                                        "exclude_locations": baseline_cameras[:50],
+                                        "directions_options": {"generalize": 0}
                                     }
                                     disc_response = requests.post(url, json=disc_payload, timeout=10, headers=headers)
                                     if disc_response.status_code == 200:
@@ -6677,7 +6684,8 @@ def calculate_route():
                             ],
                             "costing": valhalla_costing,
                             "alternates": 3 if valhalla_costing == 'auto' else 0,
-                            "exclude_locations": retry_locations
+                            "exclude_locations": retry_locations,
+                            "directions_options": {"generalize": 0}
                         }
                         if valhalla_costing == 'pedestrian':
                             retry_payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": True}}
@@ -6767,7 +6775,8 @@ def calculate_route():
                                 try:
                                     shortest_payload = {
                                         "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
-                                        "costing": "auto_shorter"
+                                        "costing": "auto_shorter",
+                                        "directions_options": {"generalize": 0}
                                     }
                                     if retry_locations:
                                         shortest_payload["exclude_locations"] = retry_locations
@@ -7073,7 +7082,8 @@ def calculate_multi_stop_route():
             url = f"{VALHALLA_URL}/route"
             payload = {
                 "locations": coords,
-                "costing": routing_mode if routing_mode in ['auto', 'pedestrian', 'bicycle'] else 'auto'
+                "costing": routing_mode if routing_mode in ['auto', 'pedestrian', 'bicycle'] else 'auto',
+                "directions_options": {"generalize": 0}
             }
             response = requests.post(url, json=payload, timeout=15)
 

@@ -106,12 +106,19 @@ function addLayerToMap(mapInstance, id, lngLatCoords, options) {
             }
         });
 
-        // Find the first symbol layer to insert polyline before it
-        // This ensures polylines render BELOW labels/text
+        // Find a symbol layer to insert polyline before it - prefer road label layer
+        // This ensures polylines render BELOW road/motorway name tags
         const style = mapInstance.getStyle();
         let beforeId = undefined;
         if (style && style.layers) {
-            const symbolLayer = style.layers.find(layer =>
+            const roadLabelLayer = style.layers.find(layer =>
+                layer.type === 'symbol' &&
+                layer.layout &&
+                layer.layout['text-field'] &&
+                (layer.id.includes('road') || layer.id.includes('transportation') ||
+                 layer.id.includes('motorway') || layer.id.includes('street') || layer.id.includes('ref'))
+            );
+            const symbolLayer = roadLabelLayer || style.layers.find(layer =>
                 layer.type === 'symbol' &&
                 layer.layout &&
                 layer.layout['text-field']
@@ -663,13 +670,17 @@ function configureRoadLabels(mapInstance, options = {}) {
                 return;
             }
 
-            // Find all text/symbol layers that contain road labels
-            // Liberty style uses layers like: 'road-label', 'motorway-label', 'street-label', etc.
+            // Find all symbol layers with text (road labels, motorway names, etc.)
+            // Liberty/OpenMapTiles uses: road_label, transportation_name, road_ref, etc.
             const labelLayers = style.layers.filter(layer =>
                 layer.type === 'symbol' &&
                 layer.layout &&
                 layer.layout['text-field'] &&
-                (layer.id.includes('label') || layer.id.includes('text'))
+                (layer.id.includes('label') || layer.id.includes('text') ||
+                 layer.id.includes('road') || layer.id.includes('transportation') ||
+                 layer.id.includes('street') || layer.id.includes('motorway') ||
+                 layer.id.includes('trunk') || layer.id.includes('primary') ||
+                 layer.id.includes('ref'))
             );
 
             console.log(`[MapLibre] Found ${labelLayers.length} label layers to configure`);
@@ -751,10 +762,15 @@ function toggleRoadLabels(mapInstance, visible) {
             const style = mapInstance.getStyle();
             if (!style || !style.layers) return;
 
+            // Target road/motorway name layers (not place names, water names, etc.)
             const labelLayers = style.layers.filter(layer =>
                 layer.type === 'symbol' &&
                 layer.layout &&
-                layer.layout['text-field']
+                layer.layout['text-field'] &&
+                (layer.id.includes('road') || layer.id.includes('transportation') ||
+                 layer.id.includes('motorway') || layer.id.includes('street') ||
+                 layer.id.includes('trunk') || layer.id.includes('primary') ||
+                 layer.id.includes('ref'))
             );
 
             labelLayers.forEach(layer => {
@@ -795,9 +811,9 @@ function setRoadLabelZoomFilters(mapInstance, options = {}) {
     if (!mapInstance) return;
 
     const config = {
-        motorwayMinZoom: options.motorwayMinZoom || 5,
-        mainRoadMinZoom: options.mainRoadMinZoom || 10,
-        streetMinZoom: options.streetMinZoom || 14
+        motorwayMinZoom: options.motorwayMinZoom || 4,
+        mainRoadMinZoom: options.mainRoadMinZoom || 8,
+        streetMinZoom: options.streetMinZoom || 10
     };
 
     const applyFilters = () => {
