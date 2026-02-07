@@ -28,6 +28,7 @@ from voyagr.api.navigation import navigation_bp, set_voice_limiter, set_speed_li
 from voyagr.api.monitoring import monitoring_bp, set_monitor
 from voyagr.api.settings import settings_bp
 from voyagr.api.costs import costs_bp, set_cost_calculator
+from voyagr.api.auth import auth_bp
 
 __all__ = [
     # Blueprints
@@ -43,6 +44,7 @@ __all__ = [
     'monitoring_bp',
     'settings_bp',
     'costs_bp',
+    'auth_bp',
     # Registration
     'register_blueprints',
     # Setter functions
@@ -58,6 +60,7 @@ __all__ = [
 def register_blueprints(app):
     """Register all API blueprints with the Flask app."""
     app.register_blueprint(core_bp)
+    app.register_blueprint(auth_bp, url_prefix='/api')
     app.register_blueprint(vehicles_bp, url_prefix='/api')
     app.register_blueprint(caz_bp, url_prefix='/api')
     app.register_blueprint(routing_bp, url_prefix='/api')

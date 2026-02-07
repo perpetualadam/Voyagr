@@ -30,6 +30,11 @@ def get_config():
     response = jsonify({
         'tomtom_api_key': os.getenv('TOMTOM_API_KEY', ''),
         'openweathermap_api_key': os.getenv('OPENWEATHERMAP_API_KEY', ''),
+        # Supabase (public)
+        'supabase_url': os.getenv('SUPABASE_URL', ''),
+        'supabase_anon_key': os.getenv('SUPABASE_ANON_KEY', ''),
+        # Auth behavior
+        'require_login': os.getenv('REQUIRE_LOGIN', 'false').lower() == 'true',
         'success': True
     })
     # Prevent caching

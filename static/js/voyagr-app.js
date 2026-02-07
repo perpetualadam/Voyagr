@@ -530,6 +530,234 @@ function saveUnitSettingsToBackend() {
 
 // ===== COMPREHENSIVE PERSISTENT SETTINGS SYSTEM =====
 
+// =============================================================================
+// Multi-profile local storage (guest vs signed-in user)
+// =============================================================================
+// We keep the existing runtime keys (pref_*, voyagr_all_settings, savedRoutes, etc.)
+// but snapshot/restore them per profile so multiple users on the same device stay separate.
+const VOYAGR_PROFILE_STORE_KEY = 'voyagr_profiles_v1';
+let activeProfileId = 'guest';
+
+function getProfileStore() {
+    try {
+        return JSON.parse(localStorage.getItem(VOYAGR_PROFILE_STORE_KEY) || '{}');
+    } catch {
+        return {};
+    }
+}
+
+function setProfileStore(store) {
+    localStorage.setItem(VOYAGR_PROFILE_STORE_KEY, JSON.stringify(store));
+}
+
+function getRuntimeProfileSnapshot() {
+    return {
+        voyagr_all_settings: localStorage.getItem('voyagr_all_settings') || '',
+        savedRoutes: localStorage.getItem('savedRoutes') || '[]'
+    };
+}
+
+function applyRuntimeProfileSnapshot(snapshot) {
+    // Restore canonical blobs first
+    localStorage.setItem('voyagr_all_settings', snapshot?.voyagr_all_settings || '');
+    localStorage.setItem('savedRoutes', snapshot?.savedRoutes || '[]');
+
+    // Hydrate derived keys + in-memory vars
+    loadAllSettings();
+    applySettingsToUI();
+
+    // Refresh saved routes UI (if present)
+    try {
+        if (typeof loadSavedRoutes === 'function') loadSavedRoutes();
+    } catch (e) {
+        console.log('[Profiles] loadSavedRoutes failed:', e);
+    }
+}
+
+function persistActiveProfile() {
+    const store = getProfileStore();
+    store[activeProfileId] = getRuntimeProfileSnapshot();
+    setProfileStore(store);
+    console.log('[Profiles] Persisted profile:', activeProfileId);
+}
+
+function ensureProfileExists(profileId) {
+    const store = getProfileStore();
+    if (!store[profileId]) {
+        store[profileId] = { voyagr_all_settings: '', savedRoutes: '[]' };
+        setProfileStore(store);
+    }
+}
+
+function switchActiveProfile(profileId, options = {}) {
+    if (!profileId) profileId = 'guest';
+
+    // Save current runtime state into current profile before switching
+    persistActiveProfile();
+
+    const store = getProfileStore();
+    const fromProfileId = activeProfileId;
+
+    ensureProfileExists(profileId);
+    activeProfileId = profileId;
+
+    // Optional: import previous profile into new one (first login migration)
+    if (options.importFromProfileId && store[options.importFromProfileId]) {
+        store[profileId] = store[options.importFromProfileId];
+        setProfileStore(store);
+        console.log('[Profiles] Imported profile', options.importFromProfileId, '→', profileId);
+    }
+
+    // Apply new profile state
+    applyRuntimeProfileSnapshot(store[profileId]);
+    console.log('[Profiles] Switched profile:', fromProfileId, '→', activeProfileId);
+}
+
+// Ensure guest profile exists on boot (maintains current behavior)
+ensureProfileExists('guest');
+
+// =============================================================================
+// Supabase Auth (optional)
+// =============================================================================
+let supabaseClient = null;
+let supabasePublicConfig = null;
+
+function setAccountUIState({ signedIn, email, message }) {
+    const statusEl = document.getElementById('accountStatus');
+    const signedOutEl = document.getElementById('accountSignedOut');
+    const signedInEl = document.getElementById('accountSignedIn');
+    const emailEl = document.getElementById('accountEmail');
+
+    if (statusEl) statusEl.textContent = message || '';
+    if (signedOutEl) signedOutEl.style.display = signedIn ? 'none' : 'block';
+    if (signedInEl) signedInEl.style.display = signedIn ? 'block' : 'none';
+    if (emailEl) emailEl.textContent = email || '-';
+}
+
+async function initSupabaseAuth() {
+    try {
+        const res = await fetch('/api/config', { cache: 'no-store' });
+        const data = await res.json();
+        supabasePublicConfig = data;
+
+        const url = data.supabase_url;
+        const anonKey = data.supabase_anon_key;
+
+        if (!url || !anonKey || typeof supabase === 'undefined') {
+            setAccountUIState({
+                signedIn: false,
+                message: 'Account login not configured on this server.'
+            });
+            const accountSection = document.getElementById('accountSection');
+            if (accountSection) accountSection.style.display = 'none';
+            return;
+        }
+
+        // Create client (global UMD: supabase.createClient)
+        const { createClient } = supabase;
+        supabaseClient = createClient(url, anonKey, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            }
+        });
+        window.supabaseClient = supabaseClient;
+
+        // Initial session
+        const { data: sessionData } = await supabaseClient.auth.getSession();
+        await handleSupabaseSession(sessionData?.session || null);
+
+        // Session changes (login/logout/refresh)
+        supabaseClient.auth.onAuthStateChange(async (_event, session) => {
+            await handleSupabaseSession(session || null);
+        });
+    } catch (e) {
+        console.error('[Auth] initSupabaseAuth failed:', e);
+        setAccountUIState({ signedIn: false, message: 'Account login unavailable (config error).' });
+    }
+}
+
+async function handleSupabaseSession(session) {
+    if (session && session.user) {
+        const userId = session.user.id;
+        const email = session.user.email || '';
+        setAccountUIState({ signedIn: true, email, message: 'Signed in.' });
+
+        const userProfileId = `sb:${userId}`;
+        ensureProfileExists(userProfileId);
+
+        // If user profile is empty but guest has data, offer import once.
+        const store = getProfileStore();
+        const guestSnap = store['guest'];
+        const userSnap = store[userProfileId];
+        const guestHasData = !!(guestSnap?.voyagr_all_settings && guestSnap.voyagr_all_settings.length > 10) ||
+                             !!(guestSnap?.savedRoutes && guestSnap.savedRoutes !== '[]');
+        const userHasData = !!(userSnap?.voyagr_all_settings && userSnap.voyagr_all_settings.length > 10) ||
+                            !!(userSnap?.savedRoutes && userSnap.savedRoutes !== '[]');
+
+        if (guestHasData && !userHasData) {
+            const importChoice = confirm('Import your current on-device (guest) profile into this account profile?');
+            if (importChoice) {
+                switchActiveProfile(userProfileId, { importFromProfileId: 'guest' });
+                showStatus('Imported guest profile into account profile', 'success');
+                return;
+            }
+        }
+
+        switchActiveProfile(userProfileId);
+        return;
+    }
+
+    // Signed out
+    setAccountUIState({ signedIn: false, message: 'Not signed in (guest profile).' });
+    switchActiveProfile('guest');
+}
+
+async function authSignInEmail() {
+    if (!supabaseClient) return showStatus('Auth not configured', 'error');
+    const email = document.getElementById('authEmail')?.value?.trim();
+    const password = document.getElementById('authPassword')?.value || '';
+    if (!email || !password) return showStatus('Enter email + password', 'error');
+
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) return showStatus(error.message || 'Sign-in failed', 'error');
+    showStatus('Signed in', 'success');
+}
+
+async function authSignUpEmail() {
+    if (!supabaseClient) return showStatus('Auth not configured', 'error');
+    const email = document.getElementById('authEmail')?.value?.trim();
+    const password = document.getElementById('authPassword')?.value || '';
+    if (!email || !password) return showStatus('Enter email + password', 'error');
+
+    const { error } = await supabaseClient.auth.signUp({ email, password });
+    if (error) return showStatus(error.message || 'Sign-up failed', 'error');
+    showStatus('Account created. Check your email if confirmation is required.', 'success');
+}
+
+async function authSignInProvider(provider) {
+    if (!supabaseClient) return showStatus('Auth not configured', 'error');
+    const { error } = await supabaseClient.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo: window.location.origin }
+    });
+    if (error) return showStatus(error.message || 'OAuth sign-in failed', 'error');
+}
+
+async function authSignOut() {
+    if (!supabaseClient) return;
+    const { error } = await supabaseClient.auth.signOut();
+    if (error) return showStatus(error.message || 'Sign-out failed', 'error');
+    showStatus('Signed out', 'info');
+}
+
+// Expose handlers for inline onclick buttons in HTML
+window.authSignInEmail = authSignInEmail;
+window.authSignUpEmail = authSignUpEmail;
+window.authSignInProvider = authSignInProvider;
+window.authSignOut = authSignOut;
+
 /**
  * saveAllSettings function
  * @function saveAllSettings
@@ -590,6 +818,9 @@ function saveAllSettings() {
 
     localStorage.setItem('voyagr_all_settings', JSON.stringify(allSettings));
     console.log('[Settings] All settings saved to localStorage', allSettings);
+
+    // Persist this snapshot to the active profile store
+    persistActiveProfile();
 }
 
 /**
@@ -2571,6 +2802,7 @@ function saveCurrentRoute() {
     let savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
     savedRoutes.push(savedRoute);
     localStorage.setItem('savedRoutes', JSON.stringify(savedRoutes));
+    persistActiveProfile();
 
     document.getElementById('routeName').value = '';
     showStatus(`Route "${routeName}" saved!`, 'success');
@@ -2646,6 +2878,7 @@ function deleteSavedRoute(routeId) {
         let savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
         savedRoutes = savedRoutes.filter(r => r.id !== routeId);
         localStorage.setItem('savedRoutes', JSON.stringify(savedRoutes));
+        persistActiveProfile();
         showStatus('Route deleted', 'success');
         loadSavedRoutes();
     }
@@ -7943,6 +8176,8 @@ if (navigator.storage && navigator.storage.persist) {
 // ===== PHASE 2: Restore app state on page load =====
 window.addEventListener('load', () => {
     restoreAppState();
+    // Initialize account login (Supabase) + profile switching
+    initSupabaseAuth();
 });
 
 // ===== PHASE 3: Initialize battery monitoring =====

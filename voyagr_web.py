@@ -3643,6 +3643,8 @@ HTML_TEMPLATE = '''
     <link rel="stylesheet" href="/static/css/voyagr.css?v=20260109t" />
     <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
     <script src="/static/js/maplibre-helpers.js?v=20260117t"></script>
+    <!-- Supabase Auth (UMD build) -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <!-- Google Plus Codes Service -->
     <script src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
@@ -3891,6 +3893,54 @@ HTML_TEMPLATE = '''
                         <button onclick="goBackToPreviousTab()" style="background: #667eea; color: white; border: none; padding: 10px 20px; border-radius: 6px; cursor: pointer; font-weight: 500; font-size: 14px; display: flex; align-items: center; gap: 8px;">
                             ← Back
                         </button>
+                    </div>
+
+                    <!-- Account Section (Supabase) -->
+                    <div class="preferences-section" id="accountSection">
+                        <h3>👤 Account</h3>
+                        <div id="accountStatus" style="font-size: 12px; color: #666; margin-bottom: 10px;">
+                            Loading account status...
+                        </div>
+
+                        <div id="accountSignedOut" style="display: none;">
+                            <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px;">
+                                <input id="authEmail" type="email" placeholder="Email" autocomplete="email"
+                                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;" />
+                                <input id="authPassword" type="password" placeholder="Password" autocomplete="current-password"
+                                       style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;" />
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                                <button onclick="authSignInEmail()" style="padding: 10px; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                                    Sign in
+                                </button>
+                                <button onclick="authSignUpEmail()" style="padding: 10px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                                    Create account
+                                </button>
+                            </div>
+
+                            <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr; gap: 10px;">
+                                <button onclick="authSignInProvider('google')" style="padding: 10px; background: #fff; color: #333; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                                    Continue with Google
+                                </button>
+                            </div>
+                            <div style="font-size: 11px; color: #888; margin-top: 8px;">
+                                Tip: login lives here in Settings so it never interrupts navigation.
+                            </div>
+                        </div>
+
+                        <div id="accountSignedIn" style="display: none;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; gap: 10px;">
+                                <div style="font-size: 13px; color: #333;">
+                                    Signed in as <strong id="accountEmail">-</strong>
+                                </div>
+                                <button onclick="authSignOut()" style="padding: 8px 12px; background: #fff; color: #c62828; border: 1px solid #ffcdd2; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                                    Sign out
+                                </button>
+                            </div>
+                            <div style="margin-top: 10px; font-size: 11px; color: #666;">
+                                Your on-device (guest) profile can stay separate. On first sign-in, you can choose to import it into your account profile.
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Unit Preferences Section -->
