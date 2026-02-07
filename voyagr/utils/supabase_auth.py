@@ -4,7 +4,7 @@ Supabase JWT authentication utilities.
 Supabase access tokens are JWTs. Depending on project configuration / Supabase rollout,
 they may be signed with:
 - HS256 (shared JWT secret)
-- RS256 (asymmetric keys; verify via JWKS)
+- RS* / ES* / EdDSA (asymmetric keys; verify via JWKS)
 
 Environment variables:
 - SUPABASE_URL: Supabase project URL (used to derive issuer/JWKS for RS256)
@@ -53,7 +53,9 @@ def verify_supabase_jwt(token: str) -> Dict[str, Any]:
     header = jwt.get_unverified_header(token)
     alg = (header.get("alg") or "").strip()
     alg_upper = alg.upper()
-    allowed_algs = {"HS256", "RS256", "RS384", "RS512"}
+    # Supabase may use RSA (RS*), ECDSA (ES*), or HS256 depending on project settings.
+    # Keep this allowlist tight to avoid "alg=none" and other unsafe options.
+    allowed_algs = {"HS256", "RS256", "RS384", "RS512", "ES256", "ES384", "ES512", "EDDSA"}
     if alg_upper not in allowed_algs:
         raise RuntimeError(f"Unsupported JWT alg: {alg!r}")
 
@@ -64,8 +66,8 @@ def verify_supabase_jwt(token: str) -> Dict[str, Any]:
 
     options = {"require": ["exp", "iat", "sub"]}
 
-    # RS*: verify using JWKS from Supabase
-    if alg_upper.startswith("RS"):
+    # RS*/ES*/EdDSA: verify using JWKS from Supabase
+    if alg_upper.startswith(("RS", "ES")) or alg_upper == "EDDSA":
         if not supabase_url:
             raise RuntimeError(f"SUPABASE_URL is required for {alg_upper} verification")
 
