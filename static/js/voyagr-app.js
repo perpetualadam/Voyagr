@@ -5929,7 +5929,10 @@ function saveVoicePreferences() {
         turnDistance2: parseInt(document.getElementById('voiceTurnDistance2').value),
         turnDistance3: parseInt(document.getElementById('voiceTurnDistance3').value),
         hazardDistance: parseInt(document.getElementById('voiceHazardDistance').value),
-        announcementsEnabled: document.getElementById('voiceAnnouncementsEnabled').checked
+        // Voice announcements are controlled by the toggle button + global flag
+        announcementsEnabled: typeof voiceAnnouncementsEnabled === 'boolean'
+            ? voiceAnnouncementsEnabled
+            : (localStorage.getItem('voiceAnnouncementsEnabled') === 'true')
     };
     localStorage.setItem('voicePreferences', JSON.stringify(prefs));
 
@@ -5939,7 +5942,8 @@ function saveVoicePreferences() {
     DESTINATION_ANNOUNCEMENT_DISTANCES.length = 0;
     DESTINATION_ANNOUNCEMENT_DISTANCES.push(10000, 5000, 2000, 1000, 500, 100);
     HAZARD_WARNING_DISTANCE = prefs.hazardDistance;
-    voiceRecognition = prefs.announcementsEnabled;
+    // FIX: announcements are a boolean flag, not the SpeechRecognition instance
+    voiceAnnouncementsEnabled = prefs.announcementsEnabled;
 
     console.log('[Voice] Preferences saved:', prefs);
     showStatus('✅ Voice preferences updated', 'success');
@@ -5989,7 +5993,7 @@ function loadVoicePreferences() {
                 toggleButton.classList.add('active');
                 toggleButton.style.background = '#4CAF50';
                 toggleButton.style.borderColor = '#4CAF50';
-                voiceRecognition = true;
+                voiceAnnouncementsEnabled = true;
             }
             console.log('[Voice] No saved preferences, using defaults');
         }
@@ -10707,7 +10711,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 // Hazard announcement debouncing
 const hazardAnnouncementDebounce = {}; // Track last announcement time per hazard type
 const HAZARD_ANNOUNCEMENT_DEBOUNCE_MS = 30000; // Wait 30 seconds between announcements for same hazard type
-const HAZARD_WARNING_DISTANCE = 500; // meters
+let HAZARD_WARNING_DISTANCE = 500; // meters
 /**
  * checkNearbyHazards function
  * @function checkNearbyHazards
