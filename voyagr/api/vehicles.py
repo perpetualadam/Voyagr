@@ -10,7 +10,7 @@ from flask import Blueprint, jsonify, request
 
 from voyagr.config import CAZ_PASS_TYPES
 from voyagr.models import get_db_connection, return_db_connection
-from voyagr.utils import validate_vehicle_type, rate_limit
+from voyagr.utils import normalize_vehicle_type, validate_vehicle_type, rate_limit
 
 vehicles_bp = Blueprint('vehicles', __name__)
 
@@ -59,6 +59,7 @@ def manage_vehicles():
                 return jsonify({'success': False, 'error': 'Vehicle name must be 1-100 characters'}), 400
 
             vehicle_type = data.get('vehicle_type', 'petrol_diesel')
+            vehicle_type = normalize_vehicle_type(vehicle_type)
             if not validate_vehicle_type(vehicle_type):
                 return jsonify({'success': False, 'error': f'Invalid vehicle_type: {vehicle_type}'}), 400
 

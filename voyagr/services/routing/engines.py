@@ -231,7 +231,13 @@ def route_with_graphhopper(
     try:
         url = f"{GRAPHHOPPER_URL}/route"
 
-        payload = {
+        headers = {
+            'User-Agent': 'Voyagr-PWA/1.0',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+
+        payload: Dict[str, Any] = {
             "points": [[start_lon, start_lat], [end_lon, end_lat]],
             "profile": "car",
             "locale": "en",
@@ -240,21 +246,50 @@ def route_with_graphhopper(
             "elevation": False
         }
 
+        custom_model: Optional[Dict[str, Any]] = None
         if enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
             custom_model = build_graphhopper_camera_avoidance_model(route_bbox)
             if custom_model:
                 payload["custom_model"] = custom_model
-                payload["ch.disable"] = True
                 logger.info("[GRAPHHOPPER] Using camera avoidance custom model")
 
-        headers = {
-            'User-Agent': 'Voyagr-PWA/1.0',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
-
         logger.info(f"[GRAPHHOPPER] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
-        response = requests.post(url, json=payload, timeout=GRAPHHOPPER_TIMEOUT, headers=headers)
+
+        response: Optional[requests.Response] = None
+        if custom_model:
+            response = requests.post(
+                url,
+                params={"ch.disable": "true"},
+                json=payload,
+                timeout=GRAPHHOPPER_TIMEOUT,
+                headers=headers,
+            )
+            if response.status_code != 200:
+                logger.warning(f"[GRAPHHOPPER] POST(custom_model) failed (HTTP {response.status_code}); retrying GET(no custom_model)")
+                response = None
+
+        if response is None:
+            params_point = {
+                "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
+                "profile": "car",
+                "locale": "en",
+                "instructions": "true",
+                "points_encoded": "true",
+                "elevation": "false",
+            }
+            response = requests.get(url, params=params_point, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
+
+            # Some deployments use `points` instead of `point` (historical / custom setups).
+            if response.status_code != 200:
+                params_points = dict(params_point)
+                params_points.pop("point", None)
+                params_points["points"] = [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"]
+                response = requests.get(url, params=params_points, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
+            if response.status_code != 200:
+                logger.warning(f"[GRAPHHOPPER] GET failed (HTTP {response.status_code}); retrying POST(no custom_model)")
+                payload_no_model = dict(payload)
+                payload_no_model.pop("custom_model", None)
+                response = requests.post(url, json=payload_no_model, timeout=GRAPHHOPPER_TIMEOUT, headers=headers)
 
         if response.status_code == 200:
             data = response.json()

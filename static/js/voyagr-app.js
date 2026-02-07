@@ -1633,7 +1633,10 @@ function displayAllRoutesOnMap() {
         const route = routeOptions[i];
         if ((!route.polyline || route.polyline.length === 0) && route.geometry) {
             const source = (route.source || '').toLowerCase();
-            const precision = source.includes('osrm') ? 5 : 6;
+            const precision =
+                Number.isFinite(route.geometry_precision)
+                    ? route.geometry_precision
+                    : (source.includes('osrm') ? 5 : 6);
             route.polyline = decodePolyline(route.geometry, precision);
         }
     }
@@ -3451,8 +3454,12 @@ async function calculateRoute() {
                     // If we have geometry from the routing service, use it
                     if (data.geometry) {
                         try {
-                            // Decode polyline geometry - OSRM uses precision 5, Valhalla uses precision 6
-                            const precision = (data.source || '').toLowerCase().includes('osrm') ? 5 : 6;
+                            // Decode polyline geometry (precision is provided by API when available)
+                            const sourceLower = (data.source || '').toLowerCase();
+                            const precision =
+                                Number.isFinite(data.geometry_precision)
+                                    ? data.geometry_precision
+                                    : (sourceLower.includes('osrm') ? 5 : 6);
                             routePath = decodePolyline(data.geometry, precision);
                             console.log(`Route path decoded: ${routePath.length} points with precision ${precision} (source: ${data.source})`);
 
@@ -3536,9 +3543,12 @@ async function calculateRoute() {
                     if (data.routes && data.routes.length > 0) {
                         // Real routes from routing engine - include source from response
                         const routeSource = data.source || 'Unknown';
-                        // OSRM uses precision 5, Valhalla uses precision 6
-                        const polylinePrecision = routeSource.toLowerCase().includes('osrm') ? 5 : 6;
-                        console.log(`[Route API] Received ${data.routes.length} routes from ${routeSource}, using polyline precision ${polylinePrecision}`);
+                        const routeSourceLower = routeSource.toLowerCase();
+                        const defaultPrecision =
+                            Number.isFinite(data.geometry_precision)
+                                ? data.geometry_precision
+                                : (routeSourceLower.includes('osrm') ? 5 : 6);
+                        console.log(`[Route API] Received ${data.routes.length} routes from ${routeSource}, default polyline precision ${defaultPrecision}`);
                         routeOptions = data.routes.map(route => ({
                             id: route.id,
                             name: route.name,
@@ -3549,11 +3559,12 @@ async function calculateRoute() {
                             toll_cost: route.toll_cost,
                             caz_cost: route.caz_cost,
                             hazard_count: route.hazard_count || 0,
-                            polyline: decodePolyline(route.geometry || '', polylinePrecision),
+                            geometry_precision: Number.isFinite(route.geometry_precision) ? route.geometry_precision : defaultPrecision,
+                            polyline: decodePolyline(route.geometry || '', Number.isFinite(route.geometry_precision) ? route.geometry_precision : defaultPrecision),
                             geometry: route.geometry,
                             hazards: route.hazards || [],
                             maneuvers: route.maneuvers || [],  // FIXED: Include maneuvers for turn-by-turn navigation
-                            source: routeSource  // Include routing engine source in each route
+                            source: route.source || routeSource  // Prefer per-route source if provided
                         }));
                         console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}:`, routeOptions.map(r => r.name));
                     } else {
@@ -5816,7 +5827,11 @@ function overviewRoute() {
 
     try {
         // Decode the route geometry to get the path
-        const precision = (window.lastCalculatedRoute.source || '').toLowerCase().includes('osrm') ? 5 : 6;
+        const sourceLower = (window.lastCalculatedRoute.source || '').toLowerCase();
+        const precision =
+            Number.isFinite(window.lastCalculatedRoute.geometry_precision)
+                ? window.lastCalculatedRoute.geometry_precision
+                : (sourceLower.includes('osrm') ? 5 : 6);
         const routePath = decodePolyline(window.lastCalculatedRoute.geometry, precision);
 
         if (!routePath || routePath.length === 0) {

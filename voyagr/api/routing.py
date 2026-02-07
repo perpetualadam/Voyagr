@@ -55,6 +55,7 @@ def test_routing_engines():
     # Get environment info
     results['environment'] = {
         'valhalla_url': VALHALLA_URL,
+        'graphhopper_url': GRAPHHOPPER_URL,
         'deployment': 'Railway.app' if 'railway' in os.getenv('HOSTNAME', '').lower() else 'Local/Other'
     }
 
@@ -92,6 +93,39 @@ def test_routing_engines():
             'error_type': type(e).__name__
         }
 
+    # Test GraphHopper (self-hosted)
+    try:
+        gh_url = f"{GRAPHHOPPER_URL}/route"
+        headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'}
+
+        params_point = {
+            "point": ["51.5074,-0.1278", "51.5174,-0.1278"],
+            "profile": "car",
+        }
+        response = requests.get(gh_url, params=params_point, timeout=5, headers=headers)
+
+        # Some deployments use `points` instead of `point`.
+        if response.status_code != 200:
+            params_points = {
+                "points": ["51.5074,-0.1278", "51.5174,-0.1278"],
+                "profile": "car",
+            }
+            response = requests.get(gh_url, params=params_points, timeout=5, headers=headers)
+
+        results['graphhopper'] = {
+            'status': 'OK' if response.status_code == 200 else f'HTTP {response.status_code}',
+            'url': GRAPHHOPPER_URL,
+            'accessible': response.status_code == 200,
+            'response_time_ms': response.elapsed.total_seconds() * 1000,
+        }
+    except Exception as e:
+        results['graphhopper'] = {
+            'status': f'Error: {str(e)}',
+            'url': GRAPHHOPPER_URL,
+            'accessible': False,
+            'error_type': type(e).__name__
+        }
+
     return jsonify(results)
 
 
@@ -122,6 +156,7 @@ def debug_route():
             },
             'routing_engines': {
                 'valhalla': {'url': VALHALLA_URL, 'status': 'testing...'},
+                'graphhopper': {'url': GRAPHHOPPER_URL, 'status': 'testing...'},
                 'osrm': {'url': 'http://router.project-osrm.org', 'status': 'testing...'}
             },
             'errors': []
@@ -161,6 +196,35 @@ def debug_route():
         except Exception as e:
             debug_info['routing_engines']['osrm']['error'] = str(e)
             debug_info['errors'].append(f"OSRM: {str(e)}")
+
+        # Test GraphHopper
+        try:
+            gh_url = f"{GRAPHHOPPER_URL}/route"
+            headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'}
+
+            params_point = {
+                "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
+                "profile": "car",
+            }
+            response = requests.get(gh_url, params=params_point, timeout=10, headers=headers)
+
+            # Some deployments use `points` instead of `point`.
+            if response.status_code != 200:
+                params_points = {
+                    "points": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
+                    "profile": "car",
+                }
+                response = requests.get(gh_url, params=params_points, timeout=10, headers=headers)
+
+            debug_info['routing_engines']['graphhopper']['status'] = f'HTTP {response.status_code}'
+            debug_info['routing_engines']['graphhopper']['response_time_ms'] = response.elapsed.total_seconds() * 1000
+            if response.status_code == 200:
+                debug_info['routing_engines']['graphhopper']['success'] = True
+            else:
+                debug_info['routing_engines']['graphhopper']['error'] = response.text[:200]
+        except Exception as e:
+            debug_info['routing_engines']['graphhopper']['error'] = str(e)
+            debug_info['errors'].append(f"GraphHopper: {str(e)}")
 
         return jsonify(debug_info)
     except Exception as e:

@@ -8,6 +8,31 @@ from typing import Any, Dict, List, Optional, Tuple
 
 logger = logging.getLogger('voyagr_web')
 
+def normalize_vehicle_type(vehicle_type: Any) -> str:
+    """
+    Normalize vehicle type values coming from clients.
+
+    Canonical internal values:
+    - petrol_diesel
+    - electric
+    - hybrid
+    - pedestrian
+    - bicycle
+    """
+    if vehicle_type is None:
+        return 'petrol_diesel'
+
+    vt = str(vehicle_type).strip().lower()
+    aliases = {
+        'petrol': 'petrol_diesel',
+        'diesel': 'petrol_diesel',
+        'gas': 'petrol_diesel',
+        'gasoline': 'petrol_diesel',
+        'ice': 'petrol_diesel',
+        'car': 'petrol_diesel',
+    }
+    return aliases.get(vt, vt)
+
 
 def sanitize_string(value: str, max_length: int = 500) -> Optional[str]:
     """
@@ -58,8 +83,9 @@ def validate_vehicle_type(vehicle_type: str) -> bool:
     Note: 'pedestrian' and 'bicycle' are valid when routing_mode matches,
     as they represent the travel mode rather than actual vehicle types.
     """
+    vt = normalize_vehicle_type(vehicle_type)
     valid_types: List[str] = ['petrol_diesel', 'electric', 'hybrid', 'pedestrian', 'bicycle']
-    return vehicle_type in valid_types
+    return vt in valid_types
 
 
 def validate_route_request(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
@@ -95,9 +121,15 @@ def validate_route_request(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     if not validate_routing_mode(routing_mode):
         return False, f"Invalid routing_mode: {routing_mode}"
 
-    vehicle_type = data.get('vehicle_type', 'petrol_diesel')
+    vehicle_type_raw = data.get('vehicle_type', 'petrol_diesel')
+    vehicle_type = normalize_vehicle_type(vehicle_type_raw)
+    # Mutate request data so downstream code sees canonical type.
+    try:
+        data['vehicle_type'] = vehicle_type
+    except Exception:
+        pass
     if not validate_vehicle_type(vehicle_type):
-        return False, f"Invalid vehicle_type: {vehicle_type}"
+        return False, f"Invalid vehicle_type: {vehicle_type_raw}"
 
     return True, None
 

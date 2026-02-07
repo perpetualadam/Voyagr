@@ -8,7 +8,7 @@ Group=root
 WorkingDirectory=/opt/voyagr
 Environment="PATH=/opt/voyagr/venv/bin"
 Environment="FLASK_ENV=production"
-Environment="VALHALLA_URL=http://141.147.102.102:8002"
+Environment="VALHALLA_URL=http://localhost:8002"
 Environment="GRAPHHOPPER_URL=http://localhost:8989"
 ExecStart=/opt/voyagr/venv/bin/gunicorn --workers 2 --threads 4 --bind 127.0.0.1:5000 --timeout 120 voyagr_web:app
 Restart=always

@@ -307,14 +307,42 @@ def validate_routing_mode(mode: str) -> bool:
     valid_modes: List[str] = ['auto', 'pedestrian', 'bicycle']
     return mode in valid_modes
 
+def normalize_vehicle_type(vehicle_type: Any) -> str:
+    """
+    Normalize vehicle type values coming from clients.
+
+    Canonical internal values:
+    - petrol_diesel
+    - electric
+    - hybrid
+    - pedestrian
+    - bicycle
+    """
+    if vehicle_type is None:
+        return 'petrol_diesel'
+
+    vt = str(vehicle_type).strip().lower()
+    aliases = {
+        # Common client values
+        'petrol': 'petrol_diesel',
+        'diesel': 'petrol_diesel',
+        'gas': 'petrol_diesel',
+        'gasoline': 'petrol_diesel',
+        'ice': 'petrol_diesel',
+        # Some UIs might send generic values
+        'car': 'petrol_diesel',
+    }
+    return aliases.get(vt, vt)
+
 def validate_vehicle_type(vehicle_type: str) -> bool:
     """Validate vehicle type.
 
     Note: 'pedestrian' and 'bicycle' are valid when routing_mode matches,
     as they represent the travel mode rather than actual vehicle types.
     """
+    vt = normalize_vehicle_type(vehicle_type)
     valid_types: List[str] = ['petrol_diesel', 'electric', 'hybrid', 'pedestrian', 'bicycle']
-    return vehicle_type in valid_types
+    return vt in valid_types
 
 def validate_route_request(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     """
@@ -349,9 +377,15 @@ def validate_route_request(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     if not validate_routing_mode(routing_mode):
         return False, f"Invalid routing_mode: {routing_mode}"
 
-    vehicle_type = data.get('vehicle_type', 'petrol_diesel')
+    vehicle_type_raw = data.get('vehicle_type', 'petrol_diesel')
+    vehicle_type = normalize_vehicle_type(vehicle_type_raw)
+    # Mutate request data so downstream code sees canonical type.
+    try:
+        data['vehicle_type'] = vehicle_type
+    except Exception:
+        pass
     if not validate_vehicle_type(vehicle_type):
-        return False, f"Invalid vehicle_type: {vehicle_type}"
+        return False, f"Invalid vehicle_type: {vehicle_type_raw}"
 
     # Validate numeric fields
     try:
@@ -2682,8 +2716,14 @@ def route_with_graphhopper(
     try:
         url = f"{GRAPHHOPPER_URL}/route"
 
-        # Build request payload
-        payload = {
+        headers = {
+            'User-Agent': 'Voyagr-PWA/1.0',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+
+        # Build request payload (used for POST + custom_model flows)
+        payload: Dict[str, Any] = {
             "points": [[start_lon, start_lat], [end_lon, end_lat]],  # GraphHopper uses [lon, lat]
             "profile": "car",
             "locale": "en",
@@ -2692,22 +2732,58 @@ def route_with_graphhopper(
             "elevation": False
         }
 
-        # Add custom model for camera avoidance
+        custom_model: Optional[Dict[str, Any]] = None
         if enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
             custom_model = build_graphhopper_camera_avoidance_model(route_bbox)
             if custom_model:
                 payload["custom_model"] = custom_model
-                payload["ch.disable"] = True  # Must disable CH for custom model
-                logger.info(f"[GRAPHHOPPER] Using camera avoidance custom model")
-
-        headers = {
-            'User-Agent': 'Voyagr-PWA/1.0',
-            'Content-Type': 'application/json',
-            'Accept': 'application/json'
-        }
+                logger.info("[GRAPHHOPPER] Using camera avoidance custom model")
 
         logger.info(f"[GRAPHHOPPER] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
-        response = requests.post(url, json=payload, timeout=GRAPHHOPPER_TIMEOUT, headers=headers)
+
+        # GraphHopper deployments vary:
+        # - Many self-hosted instances support GET /route with query params.
+        # - Custom models generally require POST with JSON + ch.disable=true.
+        response: Optional[requests.Response] = None
+
+        if custom_model:
+            # Custom model + CH disable must be sent as a query param.
+            response = requests.post(
+                url,
+                params={"ch.disable": "true"},
+                json=payload,
+                timeout=GRAPHHOPPER_TIMEOUT,
+                headers=headers,
+            )
+            if response.status_code != 200:
+                logger.warning(f"[GRAPHHOPPER] POST(custom_model) failed (HTTP {response.status_code}); retrying GET(no custom_model)")
+                response = None
+
+        if response is None:
+            # Prefer GET for broad compatibility.
+            params_point = {
+                "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
+                "profile": "car",
+                "locale": "en",
+                "instructions": "true",
+                "points_encoded": "true",
+                "elevation": "false",
+            }
+            response = requests.get(url, params=params_point, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
+
+            # Some deployments use `points` instead of `point` (historical / custom setups).
+            if response.status_code != 200:
+                params_points = dict(params_point)
+                params_points.pop("point", None)
+                params_points["points"] = [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"]
+                response = requests.get(url, params=params_points, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
+
+            # If GET fails, try POST without a custom model (some deployments accept JSON POST only).
+            if response.status_code != 200:
+                logger.warning(f"[GRAPHHOPPER] GET failed (HTTP {response.status_code}); retrying POST(no custom_model)")
+                payload_no_model = dict(payload)
+                payload_no_model.pop("custom_model", None)
+                response = requests.post(url, json=payload_no_model, timeout=GRAPHHOPPER_TIMEOUT, headers=headers)
 
         if response.status_code == 200:
             data = response.json()
@@ -6317,10 +6393,12 @@ def calculate_route():
                         'caz_cost': round(caz_cost, 2),
                         'caz_details': caz_details,
                         'geometry': route_geometry,
+                        'geometry_precision': 6,
                         'hazard_penalty_seconds': round(hazard_penalty, 0),
                         'hazard_count': hazard_count,
                         'hazards': hazards_list,
-                        'maneuvers': maneuvers
+                        'maneuvers': maneuvers,
+                        'source': 'Valhalla',
                     })
 
                     # Alternative routes (if available) - Valhalla uses 'alternates' not 'alternatives'
@@ -6394,10 +6472,12 @@ def calculate_route():
                                     'toll_cost': round(alt_toll_cost, 2),
                                     'caz_cost': round(alt_caz_cost, 2),
                                     'geometry': alt_geometry,
+                                    'geometry_precision': 6,
                                     'hazard_penalty_seconds': round(alt_hazard_penalty, 0),
                                     'hazard_count': alt_hazard_count,
                                     'hazards': alt_hazards_list,
-                                    'maneuvers': alt_maneuvers
+                                    'maneuvers': alt_maneuvers,
+                                    'source': 'Valhalla',
                                 })
 
                     # ================================================================
@@ -6459,10 +6539,12 @@ def calculate_route():
                                 'toll_cost': round(costs['toll_cost'], 2),
                                 'caz_cost': round(costs['caz_cost'], 2),
                                 'geometry': geometry,
+                                'geometry_precision': 6,
                                 'hazard_penalty_seconds': round(penalty, 0),
                                 'hazard_count': haz_count,
                                 'hazards': hazards_list,
-                                'maneuvers': route_maneuvers
+                                'maneuvers': route_maneuvers,
+                                'source': 'Valhalla',
                             }
 
                         next_route_id = len(routes) + 1
@@ -6602,6 +6684,7 @@ def calculate_route():
                                     'toll_cost': round(gh_costs['toll_cost'], 2),
                                     'caz_cost': round(gh_costs['caz_cost'], 2),
                                     'geometry': gh_geometry_p6,
+                                    'geometry_precision': 6,
                                     'hazard_penalty_seconds': round(gh_hazard_penalty, 0),
                                     'hazard_count': gh_hazard_count,
                                     'hazards': gh_hazards_list,
@@ -6662,6 +6745,7 @@ def calculate_route():
                         'via_points_count': len(via_points),
                         'stops_count': len(stops),
                         'geometry': routes[0]['geometry'],
+                        'geometry_precision': routes[0].get('geometry_precision', 6),
                         'fuel_cost': routes[0]['fuel_cost'],
                         'fuel_litres': routes[0].get('fuel_litres', 0),
                         'toll_cost': routes[0]['toll_cost'],
@@ -6831,10 +6915,12 @@ def calculate_route():
                                     'toll_cost': round(toll_cost, 2),
                                     'caz_cost': round(caz_cost, 2),
                                     'geometry': route_geometry,
+                                    'geometry_precision': 6,
                                     'hazard_penalty_seconds': round(hazard_penalty, 0),
                                     'hazard_count': hazard_count,
                                     'hazards': hazards_list,
-                                    'maneuvers': retry_maneuvers
+                                    'maneuvers': retry_maneuvers,
+                                    'source': 'Valhalla',
                                 })
 
                                 # Also request Shortest route with same reduced exclusions
@@ -6886,10 +6972,12 @@ def calculate_route():
                                                 'toll_cost': round(sh_costs['toll_cost'], 2),
                                                 'caz_cost': round(sh_costs['caz_cost'], 2),
                                                 'geometry': sh_geom,
+                                                'geometry_precision': 6,
                                                 'hazard_penalty_seconds': round(sh_hazard_penalty, 0),
                                                 'hazard_count': sh_hazard_count,
                                                 'hazards': sh_hazards_list,
-                                                'maneuvers': sh_maneuvers
+                                                'maneuvers': sh_maneuvers,
+                                                'source': 'Valhalla',
                                             })
                                             logger.info(f"[VALHALLA] Retry: Added Shortest route: {sh_dist:.1f}km")
                                 except Exception as e:
@@ -6909,6 +6997,7 @@ def calculate_route():
                                     'distance': f'{routes[0]["distance_km"]:.2f} km',
                                     'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
                                     'geometry': routes[0]['geometry'],
+                                    'geometry_precision': routes[0].get('geometry_precision', 6),
                                     'fuel_cost': routes[0]['fuel_cost'],
                                     'fuel_litres': routes[0].get('fuel_litres', 0),
                                     'toll_cost': routes[0]['toll_cost'],
@@ -7031,9 +7120,11 @@ def calculate_route():
                                 'toll_cost': round(toll_cost, 2),
                                 'caz_cost': round(caz_cost, 2),
                                 'geometry': route_geometry,
+                                'geometry_precision': 5,
                                 'hazard_penalty_seconds': round(hazard_penalty, 0),
                                 'hazard_count': hazard_count,
-                                'hazards': hazards_list
+                                'hazards': hazards_list,
+                                'source': 'OSRM',
                             })
 
                         print(f"[OSRM] SUCCESS: {len(routes)} routes found")
@@ -7062,6 +7153,7 @@ def calculate_route():
                             'distance': f'{routes[0]["distance_km"]:.2f} km',
                             'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
                             'geometry': routes[0]['geometry'],
+                            'geometry_precision': routes[0].get('geometry_precision', 5),
                             'fuel_cost': routes[0]['fuel_cost'],
                             'fuel_litres': routes[0].get('fuel_litres', 0),
                             'toll_cost': routes[0]['toll_cost'],

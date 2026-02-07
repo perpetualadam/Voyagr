@@ -12,6 +12,7 @@ from voyagr.utils.validation import (
     sanitize_string,
     validate_coordinates,
     validate_routing_mode,
+    normalize_vehicle_type,
     validate_vehicle_type,
     validate_route_request,
 )
@@ -36,6 +37,7 @@ __all__ = [
     'sanitize_string',
     'validate_coordinates',
     'validate_routing_mode',
+    'normalize_vehicle_type',
     'validate_vehicle_type',
     'validate_route_request',
     # Geometry
