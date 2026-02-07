@@ -478,10 +478,26 @@ function add3DBuildings(mapInstance, options = {}) {
             // Some tiles can contain null heights (or string heights), which otherwise trigger:
             // "Expected value to be of type number, but found null instead."
             //
-            // IMPORTANT: Some MapLibre builds will throw if `to-number` receives `null`.
-            // So we coalesce to a guaranteed numeric fallback (0) *before* converting.
-            const heightExpr = ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height'], 0]];
-            const baseExpr = ['to-number', ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0]];
+            // IMPORTANT: Some MapLibre builds will still yield null if `to-number` receives
+            // non-numeric strings (e.g. ""), and then comparisons like ['>', expr, 0] throw.
+            // So we normalize raw values and also provide a fallback to to-number.
+            const heightRaw = ['coalesce', ['get', 'render_height'], ['get', 'height'], 0];
+            const heightNorm = [
+                'case',
+                ['any', ['==', heightRaw, ''], ['==', heightRaw, 'null'], ['==', heightRaw, 'None']],
+                0,
+                heightRaw
+            ];
+            const baseRaw = ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0];
+            const baseNorm = [
+                'case',
+                ['any', ['==', baseRaw, ''], ['==', baseRaw, 'null'], ['==', baseRaw, 'None']],
+                0,
+                baseRaw
+            ];
+
+            const heightExpr = ['to-number', heightNorm, 0];
+            const baseExpr = ['to-number', baseNorm, 0];
             mapInstance.addLayer(
                 {
                     'id': '3d-buildings',
@@ -578,7 +594,14 @@ function toggle3DBuildings(mapInstance, visible) {
 function set3DBuildingHeight(mapInstance, multiplier) {
     if (!mapInstance || !mapInstance.getLayer('3d-buildings')) return;
     try {
-        const heightExpr = ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height'], 0]];
+        const heightRaw = ['coalesce', ['get', 'render_height'], ['get', 'height'], 0];
+        const heightNorm = [
+            'case',
+            ['any', ['==', heightRaw, ''], ['==', heightRaw, 'null'], ['==', heightRaw, 'None']],
+            0,
+            heightRaw
+        ];
+        const heightExpr = ['to-number', heightNorm, 0];
         mapInstance.setPaintProperty('3d-buildings', 'fill-extrusion-height', [
             'interpolate',
             ['linear'],
