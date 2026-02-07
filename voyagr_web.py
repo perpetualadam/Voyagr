@@ -6565,9 +6565,13 @@ def calculate_route():
                                     'source': 'GraphHopper'
                                 }
 
+                                # Remove any existing Valhalla "Optimised" route to avoid duplicates
+                                # GraphHopper's camera avoidance is superior (uses pre-loaded area polygons)
+                                routes = [r for r in routes if 'Optimised' not in r.get('name', '')]
+
                                 # Insert at the beginning as the optimised option
                                 routes.insert(0, gh_route_entry)
-                                logger.info(f"[GRAPHHOPPER] Added Optimised route: {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
+                                logger.info(f"[GRAPHHOPPER] Added Optimised route (replaced Valhalla Optimised): {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
                         except Exception as e:
                             logger.warning(f"[GRAPHHOPPER] Failed to add GraphHopper route: {e}")
 
