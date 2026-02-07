@@ -3180,6 +3180,7 @@ async function calculateRoute() {
                             distance_km: route.distance_km,
                             duration_minutes: route.duration_minutes,
                             fuel_cost: route.fuel_cost,
+                            fuel_litres: route.fuel_litres || 0,
                             toll_cost: route.toll_cost,
                             caz_cost: route.caz_cost,
                             hazard_count: route.hazard_count || 0,
@@ -3199,6 +3200,7 @@ async function calculateRoute() {
                                 distance_km: parseFloat(data.distance) || 0,
                                 duration_minutes: parseInt(data.time) || 0,
                                 fuel_cost: data.fuel_cost || 0,
+                                fuel_litres: data.fuel_litres || 0,
                                 toll_cost: data.toll_cost || 0,
                                 caz_cost: data.caz_cost || 0,
                                 hazard_count: 0,
@@ -5098,11 +5100,24 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     // They should NOT be adjusted based on distance unit preference (km vs miles)
     // The distance unit is just for display - the actual cost is the same regardless
     const fuelCost = parseFloat(routeData.fuel_cost || 0);
+    const fuelLitres = parseFloat(routeData.fuel_litres || 0);
     const tollCost = parseFloat(routeData.toll_cost || 0);
     const cazCost = parseFloat(routeData.caz_cost || 0);
     const totalCost = fuelCost + tollCost + cazCost;
 
     document.getElementById('previewFuelCost').textContent = symbol + fuelCost.toFixed(2);
+    // Show fuel amount - litres for petrol/diesel/hybrid, kWh for electric
+    const fuelLitresEl = document.getElementById('previewFuelLitres');
+    if (fuelLitresEl) {
+        if (fuelLitres > 0) {
+            const isElectric = currentVehicleType === 'electric';
+            const fuelUnit = isElectric ? 'kWh' : 'L';
+            fuelLitresEl.textContent = fuelLitres.toFixed(1) + ' ' + fuelUnit;
+            fuelLitresEl.style.display = 'block';
+        } else {
+            fuelLitresEl.style.display = 'none';
+        }
+    }
     document.getElementById('previewTollCost').textContent = symbol + tollCost.toFixed(2);
     document.getElementById('previewCAZCost').textContent = symbol + cazCost.toFixed(2);
     document.getElementById('previewTotalCost').textContent = symbol + totalCost.toFixed(2);
@@ -5243,7 +5258,7 @@ function showAlternativeRoutesInPreview() {
                 <span style="background: ${hazardColor}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">📷 ${hazardCount}</span>
             </div>
             <div style="font-size: 12px; color: #666;">
-                ⏱️ ${route.duration_minutes} min | 📏 ${convertDistance(route.distance_km)} ${distUnit} | 💰 ${symbol}${totalCost}
+                ⏱️ ${route.duration_minutes} min | 📏 ${convertDistance(route.distance_km)} ${distUnit} | ⛽ ${parseFloat(route.fuel_litres || 0).toFixed(1)} ${currentVehicleType === 'electric' ? 'kWh' : 'L'} | 💰 ${symbol}${totalCost}
             </div>
         `;
         div.onmouseover = () => { div.style.borderColor = routeColor; div.style.background = '#f0f4ff'; };

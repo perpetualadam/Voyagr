@@ -399,7 +399,7 @@ logger.info(f"[ROUTING] Valhalla: {VALHALLA_URL}, GraphHopper: {GRAPHHOPPER_URL}
 # GraphHopper with pre-loaded camera areas for camera avoidance
 # Priority: GraphHopper (if camera avoidance enabled) → Valhalla → OSRM
 USE_GRAPHHOPPER_CAMERA_AVOIDANCE = os.getenv('USE_GRAPHHOPPER_CAMERA_AVOIDANCE', 'true').lower() == 'true'
-GRAPHHOPPER_CAMERA_AREAS_COUNT = int(os.getenv('GRAPHHOPPER_CAMERA_AREAS_COUNT', '137'))  # Number of camera_area_N features (UK only)
+GRAPHHOPPER_CAMERA_AREAS_COUNT = int(os.getenv('GRAPHHOPPER_CAMERA_AREAS_COUNT', '128'))  # Number of camera_area_N features (UK only)
 GRAPHHOPPER_TIMEOUT = int(os.getenv('GRAPHHOPPER_TIMEOUT', '30'))  # Increased timeout for long routes
 
 # Load camera areas from geojson file for bbox filtering
@@ -1324,11 +1324,14 @@ class CostCalculator:
         toll_cost: float = 0.0
         caz_cost: float = 0.0
 
-        # Calculate fuel/energy cost
+        # Calculate fuel/energy amount and cost
+        fuel_litres: float = 0.0  # litres for petrol/diesel/hybrid, kWh for electric
         if vehicle_type == 'electric':
-            fuel_cost = (distance_km / 100) * energy_efficiency * electricity_price
+            fuel_litres = (distance_km / 100) * energy_efficiency  # kWh
+            fuel_cost = fuel_litres * electricity_price
         else:
-            fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
+            fuel_litres = (distance_km / 100) * fuel_efficiency  # litres
+            fuel_cost = fuel_litres * fuel_price
 
         # Calculate toll cost - ONLY if route passes through known toll roads
         # Pass route coordinates to enable location-based toll detection
@@ -1343,6 +1346,7 @@ class CostCalculator:
 
         return {
             'fuel_cost': round(fuel_cost, 2),
+            'fuel_litres': round(fuel_litres, 2),  # litres (petrol/diesel) or kWh (electric)
             'toll_cost': round(toll_cost, 2),
             'caz_cost': round(caz_cost, 2),
             'caz_details': caz_details,
@@ -4567,6 +4571,7 @@ HTML_TEMPLATE = '''
                                 <div>
                                     <div style="color: #666; margin-bottom: 4px;">⛽ Fuel</div>
                                     <div style="font-weight: bold; color: #333;" id="previewFuelCost">-</div>
+                                    <div style="color: #888; font-size: 11px; margin-top: 2px;" id="previewFuelLitres">-</div>
                                 </div>
                                 <div>
                                     <div style="color: #666; margin-bottom: 4px;">🛣️ Tolls</div>
@@ -5792,6 +5797,7 @@ def calculate_route():
                                 'duration_minutes': round(duration_sec / 60, 0),
                                 'geometry': geometry,
                                 'fuel_cost': costs['fuel_cost'],
+                                'fuel_litres': costs['fuel_litres'],
                                 'toll_cost': costs['toll_cost'],
                                 'caz_cost': costs['caz_cost'],
                                 'hazard_penalty_seconds': penalty,
@@ -6036,6 +6042,7 @@ def calculate_route():
                         )
 
                         fuel_cost = costs['fuel_cost']
+                        fuel_litres = costs['fuel_litres']
                         toll_cost = costs['toll_cost']
                         caz_cost = costs['caz_cost']
                         energy_cost = fuel_cost if vehicle_type == 'electric' else 0.0
@@ -6054,6 +6061,7 @@ def calculate_route():
                             'duration_minutes': total_duration / 60,
                             'geometry': combined_geometry,
                             'fuel_cost': fuel_cost,
+                            'fuel_litres': fuel_litres,
                             'toll_cost': toll_cost,
                             'caz_cost': caz_cost,
                             'energy_cost': energy_cost,
@@ -6084,6 +6092,7 @@ def calculate_route():
                             'distance': f'{total_distance:.2f} km',
                             'time': f'{int(total_duration // 60)} min',
                             'fuel_cost': fuel_cost,
+                            'fuel_litres': fuel_litres,
                             'toll_cost': toll_cost,
                             'caz_cost': caz_cost,
                             'energy_cost': energy_cost,
@@ -6216,6 +6225,7 @@ def calculate_route():
                         route_coords=route_coords
                     )
                     fuel_cost = costs['fuel_cost']
+                    fuel_litres = costs['fuel_litres']
                     toll_cost = costs['toll_cost']
                     caz_cost = costs['caz_cost']
                     caz_details = costs.get('caz_details', {})
@@ -6258,6 +6268,7 @@ def calculate_route():
                         'traffic_multiplier': round(traffic_multiplier, 2),
                         'traffic_level': traffic_level,
                         'fuel_cost': round(fuel_cost, 2),
+                        'fuel_litres': round(fuel_litres, 2),
                         'toll_cost': round(toll_cost, 2),
                         'caz_cost': round(caz_cost, 2),
                         'caz_details': caz_details,
@@ -6315,6 +6326,7 @@ def calculate_route():
                                     route_coords=alt_route_coords
                                 )
                                 alt_fuel_cost = alt_costs['fuel_cost']
+                                alt_fuel_litres = alt_costs['fuel_litres']
                                 alt_toll_cost = alt_costs['toll_cost']
                                 alt_caz_cost = alt_costs['caz_cost']
 
@@ -6334,6 +6346,7 @@ def calculate_route():
                                     'distance_km': round(alt_distance_km, 2),
                                     'duration_minutes': round(alt_time_minutes, 0),
                                     'fuel_cost': round(alt_fuel_cost, 2),
+                                    'fuel_litres': round(alt_fuel_litres, 2),
                                     'toll_cost': round(alt_toll_cost, 2),
                                     'caz_cost': round(alt_caz_cost, 2),
                                     'geometry': alt_geometry,
@@ -6398,6 +6411,7 @@ def calculate_route():
                                 'distance_km': round(distance_km, 2),
                                 'duration_minutes': round(duration_sec / 60, 0),
                                 'fuel_cost': round(costs['fuel_cost'], 2),
+                                'fuel_litres': round(costs['fuel_litres'], 2),
                                 'toll_cost': round(costs['toll_cost'], 2),
                                 'caz_cost': round(costs['caz_cost'], 2),
                                 'geometry': geometry,
@@ -6540,6 +6554,7 @@ def calculate_route():
                                     'distance_km': round(gh_distance_km, 2),
                                     'duration_minutes': round(gh_duration_min, 0),
                                     'fuel_cost': round(gh_costs['fuel_cost'], 2),
+                                    'fuel_litres': round(gh_costs['fuel_litres'], 2),
                                     'toll_cost': round(gh_costs['toll_cost'], 2),
                                     'caz_cost': round(gh_costs['caz_cost'], 2),
                                     'geometry': gh_geometry_p6,
@@ -6600,6 +6615,7 @@ def calculate_route():
                         'stops_count': len(stops),
                         'geometry': routes[0]['geometry'],
                         'fuel_cost': routes[0]['fuel_cost'],
+                        'fuel_litres': routes[0].get('fuel_litres', 0),
                         'toll_cost': routes[0]['toll_cost'],
                         'caz_cost': routes[0]['caz_cost'],
                         'caz_details': routes[0].get('caz_details', {}),
@@ -6727,6 +6743,7 @@ def calculate_route():
                                     route_coords=route_coords
                                 )
                                 fuel_cost = costs['fuel_cost']
+                                fuel_litres = costs['fuel_litres']
                                 toll_cost = costs['toll_cost']
                                 caz_cost = costs['caz_cost']
 
@@ -6762,6 +6779,7 @@ def calculate_route():
                                     'distance_km': round(distance_km, 2),
                                     'duration_minutes': round(time_minutes, 0),
                                     'fuel_cost': round(fuel_cost, 2),
+                                    'fuel_litres': round(fuel_litres, 2),
                                     'toll_cost': round(toll_cost, 2),
                                     'caz_cost': round(caz_cost, 2),
                                     'geometry': route_geometry,
@@ -6816,6 +6834,7 @@ def calculate_route():
                                                 'distance_km': round(sh_dist, 2),
                                                 'duration_minutes': round(sh_time / 60, 0),
                                                 'fuel_cost': round(sh_costs['fuel_cost'], 2),
+                                                'fuel_litres': round(sh_costs['fuel_litres'], 2),
                                                 'toll_cost': round(sh_costs['toll_cost'], 2),
                                                 'caz_cost': round(sh_costs['caz_cost'], 2),
                                                 'geometry': sh_geom,
@@ -6843,6 +6862,7 @@ def calculate_route():
                                     'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
                                     'geometry': routes[0]['geometry'],
                                     'fuel_cost': routes[0]['fuel_cost'],
+                                    'fuel_litres': routes[0].get('fuel_litres', 0),
                                     'toll_cost': routes[0]['toll_cost'],
                                     'caz_cost': routes[0]['caz_cost'],
                                     'maneuvers': routes[0].get('maneuvers', []),
@@ -6916,13 +6936,16 @@ def calculate_route():
 
                             # Calculate costs
                             fuel_cost = 0
+                            fuel_litres = 0  # litres for petrol/diesel, kWh for electric
                             toll_cost = 0
                             caz_cost = 0
 
                             if vehicle_type == 'electric':
-                                fuel_cost = (distance_km / 100) * energy_efficiency * electricity_price
+                                fuel_litres = (distance_km / 100) * energy_efficiency  # kWh
+                                fuel_cost = fuel_litres * electricity_price
                             else:
-                                fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
+                                fuel_litres = (distance_km / 100) * fuel_efficiency  # litres
+                                fuel_cost = fuel_litres * fuel_price
 
                             if include_tolls:
                                 toll_cost = calculate_toll_cost(distance_km, 'motorway', route_coords=route_coords)
@@ -6956,6 +6979,7 @@ def calculate_route():
                                 'distance_km': round(distance_km, 2),
                                 'duration_minutes': round(time_min, 0),
                                 'fuel_cost': round(fuel_cost, 2),
+                                'fuel_litres': round(fuel_litres, 2),
                                 'toll_cost': round(toll_cost, 2),
                                 'caz_cost': round(caz_cost, 2),
                                 'geometry': route_geometry,
@@ -6991,6 +7015,7 @@ def calculate_route():
                             'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
                             'geometry': routes[0]['geometry'],
                             'fuel_cost': routes[0]['fuel_cost'],
+                            'fuel_litres': routes[0].get('fuel_litres', 0),
                             'toll_cost': routes[0]['toll_cost'],
                             'caz_cost': routes[0]['caz_cost'],
                             'start_lat': start_lat,
