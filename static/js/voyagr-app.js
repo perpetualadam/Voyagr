@@ -5230,6 +5230,12 @@ function initializeCameraLayer() {
         return;
     }
 
+    // Prevent duplicate handler registration if init runs multiple times
+    if (window.__voyagrCameraLayerInitialized) {
+        return;
+    }
+    window.__voyagrCameraLayerInitialized = true;
+
     // Set toggle state based on saved preference
     const toggle = document.getElementById('showCamerasToggle');
     if (toggle) {
@@ -5262,6 +5268,12 @@ function initializeRoadLabels() {
         console.log('[Road Labels] Map not ready, deferring road labels init');
         return;
     }
+
+    // This can be called from multiple init paths; keep it idempotent.
+    if (window.__voyagrRoadLabelsInitialized) {
+        return;
+    }
+    window.__voyagrRoadLabelsInitialized = true;
 
     // Set toggle state based on saved preference
     const toggle = document.getElementById('roadLabelsToggle');
@@ -7676,6 +7688,11 @@ let gestureAction = 'recalculate';
  * @returns {*} Return value description
  */
 function initPhase3Features() {
+    if (window.__voyagrPhase3Initialized) {
+        return;
+    }
+    window.__voyagrPhase3Initialized = true;
+
     // Load gesture settings
     fetch('/api/app-settings')
         .then(response => response.json())
@@ -9146,6 +9163,11 @@ let isGeocoding = false;
  * @returns {*} Return value description
  */
 function initVoiceRecognition() {
+    // Avoid re-initializing the Web Speech API multiple times (app.js + onload init).
+    if (window.__voyagrVoiceInitialized && voiceRecognition) {
+        return true;
+    }
+
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
         console.log('[Voice] Web Speech API not supported');
@@ -9154,6 +9176,7 @@ function initVoiceRecognition() {
     }
 
     voiceRecognition = new SpeechRecognition();
+    window.__voyagrVoiceInitialized = true;
     voiceRecognition.continuous = false;
     voiceRecognition.interimResults = true;
     voiceRecognition.lang = 'en-US';
@@ -10924,6 +10947,11 @@ function saveAppState() {
  * @returns {*} Return value description
  */
 function restoreAppState() {
+    if (window.__voyagrAppStateRestored) {
+        return;
+    }
+    window.__voyagrAppStateRestored = true;
+
     try {
         const saved = localStorage.getItem('appState');
         if (saved) {
@@ -11041,6 +11069,12 @@ function getAdaptiveRefreshInterval(baseInterval) {
  * @returns {*} Return value description
  */
 function initBatteryMonitoring() {
+    // Ensure we only attach battery listeners once per page load
+    if (window.__voyagrBatteryMonitoringInitialized) {
+        return;
+    }
+    window.__voyagrBatteryMonitoringInitialized = true;
+
     // Monitor battery status for adaptive refresh intervals
     if ('getBattery' in navigator) {
         navigator.getBattery().then(battery => {
