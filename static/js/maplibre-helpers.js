@@ -477,6 +477,21 @@ function add3DBuildings(mapInstance, options = {}) {
             // Use numeric coercion to handle null/string values safely.
             // Some tiles can contain null heights (or string heights), which otherwise trigger:
             // "Expected value to be of type number, but found null instead."
+            //
+            // NOTE: Do not rely on "to-number(x, fallback)" here, as some style validators/versions
+            // treat invalid input as null. Instead: coalesce(to-number(a), to-number(b), 0).
+            const heightExpr = [
+                'coalesce',
+                ['to-number', ['get', 'render_height']],
+                ['to-number', ['get', 'height']],
+                0
+            ];
+            const baseExpr = [
+                'coalesce',
+                ['to-number', ['get', 'render_min_height']],
+                ['to-number', ['get', 'min_height']],
+                0
+            ];
             mapInstance.addLayer(
                 {
                     'id': '3d-buildings',
@@ -485,14 +500,14 @@ function add3DBuildings(mapInstance, options = {}) {
                     'type': 'fill-extrusion',
                     'minzoom': 14,
                     'filter': ['all',
-                        // Height must be > 0 (coerce to number, default 0)
-                        ['>', ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height']], 0], 0]
+                        // Height must be > 0
+                        ['>', heightExpr, 0]
                     ],
                     'paint': {
                         'fill-extrusion-color': [
                             'interpolate',
                             ['linear'],
-                            ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height']], 0],
+                            heightExpr,
                             0, '#d4d4d4',
                             50, '#b8b8b8',
                             100, '#9c9c9c'
@@ -505,12 +520,12 @@ function add3DBuildings(mapInstance, options = {}) {
                             14.5, [
                                 '*',
                                 heightMultiplier,
-                                ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height']], 0]
+                                heightExpr
                             ]
                         ],
                         // NOTE: This must be a single expression array (not wrapped in another array),
                         // otherwise style validation fails ("number expected, array found").
-                        'fill-extrusion-base': ['to-number', ['coalesce', ['get', 'render_min_height'], ['get', 'min_height']], 0],
+                        'fill-extrusion-base': baseExpr,
                         'fill-extrusion-opacity': opacity
                     }
                 },
@@ -573,7 +588,12 @@ function toggle3DBuildings(mapInstance, visible) {
 function set3DBuildingHeight(mapInstance, multiplier) {
     if (!mapInstance || !mapInstance.getLayer('3d-buildings')) return;
     try {
-        // Use coalesce to safely handle null/missing height properties
+        const heightExpr = [
+            'coalesce',
+            ['to-number', ['get', 'render_height']],
+            ['to-number', ['get', 'height']],
+            0
+        ];
         mapInstance.setPaintProperty('3d-buildings', 'fill-extrusion-height', [
             'interpolate',
             ['linear'],
@@ -582,7 +602,7 @@ function set3DBuildingHeight(mapInstance, multiplier) {
             14.5, [
                 '*',
                 multiplier,
-                ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height']], 0]
+                heightExpr
             ]
         ]);
         console.log(`[MapLibre] 3D building height set to ${multiplier}x`);

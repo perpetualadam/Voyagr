@@ -1,6 +1,6 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
 // Version: 6.0 - Network-first for root HTML, cache JS/CSS
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
@@ -55,7 +55,7 @@ async function trimCache(cacheName, maxSize) {
 
 // Install event - cache static assets
 self.addEventListener('install', event => {
-  console.log('[Service Worker] Installing v6...');
+  console.log('[Service Worker] Installing v7...');
   event.waitUntil(
     caches.open(STATIC_CACHE).then(cache => {
       console.log('[Service Worker] Caching static assets');
@@ -73,7 +73,7 @@ self.addEventListener('install', event => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
-  console.log('[Service Worker] Activating v5...');
+  console.log('[Service Worker] Activating v7...');
   const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, ROUTE_CACHE, TILE_CACHE, CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -221,6 +221,21 @@ self.addEventListener('fetch', event => {
     caches.match(request)
       .then(response => {
         if (response) {
+          // Stale-while-revalidate for static assets so updates get picked up
+          // even when the URL (including querystring) stays the same.
+          if (url.pathname.startsWith('/static/')) {
+            event.waitUntil(
+              fetch(request).then(networkResponse => {
+                if (networkResponse && networkResponse.ok) {
+                  const responseClone = networkResponse.clone();
+                  const targetCache = (url.pathname.startsWith('/static/js/') || url.pathname.startsWith('/static/css/'))
+                    ? STATIC_CACHE
+                    : DYNAMIC_CACHE;
+                  return caches.open(targetCache).then(cache => cache.put(request, responseClone));
+                }
+              }).catch(() => {})
+            );
+          }
           return response;
         }
         return fetch(request).then(networkResponse => {
