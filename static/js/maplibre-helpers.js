@@ -496,8 +496,10 @@ function add3DBuildings(mapInstance, options = {}) {
                 baseRaw
             ];
 
-            const heightExpr = ['to-number', heightNorm, 0];
-            const baseExpr = ['to-number', baseNorm, 0];
+            // Use `coalesce(to-number(x), 0)` so the expression cannot evaluate to null,
+            // and avoid relying on `to-number(x, fallback)` which is not consistently supported.
+            const heightExpr = ['coalesce', ['to-number', heightNorm], 0];
+            const baseExpr = ['coalesce', ['to-number', baseNorm], 0];
             mapInstance.addLayer(
                 {
                     'id': '3d-buildings',
@@ -601,7 +603,7 @@ function set3DBuildingHeight(mapInstance, multiplier) {
             0,
             heightRaw
         ];
-        const heightExpr = ['to-number', heightNorm, 0];
+        const heightExpr = ['coalesce', ['to-number', heightNorm], 0];
         mapInstance.setPaintProperty('3d-buildings', 'fill-extrusion-height', [
             'interpolate',
             ['linear'],
