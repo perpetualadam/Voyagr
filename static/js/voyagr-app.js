@@ -1467,27 +1467,26 @@ function bringRoutesToTop() {
         console.log(`[Routes] moveLayersToTop attempt ${retryCount}, layers:`, layerIds);
 
         try {
-            // Move each route layer to the top using MapLibre's moveLayer
-            // This moves routes above traffic/weather but still below symbol layers
+            // Move each route layer above traffic but below road labels
+            // Find the first symbol layer with text (road labels) once for all routes
+            const style = map.getStyle();
+            let beforeId = undefined;
+            if (style && style.layers) {
+                const symbolLayer = style.layers.find(l =>
+                    l.type === 'symbol' &&
+                    l.layout &&
+                    l.layout['text-field']
+                );
+                if (symbolLayer) {
+                    beforeId = symbolLayer.id;
+                }
+            }
+
             allRouteLayers.forEach((layer, idx) => {
                 if (layer && layer.id) {
                     const exists = map.getLayer(layer.id);
                     if (exists) {
-                        // Find first symbol layer to insert before
-                        const style = map.getStyle();
-                        let beforeId = undefined;
-                        if (style && style.layers) {
-                            const symbolLayer = style.layers.find(l =>
-                                l.type === 'symbol' &&
-                                l.layout &&
-                                l.layout['text-field']
-                            );
-                            if (symbolLayer) {
-                                beforeId = symbolLayer.id;
-                            }
-                        }
-
-                        // Move layer to just before symbol layers
+                        // Move layer to just before symbol layers (above traffic, below labels)
                         map.moveLayer(layer.id, beforeId);
                         console.log(`[Routes] Moved layer ${layer.id}${beforeId ? ` before ${beforeId}` : ' to top'}`);
                     } else {
@@ -3811,7 +3810,22 @@ function addTrafficLayer() {
             }
 
             if (!map.getLayer('traffic-layer')) {
-                // Add traffic layer below route layers
+                // Find the first symbol layer (road labels) to insert traffic BELOW it
+                // This ensures: base map → traffic → routes → road labels
+                let trafficBeforeId = undefined;
+                const style = map.getStyle();
+                if (style && style.layers) {
+                    const firstSymbolLayer = style.layers.find(l =>
+                        l.type === 'symbol' &&
+                        l.layout &&
+                        l.layout['text-field']
+                    );
+                    if (firstSymbolLayer) {
+                        trafficBeforeId = firstSymbolLayer.id;
+                        console.log(`[Traffic] Inserting traffic layer before symbol layer: ${trafficBeforeId}`);
+                    }
+                }
+
                 map.addLayer({
                     id: 'traffic-layer',
                     type: 'raster',
@@ -3819,7 +3833,7 @@ function addTrafficLayer() {
                     minzoom: 0,
                     maxzoom: 22,
                     paint: { 'raster-opacity': 0.6 }
-                });
+                }, trafficBeforeId);  // Insert before labels so labels stay on top
             }
 
             trafficLayer = { id: 'traffic-layer' };
@@ -4253,14 +4267,29 @@ function bringTrafficEdgesToTop() {
     if (!map || routeTrafficLayers.length === 0) return;
 
     try {
+        // Find the first symbol/label layer to insert traffic edges BEFORE
+        // This keeps traffic edges above routes but below road labels
+        const style = map.getStyle();
+        let beforeId = undefined;
+        if (style && style.layers) {
+            const symbolLayer = style.layers.find(l =>
+                l.type === 'symbol' &&
+                l.layout &&
+                l.layout['text-field']
+            );
+            if (symbolLayer) {
+                beforeId = symbolLayer.id;
+            }
+        }
+
         routeTrafficLayers.forEach(layer => {
             if (layer && layer.id && map.getLayer(layer.id)) {
-                map.moveLayer(layer.id);
+                map.moveLayer(layer.id, beforeId);
             }
         });
-        console.log('[Route Traffic] Traffic edge layers moved to top');
+        console.log(`[Route Traffic] Traffic edge layers moved before ${beforeId || 'top'}`);
 
-        // CRITICAL: Ensure labels stay on top of traffic layers
+        // Ensure labels stay on top as final safety check
         ensureLabelsOnTop();
     } catch (e) {
         console.log('[Route Traffic] Error moving traffic layers to top:', e.message);
