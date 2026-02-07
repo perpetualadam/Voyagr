@@ -1286,43 +1286,7 @@ h1 {
     }
 }
 
-.battery-indicator {
-    position: fixed;
-    top: 90px;  /* Moved down from 10px to avoid blocking speed widget */
-    right: 10px;
-    background: white;
-    border: 2px solid #667eea;
-    border-radius: 20px;
-    padding: 8px 12px;
-    font-size: 12px;
-    font-weight: 600;
-    z-index: 150;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-}
-
-.battery-indicator.low {
-    background: #f8d7da;
-    border-color: #dc3545;
-    color: #721c24;
-}
-
-.battery-indicator.medium {
-    background: #fff3cd;
-    border-color: #ffc107;
-    color: #856404;
-}
-
-.battery-indicator.high {
-    background: #d4edda;
-    border-color: #28a745;
-    color: #155724;
-}
-
-.battery-icon {
-    font-size: 14px;
-}
+/* Battery indicator widget removed - battery optimization runs in background */
 
 .theme-selector {
     display: grid;
@@ -1744,30 +1708,7 @@ body.dark-mode .tab-content {
     color: #e0e0e0;
 }
 
-/* Battery Indicator Dark Mode */
-body.dark-mode .battery-indicator {
-    background: #3a3a3a;
-    border-color: #667eea;
-    color: #e0e0e0;
-}
-
-body.dark-mode .battery-indicator.low {
-    background: #3a1a1a;
-    border-color: #ff6b6b;
-    color: #ff6b6b;
-}
-
-body.dark-mode .battery-indicator.medium {
-    background: #3a3a1a;
-    border-color: #ffd700;
-    color: #ffd700;
-}
-
-body.dark-mode .battery-indicator.high {
-    background: #1a3a1a;
-    border-color: #51cf66;
-    color: #51cf66;
-}
+/* Battery indicator dark mode styles removed - widget removed */
 
 /* Slider Dark Mode */
 body.dark-mode .preference-slider {
@@ -2405,10 +2346,7 @@ body.dark-mode .journey-summary-bar {
     z-index: 250 !important;
 }
 
-/* Update z-index for battery indicator */
-.battery-indicator {
-    z-index: 350 !important;
-}
+/* Battery indicator z-index removed - widget removed */
 
 /* Update z-index for gesture indicator */
 .gesture-indicator {
@@ -2437,13 +2375,6 @@ body.dark-mode .journey-summary-bar {
         left: 10px;
     }
 
-    /* Battery indicator - move to left side, above journey bar */
-    .battery-indicator {
-        top: auto !important;
-        bottom: calc(70px + env(safe-area-inset-bottom, 0px));
-        left: 10px;
-        right: auto !important;
-    }
 
     /* MapLibre controls - ensure adequate spacing from bottom sheet */
     .maplibregl-ctrl-bottom-left {
@@ -2472,17 +2403,6 @@ body.dark-mode .journey-summary-bar {
         min-width: 90px !important;
         transform: scale(0.9);
         transform-origin: top right;
-    }
-
-    /* Battery indicator - compact positioning */
-    .battery-indicator {
-        bottom: calc(80px + env(safe-area-inset-bottom, 0px));
-        left: 10px;
-        padding: 6px 10px;
-        font-size: 11px;
-        min-height: 44px;
-        display: flex;
-        align-items: center;
     }
 
     /* Notification container - center on mobile for better visibility */

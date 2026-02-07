@@ -4571,7 +4571,7 @@ HTML_TEMPLATE = '''
                                 <div>
                                     <div style="color: #666; margin-bottom: 4px;">⛽ Fuel</div>
                                     <div style="font-weight: bold; color: #333;" id="previewFuelCost">-</div>
-                                    <div style="color: #888; font-size: 11px; margin-top: 2px;" id="previewFuelLitres">-</div>
+                                    <div style="color: #555; font-size: 12px; margin-top: 3px; font-weight: 500;" id="previewFuelLitres"></div>
                                 </div>
                                 <div>
                                     <div style="color: #666; margin-bottom: 4px;">🛣️ Tolls</div>
@@ -4782,12 +4782,6 @@ HTML_TEMPLATE = '''
         <!-- Notification Container -->
         <!-- z-index: 500 in mobile layout hierarchy - always on top of content -->
         <div id="notificationContainer" class="notification-container" style="position: fixed; top: 20px; right: 20px; z-index: 500; max-width: 400px;"></div>
-
-        <!-- Battery Indicator (Phase 3) -->
-        <div class="battery-indicator" id="batteryIndicator" style="display: none;">
-            <span class="battery-icon">🔋</span>
-            <span id="batteryLevel">100%</span>
-        </div>
 
         <!-- Gesture Indicator (Phase 3) -->
         <div class="gesture-indicator" id="gestureIndicator">👋</div>

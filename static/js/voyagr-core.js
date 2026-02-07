@@ -97,7 +97,7 @@ function initializeMap() {
         );
     }
     // Add navigation controls (zoom and rotation) - positioned bottom-left to avoid
-    // collision with speed widget, battery indicator, and notifications in top-right
+    // collision with speed widget and notifications in top-right
     map.addControl(new maplibregl.NavigationControl(), 'bottom-left');
 
     // Enable 3D buildings

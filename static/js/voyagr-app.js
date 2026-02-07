@@ -5099,10 +5099,12 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     // NOTE: Costs are already calculated by backend based on actual distance in km
     // They should NOT be adjusted based on distance unit preference (km vs miles)
     // The distance unit is just for display - the actual cost is the same regardless
-    const fuelCost = parseFloat(routeData.fuel_cost || 0);
-    const fuelLitres = parseFloat(routeData.fuel_litres || 0);
-    const tollCost = parseFloat(routeData.toll_cost || 0);
-    const cazCost = parseFloat(routeData.caz_cost || 0);
+    // Get costs - check top-level first, then routes[0] fallback
+    const primaryRoute = (routeData.routes && routeData.routes.length > 0) ? routeData.routes[0] : routeData;
+    const fuelCost = parseFloat(routeData.fuel_cost || primaryRoute.fuel_cost || 0);
+    const fuelLitres = parseFloat(routeData.fuel_litres || primaryRoute.fuel_litres || 0);
+    const tollCost = parseFloat(routeData.toll_cost || primaryRoute.toll_cost || 0);
+    const cazCost = parseFloat(routeData.caz_cost || primaryRoute.caz_cost || 0);
     const totalCost = fuelCost + tollCost + cazCost;
 
     document.getElementById('previewFuelCost').textContent = symbol + fuelCost.toFixed(2);
@@ -5112,7 +5114,7 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         if (fuelLitres > 0) {
             const isElectric = currentVehicleType === 'electric';
             const fuelUnit = isElectric ? 'kWh' : 'L';
-            fuelLitresEl.textContent = fuelLitres.toFixed(1) + ' ' + fuelUnit;
+            fuelLitresEl.textContent = '(' + fuelLitres.toFixed(1) + ' ' + fuelUnit + ')';
             fuelLitresEl.style.display = 'block';
         } else {
             fuelLitresEl.style.display = 'none';
@@ -7615,20 +7617,9 @@ let originalGPSFrequency = 1000; // ms
  */
 function updateBatteryStatus(battery) {
     const level = Math.round(battery.level * 100);
-    const indicator = document.getElementById('batteryIndicator');
 
-    indicator.style.display = 'block';
-    document.getElementById('batteryLevel').textContent = level + '%';
-
-    // Update battery status class
-    indicator.className = 'battery-indicator';
-    if (level < 20) {
-        indicator.classList.add('low');
-    } else if (level < 50) {
-        indicator.classList.add('medium');
-    } else {
-        indicator.classList.add('high');
-    }
+    // Update battery level for adaptive refresh intervals (no visible widget)
+    currentBatteryLevel = battery.level;
 
     // Auto-enable battery saving if low
     if (level < 15 && !batterySavingMode) {
