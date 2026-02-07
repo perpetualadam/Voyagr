@@ -537,6 +537,9 @@ function saveUnitSettingsToBackend() {
 // but snapshot/restore them per profile so multiple users on the same device stay separate.
 const VOYAGR_PROFILE_STORE_KEY = 'voyagr_profiles_v1';
 let activeProfileId = 'guest';
+const SUPABASE_PROFILE_SNAPSHOTS_TABLE = 'voyagr_profile_snapshots';
+let supabaseProfileSyncTimer = null;
+let supabaseProfileSyncInFlight = false;
 
 function getProfileStore() {
     try {
@@ -574,17 +577,141 @@ function applyRuntimeProfileSnapshot(snapshot) {
     }
 }
 
+function isAccountProfileId(profileId) {
+    return typeof profileId === 'string' && profileId.startsWith('sb:') && profileId.length > 5;
+}
+
+function getUserIdFromProfileId(profileId) {
+    // profileId format: "sb:<uuid>"
+    if (!isAccountProfileId(profileId)) return '';
+    return profileId.slice(3);
+}
+
+function scheduleSupabaseProfileSync() {
+    if (!supabaseClient) return;
+    if (!isAccountProfileId(activeProfileId)) return;
+
+    if (supabaseProfileSyncTimer) {
+        clearTimeout(supabaseProfileSyncTimer);
+    }
+
+    supabaseProfileSyncTimer = setTimeout(async () => {
+        await syncActiveProfileToSupabase();
+    }, 1200);
+}
+
+async function syncActiveProfileToSupabase() {
+    if (!supabaseClient) return;
+    if (supabaseProfileSyncInFlight) return;
+    if (!isAccountProfileId(activeProfileId)) return;
+
+    const userId = getUserIdFromProfileId(activeProfileId);
+    if (!userId) return;
+
+    try {
+        supabaseProfileSyncInFlight = true;
+        const store = getProfileStore();
+        const entry = store[activeProfileId] || {};
+
+        const snapshot = getRuntimeProfileSnapshot();
+        const row = {
+            user_id: userId,
+            profile_id: activeProfileId,
+            snapshot
+        };
+
+        const { data, error } = await supabaseClient
+            .from(SUPABASE_PROFILE_SNAPSHOTS_TABLE)
+            .upsert(row, { onConflict: 'user_id,profile_id' })
+            .select('updated_at')
+            .single();
+
+        if (error) {
+            console.warn('[Supabase][Profiles] Sync failed:', error.message || error);
+            return;
+        }
+
+        // Persist remote timestamp locally for simple LWW conflict handling
+        const updatedAt = data?.updated_at || '';
+        store[activeProfileId] = {
+            ...entry,
+            ...snapshot,
+            supabase_updated_at: updatedAt
+        };
+        setProfileStore(store);
+        console.log('[Supabase][Profiles] Synced profile snapshot:', activeProfileId);
+    } catch (e) {
+        console.warn('[Supabase][Profiles] Sync exception:', e);
+    } finally {
+        supabaseProfileSyncInFlight = false;
+    }
+}
+
+async function pullProfileSnapshotFromSupabase(profileId) {
+    if (!supabaseClient) return false;
+    if (!isAccountProfileId(profileId)) return false;
+
+    const userId = getUserIdFromProfileId(profileId);
+    if (!userId) return false;
+
+    try {
+        const { data, error } = await supabaseClient
+            .from(SUPABASE_PROFILE_SNAPSHOTS_TABLE)
+            .select('snapshot, updated_at')
+            .eq('user_id', userId)
+            .eq('profile_id', profileId)
+            .maybeSingle();
+
+        if (error) {
+            console.warn('[Supabase][Profiles] Pull failed:', error.message || error);
+            return false;
+        }
+        if (!data) {
+            return false;
+        }
+
+        const remoteUpdatedAt = data.updated_at || '';
+        const remoteSnapshot = data.snapshot || {};
+
+        const store = getProfileStore();
+        const localEntry = store[profileId] || {};
+        const localUpdatedAt = localEntry.supabase_updated_at || '';
+
+        // LWW: only overwrite local profile if remote is newer (or local has never synced)
+        const shouldApplyRemote = !localUpdatedAt || (remoteUpdatedAt && remoteUpdatedAt > localUpdatedAt);
+        if (shouldApplyRemote) {
+            store[profileId] = {
+                ...localEntry,
+                ...remoteSnapshot,
+                supabase_updated_at: remoteUpdatedAt
+            };
+            setProfileStore(store);
+
+            if (activeProfileId === profileId) {
+                applyRuntimeProfileSnapshot(store[profileId]);
+            }
+            console.log('[Supabase][Profiles] Pulled profile snapshot:', profileId);
+        }
+
+        return true;
+    } catch (e) {
+        console.warn('[Supabase][Profiles] Pull exception:', e);
+        return false;
+    }
+}
+
 function persistActiveProfile() {
     const store = getProfileStore();
     store[activeProfileId] = getRuntimeProfileSnapshot();
     setProfileStore(store);
     console.log('[Profiles] Persisted profile:', activeProfileId);
+    scheduleSupabaseProfileSync();
 }
 
 function ensureProfileExists(profileId) {
     const store = getProfileStore();
     if (!store[profileId]) {
-        store[profileId] = { voyagr_all_settings: '', savedRoutes: '[]' };
+        store[profileId] = { voyagr_all_settings: '', savedRoutes: '[]', supabase_updated_at: '' };
         setProfileStore(store);
     }
 }
@@ -701,11 +828,17 @@ async function handleSupabaseSession(session) {
             if (importChoice) {
                 switchActiveProfile(userProfileId, { importFromProfileId: 'guest' });
                 showStatus('Imported guest profile into account profile', 'success');
+                // After importing guest -> account, push to Supabase as initial snapshot
+                scheduleSupabaseProfileSync();
                 return;
             }
         }
 
         switchActiveProfile(userProfileId);
+        // Pull down latest snapshot from Supabase (if any). If remote is newer, it will apply.
+        await pullProfileSnapshotFromSupabase(userProfileId);
+        // If no remote snapshot exists yet, push current local snapshot.
+        scheduleSupabaseProfileSync();
         return;
     }
 
