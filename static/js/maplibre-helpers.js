@@ -478,20 +478,10 @@ function add3DBuildings(mapInstance, options = {}) {
             // Some tiles can contain null heights (or string heights), which otherwise trigger:
             // "Expected value to be of type number, but found null instead."
             //
-            // NOTE: Do not rely on "to-number(x, fallback)" here, as some style validators/versions
-            // treat invalid input as null. Instead: coalesce(to-number(a), to-number(b), 0).
-            const heightExpr = [
-                'coalesce',
-                ['to-number', ['get', 'render_height']],
-                ['to-number', ['get', 'height']],
-                0
-            ];
-            const baseExpr = [
-                'coalesce',
-                ['to-number', ['get', 'render_min_height']],
-                ['to-number', ['get', 'min_height']],
-                0
-            ];
+            // IMPORTANT: Some MapLibre builds will throw if `to-number` receives `null`.
+            // So we coalesce to a guaranteed numeric fallback (0) *before* converting.
+            const heightExpr = ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height'], 0]];
+            const baseExpr = ['to-number', ['coalesce', ['get', 'render_min_height'], ['get', 'min_height'], 0]];
             mapInstance.addLayer(
                 {
                     'id': '3d-buildings',
@@ -588,12 +578,7 @@ function toggle3DBuildings(mapInstance, visible) {
 function set3DBuildingHeight(mapInstance, multiplier) {
     if (!mapInstance || !mapInstance.getLayer('3d-buildings')) return;
     try {
-        const heightExpr = [
-            'coalesce',
-            ['to-number', ['get', 'render_height']],
-            ['to-number', ['get', 'height']],
-            0
-        ];
+        const heightExpr = ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height'], 0]];
         mapInstance.setPaintProperty('3d-buildings', 'fill-extrusion-height', [
             'interpolate',
             ['linear'],
