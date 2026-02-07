@@ -64,6 +64,53 @@ function initializeMap() {
         pitchWithRotate: true // Enable pitch control with mouse/touch
     });
 
+    // Log MapLibre errors with useful context. Some style/tile combinations can produce
+    // expression evaluation errors like "Expected value to be of type number, but found null instead."
+    // When this happens, it is typically triggered by optional layers like 3D buildings.
+    map.on('error', (evt) => {
+        try {
+            const msg = evt?.error?.message || evt?.message || '';
+            const ctx = {
+                sourceId: evt?.sourceId,
+                tile: evt?.tile,
+                layerId: evt?.layer?.id,
+                message: msg
+            };
+            if (msg) {
+                console.warn('[MapLibre][Error]', ctx);
+            }
+
+            // If the error looks like a numeric expression evaluation issue and 3D buildings are enabled,
+            // automatically disable 3D buildings to keep the app stable.
+            if (
+                msg.includes('Expected value to be of type number') ||
+                msg.includes('number expected')
+            ) {
+                if (map && map.getLayer && map.getLayer('3d-buildings')) {
+                    console.warn('[MapLibre][3D Buildings] Disabling due to tile expression error');
+                    try {
+                        // Persist off so it won't re-enable on next load
+                        localStorage.setItem('buildings3DEnabled', 'false');
+                    } catch (e) {
+                        // ignore
+                    }
+                    // Remove the layer to stop further tile evaluation errors
+                    if (window.MapLibreHelpers && typeof window.MapLibreHelpers.remove3DBuildings === 'function') {
+                        window.MapLibreHelpers.remove3DBuildings(map);
+                    } else {
+                        try {
+                            map.removeLayer('3d-buildings');
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            // Never let error handling crash init
+        }
+    });
+
     // Handle missing images (POI icons) by providing a transparent placeholder
     // This suppresses "Image 'x' could not be loaded" errors in the console
     map.on('styleimagemissing', (e) => {
@@ -100,8 +147,11 @@ function initializeMap() {
     // collision with speed widget and notifications in top-right
     map.addControl(new maplibregl.NavigationControl(), 'bottom-left');
 
-    // Enable 3D buildings
-    MapLibreHelpers.add3DBuildings(map);
+    // Enable 3D buildings (respect user toggle; default enabled unless explicitly disabled)
+    const buildings3DEnabled = localStorage.getItem('buildings3DEnabled') !== 'false';
+    if (buildings3DEnabled) {
+        MapLibreHelpers.add3DBuildings(map);
+    }
 
     // Configure road name labels with zoom-level-based visibility
     // Labels will be visible during navigation and remain readable at 65° pitch
