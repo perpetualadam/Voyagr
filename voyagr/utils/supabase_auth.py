@@ -52,6 +52,10 @@ def verify_supabase_jwt(token: str) -> Dict[str, Any]:
     # Determine algorithm from token header
     header = jwt.get_unverified_header(token)
     alg = (header.get("alg") or "").strip()
+    alg_upper = alg.upper()
+    allowed_algs = {"HS256", "RS256", "RS384", "RS512"}
+    if alg_upper not in allowed_algs:
+        raise RuntimeError(f"Unsupported JWT alg: {alg!r}")
 
     supabase_url = os.getenv("SUPABASE_URL", "").strip().rstrip("/")
     issuer = os.getenv("SUPABASE_JWT_ISS", "").strip().rstrip("/")
@@ -60,10 +64,10 @@ def verify_supabase_jwt(token: str) -> Dict[str, Any]:
 
     options = {"require": ["exp", "iat", "sub"]}
 
-    # RS256: verify using JWKS from Supabase
-    if alg.upper().startswith("RS"):
+    # RS*: verify using JWKS from Supabase
+    if alg_upper.startswith("RS"):
         if not supabase_url:
-            raise RuntimeError("SUPABASE_URL is required for RS256 verification")
+            raise RuntimeError(f"SUPABASE_URL is required for {alg_upper} verification")
 
         global _JWKS_CLIENT
         if _JWKS_CLIENT is None:
@@ -74,7 +78,7 @@ def verify_supabase_jwt(token: str) -> Dict[str, Any]:
         return jwt.decode(
             token,
             signing_key,
-            algorithms=["RS256"],
+            algorithms=[alg_upper],
             audience=expected_aud,
             issuer=issuer or None,
             options=options,
@@ -88,7 +92,7 @@ def verify_supabase_jwt(token: str) -> Dict[str, Any]:
     return jwt.decode(
         token,
         secret,
-        algorithms=["HS256"],
+        algorithms=[alg_upper],
         audience=expected_aud,
         issuer=issuer or None,
         options=options,
