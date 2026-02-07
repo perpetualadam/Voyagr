@@ -508,9 +508,9 @@ function add3DBuildings(mapInstance, options = {}) {
                                 ['to-number', ['coalesce', ['get', 'render_height'], ['get', 'height']], 0]
                             ]
                         ],
-                        'fill-extrusion-base': [
-                            ['to-number', ['coalesce', ['get', 'render_min_height'], ['get', 'min_height']], 0]
-                        ],
+                        // NOTE: This must be a single expression array (not wrapped in another array),
+                        // otherwise style validation fails ("number expected, array found").
+                        'fill-extrusion-base': ['to-number', ['coalesce', ['get', 'render_min_height'], ['get', 'min_height']], 0],
                         'fill-extrusion-opacity': opacity
                     }
                 },

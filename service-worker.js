@@ -5,6 +5,7 @@ const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
 const ROUTE_CACHE = `voyagr-routes-${CACHE_VERSION}`;
+const TILE_CACHE = `voyagr-tiles-${CACHE_VERSION}`;
 
 // Core assets to cache immediately
 // NOTE: '/' is NOT cached - it uses network-first to get fresh API keys
@@ -21,20 +22,34 @@ const STATIC_ASSETS = [
 // Max cache sizes (in items)
 const MAX_DYNAMIC_CACHE_SIZE = 150;
 const MAX_ROUTE_CACHE_SIZE = 20;
+const MAX_TILE_CACHE_SIZE = 800;
 const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 // Helper: Limit cache size (with single summary log)
+const _lastTrimLogAt = {};
+const _trimInFlight = {};
 async function trimCache(cacheName, maxSize) {
-  const cache = await caches.open(cacheName);
-  const keys = await cache.keys();
-  if (keys.length > maxSize) {
-    const originalSize = keys.length;
-    // Delete oldest items until we're at maxSize
-    const itemsToDelete = keys.length - maxSize;
-    for (let i = 0; i < itemsToDelete; i++) {
-      await cache.delete(keys[i]);
+  if (_trimInFlight[cacheName]) return;
+  _trimInFlight[cacheName] = true;
+  try {
+    const cache = await caches.open(cacheName);
+    const keys = await cache.keys();
+    if (keys.length > maxSize) {
+      const originalSize = keys.length;
+      // Delete oldest items until we're at maxSize
+      const itemsToDelete = keys.length - maxSize;
+      for (let i = 0; i < itemsToDelete; i++) {
+        await cache.delete(keys[i]);
+      }
+      const now = Date.now();
+      const last = _lastTrimLogAt[cacheName] || 0;
+      if (now - last > 30000) {
+        _lastTrimLogAt[cacheName] = now;
+        console.log(`[SW] Trimmed ${cacheName}: ${originalSize} → ${maxSize} items`);
+      }
     }
-    console.log(`[SW] Trimmed ${cacheName}: ${originalSize} → ${maxSize} items`);
+  } finally {
+    _trimInFlight[cacheName] = false;
   }
 }
 
@@ -59,7 +74,7 @@ self.addEventListener('install', event => {
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
   console.log('[Service Worker] Activating v5...');
-  const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, ROUTE_CACHE, CACHE_NAME];
+  const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, ROUTE_CACHE, TILE_CACHE, CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
       return Promise.all(
@@ -158,12 +173,13 @@ self.addEventListener('fetch', event => {
   // Map tiles - cache first with network update (stale-while-revalidate)
   if (url.hostname.includes('tile') || url.pathname.includes('tiles')) {
     event.respondWith(
-      caches.match(request).then(cachedResponse => {
+      caches.open(TILE_CACHE).then(cache => cache.match(request)).then(cachedResponse => {
         const fetchPromise = fetch(request).then(networkResponse => {
           if (networkResponse.ok) {
             const responseClone = networkResponse.clone();
-            caches.open(DYNAMIC_CACHE).then(cache => {
-              cache.put(request, responseClone);
+            caches.open(TILE_CACHE).then(async cache => {
+              await cache.put(request, responseClone);
+              await trimCache(TILE_CACHE, MAX_TILE_CACHE_SIZE);
             });
           }
           return networkResponse;
