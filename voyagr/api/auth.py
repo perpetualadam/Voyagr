@@ -28,7 +28,6 @@ def me(_jwt_claims):  # type: ignore
             "user": {
                 "id": user_id,
                 "email": email,
-                "claims": _jwt_claims,
             },
         }
     )

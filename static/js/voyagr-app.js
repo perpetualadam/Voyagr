@@ -1405,12 +1405,48 @@ function updateAllTemperatureDisplays() {
 // ===== TRIP HISTORY FUNCTIONS =====
 let allTrips = [];
 
+function escapeHtml(value) {
+    if (value === null || value === undefined) return '';
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#39;');
+}
+
+async function getSupabaseAccessToken() {
+    try {
+        if (!supabaseClient) return null;
+        const { data } = await supabaseClient.auth.getSession();
+        return data?.session?.access_token || null;
+    } catch {
+        return null;
+    }
+}
+
+async function fetchJsonWithAuth(url, options = {}) {
+    const token = await getSupabaseAccessToken();
+    const headers = { ...(options.headers || {}) };
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+    const res = await fetch(url, { ...options, headers });
+    const contentType = res.headers.get('content-type') || '';
+    const data = contentType.includes('application/json') ? await res.json() : await res.text();
+    return { res, data };
+}
+
 async function loadTripHistory() {
     try {
-        const response = await fetch('/api/trip-history');
-        const data = await response.json();
+        const { res, data } = await fetchJsonWithAuth('/api/trip-history');
 
-        if (data.success && data.trips) {
+        if (res.status === 401) {
+            allTrips = [];
+            document.getElementById('tripHistoryList').innerHTML =
+                '<div style="text-align: center; padding: 20px; color: #999;">Sign in to view trip history.</div>';
+            return;
+        }
+
+        if (data && data.success && data.trips) {
             allTrips = data.trips;
             displayTripHistory(allTrips);
         } else {
@@ -1442,13 +1478,15 @@ function displayTripHistory(trips) {
         const distUnit = getDistanceUnit();
         const totalCost = (parseFloat(trip.fuel_cost || 0) + parseFloat(trip.toll_cost || 0) + parseFloat(trip.caz_cost || 0)).toFixed(2);
         const symbol = getCurrencySymbol();
+        const startAddr = escapeHtml(trip.start_address || 'Start');
+        const endAddr = escapeHtml(trip.end_address || 'End');
 
         return `
             <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #667eea;">
                 <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                     <div>
                         <div style="font-weight: 600; color: #333; margin-bottom: 4px;">
-                            ${trip.start_address || 'Start'} → ${trip.end_address || 'End'}
+                            ${startAddr} → ${endAddr}
                         </div>
                         <div style="font-size: 12px; color: #666;">
                             ${dateStr}
@@ -1502,8 +1540,12 @@ async function deleteTripHistory(tripId) {
     if (!confirm('Are you sure you want to delete this trip?')) return;
 
     try {
+        const token = await getSupabaseAccessToken();
+        const headers = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
         const response = await fetch(`/api/trip-history/${tripId}`, {
             method: 'DELETE'
+            , headers
         });
         const data = await response.json();
 
@@ -2732,14 +2774,14 @@ function shareViaEmail() {
  * @returns {*} Return value description
  */
 function loadRouteAnalytics() {
-    fetch('/api/trip-analytics')
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                displayAnalytics(data);
-            } else {
-                showStatus('Failed to load analytics', 'error');
+    fetchJsonWithAuth('/api/trip-analytics')
+        .then(({ res, data }) => {
+            if (res.status === 401) {
+                showStatus('Sign in to view trip analytics', 'info');
+                return;
             }
+            if (data.success) displayAnalytics(data);
+            else showStatus('Failed to load analytics', 'error');
         })
         .catch(error => {
             console.error('Analytics error:', error);
@@ -2781,7 +2823,7 @@ function displayAnalytics(data) {
     if (data.frequent_routes && data.frequent_routes.length > 0) {
         frequentRoutesList.innerHTML = data.frequent_routes.map((route, idx) => `
             <div style="background: white; padding: 10px; border-radius: 4px; margin-bottom: 8px; border-left: 4px solid #FF5722;">
-                <div style="font-weight: 500; font-size: 13px; margin-bottom: 4px;">${idx + 1}. ${route.start} → ${route.end}</div>
+                <div style="font-weight: 500; font-size: 13px; margin-bottom: 4px;">${idx + 1}. ${escapeHtml(route.start)} → ${escapeHtml(route.end)}</div>
                 <div style="font-size: 12px; color: #666;">
                     <span>🔄 ${route.count} trips</span> |
                     <span>📏 ${convertDistance(route.avg_distance)} ${distUnit}</span> |
@@ -6565,9 +6607,9 @@ function clearForm() {
  * @returns {*} Return value description
  */
 function showSearchHistory() {
-    fetch('/api/search-history')
-        .then(response => response.json())
-        .then(data => {
+    fetchJsonWithAuth('/api/search-history')
+        .then(({ res, data }) => {
+            if (res.status === 401) return;
             if (data.success && data.history.length > 0) {
                 const dropdown = document.getElementById('searchHistoryDropdown');
                 dropdown.innerHTML = '';
@@ -6575,9 +6617,11 @@ function showSearchHistory() {
                 data.history.forEach(item => {
                     const div = document.createElement('div');
                     div.className = 'search-history-item';
+                    const queryEsc = escapeHtml(item.query);
+                    const resultEsc = escapeHtml(item.result_name || '');
                     div.innerHTML = `
-                        <div class="search-history-item-text">${item.query}</div>
-                        ${item.result_name ? `<div class="search-history-item-meta">${item.result_name}</div>` : ''}
+                        <div class="search-history-item-text">${queryEsc}</div>
+                        ${item.result_name ? `<div class="search-history-item-meta">${resultEsc}</div>` : ''}
                     `;
                     div.onclick = () => {
                         document.getElementById('end').value = item.query;
@@ -6603,12 +6647,15 @@ function showSearchHistory() {
  * @returns {*} Return value description
  */
 function addToSearchHistory(query, resultName, lat, lon) {
-    fetch('/api/search-history', {
+    getSupabaseAccessToken().then(token => {
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        return fetch('/api/search-history', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, result_name: resultName, lat, lon })
-    })
-        .catch(error => console.error('Error adding to search history:', error));
+            headers,
+            body: JSON.stringify({ query, result_name: resultName, lat, lon })
+        });
+    }).catch(error => console.error('Error adding to search history:', error));
 }
 
 // Load and display favorite locations with edit/delete options
@@ -6618,12 +6665,16 @@ function addToSearchHistory(query, resultName, lat, lon) {
  * @returns {*} Return value description
  */
 function loadFavorites() {
-    fetch('/api/favorites')
-        .then(response => response.json())
-        .then(data => {
+    fetchJsonWithAuth('/api/favorites')
+        .then(({ res, data }) => {
             const section = document.getElementById('favoritesSection');
             const grid = document.getElementById('favoritesGrid');
             grid.innerHTML = '';
+
+            if (res.status === 401) {
+                section.style.display = 'none';
+                return;
+            }
 
             if (data.success && data.favorites.length > 0) {
                 data.favorites.forEach(fav => {
@@ -6635,9 +6686,11 @@ function loadFavorites() {
                     const btn = document.createElement('button');
                     btn.className = 'favorite-btn';
                     btn.style.cssText = 'flex: 1; text-align: left;';
+                    const favNameEsc = escapeHtml(fav.name);
+                    const favCatEsc = escapeHtml(fav.category);
                     btn.innerHTML = `
-                        <span class="favorite-btn-name">${fav.name}</span>
-                        <span class="favorite-btn-category">${fav.category}</span>
+                        <span class="favorite-btn-name">${favNameEsc}</span>
+                        <span class="favorite-btn-category">${favCatEsc}</span>
                     `;
                     btn.onclick = () => {
                         document.getElementById('end').value = fav.name;
@@ -6692,15 +6745,19 @@ function editFavorite(fav) {
 
     const newCategory = prompt('Edit category:', fav.category);
 
-    fetch('/api/favorites', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            id: fav.id,
-            name: newName,
-            address: fav.address,
-            category: newCategory || fav.category
-        })
+    getSupabaseAccessToken().then(token => {
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        return fetch('/api/favorites', {
+            method: 'PUT',
+            headers,
+            body: JSON.stringify({
+                id: fav.id,
+                name: newName,
+                address: fav.address,
+                category: newCategory || fav.category
+            })
+        });
     })
     .then(r => r.json())
     .then(data => {
@@ -6723,10 +6780,14 @@ function editFavorite(fav) {
 function deleteFavorite(fav) {
     if (!confirm(`Delete "${fav.name}" from favorites?`)) return;
 
-    fetch('/api/favorites', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: fav.id })
+    getSupabaseAccessToken().then(token => {
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        return fetch('/api/favorites', {
+            method: 'DELETE',
+            headers,
+            body: JSON.stringify({ id: fav.id })
+        });
     })
     .then(r => r.json())
     .then(data => {
@@ -6755,16 +6816,20 @@ function addCurrentToFavorites() {
 
     const category = prompt('Enter category (e.g., home, work, shopping):', 'location');
 
-    fetch('/api/favorites', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            name: name,
-            address: document.getElementById('end').value,
-            lat: currentLat,
-            lon: currentLon,
-            category: category || 'location'
-        })
+    getSupabaseAccessToken().then(token => {
+        const headers = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+        return fetch('/api/favorites', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                name: name,
+                address: document.getElementById('end').value,
+                lat: currentLat,
+                lon: currentLon,
+                category: category || 'location'
+            })
+        });
     })
         .then(response => response.json())
         .then(data => {

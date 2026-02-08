@@ -3,12 +3,14 @@ Authentication utilities for API endpoints.
 """
 
 import logging
+import os
 from functools import wraps
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Dict, Optional, TypeVar
 
 from flask import request, jsonify
 
 from voyagr.config import VALID_API_KEYS
+from voyagr.utils.supabase_auth import verify_supabase_jwt
 
 logger = logging.getLogger('voyagr_web')
 
@@ -31,5 +33,53 @@ def require_auth(f: F) -> F:
             return jsonify({'success': False, 'error': 'Unauthorized'}), 401
 
         return f(*args, **kwargs)
+    return decorated_function  # type: ignore
+
+
+def _is_local_request() -> bool:
+    # NOTE: request.remote_addr is the direct peer address. Behind a reverse proxy,
+    # this will typically be the proxy IP unless you explicitly trust X-Forwarded-For.
+    return request.remote_addr in ['127.0.0.1', 'localhost']
+
+
+def _get_bearer_token() -> Optional[str]:
+    auth = request.headers.get("Authorization", "")
+    if not auth:
+        return None
+    parts = auth.split(" ", 1)
+    if len(parts) != 2:
+        return None
+    scheme, token = parts[0].strip().lower(), parts[1].strip()
+    if scheme != "bearer" or not token:
+        return None
+    return token
+
+
+def require_private_user(f: F) -> F:
+    """
+    Require a Supabase user for endpoints that read/write private location data.
+
+    - Localhost requests are allowed for development (no auth) unless explicitly disabled.
+    - Non-local requests require a valid Supabase Bearer token.
+    """
+    @wraps(f)
+    def decorated_function(*args: Any, **kwargs: Any) -> Any:
+        # Allow local dev calls without auth, unless disabled.
+        if _is_local_request() and os.getenv("ALLOW_LOCAL_UNAUTH", "true").lower() == "true":
+            kwargs["_jwt_claims"] = {"sub": "local", "email": None}
+            return f(*args, **kwargs)
+
+        token = _get_bearer_token()
+        if not token:
+            return jsonify({"success": False, "error": "Missing bearer token"}), 401
+
+        try:
+            claims: Dict[str, Any] = verify_supabase_jwt(token)
+        except Exception as e:
+            return jsonify({"success": False, "error": "Invalid token", "detail": str(e)}), 401
+
+        kwargs["_jwt_claims"] = claims
+        return f(*args, **kwargs)
+
     return decorated_function  # type: ignore
 

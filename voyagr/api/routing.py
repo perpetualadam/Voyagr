@@ -21,7 +21,7 @@ from datetime import datetime
 from typing import Dict, Any
 from flask import Blueprint, jsonify, request
 
-from voyagr.config import VALHALLA_URL, GRAPHHOPPER_URL
+from voyagr.config import VALHALLA_URL, GRAPHHOPPER_URL, OSRM_URL
 from voyagr.utils import validate_coordinates
 
 logger = logging.getLogger(__name__)
@@ -31,9 +31,6 @@ routing_bp = Blueprint('routing', __name__)
 # Global references (set by main app)
 _route_cache = None
 _fallback_optimizer = None
-
-OSRM_URL = "http://router.project-osrm.org/route/v1"
-
 
 def set_route_cache(cache):
     """Set the route cache instance."""

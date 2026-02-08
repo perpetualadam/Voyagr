@@ -11,7 +11,7 @@ from typing import Optional, Any
 from flask import Blueprint, jsonify, request
 
 from voyagr.models import get_db_connection, return_db_connection
-from voyagr.utils import validate_routing_mode
+from voyagr.utils import sanitize_string, validate_routing_mode, require_private_user
 
 logger = logging.getLogger(__name__)
 
@@ -20,15 +20,32 @@ trips_bp = Blueprint('trips', __name__)
 
 @trips_bp.route('/trip-history', methods=['GET', 'POST'])
 @trips_bp.route('/trip-history/<int:trip_id>', methods=['DELETE'])
-def trip_history(trip_id: Optional[int] = None) -> Any:
+@require_private_user
+def trip_history(trip_id: Optional[int] = None, _jwt_claims: Any = None) -> Any:
     """Get, save, or delete trip history."""
     conn = None
     try:
+        user_id = (_jwt_claims or {}).get("sub") if isinstance(_jwt_claims, dict) else None
+        if not user_id:
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
         if request.method == 'GET':
-            cursor.execute('SELECT * FROM trips ORDER BY timestamp DESC LIMIT 50')
+            cursor.execute('''
+                SELECT
+                    id,
+                    start_lat, start_lon, start_address,
+                    end_lat, end_lon, end_address,
+                    distance_km, duration_minutes,
+                    fuel_cost, toll_cost, caz_cost,
+                    routing_mode, timestamp
+                FROM trips
+                WHERE user_id = ?
+                ORDER BY timestamp DESC
+                LIMIT 50
+            ''', (user_id,))
             trips = cursor.fetchall()
             return jsonify({
                 'success': True,
@@ -72,13 +89,16 @@ def trip_history(trip_id: Optional[int] = None) -> Any:
             if not validate_routing_mode(routing_mode):
                 return jsonify({'success': False, 'error': f'Invalid routing_mode: {routing_mode}'}), 400
 
+            start_address = sanitize_string(data.get('start_address', ''), max_length=200) or ''
+            end_address = sanitize_string(data.get('end_address', ''), max_length=200) or ''
+
             cursor.execute('''
-                INSERT INTO trips (start_lat, start_lon, start_address, end_lat, end_lon,
+                INSERT INTO trips (user_id, start_lat, start_lon, start_address, end_lat, end_lon,
                                   end_address, distance_km, duration_minutes, fuel_cost,
                                   toll_cost, caz_cost, routing_mode)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (start_lat, start_lon, data.get('start_address', ''),
-                  end_lat, end_lon, data.get('end_address', ''),
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ''', (user_id, start_lat, start_lon, start_address,
+                  end_lat, end_lon, end_address,
                   distance_km, duration_minutes, data.get('fuel_cost', 0),
                   data.get('toll_cost', 0), data.get('caz_cost', 0), routing_mode))
             conn.commit()
@@ -86,7 +106,7 @@ def trip_history(trip_id: Optional[int] = None) -> Any:
             return jsonify({'success': True, 'trip_id': trip_id})
 
         elif request.method == 'DELETE':
-            cursor.execute('DELETE FROM trips WHERE id = ?', (trip_id,))
+            cursor.execute('DELETE FROM trips WHERE id = ? AND user_id = ?', (trip_id, user_id))
             conn.commit()
             return jsonify({'success': True, 'message': f'Trip {trip_id} deleted'})
     except Exception as e:
@@ -97,14 +117,18 @@ def trip_history(trip_id: Optional[int] = None) -> Any:
 
 
 @trips_bp.route('/trip-analytics', methods=['GET'])
-def get_trip_analytics():
+@require_private_user
+def get_trip_analytics(_jwt_claims: Any = None):
     """Get trip analytics and statistics"""
     conn = None
     try:
+        user_id = (_jwt_claims or {}).get("sub") if isinstance(_jwt_claims, dict) else None
+        if not user_id:
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+
         conn = get_db_connection()
         cursor = conn.cursor()
-
-        cursor.execute('''
+        stats = cursor.execute('''
             SELECT
                 COUNT(*) as total_trips,
                 SUM(distance_km) as total_distance,
@@ -114,8 +138,8 @@ def get_trip_analytics():
                 SUM(toll_cost) as total_toll_cost,
                 SUM(caz_cost) as total_caz_cost
             FROM trips
-        ''')
-        stats = cursor.fetchone()
+            WHERE user_id = ?
+        ''', (user_id,)).fetchone()
 
         total_trips = stats[0] or 0
         total_distance = stats[1] or 0
@@ -135,10 +159,11 @@ def get_trip_analytics():
                 AVG(distance_km) as avg_distance,
                 AVG(fuel_cost + toll_cost + caz_cost) as avg_cost
             FROM trips
+            WHERE user_id = ?
             GROUP BY start_address, end_address
             ORDER BY trip_count DESC
             LIMIT 5
-        ''')
+        ''', (user_id,))
         frequent_routes = cursor.fetchall()
 
         routes_list = []

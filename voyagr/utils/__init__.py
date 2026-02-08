@@ -30,6 +30,7 @@ from voyagr.utils.rate_limiting import (
 
 from voyagr.utils.auth import (
     require_auth,
+    require_private_user,
 )
 
 __all__ = [
@@ -49,5 +50,6 @@ __all__ = [
     'rate_limit',
     # Auth
     'require_auth',
+    'require_private_user',
 ]
 

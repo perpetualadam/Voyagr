@@ -7,6 +7,16 @@ const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
 const ROUTE_CACHE = `voyagr-routes-${CACHE_VERSION}`;
 const TILE_CACHE = `voyagr-tiles-${CACHE_VERSION}`;
 
+// Sensitive endpoints: do NOT cache responses (privacy)
+const SENSITIVE_API_PATH_PREFIXES = [
+  '/api/config',
+  '/api/me',
+  '/api/route',
+  '/api/trip-history',
+  '/api/favorites',
+  '/api/search-history',
+];
+
 // Core assets to cache immediately
 // NOTE: '/' is NOT cached - it uses network-first to get fresh API keys
 const STATIC_ASSETS = [
@@ -114,34 +124,21 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Route API requests - network first with route cache
-  if (url.pathname === '/api/route') {
-    event.respondWith(
-      fetch(request)
-        .then(response => {
-          if (response.ok) {
-            const responseClone = response.clone();
-            caches.open(ROUTE_CACHE).then(async cache => {
-              await cache.put(request, responseClone);
-              await trimCache(ROUTE_CACHE, MAX_ROUTE_CACHE_SIZE);
-            });
-          }
-          return response;
+  // Never cache authenticated API responses, and never cache sensitive endpoints.
+  if (url.pathname.startsWith('/api/')) {
+    const hasAuth = request.headers.has('Authorization');
+    const isSensitive = SENSITIVE_API_PATH_PREFIXES.some(prefix => url.pathname.startsWith(prefix));
+    if (hasAuth || isSensitive) {
+      event.respondWith(
+        fetch(request).catch(() => {
+          return new Response(
+            JSON.stringify({ success: false, offline: true, error: 'Offline - request not cached for privacy' }),
+            { headers: { 'Content-Type': 'application/json' }, status: 503 }
+          );
         })
-        .catch(() => {
-          return caches.match(request).then(response => {
-            if (response) {
-              console.log('[SW] Serving cached route');
-              return response;
-            }
-            return new Response(
-              JSON.stringify({ success: false, error: 'Offline - no cached route available' }),
-              { headers: { 'Content-Type': 'application/json' } }
-            );
-          });
-        })
-    );
-    return;
+      );
+      return;
+    }
   }
 
   // Other API requests - network first with dynamic cache

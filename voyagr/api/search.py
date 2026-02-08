@@ -17,7 +17,7 @@ from typing import Any
 from flask import Blueprint, jsonify, request
 
 from voyagr.models import get_db_connection, return_db_connection
-from voyagr.utils import sanitize_string
+from voyagr.utils import sanitize_string, require_private_user
 from voyagr.utils.geometry import get_distance_between_points
 
 logger = logging.getLogger(__name__)
@@ -292,16 +292,22 @@ def search_poi():
 
 
 @search_bp.route('/search-history', methods=['GET', 'POST', 'DELETE'])
-def manage_search_history():
+@require_private_user
+def manage_search_history(_jwt_claims: Any = None):
     """Get, add, or clear search history."""
     conn = None
     try:
+        user_id = (_jwt_claims or {}).get("sub") if isinstance(_jwt_claims, dict) else None
+        if not user_id:
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
         if request.method == 'GET':
             cursor.execute(
-                'SELECT query, result_name, lat, lon FROM search_history ORDER BY timestamp DESC LIMIT 20'
+                'SELECT query, result_name, lat, lon FROM search_history WHERE user_id = ? ORDER BY timestamp DESC LIMIT 20',
+                (user_id,)
             )
             history = []
             for row in cursor.fetchall():
@@ -324,17 +330,18 @@ def manage_search_history():
                 return jsonify({'success': False, 'error': 'Query required'})
 
             cursor.execute(
-                'INSERT INTO search_history (query, result_name, lat, lon) VALUES (?, ?, ?, ?)',
-                (query, result_name, lat, lon)
+                'INSERT INTO search_history (user_id, query, result_name, lat, lon) VALUES (?, ?, ?, ?, ?)',
+                (user_id, query, result_name, lat, lon)
             )
             cursor.execute(
-                'DELETE FROM search_history WHERE id NOT IN (SELECT id FROM search_history ORDER BY timestamp DESC LIMIT 50)'
+                'DELETE FROM search_history WHERE user_id = ? AND id NOT IN (SELECT id FROM search_history WHERE user_id = ? ORDER BY timestamp DESC LIMIT 50)',
+                (user_id, user_id)
             )
             conn.commit()
             return jsonify({'success': True, 'message': 'Search added to history'})
 
         elif request.method == 'DELETE':
-            cursor.execute('DELETE FROM search_history')
+            cursor.execute('DELETE FROM search_history WHERE user_id = ?', (user_id,))
             conn.commit()
             return jsonify({'success': True, 'message': 'Search history cleared'})
 
@@ -346,16 +353,22 @@ def manage_search_history():
 
 
 @search_bp.route('/favorites', methods=['GET', 'POST', 'PUT', 'DELETE'])
-def manage_favorites():
+@require_private_user
+def manage_favorites(_jwt_claims: Any = None):
     """Get, add, update, or remove favorite locations."""
     conn = None
     try:
+        user_id = (_jwt_claims or {}).get("sub") if isinstance(_jwt_claims, dict) else None
+        if not user_id:
+            return jsonify({'success': False, 'error': 'Unauthorized'}), 401
+
         conn = get_db_connection()
         cursor = conn.cursor()
 
         if request.method == 'GET':
             cursor.execute(
-                'SELECT id, name, address, lat, lon, category FROM favorite_locations ORDER BY timestamp DESC'
+                'SELECT id, name, address, lat, lon, category FROM favorite_locations WHERE user_id = ? ORDER BY timestamp DESC',
+                (user_id,)
             )
             favorites = []
             for row in cursor.fetchall():
@@ -381,8 +394,8 @@ def manage_favorites():
                 return jsonify({'success': False, 'error': 'Name and coordinates required'})
 
             cursor.execute(
-                'INSERT INTO favorite_locations (name, address, lat, lon, category) VALUES (?, ?, ?, ?, ?)',
-                (name, address, lat, lon, category)
+                'INSERT INTO favorite_locations (user_id, name, address, lat, lon, category) VALUES (?, ?, ?, ?, ?, ?)',
+                (user_id, name, address, lat, lon, category)
             )
             fav_id = cursor.lastrowid
             conn.commit()
@@ -399,8 +412,8 @@ def manage_favorites():
                 return jsonify({'success': False, 'error': 'ID and name required'})
 
             cursor.execute(
-                'UPDATE favorite_locations SET name = ?, address = ?, category = ? WHERE id = ?',
-                (name, address, category, fav_id)
+                'UPDATE favorite_locations SET name = ?, address = ?, category = ? WHERE id = ? AND user_id = ?',
+                (name, address, category, fav_id, user_id)
             )
             conn.commit()
             return jsonify({'success': True, 'message': f'Updated {name}'})
@@ -412,7 +425,7 @@ def manage_favorites():
             if not fav_id:
                 return jsonify({'success': False, 'error': 'Favorite ID required'})
 
-            cursor.execute('DELETE FROM favorite_locations WHERE id = ?', (fav_id,))
+            cursor.execute('DELETE FROM favorite_locations WHERE id = ? AND user_id = ?', (fav_id, user_id))
             conn.commit()
             return jsonify({'success': True, 'message': 'Favorite removed'})
 

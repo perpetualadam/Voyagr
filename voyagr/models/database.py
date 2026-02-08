@@ -104,6 +104,7 @@ def init_db() -> None:
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS trips (
             id INTEGER PRIMARY KEY,
+            user_id TEXT,
             start_lat REAL, start_lon REAL, start_address TEXT,
             end_lat REAL, end_lon REAL, end_address TEXT,
             distance_km REAL, duration_minutes REAL,
@@ -111,6 +112,12 @@ def init_db() -> None:
             routing_mode TEXT, timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # Add user_id column if it doesn't exist (privacy: per-user scoping)
+    try:
+        cursor.execute('ALTER TABLE trips ADD COLUMN user_id TEXT')
+    except Exception:
+        pass  # Column already exists
 
     # Vehicle profiles table
     cursor.execute('''
@@ -208,6 +215,7 @@ def init_db() -> None:
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS search_history (
             id INTEGER PRIMARY KEY,
+            user_id TEXT,
             query TEXT NOT NULL,
             result_name TEXT,
             lat REAL, lon REAL,
@@ -215,10 +223,17 @@ def init_db() -> None:
         )
     ''')
 
+    # Add user_id column if it doesn't exist (privacy: per-user scoping)
+    try:
+        cursor.execute('ALTER TABLE search_history ADD COLUMN user_id TEXT')
+    except Exception:
+        pass  # Column already exists
+
     # Favorite locations table (Phase 2 feature)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS favorite_locations (
             id INTEGER PRIMARY KEY,
+            user_id TEXT,
             name TEXT NOT NULL,
             address TEXT,
             lat REAL NOT NULL, lon REAL NOT NULL,
@@ -226,6 +241,12 @@ def init_db() -> None:
             timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # Add user_id column if it doesn't exist (privacy: per-user scoping)
+    try:
+        cursor.execute('ALTER TABLE favorite_locations ADD COLUMN user_id TEXT')
+    except Exception:
+        pass  # Column already exists
 
     # Speed limit cache table (Phase 2 feature)
     cursor.execute('''
