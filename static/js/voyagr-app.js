@@ -9369,8 +9369,9 @@ const ZOOM_ANIMATION_DURATION = 0.5; // 500ms smooth animation
 // ===== GEOCODING FEATURE =====
 let geocodingCache = {};
 const GEOCODING_CACHE_KEY = 'voyagr_geocoding_cache';
-const NOMINATIM_API = 'https://nominatim.openstreetmap.org/search';
-const NOMINATIM_REVERSE_API = 'https://nominatim.openstreetmap.org/reverse';
+// Privacy: use server-side proxy endpoints (which can point to self-hosted Nominatim)
+const NOMINATIM_API = '/api/geocode';
+const NOMINATIM_REVERSE_API = '/api/reverse-geocode';
 let isGeocoding = false;
 
 // Initialize Web Speech API
@@ -11662,7 +11663,7 @@ async function showAutocomplete(fieldId) {
 
             // Fetch from Nominatim
             const response = await fetch(
-                `${NOMINATIM_API}?q=${encodeURIComponent(query)}&format=json&limit=8&addressdetails=1`,
+                `${NOMINATIM_API}?q=${encodeURIComponent(query)}&limit=8`,
                 {
                     headers: {
                         'User-Agent': 'Voyagr-PWA/1.0'
@@ -11843,7 +11844,7 @@ async function geocodeAddress(address) {
 
     try {
         console.log('[Geocoding] Fetching:', trimmedAddress);
-        const response = await fetch(`${NOMINATIM_API}?q=${encodeURIComponent(trimmedAddress)}&format=json&limit=1`, {
+        const response = await fetch(`${NOMINATIM_API}?q=${encodeURIComponent(trimmedAddress)}&limit=1`, {
             headers: {
                 'User-Agent': 'Voyagr-PWA/1.0'
             }

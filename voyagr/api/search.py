@@ -24,11 +24,89 @@ logger = logging.getLogger(__name__)
 
 search_bp = Blueprint('search', __name__)
 
+NOMINATIM_BASE_URL = os.getenv('NOMINATIM_URL', 'https://nominatim.openstreetmap.org').strip().rstrip('/')
+OVERPASS_API_URL = os.getenv('OVERPASS_API_URL', 'https://overpass-api.de/api/interpreter').strip()
+
+
+@search_bp.route('/geocode', methods=['GET'])
+def geocode():
+    """
+    Server-side geocoding proxy (privacy): browser calls this endpoint, and the server queries Nominatim.
+
+    Query params:
+      - q: query string (required)
+      - limit: number of results (default 8; max 10)
+    Returns: Nominatim-style JSON array
+    """
+    try:
+        q = (request.args.get('q') or '').strip()
+        if not q:
+            return jsonify({'success': False, 'error': 'Missing q'}), 400
+
+        try:
+            limit = int(request.args.get('limit') or 8)
+        except Exception:
+            limit = 8
+        limit = max(1, min(limit, 10))
+
+        url = f"{NOMINATIM_BASE_URL}/search"
+        params = {
+            'q': q,
+            'format': 'json',
+            'limit': str(limit),
+            'addressdetails': '1',
+        }
+        headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'}
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({'success': False, 'error': f'Geocode failed (HTTP {resp.status_code})'}), 502
+
+        out = jsonify(resp.json())
+        out.headers['Cache-Control'] = 'no-store'
+        return out
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@search_bp.route('/reverse-geocode', methods=['GET'])
+def reverse_geocode():
+    """
+    Server-side reverse geocoding proxy (privacy).
+
+    Query params:
+      - lat: latitude (required)
+      - lon: longitude (required)
+    Returns: Nominatim reverse JSON object
+    """
+    try:
+        lat = request.args.get('lat')
+        lon = request.args.get('lon')
+        if lat is None or lon is None:
+            return jsonify({'success': False, 'error': 'Missing lat/lon'}), 400
+
+        url = f"{NOMINATIM_BASE_URL}/reverse"
+        params = {
+            'lat': lat,
+            'lon': lon,
+            'format': 'json',
+            'addressdetails': '1',
+        }
+        headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'}
+        resp = requests.get(url, params=params, headers=headers, timeout=10)
+        if resp.status_code != 200:
+            return jsonify({'success': False, 'error': f'Reverse geocode failed (HTTP {resp.status_code})'}), 502
+
+        out = jsonify(resp.json())
+        out.headers['Cache-Control'] = 'no-store'
+        return out
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 def _nominatim_poi_fallback(lat: float, lon: float, poi_type: str, radius: int) -> Any:
     """Fallback POI search using Nominatim when Overpass fails."""
     try:
-        url = 'https://nominatim.openstreetmap.org/search'
+        url = f'{NOMINATIM_BASE_URL}/search'
         search_terms = {
             'fuel': 'petrol station',
             'food': 'restaurant',
@@ -94,7 +172,7 @@ def search_parking():
         if lat == 0 or lon == 0:
             return jsonify({'success': False, 'error': 'Invalid coordinates'})
 
-        url = 'https://overpass-api.de/api/interpreter'
+        url = OVERPASS_API_URL
         overpass_query = f"""
         [out:json][timeout:5];
         (
@@ -239,7 +317,7 @@ def search_poi():
             results = result.get('elements', [])
             cached = result.get('cached', False)
         else:
-            overpass_url = 'https://overpass-api.de/api/interpreter'
+            overpass_url = OVERPASS_API_URL
             amenity_queries = ''.join([
                 f'node["amenity"="{a}"](around:{radius},{lat},{lon});' for a in amenities
             ])

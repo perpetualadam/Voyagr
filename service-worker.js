@@ -15,6 +15,8 @@ const SENSITIVE_API_PATH_PREFIXES = [
   '/api/trip-history',
   '/api/favorites',
   '/api/search-history',
+  '/api/geocode',
+  '/api/reverse-geocode',
 ];
 
 // Core assets to cache immediately
