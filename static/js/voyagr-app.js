@@ -11703,25 +11703,46 @@ function displayAutocompleteResults(fieldId, results) {
         return;
     }
 
-    let html = '';
-    results.forEach((result, index) => {
+    // Privacy/security: build DOM nodes instead of injecting untrusted HTML
+    dropdown.innerHTML = '';
+
+    results.forEach((result) => {
         const icon = getLocationIcon(result);
-        const name = result.name || result.address?.road || result.address?.city || 'Location';
+        const name = result.name || result.address?.road || result.address?.city || result.display_name || 'Location';
         const address = result.display_name || '';
         const shortAddress = address.length > 60 ? address.substring(0, 60) + '...' : address;
+        const lat = parseFloat(result.lat);
+        const lon = parseFloat(result.lon);
 
-        html += `
-            <div class="autocomplete-item" onclick="selectAutocompleteResult('${fieldId}', ${result.lat}, ${result.lon}, '${name.replace(/'/g, "\\'")}')">
-                <div class="autocomplete-item-icon">${icon}</div>
-                <div class="autocomplete-item-text">
-                    <div class="autocomplete-item-name">${name}</div>
-                    <div class="autocomplete-item-address">${shortAddress}</div>
-                </div>
-            </div>
-        `;
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+        const item = document.createElement('div');
+        item.className = 'autocomplete-item';
+
+        const iconEl = document.createElement('div');
+        iconEl.className = 'autocomplete-item-icon';
+        iconEl.textContent = icon;
+
+        const textEl = document.createElement('div');
+        textEl.className = 'autocomplete-item-text';
+
+        const nameEl = document.createElement('div');
+        nameEl.className = 'autocomplete-item-name';
+        nameEl.textContent = name;
+
+        const addrEl = document.createElement('div');
+        addrEl.className = 'autocomplete-item-address';
+        addrEl.textContent = shortAddress;
+
+        textEl.appendChild(nameEl);
+        textEl.appendChild(addrEl);
+        item.appendChild(iconEl);
+        item.appendChild(textEl);
+
+        item.onclick = () => selectAutocompleteResult(fieldId, lat, lon, name);
+
+        dropdown.appendChild(item);
     });
-
-    dropdown.innerHTML = html;
 }
 /**
  * getLocationIcon function

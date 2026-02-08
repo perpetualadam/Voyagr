@@ -25,6 +25,8 @@ logger = logging.getLogger(__name__)
 search_bp = Blueprint('search', __name__)
 
 NOMINATIM_BASE_URL = os.getenv('NOMINATIM_URL', 'https://nominatim.openstreetmap.org').strip().rstrip('/')
+NOMINATIM_COUNTRYCODES = os.getenv('NOMINATIM_COUNTRYCODES', '').strip()
+NOMINATIM_LANGUAGE = os.getenv('NOMINATIM_LANGUAGE', 'en').strip()
 OVERPASS_API_URL = os.getenv('OVERPASS_API_URL', 'https://overpass-api.de/api/interpreter').strip()
 
 
@@ -56,12 +58,24 @@ def geocode():
             'limit': str(limit),
             'addressdetails': '1',
         }
-        headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'}
+        if NOMINATIM_COUNTRYCODES:
+            params['countrycodes'] = NOMINATIM_COUNTRYCODES
+
+        headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json', 'Accept-Language': NOMINATIM_LANGUAGE}
         resp = requests.get(url, params=params, headers=headers, timeout=10)
         if resp.status_code != 200:
             return jsonify({'success': False, 'error': f'Geocode failed (HTTP {resp.status_code})'}), 502
 
-        out = jsonify(resp.json())
+        data = resp.json()
+        # Quality fallback: if no results and query isn't obviously scoped, retry with UK suffix.
+        if (not data) and (',' not in q) and (not NOMINATIM_COUNTRYCODES):
+            retry_q = f"{q}, United Kingdom"
+            params['q'] = retry_q
+            resp2 = requests.get(url, params=params, headers=headers, timeout=10)
+            if resp2.status_code == 200:
+                data = resp2.json()
+
+        out = jsonify(data)
         out.headers['Cache-Control'] = 'no-store'
         return out
     except Exception as e:
@@ -91,7 +105,7 @@ def reverse_geocode():
             'format': 'json',
             'addressdetails': '1',
         }
-        headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'}
+        headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json', 'Accept-Language': NOMINATIM_LANGUAGE}
         resp = requests.get(url, params=params, headers=headers, timeout=10)
         if resp.status_code != 200:
             return jsonify({'success': False, 'error': f'Reverse geocode failed (HTTP {resp.status_code})'}), 502
