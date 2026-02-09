@@ -52,10 +52,11 @@ function initializeMap() {
         }
     }
 
-    // Initialize map with MapLibre GL JS - Using OpenFreeMap for 3D building support
+    // Initialize map with MapLibre GL JS - using self-hosted OpenMapTiles-compatible styles
     map = new maplibregl.Map({
         container: 'map',
-        style: 'https://tiles.openfreemap.org/styles/liberty',
+        // Served by our own tile stack (see Nginx proxy rules on Voyagr)
+        style: '/map/styles/liberty/style.json',
         center: [-0.1278, 51.5074], // Default: London [lon, lat]
         zoom: 13,
         pitch: 0, // Start flat, will tilt for driving mode

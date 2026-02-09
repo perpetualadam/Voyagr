@@ -8243,11 +8243,12 @@ function setMapTheme(themeOrEvent) {
         activeBtn.classList.add('active');
     }
 
-    // MapLibre style switching - using OpenFreeMap for 3D building support
+    // MapLibre style switching - using self-hosted OpenMapTiles-compatible styles
     const styleUrls = {
-        'standard': 'https://tiles.openfreemap.org/styles/liberty',
-        'satellite': 'https://tiles.openfreemap.org/styles/liberty', // Satellite not available in free tier
-        'dark': 'https://tiles.openfreemap.org/styles/positron' // Using positron as dark alternative
+        // Served by our own tile stack (see Nginx proxy rules on Voyagr)
+        'standard': '/map/styles/liberty/style.json',
+        'satellite': '/map/styles/liberty/style.json', // Satellite not implemented yet
+        'dark': '/map/styles/positron/style.json'
     };
 
     // Change map style

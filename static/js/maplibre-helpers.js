@@ -423,6 +423,23 @@ function add3DBuildings(mapInstance, options = {}) {
 
     const addBuildingLayer = () => {
         try {
+            // If the current style already contains a building extrusion layer, don't add another one.
+            // Many OpenMapTiles-based styles ship with `building-3d` (or similar) fill-extrusion layers.
+            // Our app also adds a `3d-buildings` layer dynamically for styles that don't include it.
+            // Adding both results in doubled/overlapping 3D buildings.
+            const style = mapInstance.getStyle();
+            if (style && style.layers) {
+                const hasExistingBuildingExtrusion = style.layers.some(layer =>
+                    layer &&
+                    layer.type === 'fill-extrusion' &&
+                    (layer['source-layer'] === 'building' || layer.sourceLayer === 'building')
+                );
+                if (hasExistingBuildingExtrusion) {
+                    console.log('[MapLibre] Style already provides 3D buildings; skipping dynamic extrusion layer');
+                    return;
+                }
+            }
+
             // Remove existing layer if present
             if (mapInstance.getLayer('3d-buildings')) {
                 console.log('[MapLibre] 3D buildings layer already exists');
@@ -430,7 +447,6 @@ function add3DBuildings(mapInstance, options = {}) {
             }
 
             // Find the first symbol layer to insert buildings below
-            const style = mapInstance.getStyle();
             if (!style || !style.layers) {
                 console.log('[MapLibre] Style not ready for 3D buildings');
                 return;
