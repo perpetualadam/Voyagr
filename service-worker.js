@@ -1,11 +1,15 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
 // Version: 6.0 - Network-first for root HTML, cache JS/CSS
-const CACHE_VERSION = 'v7';
+const CACHE_VERSION = 'v8';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
 const ROUTE_CACHE = `voyagr-routes-${CACHE_VERSION}`;
 const TILE_CACHE = `voyagr-tiles-${CACHE_VERSION}`;
+
+// Self-hosted MapLibre tile stack is proxied via /map/ (styles, sprites, glyphs, vector tiles).
+// Treat these like "tile" resources so they don't flood the generic dynamic cache.
+const MAP_PROXY_PATH_PREFIX = '/map/';
 
 // Sensitive endpoints: do NOT cache responses (privacy)
 const SENSITIVE_API_PATH_PREFIXES = [
@@ -27,8 +31,6 @@ const STATIC_ASSETS = [
   '/static/js/voyagr-core.js',
   '/static/js/voyagr-app.js',
   '/static/js/app.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css',
-  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'
 ];
 
 // Max cache sizes (in items)
@@ -170,7 +172,8 @@ self.addEventListener('fetch', event => {
   }
 
   // Map tiles - cache first with network update (stale-while-revalidate)
-  if (url.hostname.includes('tile') || url.pathname.includes('tiles')) {
+  // Includes our self-hosted vector tile stack proxied via /map/.
+  if (url.pathname.startsWith(MAP_PROXY_PATH_PREFIX) || url.hostname.includes('tile') || url.pathname.includes('tiles')) {
     event.respondWith(
       caches.open(TILE_CACHE).then(cache => cache.match(request)).then(cachedResponse => {
         const fetchPromise = fetch(request).then(networkResponse => {
