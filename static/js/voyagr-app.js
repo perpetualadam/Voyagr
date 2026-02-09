@@ -4047,7 +4047,10 @@ function toggle3DBuildings() {
     }
 
     if (buildings3DEnabled) {
-        MapLibreHelpers.add3DBuildings(map);
+        MapLibreHelpers.add3DBuildings(map, {
+            heightMultiplier: buildings3DHeightMultiplier,
+            opacity: buildings3DOpacity
+        });
         showStatus('🏢 3D Buildings enabled', 'success');
         console.log('[3D Buildings] Enabled');
     } else {
@@ -8257,7 +8260,10 @@ function setMapTheme(themeOrEvent) {
     // Re-add 3D buildings and road labels after style change (style resets layers)
     map.once('style.load', () => {
         if (typeof buildings3DEnabled !== 'undefined' && buildings3DEnabled) {
-            MapLibreHelpers.add3DBuildings(map);
+            MapLibreHelpers.add3DBuildings(map, {
+                heightMultiplier: buildings3DHeightMultiplier,
+                opacity: buildings3DOpacity
+            });
         }
         // Re-initialize road labels after theme change
         if (typeof initializeRoadLabels === 'function') {

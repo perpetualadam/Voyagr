@@ -423,22 +423,17 @@ function add3DBuildings(mapInstance, options = {}) {
 
     const addBuildingLayer = () => {
         try {
-            // If the current style already contains a building extrusion layer, don't add another one.
-            // Many OpenMapTiles-based styles ship with `building-3d` (or similar) fill-extrusion layers.
-            // Our app also adds a `3d-buildings` layer dynamically for styles that don't include it.
-            // Adding both results in doubled/overlapping 3D buildings.
+            // Prefer using a style-provided building extrusion layer if it exists, BUT:
+            // - many community styles contain small schema mistakes (bad minzoom key, unsafe height props, etc.)
+            // - those mistakes can result in "no 3D buildings" even though an extrusion layer exists
+            // So we try to "harden" an existing layer first; if that fails, we fall back to our own safe layer.
             const style = mapInstance.getStyle();
-            if (style && style.layers) {
-                const hasExistingBuildingExtrusion = style.layers.some(layer =>
-                    layer &&
-                    layer.type === 'fill-extrusion' &&
-                    (layer['source-layer'] === 'building' || layer.sourceLayer === 'building')
-                );
-                if (hasExistingBuildingExtrusion) {
-                    console.log('[MapLibre] Style already provides 3D buildings; skipping dynamic extrusion layer');
-                    return;
-                }
-            }
+            const styleLayers = style?.layers || [];
+            const existingBuildingExtrusions = styleLayers.filter(layer =>
+                layer &&
+                layer.type === 'fill-extrusion' &&
+                ((layer['source-layer'] || layer.sourceLayer) === 'building')
+            );
 
             // Remove existing layer if present
             if (mapInstance.getLayer('3d-buildings')) {
@@ -489,14 +484,10 @@ function add3DBuildings(mapInstance, options = {}) {
                 return;
             }
 
-            // Add 3D extrusion layer for buildings
+            // Build safe height/base expressions (used both for "harden existing" and our fallback layer).
             // Use numeric coercion to handle null/string values safely.
             // Some tiles can contain null heights (or string heights), which otherwise trigger:
             // "Expected value to be of type number, but found null instead."
-            //
-            // IMPORTANT: Some MapLibre builds will still yield null if `to-number` receives
-            // non-numeric strings (e.g. ""), and then comparisons like ['>', expr, 0] throw.
-            // So we normalize raw values and also provide a fallback to to-number.
             const heightRaw = ['coalesce', ['get', 'render_height'], ['get', 'height'], 0];
             const heightNorm = [
                 'case',
@@ -511,11 +502,77 @@ function add3DBuildings(mapInstance, options = {}) {
                 0,
                 baseRaw
             ];
-
             // Use `coalesce(to-number(x), 0)` so the expression cannot evaluate to null,
             // and avoid relying on `to-number(x, fallback)` which is not consistently supported.
             const heightExpr = ['coalesce', ['to-number', heightNorm], 0];
             const baseExpr = ['coalesce', ['to-number', baseNorm], 0];
+
+            // If the style already has a building extrusion layer, try to harden it in-place.
+            // This avoids doubled 3D while still fixing common style issues.
+            if (existingBuildingExtrusions.length > 0) {
+                const preferred = existingBuildingExtrusions[0];
+                const preferredId = preferred.id;
+                try {
+                    // Hide any additional building-extrusion layers to prevent double-rendering.
+                    for (let i = 1; i < existingBuildingExtrusions.length; i++) {
+                        const otherId = existingBuildingExtrusions[i]?.id;
+                        if (!otherId) continue;
+                        try {
+                            mapInstance.setLayoutProperty(otherId, 'visibility', 'none');
+                        } catch (e) {
+                            // ignore
+                        }
+                    }
+
+                    // Ensure the preferred layer is visible and robust against null/string heights.
+                    mapInstance.setLayoutProperty(preferredId, 'visibility', 'visible');
+                    // Constrain rendering to a sane range (most OMT styles extrude from z14+).
+                    if (typeof mapInstance.setLayerZoomRange === 'function') {
+                        mapInstance.setLayerZoomRange(preferredId, 14, 24);
+                    }
+
+                    mapInstance.setPaintProperty(preferredId, 'fill-extrusion-height', [
+                        'interpolate',
+                        ['linear'],
+                        ['zoom'],
+                        14, 0,
+                        14.5, ['*', heightMultiplier, heightExpr]
+                    ]);
+                    mapInstance.setPaintProperty(preferredId, 'fill-extrusion-base', baseExpr);
+                    mapInstance.setPaintProperty(preferredId, 'fill-extrusion-opacity', opacity);
+
+                    // If the style didn't define a color, provide a neutral ramp.
+                    try {
+                        mapInstance.setPaintProperty(preferredId, 'fill-extrusion-color', [
+                            'interpolate',
+                            ['linear'],
+                            heightExpr,
+                            0, '#d4d4d4',
+                            50, '#b8b8b8',
+                            100, '#9c9c9c'
+                        ]);
+                    } catch (e) {
+                        // Some styles intentionally use match/feature-state; leave as-is.
+                    }
+
+                    console.log(`[MapLibre] Hardened existing 3D buildings layer: ${preferredId}`);
+                    return;
+                } catch (e) {
+                    console.warn(`[MapLibre] Existing 3D buildings layer could not be hardened (${preferredId}):`, e.message);
+                    // Hide any existing extrusion layers so our fallback doesn't double-render.
+                    existingBuildingExtrusions.forEach(layer => {
+                        const id = layer?.id;
+                        if (!id) return;
+                        try {
+                            mapInstance.setLayoutProperty(id, 'visibility', 'none');
+                        } catch (err) {
+                            // ignore
+                        }
+                    });
+                    // Continue to add our own fallback layer below.
+                }
+            }
+
             mapInstance.addLayer(
                 {
                     'id': '3d-buildings',
@@ -579,6 +636,20 @@ function remove3DBuildings(mapInstance) {
             mapInstance.removeLayer('3d-buildings');
             console.log('[MapLibre] 3D buildings layer removed');
         }
+        // Also hide any style-provided building extrusion layers so the toggle works consistently.
+        const style = mapInstance.getStyle?.();
+        const layers = style?.layers || [];
+        const extrusionIds = layers
+            .filter(l => l && l.type === 'fill-extrusion' && ((l['source-layer'] || l.sourceLayer) === 'building'))
+            .map(l => l.id)
+            .filter(Boolean);
+        extrusionIds.forEach(id => {
+            try {
+                mapInstance.setLayoutProperty(id, 'visibility', 'none');
+            } catch (e) {
+                // ignore
+            }
+        });
     } catch (error) {
         console.log('[MapLibre] Error removing 3D buildings:', error.message);
     }
@@ -610,7 +681,7 @@ function toggle3DBuildings(mapInstance, visible) {
  * @param {number} multiplier - Height multiplier (1.0 = normal, 2.0 = double)
  */
 function set3DBuildingHeight(mapInstance, multiplier) {
-    if (!mapInstance || !mapInstance.getLayer('3d-buildings')) return;
+    if (!mapInstance) return;
     try {
         const heightRaw = ['coalesce', ['get', 'render_height'], ['get', 'height'], 0];
         const heightNorm = [
@@ -620,7 +691,7 @@ function set3DBuildingHeight(mapInstance, multiplier) {
             heightRaw
         ];
         const heightExpr = ['coalesce', ['to-number', heightNorm], 0];
-        mapInstance.setPaintProperty('3d-buildings', 'fill-extrusion-height', [
+        const heightPaint = [
             'interpolate',
             ['linear'],
             ['zoom'],
@@ -630,7 +701,26 @@ function set3DBuildingHeight(mapInstance, multiplier) {
                 multiplier,
                 heightExpr
             ]
-        ]);
+        ];
+
+        // Apply to our fallback layer, if present.
+        if (mapInstance.getLayer && mapInstance.getLayer('3d-buildings')) {
+            mapInstance.setPaintProperty('3d-buildings', 'fill-extrusion-height', heightPaint);
+        }
+
+        // Apply to any style-provided building extrusion layer(s) too.
+        const style = mapInstance.getStyle?.();
+        const layers = style?.layers || [];
+        layers
+            .filter(l => l && l.type === 'fill-extrusion' && ((l['source-layer'] || l.sourceLayer) === 'building'))
+            .forEach(l => {
+                try {
+                    mapInstance.setPaintProperty(l.id, 'fill-extrusion-height', heightPaint);
+                } catch (e) {
+                    // ignore
+                }
+            });
+
         console.log(`[MapLibre] 3D building height set to ${multiplier}x`);
     } catch (error) {
         console.log('[MapLibre] Error setting building height:', error.message);
@@ -643,9 +733,24 @@ function set3DBuildingHeight(mapInstance, multiplier) {
  * @param {number} opacity - Opacity value (0.0 = transparent, 1.0 = opaque)
  */
 function set3DBuildingOpacity(mapInstance, opacity) {
-    if (!mapInstance || !mapInstance.getLayer('3d-buildings')) return;
+    if (!mapInstance) return;
     try {
-        mapInstance.setPaintProperty('3d-buildings', 'fill-extrusion-opacity', opacity);
+        // Apply to our fallback layer, if present.
+        if (mapInstance.getLayer && mapInstance.getLayer('3d-buildings')) {
+            mapInstance.setPaintProperty('3d-buildings', 'fill-extrusion-opacity', opacity);
+        }
+        // Apply to any style-provided building extrusion layer(s) too.
+        const style = mapInstance.getStyle?.();
+        const layers = style?.layers || [];
+        layers
+            .filter(l => l && l.type === 'fill-extrusion' && ((l['source-layer'] || l.sourceLayer) === 'building'))
+            .forEach(l => {
+                try {
+                    mapInstance.setPaintProperty(l.id, 'fill-extrusion-opacity', opacity);
+                } catch (e) {
+                    // ignore
+                }
+            });
         console.log(`[MapLibre] 3D building opacity set to ${opacity}`);
     } catch (error) {
         console.log('[MapLibre] Error setting building opacity:', error.message);

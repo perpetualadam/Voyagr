@@ -149,9 +149,12 @@ function initializeMap() {
     map.addControl(new maplibregl.NavigationControl(), 'bottom-left');
 
     // Enable 3D buildings (respect user toggle; default enabled unless explicitly disabled)
+    // Also apply user-tuned height/opacity if present.
     const buildings3DEnabled = localStorage.getItem('buildings3DEnabled') !== 'false';
     if (buildings3DEnabled) {
-        MapLibreHelpers.add3DBuildings(map);
+        const heightMultiplier = parseFloat(localStorage.getItem('buildings3DHeight')) || 1.0;
+        const opacity = parseFloat(localStorage.getItem('buildings3DOpacity')) || 0.6;
+        MapLibreHelpers.add3DBuildings(map, { heightMultiplier, opacity });
     }
 
     // Configure road name labels with zoom-level-based visibility
