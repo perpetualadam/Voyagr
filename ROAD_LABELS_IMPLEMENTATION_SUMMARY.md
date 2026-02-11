@@ -7,6 +7,22 @@
 
 ---
 
+## 🔧 PWA “No Street Names” Fix (2026-02-11)
+
+If the PWA shows **no labels/street names**, it’s usually one of these:
+
+- MapLibre layer `visibility` was set to an invalid value (`hidden` instead of `none`)
+- The service worker cached `/map/styles/.../style.json` or glyph/font resources and kept serving a stale/broken style offline-first
+- The vector style lacks a `glyphs` endpoint or any symbol text layers (labels can’t render)
+
+Fixes applied:
+
+- Updated MapLibre label toggles to use `visibility: none` (valid MapLibre spec)
+- Updated `service-worker.js` to use **network-first** for `/map/styles/`, sprites, and glyphs/fonts (cache fallback)
+- Added a raster OpenStreetMap fallback style with baked-in labels (`static/map/styles/osm-raster/style.json`) when vector labels can’t render
+
+---
+
 ## 🎯 Implementation Overview
 
 The road name labels feature has been successfully implemented using MapLibre GL JS's native symbol layers. The Liberty map style from OpenFreeMap includes built-in road labels from OpenStreetMap data, which are now configured, styled, and controllable through the Voyagr UI.
