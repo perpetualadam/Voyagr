@@ -177,7 +177,8 @@ function initializeMap() {
             }
 
             // Persist for the session; allow theme changes to respect this.
-            window.__voyagrPreferredFallbackStyleUrl = '/static/map/styles/osm-raster/style.json';
+            // Use absolute URL so the worker can resolve it in PWA (blob: origin).
+            window.__voyagrPreferredFallbackStyleUrl = toAbsoluteOriginUrl('/static/map/styles/osm-raster/style.json');
 
             if (map && typeof map.setStyle === 'function') {
                 map.setStyle(window.__voyagrPreferredFallbackStyleUrl);
@@ -216,38 +217,26 @@ function initializeMap() {
         }
     }
 
+    // Track how many errors we've seen so we can throttle logging.
+    let _mapErrorCount = 0;
+    const _MAX_LOGGED_ERRORS = 5; // Only log the first few, then go silent.
+
     map.on('error', (evt) => {
         try {
             const msg = evt?.error?.message || evt?.message || '';
-            const ctx = {
-                sourceId: evt?.sourceId,
-                tile: evt?.tile,
-                layerId: evt?.layer?.id,
-                message: msg
-            };
-            if (msg) {
-                console.warn('[MapLibre][Error]', ctx);
+            if (!msg) return;
+
+            _mapErrorCount++;
+
+            // Only log the first few errors to avoid flooding the console with
+            // routine tile 404s (e.g. tiles outside server coverage).
+            if (_mapErrorCount <= _MAX_LOGGED_ERRORS) {
+                console.warn('[MapLibre][Error]', msg);
+            } else if (_mapErrorCount === _MAX_LOGGED_ERRORS + 1) {
+                console.warn(`[MapLibre] Suppressing further error logs (${_mapErrorCount}+ errors). Map may have tile coverage gaps.`);
             }
 
-            // Common failure mode for "no street names": glyphs/fonts are not being served
-            // from the style's glyph endpoint (404/500/etc). When that happens, labels
-            // will never render even if the label layers exist.
-            if (
-                msg.includes('glyph') ||
-                msg.includes('Glyph') ||
-                msg.includes('font') ||
-                msg.includes('Font') ||
-                msg.includes('Failed to load glyph') ||
-                msg.includes('Failed to load') && (msg.includes('.pbf') || msg.includes('fonts') || msg.includes('glyphs'))
-            ) {
-                maybeFallbackToRasterStyle(msg);
-            }
-
-            // Another common PWA failure mode: MapLibre's worker runs from a `blob:` URL and
-            // cannot resolve root-relative tile URLs from the style (e.g. "/map/data/...pbf"),
-            // producing errors like:
-            // "Failed to construct 'Request': Failed to parse URL from /map/data/..."
-            // When this happens the vector stack (and thus labels) won't load.
+            // PWA worker URL resolution failure — switch to raster fallback.
             if (
                 msg.includes('Failed to parse URL') ||
                 msg.includes("Failed to construct 'Request'") ||
@@ -256,8 +245,15 @@ function initializeMap() {
                 maybeFallbackToRasterStyle(msg);
             }
 
-            // If the error looks like a numeric expression evaluation issue and 3D buildings are enabled,
-            // automatically disable 3D buildings to keep the app stable.
+            // Glyph/font loading failure — labels won't render.
+            if (
+                msg.includes('Failed to load glyph') ||
+                (msg.includes('Failed to load') && (msg.includes('.pbf') || msg.includes('glyphs')))
+            ) {
+                maybeFallbackToRasterStyle(msg);
+            }
+
+            // Numeric expression error from 3D building layer — disable it.
             if (
                 msg.includes('Expected value to be of type number') ||
                 msg.includes('number expected')
@@ -265,20 +261,12 @@ function initializeMap() {
                 if (map && map.getLayer && map.getLayer('3d-buildings')) {
                     console.warn('[MapLibre][3D Buildings] Disabling due to tile expression error');
                     try {
-                        // Persist off so it won't re-enable on next load
                         localStorage.setItem('buildings3DEnabled', 'false');
-                    } catch (e) {
-                        // ignore
-                    }
-                    // Remove the layer to stop further tile evaluation errors
+                    } catch (_) { /* ignore */ }
                     if (window.MapLibreHelpers && typeof window.MapLibreHelpers.remove3DBuildings === 'function') {
                         window.MapLibreHelpers.remove3DBuildings(map);
                     } else {
-                        try {
-                            map.removeLayer('3d-buildings');
-                        } catch (e) {
-                            // ignore
-                        }
+                        try { map.removeLayer('3d-buildings'); } catch (_) { /* ignore */ }
                     }
                 }
             }

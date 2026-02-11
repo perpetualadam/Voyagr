@@ -8232,7 +8232,6 @@ function setMapTheme(themeOrEvent) {
     // Handle both string theme and event object
     let theme = typeof themeOrEvent === 'string' ? themeOrEvent : (themeOrEvent?.target?.dataset?.theme || 'standard');
 
-    currentMapTheme = theme;
     localStorage.setItem('mapTheme', theme);
 
     // Update UI
@@ -8245,6 +8244,21 @@ function setMapTheme(themeOrEvent) {
     if (activeBtn) {
         activeBtn.classList.add('active');
     }
+
+    if (!map) {
+        console.warn('[setMapTheme] Map not initialized yet, skipping style change');
+        currentMapTheme = theme;
+        return;
+    }
+
+    // Skip the style reload if we're setting the same theme that's already active
+    // (e.g. during loadAllSettings on first load — the style was just initialized).
+    if (theme === currentMapTheme) {
+        console.log('[setMapTheme] Theme already active, skipping redundant style reload');
+        return;
+    }
+
+    currentMapTheme = theme;
 
     // MapLibre style switching - using self-hosted OpenMapTiles-compatible styles
     const styleUrls = {
@@ -8260,11 +8274,6 @@ function setMapTheme(themeOrEvent) {
         styleUrls['standard'] = window.__voyagrPreferredFallbackStyleUrl;
         styleUrls['satellite'] = window.__voyagrPreferredFallbackStyleUrl;
         styleUrls['dark'] = window.__voyagrPreferredFallbackStyleUrl;
-    }
-
-    if (!map) {
-        console.warn('[setMapTheme] Map not initialized yet, skipping style change');
-        return;
     }
 
     // *** PWA / Web Worker fix (same approach as voyagr-core.js initializeMap) ***
