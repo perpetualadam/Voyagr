@@ -8262,46 +8262,48 @@ function setMapTheme(themeOrEvent) {
         styleUrls['dark'] = window.__voyagrPreferredFallbackStyleUrl;
     }
 
+    if (!map) {
+        console.warn('[setMapTheme] Map not initialized yet, skipping style change');
+        return;
+    }
+
     // *** PWA / Web Worker fix (same approach as voyagr-core.js initializeMap) ***
-    // Fetch the style JSON, resolve all internal URLs to absolute, then pass the
-    // resolved *object* to map.setStyle() so the worker never sees relative URLs.
+    // Resolve all internal URLs to absolute so the worker never sees relative URLs.
     const toAbs = window.__voyagrToAbsoluteOriginUrl || ((u) => u);
     const resolveUrls = window.__voyagrResolveStyleUrls || ((s) => s);
 
     const chosenUrl = styleUrls[theme] || styleUrls['standard'];
 
-    /** Apply the style and re-add layers that get wiped on style change */
-    function applyStyleAndReattach(styleObjOrUrl) {
-        map.setStyle(styleObjOrUrl);
-
-        // Re-add 3D buildings and road labels after style change (style resets layers)
-        map.once('style.load', () => {
-            if (typeof buildings3DEnabled !== 'undefined' && buildings3DEnabled) {
-                MapLibreHelpers.add3DBuildings(map, {
-                    heightMultiplier: buildings3DHeightMultiplier,
-                    opacity: buildings3DOpacity
-                });
-            }
-            // Re-initialize road labels after theme change
-            if (typeof initializeRoadLabels === 'function') {
-                initializeRoadLabels();
-            }
-        });
+    // Try to fetch and resolve the style synchronously (small JSON, fast).
+    let resolvedStyle = null;
+    try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', toAbs(chosenUrl), false); // synchronous
+        xhr.send();
+        if (xhr.status === 200) {
+            resolvedStyle = JSON.parse(xhr.responseText);
+            resolveUrls(resolvedStyle);
+        }
+    } catch (e) {
+        console.warn('[setMapTheme] Sync style fetch failed, using URL with transformRequest:', e.message);
     }
 
-    fetch(toAbs(chosenUrl))
-        .then(res => {
-            if (!res.ok) throw new Error(`Style fetch failed: ${res.status}`);
-            return res.json();
-        })
-        .then(styleJson => {
-            resolveUrls(styleJson);
-            applyStyleAndReattach(styleJson);
-        })
-        .catch(err => {
-            console.warn('[setMapTheme] Could not pre-resolve style, falling back to URL:', err.message);
-            applyStyleAndReattach(toAbs(chosenUrl));
-        });
+    // Change map style
+    map.setStyle(resolvedStyle || toAbs(chosenUrl));
+
+    // Re-add 3D buildings and road labels after style change (style resets layers)
+    map.once('style.load', () => {
+        if (typeof buildings3DEnabled !== 'undefined' && buildings3DEnabled) {
+            MapLibreHelpers.add3DBuildings(map, {
+                heightMultiplier: buildings3DHeightMultiplier,
+                opacity: buildings3DOpacity
+            });
+        }
+        // Re-initialize road labels after theme change
+        if (typeof initializeRoadLabels === 'function') {
+            initializeRoadLabels();
+        }
+    });
 
     showStatus(`🗺️ Map theme changed to ${theme}`, 'success');
     saveAllSettings();

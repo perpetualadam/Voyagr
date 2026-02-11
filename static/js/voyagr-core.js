@@ -123,52 +123,41 @@ function initializeMap() {
     window.__voyagrResolveStyleUrls = resolveStyleUrls;
     window.__voyagrToAbsoluteOriginUrl = toAbsoluteOriginUrl;
 
-    // Fetch the style JSON, resolve all URLs, then create the map with the resolved object.
-    // This avoids MapLibre's worker ever seeing a relative URL.
+    // Synchronously fetch the style JSON, resolve all URLs, then create the map.
+    // We use synchronous XHR so that `map` is available immediately after initializeMap()
+    // returns — the rest of the app (setupMapClickHandler, loadAllSettings, etc.) depends
+    // on this being synchronous.
     const VECTOR_STYLE_PATH = '/map/styles/liberty/style.json';
+    let resolvedStyle = null;
 
-    function createMapWithStyle(styleObjOrUrl) {
-        map = new maplibregl.Map({
-            container: 'map',
-            style: styleObjOrUrl,
-            // Belt-and-suspenders: also rewrite any URL MapLibre constructs at runtime.
-            transformRequest: (url /*, resourceType */) => {
-                return { url: toAbsoluteOriginUrl(url) };
-            },
-            center: [-0.1278, 51.5074], // Default: London [lon, lat]
-            zoom: 13,
-            pitch: 0, // Start flat, will tilt for driving mode
-            bearing: 0,
-            maxPitch: 85, // Allow steep pitch for driving perspective
-            pitchWithRotate: true // Enable pitch control with mouse/touch
-        });
-        finishMapSetup();
+    try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', toAbsoluteOriginUrl(VECTOR_STYLE_PATH), false); // synchronous
+        xhr.send();
+        if (xhr.status === 200) {
+            resolvedStyle = JSON.parse(xhr.responseText);
+            resolveStyleUrls(resolvedStyle);
+            console.log('[Init] Style JSON fetched & URLs resolved to absolute');
+        }
+    } catch (e) {
+        console.warn('[Init] Sync style fetch failed, will use URL with transformRequest:', e.message);
     }
 
-    fetch(toAbsoluteOriginUrl(VECTOR_STYLE_PATH))
-        .then(res => {
-            if (!res.ok) throw new Error(`Style fetch failed: ${res.status}`);
-            return res.json();
-        })
-        .then(styleJson => {
-            console.log('[Init] Style JSON fetched, resolving URLs to absolute...');
-            resolveStyleUrls(styleJson);
-            createMapWithStyle(styleJson);
-        })
-        .catch(err => {
-            // If fetching/parsing the style fails, fall back to passing the URL directly
-            // (transformRequest may still save us) or to the raster fallback.
-            console.warn('[Init] Could not pre-resolve style JSON, trying URL fallback:', err.message);
-            try {
-                createMapWithStyle(toAbsoluteOriginUrl(VECTOR_STYLE_PATH));
-            } catch (e2) {
-                console.warn('[Init] URL fallback also failed, using raster style:', e2.message);
-                createMapWithStyle('/static/map/styles/osm-raster/style.json');
-            }
-        });
-
-    // All the event handlers, controls, etc. that run after the map object exists.
-    function finishMapSetup() {
+    map = new maplibregl.Map({
+        container: 'map',
+        // Prefer the pre-resolved style object; fall back to URL + transformRequest.
+        style: resolvedStyle || toAbsoluteOriginUrl(VECTOR_STYLE_PATH),
+        // Belt-and-suspenders: also rewrite any URL MapLibre constructs at runtime.
+        transformRequest: (url /*, resourceType */) => {
+            return { url: toAbsoluteOriginUrl(url) };
+        },
+        center: [-0.1278, 51.5074], // Default: London [lon, lat]
+        zoom: 13,
+        pitch: 0, // Start flat, will tilt for driving mode
+        bearing: 0,
+        maxPitch: 85, // Allow steep pitch for driving perspective
+        pitchWithRotate: true // Enable pitch control with mouse/touch
+    });
 
     // Log MapLibre errors with useful context. Some style/tile combinations can produce
     // expression evaluation errors like "Expected value to be of type number, but found null instead."
@@ -367,7 +356,6 @@ function initializeMap() {
     });
 
     console.log('[Init] Map initialized successfully');
-    } // end finishMapSetup()
 }
 
 /**
