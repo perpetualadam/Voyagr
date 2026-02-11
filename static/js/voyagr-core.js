@@ -53,17 +53,122 @@ function initializeMap() {
     }
 
     // Initialize map with MapLibre GL JS - using self-hosted OpenMapTiles-compatible styles
-    map = new maplibregl.Map({
-        container: 'map',
-        // Served by our own tile stack (see Nginx proxy rules on Voyagr)
-        style: '/map/styles/liberty/style.json',
-        center: [-0.1278, 51.5074], // Default: London [lon, lat]
-        zoom: 13,
-        pitch: 0, // Start flat, will tilt for driving mode
-        bearing: 0,
-        maxPitch: 85, // Allow steep pitch for driving perspective
-        pitchWithRotate: true // Enable pitch control with mouse/touch
-    });
+    //
+    // *** PWA / Web Worker fix ***
+    // MapLibre runs tile fetching in a Web Worker. In PWAs the worker is often loaded from a
+    // `blob:` URL, which means root-relative paths like "/map/data/gb/12/2032/1324.pbf" cannot
+    // be resolved (the worker has no origin). This causes:
+    //   "Failed to construct 'Request': Failed to parse URL from /map/data/..."
+    // and all vector tiles, glyphs and sprites silently fail → blank map with no labels.
+    //
+    // Fix: we fetch the style JSON ourselves, rewrite EVERY relative URL inside it (sources,
+    // glyphs, sprites) to fully-qualified absolute URLs, then pass the resolved *object* to
+    // MapLibre. Combined with `transformRequest` as a safety net this guarantees the worker
+    // never receives a relative URL.
+
+    /** Convert any relative/root-relative URL to an absolute origin URL. */
+    const toAbsoluteOriginUrl = (url) => {
+        try {
+            if (!url || typeof url !== 'string') return url;
+            if (/^(data|blob|chrome-extension|moz-extension):/.test(url)) return url;
+            if (url.startsWith('http://') || url.startsWith('https://')) return url;
+            return new URL(url, window.location.origin).toString();
+        } catch (e) {
+            return url;
+        }
+    };
+
+    /**
+     * Resolve all relative URLs inside a MapLibre style object so the worker
+     * never has to deal with root-relative paths.
+     */
+    function resolveStyleUrls(style) {
+        if (!style || typeof style !== 'object') return style;
+
+        // Glyphs (font PBFs)
+        if (style.glyphs) {
+            style.glyphs = toAbsoluteOriginUrl(style.glyphs);
+        }
+        // Sprite (image + JSON atlas)
+        if (style.sprite) {
+            if (typeof style.sprite === 'string') {
+                style.sprite = toAbsoluteOriginUrl(style.sprite);
+            } else if (Array.isArray(style.sprite)) {
+                style.sprite = style.sprite.map(s => {
+                    if (typeof s === 'string') return toAbsoluteOriginUrl(s);
+                    if (s && typeof s === 'object' && s.url) {
+                        s.url = toAbsoluteOriginUrl(s.url);
+                    }
+                    return s;
+                });
+            }
+        }
+        // Sources (tile endpoints, TileJSON URLs)
+        if (style.sources) {
+            for (const key of Object.keys(style.sources)) {
+                const src = style.sources[key];
+                if (!src) continue;
+                if (src.url) {
+                    src.url = toAbsoluteOriginUrl(src.url);
+                }
+                if (Array.isArray(src.tiles)) {
+                    src.tiles = src.tiles.map(t => toAbsoluteOriginUrl(t));
+                }
+            }
+        }
+        return style;
+    }
+
+    // Expose helper globally so voyagr-app.js (theme switcher) can reuse it.
+    window.__voyagrResolveStyleUrls = resolveStyleUrls;
+    window.__voyagrToAbsoluteOriginUrl = toAbsoluteOriginUrl;
+
+    // Fetch the style JSON, resolve all URLs, then create the map with the resolved object.
+    // This avoids MapLibre's worker ever seeing a relative URL.
+    const VECTOR_STYLE_PATH = '/map/styles/liberty/style.json';
+
+    function createMapWithStyle(styleObjOrUrl) {
+        map = new maplibregl.Map({
+            container: 'map',
+            style: styleObjOrUrl,
+            // Belt-and-suspenders: also rewrite any URL MapLibre constructs at runtime.
+            transformRequest: (url /*, resourceType */) => {
+                return { url: toAbsoluteOriginUrl(url) };
+            },
+            center: [-0.1278, 51.5074], // Default: London [lon, lat]
+            zoom: 13,
+            pitch: 0, // Start flat, will tilt for driving mode
+            bearing: 0,
+            maxPitch: 85, // Allow steep pitch for driving perspective
+            pitchWithRotate: true // Enable pitch control with mouse/touch
+        });
+        finishMapSetup();
+    }
+
+    fetch(toAbsoluteOriginUrl(VECTOR_STYLE_PATH))
+        .then(res => {
+            if (!res.ok) throw new Error(`Style fetch failed: ${res.status}`);
+            return res.json();
+        })
+        .then(styleJson => {
+            console.log('[Init] Style JSON fetched, resolving URLs to absolute...');
+            resolveStyleUrls(styleJson);
+            createMapWithStyle(styleJson);
+        })
+        .catch(err => {
+            // If fetching/parsing the style fails, fall back to passing the URL directly
+            // (transformRequest may still save us) or to the raster fallback.
+            console.warn('[Init] Could not pre-resolve style JSON, trying URL fallback:', err.message);
+            try {
+                createMapWithStyle(toAbsoluteOriginUrl(VECTOR_STYLE_PATH));
+            } catch (e2) {
+                console.warn('[Init] URL fallback also failed, using raster style:', e2.message);
+                createMapWithStyle('/static/map/styles/osm-raster/style.json');
+            }
+        });
+
+    // All the event handlers, controls, etc. that run after the map object exists.
+    function finishMapSetup() {
 
     // Log MapLibre errors with useful context. Some style/tile combinations can produce
     // expression evaluation errors like "Expected value to be of type number, but found null instead."
@@ -145,6 +250,19 @@ function initializeMap() {
                 msg.includes('Font') ||
                 msg.includes('Failed to load glyph') ||
                 msg.includes('Failed to load') && (msg.includes('.pbf') || msg.includes('fonts') || msg.includes('glyphs'))
+            ) {
+                maybeFallbackToRasterStyle(msg);
+            }
+
+            // Another common PWA failure mode: MapLibre's worker runs from a `blob:` URL and
+            // cannot resolve root-relative tile URLs from the style (e.g. "/map/data/...pbf"),
+            // producing errors like:
+            // "Failed to construct 'Request': Failed to parse URL from /map/data/..."
+            // When this happens the vector stack (and thus labels) won't load.
+            if (
+                msg.includes('Failed to parse URL') ||
+                msg.includes("Failed to construct 'Request'") ||
+                msg.includes('Failed to construct "Request"')
             ) {
                 maybeFallbackToRasterStyle(msg);
             }
@@ -249,6 +367,7 @@ function initializeMap() {
     });
 
     console.log('[Init] Map initialized successfully');
+    } // end finishMapSetup()
 }
 
 /**
