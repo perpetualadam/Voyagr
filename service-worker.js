@@ -1,6 +1,6 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
 // Version: 6.0 - Network-first for root HTML, cache JS/CSS
-const CACHE_VERSION = 'v12';
+const CACHE_VERSION = 'v13';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
@@ -69,7 +69,7 @@ async function trimCache(cacheName, maxSize) {
 
 // Install event - cache static assets
 self.addEventListener('install', event => {
-  console.log('[Service Worker] Installing v7...');
+  console.log(`[Service Worker] Installing ${CACHE_VERSION}...`);
   event.waitUntil(
     caches.open(STATIC_CACHE).then(cache => {
       console.log('[Service Worker] Caching static assets');
@@ -87,7 +87,7 @@ self.addEventListener('install', event => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', event => {
-  console.log('[Service Worker] Activating v7...');
+  console.log(`[Service Worker] Activating ${CACHE_VERSION}...`);
   const currentCaches = [STATIC_CACHE, DYNAMIC_CACHE, ROUTE_CACHE, TILE_CACHE, CACHE_NAME];
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -247,32 +247,38 @@ self.addEventListener('fetch', event => {
     return;
   }
 
-  // Static assets - cache first, fallback to network
+  // JS and CSS files — NETWORK FIRST so deploys take effect immediately.
+  // Falls back to cache (including ignoreSearch) for offline use.
+  if (url.pathname.startsWith('/static/js/') || url.pathname.startsWith('/static/css/')) {
+    event.respondWith(
+      fetch(request)
+        .then(networkResponse => {
+          if (networkResponse && networkResponse.ok) {
+            const responseClone = networkResponse.clone();
+            caches.open(STATIC_CACHE).then(cache => cache.put(request, responseClone));
+          }
+          return networkResponse;
+        })
+        .catch(() => {
+          // Offline: try exact match first, then ignoreSearch to handle cache-buster changes.
+          return caches.match(request)
+            .then(resp => resp || caches.match(request, { ignoreSearch: true }))
+            .then(resp => resp || new Response('Offline', { status: 503 }));
+        })
+    );
+    return;
+  }
+
+  // Other static assets and remaining requests - cache first, fallback to network
   event.respondWith(
     caches.match(request)
       .then(response => {
         if (response) {
-          // Stale-while-revalidate for static assets so updates get picked up
-          // even when the URL (including querystring) stays the same.
-          if (url.pathname.startsWith('/static/')) {
-            event.waitUntil(
-              fetch(request).then(networkResponse => {
-                if (networkResponse && networkResponse.ok) {
-                  const responseClone = networkResponse.clone();
-                  const targetCache = (url.pathname.startsWith('/static/js/') || url.pathname.startsWith('/static/css/'))
-                    ? STATIC_CACHE
-                    : DYNAMIC_CACHE;
-                  return caches.open(targetCache).then(cache => cache.put(request, responseClone));
-                }
-              }).catch(() => {})
-            );
-          }
           return response;
         }
         return fetch(request).then(networkResponse => {
           if (networkResponse.ok && request.method === 'GET') {
             const responseClone = networkResponse.clone();
-            // Cache static assets
             if (url.pathname.startsWith('/static/') || STATIC_ASSETS.includes(url.pathname)) {
               caches.open(STATIC_CACHE).then(cache => {
                 cache.put(request, responseClone);
@@ -288,7 +294,6 @@ self.addEventListener('fetch', event => {
         });
       })
       .catch(() => {
-        // Return offline page if available
         return caches.match('/') || new Response('Offline');
       })
   );
