@@ -66,13 +66,17 @@ function initializeMap() {
     // MapLibre. Combined with `transformRequest` as a safety net this guarantees the worker
     // never receives a relative URL.
 
-    /** Convert any relative/root-relative URL to an absolute origin URL. */
+    /** Convert any relative/root-relative URL to an absolute origin URL.
+     *  Preserves MapLibre template placeholders like {z}, {x}, {y}
+     *  which new URL() would percent-encode to %7Bz%7D etc. */
     const toAbsoluteOriginUrl = (url) => {
         try {
             if (!url || typeof url !== 'string') return url;
             if (/^(data|blob|chrome-extension|moz-extension):/.test(url)) return url;
             if (url.startsWith('http://') || url.startsWith('https://')) return url;
-            return new URL(url, window.location.origin).toString();
+            const resolved = new URL(url, window.location.origin).toString();
+            // Restore curly-brace template tokens that URL() percent-encodes.
+            return resolved.replace(/%7B/gi, '{').replace(/%7D/gi, '}');
         } catch (e) {
             return url;
         }
