@@ -8254,6 +8254,14 @@ function setMapTheme(themeOrEvent) {
         'dark': '/map/styles/positron/style.json'
     };
 
+    // If core detected missing glyphs/labels and applied a raster fallback, respect it
+    // so users don't get bounced back into a label-less vector style.
+    if (window.__voyagrPreferredFallbackStyleUrl) {
+        styleUrls['standard'] = window.__voyagrPreferredFallbackStyleUrl;
+        styleUrls['satellite'] = window.__voyagrPreferredFallbackStyleUrl;
+        styleUrls['dark'] = window.__voyagrPreferredFallbackStyleUrl;
+    }
+
     // Change map style
     map.setStyle(styleUrls[theme] || styleUrls['standard']);
 

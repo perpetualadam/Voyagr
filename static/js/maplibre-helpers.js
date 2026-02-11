@@ -852,7 +852,8 @@ function configureRoadLabels(mapInstance, options = {}) {
                     mapInstance.setLayoutProperty(
                         layer.id,
                         'visibility',
-                        config.enabled ? 'visible' : 'hidden'
+                        // MapLibre/Mapbox style spec: visibility is 'visible' or 'none'
+                        config.enabled ? 'visible' : 'none'
                     );
 
                     // Set text color
@@ -939,7 +940,8 @@ function toggleRoadLabels(mapInstance, visible) {
                     mapInstance.setLayoutProperty(
                         layer.id,
                         'visibility',
-                        visible ? 'visible' : 'hidden'
+                        // MapLibre/Mapbox style spec: visibility is 'visible' or 'none'
+                        visible ? 'visible' : 'none'
                     );
                 } catch (e) {
                     // Silently skip layers that can't be modified

@@ -171,9 +171,38 @@ self.addEventListener('fetch', event => {
     return;
   }
 
+  // Map resources
+  // - Vector tiles can be cached cache-first (fast + offline-friendly).
+  // - Styles/sprites/glyphs should NOT be cache-first, otherwise the PWA can get "stuck"
+  //   on an older (or broken) style where labels never appear.
+  const isMapProxy = url.pathname.startsWith(MAP_PROXY_PATH_PREFIX);
+  const isMapStyle = isMapProxy && url.pathname.startsWith('/map/styles/');
+  const isMapSprite = isMapProxy && url.pathname.includes('/sprites/');
+  const isMapGlyphsOrFonts = isMapProxy && (url.pathname.includes('/glyphs/') || url.pathname.includes('/fonts/'));
+
+  // Map styles/sprites/glyphs/fonts - NETWORK FIRST with cache fallback
+  if (isMapStyle || isMapSprite || isMapGlyphsOrFonts) {
+    event.respondWith(
+      fetch(request)
+        .then(networkResponse => {
+          if (networkResponse && networkResponse.ok) {
+            const responseClone = networkResponse.clone();
+            caches.open(TILE_CACHE).then(async cache => {
+              await cache.put(request, responseClone);
+              await trimCache(TILE_CACHE, MAX_TILE_CACHE_SIZE);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.open(TILE_CACHE).then(cache => cache.match(request)))
+        .then(resp => resp || new Response('Offline', { status: 503 }))
+    );
+    return;
+  }
+
   // Map tiles - cache first with network update (stale-while-revalidate)
   // Includes our self-hosted vector tile stack proxied via /map/.
-  if (url.pathname.startsWith(MAP_PROXY_PATH_PREFIX) || url.hostname.includes('tile') || url.pathname.includes('tiles')) {
+  if (isMapProxy || url.hostname.includes('tile') || url.pathname.includes('tiles')) {
     event.respondWith(
       caches.open(TILE_CACHE).then(cache => cache.match(request)).then(cachedResponse => {
         const fetchPromise = fetch(request).then(networkResponse => {

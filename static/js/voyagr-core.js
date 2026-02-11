@@ -68,6 +68,60 @@ function initializeMap() {
     // Log MapLibre errors with useful context. Some style/tile combinations can produce
     // expression evaluation errors like "Expected value to be of type number, but found null instead."
     // When this happens, it is typically triggered by optional layers like 3D buildings.
+    function maybeFallbackToRasterStyle(reason) {
+        try {
+            // Only do this once per session.
+            if (window.__voyagrRasterStyleFallbackApplied) return;
+            window.__voyagrRasterStyleFallbackApplied = true;
+
+            const msg = `[MapLibre] Falling back to raster map (labels built-in): ${reason}`;
+            console.warn(msg);
+
+            // Surface to UI if available (defined in voyagr-app.js)
+            if (typeof showStatus === 'function') {
+                showStatus('🗺️ Map labels unavailable (fonts/glyphs). Switching to raster map with labels.', 'info');
+            }
+
+            // Persist for the session; allow theme changes to respect this.
+            window.__voyagrPreferredFallbackStyleUrl = '/static/map/styles/osm-raster/style.json';
+
+            if (map && typeof map.setStyle === 'function') {
+                map.setStyle(window.__voyagrPreferredFallbackStyleUrl);
+            }
+        } catch (e) {
+            // never crash
+        }
+    }
+
+    function validateStyleHasLabels() {
+        try {
+            if (!map || !map.getStyle) return;
+            const style = map.getStyle();
+            const layers = style?.layers || [];
+            const textLayers = layers.filter(l =>
+                l &&
+                l.type === 'symbol' &&
+                l.layout &&
+                l.layout['text-field']
+            );
+            const hasTextLayers = textLayers.length > 0;
+            const hasGlyphs = !!style?.glyphs;
+
+            // If a style has no glyph endpoint, MapLibre cannot render any text labels.
+            if (!hasGlyphs) {
+                maybeFallbackToRasterStyle('style has no "glyphs" endpoint');
+                return;
+            }
+            // Some styles may omit all text layers (no labels at all).
+            if (!hasTextLayers) {
+                maybeFallbackToRasterStyle('style has no symbol text layers');
+                return;
+            }
+        } catch (e) {
+            // ignore
+        }
+    }
+
     map.on('error', (evt) => {
         try {
             const msg = evt?.error?.message || evt?.message || '';
@@ -79,6 +133,20 @@ function initializeMap() {
             };
             if (msg) {
                 console.warn('[MapLibre][Error]', ctx);
+            }
+
+            // Common failure mode for "no street names": glyphs/fonts are not being served
+            // from the style's glyph endpoint (404/500/etc). When that happens, labels
+            // will never render even if the label layers exist.
+            if (
+                msg.includes('glyph') ||
+                msg.includes('Glyph') ||
+                msg.includes('font') ||
+                msg.includes('Font') ||
+                msg.includes('Failed to load glyph') ||
+                msg.includes('Failed to load') && (msg.includes('.pbf') || msg.includes('fonts') || msg.includes('glyphs'))
+            ) {
+                maybeFallbackToRasterStyle(msg);
             }
 
             // If the error looks like a numeric expression evaluation issue and 3D buildings are enabled,
@@ -111,6 +179,10 @@ function initializeMap() {
             // Never let error handling crash init
         }
     });
+
+    // After initial load and after any style switch, validate the style supports labels.
+    map.once('load', validateStyleHasLabels);
+    map.on('style.load', validateStyleHasLabels);
 
     // Handle missing images (POI icons) by providing a transparent placeholder
     // This suppresses "Image 'x' could not be loaded" errors in the console
