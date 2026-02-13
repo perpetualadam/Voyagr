@@ -3885,9 +3885,12 @@ HTML_TEMPLATE = '''
                     <div class="favorites-grid" id="favoritesGrid"></div>
                 </div>
 
-                <!-- Lane Guidance Display (Phase 2) -->
+                <!-- Lane Guidance Display (Phase 2 - Enhanced Smart Lane Recognition) -->
                 <div class="lane-guidance-display" id="laneGuidanceDisplay">
-                    <div class="lane-guidance-title">🛣️ Lane Guidance</div>
+                    <div class="lane-guidance-header">
+                        <span class="lane-guidance-title">🛣️ Lane Guidance</span>
+                        <span class="lane-guidance-badge" id="laneGuidanceBadge"></span>
+                    </div>
                     <div class="lane-visual" id="laneVisual"></div>
                     <div class="lane-guidance-text" id="laneGuidanceText"></div>
                 </div>
@@ -4918,7 +4921,7 @@ HTML_TEMPLATE = '''
                 </div>
                 <!-- Speed Limit Circle (like road signs) -->
                 <div id="speedLimitCircle" style="width: 50px; height: 50px; border-radius: 50%; border: 4px solid #E53935; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                    <div id="speedLimitValue" style="font-size: 18px; font-weight: bold; color: #333; line-height: 1;">--</div>
+                    <div id="speedLimitValue" style="font-size: 18px; font-weight: bold; color: #333; line-height: 1;">…</div>
                     <div id="speedLimitUnit" style="font-size: 8px; color: #666;">km/h</div>
                 </div>
             </div>

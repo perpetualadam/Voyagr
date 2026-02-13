@@ -5029,8 +5029,9 @@ async function triggerTrafficBasedReroute() {
             if (timeSaved >= 2) {
                 updateRouteOnMap(newRoute);
                 sendNotification('✅ Route Updated', `New route found! Saves ${timeSaved.toFixed(0)} minutes due to traffic.`, 'success');
-                if (voiceRecognition) {
-                    speakMessage(`Route updated. New route saves ${timeSaved.toFixed(0)} minutes.`);
+                // FIX: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
+                if (voiceAnnouncementsEnabled) {
+                    speakMessage(`Route updated. New route saves ${timeSaved.toFixed(0)} minutes.`, 'high');
                 }
             } else {
                 console.log('[Auto-Traffic] New route not significantly faster, keeping current route');
@@ -5097,6 +5098,30 @@ function updateRouteOnMap(newRoute) {
         opacity: 0.8
     });
 
+    // === FIX: Update maneuvers / steps so turn-by-turn stays in sync ===
+    if (newRoute.maneuvers && newRoute.maneuvers.length > 0) {
+        currentRouteSteps = newRoute.maneuvers;
+        console.log(`[Reroute] Maneuvers updated: ${currentRouteSteps.length} steps`);
+    } else if (newRoute.legs && newRoute.legs[0] && newRoute.legs[0].maneuvers) {
+        currentRouteSteps = newRoute.legs[0].maneuvers;
+        console.log(`[Reroute] Maneuvers from legs updated: ${currentRouteSteps.length} steps`);
+    }
+
+    // Reset step tracking to the beginning of the new route
+    currentStepIndex = 0;
+
+    // Reset snap-to-route index so the vehicle snaps to the new polyline correctly
+    lastSnappedRouteIndex = 0;
+
+    // Reset deviation tracking so we don't immediately re-trigger reroute
+    deviationStartTimeCheck = null;
+    rerouteAttemptCount = 0;
+
+    // Refresh the turn instruction widget immediately with new route data
+    if (currentLat && currentLon) {
+        updateTurnWidgetFromPosition(currentLat, currentLon);
+    }
+
     // Update trip info
     updateTripInfo(newRoute.distance_km, newRoute.duration_minutes, newRoute.fuel_cost, newRoute.toll_cost);
 
@@ -5111,7 +5136,7 @@ function updateRouteOnMap(newRoute) {
         time: `${newRoute.duration_minutes} minutes`
     };
 
-    console.log('[Reroute] Route updated on map');
+    console.log('[Reroute] Route updated on map with fresh maneuvers and step tracking');
 }
 
 /**
@@ -6858,30 +6883,125 @@ function addCurrentToFavorites() {
  * @param {*} maneuver - Parameter description
  * @returns {*} Return value description
  */
+// Lane guidance throttle to avoid API spam
+let lastLaneGuidanceFetch = 0;
+const LANE_GUIDANCE_FETCH_INTERVAL = 3000; // 3 seconds
+let lastLaneGuidanceManeuver = '';
+let lastLaneGuidancePosition = null;
+
 function updateLaneGuidance(lat, lon, heading, maneuver) {
-    fetch(`/api/lane-guidance?lat=${lat}&lon=${lon}&heading=${heading}&maneuver=${maneuver}`)
+    const now = Date.now();
+
+    // Throttle API calls - only fetch if position changed significantly or maneuver changed
+    const posChanged = !lastLaneGuidancePosition ||
+        calculateDistance(lat, lon, lastLaneGuidancePosition.lat, lastLaneGuidancePosition.lon) > 50;
+    const maneuverChanged = maneuver !== lastLaneGuidanceManeuver;
+
+    if (!posChanged && !maneuverChanged && (now - lastLaneGuidanceFetch) < LANE_GUIDANCE_FETCH_INTERVAL) {
+        return;
+    }
+
+    // Calculate distance to next maneuver for urgency assessment
+    let distToManeuver = 9999;
+    if (routeInProgress && currentRouteSteps && currentRouteSteps.length > currentStepIndex) {
+        const nextStep = currentRouteSteps[currentStepIndex];
+        if (nextStep && routePolyline) {
+            const shapeIdx = nextStep.begin_shape_index || 0;
+            if (shapeIdx < routePolyline.length) {
+                distToManeuver = calculateDistance(lat, lon, routePolyline[shapeIdx][0], routePolyline[shapeIdx][1]);
+            }
+        }
+    }
+
+    // Get road type from current route data
+    const roadType = getCurrentRoadType() || 'unknown';
+
+    lastLaneGuidanceFetch = now;
+    lastLaneGuidanceManeuver = maneuver;
+    lastLaneGuidancePosition = { lat, lon };
+
+    fetch(`/api/lane-guidance?lat=${lat}&lon=${lon}&heading=${heading}&maneuver=${maneuver}&distance=${distToManeuver}&road_type=${roadType}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                const display = document.getElementById('laneGuidanceDisplay');
-                const visual = document.getElementById('laneVisual');
-                const text = document.getElementById('laneGuidanceText');
-
-                visual.innerHTML = '';
-                for (let i = 1; i <= data.total_lanes; i++) {
-                    const lane = document.createElement('div');
-                    lane.className = 'lane-indicator';
-                    if (i === data.current_lane) lane.classList.add('current');
-                    if (i === data.recommended_lane) lane.classList.add('recommended');
-                    lane.textContent = i;
-                    visual.appendChild(lane);
-                }
-
-                text.textContent = data.guidance_text;
-                display.classList.add('show');
+                renderLaneGuidanceUI(data);
             }
         })
-        .catch(error => console.error('Error updating lane guidance:', error));
+        .catch(error => console.error('[Lane Guidance] Error:', error));
+}
+
+/**
+ * Render the lane guidance UI with arrows, urgency, and visual lane indicators.
+ * @param {Object} data - Lane guidance data from the API
+ */
+function renderLaneGuidanceUI(data) {
+    const display = document.getElementById('laneGuidanceDisplay');
+    const visual = document.getElementById('laneVisual');
+    const text = document.getElementById('laneGuidanceText');
+
+    if (!display || !visual || !text) return;
+
+    // Don't show lane guidance for single-lane roads or when no maneuver is approaching
+    if (data.total_lanes <= 1 || data.urgency === 'none') {
+        display.classList.remove('show');
+        return;
+    }
+
+    // Build lane visual with direction arrows
+    visual.innerHTML = '';
+    const laneArrows = data.lane_arrows || [];
+
+    for (let i = 0; i < data.total_lanes; i++) {
+        const lane = document.createElement('div');
+        lane.className = 'lane-indicator';
+        const laneNum = i + 1;
+
+        // Highlight recommended lane
+        if (laneNum === data.recommended_lane) {
+            lane.classList.add('recommended');
+        }
+
+        // Show arrow direction for each lane
+        const arrowInfo = laneArrows[i];
+        if (arrowInfo) {
+            lane.innerHTML = `<span class="lane-arrow">${arrowInfo.arrow}</span>`;
+            // Mark lanes that match the maneuver direction
+            if (arrowInfo.directions && data.has_turn_lanes) {
+                lane.classList.add('has-direction');
+            }
+        } else {
+            lane.innerHTML = `<span class="lane-arrow">↑</span>`;
+        }
+
+        visual.appendChild(lane);
+    }
+
+    // Set urgency styling
+    display.className = 'lane-guidance-display show';
+    if (data.urgency === 'now') {
+        display.classList.add('urgency-now');
+    } else if (data.urgency === 'soon') {
+        display.classList.add('urgency-soon');
+    } else if (data.urgency === 'ahead') {
+        display.classList.add('urgency-ahead');
+    }
+
+    // Build guidance text with distance context
+    let displayText = data.guidance_text || '';
+    if (data.urgency_text && data.urgency !== 'none' && data.urgency !== 'info') {
+        displayText = data.urgency_text;
+    }
+    text.textContent = displayText;
+
+    // Voice announcement for urgent lane changes
+    if (data.lane_change_needed && data.urgency === 'soon' && voiceAnnouncementsEnabled) {
+        // Only announce once per maneuver to avoid spam
+        const announceKey = `lane_${data.next_maneuver}_${data.recommended_lane}`;
+        if (announceKey !== lastLaneGuidanceManeuver + '_announced') {
+            speakMessage(data.urgency_text, 'normal');
+            lastLaneGuidanceManeuver = announceKey.replace('_announced', '') + '_announced';
+        }
+    }
 }
 
 // ===== PHASE 2 FEATURES: SPEED WARNINGS =====
@@ -6896,11 +7016,11 @@ let speedLimitThreshold = 3; // mph over limit to trigger warning
 let currentGpsSpeedMph = 0;
 let currentGpsSpeedKmh = 0;
 
-// Speed limit API throttling (FIX: Prevent API spam)
+// Speed limit API throttling (FIX: Prevent API spam while remaining responsive)
 let lastSpeedLimitFetch = 0;
 let lastSpeedLimitPosition = null;
-const SPEED_LIMIT_FETCH_INTERVAL = 10000;  // 10 seconds
-const SPEED_LIMIT_DISTANCE_THRESHOLD = 100;  // 100 meters
+const SPEED_LIMIT_FETCH_INTERVAL = 4000;   // 4 seconds (was 10s – too sluggish on road changes)
+const SPEED_LIMIT_DISTANCE_THRESHOLD = 50;  // 50 meters (was 100m – react faster to new roads)
 
 // Speed limit API error handling
 let speedLimitRetryCount = 0;
@@ -6981,17 +7101,17 @@ function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
  * Shows widget when: tracking is active OR navigation is in progress AND widget is enabled
  * @returns {void}
  */
+let _lastSpeedWidgetVisible = null; // Track to avoid redundant DOM writes
 function updateSpeedWidgetVisibility() {
     const widget = document.getElementById('speedWidget');
     if (!widget) return;
 
     const shouldShow = (isTrackingActive || routeInProgress) && speedWidgetEnabled;
-    widget.style.display = shouldShow ? 'block' : 'none';
-
-    if (shouldShow) {
-        console.log('[Speed Widget] Visible (tracking:', isTrackingActive, 'route:', routeInProgress, 'enabled:', speedWidgetEnabled, ')');
-    } else {
-        console.log('[Speed Widget] Hidden (tracking:', isTrackingActive, 'route:', routeInProgress, 'enabled:', speedWidgetEnabled, ')');
+    // Only update DOM if state actually changed
+    if (shouldShow !== _lastSpeedWidgetVisible) {
+        widget.style.display = shouldShow ? 'block' : 'none';
+        _lastSpeedWidgetVisible = shouldShow;
+        console.log('[Speed Widget]', shouldShow ? 'Visible' : 'Hidden', '(tracking:', isTrackingActive, 'route:', routeInProgress, ')');
     }
 }
 
@@ -7057,8 +7177,13 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
                     const speedLimitMph = data.data.speed_limit_mph || data.data.speed_limit;
                     console.log('[Speed Limit] API response:', data.data, 'Extracted limit:', speedLimitMph);
 
-                    // Update widget with current GPS speed and fetched limit
-                    updateSpeedWidget(currentSpeedMph, speedLimitMph);
+                    // Store the new speed limit globally so the widget picks it up immediately
+                    if (speedLimitMph && speedLimitMph > 0) {
+                        currentSpeedLimitMph = speedLimitMph;
+                    }
+
+                    // Update widget with latest speed limit
+                    updateSpeedWidget(currentGpsSpeedMph, speedLimitMph);
 
                     // Update throttling state
                     lastSpeedLimitFetch = now;
@@ -7068,7 +7193,6 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
                     speedLimitRetryCount = 0;
                 } else {
                     console.warn('[Speed Limit] No data in response:', data);
-                    updateSpeedWidget(currentSpeedMph, null);
                 }
             })
             .catch(err => {
@@ -7090,14 +7214,12 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
                     }, backoffDelay);
                 } else {
                     console.error('[Speed Limit] Max retries reached, giving up');
-                    updateSpeedWidget(currentSpeedMph, null);
                     speedLimitRetryCount = 0;
                 }
             });
-    } else {
-        // Just update speed display without fetching new limit
-        updateSpeedWidget(currentSpeedMph, currentSpeedLimitMph || null);
     }
+    // NOTE: GPS speed display is now updated on every GPS tick in the main callback,
+    // so we no longer need to update it in the throttle "else" branch.
 }
 
 /**
@@ -7405,21 +7527,25 @@ function detectUpcomingTurn(userLat, userLon) {
             // Valhalla maneuver types: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/
             // SKIP types 1-3, 7-8, 17, 27-28 (Start, Becomes, Continue, Ramp straight, Ferry)
             if (type === 4 || type === 5 || type === 6) direction = 'destination';  // Destination
-            else if (type === 9) direction = 'slight_right';  // Slight right
-            else if (type === 10) direction = 'right';  // Right
-            else if (type === 11) direction = 'sharp_right';  // Sharp right
-            else if (type === 12 || type === 13) direction = 'uturn';  // U-turn
-            else if (type === 14) direction = 'sharp_left';  // Sharp left
-            else if (type === 15) direction = 'left';  // Left
-            else if (type === 16) direction = 'slight_left';  // Slight left
-            else if (type === 18) direction = 'slight_right';  // Ramp right
-            else if (type === 19) direction = 'slight_left';  // Ramp left
-            else if (type === 20) direction = 'exit';  // Exit right
-            else if (type === 21) direction = 'exit';  // Exit left
-            else if (type === 22) direction = 'slight_right';  // Stay right
-            else if (type === 23) direction = 'slight_left';  // Stay left
-            else if (type === 24) direction = 'merge';  // Merge
-            else if (type === 25 || type === 26) direction = 'roundabout';  // Roundabout
+            else if (type === 9) direction = 'slight_right';   // Slight Right
+            else if (type === 10) direction = 'right';          // Right
+            else if (type === 11) direction = 'sharp_right';    // Sharp Right
+            else if (type === 12) direction = 'uturn';          // U-turn Right
+            else if (type === 13) direction = 'uturn';          // U-turn Left
+            else if (type === 14) direction = 'sharp_left';     // Sharp Left
+            else if (type === 15) direction = 'left';           // Left
+            else if (type === 16) direction = 'slight_left';    // Slight Left
+            else if (type === 18) direction = 'slight_right';   // Ramp Right
+            else if (type === 19) direction = 'slight_left';    // Ramp Left
+            else if (type === 20) direction = 'exit_right';     // Exit Right  (FIX: preserve direction)
+            else if (type === 21) direction = 'exit_left';      // Exit Left   (FIX: preserve direction)
+            else if (type === 22) direction = 'straight';       // Stay Straight (FIX: was slight_right)
+            else if (type === 23) direction = 'slight_right';   // Stay Right  (FIX: was slight_left)
+            else if (type === 24) direction = 'slight_left';    // Stay Left   (FIX: was merge)
+            else if (type === 25) direction = 'merge';          // Merge
+            else if (type === 26) direction = 'roundabout';     // Roundabout Enter
+            else if (type === 35) direction = 'merge';          // Merge Right
+            else if (type === 36) direction = 'merge';          // Merge Left
 
             // Skip non-turn maneuvers (straight, continue, etc.)
             if (direction === null) continue;
@@ -7879,7 +8005,8 @@ function checkSpeedViolation(currentSpeedMph, speedLimitMph, threshold = 5) {
                 console.log(`[Speed] Status: ${violation.status}, Diff: ${violation.speed_diff_mph} mph`);
 
                 // Announce speed violations via voice if enabled
-                if (violation.status === 'exceeding' && voiceRecognition) {
+                // FIX: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
+                if (violation.status === 'exceeding' && voiceAnnouncementsEnabled) {
                     speakMessage(`⚠️ Exceeding speed limit by ${violation.speed_diff_mph} mph`);
                 }
             }
@@ -8774,6 +8901,7 @@ function hideTurnInstructionWidget() {
  */
 function getTurnIcon(type) {
     // Valhalla maneuver types: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/
+    // FIX: Corrected arrow directions - left maneuvers show left arrows, right show right
     const iconMap = {
         0: '↑',    // None/Continue
         1: '↑',    // Start
@@ -8784,22 +8912,22 @@ function getTurnIcon(type) {
         6: '🏁',   // Destination Left
         7: '↑',    // Becomes
         8: '↑',    // Continue
-        9: '↱',    // Slight Right
-        10: '→',   // Right
-        11: '↳',   // Sharp Right
+        9: '↱',    // Slight Right       → arrow bending right
+        10: '→',   // Right              → right arrow
+        11: '↳',   // Sharp Right        → sharp right arrow
         12: '↩',   // U-turn Right
         13: '↩',   // U-turn Left
-        14: '↲',   // Sharp Left
-        15: '←',   // Left
-        16: '↰',   // Slight Left
+        14: '↲',   // Sharp Left         → sharp left arrow
+        15: '←',   // Left               → left arrow
+        16: '↰',   // Slight Left        → arrow bending left
         17: '↑',   // Ramp Straight
-        18: '↱',   // Ramp Right
-        19: '↰',   // Ramp Left
-        20: '↗',   // Exit Right
-        21: '↖',   // Exit Left
+        18: '↱',   // Ramp Right         → arrow bending right
+        19: '↰',   // Ramp Left          → arrow bending left
+        20: '↗',   // Exit Right         → arrow upper-right
+        21: '↖',   // Exit Left          → arrow upper-left (FIX: was showing right in some paths)
         22: '↑',   // Stay Straight
-        23: '↱',   // Stay Right
-        24: '↰',   // Stay Left
+        23: '↱',   // Stay Right         → arrow bending right
+        24: '↰',   // Stay Left          → arrow bending left
         25: '⚙️',   // Merge
         26: '🔄',  // Roundabout Enter
         27: '↗',   // Roundabout Exit
@@ -8878,16 +9006,27 @@ function updateTurnInstructionDisplay(turnInfo) {
         }
 
         // Update icon based on direction
+        // FIX: Added exit-left/exit-right, and underscore variants for compatibility
         const directionToType = {
             'left': 15,
             'right': 10,
             'slight-left': 16,
+            'slight_left': 16,
             'slight-right': 9,
+            'slight_right': 9,
             'sharp-left': 14,
+            'sharp_left': 14,
             'sharp-right': 11,
+            'sharp_right': 11,
             'u-turn': 12,
+            'uturn': 12,
             'straight': 8,
             'exit': 20,
+            'exit-right': 20,
+            'exit_right': 20,
+            'exit-left': 21,
+            'exit_left': 21,
+            'merge': 25,
             'roundabout': 26,
             'destination': 4
         };
@@ -9092,16 +9231,32 @@ function updateTurnWidgetFromPosition(lat, lon) {
             const type = maneuver.type || 0;
             let direction = 'straight';
 
-            // Map Valhalla types to directions
+            // Map Valhalla types to directions (FIX: corrected mappings)
+            // Types 9=Slight Right, 18=Ramp Right, 23=Stay Right
             if ([9, 18, 23].includes(type)) direction = 'slight-right';
+            // Type 10=Right
             else if ([10].includes(type)) direction = 'right';
+            // Type 11=Sharp Right
             else if ([11].includes(type)) direction = 'sharp-right';
+            // Types 16=Slight Left, 19=Ramp Left, 24=Stay Left
             else if ([16, 19, 24].includes(type)) direction = 'slight-left';
+            // Type 15=Left
             else if ([15].includes(type)) direction = 'left';
+            // Type 14=Sharp Left
             else if ([14].includes(type)) direction = 'sharp-left';
+            // Types 12=U-turn Right, 13=U-turn Left
             else if ([12, 13].includes(type)) direction = 'u-turn';
-            else if ([20, 21].includes(type)) direction = 'exit';
+            // Type 20=Exit Right (FIX: separate from Exit Left)
+            else if ([20].includes(type)) direction = 'exit-right';
+            // Type 21=Exit Left (FIX: was grouped with exit right)
+            else if ([21].includes(type)) direction = 'exit-left';
+            // Type 22=Stay Straight (FIX: was missing, was wrong)
+            else if ([22].includes(type)) direction = 'straight';
+            // Types 25,35,36=Merge
+            else if ([25, 35, 36].includes(type)) direction = 'merge';
+            // Types 26,27=Roundabout
             else if ([26, 27].includes(type)) direction = 'roundabout';
+            // Types 4,5,6=Destination
             else if ([4, 5, 6].includes(type)) direction = 'destination';
 
             const streetNames = maneuver.street_names || [];
@@ -9982,12 +10137,34 @@ function startGPSTracking() {
                 heading = (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360;
             }
 
+            // ===== SNAP TO ROUTE: Position vehicle on the polyline during navigation =====
+            let displayLat = lat;
+            let displayLon = lon;
+
+            if (routeInProgress && routePolyline && routePolyline.length >= 2) {
+                const snapped = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+                if (snapped.distance <= SNAP_TO_ROUTE_MAX_DISTANCE) {
+                    displayLat = snapped.lat;
+                    displayLon = snapped.lon;
+                    lastSnappedRouteIndex = snapped.index;
+                    // Recalculate heading from route direction at snapped point for smoother rotation
+                    if (snapped.index < routePolyline.length - 1) {
+                        const rA = routePolyline[snapped.index];
+                        const rB = routePolyline[snapped.index + 1];
+                        heading = calculateBearing(rA[0], rA[1], rB[0], rB[1]);
+                    }
+                } else {
+                    // Too far from route — use raw GPS (driver may be off-route)
+                    console.log(`[Snap] GPS ${snapped.distance.toFixed(0)}m from route, using raw position`);
+                }
+            }
+
             // Update user marker on map with vehicle icon and heading
             if (currentUserMarker) {
                 if (typeof currentUserMarker.remove === 'function') currentUserMarker.remove();
             }
 
-            currentUserMarker = createVehicleMarker(lat, lon, speed, accuracy, heading);
+            currentUserMarker = createVehicleMarker(displayLat, displayLon, speed, accuracy, heading);
             currentUserMarker.addTo(map);
 
             // ===== ZOOM AND FOLLOW: Center map on user with smart zoom =====
@@ -10007,7 +10184,7 @@ function startGPSTracking() {
 
                 // Smooth animation to follow vehicle
                 map.easeTo({
-                    center: [lon, lat], // MapLibre uses [lon, lat]
+                    center: [displayLon, displayLat], // MapLibre uses [lon, lat]
                     zoom: smartZoom,
                     bearing: bearing,
                     pitch: pitch,
@@ -10020,7 +10197,7 @@ function startGPSTracking() {
             } else if (!zoomAndFollowEnabled && !map._userPanned) {
                 // If zoom and follow is disabled but map hasn't been manually panned, still center on user
                 map.easeTo({
-                    center: [lon, lat],
+                    center: [displayLon, displayLat],
                     zoom: 16,
                     duration: 1000
                 });
@@ -10071,19 +10248,38 @@ function startGPSTracking() {
 
             // Heading already calculated above when creating vehicle marker
 
-            // Update lane guidance if navigating
+            // Update lane guidance if navigating (FIX: extract maneuver direction from Valhalla type)
             if (routeInProgress && currentRouteSteps.length > 0) {
                 const nextStep = currentRouteSteps[currentStepIndex];
-                const maneuver = nextStep ? nextStep.maneuver || 'straight' : 'straight';
-                updateLaneGuidance(lat, lon, heading, maneuver);
+                let maneuverDir = 'straight';
+                if (nextStep) {
+                    const mType = nextStep.type || 0;
+                    // Map Valhalla type to lane guidance maneuver direction
+                    if ([15].includes(mType)) maneuverDir = 'left';
+                    else if ([14].includes(mType)) maneuverDir = 'sharp_left';
+                    else if ([16, 19, 24].includes(mType)) maneuverDir = 'slight_left';
+                    else if ([10].includes(mType)) maneuverDir = 'right';
+                    else if ([11].includes(mType)) maneuverDir = 'sharp_right';
+                    else if ([9, 18, 23].includes(mType)) maneuverDir = 'slight_right';
+                    else if ([20].includes(mType)) maneuverDir = 'exit_right';
+                    else if ([21].includes(mType)) maneuverDir = 'exit_left';
+                    else if ([12, 13].includes(mType)) maneuverDir = 'uturn';
+                    else if ([25, 35, 36].includes(mType)) maneuverDir = 'merge';
+                    else if ([26].includes(mType)) maneuverDir = 'roundabout';
+                    else if ([4, 5, 6].includes(mType)) maneuverDir = 'destination';
+                }
+                updateLaneGuidance(lat, lon, heading, maneuverDir);
             }
 
             // Update speed warnings (assume local roads by default)
             updateSpeedWarning(lat, lon, speedMph, 'local');
 
-            // ===== UPDATE SPEED WIDGET WITH THROTTLED API CALLS =====
-            // FIX: Use throttled fetch to prevent API spam
-            // Get current road type from route data (defaults to residential for safety)
+            // ===== UPDATE SPEED WIDGET =====
+            // FIX: Always update the GPS speed display on every tick so it never shows "--"
+            // The speed limit is fetched separately with throttling to avoid API spam
+            updateSpeedWidget(speedMph, currentSpeedLimitMph || null);
+
+            // Fetch updated speed limit (throttled to avoid API spam)
             const roadType = getCurrentRoadType();
             fetchSpeedLimitThrottled(lat, lon, speedMph, roadType);
         },
@@ -10167,6 +10363,99 @@ function findNearestRouteIndex(lat, lon, polyline) {
     console.log(`[ETA] Found nearest route point at index ${nearestIndex} (${minDistance.toFixed(0)}m away)`);
     return nearestIndex;
 }
+
+/**
+ * Snap a GPS position to the closest point on the route polyline.
+ * Projects the position onto each line segment and returns the closest projected point.
+ * This ensures the vehicle icon follows the route line smoothly instead of jumping
+ * to raw GPS coordinates that may be off-road.
+ *
+ * @param {number} lat - GPS latitude
+ * @param {number} lon - GPS longitude
+ * @param {Array} polyline - Route polyline as array of [lat, lon]
+ * @param {number} [searchStartIndex=0] - Start searching from this index (performance optimisation)
+ * @returns {{ lat: number, lon: number, index: number, distance: number }} Snapped position info
+ */
+function snapToRoutePolyline(lat, lon, polyline, searchStartIndex = 0) {
+    if (!polyline || polyline.length < 2) {
+        return { lat, lon, index: 0, distance: 0 };
+    }
+
+    let bestLat = polyline[0][0];
+    let bestLon = polyline[0][1];
+    let bestDist = Infinity;
+    let bestIndex = 0;
+
+    // Limit search window around the expected area for performance
+    const searchStart = Math.max(0, searchStartIndex - 10);
+    const searchEnd = Math.min(polyline.length - 1, searchStartIndex + 200);
+
+    for (let i = searchStart; i < searchEnd; i++) {
+        const ax = polyline[i][0];
+        const ay = polyline[i][1];
+        const bx = polyline[i + 1][0];
+        const by = polyline[i + 1][1];
+
+        // Project point onto line segment [a, b]
+        const abx = bx - ax;
+        const aby = by - ay;
+        const apx = lat - ax;
+        const apy = lon - ay;
+
+        const ab2 = abx * abx + aby * aby;
+        let t = ab2 === 0 ? 0 : (apx * abx + apy * aby) / ab2;
+        t = Math.max(0, Math.min(1, t));
+
+        const projLat = ax + t * abx;
+        const projLon = ay + t * aby;
+
+        const dist = calculateDistance(lat, lon, projLat, projLon);
+        if (dist < bestDist) {
+            bestDist = dist;
+            bestLat = projLat;
+            bestLon = projLon;
+            bestIndex = i;
+        }
+    }
+
+    // If we only searched a window, also search the full polyline if nothing close was found
+    if (bestDist > 100 && (searchStart > 0 || searchEnd < polyline.length - 1)) {
+        for (let i = 0; i < polyline.length - 1; i++) {
+            if (i >= searchStart && i < searchEnd) continue; // Skip already searched
+            const ax = polyline[i][0];
+            const ay = polyline[i][1];
+            const bx = polyline[i + 1][0];
+            const by = polyline[i + 1][1];
+
+            const abx = bx - ax;
+            const aby = by - ay;
+            const apx = lat - ax;
+            const apy = lon - ay;
+
+            const ab2 = abx * abx + aby * aby;
+            let t = ab2 === 0 ? 0 : (apx * abx + apy * aby) / ab2;
+            t = Math.max(0, Math.min(1, t));
+
+            const projLat = ax + t * abx;
+            const projLon = ay + t * aby;
+
+            const dist = calculateDistance(lat, lon, projLat, projLon);
+            if (dist < bestDist) {
+                bestDist = dist;
+                bestLat = projLat;
+                bestLon = projLon;
+                bestIndex = i;
+            }
+        }
+    }
+
+    return { lat: bestLat, lon: bestLon, index: bestIndex, distance: bestDist };
+}
+
+// Track the last snapped route index for efficient searching
+let lastSnappedRouteIndex = 0;
+// Maximum distance from route to snap (meters). Beyond this, use raw GPS.
+const SNAP_TO_ROUTE_MAX_DISTANCE = 40;
 /**
  * getTurnDirectionText function
  * @function getTurnDirectionText
@@ -10176,14 +10465,23 @@ function findNearestRouteIndex(lat, lon, polyline) {
 function getTurnDirectionText(direction) {
     const directionMap = {
         'sharp_left': 'turn sharply left',
+        'sharp-left': 'turn sharply left',
         'left': 'turn left',
         'slight_left': 'keep left',
+        'slight-left': 'keep left',
         'straight': 'continue straight',
         'slight_right': 'keep right',
+        'slight-right': 'keep right',
         'right': 'turn right',
         'sharp_right': 'turn sharply right',
+        'sharp-right': 'turn sharply right',
         'uturn': 'make a U-turn',
+        'u-turn': 'make a U-turn',
         'exit': 'take the exit',
+        'exit_right': 'take the exit on the right',
+        'exit-right': 'take the exit on the right',
+        'exit_left': 'take the exit on the left',
+        'exit-left': 'take the exit on the left',
         'merge': 'merge',
         'roundabout': 'enter the roundabout',
         'destination': 'arrive at your destination'
@@ -10607,14 +10905,15 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
             logReroutingEvent(currentLat, currentLon, destination, newRoute, hazardCount);
 
             // Announce reroute via voice
-            if (voiceRecognition) {
+            // FIX: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
+            if (voiceAnnouncementsEnabled) {
                 const distUnit = getDistanceUnit();
                 const displayDist = convertDistance(newRoute.distance_km);
                 let voiceMsg = `Route recalculated. New distance: ${displayDist} ${distUnit}, time: ${newRoute.duration_minutes} minutes`;
                 if (hazardCount > 0) {
                     voiceMsg += `. Warning: ${hazardCount} hazard${hazardCount > 1 ? 's' : ''} on route.`;
                 }
-                speakMessage(voiceMsg);
+                speakMessage(voiceMsg, 'high');
             }
 
             if (hazardCount > 0) {
@@ -10863,7 +11162,8 @@ function checkNearbyHazards(lat, lon) {
                         sendNotification('Hazard Alert', message, 'warning');
 
                         // ENHANCED: Announce via voice with debouncing per hazard type
-                        if (voiceRecognition) {
+                        // FIX: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
+                        if (voiceAnnouncementsEnabled) {
                             const now = Date.now();
                             const lastAnnouncementTime = hazardAnnouncementDebounce[hazard.type] || 0;
                             const timeSinceLastAnnouncement = now - lastAnnouncementTime;
@@ -12037,6 +12337,7 @@ function startTurnByTurnNavigation(routeData) {
     routeInProgress = true;
     currentStepIndex = 0;
     currentRouteSteps = routeData.maneuvers || [];  // Store maneuvers from Valhalla
+    lastSnappedRouteIndex = 0;  // Reset snap-to-route tracking for new navigation
 
     // Decode route geometry (Valhalla precision 6)
     try {

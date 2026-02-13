@@ -32,34 +32,269 @@ def set_speed_limit_detector(detector):
     speed_limit_detector = detector
 
 
+# Lane data cache to avoid spamming Overpass API
+_lane_data_cache = {}
+_LANE_CACHE_EXPIRY = 300  # 5 minutes
+
+# Lane arrow symbols for display
+LANE_ARROWS = {
+    'left': '←',
+    'slight_left': '↖',
+    'through': '↑',
+    'slight_right': '↗',
+    'right': '→',
+    'merge_to_left': '↰',
+    'merge_to_right': '↱',
+    'none': '↑',
+}
+
+# Default lane configurations by road type
+DEFAULT_LANE_CONFIGS = {
+    'motorway': 3,
+    'trunk': 3,
+    'primary': 2,
+    'secondary': 2,
+    'tertiary': 1,
+    'residential': 1,
+    'unclassified': 1,
+}
+
+
+def _fetch_osm_lane_data(lat, lon):
+    """Fetch lane information from OpenStreetMap via Overpass API with caching."""
+    import time as _time
+
+    cache_key = f"{lat:.4f},{lon:.4f}"
+    now = _time.time()
+
+    if cache_key in _lane_data_cache:
+        cached = _lane_data_cache[cache_key]
+        if now - cached['timestamp'] < _LANE_CACHE_EXPIRY:
+            return cached['data']
+
+    try:
+        overpass_url = "http://overpass-api.de/api/interpreter"
+        query = f"""
+        [out:json][timeout:5];
+        way(around:30,{lat},{lon})[highway~"motorway|trunk|primary|secondary|tertiary"];
+        out tags;
+        """
+        resp = requests.get(overpass_url, params={'data': query}, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            for element in data.get('elements', []):
+                tags = element.get('tags', {})
+                if 'lanes' in tags:
+                    result = {
+                        'total_lanes': int(tags['lanes']),
+                        'turn_lanes': tags.get('turn:lanes', ''),
+                        'turn_lanes_forward': tags.get('turn:lanes:forward', ''),
+                        'highway': tags.get('highway', 'unknown'),
+                        'name': tags.get('name', ''),
+                        'lanes_forward': int(tags.get('lanes:forward', tags['lanes'])),
+                    }
+                    _lane_data_cache[cache_key] = {'data': result, 'timestamp': now}
+                    return result
+
+        # Nothing found - return None so caller uses defaults
+        _lane_data_cache[cache_key] = {'data': None, 'timestamp': now}
+        return None
+    except Exception as e:
+        logger.debug(f"[Lane] Overpass error: {e}")
+        return None
+
+
+def _parse_turn_lanes(turn_lanes_str, total_lanes):
+    """Parse OSM turn:lanes tag into per-lane allowed directions.
+    Example: 'left|through|through;right' → [['left'], ['through'], ['through','right']]
+    """
+    if not turn_lanes_str:
+        return None
+    parts = turn_lanes_str.split('|')
+    if len(parts) != total_lanes:
+        # Mismatch – ignore
+        return None
+    return [p.split(';') for p in parts]
+
+
+def _recommend_lane_from_turn_lanes(lane_dirs, maneuver):
+    """Given parsed turn:lanes and a maneuver, pick the best lane index (1-based)."""
+    if not lane_dirs:
+        return None
+
+    maneuver_map = {
+        'left': ['left', 'slight_left'],
+        'slight_left': ['slight_left', 'left'],
+        'right': ['right', 'slight_right'],
+        'slight_right': ['slight_right', 'right'],
+        'straight': ['through', 'none', ''],
+        'exit_right': ['right', 'slight_right', 'merge_to_right'],
+        'exit_left': ['left', 'slight_left', 'merge_to_left'],
+        'exit': ['right', 'slight_right'],
+        'merge': ['through', 'none', ''],
+    }
+
+    wanted = maneuver_map.get(maneuver, ['through', 'none', ''])
+
+    # Score each lane
+    best_lane = None
+    best_score = -1
+    for idx, dirs in enumerate(lane_dirs):
+        for w_idx, w in enumerate(wanted):
+            if w in dirs:
+                score = len(wanted) - w_idx  # Higher score for first preference
+                if score > best_score:
+                    best_score = score
+                    best_lane = idx + 1  # 1-based
+                break
+
+    return best_lane
+
+
+def _get_recommended_lane_simple(maneuver, total_lanes):
+    """Fallback lane recommendation when no OSM turn:lanes data is available."""
+    if total_lanes <= 1:
+        return 1
+
+    if maneuver in ('left', 'slight_left', 'sharp_left', 'exit_left'):
+        return 1  # Leftmost lane
+    elif maneuver in ('right', 'slight_right', 'sharp_right', 'exit_right', 'exit'):
+        return total_lanes  # Rightmost lane
+    elif maneuver in ('straight', 'merge'):
+        return max(1, (total_lanes + 1) // 2)  # Middle lane
+    else:
+        return max(1, (total_lanes + 1) // 2)
+
+
 @navigation_bp.route('/lane-guidance', methods=['GET'])
 def get_lane_guidance():
-    """Get lane guidance for current location."""
+    """Get smart lane guidance for current location using OSM data and route context."""
     try:
+        lat = float(request.args.get('lat', 0))
+        lon = float(request.args.get('lon', 0))
         heading = float(request.args.get('heading', 0))
         next_maneuver = request.args.get('maneuver', 'straight')
+        distance_to_maneuver = float(request.args.get('distance', 9999))
+        road_type = request.args.get('road_type', 'unknown')
 
-        total_lanes = 3 if heading % 180 < 90 else 2
-        current_lane = (int(heading / 90) % total_lanes) + 1
+        # Try to get real lane data from OSM
+        osm_data = _fetch_osm_lane_data(lat, lon)
 
-        if next_maneuver == 'left':
-            recommended_lane = max(1, current_lane - 1)
-        elif next_maneuver == 'right':
-            recommended_lane = min(total_lanes, current_lane + 1)
+        if osm_data:
+            total_lanes = osm_data.get('lanes_forward', osm_data['total_lanes'])
+            turn_lanes_str = osm_data.get('turn_lanes_forward') or osm_data.get('turn_lanes', '')
+            road_name = osm_data.get('name', '')
+            highway_type = osm_data.get('highway', road_type)
         else:
-            recommended_lane = current_lane
+            total_lanes = DEFAULT_LANE_CONFIGS.get(road_type, 2)
+            turn_lanes_str = ''
+            road_name = ''
+            highway_type = road_type
+
+        # Ensure at least 1 lane
+        total_lanes = max(1, total_lanes)
+
+        # Parse turn:lanes data if available
+        parsed_lanes = _parse_turn_lanes(turn_lanes_str, total_lanes)
+
+        # Build per-lane arrow/direction info
+        lane_arrows = []
+        if parsed_lanes:
+            for dirs in parsed_lanes:
+                # Pick the primary direction for display
+                primary = dirs[0] if dirs else 'through'
+                arrow = LANE_ARROWS.get(primary, '↑')
+                lane_arrows.append({
+                    'directions': dirs,
+                    'arrow': arrow,
+                    'primary': primary
+                })
+        else:
+            # Generate default arrows based on total lanes
+            for i in range(total_lanes):
+                lane_arrows.append({
+                    'directions': ['through'],
+                    'arrow': '↑',
+                    'primary': 'through'
+                })
+
+        # Determine recommended lane
+        recommended_lane = None
+        if parsed_lanes:
+            recommended_lane = _recommend_lane_from_turn_lanes(parsed_lanes, next_maneuver)
+
+        if recommended_lane is None:
+            recommended_lane = _get_recommended_lane_simple(next_maneuver, total_lanes)
+
+        # Generate urgency level based on distance to maneuver
+        if distance_to_maneuver <= 100:
+            urgency = 'now'
+            urgency_text = 'Change lane now!'
+        elif distance_to_maneuver <= 300:
+            urgency = 'soon'
+            urgency_text = f'Move to lane {recommended_lane} in {int(distance_to_maneuver)}m'
+        elif distance_to_maneuver <= 800:
+            urgency = 'ahead'
+            urgency_text = f'Prepare for lane {recommended_lane} in {int(distance_to_maneuver)}m'
+        elif distance_to_maneuver <= 1500:
+            urgency = 'info'
+            urgency_text = f'Stay in lane {recommended_lane} for upcoming maneuver'
+        else:
+            urgency = 'none'
+            urgency_text = ''
+
+        # Build guidance text
+        if next_maneuver == 'straight' or distance_to_maneuver > 1500:
+            guidance_text = f'Stay in current lane'
+        elif recommended_lane == 1:
+            guidance_text = f'Use left lane to {_maneuver_action(next_maneuver)}'
+        elif recommended_lane == total_lanes and total_lanes > 1:
+            guidance_text = f'Use right lane to {_maneuver_action(next_maneuver)}'
+        elif total_lanes >= 3:
+            guidance_text = f'Use lane {recommended_lane} to {_maneuver_action(next_maneuver)}'
+        else:
+            guidance_text = f'Use lane {recommended_lane}'
 
         return jsonify({
             'success': True,
-            'current_lane': current_lane,
-            'recommended_lane': recommended_lane,
             'total_lanes': total_lanes,
-            'lane_change_needed': current_lane != recommended_lane,
+            'recommended_lane': recommended_lane,
+            'lane_arrows': lane_arrows,
+            'lane_change_needed': True if urgency in ('now', 'soon', 'ahead') else False,
             'next_maneuver': next_maneuver,
-            'guidance_text': f"{'Move to lane ' + str(recommended_lane) if current_lane != recommended_lane else 'Stay in lane ' + str(current_lane)}"
+            'distance_to_maneuver': distance_to_maneuver,
+            'urgency': urgency,
+            'urgency_text': urgency_text,
+            'guidance_text': guidance_text,
+            'road_name': road_name,
+            'highway_type': highway_type,
+            'has_osm_data': osm_data is not None,
+            'has_turn_lanes': parsed_lanes is not None,
         })
     except Exception as e:
+        logger.error(f"[Lane Guidance] Error: {e}")
         return jsonify({'success': False, 'error': str(e)})
+
+
+def _maneuver_action(maneuver):
+    """Convert maneuver type to human-readable action."""
+    actions = {
+        'left': 'turn left',
+        'slight_left': 'bear left',
+        'sharp_left': 'turn sharply left',
+        'right': 'turn right',
+        'slight_right': 'bear right',
+        'sharp_right': 'turn sharply right',
+        'exit': 'take the exit',
+        'exit_right': 'take the exit',
+        'exit_left': 'take the exit',
+        'merge': 'merge',
+        'roundabout': 'enter the roundabout',
+        'uturn': 'make a U-turn',
+        'straight': 'continue straight',
+        'destination': 'reach your destination',
+    }
+    return actions.get(maneuver, 'continue')
 
 
 @navigation_bp.route('/speed-warnings', methods=['GET'])
