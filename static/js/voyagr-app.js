@@ -3448,6 +3448,39 @@ async function calculateRoute() {
             });
 
             if (data.success) {
+                // ===== FIX: If navigation is in progress, take a streamlined reroute path =====
+                // This avoids clearing markers, fitting bounds, or switching to the route preview tab.
+                if (routeInProgress) {
+                    console.log('[calculateRoute] Navigation active — using in-nav reroute path');
+                    hideRouteProgressBar();
+
+                    const activeRoute = (data.routes && data.routes.length > 0) ? data.routes[0] : data;
+                    if (activeRoute.geometry) {
+                        updateRouteOnMap(activeRoute);
+                    }
+
+                    // Update stored route data (preserve destination for future reroutes)
+                    const durationMinutes = activeRoute.duration_minutes || (data.time ? parseInt(data.time) : 0);
+                    window.lastCalculatedRoute = {
+                        ...window.lastCalculatedRoute,
+                        ...data,
+                        ...activeRoute,
+                        duration_minutes: durationMinutes,
+                        destination: geocodedEnd,
+                        destinationName: end
+                    };
+
+                    // Announce update
+                    if (voiceAnnouncementsEnabled) {
+                        const distUnit = getDistanceUnit();
+                        const displayDist = convertDistance(activeRoute.distance_km || parseFloat(data.distance) || 0);
+                        speakMessage(`Route recalculated. ${displayDist} ${distUnit}, ${durationMinutes} minutes.`, 'high');
+                    }
+
+                    showStatus('✅ Route recalculated — continuing navigation', 'success');
+                    return;
+                }
+
                 // Parse coordinates
                 try {
                     const startParts = geocodedStart.split(',');
@@ -5679,7 +5712,27 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         console.log(`[Route Preview] Displayed ${routeOptions.length} route(s) on map`);
     }
 
-    // Switch to route preview tab
+    // FIX: If navigation is already in progress, do NOT switch to the route preview tab
+    // or expand the bottom sheet. Instead, silently apply the new route and continue navigating.
+    if (routeInProgress) {
+        console.log('[Route Preview] Navigation active — applying route update without showing preview UI');
+
+        // Update the active route with the new data
+        const activeRoute = (routeData.routes && routeData.routes.length > 0) ? routeData.routes[0] : routeData;
+        if (activeRoute.geometry) {
+            updateRouteOnMap(activeRoute);
+        }
+
+        // Restart navigation with the new route data so turn-by-turn stays in sync
+        if (activeRoute.geometry && activeRoute.maneuvers) {
+            startTurnByTurnNavigation(activeRoute);
+        }
+
+        showStatus('✅ Route updated — continuing navigation', 'success');
+        return;
+    }
+
+    // Switch to route preview tab (only when NOT navigating)
     console.log('[Route Preview] Switching to routePreview tab');
     switchTab('routePreview');
 
