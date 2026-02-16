@@ -10213,12 +10213,32 @@ function startGPSTracking() {
             }
 
             // Update user marker on map with vehicle icon and heading
-            if (currentUserMarker) {
-                if (typeof currentUserMarker.remove === 'function') currentUserMarker.remove();
-            }
+            // FIX: Reuse the existing marker and call setLngLat for smooth movement
+            // instead of removing and recreating every tick (which kills CSS transitions)
+            if (currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
+                // Move existing marker smoothly
+                currentUserMarker.setLngLat([displayLon, displayLat]);
 
-            currentUserMarker = createVehicleMarker(displayLat, displayLon, speed, accuracy, heading);
-            currentUserMarker.addTo(map);
+                // Update heading rotation on the inner element
+                const markerEl = currentUserMarker.getElement ? currentUserMarker.getElement() : null;
+                if (markerEl) {
+                    const inner = markerEl.querySelector('div');
+                    if (inner) {
+                        inner.style.transform = `rotate(${heading}deg)`;
+                    }
+                }
+                // Store updated values
+                currentUserMarker.heading = heading;
+                currentUserMarker.speed = speed;
+                currentUserMarker.accuracy = accuracy;
+            } else {
+                // First time or marker was cleared — create fresh
+                if (currentUserMarker && typeof currentUserMarker.remove === 'function') {
+                    currentUserMarker.remove();
+                }
+                currentUserMarker = createVehicleMarker(displayLat, displayLon, speed, accuracy, heading);
+                currentUserMarker.addTo(map);
+            }
 
             // ===== ZOOM AND FOLLOW: Center map on user with smart zoom =====
             if (zoomAndFollowEnabled && mapFollowingActive) {
@@ -10429,86 +10449,83 @@ function findNearestRouteIndex(lat, lon, polyline) {
  * @param {number} [searchStartIndex=0] - Start searching from this index (performance optimisation)
  * @returns {{ lat: number, lon: number, index: number, distance: number }} Snapped position info
  */
+/**
+ * Project a point onto a line segment using latitude-corrected Cartesian math.
+ * Raw lat/lon degrees are not equal in metres — 1° longitude is cos(lat) × 1° latitude.
+ * We scale the longitude axis by cos(latitude) so the dot-product gives the true
+ * perpendicular foot on the segment, producing an accurate snap.
+ */
+function _projectToSegment(lat, lon, ax, ay, bx, by, cosLat) {
+    // Scale lon axis so 1 unit ≈ same metres as 1 unit of lat
+    const sAy = ay * cosLat;
+    const sBy = by * cosLat;
+    const sLon = lon * cosLat;
+
+    const abx = bx - ax;
+    const aby = sBy - sAy;
+    const apx = lat - ax;
+    const apy = sLon - sAy;
+
+    const ab2 = abx * abx + aby * aby;
+    let t = ab2 === 0 ? 0 : (apx * abx + apy * aby) / ab2;
+    t = Math.max(0, Math.min(1, t));
+
+    const projLat = ax + t * (bx - ax);
+    const projLon = ay + t * (by - ay); // Interpolate in original lon space
+    return { projLat, projLon, t };
+}
+
 function snapToRoutePolyline(lat, lon, polyline, searchStartIndex = 0) {
     if (!polyline || polyline.length < 2) {
-        return { lat, lon, index: 0, distance: 0 };
+        return { lat, lon, index: 0, distance: 0, t: 0 };
     }
+
+    // Precompute cos(latitude) once for longitude scaling
+    const cosLat = Math.cos(lat * Math.PI / 180);
 
     let bestLat = polyline[0][0];
     let bestLon = polyline[0][1];
     let bestDist = Infinity;
     let bestIndex = 0;
+    let bestT = 0;
 
-    // Limit search window around the expected area for performance
-    const searchStart = Math.max(0, searchStartIndex - 10);
-    const searchEnd = Math.min(polyline.length - 1, searchStartIndex + 200);
-
-    for (let i = searchStart; i < searchEnd; i++) {
-        const ax = polyline[i][0];
-        const ay = polyline[i][1];
-        const bx = polyline[i + 1][0];
-        const by = polyline[i + 1][1];
-
-        // Project point onto line segment [a, b]
-        const abx = bx - ax;
-        const aby = by - ay;
-        const apx = lat - ax;
-        const apy = lon - ay;
-
-        const ab2 = abx * abx + aby * aby;
-        let t = ab2 === 0 ? 0 : (apx * abx + apy * aby) / ab2;
-        t = Math.max(0, Math.min(1, t));
-
-        const projLat = ax + t * abx;
-        const projLon = ay + t * aby;
-
+    // Helper: test one segment
+    const testSegment = (i) => {
+        const ax = polyline[i][0], ay = polyline[i][1];
+        const bx = polyline[i + 1][0], by = polyline[i + 1][1];
+        const { projLat, projLon, t } = _projectToSegment(lat, lon, ax, ay, bx, by, cosLat);
         const dist = calculateDistance(lat, lon, projLat, projLon);
         if (dist < bestDist) {
             bestDist = dist;
             bestLat = projLat;
             bestLon = projLon;
             bestIndex = i;
+            bestT = t;
         }
+    };
+
+    // Search a window around the expected position first (fast path)
+    const searchStart = Math.max(0, searchStartIndex - 15);
+    const searchEnd = Math.min(polyline.length - 1, searchStartIndex + 250);
+    for (let i = searchStart; i < searchEnd; i++) {
+        testSegment(i);
     }
 
-    // If we only searched a window, also search the full polyline if nothing close was found
-    if (bestDist > 100 && (searchStart > 0 || searchEnd < polyline.length - 1)) {
+    // If nothing close found, search the full polyline
+    if (bestDist > 60 && (searchStart > 0 || searchEnd < polyline.length - 1)) {
         for (let i = 0; i < polyline.length - 1; i++) {
-            if (i >= searchStart && i < searchEnd) continue; // Skip already searched
-            const ax = polyline[i][0];
-            const ay = polyline[i][1];
-            const bx = polyline[i + 1][0];
-            const by = polyline[i + 1][1];
-
-            const abx = bx - ax;
-            const aby = by - ay;
-            const apx = lat - ax;
-            const apy = lon - ay;
-
-            const ab2 = abx * abx + aby * aby;
-            let t = ab2 === 0 ? 0 : (apx * abx + apy * aby) / ab2;
-            t = Math.max(0, Math.min(1, t));
-
-            const projLat = ax + t * abx;
-            const projLon = ay + t * aby;
-
-            const dist = calculateDistance(lat, lon, projLat, projLon);
-            if (dist < bestDist) {
-                bestDist = dist;
-                bestLat = projLat;
-                bestLon = projLon;
-                bestIndex = i;
-            }
+            if (i >= searchStart && i < searchEnd) continue;
+            testSegment(i);
         }
     }
 
-    return { lat: bestLat, lon: bestLon, index: bestIndex, distance: bestDist };
+    return { lat: bestLat, lon: bestLon, index: bestIndex, distance: bestDist, t: bestT };
 }
 
 // Track the last snapped route index for efficient searching
 let lastSnappedRouteIndex = 0;
 // Maximum distance from route to snap (meters). Beyond this, use raw GPS.
-const SNAP_TO_ROUTE_MAX_DISTANCE = 40;
+const SNAP_TO_ROUTE_MAX_DISTANCE = 50; // Increased from 40 to cover typical GPS drift
 /**
  * getTurnDirectionText function
  * @function getTurnDirectionText

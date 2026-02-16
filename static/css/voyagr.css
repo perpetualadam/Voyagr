@@ -1544,6 +1544,13 @@ h1 {
     transform-style: preserve-3d;
 }
 
+/* Smooth position animation: MapLibre moves markers via translate() on this element.
+   A short transition makes the vehicle glide between GPS ticks instead of jumping. */
+.maplibregl-marker.vehicle-marker-icon {
+    transition: transform 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) !important;
+    will-change: transform;
+}
+
 /* MapLibre marker container - ensure 3D transforms work */
 .maplibregl-marker {
     transform-style: preserve-3d !important;
