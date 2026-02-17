@@ -7007,17 +7007,94 @@ def calculate_route():
                                 except Exception as e:
                                     logger.warning(f"[VALHALLA] Retry Shortest route failed: {e}")
 
+                                # ================================================================
+                                # GRAPHHOPPER CAMERA-AVOIDING ROUTE: Add to retry routes
+                                # (Same logic as the primary success path)
+                                # ================================================================
+                                if graphhopper_route and graphhopper_route.get('success') and enable_hazard_avoidance:
+                                    try:
+                                        gh_distance_km = graphhopper_route.get('distance_km', 0)
+                                        gh_duration_min = graphhopper_route.get('duration_seconds', 0) / 60
+                                        gh_geometry = graphhopper_route.get('geometry', '')
+
+                                        if gh_geometry and polyline:
+                                            gh_coords = polyline.decode(gh_geometry, precision=5)
+                                            gh_geometry_p6 = polyline.encode(gh_coords, precision=6)
+
+                                            gh_costs = cost_calculator.calculate_costs(
+                                                gh_distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                                                energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+                                                route_coords=gh_coords
+                                            )
+
+                                            gh_hazard_penalty, gh_hazard_count = score_route_by_hazards(gh_coords, hazards)
+                                            gh_hazards_list = get_hazards_on_route(gh_coords, hazards)
+
+                                            gh_instructions = graphhopper_route.get('instructions', [])
+                                            gh_sign_to_valhalla = {
+                                                -3: 15, -2: 16, -1: 17, 0: 8,
+                                                1: 9, 2: 10, 3: 11, 4: 4, 5: 0, 6: 26,
+                                            }
+                                            gh_maneuvers = []
+                                            for instr in gh_instructions:
+                                                sign = instr.get('sign', 0)
+                                                valhalla_type = gh_sign_to_valhalla.get(sign, 8)
+                                                gh_maneuvers.append({
+                                                    'instruction': instr.get('text', ''),
+                                                    'distance': instr.get('distance', 0) / 1000,
+                                                    'time': instr.get('time', 0) / 1000,
+                                                    'type': valhalla_type,
+                                                    'street_names': [instr.get('street_name', '')] if instr.get('street_name') else [],
+                                                    'begin_shape_index': instr.get('interval', [0])[0] if instr.get('interval') else 0,
+                                                    'end_shape_index': instr.get('interval', [0, 0])[1] if instr.get('interval') and len(instr.get('interval', [])) > 1 else 0
+                                                })
+
+                                            gh_route_entry = {
+                                                'id': 0,
+                                                'name': '⚡ Optimised',
+                                                'distance_km': round(gh_distance_km, 2),
+                                                'duration_minutes': round(gh_duration_min, 0),
+                                                'fuel_cost': round(gh_costs['fuel_cost'], 2),
+                                                'fuel_litres': round(gh_costs['fuel_litres'], 2),
+                                                'toll_cost': round(gh_costs['toll_cost'], 2),
+                                                'caz_cost': round(gh_costs['caz_cost'], 2),
+                                                'geometry': gh_geometry_p6,
+                                                'geometry_precision': 6,
+                                                'hazard_penalty_seconds': round(gh_hazard_penalty, 0),
+                                                'hazard_count': gh_hazard_count,
+                                                'hazards': gh_hazards_list,
+                                                'maneuvers': gh_maneuvers,
+                                                'source': 'GraphHopper'
+                                            }
+
+                                            routes = [r for r in routes if 'Optimised' not in r.get('name', '')]
+                                            routes.insert(0, gh_route_entry)
+                                            logger.info(f"[GRAPHHOPPER] Added Optimised route to retry: {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
+                                    except Exception as e:
+                                        logger.warning(f"[GRAPHHOPPER] Failed to add GraphHopper route to retry: {e}")
+
+                                # Reorder by hazard penalty if avoidance enabled
+                                if enable_hazard_avoidance and hazards:
+                                    routes = sorted(routes, key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)))
+                                    for idx, route in enumerate(routes):
+                                        route['id'] = idx + 1
+
                                 print(f"[Valhalla] RETRY SUCCESS: {len(routes)} routes found")
 
                                 # Record success
                                 valhalla_elapsed = (time.time() - valhalla_start_time) * 1000
                                 fallback_optimizer.record_success('valhalla', valhalla_elapsed)
 
+                                # Determine source
+                                retry_source = 'Valhalla ✅ (Retry)'
+                                if graphhopper_route and graphhopper_route.get('success'):
+                                    retry_source = 'GraphHopper+Valhalla ✅'
+
                                 # Build response
                                 response_data = {
                                     'success': True,
                                     'routes': routes,
-                                    'source': 'Valhalla ✅ (Retry)',
+                                    'source': retry_source,
                                     'distance': f'{routes[0]["distance_km"]:.2f} km',
                                     'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
                                     'geometry': routes[0]['geometry'],
@@ -7028,6 +7105,7 @@ def calculate_route():
                                     'caz_cost': routes[0]['caz_cost'],
                                     'maneuvers': routes[0].get('maneuvers', []),
                                     'cached': False,
+                                    'camera_avoidance_engine': 'GraphHopper' if (graphhopper_route and graphhopper_route.get('success')) else 'Valhalla',
                                     'start_lat': start_lat,
                                     'start_lon': start_lon,
                                     'end_lat': end_lat,
@@ -7038,9 +7116,10 @@ def calculate_route():
                                 route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance)
                                 print(f"[CACHE] STORED: Retry route cached in memory")
 
+                                cache_source = 'GraphHopper+Valhalla' if (graphhopper_route and graphhopper_route.get('success')) else 'Valhalla'
                                 cost_calculator.cache_route_to_db(
                                     start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                                    response_data, 'Valhalla'
+                                    response_data, cache_source
                                 )
                                 print(f"[CACHE] STORED: Retry route cached in database")
 
