@@ -3454,7 +3454,19 @@ async function calculateRoute() {
                     console.log('[calculateRoute] Navigation active — using in-nav reroute path');
                     hideRouteProgressBar();
 
-                    const activeRoute = (data.routes && data.routes.length > 0) ? data.routes[0] : data;
+                    // Pick the best-matching route: prefer same-name match as the
+                    // previously selected route, then fall back to routes[0].
+                    let activeRoute = (data.routes && data.routes.length > 0) ? data.routes[0] : data;
+                    if (data.routes && data.routes.length > 1 && window.lastCalculatedRoute) {
+                        const prevName = (window.lastCalculatedRoute.name || '').toLowerCase();
+                        if (prevName) {
+                            const match = data.routes.find(r => (r.name || '').toLowerCase() === prevName);
+                            if (match) {
+                                activeRoute = match;
+                                console.log(`[Reroute] Matched previous route "${match.name}"`);
+                            }
+                        }
+                    }
                     if (activeRoute.geometry) {
                         updateRouteOnMap(activeRoute);
                     }
@@ -3470,11 +3482,11 @@ async function calculateRoute() {
                         destinationName: end
                     };
 
-                    // Announce update
+                    // Announce update with the CORRECT route's duration
                     if (voiceAnnouncementsEnabled) {
                         const distUnit = getDistanceUnit();
                         const displayDist = convertDistance(activeRoute.distance_km || parseFloat(data.distance) || 0);
-                        speakMessage(`Route recalculated. ${displayDist} ${distUnit}, ${durationMinutes} minutes.`, 'high');
+                        speakMessage(`Route recalculated. ${displayDist} ${distUnit}, ${Math.round(durationMinutes)} minutes.`, 'high');
                     }
 
                     showStatus('✅ Route recalculated — continuing navigation', 'success');
@@ -5717,8 +5729,15 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     if (routeInProgress) {
         console.log('[Route Preview] Navigation active — applying route update without showing preview UI');
 
-        // Update the active route with the new data
-        const activeRoute = (routeData.routes && routeData.routes.length > 0) ? routeData.routes[0] : routeData;
+        // Match the previously selected route by name, fall back to routes[0]
+        let activeRoute = (routeData.routes && routeData.routes.length > 0) ? routeData.routes[0] : routeData;
+        if (routeData.routes && routeData.routes.length > 1 && window.lastCalculatedRoute) {
+            const prevName = (window.lastCalculatedRoute.name || '').toLowerCase();
+            if (prevName) {
+                const match = routeData.routes.find(r => (r.name || '').toLowerCase() === prevName);
+                if (match) activeRoute = match;
+            }
+        }
         if (activeRoute.geometry) {
             updateRouteOnMap(activeRoute);
         }
@@ -5726,6 +5745,15 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         // Restart navigation with the new route data so turn-by-turn stays in sync
         if (activeRoute.geometry && activeRoute.maneuvers) {
             startTurnByTurnNavigation(activeRoute);
+        }
+
+        // Keep window.lastCalculatedRoute in sync
+        if (window.lastCalculatedRoute) {
+            window.lastCalculatedRoute = {
+                ...window.lastCalculatedRoute,
+                ...activeRoute,
+                duration_minutes: activeRoute.duration_minutes || window.lastCalculatedRoute.duration_minutes
+            };
         }
 
         showStatus('✅ Route updated — continuing navigation', 'success');
@@ -6941,6 +6969,7 @@ let lastLaneGuidanceFetch = 0;
 const LANE_GUIDANCE_FETCH_INTERVAL = 3000; // 3 seconds
 let lastLaneGuidanceManeuver = '';
 let lastLaneGuidancePosition = null;
+let _lastLaneVoiceKey = '';
 
 function updateLaneGuidance(lat, lon, heading, maneuver) {
     const now = Date.now();
@@ -7046,13 +7075,39 @@ function renderLaneGuidanceUI(data) {
     }
     text.textContent = displayText;
 
-    // Voice announcement for urgent lane changes
-    if (data.lane_change_needed && data.urgency === 'soon' && voiceAnnouncementsEnabled) {
-        // Only announce once per maneuver to avoid spam
-        const announceKey = `lane_${data.next_maneuver}_${data.recommended_lane}`;
-        if (announceKey !== lastLaneGuidanceManeuver + '_announced') {
-            speakMessage(data.urgency_text, 'normal');
-            lastLaneGuidanceManeuver = announceKey.replace('_announced', '') + '_announced';
+    // Voice announcement for lane guidance at junctions, roundabouts, and urgent lane changes
+    if (voiceAnnouncementsEnabled && data.recommended_lane && data.total_lanes > 1) {
+        const announceKey = `lane_${data.next_maneuver}_${data.recommended_lane}_${data.urgency}`;
+        const alreadyAnnounced = announceKey === _lastLaneVoiceKey;
+
+        if (!alreadyAnnounced) {
+            let laneMsg = '';
+            const lanePos = data.recommended_lane === 1 ? 'left'
+                : data.recommended_lane === data.total_lanes ? 'right'
+                : data.total_lanes === 3 && data.recommended_lane === 2 ? 'middle'
+                : `lane ${data.recommended_lane}`;
+
+            if (data.urgency === 'now') {
+                if (data.next_maneuver === 'roundabout') {
+                    laneMsg = `Use the ${lanePos} lane for the roundabout`;
+                } else {
+                    laneMsg = data.urgency_text || `Get in the ${lanePos} lane now`;
+                }
+                speakMessage(laneMsg, 'high');
+                _lastLaneVoiceKey = announceKey;
+            } else if (data.urgency === 'soon') {
+                if (data.next_maneuver === 'roundabout') {
+                    laneMsg = `At the roundabout ahead, use the ${lanePos} lane`;
+                } else {
+                    laneMsg = data.urgency_text || `Move to the ${lanePos} lane`;
+                }
+                speakMessage(laneMsg, 'normal');
+                _lastLaneVoiceKey = announceKey;
+            } else if (data.urgency === 'ahead' && data.lane_change_needed) {
+                laneMsg = `Ahead, you'll need the ${lanePos} lane`;
+                speakMessage(laneMsg, 'normal');
+                _lastLaneVoiceKey = announceKey;
+            }
         }
     }
 }
@@ -7615,8 +7670,10 @@ function detectUpcomingTurn(userLat, userLon) {
                 );
             }
 
-            // For exits, extend the detection range to 2.5km for early announcements
-            const maxDetectionDistance = direction === 'exit' ? 2500 : 600;
+            // Extend detection range for exits (2.5km) and keep/fork (1.5km)
+            const isExitDir = direction === 'exit' || direction === 'exit_right' || direction === 'exit_left';
+            const isKeepDir = direction === 'slight_right' || direction === 'slight_left';
+            const maxDetectionDistance = isExitDir ? 2500 : isKeepDir ? 1500 : 600;
 
             // Only return turns within detection range
             if (distanceToManeuver <= maxDetectionDistance) {
@@ -10392,6 +10449,10 @@ const TURN_ANNOUNCEMENT_DISTANCES = [500, 200, 100, 50]; // meters
 const EXIT_ANNOUNCEMENT_DISTANCES = [2000, 800, 200, 100]; // meters (2km, 800m, 200m, 100m exit now)
 let announcedExitThresholds = new Set();  // Track exit announcements separately
 
+// Keep right/left (fork/veer) announcement distances — earlier than turns, less than exits
+const KEEP_ANNOUNCEMENT_DISTANCES = [1000, 400, 150, 50]; // meters
+let announcedKeepThresholds = new Set();
+
 // Distance-to-destination announcement variables
 let lastDestinationAnnouncementDistance = Infinity;
 const DESTINATION_ANNOUNCEMENT_DISTANCES = [10000, 5000, 2000, 1000, 500, 100]; // meters (10km, 5km, 2km, 1km, 500m, 100m)
@@ -10770,12 +10831,19 @@ function announceUpcomingTurn(turnInfo) {
     const direction = turnInfo.direction || 'straight';
     const directionText = getTurnDirectionText(direction);
     const streetName = turnInfo.streetName || '';
-    const isExit = direction === 'exit';  // Motorway/highway exit needs earlier announcements
+    const isExit = direction === 'exit' || direction === 'exit_right' || direction === 'exit_left'
+        || direction === 'exit-right' || direction === 'exit-left';
+    const isKeep = direction === 'slight_right' || direction === 'slight_left'
+        || direction === 'slight-right' || direction === 'slight-left';
 
-    // Use different announcement distances for exits (earlier warnings at highway speeds)
-    const announcementDistances = isExit ? EXIT_ANNOUNCEMENT_DISTANCES : TURN_ANNOUNCEMENT_DISTANCES;
-    const thresholdSet = isExit ? announcedExitThresholds : announcedTurnThresholds;
-    const resetDistance = isExit ? 2500 : 600;  // Reset when past announcement zone
+    // Exits and keep-right/left on motorways need earlier warnings at highway speeds
+    const announcementDistances = isExit ? EXIT_ANNOUNCEMENT_DISTANCES
+        : isKeep ? KEEP_ANNOUNCEMENT_DISTANCES
+        : TURN_ANNOUNCEMENT_DISTANCES;
+    const thresholdSet = isExit ? announcedExitThresholds
+        : isKeep ? announcedKeepThresholds
+        : announcedTurnThresholds;
+    const resetDistance = isExit ? 2500 : isKeep ? 1500 : 600;
 
     // Check each threshold independently
     for (const announcementDistance of announcementDistances) {
@@ -10792,56 +10860,86 @@ function announceUpcomingTurn(turnInfo) {
             const streetInfo = streetName ? ` toward ${streetName}` : '';
 
             if (isExit) {
-                // Motorway exit announcements - more advance warning
+                const exitSide = (direction === 'exit_left' || direction === 'exit-left')
+                    ? ' on the left' : (direction === 'exit_right' || direction === 'exit-right') ? ' on the right' : '';
                 if (announcementDistance === 2000) {
-                    // Convert to user's preferred units
                     if (distanceUnit === 'mi') {
-                        message = `In about 1 mile, take the exit${streetInfo}`;
+                        message = `In about 1 mile, take the exit${exitSide}${streetInfo}`;
                     } else {
-                        message = `In 2 kilometers, take the exit${streetInfo}`;
+                        message = `In 2 kilometers, take the exit${exitSide}${streetInfo}`;
                     }
                 } else if (announcementDistance === 800) {
                     if (distanceUnit === 'mi') {
-                        message = `In half a mile, take the exit${streetInfo}`;
+                        message = `In half a mile, prepare to exit${exitSide}${streetInfo}`;
                     } else {
-                        message = `In 800 meters, prepare to exit${streetInfo}`;
+                        message = `In 800 meters, prepare to exit${exitSide}${streetInfo}`;
                     }
                 } else if (announcementDistance === 200) {
-                    if (distanceUnit === 'mi') {
-                        message = `Exit ahead${streetInfo}`;
-                    } else {
-                        message = `In 200 meters, exit${streetInfo}`;
-                    }
+                    message = `Exit ahead${exitSide}${streetInfo}`;
                 } else if (announcementDistance === 100) {
-                    message = `Exit now${streetInfo}`;
+                    message = `Exit now${exitSide}${streetInfo}`;
+                }
+            } else if (isKeep) {
+                const keepDir = (direction === 'slight_left' || direction === 'slight-left') ? 'left' : 'right';
+                const streetOnto = streetName ? ` toward ${streetName}` : '';
+                if (announcementDistance === 1000) {
+                    if (distanceUnit === 'mi') {
+                        message = `In half a mile, keep ${keepDir}${streetOnto}`;
+                    } else {
+                        message = `In 1 kilometer, keep ${keepDir}${streetOnto}`;
+                    }
+                } else if (announcementDistance === 400) {
+                    if (distanceUnit === 'mi') {
+                        message = `In 1300 feet, keep ${keepDir}${streetOnto}`;
+                    } else {
+                        message = `In 400 meters, keep ${keepDir}${streetOnto}`;
+                    }
+                } else if (announcementDistance === 150) {
+                    message = `Keep ${keepDir}${streetOnto}`;
+                } else if (announcementDistance === 50) {
+                    message = `Keep ${keepDir} now`;
                 }
             } else {
-                // Standard turn announcements
                 const streetOnto = streetName ? ` onto ${streetName}` : '';
 
                 if (announcementDistance === 500) {
-                    message = `In 500 meters, ${directionText}${streetOnto}`;
+                    if (distanceUnit === 'mi') {
+                        message = `In 1600 feet, ${directionText}${streetOnto}`;
+                    } else {
+                        message = `In 500 meters, ${directionText}${streetOnto}`;
+                    }
                 } else if (announcementDistance === 200) {
-                    message = `In 200 meters, ${directionText}${streetOnto}`;
+                    if (distanceUnit === 'mi') {
+                        message = `In 600 feet, ${directionText}${streetOnto}`;
+                    } else {
+                        message = `In 200 meters, ${directionText}${streetOnto}`;
+                    }
                 } else if (announcementDistance === 100) {
-                    message = `In 100 meters, ${directionText}${streetOnto}`;
+                    if (distanceUnit === 'mi') {
+                        message = `In 300 feet, ${directionText}${streetOnto}`;
+                    } else {
+                        message = `In 100 meters, ${directionText}${streetOnto}`;
+                    }
                 } else if (announcementDistance === 50) {
                     message = `${directionText}${streetOnto}`;
                 }
             }
 
             if (message) {
-                console.log(`[Voice] Announcing ${isExit ? 'exit' : 'turn'}: ${message} (distance: ${distance.toFixed(0)}m)`);
-                speakMessage(message, 'high');  // High priority - bypass throttle
+                const announceType = isExit ? 'exit' : isKeep ? 'keep' : 'turn';
+                console.log(`[Voice] Announcing ${announceType}: ${message} (distance: ${distance.toFixed(0)}m)`);
+                speakMessage(message, 'high');
                 thresholdSet.add(announcementDistance);
             }
         }
     }
 
-    // Reset when turn/exit is completely passed
+    // Reset when turn/exit/keep is completely passed
     if (distance > resetDistance) {
         if (isExit) {
             announcedExitThresholds.clear();
+        } else if (isKeep) {
+            announcedKeepThresholds.clear();
         } else {
             announcedTurnThresholds.clear();
         }
