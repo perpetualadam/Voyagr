@@ -87,3 +87,7 @@ voyagr_web_backup*.py
 .env.local
 .env.*.local
 
+# Android signing keys (TWA)
+*.jks
+*.keystore
+

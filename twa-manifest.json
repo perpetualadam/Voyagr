@@ -1,6 +1,6 @@
 {
   "packageId": "com.voyagr.app",
-  "host": "YOUR_DOMAIN.railway.app",
+  "host": "vibevoyagr.duckdns.org",
   "name": "Voyagr Navigation",
   "launcherName": "Voyagr",
   "display": "standalone",
@@ -12,8 +12,8 @@
   "backgroundColor": "#ffffff",
   "enableNotifications": true,
   "startUrl": "/",
-  "iconUrl": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%23667eea' width='512' height='512' rx='64'/><text x='50%' y='55%' font-size='300' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='middle'>V</text></svg>",
-  "maskableIconUrl": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%23667eea' width='512' height='512'/><text x='50%' y='55%' font-size='300' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='middle'>V</text></svg>",
+  "iconUrl": "https://vibevoyagr.duckdns.org/static/images/icons/icon-512.png",
+  "maskableIconUrl": "https://vibevoyagr.duckdns.org/static/images/icons/icon-512-maskable.png",
   "shortcuts": [
     {
       "name": "Calculate Route",
@@ -21,7 +21,7 @@
       "url": "/?mode=route",
       "icons": [
         {
-          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect fill='%234CAF50' width='96' height='96' rx='16'/><text x='50%' y='55%' font-size='50' fill='white' text-anchor='middle' dominant-baseline='middle'>📍</text></svg>",
+          "src": "/static/images/icons/icon-96.png",
           "sizes": "96x96"
         }
       ]
@@ -32,14 +32,14 @@
       "url": "/?mode=history",
       "icons": [
         {
-          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect fill='%23FF9800' width='96' height='96' rx='16'/><text x='50%' y='55%' font-size='50' fill='white' text-anchor='middle' dominant-baseline='middle'>📋</text></svg>",
+          "src": "/static/images/icons/icon-96.png",
           "sizes": "96x96"
         }
       ]
     }
   ],
   "generatorApp": "bubblewrap-cli",
-  "webManifestUrl": "/manifest.json",
+  "webManifestUrl": "https://vibevoyagr.duckdns.org/manifest.json",
   "fallbackType": "customtabs",
   "features": {
     "locationDelegation": {
@@ -55,7 +55,7 @@
   "enableSiteSettingsShortcut": true,
   "isChromeOSOnly": false,
   "isMetaQuest": false,
-  "fullScopeUrl": "/",
+  "fullScopeUrl": "https://vibevoyagr.duckdns.org/",
   "minSdkVersion": 23,
   "orientation": "any",
   "fingerprints": [
