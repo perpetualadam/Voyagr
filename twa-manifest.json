@@ -1,0 +1,77 @@
+{
+  "packageId": "com.voyagr.app",
+  "host": "YOUR_DOMAIN.railway.app",
+  "name": "Voyagr Navigation",
+  "launcherName": "Voyagr",
+  "display": "standalone",
+  "themeColor": "#667eea",
+  "navigationColor": "#667eea",
+  "navigationColorDark": "#4c5ecf",
+  "navigationDividerColor": "#ffffff",
+  "navigationDividerColorDark": "#1a1a1a",
+  "backgroundColor": "#ffffff",
+  "enableNotifications": true,
+  "startUrl": "/",
+  "iconUrl": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%23667eea' width='512' height='512' rx='64'/><text x='50%' y='55%' font-size='300' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='middle'>V</text></svg>",
+  "maskableIconUrl": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><rect fill='%23667eea' width='512' height='512'/><text x='50%' y='55%' font-size='300' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='middle'>V</text></svg>",
+  "shortcuts": [
+    {
+      "name": "Calculate Route",
+      "short_name": "Route",
+      "url": "/?mode=route",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect fill='%234CAF50' width='96' height='96' rx='16'/><text x='50%' y='55%' font-size='50' fill='white' text-anchor='middle' dominant-baseline='middle'>📍</text></svg>",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "Trip History",
+      "short_name": "History",
+      "url": "/?mode=history",
+      "icons": [
+        {
+          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect fill='%23FF9800' width='96' height='96' rx='16'/><text x='50%' y='55%' font-size='50' fill='white' text-anchor='middle' dominant-baseline='middle'>📋</text></svg>",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {
+    "locationDelegation": {
+      "enabled": true
+    },
+    "playBilling": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "/",
+  "minSdkVersion": 23,
+  "orientation": "any",
+  "fingerprints": [
+    {
+      "name": "upload-key",
+      "value": "REPLACE_WITH_YOUR_SHA256_FINGERPRINT"
+    }
+  ],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "signingKey": {
+    "path": "./upload-keystore.jks",
+    "alias": "voyagr"
+  },
+  "appVersionName": "1.0.0",
+  "appVersionCode": 1,
+  "splashScreenFadeOutDuration": 300,
+  "enableChromeOsTabletMode": false
+}

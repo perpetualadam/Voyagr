@@ -6,6 +6,7 @@ Contains:
 - Config endpoint
 - Monitoring dashboard
 - Manifest and service worker
+- Digital Asset Links (TWA verification)
 """
 
 import json
@@ -68,4 +69,33 @@ def service_worker():
         response.headers['Content-Type'] = 'application/javascript'
         response.headers['Service-Worker-Allowed'] = '/'
         return response
+
+
+@core_bp.route('/.well-known/assetlinks.json')
+def asset_links():
+    """Serve Digital Asset Links for TWA (Trusted Web Activity) verification.
+
+    The SHA-256 fingerprint is read from the TWA_SHA256_FINGERPRINT env var.
+    Set this to the signing certificate fingerprint of your Android app
+    (upload key or Play App Signing key).
+    """
+    fingerprint = os.getenv(
+        'TWA_SHA256_FINGERPRINT',
+        'REPLACE_WITH_YOUR_SHA256_FINGERPRINT'
+    )
+    package_name = os.getenv('TWA_PACKAGE_NAME', 'com.voyagr.app')
+    asset_links = [
+        {
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": {
+                "namespace": "android_app",
+                "package_name": package_name,
+                "sha256_cert_fingerprints": [fingerprint]
+            }
+        }
+    ]
+    response = jsonify(asset_links)
+    response.headers['Content-Type'] = 'application/json'
+    response.headers['Cache-Control'] = 'public, max-age=3600'
+    return response
 

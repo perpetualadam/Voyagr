@@ -142,7 +142,13 @@
       "url": "/?geo=%s"
     }
   ],
-  "related_applications": [],
-  "prefer_related_applications": false
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.voyagr.app",
+      "id": "com.voyagr.app"
+    }
+  ],
+  "prefer_related_applications": true
 }
 
