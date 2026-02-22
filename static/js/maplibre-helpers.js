@@ -1,6 +1,6 @@
 /**
  * MapLibre GL JS Helpers
- * Provides wrapper functions for common map operations, replacing Leaflet APIs
+ * Provides wrapper functions for common map operations
  * @module maplibre-helpers
  */
 
@@ -197,10 +197,12 @@ function removeMapLayer(mapInstance, layerId) {
 // ===== MARKER FUNCTIONS =====
 
 /**
- * Create a custom marker with HTML content
+ * Create a custom marker with HTML content.
+ * Uses MapLibre's anchor: 'center' so the element's center aligns with the
+ * geographic coordinate — no manual margin offset is needed.
  * @param {number} lat - Latitude
  * @param {number} lon - Longitude
- * @param {Object} options - Marker options (html, className, popup)
+ * @param {Object} options - Marker options (html, className, iconSize, popup)
  * @returns {maplibregl.Marker} Marker instance
  */
 function createMarker(lat, lon, options = {}) {
@@ -216,27 +218,19 @@ function createMarker(lat, lon, options = {}) {
         el.style.height = options.iconSize[1] + 'px';
     }
 
-    if (options.iconAnchor) {
-        el.style.marginLeft = -options.iconAnchor[0] + 'px';
-        el.style.marginTop = -options.iconAnchor[1] + 'px';
-    }
-
     const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
-        .setLngLat([lon, lat]); // [lon, lat] order
+        .setLngLat([lon, lat]);
 
-    // Add popup if provided
     if (options.popup) {
         const popup = new maplibregl.Popup({ offset: 25 })
             .setHTML(options.popup);
         marker.setPopup(popup);
     }
 
-    // Store reference
     const markerId = `marker-${++layerCounter}`;
     marker._mlId = markerId;
     activeMarkers.set(markerId, marker);
 
-    // Add Leaflet-compatible methods
     marker.bindPopup = function (content) {
         const popup = new maplibregl.Popup({ offset: 25 }).setHTML(content);
         this.setPopup(popup);
@@ -254,6 +248,13 @@ function createMarker(lat, lon, options = {}) {
     marker.getLatLng = function () {
         const lngLat = this.getLngLat();
         return { lat: lngLat.lat, lng: lngLat.lng };
+    };
+
+    marker.setLatLng = function (latlng) {
+        const lat = latlng.lat !== undefined ? latlng.lat : latlng[0];
+        const lng = latlng.lng !== undefined ? latlng.lng : latlng[1];
+        this.setLngLat([lng, lat]);
+        return this;
     };
 
     marker.getElement = function () {
@@ -291,7 +292,6 @@ function createCircleMarker(lat, lon, options = {}) {
     marker._mlId = markerId;
     activeMarkers.set(markerId, marker);
 
-    // Add Leaflet-compatible methods
     marker.bindPopup = function (content) {
         const popup = new maplibregl.Popup({ offset: 25 }).setHTML(content);
         this.setPopup(popup);
@@ -301,6 +301,13 @@ function createCircleMarker(lat, lon, options = {}) {
     marker.getLatLng = function () {
         const lngLat = this.getLngLat();
         return { lat: lngLat.lat, lng: lngLat.lng };
+    };
+
+    marker.setLatLng = function (latlng) {
+        const lat = latlng.lat !== undefined ? latlng.lat : latlng[0];
+        const lng = latlng.lng !== undefined ? latlng.lng : latlng[1];
+        this.setLngLat([lng, lat]);
+        return this;
     };
 
     return marker;
@@ -339,7 +346,7 @@ function computeBounds(coords) {
 }
 
 /**
- * Compute bounds from [lat, lon] coordinates (Leaflet format)
+ * Compute bounds from [lat, lon] coordinates
  * @param {Array<[number, number]>} coords - Array of [lat, lon] coordinates
  * @returns {maplibregl.LngLatBounds} Bounds object
  */
