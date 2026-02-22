@@ -59,22 +59,7 @@
     }
   ],
   "categories": ["navigation", "travel", "utilities"],
-  "screenshots": [
-    {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1080 1920'><rect fill='%23667eea' width='1080' height='1920'/><text x='50%' y='45%' font-size='120' fill='white' text-anchor='middle' font-weight='bold'>Voyagr</text><text x='50%' y='55%' font-size='60' fill='white' text-anchor='middle' opacity='0.9'>Navigation App</text></svg>",
-      "sizes": "1080x1920",
-      "type": "image/svg+xml",
-      "form_factor": "narrow",
-      "label": "Mobile view"
-    },
-    {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1920 1080'><rect fill='%23667eea' width='1920' height='1080'/><text x='50%' y='45%' font-size='100' fill='white' text-anchor='middle' font-weight='bold'>Voyagr</text><text x='50%' y='55%' font-size='50' fill='white' text-anchor='middle' opacity='0.9'>Full-Featured Navigation</text></svg>",
-      "sizes": "1920x1080",
-      "type": "image/svg+xml",
-      "form_factor": "wide",
-      "label": "Desktop view"
-    }
-  ],
+  "screenshots": [],
   "shortcuts": [
     {
       "name": "Calculate Route",
@@ -83,9 +68,9 @@
       "url": "/?mode=route",
       "icons": [
         {
-          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect fill='%234CAF50' width='96' height='96' rx='16'/><text x='50%' y='55%' font-size='50' fill='white' text-anchor='middle' dominant-baseline='middle'>📍</text></svg>",
+          "src": "/static/images/icons/shortcut-route.png",
           "sizes": "96x96",
-          "type": "image/svg+xml"
+          "type": "image/png"
         }
       ]
     },
@@ -96,9 +81,9 @@
       "url": "/?mode=history",
       "icons": [
         {
-          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect fill='%23FF9800' width='96' height='96' rx='16'/><text x='50%' y='55%' font-size='50' fill='white' text-anchor='middle' dominant-baseline='middle'>📋</text></svg>",
+          "src": "/static/images/icons/shortcut-history.png",
           "sizes": "96x96",
-          "type": "image/svg+xml"
+          "type": "image/png"
         }
       ]
     },
@@ -109,9 +94,9 @@
       "url": "/?mode=voice",
       "icons": [
         {
-          "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'><rect fill='%239C27B0' width='96' height='96' rx='16'/><text x='50%' y='55%' font-size='50' fill='white' text-anchor='middle' dominant-baseline='middle'>🎤</text></svg>",
+          "src": "/static/images/icons/shortcut-voice.png",
           "sizes": "96x96",
-          "type": "image/svg+xml"
+          "type": "image/png"
         }
       ]
     }
