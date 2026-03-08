@@ -28,6 +28,8 @@ services:
             - Content-Type
             - apikey
             - x-client-info
+            - x-supabase-api-version
+            - x-my-custom-header
           exposed_headers:
             - X-Total-Count
           credentials: true
@@ -60,6 +62,7 @@ services:
             - Content-Type
             - apikey
             - x-client-info
+            - x-supabase-api-version
             - Prefer
             - Range
           exposed_headers:
