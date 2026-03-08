@@ -65,6 +65,8 @@ services:
             - x-supabase-api-version
             - Prefer
             - Range
+            - accept-profile
+            - content-profile
           exposed_headers:
             - X-Total-Count
             - Content-Range
