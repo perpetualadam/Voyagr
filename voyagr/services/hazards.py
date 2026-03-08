@@ -90,11 +90,7 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
                 return json.loads(cached_data)
 
         hazards: Dict[str, List[Dict[str, Any]]] = {
-            'speed_camera': [],
-            'average_speed_camera': [],
-            'traffic_light_camera': [],
-            'red_light_camera': [],
-            'mobile_camera': [],
+            'camera': [],
             'police': [],
             'roadworks': [],
             'accident': [],
@@ -103,18 +99,12 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
             'debris': []
         }
 
-        # Fetch ALL cameras (all types, not just speed_camera)
         cursor.execute(
             "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
             (south, north, west, east)
         )
         for lat, lon, camera_type, desc in cursor.fetchall():
-            # Map camera type to appropriate hazard category
-            if camera_type in hazards:
-                hazards[camera_type].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high', 'original_type': camera_type})
-            else:
-                # Default to speed_camera for unknown types
-                hazards['speed_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high', 'original_type': camera_type or 'speed_camera'})
+            hazards['camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
 
         return_db_connection(conn)
         return hazards
@@ -275,7 +265,7 @@ def merge_hazards_with_tomtom_incidents(hazards: Dict[str, List[Dict[str, Any]]]
         else:
             merged[incident_type] = incident_list
 
-    camera_count = sum(len(merged.get(t, [])) for t in ['speed_camera', 'traffic_light_camera', 'average_speed_camera'])
+    camera_count = len(merged.get('camera', []))
     tomtom_count = sum(len(tomtom_incidents.get(t, [])) for t in tomtom_incidents.keys())
     total_count = sum(len(v) for v in merged.values())
     logger.info(f"[HYBRID] Merged hazards: {camera_count} cameras + {tomtom_count} TomTom incidents = {total_count} total")
@@ -290,7 +280,7 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
     try:
         all_hazards = []
         hazard_weights = {
-            'speed_camera': 50.0,
+            'camera': 50.0,
             'police': 30.0,
             'accident': 20.0,
             'roadworks': 15.0,
@@ -366,7 +356,7 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
     """Build Valhalla exclude_locations to avoid hazards."""
     try:
         hazard_weights = {
-            'speed_camera': 50.0, 'traffic_light_camera': 50.0,
+            'camera': 50.0,
             'road_closed': 45.0, 'police': 40.0, 'accident': 35.0,
             'lane_closed': 32.0, 'roadworks': 30.0, 'jam': 25.0,
             'railway_crossing': 20.0, 'pothole': 15.0, 'debris': 15.0
@@ -562,22 +552,14 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
             preferences = {row[0]: {'penalty': row[1], 'threshold': row[2]} for row in cursor.fetchall()}
             if not preferences:
                 preferences = {
-                    'speed_camera': {'penalty': 60, 'threshold': 500},
-                    'average_speed_camera': {'penalty': 60, 'threshold': 500},
-                    'traffic_light_camera': {'penalty': 90, 'threshold': 500},
-                    'red_light_camera': {'penalty': 90, 'threshold': 500},
-                    'mobile_camera': {'penalty': 60, 'threshold': 500},
+                    'camera': {'penalty': 60, 'threshold': 500},
                     'police': {'penalty': 30, 'threshold': 1000},
                     'roadworks': {'penalty': 15, 'threshold': 500},
                     'accident': {'penalty': 30, 'threshold': 500}
                 }
         except Exception:
             preferences = {
-                'speed_camera': {'penalty': 60, 'threshold': 500},
-                'average_speed_camera': {'penalty': 60, 'threshold': 500},
-                'traffic_light_camera': {'penalty': 90, 'threshold': 500},
-                'red_light_camera': {'penalty': 90, 'threshold': 500},
-                'mobile_camera': {'penalty': 60, 'threshold': 500},
+                'camera': {'penalty': 60, 'threshold': 500},
                 'police': {'penalty': 30, 'threshold': 1000},
                 'roadworks': {'penalty': 15, 'threshold': 500},
                 'accident': {'penalty': 30, 'threshold': 500}
@@ -622,9 +604,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
                         break
 
                 if min_distance <= threshold:
-                    camera_types = ['speed_camera', 'traffic_light_camera', 'average_speed_camera',
-                                    'red_light_camera', 'mobile_camera']
-                    if hazard_type in camera_types:
+                    if hazard_type == 'camera':
                         proximity_multiplier = 1.0 + (2.0 * (1.0 - min_distance / threshold))
                         distance_multiplier = max(1.0, proximity_multiplier)
                         applied_penalty = penalty * distance_multiplier

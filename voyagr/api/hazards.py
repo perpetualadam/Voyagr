@@ -82,7 +82,7 @@ def add_camera():
         data = request.json
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
-        camera_type = data.get('type', 'speed_camera')
+        camera_type = data.get('type', 'camera')
         description = sanitize_string(data.get('description', ''), max_length=500) or ''
 
         conn = get_db_connection()
@@ -217,7 +217,7 @@ def get_cameras_in_area():
             cameras.append({
                 'lat': row[0],
                 'lon': row[1],
-                'type': row[2] or 'speed_camera',
+                'type': row[2] or 'camera',
                 'description': row[3] or '',
                 'severity': row[4] or 'high'
             })

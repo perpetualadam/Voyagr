@@ -12,8 +12,7 @@ export class HazardsManager {
         this.hazards = [];
         this.avoidanceEnabled = config.avoidanceEnabled !== false;
         this.hazardTypes = config.hazardTypes || [
-            'speed_camera',
-            'traffic_camera',
+            'camera',
             'police',
             'roadworks',
             'accident',

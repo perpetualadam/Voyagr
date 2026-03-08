@@ -52,8 +52,7 @@ export const VEHICLE_TYPES = {
 
 // Hazard Types
 export const HAZARD_TYPES = {
-    SPEED_CAMERA: 'speed_camera',
-    TRAFFIC_CAMERA: 'traffic_camera',
+    CAMERA: 'camera',
     POLICE: 'police',
     ROADWORKS: 'roadworks',
     ACCIDENT: 'accident',

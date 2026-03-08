@@ -1316,11 +1316,7 @@ def init_db():
     # NOTE: All cameras now have HIGH priority to avoid (consolidated camera setting)
     # Penalty of 800s (~13 minutes) for all camera types ensures routes avoid them
     hazard_preferences = [
-        ('speed_camera', 800, 1, 100),           # 800s (13 min) - high priority
-        ('traffic_light_camera', 800, 1, 100),   # 800s (13 min) - high priority
-        ('average_speed_camera', 800, 1, 100),   # 800s (13 min) - high priority
-        ('red_light_camera', 800, 1, 100),       # 800s (13 min) - high priority
-        ('mobile_camera', 800, 1, 100),          # 800s (13 min) - high priority
+        ('camera', 800, 1, 100),                 # 800s (13 min) - high priority
         ('police', 180, 1, 200),
         ('roadworks', 300, 1, 500),
         ('accident', 600, 1, 500),
@@ -2092,11 +2088,7 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
                 return json.loads(cached_data)
 
         hazards: Dict[str, List[Dict[str, Any]]] = {
-            'speed_camera': [],
-            'average_speed_camera': [],
-            'traffic_light_camera': [],
-            'red_light_camera': [],
-            'mobile_camera': [],
+            'camera': [],
             'police': [],
             'roadworks': [],
             'accident': [],
@@ -2105,18 +2097,12 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
             'debris': []
         }
 
-        # Fetch ALL cameras (all types, not just speed_camera)
         cursor.execute(
             "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
             (south, north, west, east)
         )
         for lat, lon, camera_type, desc in cursor.fetchall():
-            # Map camera type to appropriate hazard category
-            if camera_type in hazards:
-                hazards[camera_type].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high', 'original_type': camera_type})
-            else:
-                # Default to speed_camera for unknown types
-                hazards['speed_camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high', 'original_type': camera_type or 'speed_camera'})
+            hazards['camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
 
         # Skip community reports for custom model (only cameras are used for avoidance)
         # Community reports are still used for post-processing hazard scoring
@@ -2343,7 +2329,7 @@ def merge_hazards_with_tomtom_incidents(hazards: Dict[str, List[Dict[str, Any]]]
             merged[incident_type] = incident_list
 
     # Log merge summary
-    camera_count = sum(len(merged.get(t, [])) for t in ['speed_camera', 'traffic_light_camera', 'average_speed_camera'])
+    camera_count = len(merged.get('camera', []))
     tomtom_count = sum(len(tomtom_incidents.get(t, [])) for t in tomtom_incidents.keys())
     total_count = sum(len(v) for v in merged.values())
 
@@ -2373,7 +2359,7 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], rou
 
         # Priority weights for different hazard types
         hazard_weights = {
-            'speed_camera': 50.0,            # High priority - strong avoidance
+            'camera': 50.0,                  # High priority - strong avoidance
             'police': 30.0,                  # Medium-high priority
             'accident': 20.0,                # Medium priority
             'roadworks': 15.0,               # Medium-low priority
@@ -2502,8 +2488,7 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]], r
         # The weights determine PRIORITY when we hit max_hazards limit
         # UPDATED: Added TomTom real-time incident types (road_closed, lane_closed, jam)
         hazard_weights = {
-            'speed_camera': 50.0,      # Highest priority - always avoid
-            'traffic_light_camera': 50.0,  # Same as speed camera
+            'camera': 50.0,            # Highest priority - always avoid
             'road_closed': 45.0,       # TomTom: Very high - road is impassable
             'police': 40.0,            # High priority
             'accident': 35.0,          # High priority - safety hazard (TomTom + community)
@@ -2946,11 +2931,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
                 # Table exists but is empty - use defaults
                 logger.info(f"[HAZARDS] hazard_preferences table is empty, using defaults")
                 preferences = {
-                    'speed_camera': {'penalty': 60, 'threshold': 500},
-                    'average_speed_camera': {'penalty': 60, 'threshold': 500},
-                    'traffic_light_camera': {'penalty': 90, 'threshold': 500},
-                    'red_light_camera': {'penalty': 90, 'threshold': 500},
-                    'mobile_camera': {'penalty': 60, 'threshold': 500},
+                    'camera': {'penalty': 60, 'threshold': 500},
                     'police': {'penalty': 30, 'threshold': 1000},
                     'roadworks': {'penalty': 15, 'threshold': 500},
                     'accident': {'penalty': 30, 'threshold': 500}
@@ -2959,11 +2940,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
             # Table doesn't exist - use default preferences for all camera types
             logger.info(f"[HAZARDS] hazard_preferences table not found, using defaults: {e}")
             preferences = {
-                'speed_camera': {'penalty': 60, 'threshold': 500},
-                'average_speed_camera': {'penalty': 60, 'threshold': 500},
-                'traffic_light_camera': {'penalty': 90, 'threshold': 500},
-                'red_light_camera': {'penalty': 90, 'threshold': 500},
-                'mobile_camera': {'penalty': 60, 'threshold': 500},
+                'camera': {'penalty': 60, 'threshold': 500},
                 'police': {'penalty': 30, 'threshold': 1000},
                 'roadworks': {'penalty': 15, 'threshold': 500},
                 'accident': {'penalty': 30, 'threshold': 500}
@@ -3032,9 +3009,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
                 if min_distance <= threshold:
                     # CAMERA PRIORITY: Apply distance-based multiplier for ALL camera types
                     # Cameras closer to route get exponentially higher penalty
-                    camera_types = ['speed_camera', 'traffic_light_camera', 'average_speed_camera',
-                                    'red_light_camera', 'mobile_camera']
-                    if hazard_type in camera_types:
+                    if hazard_type == 'camera':
                         # Proximity multiplier: 1.0 at threshold, 3.0 at 0m
                         # Formula: 1 + (2 * (1 - distance/threshold))
                         proximity_multiplier = 1.0 + (2.0 * (1.0 - min_distance / threshold))

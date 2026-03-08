@@ -4106,11 +4106,7 @@ function displayHazardMarkers(hazards) {
 
     // Hazard type configuration with SVG for cameras, emoji for other hazards
     const hazardConfig = {
-        'traffic_light_camera': { svg: trafficLightSVG, color: '#e53935', bgColor: '#ffebee', label: 'Traffic Light Camera' },
-        'speed_camera': { svg: speedCameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Speed Camera' },
-        'average_speed_camera': { svg: avgSpeedSVG, color: '#1565C0', bgColor: '#e3f2fd', label: 'Average Speed Camera' },
-        'red_light_camera': { svg: redLightSVG, color: '#d32f2f', bgColor: '#ffcdd2', label: 'Red Light Camera' },
-        'mobile_camera': { svg: mobileSVG, color: '#9c27b0', bgColor: '#f3e5f5', label: 'Mobile Camera' },
+        'camera': { svg: speedCameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Camera' },
         'police': { emoji: '🚔', color: '#1976d2', bgColor: '#e3f2fd', label: 'Police' },
         'roadworks': { emoji: '🚧', color: '#ffc107', bgColor: '#fff8e1', label: 'Roadworks' },
         'accident': { emoji: '⚠️', color: '#f44336', bgColor: '#ffebee', label: 'Accident' },
@@ -5705,14 +5701,9 @@ function displayCameraMarkers(cameras) {
     const trafficLightSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="7" y="2" width="10" height="20" rx="2" fill="#333" stroke="#222" stroke-width="1"/><circle cx="12" cy="6" r="2.5" fill="#f44336"/><circle cx="12" cy="12" r="2.5" fill="#FFD600"/><circle cx="12" cy="18" r="2.5" fill="#4CAF50"/></svg>`;
 
     const cameraConfig = {
-        'traffic_light_camera': { svg: trafficLightSVG, color: '#e53935', bgColor: '#ffebee', label: 'Traffic Light Camera' },
-        'speed_camera': { svg: speedCameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Speed Camera' },
-        'average_speed_camera': { svg: avgSpeedSVG, color: '#1565C0', bgColor: '#e3f2fd', label: 'Average Speed Camera' },
-        'red_light_camera': { svg: redLightSVG, color: '#d32f2f', bgColor: '#ffcdd2', label: 'Red Light Camera' },
-        'mobile_camera': { svg: mobileSVG, color: '#9c27b0', bgColor: '#f3e5f5', label: 'Mobile Camera' }
+        'camera': { svg: speedCameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Camera' }
     };
 
-    // Track unique locations to avoid duplicates
     const seenLocations = new Set();
 
     cameras.forEach(camera => {
@@ -5720,7 +5711,7 @@ function displayCameraMarkers(cameras) {
         if (seenLocations.has(locationKey)) return;
         seenLocations.add(locationKey);
 
-        const config = cameraConfig[camera.type] || cameraConfig['speed_camera'];
+        const config = cameraConfig['camera'];
 
         // Create custom HTML marker with MapLibre
         const marker = MapLibreHelpers.createMarker(camera.lat, camera.lon, {
@@ -11859,11 +11850,7 @@ function openHazardSettings() {
  */
 function getHazardIcon(type) {
     const icons = {
-        'speed_camera': '📷',
-        'traffic_camera': '📹',
-        'red_light_camera': '🚦',
-        'average_speed_camera': '⏱️',
-        'mobile_camera': '📱',
+        'camera': '📷',
         'police': '👮',
         'accident': '🚗💥',
         'roadworks': '🚧',
@@ -11938,8 +11925,7 @@ let HAZARD_WARNING_DISTANCE = 500;
 let cameraAlertType = localStorage.getItem('pref_cameraAlertType') || 'voice';
 let cameraAlertDistance = parseInt(localStorage.getItem('pref_cameraAlertDistance') || '500');
 
-const CAMERA_HAZARD_TYPES = ['speed_camera', 'traffic_light_camera', 'average_speed_camera',
-                              'red_light_camera', 'mobile_camera'];
+const CAMERA_HAZARD_TYPES = ['camera'];
 
 /**
  * Play a chime alert sound using Web Audio API
