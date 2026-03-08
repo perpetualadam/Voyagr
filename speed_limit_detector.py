@@ -534,69 +534,75 @@ class SpeedLimitDetector:
                 elements = data.get('elements', [])
                 
                 if elements:
-                    # Find the closest/most relevant way
+                    HIGHWAY_RANK = {
+                        'motorway': 10, 'motorway_link': 9,
+                        'trunk': 8, 'trunk_link': 7,
+                        'primary': 6, 'primary_link': 5,
+                        'secondary': 4, 'secondary_link': 3,
+                        'tertiary': 2, 'tertiary_link': 1,
+                    }
+                    highway_speed_map = {
+                        'motorway': 70, 'motorway_link': 50,
+                        'trunk': 70, 'trunk_link': 50,
+                        'primary': 60, 'primary_link': 40,
+                        'secondary': 60, 'secondary_link': 40,
+                        'tertiary': 40, 'tertiary_link': 30,
+                        'unclassified': 30, 'residential': 30,
+                        'living_street': 20, 'service': 20,
+                        'pedestrian': 10, 'track': 20,
+                    }
+
+                    best_explicit = None
+                    best_explicit_rank = -1
+                    best_inferred = None
+                    best_inferred_rank = -1
+                    best_inferred_hw = 'unknown'
+
                     for element in elements:
                         tags = element.get('tags', {})
-                        
-                        # Priority 1: Explicit maxspeed tag
-                        if 'maxspeed' in tags:
+                        hw = tags.get('highway', '')
+                        rank = HIGHWAY_RANK.get(hw, 0)
+                        is_dual = tags.get('dual_carriageway') == 'yes' or tags.get('carriageway') == 'dual'
+
+                        if 'maxspeed' in tags and rank >= best_explicit_rank:
                             speed_str = tags['maxspeed']
-                            # Parse speed (handle "70 mph", "50", "30 mph", "70" formats)
                             speed_str_clean = speed_str.replace('mph', '').replace('km/h', '').strip()
                             try:
                                 speed = int(speed_str_clean.split()[0])
-                                # If it was in km/h, convert to mph
                                 if 'km/h' in speed_str:
                                     speed = int(round(speed * 0.621371))
-
-                                # Track Overpass maxspeed hit
-                                self.metrics['overpass_maxspeed_hits'] += 1
-
-                                # Cache the result using LRU method
-                                self._add_to_cache(cache_key, {
-                                    'speed_limit': speed,
-                                    'timestamp': time.time(),
-                                    'source': 'OSM-maxspeed'
-                                })
-                                logger.info(f"[Speed Limit] OSM maxspeed: {speed} mph")
-                                return speed
+                                best_explicit = speed
+                                best_explicit_rank = rank
                             except (ValueError, IndexError):
                                 logger.warning(f"[Speed Limit] OSM parse error: '{speed_str}'")
-                        
-                        # Priority 2: Infer from highway type (UK defaults)
-                        highway_type = tags.get('highway', '')
-                        highway_speed_map = {
-                            'motorway': 70,
-                            'motorway_link': 50,
-                            'trunk': 70,
-                            'trunk_link': 50,
-                            'primary': 60,
-                            'primary_link': 40,
-                            'secondary': 60,
-                            'secondary_link': 40,
-                            'tertiary': 40,
-                            'tertiary_link': 30,
-                            'unclassified': 30,
-                            'residential': 30,
-                            'living_street': 20,
-                            'service': 20,
-                            'pedestrian': 10,
-                            'track': 20,
-                        }
-                        
-                        if highway_type in highway_speed_map:
-                            inferred_speed = highway_speed_map[highway_type]
 
-                            # Track Overpass highway inference
-                            self.metrics['overpass_highway_inferred'] += 1
+                        if hw in highway_speed_map and rank >= best_inferred_rank:
+                            inferred = highway_speed_map[hw]
+                            if is_dual and hw in ('primary', 'secondary', 'tertiary'):
+                                inferred = min(inferred + 10, 70)
+                            best_inferred = inferred
+                            best_inferred_rank = rank
+                            best_inferred_hw = hw
 
-                            self._add_to_cache(cache_key, {
-                                'speed_limit': inferred_speed,
-                                'timestamp': time.time(),
-                                'source': f'OSM-highway-{highway_type}'
-                            })
-                            logger.info(f"[Speed Limit] Inferred from highway={highway_type}: {inferred_speed} mph")
-                            return inferred_speed
+                    if best_explicit is not None:
+                        self.metrics['overpass_maxspeed_hits'] += 1
+                        self._add_to_cache(cache_key, {
+                            'speed_limit': best_explicit,
+                            'timestamp': time.time(),
+                            'source': 'OSM-maxspeed'
+                        })
+                        logger.info(f"[Speed Limit] OSM maxspeed (best road): {best_explicit} mph")
+                        return best_explicit
+
+                    if best_inferred is not None:
+                        self.metrics['overpass_highway_inferred'] += 1
+                        self._add_to_cache(cache_key, {
+                            'speed_limit': best_inferred,
+                            'timestamp': time.time(),
+                            'source': f'OSM-highway-{best_inferred_hw}'
+                        })
+                        logger.info(f"[Speed Limit] Inferred from highway={best_inferred_hw}: {best_inferred} mph")
+                        return best_inferred
                 else:
                     self.metrics['overpass_failures'] += 1
                     logger.warning(f"[Speed Limit] OSM returned no highway elements nearby")

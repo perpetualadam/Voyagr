@@ -3736,12 +3736,11 @@ HTML_TEMPLATE = '''
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23667eea' width='192' height='192'/><text x='50%' y='50%' font-size='100' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'>V</text></svg>">
     <link rel="manifest" href="/manifest.json">
     <title>Voyagr Navigation</title>
-    <link href="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.css" rel="stylesheet" />
+    <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="/static/css/voyagr.css?v=20260109t" />
-    <script src="https://unpkg.com/maplibre-gl@4.1.0/dist/maplibre-gl.js"></script>
+    <script src="/static/vendor/maplibre-gl.js"></script>
     <script src="/static/js/maplibre-helpers.js?v=20260117t"></script>
-    <!-- Supabase Auth (UMD build) -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="/static/vendor/supabase.min.js"></script>
     <!-- Google Plus Codes Service -->
     <script src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
@@ -4358,6 +4357,15 @@ HTML_TEMPLATE = '''
                                 <option value="500" selected>500 meters</option>
                                 <option value="800">800 meters</option>
                                 <option value="1000">1 kilometer</option>
+                            </select>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Voice Frequency</span>
+                            <select id="voiceFrequencyMode" onchange="saveVoicePreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="all">All announcements</option>
+                                <option value="important">Important only (turns &amp; hazards)</option>
+                                <option value="minimal">Minimal (turns only)</option>
                             </select>
                         </div>
 
@@ -6389,7 +6397,7 @@ def calculate_route():
                         for leg in route_data['trip']['legs']:
                             if 'maneuvers' in leg:
                                 for maneuver in leg['maneuvers']:
-                                    maneuvers.append({
+                                    m_data = {
                                         'instruction': maneuver.get('instruction', ''),
                                         'verbal_pre_transition_instruction': maneuver.get('verbal_pre_transition_instruction', ''),
                                         'distance': maneuver.get('length', 0),  # km
@@ -6397,10 +6405,13 @@ def calculate_route():
                                         'type': maneuver.get('type', 0),
                                         'street_name': maneuver.get('street_names', [''])[0] if maneuver.get('street_names') else '',
                                         'begin_street_names': maneuver.get('begin_street_names', []),
-                                        # Shape indices for accurate position on route polyline
                                         'begin_shape_index': maneuver.get('begin_shape_index', 0),
-                                        'end_shape_index': maneuver.get('end_shape_index', 0)
-                                    })
+                                        'end_shape_index': maneuver.get('end_shape_index', 0),
+                                        'speed_limit': maneuver.get('speed_limit', None),
+                                    }
+                                    if maneuver.get('type') == 26:
+                                        m_data['roundabout_exit_count'] = maneuver.get('roundabout_exit_count', 0)
+                                    maneuvers.append(m_data)
                     logger.info(f"[VALHALLA] Extracted {len(maneuvers)} maneuvers from route")
 
                     routes.append({

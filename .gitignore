@@ -91,3 +91,8 @@ voyagr_web_backup*.py
 *.jks
 *.keystore
 
+# Self-hosted Supabase secrets
+supabase-selfhost/.env
+supabase-selfhost/generated-keys.txt
+supabase-selfhost/volumes/db/data/
+

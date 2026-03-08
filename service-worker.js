@@ -1,6 +1,6 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
 // Version: 6.0 - Network-first for root HTML, cache JS/CSS
-const CACHE_VERSION = 'v14';
+const CACHE_VERSION = 'v15';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
@@ -23,21 +23,48 @@ const SENSITIVE_API_PATH_PREFIXES = [
   '/api/reverse-geocode',
 ];
 
-// Core assets to cache immediately
-// NOTE: '/' is NOT cached - it uses network-first to get fresh API keys
+// Core assets to cache immediately on install
 const STATIC_ASSETS = [
+  '/',
   '/manifest.json',
   '/static/css/voyagr.css',
+  '/static/vendor/maplibre-gl.js',
+  '/static/vendor/maplibre-gl.css',
+  '/static/vendor/supabase.min.js',
   '/static/js/voyagr-core.js',
+  '/static/js/maplibre-helpers.js',
   '/static/js/voyagr-app.js',
   '/static/js/app.js',
 ];
 
-// Max cache sizes (in items)
-const MAX_DYNAMIC_CACHE_SIZE = 150;
-const MAX_ROUTE_CACHE_SIZE = 20;
-const MAX_TILE_CACHE_SIZE = 800;
-const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+const MAX_DYNAMIC_CACHE_SIZE = 200;
+const MAX_ROUTE_CACHE_SIZE = 30;
+const MAX_TILE_CACHE_SIZE = 5000;
+const CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000;
+
+const OFFLINE_HTML = `<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voyagr - Offline</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#1a1a2e;color:#fff;
+display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center}
+.c{max-width:360px;padding:32px}
+h1{font-size:48px;margin-bottom:8px;background:linear-gradient(135deg,#667eea,#764ba2);
+-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+p{color:#aaa;margin:12px 0}
+button{margin-top:20px;padding:14px 32px;border:none;border-radius:12px;font-size:16px;font-weight:600;
+cursor:pointer;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff}
+button:active{transform:scale(0.97)}
+.icon{font-size:64px;margin-bottom:16px}
+</style></head><body>
+<div class="c">
+<div class="icon">📡</div>
+<h1>Voyagr</h1>
+<p>You're offline. If you were navigating, your route will resume when connectivity returns.</p>
+<p style="font-size:13px;color:#777">GPS tracking continues to work offline.</p>
+<button onclick="location.reload()">Retry Connection</button>
+</div></body></html>`;
 
 // Helper: Limit cache size (with single summary log)
 const _lastTrimLogAt = {};
@@ -238,9 +265,10 @@ self.addEventListener('fetch', event => {
           return response;
         })
         .catch(() => {
-          // Fallback to cache only if network fails
           return caches.match(request).then(response => {
-            return response || new Response('Offline - please reconnect');
+            return response || new Response(OFFLINE_HTML, {
+              headers: { 'Content-Type': 'text/html' }
+            });
           });
         })
     );
@@ -340,7 +368,28 @@ async function syncTrips() {
 
 async function syncRoutes() {
   console.log('[SW] Syncing saved routes...');
-  // Similar implementation for route sync
+  try {
+    const routes = await getQueuedItems('pending_routes');
+
+    for (const route of routes) {
+      try {
+        const response = await fetch('/api/save-route', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(route.data)
+        });
+
+        if (response.ok) {
+          await removeQueuedItem('pending_routes', route.id);
+          console.log('[SW] Synced route:', route.id);
+        }
+      } catch (err) {
+        console.log('[SW] Failed to sync route:', err);
+      }
+    }
+  } catch (err) {
+    console.log('[SW] Sync routes error:', err);
+  }
 }
 
 async function syncHazardReports() {
@@ -393,6 +442,9 @@ async function getQueuedItems(storeName) {
       }
       if (!db.objectStoreNames.contains('pending_hazards')) {
         db.createObjectStore('pending_hazards', { keyPath: 'id', autoIncrement: true });
+      }
+      if (!db.objectStoreNames.contains('pending_routes')) {
+        db.createObjectStore('pending_routes', { keyPath: 'id', autoIncrement: true });
       }
     };
   });

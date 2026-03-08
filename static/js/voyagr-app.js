@@ -4989,15 +4989,17 @@ async function checkTrafficAndReroute() {
         }
 
         // Compare with previous traffic data
-        const significantChange = detectSignificantTrafficChange(lastTrafficData, data);
+        const changeType = detectSignificantTrafficChange(lastTrafficData, data);
         lastTrafficData = data;
 
-        if (significantChange) {
-            console.log('[Auto-Traffic] Significant traffic change detected!');
-            sendNotification('🚦 Traffic Update', 'New traffic conditions detected. Checking for better route...', 'warning');
+        if (changeType) {
+            console.log(`[Auto-Traffic] Significant traffic change detected: ${changeType}`);
+            const notifMsg = changeType === 'closure'
+                ? 'Road closure detected! Rerouting...'
+                : 'New traffic conditions detected. Checking for better route...';
+            sendNotification('🚦 Traffic Update', notifMsg, 'warning');
 
-            // Trigger reroute with current hazard avoidance settings
-            await triggerTrafficBasedReroute();
+            await triggerTrafficBasedReroute(changeType);
         } else {
             console.log('[Auto-Traffic] No significant traffic changes');
         }
@@ -5013,31 +5015,36 @@ function detectSignificantTrafficChange(previousData, currentData) {
     if (!previousData || !previousData.patterns) return false;
     if (!currentData || !currentData.patterns) return false;
 
-    // Check if congestion level increased significantly
     const prevPatterns = previousData.patterns || [];
     const currPatterns = currentData.patterns || [];
 
-    // Calculate average congestion
+    const closureTypes = ['closure', 'road_closed', 'blocked'];
+    const hasClosure = currPatterns.some(p =>
+        closureTypes.includes(p.type) || (p.severity && p.severity >= 4)
+    );
+    if (hasClosure) {
+        console.log('[Auto-Traffic] Road closure or severe incident detected on route');
+        return 'closure';
+    }
+
     const prevAvgCongestion = prevPatterns.length > 0 ?
         prevPatterns.reduce((sum, p) => sum + (p.congestion || 0), 0) / prevPatterns.length : 0;
     const currAvgCongestion = currPatterns.length > 0 ?
         currPatterns.reduce((sum, p) => sum + (p.congestion || 0), 0) / currPatterns.length : 0;
 
-    // Significant change if congestion increased by 1+ level (on 1-5 scale)
     const congestionIncrease = currAvgCongestion - prevAvgCongestion;
 
     if (congestionIncrease >= 1) {
         console.log(`[Auto-Traffic] Congestion increased: ${prevAvgCongestion.toFixed(1)} -> ${currAvgCongestion.toFixed(1)}`);
-        return true;
+        return 'congestion';
     }
 
-    // Check for new incidents/accidents
     const prevIncidentCount = prevPatterns.filter(p => p.type === 'incident' || p.type === 'accident').length;
     const currIncidentCount = currPatterns.filter(p => p.type === 'incident' || p.type === 'accident').length;
 
     if (currIncidentCount > prevIncidentCount) {
         console.log(`[Auto-Traffic] New incidents detected: ${prevIncidentCount} -> ${currIncidentCount}`);
-        return true;
+        return 'incident';
     }
 
     return false;
@@ -5046,14 +5053,15 @@ function detectSignificantTrafficChange(previousData, currentData) {
 /**
  * Trigger reroute based on traffic changes
  */
-async function triggerTrafficBasedReroute() {
+async function triggerTrafficBasedReroute(changeType) {
     if (!window.lastCalculatedRoute || !window.lastCalculatedRoute.destination) {
         console.log('[Auto-Traffic] No destination stored, cannot reroute');
         return;
     }
 
     const destination = window.lastCalculatedRoute.destination;
-    console.log(`[Auto-Traffic] Calculating new route due to traffic changes...`);
+    const isClosure = changeType === 'closure';
+    console.log(`[Auto-Traffic] Calculating new route (reason: ${changeType})...`);
 
     try {
         const routeRequest = buildRouteRequest(currentLat, currentLon, destination);
@@ -5070,13 +5078,16 @@ async function triggerTrafficBasedReroute() {
             const oldDuration = window.lastCalculatedRoute.duration_minutes || 0;
             const timeSaved = oldDuration - newRoute.duration_minutes;
 
-            // Only reroute if new route saves at least 2 minutes
-            if (timeSaved >= 2) {
+            if (isClosure || timeSaved >= 2) {
                 updateRouteOnMap(newRoute);
-                sendNotification('✅ Route Updated', `New route found! Saves ${timeSaved.toFixed(0)} minutes due to traffic.`, 'success');
-                // FIX: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
+                const reason = isClosure ? 'road closure' : 'traffic';
+                const saveMsg = timeSaved > 0
+                    ? `Saves ${timeSaved.toFixed(0)} minutes.`
+                    : '';
+                sendNotification('✅ Route Updated',
+                    `New route found due to ${reason}. ${saveMsg}`, 'success');
                 if (voiceAnnouncementsEnabled) {
-                    speakMessage(`Route updated. New route saves ${timeSaved.toFixed(0)} minutes.`, 'high');
+                    speakMessage(`Route updated due to ${reason}. ${saveMsg}`, 'high');
                 }
             } else {
                 console.log('[Auto-Traffic] New route not significantly faster, keeping current route');
@@ -6090,26 +6101,30 @@ function loadParkingPreferences() {
  * @returns {*} Return value description
  */
 function saveVoicePreferences() {
+    const freqSelect = document.getElementById('voiceFrequencyMode');
+    const freqMode = freqSelect ? freqSelect.value : 'all';
+
     const prefs = {
         turnDistance1: parseInt(document.getElementById('voiceTurnDistance1').value),
         turnDistance2: parseInt(document.getElementById('voiceTurnDistance2').value),
         turnDistance3: parseInt(document.getElementById('voiceTurnDistance3').value),
         hazardDistance: parseInt(document.getElementById('voiceHazardDistance').value),
-        // Voice announcements are controlled by the toggle button + global flag
+        voiceFrequencyMode: freqMode,
         announcementsEnabled: typeof voiceAnnouncementsEnabled === 'boolean'
             ? voiceAnnouncementsEnabled
             : (localStorage.getItem('voiceAnnouncementsEnabled') === 'true')
     };
     localStorage.setItem('voicePreferences', JSON.stringify(prefs));
+    localStorage.setItem('voiceFrequencyMode', freqMode);
 
-    // Update global announcement distance arrays
     TURN_ANNOUNCEMENT_DISTANCES.length = 0;
     TURN_ANNOUNCEMENT_DISTANCES.push(prefs.turnDistance1, prefs.turnDistance2, prefs.turnDistance3, 50);
     DESTINATION_ANNOUNCEMENT_DISTANCES.length = 0;
     DESTINATION_ANNOUNCEMENT_DISTANCES.push(10000, 5000, 2000, 1000, 500, 100);
     HAZARD_WARNING_DISTANCE = prefs.hazardDistance;
-    // FIX: announcements are a boolean flag, not the SpeechRecognition instance
     voiceAnnouncementsEnabled = prefs.announcementsEnabled;
+    voiceFrequencyMode = freqMode;
+    VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = VOICE_FREQUENCY_THROTTLES[freqMode] || 10000;
 
     console.log('[Voice] Preferences saved:', prefs);
     showStatus('✅ Voice preferences updated', 'success');
@@ -6130,7 +6145,13 @@ function loadVoicePreferences() {
             document.getElementById('voiceTurnDistance3').value = prefs.turnDistance3 || 100;
             document.getElementById('voiceHazardDistance').value = prefs.hazardDistance || 500;
 
-            // FIXED: Properly set toggle button state with active class
+            const freqSelect = document.getElementById('voiceFrequencyMode');
+            if (freqSelect) {
+                freqSelect.value = prefs.voiceFrequencyMode || 'all';
+            }
+            voiceFrequencyMode = prefs.voiceFrequencyMode || 'all';
+            VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = VOICE_FREQUENCY_THROTTLES[voiceFrequencyMode] || 10000;
+
             const toggleButton = document.getElementById('voiceAnnouncementsEnabled');
             const announcementsEnabled = prefs.announcementsEnabled !== false;
 
@@ -6144,11 +6165,9 @@ function loadVoicePreferences() {
                 toggleButton.style.borderColor = '#999';
             }
 
-            // Update global arrays
             TURN_ANNOUNCEMENT_DISTANCES.length = 0;
             TURN_ANNOUNCEMENT_DISTANCES.push(prefs.turnDistance1, prefs.turnDistance2, prefs.turnDistance3, 50);
             HAZARD_WARNING_DISTANCE = prefs.hazardDistance || 500;
-            // FIXED: Update the new boolean flag instead of voiceRecognition object
             voiceAnnouncementsEnabled = announcementsEnabled;
 
             console.log('[Voice] Preferences loaded:', prefs);
@@ -6971,10 +6990,10 @@ let lastLaneGuidanceManeuver = '';
 let lastLaneGuidancePosition = null;
 let _lastLaneVoiceKey = '';
 
-function updateLaneGuidance(lat, lon, heading, maneuver) {
+function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
+    roundaboutExitCount = roundaboutExitCount || 0;
     const now = Date.now();
 
-    // Throttle API calls - only fetch if position changed significantly or maneuver changed
     const posChanged = !lastLaneGuidancePosition ||
         calculateDistance(lat, lon, lastLaneGuidancePosition.lat, lastLaneGuidancePosition.lon) > 50;
     const maneuverChanged = maneuver !== lastLaneGuidanceManeuver;
@@ -6983,7 +7002,6 @@ function updateLaneGuidance(lat, lon, heading, maneuver) {
         return;
     }
 
-    // Calculate distance to next maneuver for urgency assessment
     let distToManeuver = 9999;
     if (routeInProgress && currentRouteSteps && currentRouteSteps.length > currentStepIndex) {
         const nextStep = currentRouteSteps[currentStepIndex];
@@ -6995,27 +7013,60 @@ function updateLaneGuidance(lat, lon, heading, maneuver) {
         }
     }
 
-    // Get road type from current route data
     const roadType = getCurrentRoadType() || 'unknown';
 
     lastLaneGuidanceFetch = now;
     lastLaneGuidanceManeuver = maneuver;
     lastLaneGuidancePosition = { lat, lon };
 
-    fetch(`/api/lane-guidance?lat=${lat}&lon=${lon}&heading=${heading}&maneuver=${maneuver}&distance=${distToManeuver}&road_type=${roadType}`)
+    fetch(`/api/lane-guidance?lat=${lat}&lon=${lon}&heading=${heading}&maneuver=${maneuver}&distance=${distToManeuver}&road_type=${roadType}&roundabout_exit_count=${roundaboutExitCount}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 renderLaneGuidanceUI(data);
             }
         })
-        .catch(error => console.error('[Lane Guidance] Error:', error));
+        .catch(error => {
+            console.error('[Lane Guidance] Error:', error);
+            if (_voyagrIsOffline || !navigator.onLine) {
+                _offlineLaneGuidanceFallback(maneuver, distToManeuver, roundaboutExitCount);
+            }
+        });
 }
 
-/**
- * Render the lane guidance UI with arrows, urgency, and visual lane indicators.
- * @param {Object} data - Lane guidance data from the API
- */
+function _offlineLaneGuidanceFallback(maneuver, distance, exitCount) {
+    const totalLanes = 2;
+    let lane = 1;
+    if (maneuver === 'roundabout' && exitCount > 0) {
+        lane = exitCount >= 3 ? totalLanes : 1;
+    } else if (['right','slight_right','sharp_right','exit_right','exit'].includes(maneuver)) {
+        lane = totalLanes;
+    }
+    const lanePos = lane === 1 ? 'left' : 'right';
+    let urgency = 'none', urgencyText = '';
+    if (distance <= 100) { urgency = 'now'; urgencyText = `Get in the ${lanePos} lane now!`; }
+    else if (distance <= 300) { urgency = 'soon'; urgencyText = `Move to the ${lanePos} lane`; }
+    else if (distance <= 800) { urgency = 'ahead'; urgencyText = `Prepare to use the ${lanePos} lane`; }
+    let guidanceText = `Use the ${lanePos} lane`;
+    if (maneuver === 'roundabout' && exitCount > 0) {
+        guidanceText = `Use the ${lanePos} lane, take the ${_ordinal(exitCount)} exit`;
+    }
+    renderLaneGuidanceUI({
+        success: true, total_lanes: totalLanes, recommended_lane: lane,
+        lane_arrows: [{directions:['through'],arrow:'↑',primary:'through'},{directions:['through'],arrow:'↑',primary:'through'}],
+        lane_change_needed: urgency !== 'none', next_maneuver: maneuver,
+        distance_to_maneuver: distance, urgency, urgency_text: urgencyText,
+        guidance_text: guidanceText, road_name: '', highway_type: 'unknown',
+        has_osm_data: false, has_turn_lanes: false, roundabout_exit_count: exitCount
+    });
+}
+
+function _ordinal(n) {
+    const s = ['th','st','nd','rd'];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
 function renderLaneGuidanceUI(data) {
     const display = document.getElementById('laneGuidanceDisplay');
     const visual = document.getElementById('laneVisual');
@@ -7087,9 +7138,12 @@ function renderLaneGuidanceUI(data) {
                 : data.total_lanes === 3 && data.recommended_lane === 2 ? 'middle'
                 : `lane ${data.recommended_lane}`;
 
+            const exitInfo = (data.roundabout_exit_count > 0)
+                ? `, take the ${_ordinal(data.roundabout_exit_count)} exit` : '';
+
             if (data.urgency === 'now') {
                 if (data.next_maneuver === 'roundabout') {
-                    laneMsg = `Use the ${lanePos} lane for the roundabout`;
+                    laneMsg = `At the roundabout, use the ${lanePos} lane${exitInfo}`;
                 } else {
                     laneMsg = data.urgency_text || `Get in the ${lanePos} lane now`;
                 }
@@ -7097,7 +7151,7 @@ function renderLaneGuidanceUI(data) {
                 _lastLaneVoiceKey = announceKey;
             } else if (data.urgency === 'soon') {
                 if (data.next_maneuver === 'roundabout') {
-                    laneMsg = `At the roundabout ahead, use the ${lanePos} lane`;
+                    laneMsg = `At the roundabout ahead, use the ${lanePos} lane${exitInfo}`;
                 } else {
                     laneMsg = data.urgency_text || `Move to the ${lanePos} lane`;
                 }
@@ -7255,7 +7309,7 @@ function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
  * @param {number} retryAttempt - Current retry attempt (for exponential backoff)
  * @returns {void}
  */
-function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residential', retryAttempt = 0) {
+function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residential', retryAttempt = 0, valhallaSpeedLimit = null) {
     const now = Date.now();
     const timeSinceLastFetch = now - lastSpeedLimitFetch;
 
@@ -7273,7 +7327,8 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
     if (timeSinceLastFetch > SPEED_LIMIT_FETCH_INTERVAL || distanceMoved > SPEED_LIMIT_DISTANCE_THRESHOLD) {
         console.log(`[Speed Limit] Fetching (time: ${timeSinceLastFetch}ms, distance: ${distanceMoved.toFixed(0)}m, attempt: ${retryAttempt + 1})`);
 
-        fetch(`/api/speed-limit?lat=${lat}&lon=${lon}&road_type=${roadType}`)
+        const vslParam = valhallaSpeedLimit ? `&valhalla_speed_limit=${valhallaSpeedLimit}` : '';
+        fetch(`/api/speed-limit?lat=${lat}&lon=${lon}&road_type=${roadType}${vslParam}`)
             .then(response => {
                 if (!response.ok) {
                     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
@@ -7285,26 +7340,43 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
                     const speedLimitMph = data.data.speed_limit_mph || data.data.speed_limit;
                     console.log('[Speed Limit] API response:', data.data, 'Extracted limit:', speedLimitMph);
 
-                    // Store the new speed limit globally so the widget picks it up immediately
                     if (speedLimitMph && speedLimitMph > 0) {
                         currentSpeedLimitMph = speedLimitMph;
+                        cacheSpeedLimit(lat, lon, speedLimitMph, data.data.source || 'api');
                     }
 
-                    // Update widget with latest speed limit
                     updateSpeedWidget(currentGpsSpeedMph, speedLimitMph);
 
-                    // Update throttling state
                     lastSpeedLimitFetch = now;
                     lastSpeedLimitPosition = { lat, lon };
 
-                    // Reset retry count on success
                     speedLimitRetryCount = 0;
                 } else {
                     console.warn('[Speed Limit] No data in response:', data);
                 }
             })
-            .catch(err => {
+            .catch(async (err) => {
                 console.error('[Speed Limit] API error:', err);
+
+                if (_voyagrIsOffline || !navigator.onLine) {
+                    const cached = await getCachedSpeedLimit(lat, lon);
+                    if (cached) {
+                        currentSpeedLimitMph = cached.speedLimit;
+                        updateSpeedWidget(currentGpsSpeedMph, cached.speedLimit);
+                        console.log(`[Speed Limit] Offline fallback: ${cached.speedLimit} mph (${cached.source})`);
+                        lastSpeedLimitFetch = now;
+                        lastSpeedLimitPosition = { lat, lon };
+                        return;
+                    }
+                    if (valhallaSpeedLimit && valhallaSpeedLimit > 0) {
+                        currentSpeedLimitMph = valhallaSpeedLimit;
+                        updateSpeedWidget(currentGpsSpeedMph, valhallaSpeedLimit);
+                        console.log(`[Speed Limit] Offline Valhalla fallback: ${valhallaSpeedLimit} mph`);
+                        lastSpeedLimitFetch = now;
+                        lastSpeedLimitPosition = { lat, lon };
+                        return;
+                    }
+                }
 
                 // Implement exponential backoff retry
                 if (retryAttempt < SPEED_LIMIT_MAX_RETRIES) {
@@ -7318,7 +7390,7 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
 
                     // Schedule retry with exponential backoff
                     speedLimitRetryTimeout = setTimeout(() => {
-                        fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, retryAttempt + 1);
+                        fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, retryAttempt + 1, valhallaSpeedLimit);
                     }, backoffDelay);
                 } else {
                     console.error('[Speed Limit] Max retries reached, giving up');
@@ -7677,7 +7749,8 @@ function detectUpcomingTurn(userLat, userLon) {
 
             // Only return turns within detection range
             if (distanceToManeuver <= maxDetectionDistance) {
-                currentStepIndex = i;  // Update current step
+                currentStepIndex = i;
+                schedulePersistRoute();
 
                 console.log(`[Turn] Detected: ${direction} in ${distanceToManeuver.toFixed(0)}m (type=${type}, step=${i}, shapeIdx=${maneuverShapeIndex})`);
 
@@ -8694,12 +8767,282 @@ if (navigator.storage && navigator.storage.persist) {
     });
 }
 
+// ===== OFFLINE DETECTION & UI =====
+let _voyagrIsOffline = !navigator.onLine;
+
+function _createOfflineBanner() {
+    if (document.getElementById('offlineBanner')) return;
+    const banner = document.createElement('div');
+    banner.id = 'offlineBanner';
+    banner.style.cssText = `
+        position:fixed;top:0;left:0;right:0;z-index:99999;
+        background:linear-gradient(135deg,#ff6b6b,#ee5a24);color:#fff;
+        padding:10px 16px;text-align:center;font-size:14px;font-weight:600;
+        font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+        box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;align-items:center;
+        justify-content:center;gap:8px;transition:transform 0.3s ease;
+    `;
+    banner.innerHTML = `<span>📡</span><span>You're offline — GPS & cached map tiles still work</span>`;
+    document.body.prepend(banner);
+}
+
+function _removeOfflineBanner() {
+    const banner = document.getElementById('offlineBanner');
+    if (banner) {
+        banner.style.transform = 'translateY(-100%)';
+        setTimeout(() => banner.remove(), 350);
+    }
+}
+
+function _handleOffline() {
+    _voyagrIsOffline = true;
+    console.log('[Offline] Network lost');
+    _createOfflineBanner();
+    if (typeof showStatus === 'function') {
+        showStatus('📡 Offline mode — using cached data', 'warning');
+    }
+}
+
+function _handleOnline() {
+    _voyagrIsOffline = false;
+    console.log('[Offline] Network restored');
+    _removeOfflineBanner();
+    if (typeof showStatus === 'function') {
+        showStatus('✅ Back online', 'success');
+    }
+}
+
+window.addEventListener('offline', _handleOffline);
+window.addEventListener('online', _handleOnline);
+if (!navigator.onLine) {
+    window.addEventListener('load', _handleOffline);
+}
+
+// ===== OFFLINE ROUTE PERSISTENCE (IndexedDB) =====
+const ROUTE_DB_NAME = 'voyagr-nav';
+const ROUTE_DB_VERSION = 1;
+const ROUTE_STORE = 'active_route';
+const SPEED_CACHE_STORE = 'speed_limits';
+
+function _openRouteDB() {
+    return new Promise((resolve, reject) => {
+        const req = indexedDB.open(ROUTE_DB_NAME, ROUTE_DB_VERSION);
+        req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(ROUTE_STORE)) {
+                db.createObjectStore(ROUTE_STORE, { keyPath: 'id' });
+            }
+            if (!db.objectStoreNames.contains(SPEED_CACHE_STORE)) {
+                db.createObjectStore(SPEED_CACHE_STORE, { keyPath: 'key' });
+            }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+    });
+}
+
+async function persistActiveRoute() {
+    if (!routeInProgress || !routePolyline) return;
+    try {
+        const db = await _openRouteDB();
+        const tx = db.transaction(ROUTE_STORE, 'readwrite');
+        tx.objectStore(ROUTE_STORE).put({
+            id: 'current',
+            polyline: routePolyline,
+            steps: currentRouteSteps,
+            stepIndex: currentStepIndex,
+            destination: window.lastCalculatedRoute?.destination || null,
+            routeData: window.lastCalculatedRoute || null,
+            savedAt: Date.now()
+        });
+        await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+        db.close();
+    } catch (e) {
+        console.warn('[OfflineNav] Failed to persist route:', e);
+    }
+}
+
+async function loadPersistedRoute() {
+    try {
+        const db = await _openRouteDB();
+        const tx = db.transaction(ROUTE_STORE, 'readonly');
+        const getReq = tx.objectStore(ROUTE_STORE).get('current');
+        const result = await new Promise((res, rej) => {
+            getReq.onsuccess = () => res(getReq.result);
+            getReq.onerror = () => rej(getReq.error);
+        });
+        db.close();
+        if (!result) return null;
+        const age = Date.now() - (result.savedAt || 0);
+        if (age > 4 * 60 * 60 * 1000) {
+            await clearPersistedRoute();
+            return null;
+        }
+        return result;
+    } catch (e) {
+        console.warn('[OfflineNav] Failed to load persisted route:', e);
+        return null;
+    }
+}
+
+async function clearPersistedRoute() {
+    try {
+        const db = await _openRouteDB();
+        const tx = db.transaction(ROUTE_STORE, 'readwrite');
+        tx.objectStore(ROUTE_STORE).delete('current');
+        await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+        db.close();
+    } catch (e) {
+        console.warn('[OfflineNav] Failed to clear persisted route:', e);
+    }
+}
+
+let _persistRouteTimer = null;
+function schedulePersistRoute() {
+    if (_persistRouteTimer) return;
+    _persistRouteTimer = setTimeout(() => {
+        _persistRouteTimer = null;
+        persistActiveRoute();
+    }, 5000);
+}
+
+// ===== OFFLINE SPEED LIMIT CACHE =====
+async function cacheSpeedLimit(lat, lon, speedLimit, source) {
+    try {
+        const key = `${lat.toFixed(4)}_${lon.toFixed(4)}`;
+        const db = await _openRouteDB();
+        const tx = db.transaction(SPEED_CACHE_STORE, 'readwrite');
+        tx.objectStore(SPEED_CACHE_STORE).put({
+            key, speedLimit, source, cachedAt: Date.now()
+        });
+        await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+        db.close();
+    } catch (e) { /* ignore */ }
+}
+
+async function getCachedSpeedLimit(lat, lon) {
+    try {
+        const key = `${lat.toFixed(4)}_${lon.toFixed(4)}`;
+        const db = await _openRouteDB();
+        const tx = db.transaction(SPEED_CACHE_STORE, 'readonly');
+        const req = tx.objectStore(SPEED_CACHE_STORE).get(key);
+        const result = await new Promise((res, rej) => {
+            req.onsuccess = () => res(req.result);
+            req.onerror = () => rej(req.error);
+        });
+        db.close();
+        if (!result) return null;
+        if (Date.now() - result.cachedAt > 24 * 60 * 60 * 1000) return null;
+        return result;
+    } catch (e) { return null; }
+}
+
 // ===== PHASE 2: Restore app state on page load =====
 window.addEventListener('load', () => {
     restoreAppState();
-    // Initialize account login (Supabase) + profile switching
     initSupabaseAuth();
+    _tryResumeNavigation();
 });
+
+// ===== TILE PRE-CACHING FOR ROUTE CORRIDORS =====
+async function precacheRouteTiles(polyline) {
+    if (!polyline || polyline.length < 2) return;
+    if (!('caches' in window)) return;
+
+    const zoomLevels = [13, 14, 15];
+    const tileUrls = new Set();
+    const sampleInterval = Math.max(1, Math.floor(polyline.length / 80));
+
+    for (let i = 0; i < polyline.length; i += sampleInterval) {
+        const [lat, lon] = polyline[i];
+        for (const z of zoomLevels) {
+            const x = Math.floor((lon + 180) / 360 * Math.pow(2, z));
+            const latRad = lat * Math.PI / 180;
+            const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, z));
+            tileUrls.add(`/map/data/gb/${z}/${x}/${y}.pbf`);
+        }
+    }
+
+    const urls = [...tileUrls];
+    console.log(`[TilePreCache] Pre-caching ${urls.length} tiles along route corridor`);
+
+    try {
+        const cacheNames = await caches.keys();
+        const tileCacheName = cacheNames.find(n => n.startsWith('voyagr-tiles-')) || 'voyagr-tiles-v15';
+        const cache = await caches.open(tileCacheName);
+        let cached = 0;
+        const batchSize = 6;
+        for (let i = 0; i < urls.length; i += batchSize) {
+            const batch = urls.slice(i, i + batchSize);
+            const results = await Promise.allSettled(
+                batch.map(async (url) => {
+                    const existing = await cache.match(url);
+                    if (existing) return;
+                    try {
+                        const resp = await fetch(url);
+                        if (resp.ok) {
+                            await cache.put(url, resp);
+                            cached++;
+                        }
+                    } catch (e) { /* tile server may not have this tile */ }
+                })
+            );
+        }
+        console.log(`[TilePreCache] Cached ${cached} new tiles`);
+    } catch (e) {
+        console.warn('[TilePreCache] Error:', e);
+    }
+}
+
+async function _tryResumeNavigation() {
+    try {
+        const saved = await loadPersistedRoute();
+        if (!saved || !saved.polyline || !saved.steps) return;
+        console.log('[OfflineNav] Found persisted route, offering resume');
+
+        const resumeBanner = document.createElement('div');
+        resumeBanner.id = 'resumeNavBanner';
+        resumeBanner.style.cssText = `
+            position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:99998;
+            background:#fff;border-radius:16px;padding:16px 20px;
+            box-shadow:0 4px 20px rgba(0,0,0,0.25);max-width:340px;width:90%;
+            font-family:-apple-system,BlinkMacSystemFont,sans-serif;
+            display:flex;flex-direction:column;gap:10px;
+        `;
+        resumeBanner.innerHTML = `
+            <div style="font-weight:600;font-size:15px">Resume navigation?</div>
+            <div style="font-size:13px;color:#666">A previous route was found (${saved.steps.length} steps).</div>
+            <div style="display:flex;gap:8px">
+                <button id="resumeNavYes" style="flex:1;padding:10px;border:none;border-radius:10px;
+                    background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:600;
+                    font-size:14px;cursor:pointer">Resume</button>
+                <button id="resumeNavNo" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:10px;
+                    background:#fff;color:#333;font-weight:600;font-size:14px;cursor:pointer">Dismiss</button>
+            </div>
+        `;
+        document.body.appendChild(resumeBanner);
+
+        document.getElementById('resumeNavYes').onclick = () => {
+            resumeBanner.remove();
+            routePolyline = saved.polyline;
+            currentRouteSteps = saved.steps;
+            currentStepIndex = saved.stepIndex || 0;
+            routeInProgress = true;
+            if (saved.routeData) window.lastCalculatedRoute = saved.routeData;
+            showStatus('🧭 Navigation resumed from saved route', 'success');
+            if (typeof startGPSTracking === 'function') startGPSTracking();
+            console.log('[OfflineNav] Route resumed');
+        };
+        document.getElementById('resumeNavNo').onclick = () => {
+            resumeBanner.remove();
+            clearPersistedRoute();
+        };
+
+        setTimeout(() => { if (document.getElementById('resumeNavBanner')) resumeBanner.remove(); }, 30000);
+    } catch (e) {
+        console.warn('[OfflineNav] Resume check failed:', e);
+    }
+}
 
 // ===== PHASE 3: Initialize battery monitoring =====
 initBatteryMonitoring();
@@ -10398,7 +10741,9 @@ function startGPSTracking() {
                     else if ([26].includes(mType)) maneuverDir = 'roundabout';
                     else if ([4, 5, 6].includes(mType)) maneuverDir = 'destination';
                 }
-                updateLaneGuidance(lat, lon, heading, maneuverDir);
+                const exitCount = (maneuverDir === 'roundabout' && nextStep)
+                    ? (nextStep.roundabout_exit_count || 0) : 0;
+                updateLaneGuidance(lat, lon, heading, maneuverDir, exitCount);
             }
 
             // Update speed warnings (assume local roads by default)
@@ -10409,9 +10754,15 @@ function startGPSTracking() {
             // The speed limit is fetched separately with throttling to avoid API spam
             updateSpeedWidget(speedMph, currentSpeedLimitMph || null);
 
-            // Fetch updated speed limit (throttled to avoid API spam)
             const roadType = getCurrentRoadType();
-            fetchSpeedLimitThrottled(lat, lon, speedMph, roadType);
+            let valhallaSpeedLimitMph = null;
+            if (routeInProgress && currentRouteSteps && currentStepIndex < currentRouteSteps.length) {
+                const step = currentRouteSteps[currentStepIndex];
+                if (step && step.speed_limit) {
+                    valhallaSpeedLimitMph = Math.round(step.speed_limit * 0.621371);
+                }
+            }
+            fetchSpeedLimitThrottled(lat, lon, speedMph, roadType, 0, valhallaSpeedLimitMph);
         },
         (error) => {
             showStatus('GPS Error: ' + error.message, 'error');
@@ -10464,12 +10815,17 @@ const ETA_ANNOUNCEMENT_INTERVAL_MS = 600000; // Announce ETA every 10 minutes (6
 const ETA_CHANGE_THRESHOLD_MS = 300000; // Announce if ETA changes by >5 minutes (300,000 ms)
 const ETA_MIN_INTERVAL_MS = 60000; // Minimum 1 minute between any ETA announcements (prevents excessive frequency)
 
-// FIXED: Global voice announcement throttle to prevent rapid-fire announcements
 let lastVoiceAnnouncementTime = 0;
-const VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = 5000; // Minimum 5 seconds between ANY voice announcements
+let VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = 10000;
 
-// Voice announcements enabled flag (FIXED: separate from Web Speech API object)
 let voiceAnnouncementsEnabled = true;
+let voiceFrequencyMode = localStorage.getItem('voiceFrequencyMode') || 'all';
+
+const VOICE_FREQUENCY_THROTTLES = {
+    'all': 10000,
+    'important': 15000,
+    'minimal': 30000
+};
 
 /**
  * Find the nearest point on the route polyline to the current GPS position.
@@ -11061,8 +11417,7 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
             const hazardCount = newRoute.hazard_count || 0;
             const hazardsList = newRoute.hazards_on_route || [];
 
-            if (hazardCount > 0 && routeRequest.enable_hazard_avoidance) {
-                // Hazards exist on all routes - handle gracefully
+            if (hazardCount > 0) {
                 handleUnavoidableHazards(newRoute, hazardsList, hazardCount);
             }
 
@@ -11318,7 +11673,7 @@ let HAZARD_WARNING_DISTANCE = 500; // meters
  * @returns {*} Return value description
  */
 function checkNearbyHazards(lat, lon) {
-    // Check for hazards within 500m
+    if (_voyagrIsOffline || !navigator.onLine) return;
     fetch(`/api/hazards/nearby?lat=${lat}&lon=${lon}&radius=0.5`)
         .then(response => response.json())
         .then(data => {
@@ -12504,14 +12859,16 @@ function startTurnByTurnNavigation(routeData) {
 
     routeInProgress = true;
     currentStepIndex = 0;
-    currentRouteSteps = routeData.maneuvers || [];  // Store maneuvers from Valhalla
-    lastSnappedRouteIndex = 0;  // Reset snap-to-route tracking for new navigation
+    currentRouteSteps = routeData.maneuvers || [];
+    lastSnappedRouteIndex = 0;
 
-    // Decode route geometry (Valhalla precision 6)
     try {
         routePolyline = decodePolyline(routeData.geometry, 6);
         console.log('Route polyline decoded:', routePolyline.length, 'points');
         console.log('Route maneuvers:', currentRouteSteps.length, 'steps');
+
+        persistActiveRoute();
+        precacheRouteTiles(routePolyline);
 
         // Validate decoded polyline
         if (!routePolyline || routePolyline.length === 0) {
@@ -12667,6 +13024,7 @@ function stopTurnByTurnNavigation() {
     routeInProgress = false;
     currentStepIndex = 0;
     currentRouteSteps = [];
+    clearPersistedRoute();
     stopGPSTracking();
 
     // ===== SCREEN WAKE LOCK: Release screen lock when navigation ends =====
@@ -13076,18 +13434,24 @@ function showInAppNotification(title, message, type = 'info') {
  * @returns {*} Return value description
  */
 function speakMessage(message, priority = 'normal') {
-    // FIXED: Global throttle to prevent rapid-fire announcements
     const now = Date.now();
     const timeSinceLastAnnouncement = now - lastVoiceAnnouncementTime;
+    const throttle = VOICE_FREQUENCY_THROTTLES[voiceFrequencyMode] || VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS;
 
-    // Allow high-priority messages (turns, hazards) to bypass throttle
-    // Normal messages (ETA, distance) must wait for throttle
-    if (priority !== 'high' && timeSinceLastAnnouncement < VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS) {
-        console.log(`[Voice] Throttled: "${message}" (${timeSinceLastAnnouncement}ms since last)`);
+    if (voiceFrequencyMode === 'minimal' && priority !== 'high') {
+        console.log(`[Voice] Skipped (minimal mode): "${message}"`);
+        return;
+    }
+    if (voiceFrequencyMode === 'important' && priority !== 'high' && priority !== 'normal') {
+        console.log(`[Voice] Skipped (important-only mode): "${message}"`);
         return;
     }
 
-    // Use Web Speech API for voice output
+    if (priority !== 'high' && timeSinceLastAnnouncement < throttle) {
+        console.log(`[Voice] Throttled: "${message}" (${timeSinceLastAnnouncement}ms since last, throttle=${throttle}ms)`);
+        return;
+    }
+
     if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(message);
         utterance.rate = 1.0;

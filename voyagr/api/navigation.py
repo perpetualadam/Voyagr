@@ -151,17 +151,30 @@ def _recommend_lane_from_turn_lanes(lane_dirs, maneuver):
     return best_lane
 
 
-def _get_recommended_lane_simple(maneuver, total_lanes):
-    """Fallback lane recommendation when no OSM turn:lanes data is available."""
+def _get_recommended_lane_simple(maneuver, total_lanes, roundabout_exit_count=0):
+    """Fallback lane recommendation when no OSM turn:lanes data is available.
+
+    For roundabouts (UK, left-hand traffic):
+      Exit 1 (first/left exit)  -> left lane
+      Exit 2 (straight on)      -> left lane (2-lane) or middle (3+)
+      Exit 3+ (right turn)      -> right lane
+    """
     if total_lanes <= 1:
         return 1
 
-    if maneuver in ('left', 'slight_left', 'sharp_left', 'exit_left'):
-        return 1  # Leftmost lane
+    if maneuver == 'roundabout' and roundabout_exit_count > 0:
+        if roundabout_exit_count <= 1:
+            return 1  # First exit -> left lane
+        elif roundabout_exit_count == 2:
+            return 1 if total_lanes <= 2 else max(1, (total_lanes + 1) // 2)
+        else:
+            return total_lanes  # 3rd+ exit -> right lane
+    elif maneuver in ('left', 'slight_left', 'sharp_left', 'exit_left'):
+        return 1
     elif maneuver in ('right', 'slight_right', 'sharp_right', 'exit_right', 'exit'):
-        return total_lanes  # Rightmost lane
+        return total_lanes
     elif maneuver in ('straight', 'merge'):
-        return max(1, (total_lanes + 1) // 2)  # Middle lane
+        return max(1, (total_lanes + 1) // 2)
     else:
         return max(1, (total_lanes + 1) // 2)
 
@@ -176,6 +189,7 @@ def get_lane_guidance():
         next_maneuver = request.args.get('maneuver', 'straight')
         distance_to_maneuver = float(request.args.get('distance', 9999))
         road_type = request.args.get('road_type', 'unknown')
+        roundabout_exit_count = int(request.args.get('roundabout_exit_count', 0))
 
         # Try to get real lane data from OSM
         osm_data = _fetch_osm_lane_data(lat, lon)
@@ -224,36 +238,35 @@ def get_lane_guidance():
             recommended_lane = _recommend_lane_from_turn_lanes(parsed_lanes, next_maneuver)
 
         if recommended_lane is None:
-            recommended_lane = _get_recommended_lane_simple(next_maneuver, total_lanes)
+            recommended_lane = _get_recommended_lane_simple(
+                next_maneuver, total_lanes, roundabout_exit_count
+            )
 
-        # Generate urgency level based on distance to maneuver
+        lane_name = _descriptive_lane_name(recommended_lane, total_lanes)
+
         if distance_to_maneuver <= 100:
             urgency = 'now'
-            urgency_text = 'Change lane now!'
+            urgency_text = f'Get in the {lane_name} now!'
         elif distance_to_maneuver <= 300:
             urgency = 'soon'
-            urgency_text = f'Move to lane {recommended_lane} in {int(distance_to_maneuver)}m'
+            urgency_text = f'Move to the {lane_name} in {int(distance_to_maneuver)}m'
         elif distance_to_maneuver <= 800:
             urgency = 'ahead'
-            urgency_text = f'Prepare for lane {recommended_lane} in {int(distance_to_maneuver)}m'
+            urgency_text = f'Prepare to use the {lane_name} in {int(distance_to_maneuver)}m'
         elif distance_to_maneuver <= 1500:
             urgency = 'info'
-            urgency_text = f'Stay in lane {recommended_lane} for upcoming maneuver'
+            urgency_text = f'Stay in the {lane_name} for upcoming maneuver'
         else:
             urgency = 'none'
             urgency_text = ''
 
-        # Build guidance text
         if next_maneuver == 'straight' or distance_to_maneuver > 1500:
-            guidance_text = f'Stay in current lane'
-        elif recommended_lane == 1:
-            guidance_text = f'Use left lane to {_maneuver_action(next_maneuver)}'
-        elif recommended_lane == total_lanes and total_lanes > 1:
-            guidance_text = f'Use right lane to {_maneuver_action(next_maneuver)}'
-        elif total_lanes >= 3:
-            guidance_text = f'Use lane {recommended_lane} to {_maneuver_action(next_maneuver)}'
+            guidance_text = 'Stay in current lane'
+        elif next_maneuver == 'roundabout' and roundabout_exit_count > 0:
+            exit_ordinal = _ordinal(roundabout_exit_count)
+            guidance_text = f'Use the {lane_name} and take the {exit_ordinal} exit'
         else:
-            guidance_text = f'Use lane {recommended_lane}'
+            guidance_text = f'Use the {lane_name} to {_maneuver_action(next_maneuver)}'
 
         return jsonify({
             'success': True,
@@ -270,6 +283,7 @@ def get_lane_guidance():
             'highway_type': highway_type,
             'has_osm_data': osm_data is not None,
             'has_turn_lanes': parsed_lanes is not None,
+            'roundabout_exit_count': roundabout_exit_count,
         })
     except Exception as e:
         logger.error(f"[Lane Guidance] Error: {e}")
@@ -295,6 +309,28 @@ def _maneuver_action(maneuver):
         'destination': 'reach your destination',
     }
     return actions.get(maneuver, 'continue')
+
+
+def _descriptive_lane_name(lane_number, total_lanes):
+    """Convert a 1-based lane number into a human-friendly name."""
+    if total_lanes <= 1:
+        return 'lane'
+    if lane_number == 1:
+        return 'left lane'
+    if lane_number == total_lanes:
+        return 'right lane'
+    if total_lanes == 3 and lane_number == 2:
+        return 'middle lane'
+    return f'middle lane (lane {lane_number})'
+
+
+def _ordinal(n):
+    """Return ordinal string for integer n (1st, 2nd, 3rd, …)."""
+    if 11 <= (n % 100) <= 13:
+        suffix = 'th'
+    else:
+        suffix = {1: 'st', 2: 'nd', 3: 'rd'}.get(n % 10, 'th')
+    return f'{n}{suffix}'
 
 
 @navigation_bp.route('/speed-warnings', methods=['GET'])
@@ -353,10 +389,21 @@ def get_speed_limit():
         lon = float(request.args.get('lon', -0.1278))
         road_type = request.args.get('road_type', 'residential')
         vehicle_type = request.args.get('vehicle_type', 'car')
+        valhalla_speed_limit = request.args.get('valhalla_speed_limit', None)
 
         result = speed_limit_detector.get_speed_limit_for_location(
             lat=lat, lon=lon, road_type=road_type, vehicle_type=vehicle_type
         )
+
+        if valhalla_speed_limit and result:
+            try:
+                v_limit = float(valhalla_speed_limit)
+                detected = result.get('speed_limit', 0)
+                if v_limit > 0 and detected > 0 and abs(v_limit - detected) > 15:
+                    result['speed_limit'] = max(detected, int(v_limit))
+                    result['source'] = result.get('source', '') + '+valhalla-crossref'
+            except (ValueError, TypeError):
+                pass
 
         return jsonify({'success': True, 'data': result})
     except Exception as e:
