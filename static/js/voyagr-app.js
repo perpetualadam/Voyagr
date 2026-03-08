@@ -4097,16 +4097,11 @@ function displayHazardMarkers(hazards) {
     // Clear existing hazard markers
     clearHazardMarkers();
 
-    // SVG icons for camera types (UK-style speed camera icons)
-    const speedCameraSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="2" y="6" width="20" height="12" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="12" r="4" fill="#222"/><circle cx="12" cy="12" r="2" fill="#FFD600"/><rect x="8" y="3" width="8" height="4" rx="1" fill="#222"/></svg>`;
-    const avgSpeedSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="2" y="6" width="20" height="12" rx="2" fill="#1565C0" stroke="#222" stroke-width="1.5"/><circle cx="8" cy="12" r="2.5" fill="#fff"/><circle cx="16" cy="12" r="2.5" fill="#fff"/><path d="M8 12 L16 12" stroke="#fff" stroke-width="1" stroke-dasharray="2,1"/></svg>`;
-    const redLightSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="8" y="2" width="8" height="18" rx="2" fill="#333" stroke="#222" stroke-width="1"/><circle cx="12" cy="6" r="2" fill="#f44336"/><circle cx="12" cy="11" r="2" fill="#555"/><circle cx="12" cy="16" r="2" fill="#555"/></svg>`;
-    const mobileSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="2" y="8" width="16" height="10" rx="2" fill="#9C27B0" stroke="#222" stroke-width="1"/><rect x="14" y="10" width="8" height="6" rx="1" fill="#7B1FA2"/><circle cx="6" cy="18" r="2" fill="#333"/><circle cx="14" cy="18" r="2" fill="#333"/><circle cx="18" cy="12" r="2" fill="#FFD600" stroke="#222" stroke-width="0.5"/></svg>`;
-    const trafficLightSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="7" y="2" width="10" height="20" rx="2" fill="#333" stroke="#222" stroke-width="1"/><circle cx="12" cy="6" r="2.5" fill="#f44336"/><circle cx="12" cy="12" r="2.5" fill="#FFD600"/><circle cx="12" cy="18" r="2.5" fill="#4CAF50"/></svg>`;
+    // Camera SVG: square GATSO-style icon
+    const cameraSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="5" width="16" height="16" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="13" r="4" fill="#222"/><circle cx="12" cy="13" r="2" fill="#FFD600"/><rect x="8" y="2" width="8" height="4" rx="1" fill="#222"/></svg>`;
 
-    // Hazard type configuration with SVG for cameras, emoji for other hazards
     const hazardConfig = {
-        'camera': { svg: speedCameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Camera' },
+        'camera': { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Camera' },
         'police': { emoji: '🚔', color: '#1976d2', bgColor: '#e3f2fd', label: 'Police' },
         'roadworks': { emoji: '🚧', color: '#ffc107', bgColor: '#fff8e1', label: 'Roadworks' },
         'accident': { emoji: '⚠️', color: '#f44336', bgColor: '#ffebee', label: 'Accident' },
@@ -5688,20 +5683,10 @@ function displayCameraMarkers(cameras) {
     // Clear existing camera markers
     clearCameraMarkers();
 
-    // Camera type configuration with UK-style speed camera icons (SVG)
-    // Speed camera SVG: Yellow/black GATSO-style camera icon
-    const speedCameraSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="2" y="6" width="20" height="12" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="12" r="4" fill="#222"/><circle cx="12" cy="12" r="2" fill="#FFD600"/><rect x="8" y="3" width="8" height="4" rx="1" fill="#222"/></svg>`;
-    // Average speed camera: Blue/white SPECS-style icon
-    const avgSpeedSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="2" y="6" width="20" height="12" rx="2" fill="#1565C0" stroke="#222" stroke-width="1.5"/><circle cx="8" cy="12" r="2.5" fill="#fff"/><circle cx="16" cy="12" r="2.5" fill="#fff"/><path d="M8 12 L16 12" stroke="#fff" stroke-width="1" stroke-dasharray="2,1"/></svg>`;
-    // Red light camera: Red with traffic light icon
-    const redLightSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="8" y="2" width="8" height="18" rx="2" fill="#333" stroke="#222" stroke-width="1"/><circle cx="12" cy="6" r="2" fill="#f44336"/><circle cx="12" cy="11" r="2" fill="#555"/><circle cx="12" cy="16" r="2" fill="#555"/></svg>`;
-    // Mobile camera: Van with camera
-    const mobileSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="2" y="8" width="16" height="10" rx="2" fill="#9C27B0" stroke="#222" stroke-width="1"/><rect x="14" y="10" width="8" height="6" rx="1" fill="#7B1FA2"/><circle cx="6" cy="18" r="2" fill="#333"/><circle cx="14" cy="18" r="2" fill="#333"/><circle cx="18" cy="12" r="2" fill="#FFD600" stroke="#222" stroke-width="0.5"/></svg>`;
-    // Traffic light camera
-    const trafficLightSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="7" y="2" width="10" height="20" rx="2" fill="#333" stroke="#222" stroke-width="1"/><circle cx="12" cy="6" r="2.5" fill="#f44336"/><circle cx="12" cy="12" r="2.5" fill="#FFD600"/><circle cx="12" cy="18" r="2.5" fill="#4CAF50"/></svg>`;
+    const cameraSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="4" y="5" width="16" height="16" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="13" r="4" fill="#222"/><circle cx="12" cy="13" r="2" fill="#FFD600"/><rect x="8" y="2" width="8" height="4" rx="1" fill="#222"/></svg>`;
 
     const cameraConfig = {
-        'camera': { svg: speedCameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Camera' }
+        'camera': { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Camera' }
     };
 
     const seenLocations = new Set();
