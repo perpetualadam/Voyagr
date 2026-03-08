@@ -11,6 +11,7 @@ Contains:
 import logging
 import math
 import os
+import re
 import time
 import requests
 from typing import Any
@@ -30,10 +31,69 @@ NOMINATIM_LANGUAGE = os.getenv('NOMINATIM_LANGUAGE', 'en').strip()
 OVERPASS_API_URL = os.getenv('OVERPASS_API_URL', 'https://overpass-api.de/api/interpreter').strip()
 
 
+def _has_house_number(query: str) -> bool:
+    """Check if query likely contains a street number."""
+    return bool(re.match(r'^\d+[\s,]', query.strip()))
+
+
+def _tomtom_geocode(query: str, limit: int) -> list:
+    """Use TomTom Fuzzy Search API for geocoding (better house-number matching)."""
+    api_key = os.getenv('TOMTOM_API_KEY', '')
+    if not api_key:
+        return []
+    try:
+        url = f"https://api.tomtom.com/search/2/search/{requests.utils.quote(query)}.json"
+        params = {'key': api_key, 'limit': limit, 'language': NOMINATIM_LANGUAGE}
+        if NOMINATIM_COUNTRYCODES:
+            params['countrySet'] = NOMINATIM_COUNTRYCODES.upper()
+        resp = requests.get(url, params=params, timeout=8)
+        if resp.status_code != 200:
+            return []
+        results = []
+        for r in resp.json().get('results', []):
+            pos = r.get('position', {})
+            addr = r.get('address', {})
+            if not pos.get('lat') or not pos.get('lon'):
+                continue
+            house_num = addr.get('streetNumber', '')
+            street = addr.get('streetName', '')
+            city = addr.get('municipality', '')
+            country = addr.get('country', '')
+            freeform = addr.get('freeformAddress', '')
+            name_parts = []
+            if house_num:
+                name_parts.append(house_num)
+            if street:
+                name_parts.append(street)
+            name = ' '.join(name_parts) if name_parts else freeform or r.get('poi', {}).get('name', 'Location')
+            address_obj = {}
+            if house_num:
+                address_obj['house_number'] = house_num
+            if street:
+                address_obj['road'] = street
+            if city:
+                address_obj['city'] = city
+            if country:
+                address_obj['country'] = country
+            results.append({
+                'lat': str(pos['lat']),
+                'lon': str(pos['lon']),
+                'display_name': freeform or f"{name}, {city}, {country}",
+                'name': name,
+                'type': r.get('type', 'address').lower(),
+                'address': address_obj,
+            })
+        return results
+    except Exception as e:
+        logger.debug(f"[Geocode] TomTom fallback error: {e}")
+        return []
+
+
 @search_bp.route('/geocode', methods=['GET'])
 def geocode():
     """
-    Server-side geocoding proxy (privacy): browser calls this endpoint, and the server queries Nominatim.
+    Server-side geocoding proxy: queries Nominatim with TomTom fallback for
+    addresses containing house numbers.
 
     Query params:
       - q: query string (required)
@@ -67,7 +127,7 @@ def geocode():
             return jsonify({'success': False, 'error': f'Geocode failed (HTTP {resp.status_code})'}), 502
 
         data = resp.json()
-        # Quality fallback: if no results and query isn't obviously scoped, retry with UK suffix.
+
         if (not data) and (',' not in q) and (not NOMINATIM_COUNTRYCODES):
             retry_q = f"{q}, United Kingdom"
             params['q'] = retry_q
@@ -75,7 +135,25 @@ def geocode():
             if resp2.status_code == 200:
                 data = resp2.json()
 
-        out = jsonify(data)
+        query_has_number = _has_house_number(q)
+        nominatim_has_match = any(
+            r.get('address', {}).get('house_number') for r in (data or [])
+        )
+
+        if query_has_number and not nominatim_has_match:
+            tomtom_results = _tomtom_geocode(q, limit)
+            if tomtom_results:
+                seen = set()
+                for r in (data or []):
+                    key = (round(float(r.get('lat', 0)), 4), round(float(r.get('lon', 0)), 4))
+                    seen.add(key)
+                for tr in tomtom_results:
+                    key = (round(float(tr['lat']), 4), round(float(tr['lon']), 4))
+                    if key not in seen:
+                        data.insert(0, tr)
+                        seen.add(key)
+
+        out = jsonify(data[:limit] if data else [])
         out.headers['Cache-Control'] = 'no-store'
         return out
     except Exception as e:

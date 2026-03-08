@@ -2193,12 +2193,86 @@ function toggleAddStop() {
  * Handle map click for adding via-points or stops
  */
 function handleMapClickForWaypoints(e) {
+    const lat = e.lngLat.lat;
+    const lon = e.lngLat.lng;
     if (addingViaPoint) {
-        addViaPoint(e.latlng.lat, e.latlng.lng);
-        toggleAddViaPoint();  // Turn off mode after adding
+        addViaPoint(lat, lon);
+        toggleAddViaPoint();
     } else if (addingStop) {
-        addStop(e.latlng.lat, e.latlng.lng);
-        toggleAddStop();  // Turn off mode after adding
+        addStop(lat, lon);
+        toggleAddStop();
+    }
+}
+
+async function addViaPointFromAddress() {
+    const input = document.getElementById('viaPointAddress');
+    if (!input) return;
+
+    const lat = input.dataset.lat;
+    const lon = input.dataset.lon;
+    const name = input.dataset.displayName || input.value.trim();
+
+    if (lat && lon) {
+        addViaPoint(parseFloat(lat), parseFloat(lon), name);
+        input.value = '';
+        delete input.dataset.lat;
+        delete input.dataset.lon;
+        delete input.dataset.displayName;
+        const dd = getAutocompleteDropdown('viaPointAddress');
+        if (dd) dd.classList.remove('show');
+        return;
+    }
+
+    const query = input.value.trim();
+    if (!query) {
+        showStatus('Type an address to add as via-point', 'info');
+        return;
+    }
+
+    showStatus('🔍 Looking up via-point address...', 'loading');
+    const result = await geocodeAddress(query);
+    if (result) {
+        addViaPoint(result.lat, result.lon, result.display_name || query);
+        input.value = '';
+        showStatus(`📍 Via-point added: ${result.display_name || query}`, 'success');
+    } else {
+        showStatus('❌ Could not find that address', 'error');
+    }
+}
+
+async function addStopFromAddress() {
+    const input = document.getElementById('stopAddress');
+    if (!input) return;
+
+    const lat = input.dataset.lat;
+    const lon = input.dataset.lon;
+    const name = input.dataset.displayName || input.value.trim();
+
+    if (lat && lon) {
+        addStop(parseFloat(lat), parseFloat(lon), name);
+        input.value = '';
+        delete input.dataset.lat;
+        delete input.dataset.lon;
+        delete input.dataset.displayName;
+        const dd = getAutocompleteDropdown('stopAddress');
+        if (dd) dd.classList.remove('show');
+        return;
+    }
+
+    const query = input.value.trim();
+    if (!query) {
+        showStatus('Type an address to add as stop', 'info');
+        return;
+    }
+
+    showStatus('🔍 Looking up stop address...', 'loading');
+    const result = await geocodeAddress(query);
+    if (result) {
+        addStop(result.lat, result.lon, result.display_name || query);
+        input.value = '';
+        showStatus(`🛑 Stop added: ${result.display_name || query}`, 'success');
+    } else {
+        showStatus('❌ Could not find that address', 'error');
     }
 }
 
@@ -6950,11 +7024,15 @@ function clearForm() {
     document.getElementById('result').classList.remove('show');
     document.getElementById('status').className = 'status';
 
+    const viaInput = document.getElementById('viaPointAddress');
+    if (viaInput) viaInput.value = '';
+    const stopInput = document.getElementById('stopAddress');
+    if (stopInput) stopInput.value = '';
+
     if (startMarker && typeof startMarker.remove === 'function') startMarker.remove();
     if (endMarker && typeof endMarker.remove === 'function') endMarker.remove();
     if (routeLayer && typeof routeLayer.remove === 'function') routeLayer.remove();
 
-    // Clear parking
     clearParkingSelection();
 
     // Use smooth animation to return to default view (MapLibre flyTo)
@@ -12825,13 +12903,22 @@ function saveGeocodeCache() {
 let autocompleteTimeout = null;
 let autocompleteCache = {};
 
+function getAutocompleteDropdown(fieldId) {
+    const mapping = {
+        'start': 'autocompleteStart',
+        'end': 'autocompleteEnd',
+        'viaPointAddress': 'autocompleteViaPoint',
+        'stopAddress': 'autocompleteStop'
+    };
+    return document.getElementById(mapping[fieldId] || `autocomplete_${fieldId}`);
+}
+
 async function showAutocomplete(fieldId) {
     const input = document.getElementById(fieldId);
-    const dropdown = document.getElementById(`autocomplete${fieldId === 'start' ? 'Start' : 'End'}`);
+    const dropdown = getAutocompleteDropdown(fieldId);
+    if (!input || !dropdown) return;
     const query = input.value.trim();
 
-    // CRITICAL FIX: Clear stored coordinates when user types new text
-    // This ensures fresh geocoding when the user modifies the input
     if (input.dataset.lat || input.dataset.lon) {
         console.log(`[Autocomplete] Clearing stored coordinates for ${fieldId} - user is typing`);
         delete input.dataset.lat;
@@ -12839,31 +12926,25 @@ async function showAutocomplete(fieldId) {
         delete input.dataset.displayName;
     }
 
-    // Clear previous timeout
     if (autocompleteTimeout) {
         clearTimeout(autocompleteTimeout);
     }
 
-    // Hide dropdown if input is empty
     if (!query || query.length < 2) {
         dropdown.classList.remove('show');
         return;
     }
 
-    // Show loading state
     dropdown.innerHTML = '<div class="autocomplete-loading">🔍 Searching...</div>';
     dropdown.classList.add('show');
 
-    // Debounce the search
     autocompleteTimeout = setTimeout(async () => {
         try {
-            // Check cache first
             if (autocompleteCache[query]) {
                 displayAutocompleteResults(fieldId, autocompleteCache[query]);
                 return;
             }
 
-            // Fetch from Nominatim
             const response = await fetch(
                 `${NOMINATIM_API}?q=${encodeURIComponent(query)}&limit=8`,
                 {
@@ -12879,10 +12960,8 @@ async function showAutocomplete(fieldId) {
 
             const results = await response.json();
 
-            // Cache results
             autocompleteCache[query] = results;
 
-            // Display results
             displayAutocompleteResults(fieldId, results);
         } catch (error) {
             console.error('[Autocomplete] Error:', error);
@@ -12898,19 +12977,23 @@ async function showAutocomplete(fieldId) {
  * @returns {*} Return value description
  */
 function displayAutocompleteResults(fieldId, results) {
-    const dropdown = document.getElementById(`autocomplete${fieldId === 'start' ? 'Start' : 'End'}`);
+    const dropdown = getAutocompleteDropdown(fieldId);
+    if (!dropdown) return;
 
     if (!results || results.length === 0) {
         dropdown.innerHTML = '<div class="autocomplete-no-results">No results found</div>';
         return;
     }
 
-    // Privacy/security: build DOM nodes instead of injecting untrusted HTML
     dropdown.innerHTML = '';
 
     results.forEach((result) => {
         const icon = getLocationIcon(result);
-        const name = result.name || result.address?.road || result.address?.city || result.display_name || 'Location';
+        let name = result.name || result.address?.road || result.address?.city || result.display_name || 'Location';
+        const houseNum = result.address?.house_number;
+        if (houseNum && !name.startsWith(houseNum)) {
+            name = houseNum + ' ' + name;
+        }
         const address = result.display_name || '';
         const shortAddress = address.length > 60 ? address.substring(0, 60) + '...' : address;
         const lat = parseFloat(result.lat);
@@ -12987,18 +13070,28 @@ function getLocationIcon(result) {
  */
 function selectAutocompleteResult(fieldId, lat, lon, name) {
     const input = document.getElementById(fieldId);
-    const dropdown = document.getElementById(`autocomplete${fieldId === 'start' ? 'Start' : 'End'}`);
+    const dropdown = getAutocompleteDropdown(fieldId);
 
-    // Store coordinates in data attribute and display human-readable name
-    input.value = name;  // Display the human-readable name
-    input.dataset.lat = lat;  // Store lat in data attribute
-    input.dataset.lon = lon;  // Store lon in data attribute
-    input.dataset.displayName = name;  // Store display name for later use
+    if (fieldId === 'viaPointAddress') {
+        addViaPoint(lat, lon, name);
+        if (input) input.value = '';
+        if (dropdown) dropdown.classList.remove('show');
+        return;
+    }
+    if (fieldId === 'stopAddress') {
+        addStop(lat, lon, name);
+        if (input) input.value = '';
+        if (dropdown) dropdown.classList.remove('show');
+        return;
+    }
 
-    // Hide dropdown
-    dropdown.classList.remove('show');
+    input.value = name;
+    input.dataset.lat = lat;
+    input.dataset.lon = lon;
+    input.dataset.displayName = name;
 
-    // Show confirmation
+    if (dropdown) dropdown.classList.remove('show');
+
     showStatus(`✅ Selected: ${name}`, 'success');
 
     console.log(`[Autocomplete] Selected ${fieldId}: ${name} (${lat}, ${lon})`);

@@ -3807,16 +3807,41 @@ HTML_TEMPLATE = '''
                 <!-- VIA-POINTS AND STOPS SECTION (NEW) -->
                 <div class="form-group" style="background: #FFFDE7; padding: 12px; border-radius: 8px; margin-top: 10px;">
                     <label style="margin-bottom: 8px; display: block;">📍 Via-Points & Stops</label>
+
+                    <!-- Via-Point Address Input -->
+                    <div style="margin-bottom: 8px; position: relative;">
+                        <div style="display: flex; gap: 6px;">
+                            <input type="text" id="viaPointAddress" placeholder="Type address for via-point..." autocomplete="off"
+                                   oninput="showAutocomplete('viaPointAddress')" onfocus="showAutocomplete('viaPointAddress')"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault();addViaPointFromAddress();}"
+                                   style="flex: 1; padding: 8px 10px; border: 1px solid #FF9800; border-radius: 6px; font-size: 12px; outline: none;">
+                            <button onclick="addViaPointFromAddress()" style="padding: 8px 12px; background: #FF9800; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;">📍 Add Via</button>
+                            <button id="addViaPointBtn" onclick="toggleAddViaPoint()" title="Pick via-point on map" style="padding: 8px 10px; border: 1px solid #FF9800; background: white; border-radius: 6px; cursor: pointer; font-size: 14px; color: #FF9800;">🗺️</button>
+                        </div>
+                        <div class="autocomplete-dropdown" id="autocompleteViaPoint"></div>
+                    </div>
+
+                    <!-- Stop Address Input -->
+                    <div style="margin-bottom: 8px; position: relative;">
+                        <div style="display: flex; gap: 6px;">
+                            <input type="text" id="stopAddress" placeholder="Type address for stop..." autocomplete="off"
+                                   oninput="showAutocomplete('stopAddress')" onfocus="showAutocomplete('stopAddress')"
+                                   onkeydown="if(event.key==='Enter'){event.preventDefault();addStopFromAddress();}"
+                                   style="flex: 1; padding: 8px 10px; border: 1px solid #E91E63; border-radius: 6px; font-size: 12px; outline: none;">
+                            <button onclick="addStopFromAddress()" style="padding: 8px 12px; background: #E91E63; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;">🛑 Add Stop</button>
+                            <button id="addStopBtn" onclick="toggleAddStop()" title="Pick stop on map" style="padding: 8px 10px; border: 1px solid #E91E63; background: white; border-radius: 6px; cursor: pointer; font-size: 14px; color: #E91E63;">🗺️</button>
+                        </div>
+                        <div class="autocomplete-dropdown" id="autocompleteStop"></div>
+                    </div>
+
                     <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-                        <button id="addViaPointBtn" onclick="toggleAddViaPoint()" style="flex: 1; padding: 8px 12px; border: 1px solid #FF9800; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; color: #FF9800;">📍 Add Via-Point</button>
-                        <button id="addStopBtn" onclick="toggleAddStop()" style="flex: 1; padding: 8px 12px; border: 1px solid #E91E63; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; color: #E91E63;">🛑 Add Stop</button>
-                        <button onclick="clearAllWaypoints()" style="padding: 8px 12px; border: 1px solid #999; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; color: #666;">✕ Clear</button>
+                        <button onclick="clearAllWaypoints()" style="flex: 1; padding: 8px 12px; border: 1px solid #999; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; color: #666;">✕ Clear All</button>
                     </div>
                     <div style="margin-bottom: 10px;">
                         <button id="editRouteBtn" onclick="toggleRouteEditing()" style="width: 100%; padding: 10px 12px; border: 2px solid #4CAF50; background: white; border-radius: 6px; cursor: pointer; font-size: 13px; color: #4CAF50; font-weight: 600;">✏️ Edit Route (Drag to modify)</button>
                     </div>
                     <div id="waypointsList">
-                        <div style="color: #999; font-size: 12px; padding: 10px;">No waypoints added. Click buttons above to add via-points or stops.</div>
+                        <div style="color: #999; font-size: 12px; padding: 10px;">No waypoints added. Type an address above or use the map buttons.</div>
                     </div>
                     <div style="font-size: 11px; color: #888; margin-top: 8px;">
                         <strong>Via-Points:</strong> Route must pass through (e.g., scenic route)<br>
