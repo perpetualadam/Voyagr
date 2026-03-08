@@ -287,9 +287,89 @@ def search_parking():
         return jsonify({'success': False, 'error': str(e)})
 
 
+def _tomtom_poi_search(lat: float, lon: float, poi_type: str, radius: int) -> Any:
+    """Search for POIs using TomTom Search API (primary source)."""
+    tomtom_api_key = os.getenv('TOMTOM_API_KEY', '')
+    if not tomtom_api_key:
+        return None
+
+    tomtom_category_map = {
+        'fuel': '7311',
+        'food': '7315',
+        'parking': '7369',
+        'charging': '7309',
+        'hospital': '7321',
+        'pharmacy': '9361023',
+        'atm': '7397',
+        'supermarket': '7332',
+    }
+
+    category_id = tomtom_category_map.get(poi_type)
+    if not category_id:
+        return None
+
+    try:
+        url = f"https://api.tomtom.com/search/2/categorySearch/{category_id}.json"
+        params = {
+            'key': tomtom_api_key,
+            'lat': lat,
+            'lon': lon,
+            'radius': radius,
+            'limit': 20,
+            'language': 'en-GB',
+        }
+        resp = requests.get(url, params=params, timeout=5)
+        if resp.status_code != 200:
+            logger.warning(f"[POI-TomTom] API error: status={resp.status_code}")
+            return None
+
+        data = resp.json()
+        results_list = data.get('results', [])
+        if not results_list:
+            return []
+
+        poi_list = []
+        for item in results_list:
+            try:
+                pos = item.get('position', {})
+                p_lat = float(pos.get('lat', 0))
+                p_lon = float(pos.get('lon', 0))
+                poi_info = item.get('poi', {})
+                addr = item.get('address', {})
+                distance_m = get_distance_between_points(lat, lon, p_lat, p_lon)
+
+                poi_list.append({
+                    'name': poi_info.get('name', f'{poi_type.title()}'),
+                    'lat': p_lat,
+                    'lon': p_lon,
+                    'distance_m': round(distance_m, 0),
+                    'type': poi_type,
+                    'brand': poi_info.get('brands', [{}])[0].get('name', '') if poi_info.get('brands') else '',
+                    'address': addr.get('freeformAddress', ''),
+                    'opening_hours': '',
+                    'phone': poi_info.get('phone', ''),
+                    'url': poi_info.get('url', ''),
+                    'amenity': poi_type,
+                    'source': 'TomTom',
+                })
+            except (ValueError, KeyError, IndexError) as e:
+                logger.debug(f"[POI-TomTom] Error parsing result: {e}")
+                continue
+
+        poi_list.sort(key=lambda x: x['distance_m'])
+        return poi_list[:20]
+
+    except requests.exceptions.Timeout:
+        logger.warning("[POI-TomTom] Request timed out")
+        return None
+    except Exception as e:
+        logger.error(f"[POI-TomTom] Error: {e}")
+        return None
+
+
 @search_bp.route('/poi-search', methods=['POST'])
 def search_poi():
-    """Search for points of interest (fuel stations, restaurants, etc.) near a location."""
+    """Search for points of interest. Tries TomTom first, falls back to Overpass/Nominatim."""
     try:
         data = request.json
         lat = float(data.get('lat', 0))
@@ -300,6 +380,13 @@ def search_poi():
         if lat == 0 or lon == 0:
             return jsonify({'success': False, 'error': 'Invalid coordinates'})
 
+        # Try TomTom first (faster, richer data)
+        tomtom_results = _tomtom_poi_search(lat, lon, poi_type, radius)
+        if tomtom_results is not None:
+            logger.info(f"[POI] TomTom returned {len(tomtom_results)} {poi_type} results")
+            return jsonify({'success': True, 'results': tomtom_results[:15], 'type': poi_type, 'source': 'TomTom'})
+
+        # Fallback to Overpass/Nominatim
         poi_mapping = {
             'fuel': ['fuel'],
             'food': ['restaurant', 'fast_food', 'cafe'],
@@ -312,7 +399,6 @@ def search_poi():
 
         amenities = poi_mapping.get(poi_type, ['fuel'])
 
-        # Try to use overpass_helper if available
         try:
             from overpass_helper import query_overpass, build_poi_query
             OVERPASS_HELPER_AVAILABLE = True
@@ -325,7 +411,6 @@ def search_poi():
             result = query_overpass(query, cache_key=cache_key, cache_ttl=300)
 
             if not result.get('success'):
-                logger.warning(f"[POI] Overpass query failed: {result.get('error')}")
                 return _nominatim_poi_fallback(lat, lon, poi_type, radius)
 
             results = result.get('elements', [])
@@ -375,11 +460,71 @@ def search_poi():
                 continue
 
         poi_list.sort(key=lambda x: x['distance_m'])
-        logger.info(f"[POI] Found {len(poi_list)} {poi_type} locations")
-        return jsonify({'success': True, 'results': poi_list[:15], 'type': poi_type, 'cached': cached})
+        logger.info(f"[POI] Found {len(poi_list)} {poi_type} locations (Overpass)")
+        return jsonify({'success': True, 'results': poi_list[:15], 'type': poi_type, 'cached': cached, 'source': 'Overpass'})
 
     except Exception as e:
         logger.error(f"[POI] Error: {str(e)}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@search_bp.route('/poi-along-route', methods=['POST'])
+def search_poi_along_route():
+    """Search for POIs along a route by sampling points along the route polyline."""
+    try:
+        data = request.json
+        route_points = data.get('route_points', [])
+        poi_type = data.get('type', 'fuel')
+        radius = int(data.get('radius', 1000))
+
+        if not route_points or len(route_points) < 2:
+            return jsonify({'success': False, 'error': 'Route points required'})
+
+        total_pts = len(route_points)
+        sample_indices = set()
+        sample_indices.add(0)
+        sample_indices.add(total_pts - 1)
+        step = max(1, total_pts // 5)
+        for i in range(step, total_pts - 1, step):
+            sample_indices.add(i)
+            if len(sample_indices) >= 6:
+                break
+
+        all_pois = {}
+        for idx in sorted(sample_indices):
+            pt = route_points[idx]
+            pt_lat = float(pt[0]) if isinstance(pt, (list, tuple)) else float(pt.get('lat', 0))
+            pt_lon = float(pt[1]) if isinstance(pt, (list, tuple)) else float(pt.get('lon', 0))
+
+            tomtom_results = _tomtom_poi_search(pt_lat, pt_lon, poi_type, radius)
+            if tomtom_results:
+                for poi in tomtom_results:
+                    key = f"{poi['lat']:.5f},{poi['lon']:.5f}"
+                    if key not in all_pois:
+                        all_pois[key] = poi
+
+        poi_list = list(all_pois.values())
+
+        if not poi_list:
+            for idx in sorted(sample_indices)[:3]:
+                pt = route_points[idx]
+                pt_lat = float(pt[0]) if isinstance(pt, (list, tuple)) else float(pt.get('lat', 0))
+                pt_lon = float(pt[1]) if isinstance(pt, (list, tuple)) else float(pt.get('lon', 0))
+                fallback = _nominatim_poi_fallback(pt_lat, pt_lon, poi_type, radius)
+                if fallback:
+                    fb_data = fallback.get_json()
+                    if fb_data.get('results'):
+                        for poi in fb_data['results']:
+                            key = f"{poi['lat']:.5f},{poi['lon']:.5f}"
+                            if key not in all_pois:
+                                all_pois[key] = poi
+            poi_list = list(all_pois.values())
+
+        logger.info(f"[POI-AlongRoute] Found {len(poi_list)} {poi_type} along route")
+        return jsonify({'success': True, 'results': poi_list[:20], 'type': poi_type, 'source': 'TomTom+route'})
+
+    except Exception as e:
+        logger.error(f"[POI-AlongRoute] Error: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 

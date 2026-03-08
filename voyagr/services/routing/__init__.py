@@ -2,10 +2,8 @@
 Routing services for Voyagr.
 
 Contains:
-- graphhopper: GraphHopper routing engine
-- valhalla: Valhalla routing engine
-- osrm: OSRM routing engine
 - engines: Routing engine management and fallback chain
+- multidrop: Multi-drop route optimization (TSP, 2-opt)
 """
 
 from voyagr.services.routing.engines import (
@@ -16,11 +14,18 @@ from voyagr.services.routing.engines import (
     fallback_optimizer,
 )
 
+from voyagr.services.routing.multidrop import (
+    optimize_stop_order,
+    build_multidrop_route,
+)
+
 __all__ = [
     'FallbackChainOptimizer',
     'ParallelRoutingEngine',
     'get_traffic_duration_multiplier',
     'route_with_graphhopper',
     'fallback_optimizer',
+    'optimize_stop_order',
+    'build_multidrop_route',
 ]
 

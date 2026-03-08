@@ -46,14 +46,7 @@ def _get_allowed_origins() -> List[str]:
         "http://127.0.0.1:3000",
     ]
 
-    # Add Railway.app and other production domains
-    if os.getenv('RAILWAY_ENVIRONMENT_NAME'):
-        railway_url = os.getenv('RAILWAY_PUBLIC_DOMAIN')
-        if railway_url:
-            origins.append(f"https://{railway_url}")
-            origins.append(f"http://{railway_url}")
-
-    # Add environment-configured origins
+    # Add environment-configured origins (production domains, etc.)
     env_origins = os.getenv('ALLOWED_ORIGINS', '').strip()
     if env_origins:
         origins.extend([origin.strip() for origin in env_origins.split(',') if origin.strip()])

@@ -40,6 +40,8 @@ from voyagr.services.routing import (
     get_traffic_duration_multiplier,
     route_with_graphhopper,
     fallback_optimizer,
+    optimize_stop_order,
+    build_multidrop_route,
 )
 
 __all__ = [
@@ -72,5 +74,7 @@ __all__ = [
     'get_traffic_duration_multiplier',
     'route_with_graphhopper',
     'fallback_optimizer',
+    'optimize_stop_order',
+    'build_multidrop_route',
 ]
 

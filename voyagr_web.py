@@ -87,16 +87,7 @@ def _get_allowed_origins() -> List[str]:
         "http://127.0.0.1:3000",
     ]
 
-    # Add Railway.app and other production domains
-    # Railway.app uses https://<project-name>.railway.app
-    if os.getenv('RAILWAY_ENVIRONMENT_NAME'):
-        # Running on Railway - add Railway domain
-        railway_url = os.getenv('RAILWAY_PUBLIC_DOMAIN')
-        if railway_url:
-            origins.append(f"https://{railway_url}")
-            origins.append(f"http://{railway_url}")
-
-    # Add environment-configured origins
+    # Add environment-configured origins (production domains, etc.)
     env_origins = os.getenv('ALLOWED_ORIGINS', '').strip()
     if env_origins:
         origins.extend([origin.strip() for origin in env_origins.split(',') if origin.strip()])
@@ -1293,13 +1284,32 @@ def init_db():
         )
     ''')
 
+    # Multi-drop and route avoidance settings columns (added dynamically for existing databases)
+    multidrop_columns = [
+        ('optimize_stop_order', 'INTEGER DEFAULT 1'),
+        ('round_trip', 'INTEGER DEFAULT 0'),
+        ('traffic_aware_routing', 'INTEGER DEFAULT 1'),
+        ('avoid_road_closures', 'INTEGER DEFAULT 1'),
+        ('avoid_incidents', 'INTEGER DEFAULT 1'),
+        ('avoid_toll_roads', 'INTEGER DEFAULT 0'),
+        ('avoid_motorways', 'INTEGER DEFAULT 0'),
+        ('avoid_ferries', 'INTEGER DEFAULT 0'),
+    ]
+    for col_name, col_def in multidrop_columns:
+        try:
+            cursor.execute(f'ALTER TABLE app_settings ADD COLUMN {col_name} {col_def}')
+        except Exception:
+            pass  # Column already exists
+
     # Initialize app settings if not exists
     cursor.execute('SELECT COUNT(*) FROM app_settings')
     if cursor.fetchone()[0] == 0:
         cursor.execute('''
             INSERT INTO app_settings
-            (gesture_enabled, gesture_sensitivity, gesture_action, battery_saving_mode, map_theme, ml_predictions_enabled, haptic_feedback_enabled)
-            VALUES (1, 'medium', 'recalculate', 0, 'standard', 1, 1)
+            (gesture_enabled, gesture_sensitivity, gesture_action, battery_saving_mode, map_theme, ml_predictions_enabled, haptic_feedback_enabled,
+             optimize_stop_order, round_trip, traffic_aware_routing, avoid_road_closures, avoid_incidents)
+            VALUES (1, 'medium', 'recalculate', 0, 'standard', 1, 1,
+                    1, 0, 1, 1, 1)
         ''')
 
     # Insert default hazard preferences if not exists
@@ -3926,10 +3936,31 @@ HTML_TEMPLATE = '''
                         <span class="quick-search-btn-icon">🍔</span>
                         <span>Food</span>
                     </button>
+                    <button class="quick-search-btn" onclick="quickSearch('charging')">
+                        <span class="quick-search-btn-icon">🔌</span>
+                        <span>EV Charge</span>
+                    </button>
+                    <button class="quick-search-btn" onclick="quickSearch('pharmacy')">
+                        <span class="quick-search-btn-icon">💊</span>
+                        <span>Pharmacy</span>
+                    </button>
                     <button class="quick-search-btn" onclick="quickSearch('hospital')">
                         <span class="quick-search-btn-icon">🏥</span>
                         <span>Hospital</span>
                     </button>
+                </div>
+                <div id="alongRouteSearch" style="display: none; margin-top: 8px;">
+                    <button onclick="searchAlongRoute()" style="width: 100%; padding: 10px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                        🔍 Search Along Route
+                    </button>
+                    <div id="alongRouteCategories" style="display: none; margin-top: 8px;">
+                        <div class="quick-search">
+                            <button class="quick-search-btn" onclick="searchAlongRouteByType('fuel')">⛽ Fuel</button>
+                            <button class="quick-search-btn" onclick="searchAlongRouteByType('food')">🍔 Food</button>
+                            <button class="quick-search-btn" onclick="searchAlongRouteByType('charging')">🔌 EV</button>
+                            <button class="quick-search-btn" onclick="searchAlongRouteByType('parking')">🅿️ Park</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Trip Info -->
@@ -4105,6 +4136,28 @@ HTML_TEMPLATE = '''
                         </div>
                     </div>
 
+                    <!-- Route Avoidance Section -->
+                    <div class="preferences-section">
+                        <h3>🚫 Route Avoidance</h3>
+                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Avoid specific road types when calculating routes</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">💰 Avoid Toll Roads</span>
+                            <button class="toggle-switch" id="avoidTollRoads" onclick="toggleAvoidancePreference('tollRoads')" data-pref="tollRoads"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🛣️ Avoid Motorways</span>
+                            <button class="toggle-switch" id="avoidMotorways" onclick="toggleAvoidancePreference('motorways')" data-pref="motorways"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">⛴️ Avoid Ferries</span>
+                            <button class="toggle-switch" id="avoidFerries" onclick="toggleAvoidancePreference('ferries')" data-pref="ferries"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: 5px 0 0 0;">These apply to all routes including multi-drop legs via Valhalla costing options</p>
+                    </div>
+
                     <!-- Navigation Automation Section -->
                     <div class="preferences-section">
                         <h3>🤖 Navigation Automation</h3>
@@ -4182,6 +4235,70 @@ HTML_TEMPLATE = '''
                                 <input type="range" id="maxDetour" min="0" max="50" value="20" onchange="updateDetourLabel()" style="flex: 1; cursor: pointer;">
                                 <span id="detourLabel" style="font-size: 13px; font-weight: 500; min-width: 40px;">20%</span>
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Multi-Drop Settings Section -->
+                    <div class="preferences-section">
+                        <h3>📦 Multi-Drop Settings</h3>
+                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Configure multi-stop delivery and route optimization</p>
+
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 15px;">
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="optimizeStopOrder" checked onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <div>
+                                    <span style="font-size: 13px; font-weight: 500;">Optimize Stop Order</span>
+                                    <div style="font-size: 11px; color: #888;">Automatically find the most efficient route through all stops</div>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="roundTrip" onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <div>
+                                    <span style="font-size: 13px; font-weight: 500;">Round Trip</span>
+                                    <div style="font-size: 11px; color: #888;">Return to starting point after all stops</div>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="trafficAwareRouting" checked onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <div>
+                                    <span style="font-size: 13px; font-weight: 500;">Traffic-Aware Routing</span>
+                                    <div style="font-size: 11px; color: #888;">Use real-time traffic data for route calculation and ETAs</div>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="avoidRoadClosures" checked onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <div>
+                                    <span style="font-size: 13px; font-weight: 500;">Avoid Road Closures</span>
+                                    <div style="font-size: 11px; color: #888;">Automatically route around closed roads and incidents</div>
+                                </div>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                                <input type="checkbox" id="avoidIncidents" checked onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
+                                <div>
+                                    <span style="font-size: 13px; font-weight: 500;">Avoid Accidents & Roadworks</span>
+                                    <div style="font-size: 11px; color: #888;">Route around reported accidents, roadworks, and hazards</div>
+                                </div>
+                            </label>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">Departure Time</span>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <input type="datetime-local" id="departureTime" onchange="saveMultiDropPreferences()" style="flex: 1; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <button onclick="clearDepartureTime()" style="padding: 8px 12px; border: 1px solid #ddd; background: #f5f5f5; border-radius: 4px; cursor: pointer; font-size: 12px;">Now</button>
+                            </div>
+                            <div style="font-size: 11px; color: #888; margin-top: 4px;">Set departure time for accurate ETAs. Leave empty to use current time.</div>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🕐 Best Time to Leave</span>
+                            <button onclick="analysebestTimeToLeave()" style="padding: 10px 16px; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%;">
+                                Analyse Best Departure Time
+                            </button>
+                        </div>
+                        <div id="bestTimeResult" style="display: none; margin-top: 8px; padding: 12px; background: #f0f4ff; border-radius: 8px; border: 1px solid #dde4ff;">
+                            <div style="font-size: 13px; font-weight: 600; color: #333; margin-bottom: 6px;">Recommended Departure Times</div>
+                            <div id="bestTimeSlots" style="font-size: 12px; color: #555;"></div>
                         </div>
                     </div>
 
@@ -4372,6 +4489,28 @@ HTML_TEMPLATE = '''
                         <div class="preference-item">
                             <span class="preference-label">🔊 Voice Announcements</span>
                             <button class="toggle-switch" id="voiceAnnouncementsEnabled" onclick="toggleVoiceAnnouncements()"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">📷 Camera Alert Type</span>
+                            <select id="cameraAlertType" onchange="saveCameraAlertPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="off">Off</option>
+                                <option value="voice" selected>Voice Only</option>
+                                <option value="chime">Chime Only</option>
+                                <option value="both">Voice + Chime</option>
+                            </select>
+                            <div style="font-size: 11px; color: #888; margin-top: 4px;">Alert when approaching speed cameras and traffic light cameras</div>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">📷 Camera Alert Distance</span>
+                            <select id="cameraAlertDistance" onchange="saveCameraAlertPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="200">200 meters</option>
+                                <option value="300">300 meters</option>
+                                <option value="500" selected>500 meters</option>
+                                <option value="800">800 meters</option>
+                                <option value="1000">1 kilometer</option>
+                            </select>
                         </div>
                     </div>
 
@@ -4951,6 +5090,11 @@ HTML_TEMPLATE = '''
             <button id="startNavBtn" class="fab" title="Start Navigation" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
             <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
             <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
+        </div>
+
+        <!-- Current Road Name Bar - Shows road name during navigation -->
+        <div id="roadNameBar" style="display: none; position: absolute; bottom: 155px; left: 50%; transform: translateX(-50%); z-index: 250; background: rgba(0,0,0,0.8); color: white; padding: 6px 18px; border-radius: 20px; font-size: 14px; font-weight: 600; white-space: nowrap; max-width: 80%; overflow: hidden; text-overflow: ellipsis; text-align: center; backdrop-filter: blur(10px);">
+            <span id="currentRoadName">--</span>
         </div>
 
         <!-- Journey Summary Bar - Shows remaining distance, ETA, and time during navigation -->
@@ -5665,9 +5809,20 @@ def calculate_route():
         caz_exempt = data.get('caz_exempt', False)
         enable_hazard_avoidance = data.get('enable_hazard_avoidance', False)
 
-        # VIA-POINTS AND STOPS (NEW)
+        # Route avoidance preferences (Valhalla costing options)
+        avoid_tolls = data.get('avoid_tolls', False)
+        avoid_motorways = data.get('avoid_motorways', False)
+        avoid_ferries = data.get('avoid_ferries', False)
+
+        # VIA-POINTS AND STOPS
         via_points = data.get('via_points', [])  # [{lat, lon, name, type: 'via'}]
         stops = data.get('stops', [])  # [{lat, lon, name, type: 'stop', duration: 15}]
+
+        # Multi-drop settings from frontend
+        optimize_stop_order = data.get('optimize_stop_order', False)
+        round_trip = data.get('round_trip', False)
+        departure_time = data.get('departure_time')
+        time_windows = data.get('time_windows')
 
         # Calculate total stop time
         total_stop_time = sum(s.get('duration', 15) for s in stops)
@@ -5686,6 +5841,112 @@ def calculate_route():
         end_coords = validate_coordinates(end)
         start_lat, start_lon = start_coords
         end_lat, end_lon = end_coords
+
+        # ====================================================================
+        # MULTI-DROP ROUTING: When optimize_stop_order is enabled and there
+        # are stops, use the multi-drop engine for proper TSP optimization
+        # ====================================================================
+        all_intermediate = list(via_points) + list(stops)
+        if optimize_stop_order and len(all_intermediate) >= 2:
+            from voyagr.services.routing.multidrop import build_multidrop_route
+            logger.info(f"[ROUTE] Multi-drop optimization requested with {len(all_intermediate)} stops")
+
+            md_stops = []
+            for item in all_intermediate:
+                md_stops.append({
+                    'lat': float(item.get('lat', 0)),
+                    'lon': float(item.get('lon', 0)),
+                    'name': item.get('name', 'Stop'),
+                    'duration': item.get('duration', 0),
+                    'type': item.get('type', 'via'),
+                })
+
+            md_exclude = []
+            if enable_hazard_avoidance:
+                try:
+                    all_lats = [start_lat, end_lat] + [s['lat'] for s in md_stops]
+                    all_lons = [start_lon, end_lon] + [s['lon'] for s in md_stops]
+                    hazards_md = fetch_hazards_for_route(min(all_lats), min(all_lons), max(all_lats), max(all_lons))
+                    bbox_md = {'south': min(all_lats), 'north': max(all_lats),
+                               'west': min(all_lons), 'east': max(all_lons)}
+                    md_exclude = build_valhalla_exclude_locations(hazards_md, route_bbox=bbox_md, max_hazards=50)
+                except Exception as e:
+                    logger.warning(f"[MULTI-DROP] Hazard fetch failed: {e}")
+
+            tw_dict = None
+            if time_windows and isinstance(time_windows, dict):
+                tw_dict = {int(k): v for k, v in time_windows.items()}
+
+            # Use GraphHopper camera avoidance on multi-drop legs when optimised routing is on
+            use_gh = enable_hazard_avoidance and routing_mode == 'auto'
+            md_bbox = bbox_md if enable_hazard_avoidance else None
+
+            md_result = build_multidrop_route(
+                start={'lat': start_lat, 'lon': start_lon},
+                end={'lat': end_lat, 'lon': end_lon},
+                stops=md_stops,
+                optimize_order=True,
+                round_trip=round_trip,
+                routing_mode=routing_mode,
+                enable_hazard_avoidance=enable_hazard_avoidance,
+                departure_time=departure_time,
+                time_windows=tw_dict,
+                exclude_locations=md_exclude if md_exclude else None,
+                use_graphhopper_avoidance=use_gh,
+                route_bbox=md_bbox,
+                avoid_tolls=avoid_tolls,
+                avoid_motorways=avoid_motorways,
+                avoid_ferries=avoid_ferries,
+            )
+
+            if md_result.get('success'):
+                md_result['distance'] = f"{md_result['total_distance_km']:.2f} km"
+                md_result['time'] = f"{md_result['total_duration_minutes']:.0f} minutes"
+                md_result['total_time_with_stops'] = f"{md_result['total_duration_minutes']:.0f} minutes"
+                md_result['total_stop_time'] = md_result.get('total_stop_time_minutes', 0)
+                md_result['via_points_count'] = len(via_points)
+                md_result['stops_count'] = len(stops)
+                md_result['source'] = 'Voyagr Multi-Drop'
+                md_result['start_lat'] = start_lat
+                md_result['start_lon'] = start_lon
+                md_result['end_lat'] = end_lat
+                md_result['end_lon'] = end_lon
+                md_result['cached'] = False
+                md_result['multi_drop'] = True
+
+                geometry = md_result.get('all_geometry', [])
+                first_geom = geometry[0] if geometry else None
+                first_precision = md_result['legs'][0].get('geometry_precision', 6) if md_result.get('legs') else 6
+
+                if first_geom:
+                    md_result['geometry'] = first_geom
+                    md_result['geometry_precision'] = first_precision
+
+                maneuvers = md_result.get('all_maneuvers', [])
+                if maneuvers:
+                    md_result['maneuvers'] = maneuvers
+
+                # Build a routes array for compatibility with route comparison UI
+                md_result['routes'] = [{
+                    'id': 1,
+                    'name': 'Multi-Drop' + (' (Optimized)' if md_result.get('optimized') else ''),
+                    'distance_km': md_result['total_distance_km'],
+                    'duration_minutes': md_result['total_duration_minutes'],
+                    'fuel_cost': 0,
+                    'fuel_litres': 0,
+                    'toll_cost': 0,
+                    'caz_cost': 0,
+                    'hazard_count': 0,
+                    'hazard_penalty_seconds': 0,
+                    'geometry': first_geom,
+                    'geometry_precision': first_precision,
+                    'maneuvers': maneuvers,
+                    'source': 'Voyagr Multi-Drop',
+                }]
+
+                return jsonify(md_result)
+            else:
+                logger.warning(f"[MULTI-DROP] Optimization failed, falling through to standard routing")
 
         # ====================================================================
         # PHASE 3 OPTIMIZATION: Check route cache first
@@ -5721,10 +5982,15 @@ def calculate_route():
             tomtom_incidents = fetch_tomtom_incidents(tomtom_bbox)
 
             if tomtom_incidents:
-                # Merge TomTom incidents with camera hazards
                 hazards = merge_hazards_with_tomtom_incidents(hazards, tomtom_incidents)
                 tomtom_elapsed = (time.time() - tomtom_start) * 1000
                 logger.info(f"[TOMTOM] Merged real-time incidents in {tomtom_elapsed:.0f}ms")
+
+                # Extract road closures as additional exclude_locations
+                road_closures = tomtom_incidents.get('road_closed', [])
+                if road_closures:
+                    closure_count = len(road_closures)
+                    logger.info(f"[TOMTOM] {closure_count} road closures found - will be excluded from routing")
             else:
                 logger.debug("[TOMTOM] No real-time incidents found for route area")
         except Exception as e:
@@ -5807,15 +6073,29 @@ def calculate_route():
                     # Pass route coordinates for distance-based prioritization
                     # NOTE: Valhalla has a hard limit of 50 exclude_locations
                     # Exceeding this returns error 157: "Exceeded max avoid locations: 50"
+                    # Reserve slots for road closures (higher priority than cameras)
+                    road_closures = hazards.get('road_closed', [])
+                    closure_excludes = [{"lat": c["lat"], "lon": c["lon"]}
+                                        for c in road_closures[:15]
+                                        if "lat" in c and "lon" in c]
+                    remaining_slots = 50 - len(closure_excludes)
+
                     exclude_locations = build_valhalla_exclude_locations(
                         hazards,
                         route_bbox=route_bbox,
-                        max_hazards=50,  # Valhalla's max limit
+                        max_hazards=max(remaining_slots, 10),
                         start_lat=start_lat,
                         start_lon=start_lon,
                         end_lat=end_lat,
                         end_lon=end_lon
                     )
+                    if closure_excludes:
+                        exclude_locations = closure_excludes + [
+                            loc for loc in exclude_locations
+                            if loc not in closure_excludes
+                        ]
+                        exclude_locations = exclude_locations[:50]
+                        logger.info(f"[VALHALLA] Added {len(closure_excludes)} road closures to exclude_locations")
                     if exclude_locations:
                         logger.info(f"[VALHALLA] Using {len(exclude_locations)} exclude_locations for hazard avoidance")
                     else:
@@ -6276,23 +6556,43 @@ def calculate_route():
                     use_segmented_routing = False
 
             # Build request payload (standard 2-point routing)
-            # Use requested costing so pedestrian/bicycle get correct routes and ETAs
             payload = {
-                "locations": [
+                "locations": route_locations if has_waypoints else [
                     {"lat": start_lat, "lon": start_lon},
                     {"lat": end_lat, "lon": end_lon}
                 ],
                 "costing": valhalla_costing,
-                "alternates": 3 if valhalla_costing == 'auto' else 0,  # Alternates only for auto
-                "directions_options": {"generalize": 0}  # Full geometry - follow roads on bends/corners
+                "alternates": 3 if (valhalla_costing == 'auto' and not has_waypoints) else 0,
+                "directions_options": {"generalize": 0}
             }
-            # Optional costing_options for walk/bike speeds (Valhalla uses these for ETA)
-            if valhalla_costing == 'pedestrian':
-                payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": True}}
-            elif valhalla_costing == 'bicycle':
-                payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": True}}
 
-            # Add exclude_locations if hazard avoidance is enabled
+            if valhalla_costing == 'pedestrian':
+                payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}}
+            elif valhalla_costing == 'bicycle':
+                payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}}
+            elif valhalla_costing in ('auto', 'auto_shorter'):
+                auto_opts = {}
+                if avoid_tolls:
+                    auto_opts["use_tolls"] = 0
+                if avoid_motorways:
+                    auto_opts["use_highways"] = 0
+                if avoid_ferries:
+                    auto_opts["use_ferry"] = 0
+                if auto_opts:
+                    payload["costing_options"] = {valhalla_costing: auto_opts}
+                    logger.info(f"[VALHALLA] Avoidance options: tolls={avoid_tolls}, motorways={avoid_motorways}, ferries={avoid_ferries}")
+
+            # Traffic-aware routing: use departure time for time-dependent routing
+            if valhalla_costing == 'auto':
+                if departure_time:
+                    payload["date_time"] = {"type": 1, "value": departure_time}
+                    logger.info(f"[VALHALLA] Time-dependent routing with departure: {departure_time}")
+                else:
+                    from datetime import datetime as dt_now
+                    now_str = dt_now.now().strftime('%Y-%m-%dT%H:%M')
+                    payload["date_time"] = {"type": 1, "value": now_str}
+                    logger.info(f"[VALHALLA] Time-dependent routing with current time: {now_str}")
+
             if exclude_locations:
                 payload["exclude_locations"] = exclude_locations
                 logger.debug(f"[VALHALLA] Added {len(exclude_locations)} exclude_locations to request")
@@ -6871,9 +7171,19 @@ def calculate_route():
                             "directions_options": {"generalize": 0}
                         }
                         if valhalla_costing == 'pedestrian':
-                            retry_payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": True}}
+                            retry_payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}}
                         elif valhalla_costing == 'bicycle':
-                            retry_payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": True}}
+                            retry_payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}}
+                        elif valhalla_costing in ('auto', 'auto_shorter'):
+                            auto_opts = {}
+                            if avoid_tolls:
+                                auto_opts["use_tolls"] = 0
+                            if avoid_motorways:
+                                auto_opts["use_highways"] = 0
+                            if avoid_ferries:
+                                auto_opts["use_ferry"] = 0
+                            if auto_opts:
+                                retry_payload["costing_options"] = {valhalla_costing: auto_opts}
 
                         retry_response = requests.post(url, json=retry_payload, timeout=10, headers=headers)
 
@@ -7313,7 +7623,7 @@ def calculate_route():
                 'valhalla_url': VALHALLA_URL,
                 'osrm_url': 'http://router.project-osrm.org',
                 'valhalla_error': str(valhalla_error),
-                'deployment_hint': 'If on Railway.app, routing engines may be unreachable. Try /api/test-routing-engines for diagnostics.'
+                'deployment_hint': 'Try /api/test-routing-engines for diagnostics.'
             }
 
             return jsonify({
@@ -7328,84 +7638,117 @@ def calculate_route():
 
 @app.route('/api/multi-stop-route', methods=['POST'])
 def calculate_multi_stop_route():
-    """Calculate route with multiple waypoints."""
+    """
+    Calculate a multi-drop route with optional stop order optimization,
+    per-leg breakdown, time windows, and round-trip support.
+    """
     try:
-        data = request.json
+        from voyagr.services.routing.multidrop import build_multidrop_route
+
+        data = request.json or {}
+        start_raw = data.get('start', '')
+        end_raw = data.get('end', '')
         waypoints = data.get('waypoints', [])
+        stops_list = data.get('stops', [])
         routing_mode = data.get('routing_mode', 'auto')
+        optimize = data.get('optimize_order', True)
+        round_trip = data.get('round_trip', False)
+        departure_time = data.get('departure_time')
+        time_windows = data.get('time_windows')
+        enable_hazard_avoidance = data.get('enable_hazard_avoidance', False)
+        avoid_tolls = data.get('avoid_tolls', False)
+        avoid_motorways = data.get('avoid_motorways', False)
+        avoid_ferries = data.get('avoid_ferries', False)
 
-        # ================================================================
-        # PHASE 5: Validate multi-stop request
-        # ================================================================
-        if not waypoints or len(waypoints) < 2:
-            return jsonify({'success': False, 'error': 'Need at least 2 waypoints'}), 400
-
-        if len(waypoints) > 25:
-            return jsonify({'success': False, 'error': 'Maximum 25 waypoints allowed'}), 400
-
-        if not validate_routing_mode(routing_mode):
-            return jsonify({'success': False, 'error': f'Invalid routing_mode: {routing_mode}'}), 400
-
-        # Parse and validate all waypoints
-        coords = []
-        for i, wp in enumerate(waypoints):
-            wp_coords = validate_coordinates(wp)
-            if not wp_coords:
-                return jsonify({'success': False, 'error': f'Invalid waypoint {i+1}: {wp}'}), 400
-
-            lat, lon = wp_coords
-            coords.append({'lat': lat, 'lon': lon})
-
-        # Try Valhalla (PRIMARY)
-        try:
-            url = f"{VALHALLA_URL}/route"
-            payload = {
-                "locations": coords,
-                "costing": routing_mode if routing_mode in ['auto', 'pedestrian', 'bicycle'] else 'auto',
-                "directions_options": {"generalize": 0}
-            }
-            response = requests.post(url, json=payload, timeout=15)
-
-            if response.status_code == 200:
-                route_data = response.json()
-                if 'trip' in route_data:
-                    # NOTE: Valhalla returns distance in kilometers, not meters!
-                    distance = route_data['trip']['summary']['length']  # Already in km
-                    duration_minutes = route_data['trip']['summary']['time'] / 60
-
-                    return jsonify({
-                        'success': True,
-                        'distance': f'{distance:.2f} km',
-                        'time': f'{duration_minutes:.0f} minutes',
-                        'waypoints': len(waypoints),
-                        'source': 'Valhalla ✅'
+        all_stops = list(stops_list)
+        for wp in waypoints:
+            if isinstance(wp, dict):
+                all_stops.append({
+                    'lat': wp.get('lat', 0),
+                    'lon': wp.get('lon', 0),
+                    'name': wp.get('name', 'Waypoint'),
+                    'duration': wp.get('duration', 0),
+                    'type': wp.get('type', 'via'),
+                })
+            elif isinstance(wp, str):
+                wp_coords = validate_coordinates(wp)
+                if wp_coords:
+                    all_stops.append({
+                        'lat': wp_coords[0], 'lon': wp_coords[1],
+                        'name': 'Waypoint', 'duration': 0, 'type': 'via',
                     })
-        except (requests.exceptions.RequestException, KeyError, ValueError) as e:
-            logger.debug(f"[MULTI-STOP] Valhalla fallback failed: {e}")
 
-        # Fallback: calculate segments with OSRM
-        total_distance = 0
-        total_time = 0
+        if len(all_stops) < 1:
+            return jsonify({'success': False, 'error': 'Need at least 1 stop'}), 400
+        if len(all_stops) > 25:
+            return jsonify({'success': False, 'error': 'Maximum 25 stops allowed'}), 400
 
-        for i in range(len(coords) - 1):
-            osrm_url = f"{OSRM_URL}/driving/{coords[i]['lon']},{coords[i]['lat']};{coords[i+1]['lon']},{coords[i+1]['lat']}"
-            response = requests.get(osrm_url, timeout=10)
+        start_coords = validate_coordinates(start_raw) if start_raw else None
+        end_coords = validate_coordinates(end_raw) if end_raw else None
 
-            if response.status_code == 200:
-                route_data = response.json()
-                if route_data.get('code') == 'Ok':
-                    total_distance += route_data['routes'][0]['distance'] / 1000
-                    total_time += route_data['routes'][0]['duration'] / 60
+        if not start_coords:
+            first = all_stops.pop(0)
+            start_loc = {'lat': float(first['lat']), 'lon': float(first['lon'])}
+        else:
+            start_loc = {'lat': start_coords[0], 'lon': start_coords[1]}
 
-        return jsonify({
-            'success': True,
-            'distance': f'{total_distance:.2f} km',
-            'time': f'{total_time:.0f} minutes',
-            'waypoints': len(waypoints),
-            'source': 'OSRM'
-        })
+        end_loc = None
+        if end_coords:
+            end_loc = {'lat': end_coords[0], 'lon': end_coords[1]}
+
+        if not all_stops:
+            return jsonify({'success': False, 'error': 'Need at least 1 stop besides start/end'}), 400
+
+        tw_dict = None
+        if time_windows and isinstance(time_windows, dict):
+            tw_dict = {int(k): v for k, v in time_windows.items()}
+
+        exclude_locations = []
+        if enable_hazard_avoidance:
+            try:
+                from voyagr.services.hazards import fetch_hazards_for_route, build_valhalla_exclude_locations
+                min_lat = min(start_loc['lat'], *(s['lat'] for s in all_stops))
+                max_lat = max(start_loc['lat'], *(s['lat'] for s in all_stops))
+                min_lon = min(start_loc['lon'], *(s['lon'] for s in all_stops))
+                max_lon = max(start_loc['lon'], *(s['lon'] for s in all_stops))
+                hazards = fetch_hazards_for_route(min_lat, min_lon, max_lat, max_lon)
+                bbox = {'south': min_lat, 'north': max_lat, 'west': min_lon, 'east': max_lon}
+                exclude_locations = build_valhalla_exclude_locations(hazards, route_bbox=bbox, max_hazards=50)
+            except Exception as e:
+                logger.warning(f"[MULTI-DROP] Hazard fetch failed: {e}")
+
+        use_gh = enable_hazard_avoidance and routing_mode == 'auto'
+        gh_bbox = bbox if enable_hazard_avoidance else None
+
+        result = build_multidrop_route(
+            start=start_loc,
+            end=end_loc,
+            stops=all_stops,
+            optimize_order=optimize,
+            round_trip=round_trip,
+            routing_mode=routing_mode,
+            enable_hazard_avoidance=enable_hazard_avoidance,
+            departure_time=departure_time,
+            time_windows=tw_dict,
+            exclude_locations=exclude_locations if exclude_locations else None,
+            use_graphhopper_avoidance=use_gh,
+            route_bbox=gh_bbox,
+            avoid_tolls=avoid_tolls,
+            avoid_motorways=avoid_motorways,
+            avoid_ferries=avoid_ferries,
+        )
+
+        if not result.get('success'):
+            return jsonify(result), 500
+
+        result['distance'] = f"{result['total_distance_km']:.2f} km"
+        result['time'] = f"{result['total_duration_minutes']:.0f} minutes"
+        result['source'] = 'Voyagr Multi-Drop'
+
+        return jsonify(result)
 
     except Exception as e:
+        logger.error(f"[MULTI-DROP] Error: {e}")
         return jsonify({'success': False, 'error': str(e)})
 
 # Navigation routes (/api/weather, /api/analytics, /api/speed-limit, etc.)
@@ -7455,7 +7798,6 @@ set_fallback_optimizer(fallback_optimizer)
 
 
 if __name__ == '__main__':
-    # Get port from environment variable (Railway sets this)
     port = int(os.getenv('PORT', 5000))
 
     # ====================================================================

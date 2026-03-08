@@ -30,19 +30,14 @@ def manage_app_settings():
             cursor.execute('SELECT * FROM app_settings LIMIT 1')
             row = cursor.fetchone()
             if row:
-                settings = {
-                    'gesture_enabled': row[1],
-                    'gesture_sensitivity': row[2],
-                    'gesture_action': row[3],
-                    'battery_saving_mode': row[4],
-                    'map_theme': row[5],
-                    'ml_predictions_enabled': row[6],
-                    'haptic_feedback_enabled': row[7],
-                    'distance_unit': row[8] if len(row) > 8 else 'km',
-                    'currency_unit': row[9] if len(row) > 9 else 'GBP',
-                    'speed_unit': row[10] if len(row) > 10 else 'kmh',
-                    'temperature_unit': row[11] if len(row) > 11 else 'celsius'
-                }
+                col_names = [desc[0] for desc in cursor.description]
+                settings = {col: row[i] for i, col in enumerate(col_names) if col != 'id' and col != 'timestamp'}
+                # Ensure defaults for multi-drop fields
+                settings.setdefault('optimize_stop_order', 1)
+                settings.setdefault('round_trip', 0)
+                settings.setdefault('traffic_aware_routing', 1)
+                settings.setdefault('avoid_road_closures', 1)
+                settings.setdefault('avoid_incidents', 1)
                 return_db_connection(conn)
                 return jsonify({'success': True, 'settings': settings})
             return_db_connection(conn)
@@ -56,7 +51,11 @@ def manage_app_settings():
             field_map = [
                 'gesture_enabled', 'gesture_sensitivity', 'gesture_action',
                 'battery_saving_mode', 'map_theme', 'ml_predictions_enabled',
-                'distance_unit', 'currency_unit', 'speed_unit', 'temperature_unit'
+                'haptic_feedback_enabled',
+                'distance_unit', 'currency_unit', 'speed_unit', 'temperature_unit',
+                'optimize_stop_order', 'round_trip',
+                'traffic_aware_routing', 'avoid_road_closures', 'avoid_incidents',
+                'avoid_toll_roads', 'avoid_motorways', 'avoid_ferries',
             ]
 
             for field in field_map:

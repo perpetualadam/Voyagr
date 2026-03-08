@@ -363,7 +363,10 @@ function switchTab(tab) {
         sheetTitle.textContent = '⚙️ Settings';
         loadUnitPreferences();
         loadRoutePreferences();
+        loadMultiDropPreferences();
         loadVoicePreferences();
+        loadCameraAlertPreferences();
+        loadAvoidancePreferences();
     } else if (tab === 'tripHistory') {
         tripHistoryTab.style.display = 'block';
         sheetTitle.textContent = '📋 Trip History';
@@ -945,7 +948,16 @@ function saveAllSettings() {
             pricePreference: document.getElementById('parkingPricePreference')?.value || 'any'
         },
 
-        // Timestamp for debugging
+        // Multi-drop preferences
+        multiDropPreferences: {
+            optimizeStopOrder: localStorage.getItem('pref_optimizeStopOrder') !== 'false',
+            roundTrip: localStorage.getItem('pref_roundTrip') === 'true',
+            trafficAwareRouting: localStorage.getItem('pref_trafficAwareRouting') !== 'false',
+            avoidRoadClosures: localStorage.getItem('pref_avoidRoadClosures') !== 'false',
+            avoidIncidents: localStorage.getItem('pref_avoidIncidents') !== 'false',
+            departureTime: localStorage.getItem('pref_departureTime') || ''
+        },
+
         lastSaved: new Date().toISOString()
     };
 
@@ -2297,53 +2309,241 @@ function clearAllWaypoints() {
     stopMarkers.forEach(m => { if (m && typeof m.remove === 'function') m.remove(); });
     viaPointMarkers = [];
     stopMarkers = [];
+    clearMultiDropLayers();
     updateWaypointsList();
     showStatus('All waypoints cleared', 'info');
 }
 
 /**
- * Update the waypoints list display
+ * Update the waypoints list display with drag-to-reorder
  */
 function updateWaypointsList() {
     const container = document.getElementById('waypointsList');
     if (!container) return;
 
-    if (viaPoints.length === 0 && stops.length === 0) {
+    const allItems = [
+        ...viaPoints.map((p, i) => ({...p, _type: 'via', _idx: i})),
+        ...stops.map((s, i) => ({...s, _type: 'stop', _idx: i}))
+    ];
+
+    if (allItems.length === 0) {
         container.innerHTML = '<div style="color: #999; font-size: 12px; padding: 10px;">No waypoints added. Click buttons above to add via-points or stops.</div>';
         return;
     }
 
     let html = '';
 
-    // Via-points
     viaPoints.forEach((point, idx) => {
         html += `
-            <div style="display: flex; align-items: center; padding: 8px; background: #FFF3E0; border-radius: 6px; margin-bottom: 6px;">
+            <div class="waypoint-item" draggable="true" data-type="via" data-index="${idx}"
+                 ondragstart="onWaypointDragStart(event)" ondragover="onWaypointDragOver(event)" ondrop="onWaypointDrop(event)"
+                 style="display: flex; align-items: center; padding: 8px; background: #FFF3E0; border-radius: 6px; margin-bottom: 6px; cursor: grab; transition: opacity 0.2s;">
+                <span style="margin-right: 6px; color: #999; font-size: 14px; cursor: grab;">⠿</span>
                 <span style="background: #FF9800; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 8px;">${idx + 1}</span>
                 <span style="flex: 1; font-size: 13px;">${point.name}</span>
+                <button onclick="moveWaypoint('via', ${idx}, -1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" title="Move up">▲</button>
+                <button onclick="moveWaypoint('via', ${idx}, 1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" title="Move down">▼</button>
                 <button onclick="removeViaPoint(${idx})" style="background: none; border: none; color: #f44336; cursor: pointer; font-size: 16px;">✕</button>
             </div>
         `;
     });
 
-    // Stops
     stops.forEach((stop, idx) => {
         html += `
-            <div style="display: flex; align-items: center; padding: 8px; background: #FCE4EC; border-radius: 6px; margin-bottom: 6px;">
-                <span style="background: #E91E63; color: white; border-radius: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 8px;">🅿️</span>
+            <div class="waypoint-item" draggable="true" data-type="stop" data-index="${idx}"
+                 ondragstart="onWaypointDragStart(event)" ondragover="onWaypointDragOver(event)" ondrop="onWaypointDrop(event)"
+                 style="display: flex; align-items: center; padding: 8px; background: #FCE4EC; border-radius: 6px; margin-bottom: 6px; cursor: grab; transition: opacity 0.2s;">
+                <span style="margin-right: 6px; color: #999; font-size: 14px; cursor: grab;">⠿</span>
+                <span style="background: #E91E63; color: white; border-radius: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 8px;">${idx + 1}</span>
                 <span style="flex: 1; font-size: 13px;">${stop.name} (${stop.duration} min)</span>
+                <button onclick="moveWaypoint('stop', ${idx}, -1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" title="Move up">▲</button>
+                <button onclick="moveWaypoint('stop', ${idx}, 1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" title="Move down">▼</button>
                 <button onclick="removeStop(${idx})" style="background: none; border: none; color: #f44336; cursor: pointer; font-size: 16px;">✕</button>
             </div>
         `;
     });
 
-    // Total stop time
     const totalStopTime = stops.reduce((sum, s) => sum + s.duration, 0);
     if (totalStopTime > 0) {
-        html += `<div style="font-size: 12px; color: #666; margin-top: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px;">⏱️ Total stop time: <strong>${totalStopTime} min</strong></div>`;
+        html += `<div style="font-size: 12px; color: #666; margin-top: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px;">Total stop time: <strong>${totalStopTime} min</strong></div>`;
     }
 
     container.innerHTML = html;
+}
+
+let _draggedWaypoint = null;
+
+function onWaypointDragStart(e) {
+    _draggedWaypoint = { type: e.target.dataset.type, index: parseInt(e.target.dataset.index) };
+    e.target.style.opacity = '0.5';
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function onWaypointDragOver(e) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+}
+
+function onWaypointDrop(e) {
+    e.preventDefault();
+    const target = e.target.closest('.waypoint-item');
+    if (!target || !_draggedWaypoint) return;
+
+    const targetType = target.dataset.type;
+    const targetIdx = parseInt(target.dataset.index);
+
+    if (_draggedWaypoint.type === targetType) {
+        const arr = _draggedWaypoint.type === 'via' ? viaPoints : stops;
+        const markerArr = _draggedWaypoint.type === 'via' ? viaPointMarkers : stopMarkers;
+        const item = arr.splice(_draggedWaypoint.index, 1)[0];
+        const marker = markerArr.splice(_draggedWaypoint.index, 1)[0];
+        arr.splice(targetIdx, 0, item);
+        markerArr.splice(targetIdx, 0, marker);
+        updateWaypointsList();
+    }
+    _draggedWaypoint = null;
+    document.querySelectorAll('.waypoint-item').forEach(el => el.style.opacity = '1');
+}
+
+function moveWaypoint(type, index, direction) {
+    const arr = type === 'via' ? viaPoints : stops;
+    const markerArr = type === 'via' ? viaPointMarkers : stopMarkers;
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= arr.length) return;
+    [arr[index], arr[newIndex]] = [arr[newIndex], arr[index]];
+    [markerArr[index], markerArr[newIndex]] = [markerArr[newIndex], markerArr[index]];
+    updateWaypointsList();
+    if (type === 'via') refreshViaPointMarkers();
+}
+
+/**
+ * Display multi-drop route leg breakdown in the waypoints area
+ */
+function displayMultiDropLegs(data) {
+    const container = document.getElementById('waypointsList');
+    if (!container || !data.legs) return;
+
+    const distUnit = getDistanceUnit();
+    let html = '<div style="margin-top: 10px;">';
+    html += '<div style="font-weight: 600; font-size: 13px; margin-bottom: 8px; color: #333;">Route Itinerary' +
+            (data.optimized ? ' (Optimized)' : '') + '</div>';
+
+    data.legs.forEach((leg, idx) => {
+        const legDist = convertDistance(leg.distance_km || 0);
+        const legTime = Math.round(leg.duration_minutes || 0);
+        const eta = leg.eta ? new Date(leg.eta).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '';
+        const stopInfo = leg.stop;
+
+        const bgColor = idx % 2 === 0 ? '#f8f9fa' : '#ffffff';
+        const borderColor = stopInfo && !stopInfo.time_window_ok ? '#f44336' : '#4CAF50';
+
+        html += `<div style="padding: 10px; background: ${bgColor}; border-left: 3px solid ${borderColor}; border-radius: 4px; margin-bottom: 4px;">`;
+        html += `<div style="display: flex; justify-content: space-between; align-items: center;">`;
+        html += `<span style="font-weight: 500; font-size: 13px;">Leg ${idx + 1}</span>`;
+        html += `<span style="font-size: 12px; color: #666;">${legDist} ${distUnit} | ${legTime} min</span>`;
+        html += `</div>`;
+
+        if (stopInfo) {
+            html += `<div style="margin-top: 4px; font-size: 12px;">`;
+            html += `<span style="color: #E91E63; font-weight: 500;">${stopInfo.name}</span>`;
+            if (stopInfo.duration_minutes > 0) {
+                html += ` <span style="color: #999;">(${stopInfo.duration_minutes} min stop)</span>`;
+            }
+            if (eta) {
+                html += ` <span style="color: #2196F3;">ETA: ${eta}</span>`;
+            }
+            if (!stopInfo.time_window_ok) {
+                html += ' <span style="color: #f44336; font-weight: 600;">Outside time window</span>';
+            }
+            html += `</div>`;
+        } else if (eta) {
+            html += `<div style="margin-top: 4px; font-size: 12px; color: #2196F3;">ETA: ${eta}</div>`;
+        }
+        html += `</div>`;
+    });
+
+    html += `<div style="padding: 8px; background: #E8F5E9; border-radius: 4px; margin-top: 8px;">`;
+    html += `<div style="font-weight: 600; font-size: 13px; color: #2E7D32;">`;
+    html += `Total: ${convertDistance(data.total_distance_km)} ${distUnit} | `;
+    html += `${Math.round(data.total_duration_minutes)} min`;
+    if (data.total_stop_time_minutes > 0) {
+        html += ` (incl. ${data.total_stop_time_minutes} min stops)`;
+    }
+    html += `</div>`;
+    if (data.round_trip) {
+        html += `<div style="font-size: 11px; color: #666; margin-top: 2px;">Round trip - returns to start</div>`;
+    }
+    html += `</div>`;
+
+    html += '</div>';
+    container.innerHTML += html;
+
+    // Draw multi-drop leg geometries on map with different colors
+    if (data.all_geometry && data.all_geometry.length > 0) {
+        drawMultiDropLegsOnMap(data);
+    }
+}
+
+/**
+ * Draw multi-drop route legs on the map with distinct colors per leg
+ */
+function drawMultiDropLegsOnMap(data) {
+    if (!map || !data.all_geometry) return;
+
+    const legColors = ['#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0',
+                       '#00BCD4', '#FF5722', '#795548', '#607D8B', '#3F51B5'];
+
+    data.all_geometry.forEach((geom, idx) => {
+        if (!geom) return;
+        try {
+            const precision = (data.legs && data.legs[idx]) ?
+                              (data.legs[idx].geometry_precision || 6) : 6;
+            const decoded = decodePolyline(geom, precision);
+            if (decoded.length < 2) return;
+
+            const coords = decoded.map(p => [p[1], p[0]]);
+            const layerId = `multidrop-leg-${idx}`;
+            const sourceId = `multidrop-leg-source-${idx}`;
+
+            if (map.getLayer(layerId)) map.removeLayer(layerId);
+            if (map.getSource(sourceId)) map.removeSource(sourceId);
+
+            map.addSource(sourceId, {
+                type: 'geojson',
+                data: {
+                    type: 'Feature',
+                    geometry: { type: 'LineString', coordinates: coords }
+                }
+            });
+
+            map.addLayer({
+                id: layerId,
+                type: 'line',
+                source: sourceId,
+                layout: { 'line-join': 'round', 'line-cap': 'round' },
+                paint: {
+                    'line-color': legColors[idx % legColors.length],
+                    'line-width': 5,
+                    'line-opacity': 0.85
+                }
+            });
+        } catch (e) {
+            console.warn(`[MultiDrop] Failed to draw leg ${idx}:`, e);
+        }
+    });
+}
+
+/**
+ * Clear multi-drop leg layers from map
+ */
+function clearMultiDropLayers() {
+    if (!map) return;
+    for (let i = 0; i < 25; i++) {
+        const layerId = `multidrop-leg-${i}`;
+        const sourceId = `multidrop-leg-source-${i}`;
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getSource(sourceId)) map.removeSource(sourceId);
+    }
 }
 
 /**
@@ -2846,17 +3046,59 @@ function saveRoutePreferences() {
     const preferences = {
         avoidHighways: document.getElementById('avoidHighways').checked,
         preferScenic: document.getElementById('preferScenic').checked,
-        avoidTolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
-        avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
+        avoidTolls: localStorage.getItem('pref_tolls') !== 'false',
+        avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
         preferQuiet: document.getElementById('preferQuiet').checked,
         avoidUnpaved: document.getElementById('avoidUnpaved').checked,
-        routeOptimization: document.getElementById('routeOptimization').value,
-        maxDetour: parseInt(document.getElementById('maxDetour').value)
+        routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
+        maxDetour: parseInt(document.getElementById('maxDetour')?.value || 20)
     };
 
     localStorage.setItem('routePreferences', JSON.stringify(preferences));
     saveAllSettings();
     showStatus('Route preferences saved!', 'success');
+}
+
+function saveMultiDropPreferences() {
+    const optimizeEl = document.getElementById('optimizeStopOrder');
+    const roundTripEl = document.getElementById('roundTrip');
+    const trafficEl = document.getElementById('trafficAwareRouting');
+    const closuresEl = document.getElementById('avoidRoadClosures');
+    const incidentsEl = document.getElementById('avoidIncidents');
+    const departureEl = document.getElementById('departureTime');
+
+    if (optimizeEl) localStorage.setItem('pref_optimizeStopOrder', optimizeEl.checked ? 'true' : 'false');
+    if (roundTripEl) localStorage.setItem('pref_roundTrip', roundTripEl.checked ? 'true' : 'false');
+    if (trafficEl) localStorage.setItem('pref_trafficAwareRouting', trafficEl.checked ? 'true' : 'false');
+    if (closuresEl) localStorage.setItem('pref_avoidRoadClosures', closuresEl.checked ? 'true' : 'false');
+    if (incidentsEl) localStorage.setItem('pref_avoidIncidents', incidentsEl.checked ? 'true' : 'false');
+    if (departureEl) localStorage.setItem('pref_departureTime', departureEl.value || '');
+
+    saveAllSettings();
+    showStatus('Multi-drop preferences saved!', 'success');
+}
+
+function loadMultiDropPreferences() {
+    const optimizeEl = document.getElementById('optimizeStopOrder');
+    const roundTripEl = document.getElementById('roundTrip');
+    const trafficEl = document.getElementById('trafficAwareRouting');
+    const closuresEl = document.getElementById('avoidRoadClosures');
+    const incidentsEl = document.getElementById('avoidIncidents');
+    const departureEl = document.getElementById('departureTime');
+
+    if (optimizeEl) optimizeEl.checked = localStorage.getItem('pref_optimizeStopOrder') !== 'false';
+    if (roundTripEl) roundTripEl.checked = localStorage.getItem('pref_roundTrip') === 'true';
+    if (trafficEl) trafficEl.checked = localStorage.getItem('pref_trafficAwareRouting') !== 'false';
+    if (closuresEl) closuresEl.checked = localStorage.getItem('pref_avoidRoadClosures') !== 'false';
+    if (incidentsEl) incidentsEl.checked = localStorage.getItem('pref_avoidIncidents') !== 'false';
+    if (departureEl) departureEl.value = localStorage.getItem('pref_departureTime') || '';
+}
+
+function clearDepartureTime() {
+    const el = document.getElementById('departureTime');
+    if (el) el.value = '';
+    localStorage.removeItem('pref_departureTime');
+    showStatus('Departure time cleared - using current time', 'info');
 }
 
 /**
@@ -3378,6 +3620,16 @@ async function calculateRoute() {
     // Calculate total stop time for display
     const totalStopTime = stops.reduce((sum, s) => sum + (s.duration || 15), 0);
 
+    // Multi-drop settings from route preferences
+    const routePrefs = getRoutePreferences();
+    const optimizeOrder = localStorage.getItem('pref_optimizeStopOrder') !== 'false';
+    const roundTrip = localStorage.getItem('pref_roundTrip') === 'true';
+    const departureTime = localStorage.getItem('pref_departureTime') || null;
+
+    const avoidTollRoads = localStorage.getItem('pref_avoid_tollRoads') === 'true';
+    const avoidMotorways = localStorage.getItem('pref_avoid_motorways') === 'true';
+    const avoidFerries = localStorage.getItem('pref_avoid_ferries') === 'true';
+
     const requestBody = {
         start: geocodedStart,
         end: geocodedEnd,
@@ -3385,11 +3637,18 @@ async function calculateRoute() {
         vehicle_type: currentVehicleType,
         enable_hazard_avoidance: enableHazardAvoidance,
         via_points: viaPointsData,
-        stops: stopsData
+        stops: stopsData,
+        optimize_stop_order: optimizeOrder,
+        round_trip: roundTrip,
+        departure_time: departureTime,
+        avoid_tolls: avoidTollRoads,
+        avoid_motorways: avoidMotorways,
+        avoid_ferries: avoidFerries,
     };
 
     console.log('[calculateRoute] Making API request to /api/route with:', requestBody);
     console.log('[calculateRoute] Via-points:', viaPointsData.length, 'Stops:', stopsData.length, 'Total stop time:', totalStopTime, 'min');
+    console.log('[calculateRoute] Multi-drop: optimize=' + optimizeOrder + ' roundTrip=' + roundTrip);
 
     fetch('/api/route', {
         method: 'POST',
@@ -3602,14 +3861,19 @@ async function calculateRoute() {
                     if (data.via_points_count > 0 || data.stops_count > 0) {
                         statusMsg += ` 📍 ${data.via_points_count || 0} via-points, ${data.stops_count || 0} stops`;
                     }
+                    if (data.multi_drop && data.optimized) {
+                        statusMsg += ' (optimized order)';
+                    }
                     showStatus(statusMsg, 'success');
 
-                    // Store route data for navigation (including destination for rerouting)
-                    // FIXED: Store geocoded coordinates instead of raw input text
-                    // FIXED: Ensure duration_minutes is set at top level for ETA calculations
+                    // Display multi-drop leg breakdown if available
+                    if (data.multi_drop && data.legs && data.legs.length > 0) {
+                        displayMultiDropLegs(data);
+                    }
+
                     const durationMinutes = (data.routes && data.routes.length > 0)
                         ? data.routes[0].duration_minutes
-                        : (data.time ? parseInt(data.time) : 0);
+                        : (data.total_duration_minutes || (data.time ? parseInt(data.time) : 0));
 
                     window.lastCalculatedRoute = {
                         ...data,
@@ -10763,6 +11027,10 @@ function startGPSTracking() {
                 }
             }
             fetchSpeedLimitThrottled(lat, lon, speedMph, roadType, 0, valhallaSpeedLimitMph);
+
+            if (routeInProgress) {
+                fetchRoadNameThrottled(lat, lon);
+            }
         },
         (error) => {
             showStatus('GPS Error: ' + error.message, 'error');
@@ -11662,9 +11930,86 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 // Hazard announcement debouncing
-const hazardAnnouncementDebounce = {}; // Track last announcement time per hazard type
-const HAZARD_ANNOUNCEMENT_DEBOUNCE_MS = 30000; // Wait 30 seconds between announcements for same hazard type
-let HAZARD_WARNING_DISTANCE = 500; // meters
+const hazardAnnouncementDebounce = {};
+const HAZARD_ANNOUNCEMENT_DEBOUNCE_MS = 30000;
+let HAZARD_WARNING_DISTANCE = 500;
+
+// Camera alert types: 'off', 'voice', 'chime', 'both'
+let cameraAlertType = localStorage.getItem('pref_cameraAlertType') || 'voice';
+let cameraAlertDistance = parseInt(localStorage.getItem('pref_cameraAlertDistance') || '500');
+
+const CAMERA_HAZARD_TYPES = ['speed_camera', 'traffic_light_camera', 'average_speed_camera',
+                              'red_light_camera', 'mobile_camera'];
+
+/**
+ * Play a chime alert sound using Web Audio API
+ */
+function playCameraChime() {
+    try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(880, ctx.currentTime);
+        osc1.frequency.setValueAtTime(1100, ctx.currentTime + 0.1);
+
+        osc2.type = 'sine';
+        osc2.frequency.setValueAtTime(660, ctx.currentTime);
+        osc2.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+
+        gain.gain.setValueAtTime(0.3, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+
+        osc1.connect(gain);
+        osc2.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc1.start(ctx.currentTime);
+        osc2.start(ctx.currentTime);
+        osc1.stop(ctx.currentTime + 0.4);
+        osc2.stop(ctx.currentTime + 0.4);
+
+        setTimeout(() => {
+            const osc3 = ctx.createOscillator();
+            const gain2 = ctx.createGain();
+            osc3.type = 'sine';
+            osc3.frequency.setValueAtTime(1320, ctx.currentTime);
+            gain2.gain.setValueAtTime(0.25, ctx.currentTime);
+            gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
+            osc3.connect(gain2);
+            gain2.connect(ctx.destination);
+            osc3.start(ctx.currentTime);
+            osc3.stop(ctx.currentTime + 0.3);
+        }, 200);
+    } catch (e) {
+        console.warn('[Camera Alert] Chime failed:', e);
+    }
+}
+
+function saveCameraAlertPreferences() {
+    const typeEl = document.getElementById('cameraAlertType');
+    const distEl = document.getElementById('cameraAlertDistance');
+    if (typeEl) {
+        cameraAlertType = typeEl.value;
+        localStorage.setItem('pref_cameraAlertType', cameraAlertType);
+    }
+    if (distEl) {
+        cameraAlertDistance = parseInt(distEl.value);
+        localStorage.setItem('pref_cameraAlertDistance', distEl.value);
+    }
+    showStatus('Camera alert preferences saved', 'success');
+}
+
+function loadCameraAlertPreferences() {
+    const typeEl = document.getElementById('cameraAlertType');
+    const distEl = document.getElementById('cameraAlertDistance');
+    cameraAlertType = localStorage.getItem('pref_cameraAlertType') || 'voice';
+    cameraAlertDistance = parseInt(localStorage.getItem('pref_cameraAlertDistance') || '500');
+    if (typeEl) typeEl.value = cameraAlertType;
+    if (distEl) distEl.value = cameraAlertDistance.toString();
+}
 /**
  * checkNearbyHazards function
  * @function checkNearbyHazards
@@ -11680,24 +12025,32 @@ function checkNearbyHazards(lat, lon) {
             if (data.success && data.hazards && data.hazards.length > 0) {
                 data.hazards.forEach(hazard => {
                     const distance = calculateDistance(lat, lon, hazard.lat, hazard.lon);
-                    if (distance < HAZARD_WARNING_DISTANCE) {
-                        const message = `⚠️ ${hazard.type} ${distance.toFixed(0)}m ahead`;
+                    const isCamera = CAMERA_HAZARD_TYPES.includes(hazard.type);
+                    const alertDist = isCamera ? cameraAlertDistance : HAZARD_WARNING_DISTANCE;
+
+                    if (distance < alertDist) {
+                        const friendlyType = hazard.type.replace(/_/g, ' ');
+                        const distStr = distance.toFixed(0);
+                        const message = `${friendlyType} ${distStr}m ahead`;
                         sendNotification('Hazard Alert', message, 'warning');
 
-                        // ENHANCED: Announce via voice with debouncing per hazard type
-                        // FIX: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
-                        if (voiceAnnouncementsEnabled) {
-                            const now = Date.now();
-                            const lastAnnouncementTime = hazardAnnouncementDebounce[hazard.type] || 0;
-                            const timeSinceLastAnnouncement = now - lastAnnouncementTime;
+                        const now = Date.now();
+                        const debounceKey = `${hazard.type}_${hazard.lat}_${hazard.lon}`;
+                        const lastTime = hazardAnnouncementDebounce[debounceKey] || 0;
 
-                            if (timeSinceLastAnnouncement > HAZARD_ANNOUNCEMENT_DEBOUNCE_MS) {
-                                const voiceMessage = `${hazard.type.replace(/_/g, ' ')} ${distance.toFixed(0)} meters ahead`;
-                                console.log(`[Voice] Hazard announcement: ${voiceMessage} (type: ${hazard.type})`);
-                                speakMessage(voiceMessage);
-                                hazardAnnouncementDebounce[hazard.type] = now;
-                            } else {
-                                console.log(`[Voice] Hazard debounced: ${hazard.type} (${(HAZARD_ANNOUNCEMENT_DEBOUNCE_MS - timeSinceLastAnnouncement).toFixed(0)}ms remaining)`);
+                        if (now - lastTime > HAZARD_ANNOUNCEMENT_DEBOUNCE_MS) {
+                            hazardAnnouncementDebounce[debounceKey] = now;
+
+                            if (isCamera) {
+                                // Camera-specific alert with configurable type
+                                if (cameraAlertType === 'voice' || cameraAlertType === 'both') {
+                                    speakMessage(`${friendlyType}, ${distStr} meters ahead`, 'high');
+                                }
+                                if (cameraAlertType === 'chime' || cameraAlertType === 'both') {
+                                    playCameraChime();
+                                }
+                            } else if (voiceAnnouncementsEnabled) {
+                                speakMessage(`${friendlyType}, ${distStr} meters ahead`);
                             }
                         }
                     }
@@ -12021,7 +12374,12 @@ function saveAppState() {
                 gestureControl: localStorage.getItem('pref_gestureControl'),
                 batterySaving: localStorage.getItem('pref_batterySaving'),
                 mapTheme: localStorage.getItem('pref_mapTheme'),
-                mlPredictions: localStorage.getItem('pref_mlPredictions')
+                mlPredictions: localStorage.getItem('pref_mlPredictions'),
+                optimizeStopOrder: localStorage.getItem('pref_optimizeStopOrder'),
+                roundTrip: localStorage.getItem('pref_roundTrip'),
+                trafficAwareRouting: localStorage.getItem('pref_trafficAwareRouting'),
+                avoidRoadClosures: localStorage.getItem('pref_avoidRoadClosures'),
+                avoidIncidents: localStorage.getItem('pref_avoidIncidents')
             },
             timestamp: Date.now()
         };
@@ -13026,6 +13384,7 @@ function stopTurnByTurnNavigation() {
     currentRouteSteps = [];
     clearPersistedRoute();
     stopGPSTracking();
+    hideRoadNameBar();
 
     // ===== SCREEN WAKE LOCK: Release screen lock when navigation ends =====
     if (window.screenWakeLock) {
@@ -13344,6 +13703,300 @@ function selectPOI(poiLat, poiLon, poiName, userLat, userLon) {
     // Automatically calculate route
     calculateRoute();
 }
+
+// ===== ROUTE AVOIDANCE PREFERENCES =====
+
+function toggleAvoidancePreference(pref) {
+    const btn = document.getElementById('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1));
+    if (!btn) return;
+    const isActive = btn.classList.toggle('active');
+    if (isActive) {
+        btn.style.background = '#4CAF50';
+        btn.style.borderColor = '#4CAF50';
+    } else {
+        btn.style.background = '#ccc';
+        btn.style.borderColor = '#ccc';
+    }
+    localStorage.setItem('pref_avoid_' + pref, isActive ? 'true' : 'false');
+    console.log(`[Avoidance] ${pref} = ${isActive}`);
+}
+
+function loadAvoidancePreferences() {
+    const prefs = ['tollRoads', 'motorways', 'ferries'];
+    prefs.forEach(pref => {
+        const isActive = localStorage.getItem('pref_avoid_' + pref) === 'true';
+        const btn = document.getElementById('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1));
+        if (btn) {
+            if (isActive) {
+                btn.classList.add('active');
+                btn.style.background = '#4CAF50';
+                btn.style.borderColor = '#4CAF50';
+            } else {
+                btn.classList.remove('active');
+                btn.style.background = '#ccc';
+                btn.style.borderColor = '#ccc';
+            }
+        }
+    });
+}
+
+
+// ===== ROAD NAME DISPLAY (TomTom Reverse Geocoding) =====
+
+let lastRoadNameFetch = 0;
+const ROAD_NAME_FETCH_INTERVAL = 5000;
+let lastRoadNamePosition = null;
+const ROAD_NAME_DISTANCE_THRESHOLD = 50;
+let currentRoadDisplayName = '';
+
+function fetchRoadNameThrottled(lat, lon) {
+    const now = Date.now();
+    if (now - lastRoadNameFetch < ROAD_NAME_FETCH_INTERVAL) return;
+
+    let distanceMoved = 999;
+    if (lastRoadNamePosition) {
+        distanceMoved = calculateDistanceMeters(lat, lon, lastRoadNamePosition.lat, lastRoadNamePosition.lon);
+    }
+
+    if (distanceMoved < ROAD_NAME_DISTANCE_THRESHOLD && lastRoadNameFetch > 0) return;
+
+    lastRoadNameFetch = now;
+    lastRoadNamePosition = { lat, lon };
+
+    fetch(`/api/road-info?lat=${lat}&lon=${lon}`)
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.road_name) {
+                currentRoadDisplayName = data.road_name;
+                const bar = document.getElementById('roadNameBar');
+                const label = document.getElementById('currentRoadName');
+                if (bar && label) {
+                    label.textContent = data.road_name;
+                    bar.style.display = 'block';
+                }
+            }
+        })
+        .catch(err => {
+            console.debug('[RoadName] Fetch error:', err);
+        });
+}
+
+function hideRoadNameBar() {
+    const bar = document.getElementById('roadNameBar');
+    if (bar) bar.style.display = 'none';
+    currentRoadDisplayName = '';
+}
+
+
+// ===== SEARCH ALONG ROUTE =====
+
+function searchAlongRoute() {
+    const cats = document.getElementById('alongRouteCategories');
+    if (cats) {
+        cats.style.display = cats.style.display === 'none' ? 'block' : 'none';
+    }
+}
+
+function searchAlongRouteByType(type) {
+    if (!routePolyline || routePolyline.length < 2) {
+        showStatus('Calculate a route first', 'error');
+        return;
+    }
+
+    showStatus(`Searching for ${type} along route...`, 'info');
+
+    const routePoints = routePolyline.map(p => [p[0], p[1]]);
+
+    fetch('/api/poi-along-route', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            route_points: routePoints,
+            type: type,
+            radius: 1000,
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success && data.results && data.results.length > 0) {
+            displayPOIResults(data.results, type, currentLat || 51.5074, currentLon || -0.1278);
+            addPOIMarkersToMap(data.results, type);
+            showStatus(`Found ${data.results.length} ${type} along route`, 'success');
+        } else {
+            showStatus(`No ${type} found along route`, 'info');
+        }
+    })
+    .catch(err => {
+        console.error('[AlongRoute] Error:', err);
+        showStatus('Search failed', 'error');
+    });
+}
+
+function addPOIMarkersToMap(pois, type) {
+    clearPOIMarkers();
+
+    const icons = { fuel: '⛽', food: '🍔', parking: '🅿️', charging: '🔌', pharmacy: '💊', hospital: '🏥' };
+    const icon = icons[type] || '📍';
+
+    pois.forEach((poi, idx) => {
+        if (!window.map) return;
+
+        const el = document.createElement('div');
+        el.className = 'poi-marker';
+        el.style.cssText = 'font-size: 24px; cursor: pointer; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));';
+        el.textContent = icon;
+        el.title = poi.name;
+
+        const marker = new maplibregl.Marker({ element: el })
+            .setLngLat([poi.lon, poi.lat])
+            .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(
+                `<div style="padding: 8px;">
+                    <strong>${poi.name}</strong><br>
+                    <span style="font-size: 12px; color: #666;">${poi.address || ''}</span><br>
+                    <span style="font-size: 11px; color: #888;">${(poi.distance_m / 1000).toFixed(1)} km away</span>
+                    ${poi.phone ? `<br><a href="tel:${poi.phone}" style="font-size: 12px;">${poi.phone}</a>` : ''}
+                </div>`
+            ))
+            .addTo(window.map);
+
+        if (!window._poiMarkers) window._poiMarkers = [];
+        window._poiMarkers.push(marker);
+    });
+}
+
+function clearPOIMarkers() {
+    if (window._poiMarkers) {
+        window._poiMarkers.forEach(m => m.remove());
+        window._poiMarkers = [];
+    }
+}
+
+
+// ===== BEST TIME TO LEAVE =====
+
+function analysebestTimeToLeave() {
+    const startInput = document.getElementById('start');
+    const endInput = document.getElementById('end');
+
+    if (!startInput || !endInput || !startInput.value || !endInput.value) {
+        showStatus('Enter start and end locations first', 'error');
+        return;
+    }
+
+    const startVal = startInput.value.trim();
+    const endVal = endInput.value.trim();
+
+    let startLat, startLon, endLat, endLon;
+
+    const startDataLat = startInput.getAttribute('data-lat');
+    const startDataLon = startInput.getAttribute('data-lon');
+    const endDataLat = endInput.getAttribute('data-lat');
+    const endDataLon = endInput.getAttribute('data-lon');
+
+    if (startDataLat && startDataLon) {
+        startLat = parseFloat(startDataLat);
+        startLon = parseFloat(startDataLon);
+    } else {
+        const parts = startVal.split(',');
+        if (parts.length === 2) {
+            startLat = parseFloat(parts[0]);
+            startLon = parseFloat(parts[1]);
+        }
+    }
+
+    if (endDataLat && endDataLon) {
+        endLat = parseFloat(endDataLat);
+        endLon = parseFloat(endDataLon);
+    } else {
+        const parts = endVal.split(',');
+        if (parts.length === 2) {
+            endLat = parseFloat(parts[0]);
+            endLon = parseFloat(parts[1]);
+        }
+    }
+
+    if (!startLat || !endLat) {
+        showStatus('Geocode locations first (calculate a route)', 'error');
+        return;
+    }
+
+    showStatus('Analysing traffic patterns...', 'loading');
+
+    fetch('/api/best-time-to-leave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            start_lat: startLat, start_lon: startLon,
+            end_lat: endLat, end_lon: endLon,
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            const container = document.getElementById('bestTimeResult');
+            const slotsDiv = document.getElementById('bestTimeSlots');
+            if (!container || !slotsDiv) return;
+
+            const trafficColors = {
+                low: '#4CAF50', moderate: '#FF9800', heavy: '#FF5722', severe: '#D32F2F'
+            };
+
+            let html = '';
+            data.all_slots.sort((a, b) => {
+                const timeA = a.time.split(':').map(Number);
+                const timeB = b.time.split(':').map(Number);
+                return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
+            });
+
+            data.all_slots.forEach(slot => {
+                const color = trafficColors[slot.traffic_level] || '#999';
+                const isBest = data.best_time && slot.time === data.best_time.time;
+                const barWidth = Math.max(10, Math.min(100, slot.congestion_pct));
+                html += `
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px 8px; border-radius: 6px; ${isBest ? 'background: #e8f5e9; border: 1px solid #81C784;' : 'background: #fafafa;'}">
+                        <span style="font-size: 13px; font-weight: ${isBest ? '700' : '500'}; min-width: 45px;">${slot.is_now ? 'Now' : slot.time}</span>
+                        <div style="flex: 1; background: #eee; border-radius: 4px; height: 8px; overflow: hidden;">
+                            <div style="width: ${barWidth}%; height: 100%; background: ${color}; border-radius: 4px;"></div>
+                        </div>
+                        <span style="font-size: 11px; color: ${color}; font-weight: 600; min-width: 60px; text-align: right;">${slot.traffic_level}</span>
+                        ${isBest ? '<span style="font-size: 11px; color: #388E3C; font-weight: 700;">BEST</span>' : ''}
+                    </div>`;
+            });
+
+            html += `<div style="font-size: 11px; color: #888; margin-top: 8px;">Source: ${data.source} | Analysed at ${data.analysed_at}</div>`;
+
+            if (data.best_time && !data.best_time.is_now) {
+                html += `<button onclick="applyBestDepartureTime('${data.best_time.time}')" style="margin-top: 8px; width: 100%; padding: 8px; background: #4CAF50; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                    Set departure to ${data.best_time.time}
+                </button>`;
+            }
+
+            slotsDiv.innerHTML = html;
+            container.style.display = 'block';
+            showStatus('Traffic analysis complete', 'success');
+        } else {
+            showStatus(data.error || 'Analysis failed', 'error');
+        }
+    })
+    .catch(err => {
+        console.error('[BestTime] Error:', err);
+        showStatus('Analysis failed', 'error');
+    });
+}
+
+function applyBestDepartureTime(timeStr) {
+    const today = new Date();
+    const [hours, minutes] = timeStr.split(':');
+    today.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+    const dtInput = document.getElementById('departureTime');
+    if (dtInput) {
+        const formatted = today.toISOString().slice(0, 16);
+        dtInput.value = formatted;
+        localStorage.setItem('pref_departureTime', formatted);
+        showStatus(`Departure time set to ${timeStr}`, 'success');
+    }
+}
+
 
 // ===== NOTIFICATIONS SYSTEM FUNCTIONS =====
 /**
@@ -13668,6 +14321,8 @@ function updateTripInfo(distance, time, fuelCost, tollCost) {
         document.getElementById('fuelCost').textContent = fuelCost || '-';
         document.getElementById('tollCost').textContent = tollCost || '-';
         tripInfo.classList.add('show');
+        const alongRouteBtn = document.getElementById('alongRouteSearch');
+        if (alongRouteBtn) alongRouteBtn.style.display = 'block';
     }
 }
 
@@ -13676,6 +14331,10 @@ const originalClearForm = clearForm;
 clearForm = function () {
     originalClearForm();
     document.getElementById('tripInfo').classList.remove('show');
+    const alongRouteBtn = document.getElementById('alongRouteSearch');
+    if (alongRouteBtn) alongRouteBtn.style.display = 'none';
+    hideRoadNameBar();
+    clearPOIMarkers();
 };
 
 // Update calculateRoute to show trip info

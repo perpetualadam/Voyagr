@@ -472,6 +472,201 @@ def reset_speed_limit_metrics():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@navigation_bp.route('/road-info', methods=['GET'])
+def get_road_info():
+    """Get current road name and info using TomTom Reverse Geocoding."""
+    try:
+        lat = float(request.args.get('lat', 0))
+        lon = float(request.args.get('lon', 0))
+
+        if lat == 0 or lon == 0:
+            return jsonify({'success': False, 'error': 'Invalid coordinates'})
+
+        tomtom_api_key = os.getenv('TOMTOM_API_KEY', '')
+        if tomtom_api_key:
+            try:
+                url = f"https://api.tomtom.com/search/2/reverseGeocode/{lat},{lon}.json"
+                params = {
+                    'key': tomtom_api_key,
+                    'returnSpeedLimit': 'true',
+                    'returnRoadUse': 'true',
+                    'radius': 50,
+                }
+                resp = requests.get(url, params=params, timeout=3)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    addresses = data.get('addresses', [])
+                    if addresses:
+                        addr = addresses[0].get('address', {})
+                        road_name = addr.get('streetName', '') or addr.get('street', '')
+                        road_number = addr.get('streetNumber', '')
+                        municipality = addr.get('municipality', '')
+                        country_subdivision = addr.get('countrySubdivision', '')
+                        speed_limit = addr.get('speedLimit', '')
+
+                        display_name = road_name
+                        if road_number and road_name:
+                            display_name = f"{road_name}"
+                        if not display_name and municipality:
+                            display_name = municipality
+
+                        return jsonify({
+                            'success': True,
+                            'road_name': display_name,
+                            'road_number': road_number,
+                            'municipality': municipality,
+                            'region': country_subdivision,
+                            'speed_limit': speed_limit,
+                            'source': 'TomTom',
+                        })
+            except Exception as e:
+                logger.warning(f"[RoadInfo] TomTom reverse geocode failed: {e}")
+
+        try:
+            from voyagr.api.search import NOMINATIM_BASE_URL, NOMINATIM_LANGUAGE
+            url = f"{NOMINATIM_BASE_URL}/reverse"
+            params = {'lat': lat, 'lon': lon, 'format': 'json', 'addressdetails': '1', 'zoom': 18}
+            headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept-Language': NOMINATIM_LANGUAGE}
+            resp = requests.get(url, params=params, headers=headers, timeout=5)
+            if resp.status_code == 200:
+                data = resp.json()
+                addr = data.get('address', {})
+                road_name = addr.get('road', '') or addr.get('pedestrian', '') or addr.get('path', '')
+                municipality = addr.get('city', '') or addr.get('town', '') or addr.get('village', '')
+                return jsonify({
+                    'success': True,
+                    'road_name': road_name,
+                    'municipality': municipality,
+                    'source': 'Nominatim',
+                })
+        except Exception as e:
+            logger.warning(f"[RoadInfo] Nominatim fallback failed: {e}")
+
+        return jsonify({'success': False, 'error': 'No road info available'})
+    except Exception as e:
+        logger.error(f"[RoadInfo] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
+@navigation_bp.route('/best-time-to-leave', methods=['POST'])
+def best_time_to_leave():
+    """Analyse traffic patterns to suggest optimal departure times using TomTom Traffic Flow."""
+    try:
+        data = request.json
+        start_lat = float(data.get('start_lat', 0))
+        start_lon = float(data.get('start_lon', 0))
+        end_lat = float(data.get('end_lat', 0))
+        end_lon = float(data.get('end_lon', 0))
+
+        if start_lat == 0 or end_lat == 0:
+            return jsonify({'success': False, 'error': 'Start and end coordinates required'})
+
+        tomtom_api_key = os.getenv('TOMTOM_API_KEY', '')
+
+        from datetime import datetime as dt, timedelta
+        now = dt.now()
+        time_slots = []
+
+        mid_lat = (start_lat + end_lat) / 2
+        mid_lon = (start_lon + end_lon) / 2
+        sample_points = [
+            (start_lat, start_lon),
+            (mid_lat, mid_lon),
+            ((start_lat + mid_lat) / 2, (start_lon + mid_lon) / 2),
+        ]
+
+        candidate_times = []
+        for offset_min in range(0, 180, 30):
+            candidate = now + timedelta(minutes=offset_min)
+            candidate_times.append(candidate)
+
+        if tomtom_api_key:
+            for candidate in candidate_times:
+                total_congestion = 0
+                samples_ok = 0
+                for pt_lat, pt_lon in sample_points:
+                    try:
+                        url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/relative0/10/json"
+                        params = {
+                            'key': tomtom_api_key,
+                            'point': f"{pt_lat},{pt_lon}",
+                            'unit': 'KMPH',
+                        }
+                        resp = requests.get(url, params=params, timeout=3)
+                        if resp.status_code == 200:
+                            flow = resp.json().get('flowSegmentData', {})
+                            current_speed = flow.get('currentSpeed', 0)
+                            free_flow = flow.get('freeFlowSpeed', 1)
+                            if free_flow > 0:
+                                ratio = current_speed / free_flow
+                                congestion = max(0, (1 - ratio) * 100)
+                                total_congestion += congestion
+                                samples_ok += 1
+                    except Exception:
+                        pass
+
+                avg_congestion = total_congestion / max(samples_ok, 1)
+                if candidate == candidate_times[0]:
+                    congestion_label = 'now'
+                else:
+                    congestion_label = candidate.strftime('%H:%M')
+
+                if avg_congestion < 15:
+                    traffic_level = 'low'
+                elif avg_congestion < 35:
+                    traffic_level = 'moderate'
+                elif avg_congestion < 55:
+                    traffic_level = 'heavy'
+                else:
+                    traffic_level = 'severe'
+
+                time_slots.append({
+                    'time': candidate.strftime('%H:%M'),
+                    'label': congestion_label,
+                    'congestion_pct': round(avg_congestion, 1),
+                    'traffic_level': traffic_level,
+                    'is_now': candidate == candidate_times[0],
+                })
+        else:
+            for candidate in candidate_times:
+                hour = candidate.hour
+                if 7 <= hour <= 9 or 16 <= hour <= 19:
+                    congestion = 60
+                    traffic_level = 'heavy'
+                elif 10 <= hour <= 15:
+                    congestion = 25
+                    traffic_level = 'moderate'
+                elif 20 <= hour <= 22:
+                    congestion = 15
+                    traffic_level = 'low'
+                else:
+                    congestion = 5
+                    traffic_level = 'low'
+
+                time_slots.append({
+                    'time': candidate.strftime('%H:%M'),
+                    'label': 'now' if candidate == candidate_times[0] else candidate.strftime('%H:%M'),
+                    'congestion_pct': congestion,
+                    'traffic_level': traffic_level,
+                    'is_now': candidate == candidate_times[0],
+                })
+
+        time_slots.sort(key=lambda x: x['congestion_pct'])
+        best = time_slots[0] if time_slots else None
+        source = 'TomTom Traffic Flow' if tomtom_api_key else 'estimated (historical patterns)'
+
+        return jsonify({
+            'success': True,
+            'best_time': best,
+            'all_slots': time_slots,
+            'source': source,
+            'analysed_at': now.strftime('%H:%M'),
+        })
+    except Exception as e:
+        logger.error(f"[BestTime] Error: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @navigation_bp.route('/weather', methods=['GET'])
 def get_weather():
     """Get weather for a location."""
