@@ -25,7 +25,6 @@ services:
       JWT_EXP: ${JWT_EXPIRY:-3600}
     volumes:
       - supabase-db-data:/var/lib/postgresql/data
-      - ./volumes/db/init:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U supabase_admin -d supabase"]
       interval: 10s
