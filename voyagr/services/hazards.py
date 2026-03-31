@@ -281,6 +281,7 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
         all_hazards = []
         hazard_weights = {
             'camera': 50.0,
+            'traffic_light': 40.0,
             'police': 30.0,
             'accident': 20.0,
             'roadworks': 15.0,
@@ -358,6 +359,7 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
         hazard_weights = {
             'camera': 50.0,
             'road_closed': 45.0, 'police': 40.0, 'accident': 35.0,
+            'traffic_light': 38.0,
             'lane_closed': 32.0, 'roadworks': 30.0, 'jam': 25.0,
             'railway_crossing': 20.0, 'pothole': 15.0, 'debris': 15.0
         }
@@ -604,7 +606,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
                         break
 
                 if min_distance <= threshold:
-                    if hazard_type == 'camera':
+                    if hazard_type in ('camera', 'traffic_light'):
                         proximity_multiplier = 1.0 + (2.0 * (1.0 - min_distance / threshold))
                         distance_multiplier = max(1.0, proximity_multiplier)
                         applied_penalty = penalty * distance_multiplier
@@ -620,3 +622,62 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
         logger.error(f"Error scoring route: {e}")
         return 0, 0
 
+
+def fetch_traffic_lights_osm_bbox(
+    south: float,
+    north: float,
+    west: float,
+    east: float,
+    max_nodes: int = 120,
+) -> List[Dict[str, Any]]:
+    """Load traffic signal nodes from OpenStreetMap via Overpass (bounding box)."""
+    out: List[Dict[str, Any]] = []
+    try:
+        from overpass_helper import query_overpass, build_traffic_signals_query
+    except ImportError:
+        logger.warning("[TRAFFIC_LIGHTS] overpass_helper not available")
+        return out
+
+    if abs(north - south) > 0.35 or abs(east - west) > 0.35:
+        logger.info("[TRAFFIC_LIGHTS] BBox too large; skipping OSM traffic lights fetch")
+        return out
+
+    query = build_traffic_signals_query(south, west, north, east)
+    cache_key = f"tl_bbox_{south:.4f}_{west:.4f}_{north:.4f}_{east:.4f}"
+    result = query_overpass(query, cache_key=cache_key, cache_ttl=300)
+    if not result.get('success'):
+        logger.warning(f"[TRAFFIC_LIGHTS] Overpass failed: {result.get('error')}")
+        return out
+
+    for el in result.get('elements', [])[:max_nodes]:
+        lat = el.get('lat')
+        lon = el.get('lon')
+        if lat is None or lon is None:
+            continue
+        out.append({
+            'lat': float(lat),
+            'lon': float(lon),
+            'description': 'Traffic light (OSM)',
+            'severity': 'medium',
+        })
+    logger.info(f"[TRAFFIC_LIGHTS] Loaded {len(out)} OSM traffic signals in bbox")
+    return out
+
+
+def merge_graphhopper_custom_models(
+    camera_model: Optional[Dict[str, Any]],
+    dynamic_model: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """Merge camera-area priority rules with dynamic hazard polygons (e.g. traffic lights)."""
+    if not camera_model and not dynamic_model:
+        return None
+    if not camera_model:
+        return dynamic_model
+    if not dynamic_model:
+        return camera_model
+    merged: Dict[str, Any] = {
+        'priority': list(camera_model.get('priority', [])) + list(dynamic_model.get('priority', [])),
+    }
+    if dynamic_model.get('areas'):
+        merged['areas'] = dynamic_model['areas']
+    return merged

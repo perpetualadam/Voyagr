@@ -928,6 +928,7 @@ function saveAllSettings() {
             avoidTolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
             avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
             avoidCameras: localStorage.getItem('pref_cameras') !== 'false',  // Default: true (avoid cameras)
+            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
             variableSpeedAlerts: localStorage.getItem('pref_variableSpeedAlerts') === 'true'
         },
 
@@ -935,6 +936,7 @@ function saveAllSettings() {
         mapTheme: localStorage.getItem('mapTheme') || 'standard',
         smartZoomEnabled: smartZoomEnabled,
         showCamerasEnabled: showCamerasEnabled,
+        showOsmTrafficLightsEnabled: showOsmTrafficLightsEnabled,
         showTrafficEnabled: showTrafficEnabled,
 
         // Navigation automation
@@ -1018,6 +1020,9 @@ function loadAllSettings() {
                 localStorage.setItem('pref_tolls', settings.hazardPreferences.avoidTolls ? 'true' : 'false');
                 localStorage.setItem('pref_caz', settings.hazardPreferences.avoidCAZ ? 'true' : 'false');
                 localStorage.setItem('pref_cameras', settings.hazardPreferences.avoidCameras ? 'true' : 'false');
+                if (settings.hazardPreferences.avoidTrafficLights !== undefined) {
+                    localStorage.setItem('pref_trafficLightsAvoid', settings.hazardPreferences.avoidTrafficLights ? 'true' : 'false');
+                }
                 localStorage.setItem('pref_variableSpeedAlerts', settings.hazardPreferences.variableSpeedAlerts ? 'true' : 'false');
             }
 
@@ -1032,6 +1037,10 @@ function loadAllSettings() {
             if (settings.showCamerasEnabled !== undefined) {
                 showCamerasEnabled = settings.showCamerasEnabled;
                 localStorage.setItem('showCamerasEnabled', showCamerasEnabled ? 'true' : 'false');
+            }
+            if (settings.showOsmTrafficLightsEnabled !== undefined) {
+                showOsmTrafficLightsEnabled = settings.showOsmTrafficLightsEnabled;
+                localStorage.setItem('showOsmTrafficLightsOnMap', showOsmTrafficLightsEnabled ? 'true' : 'false');
             }
             if (settings.showTrafficEnabled !== undefined) {
                 showTrafficEnabled = settings.showTrafficEnabled;
@@ -3670,6 +3679,7 @@ async function calculateRoute() {
     // Check if hazard avoidance is enabled (any hazard type selected)
     const enableHazardAvoidance =
         localStorage.getItem('pref_cameras') !== 'false' ||  // Default: true
+        localStorage.getItem('pref_trafficLightsAvoid') === 'true' ||
         localStorage.getItem('pref_police') === 'true' ||
         localStorage.getItem('pref_roadworks') === 'true' ||
         localStorage.getItem('pref_accidents') === 'true';
@@ -3710,6 +3720,8 @@ async function calculateRoute() {
         routing_mode: currentRoutingMode,
         vehicle_type: currentVehicleType,
         enable_hazard_avoidance: enableHazardAvoidance,
+        avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
+        avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
         via_points: viaPointsData,
         stops: stopsData,
         optimize_stop_order: optimizeOrder,
@@ -4176,6 +4188,7 @@ function displayHazardMarkers(hazards) {
 
     const hazardConfig = {
         'camera': { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Camera' },
+        'traffic_light': { emoji: '🚥', color: '#2e7d32', bgColor: '#e8f5e9', label: 'Traffic light' },
         'police': { emoji: '🚔', color: '#1976d2', bgColor: '#e3f2fd', label: 'Police' },
         'roadworks': { emoji: '🚧', color: '#ffc107', bgColor: '#fff8e1', label: 'Roadworks' },
         'accident': { emoji: '⚠️', color: '#f44336', bgColor: '#ffebee', label: 'Accident' },
@@ -5441,9 +5454,10 @@ async function manualTrafficUpdate() {
  */
 function buildRouteRequest(startLat, startLon, destination) {
     const enableHazardAvoidance =
-        localStorage.getItem('pref_cameras') !== 'false' ||  // Default: true
-        localStorage.getItem('pref_tolls') !== 'false' ||    // Default: true
-        localStorage.getItem('pref_caz') !== 'false';        // Default: true
+        localStorage.getItem('pref_cameras') !== 'false' ||
+        localStorage.getItem('pref_trafficLightsAvoid') === 'true' ||
+        localStorage.getItem('pref_tolls') !== 'false' ||
+        localStorage.getItem('pref_caz') !== 'false';
 
     return {
         start: `${startLat},${startLon}`,
@@ -5457,9 +5471,10 @@ function buildRouteRequest(startLat, startLon, destination) {
         include_tolls: localStorage.getItem('includeTolls') !== 'false',
         include_caz: localStorage.getItem('includeCAZ') !== 'false',
         enable_hazard_avoidance: enableHazardAvoidance,
-        avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',  // Default: true
-        avoid_tolls: localStorage.getItem('pref_tolls') !== 'false',      // Default: true
-        avoid_caz: localStorage.getItem('pref_caz') !== 'false'           // Default: true
+        avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
+        avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
+        avoid_tolls: localStorage.getItem('pref_tolls') !== 'false',
+        avoid_caz: localStorage.getItem('pref_caz') !== 'false'
     };
 }
 
@@ -5676,6 +5691,9 @@ window.cameraMarkers = [];
 let showCamerasEnabled = localStorage.getItem('showCamerasEnabled') !== 'false'; // Default: enabled
 let cameraFetchTimeout = null;
 
+window.osmTrafficLightMarkers = [];
+let showOsmTrafficLightsEnabled = localStorage.getItem('showOsmTrafficLightsOnMap') === 'true';
+
 /**
  * Toggle show cameras on map
  */
@@ -5805,6 +5823,72 @@ function displayCameraMarkers(cameras) {
     console.log(`[Cameras] Displayed ${window.cameraMarkers.length} camera markers`);
 }
 
+function toggleShowOsmTrafficLights() {
+    showOsmTrafficLightsEnabled = !showOsmTrafficLightsEnabled;
+    localStorage.setItem('showOsmTrafficLightsOnMap', showOsmTrafficLightsEnabled ? 'true' : 'false');
+    const toggle = document.getElementById('showOsmTrafficLightsToggle');
+    if (toggle) toggle.classList.toggle('active', showOsmTrafficLightsEnabled);
+    if (showOsmTrafficLightsEnabled) {
+        fetchAndDisplayOsmTrafficLights();
+    } else {
+        clearOsmTrafficLightMarkers();
+    }
+    if (typeof saveAllSettings === 'function') saveAllSettings();
+}
+
+function clearOsmTrafficLightMarkers() {
+    if (window.osmTrafficLightMarkers) {
+        window.osmTrafficLightMarkers.forEach(m => {
+            if (m && typeof m.remove === 'function') m.remove();
+        });
+    }
+    window.osmTrafficLightMarkers = [];
+}
+
+function fetchAndDisplayOsmTrafficLights() {
+    if (!showOsmTrafficLightsEnabled || !map) return;
+    const zoom = map.getZoom();
+    if (zoom < 10) {
+        clearOsmTrafficLightMarkers();
+        return;
+    }
+    const bounds = map.getBounds();
+    const north = bounds.getNorth();
+    const south = bounds.getSouth();
+    const east = bounds.getEast();
+    const west = bounds.getWest();
+    fetch(`/api/traffic-lights/area?north=${north}&south=${south}&east=${east}&west=${west}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.traffic_lights) {
+                displayOsmTrafficLightMarkers(data.traffic_lights);
+            }
+        })
+        .catch(err => console.error('[OSM Traffic Lights]', err));
+}
+
+function displayOsmTrafficLightMarkers(lights) {
+    if (!lights || lights.length === 0) {
+        clearOsmTrafficLightMarkers();
+        return;
+    }
+    clearOsmTrafficLightMarkers();
+    const seen = new Set();
+    lights.forEach(light => {
+        const key = `${Number(light.lat).toFixed(5)},${Number(light.lon).toFixed(5)}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const marker = MapLibreHelpers.createMarker(light.lat, light.lon, {
+            className: 'osm-traffic-light-marker',
+            html: `<div style="background:#e8f5e9;border:2px solid #2e7d32;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;">🚥</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14],
+            popup: '<div style="text-align:center;font-size:12px;">Traffic light (OpenStreetMap)</div>'
+        }).addTo(map);
+        window.osmTrafficLightMarkers.push(marker);
+    });
+}
+
 /**
  * Initialize camera layer - called after map is ready
  */
@@ -5825,6 +5909,10 @@ function initializeCameraLayer() {
     if (toggle) {
         toggle.classList.toggle('active', showCamerasEnabled);
     }
+    const osmTlToggle = document.getElementById('showOsmTrafficLightsToggle');
+    if (osmTlToggle) {
+        osmTlToggle.classList.toggle('active', showOsmTrafficLightsEnabled);
+    }
 
     // Fetch cameras on map move (with debounce)
     map.on('moveend', () => {
@@ -5833,12 +5921,16 @@ function initializeCameraLayer() {
         }
         cameraFetchTimeout = setTimeout(() => {
             fetchAndDisplayCameras();
+            fetchAndDisplayOsmTrafficLights();
         }, 500); // 500ms debounce
     });
 
     // Initial fetch if enabled
     if (showCamerasEnabled) {
         fetchAndDisplayCameras();
+    }
+    if (showOsmTrafficLightsEnabled) {
+        fetchAndDisplayOsmTrafficLights();
     }
 
     console.log('[Cameras] Camera layer initialized');
@@ -6792,7 +6884,8 @@ async function selectParking(parking, destinationCoords) {
 
         // Calculate driving route to parking
         const enableHazardAvoidanceParking =
-            localStorage.getItem('pref_cameras') !== 'false' ||  // Default: true
+            localStorage.getItem('pref_cameras') !== 'false' ||
+            localStorage.getItem('pref_trafficLightsAvoid') === 'true' ||
             localStorage.getItem('pref_police') === 'true' ||
             localStorage.getItem('pref_roadworks') === 'true' ||
             localStorage.getItem('pref_accidents') === 'true';
@@ -6807,7 +6900,9 @@ async function selectParking(parking, destinationCoords) {
                 vehicle_type: currentVehicleType,
                 include_tolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
                 avoid_caz: localStorage.getItem('pref_caz') !== 'false',        // Default: true
-                enable_hazard_avoidance: enableHazardAvoidanceParking
+                enable_hazard_avoidance: enableHazardAvoidanceParking,
+                avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
+                avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true'
             })
         });
 
@@ -6819,7 +6914,8 @@ async function selectParking(parking, destinationCoords) {
 
         // Calculate walking route from parking to destination
         const enableHazardAvoidanceWalking =
-            localStorage.getItem('pref_cameras') !== 'false' ||  // Default: true
+            localStorage.getItem('pref_cameras') !== 'false' ||
+            localStorage.getItem('pref_trafficLightsAvoid') === 'true' ||
             localStorage.getItem('pref_police') === 'true' ||
             localStorage.getItem('pref_roadworks') === 'true' ||
             localStorage.getItem('pref_accidents') === 'true';
@@ -6832,7 +6928,9 @@ async function selectParking(parking, destinationCoords) {
                 end: `${destinationCoords.lat},${destinationCoords.lon}`,
                 routing_mode: 'pedestrian',
                 vehicle_type: 'pedestrian',
-                enable_hazard_avoidance: enableHazardAvoidanceWalking
+                enable_hazard_avoidance: enableHazardAvoidanceWalking,
+                avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
+                avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true'
             })
         });
 
@@ -11914,6 +12012,7 @@ function openHazardSettings() {
 function getHazardIcon(type) {
     const icons = {
         'camera': '📷',
+        'traffic_light': '🚥',
         'police': '👮',
         'accident': '🚗💥',
         'roadworks': '🚧',
@@ -11988,7 +12087,7 @@ let HAZARD_WARNING_DISTANCE = 500;
 let cameraAlertType = localStorage.getItem('pref_cameraAlertType') || 'voice';
 let cameraAlertDistance = parseInt(localStorage.getItem('pref_cameraAlertDistance') || '500');
 
-const CAMERA_HAZARD_TYPES = ['camera'];
+const CAMERA_HAZARD_TYPES = ['camera', 'traffic_light'];
 
 /**
  * Play a chime alert sound using Web Audio API
@@ -14222,6 +14321,7 @@ function togglePreference(pref) {
         'tolls': 'avoidTolls',
         'caz': 'avoidCAZ',
         'cameras': 'avoidCameras',
+        'trafficLightsAvoid': 'avoidTrafficLights',
         'variableSpeedAlerts': 'variableSpeedAlerts'
     };
 
@@ -14261,6 +14361,9 @@ function togglePreference(pref) {
     } else if (pref === 'cameras') {
         console.log('[Settings] Optimised routing:', isActive ? 'enabled' : 'disabled');
         showStatus(`⚡ Optimised routing ${isActive ? 'enabled' : 'disabled'}`, 'info');
+    } else if (pref === 'trafficLightsAvoid') {
+        console.log('[Settings] Avoid traffic lights:', isActive ? 'enabled' : 'disabled');
+        showStatus(`🚦 Traffic light avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
     }
 
     // Save all settings to persistent storage
@@ -14277,13 +14380,14 @@ function loadPreferences() {
         'tolls': 'avoidTolls',
         'caz': 'avoidCAZ',
         'cameras': 'avoidCameras',
+        'trafficLightsAvoid': 'avoidTrafficLights',
         'variableSpeedAlerts': 'variableSpeedAlerts'
     };
 
     // Preferences that default to TRUE (enabled) when not set
     const defaultEnabledPrefs = ['tolls', 'caz', 'cameras'];
 
-    const prefs = ['tolls', 'caz', 'cameras', 'variableSpeedAlerts'];
+    const prefs = ['tolls', 'caz', 'cameras', 'trafficLightsAvoid', 'variableSpeedAlerts'];
     prefs.forEach(pref => {
         const saved = localStorage.getItem('pref_' + pref);
         const buttonId = buttonIdMap[pref];

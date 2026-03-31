@@ -373,6 +373,7 @@ def init_db() -> None:
     # Insert default hazard preferences if not exists
     hazard_preferences = [
         ('camera', 800, 1, 100),
+        ('traffic_light', 400, 1, 80),
         ('police', 180, 1, 200),
         ('roadworks', 300, 1, 500),
         ('accident', 600, 1, 500),

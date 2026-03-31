@@ -308,11 +308,12 @@ def build_multidrop_route(
     avoid_tolls: bool = False,
     avoid_motorways: bool = False,
     avoid_ferries: bool = False,
+    traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     Build a complete multi-drop route with per-leg geometry, instructions, and costs.
     When use_graphhopper_avoidance is True, each leg tries GraphHopper with camera
-    avoidance before falling back to Valhalla.
+    avoidance (and optional OSM traffic lights) before falling back to Valhalla.
 
     Returns full route data with per-leg breakdown suitable for frontend rendering.
     """
@@ -364,6 +365,7 @@ def build_multidrop_route(
             avoid_tolls=avoid_tolls,
             avoid_motorways=avoid_motorways,
             avoid_ferries=avoid_ferries,
+            traffic_light_hazards=traffic_light_hazards,
         )
 
         stop_info = None
@@ -446,10 +448,11 @@ def _route_leg(
     avoid_tolls: bool = False,
     avoid_motorways: bool = False,
     avoid_ferries: bool = False,
+    traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Route a single leg. Tries GraphHopper (if enabled), then Valhalla, then OSRM."""
     if use_graphhopper and costing == "auto" and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
-        gh_result = _graphhopper_leg(from_loc, to_loc, route_bbox)
+        gh_result = _graphhopper_leg(from_loc, to_loc, route_bbox, traffic_light_hazards=traffic_light_hazards)
         if gh_result:
             return gh_result
 
@@ -477,10 +480,15 @@ def _graphhopper_leg(
     from_loc: Dict[str, float],
     to_loc: Dict[str, float],
     route_bbox: Optional[Dict[str, float]] = None,
+    traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Route a single leg via GraphHopper with camera avoidance custom model."""
     try:
-        from voyagr.services.hazards import build_graphhopper_camera_avoidance_model
+        from voyagr.services.hazards import (
+            build_graphhopper_camera_avoidance_model,
+            build_graphhopper_custom_model,
+            merge_graphhopper_custom_models,
+        )
 
         url = f"{GRAPHHOPPER_URL}/route"
         payload: Dict[str, Any] = {
@@ -493,7 +501,15 @@ def _graphhopper_leg(
             "elevation": False,
         }
 
-        custom_model = build_graphhopper_camera_avoidance_model(route_bbox)
+        cam_model = build_graphhopper_camera_avoidance_model(route_bbox) or None
+        tl_model = None
+        if traffic_light_hazards:
+            tl_model = build_graphhopper_custom_model(
+                {'traffic_light': traffic_light_hazards},
+                route_bbox=route_bbox,
+                max_hazards=15,
+            )
+        custom_model = merge_graphhopper_custom_models(cam_model, tl_model if tl_model else None)
         if custom_model:
             payload["custom_model"] = custom_model
 

@@ -30,6 +30,8 @@ from voyagr.services.hazards import (
     build_graphhopper_camera_avoidance_model,
     get_hazards_on_route,
     score_route_by_hazards,
+    fetch_traffic_lights_osm_bbox,
+    merge_graphhopper_custom_models,
     CAMERA_AREAS_DATA,
     load_camera_areas,
 )
@@ -66,6 +68,8 @@ __all__ = [
     'build_graphhopper_camera_avoidance_model',
     'get_hazards_on_route',
     'score_route_by_hazards',
+    'fetch_traffic_lights_osm_bbox',
+    'merge_graphhopper_custom_models',
     'CAMERA_AREAS_DATA',
     'load_camera_areas',
     # Routing module

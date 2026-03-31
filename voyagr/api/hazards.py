@@ -188,6 +188,27 @@ def get_nearby_hazards():
             return_db_connection(conn)
 
 
+@hazards_bp.route('/traffic-lights/area', methods=['GET'])
+def get_traffic_lights_in_area():
+    """Traffic signals in map viewport (OSM via Overpass), for map layer."""
+    try:
+        north = float(request.args.get('north', 90))
+        south = float(request.args.get('south', -90))
+        east = float(request.args.get('east', 180))
+        west = float(request.args.get('west', -180))
+
+        if abs(north - south) > 0.35 or abs(east - west) > 0.35:
+            return jsonify({'success': True, 'traffic_lights': [], 'message': 'Zoom in to see traffic lights'})
+
+        from voyagr.services.hazards import fetch_traffic_lights_osm_bbox
+        lights = fetch_traffic_lights_osm_bbox(south, north, west, east, max_nodes=200)
+        out = [{'lat': x['lat'], 'lon': x['lon'], 'type': 'traffic_light', 'description': x.get('description', '')} for x in lights]
+        return jsonify({'success': True, 'traffic_lights': out, 'count': len(out)})
+    except Exception as e:
+        logger.error(f"Error fetching traffic lights in area: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @hazards_bp.route('/cameras/area', methods=['GET'])
 def get_cameras_in_area():
     """Get all cameras within a map viewport bounding box."""
