@@ -929,6 +929,7 @@ function saveAllSettings() {
             avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
             avoidCameras: localStorage.getItem('pref_cameras') !== 'false',  // Default: true (avoid cameras)
             avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
+            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') === 'true',
             variableSpeedAlerts: localStorage.getItem('pref_variableSpeedAlerts') === 'true'
         },
 
@@ -937,6 +938,7 @@ function saveAllSettings() {
         smartZoomEnabled: smartZoomEnabled,
         showCamerasEnabled: showCamerasEnabled,
         showOsmTrafficLightsEnabled: showOsmTrafficLightsEnabled,
+        showOsmRailwayCrossingsEnabled: showOsmRailwayCrossingsEnabled,
         showTrafficEnabled: showTrafficEnabled,
 
         // Navigation automation
@@ -1023,6 +1025,9 @@ function loadAllSettings() {
                 if (settings.hazardPreferences.avoidTrafficLights !== undefined) {
                     localStorage.setItem('pref_trafficLightsAvoid', settings.hazardPreferences.avoidTrafficLights ? 'true' : 'false');
                 }
+                if (settings.hazardPreferences.avoidRailwayCrossings !== undefined) {
+                    localStorage.setItem('pref_railwayCrossingsAvoid', settings.hazardPreferences.avoidRailwayCrossings ? 'true' : 'false');
+                }
                 localStorage.setItem('pref_variableSpeedAlerts', settings.hazardPreferences.variableSpeedAlerts ? 'true' : 'false');
             }
 
@@ -1041,6 +1046,10 @@ function loadAllSettings() {
             if (settings.showOsmTrafficLightsEnabled !== undefined) {
                 showOsmTrafficLightsEnabled = settings.showOsmTrafficLightsEnabled;
                 localStorage.setItem('showOsmTrafficLightsOnMap', showOsmTrafficLightsEnabled ? 'true' : 'false');
+            }
+            if (settings.showOsmRailwayCrossingsEnabled !== undefined) {
+                showOsmRailwayCrossingsEnabled = settings.showOsmRailwayCrossingsEnabled;
+                localStorage.setItem('showOsmRailwayCrossingsOnMap', showOsmRailwayCrossingsEnabled ? 'true' : 'false');
             }
             if (settings.showTrafficEnabled !== undefined) {
                 showTrafficEnabled = settings.showTrafficEnabled;
@@ -3680,6 +3689,7 @@ async function calculateRoute() {
     const enableHazardAvoidance =
         localStorage.getItem('pref_cameras') !== 'false' ||  // Default: true
         localStorage.getItem('pref_trafficLightsAvoid') === 'true' ||
+        localStorage.getItem('pref_railwayCrossingsAvoid') === 'true' ||
         localStorage.getItem('pref_police') === 'true' ||
         localStorage.getItem('pref_roadworks') === 'true' ||
         localStorage.getItem('pref_accidents') === 'true';
@@ -3722,6 +3732,7 @@ async function calculateRoute() {
         enable_hazard_avoidance: enableHazardAvoidance,
         avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
         avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
+        avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') === 'true',
         via_points: viaPointsData,
         stops: stopsData,
         optimize_stop_order: optimizeOrder,
@@ -5456,6 +5467,7 @@ function buildRouteRequest(startLat, startLon, destination) {
     const enableHazardAvoidance =
         localStorage.getItem('pref_cameras') !== 'false' ||
         localStorage.getItem('pref_trafficLightsAvoid') === 'true' ||
+        localStorage.getItem('pref_railwayCrossingsAvoid') === 'true' ||
         localStorage.getItem('pref_tolls') !== 'false' ||
         localStorage.getItem('pref_caz') !== 'false';
 
@@ -5473,6 +5485,7 @@ function buildRouteRequest(startLat, startLon, destination) {
         enable_hazard_avoidance: enableHazardAvoidance,
         avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
         avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
+        avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') === 'true',
         avoid_tolls: localStorage.getItem('pref_tolls') !== 'false',
         avoid_caz: localStorage.getItem('pref_caz') !== 'false'
     };
@@ -5694,6 +5707,12 @@ let cameraFetchTimeout = null;
 window.osmTrafficLightMarkers = [];
 let showOsmTrafficLightsEnabled = localStorage.getItem('showOsmTrafficLightsOnMap') === 'true';
 
+window.osmRailwayCrossingMarkers = [];
+let showOsmRailwayCrossingsEnabled = localStorage.getItem('showOsmRailwayCrossingsOnMap') === 'true';
+
+/** SVG icon: level crossing (rails + warning cross), matches hazard railway_crossing colours */
+const RAILWAY_CROSSING_MAP_ICON_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="4" fill="#efebe9" stroke="#795548" stroke-width="2"/><path stroke="#424242" stroke-width="1.8" stroke-linecap="round" d="M5 9h14M5 15h14"/><path stroke="#c62828" stroke-width="2.2" stroke-linecap="round" d="M8 7l8 10M16 7l-8 10"/></svg>`;
+
 /**
  * Toggle show cameras on map
  */
@@ -5836,6 +5855,19 @@ function toggleShowOsmTrafficLights() {
     if (typeof saveAllSettings === 'function') saveAllSettings();
 }
 
+function toggleShowOsmRailwayCrossings() {
+    showOsmRailwayCrossingsEnabled = !showOsmRailwayCrossingsEnabled;
+    localStorage.setItem('showOsmRailwayCrossingsOnMap', showOsmRailwayCrossingsEnabled ? 'true' : 'false');
+    const toggle = document.getElementById('showOsmRailwayCrossingsToggle');
+    if (toggle) toggle.classList.toggle('active', showOsmRailwayCrossingsEnabled);
+    if (showOsmRailwayCrossingsEnabled) {
+        fetchAndDisplayOsmRailwayCrossings();
+    } else {
+        clearOsmRailwayCrossingMarkers();
+    }
+    if (typeof saveAllSettings === 'function') saveAllSettings();
+}
+
 function clearOsmTrafficLightMarkers() {
     if (window.osmTrafficLightMarkers) {
         window.osmTrafficLightMarkers.forEach(m => {
@@ -5843,6 +5875,15 @@ function clearOsmTrafficLightMarkers() {
         });
     }
     window.osmTrafficLightMarkers = [];
+}
+
+function clearOsmRailwayCrossingMarkers() {
+    if (window.osmRailwayCrossingMarkers) {
+        window.osmRailwayCrossingMarkers.forEach(m => {
+            if (m && typeof m.remove === 'function') m.remove();
+        });
+    }
+    window.osmRailwayCrossingMarkers = [];
 }
 
 function fetchAndDisplayOsmTrafficLights() {
@@ -5867,6 +5908,28 @@ function fetchAndDisplayOsmTrafficLights() {
         .catch(err => console.error('[OSM Traffic Lights]', err));
 }
 
+function fetchAndDisplayOsmRailwayCrossings() {
+    if (!showOsmRailwayCrossingsEnabled || !map) return;
+    const zoom = map.getZoom();
+    if (zoom < 10) {
+        clearOsmRailwayCrossingMarkers();
+        return;
+    }
+    const bounds = map.getBounds();
+    const north = bounds.getNorth();
+    const south = bounds.getSouth();
+    const east = bounds.getEast();
+    const west = bounds.getWest();
+    fetch(`/api/railway-crossings/area?north=${north}&south=${south}&east=${east}&west=${west}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success && data.railway_crossings) {
+                displayOsmRailwayCrossingMarkers(data.railway_crossings);
+            }
+        })
+        .catch(err => console.error('[OSM Railway Crossings]', err));
+}
+
 function displayOsmTrafficLightMarkers(lights) {
     if (!lights || lights.length === 0) {
         clearOsmTrafficLightMarkers();
@@ -5886,6 +5949,34 @@ function displayOsmTrafficLightMarkers(lights) {
             popup: '<div style="text-align:center;font-size:12px;">Traffic light (OpenStreetMap)</div>'
         }).addTo(map);
         window.osmTrafficLightMarkers.push(marker);
+    });
+}
+
+function displayOsmRailwayCrossingMarkers(crossings) {
+    if (!crossings || crossings.length === 0) {
+        clearOsmRailwayCrossingMarkers();
+        return;
+    }
+    clearOsmRailwayCrossingMarkers();
+    const seen = new Set();
+    const popupHtml = `
+        <div style="text-align:center;font-size:12px;max-width:220px;">
+            <div style="margin-bottom:6px;display:flex;justify-content:center;">${RAILWAY_CROSSING_MAP_ICON_SVG}</div>
+            <strong>Level crossing</strong>
+            <div style="color:#666;margin-top:4px;">OpenStreetMap · <code style="font-size:10px;">railway=level_crossing</code></div>
+        </div>`;
+    crossings.forEach(cx => {
+        const key = `${Number(cx.lat).toFixed(5)},${Number(cx.lon).toFixed(5)}`;
+        if (seen.has(key)) return;
+        seen.add(key);
+        const marker = MapLibreHelpers.createMarker(cx.lat, cx.lon, {
+            className: 'osm-railway-crossing-marker',
+            html: `<div style="background:#efebe9;border:2px solid #795548;border-radius:6px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.35);">${RAILWAY_CROSSING_MAP_ICON_SVG}</div>`,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popup: popupHtml
+        }).addTo(map);
+        window.osmRailwayCrossingMarkers.push(marker);
     });
 }
 
@@ -5913,6 +6004,10 @@ function initializeCameraLayer() {
     if (osmTlToggle) {
         osmTlToggle.classList.toggle('active', showOsmTrafficLightsEnabled);
     }
+    const osmRxToggle = document.getElementById('showOsmRailwayCrossingsToggle');
+    if (osmRxToggle) {
+        osmRxToggle.classList.toggle('active', showOsmRailwayCrossingsEnabled);
+    }
 
     // Fetch cameras on map move (with debounce)
     map.on('moveend', () => {
@@ -5922,6 +6017,7 @@ function initializeCameraLayer() {
         cameraFetchTimeout = setTimeout(() => {
             fetchAndDisplayCameras();
             fetchAndDisplayOsmTrafficLights();
+            fetchAndDisplayOsmRailwayCrossings();
         }, 500); // 500ms debounce
     });
 
@@ -5931,6 +6027,9 @@ function initializeCameraLayer() {
     }
     if (showOsmTrafficLightsEnabled) {
         fetchAndDisplayOsmTrafficLights();
+    }
+    if (showOsmRailwayCrossingsEnabled) {
+        fetchAndDisplayOsmRailwayCrossings();
     }
 
     console.log('[Cameras] Camera layer initialized');
@@ -6886,6 +6985,7 @@ async function selectParking(parking, destinationCoords) {
         const enableHazardAvoidanceParking =
             localStorage.getItem('pref_cameras') !== 'false' ||
             localStorage.getItem('pref_trafficLightsAvoid') === 'true' ||
+            localStorage.getItem('pref_railwayCrossingsAvoid') === 'true' ||
             localStorage.getItem('pref_police') === 'true' ||
             localStorage.getItem('pref_roadworks') === 'true' ||
             localStorage.getItem('pref_accidents') === 'true';
@@ -6902,7 +7002,8 @@ async function selectParking(parking, destinationCoords) {
                 avoid_caz: localStorage.getItem('pref_caz') !== 'false',        // Default: true
                 enable_hazard_avoidance: enableHazardAvoidanceParking,
                 avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
-                avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true'
+                avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
+                avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') === 'true'
             })
         });
 
@@ -6916,6 +7017,7 @@ async function selectParking(parking, destinationCoords) {
         const enableHazardAvoidanceWalking =
             localStorage.getItem('pref_cameras') !== 'false' ||
             localStorage.getItem('pref_trafficLightsAvoid') === 'true' ||
+            localStorage.getItem('pref_railwayCrossingsAvoid') === 'true' ||
             localStorage.getItem('pref_police') === 'true' ||
             localStorage.getItem('pref_roadworks') === 'true' ||
             localStorage.getItem('pref_accidents') === 'true';
@@ -6930,7 +7032,8 @@ async function selectParking(parking, destinationCoords) {
                 vehicle_type: 'pedestrian',
                 enable_hazard_avoidance: enableHazardAvoidanceWalking,
                 avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
-                avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true'
+                avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
+                avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') === 'true'
             })
         });
 
@@ -12517,6 +12620,7 @@ function saveAppState() {
                 roadworks: localStorage.getItem('pref_roadworks'),
                 accidents: localStorage.getItem('pref_accidents'),
                 railwayCrossings: localStorage.getItem('pref_railwayCrossings'),
+                railwayCrossingsAvoid: localStorage.getItem('pref_railwayCrossingsAvoid'),
                 potholes: localStorage.getItem('pref_potholes'),
                 debris: localStorage.getItem('pref_debris'),
                 gestureControl: localStorage.getItem('pref_gestureControl'),
@@ -14322,6 +14426,7 @@ function togglePreference(pref) {
         'caz': 'avoidCAZ',
         'cameras': 'avoidCameras',
         'trafficLightsAvoid': 'avoidTrafficLights',
+        'railwayCrossingsAvoid': 'avoidRailwayCrossings',
         'variableSpeedAlerts': 'variableSpeedAlerts'
     };
 
@@ -14364,6 +14469,9 @@ function togglePreference(pref) {
     } else if (pref === 'trafficLightsAvoid') {
         console.log('[Settings] Avoid traffic lights:', isActive ? 'enabled' : 'disabled');
         showStatus(`🚦 Traffic light avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
+    } else if (pref === 'railwayCrossingsAvoid') {
+        console.log('[Settings] Avoid railway crossings:', isActive ? 'enabled' : 'disabled');
+        showStatus(`🚂 Railway crossing avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
     }
 
     // Save all settings to persistent storage
@@ -14381,13 +14489,14 @@ function loadPreferences() {
         'caz': 'avoidCAZ',
         'cameras': 'avoidCameras',
         'trafficLightsAvoid': 'avoidTrafficLights',
+        'railwayCrossingsAvoid': 'avoidRailwayCrossings',
         'variableSpeedAlerts': 'variableSpeedAlerts'
     };
 
     // Preferences that default to TRUE (enabled) when not set
     const defaultEnabledPrefs = ['tolls', 'caz', 'cameras'];
 
-    const prefs = ['tolls', 'caz', 'cameras', 'trafficLightsAvoid', 'variableSpeedAlerts'];
+    const prefs = ['tolls', 'caz', 'cameras', 'trafficLightsAvoid', 'railwayCrossingsAvoid', 'variableSpeedAlerts'];
     prefs.forEach(pref => {
         const saved = localStorage.getItem('pref_' + pref);
         const buttonId = buttonIdMap[pref];

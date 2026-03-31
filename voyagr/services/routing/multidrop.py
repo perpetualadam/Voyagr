@@ -309,11 +309,12 @@ def build_multidrop_route(
     avoid_motorways: bool = False,
     avoid_ferries: bool = False,
     traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
+    railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     Build a complete multi-drop route with per-leg geometry, instructions, and costs.
     When use_graphhopper_avoidance is True, each leg tries GraphHopper with camera
-    avoidance (and optional OSM traffic lights) before falling back to Valhalla.
+    avoidance (and optional OSM traffic lights / level crossings) before falling back to Valhalla.
 
     Returns full route data with per-leg breakdown suitable for frontend rendering.
     """
@@ -366,6 +367,7 @@ def build_multidrop_route(
             avoid_motorways=avoid_motorways,
             avoid_ferries=avoid_ferries,
             traffic_light_hazards=traffic_light_hazards,
+            railway_crossing_hazards=railway_crossing_hazards,
         )
 
         stop_info = None
@@ -449,10 +451,15 @@ def _route_leg(
     avoid_motorways: bool = False,
     avoid_ferries: bool = False,
     traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
+    railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """Route a single leg. Tries GraphHopper (if enabled), then Valhalla, then OSRM."""
     if use_graphhopper and costing == "auto" and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
-        gh_result = _graphhopper_leg(from_loc, to_loc, route_bbox, traffic_light_hazards=traffic_light_hazards)
+        gh_result = _graphhopper_leg(
+            from_loc, to_loc, route_bbox,
+            traffic_light_hazards=traffic_light_hazards,
+            railway_crossing_hazards=railway_crossing_hazards,
+        )
         if gh_result:
             return gh_result
 
@@ -481,6 +488,7 @@ def _graphhopper_leg(
     to_loc: Dict[str, float],
     route_bbox: Optional[Dict[str, float]] = None,
     traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
+    railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Route a single leg via GraphHopper with camera avoidance custom model."""
     try:
@@ -502,14 +510,19 @@ def _graphhopper_leg(
         }
 
         cam_model = build_graphhopper_camera_avoidance_model(route_bbox) or None
-        tl_model = None
+        osm_dynamic: Dict[str, List[Dict[str, Any]]] = {}
         if traffic_light_hazards:
-            tl_model = build_graphhopper_custom_model(
-                {'traffic_light': traffic_light_hazards},
+            osm_dynamic['traffic_light'] = traffic_light_hazards
+        if railway_crossing_hazards:
+            osm_dynamic['railway_crossing'] = railway_crossing_hazards
+        tl_rx_model = None
+        if osm_dynamic:
+            tl_rx_model = build_graphhopper_custom_model(
+                osm_dynamic,
                 route_bbox=route_bbox,
-                max_hazards=15,
+                max_hazards=22,
             )
-        custom_model = merge_graphhopper_custom_models(cam_model, tl_model if tl_model else None)
+        custom_model = merge_graphhopper_custom_models(cam_model, tl_rx_model if tl_rx_model else None)
         if custom_model:
             payload["custom_model"] = custom_model
 

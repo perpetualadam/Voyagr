@@ -378,6 +378,22 @@ def build_traffic_signals_query(
     out body;
     '''
 
+
+def build_railway_level_crossings_query(
+    min_lat: float,
+    min_lng: float,
+    max_lat: float,
+    max_lng: float,
+) -> str:
+    """Build a query for road–rail level crossings (vehicle-relevant) in a bounding box."""
+    return f'''
+    [out:json][timeout:20];
+    (
+        node["railway"="level_crossing"]({min_lat},{min_lng},{max_lat},{max_lng});
+    );
+    out body;
+    '''
+
 def build_corridor_traffic_signals_query(
     points: List[Tuple[float, float]],
     radius: int = 100

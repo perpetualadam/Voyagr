@@ -882,14 +882,14 @@ class RouteCache:
         self.hits = 0
         self.misses = 0
 
-    def _make_key(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True) -> str:
+    def _make_key(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False) -> str:
         """Create cache key from route parameters."""
-        return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type},{enable_hazard_avoidance},{int(avoid_traffic_lights)},{int(avoid_cameras)}"
+        return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type},{enable_hazard_avoidance},{int(avoid_traffic_lights)},{int(avoid_cameras)},{int(avoid_railway_crossings)}"
 
-    def get(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True) -> Optional[Dict[str, Any]]:
+    def get(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False) -> Optional[Dict[str, Any]]:
         """Get cached route if available and not expired."""
         with self.lock:
-            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras)
+            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings)
 
             if key not in self.cache:
                 self.misses += 1
@@ -907,10 +907,10 @@ class RouteCache:
             self.hits += 1
             return self.cache[key]
 
-    def set(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, route_data: Dict[str, Any], enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True) -> None:
+    def set(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, route_data: Dict[str, Any], enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False) -> None:
         """Cache a route calculation."""
         with self.lock:
-            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras)
+            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings)
 
             # Remove oldest if at capacity
             if len(self.cache) >= self.max_size and key not in self.cache:
@@ -2363,9 +2363,9 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], rou
             'camera': 50.0,                  # High priority - strong avoidance
             'traffic_light': 40.0,           # OSM traffic signals (when enabled)
             'police': 30.0,                  # Medium-high priority
+            'railway_crossing': 35.0,        # OSM level crossings (dynamic polygons; must be >= 30)
             'accident': 20.0,                # Medium priority
             'roadworks': 15.0,               # Medium-low priority
-            'railway_crossing': 10.0,        # Low priority
             'pothole': 5.0,                  # Very low priority
             'debris': 5.0                    # Very low priority
         }
@@ -2720,6 +2720,7 @@ def route_with_graphhopper(
     enable_camera_avoidance: bool = True,
     route_bbox: Optional[Dict[str, float]] = None,
     traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
+    railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Route using GraphHopper with optional camera avoidance via pre-loaded areas.
@@ -2730,6 +2731,7 @@ def route_with_graphhopper(
         enable_camera_avoidance: Whether to use camera avoidance custom model
         route_bbox: Bounding box of route for area selection
         traffic_light_hazards: Optional OSM traffic light points to avoid (dynamic polygons)
+        railway_crossing_hazards: Optional OSM level crossing points (separate from traffic lights)
 
     Returns:
         Route data dict or None if failed
@@ -2760,18 +2762,24 @@ def route_with_graphhopper(
         if enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
             cam_model = build_graphhopper_camera_avoidance_model(route_bbox) or None
 
-        tl_model: Optional[Dict[str, Any]] = None
+        osm_dynamic: Dict[str, List[Dict[str, Any]]] = {}
         if traffic_light_hazards:
-            tl_model = gh_build_hazard_model(
-                {'traffic_light': traffic_light_hazards},
+            osm_dynamic['traffic_light'] = traffic_light_hazards
+        if railway_crossing_hazards:
+            osm_dynamic['railway_crossing'] = railway_crossing_hazards
+
+        tl_rx_model: Optional[Dict[str, Any]] = None
+        if osm_dynamic:
+            tl_rx_model = gh_build_hazard_model(
+                osm_dynamic,
                 route_bbox=route_bbox,
-                max_hazards=15,
+                max_hazards=22,
             ) or None
 
-        custom_model = merge_graphhopper_custom_models(cam_model, tl_model)
+        custom_model = merge_graphhopper_custom_models(cam_model, tl_rx_model)
         if custom_model:
             payload["custom_model"] = custom_model
-            logger.info("[GRAPHHOPPER] Using custom model (cameras and/or traffic lights)")
+            logger.info("[GRAPHHOPPER] Using custom model (cameras and/or OSM traffic lights / railway crossings)")
 
         logger.info(f"[GRAPHHOPPER] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
 
@@ -4154,7 +4162,13 @@ HTML_TEMPLATE = '''
                             <span class="preference-label">🚦 Avoid Traffic Lights (OSM)</span>
                             <button class="toggle-switch" id="avoidTrafficLights" data-pref="trafficLightsAvoid" onclick="togglePreference('trafficLightsAvoid')"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Uses OpenStreetMap signal locations; combines with optimised routing. You can enable this without speed cameras if you turn off Optimised Routing above.</p>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Uses OpenStreetMap traffic signal locations. Independent of Optimised Routing and railway crossings — enable only what you need.</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🚂 Avoid Railway Crossings (OSM)</span>
+                            <button class="toggle-switch" id="avoidRailwayCrossings" data-pref="railwayCrossingsAvoid" onclick="togglePreference('railwayCrossingsAvoid')"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Uses OpenStreetMap <code>railway=level_crossing</code> nodes. Separate from traffic lights; works best with Optimised Routing enabled for GraphHopper avoidance.</p>
 
                         <div class="preference-item">
                             <span class="preference-label">📊 Variable Speed Alerts</span>
@@ -4379,6 +4393,12 @@ HTML_TEMPLATE = '''
                             <span class="preference-label">🚥 OSM Traffic Lights on Map</span>
                             <button class="toggle-switch" id="showOsmTrafficLightsToggle" onclick="toggleShowOsmTrafficLights()"></button>
                         </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🛤️ OSM Railway Crossings on Map</span>
+                            <button class="toggle-switch" id="showOsmRailwayCrossingsToggle" onclick="toggleShowOsmRailwayCrossings()"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Level crossings from OpenStreetMap (<code>railway=level_crossing</code>). Independent of the “Avoid railway crossings” routing option.</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🚦 Show Traffic Flow</span>
@@ -5840,6 +5860,7 @@ def calculate_route():
         caz_exempt = data.get('caz_exempt', False)
         enable_hazard_avoidance = data.get('enable_hazard_avoidance', False)
         avoid_traffic_lights = data.get('avoid_traffic_lights', False)
+        avoid_railway_crossings = data.get('avoid_railway_crossings', False)
         avoid_cameras = data.get('avoid_cameras', True)
 
         # Route avoidance preferences (Valhalla costing options)
@@ -5896,6 +5917,7 @@ def calculate_route():
 
             md_exclude = []
             md_tl_for_gh = None
+            md_rx_for_gh = None
             bbox_md = None
             if enable_hazard_avoidance:
                 try:
@@ -5913,6 +5935,13 @@ def calculate_route():
                         md_tl_for_gh = hazards_md.get('traffic_light')
                     else:
                         hazards_md['traffic_light'] = []
+                    if avoid_railway_crossings:
+                        from voyagr.services.hazards import fetch_railway_crossings_osm_bbox
+                        hazards_md['railway_crossing'] = fetch_railway_crossings_osm_bbox(
+                            bbox_md['south'], bbox_md['north'], bbox_md['west'], bbox_md['east'])
+                        md_rx_for_gh = hazards_md.get('railway_crossing')
+                    else:
+                        hazards_md['railway_crossing'] = []
                     md_exclude = build_valhalla_exclude_locations(hazards_md, route_bbox=bbox_md, max_hazards=50)
                 except Exception as e:
                     logger.warning(f"[MULTI-DROP] Hazard fetch failed: {e}")
@@ -5942,6 +5971,7 @@ def calculate_route():
                 avoid_motorways=avoid_motorways,
                 avoid_ferries=avoid_ferries,
                 traffic_light_hazards=md_tl_for_gh,
+                railway_crossing_hazards=md_rx_for_gh,
             )
 
             if md_result.get('success'):
@@ -5996,7 +6026,7 @@ def calculate_route():
         # ====================================================================
         # PHASE 3 OPTIMIZATION: Check route cache first
         # ====================================================================
-        cached_route = route_cache.get(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras)
+        cached_route = route_cache.get(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings)
         if cached_route:
             logger.info(f"[CACHE] HIT: Route from ({start_lat},{start_lon}) to ({end_lat},{end_lon}) with hazard_avoidance={enable_hazard_avoidance}")
             cached_route['cached'] = True
@@ -6059,6 +6089,21 @@ def calculate_route():
         else:
             hazards['traffic_light'] = []
 
+        if avoid_railway_crossings:
+            try:
+                from voyagr.services.hazards import fetch_railway_crossings_osm_bbox
+                _rs = min(start_lat, end_lat) - 0.1
+                _rn = max(start_lat, end_lat) + 0.1
+                _rw = min(start_lon, end_lon) - 0.1
+                _re = max(start_lon, end_lon) + 0.1
+                hazards['railway_crossing'] = fetch_railway_crossings_osm_bbox(_rs, _rn, _rw, _re)
+                logger.info(f"[RAILWAY_CROSSINGS] Merged {len(hazards.get('railway_crossing', []))} OSM level crossings for routing")
+            except Exception as e:
+                logger.warning(f"[RAILWAY_CROSSINGS] Could not load OSM railway crossings: {e}")
+                hazards['railway_crossing'] = []
+        else:
+            hazards['railway_crossing'] = []
+
         if enable_hazard_avoidance:
             logger.info(f"[HAZARDS] Hazard avoidance ENABLED - will use exclude_locations")
         else:
@@ -6095,11 +6140,13 @@ def calculate_route():
             logger.info(f"[ROUTING] Trying GraphHopper with camera avoidance (route: {straight_line_km:.0f}km)...")
             try:
                 _tl_gh = hazards.get('traffic_light', []) if avoid_traffic_lights else []
+                _rx_gh = hazards.get('railway_crossing', []) if avoid_railway_crossings else []
                 graphhopper_route = route_with_graphhopper(
                     start_lat, start_lon, end_lat, end_lon,
                     enable_camera_avoidance=avoid_cameras,
                     route_bbox=route_bbox,
                     traffic_light_hazards=_tl_gh if _tl_gh else None,
+                    railway_crossing_hazards=_rx_gh if _rx_gh else None,
                 )
                 if graphhopper_route and graphhopper_route.get('success'):
                     logger.info(f"[GRAPHHOPPER] ✅ Route found with camera avoidance")
@@ -6598,7 +6645,7 @@ def calculate_route():
                         }
 
                         # Cache the route
-                        route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras)
+                        route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings)
                         print(f"[CACHE] STORED: Segmented route cached in memory")
 
                         cost_calculator.cache_route_to_db(
@@ -7161,7 +7208,7 @@ def calculate_route():
                     }
 
                     # Cache the route for future requests
-                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras)
+                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings)
                     print(f"[CACHE] STORED: Route cached in memory with hazard_avoidance={enable_hazard_avoidance}")
 
                     # ================================================================
@@ -7499,7 +7546,7 @@ def calculate_route():
                                 }
 
                                 # Cache the route
-                                route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras)
+                                route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings)
                                 print(f"[CACHE] STORED: Retry route cached in memory")
 
                                 cache_source = 'GraphHopper+Valhalla' if (graphhopper_route and graphhopper_route.get('success')) else 'Valhalla'
@@ -7823,7 +7870,7 @@ def calculate_multi_stop_route():
 # HAZARD AVOIDANCE ENDPOINTS
 # Moved to voyagr/api/hazards.py blueprint:
 # - /api/hazard-preferences, /api/hazards/add-camera, /api/hazards/report
-# - /api/hazards/nearby, /api/cameras/area, /api/traffic-lights
+# - /api/hazards/nearby, /api/cameras/area, /api/traffic-lights, /api/railway-crossings/area
 # ============================================================================
 
 # Navigation routes moved to voyagr/api/navigation.py blueprint:

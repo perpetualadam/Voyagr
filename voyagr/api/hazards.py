@@ -209,6 +209,35 @@ def get_traffic_lights_in_area():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@hazards_bp.route('/railway-crossings/area', methods=['GET'])
+def get_railway_crossings_in_area():
+    """Road–rail level crossings in map viewport (OSM via Overpass), for map layer."""
+    try:
+        north = float(request.args.get('north', 90))
+        south = float(request.args.get('south', -90))
+        east = float(request.args.get('east', 180))
+        west = float(request.args.get('west', -180))
+
+        if abs(north - south) > 0.35 or abs(east - west) > 0.35:
+            return jsonify({'success': True, 'railway_crossings': [], 'message': 'Zoom in to see railway crossings'})
+
+        from voyagr.services.hazards import fetch_railway_crossings_osm_bbox
+        crossings = fetch_railway_crossings_osm_bbox(south, north, west, east, max_nodes=200)
+        out = [
+            {
+                'lat': x['lat'],
+                'lon': x['lon'],
+                'type': 'railway_crossing',
+                'description': x.get('description', ''),
+            }
+            for x in crossings
+        ]
+        return jsonify({'success': True, 'railway_crossings': out, 'count': len(out)})
+    except Exception as e:
+        logger.error(f"Error fetching railway crossings in area: {e}")
+        return jsonify({'success': False, 'error': str(e)})
+
+
 @hazards_bp.route('/cameras/area', methods=['GET'])
 def get_cameras_in_area():
     """Get all cameras within a map viewport bounding box."""

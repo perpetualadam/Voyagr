@@ -8,6 +8,7 @@ Includes:
 - build_graphhopper_custom_model: Build GraphHopper avoidance model
 - build_valhalla_exclude_locations: Build Valhalla exclude locations list
 - build_graphhopper_camera_avoidance_model: Camera-specific avoidance model
+- fetch_traffic_lights_osm_bbox / fetch_railway_crossings_osm_bbox: OSM points for routing
 - get_hazards_on_route: Get hazards near a route
 - score_route_by_hazards: Calculate hazard penalty score for route
 """
@@ -283,9 +284,9 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
             'camera': 50.0,
             'traffic_light': 40.0,
             'police': 30.0,
+            'railway_crossing': 35.0,  # OSM level crossings — same tier as dynamic avoidance (must be >= 30)
             'accident': 20.0,
             'roadworks': 15.0,
-            'railway_crossing': 10.0,
             'pothole': 5.0,
             'debris': 5.0
         }
@@ -661,6 +662,47 @@ def fetch_traffic_lights_osm_bbox(
             'severity': 'medium',
         })
     logger.info(f"[TRAFFIC_LIGHTS] Loaded {len(out)} OSM traffic signals in bbox")
+    return out
+
+
+def fetch_railway_crossings_osm_bbox(
+    south: float,
+    north: float,
+    west: float,
+    east: float,
+    max_nodes: int = 100,
+) -> List[Dict[str, Any]]:
+    """Load road–rail level crossing nodes from OpenStreetMap via Overpass (bounding box)."""
+    out: List[Dict[str, Any]] = []
+    try:
+        from overpass_helper import query_overpass, build_railway_level_crossings_query
+    except ImportError:
+        logger.warning("[RAILWAY_CROSSINGS] overpass_helper not available")
+        return out
+
+    if abs(north - south) > 0.35 or abs(east - west) > 0.35:
+        logger.info("[RAILWAY_CROSSINGS] BBox too large; skipping OSM railway crossing fetch")
+        return out
+
+    query = build_railway_level_crossings_query(south, west, north, east)
+    cache_key = f"rx_bbox_{south:.4f}_{west:.4f}_{north:.4f}_{east:.4f}"
+    result = query_overpass(query, cache_key=cache_key, cache_ttl=300)
+    if not result.get("success"):
+        logger.warning(f"[RAILWAY_CROSSINGS] Overpass failed: {result.get('error')}")
+        return out
+
+    for el in result.get("elements", [])[:max_nodes]:
+        lat = el.get("lat")
+        lon = el.get("lon")
+        if lat is None or lon is None:
+            continue
+        out.append({
+            "lat": float(lat),
+            "lon": float(lon),
+            "description": "Railway level crossing (OSM)",
+            "severity": "medium",
+        })
+    logger.info(f"[RAILWAY_CROSSINGS] Loaded {len(out)} OSM level crossings in bbox")
     return out
 
 
