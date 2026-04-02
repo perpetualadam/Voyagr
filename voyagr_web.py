@@ -1906,6 +1906,37 @@ def decode_route_geometry(geometry: str, precision: int = 5) -> List[Tuple[float
 
     return []
 
+
+def valhalla_maneuver_dict(maneuver: Dict[str, Any], length_in_meters: bool = False) -> Dict[str, Any]:
+    """
+    Normalize a Valhalla leg maneuver for the Voyagr API JSON.
+    See Valhalla turn-by-turn reference: instruction, verbal_transition_alert_instruction,
+    verbal_pre_transition_instruction, verbal_post_transition_instruction, street_names, length, etc.
+    """
+    sn = maneuver.get('street_names') or []
+    length = maneuver.get('length', 0)
+    if length_in_meters:
+        length = float(length) * 1000.0
+    out: Dict[str, Any] = {
+        'instruction': maneuver.get('instruction', ''),
+        'verbal_transition_alert_instruction': maneuver.get('verbal_transition_alert_instruction', ''),
+        'verbal_pre_transition_instruction': maneuver.get('verbal_pre_transition_instruction', ''),
+        'verbal_post_transition_instruction': maneuver.get('verbal_post_transition_instruction', ''),
+        'distance': length,
+        'time': maneuver.get('time', 0),
+        'type': maneuver.get('type', 0),
+        'street_name': sn[0] if sn else '',
+        'street_names': sn,
+        'begin_street_names': maneuver.get('begin_street_names', []),
+        'begin_shape_index': maneuver.get('begin_shape_index', 0),
+        'end_shape_index': maneuver.get('end_shape_index', 0),
+        'speed_limit': maneuver.get('speed_limit'),
+    }
+    if maneuver.get('type') == 26:
+        out['roundabout_exit_count'] = maneuver.get('roundabout_exit_count', 0)
+    return out
+
+
 def calculate_fuel_cost(distance_km: float, fuel_efficiency_l_per_100km: float, fuel_price_gbp_per_l: float) -> float:
     """Calculate fuel cost for a route."""
     fuel_needed = (distance_km / 100) * fuel_efficiency_l_per_100km
@@ -6408,7 +6439,10 @@ def calculate_route():
                         try:
                             shortest_payload = {
                                 "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
-                                "costing": "auto_shorter"
+                                "costing": "auto_shorter",
+                                "units": "kilometers",
+                                "language": "en-GB",
+                                "directions_options": {"generalize": 0},
                             }
                             if alt_exclude:
                                 shortest_payload["exclude_locations"] = alt_exclude
@@ -6574,18 +6608,7 @@ def calculate_route():
                                 for leg in seg_data['trip']['legs']:
                                     if 'maneuvers' in leg:
                                         for m in leg['maneuvers']:
-                                            all_maneuvers.append({
-                                                'instruction': m.get('instruction', ''),
-                                                'type': m.get('type', 0),
-                                                'distance': m.get('length', 0) * 1000,  # km to m
-                                                'time': m.get('time', 0),
-                                                'lat': m.get('begin_shape_index', 0),
-                                                'lon': m.get('end_shape_index', 0),
-                                                'street_names': m.get('street_names', []),
-                                                'begin_street_names': m.get('begin_street_names', []),
-                                                'begin_shape_index': m.get('begin_shape_index', 0),
-                                                'end_shape_index': m.get('end_shape_index', 0)
-                                            })
+                                            all_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=True))
 
                                 logger.info(f"[VALHALLA] Segment {i+1} SUCCESS: {seg_distance:.2f}km, {seg_duration/60:.0f}min")
                             else:
@@ -6717,6 +6740,9 @@ def calculate_route():
                 ],
                 "costing": valhalla_costing,
                 "alternates": 3 if (valhalla_costing == 'auto' and not has_waypoints) else 0,
+                # Valhalla API: units/language at top level affect narration (turn-by-turn API reference)
+                "units": "kilometers",
+                "language": "en-GB",
                 "directions_options": {"generalize": 0}
             }
 
@@ -6851,21 +6877,7 @@ def calculate_route():
                         for leg in route_data['trip']['legs']:
                             if 'maneuvers' in leg:
                                 for maneuver in leg['maneuvers']:
-                                    m_data = {
-                                        'instruction': maneuver.get('instruction', ''),
-                                        'verbal_pre_transition_instruction': maneuver.get('verbal_pre_transition_instruction', ''),
-                                        'distance': maneuver.get('length', 0),  # km
-                                        'time': maneuver.get('time', 0),  # seconds
-                                        'type': maneuver.get('type', 0),
-                                        'street_name': maneuver.get('street_names', [''])[0] if maneuver.get('street_names') else '',
-                                        'begin_street_names': maneuver.get('begin_street_names', []),
-                                        'begin_shape_index': maneuver.get('begin_shape_index', 0),
-                                        'end_shape_index': maneuver.get('end_shape_index', 0),
-                                        'speed_limit': maneuver.get('speed_limit', None),
-                                    }
-                                    if maneuver.get('type') == 26:
-                                        m_data['roundabout_exit_count'] = maneuver.get('roundabout_exit_count', 0)
-                                    maneuvers.append(m_data)
+                                    maneuvers.append(valhalla_maneuver_dict(maneuver, length_in_meters=False))
                     logger.info(f"[VALHALLA] Extracted {len(maneuvers)} maneuvers from route")
 
                     routes.append({
@@ -6912,17 +6924,7 @@ def calculate_route():
                                         # Extract maneuvers for this alternative route
                                         if 'maneuvers' in leg:
                                             for m in leg['maneuvers']:
-                                                alt_maneuvers.append({
-                                                    'instruction': m.get('instruction', ''),
-                                                    'verbal_pre_transition_instruction': m.get('verbal_pre_transition_instruction', ''),
-                                                    'distance': m.get('length', 0),  # km
-                                                    'time': m.get('time', 0),  # seconds
-                                                    'type': m.get('type', 0),
-                                                    'street_names': m.get('street_names', []),
-                                                    'begin_street_names': m.get('begin_street_names', []),
-                                                    'begin_shape_index': m.get('begin_shape_index', 0),
-                                                    'end_shape_index': m.get('end_shape_index', 0)
-                                                })
+                                                alt_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=False))
                                 logger.info(f"[VALHALLA] Alt route {idx+1}: Extracted {len(alt_maneuvers)} maneuvers")
 
                                 # ================================================================
@@ -7005,18 +7007,7 @@ def calculate_route():
                                 for leg in valhalla_data['trip']['legs']:
                                     if 'maneuvers' in leg:
                                         for m in leg['maneuvers']:
-                                            route_maneuvers.append({
-                                                'instruction': m.get('instruction', ''),
-                                                'type': m.get('type', 0),
-                                                'distance': m.get('length', 0) * 1000,  # km to m
-                                                'time': m.get('time', 0),
-                                                'lat': m.get('begin_shape_index', 0),
-                                                'lon': m.get('end_shape_index', 0),
-                                                'street_names': m.get('street_names', []),
-                                                'begin_street_names': m.get('begin_street_names', []),
-                                                'begin_shape_index': m.get('begin_shape_index', 0),
-                                                'end_shape_index': m.get('end_shape_index', 0)
-                                            })
+                                            route_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=True))
 
                             return {
                                 'id': route_id,
@@ -7043,6 +7034,8 @@ def calculate_route():
                             shortest_payload = {
                                 "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
                                 "costing": "auto_shorter",
+                                "units": "kilometers",
+                                "language": "en-GB",
                                 "directions_options": {"generalize": 0}
                             }
                             if alt_exclude:
@@ -7322,6 +7315,8 @@ def calculate_route():
                             "costing": valhalla_costing,
                             "alternates": 3 if valhalla_costing == 'auto' else 0,
                             "exclude_locations": retry_locations,
+                            "units": "kilometers",
+                            "language": "en-GB",
                             "directions_options": {"generalize": 0}
                         }
                         if valhalla_costing == 'pedestrian':
@@ -7393,15 +7388,7 @@ def calculate_route():
                                     for leg in retry_data['trip']['legs']:
                                         if 'maneuvers' in leg:
                                             for m in leg['maneuvers']:
-                                                retry_maneuvers.append({
-                                                    'instruction': m.get('instruction', ''),
-                                                    'type': m.get('type', 0),
-                                                    'distance': m.get('length', 0) * 1000,  # km to m
-                                                    'time': m.get('time', 0),
-                                                    'street_names': m.get('street_names', []),
-                                                    'begin_shape_index': m.get('begin_shape_index', 0),
-                                                    'end_shape_index': m.get('end_shape_index', 0)
-                                                })
+                                                retry_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=True))
                                 logger.info(f"[VALHALLA] Retry route has {len(retry_maneuvers)} maneuvers")
 
                                 routes.append({
@@ -7427,6 +7414,8 @@ def calculate_route():
                                     shortest_payload = {
                                         "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
                                         "costing": "auto_shorter",
+                                        "units": "kilometers",
+                                        "language": "en-GB",
                                         "directions_options": {"generalize": 0}
                                     }
                                     if retry_locations:
@@ -7452,15 +7441,7 @@ def calculate_route():
                                             for leg in sh_data['trip']['legs']:
                                                 if 'maneuvers' in leg:
                                                     for m in leg['maneuvers']:
-                                                        sh_maneuvers.append({
-                                                            'instruction': m.get('instruction', ''),
-                                                            'type': m.get('type', 0),
-                                                            'distance': m.get('length', 0) * 1000,
-                                                            'time': m.get('time', 0),
-                                                            'street_names': m.get('street_names', []),
-                                                            'begin_shape_index': m.get('begin_shape_index', 0),
-                                                            'end_shape_index': m.get('end_shape_index', 0)
-                                                        })
+                                                        sh_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=True))
                                             routes.append({
                                                 'id': 2,
                                                 'name': '📏 Shortest',

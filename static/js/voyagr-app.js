@@ -8278,8 +8278,12 @@ function detectUpcomingTurn(userLat, userLon) {
                 return {
                     distance: distanceToManeuver,
                     direction: direction,
-                    streetName: maneuver.street_name || maneuver.begin_street_names?.[0] || '',
-                    instruction: maneuver.instruction || maneuver.verbal_pre_transition_instruction || ''
+                    streetName: maneuver.street_name || (maneuver.street_names && maneuver.street_names[0]) || maneuver.begin_street_names?.[0] || '',
+                    instruction: maneuver.instruction || maneuver.verbal_pre_transition_instruction || '',
+                    // Valhalla turn-by-turn: verbal_transition_alert = early; verbal_pre = immediately prior
+                    verbal_transition_alert_instruction: maneuver.verbal_transition_alert_instruction || '',
+                    verbal_pre_transition_instruction: maneuver.verbal_pre_transition_instruction || '',
+                    verbal_post_transition_instruction: maneuver.verbal_post_transition_instruction || ''
                 };
             }
 
@@ -10234,12 +10238,13 @@ function updateTurnWidgetFromPosition(lat, lon) {
             else if ([4, 5, 6].includes(type)) direction = 'destination';
 
             const streetNames = maneuver.street_names || [];
+            const streetLabel = streetNames.length > 0 ? streetNames[0] : (maneuver.street_name || '');
 
             updateTurnInstructionDisplay({
                 distance: distanceToManeuver,
                 direction: direction,
-                instruction: maneuver.instruction || '',
-                streetName: streetNames.length > 0 ? streetNames[0] : ''
+                instruction: maneuver.instruction || maneuver.verbal_pre_transition_instruction || '',
+                streetName: streetLabel
             });
 
             return;
@@ -11712,6 +11717,9 @@ function announceUpcomingTurn(turnInfo) {
     const direction = turnInfo.direction || 'straight';
     const directionText = getTurnDirectionText(direction);
     const streetName = turnInfo.streetName || '';
+    // Valhalla: verbal_transition_alert_instruction (early), verbal_pre_transition_instruction (immediately prior)
+    const verbalAlert = (turnInfo.verbal_transition_alert_instruction || '').trim();
+    const verbalPre = (turnInfo.verbal_pre_transition_instruction || '').trim();
     const isExit = direction === 'exit' || direction === 'exit_right' || direction === 'exit_left'
         || direction === 'exit-right' || direction === 'exit-left';
     const isKeep = direction === 'slight_right' || direction === 'slight_left'
@@ -11784,7 +11792,9 @@ function announceUpcomingTurn(turnInfo) {
                 const streetOnto = streetName ? ` onto ${streetName}` : '';
 
                 if (announcementDistance === 500) {
-                    if (distanceUnit === 'mi') {
+                    if (verbalAlert) {
+                        message = verbalAlert;
+                    } else if (distanceUnit === 'mi') {
                         message = `In 1600 feet, ${directionText}${streetOnto}`;
                     } else {
                         message = `In 500 meters, ${directionText}${streetOnto}`;
@@ -11796,7 +11806,9 @@ function announceUpcomingTurn(turnInfo) {
                         message = `In 200 meters, ${directionText}${streetOnto}`;
                     }
                 } else if (announcementDistance === 100) {
-                    if (distanceUnit === 'mi') {
+                    if (verbalPre) {
+                        message = verbalPre;
+                    } else if (distanceUnit === 'mi') {
                         message = `In 300 feet, ${directionText}${streetOnto}`;
                     } else {
                         message = `In 100 meters, ${directionText}${streetOnto}`;
