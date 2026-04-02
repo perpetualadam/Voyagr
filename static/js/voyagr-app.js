@@ -23,6 +23,63 @@ let bottomSheetStartY = 0;
 let bottomSheetCurrentY = 0;
 let bottomSheetIsExpanded = false; // Tracks logical state (expanded or collapsed)
 
+/** Event target as Element — Text nodes have no .closest (fixes mobile taps on emoji/labels). */
+function voyagrEventTargetElement(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    if (raw.nodeType === Node.ELEMENT_NODE) return raw;
+    if (raw.nodeType === Node.TEXT_NODE && raw.parentElement) return raw.parentElement;
+    return null;
+}
+
+function voyagrClosest(raw, selector) {
+    const el = voyagrEventTargetElement(raw);
+    return el && typeof el.closest === 'function' ? el.closest(selector) : null;
+}
+
+// ===== RECENT DESTINATIONS (local history; works without auth) =====
+const VOYAGR_RECENT_DEST_KEY = 'voyagrRecentDestinations';
+const VOYAGR_RECENT_DEST_LIMIT = 15;
+
+function loadRecentDestinations() {
+    try {
+        const raw = localStorage.getItem(VOYAGR_RECENT_DEST_KEY);
+        if (!raw) return [];
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function recordRecentDestination(label, lat, lon, kind) {
+    if (!label || lat == null || lon == null) return;
+    const latN = parseFloat(lat);
+    const lonN = parseFloat(lon);
+    if (!Number.isFinite(latN) || !Number.isFinite(lonN)) return;
+    const trimmedLabel = String(label).trim();
+    if (!trimmedLabel) return;
+    const list = loadRecentDestinations();
+    const entry = {
+        label: trimmedLabel,
+        lat: latN,
+        lon: lonN,
+        ts: Date.now(),
+        kind: kind || 'search'
+    };
+    const filtered = list.filter(
+        (x) =>
+            !(
+                Math.abs(x.lat - latN) < 1e-5 &&
+                Math.abs(x.lon - lonN) < 1e-5 &&
+                (x.label || '') === trimmedLabel
+            )
+    );
+    filtered.unshift(entry);
+    try {
+        localStorage.setItem(VOYAGR_RECENT_DEST_KEY, JSON.stringify(filtered.slice(0, VOYAGR_RECENT_DEST_LIMIT)));
+    } catch (e) { /* quota */ }
+}
+
 // ===== DEBUG SCROLL FUNCTION =====
 window.debugScrollIssue = function() {
     const bsc = document.querySelector('.bottom-sheet-content');
@@ -2492,7 +2549,7 @@ function onWaypointDragOver(e) {
 
 function onWaypointDrop(e) {
     e.preventDefault();
-    const target = e.target.closest('.waypoint-item');
+    const target = voyagrClosest(e.target, '.waypoint-item');
     if (!target || !_draggedWaypoint) return;
 
     const targetType = target.dataset.type;
@@ -3863,6 +3920,16 @@ async function calculateRoute() {
                     }
 
                     showStatus('✅ Route recalculated — continuing navigation', 'success');
+                    try {
+                        const ep = (geocodedEnd || '').split(',');
+                        if (ep.length >= 2) {
+                            const elat = parseFloat(ep[0].trim());
+                            const elon = parseFloat(ep[1].trim());
+                            if (Number.isFinite(elat) && Number.isFinite(elon)) {
+                                recordRecentDestination(end, elat, elon, 'route');
+                            }
+                        }
+                    } catch (_) { /* ignore */ }
                     return;
                 }
 
@@ -4085,6 +4152,10 @@ async function calculateRoute() {
                     const notificationMessage = `${displayDistance} ${distUnit} in ${data.time}. Ready to navigate?`;
                     console.log('[Route] Route ready notification:', notificationMessage);
                     sendNotification('Route Ready', notificationMessage, 'success');
+
+                    try {
+                        recordRecentDestination(end, endCoords[0], endCoords[1], 'route');
+                    } catch (_) { /* ignore */ }
                 } catch (e) {
                     showStatus('Error parsing coordinates: ' + e.message, 'error');
                     console.error('Coordinate parsing error:', e);
@@ -4337,7 +4408,7 @@ function initBottomSheetLogic() {
 
     const onDragStart = (e) => {
         // Only allow dragging from handle or header (unless content is scrolled to top)
-        if (!e.target.closest('.bottom-sheet-handle') && !e.target.closest('.bottom-sheet-header')) {
+        if (!voyagrClosest(e.target, '.bottom-sheet-handle') && !voyagrClosest(e.target, '.bottom-sheet-header')) {
             return;
         }
 
@@ -7267,40 +7338,83 @@ function clearForm() {
 
 // ===== PHASE 2 FEATURES: SEARCH HISTORY & FAVORITES =====
 
-// Load and display search history
+/**
+ * Fill destination autocomplete with recent (local) + server search history when query is short.
+ * @param {HTMLElement} dropdown - #autocompleteEnd
+ */
+async function renderEndDestinationSuggestions(dropdown) {
+    if (!dropdown) return;
+
+    const recent = loadRecentDestinations();
+    dropdown.innerHTML = '';
+
+    const appendSectionTitle = (text) => {
+        const title = document.createElement('div');
+        title.className = 'autocomplete-section-title';
+        title.textContent = text;
+        title.style.cssText = 'padding:10px 14px 6px;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;';
+        dropdown.appendChild(title);
+    };
+
+    if (recent.length) {
+        appendSectionTitle('Recent destinations');
+        recent.forEach((item) => {
+            const div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            const kindLabel = item.kind === 'route' ? 'Used in a route' : 'Recent search';
+            const labelEsc = escapeHtml(item.label);
+            div.innerHTML = `<div class="autocomplete-item-icon">🕐</div><div class="autocomplete-item-text"><div class="autocomplete-item-name">${labelEsc}</div><div class="autocomplete-item-address">${kindLabel}</div></div>`;
+            div.onclick = () => selectAutocompleteResult('end', item.lat, item.lon, item.label);
+            dropdown.appendChild(div);
+        });
+    }
+
+    let serverCount = 0;
+    try {
+        const { res, data } = await fetchJsonWithAuth('/api/search-history');
+        if (res.status !== 401 && data.success && data.history && data.history.length > 0) {
+            appendSectionTitle('Saved searches');
+            data.history.forEach((item) => {
+                const lat = item.lat != null ? parseFloat(item.lat) : NaN;
+                const lon = item.lon != null ? parseFloat(item.lon) : NaN;
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                const primary = escapeHtml(item.query || '');
+                const meta = escapeHtml(item.result_name || '');
+                if (Number.isFinite(lat) && Number.isFinite(lon)) {
+                    div.innerHTML = `<div class="autocomplete-item-icon">🔎</div><div class="autocomplete-item-text"><div class="autocomplete-item-name">${primary}</div>${meta ? `<div class="autocomplete-item-address">${meta}</div>` : ''}</div>`;
+                    div.onclick = () => selectAutocompleteResult('end', lat, lon, item.result_name || item.query);
+                } else {
+                    div.innerHTML = `<div class="autocomplete-item-icon">🔎</div><div class="autocomplete-item-text"><div class="autocomplete-item-name">${primary}</div></div>`;
+                    div.onclick = () => {
+                        const endInput = document.getElementById('end');
+                        if (endInput) endInput.value = item.query || '';
+                        dropdown.classList.remove('show');
+                    };
+                }
+                dropdown.appendChild(div);
+                serverCount++;
+            });
+        }
+    } catch (e) {
+        console.error('[Search history]', e);
+    }
+
+    if (!recent.length && serverCount === 0) {
+        dropdown.innerHTML = '<div class="autocomplete-no-results">Type at least 2 letters to search. Recent destinations appear here after you select places or calculate a route.</div>';
+    }
+    dropdown.classList.add('show');
+}
+
 /**
  * showSearchHistory function
  * @function showSearchHistory
  * @returns {*} Return value description
  */
 function showSearchHistory() {
-    fetchJsonWithAuth('/api/search-history')
-        .then(({ res, data }) => {
-            if (res.status === 401) return;
-            if (data.success && data.history.length > 0) {
-                const dropdown = document.getElementById('searchHistoryDropdown');
-                dropdown.innerHTML = '';
-
-                data.history.forEach(item => {
-                    const div = document.createElement('div');
-                    div.className = 'search-history-item';
-                    const queryEsc = escapeHtml(item.query);
-                    const resultEsc = escapeHtml(item.result_name || '');
-                    div.innerHTML = `
-                        <div class="search-history-item-text">${queryEsc}</div>
-                        ${item.result_name ? `<div class="search-history-item-meta">${resultEsc}</div>` : ''}
-                    `;
-                    div.onclick = () => {
-                        document.getElementById('end').value = item.query;
-                        dropdown.classList.remove('show');
-                    };
-                    dropdown.appendChild(div);
-                });
-
-                dropdown.classList.add('show');
-            }
-        })
-        .catch(error => console.error('Error loading search history:', error));
+    const dropdown = getAutocompleteDropdown('end');
+    if (!dropdown) return;
+    renderEndDestinationSuggestions(dropdown).catch((e) => console.error('Error loading search history:', e));
 }
 
 // Add search to history
@@ -7314,6 +7428,9 @@ function showSearchHistory() {
  * @returns {*} Return value description
  */
 function addToSearchHistory(query, resultName, lat, lon) {
+    if (query && lat != null && lon != null) {
+        recordRecentDestination(resultName || query, lat, lon, 'search');
+    }
     getSupabaseAccessToken().then(token => {
         const headers = { 'Content-Type': 'application/json' };
         if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -10936,7 +11053,7 @@ function initBottomSheet() {
     if (header) {
         header.addEventListener('click', (e) => {
             // Don't expand if clicking on the icon buttons
-            if (e.target.closest('button')) return;
+            if (voyagrClosest(e.target, 'button')) return;
             e.stopPropagation();
             if (bottomSheetIsExpanded) {
                 collapseBottomSheet();
@@ -10950,7 +11067,7 @@ function initBottomSheet() {
     // But only if clicking on handle/header, not on content (to allow scrolling)
     bottomSheet.addEventListener('click', (e) => {
         // Don't expand if clicking inside the content area (allows interaction with buttons, scroll, etc.)
-        if (e.target.closest('.bottom-sheet-content')) {
+        if (voyagrClosest(e.target, '.bottom-sheet-content')) {
             return;
         }
         if (!bottomSheetIsExpanded) {
@@ -13280,6 +13397,20 @@ async function showAutocomplete(fieldId) {
     }
 
     if (!query || query.length < 2) {
+        if (fieldId === 'end') {
+            const histEl = document.getElementById('searchHistoryDropdown');
+            if (histEl) {
+                histEl.classList.remove('show');
+                histEl.innerHTML = '';
+            }
+            dropdown.innerHTML = '<div class="autocomplete-loading">Loading…</div>';
+            dropdown.classList.add('show');
+            renderEndDestinationSuggestions(dropdown).catch((err) => {
+                console.error('[Recent destinations]', err);
+                dropdown.innerHTML = '<div class="autocomplete-no-results">Could not load recent destinations.</div>';
+            });
+            return;
+        }
         dropdown.classList.remove('show');
         return;
     }
@@ -13440,6 +13571,10 @@ function selectAutocompleteResult(fieldId, lat, lon, name) {
     input.dataset.displayName = name;
 
     if (dropdown) dropdown.classList.remove('show');
+
+    if (fieldId === 'end') {
+        recordRecentDestination(name, lat, lon, 'search');
+    }
 
     showStatus(`✅ Selected: ${name}`, 'success');
 
@@ -14882,7 +15017,7 @@ function initMobileEnhancements() {
 
     // Prevent pull-to-refresh on mobile browsers
     document.body.addEventListener('touchmove', (e) => {
-        if (e.target.closest('.bottom-sheet-content')) {
+        if (voyagrClosest(e.target, '.bottom-sheet-content')) {
             // Allow scrolling in bottom sheet
             return;
         }

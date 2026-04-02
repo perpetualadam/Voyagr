@@ -3791,7 +3791,7 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>Voyagr Navigation</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260331u" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260331v" />
     <script src="/static/vendor/maplibre-gl.js"></script>
     <script src="/static/js/maplibre-helpers.js?v=20260117t"></script>
     <script src="/static/vendor/supabase.min.js"></script>
@@ -3800,7 +3800,7 @@ HTML_TEMPLATE = '''
     <!-- External JavaScript modules -->
     <script src="/static/js/modules/traffic-lights.js?v=20260117t"></script>
     <script src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    <script src="/static/js/voyagr-app.js?v=20260211t4"></script>
+    <script src="/static/js/voyagr-app.js?v=20260331v"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -4695,8 +4695,8 @@ HTML_TEMPLATE = '''
 
                         <!-- Recording Controls -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-                            <button id="dashcamStartBtn" class="routing-mode-btn" onclick="startDashcamRecording()" style="background: #4CAF50; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 14px;">🔴 Start Recording</button>
-                            <button id="dashcamStopBtn" class="routing-mode-btn" onclick="stopDashcamRecording()" style="background: #F44336; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 14px; display: none;">⏹️ Stop Recording</button>
+                            <button type="button" id="dashcamStartBtn" class="routing-mode-btn" onclick="startDashcamRecording()" style="background: #4CAF50; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 14px; touch-action: manipulation;">🔴 Start Recording</button>
+                            <button type="button" id="dashcamStopBtn" class="routing-mode-btn" onclick="stopDashcamRecording()" style="background: #F44336; color: white; border: none; padding: 12px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 14px; display: none; touch-action: manipulation;">⏹️ Stop Recording</button>
                         </div>
 
                         <!-- Recording Indicator (During Navigation) -->
@@ -4734,7 +4734,7 @@ HTML_TEMPLATE = '''
 
                             <div class="preference-item" style="margin-bottom: 12px;">
                                 <span class="preference-label">Audio Recording</span>
-                                <button class="toggle-switch" id="dashcamAudio" onclick="updateDashcamSettings()" style="margin-left: auto;"></button>
+                                <button type="button" class="toggle-switch" id="dashcamAudio" onclick="toggleDashcamAudio()" style="margin-left: auto;" aria-label="Toggle audio recording"></button>
                             </div>
 
                             <div class="preference-item">
@@ -5278,6 +5278,12 @@ HTML_TEMPLATE = '''
             loadDashcamRecordings();
             loadDashcamSettings();
         });
+
+        function toggleDashcamAudio() {
+            const audioBtn = document.getElementById('dashcamAudio');
+            if (audioBtn) audioBtn.classList.toggle('active');
+            updateDashcamSettings();
+        }
 
         async function startDashcamRecording() {
             try {
