@@ -5267,7 +5267,7 @@ HTML_TEMPLATE = '''
                     // Update UI
                     updateDashcamUI();
                     startRecordingTimer();
-                    showNotification('Dashcam recording started', 'success');
+                    sendNotification('📹 Dashcam', 'Dashcam recording started', 'success');
 
                     // Show recording indicator
                     document.getElementById('dashcamIndicator').style.display = 'block';
@@ -5275,11 +5275,11 @@ HTML_TEMPLATE = '''
                     // Start collecting GPS metadata
                     startDashcamMetadataCollection();
                 } else {
-                    showNotification('Failed to start recording: ' + data.error, 'error');
+                    sendNotification('📹 Dashcam', 'Failed to start recording: ' + data.error, 'error');
                 }
             } catch (error) {
                 console.error('Error starting dashcam:', error);
-                showNotification('Error starting dashcam recording', 'error');
+                sendNotification('📹 Dashcam', 'Error starting dashcam recording', 'error');
             }
         }
 
@@ -5296,16 +5296,16 @@ HTML_TEMPLATE = '''
                     updateDashcamUI();
                     document.getElementById('dashcamIndicator').style.display = 'none';
 
-                    showNotification('Dashcam recording stopped', 'success');
+                    sendNotification('📹 Dashcam', 'Dashcam recording stopped', 'success');
 
                     // Reload recordings list
                     loadDashcamRecordings();
                 } else {
-                    showNotification('Failed to stop recording: ' + data.error, 'error');
+                    sendNotification('📹 Dashcam', 'Failed to stop recording: ' + data.error, 'error');
                 }
             } catch (error) {
                 console.error('Error stopping dashcam:', error);
-                showNotification('Error stopping dashcam recording', 'error');
+                sendNotification('📹 Dashcam', 'Error stopping dashcam recording', 'error');
             }
         }
 
@@ -5441,14 +5441,14 @@ HTML_TEMPLATE = '''
                 const data = await response.json();
 
                 if (data.success) {
-                    showNotification('Recording deleted', 'success');
+                    sendNotification('📹 Dashcam', 'Recording deleted', 'success');
                     loadDashcamRecordings();
                 } else {
-                    showNotification('Failed to delete recording', 'error');
+                    sendNotification('📹 Dashcam', 'Failed to delete recording', 'error');
                 }
             } catch (error) {
                 console.error('Error deleting recording:', error);
-                showNotification('Error deleting recording', 'error');
+                sendNotification('📹 Dashcam', 'Error deleting recording', 'error');
             }
         }
 
@@ -5460,14 +5460,14 @@ HTML_TEMPLATE = '''
                 const data = await response.json();
 
                 if (data.success) {
-                    showNotification(`Cleaned up ${data.deleted_count} old recordings`, 'success');
+                    sendNotification('📹 Dashcam', `Cleaned up ${data.deleted_count} old recordings`, 'success');
                     loadDashcamRecordings();
                 } else {
-                    showNotification('Cleanup failed: ' + data.error, 'error');
+                    sendNotification('📹 Dashcam', 'Cleanup failed: ' + data.error, 'error');
                 }
             } catch (error) {
                 console.error('Error cleaning up recordings:', error);
-                showNotification('Error cleaning up recordings', 'error');
+                sendNotification('📹 Dashcam', 'Error cleaning up recordings', 'error');
             }
         }
 
@@ -5477,15 +5477,19 @@ HTML_TEMPLATE = '''
                 response.then(r => r.json()).then(data => {
                     if (data.success && data.settings) {
                         document.getElementById('dashcamResolution').value = data.settings.resolution || '1080p';
-                        document.getElementById('dashcamFps').value = data.settings.fps || '30';
-                        document.getElementById('dashcamRetention').value = data.settings.retention_days || '14';
+                        document.getElementById('dashcamFps').value = String(data.settings.fps != null ? data.settings.fps : '30');
+                        document.getElementById('dashcamRetention').value = String(data.settings.retention_days != null ? data.settings.retention_days : '14');
 
                         const audioBtn = document.getElementById('dashcamAudio');
-                        if (data.settings.audio) {
-                            audioBtn.classList.add('active');
+                        if (audioBtn) {
+                            if (data.settings.audio_enabled) {
+                                audioBtn.classList.add('active');
+                            } else {
+                                audioBtn.classList.remove('active');
+                            }
                         }
                     }
-                });
+                }).catch(function (e) { console.error('Dashcam settings load failed:', e); });
             } catch (error) {
                 console.error('Error loading dashcam settings:', error);
             }
@@ -5508,13 +5512,13 @@ HTML_TEMPLATE = '''
 
                 const data = await response.json();
                 if (data.success) {
-                    showNotification('Dashcam settings updated', 'success');
+                    sendNotification('📹 Dashcam', 'Dashcam settings updated', 'success');
                 } else {
-                    showNotification('Failed to update settings', 'error');
+                    sendNotification('📹 Dashcam', 'Failed to update settings', 'error');
                 }
             } catch (error) {
                 console.error('Error updating dashcam settings:', error);
-                showNotification('Error updating settings', 'error');
+                sendNotification('📹 Dashcam', 'Error updating settings', 'error');
             }
         }
     </script>

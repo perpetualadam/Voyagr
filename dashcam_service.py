@@ -233,9 +233,12 @@ class DashcamService:
     def update_settings(self, settings: Dict[str, Any]) -> Dict[str, Any]:
         """Update dashcam settings."""
         try:
-            self.settings.update(settings)
+            normalized = dict(settings)
+            if 'audio' in normalized and 'audio_enabled' not in normalized:
+                normalized['audio_enabled'] = bool(normalized.pop('audio'))
+            self.settings.update(normalized)
             logger.info(f"Settings updated: {settings}")
-            return {'success': True, 'settings': self.settings}
+            return {'success': True, 'settings': self.settings.copy()}
         except Exception as e:
             logger.error(f"Error updating settings: {e}")
             return {'success': False, 'error': str(e)}

@@ -65,8 +65,8 @@ def add_metadata():
     """Add GPS metadata to current recording."""
     try:
         data = request.json or {}
-        lat = float(data.get('lat', 0))
-        lon = float(data.get('lon', 0))
+        lat = float(data.get('lat', data.get('latitude', 0)))
+        lon = float(data.get('lon', data.get('longitude', 0)))
         speed = float(data.get('speed', 0))
         heading = float(data.get('heading', 0))
         
