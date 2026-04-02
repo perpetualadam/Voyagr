@@ -9074,7 +9074,8 @@ function disableBatterySavingMode() {
 
 // ===== PHASE 3 FEATURES: MAP THEMES =====
 
-let currentMapTheme = 'standard';
+let currentMapTheme =
+    typeof localStorage !== 'undefined' ? localStorage.getItem('mapTheme') || 'standard' : 'standard';
 /**
  * setMapTheme function
  * @function setMapTheme

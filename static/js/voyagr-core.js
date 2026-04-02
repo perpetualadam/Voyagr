@@ -131,7 +131,18 @@ function initializeMap() {
     // We use synchronous XHR so that `map` is available immediately after initializeMap()
     // returns — the rest of the app (setupMapClickHandler, loadAllSettings, etc.) depends
     // on this being synchronous.
-    const VECTOR_STYLE_PATH = '/map/styles/liberty/style.json';
+    const mapTheme =
+        typeof localStorage !== 'undefined'
+            ? localStorage.getItem('mapTheme') || 'standard'
+            : 'standard';
+    let VECTOR_STYLE_PATH;
+    if (mapTheme === 'satellite') {
+        VECTOR_STYLE_PATH = '/static/map/styles/satellite/style.json';
+    } else if (mapTheme === 'dark') {
+        VECTOR_STYLE_PATH = '/map/styles/positron/style.json';
+    } else {
+        VECTOR_STYLE_PATH = '/map/styles/liberty/style.json';
+    }
     let resolvedStyle = null;
 
     try {
