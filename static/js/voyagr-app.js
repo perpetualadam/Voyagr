@@ -199,11 +199,25 @@ let smartZoomEnabled = localStorage.getItem('smartZoomEnabled') === '1' || true;
 // let zoomAndFollowEnabled = ...;
 // let mapFollowingActive = ...;
 let navigationActive = false;
-let paddingBottom = window.innerHeight * 0.55; // For driver's perspective
+
+/**
+ * Camera padding while following navigation: keeps the vehicle icon in the lower third of the map
+ * (ahead of you on screen). Top inset pushes the focal point down; bottom inset clears the bottom sheet / chrome.
+ */
+function getNavigationFollowPadding() {
+    const h = window.innerHeight;
+    const w = window.innerWidth;
+    const bottomUiReserve = Math.min(200, Math.max(96, h * 0.15));
+    return {
+        top: Math.round(h * 0.38),
+        bottom: Math.round(bottomUiReserve),
+        left: Math.round(Math.min(22, w * 0.03)),
+        right: Math.round(Math.min(22, w * 0.03))
+    };
+}
 
 window.addEventListener('resize', () => {
-    paddingBottom = window.innerHeight * 0.55;
-    console.log(`[Viewport] Padding updated: ${paddingBottom.toFixed(0)}px`);
+    console.log('[Viewport] Window resized; follow padding recomputed on next frame');
 });
 
 // ===== DARK MODE FUNCTIONS =====
@@ -9596,7 +9610,7 @@ let driverPerspectiveEnabled = localStorage.getItem('driverPerspectiveEnabled') 
 
 /**
  * Toggle driver's perspective (3D view) setting
- * When enabled: 60° pitch with heading-aligned bearing and bottom padding
+ * When enabled: 60° pitch with heading-aligned bearing and follow padding (vehicle lower on screen)
  * When disabled: 0° pitch for standard top-down view
  */
 function toggleDriverPerspective() {
@@ -9627,7 +9641,7 @@ function toggleDriverPerspective() {
 
 /**
  * Apply driver's perspective camera view if enabled
- * Uses 60° pitch, heading-aligned bearing, and bottom padding
+ * Uses 60° pitch, heading-aligned bearing, and follow padding
  */
 function applyDriverPerspective() {
     if (!map) return;
@@ -9644,7 +9658,7 @@ function applyDriverPerspective() {
         // 3D driver's eye view
         easeOptions.pitch = 60;
         easeOptions.bearing = heading;
-        easeOptions.padding = { top: 0, bottom: window.innerHeight * 0.5, left: 0, right: 0 };
+        easeOptions.padding = getNavigationFollowPadding();
 
         // Only set center if we have valid coordinates
         if (currentLat && currentLon) {
@@ -9652,7 +9666,7 @@ function applyDriverPerspective() {
         }
 
         map.easeTo(easeOptions);
-        console.log('[Driver View] Applied 3D perspective (pitch: 60°, padding: 50% bottom)');
+        console.log('[Driver View] Applied 3D perspective (pitch: 60°, follow padding)');
     } else {
         // Standard top-down view
         easeOptions.pitch = 0;
@@ -11182,12 +11196,9 @@ function startGPSTracking() {
                 const smartZoom = calculateSmartZoom(speedMph, null, 'motorway');
 
                 // Respect driver's perspective setting for pitch
-                // When enabled: 60° pitch with bottom padding for driver's eye view
-                // When disabled: 0° pitch for standard top-down view
+                // Padding: large top inset places vehicle near bottom of visible map (classic satnav)
                 const pitch = driverPerspectiveEnabled ? 60 : 0;
-                const padding = driverPerspectiveEnabled
-                    ? { top: 0, bottom: window.innerHeight * 0.5, left: 0, right: 0 }
-                    : { top: 50, bottom: paddingBottom, left: 50, right: 50 };
+                const padding = getNavigationFollowPadding();
                 const bearing = driverPerspectiveEnabled ? (heading || map.getBearing()) : 0;
 
                 // Smooth animation to follow vehicle
@@ -11203,10 +11214,10 @@ function startGPSTracking() {
 
                 console.log(`[Navigation] View: pitch ${pitch}°, bearing ${Math.round(bearing)}°, zoom ${smartZoom.toFixed(1)}, driverPerspective: ${driverPerspectiveEnabled}`);
             } else if (!zoomAndFollowEnabled && !map._userPanned) {
-                // If zoom and follow is disabled but map hasn't been manually panned, still center on user
                 map.easeTo({
                     center: [displayLon, displayLat],
                     zoom: 16,
+                    padding: routeInProgress ? getNavigationFollowPadding() : undefined,
                     duration: 1000
                 });
             }
@@ -13688,7 +13699,7 @@ function startTurnByTurnNavigation(routeData) {
                 pitch: pitch,
                 bearing: heading,
                 center: [currentLon, currentLat],
-                padding: { top: 0, bottom: window.innerHeight * 0.3, left: 0, right: 0 },
+                padding: getNavigationFollowPadding(),
                 duration: 1000
             });
             console.log(`[Driver View] Applied 3D perspective (pitch: ${pitch}°)`);
