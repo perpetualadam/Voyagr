@@ -3171,6 +3171,7 @@ function saveMultiDropPreferences() {
 }
 
 function loadMultiDropPreferences() {
+    ensureDefaultTrafficAwareRouting();
     const optimizeEl = document.getElementById('optimizeStopOrder');
     const roundTripEl = document.getElementById('roundTrip');
     const trafficEl = document.getElementById('trafficAwareRouting');
@@ -5224,6 +5225,9 @@ let deviationStartTime = null;
 let isCurrentlyDeviated = false;
 const DEVIATION_THRESHOLD_METERS = 50;
 const DEVIATION_TIME_THRESHOLD_MS = 10000; // 10 seconds
+/** Until GPS is this close to the route line, skip deviation alerts/reroute (e.g. start point ≠ current location). */
+const ROUTE_JOIN_GATE_METERS = 120;
+let routeJoinConfirmedForDeviation = false;
 
 /**
  * Toggle auto-traffic update on/off
@@ -10405,15 +10409,18 @@ function updateJourneySummaryBar() {
 
     if (!distanceEl || !timeEl || !etaEl) return;
 
-    // Calculate remaining distance from current position
-    let remainingDistanceMeters = 0;
-    const startIdx = currentStepIndex || 0;
+    const userHasStartedMoving = hasUserStartedMoving();
 
-    for (let i = startIdx; i < routePolyline.length - 1; i++) {
-        remainingDistanceMeters += calculateDistance(
-            routePolyline[i][0], routePolyline[i][1],
-            routePolyline[i + 1][0], routePolyline[i + 1][1]
-        );
+    // Remaining distance along the decoded polyline (not currentStepIndex — that is a maneuver index)
+    let remainingDistanceMeters = 0;
+    if (routePolyline.length >= 2) {
+        if (userHasStartedMoving && currentLat != null && currentLon != null) {
+            remainingDistanceMeters = computeRemainingDistanceAlongRoute(
+                currentLat, currentLon, routePolyline, lastSnappedRouteIndex
+            );
+        } else {
+            remainingDistanceMeters = getTotalPolylineLengthMeters(routePolyline);
+        }
     }
 
     // Format remaining distance in user's preferred units
@@ -10431,15 +10438,15 @@ function updateJourneySummaryBar() {
     // Calculate remaining time based on route data
     let remainingTimeMinutes = 0;
 
-    // FIX: Only use progress-based calculation if user has actually started moving
-    const userHasStartedMoving = hasUserStartedMoving();
-
-    if (window.lastCalculatedRoute && window.lastCalculatedRoute.duration_minutes) {
-        const totalDuration = window.lastCalculatedRoute.duration_minutes;
-        const totalDistance = window.lastCalculatedRoute.distance_km * 1000 || 1;
+    const routeDurationMin = getRouteOriginalDurationMinutes();
+    if (window.lastCalculatedRoute && routeDurationMin > 0) {
+        const totalDuration = routeDurationMin;
+        const polylineTotalM = getTotalPolylineLengthMeters(routePolyline);
+        const totalDistance =
+            polylineTotalM > 0 ? polylineTotalM : (window.lastCalculatedRoute.distance_km * 1000 || 1);
 
         if (userHasStartedMoving) {
-            // User is moving: Use progress-based calculation
+            // User is moving: Use progress-based calculation (same length basis as remaining distance)
             const progress = 1 - (remainingDistanceMeters / totalDistance);
             remainingTimeMinutes = totalDuration * (1 - progress);
 
@@ -10454,6 +10461,7 @@ function updateJourneySummaryBar() {
             remainingTimeMinutes = totalDuration;
             console.log(`[ETA] Pre-movement: Using original duration ${totalDuration.toFixed(1)} min`);
         }
+        remainingTimeMinutes = applyTrafficRatioToBaseRemaining(remainingTimeMinutes);
     } else {
         // Fallback: estimate based on average speed (50 km/h)
         const avgSpeedKmh = 50;
@@ -10831,6 +10839,7 @@ window.addEventListener('load', () => {
 
     // Load all persistent settings from localStorage
     console.log('[Settings] Loading all persistent settings...');
+    ensureDefaultTrafficAwareRouting();
     loadAllSettings();
     applySettingsToUI();
 
@@ -11342,8 +11351,165 @@ const DESTINATION_ANNOUNCEMENT_DISTANCES = [10000, 5000, 2000, 1000, 500, 100]; 
 let lastETAAnnouncementTime = 0;
 let lastAnnouncedETA = null;
 const ETA_ANNOUNCEMENT_INTERVAL_MS = 600000; // Announce ETA every 10 minutes (600,000 ms)
+const ETA_INITIAL_ANNOUNCE_DELAY_MS = 30000; // First ETA voice shortly after navigation starts
+const NAV_TRAFFIC_ETA_MIN_INTERVAL_MS = 12000; // Min time between traffic-conditions fetches (ETA refresh is ~30s)
 const ETA_CHANGE_THRESHOLD_MS = 300000; // Announce if ETA changes by >5 minutes (300,000 ms)
 const ETA_MIN_INTERVAL_MS = 60000; // Minimum 1 minute between any ETA announcements (prevents excessive frequency)
+
+let initialETAAnnouncementTimeoutId = null;
+let lastNavTrafficFetchAt = 0;
+/** Live nav ETA + traffic snapshot (updated during navigation). */
+window.navETASnapshot = {
+    baseRemainingMinutes: 0,
+    trafficAdjustedMinutes: null,
+    trafficLevel: null,
+    congestionPercent: null,
+    progressPercent: 0,
+    trafficFetchAt: 0,
+    baseAtTrafficFetch: 0
+};
+
+/** First-time default: traffic-aware ETA on; only explicit 'false' disables. */
+function ensureDefaultTrafficAwareRouting() {
+    if (localStorage.getItem('pref_trafficAwareRouting') === null) {
+        localStorage.setItem('pref_trafficAwareRouting', 'true');
+    }
+}
+
+function shouldApplyTrafficAwareETA() {
+    ensureDefaultTrafficAwareRouting();
+    if (localStorage.getItem('pref_trafficAwareRouting') === 'false') return false;
+    return (currentRoutingMode || 'auto') === 'auto';
+}
+
+function getRouteOriginalDurationMinutes() {
+    if (!window.lastCalculatedRoute) return 0;
+    let m = window.lastCalculatedRoute.duration_minutes ||
+        (window.lastCalculatedRoute.time ? parseInt(window.lastCalculatedRoute.time, 10) : 0);
+    if (m > 1440) m = Math.round(m / 60);
+    return m;
+}
+
+/**
+ * Progress-based remaining time (minutes) from GPS on polyline; same basis as server route duration.
+ * @returns {{ originalDurationMinutes: number, timeRemainingMinutes: number, progressPercent: number } | null}
+ */
+function computeBaseNavigationETAMinutes() {
+    if (!routeInProgress || !window.lastCalculatedRoute || !routePolyline || routePolyline.length === 0) {
+        return null;
+    }
+    const originalDurationMinutes = getRouteOriginalDurationMinutes();
+    if (!originalDurationMinutes || originalDurationMinutes <= 0) return null;
+
+    const userHasStartedMoving = hasUserStartedMoving();
+    const totalDistance = getTotalPolylineLengthMeters(routePolyline);
+    let remainingDistance = totalDistance;
+    if (userHasStartedMoving && currentLat != null && currentLon != null && routePolyline.length >= 2) {
+        remainingDistance = computeRemainingDistanceAlongRoute(
+            currentLat, currentLon, routePolyline, lastSnappedRouteIndex
+        );
+    }
+    let progressPercent = 0;
+    if (totalDistance > 0) {
+        progressPercent = Math.max(0, Math.min(100, ((totalDistance - remainingDistance) / totalDistance) * 100));
+    }
+    const timeRemainingMinutes = Math.round(originalDurationMinutes * (1 - (progressPercent / 100)));
+    if (timeRemainingMinutes < 0 || timeRemainingMinutes > originalDurationMinutes) return null;
+    return { originalDurationMinutes, timeRemainingMinutes, progressPercent };
+}
+
+function applyTrafficRatioToBaseRemaining(baseRemainingMinutes) {
+    if (!shouldApplyTrafficAwareETA()) return baseRemainingMinutes;
+    const snap = window.navETASnapshot;
+    if (snap.trafficAdjustedMinutes == null || snap.baseAtTrafficFetch <= 0 || !snap.trafficFetchAt) {
+        return baseRemainingMinutes;
+    }
+    if (Date.now() - snap.trafficFetchAt > 90000) return baseRemainingMinutes;
+    const ratio = snap.trafficAdjustedMinutes / snap.baseAtTrafficFetch;
+    return Math.max(1, Math.round(baseRemainingMinutes * ratio));
+}
+
+async function refreshNavTrafficETAIfDue(baseRemainingMinutes, progressPercent, forceFetch = false) {
+    window.navETASnapshot.baseRemainingMinutes = baseRemainingMinutes;
+    window.navETASnapshot.progressPercent = progressPercent;
+
+    if (!shouldApplyTrafficAwareETA() || !currentLat || !currentLon) {
+        window.navETASnapshot.trafficAdjustedMinutes = null;
+        return;
+    }
+
+    const now = Date.now();
+    if (!forceFetch && now - lastNavTrafficFetchAt < NAV_TRAFFIC_ETA_MIN_INTERVAL_MS && window.navETASnapshot.trafficFetchAt) {
+        return;
+    }
+    lastNavTrafficFetchAt = now;
+
+    try {
+        const response = await fetch('/api/traffic-conditions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                lat: currentLat,
+                lon: currentLon,
+                duration_minutes: Math.max(1, Math.round(baseRemainingMinutes))
+            })
+        });
+        const data = await response.json();
+        if (data.success) {
+            const baseAt = Math.max(1, Math.round(baseRemainingMinutes));
+            window.navETASnapshot = {
+                ...window.navETASnapshot,
+                trafficAdjustedMinutes: data.updated_duration_minutes,
+                trafficLevel: data.traffic_level,
+                congestionPercent: data.congestion_percentage != null ? data.congestion_percentage : null,
+                trafficFetchAt: Date.now(),
+                baseAtTrafficFetch: baseAt
+            };
+        }
+    } catch (e) {
+        console.warn('[ETA] Traffic conditions fetch failed:', e);
+    }
+}
+
+function renderTurnInfoETAPanel(baseMinutes, adjustedMinutes, progressPercent, trafficLevel, congestionPercent) {
+    const turnInfo = document.getElementById('turnInfo');
+    if (!turnInfo) return;
+    const now = Date.now();
+    const displayMins = adjustedMinutes != null ? adjustedMinutes : baseMinutes;
+    const eta = new Date(now + displayMins * 60000);
+    let trafficLine = '';
+    if (shouldApplyTrafficAwareETA()) {
+        if (trafficLevel) {
+            trafficLine = `Traffic: ${trafficLevel}`;
+            if (congestionPercent != null) trafficLine += ` · ${congestionPercent}% congestion`;
+        } else {
+            trafficLine = 'Traffic: updating…';
+        }
+    }
+    turnInfo.innerHTML = `
+            <div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
+                <div style="font-size: 12px; color: #666;">ETA</div>
+                <div style="font-size: 18px; font-weight: bold; color: #333;">
+                    ${eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+                <div style="font-size: 12px; color: #999; margin-top: 5px;">
+                    ${displayMins} min remaining (${progressPercent.toFixed(0)}% complete)
+                </div>
+                ${trafficLine ? `<div style="font-size: 11px; color: #555; margin-top: 4px;">${trafficLine}</div>` : ''}
+            </div>
+        `;
+}
+
+function buildETAVoiceMessage(timeRemainingMinutes, etaDate) {
+    const etaHours = etaDate.getHours();
+    const etaMinutes = etaDate.getMinutes();
+    if (timeRemainingMinutes > 60) {
+        const hours = Math.floor(timeRemainingMinutes / 60);
+        const mins = timeRemainingMinutes % 60;
+        return `You will arrive in ${hours} hour${hours > 1 ? 's' : ''} and ${mins} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
+    }
+    return `You will arrive in ${timeRemainingMinutes} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
+}
 
 let lastVoiceAnnouncementTime = 0;
 let VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = 10000;
@@ -11380,7 +11546,6 @@ function findNearestRouteIndex(lat, lon, polyline) {
         }
     }
 
-    console.log(`[ETA] Found nearest route point at index ${nearestIndex} (${minDistance.toFixed(0)}m away)`);
     return nearestIndex;
 }
 
@@ -11467,6 +11632,44 @@ function snapToRoutePolyline(lat, lon, polyline, searchStartIndex = 0) {
     }
 
     return { lat: bestLat, lon: bestLon, index: bestIndex, distance: bestDist, t: bestT };
+}
+
+/**
+ * Total path length along the polyline (meters).
+ */
+function getTotalPolylineLengthMeters(polyline) {
+    if (!polyline || polyline.length < 2) return 0;
+    let total = 0;
+    for (let i = 0; i < polyline.length - 1; i++) {
+        total += calculateDistance(
+            polyline[i][0], polyline[i][1],
+            polyline[i + 1][0], polyline[i + 1][1]
+        );
+    }
+    return total;
+}
+
+/**
+ * Remaining distance (meters) along the polyline from the snapped GPS position to the route end.
+ * Uses the same snap logic as the map marker so ETA tracks progress along the line.
+ */
+function computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex = 0) {
+    if (!polyline || polyline.length < 2) return 0;
+    const snap = snapToRoutePolyline(lat, lon, polyline, searchStartIndex);
+    const i = snap.index;
+    const t = snap.t !== undefined ? snap.t : 0;
+    const segLen = calculateDistance(
+        polyline[i][0], polyline[i][1],
+        polyline[i + 1][0], polyline[i + 1][1]
+    );
+    let remaining = (1 - t) * segLen;
+    for (let j = i + 1; j < polyline.length - 1; j++) {
+        remaining += calculateDistance(
+            polyline[j][0], polyline[j][1],
+            polyline[j + 1][0], polyline[j + 1][1]
+        );
+    }
+    return Math.max(0, remaining);
 }
 
 // Track the last snapped route index for efficient searching
@@ -11857,15 +12060,19 @@ function checkRouteDeviation(lat, lon) {
         return;
     }
 
-    // Calculate distance from current position to route
     if (!routePolyline || routePolyline.length === 0) return;
 
-    let minDistance = Infinity;
-    for (let i = 0; i < routePolyline.length; i++) {
-        const point = routePolyline[i];
-        const distance = calculateDistance(lat, lon, point[0], point[1]);
-        if (distance < minDistance) {
-            minDistance = distance;
+    const snap = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+    const minDistance = snap.distance;
+
+    if (!routeJoinConfirmedForDeviation) {
+        if (minDistance <= ROUTE_JOIN_GATE_METERS) {
+            routeJoinConfirmedForDeviation = true;
+            if (deviationStartTimeCheck) deviationStartTimeCheck = null;
+            console.log('[Rerouting] Route join detected — deviation monitoring active');
+        } else {
+            if (deviationStartTimeCheck) deviationStartTimeCheck = null;
+            return;
         }
     }
 
@@ -12333,6 +12540,7 @@ function checkNearbyHazards(lat, lon) {
  */
 function startLiveDataRefresh() {
     if (routeInProgress) {
+        stopLiveDataRefresh(); // Avoid stacked intervals if this runs more than once per session
         // Get adaptive intervals based on battery level (Phase 3)
         const trafficInterval = getAdaptiveRefreshInterval(REFRESH_INTERVALS.traffic_navigation);
         const etaInterval = getAdaptiveRefreshInterval(REFRESH_INTERVALS.eta);
@@ -12345,10 +12553,9 @@ function startLiveDataRefresh() {
         }, trafficInterval);
 
         // FIXED: ETA refresh every 30 seconds (or adaptive)
-        // Now includes voice announcement with proper throttling
+        // Traffic-aware ETA fetches inside updateETACalculation; voice runs after refresh
         etaRefreshInterval = setInterval(() => {
-            updateETACalculation();
-            announceETAIfNeeded();  // FIXED: Announce ETA only when needed (every 10 minutes)
+            updateETACalculation().then(() => announceETAIfNeeded());
         }, etaInterval);
 
         // Weather refresh every 30 minutes (or adaptive)
@@ -12406,83 +12613,37 @@ function refreshTrafficData() {
 /**
  * updateETACalculation function
  * @function updateETACalculation
- * @returns {*} Return value description
+ * @returns {Promise<void>}
  */
-function updateETACalculation() {
+async function updateETACalculation() {
     if (!routeInProgress || !window.lastCalculatedRoute || !routePolyline) return;
 
-    // Get original route duration from the calculated route
-    let originalDurationMinutes = window.lastCalculatedRoute.duration_minutes ||
-        (window.lastCalculatedRoute.time ? parseInt(window.lastCalculatedRoute.time) : 0);
-
-    // FIXED: Sanity check - duration should be reasonable (< 24 hours = 1440 minutes)
-    // If duration is > 1440, it might be in seconds instead of minutes
-    if (originalDurationMinutes > 1440) {
-        console.warn('[ETA] Duration seems to be in seconds, converting:', originalDurationMinutes);
-        originalDurationMinutes = Math.round(originalDurationMinutes / 60);
-    }
-
-    if (!originalDurationMinutes || originalDurationMinutes <= 0) {
-        console.warn('[ETA] No valid route duration available');
+    const base = computeBaseNavigationETAMinutes();
+    if (!base) {
+        console.warn('[ETA] No valid route duration or progress');
         return;
     }
 
-    console.log('[ETA] Using duration:', originalDurationMinutes, 'minutes');
+    const { timeRemainingMinutes, progressPercent } = base;
+    let adjusted = applyTrafficRatioToBaseRemaining(timeRemainingMinutes);
+    renderTurnInfoETAPanel(
+        timeRemainingMinutes,
+        shouldApplyTrafficAwareETA() ? adjusted : null,
+        progressPercent,
+        window.navETASnapshot.trafficLevel,
+        window.navETASnapshot.congestionPercent
+    );
 
-    // Calculate remaining distance to estimate progress
-    let remainingDistance = 0;
-    if (currentStepIndex !== undefined) {
-        for (let i = currentStepIndex; i < routePolyline.length - 1; i++) {
-            remainingDistance += calculateDistance(
-                routePolyline[i][0], routePolyline[i][1],
-                routePolyline[i + 1][0], routePolyline[i + 1][1]
-            );
-        }
-    }
+    await refreshNavTrafficETAIfDue(timeRemainingMinutes, progressPercent, false);
 
-    // Calculate total route distance
-    let totalDistance = 0;
-    for (let i = 0; i < routePolyline.length - 1; i++) {
-        totalDistance += calculateDistance(
-            routePolyline[i][0], routePolyline[i][1],
-            routePolyline[i + 1][0], routePolyline[i + 1][1]
-        );
-    }
-
-    // Calculate progress percentage (0-100)
-    let progressPercent = 0;
-    if (totalDistance > 0) {
-        progressPercent = Math.max(0, Math.min(100, ((totalDistance - remainingDistance) / totalDistance) * 100));
-    }
-
-    // Calculate time remaining based on progress
-    // If we've completed X% of the route, we have (100-X)% of time remaining
-    const timeRemainingMinutes = Math.round(originalDurationMinutes * (1 - (progressPercent / 100)));
-
-    // Sanity check: time remaining should be positive and less than original duration
-    if (timeRemainingMinutes < 0 || timeRemainingMinutes > originalDurationMinutes) {
-        console.warn('[ETA] Invalid time remaining calculated:', timeRemainingMinutes, 'original:', originalDurationMinutes);
-        return;
-    }
-
-    const now = Date.now();
-    const eta = new Date(now + timeRemainingMinutes * 60000);
-
-    // Update display
-    const turnInfo = document.getElementById('turnInfo');
-    if (turnInfo) {
-        turnInfo.innerHTML = `
-            <div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
-                <div style="font-size: 12px; color: #666;">ETA</div>
-                <div style="font-size: 18px; font-weight: bold; color: #333;">
-                    ${eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-                <div style="font-size: 12px; color: #999; margin-top: 5px;">
-                    ${timeRemainingMinutes} min remaining (${progressPercent.toFixed(0)}% complete)
-                </div>
-            </div>
-        `;
-    }
+    adjusted = applyTrafficRatioToBaseRemaining(timeRemainingMinutes);
+    renderTurnInfoETAPanel(
+        timeRemainingMinutes,
+        shouldApplyTrafficAwareETA() ? adjusted : null,
+        progressPercent,
+        window.navETASnapshot.trafficLevel,
+        window.navETASnapshot.congestionPercent
+    );
 }
 
 /**
@@ -12492,103 +12653,59 @@ function updateETACalculation() {
  * FIX: Added movement detection to prevent incorrect ETA announcements before journey starts
  */
 function announceETAIfNeeded() {
-    // FIXED: Announce ETA only when needed (every 10 minutes)
-    // Uses original route duration for accurate ETA calculation
     if (!routeInProgress || !window.lastCalculatedRoute || !voiceAnnouncementsEnabled) return;
 
     const now = Date.now();
     const timeSinceLastAnnouncement = now - lastETAAnnouncementTime;
 
-    // Only announce if 10 minutes have passed since last announcement
     if (timeSinceLastAnnouncement > ETA_ANNOUNCEMENT_INTERVAL_MS) {
-        // Get original route duration from the calculated route
-        let originalDurationMinutes = window.lastCalculatedRoute.duration_minutes ||
-            (window.lastCalculatedRoute.time ? parseInt(window.lastCalculatedRoute.time) : 0);
-
-        // FIXED: Sanity check - duration should be reasonable (< 24 hours = 1440 minutes)
-        // If duration is > 1440, it might be in seconds instead of minutes
-        if (originalDurationMinutes > 1440) {
-            console.warn('[ETA] Duration seems to be in seconds, converting:', originalDurationMinutes);
-            originalDurationMinutes = Math.round(originalDurationMinutes / 60);
-        }
-
-        if (!originalDurationMinutes || originalDurationMinutes <= 0) {
-            console.warn('[ETA] No valid route duration available');
+        const base = computeBaseNavigationETAMinutes();
+        if (!base) {
+            console.warn('[ETA] No valid route duration for voice');
             return;
         }
-
-        // FIX: Check if user has actually started moving
-        const userHasStartedMoving = hasUserStartedMoving();
-        let timeRemainingMinutes;
-
-        if (userHasStartedMoving) {
-            // User is moving: Calculate progress-based ETA
-            // FIXED: Calculate remaining distance from ACTUAL GPS position on route
-            // Previously used currentStepIndex (maneuver index) which doesn't correspond to polyline indices
-            let remainingDistance = 0;
-            if (routePolyline && currentLat && currentLon) {
-                // Find where the driver actually is on the route polyline
-                const userRouteIndex = findNearestRouteIndex(currentLat, currentLon, routePolyline);
-                for (let i = userRouteIndex; i < routePolyline.length - 1; i++) {
-                    remainingDistance += calculateDistance(
-                        routePolyline[i][0], routePolyline[i][1],
-                        routePolyline[i + 1][0], routePolyline[i + 1][1]
-                    );
-                }
-            }
-
-            // Calculate total route distance
-            let totalDistance = 0;
-            if (routePolyline) {
-                for (let i = 0; i < routePolyline.length - 1; i++) {
-                    totalDistance += calculateDistance(
-                        routePolyline[i][0], routePolyline[i][1],
-                        routePolyline[i + 1][0], routePolyline[i + 1][1]
-                    );
-                }
-            }
-
-            // Calculate progress percentage (0-100)
-            let progressPercent = 0;
-            if (totalDistance > 0) {
-                progressPercent = Math.max(0, Math.min(100, ((totalDistance - remainingDistance) / totalDistance) * 100));
-            }
-
-            // Calculate time remaining based on progress
-            // If we've completed X% of the route, we have (100-X)% of time remaining
-            timeRemainingMinutes = Math.round(originalDurationMinutes * (1 - (progressPercent / 100)));
-
-            // Sanity check: time remaining should be positive and less than original duration
-            if (timeRemainingMinutes < 0 || timeRemainingMinutes > originalDurationMinutes) {
-                console.warn('[ETA] Invalid time remaining calculated:', timeRemainingMinutes, 'original:', originalDurationMinutes);
-                return;
-            }
-
-            console.log(`[Voice] ETA (moving): progress ${progressPercent.toFixed(1)}%, remaining ${(remainingDistance / 1000).toFixed(1)}km, time ${timeRemainingMinutes}min`);
-        } else {
-            // User hasn't started moving: Use original route duration
-            // This prevents GPS inaccuracy from announcing incorrect ETA
-            timeRemainingMinutes = originalDurationMinutes;
-            console.log(`[Voice] ETA (pre-movement): Using original duration ${originalDurationMinutes}min`);
-        }
-
+        const timeRemainingMinutes = applyTrafficRatioToBaseRemaining(base.timeRemainingMinutes);
         const eta = new Date(now + timeRemainingMinutes * 60000);
-        const etaHours = eta.getHours();
-        const etaMinutes = eta.getMinutes();
-
-        let message = '';
-        if (timeRemainingMinutes > 60) {
-            const hours = Math.floor(timeRemainingMinutes / 60);
-            const mins = timeRemainingMinutes % 60;
-            message = `You will arrive in ${hours} hour${hours > 1 ? 's' : ''} and ${mins} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
-        } else {
-            message = `You will arrive in ${timeRemainingMinutes} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
-        }
-
+        const message = buildETAVoiceMessage(timeRemainingMinutes, eta);
         console.log(`[Voice] ETA announcement: ${message}`);
         speakMessage(message);
         lastETAAnnouncementTime = now;
         lastAnnouncedETA = eta;
+    }
+}
+
+async function speakInitialETAAnnouncement() {
+    if (!routeInProgress || !window.lastCalculatedRoute || !voiceAnnouncementsEnabled) return;
+    const base = computeBaseNavigationETAMinutes();
+    if (!base) return;
+    if (shouldApplyTrafficAwareETA() && currentLat != null && currentLon != null) {
+        await refreshNavTrafficETAIfDue(base.timeRemainingMinutes, base.progressPercent, true);
+    }
+    const now = Date.now();
+    const timeRemainingMinutes = applyTrafficRatioToBaseRemaining(base.timeRemainingMinutes);
+    const eta = new Date(now + timeRemainingMinutes * 60000);
+    const message = buildETAVoiceMessage(timeRemainingMinutes, eta);
+    console.log(`[Voice] Initial ETA announcement: ${message}`);
+    speakMessage(message);
+    lastETAAnnouncementTime = now;
+    lastAnnouncedETA = eta;
+}
+
+function scheduleInitialETAAnnouncement() {
+    if (initialETAAnnouncementTimeoutId) {
+        clearTimeout(initialETAAnnouncementTimeoutId);
+        initialETAAnnouncementTimeoutId = null;
+    }
+    initialETAAnnouncementTimeoutId = setTimeout(() => {
+        initialETAAnnouncementTimeoutId = null;
+        speakInitialETAAnnouncement();
+    }, ETA_INITIAL_ANNOUNCE_DELAY_MS);
+}
+
+function clearInitialETAAnnouncement() {
+    if (initialETAAnnouncementTimeoutId) {
+        clearTimeout(initialETAAnnouncementTimeoutId);
+        initialETAAnnouncementTimeoutId = null;
     }
 }
 
@@ -13500,6 +13617,19 @@ function startTurnByTurnNavigation(routeData) {
     currentStepIndex = 0;
     currentRouteSteps = routeData.maneuvers || [];
     lastSnappedRouteIndex = 0;
+    routeJoinConfirmedForDeviation = false;
+    lastETAAnnouncementTime = Date.now();
+    lastAnnouncedETA = null;
+    lastNavTrafficFetchAt = 0;
+    window.navETASnapshot = {
+        baseRemainingMinutes: 0,
+        trafficAdjustedMinutes: null,
+        trafficLevel: null,
+        congestionPercent: null,
+        progressPercent: 0,
+        trafficFetchAt: 0,
+        baseAtTrafficFetch: 0
+    };
 
     try {
         routePolyline = decodePolyline(routeData.geometry, 6);
@@ -13567,6 +13697,8 @@ function startTurnByTurnNavigation(routeData) {
 
     // ===== PHASE 1: Start live data refresh =====
     startLiveDataRefresh();
+    void updateETACalculation();
+    scheduleInitialETAAnnouncement();
 
     // ===== START AUTO-TRAFFIC UPDATES =====
     if (autoTrafficUpdateEnabled) {
@@ -13661,6 +13793,7 @@ function stopTurnByTurnNavigation() {
     }
 
     routeInProgress = false;
+    routeJoinConfirmedForDeviation = false;
     currentStepIndex = 0;
     currentRouteSteps = [];
     clearPersistedRoute();
@@ -13681,6 +13814,7 @@ function stopTurnByTurnNavigation() {
 
     // ===== PHASE 1: Stop live data refresh =====
     stopLiveDataRefresh();
+    clearInitialETAAnnouncement();
 
     // ===== STOP AUTO-TRAFFIC UPDATES =====
     stopAutoTrafficUpdates();

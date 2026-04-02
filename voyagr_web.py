@@ -3791,7 +3791,7 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>Voyagr Navigation</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260109t" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260331t" />
     <script src="/static/vendor/maplibre-gl.js"></script>
     <script src="/static/js/maplibre-helpers.js?v=20260117t"></script>
     <script src="/static/vendor/supabase.min.js"></script>

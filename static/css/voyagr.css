@@ -2561,3 +2561,101 @@ body.dark-mode .speed-widget #speedLimitCircle {
 body.dark-mode .speed-widget #speedLimitValue {
     color: #e0e0e0 !important;
 }
+
+/* ============================================
+   Streamlined UI refresh — cards, type, sheet
+   ============================================ */
+:root {
+    --voyagr-radius: 14px;
+    --voyagr-radius-sm: 11px;
+    --voyagr-border: rgba(15, 23, 42, 0.09);
+    --voyagr-accent: #5c6bc0;
+    --voyagr-surface: rgba(255, 255, 255, 0.97);
+    --voyagr-text: #111827;
+    --voyagr-muted: #6b7280;
+}
+
+.bottom-sheet {
+    border-radius: 22px 22px 0 0;
+    background: var(--voyagr-surface);
+    box-shadow: 0 -10px 44px rgba(15, 23, 42, 0.1);
+    border: 1px solid var(--voyagr-border);
+}
+
+.bottom-sheet-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.bottom-sheet-header h2 {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--voyagr-text);
+}
+
+.bottom-sheet-content {
+    padding: 18px;
+}
+
+label {
+    font-weight: 500;
+    color: var(--voyagr-muted);
+    font-size: 13px;
+    letter-spacing: 0.01em;
+}
+
+input:not([type="checkbox"]):not([type="radio"]),
+select,
+textarea {
+    border: 1px solid var(--voyagr-border);
+    border-radius: var(--voyagr-radius-sm);
+    padding: 12px 14px;
+    background: #f9fafb;
+    color: var(--voyagr-text);
+}
+
+input:not([type="checkbox"]):not([type="radio"]):focus,
+select:focus,
+textarea:focus {
+    outline: none;
+    border-color: var(--voyagr-accent);
+    background: #fff;
+    box-shadow: 0 0 0 3px rgba(92, 107, 192, 0.14);
+}
+
+.location-btn {
+    border-radius: 10px;
+    border: 1px solid var(--voyagr-border);
+    background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.preferences-section {
+    border-radius: var(--voyagr-radius);
+}
+
+body.dark-mode .bottom-sheet {
+    background: rgba(24, 24, 27, 0.98);
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 -10px 44px rgba(0, 0, 0, 0.45);
+}
+
+body.dark-mode .bottom-sheet-header h2 {
+    color: #f4f4f5;
+}
+
+body.dark-mode input:not([type="checkbox"]):not([type="radio"]),
+body.dark-mode select,
+body.dark-mode textarea {
+    background: #27272a;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #f4f4f5;
+}
+
+body.dark-mode input:not([type="checkbox"]):not([type="radio"]):focus,
+body.dark-mode select:focus,
+body.dark-mode textarea:focus {
+    border-color: #818cf8;
+    box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2);
+}
