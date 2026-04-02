@@ -882,14 +882,14 @@ class RouteCache:
         self.hits = 0
         self.misses = 0
 
-    def _make_key(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False) -> str:
+    def _make_key(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False, avoid_caz_zones: bool = False) -> str:
         """Create cache key from route parameters."""
-        return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type},{enable_hazard_avoidance},{int(avoid_traffic_lights)},{int(avoid_cameras)},{int(avoid_railway_crossings)}"
+        return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type},{enable_hazard_avoidance},{int(avoid_traffic_lights)},{int(avoid_cameras)},{int(avoid_railway_crossings)},{int(avoid_caz_zones)}"
 
-    def get(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False) -> Optional[Dict[str, Any]]:
+    def get(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False, avoid_caz_zones: bool = False) -> Optional[Dict[str, Any]]:
         """Get cached route if available and not expired."""
         with self.lock:
-            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings)
+            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings, avoid_caz_zones)
 
             if key not in self.cache:
                 self.misses += 1
@@ -907,10 +907,10 @@ class RouteCache:
             self.hits += 1
             return self.cache[key]
 
-    def set(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, route_data: Dict[str, Any], enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False) -> None:
+    def set(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, route_data: Dict[str, Any], enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False, avoid_caz_zones: bool = False) -> None:
         """Cache a route calculation."""
         with self.lock:
-            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings)
+            key = self._make_key(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings, avoid_caz_zones)
 
             # Remove oldest if at capacity
             if len(self.cache) >= self.max_size and key not in self.cache:
@@ -2721,6 +2721,7 @@ def route_with_graphhopper(
     route_bbox: Optional[Dict[str, float]] = None,
     traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
     railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
+    avoid_caz_zones: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """
     Route using GraphHopper with optional camera avoidance via pre-loaded areas.
@@ -2732,12 +2733,17 @@ def route_with_graphhopper(
         route_bbox: Bounding box of route for area selection
         traffic_light_hazards: Optional OSM traffic light points to avoid (dynamic polygons)
         railway_crossing_hazards: Optional OSM level crossing points (separate from traffic lights)
+        avoid_caz_zones: Penalize edges inside UK CAZ/ULEZ polygons (same data as costing)
 
     Returns:
         Route data dict or None if failed
     """
     try:
-        from voyagr.services.hazards import merge_graphhopper_custom_models, build_graphhopper_custom_model as gh_build_hazard_model
+        from voyagr.services.hazards import (
+            merge_graphhopper_custom_model_parts,
+            build_graphhopper_caz_avoidance_model,
+            build_graphhopper_custom_model as gh_build_hazard_model,
+        )
 
         url = f"{GRAPHHOPPER_URL}/route"
 
@@ -2776,10 +2782,14 @@ def route_with_graphhopper(
                 max_hazards=22,
             ) or None
 
-        custom_model = merge_graphhopper_custom_models(cam_model, tl_rx_model)
+        caz_model: Optional[Dict[str, Any]] = None
+        if avoid_caz_zones:
+            caz_model = build_graphhopper_caz_avoidance_model(route_bbox) or None
+
+        custom_model = merge_graphhopper_custom_model_parts(cam_model, tl_rx_model, caz_model)
         if custom_model:
             payload["custom_model"] = custom_model
-            logger.info("[GRAPHHOPPER] Using custom model (cameras and/or OSM traffic lights / railway crossings)")
+            logger.info("[GRAPHHOPPER] Using custom model (cameras, OSM hazards, and/or CAZ polygons)")
 
         logger.info(f"[GRAPHHOPPER] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
 
@@ -5858,10 +5868,16 @@ def calculate_route():
         include_tolls = data.get('include_tolls', True)
         include_caz = data.get('include_caz', True)
         caz_exempt = data.get('caz_exempt', False)
+        avoid_caz = data.get('avoid_caz', True)
         enable_hazard_avoidance = data.get('enable_hazard_avoidance', False)
-        avoid_traffic_lights = data.get('avoid_traffic_lights', False)
-        avoid_railway_crossings = data.get('avoid_railway_crossings', False)
+        avoid_traffic_lights = data.get('avoid_traffic_lights', True)
+        avoid_railway_crossings = data.get('avoid_railway_crossings', True)
         avoid_cameras = data.get('avoid_cameras', True)
+
+        # Align with calculate_caz_cost: no routing penalties when exempt or fully electric
+        apply_caz_routing_avoidance = bool(
+            avoid_caz and not caz_exempt and vehicle_type != 'electric'
+        )
 
         # Route avoidance preferences (Valhalla costing options)
         avoid_tolls = data.get('avoid_tolls', False)
@@ -5926,23 +5942,30 @@ def calculate_route():
                     hazards_md = fetch_hazards_for_route(min(all_lats), min(all_lons), max(all_lats), max(all_lons))
                     if not avoid_cameras:
                         hazards_md['camera'] = []
-                    bbox_md = {'south': min(all_lats), 'north': max(all_lats),
-                               'west': min(all_lons), 'east': max(all_lons)}
+                    bbox_md = {
+                        'min_lat': min(all_lats), 'max_lat': max(all_lats),
+                        'min_lon': min(all_lons), 'max_lon': max(all_lons),
+                    }
                     if avoid_traffic_lights:
                         from voyagr.services.hazards import fetch_traffic_lights_osm_bbox
                         hazards_md['traffic_light'] = fetch_traffic_lights_osm_bbox(
-                            bbox_md['south'], bbox_md['north'], bbox_md['west'], bbox_md['east'])
+                            bbox_md['min_lat'], bbox_md['max_lat'], bbox_md['min_lon'], bbox_md['max_lon'])
                         md_tl_for_gh = hazards_md.get('traffic_light')
                     else:
                         hazards_md['traffic_light'] = []
                     if avoid_railway_crossings:
                         from voyagr.services.hazards import fetch_railway_crossings_osm_bbox
                         hazards_md['railway_crossing'] = fetch_railway_crossings_osm_bbox(
-                            bbox_md['south'], bbox_md['north'], bbox_md['west'], bbox_md['east'])
+                            bbox_md['min_lat'], bbox_md['max_lat'], bbox_md['min_lon'], bbox_md['max_lon'])
                         md_rx_for_gh = hazards_md.get('railway_crossing')
                     else:
                         hazards_md['railway_crossing'] = []
-                    md_exclude = build_valhalla_exclude_locations(hazards_md, route_bbox=bbox_md, max_hazards=50)
+                    from voyagr.services.hazards import get_caz_valhalla_exclude_points
+                    md_caz_pts = get_caz_valhalla_exclude_points(bbox_md, max_points=10) if apply_caz_routing_avoidance else []
+                    md_cap = max(50 - len(md_caz_pts), 8)
+                    md_exclude = build_valhalla_exclude_locations(hazards_md, route_bbox=bbox_md, max_hazards=md_cap)
+                    if md_caz_pts:
+                        md_exclude = (md_caz_pts + md_exclude)[:50]
                 except Exception as e:
                     logger.warning(f"[MULTI-DROP] Hazard fetch failed: {e}")
 
@@ -5972,6 +5995,7 @@ def calculate_route():
                 avoid_ferries=avoid_ferries,
                 traffic_light_hazards=md_tl_for_gh,
                 railway_crossing_hazards=md_rx_for_gh,
+                avoid_caz_zones=apply_caz_routing_avoidance,
             )
 
             if md_result.get('success'):
@@ -6026,7 +6050,7 @@ def calculate_route():
         # ====================================================================
         # PHASE 3 OPTIMIZATION: Check route cache first
         # ====================================================================
-        cached_route = route_cache.get(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings)
+        cached_route = route_cache.get(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings, apply_caz_routing_avoidance)
         if cached_route:
             logger.info(f"[CACHE] HIT: Route from ({start_lat},{start_lon}) to ({end_lat},{end_lon}) with hazard_avoidance={enable_hazard_avoidance}")
             cached_route['cached'] = True
@@ -6147,6 +6171,7 @@ def calculate_route():
                     route_bbox=route_bbox,
                     traffic_light_hazards=_tl_gh if _tl_gh else None,
                     railway_crossing_hazards=_rx_gh if _rx_gh else None,
+                    avoid_caz_zones=apply_caz_routing_avoidance,
                 )
                 if graphhopper_route and graphhopper_route.get('success'):
                     logger.info(f"[GRAPHHOPPER] ✅ Route found with camera avoidance")
@@ -6192,15 +6217,28 @@ def calculate_route():
                                         if "lat" in c and "lon" in c]
                     remaining_slots = 50 - len(closure_excludes)
 
+                    from voyagr.services.hazards import get_caz_valhalla_exclude_points
+                    caz_excludes = get_caz_valhalla_exclude_points(
+                        route_bbox, max_points=min(12, max(4, remaining_slots // 4))
+                    ) if apply_caz_routing_avoidance else []
+                    remaining_slots = max(remaining_slots - len(caz_excludes), 0)
+
                     exclude_locations = build_valhalla_exclude_locations(
                         hazards,
                         route_bbox=route_bbox,
-                        max_hazards=max(remaining_slots, 10),
+                        max_hazards=max(remaining_slots, 8),
                         start_lat=start_lat,
                         start_lon=start_lon,
                         end_lat=end_lat,
                         end_lon=end_lon
                     )
+                    if caz_excludes:
+                        exclude_locations = caz_excludes + [
+                            loc for loc in exclude_locations
+                            if loc not in caz_excludes
+                        ]
+                        exclude_locations = exclude_locations[:50]
+                        logger.info(f"[VALHALLA] Added {len(caz_excludes)} CAZ sample points to exclude_locations")
                     if closure_excludes:
                         exclude_locations = closure_excludes + [
                             loc for loc in exclude_locations
@@ -6645,7 +6683,7 @@ def calculate_route():
                         }
 
                         # Cache the route
-                        route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings)
+                        route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings, apply_caz_routing_avoidance)
                         print(f"[CACHE] STORED: Segmented route cached in memory")
 
                         cost_calculator.cache_route_to_db(
@@ -7208,7 +7246,7 @@ def calculate_route():
                     }
 
                     # Cache the route for future requests
-                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings)
+                    route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings, apply_caz_routing_avoidance)
                     print(f"[CACHE] STORED: Route cached in memory with hazard_avoidance={enable_hazard_avoidance}")
 
                     # ================================================================
@@ -7546,7 +7584,7 @@ def calculate_route():
                                 }
 
                                 # Cache the route
-                                route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings)
+                                route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings, apply_caz_routing_avoidance)
                                 print(f"[CACHE] STORED: Retry route cached in memory")
 
                                 cache_source = 'GraphHopper+Valhalla' if (graphhopper_route and graphhopper_route.get('success')) else 'Valhalla'
@@ -7771,6 +7809,10 @@ def calculate_multi_stop_route():
         avoid_tolls = data.get('avoid_tolls', False)
         avoid_motorways = data.get('avoid_motorways', False)
         avoid_ferries = data.get('avoid_ferries', False)
+        avoid_caz = data.get('avoid_caz', True)
+        caz_exempt = data.get('caz_exempt', False)
+        vehicle_type_ms = normalize_vehicle_type(data.get('vehicle_type', 'petrol_diesel'))
+        apply_caz_ms = bool(avoid_caz and not caz_exempt and vehicle_type_ms != 'electric')
 
         all_stops = list(stops_list)
         for wp in waypoints:
@@ -7815,17 +7857,30 @@ def calculate_multi_stop_route():
         if time_windows and isinstance(time_windows, dict):
             tw_dict = {int(k): v for k, v in time_windows.items()}
 
+        bbox = None
         exclude_locations = []
         if enable_hazard_avoidance:
             try:
-                from voyagr.services.hazards import fetch_hazards_for_route, build_valhalla_exclude_locations
+                from voyagr.services.hazards import (
+                    fetch_hazards_for_route,
+                    build_valhalla_exclude_locations,
+                    get_caz_valhalla_exclude_points,
+                )
                 min_lat = min(start_loc['lat'], *(s['lat'] for s in all_stops))
                 max_lat = max(start_loc['lat'], *(s['lat'] for s in all_stops))
                 min_lon = min(start_loc['lon'], *(s['lon'] for s in all_stops))
                 max_lon = max(start_loc['lon'], *(s['lon'] for s in all_stops))
                 hazards = fetch_hazards_for_route(min_lat, min_lon, max_lat, max_lon)
-                bbox = {'south': min_lat, 'north': max_lat, 'west': min_lon, 'east': max_lon}
-                exclude_locations = build_valhalla_exclude_locations(hazards, route_bbox=bbox, max_hazards=50)
+                bbox = {
+                    'min_lat': min_lat, 'max_lat': max_lat,
+                    'min_lon': min_lon, 'max_lon': max_lon,
+                }
+                md_caz_pts = get_caz_valhalla_exclude_points(bbox, max_points=10) if apply_caz_ms else []
+                md_cap = max(50 - len(md_caz_pts), 8)
+                exclude_locations = build_valhalla_exclude_locations(
+                    hazards, route_bbox=bbox, max_hazards=md_cap)
+                if md_caz_pts:
+                    exclude_locations = (md_caz_pts + exclude_locations)[:50]
             except Exception as e:
                 logger.warning(f"[MULTI-DROP] Hazard fetch failed: {e}")
 
@@ -7848,6 +7903,7 @@ def calculate_multi_stop_route():
             avoid_tolls=avoid_tolls,
             avoid_motorways=avoid_motorways,
             avoid_ferries=avoid_ferries,
+            avoid_caz_zones=apply_caz_ms,
         )
 
         if not result.get('success'):

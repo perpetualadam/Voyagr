@@ -928,8 +928,8 @@ function saveAllSettings() {
             avoidTolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
             avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
             avoidCameras: localStorage.getItem('pref_cameras') !== 'false',  // Default: true (avoid cameras)
-            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
-            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') === 'true',
+            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
+            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
             variableSpeedAlerts: localStorage.getItem('pref_variableSpeedAlerts') === 'true'
         },
 
@@ -3688,8 +3688,9 @@ async function calculateRoute() {
     // Check if hazard avoidance is enabled (any hazard type selected)
     const enableHazardAvoidance =
         localStorage.getItem('pref_cameras') !== 'false' ||  // Default: true
-        localStorage.getItem('pref_trafficLightsAvoid') === 'true' ||
-        localStorage.getItem('pref_railwayCrossingsAvoid') === 'true' ||
+        localStorage.getItem('pref_caz') !== 'false' ||
+        localStorage.getItem('pref_trafficLightsAvoid') !== 'false' ||
+        localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
         localStorage.getItem('pref_police') === 'true' ||
         localStorage.getItem('pref_roadworks') === 'true' ||
         localStorage.getItem('pref_accidents') === 'true';
@@ -3731,8 +3732,9 @@ async function calculateRoute() {
         vehicle_type: currentVehicleType,
         enable_hazard_avoidance: enableHazardAvoidance,
         avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
-        avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
-        avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') === 'true',
+        avoid_caz: localStorage.getItem('pref_caz') !== 'false',
+        avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
+        avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
         via_points: viaPointsData,
         stops: stopsData,
         optimize_stop_order: optimizeOrder,
@@ -5466,8 +5468,8 @@ async function manualTrafficUpdate() {
 function buildRouteRequest(startLat, startLon, destination) {
     const enableHazardAvoidance =
         localStorage.getItem('pref_cameras') !== 'false' ||
-        localStorage.getItem('pref_trafficLightsAvoid') === 'true' ||
-        localStorage.getItem('pref_railwayCrossingsAvoid') === 'true' ||
+        localStorage.getItem('pref_trafficLightsAvoid') !== 'false' ||
+        localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
         localStorage.getItem('pref_tolls') !== 'false' ||
         localStorage.getItem('pref_caz') !== 'false';
 
@@ -5484,8 +5486,8 @@ function buildRouteRequest(startLat, startLon, destination) {
         include_caz: localStorage.getItem('includeCAZ') !== 'false',
         enable_hazard_avoidance: enableHazardAvoidance,
         avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
-        avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
-        avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') === 'true',
+        avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
+        avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
         avoid_tolls: localStorage.getItem('pref_tolls') !== 'false',
         avoid_caz: localStorage.getItem('pref_caz') !== 'false'
     };
@@ -6984,8 +6986,8 @@ async function selectParking(parking, destinationCoords) {
         // Calculate driving route to parking
         const enableHazardAvoidanceParking =
             localStorage.getItem('pref_cameras') !== 'false' ||
-            localStorage.getItem('pref_trafficLightsAvoid') === 'true' ||
-            localStorage.getItem('pref_railwayCrossingsAvoid') === 'true' ||
+            localStorage.getItem('pref_trafficLightsAvoid') !== 'false' ||
+            localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
             localStorage.getItem('pref_police') === 'true' ||
             localStorage.getItem('pref_roadworks') === 'true' ||
             localStorage.getItem('pref_accidents') === 'true';
@@ -7002,8 +7004,8 @@ async function selectParking(parking, destinationCoords) {
                 avoid_caz: localStorage.getItem('pref_caz') !== 'false',        // Default: true
                 enable_hazard_avoidance: enableHazardAvoidanceParking,
                 avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
-                avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
-                avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') === 'true'
+                avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
+                avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false'
             })
         });
 
@@ -7016,8 +7018,8 @@ async function selectParking(parking, destinationCoords) {
         // Calculate walking route from parking to destination
         const enableHazardAvoidanceWalking =
             localStorage.getItem('pref_cameras') !== 'false' ||
-            localStorage.getItem('pref_trafficLightsAvoid') === 'true' ||
-            localStorage.getItem('pref_railwayCrossingsAvoid') === 'true' ||
+            localStorage.getItem('pref_trafficLightsAvoid') !== 'false' ||
+            localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
             localStorage.getItem('pref_police') === 'true' ||
             localStorage.getItem('pref_roadworks') === 'true' ||
             localStorage.getItem('pref_accidents') === 'true';
@@ -7032,8 +7034,8 @@ async function selectParking(parking, destinationCoords) {
                 vehicle_type: 'pedestrian',
                 enable_hazard_avoidance: enableHazardAvoidanceWalking,
                 avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
-                avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') === 'true',
-                avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') === 'true'
+                avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
+                avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false'
             })
         });
 
@@ -14494,7 +14496,7 @@ function loadPreferences() {
     };
 
     // Preferences that default to TRUE (enabled) when not set
-    const defaultEnabledPrefs = ['tolls', 'caz', 'cameras'];
+    const defaultEnabledPrefs = ['tolls', 'caz', 'cameras', 'trafficLightsAvoid', 'railwayCrossingsAvoid'];
 
     const prefs = ['tolls', 'caz', 'cameras', 'trafficLightsAvoid', 'railwayCrossingsAvoid', 'variableSpeedAlerts'];
     prefs.forEach(pref => {
@@ -14503,8 +14505,8 @@ function loadPreferences() {
         const button = document.getElementById(buttonId);
 
         if (button) {
-            // For tolls and CAZ: default to enabled (true) if not set
-            // For others: default to disabled (false) if not set
+            // Tolls, CAZ, cameras, traffic lights, railway: default enabled if not set
+            // variableSpeedAlerts: default off if not set
             const isDefaultEnabled = defaultEnabledPrefs.includes(pref);
             const isEnabled = saved === null ? isDefaultEnabled : saved === 'true';
 

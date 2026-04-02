@@ -310,6 +310,7 @@ def build_multidrop_route(
     avoid_ferries: bool = False,
     traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
     railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
+    avoid_caz_zones: bool = False,
 ) -> Dict[str, Any]:
     """
     Build a complete multi-drop route with per-leg geometry, instructions, and costs.
@@ -368,6 +369,7 @@ def build_multidrop_route(
             avoid_ferries=avoid_ferries,
             traffic_light_hazards=traffic_light_hazards,
             railway_crossing_hazards=railway_crossing_hazards,
+            avoid_caz_zones=avoid_caz_zones,
         )
 
         stop_info = None
@@ -452,6 +454,7 @@ def _route_leg(
     avoid_ferries: bool = False,
     traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
     railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
+    avoid_caz_zones: bool = False,
 ) -> Dict[str, Any]:
     """Route a single leg. Tries GraphHopper (if enabled), then Valhalla, then OSRM."""
     if use_graphhopper and costing == "auto" and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
@@ -459,6 +462,7 @@ def _route_leg(
             from_loc, to_loc, route_bbox,
             traffic_light_hazards=traffic_light_hazards,
             railway_crossing_hazards=railway_crossing_hazards,
+            avoid_caz_zones=avoid_caz_zones,
         )
         if gh_result:
             return gh_result
@@ -489,13 +493,15 @@ def _graphhopper_leg(
     route_bbox: Optional[Dict[str, float]] = None,
     traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
     railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
+    avoid_caz_zones: bool = False,
 ) -> Optional[Dict[str, Any]]:
     """Route a single leg via GraphHopper with camera avoidance custom model."""
     try:
         from voyagr.services.hazards import (
             build_graphhopper_camera_avoidance_model,
+            build_graphhopper_caz_avoidance_model,
             build_graphhopper_custom_model,
-            merge_graphhopper_custom_models,
+            merge_graphhopper_custom_model_parts,
         )
 
         url = f"{GRAPHHOPPER_URL}/route"
@@ -522,7 +528,11 @@ def _graphhopper_leg(
                 route_bbox=route_bbox,
                 max_hazards=22,
             )
-        custom_model = merge_graphhopper_custom_models(cam_model, tl_rx_model if tl_rx_model else None)
+        caz_model = None
+        if avoid_caz_zones:
+            caz_model = build_graphhopper_caz_avoidance_model(route_bbox) or None
+        custom_model = merge_graphhopper_custom_model_parts(
+            cam_model, tl_rx_model if tl_rx_model else None, caz_model)
         if custom_model:
             payload["custom_model"] = custom_model
 

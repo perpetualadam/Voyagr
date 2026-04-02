@@ -706,20 +706,141 @@ def fetch_railway_crossings_osm_bbox(
     return out
 
 
+def merge_graphhopper_custom_model_parts(
+    *parts: Optional[Dict[str, Any]],
+) -> Optional[Dict[str, Any]]:
+    """
+    Merge any number of GraphHopper custom models (camera rules, OSM hazard polygons, CAZ polygons).
+    Concatenates priority rules and combines all FeatureCollection areas.
+    """
+    models = [p for p in parts if p]
+    if not models:
+        return None
+    merged: Dict[str, Any] = {'priority': []}
+    for m in models:
+        merged['priority'].extend(m.get('priority', []))
+    fc_features: List[Dict[str, Any]] = []
+    for m in models:
+        areas = m.get('areas')
+        if areas and areas.get('features'):
+            fc_features.extend(areas['features'])
+    if fc_features:
+        merged['areas'] = {'type': 'FeatureCollection', 'features': fc_features}
+    return merged
+
+
 def merge_graphhopper_custom_models(
     camera_model: Optional[Dict[str, Any]],
     dynamic_model: Optional[Dict[str, Any]],
 ) -> Optional[Dict[str, Any]]:
     """Merge camera-area priority rules with dynamic hazard polygons (e.g. traffic lights)."""
-    if not camera_model and not dynamic_model:
-        return None
-    if not camera_model:
-        return dynamic_model
-    if not dynamic_model:
-        return camera_model
-    merged: Dict[str, Any] = {
-        'priority': list(camera_model.get('priority', [])) + list(dynamic_model.get('priority', [])),
+    return merge_graphhopper_custom_model_parts(camera_model, dynamic_model)
+
+
+def _caz_polygon_bounds_overlap_route_bbox(
+    polygon_latlon: List[Tuple[float, float]],
+    route_bbox: Dict[str, float],
+) -> bool:
+    """True if CAZ polygon bounding box overlaps the route bounding box (with small margin)."""
+    if len(polygon_latlon) < 3:
+        return False
+    lats = [p[0] for p in polygon_latlon]
+    lons = [p[1] for p in polygon_latlon]
+    pl, ph = min(lats), max(lats)
+    pwl, pel = min(lons), max(lons)
+    m = 0.02
+    return not (
+        ph < route_bbox['min_lat'] - m
+        or pl > route_bbox['max_lat'] + m
+        or pel < route_bbox['min_lon'] - m
+        or pwl > route_bbox['max_lon'] + m
+    )
+
+
+def build_graphhopper_caz_avoidance_model(
+    route_bbox: Optional[Dict[str, float]],
+) -> Dict[str, Any]:
+    """
+    GraphHopper custom model: penalize edges inside UK CAZ/ULEZ polygons that overlap the route bbox.
+    Uses the same polygon data as cost calculation (voyagr.config.CAZ_ZONES_DATA).
+    """
+    if not route_bbox:
+        return {}
+    try:
+        from voyagr.config import CAZ_ZONES_DATA
+    except ImportError:
+        return {}
+
+    features: List[Dict[str, Any]] = []
+    priority_rules: List[Dict[str, str]] = []
+
+    for zone_id, zone_data in CAZ_ZONES_DATA.items():
+        poly = zone_data.get('polygon') or []
+        if len(poly) < 4:
+            continue
+        if not _caz_polygon_bounds_overlap_route_bbox(poly, route_bbox):
+            continue
+
+        safe_id = ''.join(c if c.isalnum() or c == '_' else '_' for c in zone_id)
+        feat_id = f'caz_{safe_id}'
+        ring = [[float(pt[1]), float(pt[0])] for pt in poly]
+        if ring[0] != ring[-1]:
+            ring.append(ring[0])
+
+        features.append({
+            'type': 'Feature',
+            'id': feat_id,
+            'geometry': {'type': 'Polygon', 'coordinates': [ring]},
+        })
+        priority_rules.append({'if': f'in_{feat_id}', 'multiply_by': '0.02'})
+
+    if not features:
+        return {}
+
+    logger.info(f"[GRAPHHOPPER] CAZ avoidance model: {len(features)} zone polygon(s)")
+    return {
+        'priority': priority_rules,
+        'areas': {'type': 'FeatureCollection', 'features': features},
     }
-    if dynamic_model.get('areas'):
-        merged['areas'] = dynamic_model['areas']
-    return merged
+
+
+def get_caz_valhalla_exclude_points(
+    route_bbox: Dict[str, float],
+    max_points: int = 12,
+) -> List[Dict[str, float]]:
+    """
+    Sample points inside/overlapping CAZ zones for Valhalla exclude_locations (cap 50 total with other avoids).
+    One centroid + one vertex per overlapping zone until max_points.
+    """
+    try:
+        from voyagr.config import CAZ_ZONES_DATA
+    except ImportError:
+        return []
+
+    out: List[Dict[str, float]] = []
+    seen = set()
+
+    def _add(lat: float, lon: float) -> None:
+        key = (round(lat, 4), round(lon, 4))
+        if key in seen or len(out) >= max_points:
+            return
+        seen.add(key)
+        out.append({'lat': lat, 'lon': lon})
+
+    for _zone_id, zone_data in CAZ_ZONES_DATA.items():
+        poly = zone_data.get('polygon') or []
+        if len(poly) < 3:
+            continue
+        if not _caz_polygon_bounds_overlap_route_bbox(poly, route_bbox):
+            continue
+        nlat = sum(p[0] for p in poly) / len(poly)
+        nlon = sum(p[1] for p in poly) / len(poly)
+        _add(nlat, nlon)
+        if len(out) >= max_points:
+            break
+        mid = poly[len(poly) // 2]
+        _add(float(mid[0]), float(mid[1]))
+
+    if out:
+        logger.info(f"[VALHALLA] CAZ exclude sample points: {len(out)}")
+    return out[:max_points]
