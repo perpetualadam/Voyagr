@@ -3791,7 +3791,7 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>Voyagr Navigation</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260331t" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260331u" />
     <script src="/static/vendor/maplibre-gl.js"></script>
     <script src="/static/js/maplibre-helpers.js?v=20260117t"></script>
     <script src="/static/vendor/supabase.min.js"></script>
@@ -3821,18 +3821,18 @@ HTML_TEMPLATE = '''
             <div class="bottom-sheet-handle"></div>
 
             <div class="bottom-sheet-header">
-                <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
-                    <h2 id="sheetTitle">🗺️ Navigation</h2>
-                    <div style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center;">
-                        <button class="fab" title="Saved Routes" onclick="switchTab('savedRoutes')" style="width: 40px; height: 40px; font-size: 18px; background: #E91E63; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">⭐</button>
-                        <button class="fab" title="Analytics" onclick="switchTab('routeAnalytics')" style="width: 40px; height: 40px; font-size: 18px; background: #FF5722; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">📊</button>
-                        <button class="fab" title="Share Route" onclick="switchTab('routeSharing')" style="width: 40px; height: 40px; font-size: 18px; background: #9C27B0; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">🔗</button>
-                        <button class="fab" title="Route Options" onclick="switchTab('routeComparison')" style="width: 40px; height: 40px; font-size: 18px; background: #4CAF50; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">🛣️</button>
-                        <button class="fab" title="Trip History" onclick="switchTab('tripHistory')" style="width: 40px; height: 40px; font-size: 18px; background: #FF9800; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">📋</button>
-                        <button class="fab" title="Dashcam" onclick="switchTab('dashcam')" style="width: 40px; height: 40px; font-size: 18px; background: #E91E63; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">📹</button>
-                        <button class="fab" title="Settings" onclick="switchTab('settings')" style="width: 40px; height: 40px; font-size: 18px; background: #667eea; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center;">⚙️</button>
-                        <button class="fab" title="Collapse" onclick="collapseBottomSheet()" style="width: 40px; height: 40px; font-size: 18px; background: #999; color: white; border: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; margin-left: 8px;">▼</button>
-                    </div>
+                <div class="sheet-header-inner">
+                    <h2 id="sheetTitle" class="sheet-title">🗺️ Navigation</h2>
+                    <nav class="sheet-toolbar" aria-label="Quick navigation">
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--saved" title="Saved Routes" onclick="switchTab('savedRoutes')">⭐</button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--analytics" title="Analytics" onclick="switchTab('routeAnalytics')">📊</button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--share" title="Share Route" onclick="switchTab('routeSharing')">🔗</button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--routes" title="Route Options" onclick="switchTab('routeComparison')">🛣️</button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--history" title="Trip History" onclick="switchTab('tripHistory')">📋</button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--dashcam" title="Dashcam" onclick="switchTab('dashcam')">📹</button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--settings" title="Settings" onclick="switchTab('settings')">⚙️</button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--collapse" title="Collapse" onclick="collapseBottomSheet()">▼</button>
+                    </nav>
                 </div>
             </div>
 
@@ -3853,10 +3853,10 @@ HTML_TEMPLATE = '''
                 </div>
 
                 <!-- Swap Start/Destination Button -->
-                <div style="display: flex; justify-content: center; margin: -5px 0 5px 0;">
-                    <button type="button" id="swapLocationsBtn" onclick="swapStartAndDestination()" style="padding: 6px 16px; background: #f5f5f5; border: 1px solid #ddd; border-radius: 20px; cursor: pointer; font-size: 14px; display: flex; align-items: center; gap: 6px; transition: all 0.2s ease;" title="Swap start and destination">
-                        <span style="font-size: 16px;">⇅</span>
-                        <span style="font-size: 12px; color: #666;">Swap</span>
+                <div class="swap-row">
+                    <button type="button" id="swapLocationsBtn" class="btn-swap" onclick="swapStartAndDestination()" title="Swap start and destination">
+                        <span class="btn-swap-icon" aria-hidden="true">⇅</span>
+                        <span class="btn-swap-label">Swap</span>
                     </button>
                 </div>
 
@@ -3874,55 +3874,54 @@ HTML_TEMPLATE = '''
                 </div>
 
                 <!-- VIA-POINTS AND STOPS SECTION (NEW) -->
-                <div class="form-group" style="background: #FFFDE7; padding: 12px; border-radius: 8px; margin-top: 10px;">
-                    <label style="margin-bottom: 8px; display: block;">📍 Via-Points & Stops</label>
+                <div class="form-group card-waypoints">
+                    <label class="card-waypoints-title">Via-Points &amp; Stops</label>
 
                     <!-- Via-Point Address Input -->
-                    <div style="margin-bottom: 8px; position: relative;">
-                        <div style="display: flex; gap: 6px;">
-                            <input type="text" id="viaPointAddress" placeholder="Type address for via-point..." autocomplete="off"
+                    <div class="waypoint-block">
+                        <div class="waypoint-field-row">
+                            <input type="text" id="viaPointAddress" placeholder="Via-point address…" autocomplete="off"
                                    oninput="showAutocomplete('viaPointAddress')" onfocus="showAutocomplete('viaPointAddress')"
                                    onkeydown="if(event.key==='Enter'){event.preventDefault();addViaPointFromAddress();}"
-                                   style="flex: 1; padding: 8px 10px; border: 1px solid #FF9800; border-radius: 6px; font-size: 12px; outline: none;">
-                            <button onclick="addViaPointFromAddress()" style="padding: 8px 12px; background: #FF9800; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;">📍 Add Via</button>
-                            <button id="addViaPointBtn" onclick="toggleAddViaPoint()" title="Pick via-point on map" style="padding: 8px 10px; border: 1px solid #FF9800; background: white; border-radius: 6px; cursor: pointer; font-size: 14px; color: #FF9800;">🗺️</button>
+                                   class="input-waypoint input-waypoint--via">
+                            <button type="button" class="btn-waypoint btn-waypoint--via" onclick="addViaPointFromAddress()">Add via</button>
+                            <button type="button" id="addViaPointBtn" class="btn-waypoint-map btn-waypoint-map--via" onclick="toggleAddViaPoint()" title="Pick via-point on map">🗺️</button>
                         </div>
                         <div class="autocomplete-dropdown" id="autocompleteViaPoint"></div>
                     </div>
 
                     <!-- Stop Address Input -->
-                    <div style="margin-bottom: 8px; position: relative;">
-                        <div style="display: flex; gap: 6px;">
-                            <input type="text" id="stopAddress" placeholder="Type address for stop..." autocomplete="off"
+                    <div class="waypoint-block">
+                        <div class="waypoint-field-row">
+                            <input type="text" id="stopAddress" placeholder="Stop address…" autocomplete="off"
                                    oninput="showAutocomplete('stopAddress')" onfocus="showAutocomplete('stopAddress')"
                                    onkeydown="if(event.key==='Enter'){event.preventDefault();addStopFromAddress();}"
-                                   style="flex: 1; padding: 8px 10px; border: 1px solid #E91E63; border-radius: 6px; font-size: 12px; outline: none;">
-                            <button onclick="addStopFromAddress()" style="padding: 8px 12px; background: #E91E63; color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; white-space: nowrap;">🛑 Add Stop</button>
-                            <button id="addStopBtn" onclick="toggleAddStop()" title="Pick stop on map" style="padding: 8px 10px; border: 1px solid #E91E63; background: white; border-radius: 6px; cursor: pointer; font-size: 14px; color: #E91E63;">🗺️</button>
+                                   class="input-waypoint input-waypoint--stop">
+                            <button type="button" class="btn-waypoint btn-waypoint--stop" onclick="addStopFromAddress()">Add stop</button>
+                            <button type="button" id="addStopBtn" class="btn-waypoint-map btn-waypoint-map--stop" onclick="toggleAddStop()" title="Pick stop on map">🗺️</button>
                         </div>
                         <div class="autocomplete-dropdown" id="autocompleteStop"></div>
                     </div>
 
-                    <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-                        <button onclick="clearAllWaypoints()" style="flex: 1; padding: 8px 12px; border: 1px solid #999; background: white; border-radius: 6px; cursor: pointer; font-size: 12px; color: #666;">✕ Clear All</button>
+                    <div class="waypoint-actions">
+                        <button type="button" class="btn-waypoint-clear" onclick="clearAllWaypoints()">Clear all</button>
                     </div>
-                    <div style="margin-bottom: 10px;">
-                        <button id="editRouteBtn" onclick="toggleRouteEditing()" style="width: 100%; padding: 10px 12px; border: 2px solid #4CAF50; background: white; border-radius: 6px; cursor: pointer; font-size: 13px; color: #4CAF50; font-weight: 600;">✏️ Edit Route (Drag to modify)</button>
+                    <div class="waypoint-edit-wrap">
+                        <button type="button" id="editRouteBtn" class="btn-edit-route" onclick="toggleRouteEditing()">Edit route (drag on map)</button>
                     </div>
                     <div id="waypointsList">
-                        <div style="color: #999; font-size: 12px; padding: 10px;">No waypoints added. Type an address above or use the map buttons.</div>
+                        <div class="waypoints-empty">No waypoints yet. Enter an address or use the map buttons.</div>
                     </div>
-                    <div style="font-size: 11px; color: #888; margin-top: 8px;">
-                        <strong>Via-Points:</strong> Route must pass through (e.g., scenic route)<br>
-                        <strong>Stops:</strong> Places to park/stop (adds time to journey)<br>
-                        <strong>Edit Route:</strong> Drag orange markers on route to modify path
-                    </div>
+                    <p class="waypoints-hint">
+                        <strong>Via-points</strong> force the route through a place. <strong>Stops</strong> add dwell time.
+                        <strong>Edit route</strong> lets you drag markers on the line.
+                    </p>
                 </div>
 
                 <!-- Vehicle Type Selector -->
                 <div class="form-group">
                     <label for="vehicleType">🚗 Vehicle Type</label>
-                    <select id="vehicleType" onchange="updateVehicleType()" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px;">
+                    <select id="vehicleType" class="select-input" onchange="updateVehicleType()">
                         <option value="petrol_diesel">🚗 Car (Petrol/Diesel)</option>
                         <option value="electric">⚡ Electric Vehicle</option>
                         <option value="motorcycle">🏍️ Motorcycle</option>
@@ -3934,27 +3933,23 @@ HTML_TEMPLATE = '''
                 <!-- Routing Mode Selector -->
                 <div class="form-group">
                     <label>🛣️ Routing Mode</label>
-                    <div style="display: flex; gap: 8px; margin-top: 8px;">
-                        <button class="routing-mode-btn active" id="routingAuto" onclick="setRoutingMode('auto')">🚗 Auto</button>
-                        <button class="routing-mode-btn" id="routingPedestrian" onclick="setRoutingMode('pedestrian')">🚶 Walk</button>
-                        <button class="routing-mode-btn" id="routingBicycle" onclick="setRoutingMode('bicycle')">🚴 Bike</button>
+                    <div class="routing-mode-group">
+                        <button type="button" class="routing-mode-btn active" id="routingAuto" onclick="setRoutingMode('auto')">🚗 Auto</button>
+                        <button type="button" class="routing-mode-btn" id="routingPedestrian" onclick="setRoutingMode('pedestrian')">🚶 Walk</button>
+                        <button type="button" class="routing-mode-btn" id="routingBicycle" onclick="setRoutingMode('bicycle')">🚴 Bike</button>
                     </div>
                 </div>
 
                 <!-- Route Calculation Button (MOVED TO TOP FOR VISIBILITY) -->
-                <button class="btn-calculate" onclick="calculateRoute()" style="margin-top: 15px; margin-bottom: 20px;">🚀 Calculate Route</button>
+                <button type="button" class="btn-calculate btn-calculate--primary" onclick="calculateRoute()">Calculate route</button>
 
                 <!-- Auto GPS Location Toggle (NEW FEATURE) -->
-                <div class="form-group" style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-top: 15px;">
-                    <div style="display: flex; align-items: center; justify-content: space-between;">
-                        <label style="margin: 0; font-weight: 500; color: #333;">
-                            📍 Auto-Use Current Location as Start
-                        </label>
-                        <input type="checkbox" id="autoGpsToggle" style="width: 20px; height: 20px; cursor: pointer;" onchange="toggleAutoGpsLocation()">
+                <div class="form-group card-settings-inline">
+                    <div class="settings-inline-row">
+                        <label for="autoGpsToggle" class="settings-inline-label">Use current GPS as start</label>
+                        <input type="checkbox" id="autoGpsToggle" class="input-toggle-checkbox" onchange="toggleAutoGpsLocation()">
                     </div>
-                    <div style="font-size: 12px; color: #666; margin-top: 8px;">
-                        When enabled, your current GPS location will automatically be used as the start location for route calculations.
-                    </div>
+                    <p class="settings-inline-help">When on, route calculations use your live position as the start automatically.</p>
                 </div>
 
                 <!-- Favorite Locations Section (Phase 2) -->

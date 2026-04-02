@@ -2433,7 +2433,7 @@ function updateWaypointsList() {
     ];
 
     if (allItems.length === 0) {
-        container.innerHTML = '<div style="color: #999; font-size: 12px; padding: 10px;">No waypoints added. Click buttons above to add via-points or stops.</div>';
+        container.innerHTML = '<div class="waypoints-empty">No waypoints yet. Add via-points or stops above.</div>';
         return;
     }
 
@@ -14830,8 +14830,8 @@ function initMobileEnhancements() {
     console.log('[Mobile] iOS:', isIOS());
     console.log('[Mobile] Android:', isAndroid());
 
-    // Add haptic feedback to all FAB buttons
-    document.querySelectorAll('.fab').forEach(fab => {
+    // Add haptic feedback to FABs and sheet toolbar icon buttons
+    document.querySelectorAll('.fab, .sheet-icon-btn').forEach(fab => {
         fab.addEventListener('touchstart', () => {
             triggerHaptic('light');
             fab.classList.add('haptic-feedback');

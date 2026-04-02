@@ -33,7 +33,7 @@ test.describe('Route Calculation Workflow', () => {
     }
 
     // Click calculate route button
-    await page.click('button:has-text("Calculate Route")');
+    await page.getByRole('button', { name: /calculate route/i }).click();
     
     // Wait for route to be calculated
     await page.waitForSelector('[data-testid="route-result"]', { timeout: 10000 });
@@ -61,7 +61,7 @@ test.describe('Route Calculation Workflow', () => {
     await page.locator('[role="option"]').first().click();
 
     // Calculate route
-    await page.click('button:has-text("Calculate Route")');
+    await page.getByRole('button', { name: /calculate route/i }).click();
     await page.waitForSelector('[data-testid="route-options"]', { timeout: 10000 });
 
     // Verify multiple routes are shown
@@ -81,7 +81,7 @@ test.describe('Route Calculation Workflow', () => {
     await page.waitForTimeout(300);
     await page.locator('[role="option"]').first().click();
 
-    await page.click('button:has-text("Calculate Route")');
+    await page.getByRole('button', { name: /calculate route/i }).click();
     await page.waitForSelector('[data-testid="route-result"]', { timeout: 10000 });
 
     // Click on cost breakdown
@@ -101,7 +101,7 @@ test.describe('Route Calculation Workflow', () => {
     await page.fill('input[placeholder*="Destination"]', 'Manchester');
     
     // Try to calculate route
-    await page.click('button:has-text("Calculate Route")');
+    await page.getByRole('button', { name: /calculate route/i }).click();
     
     // Wait for error message
     await page.waitForSelector('[data-testid="error-message"]', { timeout: 5000 });
@@ -125,7 +125,7 @@ test.describe('Route Calculation Workflow', () => {
     await page.check('input[name="avoid-highways"]');
 
     // Calculate route
-    await page.click('button:has-text("Calculate Route")');
+    await page.getByRole('button', { name: /calculate route/i }).click();
     await page.waitForSelector('[data-testid="route-result"]', { timeout: 10000 });
 
     // Verify route is calculated with preferences
@@ -143,7 +143,7 @@ test.describe('Route Calculation Workflow', () => {
     await page.waitForTimeout(300);
     await page.locator('[role="option"]').first().click();
 
-    await page.click('button:has-text("Calculate Route")');
+    await page.getByRole('button', { name: /calculate route/i }).click();
     await page.waitForSelector('[data-testid="route-result"]', { timeout: 10000 });
 
     // Save route

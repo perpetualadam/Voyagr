@@ -21,7 +21,7 @@ test.describe('Trip History Workflow', () => {
     await page.waitForTimeout(300);
     await page.locator('[role="option"]').first().click();
 
-    await page.click('button:has-text("Calculate Route")');
+    await page.getByRole('button', { name: /calculate route/i }).click();
     await page.waitForSelector('[data-testid="route-result"]', { timeout: 10000 });
     
     await page.click('[data-testid="start-navigation"]');
@@ -50,7 +50,7 @@ test.describe('Trip History Workflow', () => {
     await page.waitForTimeout(300);
     await page.locator('[role="option"]').first().click();
 
-    await page.click('button:has-text("Calculate Route")');
+    await page.getByRole('button', { name: /calculate route/i }).click();
     await page.waitForSelector('[data-testid="route-result"]', { timeout: 10000 });
     
     await page.click('[data-testid="start-navigation"]');
@@ -123,7 +123,7 @@ test.describe('Trip History Workflow', () => {
     await page.waitForTimeout(300);
     await page.locator('[role="option"]').first().click();
 
-    await page.click('button:has-text("Calculate Route")');
+    await page.getByRole('button', { name: /calculate route/i }).click();
     await page.waitForSelector('[data-testid="route-result"]', { timeout: 10000 });
     
     await page.click('[data-testid="start-navigation"]');

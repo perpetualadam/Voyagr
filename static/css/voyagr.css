@@ -2659,3 +2659,399 @@ body.dark-mode textarea:focus {
     border-color: #818cf8;
     box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2);
 }
+
+/* ============================================
+   Navigation shell — toolbar, cards, actions
+   ============================================ */
+.sheet-header-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px 12px;
+    width: 100%;
+}
+
+.bottom-sheet-header .sheet-title {
+    font-size: 17px;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--voyagr-text, #111827);
+    margin: 0;
+    flex: 1 1 140px;
+    min-width: 0;
+}
+
+.sheet-toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: flex-end;
+    align-items: center;
+    flex: 1 1 200px;
+}
+
+.sheet-icon-btn {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 12px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    line-height: 1;
+    color: #fff;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    flex-shrink: 0;
+}
+
+.sheet-icon-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+    filter: brightness(1.05);
+}
+
+.sheet-icon-btn:active {
+    transform: scale(0.96);
+}
+
+.sheet-icon-btn--saved { background: linear-gradient(145deg, #ec407a, #c2185b); }
+.sheet-icon-btn--analytics { background: linear-gradient(145deg, #ff7043, #e64a19); }
+.sheet-icon-btn--share { background: linear-gradient(145deg, #ab47bc, #8e24aa); }
+.sheet-icon-btn--routes { background: linear-gradient(145deg, #66bb6a, #388e3c); }
+.sheet-icon-btn--history { background: linear-gradient(145deg, #ffa726, #f57c00); }
+.sheet-icon-btn--dashcam { background: linear-gradient(145deg, #ef5350, #c62828); }
+.sheet-icon-btn--settings { background: linear-gradient(145deg, #7e8ff0, #5c6bc0); }
+.sheet-icon-btn--collapse {
+    background: linear-gradient(145deg, #94a3b8, #64748b);
+    margin-left: 2px;
+}
+
+.swap-row {
+    display: flex;
+    justify-content: center;
+    margin: 2px 0 10px;
+}
+
+.btn-swap {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 18px;
+    background: #f3f4f6;
+    border: 1px solid var(--voyagr-border, rgba(15, 23, 42, 0.09));
+    border-radius: 999px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--voyagr-muted, #6b7280);
+    transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.btn-swap:hover {
+    background: #e5e7eb;
+    border-color: rgba(15, 23, 42, 0.14);
+}
+
+.btn-swap-icon {
+    font-size: 16px;
+    opacity: 0.85;
+}
+
+.btn-swap-label {
+    font-size: 12px;
+    letter-spacing: 0.02em;
+}
+
+.card-waypoints {
+    background: linear-gradient(180deg, #fffbeb 0%, #fff8e1 100%);
+    border: 1px solid rgba(245, 158, 11, 0.28);
+    border-radius: var(--voyagr-radius, 14px);
+    padding: 14px;
+    margin-top: 12px;
+}
+
+.card-waypoints-title {
+    display: block;
+    margin-bottom: 12px;
+    font-weight: 600;
+    font-size: 13px;
+    color: #92400e;
+    letter-spacing: 0.01em;
+}
+
+.waypoint-block {
+    position: relative;
+    margin-bottom: 10px;
+}
+
+.waypoint-field-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+}
+
+.input-waypoint {
+    flex: 1;
+    min-width: 0;
+    font-size: 13px !important;
+    padding: 10px 12px !important;
+}
+
+.input-waypoint--via {
+    border-color: rgba(249, 115, 22, 0.45) !important;
+    background: #fffdfb !important;
+}
+
+.input-waypoint--stop {
+    border-color: rgba(236, 72, 153, 0.45) !important;
+    background: #fffafc !important;
+}
+
+.btn-waypoint {
+    padding: 10px 12px;
+    border: none;
+    border-radius: var(--voyagr-radius-sm, 11px);
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+    color: #fff;
+    transition: filter 0.15s ease, transform 0.1s ease;
+}
+
+.btn-waypoint--via {
+    background: linear-gradient(145deg, #fb923c, #ea580c);
+}
+
+.btn-waypoint--stop {
+    background: linear-gradient(145deg, #ec4899, #db2777);
+}
+
+.btn-waypoint:active {
+    transform: scale(0.98);
+}
+
+.btn-waypoint-map {
+    width: 44px;
+    flex-shrink: 0;
+    padding: 0;
+    border-radius: var(--voyagr-radius-sm, 11px);
+    cursor: pointer;
+    font-size: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: #fff;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-waypoint-map--via {
+    border: 1px solid rgba(249, 115, 22, 0.5);
+    color: #ea580c;
+}
+
+.btn-waypoint-map--stop {
+    border: 1px solid rgba(236, 72, 153, 0.5);
+    color: #db2777;
+}
+
+.btn-waypoint-map:hover {
+    background: #fafafa;
+}
+
+.waypoint-actions {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.btn-waypoint-clear {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1px solid var(--voyagr-border, rgba(15, 23, 42, 0.09));
+    border-radius: var(--voyagr-radius-sm, 11px);
+    background: #fff;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--voyagr-muted, #6b7280);
+}
+
+.btn-waypoint-clear:hover {
+    background: #f9fafb;
+}
+
+.waypoint-edit-wrap {
+    margin-bottom: 10px;
+}
+
+.btn-edit-route {
+    width: 100%;
+    padding: 11px 14px;
+    border: 2px solid #22c55e;
+    border-radius: var(--voyagr-radius-sm, 11px);
+    background: #fff;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    color: #15803d;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+
+.btn-edit-route:hover {
+    background: #f0fdf4;
+}
+
+.waypoints-empty {
+    color: var(--voyagr-muted, #6b7280);
+    font-size: 12px;
+    padding: 12px 4px;
+    text-align: center;
+}
+
+.waypoints-hint {
+    font-size: 11px;
+    line-height: 1.45;
+    color: #78716c;
+    margin-top: 10px;
+}
+
+.waypoints-hint strong {
+    color: #57534e;
+}
+
+.select-input {
+    width: 100%;
+    font-size: 14px;
+}
+
+.routing-mode-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.btn-calculate--primary {
+    width: 100%;
+    margin-top: 6px;
+    margin-bottom: 18px;
+    border-radius: var(--voyagr-radius, 14px) !important;
+    padding: 15px 20px !important;
+    font-size: 15px !important;
+    letter-spacing: 0.02em;
+}
+
+.card-settings-inline {
+    background: #f9fafb;
+    border: 1px solid var(--voyagr-border, rgba(15, 23, 42, 0.09));
+    border-radius: var(--voyagr-radius, 14px);
+    padding: 14px;
+    margin-top: 8px;
+}
+
+.settings-inline-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.settings-inline-label {
+    margin: 0 !important;
+    font-weight: 500 !important;
+    font-size: 13px !important;
+    color: var(--voyagr-text, #111827) !important;
+    flex: 1;
+}
+
+.input-toggle-checkbox {
+    width: 22px !important;
+    height: 22px !important;
+    min-width: 22px;
+    cursor: pointer;
+    accent-color: var(--voyagr-accent, #5c6bc0);
+}
+
+.settings-inline-help {
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--voyagr-muted, #6b7280);
+    margin: 10px 0 0;
+}
+
+body.dark-mode .sheet-icon-btn {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+body.dark-mode .btn-swap {
+    background: #27272a;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #a1a1aa;
+}
+
+body.dark-mode .card-waypoints {
+    background: linear-gradient(180deg, #292524 0%, #1c1917 100%);
+    border-color: rgba(245, 158, 11, 0.25);
+}
+
+body.dark-mode .card-waypoints-title {
+    color: #fcd34d;
+}
+
+body.dark-mode .input-waypoint--via {
+    background: #1c1917 !important;
+    border-color: rgba(251, 146, 60, 0.4) !important;
+    color: #f4f4f5 !important;
+}
+
+body.dark-mode .input-waypoint--stop {
+    background: #1c1917 !important;
+    border-color: rgba(244, 114, 182, 0.4) !important;
+    color: #f4f4f5 !important;
+}
+
+body.dark-mode .btn-waypoint-map {
+    background: #27272a;
+}
+
+body.dark-mode .btn-waypoint-map:hover {
+    background: #3f3f46;
+}
+
+body.dark-mode .btn-waypoint-clear {
+    background: #27272a;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #a1a1aa;
+}
+
+body.dark-mode .btn-edit-route {
+    background: #14532d;
+    border-color: #22c55e;
+    color: #bbf7d0;
+}
+
+body.dark-mode .waypoints-hint {
+    color: #a8a29e;
+}
+
+body.dark-mode .waypoints-hint strong {
+    color: #d6d3d1;
+}
+
+body.dark-mode .card-settings-inline {
+    background: #27272a;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+
+body.dark-mode .settings-inline-label {
+    color: #f4f4f5 !important;
+}
+
+body.dark-mode .settings-inline-help {
+    color: #a1a1aa;
+}
