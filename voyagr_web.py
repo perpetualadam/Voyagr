@@ -4385,16 +4385,16 @@ HTML_TEMPLATE = '''
                         <div class="preference-item">
                             <span class="preference-label">🗺️ Map Theme</span>
                         </div>
-                        <div class="theme-selector">
-                            <button class="theme-option active" onclick="setMapTheme('standard')">
+                        <div class="theme-selector" id="mapThemeSelector">
+                            <button type="button" class="theme-option active" data-theme="standard" onclick="setMapTheme('standard')">
                                 <div class="theme-preview standard"></div>
                                 Standard
                             </button>
-                            <button class="theme-option" onclick="setMapTheme('satellite')">
+                            <button type="button" class="theme-option" data-theme="satellite" onclick="setMapTheme('satellite')">
                                 <div class="theme-preview satellite"></div>
                                 Satellite
                             </button>
-                            <button class="theme-option" onclick="setMapTheme('dark')">
+                            <button type="button" class="theme-option" data-theme="dark" onclick="setMapTheme('dark')">
                                 <div class="theme-preview dark"></div>
                                 Dark
                             </button>

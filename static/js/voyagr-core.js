@@ -196,6 +196,14 @@ function initializeMap() {
         try {
             if (!map || !map.getStyle) return;
             const style = map.getStyle();
+            const sources = style?.sources || {};
+            const sourceVals = Object.values(sources);
+            if (
+                sourceVals.length > 0 &&
+                sourceVals.every((s) => s && s.type === 'raster')
+            ) {
+                return;
+            }
             const layers = style?.layers || [];
             const textLayers = layers.filter(l =>
                 l &&

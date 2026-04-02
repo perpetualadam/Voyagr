@@ -9087,13 +9087,16 @@ function setMapTheme(themeOrEvent) {
 
     localStorage.setItem('mapTheme', theme);
 
-    // Update UI
-    document.querySelectorAll('.theme-option').forEach(btn => {
-        btn.classList.remove('active');
-    });
+    // Update UI (map theme row only — not UI light/dark/auto)
+    const mapThemeRow = document.getElementById('mapThemeSelector');
+    if (mapThemeRow) {
+        mapThemeRow.querySelectorAll('.theme-option').forEach((btn) => {
+            btn.classList.remove('active');
+        });
+    }
 
-    // Highlight the active theme button
-    const activeBtn = document.querySelector(`[data-theme="${theme}"]`);
+    // Highlight the active map theme button
+    const activeBtn = document.querySelector(`#mapThemeSelector [data-theme="${theme}"]`);
     if (activeBtn) {
         activeBtn.classList.add('active');
     }
@@ -9113,25 +9116,25 @@ function setMapTheme(themeOrEvent) {
 
     currentMapTheme = theme;
 
-    // MapLibre style switching - using self-hosted OpenMapTiles-compatible styles
+    // MapLibre style switching — vector themes via /map/; satellite via static raster (Esri imagery)
+    const toAbs = window.__voyagrToAbsoluteOriginUrl || ((u) => u);
+    const satelliteRasterUrl = toAbs('/static/map/styles/satellite/style.json');
     const styleUrls = {
-        // Served by our own tile stack (see Nginx proxy rules on Voyagr)
         'standard': '/map/styles/liberty/style.json',
-        'satellite': '/map/styles/liberty/style.json', // Satellite not implemented yet
+        'satellite': satelliteRasterUrl,
         'dark': '/map/styles/positron/style.json'
     };
 
-    // If core detected missing glyphs/labels and applied a raster fallback, respect it
-    // so users don't get bounced back into a label-less vector style.
+    // If core detected missing glyphs/labels and applied OSM raster fallback, use it for vector themes.
+    // Keep satellite as aerial imagery (also raster, works in PWA workers with absolute URLs).
     if (window.__voyagrPreferredFallbackStyleUrl) {
         styleUrls['standard'] = window.__voyagrPreferredFallbackStyleUrl;
-        styleUrls['satellite'] = window.__voyagrPreferredFallbackStyleUrl;
         styleUrls['dark'] = window.__voyagrPreferredFallbackStyleUrl;
+        styleUrls['satellite'] = satelliteRasterUrl;
     }
 
     // *** PWA / Web Worker fix (same approach as voyagr-core.js initializeMap) ***
     // Resolve all internal URLs to absolute so the worker never sees relative URLs.
-    const toAbs = window.__voyagrToAbsoluteOriginUrl || ((u) => u);
     const resolveUrls = window.__voyagrResolveStyleUrls || ((s) => s);
 
     const chosenUrl = styleUrls[theme] || styleUrls['standard'];

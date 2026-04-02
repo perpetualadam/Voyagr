@@ -1,0 +1,35 @@
+{
+  "version": 8,
+  "name": "Satellite — World Imagery (Esri)",
+  "sources": {
+    "esri-imagery": {
+      "type": "raster",
+      "tiles": [
+        "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+      ],
+      "tileSize": 256,
+      "attribution": "Imagery © Esri, Maxar, Earthstar Geographics, GIS community",
+      "maxzoom": 19
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#0d1114"
+      }
+    },
+    {
+      "id": "esri-imagery",
+      "type": "raster",
+      "source": "esri-imagery",
+      "minzoom": 0,
+      "maxzoom": 22,
+      "paint": {
+        "raster-opacity": 1,
+        "raster-fade-duration": 0
+      }
+    }
+  ]
+}
