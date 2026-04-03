@@ -1,6 +1,10 @@
 {
   "version": 8,
   "name": "Satellite — World Imagery (Esri)",
+  "metadata": {
+    "voyagr.theme": "satellite",
+    "voyagr.imagery": "esri-world-imagery"
+  },
   "sources": {
     "esri-imagery": {
       "type": "raster",
