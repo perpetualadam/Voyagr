@@ -1561,6 +1561,16 @@ h1 {
     transform-style: preserve-3d !important;
 }
 
+/* Vertical OSM-style traffic light SVG (route lights, OSM layer, hazard markers) */
+.osm-traffic-light-pill svg {
+    width: 14px;
+    height: 32px;
+    min-width: 14px;
+    min-height: 32px;
+    flex-shrink: 0;
+    display: block;
+}
+
 /* Add dynamic shadow that appears when map is pitched (3D view) */
 .maplibregl-marker.vehicle-marker-icon::after {
     content: '';

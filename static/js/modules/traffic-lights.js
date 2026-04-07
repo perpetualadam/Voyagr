@@ -34,7 +34,7 @@ function createTrafficLightSVG(activeLight, width = 14, height = 32) {
     else if (activeLight === 'yellow') y = '#f59e0b';
     else if (activeLight === 'green') g = '#22c55e';
 
-    return `<svg viewBox="0 0 16 36" width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" style="display:block" aria-hidden="true"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="${r}"/><circle cx="8" cy="18" r="4.2" fill="${y}"/><circle cx="8" cy="27.5" r="4.2" fill="${g}"/></svg>`;
+    return `<svg viewBox="0 0 16 36" width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" style="display:block;flex-shrink:0;width:${width}px;height:${height}px" aria-hidden="true"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="${r}"/><circle cx="8" cy="18" r="4.2" fill="${y}"/><circle cx="8" cy="27.5" r="4.2" fill="${g}"/></svg>`;
 }
 
 /**
@@ -393,6 +393,11 @@ if (typeof document !== 'undefined') {
         }
 
         .traffic-light-icon svg {
+            width: 14px !important;
+            height: 32px !important;
+            min-width: 14px;
+            min-height: 32px;
+            flex-shrink: 0;
             filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
         }
 

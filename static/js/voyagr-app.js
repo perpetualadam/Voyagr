@@ -4569,7 +4569,7 @@ function displayHazardMarkers(hazards) {
 
     const hazardConfig = {
         'camera': { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Camera' },
-        'traffic_light': { emoji: '🚥', color: '#2e7d32', bgColor: '#e8f5e9', label: 'Traffic light' },
+        'traffic_light': { useOsmTrafficLightPill: true, color: '#2e7d32', bgColor: '#e8f5e9', label: 'Traffic light' },
         'police': { emoji: '🚔', color: '#1976d2', bgColor: '#e3f2fd', label: 'Police' },
         'roadworks': { emoji: '🚧', color: '#ffc107', bgColor: '#fff8e1', label: 'Roadworks' },
         'accident': { emoji: '⚠️', color: '#f44336', bgColor: '#ffebee', label: 'Accident' },
@@ -4588,21 +4588,18 @@ function displayHazardMarkers(hazards) {
         seenLocations.add(locationKey);
 
         const config = hazardConfig[hazard.type] || { emoji: '⚠️', color: '#ff9800', bgColor: '#fff3e0', label: 'Hazard' };
-        const iconContent = config.svg || config.emoji;
-        const isCamera = !!config.svg;
 
-        // Create popup icon (larger version for popup)
-        const popupIcon = config.svg || `<span style="font-size: 24px;">${config.emoji}</span>`;
+        let markerHtml;
+        let markerIconSize;
+        let popupIcon;
 
-        // Create distance text if available
-        const hazardDistanceText = hazard.distance_km
-            ? `<div style="font-size: 11px; color: #888; margin-top: 5px;">${hazard.distance_km.toFixed(1)} km ahead</div>`
-            : '';
-
-        // Create custom HTML marker with MapLibre
-        const marker = MapLibreHelpers.createMarker(hazard.lat, hazard.lon, {
-            className: 'hazard-marker',
-            html: `<div style="
+        if (config.useOsmTrafficLightPill) {
+            markerHtml = getOsmTrafficLightMarkerPillHTML();
+            markerIconSize = [26, 38];
+            popupIcon = `<div style="width:26px;height:38px;margin:0 auto;">${getOsmTrafficLightMarkerPillHTML()}</div>`;
+        } else if (config.svg) {
+            const isCamera = true;
+            markerHtml = `<div style="
                 background: ${config.bgColor};
                 border: 2px solid ${config.color};
                 border-radius: ${isCamera ? '4px' : '50%'};
@@ -4611,12 +4608,39 @@ function displayHazardMarkers(hazards) {
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-size: ${isCamera ? '12px' : '14px'};
+                font-size: 12px;
                 box-shadow: 0 2px 6px rgba(0,0,0,0.3);
                 cursor: pointer;
-            ">${iconContent}</div>`,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14],
+            ">${config.svg}</div>`;
+            markerIconSize = [28, 28];
+            popupIcon = config.svg;
+        } else {
+            markerHtml = `<div style="
+                background: ${config.bgColor};
+                border: 2px solid ${config.color};
+                border-radius: 50%;
+                width: 28px;
+                height: 28px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 14px;
+                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+                cursor: pointer;
+            ">${config.emoji}</div>`;
+            markerIconSize = [28, 28];
+            popupIcon = `<span style="font-size: 24px;">${config.emoji}</span>`;
+        }
+
+        const hazardDistanceText = hazard.distance_km
+            ? `<div style="font-size: 11px; color: #888; margin-top: 5px;">${hazard.distance_km.toFixed(1)} km ahead</div>`
+            : '';
+
+        const marker = MapLibreHelpers.createMarker(hazard.lat, hazard.lon, {
+            className: 'hazard-marker',
+            html: markerHtml,
+            iconSize: markerIconSize,
+            iconAnchor: [markerIconSize[0] / 2, markerIconSize[1] / 2],
             popup: `
                 <div style="text-align: center; min-width: 150px;">
                     <div style="margin-bottom: 8px; display: flex; justify-content: center;">${popupIcon}</div>
@@ -6091,7 +6115,12 @@ function getOsmTrafficLightMarkerInnerSVG() {
     if (typeof TrafficLights !== 'undefined' && TrafficLights.createIconSVG) {
         return TrafficLights.createIconSVG('none', 14, 32);
     }
-    return `<svg viewBox="0 0 16 36" width="14" height="32" xmlns="http://www.w3.org/2000/svg" style="display:block"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#7f1d1d"/><circle cx="8" cy="18" r="4.2" fill="#713f12"/><circle cx="8" cy="27.5" r="4.2" fill="#14532d"/></svg>`;
+    return `<svg viewBox="0 0 16 36" width="14" height="32" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" style="display:block;flex-shrink:0;width:14px;height:32px"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#7f1d1d"/><circle cx="8" cy="18" r="4.2" fill="#713f12"/><circle cx="8" cy="27.5" r="4.2" fill="#14532d"/></svg>`;
+}
+
+/** Green pill + vertical SVG (OSM layer, route hazard markers — not the horizontal 🚥 emoji). */
+function getOsmTrafficLightMarkerPillHTML() {
+    return `<div class="osm-traffic-light-pill" style="box-sizing:border-box;width:100%;height:100%;background:#e8f5e9;border:2px solid #2e7d32;border-radius:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.25);">${getOsmTrafficLightMarkerInnerSVG()}</div>`;
 }
 
 /**
@@ -6322,13 +6351,14 @@ function displayOsmTrafficLightMarkers(lights) {
         const key = `${Number(light.lat).toFixed(5)},${Number(light.lon).toFixed(5)}`;
         if (seen.has(key)) return;
         seen.add(key);
-        const tlSvg = getOsmTrafficLightMarkerInnerSVG();
+        const pill = getOsmTrafficLightMarkerPillHTML();
+        const popupPill = `<div style="width:26px;height:38px;margin:0 auto 6px;">${pill}</div>`;
         const marker = MapLibreHelpers.createMarker(light.lat, light.lon, {
             className: 'osm-traffic-light-marker',
-            html: `<div style="box-sizing:border-box;width:100%;height:100%;background:#e8f5e9;border:2px solid #2e7d32;border-radius:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.25);">${tlSvg}</div>`,
+            html: pill,
             iconSize: [26, 38],
             iconAnchor: [13, 19],
-            popup: `<div style="text-align:center;font-size:12px;max-width:200px;"><div style="display:flex;justify-content:center;margin-bottom:6px">${tlSvg}</div><strong>Traffic light</strong><div style="color:#666;margin-top:4px;">OpenStreetMap</div></div>`
+            popup: `<div style="text-align:center;font-size:12px;max-width:200px;">${popupPill}<strong>Traffic light</strong><div style="color:#666;margin-top:4px;">OpenStreetMap</div></div>`
         }).addTo(map);
         window.osmTrafficLightMarkers.push(marker);
     });
@@ -12818,7 +12848,7 @@ function openHazardSettings() {
 function getHazardIcon(type) {
     const icons = {
         'camera': '📷',
-        'traffic_light': '🚥',
+        'traffic_light': '🚦',
         'police': '👮',
         'accident': '🚗💥',
         'roadworks': '🚧',
