@@ -3798,9 +3798,9 @@ HTML_TEMPLATE = '''
     <!-- Google Plus Codes Service -->
     <script src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/modules/traffic-lights.js?v=20260117t"></script>
+    <script src="/static/js/modules/traffic-lights.js?v=20260331a"></script>
     <script src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    <script src="/static/js/voyagr-app.js?v=20260404a"></script>
+    <script src="/static/js/voyagr-app.js?v=20260404c"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>

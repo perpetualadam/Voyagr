@@ -18,63 +18,23 @@ const TRAFFIC_LIGHT_STATES = {
 };
 
 /**
- * Create SVG traffic light icon
- * @param {string} activeLight - Which light is active: 'red', 'yellow', 'green', or 'none'
- * @param {number} width - Width of SVG (default: 16)
- * @param {number} height - Height of SVG (default: 32)
- * @returns {string} SVG HTML string
+ * Vertical traffic-light icon (same geometry as OSM map markers — green frame, dark housing).
+ * @param {string} activeLight - 'red' | 'yellow' | 'green' | 'none' (all lenses dim)
+ * @param {number} width - Rendered width (default 14)
+ * @param {number} height - Rendered height (default 32)
  */
-function createTrafficLightSVG(activeLight, width = 16, height = 32) {
-    // Scale factors for different sizes
-    const scaleX = width / 16;
-    const scaleY = height / 32;
+function createTrafficLightSVG(activeLight, width = 14, height = 32) {
+    const dimR = '#7f1d1d';
+    const dimY = '#713f12';
+    const dimG = '#14532d';
+    let r = dimR;
+    let y = dimY;
+    let g = dimG;
+    if (activeLight === 'red') r = '#ef4444';
+    else if (activeLight === 'yellow') y = '#f59e0b';
+    else if (activeLight === 'green') g = '#22c55e';
 
-    return `
-        <svg width="${width}" height="${height}" viewBox="0 0 16 32" xmlns="http://www.w3.org/2000/svg">
-            <!-- Traffic light housing -->
-            <rect x="1" y="0" width="14" height="32" rx="2" fill="#1a1a1a" stroke="#333" stroke-width="0.5"/>
-
-            <!-- Red light -->
-            <circle cx="8" cy="6" r="4"
-                fill="${activeLight === 'red' ? '#ef4444' : '#4a1a1a'}"
-                stroke="#666" stroke-width="0.3"
-                opacity="${activeLight === 'red' ? '1' : '0.4'}"/>
-            ${activeLight === 'red' ? '<circle cx="8" cy="6" r="4" fill="url(#redGlow)"/>' : ''}
-
-            <!-- Yellow light -->
-            <circle cx="8" cy="16" r="4"
-                fill="${activeLight === 'yellow' ? '#f59e0b' : '#4a3a1a'}"
-                stroke="#666" stroke-width="0.3"
-                opacity="${activeLight === 'yellow' ? '1' : '0.4'}"/>
-            ${activeLight === 'yellow' ? '<circle cx="8" cy="16" r="4" fill="url(#yellowGlow)"/>' : ''}
-
-            <!-- Green light -->
-            <circle cx="8" cy="26" r="4"
-                fill="${activeLight === 'green' ? '#22c55e' : '#1a4a2a'}"
-                stroke="#666" stroke-width="0.3"
-                opacity="${activeLight === 'green' ? '1' : '0.4'}"/>
-            ${activeLight === 'green' ? '<circle cx="8" cy="26" r="4" fill="url(#greenGlow)"/>' : ''}
-
-            <!-- Glow effects -->
-            <defs>
-                <radialGradient id="redGlow">
-                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
-                    <stop offset="50%" stop-color="#ef4444" stop-opacity="0.8"/>
-                    <stop offset="100%" stop-color="#ef4444" stop-opacity="0"/>
-                </radialGradient>
-                <radialGradient id="yellowGlow">
-                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
-                    <stop offset="50%" stop-color="#f59e0b" stop-opacity="0.8"/>
-                    <stop offset="100%" stop-color="#f59e0b" stop-opacity="0"/>
-                </radialGradient>
-                <radialGradient id="greenGlow">
-                    <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
-                    <stop offset="50%" stop-color="#22c55e" stop-opacity="0.8"/>
-                    <stop offset="100%" stop-color="#22c55e" stop-opacity="0"/>
-                </radialGradient>
-            </defs>
-        </svg>
-    `;
+    return `<svg viewBox="0 0 16 36" width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" style="display:block" aria-hidden="true"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="${r}"/><circle cx="8" cy="18" r="4.2" fill="${y}"/><circle cx="8" cy="27.5" r="4.2" fill="${g}"/></svg>`;
 }
 
 /**
@@ -101,7 +61,9 @@ function createTrafficLightElement(light) {
 
     el.innerHTML = `
         <div class="traffic-light-container">
-            <div class="traffic-light-icon">${createTrafficLightSVG(stateInfo.activeLight)}</div>
+            <div class="traffic-light-osm-wrap">
+                <div class="traffic-light-icon">${createTrafficLightSVG(stateInfo.activeLight)}</div>
+            </div>
             ${countdown}
         </div>
     `;
@@ -137,9 +99,9 @@ function addTrafficLight(light) {
     const popup = new maplibregl.Popup({ offset: 20, closeButton: false })
         .setHTML(`
             <div class="traffic-light-popup">
-                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-                    <div style="width: 14px; height: 28px;">
-                        ${createTrafficLightSVG(stateInfo.activeLight, 14, 28)}
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <div class="traffic-light-osm-wrap traffic-light-osm-wrap--popup">
+                        ${createTrafficLightSVG(stateInfo.activeLight, 14, 32)}
                     </div>
                     <strong>Traffic Light</strong>
                 </div>
@@ -383,7 +345,9 @@ window.TrafficLights = {
     plotTrafficLightsOnRoute,
     toggleTrafficLights,
     checkNearbyTrafficLights,
-    isEnabled: () => trafficLightsEnabled
+    isEnabled: () => trafficLightsEnabled,
+    /** Shared vertical icon for OSM + route markers (activeLight: red|yellow|green|none) */
+    createIconSVG: createTrafficLightSVG
 };
 
 // Add CSS styles for traffic light markers
@@ -398,10 +362,27 @@ if (typeof document !== 'undefined') {
             display: flex;
             flex-direction: column;
             align-items: center;
-            background: rgba(255, 255, 255, 0.95);
-            border-radius: 4px;
-            padding: 3px;
-            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(0, 0, 0, 0.2);
+            background: transparent;
+            padding: 0;
+        }
+
+        .traffic-light-osm-wrap {
+            box-sizing: border-box;
+            width: 26px;
+            height: 38px;
+            background: #e8f5e9;
+            border: 2px solid #2e7d32;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+        }
+
+        .traffic-light-osm-wrap--popup {
+            width: 26px;
+            height: 38px;
+            flex-shrink: 0;
         }
 
         .traffic-light-icon {

@@ -6086,6 +6086,14 @@ let showOsmRailwayCrossingsEnabled = localStorage.getItem('showOsmRailwayCrossin
 /** SVG icon: level crossing (rails + warning cross), matches hazard railway_crossing colours */
 const RAILWAY_CROSSING_MAP_ICON_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="4" fill="#efebe9" stroke="#795548" stroke-width="2"/><path stroke="#424242" stroke-width="1.8" stroke-linecap="round" d="M5 9h14M5 15h14"/><path stroke="#c62828" stroke-width="2.2" stroke-linecap="round" d="M8 7l8 10M16 7l-8 10"/></svg>`;
 
+/** Same vertical icon as route traffic lights (`traffic-lights.js`); fallback if module not loaded. */
+function getOsmTrafficLightMarkerInnerSVG() {
+    if (typeof TrafficLights !== 'undefined' && TrafficLights.createIconSVG) {
+        return TrafficLights.createIconSVG('none', 14, 32);
+    }
+    return `<svg viewBox="0 0 16 36" width="14" height="32" xmlns="http://www.w3.org/2000/svg" style="display:block"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#7f1d1d"/><circle cx="8" cy="18" r="4.2" fill="#713f12"/><circle cx="8" cy="27.5" r="4.2" fill="#14532d"/></svg>`;
+}
+
 /**
  * Toggle show cameras on map
  */
@@ -6314,12 +6322,13 @@ function displayOsmTrafficLightMarkers(lights) {
         const key = `${Number(light.lat).toFixed(5)},${Number(light.lon).toFixed(5)}`;
         if (seen.has(key)) return;
         seen.add(key);
+        const tlSvg = getOsmTrafficLightMarkerInnerSVG();
         const marker = MapLibreHelpers.createMarker(light.lat, light.lon, {
             className: 'osm-traffic-light-marker',
-            html: `<div style="background:#e8f5e9;border:2px solid #2e7d32;border-radius:50%;width:28px;height:28px;display:flex;align-items:center;justify-content:center;font-size:14px;">🚥</div>`,
-            iconSize: [28, 28],
-            iconAnchor: [14, 14],
-            popup: '<div style="text-align:center;font-size:12px;">Traffic light (OpenStreetMap)</div>'
+            html: `<div style="box-sizing:border-box;width:100%;height:100%;background:#e8f5e9;border:2px solid #2e7d32;border-radius:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.25);">${tlSvg}</div>`,
+            iconSize: [26, 38],
+            iconAnchor: [13, 19],
+            popup: `<div style="text-align:center;font-size:12px;max-width:200px;"><div style="display:flex;justify-content:center;margin-bottom:6px">${tlSvg}</div><strong>Traffic light</strong><div style="color:#666;margin-top:4px;">OpenStreetMap</div></div>`
         }).addTo(map);
         window.osmTrafficLightMarkers.push(marker);
     });
