@@ -1506,6 +1506,227 @@ function updateAllTemperatureDisplays() {
 // ===== TRIP HISTORY FUNCTIONS =====
 let allTrips = [];
 
+const VOYAGR_LOCAL_TRIPS_KEY = 'voyagrLocalTrips';
+const MAX_LOCAL_TRIPS = 50;
+
+function loadRawLocalTrips() {
+    try {
+        const raw = localStorage.getItem(VOYAGR_LOCAL_TRIPS_KEY);
+        if (!raw) return [];
+        const arr = JSON.parse(raw);
+        return Array.isArray(arr) ? arr : [];
+    } catch (e) {
+        return [];
+    }
+}
+
+function saveRawLocalTrips(entries) {
+    try {
+        localStorage.setItem(VOYAGR_LOCAL_TRIPS_KEY, JSON.stringify(entries));
+    } catch (e) {
+        console.warn('[TripHistory] localStorage save failed:', e);
+    }
+}
+
+function parseLatLonString(str) {
+    if (!str || typeof str !== 'string') return null;
+    const p = str.split(',');
+    if (p.length < 2) return null;
+    const lat = parseFloat(p[0].trim());
+    const lon = parseFloat(p[1].trim());
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return { lat, lon };
+}
+
+/**
+ * Build a completed-trip payload from the active route + form fields.
+ * @returns {object|null}
+ */
+function buildCompletedTripRecord(route) {
+    if (!route) return null;
+    const startEl = document.getElementById('start');
+    const endEl = document.getElementById('end');
+    let start_lat;
+    let start_lon;
+    let end_lat;
+    let end_lon;
+    const start_address = (startEl && startEl.value) ? startEl.value.trim() : '';
+    const end_address = (endEl && endEl.value) ? endEl.value.trim() : (route.destinationName || '');
+
+    if (startEl && startEl.dataset.lat && startEl.dataset.lon) {
+        start_lat = parseFloat(startEl.dataset.lat);
+        start_lon = parseFloat(startEl.dataset.lon);
+    } else if (route.start) {
+        const ps = parseLatLonString(route.start);
+        if (ps) {
+            start_lat = ps.lat;
+            start_lon = ps.lon;
+        }
+    }
+    if (endEl && endEl.dataset.lat && endEl.dataset.lon) {
+        end_lat = parseFloat(endEl.dataset.lat);
+        end_lon = parseFloat(endEl.dataset.lon);
+    } else if (route.destination) {
+        const pe = parseLatLonString(route.destination);
+        if (pe) {
+            end_lat = pe.lat;
+            end_lon = pe.lon;
+        }
+    }
+
+    if (
+        (start_lat == null || end_lat == null) &&
+        typeof routePolyline !== 'undefined' &&
+        routePolyline &&
+        routePolyline.length > 1
+    ) {
+        if (start_lat == null || start_lon == null) {
+            start_lat = routePolyline[0][0];
+            start_lon = routePolyline[0][1];
+        }
+        const L = routePolyline[routePolyline.length - 1];
+        if (end_lat == null || end_lon == null) {
+            end_lat = L[0];
+            end_lon = L[1];
+        }
+    }
+
+    if (start_lat == null || start_lon == null || end_lat == null || end_lon == null) {
+        return null;
+    }
+
+    const distance_km = parseFloat(route.distance_km != null ? route.distance_km : route.distance) || 0;
+    const duration_minutes = parseFloat(
+        route.duration_minutes != null ? route.duration_minutes : route.time
+    ) || 0;
+
+    return {
+        start_lat,
+        start_lon,
+        end_lat,
+        end_lon,
+        start_address: start_address || `${start_lat},${start_lon}`,
+        end_address: end_address || `${end_lat},${end_lon}`,
+        distance_km,
+        duration_minutes,
+        fuel_cost: route.fuel_cost || 0,
+        toll_cost: route.toll_cost || 0,
+        caz_cost: route.caz_cost || 0,
+        routing_mode: typeof currentRoutingMode !== 'undefined' ? currentRoutingMode : 'auto',
+        timestamp: new Date().toISOString()
+    };
+}
+
+function updateLocalTripServerId(localId, serverTripId) {
+    const raw = loadRawLocalTrips();
+    const idx = raw.findIndex((e) => e.localId === localId);
+    if (idx >= 0) {
+        raw[idx].serverId = serverTripId;
+        saveRawLocalTrips(raw);
+    }
+}
+
+/**
+ * Save journey to device; POST to server when signed in.
+ */
+async function persistCompletedTrip(route) {
+    const base = buildCompletedTripRecord(route);
+    if (!base) {
+        console.warn('[TripHistory] Could not build trip record — not saved');
+        return;
+    }
+
+    const localId = Date.now();
+    const entry = {
+        localId,
+        serverId: null,
+        ...base
+    };
+    const raw = loadRawLocalTrips();
+    raw.unshift(entry);
+    saveRawLocalTrips(raw.slice(0, MAX_LOCAL_TRIPS));
+
+    const token = await getSupabaseAccessToken();
+    if (!token) {
+        console.log('[TripHistory] Saved on device only (not signed in)');
+        return;
+    }
+
+    try {
+        const { res, data } = await fetchJsonWithAuth('/api/trip-history', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                start_lat: base.start_lat,
+                start_lon: base.start_lon,
+                end_lat: base.end_lat,
+                end_lon: base.end_lon,
+                start_address: base.start_address,
+                end_address: base.end_address,
+                distance_km: base.distance_km,
+                duration_minutes: base.duration_minutes,
+                fuel_cost: base.fuel_cost,
+                toll_cost: base.toll_cost,
+                caz_cost: base.caz_cost,
+                routing_mode: base.routing_mode
+            })
+        });
+        if (res.ok && data && data.success && data.trip_id) {
+            updateLocalTripServerId(localId, data.trip_id);
+            console.log('[TripHistory] Synced to account, trip_id:', data.trip_id);
+        }
+    } catch (e) {
+        console.warn('[TripHistory] Server save failed (trip remains on device):', e);
+    }
+}
+
+function mergeServerAndLocalTrips(serverTrips, rawLocal) {
+    const out = Array.isArray(serverTrips) ? serverTrips.slice() : [];
+    const serverIds = new Set(out.map((t) => t.id));
+
+    (rawLocal || []).forEach((e) => {
+        const row = {
+            start_lat: e.start_lat,
+            start_lon: e.start_lon,
+            end_lat: e.end_lat,
+            end_lon: e.end_lon,
+            start_address: e.start_address,
+            end_address: e.end_address,
+            distance_km: e.distance_km,
+            duration_minutes: e.duration_minutes,
+            fuel_cost: e.fuel_cost,
+            toll_cost: e.toll_cost,
+            caz_cost: e.caz_cost,
+            routing_mode: e.routing_mode,
+            timestamp: e.timestamp
+        };
+        if (e.serverId != null) {
+            if (serverIds.has(e.serverId)) return;
+            out.push({ ...row, id: e.serverId, _localOnly: false });
+            serverIds.add(e.serverId);
+        } else {
+            out.push({ ...row, id: -e.localId, _localOnly: true });
+        }
+    });
+
+    out.sort((a, b) => {
+        const ta = new Date(a.timestamp).getTime();
+        const tb = new Date(b.timestamp).getTime();
+        return tb - ta;
+    });
+    return out;
+}
+
+function removeLocalTripByLocalId(localId) {
+    const raw = loadRawLocalTrips().filter((e) => e.localId !== localId);
+    saveRawLocalTrips(raw);
+}
+
+function removeLocalTripByServerId(serverId) {
+    const raw = loadRawLocalTrips().filter((e) => e.serverId !== serverId);
+    saveRawLocalTrips(raw);
+}
+
 function escapeHtml(value) {
     if (value === null || value === undefined) return '';
     return String(value)
@@ -1541,21 +1762,38 @@ async function loadTripHistory() {
         const { res, data } = await fetchJsonWithAuth('/api/trip-history');
 
         if (res.status === 401) {
-            allTrips = [];
-            document.getElementById('tripHistoryList').innerHTML =
-                '<div style="text-align: center; padding: 20px; color: #999;">Sign in to view trip history.</div>';
+            allTrips = mergeServerAndLocalTrips([], loadRawLocalTrips());
+            displayTripHistory(allTrips);
+            const list = document.getElementById('tripHistoryList');
+            if (list && list.firstChild) {
+                const banner = document.createElement('div');
+                banner.style.cssText =
+                    'padding:12px;background:#E3F2FD;border-radius:8px;margin-bottom:12px;font-size:13px;color:#1565C0;';
+                banner.textContent =
+                    allTrips.length > 0
+                        ? '📱 Showing trips saved on this device. Sign in to sync trips with your account.'
+                        : '📱 No trips on this device yet. Finish navigation to save a trip here, then sign in to sync across devices.';
+                list.insertBefore(banner, list.firstChild);
+            }
+            bindTripHistorySearch();
             return;
         }
 
-        if (data && data.success && data.trips) {
-            allTrips = data.trips;
+        if (data && data.success && Array.isArray(data.trips)) {
+            allTrips = mergeServerAndLocalTrips(data.trips, loadRawLocalTrips());
             displayTripHistory(allTrips);
         } else {
-            document.getElementById('tripHistoryList').innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No trips found</div>';
+            allTrips = mergeServerAndLocalTrips([], loadRawLocalTrips());
+            displayTripHistory(allTrips);
         }
     } catch (error) {
         console.error('Error loading trip history:', error);
-        document.getElementById('tripHistoryList').innerHTML = '<div style="text-align: center; padding: 20px; color: #f44336;">Error loading trips</div>';
+        allTrips = [];
+        const list = document.getElementById('tripHistoryList');
+        if (list) {
+            list.innerHTML = '<div style="text-align: center; padding: 20px; color: #f44336;">Error loading trips</div>';
+        }
+        bindTripHistorySearch();
     }
 }
 /**
@@ -1564,17 +1802,59 @@ async function loadTripHistory() {
  * @param {*} trips - Parameter description
  * @returns {*} Return value description
  */
+/**
+ * Filter trips list when user types in trip search (safe for numeric/string timestamps).
+ */
+function bindTripHistorySearch() {
+    const input = document.getElementById('tripSearchInput');
+    if (!input) return;
+
+    input.oninput = (e) => {
+        const searchTerm = (e.target.value || '').toLowerCase().trim();
+        if (!searchTerm) {
+            displayTripHistory(allTrips);
+            return;
+        }
+        const filtered = (allTrips || []).filter((trip) => {
+            try {
+                const start = (trip.start_address || '').toLowerCase();
+                const end = (trip.end_address || '').toLowerCase();
+                let tsText = '';
+                if (trip.timestamp != null && trip.timestamp !== '') {
+                    const d = new Date(trip.timestamp);
+                    tsText = Number.isNaN(d.getTime())
+                        ? String(trip.timestamp)
+                        : `${d.toLocaleString()} ${d.toDateString()}`;
+                }
+                tsText = tsText.toLowerCase();
+                return (
+                    start.includes(searchTerm) ||
+                    end.includes(searchTerm) ||
+                    tsText.includes(searchTerm)
+                );
+            } catch (err) {
+                return false;
+            }
+        });
+        displayTripHistory(filtered);
+    };
+}
+
 function displayTripHistory(trips) {
     const listContainer = document.getElementById('tripHistoryList');
+    if (!listContainer) return;
 
     if (!trips || trips.length === 0) {
         listContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No trips found</div>';
+        bindTripHistorySearch();
         return;
     }
 
     listContainer.innerHTML = trips.map((trip, index) => {
         const date = new Date(trip.timestamp);
-        const dateStr = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const dateStr = Number.isNaN(date.getTime())
+            ? '—'
+            : date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         const distance = convertDistance(trip.distance_km);
         const distUnit = getDistanceUnit();
         const totalCost = (parseFloat(trip.fuel_cost || 0) + parseFloat(trip.toll_cost || 0) + parseFloat(trip.caz_cost || 0)).toFixed(2);
@@ -1588,6 +1868,7 @@ function displayTripHistory(trips) {
                     <div>
                         <div style="font-weight: 600; color: #333; margin-bottom: 4px;">
                             ${startAddr} → ${endAddr}
+                            ${trip._localOnly ? ' <span style="font-size:11px;font-weight:500;color:#1565C0;">(this device)</span>' : ''}
                         </div>
                         <div style="font-size: 12px; color: #666;">
                             ${dateStr}
@@ -1606,16 +1887,7 @@ function displayTripHistory(trips) {
         `;
     }).join('');
 
-    // Add search functionality
-    document.getElementById('tripSearchInput').oninput = (e) => {
-        const searchTerm = e.target.value.toLowerCase();
-        const filtered = allTrips.filter(trip =>
-            (trip.start_address && trip.start_address.toLowerCase().includes(searchTerm)) ||
-            (trip.end_address && trip.end_address.toLowerCase().includes(searchTerm)) ||
-            (trip.timestamp && trip.timestamp.toLowerCase().includes(searchTerm))
-        );
-        displayTripHistory(filtered);
-    };
+    bindTripHistorySearch();
 }
 
 async function recalculateTrip(tripId) {
@@ -1640,6 +1912,15 @@ async function recalculateTrip(tripId) {
 async function deleteTripHistory(tripId) {
     if (!confirm('Are you sure you want to delete this trip?')) return;
 
+    if (tripId < 0) {
+        const localId = -tripId;
+        removeLocalTripByLocalId(localId);
+        allTrips = allTrips.filter((t) => t.id !== tripId);
+        displayTripHistory(allTrips);
+        showStatus('Trip removed from this device', 'success');
+        return;
+    }
+
     try {
         const token = await getSupabaseAccessToken();
         const headers = {};
@@ -1651,6 +1932,7 @@ async function deleteTripHistory(tripId) {
         const data = await response.json();
 
         if (data.success) {
+            removeLocalTripByServerId(tripId);
             allTrips = allTrips.filter(t => t.id !== tripId);
             displayTripHistory(allTrips);
             showStatus('Trip deleted', 'success');
@@ -13931,9 +14213,15 @@ function startTurnByTurnNavigation(routeData) {
     speakMessage('Navigation started. Follow the route.');
     showStatus('🧭 Turn-by-turn navigation active', 'success');
     try {
-        maybeNotifyVolumeForVoiceGuidance();
+        setTimeout(() => {
+            try {
+                showVolumeHintForNavigation();
+            } catch (e) {
+                console.warn('[EnvHint] volume hint:', e);
+            }
+        }, 700);
     } catch (e) {
-        console.warn('[EnvHint] volume hint:', e);
+        console.warn('[EnvHint] volume hint schedule:', e);
     }
 }
 
@@ -13945,6 +14233,7 @@ function startTurnByTurnNavigation(routeData) {
 function stopTurnByTurnNavigation() {
     // Show summary if we have a valid route and were actually navigating
     if (window.lastCalculatedRoute && routeInProgress) {
+        void persistCompletedTrip(window.lastCalculatedRoute);
         showJourneySummary(window.lastCalculatedRoute);
     }
 
@@ -14735,18 +15024,29 @@ function initDeviceEnvironmentNotifications() {
 }
 
 /**
- * Browsers cannot read device volume. Remind once per tab session when voice nav is on.
+ * Browsers cannot read device volume. Show status + in-app banner (not sendEnvironmentHint throttle).
+ * Deferred from navigation start so it is not lost behind other toasts / wake-lock status.
  */
-function maybeNotifyVolumeForVoiceGuidance() {
+function showVolumeHintForNavigation() {
     if (typeof voiceAnnouncementsEnabled !== 'undefined' && !voiceAnnouncementsEnabled) return;
-    if (sessionStorage.getItem('voyagrVolumeHintShown') === '1') return;
-    sessionStorage.setItem('voyagrVolumeHintShown', '1');
-    sendEnvironmentHint(
-        'volume',
-        'Check volume for voice guidance',
-        'Turn your device volume up so you can hear turn-by-turn directions. Browsers cannot detect mute or low volume.',
-        'info'
-    );
+
+    const line =
+        'Turn your device volume up to hear turn-by-turn directions. Browsers cannot detect mute or low volume.';
+    showStatus('🔊 ' + line, 'info');
+    showInAppNotification('Voice guidance', line, 'info');
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+            new Notification('Voice guidance', {
+                body: line,
+                icon: '/favicon.ico',
+                tag: 'voyagr-volume-hint',
+                silent: true
+            });
+        } catch (e) {
+            console.log('[EnvHint] volume Notification:', e);
+        }
+    }
 }
 
 /**
