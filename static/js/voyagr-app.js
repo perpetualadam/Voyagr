@@ -14547,7 +14547,8 @@ function displayPOIResults(results, type, userLat, userLon) {
         'parking': '🅿️',
         'charging': '🔌',
         'hospital': '🏥',
-        'pharmacy': '💊'
+        'pharmacy': '💊',
+        'groceries': '🛒'
     };
     const icon = icons[type] || '📍';
 
@@ -14557,7 +14558,7 @@ function displayPOIResults(results, type, userLat, userLon) {
             <div style="background: white; border-radius: 12px; max-width: 400px; width: 100%; max-height: 80vh; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
                 <div style="padding: 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
                     <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0; font-size: 18px;">${icon} Nearby ${type.charAt(0).toUpperCase() + type.slice(1)}</h3>
+                        <h3 style="margin: 0; font-size: 18px;">${icon} Nearby ${type === 'groceries' ? 'Groceries' : (type.charAt(0).toUpperCase() + type.slice(1))}</h3>
                         <button onclick="closePOIModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0;">✕</button>
                     </div>
                     <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Found ${results.length} locations</p>
@@ -14779,7 +14780,7 @@ function searchAlongRouteByType(type) {
 function addPOIMarkersToMap(pois, type) {
     clearPOIMarkers();
 
-    const icons = { fuel: '⛽', food: '🍔', parking: '🅿️', charging: '🔌', pharmacy: '💊', hospital: '🏥' };
+    const icons = { fuel: '⛽', food: '🍔', parking: '🅿️', charging: '🔌', pharmacy: '💊', hospital: '🏥', groceries: '🛒' };
     const icon = icons[type] || '📍';
 
     pois.forEach((poi, idx) => {

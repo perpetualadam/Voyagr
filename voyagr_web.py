@@ -3800,7 +3800,7 @@ HTML_TEMPLATE = '''
     <!-- External JavaScript modules -->
     <script src="/static/js/modules/traffic-lights.js?v=20260117t"></script>
     <script src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    <script src="/static/js/voyagr-app.js?v=20260403b"></script>
+    <script src="/static/js/voyagr-app.js?v=20260404a"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -4012,6 +4012,10 @@ HTML_TEMPLATE = '''
                         <span class="quick-search-btn-icon">🏥</span>
                         <span>Hospital</span>
                     </button>
+                    <button class="quick-search-btn" onclick="quickSearch('groceries')">
+                        <span class="quick-search-btn-icon">🛒</span>
+                        <span>Groceries</span>
+                    </button>
                 </div>
                 <div id="alongRouteSearch" style="display: none; margin-top: 8px;">
                     <button onclick="searchAlongRoute()" style="width: 100%; padding: 10px; background: linear-gradient(135deg, #667eea, #764ba2); color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
@@ -4023,6 +4027,7 @@ HTML_TEMPLATE = '''
                             <button class="quick-search-btn" onclick="searchAlongRouteByType('food')">🍔 Food</button>
                             <button class="quick-search-btn" onclick="searchAlongRouteByType('charging')">🔌 EV</button>
                             <button class="quick-search-btn" onclick="searchAlongRouteByType('parking')">🅿️ Park</button>
+                            <button class="quick-search-btn" onclick="searchAlongRouteByType('groceries')">🛒 Groceries</button>
                         </div>
                     </div>
                 </div>

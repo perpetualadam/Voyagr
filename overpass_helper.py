@@ -434,16 +434,20 @@ def build_poi_query(
     lat: float,
     lon: float,
     radius: int,
-    amenities: List[str]
+    amenities: List[str],
+    shops: Optional[List[str]] = None,
 ) -> str:
-    """Build a query for POIs around a point."""
-    amenity_queries = ''.join([
+    """Build a query for POIs around a point (amenity=* and/or shop=* OSM tags)."""
+    parts: List[str] = [
         f'node["amenity"="{a}"](around:{radius},{lat},{lon});' for a in amenities
-    ])
+    ]
+    for s in shops or []:
+        parts.append(f'node["shop"="{s}"](around:{radius},{lat},{lon});')
+    body = ''.join(parts)
     return f'''
     [out:json][timeout:10];
     (
-        {amenity_queries}
+        {body}
     );
     out body;
     '''

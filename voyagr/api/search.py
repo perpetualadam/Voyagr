@@ -99,6 +99,12 @@ def geocode():
       - q: query string (required)
       - limit: number of results (default 8; max 10)
     Returns: Nominatim-style JSON array
+
+    Nominatim search features not used here (could improve business/POI lookup):
+      structured forward geocode (street/city/postcode/country params instead of q);
+      viewbox + bounded=1 for map-biased search; dedupe=1; extratags=1; namedetails=1;
+      polygon_geojson / polygon_kml; layer= / featuretype= filters; /lookup by osm ids;
+      /details endpoint; email= for usage policy. Reverse uses addressdetails only.
     """
     try:
         q = (request.args.get('q') or '').strip()
@@ -204,7 +210,10 @@ def _nominatim_poi_fallback(lat: float, lon: float, poi_type: str, radius: int) 
             'food': 'restaurant',
             'charging': 'electric vehicle charging',
             'hospital': 'hospital',
-            'pharmacy': 'pharmacy'
+            'pharmacy': 'pharmacy',
+            'parking': 'parking',
+            'groceries': 'supermarket',
+            'supermarket': 'supermarket',
         }
 
         params = {
@@ -380,6 +389,7 @@ def _tomtom_poi_search(lat: float, lon: float, poi_type: str, radius: int) -> An
         'pharmacy': '9361023',
         'atm': '7397',
         'supermarket': '7332',
+        'groceries': '7332',
     }
 
     category_id = tomtom_category_map.get(poi_type)
@@ -464,18 +474,27 @@ def search_poi():
             logger.info(f"[POI] TomTom returned {len(tomtom_results)} {poi_type} results")
             return jsonify({'success': True, 'results': tomtom_results[:15], 'type': poi_type, 'source': 'TomTom'})
 
-        # Fallback to Overpass/Nominatim
-        poi_mapping = {
+        # Fallback to Overpass/Nominatim — OSM: many stores use shop=*, not amenity=*
+        poi_amenity_tags = {
             'fuel': ['fuel'],
             'food': ['restaurant', 'fast_food', 'cafe'],
             'charging': ['charging_station'],
             'hospital': ['hospital', 'clinic'],
             'pharmacy': ['pharmacy'],
             'atm': ['atm', 'bank'],
-            'supermarket': ['supermarket']
+            'parking': ['parking'],
+            'supermarket': [],
+            'groceries': [],
+        }
+        poi_shop_tags = {
+            'supermarket': ['supermarket'],
+            'groceries': ['supermarket', 'greengrocer', 'convenience'],
         }
 
-        amenities = poi_mapping.get(poi_type, ['fuel'])
+        amenities = poi_amenity_tags.get(poi_type)
+        if amenities is None:
+            amenities = ['fuel']
+        shops = list(poi_shop_tags.get(poi_type, []))
 
         try:
             from overpass_helper import query_overpass, build_poi_query
@@ -484,7 +503,7 @@ def search_poi():
             OVERPASS_HELPER_AVAILABLE = False
 
         if OVERPASS_HELPER_AVAILABLE:
-            query = build_poi_query(lat, lon, radius, amenities)
+            query = build_poi_query(lat, lon, radius, amenities, shops)
             cache_key = f"poi_{poi_type}_{lat:.4f}_{lon:.4f}_{radius}"
             result = query_overpass(query, cache_key=cache_key, cache_ttl=300)
 
@@ -498,10 +517,13 @@ def search_poi():
             amenity_queries = ''.join([
                 f'node["amenity"="{a}"](around:{radius},{lat},{lon});' for a in amenities
             ])
+            shop_queries = ''.join([
+                f'node["shop"="{s}"](around:{radius},{lat},{lon});' for s in shops
+            ])
             query = f'''
             [out:json][timeout:10];
             (
-                {amenity_queries}
+                {amenity_queries}{shop_queries}
             );
             out body;
             '''
