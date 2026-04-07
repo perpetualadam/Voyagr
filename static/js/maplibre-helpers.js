@@ -12,6 +12,27 @@ const activeMarkers = new Map();
 // ===== POLYLINE FUNCTIONS =====
 
 /**
+ * MapLibre line-width expression: full width at city zoom, tapers at high zoom
+ * so dense polylines do not read as solid grey “blobs”.
+ * @param {number} baseWidth - Nominal width at ~z12 (screen pixels)
+ * @returns {Array} MapLibre expression for line-width
+ */
+function buildZoomScaledLineWidth(baseWidth) {
+    const b = Math.max(1, Number(baseWidth) || 4);
+    return [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        9, Math.min(16, b * 1.08),
+        12, b,
+        15, Math.max(2.5, b * 0.88),
+        17, Math.max(2, b * 0.58),
+        19, Math.max(1.5, b * 0.4),
+        22, Math.max(1.5, b * 0.28)
+    ];
+}
+
+/**
  * Add a polyline to the map using direct MapLibre API
  * @param {maplibregl.Map} mapInstance - The map instance
  * @param {Array} coords - Array of [lat, lon] coordinates (arrays or objects)
@@ -129,6 +150,11 @@ function addLayerToMap(mapInstance, id, lngLatCoords, options) {
             }
         }
 
+        const baseW = options.weight || 4;
+        const lineWidth = options.zoomScaledWidth === false
+            ? baseW
+            : buildZoomScaledLineWidth(baseW);
+
         mapInstance.addLayer({
             id: id,
             type: 'line',
@@ -136,7 +162,7 @@ function addLayerToMap(mapInstance, id, lngLatCoords, options) {
             layout: { 'line-join': 'round', 'line-cap': 'round' },
             paint: {
                 'line-color': options.color || '#667eea',
-                'line-width': options.weight || 4,
+                'line-width': lineWidth,
                 'line-opacity': options.opacity || 0.8
             }
         }, beforeId);  // Insert before symbol layers to keep labels on top
@@ -1026,6 +1052,7 @@ function setRoadLabelZoomFilters(mapInstance, options = {}) {
 
 // ===== EXPORTS (global scope) =====
 window.MapLibreHelpers = {
+    buildZoomScaledLineWidth,
     addPolyline,
     removeMapLayer,
     createMarker,

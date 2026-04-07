@@ -3793,14 +3793,14 @@ HTML_TEMPLATE = '''
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="/static/css/voyagr.css?v=20260331v" />
     <script src="/static/vendor/maplibre-gl.js"></script>
-    <script src="/static/js/maplibre-helpers.js?v=20260117t"></script>
+    <script src="/static/js/maplibre-helpers.js?v=20260403a"></script>
     <script src="/static/vendor/supabase.min.js"></script>
     <!-- Google Plus Codes Service -->
     <script src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
     <script src="/static/js/modules/traffic-lights.js?v=20260117t"></script>
     <script src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    <script src="/static/js/voyagr-app.js?v=20260402e"></script>
+    <script src="/static/js/voyagr-app.js?v=20260403b"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>

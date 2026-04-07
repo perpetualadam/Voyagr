@@ -2174,7 +2174,7 @@ function doAddRouteLayers() {
                     },
                     paint: {
                         'line-color': color,
-                        'line-width': weight,
+                        'line-width': MapLibreHelpers.buildZoomScaledLineWidth(weight),
                         'line-opacity': opacity
                     }
                 }, beforeId);
@@ -2968,7 +2968,7 @@ function drawMultiDropLegsOnMap(data) {
                 layout: { 'line-join': 'round', 'line-cap': 'round' },
                 paint: {
                     'line-color': legColors[idx % legColors.length],
-                    'line-width': 5,
+                    'line-width': MapLibreHelpers.buildZoomScaledLineWidth(5),
                     'line-opacity': 0.85
                 }
             });
@@ -6471,6 +6471,42 @@ function startNavigation() {
 
 // ===== ROUTE PREVIEW FEATURE =====
 /**
+ * Apply a new route during active navigation without touching preview DOM, bottom sheet, or tabs.
+ * Uses the same matching logic as calculateRoute in-nav path; does not restart turn-by-turn (updateRouteOnMap syncs geometry/steps).
+ * @param {Object} routeData - API route payload or single route object
+ */
+function applyRouteUpdateDuringNavigation(routeData) {
+    console.log('[Route Preview] Navigation active — silent route update (no preview UI / no sheet)');
+
+    let activeRoute = (routeData.routes && routeData.routes.length > 0) ? routeData.routes[0] : routeData;
+    if (routeData.routes && routeData.routes.length > 1 && window.lastCalculatedRoute) {
+        const prevName = (window.lastCalculatedRoute.name || '').toLowerCase();
+        if (prevName) {
+            const match = routeData.routes.find(r => (r.name || '').toLowerCase() === prevName);
+            if (match) activeRoute = match;
+        }
+    }
+
+    if (activeRoute.geometry) {
+        updateRouteOnMap(activeRoute);
+    }
+
+    if (window.lastCalculatedRoute) {
+        const durationMinutes = activeRoute.duration_minutes ??
+            (routeData.time ? parseInt(routeData.time, 10) : null) ??
+            window.lastCalculatedRoute.duration_minutes;
+        window.lastCalculatedRoute = {
+            ...window.lastCalculatedRoute,
+            ...routeData,
+            ...activeRoute,
+            duration_minutes: durationMinutes
+        };
+    }
+
+    showStatus('✅ Route updated — continuing navigation', 'success');
+}
+
+/**
  * showRoutePreview function
  * @function showRoutePreview
  * @param {*} routeData - Route data to display in preview
@@ -6483,6 +6519,11 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     if (!routeData) {
         showStatus('No route data available', 'error');
         console.error('[Route Preview] No route data provided');
+        return;
+    }
+
+    if (routeInProgress) {
+        applyRouteUpdateDuringNavigation(routeData);
         return;
     }
 
@@ -6611,42 +6652,6 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     if (!skipMapDisplay && routeOptions && routeOptions.length > 0) {
         displayAllRoutesOnMap();
         console.log(`[Route Preview] Displayed ${routeOptions.length} route(s) on map`);
-    }
-
-    // FIX: If navigation is already in progress, do NOT switch to the route preview tab
-    // or expand the bottom sheet. Instead, silently apply the new route and continue navigating.
-    if (routeInProgress) {
-        console.log('[Route Preview] Navigation active — applying route update without showing preview UI');
-
-        // Match the previously selected route by name, fall back to routes[0]
-        let activeRoute = (routeData.routes && routeData.routes.length > 0) ? routeData.routes[0] : routeData;
-        if (routeData.routes && routeData.routes.length > 1 && window.lastCalculatedRoute) {
-            const prevName = (window.lastCalculatedRoute.name || '').toLowerCase();
-            if (prevName) {
-                const match = routeData.routes.find(r => (r.name || '').toLowerCase() === prevName);
-                if (match) activeRoute = match;
-            }
-        }
-        if (activeRoute.geometry) {
-            updateRouteOnMap(activeRoute);
-        }
-
-        // Restart navigation with the new route data so turn-by-turn stays in sync
-        if (activeRoute.geometry && activeRoute.maneuvers) {
-            startTurnByTurnNavigation(activeRoute);
-        }
-
-        // Keep window.lastCalculatedRoute in sync
-        if (window.lastCalculatedRoute) {
-            window.lastCalculatedRoute = {
-                ...window.lastCalculatedRoute,
-                ...activeRoute,
-                duration_minutes: activeRoute.duration_minutes || window.lastCalculatedRoute.duration_minutes
-            };
-        }
-
-        showStatus('✅ Route updated — continuing navigation', 'success');
-        return;
     }
 
     // Switch to route preview tab (only when NOT navigating)
@@ -11766,7 +11771,11 @@ const DESTINATION_ANNOUNCEMENT_DISTANCES = [10000, 5000, 2000, 1000, 500, 100]; 
 let lastETAAnnouncementTime = 0;
 let lastAnnouncedETA = null;
 const ETA_ANNOUNCEMENT_INTERVAL_MS = 600000; // Announce ETA every 10 minutes (600,000 ms)
-const ETA_INITIAL_ANNOUNCE_DELAY_MS = 30000; // First ETA voice shortly after navigation starts
+const ETA_INITIAL_ANNOUNCE_DELAY_MS = 30000; // First check for initial ETA voice after navigation starts
+/** Initial ETA is deferred until movement; retry interval and cap (avoids repeating ETA while stationary). */
+const INITIAL_ETA_MOVEMENT_RETRY_MS = 20000;
+const INITIAL_ETA_MOVEMENT_MAX_RETRIES = 15; // ~5 minutes of retries, then skip initial ETA
+let initialETAMovementRetries = 0;
 const NAV_TRAFFIC_ETA_MIN_INTERVAL_MS = 12000; // Min time between traffic-conditions fetches (ETA refresh is ~30s)
 const ETA_CHANGE_THRESHOLD_MS = 300000; // Announce if ETA changes by >5 minutes (300,000 ms)
 const ETA_MIN_INTERVAL_MS = 60000; // Minimum 1 minute between any ETA announcements (prevents excessive frequency)
@@ -12464,6 +12473,47 @@ let lastRerouteDeviation = 0;
 let deviationStartTimeCheck = null; // Track when deviation started
 let rerouteAttemptCount = 0; // Track reroute attempts for logging
 
+/** After a failed deviation reroute API call, retry with backoff (does not replace GPS deviation timing). */
+let rerouteFailureRetryTimer = null;
+let rerouteFailureRetryCount = 0;
+const REROUTE_FAILURE_RETRY_DELAYS_MS = [4000, 6500, 10000, 14000];
+
+function clearRerouteFailureRetries() {
+    if (rerouteFailureRetryTimer) {
+        clearTimeout(rerouteFailureRetryTimer);
+        rerouteFailureRetryTimer = null;
+    }
+    rerouteFailureRetryCount = 0;
+}
+
+function scheduleAutomaticRerouteRetry() {
+    if (!routeInProgress || !autoRerouteOnDeviationEnabled) {
+        clearRerouteFailureRetries();
+        return;
+    }
+    if (rerouteFailureRetryCount >= REROUTE_FAILURE_RETRY_DELAYS_MS.length) {
+        sendNotification('❌ Rerouting failed',
+            'Could not get a new route after several tries. Pull over safely and use Recalculate if needed.',
+            'error');
+        clearRerouteFailureRetries();
+        return;
+    }
+    const delay = REROUTE_FAILURE_RETRY_DELAYS_MS[rerouteFailureRetryCount];
+    const attemptLabel = rerouteFailureRetryCount + 1;
+    rerouteFailureRetryCount++;
+    if (rerouteFailureRetryTimer) clearTimeout(rerouteFailureRetryTimer);
+    console.log(`[Rerouting] Scheduling failure retry ${attemptLabel}/${REROUTE_FAILURE_RETRY_DELAYS_MS.length} in ${delay}ms`);
+    rerouteFailureRetryTimer = setTimeout(() => {
+        rerouteFailureRetryTimer = null;
+        if (!routeInProgress || !autoRerouteOnDeviationEnabled) {
+            clearRerouteFailureRetries();
+            return;
+        }
+        showStatus(`🔄 Reroute retry ${attemptLabel}/${REROUTE_FAILURE_RETRY_DELAYS_MS.length}...`, 'warning');
+        void triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon);
+    }, delay);
+}
+
 /**
  * checkRouteDeviation function - Enhanced with time-based detection
  * Only triggers reroute if user is >50m off-route for >10 seconds
@@ -12569,6 +12619,8 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
         const data = await response.json();
 
         if (data.success && data.routes && data.routes.length > 0) {
+            clearRerouteFailureRetries();
+
             const newRoute = data.routes[0];
             console.log(`[Rerouting] New route calculated: ${newRoute.distance_km}km, ${newRoute.duration_minutes}min`);
 
@@ -12609,11 +12661,17 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
             console.log('[Rerouting] Automatic reroute completed successfully');
         } else {
             console.log('[Rerouting] Failed to calculate new route:', data.error);
-            sendNotification('❌ Rerouting Failed', 'Could not calculate new route. Continuing on current route.', 'error');
+            if (rerouteFailureRetryCount === 0) {
+                sendNotification('❌ Rerouting Failed', 'Could not calculate new route. Retrying automatically…', 'error');
+            }
+            scheduleAutomaticRerouteRetry();
         }
     } catch (error) {
         console.error('[Rerouting] Error during automatic reroute:', error);
-        sendNotification('❌ Rerouting Error', 'Error recalculating route: ' + error.message, 'error');
+        if (rerouteFailureRetryCount === 0) {
+            sendNotification('❌ Rerouting Error', 'Network or server error. Retrying automatically…', 'error');
+        }
+        scheduleAutomaticRerouteRetry();
     }
 }
 
@@ -13091,6 +13149,28 @@ function announceETAIfNeeded() {
 
 async function speakInitialETAAnnouncement() {
     if (!routeInProgress || !window.lastCalculatedRoute || !voiceAnnouncementsEnabled) return;
+
+    if (!hasUserStartedMoving()) {
+        initialETAMovementRetries += 1;
+        if (initialETAMovementRetries <= INITIAL_ETA_MOVEMENT_MAX_RETRIES) {
+            if (initialETAAnnouncementTimeoutId) {
+                clearTimeout(initialETAAnnouncementTimeoutId);
+                initialETAAnnouncementTimeoutId = null;
+            }
+            initialETAAnnouncementTimeoutId = setTimeout(() => {
+                initialETAAnnouncementTimeoutId = null;
+                void speakInitialETAAnnouncement();
+            }, INITIAL_ETA_MOVEMENT_RETRY_MS);
+            console.log('[Voice] Initial ETA deferred until movement (retry %s/%s)',
+                initialETAMovementRetries, INITIAL_ETA_MOVEMENT_MAX_RETRIES);
+        } else {
+            console.log('[Voice] Initial ETA skipped after max stationary retries; periodic ETA still applies');
+        }
+        return;
+    }
+
+    initialETAMovementRetries = 0;
+
     const base = computeBaseNavigationETAMinutes();
     if (!base) return;
     if (shouldApplyTrafficAwareETA() && currentLat != null && currentLon != null) {
@@ -14054,6 +14134,7 @@ function startTurnByTurnNavigation(routeData) {
     lastETAAnnouncementTime = Date.now();
     lastAnnouncedETA = null;
     lastNavTrafficFetchAt = 0;
+    initialETAMovementRetries = 0;
     window.navETASnapshot = {
         baseRemainingMinutes: 0,
         trafficAdjustedMinutes: null,
@@ -14240,6 +14321,7 @@ function stopTurnByTurnNavigation() {
 
     routeInProgress = false;
     routeJoinConfirmedForDeviation = false;
+    clearRerouteFailureRetries();
     currentStepIndex = 0;
     currentRouteSteps = [];
     clearPersistedRoute();
@@ -14261,6 +14343,7 @@ function stopTurnByTurnNavigation() {
     // ===== PHASE 1: Stop live data refresh =====
     stopLiveDataRefresh();
     clearInitialETAAnnouncement();
+    initialETAMovementRetries = 0;
 
     // ===== STOP AUTO-TRAFFIC UPDATES =====
     stopAutoTrafficUpdates();
