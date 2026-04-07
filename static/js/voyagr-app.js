@@ -14213,13 +14213,14 @@ function startTurnByTurnNavigation(routeData) {
     speakMessage('Navigation started. Follow the route.');
     showStatus('🧭 Turn-by-turn navigation active', 'success');
     try {
+        // After wake-lock + other status messages (they overwrite #status).
         setTimeout(() => {
             try {
                 showVolumeHintForNavigation();
             } catch (e) {
                 console.warn('[EnvHint] volume hint:', e);
             }
-        }, 700);
+        }, 2600);
     } catch (e) {
         console.warn('[EnvHint] volume hint schedule:', e);
     }
@@ -14911,7 +14912,7 @@ function sendNotification(title, message, type = 'info') {
  * @param {*} type - Parameter description
  * @returns {*} Return value description
  */
-function showInAppNotification(title, message, type = 'info') {
+function showInAppNotification(title, message, type = 'info', durationMs = 5000) {
     // Create notification element
     const notifContainer = document.getElementById('notificationContainer');
     if (!notifContainer) {
@@ -14933,12 +14934,12 @@ function showInAppNotification(title, message, type = 'info') {
 
     notifContainer.appendChild(notif);
 
-    // Auto-remove after 5 seconds
+    const ttl = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 5000;
     setTimeout(() => {
         if (notif.parentElement) {
             notif.remove();
         }
-    }, 5000);
+    }, ttl);
 }
 
 /** Min interval between same-class environment hints (offline / GPS / volume). */
@@ -15024,21 +15025,67 @@ function initDeviceEnvironmentNotifications() {
 }
 
 /**
- * Browsers cannot read device volume. Show status + in-app banner (not sendEnvironmentHint throttle).
- * Deferred from navigation start so it is not lost behind other toasts / wake-lock status.
+ * Volume reminder: textual (fixed banner + top-right toast) + optional spoken line if voice is on.
+ * Does not use #status — wake lock and other code overwrite that element.
  */
 function showVolumeHintForNavigation() {
-    if (typeof voiceAnnouncementsEnabled !== 'undefined' && !voiceAnnouncementsEnabled) return;
-
     const line =
-        'Turn your device volume up to hear turn-by-turn directions. Browsers cannot detect mute or low volume.';
-    showStatus('🔊 ' + line, 'info');
-    showInAppNotification('Voice guidance', line, 'info');
+        'Turn your device volume up to hear turn-by-turn directions.';
+    const detail = 'Browsers cannot detect mute or low volume.';
+
+    if (typeof voiceAnnouncementsEnabled !== 'undefined' && voiceAnnouncementsEnabled) {
+        try {
+            speakMessage('Turn your device volume up to hear spoken directions.', 'high');
+        } catch (e) {
+            console.log('[EnvHint] volume TTS:', e);
+        }
+    }
+
+    let chip = document.getElementById('volumeHintBanner');
+    if (chip) chip.remove();
+    chip = document.createElement('div');
+    chip.id = 'volumeHintBanner';
+    chip.setAttribute('role', 'status');
+    chip.style.cssText = [
+        'position:fixed',
+        'left:50%',
+        'bottom:max(108px, calc(env(safe-area-inset-bottom, 0px) + 88px))',
+        'transform:translateX(-50%)',
+        'z-index:10001',
+        'max-width:min(420px,92vw)',
+        'padding:14px 16px',
+        'background:#E3F2FD',
+        'border:2px solid #2196F3',
+        'border-radius:14px',
+        'box-shadow:0 8px 28px rgba(0,0,0,.22)',
+        'font-family:-apple-system,BlinkMacSystemFont,sans-serif',
+        'font-size:15px',
+        'color:#0d47a1',
+        'text-align:center'
+    ].join(';');
+    chip.innerHTML = `
+        <strong style="display:block;margin-bottom:6px;">🔊 Check volume</strong>
+        <span>${line}</span><br>
+        <span style="font-size:13px;opacity:.9">${detail}</span>
+        <div style="margin-top:10px;">
+            <button type="button" style="padding:8px 18px;border:none;border-radius:10px;background:#2196F3;color:#fff;font-weight:600;cursor:pointer;font-size:14px;">OK</button>
+        </div>
+    `;
+    const ok = chip.querySelector('button');
+    if (ok) ok.onclick = () => chip.remove();
+    document.body.appendChild(chip);
+
+    setTimeout(() => {
+        const el = document.getElementById('volumeHintBanner');
+        if (el) el.remove();
+    }, 14000);
+
+    showInAppNotification('Voice guidance', `${line} ${detail}`, 'info', 12000);
 
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
             new Notification('Voice guidance', {
-                body: line,
+                body: `${line} ${detail}`,
                 icon: '/favicon.ico',
                 tag: 'voyagr-volume-hint',
                 silent: true
