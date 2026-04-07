@@ -9606,6 +9606,7 @@ window.addEventListener('load', () => {
     restoreAppState();
     initSupabaseAuth();
     _tryResumeNavigation();
+    initDeviceEnvironmentNotifications();
 });
 
 // ===== TILE PRE-CACHING FOR ROUTE CORRIDORS =====
@@ -13929,6 +13930,11 @@ function startTurnByTurnNavigation(routeData) {
     sendNotification('Navigation Started', 'Turn-by-turn guidance activated', 'success');
     speakMessage('Navigation started. Follow the route.');
     showStatus('🧭 Turn-by-turn navigation active', 'success');
+    try {
+        maybeNotifyVolumeForVoiceGuidance();
+    } catch (e) {
+        console.warn('[EnvHint] volume hint:', e);
+    }
 }
 
 /**
@@ -14645,6 +14651,104 @@ function showInAppNotification(title, message, type = 'info') {
         }
     }, 5000);
 }
+
+/** Min interval between same-class environment hints (offline / GPS / volume). */
+const _envHintLast = { offline: 0, online: 0, gps: 0, volume: 0 };
+const ENV_HINT_MIN_MS = 45000;
+
+/**
+ * In-app (+ system notification if permitted) for connectivity / GPS / volume reminders.
+ * Uses its own throttle so it is not blocked by generic sendNotification throttling.
+ * @param {'offline'|'online'|'gps'|'volume'} channel
+ */
+function sendEnvironmentHint(channel, title, message, type = 'warning') {
+    const now = Date.now();
+    if (now - (_envHintLast[channel] || 0) < ENV_HINT_MIN_MS) return;
+    _envHintLast[channel] = now;
+
+    showInAppNotification(title, message, type);
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+        try {
+            new Notification(title, {
+                body: message,
+                icon: '/favicon.ico',
+                badge: '/favicon.ico',
+                tag: `voyagr-env-${channel}`,
+                requireInteraction: type === 'warning' || type === 'error'
+            });
+        } catch (e) {
+            console.log('[EnvHint] Notification API:', e);
+        }
+    }
+}
+
+/**
+ * Offline/online, GPS permission, and (when starting nav) volume reminders.
+ * System volume cannot be read in a browser; we remind when voice guidance is on.
+ */
+function initDeviceEnvironmentNotifications() {
+    try {
+        const offlineTitle = 'No internet connection';
+        const offlineMsg =
+            'You are offline. New routes, search, and live data need a connection. Saved routes and GPS can still work when location is allowed.';
+
+        const notifyOffline = () => sendEnvironmentHint('offline', offlineTitle, offlineMsg, 'warning');
+        const notifyOnline = () =>
+            sendEnvironmentHint('online', 'Back online', 'Connection restored. Live routing and updates are available again.', 'success');
+
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            notifyOffline();
+        }
+
+        window.addEventListener('offline', notifyOffline);
+        window.addEventListener('online', notifyOnline);
+
+        if (navigator.permissions && typeof navigator.permissions.query === 'function') {
+            try {
+                navigator.permissions
+                    .query({ name: 'geolocation' })
+                    .then((status) => {
+                        const onChange = () => {
+                            if (status.state === 'denied') {
+                                sendEnvironmentHint(
+                                    'gps',
+                                    'Location blocked',
+                                    'Enable location access for this site in your browser or system settings so GPS navigation and position updates work.',
+                                    'warning'
+                                );
+                            }
+                        };
+                        onChange();
+                        status.addEventListener('change', onChange);
+                    })
+                    .catch(() => {
+                        /* Safari / older browsers: no Permissions API for geolocation */
+                    });
+            } catch (e) {
+                console.log('[EnvHint] permissions.query not available:', e);
+            }
+        }
+    } catch (e) {
+        console.warn('[EnvHint] initDeviceEnvironmentNotifications:', e);
+    }
+}
+
+/**
+ * Browsers cannot read device volume. Remind once per tab session when voice nav is on.
+ */
+function maybeNotifyVolumeForVoiceGuidance() {
+    if (typeof voiceAnnouncementsEnabled !== 'undefined' && !voiceAnnouncementsEnabled) return;
+    if (sessionStorage.getItem('voyagrVolumeHintShown') === '1') return;
+    sessionStorage.setItem('voyagrVolumeHintShown', '1');
+    sendEnvironmentHint(
+        'volume',
+        'Check volume for voice guidance',
+        'Turn your device volume up so you can hear turn-by-turn directions. Browsers cannot detect mute or low volume.',
+        'info'
+    );
+}
+
 /**
  * speakMessage function
  * @function speakMessage
