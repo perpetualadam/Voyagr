@@ -4341,10 +4341,10 @@ async function calculateRoute() {
                     }
                     updateTripInfo(data.distance, displayTime, data.fuel_cost || '-', data.toll_cost || '-');
 
-                    // Show custom router performance if available
-                    let statusMsg = 'Route calculated successfully! (' + data.source + ')';
+                    // Do not surface backend routing engine names in user-facing UI
+                    let statusMsg = 'Route calculated successfully!';
                     if (data.response_time_ms) {
-                        statusMsg += ` - ${data.response_time_ms.toFixed(0)}ms`;
+                        statusMsg += ` (${data.response_time_ms.toFixed(0)}ms)`;
                     }
                     if (data.source && data.source.includes('Custom Router')) {
                         statusMsg += ' ⚡ Ultra-fast!';
@@ -6705,8 +6705,7 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         console.log('[Hazards] No hazards detected for this route');
     }
 
-    // Update route details
-    document.getElementById('previewRoutingEngine').textContent = routeData.source || 'Unknown';
+    // Update route details (routing engine stack is hidden from the preview UI)
     document.getElementById('previewRoutingMode').textContent = currentRoutingMode.charAt(0).toUpperCase() + currentRoutingMode.slice(1);
     document.getElementById('previewVehicleType').textContent = currentVehicleType.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 

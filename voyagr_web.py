@@ -4185,7 +4185,7 @@ HTML_TEMPLATE = '''
     <!-- External JavaScript modules -->
     <script src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
     <script src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    <script src="/static/js/voyagr-app.js?v=20260409c"></script>
+    <script src="/static/js/voyagr-app.js?v=20260409d"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -5383,9 +5383,12 @@ HTML_TEMPLATE = '''
                         <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-bottom: 15px;">
                             <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📋 Route Details</h4>
                             <div style="font-size: 13px; line-height: 1.6;">
-                                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span style="color: #666;">Routing Engine:</span>
-                                    <strong id="previewRoutingEngine">-</strong>
+                                <!-- Backend routing stack is not shown to end users -->
+                                <div id="previewRoutingEngineRow" style="display: none;" aria-hidden="true">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                        <span style="color: #666;">Routing Engine:</span>
+                                        <strong id="previewRoutingEngine"></strong>
+                                    </div>
                                 </div>
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
                                     <span style="color: #666;">Routing Mode:</span>
