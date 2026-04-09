@@ -29,7 +29,7 @@ echo "[4/7] Setting up Python virtual environment..."
 python3 -m venv venv
 source venv/bin/activate
 pip install --upgrade pip
-pip install -r requirements-railway.txt
+pip install -r requirements-web.txt
 
 # Copy environment file
 echo "[5/7] Configuring environment..."

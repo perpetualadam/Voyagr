@@ -818,6 +818,104 @@ function switchActiveProfile(profileId, options = {}) {
 ensureProfileExists('guest');
 
 // =============================================================================
+// Support: Stripe subscription (link or Checkout) + BMC/Patreon tips from /api/config
+// =============================================================================
+function openVoyagerPremiumSection() {
+    try {
+        if (typeof expandBottomSheet === 'function') {
+            expandBottomSheet();
+        }
+        switchTab('settings');
+        setTimeout(() => {
+            const el = document.getElementById('supportVoyagrSection');
+            if (!el) return;
+            if (el.style.display === 'none') {
+                showStatus('Voyager Premium is not configured on this server yet (add Stripe or tip URLs in .env).', 'info');
+                return;
+            }
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 80);
+    } catch (e) {
+        console.warn('[Voyager Premium] open section failed', e);
+    }
+}
+
+function applySupportLinksFromConfig(cfg) {
+    const section = document.getElementById('supportVoyagrSection');
+    if (!section || !cfg) return;
+
+    const pl = (cfg.stripe_payment_link_url || '').trim();
+    const bmc = (cfg.buy_me_a_coffee_url || '').trim();
+    const pat = (cfg.patreon_url || '').trim();
+    const checkout = !!(cfg.stripe_subscription_checkout_available || cfg.stripe_checkout_available);
+
+    const btnStripe = document.getElementById('supportStripePremiumBtn');
+    const btnBmc = document.getElementById('supportBmcBtn');
+    const btnPat = document.getElementById('supportPatreonBtn');
+
+    const stripePremium = !!(pl || checkout);
+    const show = !!(stripePremium || bmc || pat);
+    section.style.display = show ? 'block' : 'none';
+
+    const trialNote = document.getElementById('supportStripeTrialNote');
+    const trialDays = parseInt(cfg.stripe_subscription_trial_days, 10);
+    const usesCheckout = !pl && checkout;
+    if (trialNote) {
+        if (Number.isFinite(trialDays) && trialDays > 0 && usesCheckout) {
+            trialNote.style.display = 'block';
+            trialNote.textContent =
+                `Voyager Premium checkout includes a ${trialDays}-day free trial; billing starts after that. Set STRIPE_SUCCESS_URL to your public site (domain B) if you want users to land there after checkout.`;
+        } else {
+            trialNote.style.display = 'none';
+            trialNote.textContent = '';
+        }
+    }
+
+    if (btnStripe) {
+        btnStripe.style.display = stripePremium ? 'block' : 'none';
+        if (pl) {
+            btnStripe.onclick = () => { window.open(pl, '_blank', 'noopener,noreferrer'); };
+        } else if (checkout) {
+            btnStripe.onclick = () => { void startStripeSubscriptionCheckout(); };
+        } else {
+            btnStripe.onclick = null;
+        }
+    }
+    if (btnBmc) {
+        btnBmc.style.display = bmc ? 'block' : 'none';
+        btnBmc.onclick = bmc ? () => { window.open(bmc, '_blank', 'noopener,noreferrer'); } : null;
+    }
+    if (btnPat) {
+        btnPat.style.display = pat ? 'block' : 'none';
+        btnPat.onclick = pat ? () => { window.open(pat, '_blank', 'noopener,noreferrer'); } : null;
+    }
+}
+
+async function startStripeSubscriptionCheckout() {
+    try {
+        showStatus('Opening subscription checkout…', 'info');
+        const origin = window.location.origin;
+        const res = await fetch('/api/support/stripe-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                success_url: `${origin}/?subscribe=success`,
+                cancel_url: `${origin}/?subscribe=cancelled`,
+            }),
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success || !data.url) {
+            showStatus(data.error || 'Subscription checkout unavailable', 'error');
+            return;
+        }
+        window.location.href = data.url;
+    } catch (e) {
+        console.error('[Support] Stripe subscription checkout failed', e);
+        showStatus('Could not start subscription checkout', 'error');
+    }
+}
+
+// =============================================================================
 // Supabase Auth (optional)
 // =============================================================================
 let supabaseClient = null;
@@ -840,6 +938,7 @@ async function initSupabaseAuth() {
         const res = await fetch('/api/config', { cache: 'no-store' });
         const data = await res.json();
         supabasePublicConfig = data;
+        applySupportLinksFromConfig(data);
 
         const url = data.supabase_url;
         const anonKey = data.supabase_anon_key;
@@ -5027,6 +5126,7 @@ function addTrafficLayer() {
         fetch('/api/config')
             .then(r => r.json())
             .then(data => {
+                applySupportLinksFromConfig(data);
                 if (data.success && data.tomtom_api_key) {
                     window.TOMTOM_API_KEY = data.tomtom_api_key;
                     console.log('[Traffic] API key loaded from server, reinitializing...');
@@ -5213,6 +5313,7 @@ function addWeatherLayer() {
         fetch('/api/config')
             .then(r => r.json())
             .then(data => {
+                applySupportLinksFromConfig(data);
                 if (data.success && data.openweathermap_api_key) {
                     window.OPENWEATHERMAP_API_KEY = data.openweathermap_api_key;
                     console.log('[Weather] API key loaded from server, reinitializing...');

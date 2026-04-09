@@ -1,13 +1,2 @@
-Flask==2.3.3
-Flask-CORS==4.0.0
-requests==2.31.0
-python-dotenv==1.0.0
-polyline==2.0.3
-mercantile==1.2.1
-geopy==2.4.0
-protobuf==5.28.2
-boto3==1.35.24
-gunicorn==21.2.0
-PyJWT==2.10.1
-cryptography
-
+# Deprecated name: use requirements-web.txt (Contabo, VPS, Docker, Railway, etc.)
+-r requirements-web.txt

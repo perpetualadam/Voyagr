@@ -71,6 +71,10 @@ class SecurityConfig:
         
         # Referrer-Policy
         response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+
+        # Discourage search indexing when running a private / unlisted deployment
+        if os.getenv('VOYAGR_BLOCK_SEARCH_INDEXING', '').strip().lower() in ('1', 'true', 'yes', 'on'):
+            response.headers['X-Robots-Tag'] = 'noindex, nofollow, noarchive'
         
         # Permissions-Policy
         response.headers['Permissions-Policy'] = (

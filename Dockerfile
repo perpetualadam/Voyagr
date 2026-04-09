@@ -5,10 +5,10 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Copy requirements file first (for better caching)
-COPY requirements-railway.txt .
+COPY requirements-web.txt .
 
 # Install Python dependencies
-RUN pip install --no-cache-dir -r requirements-railway.txt
+RUN pip install --no-cache-dir -r requirements-web.txt
 
 # Copy all application files
 COPY . .

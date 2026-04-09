@@ -12,23 +12,43 @@ Contains:
 
 import json
 import os
-from flask import Blueprint, jsonify, render_template_string, current_app
+from typing import Optional
+
+from flask import Blueprint, jsonify, render_template_string, current_app, Response
+
+from voyagr.discoverability import block_search_indexing
 
 core_bp = Blueprint('core', __name__)
+
+
+def _index_template_kwargs() -> dict:
+    return {
+        'tomtom_api_key': os.getenv('TOMTOM_API_KEY', ''),
+        'block_search_indexing': block_search_indexing(),
+    }
 
 
 @core_bp.route('/')
 def index():
     """Render the main application page."""
     from voyagr_web import HTML_TEMPLATE
-    tomtom_key = os.getenv('TOMTOM_API_KEY', '')
-    return render_template_string(HTML_TEMPLATE, tomtom_api_key=tomtom_key)
+    return render_template_string(HTML_TEMPLATE, **_index_template_kwargs())
 
 
 @core_bp.route('/api/config')
 def get_config():
     """Return client-side configuration including API keys.
     This endpoint bypasses HTML caching issues."""
+    stripe_key = os.getenv('STRIPE_SECRET_KEY', '').strip()
+    sub_price = os.getenv('STRIPE_SUBSCRIPTION_PRICE_ID', '').strip() or os.getenv(
+        'STRIPE_DONATE_PRICE_ID', ''
+    ).strip()
+    trial_raw = os.getenv('STRIPE_SUBSCRIPTION_TRIAL_DAYS', '').strip()
+    trial_days_out: Optional[int] = None
+    if trial_raw.isdigit():
+        tv = int(trial_raw)
+        if tv > 0:
+            trial_days_out = tv
     response = jsonify({
         'tomtom_api_key': os.getenv('TOMTOM_API_KEY', ''),
         'openweathermap_api_key': os.getenv('OPENWEATHERMAP_API_KEY', ''),
@@ -37,6 +57,17 @@ def get_config():
         'supabase_anon_key': os.getenv('SUPABASE_ANON_KEY', ''),
         # Auth behavior
         'require_login': os.getenv('REQUIRE_LOGIN', 'false').lower() == 'true',
+        # Discoverability (client may adjust UI; enforcement is server headers + robots.txt)
+        'block_search_indexing': block_search_indexing(),
+        # Stripe = subscription (Payment Link or Checkout); BMC / Patreon = one-off tips
+        'stripe_payment_link_url': os.getenv('VOYAGR_STRIPE_PAYMENT_LINK_URL', '').strip(),
+        'buy_me_a_coffee_url': os.getenv('VOYAGR_BUYMEACOFFEE_URL', '').strip(),
+        'patreon_url': os.getenv('VOYAGR_PATREON_URL', '').strip(),
+        'stripe_subscription_checkout_available': bool(stripe_key and sub_price),
+        # Deprecated alias (same flag); remove when all clients updated
+        'stripe_checkout_available': bool(stripe_key and sub_price),
+        # Shown in app UI for Checkout flow; Payment Link trials are set in Stripe Dashboard only
+        'stripe_subscription_trial_days': trial_days_out,
         'success': True
     })
     # Prevent caching
@@ -44,6 +75,16 @@ def get_config():
     response.headers['Pragma'] = 'no-cache'
     response.headers['Expires'] = '0'
     return response
+
+
+@core_bp.route('/robots.txt')
+def robots_txt():
+    """Crawler policy: disallow all when VOYAGR_BLOCK_SEARCH_INDEXING is enabled."""
+    if block_search_indexing():
+        body = 'User-agent: *\nDisallow: /\n'
+    else:
+        body = 'User-agent: *\nAllow: /\n'
+    return Response(body, mimetype='text/plain')
 
 
 @core_bp.route('/monitoring')

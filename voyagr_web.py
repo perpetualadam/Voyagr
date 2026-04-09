@@ -87,7 +87,7 @@ def _get_allowed_origins() -> List[str]:
         "http://127.0.0.1:3000",
     ]
 
-    # Add environment-configured origins (production domains, etc.)
+    # Add environment-configured origins (comma-separated), e.g. https://app.yourdomain.com
     env_origins = os.getenv('ALLOWED_ORIGINS', '').strip()
     if env_origins:
         origins.extend([origin.strip() for origin in env_origins.split(',') if origin.strip()])
@@ -110,6 +110,7 @@ CORS(app, resources={
 # ============================================================================
 # Import and register API blueprints from voyagr.api module
 # These blueprints contain extracted route handlers organized by functionality
+from voyagr.discoverability import block_search_indexing
 from voyagr.api import (
     register_blueprints,
     set_route_cache,
@@ -124,6 +125,14 @@ from voyagr.api import (
 # Note: The blueprints are registered here, but the setter functions
 # will be called later after the corresponding instances are initialized
 register_blueprints(app)
+
+
+@app.after_request
+def _voyagr_discoverability_headers(response):
+    """Discourage crawlers when VOYAGR_BLOCK_SEARCH_INDEXING is set (no SecurityConfig dependency)."""
+    if block_search_indexing():
+        response.headers['X-Robots-Tag'] = 'noindex, nofollow, noarchive'
+    return response
 
 # ============================================================================
 # DASHCAM BLUEPRINT INITIALIZATION
@@ -4167,6 +4176,10 @@ HTML_TEMPLATE = '''
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#667eea">
     <meta name="description" content="Full-featured navigation app with route planning, cost estimation, and trip tracking">
+    {% if block_search_indexing %}
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <meta name="googlebot" content="noindex, nofollow, noarchive">
+    {% endif %}
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -4185,7 +4198,7 @@ HTML_TEMPLATE = '''
     <!-- External JavaScript modules -->
     <script src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
     <script src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    <script src="/static/js/voyagr-app.js?v=20260409d"></script>
+    <script src="/static/js/voyagr-app.js?v=20260409i"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -4215,6 +4228,7 @@ HTML_TEMPLATE = '''
                         <button type="button" class="sheet-icon-btn sheet-icon-btn--routes" title="Route Options" onclick="switchTab('routeComparison')">🛣️</button>
                         <button type="button" class="sheet-icon-btn sheet-icon-btn--history" title="Trip History" onclick="switchTab('tripHistory')">📋</button>
                         <button type="button" class="sheet-icon-btn sheet-icon-btn--dashcam" title="Dashcam" onclick="switchTab('dashcam')">📹</button>
+                        <button type="button" class="sheet-icon-btn sheet-icon-btn--premium" title="Voyager Premium — subscribe &amp; tips" onclick="openVoyagerPremiumSection()">⚡</button>
                         <button type="button" class="sheet-icon-btn sheet-icon-btn--settings" title="Settings" onclick="switchTab('settings')">⚙️</button>
                         <button type="button" class="sheet-icon-btn sheet-icon-btn--collapse" title="Collapse" onclick="collapseBottomSheet()">▼</button>
                     </nav>
@@ -4524,6 +4538,20 @@ HTML_TEMPLATE = '''
                             <div style="margin-top: 10px; font-size: 11px; color: #666;">
                                 Your on-device (guest) profile can stay separate. On first sign-in, you can choose to import it into your account profile.
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- Voyager Premium (Stripe subscription) + tips (BMC / Patreon) — URLs from server config -->
+                    <div class="preferences-section" id="supportVoyagrSection" style="display: none;">
+                        <h3>⚡ Voyager Premium</h3>
+                        <p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
+                            The app is free to use. <strong>Voyager Premium</strong> is a <strong>paid subscription</strong> (Stripe) for premium features. <strong>Buy Me a Coffee</strong> and <strong>Patreon</strong> are separate <strong>one-off tips</strong> or patronage.
+                        </p>
+                        <p id="supportStripeTrialNote" style="display: none; font-size: 12px; color: #1565c0; margin: 0 0 10px 0;"></p>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                            <button type="button" id="supportStripePremiumBtn" style="display: none; padding: 12px; background: #635bff; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">💳 Subscribe — Voyager Premium</button>
+                            <button type="button" id="supportBmcBtn" style="display: none; padding: 12px; background: #ffdd00; color: #0d0d0d; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">☕ Tip — Buy Me a Coffee</button>
+                            <button type="button" id="supportPatreonBtn" style="display: none; padding: 12px; background: #ff424d; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">🎭 Tip / patron — Patreon</button>
                         </div>
                     </div>
 
@@ -5957,8 +5985,11 @@ HTML_TEMPLATE = '''
 
 @app.route('/')
 def index():
-    tomtom_key = os.getenv('TOMTOM_API_KEY', '')
-    return render_template_string(HTML_TEMPLATE, tomtom_api_key=tomtom_key)
+    return render_template_string(
+        HTML_TEMPLATE,
+        tomtom_api_key=os.getenv('TOMTOM_API_KEY', ''),
+        block_search_indexing=block_search_indexing(),
+    )
 
 # Core routes (/api/config, /monitoring, /manifest.json, /service-worker.js)
 # moved to voyagr/api/core.py blueprint
