@@ -4198,7 +4198,7 @@ HTML_TEMPLATE = '''
     <!-- External JavaScript modules -->
     <script src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
     <script src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    <script src="/static/js/voyagr-app.js?v=20260409i"></script>
+    <script src="/static/js/voyagr-app.js?v=20260409j"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -4545,8 +4545,9 @@ HTML_TEMPLATE = '''
                     <div class="preferences-section" id="supportVoyagrSection" style="display: none;">
                         <h3>⚡ Voyager Premium</h3>
                         <p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
-                            The app is free to use. <strong>Voyager Premium</strong> is a <strong>paid subscription</strong> (Stripe) for premium features. <strong>Buy Me a Coffee</strong> and <strong>Patreon</strong> are separate <strong>one-off tips</strong> or patronage.
+                            <strong>Voyager Premium</strong> is a <strong>paid subscription</strong> (Stripe) for premium features. <strong>Buy Me a Coffee</strong> and <strong>Patreon</strong> are separate <strong>one-off tips</strong> or patronage.
                         </p>
+                        <p id="serviceRegionNote" style="display: none; font-size: 12px; color: #5d4037; margin: 0 0 10px 0; padding: 8px 10px; background: #fff8e1; border-radius: 6px; border-left: 3px solid #ff8f00;"></p>
                         <p id="supportStripeTrialNote" style="display: none; font-size: 12px; color: #1565c0; margin: 0 0 10px 0;"></p>
                         <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
                             <button type="button" id="supportStripePremiumBtn" style="display: none; padding: 12px; background: #635bff; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">💳 Subscribe — Voyager Premium</button>

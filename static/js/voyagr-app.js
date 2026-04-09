@@ -853,9 +853,22 @@ function applySupportLinksFromConfig(cfg) {
     const btnBmc = document.getElementById('supportBmcBtn');
     const btnPat = document.getElementById('supportPatreonBtn');
 
+    const regionNote = (cfg.service_region_note || '').trim();
+
     const stripePremium = !!(pl || checkout);
-    const show = !!(stripePremium || bmc || pat);
+    const show = !!(stripePremium || bmc || pat || regionNote);
     section.style.display = show ? 'block' : 'none';
+
+    const regionEl = document.getElementById('serviceRegionNote');
+    if (regionEl) {
+        if (regionNote) {
+            regionEl.style.display = 'block';
+            regionEl.textContent = regionNote;
+        } else {
+            regionEl.style.display = 'none';
+            regionEl.textContent = '';
+        }
+    }
 
     const trialNote = document.getElementById('supportStripeTrialNote');
     const trialDays = parseInt(cfg.stripe_subscription_trial_days, 10);

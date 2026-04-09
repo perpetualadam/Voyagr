@@ -68,6 +68,8 @@ def get_config():
         'stripe_checkout_available': bool(stripe_key and sub_price),
         # Shown in app UI for Checkout flow; Payment Link trials are set in Stripe Dashboard only
         'stripe_subscription_trial_days': trial_days_out,
+        # Optional notice (e.g. "UK only") — set VOYAGR_SERVICE_REGION_NOTE on the server
+        'service_region_note': os.getenv('VOYAGR_SERVICE_REGION_NOTE', '').strip(),
         'success': True
     })
     # Prevent caching
