@@ -3127,10 +3127,22 @@ function displaySingleRoute(index) {
         fetchAndDisplayRouteTraffic();
     }
 
-    // Plot traffic lights on the route if enabled
-    if (typeof plotTrafficLightsOnRoute === 'function' && polylinePoints.length > 0) {
-        console.log('[Routes] Plotting traffic lights on selected route');
-        plotTrafficLightsOnRoute(polylinePoints);
+    // Plot traffic lights on the route if enabled.
+    // Prefer module export on window.TrafficLights; keep legacy global fallback.
+    if (polylinePoints.length > 0) {
+        const plotRouteTrafficLights =
+            (typeof window !== 'undefined' &&
+             window.TrafficLights &&
+             typeof window.TrafficLights.plotTrafficLightsOnRoute === 'function')
+                ? window.TrafficLights.plotTrafficLightsOnRoute
+                : (typeof plotTrafficLightsOnRoute === 'function' ? plotTrafficLightsOnRoute : null);
+
+        if (plotRouteTrafficLights) {
+            console.log('[Routes] Plotting traffic lights on selected route');
+            plotRouteTrafficLights(polylinePoints);
+        } else {
+            console.warn('[Routes] Traffic lights module not available for route plotting');
+        }
     }
 
     console.log(`[Routes] Showing only route ${index + 1}: ${route.name}`);
@@ -9933,6 +9945,23 @@ window.addEventListener('load', () => {
     initSupabaseAuth();
     _tryResumeNavigation();
     initDeviceEnvironmentNotifications();
+    // Show a volume reminder on app open (once per tab session).
+    try {
+        const openVolumeHintKey = 'voyagr_volume_hint_on_open_shown';
+        const alreadyShown = sessionStorage.getItem(openVolumeHintKey) === 'true';
+        if (!alreadyShown) {
+            sessionStorage.setItem(openVolumeHintKey, 'true');
+            setTimeout(() => {
+                try {
+                    showVolumeHintForNavigation();
+                } catch (e) {
+                    console.warn('[EnvHint] open volume hint:', e);
+                }
+            }, 1800);
+        }
+    } catch (e) {
+        console.warn('[EnvHint] open volume hint schedule:', e);
+    }
 });
 
 // ===== TILE PRE-CACHING FOR ROUTE CORRIDORS =====

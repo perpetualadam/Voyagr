@@ -350,6 +350,11 @@ window.TrafficLights = {
     createIconSVG: createTrafficLightSVG
 };
 
+// Backward-compatible global alias used by legacy callers.
+if (typeof window !== 'undefined') {
+    window.plotTrafficLightsOnRoute = plotTrafficLightsOnRoute;
+}
+
 // Add CSS styles for traffic light markers
 if (typeof document !== 'undefined') {
     const style = document.createElement('style');
