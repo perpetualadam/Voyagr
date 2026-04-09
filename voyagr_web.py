@@ -3124,6 +3124,105 @@ def valhalla_route_json_to_standard_routes(
     return routes
 
 
+def fetch_valhalla_auto_shorter_json(
+    url: str,
+    headers: Dict[str, str],
+    locations: List[Dict[str, Any]],
+    exclude_locations: Optional[List[Dict[str, Any]]] = None,
+    timeout: int = 10,
+) -> Optional[Dict[str, Any]]:
+    """
+    Valhalla auto_shorter (distance-focused). If exclude_locations is non-empty, try that first;
+    on non-success, retry without exclusions so routing still succeeds when avoids over-constrain the graph.
+    """
+    base_payload: Dict[str, Any] = {
+        'locations': locations,
+        'costing': 'auto_shorter',
+        'units': 'kilometers',
+        'language': 'en-GB',
+        'directions_options': {'generalize': 0},
+    }
+    attempts: List[Dict[str, Any]] = []
+    if exclude_locations:
+        w = dict(base_payload)
+        w['exclude_locations'] = exclude_locations
+        attempts.append(w)
+    attempts.append(base_payload)
+    for payload in attempts:
+        try:
+            resp = requests.post(url, json=payload, timeout=timeout, headers=headers)
+            if resp.status_code != 200:
+                continue
+            data = resp.json()
+            if data.get('error'):
+                continue
+            if 'trip' in data and 'legs' in data['trip'] and data['trip']['legs']:
+                return data
+        except Exception as e:
+            logger.warning(f'[VALHALLA] auto_shorter request failed: {e}')
+    return None
+
+
+def valhalla_trip_json_to_std_route_entry(
+    name: str,
+    trip_json: Dict[str, Any],
+    route_id: int,
+    hazards: Dict[str, List[Dict[str, Any]]],
+    cost_calculator: Any,
+    *,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+) -> Optional[Dict[str, Any]]:
+    """Build a single /api/route-style route dict from Valhalla JSON containing trip+legs (e.g. auto_shorter)."""
+    if 'trip' not in trip_json or 'legs' not in trip_json['trip']:
+        return None
+    legs = trip_json['trip']['legs']
+    if not legs or 'shape' not in legs[0]:
+        return None
+    sh_geom = legs[0]['shape']
+    sh_dist = trip_json['trip']['summary']['length']
+    sh_time = trip_json['trip']['summary']['time']
+    if not polyline:
+        return None
+    coords = polyline.decode(sh_geom, precision=6)
+    penalty, haz_count = score_route_by_hazards(coords, hazards)
+    hazards_list = get_hazards_on_route(coords, hazards)
+    costs = cost_calculator.calculate_costs(
+        sh_dist, vehicle_type, fuel_efficiency, fuel_price,
+        energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+        route_coords=coords,
+    )
+    route_maneuvers = []
+    for leg in legs:
+        if 'maneuvers' in leg:
+            for m in leg['maneuvers']:
+                route_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=True))
+
+    return {
+        'id': route_id,
+        'name': name,
+        'distance_km': round(sh_dist, 2),
+        'duration_minutes': round(sh_time / 60, 0),
+        'fuel_cost': round(costs['fuel_cost'], 2),
+        'fuel_litres': round(costs['fuel_litres'], 2),
+        'toll_cost': round(costs['toll_cost'], 2),
+        'caz_cost': round(costs['caz_cost'], 2),
+        'geometry': sh_geom,
+        'geometry_precision': 6,
+        'hazard_penalty_seconds': round(penalty, 0),
+        'hazard_count': haz_count,
+        'hazards': hazards_list,
+        'maneuvers': route_maneuvers,
+        'source': 'Valhalla',
+    }
+
+
 def build_valhalla_baseline_request_payload(
     *,
     start_lat: float,
@@ -7326,27 +7425,27 @@ def calculate_route():
 
                         next_route_id = len(routes) + 1
 
-                        # Route: Shortest Distance (auto_shorter costing)
+                        # Route: Shortest Distance (auto_shorter costing); retry without exclusions if avoids over-constrain
                         try:
-                            shortest_payload = {
-                                "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
-                                "costing": "auto_shorter",
-                                "units": "kilometers",
-                                "language": "en-GB",
-                                "directions_options": {"generalize": 0}
-                            }
-                            if alt_exclude:
-                                shortest_payload["exclude_locations"] = alt_exclude
-                            sh_response = requests.post(url, json=shortest_payload, timeout=10, headers=headers)
-                            if sh_response.status_code == 200:
-                                sh_data = sh_response.json()
-                                if 'trip' in sh_data and 'legs' in sh_data['trip']:
-                                    sh_geom = sh_data['trip']['legs'][0]['shape']
-                                    sh_dist = sh_data['trip']['summary']['length']
-                                    sh_time = sh_data['trip']['summary']['time']
-                                    routes.append(build_std_route_entry('📏 Shortest', sh_geom, sh_dist, sh_time, next_route_id, sh_data))
+                            shortest_locs = route_locations if has_waypoints else [
+                                {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
+                            ]
+                            sh_data = fetch_valhalla_auto_shorter_json(
+                                url, headers, shortest_locs,
+                                exclude_locations=alt_exclude if alt_exclude else None,
+                            )
+                            if sh_data:
+                                entry = valhalla_trip_json_to_std_route_entry(
+                                    '📏 Shortest', sh_data, next_route_id, hazards, cost_calculator,
+                                    vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                                    fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                                    electricity_price=electricity_price, include_tolls=include_tolls,
+                                    include_caz=include_caz, caz_exempt=caz_exempt,
+                                )
+                                if entry:
+                                    routes.append(entry)
                                     next_route_id += 1
-                                    logger.info(f"[VALHALLA] Added Shortest route: {sh_dist:.1f}km")
+                                    logger.info(f"[VALHALLA] Added Shortest route: {entry['distance_km']:.1f}km")
                         except Exception as e:
                             logger.warning(f"[VALHALLA] Shortest route failed: {e}")
 
@@ -7384,6 +7483,46 @@ def calculate_route():
                             logger.warning(f"[VALHALLA] Optimised route failed: {e}")
 
                         logger.info(f"[VALHALLA] Final route count: {len(routes)}")
+
+                    # auto_shorter (📏 Shortest) is not the same as Valhalla alternates labeled "Shortest".
+                    # When we already had 3+ routes we skipped the distinct block; exclusions can also make
+                    # the first auto_shorter attempt fail — ensure the true shortest option exists when missing.
+                    if valhalla_costing == 'auto':
+                        if not any('📏 Shortest' in (r.get('name') or '') for r in routes):
+                            try:
+                                ensure_exclude: List[Dict[str, Any]] = []
+                                if enable_hazard_avoidance and hazards:
+                                    try:
+                                        ensure_exclude = build_valhalla_exclude_locations(
+                                            hazards, route_bbox=route_bbox, max_hazards=50,
+                                            start_lat=start_lat, start_lon=start_lon,
+                                            end_lat=end_lat, end_lon=end_lon,
+                                        )
+                                    except Exception as ex:
+                                        logger.warning(f'[VALHALLA] ensure Shortest: exclude build failed: {ex}')
+                                locs_ensure = route_locations if has_waypoints else [
+                                    {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
+                                ]
+                                sh_ensure = fetch_valhalla_auto_shorter_json(
+                                    url, headers, locs_ensure,
+                                    exclude_locations=ensure_exclude if ensure_exclude else None,
+                                )
+                                if sh_ensure:
+                                    next_id = len(routes) + 1
+                                    ent = valhalla_trip_json_to_std_route_entry(
+                                        '📏 Shortest', sh_ensure, next_id, hazards, cost_calculator,
+                                        vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                                        fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                                        electricity_price=electricity_price, include_tolls=include_tolls,
+                                        include_caz=include_caz, caz_exempt=caz_exempt,
+                                    )
+                                    if ent:
+                                        routes.append(ent)
+                                        logger.info(
+                                            f'[VALHALLA] Added Shortest route (ensure): {ent["distance_km"]:.1f}km'
+                                        )
+                            except Exception as e:
+                                logger.warning(f'[VALHALLA] ensure Shortest failed: {e}')
 
                     print(f"[Valhalla] SUCCESS: {len(routes)} routes found")
 
@@ -7706,57 +7845,31 @@ def calculate_route():
                                     'source': 'Valhalla',
                                 })
 
-                                # Also request Shortest route with same reduced exclusions
+                                # Also request Shortest (auto_shorter); retry without exclusions if reduced avoids still block routing
                                 try:
-                                    shortest_payload = {
-                                        "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
-                                        "costing": "auto_shorter",
-                                        "units": "kilometers",
-                                        "language": "en-GB",
-                                        "directions_options": {"generalize": 0}
-                                    }
-                                    if retry_locations:
-                                        shortest_payload["exclude_locations"] = retry_locations
-                                    logger.info(f"[VALHALLA] Retry: Requesting Shortest route with {len(retry_locations)} exclusions")
-                                    sh_response = requests.post(url, json=shortest_payload, timeout=10, headers=headers)
-                                    if sh_response.status_code == 200:
-                                        sh_data = sh_response.json()
-                                        if 'trip' in sh_data and 'legs' in sh_data['trip']:
-                                            sh_geom = sh_data['trip']['legs'][0]['shape']
-                                            sh_dist = sh_data['trip']['summary']['length']
-                                            sh_time = sh_data['trip']['summary']['time']
-                                            sh_coords = decode_route_geometry(sh_geom, precision=6)
-                                            sh_costs = cost_calculator.calculate_costs(
-                                                sh_dist, vehicle_type, fuel_efficiency, fuel_price,
-                                                energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
-                                                route_coords=sh_coords
+                                    retry_short_locs = route_locations if has_waypoints else [
+                                        {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
+                                    ]
+                                    logger.info(
+                                        f"[VALHALLA] Retry: Requesting Shortest route with {len(retry_locations)} exclusions"
+                                    )
+                                    sh_data = fetch_valhalla_auto_shorter_json(
+                                        url, headers, retry_short_locs,
+                                        exclude_locations=retry_locations if retry_locations else None,
+                                    )
+                                    if sh_data:
+                                        rent = valhalla_trip_json_to_std_route_entry(
+                                            '📏 Shortest', sh_data, 2, hazards, cost_calculator,
+                                            vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                                            fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                                            electricity_price=electricity_price, include_tolls=include_tolls,
+                                            include_caz=include_caz, caz_exempt=caz_exempt,
+                                        )
+                                        if rent:
+                                            routes.append(rent)
+                                            logger.info(
+                                                f"[VALHALLA] Retry: Added Shortest route: {rent['distance_km']:.1f}km"
                                             )
-                                            sh_hazard_penalty, sh_hazard_count = score_route_by_hazards(sh_geom, hazards) if hazards else (0, 0)
-                                            sh_hazards_list = get_hazards_on_route(sh_geom, hazards) if hazards else []
-                                            # Extract maneuvers for shortest route
-                                            sh_maneuvers = []
-                                            for leg in sh_data['trip']['legs']:
-                                                if 'maneuvers' in leg:
-                                                    for m in leg['maneuvers']:
-                                                        sh_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=True))
-                                            routes.append({
-                                                'id': 2,
-                                                'name': '📏 Shortest',
-                                                'distance_km': round(sh_dist, 2),
-                                                'duration_minutes': round(sh_time / 60, 0),
-                                                'fuel_cost': round(sh_costs['fuel_cost'], 2),
-                                                'fuel_litres': round(sh_costs['fuel_litres'], 2),
-                                                'toll_cost': round(sh_costs['toll_cost'], 2),
-                                                'caz_cost': round(sh_costs['caz_cost'], 2),
-                                                'geometry': sh_geom,
-                                                'geometry_precision': 6,
-                                                'hazard_penalty_seconds': round(sh_hazard_penalty, 0),
-                                                'hazard_count': sh_hazard_count,
-                                                'hazards': sh_hazards_list,
-                                                'maneuvers': sh_maneuvers,
-                                                'source': 'Valhalla',
-                                            })
-                                            logger.info(f"[VALHALLA] Retry: Added Shortest route: {sh_dist:.1f}km")
                                 except Exception as e:
                                     logger.warning(f"[VALHALLA] Retry Shortest route failed: {e}")
 
@@ -7965,6 +8078,42 @@ def calculate_route():
                     else:
                         _rbody = vrec.text[:800] if vrec.text else ''
                         logger.warning(f"[ROUTING] Recovery Valhalla HTTP {vrec.status_code}: {_rbody}")
+
+                    # Baseline Valhalla is fastest + alternates only; add distance-shortest (auto_shorter) as third option.
+                    if valhalla_costing == 'auto' and routes_out:
+                        if not any('📏 Shortest' in (r.get('name') or '') for r in routes_out):
+                            try:
+                                rec_excl: List[Dict[str, Any]] = []
+                                if enable_hazard_avoidance and hazards:
+                                    try:
+                                        rec_excl = build_valhalla_exclude_locations(
+                                            hazards, route_bbox=route_bbox, max_hazards=50,
+                                            start_lat=start_lat, start_lon=start_lon,
+                                            end_lat=end_lat, end_lon=end_lon,
+                                        )
+                                    except Exception as rex:
+                                        logger.warning(f'[ROUTING] Recovery Shortest: exclude build failed: {rex}')
+                                locs_rec = route_locations if has_waypoints else [
+                                    {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
+                                ]
+                                sh_rec = fetch_valhalla_auto_shorter_json(
+                                    url, headers, locs_rec,
+                                    exclude_locations=rec_excl if rec_excl else None,
+                                )
+                                if sh_rec:
+                                    rid = len(routes_out) + 1
+                                    rent = valhalla_trip_json_to_std_route_entry(
+                                        '📏 Shortest', sh_rec, rid, hazards, cost_calculator,
+                                        vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                                        fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                                        electricity_price=electricity_price, include_tolls=include_tolls,
+                                        include_caz=include_caz, caz_exempt=caz_exempt,
+                                    )
+                                    if rent:
+                                        routes_out.append(rent)
+                                        logger.info('[ROUTING] Recovery: added 📏 Shortest (auto_shorter)')
+                            except Exception as rec_s_e:
+                                logger.warning(f'[ROUTING] Recovery Shortest failed: {rec_s_e}')
 
                     if routes_out:
                         if enable_hazard_avoidance and hazards:
