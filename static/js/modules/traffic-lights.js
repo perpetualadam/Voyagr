@@ -27,12 +27,22 @@ function createTrafficLightSVG(activeLight, width = 14, height = 32) {
     const dimR = '#7f1d1d';
     const dimY = '#713f12';
     const dimG = '#14532d';
-    let r = dimR;
-    let y = dimY;
-    let g = dimG;
-    if (activeLight === 'red') r = '#ef4444';
-    else if (activeLight === 'yellow') y = '#f59e0b';
-    else if (activeLight === 'green') g = '#22c55e';
+    const brightR = '#ef4444';
+    const brightY = '#f59e0b';
+    const brightG = '#22c55e';
+    // Default OSM icon style: all three lenses visible in vertical order.
+    let r = brightR;
+    let y = brightY;
+    let g = brightG;
+    // Optional state emphasis mode: only one lens bright.
+    if (activeLight === 'red' || activeLight === 'yellow' || activeLight === 'green') {
+        r = dimR;
+        y = dimY;
+        g = dimG;
+    }
+    if (activeLight === 'red') r = brightR;
+    else if (activeLight === 'yellow') y = brightY;
+    else if (activeLight === 'green') g = brightG;
 
     return `<svg viewBox="0 0 16 36" width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" style="display:block;flex-shrink:0;width:${width}px;height:${height}px" aria-hidden="true"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="${r}"/><circle cx="8" cy="18" r="4.2" fill="${y}"/><circle cx="8" cy="27.5" r="4.2" fill="${g}"/></svg>`;
 }

@@ -6127,7 +6127,7 @@ function getOsmTrafficLightMarkerInnerSVG() {
     if (typeof TrafficLights !== 'undefined' && TrafficLights.createIconSVG) {
         return TrafficLights.createIconSVG('none', 14, 32);
     }
-    return `<svg viewBox="0 0 16 36" width="14" height="32" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" style="display:block;flex-shrink:0;width:14px;height:32px"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#7f1d1d"/><circle cx="8" cy="18" r="4.2" fill="#713f12"/><circle cx="8" cy="27.5" r="4.2" fill="#14532d"/></svg>`;
+    return `<svg viewBox="0 0 16 36" width="14" height="32" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" style="display:block;flex-shrink:0;width:14px;height:32px"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"/><circle cx="8" cy="18" r="4.2" fill="#f59e0b"/><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"/></svg>`;
 }
 
 /** Green pill + vertical SVG (OSM layer, route hazard markers — not the horizontal 🚥 emoji). */
