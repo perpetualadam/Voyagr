@@ -43,8 +43,6 @@ function createTrafficLightSVG(activeLight, width = 14, height = 32) {
  * @returns {HTMLElement} Marker element
  */
 function createTrafficLightElement(light) {
-    const stateInfo = TRAFFIC_LIGHT_STATES[light.state] || TRAFFIC_LIGHT_STATES.unknown;
-
     const el = document.createElement('div');
     el.className = 'traffic-light-marker';
     el.setAttribute('data-light-id', light.id);
@@ -62,7 +60,7 @@ function createTrafficLightElement(light) {
     el.innerHTML = `
         <div class="traffic-light-container">
             <div class="traffic-light-osm-wrap">
-                <div class="traffic-light-icon">${createTrafficLightSVG(stateInfo.activeLight)}</div>
+                <div class="traffic-light-icon">${createTrafficLightSVG('none')}</div>
             </div>
             ${countdown}
         </div>
@@ -101,7 +99,7 @@ function addTrafficLight(light) {
             <div class="traffic-light-popup">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
                     <div class="traffic-light-osm-wrap traffic-light-osm-wrap--popup">
-                        ${createTrafficLightSVG(stateInfo.activeLight, 14, 32)}
+                        ${createTrafficLightSVG('none', 14, 32)}
                     </div>
                     <strong>Traffic Light</strong>
                 </div>
@@ -141,12 +139,10 @@ function updateTrafficLight(id, updates) {
 
     // Update marker element
     const el = entry.marker.getElement();
-    const stateInfo = TRAFFIC_LIGHT_STATES[updatedLight.state] || TRAFFIC_LIGHT_STATES.unknown;
-
-    // Update icon with new SVG
+    // Keep route marker icon consistent with OSM style (neutral lenses).
     const iconEl = el.querySelector('.traffic-light-icon');
     if (iconEl) {
-        iconEl.innerHTML = createTrafficLightSVG(stateInfo.activeLight);
+        iconEl.innerHTML = createTrafficLightSVG('none');
     }
 
     // Update countdown
