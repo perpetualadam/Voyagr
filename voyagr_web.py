@@ -2904,6 +2904,293 @@ def route_with_graphhopper(
         return None
 
 
+def build_graphhopper_optimised_route_entry(
+    graphhopper_route: Dict[str, Any],
+    hazards: Dict[str, List[Dict[str, Any]]],
+    cost_calculator: Any,
+    *,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+    traffic_multiplier: float = 1.0,
+) -> Optional[Dict[str, Any]]:
+    """
+    Turn a successful route_with_graphhopper() result into the same route dict shape
+    used in /api/route (⚡ Optimised, maneuvers, costs, hazards along geometry).
+    """
+    if not graphhopper_route or not graphhopper_route.get('success') or not polyline:
+        return None
+    try:
+        gh_distance_km = graphhopper_route.get('distance_km', 0)
+        gh_duration_min = graphhopper_route.get('duration_seconds', 0) / 60
+        gh_geometry = graphhopper_route.get('geometry', '')
+        if not gh_geometry:
+            return None
+
+        gh_coords = polyline.decode(gh_geometry, precision=5)
+        gh_geometry_p6 = polyline.encode(gh_coords, precision=6)
+
+        gh_costs = cost_calculator.calculate_costs(
+            gh_distance_km, vehicle_type, fuel_efficiency, fuel_price,
+            energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+            route_coords=gh_coords,
+        )
+
+        gh_hazard_penalty, gh_hazard_count = score_route_by_hazards(gh_coords, hazards)
+        gh_hazards_list = get_hazards_on_route(gh_coords, hazards)
+        gh_duration_min = gh_duration_min * traffic_multiplier
+
+        gh_sign_to_valhalla = {
+            -3: 15, -2: 16, -1: 17, 0: 8,
+            1: 9, 2: 10, 3: 11, 4: 4, 5: 0, 6: 26,
+        }
+        gh_maneuvers = []
+        for instr in graphhopper_route.get('instructions', []):
+            sign = instr.get('sign', 0)
+            valhalla_type = gh_sign_to_valhalla.get(sign, 8)
+            gh_maneuvers.append({
+                'instruction': instr.get('text', ''),
+                'distance': instr.get('distance', 0) / 1000,
+                'time': instr.get('time', 0) / 1000,
+                'type': valhalla_type,
+                'street_names': [instr.get('street_name', '')] if instr.get('street_name') else [],
+                'begin_shape_index': instr.get('interval', [0])[0] if instr.get('interval') else 0,
+                'end_shape_index': instr.get('interval', [0, 0])[1] if instr.get('interval') and len(instr.get('interval', [])) > 1 else 0,
+            })
+
+        return {
+            'id': 0,
+            'name': '⚡ Optimised',
+            'distance_km': round(gh_distance_km, 2),
+            'duration_minutes': round(gh_duration_min, 0),
+            'fuel_cost': round(gh_costs['fuel_cost'], 2),
+            'fuel_litres': round(gh_costs['fuel_litres'], 2),
+            'toll_cost': round(gh_costs['toll_cost'], 2),
+            'caz_cost': round(gh_costs['caz_cost'], 2),
+            'geometry': gh_geometry_p6,
+            'geometry_precision': 6,
+            'hazard_penalty_seconds': round(gh_hazard_penalty, 0),
+            'hazard_count': gh_hazard_count,
+            'hazards': gh_hazards_list,
+            'maneuvers': gh_maneuvers,
+            'source': 'GraphHopper',
+        }
+    except Exception as e:
+        logger.warning(f"[GRAPHHOPPER] build_graphhopper_optimised_route_entry failed: {e}")
+        return None
+
+
+def valhalla_route_json_to_standard_routes(
+    route_data: Dict[str, Any],
+    *,
+    valhalla_costing: str,
+    start_lat: float,
+    start_lon: float,
+    hazards: Dict[str, List[Dict[str, Any]]],
+    cost_calculator: Any,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+) -> List[Dict[str, Any]]:
+    """
+    Parse a Valhalla /route JSON body (with 'trip') into the route option dicts used by /api/route.
+    Used for the primary success path recovery duplicate and for baseline Valhalla after hazard-heavy failure.
+    """
+    routes: List[Dict[str, Any]] = []
+    if 'trip' not in route_data or 'legs' not in route_data['trip']:
+        return routes
+
+    distance = route_data['trip']['summary']['length']
+    duration_seconds = route_data['trip']['summary']['time']
+    distance_km = distance
+    base_time_minutes = duration_seconds / 60
+
+    route_geometry = None
+    for leg in route_data['trip']['legs']:
+        if 'shape' in leg:
+            route_geometry = leg['shape']
+            break
+
+    if valhalla_costing == 'auto':
+        traffic_multiplier, traffic_level = get_traffic_duration_multiplier(start_lat, start_lon)
+        time_minutes = base_time_minutes * traffic_multiplier
+    else:
+        traffic_multiplier, traffic_level = 1.0, 'N/A'
+        time_minutes = base_time_minutes
+
+    route_coords = decode_route_geometry(route_geometry, precision=6)
+    costs = cost_calculator.calculate_costs(
+        distance_km, vehicle_type, fuel_efficiency, fuel_price,
+        energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+        route_coords=route_coords,
+    )
+    hazard_penalty = 0
+    hazard_count = 0
+    hazards_list: List[Dict[str, Any]] = []
+    if hazards:
+        hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
+        hazards_list = get_hazards_on_route(route_geometry, hazards)
+
+    maneuvers = []
+    for leg in route_data['trip']['legs']:
+        if 'maneuvers' in leg:
+            for maneuver in leg['maneuvers']:
+                maneuvers.append(valhalla_maneuver_dict(maneuver, length_in_meters=False))
+
+    routes.append({
+        'id': 1,
+        'name': 'Fastest',
+        'distance_km': round(distance_km, 2),
+        'duration_minutes': round(time_minutes, 0),
+        'base_duration_minutes': round(base_time_minutes, 0),
+        'traffic_multiplier': round(traffic_multiplier, 2),
+        'traffic_level': traffic_level,
+        'fuel_cost': round(costs['fuel_cost'], 2),
+        'fuel_litres': round(costs['fuel_litres'], 2),
+        'toll_cost': round(costs['toll_cost'], 2),
+        'caz_cost': round(costs['caz_cost'], 2),
+        'caz_details': costs.get('caz_details', {}),
+        'geometry': route_geometry,
+        'geometry_precision': 6,
+        'hazard_penalty_seconds': round(hazard_penalty, 0),
+        'hazard_count': hazard_count,
+        'hazards': hazards_list,
+        'maneuvers': maneuvers,
+        'source': 'Valhalla',
+    })
+
+    if 'alternates' in route_data:
+        for idx, alt_route in enumerate(route_data['alternates'][:3]):
+            if 'trip' not in alt_route or 'summary' not in alt_route['trip']:
+                continue
+            alt_distance = alt_route['trip']['summary']['length']
+            alt_duration_seconds = alt_route['trip']['summary']['time']
+            alt_distance_km = alt_distance
+            alt_base_time_minutes = alt_duration_seconds / 60
+            alt_time_minutes = alt_base_time_minutes * traffic_multiplier
+
+            alt_geometry = None
+            alt_maneuvers = []
+            if 'legs' in alt_route['trip']:
+                for leg in alt_route['trip']['legs']:
+                    if 'shape' in leg and alt_geometry is None:
+                        alt_geometry = leg['shape']
+                    if 'maneuvers' in leg:
+                        for m in leg['maneuvers']:
+                            alt_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=False))
+
+            alt_route_coords = decode_route_geometry(alt_geometry, precision=6)
+            alt_costs = cost_calculator.calculate_costs(
+                alt_distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+                route_coords=alt_route_coords,
+            )
+            alt_hazard_penalty = 0
+            alt_hazard_count = 0
+            alt_hazards_list: List[Dict[str, Any]] = []
+            if hazards:
+                alt_hazard_penalty, alt_hazard_count = score_route_by_hazards(alt_geometry, hazards)
+                alt_hazards_list = get_hazards_on_route(alt_geometry, hazards)
+
+            route_names = ['Shortest', 'Balanced', 'Alternative']
+            routes.append({
+                'id': idx + 2,
+                'name': route_names[idx] if idx < len(route_names) else f'Alternative {idx}',
+                'distance_km': round(alt_distance_km, 2),
+                'duration_minutes': round(alt_time_minutes, 0),
+                'fuel_cost': round(alt_costs['fuel_cost'], 2),
+                'fuel_litres': round(alt_costs['fuel_litres'], 2),
+                'toll_cost': round(alt_costs['toll_cost'], 2),
+                'caz_cost': round(alt_costs['caz_cost'], 2),
+                'geometry': alt_geometry,
+                'geometry_precision': 6,
+                'hazard_penalty_seconds': round(alt_hazard_penalty, 0),
+                'hazard_count': alt_hazard_count,
+                'hazards': alt_hazards_list,
+                'maneuvers': alt_maneuvers,
+                'source': 'Valhalla',
+            })
+
+    return routes
+
+
+def build_valhalla_baseline_request_payload(
+    *,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    route_locations: List[Dict[str, Any]],
+    has_waypoints: bool,
+    valhalla_costing: str,
+    avoid_tolls: bool,
+    avoid_motorways: bool,
+    avoid_ferries: bool,
+    departure_time: Optional[str],
+) -> Dict[str, Any]:
+    """
+    Valhalla /route JSON without exclude_locations — used when hazard-heavy requests fail (e.g. HTTP 400)
+    but we still want Valhalla fastest + alternates alongside GraphHopper.
+    """
+    payload: Dict[str, Any] = {
+        "locations": route_locations if has_waypoints else [
+            {"lat": start_lat, "lon": start_lon},
+            {"lat": end_lat, "lon": end_lon},
+        ],
+        "costing": valhalla_costing,
+        "alternates": 3 if (valhalla_costing == 'auto' and not has_waypoints) else 0,
+        "units": "kilometers",
+        "language": "en-GB",
+        "directions_options": {"generalize": 0},
+    }
+    if valhalla_costing == 'pedestrian':
+        payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}}
+    elif valhalla_costing == 'bicycle':
+        payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}}
+    elif valhalla_costing in ('auto', 'auto_shorter'):
+        auto_opts: Dict[str, Any] = {}
+        if avoid_tolls:
+            auto_opts["use_tolls"] = 0
+        if avoid_motorways:
+            auto_opts["use_highways"] = 0
+        if avoid_ferries:
+            auto_opts["use_ferry"] = 0
+        if auto_opts:
+            payload["costing_options"] = {valhalla_costing: auto_opts}
+
+    if valhalla_costing == 'auto':
+        if departure_time:
+            payload["date_time"] = {"type": 1, "value": departure_time}
+        else:
+            from datetime import datetime as dt_now
+            payload["date_time"] = {"type": 1, "value": dt_now.now().strftime('%Y-%m-%dT%H:%M')}
+    return payload
+
+
+def _hazard_marker_display_type(hazard_category: str, hazard: Dict[str, Any]) -> str:
+    """
+    Frontend hazard markers key off `type`. TomTom incidents store iconCategory in `original_type`
+    (digit strings like '6'); using that as type breaks the map (unknown → generic warning icon).
+    """
+    ot = hazard.get('original_type')
+    if ot is None:
+        return hazard_category
+    s = str(ot).strip()
+    if s.isdigit():
+        return hazard_category
+    return s
+
+
 def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
     """
     Get list of hazards that are on or near the route.
@@ -2961,8 +3248,7 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[
 
                 # If hazard is within threshold, add to list
                 if min_distance <= threshold:
-                    # Use original_type if available (for speed cameras), otherwise use hazard_type
-                    display_type = hazard.get('original_type', hazard_type)
+                    display_type = _hazard_marker_display_type(hazard_type, hazard)
                     hazards_on_route.append({
                         'lat': hazard_lat,
                         'lon': hazard_lon,
@@ -3798,9 +4084,9 @@ HTML_TEMPLATE = '''
     <!-- Google Plus Codes Service -->
     <script src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/modules/traffic-lights.js?v=20260331b"></script>
+    <script src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
     <script src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    <script src="/static/js/voyagr-app.js?v=20260404d"></script>
+    <script src="/static/js/voyagr-app.js?v=20260409c"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -6226,6 +6512,9 @@ def calculate_route():
         logger.debug(f"[ROUTING] Valhalla URL: {VALHALLA_URL}")
 
         valhalla_start_time = time.time()
+        # Defaults if Valhalla try exits early; overwritten when waypoints are processed.
+        route_locations = [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}]
+        has_waypoints = False
         try:
             url = f"{VALHALLA_URL}/route"
 
@@ -6804,7 +7093,9 @@ def calculate_route():
                 valhalla_error = f"Routing service unreachable: {str(e)}"
                 response = None
             if response and response.status_code != 200:
-                print(f"[Valhalla] Response body: {response.text[:500]}", flush=True)
+                _vb = response.text[:1200] if response.text else ''
+                print(f"[Valhalla] Response body: {_vb}", flush=True)
+                logger.warning(f"[VALHALLA] HTTP {response.status_code} body: {_vb}")
 
             if response and response.status_code == 200:
                 route_data = response.json()
@@ -7602,6 +7893,135 @@ def calculate_route():
             # Valhalla succeeded (either first attempt or retry) - skip OSRM fallback
             logger.info(f"[ROUTING] Valhalla succeeded, skipping OSRM fallback")
         else:
+            # ----------------------------------------------------------------
+            # GraphHopper often succeeds while Valhalla rejects hazard-heavy payloads (HTTP 400).
+            # Return GH ⚡ Optimised + baseline Valhalla (no exclude_locations) before OSRM.
+            # ----------------------------------------------------------------
+            recovery_data: Optional[Dict[str, Any]] = None
+            if graphhopper_route and graphhopper_route.get('success'):
+                try:
+                    tr_mult = 1.0
+                    if valhalla_costing == 'auto':
+                        tr_mult, _ = get_traffic_duration_multiplier(start_lat, start_lon)
+                    gh_entry = build_graphhopper_optimised_route_entry(
+                        graphhopper_route,
+                        hazards,
+                        cost_calculator,
+                        vehicle_type=vehicle_type,
+                        fuel_efficiency=fuel_efficiency,
+                        fuel_price=fuel_price,
+                        energy_efficiency=energy_efficiency,
+                        electricity_price=electricity_price,
+                        include_tolls=include_tolls,
+                        include_caz=include_caz,
+                        caz_exempt=caz_exempt,
+                        traffic_multiplier=tr_mult,
+                    )
+                    routes_out: List[Dict[str, Any]] = []
+                    if gh_entry:
+                        routes_out.append(gh_entry)
+
+                    baseline_payload = build_valhalla_baseline_request_payload(
+                        start_lat=start_lat,
+                        start_lon=start_lon,
+                        end_lat=end_lat,
+                        end_lon=end_lon,
+                        route_locations=route_locations,
+                        has_waypoints=has_waypoints,
+                        valhalla_costing=valhalla_costing,
+                        avoid_tolls=avoid_tolls,
+                        avoid_motorways=avoid_motorways,
+                        avoid_ferries=avoid_ferries,
+                        departure_time=departure_time,
+                    )
+                    logger.info("[ROUTING] Recovery: requesting baseline Valhalla (no exclude_locations)")
+                    vrec = requests.post(url, json=baseline_payload, timeout=15, headers=headers)
+                    valhalla_baseline_ok = False
+                    if vrec.status_code == 200:
+                        rd = vrec.json()
+                        if rd.get('error'):
+                            logger.warning(f"[ROUTING] Recovery Valhalla error in JSON: {rd.get('error')}")
+                        elif 'trip' in rd:
+                            v_routes = valhalla_route_json_to_standard_routes(
+                                rd,
+                                valhalla_costing=valhalla_costing,
+                                start_lat=start_lat,
+                                start_lon=start_lon,
+                                hazards=hazards,
+                                cost_calculator=cost_calculator,
+                                vehicle_type=vehicle_type,
+                                fuel_efficiency=fuel_efficiency,
+                                fuel_price=fuel_price,
+                                energy_efficiency=energy_efficiency,
+                                electricity_price=electricity_price,
+                                include_tolls=include_tolls,
+                                include_caz=include_caz,
+                                caz_exempt=caz_exempt,
+                            )
+                            if v_routes:
+                                routes_out.extend(v_routes)
+                                valhalla_baseline_ok = True
+                                logger.info(f"[ROUTING] Recovery: baseline Valhalla returned {len(v_routes)} route(s)")
+                    else:
+                        _rbody = vrec.text[:800] if vrec.text else ''
+                        logger.warning(f"[ROUTING] Recovery Valhalla HTTP {vrec.status_code}: {_rbody}")
+
+                    if routes_out:
+                        if enable_hazard_avoidance and hazards:
+                            routes_out = sorted(
+                                routes_out,
+                                key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)),
+                            )
+                        for idx, route in enumerate(routes_out):
+                            route['id'] = idx + 1
+
+                        routing_source = (
+                            'GraphHopper+Valhalla ✅'
+                            if valhalla_baseline_ok
+                            else 'GraphHopper (Valhalla hazard request failed)'
+                        )
+                        total_dur_stops = routes_out[0]['duration_minutes'] + total_stop_time
+                        recovery_data = {
+                            'success': True,
+                            'routes': routes_out,
+                            'source': routing_source,
+                            'distance': f'{routes_out[0]["distance_km"]:.2f} km',
+                            'time': f'{routes_out[0]["duration_minutes"]:.0f} minutes',
+                            'total_time_with_stops': f'{total_dur_stops:.0f} minutes',
+                            'total_stop_time': total_stop_time,
+                            'via_points_count': len(via_points),
+                            'stops_count': len(stops),
+                            'geometry': routes_out[0]['geometry'],
+                            'geometry_precision': routes_out[0].get('geometry_precision', 6),
+                            'fuel_cost': routes_out[0]['fuel_cost'],
+                            'fuel_litres': routes_out[0].get('fuel_litres', 0),
+                            'toll_cost': routes_out[0]['toll_cost'],
+                            'caz_cost': routes_out[0]['caz_cost'],
+                            'caz_details': routes_out[0].get('caz_details', {}),
+                            'maneuvers': routes_out[0].get('maneuvers', []),
+                            'cached': False,
+                            'camera_avoidance_engine': 'GraphHopper',
+                            'start_lat': start_lat,
+                            'start_lon': start_lon,
+                            'end_lat': end_lat,
+                            'end_lon': end_lon,
+                        }
+                        route_cache.set(
+                            start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                            recovery_data, enable_hazard_avoidance, avoid_traffic_lights,
+                            avoid_cameras, avoid_railway_crossings, apply_caz_routing_avoidance,
+                        )
+                        cost_calculator.cache_route_to_db(
+                            start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                            recovery_data, routing_source,
+                        )
+                        logger.info(f"[ROUTING] Recovery response: {routing_source}, {len(routes_out)} route(s)")
+                except Exception as rec_e:
+                    logger.warning(f"[ROUTING] GraphHopper/Valhalla recovery failed: {rec_e}")
+
+            if recovery_data is not None:
+                return jsonify(recovery_data)
+
             # Fallback to OSRM (public service); use profile matching routing mode
             osrm_profile = 'driving' if valhalla_costing == 'auto' else ('foot' if valhalla_costing == 'pedestrian' else 'bike')
             logger.info(f"[OSRM] Trying fallback with profile={osrm_profile} ({start_lon},{start_lat}) to ({end_lon},{end_lat})")

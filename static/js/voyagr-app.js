@@ -2246,8 +2246,8 @@ function bringRoutesToTop() {
         console.warn('[Routes] bringRoutesToTop: map not available');
         return;
     }
+    // Normal on startup: traffic/weather call this before any route is drawn (allRouteLayers empty).
     if (!allRouteLayers || allRouteLayers.length === 0) {
-        console.warn('[Routes] bringRoutesToTop: no route layers to move');
         return;
     }
 
@@ -3127,8 +3127,8 @@ function displaySingleRoute(index) {
         fetchAndDisplayRouteTraffic();
     }
 
-    // Plot traffic lights on the route if enabled.
-    // Prefer module export on window.TrafficLights; keep legacy global fallback.
+    // Traffic lights: when route hazards already include OSM signals, use hazard markers only
+    // (same OSM data as /api/traffic-lights — avoids two marker styles stacked on the map).
     if (polylinePoints.length > 0) {
         const plotRouteTrafficLights =
             (typeof window !== 'undefined' &&
@@ -3137,10 +3137,26 @@ function displaySingleRoute(index) {
                 ? window.TrafficLights.plotTrafficLightsOnRoute
                 : (typeof plotTrafficLightsOnRoute === 'function' ? plotTrafficLightsOnRoute : null);
 
-        if (plotRouteTrafficLights) {
-            console.log('[Routes] Plotting traffic lights on selected route');
+        const hasOsmTlsInHazards = !!(route.hazards && route.hazards.some(h => {
+            if (!h || !h.type) return false;
+            const t = String(h.type);
+            return t === 'traffic_light' || t === 'traffic_signals' || t === 'traffic_signal';
+        }));
+
+        const tlEnabled = window.TrafficLights && typeof window.TrafficLights.isEnabled === 'function' && window.TrafficLights.isEnabled();
+
+        if (window.TrafficLights && typeof window.TrafficLights.clearAllTrafficLights === 'function') {
+            if (hasOsmTlsInHazards || !tlEnabled) {
+                window.TrafficLights.clearAllTrafficLights();
+            }
+        }
+
+        if (plotRouteTrafficLights && tlEnabled && !hasOsmTlsInHazards) {
+            console.log('[Routes] Plotting traffic lights on selected route (OSM via /api/traffic-lights)');
             plotRouteTrafficLights(polylinePoints);
-        } else {
+        } else if (hasOsmTlsInHazards) {
+            console.log('[Routes] Traffic lights on route from hazard markers (OSM); skipping duplicate plot');
+        } else if (!plotRouteTrafficLights) {
             console.warn('[Routes] Traffic lights module not available for route plotting');
         }
     }
@@ -4599,7 +4615,10 @@ function displayHazardMarkers(hazards) {
         if (seenLocations.has(locationKey)) return;
         seenLocations.add(locationKey);
 
-        const config = hazardConfig[hazard.type] || { emoji: '⚠️', color: '#ff9800', bgColor: '#fff3e0', label: 'Hazard' };
+        const hazardTypeKey = (hazard.type === 'traffic_signals' || hazard.type === 'traffic_signal')
+            ? 'traffic_light'
+            : hazard.type;
+        const config = hazardConfig[hazardTypeKey] || { emoji: '⚠️', color: '#ff9800', bgColor: '#fff3e0', label: 'Hazard' };
 
         let markerHtml;
         let markerIconSize;
