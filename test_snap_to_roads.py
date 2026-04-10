@@ -290,11 +290,11 @@ class TestSnapToRoadsResponseParsing(unittest.TestCase):
         }
         mock_get.return_value = mock_response
 
-        # Should fall back to Traffic Flow API or default
+        # No posted limit from TomTom; Overpass mock has no elements → unknown
         result = self.detector.get_speed_limit_for_location(51.5074, -0.1278)
 
-        # Should still return a result (fallback)
-        self.assertIsNotNone(result, "Should return fallback result")
+        self.assertIsNotNone(result, "Should return response dict")
+        self.assertIsNone(result.get('speed_limit_mph'), "Should not infer without maxspeed/TomTom data")
         print("   ✅ PASS: Handles missing data gracefully")
 
 

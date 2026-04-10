@@ -10676,16 +10676,16 @@ class SatNavApp(App):
         """Get current speed limit for location."""
         try:
             if not self.speed_limit_detector:
-                return {'speed_limit_mph': 70, 'error': 'Speed limit detector not available'}
+                return {'speed_limit_mph': None, 'error': 'Speed limit detector not available'}
 
             result = self.speed_limit_detector.get_speed_limit_for_location(
                 lat, lon, road_type, self.vehicle_type
             )
-            self.current_speed_limit_mph = result.get('speed_limit_mph', 70)
+            self.current_speed_limit_mph = result.get('speed_limit_mph')
             return result
         except Exception as e:
             print(f"Error getting speed limit: {e}")
-            return {'speed_limit_mph': 70, 'error': str(e)}
+            return {'speed_limit_mph': None, 'error': str(e)}
 
     def check_speed_violation(self, current_speed_mph):
         """Check if vehicle is exceeding speed limit."""

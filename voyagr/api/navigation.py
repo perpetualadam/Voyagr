@@ -389,23 +389,10 @@ def get_speed_limit():
         lon = float(request.args.get('lon', -0.1278))
         road_type = request.args.get('road_type', 'residential')
         vehicle_type = request.args.get('vehicle_type', 'car')
-        valhalla_speed_limit = request.args.get('valhalla_speed_limit', None)
 
         result = speed_limit_detector.get_speed_limit_for_location(
             lat=lat, lon=lon, road_type=road_type, vehicle_type=vehicle_type
         )
-
-        if valhalla_speed_limit and result:
-            try:
-                v_limit = float(valhalla_speed_limit)
-                detected = result.get('speed_limit_mph', 0)
-                if v_limit > 0 and detected > 0 and abs(v_limit - detected) > 15:
-                    merged = max(detected, int(v_limit))
-                    result['speed_limit_mph'] = merged
-                    result['speed_limit_kmh'] = round(merged * 1.60934, 1)
-                    result['source'] = str(result.get('source', '')) + '+valhalla-crossref'
-            except (ValueError, TypeError):
-                pass
 
         return jsonify({'success': True, 'data': result})
     except Exception as e:
@@ -421,7 +408,14 @@ def check_speed_violation():
 
         data = request.json
         current_speed_mph = float(data.get('current_speed_mph', 0))
-        speed_limit_mph = int(data.get('speed_limit_mph', 30))
+        raw_sl = data.get('speed_limit_mph')
+        try:
+            if raw_sl is None:
+                speed_limit_mph = None
+            else:
+                speed_limit_mph = int(float(raw_sl))
+        except (ValueError, TypeError):
+            speed_limit_mph = None
         warning_threshold_mph = int(data.get('warning_threshold_mph', 5))
 
         result = speed_limit_detector.check_speed_violation(

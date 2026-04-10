@@ -9315,7 +9315,8 @@ function updateVariableSpeedLimit(lat, lon, roadType = 'motorway', vehicleType =
                 const infoEl = document.getElementById('variableSpeedInfo');
 
                 const speedData = data.data;
-                limitEl.textContent = `${speedData.speed_limit_mph} mph`;
+                const vslMph = speedData.speed_limit_mph;
+                limitEl.textContent = (vslMph != null && vslMph > 0) ? `${vslMph} mph` : '—';
 
                 let infoHtml = '';
                 if (speedData.is_smart_motorway) {

@@ -74,8 +74,8 @@ class TestCacheLRU(unittest.TestCase):
         """Test that expired entries are cleaned up"""
         print("\n[TEST] Cache expiry cleanup...")
         
-        # Add entry with old timestamp (expired)
-        old_time = time.time() - 400  # 400 seconds ago (> 5 min TTL)
+        # Add entry with old timestamp (expired vs current cache_expiry, default 600s)
+        old_time = time.time() - (self.detector.cache_expiry + 60)
         self.detector.speed_limit_cache['expired_key'] = {
             'speed_limit': 30,
             'timestamp': old_time,
@@ -219,7 +219,7 @@ class TestAPIIntegration(unittest.TestCase):
         mock_response.status_code = 200
         mock_response.json.return_value = {
             'elements': [{
-                'tags': {'highway': 'residential'}
+                'tags': {'highway': 'residential', 'maxspeed': '30 mph'}
             }]
         }
         mock_get.return_value = mock_response
@@ -228,25 +228,24 @@ class TestAPIIntegration(unittest.TestCase):
         result = self.detector.get_speed_limit_for_location(51.5074, -0.1278)
         
         self.assertIsNotNone(result)
+        self.assertEqual(result.get('speed_limit_mph'), 30)
         print("   ✅ PASS: Overpass integration working")
     
     def test_default_speed_limit(self):
-        """Test that default is residential (30mph) not motorway (70mph)"""
-        print("\n[TEST] Default speed limit safety...")
+        """When APIs fail, posted limit is unknown (no inferred default)."""
+        print("\n[TEST] No default speed limit when APIs fail...")
 
         # Mock all API calls to fail
         with patch('speed_limit_detector.requests.get') as mock_get:
             mock_get.side_effect = Exception("API unavailable")
 
-            # Should default to residential (30mph)
             result = self.detector.get_speed_limit_for_location(
                 51.5074, -0.1278, road_type='residential'
             )
 
-            # Result is a dict, extract speed_limit_mph
             speed_limit = result.get('speed_limit_mph') if isinstance(result, dict) else result
-            self.assertEqual(speed_limit, 30, "Should default to 30mph")
-            print("   ✅ PASS: Safe default (30mph)")
+            self.assertIsNone(speed_limit, "Should not invent a limit without TomTom/OSM maxspeed")
+            print("   ✅ PASS: Unknown limit when no posted data")
 
 
 def run_all_tests():
