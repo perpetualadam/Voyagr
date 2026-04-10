@@ -5,7 +5,7 @@ Tests speed limit detection, smart motorway support, and speed warnings
 
 import unittest
 import time
-from speed_limit_detector import SpeedLimitDetector, SMART_MOTORWAYS, DEFAULT_SPEED_LIMITS
+from speed_limit_detector import SpeedLimitDetector, SMART_MOTORWAYS, DEFAULT_SPEED_LIMITS_UK
 
 
 class TestSpeedLimitDetector(unittest.TestCase):
@@ -66,10 +66,10 @@ class TestSpeedLimitDetector(unittest.TestCase):
     
     def test_default_speed_limits(self):
         """Test default speed limits for road types."""
-        self.assertEqual(DEFAULT_SPEED_LIMITS['motorway'], 70)
-        self.assertEqual(DEFAULT_SPEED_LIMITS['trunk_road'], 70)
-        self.assertEqual(DEFAULT_SPEED_LIMITS['primary_road'], 60)
-        self.assertEqual(DEFAULT_SPEED_LIMITS['residential'], 30)
+        self.assertEqual(DEFAULT_SPEED_LIMITS_UK['motorway'], 70)
+        self.assertEqual(DEFAULT_SPEED_LIMITS_UK['trunk_road'], 70)
+        self.assertEqual(DEFAULT_SPEED_LIMITS_UK['primary_road'], 60)
+        self.assertEqual(DEFAULT_SPEED_LIMITS_UK['residential'], 30)
     
     def test_vehicle_specific_speed_limits(self):
         """Test vehicle-specific speed limits."""

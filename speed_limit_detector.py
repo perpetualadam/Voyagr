@@ -1,6 +1,7 @@
 """
 Speed Limit Detection Module for Voyagr
-Detects and manages speed limits for UK roads, with special support for smart motorways.
+Resolves speed limits from TomTom, OSM (maxspeed), and regional defaults.
+UK smart motorways use simulated variable limits only inside Great Britain.
 """
 
 import json
@@ -27,7 +28,7 @@ SMART_MOTORWAYS = {
 }
 
 # UK Default Speed Limits (mph)
-DEFAULT_SPEED_LIMITS = {
+DEFAULT_SPEED_LIMITS_UK = {
     'motorway': 70,
     'trunk_road': 70,
     'primary_road': 60,
@@ -35,6 +36,83 @@ DEFAULT_SPEED_LIMITS = {
     'residential': 30,
     'living_street': 20,
     'unclassified': 30,
+}
+
+# US typical defaults when OSM has no maxspeed (mph)
+DEFAULT_SPEED_LIMITS_US = {
+    'motorway': 70,
+    'trunk_road': 55,
+    'primary_road': 55,
+    'secondary_road': 55,
+    'residential': 25,
+    'living_street': 15,
+    'unclassified': 35,
+}
+
+# EU / rest-of-world defaults as mph equivalents of common signed limits
+DEFAULT_SPEED_LIMITS_METRIC = {
+    'motorway': 81,       # ~130 km/h
+    'trunk_road': 62,     # ~100 km/h
+    'primary_road': 56,   # ~90 km/h
+    'secondary_road': 50, # ~80 km/h
+    'residential': 31,    # ~50 km/h
+    'living_street': 19,  # ~30 km/h
+    'unclassified': 31,
+}
+
+DEFAULT_SPEED_BY_REGION = {
+    'uk': DEFAULT_SPEED_LIMITS_UK,
+    'us': DEFAULT_SPEED_LIMITS_US,
+    'metric': DEFAULT_SPEED_LIMITS_METRIC,
+}
+
+# Valhalla / OSM-style aliases → keys used in VEHICLE_SPEED_LIMITS and defaults
+ROAD_TYPE_ALIASES = {
+    'primary': 'primary_road',
+    'secondary': 'secondary_road',
+    'trunk': 'trunk_road',
+    'motorway_link': 'motorway',
+    'trunk_link': 'trunk_road',
+    'primary_link': 'primary_road',
+    'secondary_link': 'secondary_road',
+    'tertiary': 'secondary_road',
+    'tertiary_link': 'secondary_road',
+    'unclassified': 'residential',
+    'service': 'residential',
+}
+
+# Inferred limits (mph) when a way has highway=* but no maxspeed=*
+HIGHWAY_INFERRED_MPH = {
+    'uk': {
+        'motorway': 70, 'motorway_link': 50,
+        'trunk': 70, 'trunk_link': 50,
+        'primary': 60, 'primary_link': 40,
+        'secondary': 60, 'secondary_link': 40,
+        'tertiary': 40, 'tertiary_link': 30,
+        'unclassified': 30, 'residential': 30,
+        'living_street': 20, 'service': 20,
+        'pedestrian': 10, 'track': 20,
+    },
+    'us': {
+        'motorway': 70, 'motorway_link': 55,
+        'trunk': 55, 'trunk_link': 45,
+        'primary': 55, 'primary_link': 45,
+        'secondary': 55, 'secondary_link': 45,
+        'tertiary': 35, 'tertiary_link': 35,
+        'unclassified': 35, 'residential': 25,
+        'living_street': 15, 'service': 25,
+        'pedestrian': 10, 'track': 20,
+    },
+    'metric': {
+        'motorway': 81, 'motorway_link': 50,
+        'trunk': 62, 'trunk_link': 44,
+        'primary': 56, 'primary_link': 50,
+        'secondary': 50, 'secondary_link': 44,
+        'tertiary': 31, 'tertiary_link': 28,
+        'unclassified': 31, 'residential': 31,
+        'living_street': 19, 'service': 19,
+        'pedestrian': 6, 'track': 12,
+    },
 }
 
 # Vehicle-specific speed limits (mph)
@@ -48,6 +126,98 @@ VEHICLE_SPEED_LIMITS = {
     'bicycle': {'motorway': 0, 'trunk_road': 0, 'primary_road': 0},  # Not applicable
     'pedestrian': {'motorway': 0, 'trunk_road': 0, 'primary_road': 0},  # Not applicable
 }
+
+
+def _normalize_road_type(road_type: str) -> str:
+    if not road_type:
+        return 'residential'
+    return ROAD_TYPE_ALIASES.get(road_type, road_type)
+
+
+def _region_from_lat_lon(lat: float, lon: float) -> str:
+    """
+    Choose default-limit family: uk, us, or metric (EU / rest of world).
+    Set SPEED_LIMIT_REGION=uk|us|metric to override (e.g. Ireland uses metric signs).
+    """
+    override = os.getenv('SPEED_LIMIT_REGION', '').strip().lower()
+    if override in ('uk', 'us', 'metric'):
+        return override
+    # Continental US (approximate)
+    if 24.5 <= lat <= 50.0 and -125.0 <= lon <= -66.0:
+        return 'us'
+    # United Kingdom + nearby (mph signage); Ireland also uses this box — use env for ROI if needed
+    if 49.5 <= lat <= 60.9 and -8.0 <= lon <= 2.0:
+        return 'uk'
+    return 'metric'
+
+
+def _parse_osm_maxspeed_to_mph(speed_str: str, region: str) -> Optional[int]:
+    """Parse OSM maxspeed tag to mph. Handles mph, km/h, and bare numbers (region-dependent)."""
+    if not speed_str:
+        return None
+    raw = speed_str.strip()
+    low = raw.lower()
+    if low in ('none', 'signals', 'walk', 'implicit', 'variable'):
+        return None
+    # Country-specific presets like DE:urban — skip numeric parse
+    if ':' in low.split()[0] and not any(ch.isdigit() for ch in low.split()[0]):
+        return None
+
+    has_mph = 'mph' in low
+    has_kmh = 'km/h' in low or 'kmh' in low
+
+    cleaned = low.replace('km/h', ' ').replace('kmh', ' ').replace('mph', ' ').strip()
+    try:
+        val = float(cleaned.split()[0])
+    except (ValueError, IndexError):
+        return None
+
+    if has_mph:
+        return int(round(val))
+    if has_kmh:
+        return int(round(val * 0.621371))
+    # Bare number: UK/US mappers often mean mph; elsewhere OSM default is km/h
+    if region in ('uk', 'us'):
+        return int(round(val))
+    return int(round(val * 0.621371))
+
+
+def _snap_tomtom_kmh_to_mph(speed_kmh: float, region: str) -> int:
+    """Round TomTom km/h limit to a plausible signed speed in mph for the region."""
+    speed_mph = speed_kmh * 0.621371
+    if region == 'uk':
+        uk_limits = [20, 30, 40, 50, 60, 70]
+        return min(uk_limits, key=lambda x: abs(x - speed_mph))
+    if region == 'us':
+        us_limits = [15, 25, 30, 35, 45, 55, 65, 70, 75, 80]
+        return min(us_limits, key=lambda x: abs(x - speed_mph))
+    common_kmh = [20, 30, 50, 70, 90, 100, 110, 120, 130]
+    best_kmh = min(common_kmh, key=lambda x: abs(x - speed_kmh))
+    return int(round(best_kmh * 0.621371))
+
+
+def _freeflow_kmh_to_limit_mph(free_flow_kmh: float, region: str) -> int:
+    """Infer posted limit from TomTom free-flow speed (heuristic; not ground truth)."""
+    free_flow_mph = free_flow_kmh * 0.621371
+    estimated_mph = free_flow_mph - 12
+    if region == 'uk':
+        uk_limits = [20, 30, 40, 50, 60, 70]
+        speed_limit = min(uk_limits, key=lambda x: abs(x - estimated_mph))
+        if free_flow_mph > 80:
+            speed_limit = 70
+        elif free_flow_mph < 30:
+            speed_limit = min(uk_limits, key=lambda x: abs(x - free_flow_mph))
+        return speed_limit
+    if region == 'us':
+        us_limits = [15, 25, 30, 35, 45, 55, 65, 70, 75]
+        speed_limit = min(us_limits, key=lambda x: abs(x - estimated_mph))
+        if free_flow_mph > 75:
+            speed_limit = 70
+        return speed_limit
+    est_kmh = max(10.0, free_flow_kmh - 15)
+    common_kmh = [30, 50, 70, 90, 100, 120, 130]
+    best = min(common_kmh, key=lambda x: abs(x - est_kmh))
+    return int(round(best * 0.621371))
 
 
 class SpeedLimitDetector:
@@ -245,20 +415,25 @@ class SpeedLimitDetector:
             # Track total requests
             self.metrics['total_requests'] += 1
 
-            # Check if location is on smart motorway
-            smart_motorway_info = self._check_smart_motorway(lat, lon)
+            region = _region_from_lat_lon(lat, lon)
+            norm_road = _normalize_road_type(road_type)
+
+            # Smart motorway simulation applies only in GB (mph variable limits)
+            smart_motorway_info = (
+                self._check_smart_motorway(lat, lon)
+                if region == 'uk'
+                else {'is_smart_motorway': False, 'motorway_name': None}
+            )
 
             if smart_motorway_info['is_smart_motorway']:
-                # Get variable speed limit from smart motorway
                 speed_limit = self._get_smart_motorway_speed_limit(
                     lat, lon, smart_motorway_info['motorway_name']
                 )
             else:
-                # Get default speed limit from OSM
-                speed_limit = self._get_osm_speed_limit(lat, lon, road_type)
+                speed_limit = self._get_osm_speed_limit(lat, lon, norm_road, region)
 
-            # Apply vehicle-specific limits
-            vehicle_limit = VEHICLE_SPEED_LIMITS.get(vehicle_type, {}).get(road_type)
+            # Apply vehicle-specific limits (aliases so Valhalla road_class matches)
+            vehicle_limit = VEHICLE_SPEED_LIMITS.get(vehicle_type, {}).get(norm_road)
             if vehicle_limit and vehicle_limit < speed_limit:
                 speed_limit = vehicle_limit
 
@@ -278,6 +453,7 @@ class SpeedLimitDetector:
                 'speed_limit_kmh': round(speed_limit * 1.60934, 1),
                 'road_type': road_type,
                 'vehicle_type': vehicle_type,
+                'speed_limit_region': region,
                 'is_smart_motorway': smart_motorway_info['is_smart_motorway'],
                 'motorway_name': smart_motorway_info.get('motorway_name'),
                 'speed_limit_changed': speed_limit_changed,
@@ -333,7 +509,7 @@ class SpeedLimitDetector:
             logger.error(f"Error getting smart motorway speed limit: {e}")
             return 70
     
-    def _get_osm_speed_limit(self, lat: float, lon: float, road_type: str) -> int:
+    def _get_osm_speed_limit(self, lat: float, lon: float, road_type: str, region: str) -> int:
         """Get speed limit - try TomTom first (faster), then fall back to OSM/defaults."""
         # Periodic cache cleanup (every 100 requests)
         if len(self.speed_limit_cache) % 100 == 0:
@@ -403,12 +579,7 @@ class SpeedLimitDetector:
                                     speed_limit_kmh = speed_limit_data.get('value', 0)
 
                                     if speed_limit_kmh > 0:
-                                        # Convert km/h to mph (UK uses mph)
-                                        speed_limit_mph = int(round(speed_limit_kmh * 0.621371))
-
-                                        # Round to nearest common UK speed limit
-                                        uk_limits = [20, 30, 40, 50, 60, 70]
-                                        speed_limit = min(uk_limits, key=lambda x: abs(x - speed_limit_mph))
+                                        speed_limit = _snap_tomtom_kmh_to_mph(float(speed_limit_kmh), region)
 
                                         # Track successful call
                                         self.metrics['tomtom_snap_to_roads_success'] += 1
@@ -453,28 +624,8 @@ class SpeedLimitDetector:
                     free_flow_speed_kmh = flow_data.get('freeFlowSpeed', 0)
 
                     if free_flow_speed_kmh > 0:
-                        # FIX: freeFlowSpeed is NOT the speed limit - it's the average traffic speed
-                        # People typically drive 5-15 mph faster than the speed limit
-                        # We need to estimate the actual speed limit by reducing freeFlowSpeed
-
-                        # Convert km/h to mph (UK uses mph)
+                        speed_limit = _freeflow_kmh_to_limit_mph(float(free_flow_speed_kmh), region)
                         free_flow_mph = free_flow_speed_kmh * 0.621371
-
-                        # Estimate actual speed limit by reducing free flow speed
-                        # Typical relationship: freeFlowSpeed ≈ speedLimit + 10-15 mph
-                        # Use a conservative 12 mph reduction
-                        estimated_speed_mph = free_flow_mph - 12
-
-                        # Round to nearest common UK speed limit (20, 30, 40, 50, 60, 70)
-                        uk_limits = [20, 30, 40, 50, 60, 70]
-                        speed_limit = min(uk_limits, key=lambda x: abs(x - estimated_speed_mph))
-
-                        # Additional validation: if free flow is very high (>80 mph), it's likely a motorway
-                        if free_flow_mph > 80:
-                            speed_limit = 70  # UK motorway limit
-                        # If free flow is very low (<30 mph), it's likely a 20 or 30 zone
-                        elif free_flow_mph < 30:
-                            speed_limit = min(uk_limits, key=lambda x: abs(x - free_flow_mph))
 
                         # Track successful TomTom Traffic Flow call
                         self.metrics['tomtom_traffic_flow_success'] += 1
@@ -541,16 +692,9 @@ class SpeedLimitDetector:
                         'secondary': 4, 'secondary_link': 3,
                         'tertiary': 2, 'tertiary_link': 1,
                     }
-                    highway_speed_map = {
-                        'motorway': 70, 'motorway_link': 50,
-                        'trunk': 70, 'trunk_link': 50,
-                        'primary': 60, 'primary_link': 40,
-                        'secondary': 60, 'secondary_link': 40,
-                        'tertiary': 40, 'tertiary_link': 30,
-                        'unclassified': 30, 'residential': 30,
-                        'living_street': 20, 'service': 20,
-                        'pedestrian': 10, 'track': 20,
-                    }
+                    highway_speed_map = HIGHWAY_INFERRED_MPH.get(region, HIGHWAY_INFERRED_MPH['metric'])
+                    dual_cap = {'uk': 70, 'us': 75, 'metric': 87}.get(region, 70)
+                    dual_boost = 10 if region == 'uk' else (8 if region == 'metric' else 5)
 
                     best_explicit = None
                     best_explicit_rank = -1
@@ -566,20 +710,17 @@ class SpeedLimitDetector:
 
                         if 'maxspeed' in tags and rank >= best_explicit_rank:
                             speed_str = tags['maxspeed']
-                            speed_str_clean = speed_str.replace('mph', '').replace('km/h', '').strip()
-                            try:
-                                speed = int(speed_str_clean.split()[0])
-                                if 'km/h' in speed_str:
-                                    speed = int(round(speed * 0.621371))
-                                best_explicit = speed
+                            parsed = _parse_osm_maxspeed_to_mph(speed_str, region)
+                            if parsed is not None:
+                                best_explicit = parsed
                                 best_explicit_rank = rank
-                            except (ValueError, IndexError):
-                                logger.warning(f"[Speed Limit] OSM parse error: '{speed_str}'")
+                            else:
+                                logger.debug(f"[Speed Limit] OSM maxspeed not parsed: '{speed_str}'")
 
                         if hw in highway_speed_map and rank >= best_inferred_rank:
                             inferred = highway_speed_map[hw]
                             if is_dual and hw in ('primary', 'secondary', 'tertiary'):
-                                inferred = min(inferred + 10, 70)
+                                inferred = min(inferred + dual_boost, dual_cap)
                             best_inferred = inferred
                             best_inferred_rank = rank
                             best_inferred_hw = hw
@@ -616,11 +757,10 @@ class SpeedLimitDetector:
             self.metrics['overpass_failures'] += 1
             logger.error(f"[Speed Limit] OSM failed: {e}")
 
-        # FIX: Use road_type parameter (now defaults to 'residential' from API)
-        # Fallback to residential (30mph) as safer default
         self.metrics['default_fallbacks'] += 1
-        default_limit = DEFAULT_SPEED_LIMITS.get(road_type, 30)
-        logger.info(f"[Speed Limit] Using default for {road_type}: {default_limit} mph")
+        defaults_table = DEFAULT_SPEED_BY_REGION.get(region, DEFAULT_SPEED_BY_REGION['metric'])
+        default_limit = defaults_table.get(road_type, defaults_table.get('residential', 31))
+        logger.info(f"[Speed Limit] Using default for region={region} road={road_type}: {default_limit} mph")
 
         # Cache the default too to avoid repeated API calls
         self._add_to_cache(cache_key, {

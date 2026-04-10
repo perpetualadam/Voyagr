@@ -398,10 +398,12 @@ def get_speed_limit():
         if valhalla_speed_limit and result:
             try:
                 v_limit = float(valhalla_speed_limit)
-                detected = result.get('speed_limit', 0)
+                detected = result.get('speed_limit_mph', 0)
                 if v_limit > 0 and detected > 0 and abs(v_limit - detected) > 15:
-                    result['speed_limit'] = max(detected, int(v_limit))
-                    result['source'] = result.get('source', '') + '+valhalla-crossref'
+                    merged = max(detected, int(v_limit))
+                    result['speed_limit_mph'] = merged
+                    result['speed_limit_kmh'] = round(merged * 1.60934, 1)
+                    result['source'] = str(result.get('source', '')) + '+valhalla-crossref'
             except (ValueError, TypeError):
                 pass
 

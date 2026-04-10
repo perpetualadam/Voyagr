@@ -6034,9 +6034,26 @@ function buildRouteRequest(startLat, startLon, destination) {
 }
 
 /**
+ * Reset voice/ETA/distance announcement state when geometry changes (reroute).
+ * Prevents repeating the same milestones and back-to-back ETA after "route recalculated".
+ */
+function resetVoiceAnnouncementStateForNewRoute() {
+    lastETAAnnouncementTime = Date.now();
+    lastAnnouncedETA = null;
+    lastDestinationAnnouncementDistance = Infinity;
+    announcedTurnThresholds.clear();
+    announcedExitThresholds.clear();
+    announcedKeepThresholds.clear();
+    clearInitialETAAnnouncement();
+    initialETAMovementRetries = 0;
+}
+
+/**
  * Update route on map with new route data
  */
 function updateRouteOnMap(newRoute) {
+    resetVoiceAnnouncementStateForNewRoute();
+
     // Remove old route layer
     if (routeLayer && typeof routeLayer.remove === 'function') {
         routeLayer.remove();
