@@ -68,7 +68,8 @@ class TestSpeedLimitDetector(unittest.TestCase):
         """Test default speed limits for road types."""
         self.assertEqual(DEFAULT_SPEED_LIMITS_UK['motorway'], 70)
         self.assertEqual(DEFAULT_SPEED_LIMITS_UK['trunk_road'], 70)
-        self.assertEqual(DEFAULT_SPEED_LIMITS_UK['primary_road'], 60)
+        self.assertEqual(DEFAULT_SPEED_LIMITS_UK['primary_road'], 50)
+        self.assertEqual(DEFAULT_SPEED_LIMITS_UK['secondary_road'], 50)
         self.assertEqual(DEFAULT_SPEED_LIMITS_UK['residential'], 30)
     
     def test_vehicle_specific_speed_limits(self):

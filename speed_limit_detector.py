@@ -27,12 +27,12 @@ SMART_MOTORWAYS = {
     'M62': {'sections': [(53.5, -2.0), (53.8, -1.5)], 'active': True},
 }
 
-# UK Default Speed Limits (mph)
+# UK Default Speed Limits (mph) — last resort when no API/OSM data; many A/B roads are now 50 where NSL was once assumed 60
 DEFAULT_SPEED_LIMITS_UK = {
     'motorway': 70,
     'trunk_road': 70,
-    'primary_road': 60,
-    'secondary_road': 60,
+    'primary_road': 50,
+    'secondary_road': 50,
     'residential': 30,
     'living_street': 20,
     'unclassified': 30,
@@ -86,8 +86,8 @@ HIGHWAY_INFERRED_MPH = {
     'uk': {
         'motorway': 70, 'motorway_link': 50,
         'trunk': 70, 'trunk_link': 50,
-        'primary': 60, 'primary_link': 40,
-        'secondary': 60, 'secondary_link': 40,
+        'primary': 50, 'primary_link': 40,
+        'secondary': 50, 'secondary_link': 40,
         'tertiary': 40, 'tertiary_link': 30,
         'unclassified': 30, 'residential': 30,
         'living_street': 20, 'service': 20,
@@ -607,8 +607,10 @@ class SpeedLimitDetector:
                 self.metrics['tomtom_snap_to_roads_failures'] += 1
                 logger.error(f"[Speed Limit] TomTom Snap to Roads failed: {e}")
 
-        # Fallback: Try TomTom Traffic Flow API - uses freeFlowSpeed as speed limit proxy
-        if tomtom_api_key:
+        # Optional: TomTom Traffic Flow freeFlowSpeed — NOT a posted limit; can exceed limits when traffic is light.
+        # Disabled by default. Set SPEED_LIMIT_USE_TRAFFIC_FLOW=true only if you accept heuristic guesses.
+        use_flow_for_limit = os.getenv('SPEED_LIMIT_USE_TRAFFIC_FLOW', '').strip().lower() in ('1', 'true', 'yes')
+        if tomtom_api_key and use_flow_for_limit:
             try:
                 self.metrics['tomtom_traffic_flow_calls'] += 1
                 tomtom_url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
@@ -627,11 +629,9 @@ class SpeedLimitDetector:
                         speed_limit = _freeflow_kmh_to_limit_mph(float(free_flow_speed_kmh), region)
                         free_flow_mph = free_flow_speed_kmh * 0.621371
 
-                        # Track successful TomTom Traffic Flow call
                         self.metrics['tomtom_traffic_flow_success'] += 1
                         self._track_tomtom_call(success=True)
 
-                        # Cache the result using LRU method
                         self._add_to_cache(cache_key, {
                             'speed_limit': speed_limit,
                             'timestamp': time.time(),
@@ -642,7 +642,7 @@ class SpeedLimitDetector:
                     else:
                         self.metrics['tomtom_traffic_flow_failures'] += 1
                         self._track_tomtom_call(success=False)
-                        logger.warning(f"[Speed Limit] TomTom Traffic Flow returned freeFlowSpeed=0")
+                        logger.warning("[Speed Limit] TomTom Traffic Flow returned freeFlowSpeed=0")
                 else:
                     self.metrics['tomtom_traffic_flow_failures'] += 1
                     self._track_tomtom_call(success=False)
@@ -655,6 +655,8 @@ class SpeedLimitDetector:
                 self.metrics['tomtom_traffic_flow_failures'] += 1
                 self._track_tomtom_call(success=False)
                 logger.error(f"[Speed Limit] TomTom Traffic Flow failed: {e}")
+        elif tomtom_api_key:
+            logger.debug("[Speed Limit] TomTom Traffic Flow skipped for posted limit (set SPEED_LIMIT_USE_TRAFFIC_FLOW=true to enable)")
         else:
             logger.info("[Speed Limit] No TOMTOM_API_KEY configured, skipping TomTom")
 
