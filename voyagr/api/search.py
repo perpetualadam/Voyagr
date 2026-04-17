@@ -31,6 +31,26 @@ NOMINATIM_LANGUAGE = os.getenv('NOMINATIM_LANGUAGE', 'en').strip()
 OVERPASS_API_URL = os.getenv('OVERPASS_API_URL', 'https://overpass-api.de/api/interpreter').strip()
 
 
+def _nominatim_headers() -> dict:
+    """OSM policy: identifiable User-Agent; optional NOMINATIM_USER_AGENT override."""
+    ua = os.getenv('NOMINATIM_USER_AGENT', '').strip() or (
+        'Voyagr/1.0 (+https://github.com/perpetualadam/Voyagr)'
+    )
+    return {
+        'User-Agent': ua,
+        'Accept': 'application/json',
+        'Accept-Language': NOMINATIM_LANGUAGE,
+        'Accept-Encoding': 'gzip',
+    }
+
+
+def _nominatim_email_params(params: dict) -> None:
+    """Nominatim prefers contact email when using the public instance (NOMINATIM_EMAIL)."""
+    email = os.getenv('NOMINATIM_EMAIL', '').strip()
+    if email:
+        params['email'] = email
+
+
 def _has_house_number(query: str) -> bool:
     """Check if query likely contains a street number."""
     return bool(re.match(r'^\d+[\s,]', query.strip()))
@@ -92,8 +112,9 @@ def _tomtom_geocode(query: str, limit: int) -> list:
 @search_bp.route('/geocode', methods=['GET'])
 def geocode():
     """
-    Server-side geocoding proxy: queries Nominatim with TomTom fallback for
-    addresses containing house numbers.
+    Server-side geocoding proxy: queries Nominatim, then TomTom when Nominatim
+    is empty, fails HTTP, or throws; also merges TomTom for house-number queries
+    with no Nominatim house match.
 
     Query params:
       - q: query string (required)
@@ -126,20 +147,25 @@ def geocode():
         }
         if NOMINATIM_COUNTRYCODES:
             params['countrycodes'] = NOMINATIM_COUNTRYCODES
+        _nominatim_email_params(params)
 
-        headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json', 'Accept-Language': NOMINATIM_LANGUAGE}
+        headers = _nominatim_headers()
         resp = requests.get(url, params=params, headers=headers, timeout=10)
-        if resp.status_code != 200:
-            return jsonify({'success': False, 'error': f'Geocode failed (HTTP {resp.status_code})'}), 502
-
-        data = resp.json()
+        data: list = []
+        if resp.status_code == 200:
+            raw = resp.json()
+            data = raw if isinstance(raw, list) else []
+        else:
+            logger.warning(f"[Geocode] Nominatim HTTP {resp.status_code} for q={q[:80]!r}")
 
         if (not data) and (',' not in q) and (not NOMINATIM_COUNTRYCODES):
             retry_q = f"{q}, United Kingdom"
             params['q'] = retry_q
+            _nominatim_email_params(params)
             resp2 = requests.get(url, params=params, headers=headers, timeout=10)
             if resp2.status_code == 200:
-                data = resp2.json()
+                raw2 = resp2.json()
+                data = raw2 if isinstance(raw2, list) else []
 
         query_has_number = _has_house_number(q)
         nominatim_has_match = any(
@@ -159,10 +185,33 @@ def geocode():
                         data.insert(0, tr)
                         seen.add(key)
 
+        if not data:
+            tomtom_fallback = _tomtom_geocode(q, limit)
+            if tomtom_fallback:
+                data = tomtom_fallback
+
+        if not data and resp.status_code != 200:
+            return jsonify({'success': False, 'error': f'Geocode failed (HTTP {resp.status_code})'}), 502
+
         out = jsonify(data[:limit] if data else [])
         out.headers['Cache-Control'] = 'no-store'
         return out
     except Exception as e:
+        logger.warning(f"[Geocode] Exception, trying TomTom: {e}")
+        q_fb = (request.args.get('q') or '').strip()
+        try:
+            lim_fb = max(1, min(int(request.args.get('limit') or 8), 10))
+        except Exception:
+            lim_fb = 8
+        try:
+            if q_fb:
+                tomtom_fallback = _tomtom_geocode(q_fb, lim_fb)
+                if tomtom_fallback:
+                    out = jsonify(tomtom_fallback[:lim_fb])
+                    out.headers['Cache-Control'] = 'no-store'
+                    return out
+        except Exception:
+            pass
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
@@ -189,7 +238,8 @@ def reverse_geocode():
             'format': 'json',
             'addressdetails': '1',
         }
-        headers = {'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json', 'Accept-Language': NOMINATIM_LANGUAGE}
+        _nominatim_email_params(params)
+        headers = _nominatim_headers()
         resp = requests.get(url, params=params, headers=headers, timeout=10)
         if resp.status_code != 200:
             return jsonify({'success': False, 'error': f'Reverse geocode failed (HTTP {resp.status_code})'}), 502
@@ -222,8 +272,9 @@ def _nominatim_poi_fallback(lat: float, lon: float, poi_type: str, radius: int) 
             'limit': 15,
             'addressdetails': 1
         }
+        _nominatim_email_params(params)
 
-        headers = {'User-Agent': 'Voyagr-PWA/1.0'}
+        headers = _nominatim_headers()
         response = requests.get(url, params=params, headers=headers, timeout=10)
 
         if response.status_code != 200:

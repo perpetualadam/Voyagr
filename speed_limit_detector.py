@@ -1,6 +1,6 @@
 """
 Speed Limit Detection Module for Voyagr
-Posted limits only: TomTom Snap to Roads, then OSM maxspeed (Overpass).
+Posted limits only: OSM maxspeed (Overpass) first, then TomTom Snap to Roads.
 No regional defaults, highway-type inference, traffic-flow guesses,
 smart-motorway simulation, or vehicle-type caps.
 """
@@ -515,7 +515,7 @@ class SpeedLimitDetector:
             return 70
     
     def _get_tomtom_or_osm_posted_limit(self, lat: float, lon: float, region: str) -> Optional[int]:
-        """TomTom Snap to Roads first, then OSM maxspeed only. Returns None if unknown."""
+        """OSM maxspeed (Overpass) first, then TomTom Snap to Roads. Returns None if unknown."""
         # Periodic cache cleanup (every 100 requests)
         if len(self.speed_limit_cache) % 100 == 0:
             self._cleanup_expired_cache()
@@ -538,71 +538,6 @@ class SpeedLimitDetector:
             logger.error(f"[Speed Limit] Cache check failed: {e}")
 
         self.metrics['cache_misses'] += 1
-
-        tomtom_api_key = os.getenv('TOMTOM_API_KEY')
-        if tomtom_api_key:
-            try:
-                self.metrics['tomtom_snap_to_roads_calls'] += 1
-
-                offset = 0.0005  # ~50 meters
-                points_str = f"{lon},{lat};{lon+offset},{lat+offset}"
-
-                snap_url = "https://api.tomtom.com/snapToRoads/1"
-                params = {
-                    'key': tomtom_api_key,
-                    'points': points_str,
-                    'headings': '0;0',
-                    'timestamps': '2021-01-01T00:00:00Z;2021-01-01T00:01:00Z',
-                    'fields': '{route{properties{speedLimits{value,unit,type}}}}',
-                    'vehicleType': 'PassengerCar',
-                    'measurementSystem': 'metric'
-                }
-
-                response = requests.get(snap_url, params=params, timeout=3)
-
-                if response.status_code == 200:
-                    snap_data = response.json()
-
-                    if 'route' in snap_data:
-                        route_features = snap_data['route']
-                        if isinstance(route_features, list) and len(route_features) > 0:
-                            segment = route_features[0]
-                            if 'properties' in segment and 'speedLimits' in segment['properties']:
-                                speed_limit_data = segment['properties']['speedLimits']
-                                if isinstance(speed_limit_data, dict):
-                                    speed_limit_kmh = speed_limit_data.get('value', 0)
-
-                                    if speed_limit_kmh > 0:
-                                        speed_limit = _snap_tomtom_kmh_to_mph(float(speed_limit_kmh), region)
-
-                                        self.metrics['tomtom_snap_to_roads_success'] += 1
-                                        self._track_tomtom_call(success=True)
-
-                                        self._add_to_cache(cache_key, {
-                                            'speed_limit': speed_limit,
-                                            'timestamp': time.time(),
-                                            'source': 'TomTom-SnapToRoads'
-                                        })
-                                        logger.info(
-                                            f"[Speed Limit] TomTom Snap to Roads: {speed_limit_kmh} km/h -> {speed_limit} mph"
-                                        )
-                                        return speed_limit
-
-                    self.metrics['tomtom_snap_to_roads_failures'] += 1
-                    logger.warning("[Speed Limit] TomTom Snap to Roads returned no speed limit data")
-                else:
-                    self.metrics['tomtom_snap_to_roads_failures'] += 1
-                    logger.warning(
-                        f"[Speed Limit] TomTom Snap to Roads API error: status={response.status_code}"
-                    )
-            except requests.exceptions.Timeout:
-                self.metrics['tomtom_snap_to_roads_failures'] += 1
-                logger.warning("[Speed Limit] TomTom Snap to Roads API timeout (3s)")
-            except Exception as e:
-                self.metrics['tomtom_snap_to_roads_failures'] += 1
-                logger.error(f"[Speed Limit] TomTom Snap to Roads failed: {e}")
-        else:
-            logger.info("[Speed Limit] No TOMTOM_API_KEY configured, skipping TomTom")
 
         try:
             self.metrics['overpass_calls'] += 1
@@ -671,8 +606,73 @@ class SpeedLimitDetector:
             self.metrics['overpass_failures'] += 1
             logger.error(f"[Speed Limit] OSM failed: {e}")
 
+        tomtom_api_key = os.getenv('TOMTOM_API_KEY')
+        if tomtom_api_key:
+            try:
+                self.metrics['tomtom_snap_to_roads_calls'] += 1
+
+                offset = 0.0005  # ~50 meters
+                points_str = f"{lon},{lat};{lon+offset},{lat+offset}"
+
+                snap_url = "https://api.tomtom.com/snapToRoads/1"
+                params = {
+                    'key': tomtom_api_key,
+                    'points': points_str,
+                    'headings': '0;0',
+                    'timestamps': '2021-01-01T00:00:00Z;2021-01-01T00:01:00Z',
+                    'fields': '{route{properties{speedLimits{value,unit,type}}}}',
+                    'vehicleType': 'PassengerCar',
+                    'measurementSystem': 'metric'
+                }
+
+                response = requests.get(snap_url, params=params, timeout=3)
+
+                if response.status_code == 200:
+                    snap_data = response.json()
+
+                    if 'route' in snap_data:
+                        route_features = snap_data['route']
+                        if isinstance(route_features, list) and len(route_features) > 0:
+                            segment = route_features[0]
+                            if 'properties' in segment and 'speedLimits' in segment['properties']:
+                                speed_limit_data = segment['properties']['speedLimits']
+                                if isinstance(speed_limit_data, dict):
+                                    speed_limit_kmh = speed_limit_data.get('value', 0)
+
+                                    if speed_limit_kmh > 0:
+                                        speed_limit = _snap_tomtom_kmh_to_mph(float(speed_limit_kmh), region)
+
+                                        self.metrics['tomtom_snap_to_roads_success'] += 1
+                                        self._track_tomtom_call(success=True)
+
+                                        self._add_to_cache(cache_key, {
+                                            'speed_limit': speed_limit,
+                                            'timestamp': time.time(),
+                                            'source': 'TomTom-SnapToRoads'
+                                        })
+                                        logger.info(
+                                            f"[Speed Limit] TomTom Snap to Roads: {speed_limit_kmh} km/h -> {speed_limit} mph"
+                                        )
+                                        return speed_limit
+
+                    self.metrics['tomtom_snap_to_roads_failures'] += 1
+                    logger.warning("[Speed Limit] TomTom Snap to Roads returned no speed limit data")
+                else:
+                    self.metrics['tomtom_snap_to_roads_failures'] += 1
+                    logger.warning(
+                        f"[Speed Limit] TomTom Snap to Roads API error: status={response.status_code}"
+                    )
+            except requests.exceptions.Timeout:
+                self.metrics['tomtom_snap_to_roads_failures'] += 1
+                logger.warning("[Speed Limit] TomTom Snap to Roads API timeout (3s)")
+            except Exception as e:
+                self.metrics['tomtom_snap_to_roads_failures'] += 1
+                logger.error(f"[Speed Limit] TomTom Snap to Roads failed: {e}")
+        else:
+            logger.info("[Speed Limit] No TOMTOM_API_KEY configured, skipping TomTom")
+
         self.metrics['default_fallbacks'] += 1
-        logger.info("[Speed Limit] No posted limit from TomTom or OSM maxspeed")
+        logger.info("[Speed Limit] No posted limit from OSM maxspeed or TomTom Snap to Roads")
 
         self._add_to_cache(cache_key, {
             'speed_limit': None,

@@ -3165,7 +3165,14 @@ function selectRoute(index) {
     // This ensures maneuvers and all route data are available for navigation
     if (routeOptions && routeOptions[index]) {
         const selectedRoute = routeOptions[index];
-        window.lastCalculatedRoute = selectedRoute;
+        const prev = window.lastCalculatedRoute || {};
+        // Preserve destination strings for auto-reroute / traffic reroute (not on per-route option objects)
+        window.lastCalculatedRoute = {
+            ...prev,
+            ...selectedRoute,
+            destination: prev.destination || selectedRoute.destination,
+            destinationName: prev.destinationName || selectedRoute.destinationName
+        };
         console.log(`[Routes] Selected route "${selectedRoute.name}" with ${(selectedRoute.maneuvers || []).length} maneuvers`);
 
         // Update the route preview with the selected route data
@@ -8488,7 +8495,11 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
                         cacheSpeedLimit(lat, lon, speedLimitMph, data.data.source || 'api');
                     }
 
-                    updateSpeedWidget(currentGpsSpeedMph, speedLimitMph);
+                    const edge = valhallaSpeedLimit && valhallaSpeedLimit > 0 ? valhallaSpeedLimit : null;
+                    const displayLimit = (speedLimitMph && speedLimitMph > 0)
+                        ? speedLimitMph
+                        : edge;
+                    updateSpeedWidget(currentGpsSpeedMph, displayLimit);
 
                     lastSpeedLimitFetch = now;
                     lastSpeedLimitPosition = { lat, lon };
@@ -11964,9 +11975,7 @@ function startGPSTracking() {
 
             // ===== UPDATE SPEED WIDGET =====
             // FIX: Always update the GPS speed display on every tick so it never shows "--"
-            // The speed limit is fetched separately with throttling to avoid API spam
-            updateSpeedWidget(speedMph, currentSpeedLimitMph || null);
-
+            // Show Valhalla step speed (route edge) until Overpass/TomTom API fills currentSpeedLimitMph
             const roadType = getCurrentRoadType();
             let valhallaSpeedLimitMph = null;
             if (routeInProgress && currentRouteSteps && currentStepIndex < currentRouteSteps.length) {
@@ -11975,10 +11984,16 @@ function startGPSTracking() {
                     valhallaSpeedLimitMph = Math.round(step.speed_limit * 0.621371);
                 }
             }
-            fetchSpeedLimitThrottled(lat, lon, speedMph, roadType, 0, valhallaSpeedLimitMph);
+            const shownLimit = (currentSpeedLimitMph && currentSpeedLimitMph > 0)
+                ? currentSpeedLimitMph
+                : (valhallaSpeedLimitMph && valhallaSpeedLimitMph > 0 ? valhallaSpeedLimitMph : null);
+            updateSpeedWidget(speedMph, shownLimit);
+
+            // Query speed limits at polyline-snapped position when on-route (aligns OSM ways with driven road)
+            fetchSpeedLimitThrottled(displayLat, displayLon, speedMph, roadType, 0, valhallaSpeedLimitMph);
 
             if (routeInProgress) {
-                fetchRoadNameThrottled(lat, lon);
+                fetchRoadNameThrottled(displayLat, displayLon);
             }
         },
         (error) => {
@@ -14277,7 +14292,10 @@ async function geocodeAddress(address) {
 
         const data = await response.json();
 
-        if (!data || data.length === 0) {
+        if (data && typeof data === 'object' && data.success === false && data.error) {
+            throw new Error(data.error);
+        }
+        if (!Array.isArray(data) || data.length === 0) {
             console.log('[Geocoding] No results for:', trimmedAddress);
             return null;
         }
