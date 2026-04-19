@@ -433,6 +433,7 @@ function switchTab(tab) {
         loadVoicePreferences();
         loadCameraAlertPreferences();
         loadAvoidancePreferences();
+        loadHazardCameraTogglesFromApi();
     } else if (tab === 'tripHistory') {
         tripHistoryTab.style.display = 'block';
         sheetTitle.textContent = '📋 Trip History';
@@ -15631,6 +15632,11 @@ const HAZARD_CAMERA_SUBTYPES = [
     'camera_other'
 ];
 
+function hazardPrefEnabled(pref) {
+    if (!pref) return true;
+    return pref.enabled === true || pref.enabled === 1;
+}
+
 function applyHazardToggleStyles(button, enabled) {
     if (!button) return;
     if (enabled) {
@@ -15650,15 +15656,19 @@ async function loadHazardCameraTogglesFromApi() {
     try {
         const res = await fetch('/api/hazard-preferences');
         const data = await res.json();
-        if (!data.success || !data.preferences) return;
+        const prefsList = data.success && data.preferences ? data.preferences : [];
         for (const ht of HAZARD_CAMERA_SUBTYPES) {
-            const pref = data.preferences.find(p => p.hazard_type === ht);
+            const pref = prefsList.find(p => p.hazard_type === ht);
             const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${ht}"]`);
-            if (!pref || !btn) continue;
-            applyHazardToggleStyles(btn, pref.enabled);
+            if (!btn) continue;
+            applyHazardToggleStyles(btn, hazardPrefEnabled(pref));
         }
     } catch (e) {
         console.warn('[HAZARDS] Could not load camera hazard preferences:', e);
+        for (const ht of HAZARD_CAMERA_SUBTYPES) {
+            const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${ht}"]`);
+            if (btn) applyHazardToggleStyles(btn, true);
+        }
     }
 }
 
@@ -15672,20 +15682,19 @@ async function toggleHazardPreferenceApi(hazardType, ev) {
             return;
         }
         const pref = data.preferences.find(p => p.hazard_type === hazardType);
-        if (!pref) {
-            showStatus('Unknown hazard preference', 'error');
-            return;
+        const currentlyOn = hazardPrefEnabled(pref);
+        const newEnabled = !currentlyOn;
+
+        const payload = { hazard_type: hazardType, enabled: newEnabled };
+        if (pref) {
+            payload.penalty_seconds = pref.penalty_seconds;
+            payload.proximity_threshold_meters = pref.proximity_threshold_meters;
         }
-        const newEnabled = !pref.enabled;
+
         const upd = await fetch('/api/hazard-preferences', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                hazard_type: hazardType,
-                penalty_seconds: pref.penalty_seconds,
-                enabled: newEnabled,
-                proximity_threshold_meters: pref.proximity_threshold_meters
-            })
+            body: JSON.stringify(payload)
         });
         const out = await upd.json();
         if (!out.success) {
@@ -15702,6 +15711,9 @@ async function toggleHazardPreferenceApi(hazardType, ev) {
         showStatus('Could not update hazard preference', 'error');
     }
 }
+
+window.toggleHazardPreferenceApi = toggleHazardPreferenceApi;
+window.loadHazardCameraTogglesFromApi = loadHazardCameraTogglesFromApi;
 
 /**
  * loadPreferences function

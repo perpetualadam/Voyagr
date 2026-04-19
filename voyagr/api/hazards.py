@@ -50,17 +50,42 @@ def hazard_preferences():
             })
 
         else:  # POST
-            data = request.json
+            data = request.get_json(silent=True) or {}
             hazard_type = data.get('hazard_type')
+            if not hazard_type:
+                return jsonify({'success': False, 'error': 'hazard_type is required'}), 400
+
             penalty = data.get('penalty_seconds')
             enabled = data.get('enabled', True)
             threshold = data.get('proximity_threshold_meters')
+
+            # Defaults for camera subtype rows (matches voyagr_web init_db)
+            _cam_penalty: dict[str, int] = {
+                'camera_red_light': 1200,
+                'camera_speed': 800,
+                'camera_average_speed': 800,
+                'camera_bus_lane': 800,
+                'camera_mobile': 800,
+                'camera_other': 800,
+            }
+            if penalty is None and hazard_type in _cam_penalty:
+                penalty = _cam_penalty[hazard_type]
+            if penalty is None:
+                penalty = 800
+            thr = threshold if threshold is not None else 100
+            en_int = int(bool(enabled))
 
             cursor.execute('''
                 UPDATE hazard_preferences
                 SET penalty_seconds = ?, enabled = ?, proximity_threshold_meters = ?
                 WHERE hazard_type = ?
-            ''', (penalty, int(enabled), threshold, hazard_type))
+            ''', (penalty, en_int, thr, hazard_type))
+
+            if cursor.rowcount == 0:
+                cursor.execute('''
+                    INSERT INTO hazard_preferences (hazard_type, penalty_seconds, enabled, proximity_threshold_meters)
+                    VALUES (?, ?, ?, ?)
+                ''', (hazard_type, penalty, en_int, thr))
 
             conn.commit()
             invalidate_hazard_cache()
