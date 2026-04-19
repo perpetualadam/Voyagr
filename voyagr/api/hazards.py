@@ -18,6 +18,7 @@ from flask import Blueprint, jsonify, request
 
 from voyagr.models import get_db_connection, return_db_connection
 from voyagr.utils import sanitize_string, require_auth
+from voyagr.utils.camera_buckets import normalize_camera_hazard_bucket
 from voyagr.utils.geometry import get_distance_between_points
 from voyagr.services import invalidate_hazard_cache, invalidate_route_cache
 
@@ -289,10 +290,12 @@ def get_cameras_in_area():
 
         cameras = []
         for row in cursor.fetchall():
+            raw_type = row[2] or 'camera'
             cameras.append({
                 'lat': row[0],
                 'lon': row[1],
-                'type': row[2] or 'camera',
+                'type': raw_type,
+                'bucket': normalize_camera_hazard_bucket(raw_type),
                 'description': row[3] or '',
                 'severity': row[4] or 'high'
             })

@@ -30,6 +30,7 @@ from voyagr.api.settings import settings_bp
 from voyagr.api.costs import costs_bp, set_cost_calculator
 from voyagr.api.auth import auth_bp
 from voyagr.api.support import support_bp
+from voyagr.api.coupons import coupons_bp
 
 __all__ = [
     # Blueprints
@@ -47,6 +48,7 @@ __all__ = [
     'costs_bp',
     'auth_bp',
     'support_bp',
+    'coupons_bp',
     # Registration
     'register_blueprints',
     # Setter functions
@@ -75,4 +77,5 @@ def register_blueprints(app):
     app.register_blueprint(settings_bp, url_prefix='/api')
     app.register_blueprint(costs_bp, url_prefix='/api')
     app.register_blueprint(support_bp, url_prefix='/api')
+    app.register_blueprint(coupons_bp, url_prefix='/api')
 

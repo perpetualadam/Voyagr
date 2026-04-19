@@ -434,6 +434,7 @@ function switchTab(tab) {
         loadCameraAlertPreferences();
         loadAvoidancePreferences();
         loadHazardCameraTogglesFromApi();
+        loadPromoEntitlementStatus();
     } else if (tab === 'tripHistory') {
         tripHistoryTab.style.display = 'block';
         sheetTitle.textContent = '📋 Trip History';
@@ -1010,8 +1011,8 @@ async function handleSupabaseSession(session) {
             if (importChoice) {
                 switchActiveProfile(userProfileId, { importFromProfileId: 'guest' });
                 showStatus('Imported guest profile into account profile', 'success');
-                // After importing guest -> account, push to Supabase as initial snapshot
                 scheduleSupabaseProfileSync();
+                await refreshPromoCodeSection(session || null);
                 return;
             }
         }
@@ -1021,12 +1022,14 @@ async function handleSupabaseSession(session) {
         await pullProfileSnapshotFromSupabase(userProfileId);
         // If no remote snapshot exists yet, push current local snapshot.
         scheduleSupabaseProfileSync();
+        await refreshPromoCodeSection(session || null);
         return;
     }
 
     // Signed out
     setAccountUIState({ signedIn: false, message: 'Not signed in (guest profile).' });
     switchActiveProfile('guest');
+    await refreshPromoCodeSection(session || null);
 }
 
 async function authSignInEmail() {
@@ -1067,11 +1070,89 @@ async function authSignOut() {
     showStatus('Signed out', 'info');
 }
 
+async function refreshPromoCodeSection(session) {
+    const block = document.getElementById('promoCodeBlock');
+    const guestNote = document.getElementById('promoCodeGuestNote');
+    const formWrap = document.getElementById('promoCodeFormWrap');
+    if (!block || !guestNote || !formWrap) return;
+    if (!supabaseClient) {
+        block.style.display = 'none';
+        return;
+    }
+    block.style.display = 'block';
+    if (session?.user) {
+        guestNote.style.display = 'none';
+        formWrap.style.display = 'block';
+        await loadPromoEntitlementStatus();
+    } else {
+        guestNote.style.display = 'block';
+        formWrap.style.display = 'none';
+        const summary = document.getElementById('promoEntitlementSummary');
+        if (summary) summary.textContent = '';
+    }
+}
+
+async function loadPromoEntitlementStatus() {
+    const summary = document.getElementById('promoEntitlementSummary');
+    if (!summary) return;
+    try {
+        const { res, data } = await fetchJsonWithAuth('/api/coupons/status');
+        if (!res.ok || !data.success) {
+            summary.textContent = '';
+            return;
+        }
+        if (data.lifetime) {
+            summary.textContent = 'Promo access: lifetime.';
+            summary.style.color = '#2e7d32';
+        } else if (data.trial_active && data.trial_expires_at) {
+            const d = new Date(data.trial_expires_at * 1000);
+            summary.textContent = `Promo access: trial until ${d.toLocaleString()}.`;
+            summary.style.color = '#1565c0';
+        } else {
+            summary.textContent = 'Promo access: none applied.';
+            summary.style.color = '#666';
+        }
+    } catch {
+        summary.textContent = '';
+    }
+}
+
+async function redeemPromoCode() {
+    const input = document.getElementById('promoCodeInput');
+    const statusEl = document.getElementById('promoCodeStatus');
+    const code = input?.value?.trim();
+    if (!code) {
+        if (statusEl) statusEl.textContent = 'Enter a code.';
+        return;
+    }
+    if (statusEl) statusEl.textContent = 'Applying…';
+    try {
+        const { res, data } = await fetchJsonWithAuth('/api/coupons/redeem', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ code })
+        });
+        if (data.success) {
+            showStatus(data.message || 'Code applied', 'success');
+            if (statusEl) statusEl.textContent = data.message || 'Applied.';
+            if (input) input.value = '';
+            await loadPromoEntitlementStatus();
+        } else {
+            if (statusEl) statusEl.textContent = data.error || 'Could not apply code.';
+            showStatus(data.error || 'Could not apply code', 'error');
+        }
+    } catch {
+        if (statusEl) statusEl.textContent = 'Network error.';
+        showStatus('Could not apply code', 'error');
+    }
+}
+
 // Expose handlers for inline onclick buttons in HTML
 window.authSignInEmail = authSignInEmail;
 window.authSignUpEmail = authSignUpEmail;
 window.authSignInProvider = authSignInProvider;
 window.authSignOut = authSignOut;
+window.redeemPromoCode = redeemPromoCode;
 
 /**
  * saveAllSettings function
@@ -3556,6 +3637,10 @@ function loadRouteAnalytics() {
                 showStatus('Sign in to view trip analytics', 'info');
                 return;
             }
+            if (res.status === 403 && data && data.code === 'premium_required') {
+                showStatus(data.error || 'Premium access required — redeem a promo code in Settings → Account.', 'info');
+                return;
+            }
             if (data.success) displayAnalytics(data);
             else showStatus('Failed to load analytics', 'error');
         })
@@ -4683,6 +4768,53 @@ function collapseBottomSheetForRoutePreview() {
 }
 
 /**
+ * Map API / legacy hazard.type strings to marker style keys (camera_* , traffic_light, …).
+ */
+function normalizeCameraHazardTypeForMarker(raw) {
+    if (raw === 'traffic_signals' || raw === 'traffic_signal') return 'traffic_light';
+    if (raw == null || raw === '') return 'camera_speed';
+    const k = String(raw).toLowerCase();
+    if (k === 'camera') return 'camera_speed';
+    if (k === 'speed_camera') return 'camera_speed';
+    if (k === 'traffic_light_camera' || k === 'traffic-light-camera') return 'camera_red_light';
+    if (k.startsWith('camera_')) return k;
+    if (/(red_light|red-light|traffic_light|traffic light|rlc|tlc)/i.test(String(raw))) return 'camera_red_light';
+    if (/(spec|average|vec)/i.test(k)) return 'camera_average_speed';
+    if (k.includes('bus')) return 'camera_bus_lane';
+    if (k.includes('mobile')) return 'camera_mobile';
+    if (k === 'speed' || k === 'fixed' || k === 'gatso' || k === 'truvelo') return 'camera_speed';
+    return 'camera_other';
+}
+
+/**
+ * Shared SVG marker styles for route hazards and “cameras on map” layer.
+ */
+function getHazardMarkerStyleMap() {
+    const cameraSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="5" width="16" height="16" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="13" r="4" fill="#222"/><circle cx="12" cy="13" r="2" fill="#FFD600"/><rect x="8" y="2" width="8" height="4" rx="1" fill="#222"/></svg>`;
+    const cameraRedLightSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="3" y="5" width="18" height="14" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="9.5" cy="12" r="3.2" fill="#222"/><circle cx="9.5" cy="12" r="1.6" fill="#FFD600"/><circle cx="16.5" cy="9.5" r="2.2" fill="#f44336" stroke="#b71c1c" stroke-width="0.8"/><circle cx="16.5" cy="14.5" r="2.2" fill="#fbc02d" stroke="#f57f17" stroke-width="0.8"/><circle cx="16.5" cy="19.5" r="2.2" fill="#388e3c" stroke="#1b5e20" stroke-width="0.8"/></svg>`;
+    const cameraAvgSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="7" width="16" height="11" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="12.5" r="3" fill="#222"/><path d="M5 18 L19 18" stroke="#222" stroke-width="1.3" stroke-dasharray="2 2"/></svg>`;
+    const cameraBusSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="7" width="16" height="12" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="13" r="3" fill="#222"/><rect x="7" y="9" width="10" height="6" rx="1" fill="#1565c0"/></svg>`;
+    const cameraMobileSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="6" width="13" height="13" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="10.5" cy="12.5" r="3" fill="#222"/><path d="M17 8 L20 7 L19 14 L16 13 Z" fill="#555"/></svg>`;
+
+    return {
+        camera: { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Speed camera' },
+        camera_speed: { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Speed camera' },
+        camera_red_light: { svg: cameraRedLightSVG, color: '#e65100', bgColor: '#fff3e0', label: 'Traffic-light camera' },
+        camera_average_speed: { svg: cameraAvgSVG, color: '#6a1b9a', bgColor: '#f3e5f5', label: 'Average speed camera' },
+        camera_bus_lane: { svg: cameraBusSVG, color: '#0d47a1', bgColor: '#e3f2fd', label: 'Bus lane camera' },
+        camera_mobile: { svg: cameraMobileSVG, color: '#37474f', bgColor: '#eceff1', label: 'Mobile camera' },
+        camera_other: { svg: cameraSVG, color: '#f57c00', bgColor: '#fff8e1', label: 'Camera' },
+        traffic_light: { useOsmTrafficLightPill: true, color: '#2e7d32', bgColor: '#e8f5e9', label: 'Traffic light' },
+        police: { emoji: '🚔', color: '#1976d2', bgColor: '#e3f2fd', label: 'Police' },
+        roadworks: { emoji: '🚧', color: '#ffc107', bgColor: '#fff8e1', label: 'Roadworks' },
+        accident: { emoji: '⚠️', color: '#f44336', bgColor: '#ffebee', label: 'Accident' },
+        railway_crossing: { emoji: '🚂', color: '#795548', bgColor: '#efebe9', label: 'Railway Crossing' },
+        pothole: { emoji: '🕳️', color: '#607d8b', bgColor: '#eceff1', label: 'Pothole' },
+        debris: { emoji: '🪨', color: '#8d6e63', bgColor: '#efebe9', label: 'Debris' }
+    };
+}
+
+/**
  * Display hazard markers on the map
  * @param {Array} hazards - Array of hazard objects with lat, lon, type, description
  */
@@ -4695,29 +4827,7 @@ function displayHazardMarkers(hazards) {
     // Clear existing hazard markers
     clearHazardMarkers();
 
-    // Camera SVG: square GATSO-style icon (speed / fixed)
-    const cameraSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="5" width="16" height="16" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="13" r="4" fill="#222"/><circle cx="12" cy="13" r="2" fill="#FFD600"/><rect x="8" y="2" width="8" height="4" rx="1" fill="#222"/></svg>`;
-    const cameraRedLightSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="3" y="5" width="18" height="14" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="9.5" cy="12" r="3.2" fill="#222"/><circle cx="9.5" cy="12" r="1.6" fill="#FFD600"/><circle cx="16.5" cy="9.5" r="2.2" fill="#f44336" stroke="#b71c1c" stroke-width="0.8"/><circle cx="16.5" cy="14.5" r="2.2" fill="#fbc02d" stroke="#f57f17" stroke-width="0.8"/><circle cx="16.5" cy="19.5" r="2.2" fill="#388e3c" stroke="#1b5e20" stroke-width="0.8"/></svg>`;
-    const cameraAvgSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="7" width="16" height="11" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="12.5" r="3" fill="#222"/><path d="M5 18 L19 18" stroke="#222" stroke-width="1.3" stroke-dasharray="2 2"/></svg>`;
-    const cameraBusSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="7" width="16" height="12" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="13" r="3" fill="#222"/><rect x="7" y="9" width="10" height="6" rx="1" fill="#1565c0"/></svg>`;
-    const cameraMobileSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="6" width="13" height="13" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="10.5" cy="12.5" r="3" fill="#222"/><path d="M17 8 L20 7 L19 14 L16 13 Z" fill="#555"/></svg>`;
-
-    const hazardConfig = {
-        'camera': { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Speed camera' },
-        'camera_speed': { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Speed camera' },
-        'camera_red_light': { svg: cameraRedLightSVG, color: '#e65100', bgColor: '#fff3e0', label: 'Traffic-light camera' },
-        'camera_average_speed': { svg: cameraAvgSVG, color: '#6a1b9a', bgColor: '#f3e5f5', label: 'Average speed camera' },
-        'camera_bus_lane': { svg: cameraBusSVG, color: '#0d47a1', bgColor: '#e3f2fd', label: 'Bus lane camera' },
-        'camera_mobile': { svg: cameraMobileSVG, color: '#37474f', bgColor: '#eceff1', label: 'Mobile camera' },
-        'camera_other': { svg: cameraSVG, color: '#f57c00', bgColor: '#fff8e1', label: 'Camera' },
-        'traffic_light': { useOsmTrafficLightPill: true, color: '#2e7d32', bgColor: '#e8f5e9', label: 'Traffic light' },
-        'police': { emoji: '🚔', color: '#1976d2', bgColor: '#e3f2fd', label: 'Police' },
-        'roadworks': { emoji: '🚧', color: '#ffc107', bgColor: '#fff8e1', label: 'Roadworks' },
-        'accident': { emoji: '⚠️', color: '#f44336', bgColor: '#ffebee', label: 'Accident' },
-        'railway_crossing': { emoji: '🚂', color: '#795548', bgColor: '#efebe9', label: 'Railway Crossing' },
-        'pothole': { emoji: '🕳️', color: '#607d8b', bgColor: '#eceff1', label: 'Pothole' },
-        'debris': { emoji: '🪨', color: '#8d6e63', bgColor: '#efebe9', label: 'Debris' }
-    };
+    const hazardConfig = getHazardMarkerStyleMap();
 
     // Track unique locations to avoid duplicates
     const seenLocations = new Set();
@@ -4728,12 +4838,7 @@ function displayHazardMarkers(hazards) {
         if (seenLocations.has(locationKey)) return;
         seenLocations.add(locationKey);
 
-        let hazardTypeKey = (hazard.type === 'traffic_signals' || hazard.type === 'traffic_signal')
-            ? 'traffic_light'
-            : hazard.type;
-        if (hazardTypeKey === 'camera') {
-            hazardTypeKey = 'camera_speed';
-        }
+        const hazardTypeKey = normalizeCameraHazardTypeForMarker(hazard.type);
         const config = hazardConfig[hazardTypeKey] || { emoji: '⚠️', color: '#ff9800', bgColor: '#fff3e0', label: 'Hazard' };
 
         let markerHtml;
@@ -6370,11 +6475,7 @@ function displayCameraMarkers(cameras) {
     // Clear existing camera markers
     clearCameraMarkers();
 
-    const cameraSVG = `<svg viewBox="0 0 24 24" width="18" height="18"><rect x="4" y="5" width="16" height="16" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="13" r="4" fill="#222"/><circle cx="12" cy="13" r="2" fill="#FFD600"/><rect x="8" y="2" width="8" height="4" rx="1" fill="#222"/></svg>`;
-
-    const cameraConfig = {
-        'camera': { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Camera' }
-    };
+    const styleMap = getHazardMarkerStyleMap();
 
     const seenLocations = new Set();
 
@@ -6383,7 +6484,13 @@ function displayCameraMarkers(cameras) {
         if (seenLocations.has(locationKey)) return;
         seenLocations.add(locationKey);
 
-        const config = cameraConfig['camera'];
+        const bucket = normalizeCameraHazardTypeForMarker(camera.bucket || camera.type);
+        let config = styleMap[bucket] || styleMap.camera_speed;
+        if (!config || !config.svg) {
+            config = styleMap.camera_speed;
+        }
+        const svgForMarker = config.svg.replace('width="20"', 'width="24"').replace('height="20"', 'height="24"');
+        const svgForPopup = config.svg.replace('width="20"', 'width="32"').replace('height="20"', 'height="32"');
 
         // Create custom HTML marker with MapLibre
         const marker = MapLibreHelpers.createMarker(camera.lat, camera.lon, {
@@ -6400,12 +6507,12 @@ function displayCameraMarkers(cameras) {
                 box-shadow: 0 4px 10px rgba(0,0,0,0.4);
                 cursor: pointer;
                 transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            ">${config.svg.replace('width="18"', 'width="24"').replace('height="18"', 'height="24"')}</div>`,
+            ">${svgForMarker}</div>`,
             iconSize: [32, 32],
             iconAnchor: [16, 16],
             popup: `
                 <div style="text-align: center; min-width: 140px;">
-                    <div style="margin-bottom: 8px; display: flex; justify-content: center;">${config.svg.replace('width="18"', 'width="32"').replace('height="18"', 'height="32"')}</div>
+                    <div style="margin-bottom: 8px; display: flex; justify-content: center;">${svgForPopup}</div>
                     <div style="font-weight: bold; color: ${config.color}; margin-bottom: 5px;">${config.label}</div>
                     ${camera.description ? `<div style="font-size: 11px; color: #666;">${camera.description}</div>` : ''}
                 </div>

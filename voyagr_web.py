@@ -21,6 +21,8 @@ from collections import OrderedDict
 import logging
 from typing import List, Dict, Tuple, Optional, Any, Callable, TypeVar, Set
 
+from voyagr.utils.camera_buckets import normalize_camera_hazard_bucket
+
 F = TypeVar('F', bound=Callable[..., Any])
 
 # Optional imports with fallbacks
@@ -1339,6 +1341,42 @@ def init_db():
         )
     ''')
 
+    # Promo coupons (trial / person-bound lifetime) + per-user entitlements
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS promo_coupons (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL COLLATE NOCASE,
+            coupon_kind TEXT NOT NULL,
+            trial_days INTEGER,
+            bound_user_id TEXT,
+            bound_email TEXT,
+            max_redemptions INTEGER NOT NULL DEFAULT 1,
+            redemption_count INTEGER NOT NULL DEFAULT 0,
+            expires_at INTEGER,
+            active INTEGER NOT NULL DEFAULT 1,
+            notes TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS promo_redemptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            coupon_id INTEGER NOT NULL,
+            user_id TEXT NOT NULL,
+            redeemed_at INTEGER NOT NULL,
+            UNIQUE(coupon_id, user_id)
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_entitlements (
+            user_id TEXT PRIMARY KEY,
+            lifetime INTEGER NOT NULL DEFAULT 0,
+            trial_expires_at INTEGER,
+            updated_at INTEGER NOT NULL
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_promo_coupons_code ON promo_coupons(code)')
+
     # Multi-drop and route avoidance settings columns (added dynamically for existing databases)
     multidrop_columns = [
         ('optimize_stop_order', 'INTEGER DEFAULT 1'),
@@ -2153,24 +2191,6 @@ def return_db_connection(conn: Any) -> None:
         db_pool.return_connection(conn)
     else:
         conn.close()
-
-
-def normalize_camera_hazard_bucket(raw_type: Optional[str]) -> str:
-    """Map cameras.type (SCDB labels, legacy values) to a hazard_preferences key."""
-    if not raw_type:
-        return 'camera_speed'
-    t = str(raw_type).strip().lower()
-    if t in ('camera', 'speed', 'fixed', 'gatso', 'truvelo'):
-        return 'camera_speed'
-    if any(x in t for x in ('red_light', 'red-light', 'traffic_light', 'traffic light', 'rlc', 'tlc')):
-        return 'camera_red_light'
-    if any(x in t for x in ('spec', 'average', 'avg', 'vec')):
-        return 'camera_average_speed'
-    if 'bus' in t:
-        return 'camera_bus_lane'
-    if 'mobile' in t:
-        return 'camera_mobile'
-    return 'camera_other'
 
 
 def clear_camera_hazard_buckets(hazards: Dict[str, Any]) -> None:
@@ -3411,15 +3431,20 @@ def build_valhalla_baseline_request_payload(
 
 def _hazard_marker_display_type(hazard_category: str, hazard: Dict[str, Any]) -> str:
     """
-    Frontend hazard markers key off `type`. TomTom incidents store iconCategory in `original_type`
-    (digit strings like '6'); using that as type breaks the map (unknown → generic warning icon).
+    Stable `type` strings for map markers. Camera rows must use camera_* keys so the PWA picks
+    the right icon; do not forward raw SCDB/TomTom description strings from `original_type`.
     """
-    ot = hazard.get('original_type')
+    hc = (hazard_category or "").strip()
+    if hc == "camera":
+        return "camera_speed"
+    if hc.startswith("camera_"):
+        return hc
+    ot = hazard.get("original_type")
     if ot is None:
-        return hazard_category
+        return hc
     s = str(ot).strip()
     if s.isdigit():
-        return hazard_category
+        return hc
     return s
 
 
@@ -4325,7 +4350,7 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>Voyagr Navigation</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260331w" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260410b" />
     <script src="/static/vendor/maplibre-gl.js"></script>
     <script src="/static/js/maplibre-helpers.js?v=20260403a"></script>
     <script src="/static/vendor/supabase.min.js"></script>
@@ -4334,7 +4359,7 @@ HTML_TEMPLATE = '''
     <!-- External JavaScript modules -->
     <script src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
     <script src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    <script src="/static/js/voyagr-app.js?v=20260410a"></script>
+    <script src="/static/js/voyagr-app.js?v=20260411b"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -4675,6 +4700,22 @@ HTML_TEMPLATE = '''
                                 Your on-device (guest) profile can stay separate. On first sign-in, you can choose to import it into your account profile.
                             </div>
                         </div>
+
+                        <div id="promoCodeBlock" style="display: none; margin-top: 14px; padding-top: 12px; border-top: 1px solid #eee;">
+                            <h4 style="margin: 0 0 6px 0; font-size: 14px; color: #333;">Promo code</h4>
+                            <p style="font-size: 11px; color: #888; margin: 0 0 8px 0;">Trial or lifetime codes. Some codes only work for the account they were issued to.</p>
+                            <div id="promoCodeGuestNote" style="display: none; font-size: 12px; color: #888;">Sign in to apply a promo code.</div>
+                            <div id="promoCodeFormWrap" style="display: none;">
+                                <div style="display: flex; gap: 8px; flex-wrap: wrap; align-items: center;">
+                                    <input id="promoCodeInput" type="text" placeholder="Enter code" autocomplete="off"
+                                           style="flex: 1; min-width: 140px; padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px;" />
+                                    <button type="button" onclick="redeemPromoCode()"
+                                            style="padding: 10px 16px; background: #667eea; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">Apply</button>
+                                </div>
+                                <div id="promoCodeStatus" style="margin-top: 6px; font-size: 12px; color: #666;"></div>
+                                <div id="promoEntitlementSummary" style="margin-top: 4px; font-size: 12px; color: #333;"></div>
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Voyager Premium (Stripe subscription) + tips (BMC / Patreon) — URLs from server config -->
@@ -5007,7 +5048,10 @@ HTML_TEMPLATE = '''
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">🚥 OSM Traffic Lights on Map</span>
+                            <span class="preference-label preference-label--with-tl-icon">
+                                <span class="settings-osm-traffic-light-pill" aria-hidden="true"><svg viewBox="0 0 16 36" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"/><circle cx="8" cy="18" r="4.2" fill="#f59e0b"/><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"/></svg></span>
+                                <span>OSM Traffic Lights on Map</span>
+                            </span>
                             <button class="toggle-switch active" id="showOsmTrafficLightsToggle" onclick="toggleShowOsmTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
 
@@ -5023,10 +5067,13 @@ HTML_TEMPLATE = '''
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">🚥 Show Traffic Lights</span>
+                            <span class="preference-label preference-label--with-tl-icon">
+                                <span class="settings-osm-traffic-light-pill" aria-hidden="true"><svg viewBox="0 0 16 36" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"/><circle cx="8" cy="18" r="4.2" fill="#f59e0b"/><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"/></svg></span>
+                                <span>Show Traffic Lights</span>
+                            </span>
                             <button class="toggle-switch active" id="trafficLightsToggle" onclick="toggleTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Display traffic signal markers (🔴🟡🟢) along your route</p>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Same vertical OSM-style icon as on the map (red → amber → green), shown along your route.</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🛤️ Route Traffic Edges</span>

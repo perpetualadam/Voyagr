@@ -70,6 +70,9 @@ def get_config():
         'stripe_subscription_trial_days': trial_days_out,
         # Optional notice (e.g. "UK only") — set VOYAGR_SERVICE_REGION_NOTE on the server
         'service_region_note': os.getenv('VOYAGR_SERVICE_REGION_NOTE', '').strip(),
+        # When true, routes using require_promo_premium_if_enforced reject users without promo trial/lifetime
+        'promo_premium_enforcement': os.getenv('VOYAGR_ENFORCE_PROMO_PREMIUM', '').strip().lower()
+        in ('1', 'true', 'yes'),
         'success': True
     })
     # Prevent caching

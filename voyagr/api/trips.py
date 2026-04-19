@@ -12,6 +12,7 @@ from flask import Blueprint, jsonify, request
 
 from voyagr.models import get_db_connection, return_db_connection
 from voyagr.utils import sanitize_string, validate_routing_mode, require_private_user
+from voyagr.utils.entitlements import require_promo_premium_if_enforced
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,7 @@ def trip_history(trip_id: Optional[int] = None, _jwt_claims: Any = None) -> Any:
 
 @trips_bp.route('/trip-analytics', methods=['GET'])
 @require_private_user
+@require_promo_premium_if_enforced
 def get_trip_analytics(_jwt_claims: Any = None):
     """Get trip analytics and statistics"""
     conn = None
