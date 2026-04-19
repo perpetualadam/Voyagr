@@ -1095,9 +1095,14 @@ async function refreshPromoCodeSection(session) {
 async function loadPromoEntitlementStatus() {
     const summary = document.getElementById('promoEntitlementSummary');
     if (!summary) return;
+    const token = await getSupabaseAccessToken();
+    if (!token) {
+        summary.textContent = '';
+        return;
+    }
     try {
         const { res, data } = await fetchJsonWithAuth('/api/coupons/status');
-        if (!res.ok || !data.success) {
+        if (res.status === 401 || !res.ok || !data.success) {
             summary.textContent = '';
             return;
         }
