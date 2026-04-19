@@ -1,6 +1,6 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
 // Version: 6.0 - Network-first for root HTML, cache JS/CSS
-const CACHE_VERSION = 'v16';
+const CACHE_VERSION = 'v17';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;

@@ -15978,6 +15978,14 @@ function isStandalonePWA() {
         document.referrer.includes('android-app://');
 }
 
+/** Chrome/Edge/Android: captures install prompt for Add to Home Screen */
+let voyagrDeferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    voyagrDeferredInstallPrompt = e;
+    tryShowInstallBanner();
+});
+
 /**
  * Check if running on iOS
  */
@@ -15990,6 +15998,102 @@ function isIOS() {
  */
 function isAndroid() {
     return /Android/.test(navigator.userAgent);
+}
+
+function dismissAddToHomeScreenForDays(days) {
+    const el = document.getElementById('voyagr-add-homescreen-banner');
+    if (el) el.remove();
+    const ms = days * 24 * 60 * 60 * 1000;
+    localStorage.setItem('voyagr_add_homescreen_dismiss_until', String(Date.now() + ms));
+}
+
+/**
+ * Prompt to add Voyagr to home screen when opened in a normal browser tab (not installed PWA).
+ * iOS: Safari has no install API — show Share → Add to Home Screen hint.
+ * Chrome/Android: uses beforeinstallprompt when available.
+ */
+function tryShowInstallBanner() {
+    if (typeof isStandalonePWA !== 'function' || isStandalonePWA()) return;
+
+    const dismissUntil = parseInt(localStorage.getItem('voyagr_add_homescreen_dismiss_until') || '0', 10);
+    if (dismissUntil && Date.now() < dismissUntil) return;
+
+    const ios = typeof isIOS === 'function' && isIOS();
+    const deferred = voyagrDeferredInstallPrompt;
+    let mode = ios ? 'ios' : deferred ? 'install' : 'generic';
+
+    const existing = document.getElementById('voyagr-add-homescreen-banner');
+    if (existing) {
+        const cur = existing.getAttribute('data-mode');
+        if (cur === mode) return;
+        if (cur === 'generic' && mode === 'install') {
+            existing.remove();
+        } else if (cur === 'ios' || cur === 'install') {
+            return;
+        } else if (cur === 'generic' && mode === 'generic') {
+            return;
+        }
+    }
+
+    if (document.getElementById('voyagr-add-homescreen-banner')) return;
+
+    const bar = document.createElement('div');
+    bar.id = 'voyagr-add-homescreen-banner';
+    bar.setAttribute('data-mode', mode);
+    bar.setAttribute('role', 'dialog');
+    bar.setAttribute('aria-label', 'Add Voyagr to home screen');
+    bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#1a237e;color:#fff;padding:12px 14px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;font-size:14px;box-shadow:0 -4px 16px rgba(0,0,0,0.25);';
+
+    const msg = document.createElement('div');
+    msg.style.flex = '1';
+    msg.style.minWidth = '200px';
+
+    const actions = document.createElement('div');
+    actions.style.display = 'flex';
+    actions.style.gap = '8px';
+    actions.style.flexShrink = '0';
+
+    const btnLater = document.createElement('button');
+    btnLater.type = 'button';
+    btnLater.textContent = 'Not now';
+    btnLater.style.cssText = 'padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.5);background:transparent;color:#fff;cursor:pointer;font-size:13px;';
+    btnLater.onclick = () => dismissAddToHomeScreenForDays(14);
+
+    if (mode === 'ios') {
+        msg.innerHTML = '<strong>Add Voyagr to your home screen</strong><br><span style="opacity:0.92;font-size:12px;">Tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</span>';
+        actions.appendChild(btnLater);
+    } else if (mode === 'install') {
+        msg.innerHTML = '<strong>Install Voyagr</strong><span style="opacity:0.92;font-size:12px;display:block;margin-top:4px;">Add this app to your home screen for quick access.</span>';
+        const btnInstall = document.createElement('button');
+        btnInstall.type = 'button';
+        btnInstall.textContent = 'Add to Home screen';
+        btnInstall.style.cssText = 'padding:8px 14px;border-radius:8px;border:none;background:#7c4dff;color:#fff;cursor:pointer;font-weight:600;font-size:13px;';
+        btnInstall.onclick = async () => {
+            const ev = voyagrDeferredInstallPrompt;
+            if (!ev) return;
+            try {
+                await ev.prompt();
+                await ev.userChoice;
+            } catch (_) { /* ignore */ }
+            voyagrDeferredInstallPrompt = null;
+            dismissAddToHomeScreenForDays(365);
+        };
+        actions.appendChild(btnLater);
+        actions.appendChild(btnInstall);
+    } else {
+        msg.innerHTML = '<strong>Add Voyagr to your home screen</strong><span style="opacity:0.92;font-size:12px;display:block;margin-top:4px;">Use your browser menu: Install app or Add to Home Screen.</span>';
+        const btnOk = document.createElement('button');
+        btnOk.type = 'button';
+        btnOk.textContent = 'Got it';
+        btnOk.style.cssText = 'padding:8px 14px;border-radius:8px;border:none;background:#7c4dff;color:#fff;cursor:pointer;font-weight:600;font-size:13px;';
+        btnOk.onclick = () => dismissAddToHomeScreenForDays(14);
+        actions.appendChild(btnLater);
+        actions.appendChild(btnOk);
+    }
+
+    bar.appendChild(msg);
+    bar.appendChild(actions);
+    document.body.appendChild(bar);
 }
 
 /**
@@ -16187,6 +16291,7 @@ window.addEventListener('load', () => {
     initMobileEnhancements();
     requestPersistentStorage();
     checkStorageUsage();
+    setTimeout(() => tryShowInstallBanner(), 2200);
 });
 
 /**

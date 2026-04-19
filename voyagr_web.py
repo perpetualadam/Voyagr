@@ -4359,7 +4359,7 @@ HTML_TEMPLATE = '''
     <!-- External JavaScript modules -->
     <script src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
     <script src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    <script src="/static/js/voyagr-app.js?v=20260411b"></script>
+    <script src="/static/js/voyagr-app.js?v=20260411c"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -4677,11 +4677,13 @@ HTML_TEMPLATE = '''
                                 </button>
                             </div>
 
+                            <!-- Continue with Google — disabled (use email sign-in). Re-enable by uncommenting:
                             <div style="margin-top: 10px; display: grid; grid-template-columns: 1fr; gap: 10px;">
                                 <button onclick="authSignInProvider('google')" style="padding: 10px; background: #fff; color: #333; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
                                     Continue with Google
                                 </button>
                             </div>
+                            -->
                             <div style="font-size: 11px; color: #888; margin-top: 8px;">
                                 Tip: login lives here in Settings so it never interrupts navigation.
                             </div>
@@ -4722,7 +4724,7 @@ HTML_TEMPLATE = '''
                     <div class="preferences-section" id="supportVoyagrSection" style="display: none;">
                         <h3>⚡ Voyager Premium</h3>
                         <p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
-                            <strong>Voyager Premium</strong> is a <strong>paid subscription</strong> (Stripe) for premium features. <strong>Buy Me a Coffee</strong> and <strong>Patreon</strong> are separate <strong>one-off tips</strong> or patronage.
+                            <strong>Voyager Premium</strong> is a <strong>paid subscription</strong> (Stripe) for premium features.
                         </p>
                         <p id="serviceRegionNote" style="display: none; font-size: 12px; color: #5d4037; margin: 0 0 10px 0; padding: 8px 10px; background: #fff8e1; border-radius: 6px; border-left: 3px solid #ff8f00;"></p>
                         <p id="supportStripeTrialNote" style="display: none; font-size: 12px; color: #1565c0; margin: 0 0 10px 0;"></p>
