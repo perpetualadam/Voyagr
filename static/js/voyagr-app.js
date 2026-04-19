@@ -211,13 +211,8 @@ function getCurrencySymbol() {
  * @returns {*} Return value description
  */
 function adjustCostForUnits(cost, costType = 'fuel') {
-    if (distanceUnit === 'mi') {
-        // For imperial units, costs need to be adjusted
-        // Fuel: 1 L/100km = 0.0621371 L/mile, so multiply by 1.60934
-        // Toll: £/km becomes £/mile, multiply by 1.60934
-        // CAZ: Based on distance, so multiply by 1.60934
-        return cost * 1.60934;
-    }
+    // Currency totals from the API are absolute amounts (£ / $ / €).
+    // Distance unit (mi vs km) must not rescale money — only distance labels change.
     return cost;
 }
 /**
@@ -2580,14 +2575,10 @@ function displayRouteComparison() {
         const hazardCount = route.hazard_count || 0;
         const routeColor = ROUTE_COLORS[index % ROUTE_COLORS.length];
 
-        // Adjust costs for imperial units if needed
         const fuelCost = parseFloat(route.fuel_cost || 0);
         const tollCost = parseFloat(route.toll_cost || 0);
         const cazCost = parseFloat(route.caz_cost || 0);
-        const adjustedFuelCost = distanceUnit === 'mi' ? fuelCost * 1.60934 : fuelCost;
-        const adjustedTollCost = distanceUnit === 'mi' ? tollCost * 1.60934 : tollCost;
-        const adjustedCazCost = distanceUnit === 'mi' ? cazCost * 1.60934 : cazCost;
-        const totalCost = (adjustedFuelCost + adjustedTollCost + adjustedCazCost).toFixed(2);
+        const totalCost = (fuelCost + tollCost + cazCost).toFixed(2);
 
         const isSelected = index === selectedRouteIndex;
         const borderColor = isSelected ? routeColor : '#ddd';
@@ -2608,8 +2599,8 @@ function displayRouteComparison() {
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #333; margin-bottom: 8px;">
                     <div><strong>⏱️ ${route.duration_minutes} min</strong></div>
                     <div><strong>📏 ${distance} ${distUnit}</strong></div>
-                    <div>⛽ ${symbol}${adjustedFuelCost.toFixed(2)}</div>
-                    <div>🛣️ ${symbol}${adjustedTollCost.toFixed(2)}</div>
+                    <div>⛽ ${symbol}${fuelCost.toFixed(2)}</div>
+                    <div>🛣️ ${symbol}${tollCost.toFixed(2)}</div>
                 </div>
                 <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
                     Total: <strong>${symbol}${totalCost}</strong>
@@ -3308,28 +3299,24 @@ function useRoute(index) {
     const distUnit = getDistanceUnit();
     const symbol = getCurrencySymbol();
 
-    // Adjust costs for imperial units if needed
     const fuelCost = parseFloat(route.fuel_cost || 0);
     const tollCost = parseFloat(route.toll_cost || 0);
     const cazCost = parseFloat(route.caz_cost || 0);
-    const adjustedFuelCost = distanceUnit === 'mi' ? fuelCost * 1.60934 : fuelCost;
-    const adjustedTollCost = distanceUnit === 'mi' ? tollCost * 1.60934 : tollCost;
-    const adjustedCazCost = distanceUnit === 'mi' ? cazCost * 1.60934 : cazCost;
-    const totalCost = (adjustedFuelCost + adjustedTollCost + adjustedCazCost).toFixed(2);
+    const totalCost = (fuelCost + tollCost + cazCost).toFixed(2);
 
     document.getElementById('distance').textContent = distance + ' ' + distUnit;
     document.getElementById('distance').dataset.km = route.distance_km;
     document.getElementById('time').textContent = route.duration_minutes + ' min';
-    document.getElementById('fuelCost').textContent = symbol + adjustedFuelCost.toFixed(2);
-    document.getElementById('fuelCost').dataset.value = adjustedFuelCost;
-    document.getElementById('tollCost').textContent = symbol + adjustedTollCost.toFixed(2);
-    document.getElementById('tollCost').dataset.value = adjustedTollCost;
+    document.getElementById('fuelCost').textContent = symbol + fuelCost.toFixed(2);
+    document.getElementById('fuelCost').dataset.value = fuelCost;
+    document.getElementById('tollCost').textContent = symbol + tollCost.toFixed(2);
+    document.getElementById('tollCost').dataset.value = tollCost;
 
-    console.log('[Cost] Route selected with adjusted costs:', {
+    console.log('[Cost] Route selected with costs:', {
         distanceUnit: distanceUnit,
-        fuelCost: adjustedFuelCost.toFixed(2),
-        tollCost: adjustedTollCost.toFixed(2),
-        cazCost: adjustedCazCost.toFixed(2),
+        fuelCost: fuelCost.toFixed(2),
+        tollCost: tollCost.toFixed(2),
+        cazCost: cazCost.toFixed(2),
         totalCost: totalCost
     });
 
@@ -3371,17 +3358,13 @@ function prepareRouteSharing() {
     document.getElementById('shareDistance').textContent = `Distance: ${convertDistance(route.distance_km || 0)} ${distUnit}`;
     document.getElementById('shareTime').textContent = `Duration: ${route.time || 'N/A'}`;
 
-    // Adjust costs for imperial units if needed
     const fuelCost = parseFloat(route.fuel_cost || 0);
     const tollCost = parseFloat(route.toll_cost || 0);
     const cazCost = parseFloat(route.caz_cost || 0);
-    const adjustedFuelCost = distanceUnit === 'mi' ? fuelCost * 1.60934 : fuelCost;
-    const adjustedTollCost = distanceUnit === 'mi' ? tollCost * 1.60934 : tollCost;
-    const adjustedCazCost = distanceUnit === 'mi' ? cazCost * 1.60934 : cazCost;
-    const totalCost = (adjustedFuelCost + adjustedTollCost + adjustedCazCost).toFixed(2);
+    const totalCost = (fuelCost + tollCost + cazCost).toFixed(2);
     document.getElementById('shareCost').textContent = `Total Cost: ${symbol}${totalCost}`;
 
-    console.log('[Cost] Route sharing prepared with adjusted costs:', {
+    console.log('[Cost] Route sharing prepared with costs:', {
         distanceUnit: distanceUnit,
         totalCost: totalCost
     });
@@ -4711,11 +4694,21 @@ function displayHazardMarkers(hazards) {
     // Clear existing hazard markers
     clearHazardMarkers();
 
-    // Camera SVG: square GATSO-style icon
+    // Camera SVG: square GATSO-style icon (speed / fixed)
     const cameraSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="5" width="16" height="16" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="13" r="4" fill="#222"/><circle cx="12" cy="13" r="2" fill="#FFD600"/><rect x="8" y="2" width="8" height="4" rx="1" fill="#222"/></svg>`;
+    const cameraRedLightSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="3" y="5" width="18" height="14" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="9.5" cy="12" r="3.2" fill="#222"/><circle cx="9.5" cy="12" r="1.6" fill="#FFD600"/><circle cx="16.5" cy="9.5" r="2.2" fill="#f44336" stroke="#b71c1c" stroke-width="0.8"/><circle cx="16.5" cy="14.5" r="2.2" fill="#fbc02d" stroke="#f57f17" stroke-width="0.8"/><circle cx="16.5" cy="19.5" r="2.2" fill="#388e3c" stroke="#1b5e20" stroke-width="0.8"/></svg>`;
+    const cameraAvgSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="7" width="16" height="11" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="12.5" r="3" fill="#222"/><path d="M5 18 L19 18" stroke="#222" stroke-width="1.3" stroke-dasharray="2 2"/></svg>`;
+    const cameraBusSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="7" width="16" height="12" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="13" r="3" fill="#222"/><rect x="7" y="9" width="10" height="6" rx="1" fill="#1565c0"/></svg>`;
+    const cameraMobileSVG = `<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="6" width="13" height="13" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="10.5" cy="12.5" r="3" fill="#222"/><path d="M17 8 L20 7 L19 14 L16 13 Z" fill="#555"/></svg>`;
 
     const hazardConfig = {
-        'camera': { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Camera' },
+        'camera': { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Speed camera' },
+        'camera_speed': { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Speed camera' },
+        'camera_red_light': { svg: cameraRedLightSVG, color: '#e65100', bgColor: '#fff3e0', label: 'Traffic-light camera' },
+        'camera_average_speed': { svg: cameraAvgSVG, color: '#6a1b9a', bgColor: '#f3e5f5', label: 'Average speed camera' },
+        'camera_bus_lane': { svg: cameraBusSVG, color: '#0d47a1', bgColor: '#e3f2fd', label: 'Bus lane camera' },
+        'camera_mobile': { svg: cameraMobileSVG, color: '#37474f', bgColor: '#eceff1', label: 'Mobile camera' },
+        'camera_other': { svg: cameraSVG, color: '#f57c00', bgColor: '#fff8e1', label: 'Camera' },
         'traffic_light': { useOsmTrafficLightPill: true, color: '#2e7d32', bgColor: '#e8f5e9', label: 'Traffic light' },
         'police': { emoji: '🚔', color: '#1976d2', bgColor: '#e3f2fd', label: 'Police' },
         'roadworks': { emoji: '🚧', color: '#ffc107', bgColor: '#fff8e1', label: 'Roadworks' },
@@ -4734,9 +4727,12 @@ function displayHazardMarkers(hazards) {
         if (seenLocations.has(locationKey)) return;
         seenLocations.add(locationKey);
 
-        const hazardTypeKey = (hazard.type === 'traffic_signals' || hazard.type === 'traffic_signal')
+        let hazardTypeKey = (hazard.type === 'traffic_signals' || hazard.type === 'traffic_signal')
             ? 'traffic_light'
             : hazard.type;
+        if (hazardTypeKey === 'camera') {
+            hazardTypeKey = 'camera_speed';
+        }
         const config = hazardConfig[hazardTypeKey] || { emoji: '⚠️', color: '#ff9800', bgColor: '#fff3e0', label: 'Hazard' };
 
         let markerHtml;
@@ -6271,10 +6267,10 @@ let showCamerasEnabled = localStorage.getItem('showCamerasEnabled') !== 'false';
 let cameraFetchTimeout = null;
 
 window.osmTrafficLightMarkers = [];
-let showOsmTrafficLightsEnabled = localStorage.getItem('showOsmTrafficLightsOnMap') === 'true';
+let showOsmTrafficLightsEnabled = localStorage.getItem('showOsmTrafficLightsOnMap') !== 'false';
 
 window.osmRailwayCrossingMarkers = [];
-let showOsmRailwayCrossingsEnabled = localStorage.getItem('showOsmRailwayCrossingsOnMap') === 'true';
+let showOsmRailwayCrossingsEnabled = localStorage.getItem('showOsmRailwayCrossingsOnMap') !== 'false';
 
 /** SVG icon: level crossing (rails + warning cross), matches hazard railway_crossing colours */
 const RAILWAY_CROSSING_MAP_ICON_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="4" fill="#efebe9" stroke="#795548" stroke-width="2"/><path stroke="#424242" stroke-width="1.8" stroke-linecap="round" d="M5 9h14M5 15h14"/><path stroke="#c62828" stroke-width="2.2" stroke-linecap="round" d="M8 7l8 10M16 7l-8 10"/></svg>`;
@@ -6425,7 +6421,18 @@ function toggleShowOsmTrafficLights() {
     showOsmTrafficLightsEnabled = !showOsmTrafficLightsEnabled;
     localStorage.setItem('showOsmTrafficLightsOnMap', showOsmTrafficLightsEnabled ? 'true' : 'false');
     const toggle = document.getElementById('showOsmTrafficLightsToggle');
-    if (toggle) toggle.classList.toggle('active', showOsmTrafficLightsEnabled);
+    if (toggle) {
+        toggle.classList.toggle('active', showOsmTrafficLightsEnabled);
+        if (showOsmTrafficLightsEnabled) {
+            toggle.style.background = '#4CAF50';
+            toggle.style.borderColor = '#4CAF50';
+            toggle.style.color = 'white';
+        } else {
+            toggle.style.background = '#ddd';
+            toggle.style.borderColor = '#999';
+            toggle.style.color = '#333';
+        }
+    }
     if (showOsmTrafficLightsEnabled) {
         fetchAndDisplayOsmTrafficLights();
     } else {
@@ -6438,7 +6445,18 @@ function toggleShowOsmRailwayCrossings() {
     showOsmRailwayCrossingsEnabled = !showOsmRailwayCrossingsEnabled;
     localStorage.setItem('showOsmRailwayCrossingsOnMap', showOsmRailwayCrossingsEnabled ? 'true' : 'false');
     const toggle = document.getElementById('showOsmRailwayCrossingsToggle');
-    if (toggle) toggle.classList.toggle('active', showOsmRailwayCrossingsEnabled);
+    if (toggle) {
+        toggle.classList.toggle('active', showOsmRailwayCrossingsEnabled);
+        if (showOsmRailwayCrossingsEnabled) {
+            toggle.style.background = '#4CAF50';
+            toggle.style.borderColor = '#4CAF50';
+            toggle.style.color = 'white';
+        } else {
+            toggle.style.background = '#ddd';
+            toggle.style.borderColor = '#999';
+            toggle.style.color = '#333';
+        }
+    }
     if (showOsmRailwayCrossingsEnabled) {
         fetchAndDisplayOsmRailwayCrossings();
     } else {
@@ -6584,10 +6602,28 @@ function initializeCameraLayer() {
     const osmTlToggle = document.getElementById('showOsmTrafficLightsToggle');
     if (osmTlToggle) {
         osmTlToggle.classList.toggle('active', showOsmTrafficLightsEnabled);
+        if (showOsmTrafficLightsEnabled) {
+            osmTlToggle.style.background = '#4CAF50';
+            osmTlToggle.style.borderColor = '#4CAF50';
+            osmTlToggle.style.color = 'white';
+        } else {
+            osmTlToggle.style.background = '#ddd';
+            osmTlToggle.style.borderColor = '#999';
+            osmTlToggle.style.color = '#333';
+        }
     }
     const osmRxToggle = document.getElementById('showOsmRailwayCrossingsToggle');
     if (osmRxToggle) {
         osmRxToggle.classList.toggle('active', showOsmRailwayCrossingsEnabled);
+        if (showOsmRailwayCrossingsEnabled) {
+            osmRxToggle.style.background = '#4CAF50';
+            osmRxToggle.style.borderColor = '#4CAF50';
+            osmRxToggle.style.color = 'white';
+        } else {
+            osmRxToggle.style.background = '#ddd';
+            osmRxToggle.style.borderColor = '#999';
+            osmRxToggle.style.color = '#333';
+        }
     }
 
     // Fetch cameras on map move (with debounce)
@@ -6795,12 +6831,14 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     document.getElementById('previewCAZCost').textContent = symbol + cazCost.toFixed(2);
     document.getElementById('previewTotalCost').textContent = symbol + totalCost.toFixed(2);
 
-    // Update CAZ status display
+    // Update CAZ status display (merge primary route slice — alternates carry their own caz_details)
     const cazStatusContainer = document.getElementById('cazStatusContainer');
-    const cazDetails = routeData.caz_details || {};
+    const primaryRouteForCaz = (routeData.routes && routeData.routes.length > 0) ? routeData.routes[0] : routeData;
+    const cazDetails = primaryRouteForCaz.caz_details || routeData.caz_details || {};
 
     if (cazStatusContainer) {
-        if (cazDetails.zones_crossed && cazDetails.zones_crossed.length > 0) {
+        const zonesCrossed = (cazDetails.zones_crossed && cazDetails.zones_crossed.length > 0);
+        if (zonesCrossed) {
             let cazStatusHtml = '';
             if (cazDetails.is_exempt) {
                 cazStatusHtml = `<div style="color: #4caf50; font-size: 12px;">✅ CAZ Exempt (${cazDetails.exemption_reason || 'Electric Vehicle'})</div>`;
@@ -6811,6 +6849,9 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
                 cazStatusHtml = `<div style="color: #ff9800; font-size: 12px;">⚠️ Passes through: ${zoneNames}</div>`;
             }
             cazStatusContainer.innerHTML = cazStatusHtml;
+            cazStatusContainer.style.display = 'block';
+        } else if (cazCost > 0) {
+            cazStatusContainer.innerHTML = `<div style="color: #ff9800; font-size: 12px;">⚠️ CAZ charge included in total (${symbol}${cazCost.toFixed(2)}). Zone names unavailable for this route.</div>`;
             cazStatusContainer.style.display = 'block';
         } else {
             cazStatusContainer.style.display = 'none';
@@ -6907,14 +6948,10 @@ function showAlternativeRoutesInPreview() {
     const distUnit = getDistanceUnit();
 
     routeOptions.forEach((route, index) => {
-        // Adjust costs for imperial units if needed
         const fuelCost = parseFloat(route.fuel_cost || 0);
         const tollCost = parseFloat(route.toll_cost || 0);
         const cazCost = parseFloat(route.caz_cost || 0);
-        const adjustedFuelCost = distanceUnit === 'mi' ? fuelCost * 1.60934 : fuelCost;
-        const adjustedTollCost = distanceUnit === 'mi' ? tollCost * 1.60934 : tollCost;
-        const adjustedCazCost = distanceUnit === 'mi' ? cazCost * 1.60934 : cazCost;
-        const totalCost = (adjustedFuelCost + adjustedTollCost + adjustedCazCost).toFixed(2);
+        const totalCost = (fuelCost + tollCost + cazCost).toFixed(2);
         const routeColor = ROUTE_COLORS[index % ROUTE_COLORS.length];
         const routeName = route.name || `Route ${index + 1}`;
         const hazardCount = route.hazard_count || 0;
@@ -15585,6 +15622,87 @@ function togglePreference(pref) {
     saveAllSettings();
 }
 
+const HAZARD_CAMERA_SUBTYPES = [
+    'camera_speed',
+    'camera_red_light',
+    'camera_average_speed',
+    'camera_bus_lane',
+    'camera_mobile',
+    'camera_other'
+];
+
+function applyHazardToggleStyles(button, enabled) {
+    if (!button) return;
+    if (enabled) {
+        button.classList.add('active');
+        button.style.background = '#4CAF50';
+        button.style.borderColor = '#4CAF50';
+        button.style.color = 'white';
+    } else {
+        button.classList.remove('active');
+        button.style.background = '#ddd';
+        button.style.borderColor = '#999';
+        button.style.color = '#333';
+    }
+}
+
+async function loadHazardCameraTogglesFromApi() {
+    try {
+        const res = await fetch('/api/hazard-preferences');
+        const data = await res.json();
+        if (!data.success || !data.preferences) return;
+        for (const ht of HAZARD_CAMERA_SUBTYPES) {
+            const pref = data.preferences.find(p => p.hazard_type === ht);
+            const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${ht}"]`);
+            if (!pref || !btn) continue;
+            applyHazardToggleStyles(btn, pref.enabled);
+        }
+    } catch (e) {
+        console.warn('[HAZARDS] Could not load camera hazard preferences:', e);
+    }
+}
+
+async function toggleHazardPreferenceApi(hazardType, ev) {
+    if (ev) ev.preventDefault();
+    try {
+        const res = await fetch('/api/hazard-preferences');
+        const data = await res.json();
+        if (!data.success || !data.preferences) {
+            showStatus('Could not load hazard preferences', 'error');
+            return;
+        }
+        const pref = data.preferences.find(p => p.hazard_type === hazardType);
+        if (!pref) {
+            showStatus('Unknown hazard preference', 'error');
+            return;
+        }
+        const newEnabled = !pref.enabled;
+        const upd = await fetch('/api/hazard-preferences', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                hazard_type: hazardType,
+                penalty_seconds: pref.penalty_seconds,
+                enabled: newEnabled,
+                proximity_threshold_meters: pref.proximity_threshold_meters
+            })
+        });
+        const out = await upd.json();
+        if (!out.success) {
+            showStatus(out.error || 'Update failed', 'error');
+            return;
+        }
+        const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${hazardType}"]`);
+        applyHazardToggleStyles(btn, newEnabled);
+        const label = hazardType.replace(/^camera_/, '').replace(/_/g, ' ');
+        showStatus(`Camera (${label}) avoidance ${newEnabled ? 'enabled' : 'disabled'}`, 'info');
+        saveAllSettings();
+    } catch (e) {
+        console.error('[HAZARDS] toggle:', e);
+        showStatus('Could not update hazard preference', 'error');
+    }
+}
+
 /**
  * loadPreferences function
  * @function loadPreferences
@@ -15632,6 +15750,8 @@ function loadPreferences() {
             console.warn('[Settings] Button not found for preference:', pref, 'ID:', buttonId);
         }
     });
+
+    loadHazardCameraTogglesFromApi();
 
     // ===== LOAD GESTURE CONTROL PREFERENCE =====
     const gestureSaved = localStorage.getItem('gestureEnabled');

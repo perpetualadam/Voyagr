@@ -1025,6 +1025,52 @@ class DatabasePool:
 DB_FILE = 'voyagr_web.db'
 db_pool = None  # Will be initialized after DB creation
 
+# Camera hazard buckets (must exist before init_db() — used in DB migration)
+CAMERA_HAZARD_BUCKETS: Tuple[str, ...] = (
+    'camera_speed',
+    'camera_red_light',
+    'camera_average_speed',
+    'camera_bus_lane',
+    'camera_mobile',
+    'camera_other',
+)
+
+
+def migrate_legacy_camera_hazard_preferences(cursor: sqlite3.Cursor) -> None:
+    """If DB only has legacy 'camera', copy settings into camera_* rows once."""
+    cursor.execute(
+        "SELECT COUNT(*) FROM hazard_preferences WHERE hazard_type LIKE 'camera_%'"
+    )
+    if cursor.fetchone()[0] > 0:
+        return
+    cursor.execute(
+        "SELECT penalty_seconds, proximity_threshold_meters, enabled FROM hazard_preferences WHERE hazard_type='camera'"
+    )
+    cam = cursor.fetchone()
+    penalty, threshold, enabled = (800, 100, 1) if not cam else (cam[0], cam[1], cam[2])
+    for st in CAMERA_HAZARD_BUCKETS:
+        cursor.execute(
+            '''
+            INSERT OR IGNORE INTO hazard_preferences
+            (hazard_type, penalty_seconds, enabled, proximity_threshold_meters)
+            VALUES (?, ?, ?, ?)
+            ''',
+            (st, penalty, int(enabled), threshold),
+        )
+
+
+def apply_camera_hazard_penalty_defaults(cursor: sqlite3.Cursor) -> None:
+    """Keep SCDB camera penalty_seconds aligned: red-light 1200s, all other camera_* buckets 800s."""
+    cursor.execute(
+        "UPDATE hazard_preferences SET penalty_seconds = 1200 WHERE hazard_type = 'camera_red_light'"
+    )
+    cursor.execute(
+        """UPDATE hazard_preferences SET penalty_seconds = 800 WHERE hazard_type IN (
+            'camera_speed', 'camera_average_speed', 'camera_bus_lane', 'camera_mobile', 'camera_other'
+        )"""
+    )
+
+
 def init_db():
     """Initialize database with all tables."""
     conn = sqlite3.connect(DB_FILE)
@@ -1322,11 +1368,15 @@ def init_db():
         ''')
 
     # Insert default hazard preferences if not exists
-    # NOTE: All cameras now have HIGH priority to avoid (consolidated camera setting)
-    # Penalty of 800s (~13 minutes) for all camera types ensures routes avoid them
     hazard_preferences = [
-        ('camera', 800, 1, 100),                 # 800s (13 min) - high priority
-        ('traffic_light', 400, 1, 80),            # OSM traffic lights (lower than cameras)
+        ('camera_speed', 800, 1, 100),
+        ('camera_red_light', 1200, 1, 100),
+        ('camera_average_speed', 800, 1, 100),
+        ('camera_bus_lane', 800, 1, 100),
+        ('camera_mobile', 800, 1, 150),
+        ('camera_other', 800, 1, 100),
+        ('camera', 800, 0, 100),                  # legacy bucket; replaced by camera_* rows
+        ('traffic_light', 400, 1, 80),
         ('police', 180, 1, 200),
         ('roadworks', 300, 1, 500),
         ('accident', 600, 1, 500),
@@ -1341,6 +1391,9 @@ def init_db():
             (hazard_type, penalty_seconds, enabled, proximity_threshold_meters)
             VALUES (?, ?, ?, ?)
         ''', (hazard_type, penalty, enabled, threshold))
+
+    migrate_legacy_camera_hazard_preferences(cursor)
+    apply_camera_hazard_penalty_defaults(cursor)
 
     conn.commit()
     conn.close()
@@ -2101,6 +2154,54 @@ def return_db_connection(conn: Any) -> None:
     else:
         conn.close()
 
+
+def normalize_camera_hazard_bucket(raw_type: Optional[str]) -> str:
+    """Map cameras.type (SCDB labels, legacy values) to a hazard_preferences key."""
+    if not raw_type:
+        return 'camera_speed'
+    t = str(raw_type).strip().lower()
+    if t in ('camera', 'speed', 'fixed', 'gatso', 'truvelo'):
+        return 'camera_speed'
+    if any(x in t for x in ('red_light', 'red-light', 'traffic_light', 'traffic light', 'rlc', 'tlc')):
+        return 'camera_red_light'
+    if any(x in t for x in ('spec', 'average', 'avg', 'vec')):
+        return 'camera_average_speed'
+    if 'bus' in t:
+        return 'camera_bus_lane'
+    if 'mobile' in t:
+        return 'camera_mobile'
+    return 'camera_other'
+
+
+def clear_camera_hazard_buckets(hazards: Dict[str, Any]) -> None:
+    """Clear all SCDB-derived camera buckets (when master optimised-routing toggle is off)."""
+    for key in list(hazards.keys()):
+        if key.startswith('camera_') or key == 'camera':
+            hazards[key] = []
+
+
+def filter_camera_hazards_by_preferences(hazards: Dict[str, Any]) -> None:
+    """Remove disabled camera subtypes from routing/scoring inputs (respects hazard_preferences)."""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT hazard_type, enabled FROM hazard_preferences WHERE hazard_type LIKE 'camera_%' OR hazard_type = 'camera'"
+        )
+        rows = cursor.fetchall()
+        return_db_connection(conn)
+        pref_on = {h[0]: bool(h[1]) for h in rows}
+        for key in list(hazards.keys()):
+            if (key.startswith('camera_') or key == 'camera') and key in pref_on and not pref_on[key]:
+                hazards[key] = []
+    except Exception as e:
+        logger.warning(f"[HAZARDS] filter_camera_hazards_by_preferences: {e}")
+
+
+def count_scdb_cameras(hazards: Dict[str, Any]) -> int:
+    return sum(len(hazards.get(k, [])) for k in CAMERA_HAZARD_BUCKETS)
+
+
 def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, List[Dict[str, Any]]]:
     """Fetch hazards within bounding box of route."""
     try:
@@ -2126,10 +2227,18 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
             cached_data, timestamp = cached
             if time.time() - timestamp < 600:  # 10-minute cache
                 return_db_connection(conn)
-                return json.loads(cached_data)
+                parsed: Dict[str, Any] = json.loads(cached_data)
+                if parsed.get('camera') and not any(k.startswith('camera_') for k in parsed):
+                    parsed['camera_speed'] = parsed.pop('camera', [])
+                return parsed
 
         hazards: Dict[str, List[Dict[str, Any]]] = {
-            'camera': [],
+            'camera_speed': [],
+            'camera_red_light': [],
+            'camera_average_speed': [],
+            'camera_bus_lane': [],
+            'camera_mobile': [],
+            'camera_other': [],
             'police': [],
             'roadworks': [],
             'accident': [],
@@ -2143,7 +2252,16 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
             (south, north, west, east)
         )
         for lat, lon, camera_type, desc in cursor.fetchall():
-            hazards['camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
+            bucket = normalize_camera_hazard_bucket(camera_type)
+            if bucket not in hazards:
+                bucket = 'camera_other'
+            hazards[bucket].append({
+                'lat': lat,
+                'lon': lon,
+                'type': bucket,
+                'description': desc or '',
+                'severity': 'high',
+            })
 
         # Skip community reports for custom model (only cameras are used for avoidance)
         # Community reports are still used for post-processing hazard scoring
@@ -2370,7 +2488,7 @@ def merge_hazards_with_tomtom_incidents(hazards: Dict[str, List[Dict[str, Any]]]
             merged[incident_type] = incident_list
 
     # Log merge summary
-    camera_count = len(merged.get('camera', []))
+    camera_count = count_scdb_cameras(merged)
     tomtom_count = sum(len(tomtom_incidents.get(t, [])) for t in tomtom_incidents.keys())
     total_count = sum(len(v) for v in merged.values())
 
@@ -2412,6 +2530,8 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], rou
 
         for hazard_type, hazard_list in hazards.items():
             weight = hazard_weights.get(hazard_type, 10.0)
+            if hazard_type.startswith('camera_'):
+                weight = hazard_weights.get('camera', 50.0)
             # Only include high-priority hazards (cameras, traffic lights, police)
             if weight >= 30.0:
                 for hazard in hazard_list:
@@ -2548,6 +2668,8 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]], r
 
         for hazard_type, hazard_list in hazards.items():
             weight = hazard_weights.get(hazard_type, 10.0)
+            if hazard_type.startswith('camera_'):
+                weight = hazard_weights.get('camera', 50.0)
             # FIXED: Include ALL hazard types, not just those with weight >= 30
             # This ensures routes with avoidance have FEWER hazards, not more
             for hazard in hazard_list:
@@ -3121,6 +3243,7 @@ def valhalla_route_json_to_standard_routes(
                 'fuel_litres': round(alt_costs['fuel_litres'], 2),
                 'toll_cost': round(alt_costs['toll_cost'], 2),
                 'caz_cost': round(alt_costs['caz_cost'], 2),
+                'caz_details': alt_costs.get('caz_details', {}),
                 'geometry': alt_geometry,
                 'geometry_precision': 6,
                 'hazard_penalty_seconds': round(alt_hazard_penalty, 0),
@@ -3222,6 +3345,7 @@ def valhalla_trip_json_to_std_route_entry(
         'fuel_litres': round(costs['fuel_litres'], 2),
         'toll_cost': round(costs['toll_cost'], 2),
         'caz_cost': round(costs['caz_cost'], 2),
+        'caz_details': costs.get('caz_details', {}),
         'geometry': sh_geom,
         'geometry_precision': 6,
         'hazard_penalty_seconds': round(penalty, 0),
@@ -3392,7 +3516,13 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
                 # Table exists but is empty - use defaults
                 logger.info(f"[HAZARDS] hazard_preferences table is empty, using defaults")
                 preferences = {
-                    'camera': {'penalty': 60, 'threshold': 500},
+                    'camera_speed': {'penalty': 800, 'threshold': 500},
+                    'camera_red_light': {'penalty': 1200, 'threshold': 120},
+                    'camera_average_speed': {'penalty': 800, 'threshold': 500},
+                    'camera_bus_lane': {'penalty': 800, 'threshold': 500},
+                    'camera_mobile': {'penalty': 800, 'threshold': 500},
+                    'camera_other': {'penalty': 800, 'threshold': 500},
+                    'camera': {'penalty': 800, 'threshold': 500},
                     'traffic_light': {'penalty': 45, 'threshold': 80},
                     'police': {'penalty': 30, 'threshold': 1000},
                     'roadworks': {'penalty': 15, 'threshold': 500},
@@ -3402,7 +3532,13 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
             # Table doesn't exist - use default preferences for all camera types
             logger.info(f"[HAZARDS] hazard_preferences table not found, using defaults: {e}")
             preferences = {
-                'camera': {'penalty': 60, 'threshold': 500},
+                'camera_speed': {'penalty': 800, 'threshold': 500},
+                'camera_red_light': {'penalty': 1200, 'threshold': 120},
+                'camera_average_speed': {'penalty': 800, 'threshold': 500},
+                'camera_bus_lane': {'penalty': 800, 'threshold': 500},
+                'camera_mobile': {'penalty': 800, 'threshold': 500},
+                'camera_other': {'penalty': 800, 'threshold': 500},
+                'camera': {'penalty': 800, 'threshold': 500},
                 'traffic_light': {'penalty': 45, 'threshold': 80},
                 'police': {'penalty': 30, 'threshold': 1000},
                 'roadworks': {'penalty': 15, 'threshold': 500},
@@ -3472,7 +3608,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
                 if min_distance <= threshold:
                     # CAMERA PRIORITY: Apply distance-based multiplier for ALL camera types
                     # Cameras closer to route get exponentially higher penalty
-                    if hazard_type in ('camera', 'traffic_light'):
+                    if hazard_type == 'traffic_light' or hazard_type.startswith('camera_') or hazard_type == 'camera':
                         # Proximity multiplier: 1.0 at threshold, 3.0 at 0m
                         # Formula: 1 + (2 * (1 - distance/threshold))
                         proximity_multiplier = 1.0 + (2.0 * (1.0 - min_distance / threshold))
@@ -4612,6 +4748,32 @@ HTML_TEMPLATE = '''
                             <span class="preference-label">⚡ Optimised Routing (cameras)</span>
                             <button class="toggle-switch" id="avoidCameras" data-pref="cameras" onclick="togglePreference('cameras')"></button>
                         </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 8px 0;">When on, routing can avoid camera locations. Use the toggles below to include or exclude each camera class (from your camera database, e.g. SCDB). Each setting is stored in hazard preferences.</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">📷 Speed cameras</span>
+                            <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_speed" onclick="toggleHazardPreferenceApi('camera_speed', event)"></button>
+                        </div>
+                        <div class="preference-item">
+                            <span class="preference-label">🚦 Traffic-light cameras</span>
+                            <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_red_light" onclick="toggleHazardPreferenceApi('camera_red_light', event)"></button>
+                        </div>
+                        <div class="preference-item">
+                            <span class="preference-label">📉 Average-speed (SPECS)</span>
+                            <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_average_speed" onclick="toggleHazardPreferenceApi('camera_average_speed', event)"></button>
+                        </div>
+                        <div class="preference-item">
+                            <span class="preference-label">🚌 Bus lane cameras</span>
+                            <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_bus_lane" onclick="toggleHazardPreferenceApi('camera_bus_lane', event)"></button>
+                        </div>
+                        <div class="preference-item">
+                            <span class="preference-label">🚔 Mobile cameras</span>
+                            <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_mobile" onclick="toggleHazardPreferenceApi('camera_mobile', event)"></button>
+                        </div>
+                        <div class="preference-item">
+                            <span class="preference-label">❔ Other cameras</span>
+                            <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_other" onclick="toggleHazardPreferenceApi('camera_other', event)"></button>
+                        </div>
 
                         <div class="preference-item">
                             <span class="preference-label">🚦 Avoid Traffic Lights (OSM)</span>
@@ -4846,12 +5008,12 @@ HTML_TEMPLATE = '''
 
                         <div class="preference-item">
                             <span class="preference-label">🚥 OSM Traffic Lights on Map</span>
-                            <button class="toggle-switch" id="showOsmTrafficLightsToggle" onclick="toggleShowOsmTrafficLights()"></button>
+                            <button class="toggle-switch active" id="showOsmTrafficLightsToggle" onclick="toggleShowOsmTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label">🛤️ OSM Railway Crossings on Map</span>
-                            <button class="toggle-switch" id="showOsmRailwayCrossingsToggle" onclick="toggleShowOsmRailwayCrossings()"></button>
+                            <button class="toggle-switch active" id="showOsmRailwayCrossingsToggle" onclick="toggleShowOsmRailwayCrossings()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Level crossings from OpenStreetMap (<code>railway=level_crossing</code>). Independent of the “Avoid railway crossings” routing option.</p>
 
@@ -6402,7 +6564,9 @@ def calculate_route():
                     all_lons = [start_lon, end_lon] + [s['lon'] for s in md_stops]
                     hazards_md = fetch_hazards_for_route(min(all_lats), min(all_lons), max(all_lats), max(all_lons))
                     if not avoid_cameras:
-                        hazards_md['camera'] = []
+                        clear_camera_hazard_buckets(hazards_md)
+                    else:
+                        filter_camera_hazards_by_preferences(hazards_md)
                     bbox_md = {
                         'min_lat': min(all_lats), 'max_lat': max(all_lats),
                         'min_lon': min(all_lons), 'max_lon': max(all_lons),
@@ -6557,7 +6721,9 @@ def calculate_route():
             logger.warning(f"[TOMTOM] Failed to fetch incidents (using cameras only): {e}")
 
         if not avoid_cameras:
-            hazards['camera'] = []
+            clear_camera_hazard_buckets(hazards)
+        else:
+            filter_camera_hazards_by_preferences(hazards)
 
         if avoid_traffic_lights:
             try:
@@ -7393,6 +7559,7 @@ def calculate_route():
                                     'fuel_litres': round(alt_fuel_litres, 2),
                                     'toll_cost': round(alt_toll_cost, 2),
                                     'caz_cost': round(alt_caz_cost, 2),
+                                    'caz_details': alt_costs.get('caz_details', {}),
                                     'geometry': alt_geometry,
                                     'geometry_precision': 6,
                                     'hazard_penalty_seconds': round(alt_hazard_penalty, 0),
@@ -7449,6 +7616,7 @@ def calculate_route():
                                 'fuel_litres': round(costs['fuel_litres'], 2),
                                 'toll_cost': round(costs['toll_cost'], 2),
                                 'caz_cost': round(costs['caz_cost'], 2),
+                                'caz_details': costs.get('caz_details', {}),
                                 'geometry': geometry,
                                 'geometry_precision': 6,
                                 'hazard_penalty_seconds': round(penalty, 0),

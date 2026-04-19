@@ -91,7 +91,12 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
                 return json.loads(cached_data)
 
         hazards: Dict[str, List[Dict[str, Any]]] = {
-            'camera': [],
+            'camera_speed': [],
+            'camera_red_light': [],
+            'camera_average_speed': [],
+            'camera_bus_lane': [],
+            'camera_mobile': [],
+            'camera_other': [],
             'police': [],
             'roadworks': [],
             'accident': [],
@@ -100,12 +105,37 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
             'debris': []
         }
 
+        def _norm_cam(t: Optional[str]) -> str:
+            if not t:
+                return 'camera_speed'
+            x = str(t).strip().lower()
+            if x in ('camera', 'speed', 'fixed', 'gatso', 'truvelo'):
+                return 'camera_speed'
+            if any(s in x for s in ('red_light', 'red-light', 'traffic_light', 'traffic light', 'rlc', 'tlc')):
+                return 'camera_red_light'
+            if any(s in x for s in ('spec', 'average', 'avg', 'vec')):
+                return 'camera_average_speed'
+            if 'bus' in x:
+                return 'camera_bus_lane'
+            if 'mobile' in x:
+                return 'camera_mobile'
+            return 'camera_other'
+
         cursor.execute(
             "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
             (south, north, west, east)
         )
         for lat, lon, camera_type, desc in cursor.fetchall():
-            hazards['camera'].append({'lat': lat, 'lon': lon, 'description': desc, 'severity': 'high'})
+            bucket = _norm_cam(camera_type)
+            if bucket not in hazards:
+                bucket = 'camera_other'
+            hazards[bucket].append({
+                'lat': lat,
+                'lon': lon,
+                'type': bucket,
+                'description': desc or '',
+                'severity': 'high',
+            })
 
         return_db_connection(conn)
         return hazards
@@ -266,7 +296,8 @@ def merge_hazards_with_tomtom_incidents(hazards: Dict[str, List[Dict[str, Any]]]
         else:
             merged[incident_type] = incident_list
 
-    camera_count = len(merged.get('camera', []))
+    cam_keys = ('camera_speed', 'camera_red_light', 'camera_average_speed', 'camera_bus_lane', 'camera_mobile', 'camera_other')
+    camera_count = sum(len(merged.get(k, [])) for k in cam_keys)
     tomtom_count = sum(len(tomtom_incidents.get(t, [])) for t in tomtom_incidents.keys())
     total_count = sum(len(v) for v in merged.values())
     logger.info(f"[HYBRID] Merged hazards: {camera_count} cameras + {tomtom_count} TomTom incidents = {total_count} total")
@@ -293,6 +324,8 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
 
         for hazard_type, hazard_list in hazards.items():
             weight = hazard_weights.get(hazard_type, 10.0)
+            if hazard_type.startswith('camera_'):
+                weight = hazard_weights.get('camera', 50.0)
             if weight >= 30.0:
                 for hazard in hazard_list:
                     if route_bbox:
@@ -369,6 +402,8 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
 
         for hazard_type, hazard_list in hazards.items():
             weight = hazard_weights.get(hazard_type, 10.0)
+            if hazard_type.startswith('camera_'):
+                weight = hazard_weights.get('camera', 50.0)
             for hazard in hazard_list:
                 if route_bbox:
                     margin_percent = 0.5
@@ -525,7 +560,7 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]],
                         break
 
                 if min_distance <= threshold:
-                    display_type = hazard.get('original_type', hazard_type)
+                    display_type = hazard.get('type') or hazard_type
                     hazards_on_route.append({
                         'lat': hazard_lat, 'lon': hazard_lon,
                         'type': display_type,
@@ -555,14 +590,26 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
             preferences = {row[0]: {'penalty': row[1], 'threshold': row[2]} for row in cursor.fetchall()}
             if not preferences:
                 preferences = {
-                    'camera': {'penalty': 60, 'threshold': 500},
+                    'camera_speed': {'penalty': 800, 'threshold': 500},
+                    'camera_red_light': {'penalty': 1200, 'threshold': 120},
+                    'camera_average_speed': {'penalty': 800, 'threshold': 500},
+                    'camera_bus_lane': {'penalty': 800, 'threshold': 500},
+                    'camera_mobile': {'penalty': 800, 'threshold': 500},
+                    'camera_other': {'penalty': 800, 'threshold': 500},
+                    'camera': {'penalty': 800, 'threshold': 500},
                     'police': {'penalty': 30, 'threshold': 1000},
                     'roadworks': {'penalty': 15, 'threshold': 500},
                     'accident': {'penalty': 30, 'threshold': 500}
                 }
         except Exception:
             preferences = {
-                'camera': {'penalty': 60, 'threshold': 500},
+                'camera_speed': {'penalty': 800, 'threshold': 500},
+                'camera_red_light': {'penalty': 1200, 'threshold': 120},
+                'camera_average_speed': {'penalty': 800, 'threshold': 500},
+                'camera_bus_lane': {'penalty': 800, 'threshold': 500},
+                'camera_mobile': {'penalty': 800, 'threshold': 500},
+                'camera_other': {'penalty': 800, 'threshold': 500},
+                'camera': {'penalty': 800, 'threshold': 500},
                 'police': {'penalty': 30, 'threshold': 1000},
                 'roadworks': {'penalty': 15, 'threshold': 500},
                 'accident': {'penalty': 30, 'threshold': 500}
@@ -607,7 +654,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
                         break
 
                 if min_distance <= threshold:
-                    if hazard_type in ('camera', 'traffic_light'):
+                    if hazard_type == 'traffic_light' or hazard_type.startswith('camera_') or hazard_type == 'camera':
                         proximity_multiplier = 1.0 + (2.0 * (1.0 - min_distance / threshold))
                         distance_multiplier = max(1.0, proximity_multiplier)
                         applied_penalty = penalty * distance_multiplier
