@@ -17,8 +17,11 @@ import requests
 from flask import Blueprint, jsonify, request, send_file, after_this_request
 
 from voyagr.models import get_db_connection, return_db_connection
+from voyagr.utils.rate_limiting import RateLimiter
 
 logger = logging.getLogger(__name__)
+
+_speed_limit_feedback_limiter = RateLimiter(max_requests=40, window_seconds=60)
 
 navigation_bp = Blueprint('navigation', __name__)
 
@@ -468,6 +471,73 @@ def reset_speed_limit_metrics():
         return jsonify({'success': False, 'error': str(e)})
 
 
+@navigation_bp.route('/speed-limit/feedback', methods=['POST'])
+def speed_limit_feedback():
+    """
+    Log anonymous driver feedback on the displayed speed limit (confirmed vs wrong).
+    Intended for analytics and detector tuning — no PII stored.
+    """
+    ip = request.remote_addr
+    if ip and not _speed_limit_feedback_limiter.is_allowed(ip):
+        return jsonify({'success': False, 'error': 'Rate limit exceeded'}), 429
+
+    data = request.get_json(silent=True) or {}
+    outcome = (data.get('outcome') or '').strip().lower()
+    if outcome not in ('confirmed', 'wrong_sign'):
+        return jsonify({'success': False, 'error': 'outcome must be confirmed or wrong_sign'}), 400
+
+    try:
+        lat = float(data.get('lat'))
+        lon = float(data.get('lon'))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'lat and lon are required numbers'}), 400
+
+    if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+        return jsonify({'success': False, 'error': 'lat/lon out of range'}), 400
+
+    raw_mph = data.get('displayed_mph')
+    displayed_mph = None
+    if raw_mph is not None and raw_mph != '':
+        try:
+            displayed_mph = int(float(raw_mph))
+        except (TypeError, ValueError):
+            displayed_mph = None
+    if displayed_mph is not None and (displayed_mph < 1 or displayed_mph > 130):
+        displayed_mph = None
+
+    src = data.get('source')
+    if src is None:
+        source = None
+    else:
+        source = str(src).strip()[:64] or None
+
+    client_ts = data.get('client_ts')
+    try:
+        client_ts_int = int(client_ts) if client_ts is not None else None
+    except (TypeError, ValueError):
+        client_ts_int = None
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute(
+            '''
+            INSERT INTO speed_limit_feedback (outcome, lat, lon, displayed_mph, source, client_ts)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ''',
+            (outcome, lat, lon, displayed_mph, source, client_ts_int),
+        )
+        conn.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        logger.warning('[speed-limit/feedback] insert failed: %s', e)
+        return jsonify({'success': False, 'error': 'Could not store feedback'}), 500
+    finally:
+        if conn:
+            return_db_connection(conn)
+
+
 @navigation_bp.route('/road-info', methods=['GET'])
 def get_road_info():
     """Get current road name and info using TomTom Reverse Geocoding."""
@@ -791,17 +861,24 @@ def voice_command():
         command = data.get('command', '').lower().strip()
         lat = float(data.get('lat', 51.5074))
         lon = float(data.get('lon', -0.1278))
+        speed_hint = data.get('speed_limit_mph_hint')
 
         if not command or len(command) > 500:
             return jsonify({'success': False, 'error': 'Invalid command'})
 
-        result = _parse_voice_command(command, lat, lon)
+        result = _parse_voice_command(command, lat, lon, speed_limit_mph_hint=speed_hint)
         return jsonify(result)
     except Exception as e:
         return jsonify({'success': False, 'error': str(e)})
 
 
-def _parse_voice_command(command: str, _lat: float, _lon: float) -> Dict[str, Any]:
+def _parse_voice_command(
+    command: str,
+    _lat: float,
+    _lon: float,
+    *,
+    speed_limit_mph_hint=None,
+) -> Dict[str, Any]:
     """Parse voice command and return action to execute."""
     try:
         command = command.lower().strip()
@@ -829,6 +906,105 @@ def _parse_voice_command(command: str, _lat: float, _lon: float) -> Dict[str, An
 
         if any(cmd in command for cmd in ['reroute', 'recalculate', 'find new route']):
             return {'success': True, 'action': 'reroute', 'message': 'Recalculating route from current location'}
+
+        if any(
+            phrase in command
+            for phrase in (
+                'speed limit wrong',
+                'wrong speed limit',
+                'limit is wrong',
+                'posted limit wrong',
+                'speed limit is wrong',
+                'displayed limit wrong',
+                'app has wrong limit',
+                'limit shown is wrong',
+            )
+        ):
+            try:
+                mph = int(float(speed_limit_mph_hint)) if speed_limit_mph_hint is not None else None
+            except (TypeError, ValueError):
+                mph = None
+            if mph and mph > 0:
+                msg = f'Thanks — noted that about {mph} miles per hour may be wrong here. Drive safely.'
+            else:
+                msg = (
+                    'Thanks — noted that the limit shown may be wrong. '
+                    'After you stop safely, you can report map details from settings.'
+                )
+            return {'success': True, 'action': 'reject_speed_display', 'message': msg}
+
+        if any(
+            phrase in command
+            for phrase in (
+                'confirm speed limit',
+                'speed limit correct',
+                'speed limit is correct',
+                'limit is correct',
+                'posted limit correct',
+            )
+        ):
+            try:
+                mph = int(float(speed_limit_mph_hint)) if speed_limit_mph_hint is not None else None
+            except (TypeError, ValueError):
+                mph = None
+            if mph and mph > 0:
+                msg = f'Noted. The app is showing about {mph} miles per hour for this road.'
+            else:
+                msg = (
+                    'Noted. After you stop safely, you can report a map issue from settings; '
+                    'the detector uses OpenStreetMap and live services.'
+                )
+            return {'success': True, 'action': 'confirm_speed_display', 'message': msg}
+
+        if 'report' in command:
+            if any(x in command for x in ('speed camera', 'speeding camera', 'gatso', 'mobile camera')):
+                return {
+                    'success': True,
+                    'action': 'report_hazard',
+                    'hazard_type': 'speed_camera',
+                    'description': command[:240],
+                    'message': 'Logging a speed camera report at your current location.',
+                }
+            if any(x in command for x in ('traffic light camera', 'red light camera')):
+                return {
+                    'success': True,
+                    'action': 'report_hazard',
+                    'hazard_type': 'camera_red_light',
+                    'description': command[:240],
+                    'message': 'Logging a traffic light camera report.',
+                }
+            if any(x in command for x in ('road closed', 'road closure', 'closure')):
+                return {
+                    'success': True,
+                    'action': 'report_hazard',
+                    'hazard_type': 'road_closure',
+                    'description': command[:240],
+                    'message': 'Logging a road closure report.',
+                }
+            if ('traffic' in command and 'jam' in command) or 'congestion' in command:
+                return {
+                    'success': True,
+                    'action': 'report_hazard',
+                    'hazard_type': 'traffic',
+                    'description': command[:240],
+                    'message': 'Logging a traffic congestion report.',
+                }
+            if 'pothole' in command:
+                return {
+                    'success': True,
+                    'action': 'report_hazard',
+                    'hazard_type': 'pothole',
+                    'description': command[:240],
+                    'message': 'Logging a pothole report.',
+                }
+            if 'accident' in command or 'crash' in command:
+                return {
+                    'success': True,
+                    'action': 'report_hazard',
+                    'hazard_type': 'accident',
+                    'description': command[:240],
+                    'message': 'Logging an accident report.',
+                }
 
         if 'avoid tolls' in command:
             return {'success': True, 'action': 'set_preference', 'preference': 'tolls', 'value': False, 'message': 'Toll avoidance enabled'}

@@ -546,13 +546,15 @@ class SpeedLimitDetector:
 
             self._wait_for_overpass_rate_limit()
 
+            # Use way centers so we pick the road the vehicle is actually on, not a
+            # parallel motorway/trunk with a higher highway=* rank but farther away.
             query = f"""
-            [out:json][timeout:5];
-            way(around:50,{lat},{lon})[highway];
-            out tags;
+            [out:json][timeout:8];
+            way(around:45,{lat},{lon})[highway];
+            out center tags;
             """
 
-            response = requests.get(overpass_url, params={'data': query}, timeout=5)
+            response = requests.get(overpass_url, params={'data': query}, timeout=8)
 
             if response.status_code == 200:
                 data = response.json()
@@ -566,23 +568,43 @@ class SpeedLimitDetector:
                         'secondary': 4, 'secondary_link': 3,
                         'tertiary': 2, 'tertiary_link': 1,
                     }
+                    # Ignore pedestrian/cycle infrastructure that often sits beside drivable roads
+                    # and carries low maxspeed tags (e.g. 10 km/h), which produced bogus ~7 mph flashes.
+                    excluded_hw = frozenset({
+                        'footway', 'path', 'pedestrian', 'cycleway', 'steps',
+                        'bridleway', 'track', 'corridor', 'elevator',
+                    })
 
                     best_explicit = None
-                    best_explicit_rank = -1
+                    best_dist_km = float('inf')
+                    best_rank = -1  # highway class tie-break when distances are equal
 
                     for element in elements:
                         tags = element.get('tags', {})
                         hw = tags.get('highway', '')
+                        if hw in excluded_hw:
+                            continue
+                        if 'maxspeed' not in tags:
+                            continue
+                        center = element.get('center') or {}
+                        c_lat = center.get('lat')
+                        c_lon = center.get('lon')
+                        if c_lat is None or c_lon is None:
+                            continue
+                        dist_km = self._haversine_distance(lat, lon, float(c_lat), float(c_lon))
                         rank = HIGHWAY_RANK.get(hw, 0)
-
-                        if 'maxspeed' in tags and rank >= best_explicit_rank:
-                            speed_str = tags['maxspeed']
-                            parsed = _parse_osm_maxspeed_to_mph(speed_str, region)
-                            if parsed is not None:
-                                best_explicit = parsed
-                                best_explicit_rank = rank
-                            else:
-                                logger.debug(f"[Speed Limit] OSM maxspeed not parsed: '{speed_str}'")
+                        speed_str = tags['maxspeed']
+                        parsed = _parse_osm_maxspeed_to_mph(speed_str, region)
+                        if parsed is None:
+                            logger.debug(f"[Speed Limit] OSM maxspeed not parsed: '{speed_str}'")
+                            continue
+                        # Prefer closest drivable way with maxspeed; break ties by higher road class.
+                        if dist_km < best_dist_km - 1e-6 or (
+                            abs(dist_km - best_dist_km) < 1e-6 and rank > best_rank
+                        ):
+                            best_explicit = parsed
+                            best_dist_km = dist_km
+                            best_rank = rank
 
                     if best_explicit is not None:
                         self.metrics['overpass_maxspeed_hits'] += 1
@@ -591,7 +613,10 @@ class SpeedLimitDetector:
                             'timestamp': time.time(),
                             'source': 'OSM-maxspeed'
                         })
-                        logger.info(f"[Speed Limit] OSM maxspeed (best road): {best_explicit} mph")
+                        logger.info(
+                            f"[Speed Limit] OSM maxspeed (closest way ~{best_dist_km * 1000:.0f}m): "
+                            f"{best_explicit} mph"
+                        )
                         return best_explicit
                 else:
                     self.metrics['overpass_failures'] += 1

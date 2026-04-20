@@ -431,6 +431,7 @@ function switchTab(tab) {
         loadRoutePreferences();
         loadMultiDropPreferences();
         loadVoicePreferences();
+        loadPorcupineWakeUi();
         loadCameraAlertPreferences();
         loadAvoidancePreferences();
         loadHazardCameraTogglesFromApi();
@@ -5876,7 +5877,8 @@ let isCurrentlyDeviated = false;
 const DEVIATION_THRESHOLD_METERS = 50;
 const DEVIATION_TIME_THRESHOLD_MS = 10000; // 10 seconds
 /** Until GPS is this close to the route line, skip deviation alerts/reroute (e.g. start point ≠ current location). */
-const ROUTE_JOIN_GATE_METERS = 120;
+/** Require GPS to be this close to the polyline before deviation reroutes fire (lower = sooner real-world reroutes). */
+const ROUTE_JOIN_GATE_METERS = 85;
 let routeJoinConfirmedForDeviation = false;
 
 /**
@@ -7427,6 +7429,236 @@ function loadVoicePreferences() {
     }
 }
 
+// ----- Picovoice Porcupine wake word (browser / PWA). Native satnav.py keeps on-device «Hey SatNav»; same UX here when a Web (WASM) .ppn is deployed. -----
+const VOYAGR_PORCUPINE_WAKE_STORAGE_KEY = 'voyagrPorcupineWakeEnabled';
+let porcupineWakePipelineRunning = false;
+let porcupineWakeResumeAfterVoice = false;
+let _porcupineWakeWorker = null;
+let _porcupineWakeBridgeEngine = null;
+let _porcupineWakeStarting = false;
+let _porcupineWakeLastDetectionMs = 0;
+
+function picovoiceClientConfigured() {
+    return !!(
+        typeof window !== 'undefined' &&
+        window.VoyagrPicovoiceWebAssetsOk &&
+        typeof window.PICOVOICE_ACCESS_KEY === 'string' &&
+        window.PICOVOICE_ACCESS_KEY.trim().length > 0 &&
+        typeof PorcupineWeb !== 'undefined' &&
+        typeof WebVoiceProcessor !== 'undefined'
+    );
+}
+
+function loadPorcupineWakeUi() {
+    const row = document.getElementById('porcupineWakePrefRow');
+    const help = document.getElementById('porcupineWakeHelp');
+    const toggle = document.getElementById('porcupineWakeToggle');
+    if (!row || !toggle) {
+        return;
+    }
+    if (!picovoiceClientConfigured()) {
+        row.style.display = 'none';
+        if (help) {
+            help.style.display = 'none';
+        }
+        return;
+    }
+    row.style.display = '';
+    if (help) {
+        help.style.display = '';
+    }
+    const enabled = localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true';
+    if (enabled) {
+        toggle.classList.add('active');
+        toggle.style.background = '#4CAF50';
+        toggle.style.borderColor = '#4CAF50';
+        toggle.style.color = 'white';
+    } else {
+        toggle.classList.remove('active');
+        toggle.style.background = '#ddd';
+        toggle.style.borderColor = '#999';
+        toggle.style.color = '#333';
+    }
+}
+
+function togglePorcupineWakeWord() {
+    const button = document.getElementById('porcupineWakeToggle');
+    if (!button || !picovoiceClientConfigured()) {
+        return;
+    }
+    button.classList.toggle('active');
+    const enabled = button.classList.contains('active');
+    if (enabled) {
+        button.style.background = '#4CAF50';
+        button.style.borderColor = '#4CAF50';
+        button.style.color = 'white';
+    } else {
+        button.style.background = '#ddd';
+        button.style.borderColor = '#999';
+        button.style.color = '#333';
+    }
+    localStorage.setItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY, enabled ? 'true' : 'false');
+    if (enabled) {
+        void startPorcupineWakePipeline();
+        showStatus('Wake word listening enabled', 'success');
+    } else {
+        porcupineWakeResumeAfterVoice = false;
+        void stopPorcupineWakePipeline();
+        showStatus('Wake word listening disabled', 'success');
+    }
+    saveAllSettings();
+}
+
+function maybeResumePorcupineWakeAfterVoice() {
+    if (!porcupineWakeResumeAfterVoice) {
+        return;
+    }
+    porcupineWakeResumeAfterVoice = false;
+    if (localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) !== 'true') {
+        return;
+    }
+    if (!picovoiceClientConfigured()) {
+        return;
+    }
+    void startPorcupineWakePipeline();
+}
+
+async function porcupineCustomKeywordAvailable() {
+    const p = typeof window.VoyagrPicovoiceKeywordPath === 'string' ? window.VoyagrPicovoiceKeywordPath.trim() : '';
+    if (!p) {
+        return false;
+    }
+    try {
+        let r = await fetch(p, { method: 'HEAD', cache: 'no-store' });
+        if (r.status === 405 || r.status === 501) {
+            r = await fetch(p, { method: 'GET', cache: 'no-store' });
+        }
+        return r.ok;
+    } catch (e) {
+        console.warn('[Porcupine] Keyword probe failed:', e);
+        return false;
+    }
+}
+
+async function stopPorcupineWakePipeline() {
+    if (_porcupineWakeBridgeEngine && typeof WebVoiceProcessor !== 'undefined') {
+        try {
+            await WebVoiceProcessor.unsubscribe(_porcupineWakeBridgeEngine);
+        } catch (e) {
+            console.warn('[Porcupine] unsubscribe:', e);
+        }
+    }
+    _porcupineWakeBridgeEngine = null;
+    if (_porcupineWakeWorker) {
+        try {
+            await _porcupineWakeWorker.release();
+        } catch (e) {
+            console.warn('[Porcupine] release:', e);
+        }
+        try {
+            _porcupineWakeWorker.terminate();
+        } catch (e) {
+            console.warn('[Porcupine] terminate:', e);
+        }
+        _porcupineWakeWorker = null;
+    }
+    porcupineWakePipelineRunning = false;
+}
+
+async function startPorcupineWakePipeline() {
+    if (!picovoiceClientConfigured() || localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) !== 'true') {
+        return;
+    }
+    if (porcupineWakePipelineRunning || _porcupineWakeStarting) {
+        return;
+    }
+    if (typeof location !== 'undefined' && location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        console.warn('[Porcupine] Wake word needs HTTPS (or localhost) for microphone access.');
+        showStatus('Wake word requires HTTPS for the microphone', 'warning');
+        return;
+    }
+    _porcupineWakeStarting = true;
+    try {
+        await stopPorcupineWakePipeline();
+        const accessKey = window.PICOVOICE_ACCESS_KEY.trim();
+        const useCustom = await porcupineCustomKeywordAvailable();
+        const keywords = useCustom
+            ? [{
+                publicPath: window.VoyagrPicovoiceKeywordPath.trim(),
+                label: 'Hey SatNav',
+                sensitivity: 0.55
+            }]
+            : PorcupineWeb.BuiltInKeyword.Porcupine;
+        const model = { publicPath: '/static/vendor/picovoice/porcupine_params.pv' };
+        const onDetection = (detection) => {
+            if (!detection || typeof detection.label !== 'string') {
+                return;
+            }
+            const now = Date.now();
+            if (now - _porcupineWakeLastDetectionMs < 2200) {
+                return;
+            }
+            _porcupineWakeLastDetectionMs = now;
+            if (typeof isListening !== 'undefined' && isListening) {
+                return;
+            }
+            console.log('[Porcupine] Wake detected:', detection.label);
+            void onPorcupineWakeHotword();
+        };
+        const worker = await PorcupineWeb.PorcupineWorker.create(
+            accessKey,
+            keywords,
+            onDetection,
+            model,
+            {
+                processErrorCallback: (err) => {
+                    console.error('[Porcupine] process error:', err);
+                }
+            }
+        );
+        _porcupineWakeWorker = worker;
+        WebVoiceProcessor.setOptions({
+            frameLength: worker.frameLength,
+            outputSampleRate: worker.sampleRate
+        }, false);
+        const bridge = {
+            onmessage: (e) => {
+                if (e.data && e.data.command === 'process' && e.data.inputFrame && _porcupineWakeWorker) {
+                    _porcupineWakeWorker.process(e.data.inputFrame);
+                }
+            }
+        };
+        _porcupineWakeBridgeEngine = bridge;
+        await WebVoiceProcessor.subscribe(bridge);
+        porcupineWakePipelineRunning = true;
+        if (!useCustom) {
+            console.info('[Porcupine] Using built-in keyword «Porcupine» until hey_satnav_wasm.ppn is available at', window.VoyagrPicovoiceKeywordPath);
+        }
+    } catch (e) {
+        console.error('[Porcupine] Failed to start wake pipeline:', e);
+        showStatus('Wake word could not start (check Picovoice key and assets)', 'error');
+        await stopPorcupineWakePipeline();
+    } finally {
+        _porcupineWakeStarting = false;
+    }
+}
+
+async function onPorcupineWakeHotword() {
+    porcupineWakeResumeAfterVoice = true;
+    await stopPorcupineWakePipeline();
+    speakMessage('Say your command', 'high');
+    await new Promise((r) => setTimeout(r, 450));
+    if (!voiceRecognition && !initVoiceRecognition()) {
+        maybeResumePorcupineWakeAfterVoice();
+        return;
+    }
+    if (!isListening) {
+        document.getElementById('voiceTranscript').textContent = '';
+        voiceRecognition.start();
+        isListening = true;
+    }
+}
+
 /**
  * toggleVoiceAnnouncements function
  * @function toggleVoiceAnnouncements
@@ -8643,6 +8875,10 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
                     if (speedLimitMph && speedLimitMph > 0) {
                         currentSpeedLimitMph = speedLimitMph;
                         cacheSpeedLimit(lat, lon, speedLimitMph, data.data.source || 'api');
+                    } else {
+                        // Clear stale posted limit when the detector says "unknown" for this cell,
+                        // so the widget can fall back to Valhalla edge speed or "?".
+                        currentSpeedLimitMph = null;
                     }
 
                     const edge = valhallaSpeedLimit && valhallaSpeedLimit > 0 ? valhallaSpeedLimit : null;
@@ -9260,8 +9496,9 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
     markerDiv.style.justifyContent = 'center';
     markerDiv.style.position = 'relative';
 
-    // Apply rotation to the entire marker based on heading
-    markerDiv.style.transform = `rotate(${heading}deg)`;
+    const mapBr = map && typeof map.getBearing === 'function' ? map.getBearing() : 0;
+    const rot = ((heading - mapBr) % 360 + 360) % 360;
+    markerDiv.style.transform = `rotate(${rot}deg)`;
     markerDiv.style.transition = 'transform 0.3s ease-out';
 
     // 3D effect: Add layered shadows for depth perception
@@ -9491,6 +9728,48 @@ function updateVariableSpeedLimit(lat, lon, roadType = 'motorway', vehicleType =
         })
         .catch(error => console.error('Error updating variable speed limit:', error));
 }
+
+/**
+ * Fire-and-forget log of driver feedback on the displayed speed limit (analytics).
+ * @param {'confirmed'|'wrong_sign'} outcome
+ * @param {{ source?: string }} [extra]
+ */
+function postSpeedLimitFeedback(outcome, extra) {
+    if (outcome !== 'confirmed' && outcome !== 'wrong_sign') {
+        return;
+    }
+    const lat = typeof currentLat === 'number' && Number.isFinite(currentLat) ? currentLat : null;
+    const lon = typeof currentLon === 'number' && Number.isFinite(currentLon) ? currentLon : null;
+    if (lat == null || lon == null) {
+        return;
+    }
+    const mph =
+        typeof currentSpeedLimitMph !== 'undefined' &&
+        currentSpeedLimitMph != null &&
+        Number.isFinite(currentSpeedLimitMph) &&
+        currentSpeedLimitMph > 0
+            ? Math.round(currentSpeedLimitMph)
+            : null;
+    const payload = {
+        outcome,
+        lat,
+        lon,
+        displayed_mph: mph,
+        source: (extra && extra.source) || 'client',
+        client_ts: Date.now()
+    };
+    try {
+        fetch('/api/speed-limit/feedback', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            keepalive: true
+        }).catch((e) => console.debug('[SpeedLimitFeedback]', e));
+    } catch (e) {
+        console.debug('[SpeedLimitFeedback]', e);
+    }
+}
+
 /**
  * checkSpeedViolation function
  * @function checkSpeedViolation
@@ -11456,6 +11735,7 @@ function initVoiceRecognition() {
         document.getElementById('voiceBtnText').textContent = '🎤 Start Voice';
         document.getElementById('voiceBtn').classList.remove('active');
         isListening = false;
+        maybeResumePorcupineWakeAfterVoice();
     };
 
     voiceRecognition.onend = () => {
@@ -11474,7 +11754,7 @@ function initVoiceRecognition() {
  * @function toggleVoiceInput
  * @returns {*} Return value description
  */
-function toggleVoiceInput() {
+async function toggleVoiceInput() {
     if (!voiceRecognition) {
         if (!initVoiceRecognition()) {
             return;
@@ -11485,6 +11765,10 @@ function toggleVoiceInput() {
         voiceRecognition.stop();
         isListening = false;
     } else {
+        if (porcupineWakePipelineRunning) {
+            porcupineWakeResumeAfterVoice = true;
+            await stopPorcupineWakePipeline();
+        }
         document.getElementById('voiceTranscript').textContent = '';
         voiceRecognition.start();
         isListening = true;
@@ -11545,6 +11829,8 @@ function setupVoiceCommandProcessing() {
         const transcript = document.getElementById('voiceTranscript').textContent.replace('📝 ', '').trim();
         if (transcript) {
             processVoiceCommand(transcript);
+        } else {
+            maybeResumePorcupineWakeAfterVoice();
         }
     };
 }
@@ -11555,7 +11841,10 @@ function setupVoiceCommandProcessing() {
  * @returns {*} Return value description
  */
 function processVoiceCommand(command) {
-    if (!command) return;
+    if (!command) {
+        maybeResumePorcupineWakeAfterVoice();
+        return;
+    }
 
     console.log('[Voice] Processing command:', command);
     document.getElementById('voiceStatus').textContent = '⚙️ Processing: ' + command;
@@ -11568,7 +11857,11 @@ function processVoiceCommand(command) {
         body: JSON.stringify({
             command: command,
             lat: currentLat,
-            lon: currentLon
+            lon: currentLon,
+            speed_limit_mph_hint:
+                typeof currentSpeedLimitMph !== 'undefined' && currentSpeedLimitMph > 0
+                    ? currentSpeedLimitMph
+                    : null
         })
     })
         .then(response => response.json())
@@ -11587,6 +11880,9 @@ function processVoiceCommand(command) {
             console.log('[Voice] Error:', error);
             speakText('Error processing command');
             document.getElementById('voiceStatus').textContent = '❌ Error: ' + error.message;
+        })
+        .finally(() => {
+            maybeResumePorcupineWakeAfterVoice();
         });
 }
 /**
@@ -11632,12 +11928,28 @@ function handleVoiceAction(data) {
                     lat: currentLat,
                     lon: currentLon,
                     hazard_type: data.hazard_type,
-                    description: data.description,
+                    description: data.description || '',
                     severity: 'medium'
                 })
             })
                 .then(r => r.json())
-                .then(r => console.log('[Voice] Hazard reported:', r));
+                .then((r) => {
+                    console.log('[Voice] Hazard reported:', r);
+                    if (!r.success && r.error) {
+                        showStatus('Voice report: ' + r.error, 'warning');
+                    }
+                })
+                .catch((e) => console.warn('[Voice] Hazard report failed:', e));
+            break;
+
+        case 'confirm_speed_display':
+            speakMessage(data.message || 'Speed limit noted.', 'high');
+            postSpeedLimitFeedback('confirmed', { source: 'voice_confirm' });
+            break;
+
+        case 'reject_speed_display':
+            speakMessage(data.message || 'Thanks, we noted the limit may be wrong.', 'high');
+            postSpeedLimitFeedback('wrong_sign', { source: 'voice_reject' });
             break;
 
         case 'reroute':
@@ -11693,6 +12005,12 @@ window.addEventListener('load', () => {
     // Load voice preferences (FIXED: was missing)
     console.log('[Voice] Loading voice preferences...');
     loadVoicePreferences();
+    loadPorcupineWakeUi();
+    void (async () => {
+        if (localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true' && picovoiceClientConfigured()) {
+            await startPorcupineWakePipeline();
+        }
+    })();
 
     // Legacy preference loading (for backward compatibility)
     loadPreferences();
@@ -11945,6 +12263,9 @@ function startGPSTracking() {
             const lon = position.coords.longitude;
             const accuracy = position.coords.accuracy;
             const speed = position.coords.speed || 0;
+            const deviceHeading = typeof position.coords.heading === 'number' && !Number.isNaN(position.coords.heading)
+                ? position.coords.heading
+                : null;
 
             currentLat = lat;
             currentLon = lon;
@@ -11957,15 +12278,30 @@ function startGPSTracking() {
                 speed: speed,
                 accuracy: accuracy
             });
+            if (trackingHistory.length > 40) {
+                trackingHistory.splice(0, trackingHistory.length - 40);
+            }
 
-            // Calculate heading from tracking history
+            // Prefer device compass/course when moving; otherwise motion vector from recent fixes.
             let heading = 0;
-            if (trackingHistory.length > 1) {
-                const prev = trackingHistory[trackingHistory.length - 2];
+            if (deviceHeading != null && speed > 1.5) {
+                heading = (deviceHeading + 360) % 360;
+            } else if (trackingHistory.length > 1) {
                 const curr = trackingHistory[trackingHistory.length - 1];
+                let prev = trackingHistory[trackingHistory.length - 2];
+                for (let i = trackingHistory.length - 2; i >= 0 && i >= trackingHistory.length - 6; i--) {
+                    const p = trackingHistory[i];
+                    const segM = calculateDistanceMeters(p.lat, p.lon, curr.lat, curr.lon);
+                    if (segM >= 3) {
+                        prev = p;
+                        break;
+                    }
+                }
                 const dLon = curr.lon - prev.lon;
                 const dLat = curr.lat - prev.lat;
-                heading = (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360;
+                if (Math.abs(dLon) + Math.abs(dLat) > 1e-7) {
+                    heading = (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360;
+                }
             }
 
             // ===== SNAP TO ROUTE: Position vehicle on the polyline during navigation =====
@@ -12002,7 +12338,9 @@ function startGPSTracking() {
                 if (markerEl) {
                     const inner = markerEl.querySelector('div');
                     if (inner) {
-                        inner.style.transform = `rotate(${heading}deg)`;
+                        const mapBr = map && typeof map.getBearing === 'function' ? map.getBearing() : 0;
+                        const rot = ((heading - mapBr) % 360 + 360) % 360;
+                        inner.style.transform = `rotate(${rot}deg)`;
                     }
                 }
                 // Store updated values
@@ -12055,8 +12393,9 @@ function startGPSTracking() {
                 checkRouteDeviation(lat, lon);
             }
 
-            // Check for hazards nearby
+            // Check for hazards nearby (DB) + cameras stored on the active route geometry
             checkNearbyHazards(lat, lon);
+            checkRouteHazardCamerasAhead(lat, lon);
 
             // Check for variable speed limits
             updateVariableSpeedLimit(lat, lon, 'motorway', currentVehicleType);
@@ -12130,8 +12469,13 @@ function startGPSTracking() {
             let valhallaSpeedLimitMph = null;
             if (routeInProgress && currentRouteSteps && currentStepIndex < currentRouteSteps.length) {
                 const step = currentRouteSteps[currentStepIndex];
-                if (step && step.speed_limit) {
-                    valhallaSpeedLimitMph = Math.round(step.speed_limit * 0.621371);
+                const rawSl = step && step.speed_limit != null ? Number(step.speed_limit) : NaN;
+                if (Number.isFinite(rawSl) && rawSl > 0) {
+                    // Valhalla maneuver speed_limit is km/h. Guard implausible hints (bad edge / unit mixups).
+                    valhallaSpeedLimitMph = Math.round(rawSl * 0.621371);
+                    if (valhallaSpeedLimitMph < 10 && speedMph > 18) {
+                        valhallaSpeedLimitMph = null;
+                    }
                 }
             }
             const shownLimit = (currentSpeedLimitMph && currentSpeedLimitMph > 0)
@@ -13049,7 +13393,7 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
 
             // Check for unavoidable hazards
             const hazardCount = newRoute.hazard_count || 0;
-            const hazardsList = newRoute.hazards_on_route || [];
+            const hazardsList = newRoute.hazards || newRoute.hazards_on_route || [];
 
             if (hazardCount > 0) {
                 handleUnavoidableHazards(newRoute, hazardsList, hazardCount);
@@ -13115,7 +13459,7 @@ function handleUnavoidableHazards(route, hazardsList, hazardCount) {
     // Build hazard summary
     const hazardSummary = Object.entries(hazardTypes)
         .map(([type, count]) => `${count}x ${type.replace(/_/g, ' ')}`)
-        .join(', ');
+        .join(', ') || 'See map for hazard markers along this route.';
 
     // Show detailed notification
     const message = `⚠️ ${hazardCount} hazard${hazardCount > 1 ? 's' : ''} cannot be avoided on any route to destination:\n${hazardSummary}`;
@@ -13307,7 +13651,38 @@ let HAZARD_WARNING_DISTANCE = 500;
 let cameraAlertType = localStorage.getItem('pref_cameraAlertType') || 'voice';
 let cameraAlertDistance = parseInt(localStorage.getItem('pref_cameraAlertDistance') || '500');
 
-const CAMERA_HAZARD_TYPES = ['camera', 'traffic_light'];
+const CAMERA_HAZARD_TYPES = [
+    'camera',
+    'traffic_light',
+    'speed_camera',
+    'camera_speed',
+    'camera_red_light',
+    'traffic_light_camera',
+    'camera_average_speed',
+    'camera_bus_lane',
+    'camera_mobile',
+    'camera_other'
+];
+
+/**
+ * Normalize /api/hazards/nearby payload to a flat list of {lat, lon, type, ...}.
+ * Backend returns { cameras: [], reports: [] }; older code expected a single array.
+ */
+function flattenNearbyHazardsPayload(hazardsPayload) {
+    if (!hazardsPayload) return [];
+    if (Array.isArray(hazardsPayload)) return hazardsPayload;
+    const out = [];
+    if (Array.isArray(hazardsPayload.cameras)) out.push(...hazardsPayload.cameras);
+    if (Array.isArray(hazardsPayload.reports)) out.push(...hazardsPayload.reports);
+    return out;
+}
+
+function isCameraHazardType(typeStr) {
+    if (typeStr == null || typeStr === '') return false;
+    const t = String(typeStr).toLowerCase();
+    if (CAMERA_HAZARD_TYPES.includes(t)) return true;
+    return t.includes('camera') || t === 'speed_camera' || t === 'traffic_light_camera';
+}
 
 /**
  * Play a chime alert sound using Web Audio API
@@ -13385,47 +13760,79 @@ function loadCameraAlertPreferences() {
  * @param {*} lon - Parameter description
  * @returns {*} Return value description
  */
+function announceCameraOrHazard(hazard, distanceM, opts = {}) {
+    const { unavoidableRouteCamera = false } = opts;
+    const friendlyType = String(hazard.type || 'hazard').replace(/_/g, ' ');
+    const distStr = distanceM.toFixed(0);
+    const message = unavoidableRouteCamera
+        ? `${friendlyType} on your route, ${distStr} meters ahead — may be unavoidable on this path`
+        : `${friendlyType} ${distStr}m ahead`;
+    sendNotification(unavoidableRouteCamera ? 'Route hazard' : 'Hazard Alert', message, 'warning');
+
+    const now = Date.now();
+    const debounceKey = `${hazard.type}_${hazard.lat}_${hazard.lon}_${unavoidableRouteCamera ? 'route' : 'near'}`;
+    const lastTime = hazardAnnouncementDebounce[debounceKey] || 0;
+
+    if (now - lastTime <= HAZARD_ANNOUNCEMENT_DEBOUNCE_MS) return;
+    hazardAnnouncementDebounce[debounceKey] = now;
+
+    const isCamera = isCameraHazardType(hazard.type);
+    if (isCamera) {
+        if (cameraAlertType === 'voice' || cameraAlertType === 'both') {
+            const spoken = unavoidableRouteCamera
+                ? `Camera on route in ${distStr} meters. This path may still pass the camera.`
+                : `${friendlyType}, ${distStr} meters ahead`;
+            speakMessage(spoken, 'high');
+        }
+        if (cameraAlertType === 'chime' || cameraAlertType === 'both') {
+            playCameraChime();
+        }
+    } else if (voiceAnnouncementsEnabled) {
+        speakMessage(`${friendlyType}, ${distStr} meters ahead`);
+    }
+}
+
 function checkNearbyHazards(lat, lon) {
     if (_voyagrIsOffline || !navigator.onLine) return;
     fetch(`/api/hazards/nearby?lat=${lat}&lon=${lon}&radius=0.5`)
         .then(response => response.json())
         .then(data => {
-            if (data.success && data.hazards && data.hazards.length > 0) {
-                data.hazards.forEach(hazard => {
-                    const distance = calculateDistance(lat, lon, hazard.lat, hazard.lon);
-                    const isCamera = CAMERA_HAZARD_TYPES.includes(hazard.type);
-                    const alertDist = isCamera ? cameraAlertDistance : HAZARD_WARNING_DISTANCE;
+            if (!data.success || !data.hazards) return;
+            const list = flattenNearbyHazardsPayload(data.hazards);
+            if (list.length === 0) return;
+            list.forEach(hazard => {
+                if (hazard.lat == null || hazard.lon == null) return;
+                const distance = hazard.distance_meters != null
+                    ? Number(hazard.distance_meters)
+                    : calculateDistance(lat, lon, hazard.lat, hazard.lon);
+                const isCamera = isCameraHazardType(hazard.type);
+                const alertDist = isCamera ? cameraAlertDistance : HAZARD_WARNING_DISTANCE;
 
-                    if (distance < alertDist) {
-                        const friendlyType = hazard.type.replace(/_/g, ' ');
-                        const distStr = distance.toFixed(0);
-                        const message = `${friendlyType} ${distStr}m ahead`;
-                        sendNotification('Hazard Alert', message, 'warning');
-
-                        const now = Date.now();
-                        const debounceKey = `${hazard.type}_${hazard.lat}_${hazard.lon}`;
-                        const lastTime = hazardAnnouncementDebounce[debounceKey] || 0;
-
-                        if (now - lastTime > HAZARD_ANNOUNCEMENT_DEBOUNCE_MS) {
-                            hazardAnnouncementDebounce[debounceKey] = now;
-
-                            if (isCamera) {
-                                // Camera-specific alert with configurable type
-                                if (cameraAlertType === 'voice' || cameraAlertType === 'both') {
-                                    speakMessage(`${friendlyType}, ${distStr} meters ahead`, 'high');
-                                }
-                                if (cameraAlertType === 'chime' || cameraAlertType === 'both') {
-                                    playCameraChime();
-                                }
-                            } else if (voiceAnnouncementsEnabled) {
-                                speakMessage(`${friendlyType}, ${distStr} meters ahead`);
-                            }
-                        }
-                    }
-                });
-            }
+                if (distance < alertDist) {
+                    announceCameraOrHazard(hazard, distance, { unavoidableRouteCamera: false });
+                }
+            });
         })
         .catch(error => console.log('Hazard check error:', error));
+}
+
+/**
+ * Alerts for cameras already attached to the active route (always "on path"),
+ * including when nearby DB query misses due to bbox vs radius.
+ */
+function checkRouteHazardCamerasAhead(lat, lon) {
+    if (!routeInProgress || cameraAlertType === 'off') return;
+    const route = window.lastCalculatedRoute;
+    const list = route && Array.isArray(route.hazards) ? route.hazards : [];
+    if (list.length === 0) return;
+    list.forEach(hazard => {
+        if (!isCameraHazardType(hazard.type)) return;
+        if (hazard.lat == null || hazard.lon == null) return;
+        const distance = calculateDistance(lat, lon, hazard.lat, hazard.lon);
+        if (distance < cameraAlertDistance) {
+            announceCameraOrHazard(hazard, distance, { unavoidableRouteCamera: true });
+        }
+    });
 }
 
 // ===== PHASE 1: LIVE DATA REFRESH FUNCTIONS =====
@@ -15572,14 +15979,20 @@ function showVolumeHintForNavigation() {
         'text-align:center'
     ].join(';');
     chip.innerHTML = `
+        <div style="display:flex;justify-content:flex-end;margin:-4px -4px 4px 0;">
+            <button type="button" id="volumeHintDismiss" aria-label="Dismiss" title="Dismiss"
+                style="border:none;background:transparent;color:#1565c0;font-size:22px;line-height:1;cursor:pointer;padding:4px 8px;">×</button>
+        </div>
         <strong style="display:block;margin-bottom:6px;">🔊 Check volume</strong>
         <span>${line}</span><br>
         <span style="font-size:13px;opacity:.9">${detail}</span>
         <div style="margin-top:10px;">
-            <button type="button" style="padding:8px 18px;border:none;border-radius:10px;background:#2196F3;color:#fff;font-weight:600;cursor:pointer;font-size:14px;">OK</button>
+            <button type="button" id="volumeHintOk" style="padding:8px 18px;border:none;border-radius:10px;background:#2196F3;color:#fff;font-weight:600;cursor:pointer;font-size:14px;">OK</button>
         </div>
     `;
-    const ok = chip.querySelector('button');
+    const dismiss = document.getElementById('volumeHintDismiss');
+    if (dismiss) dismiss.onclick = () => chip.remove();
+    const ok = document.getElementById('volumeHintOk');
     if (ok) ok.onclick = () => chip.remove();
     document.body.appendChild(chip);
 
@@ -15587,8 +16000,6 @@ function showVolumeHintForNavigation() {
         const el = document.getElementById('volumeHintBanner');
         if (el) el.remove();
     }, 14000);
-
-    showInAppNotification('Voice guidance', `${line} ${detail}`, 'info', 12000);
 
     if ('Notification' in window && Notification.permission === 'granted') {
         try {

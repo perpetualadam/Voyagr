@@ -1237,6 +1237,20 @@ def init_db():
         )
     ''')
 
+    # Anonymous speed-limit display feedback (confirmed vs wrong) for detector analytics
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS speed_limit_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            outcome TEXT NOT NULL,
+            lat REAL NOT NULL,
+            lon REAL NOT NULL,
+            displayed_mph INTEGER,
+            source TEXT,
+            client_ts INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # Lane guidance cache table (Phase 2 feature)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS lane_guidance_cache (
@@ -4359,7 +4373,11 @@ HTML_TEMPLATE = '''
     <!-- External JavaScript modules -->
     <script src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
     <script src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    <script src="/static/js/voyagr-app.js?v=20260411d"></script>
+    {% if picovoice_access_key and picovoice_web_assets_ok %}
+    <script src="/static/vendor/picovoice/web-voice-processor.iife.js?v=pv4"></script>
+    <script src="/static/vendor/picovoice/porcupine-web.iife.js?v=pv4"></script>
+    {% endif %}
+    <script src="/static/js/voyagr-app.js?v=20260420d"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -5207,6 +5225,17 @@ HTML_TEMPLATE = '''
                             <span class="preference-label">🔊 Voice Announcements</span>
                             <button class="toggle-switch" id="voiceAnnouncementsEnabled" onclick="toggleVoiceAnnouncements()"></button>
                         </div>
+
+                        {% if picovoice_access_key and picovoice_web_assets_ok %}
+                        <div class="preference-item" id="porcupineWakePrefRow" style="display: none;">
+                            <span class="preference-label">🎙️ Wake word «Hey SatNav» (Picovoice)</span>
+                            <button type="button" class="toggle-switch" id="porcupineWakeToggle" onclick="togglePorcupineWakeWord()"></button>
+                        </div>
+                        <p id="porcupineWakeHelp" style="display: none; font-size: 11px; color: #888; margin: -6px 0 8px 0;">
+                            Hands-free: say the wake phrase, then your command (same flow as the native app). Train the Web (WASM) keyword in Picovoice Console and save it as
+                            <code>static/vendor/picovoice/hey_satnav_wasm.ppn</code> for an exact match; otherwise the app falls back to the built-in word «Porcupine» until that file is present.
+                        </p>
+                        {% endif %}
 
                         <div class="preference-item">
                             <span class="preference-label">📷 Camera Alert Type</span>
@@ -6190,6 +6219,9 @@ HTML_TEMPLATE = '''
     <!-- API Keys injected from server -->
     <script>
         window.TOMTOM_API_KEY = '{{ tomtom_api_key }}';
+        window.PICOVOICE_ACCESS_KEY = {{ picovoice_access_key|tojson }};
+        window.VoyagrPicovoiceKeywordPath = {{ picovoice_keyword_public_path|tojson }};
+        window.VoyagrPicovoiceWebAssetsOk = {{ picovoice_web_assets_ok|tojson }};
     </script>
 </body>
 </html>
@@ -6197,10 +6229,28 @@ HTML_TEMPLATE = '''
 
 @app.route('/')
 def index():
+    _base = os.path.dirname(os.path.abspath(__file__))
+    _pv_dir = os.path.join(_base, 'static', 'vendor', 'picovoice')
+    _porcupine_js = os.path.join(_pv_dir, 'porcupine-web.iife.js')
+    _wvp_js = os.path.join(_pv_dir, 'web-voice-processor.iife.js')
+    _pv_model = os.path.join(_pv_dir, 'porcupine_params.pv')
+    picovoice_access_key = (os.getenv('PICOVOICE_ACCESS_KEY') or '').strip()
+    picovoice_web_assets_ok = bool(
+        picovoice_access_key
+        and os.path.isfile(_porcupine_js)
+        and os.path.isfile(_wvp_js)
+        and os.path.isfile(_pv_model)
+    )
+    picovoice_keyword_public_path = (
+        os.getenv('PICOVOICE_WEB_KEYWORD_PATH') or '/static/vendor/picovoice/hey_satnav_wasm.ppn'
+    ).strip()
     return render_template_string(
         HTML_TEMPLATE,
         tomtom_api_key=os.getenv('TOMTOM_API_KEY', ''),
         block_search_indexing=block_search_indexing(),
+        picovoice_access_key=picovoice_access_key,
+        picovoice_web_assets_ok=picovoice_web_assets_ok,
+        picovoice_keyword_public_path=picovoice_keyword_public_path,
     )
 
 # Core routes (/api/config, /monitoring, /manifest.json, /service-worker.js)

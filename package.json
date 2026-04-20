@@ -4,6 +4,8 @@
   "description": "Voyagr - Advanced Navigation PWA with Route Optimization",
   "main": "voyagr_web.py",
   "scripts": {
+    "picovoice:sync": "node scripts/sync-picovoice-web.cjs",
+    "postinstall": "node scripts/sync-picovoice-web.cjs",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -30,6 +32,8 @@
     "jest-environment-jsdom": "^29.7.0"
   },
   "dependencies": {
+    "@picovoice/porcupine-web": "^4.0.0",
+    "@picovoice/web-voice-processor": "^4.0.9",
     "leaflet": "^1.9.4",
     "polyline": "^0.2.0"
   }
