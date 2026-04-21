@@ -8,21 +8,20 @@
 
     var WASM_DIR = '/static/vendor/sherpa-kws/wasm/';
     var WASM_MAIN = WASM_DIR + 'sherpa-onnx-wasm-kws-main.js';
-    var SPIKE_GLUE = '/static/js/sherpa-onnx-kws-spike.js?v=20260421c';
+    var SPIKE_GLUE = '/static/js/sherpa-onnx-kws-spike.js?v=20260421d';
     var KEYWORDS_URL = '/static/vendor/sherpa-kws/spike-config/keywords-hey-sat-nav.txt';
     // Files referenced by the hardcoded model config in sherpa-onnx-kws-spike.js/createKws.
     // Emscripten's virtual FS loads these via HTTP from WASM_DIR on startup; if any are
     // 404 the native _SherpaOnnxCreateKeywordSpotter() call throws an *integer pointer*
     // exception that shows as "[Sherpa map] <number>" and is effectively useless.
     // We HEAD-probe them up front so the user sees a clear message instead.
-    // Files we expect inside WASM_DIR for the sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
-    // bundle (epoch-13). If you swap model bundles update both this list and the
-    // transducer filenames in the myConfig block below.
+    // Files we expect to be HTTP-reachable under WASM_DIR. The onnx transducer
+    // weights are intentionally *not* listed here because the upstream WASM build
+    // bakes them into sherpa-onnx-wasm-kws-main.data via Emscripten --preload-file,
+    // served from a virtual FS rather than over HTTP. Including them would cause
+    // false 404s on setups where .data is the source of truth.
     var REQUIRED_MODEL_FILES = [
         'tokens.txt',
-        'encoder-epoch-13-avg-2-chunk-16-left-64.onnx',
-        'decoder-epoch-13-avg-2-chunk-16-left-64.onnx',
-        'joiner-epoch-13-avg-2-chunk-16-left-64.onnx',
     ];
 
     /**
@@ -181,13 +180,19 @@
                                 return r.text();
                             })
                             .then(function (keywordsText) {
+                                // Filenames below must match the names baked into
+                                // sherpa-onnx-wasm-kws-main.data (the Emscripten --preload-file
+                                // manifest from upstream wasm/kws/CMakeLists.txt). The stock
+                                // build uses epoch-12 names regardless of the underlying model
+                                // checkpoint, so we keep epoch-12 here and stage the zh-en-3M
+                                // bundle files under those names when preparing assets.
                                 var myConfig = {
                                     featConfig: { samplingRate: 16000, featureDim: 80 },
                                     modelConfig: {
                                         transducer: {
-                                            encoder: './encoder-epoch-13-avg-2-chunk-16-left-64.onnx',
-                                            decoder: './decoder-epoch-13-avg-2-chunk-16-left-64.onnx',
-                                            joiner: './joiner-epoch-13-avg-2-chunk-16-left-64.onnx',
+                                            encoder: './encoder-epoch-12-avg-2-chunk-16-left-64.onnx',
+                                            decoder: './decoder-epoch-12-avg-2-chunk-16-left-64.onnx',
+                                            joiner: './joiner-epoch-12-avg-2-chunk-16-left-64.onnx',
                                         },
                                         tokens: './tokens.txt',
                                         provider: 'cpu',
@@ -209,6 +214,21 @@
                                     // Emscripten rethrows integer pointers here — decode them before surfacing.
                                     var msg = formatSherpaError(rawErr);
                                     throw new Error(msg);
+                                }
+                                // The C API logs "Errors in config!" and returns NULL on bad
+                                // config instead of throwing. A zero handle means the recogniser
+                                // is unusable — the pipeline would "start listening" but never
+                                // detect anything. Catch this here so we surface a clear error
+                                // instead of silently sitting on a dead recogniser.
+                                if (!_recognizer || !_recognizer.handle) {
+                                    _recognizer = null;
+                                    throw new Error(
+                                        'Sherpa KWS failed to initialise: the virtual FS inside ' +
+                                        'sherpa-onnx-wasm-kws-main.data does not contain the ' +
+                                        'encoder/decoder/joiner filenames we asked for. Check the ' +
+                                        '"transducer ... does not exist" line logged by ' +
+                                        'sherpa-onnx-wasm-kws-main.js just before this error.'
+                                    );
                                 }
                                 doneOk();
                             })
@@ -242,6 +262,11 @@
             var result = _recognizer.getResult(_recognizerStream);
             var kw = result && result.keyword != null ? String(result.keyword) : '';
             if (kw.length > 0) {
+                // Explicit diagnostic log — makes it trivial to confirm Sherpa
+                // actually spotted the wake phrase (vs. the recogniser silently
+                // running with a dead handle). Safe to leave on: one line per
+                // detection, no behavioural impact.
+                console.log('[Sherpa map] keyword detected:', kw, result);
                 _recognizer.reset(_recognizerStream);
                 try {
                     _onKeyword(result);

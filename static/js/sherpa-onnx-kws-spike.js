@@ -323,13 +323,15 @@ class Kws {
 }
 
 function createKws(Module, myConfig) {
-  // Default transducer files match the sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
-  // bundle layout (epoch-13). Callers of createKws() (the Voyagr runtime, the
-  // spike page) override this via `myConfig` when they want a different checkpoint.
+  // Default transducer filenames match the upstream sherpa-onnx wasm build
+  // (wasm/kws/CMakeLists.txt --preload-file list), which bakes the onnx files
+  // into sherpa-onnx-wasm-kws-main.data under epoch-12 names regardless of the
+  // model checkpoint. Callers (Voyagr runtime, spike page) override via myConfig
+  // when needed, but must pick names that exist in the WASM virtual FS.
   let transducerConfig = {
-    encoder: './encoder-epoch-13-avg-2-chunk-16-left-64.onnx',
-    decoder: './decoder-epoch-13-avg-2-chunk-16-left-64.onnx',
-    joiner: './joiner-epoch-13-avg-2-chunk-16-left-64.onnx',
+    encoder: './encoder-epoch-12-avg-2-chunk-16-left-64.onnx',
+    decoder: './decoder-epoch-12-avg-2-chunk-16-left-64.onnx',
+    joiner: './joiner-epoch-12-avg-2-chunk-16-left-64.onnx',
   };
   let modelConfig = {
     transducer: transducerConfig,

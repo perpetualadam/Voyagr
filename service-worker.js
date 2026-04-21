@@ -1,6 +1,6 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
 // Version: 6.0 - Network-first for root HTML, cache JS/CSS
-const CACHE_VERSION = 'v25';
+const CACHE_VERSION = 'v27';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
@@ -538,6 +538,40 @@ self.addEventListener('message', event => {
     event.waitUntil(
       caches.open(DYNAMIC_CACHE).then(cache => {
         return cache.addAll(event.data.urls);
+      })
+    );
+  }
+
+  // Targeted static-cache warm-up. Used to opportunistically precache large
+  // vendor bundles (e.g. Sherpa WASM) *after* first successful page load so
+  // subsequent launches — including offline — have everything ready.
+  // Routed to STATIC_CACHE so it's not evicted by the dynamic cache trimmer.
+  // Silently skips URLs that are already cached to keep the warm-up idempotent.
+  if (event.data.type === 'WARM_STATIC_URLS') {
+    const urls = Array.isArray(event.data.urls) ? event.data.urls : [];
+    if (urls.length === 0) return;
+    event.waitUntil(
+      caches.open(STATIC_CACHE).then(async cache => {
+        const toFetch = [];
+        for (const u of urls) {
+          try {
+            const hit = await cache.match(u);
+            if (!hit) toFetch.push(u);
+          } catch (_e) {
+            toFetch.push(u);
+          }
+        }
+        if (toFetch.length === 0) {
+          console.log('[SW] WARM_STATIC_URLS: all targets already cached');
+          return;
+        }
+        console.log('[SW] WARM_STATIC_URLS: warming', toFetch.length, 'of', urls.length);
+        // cache.add() per-url so one 404 doesn't abort the whole set.
+        return Promise.all(toFetch.map(u =>
+          cache.add(u).catch(err => {
+            console.log('[SW] WARM_STATIC_URLS miss:', u, err && err.message);
+          })
+        ));
       })
     );
   }

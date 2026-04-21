@@ -10634,6 +10634,31 @@ function toggleMLPredictions() {
     saveAllSettings();
 }
 
+// Opportunistically precache large Sherpa WASM vendor assets *after* the app is
+// loaded and idle. Runs once per page load, only when online and when the SW
+// is actually controlling this page. Lets a user who toggles the wake phrase
+// for the first time while offline still have the WASM bundle ready. Skipping
+// is handled inside the SW (WARM_STATIC_URLS is idempotent), so repeat calls
+// are cheap no-ops.
+function warmSherpaStaticCache() {
+    try {
+        if (!('serviceWorker' in navigator)) return;
+        if (!navigator.onLine) return;
+        const ctrl = navigator.serviceWorker.controller;
+        if (!ctrl) return;
+        const urls = [
+            '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.js',
+            '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.wasm',
+            '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.data',
+            '/static/vendor/sherpa-kws/wasm/tokens.txt',
+            '/static/vendor/sherpa-kws/spike-config/keywords-hey-sat-nav.txt',
+        ];
+        ctrl.postMessage({ type: 'WARM_STATIC_URLS', urls: urls });
+    } catch (_e) {
+        // Never let warm-up break the app.
+    }
+}
+
 // PWA Service Worker Registration
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -10645,6 +10670,18 @@ if ('serviceWorker' in navigator) {
                 setInterval(() => {
                     registration.update();
                 }, 60000); // Check every minute
+
+                // Kick off Sherpa vendor cache warm-up 8s after load (idle).
+                // Prefer requestIdleCallback when available so we don't compete
+                // with first-paint work; fall back to setTimeout on Safari.
+                const scheduleWarm = (cb) => {
+                    if (typeof requestIdleCallback === 'function') {
+                        requestIdleCallback(cb, { timeout: 12000 });
+                    } else {
+                        setTimeout(cb, 8000);
+                    }
+                };
+                scheduleWarm(warmSherpaStaticCache);
             })
             .catch(error => {
                 console.log('[PWA] Service Worker registration failed:', error);

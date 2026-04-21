@@ -4429,8 +4429,8 @@ HTML_TEMPLATE = '''
     {# Voyagr uses Sherpa-ONNX for on-device wake-word detection. Picovoice/Porcupine
        is no longer bundled — its legacy code paths in voyagr-app.js short-circuit
        safely when `PorcupineWeb` is undefined (see picovoiceClientConfigured()). #}
-    <script defer src="/static/js/sherpa-kws-map-runtime.js?v=20260421h"></script>
-    <script defer src="/static/js/voyagr-app.js?v=20260421k"></script>
+    <script defer src="/static/js/sherpa-kws-map-runtime.js?v=20260421i"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260421l"></script>
     <script defer src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -5271,8 +5271,9 @@ HTML_TEMPLATE = '''
                             <span class="preference-label">🎙️ Wake phrase «Hey Sat Nav»</span>
                             <button type="button" class="toggle-switch" id="sherpaWakeToggle" onclick="toggleSherpaWakeWord()"></button>
                         </div>
-                        <p id="sherpaWakeHelp" style="font-size: 11px; color: #888; margin: -6px 0 8px 0;">
+                        <p id="sherpaWakeHelp" style="font-size: 11px; color: #888; margin: -6px 0 8px 0; line-height: 1.5;">
                             On-device keyword spotting powered by Sherpa-ONNX. HTTPS required for the microphone.
+                            <br><span style="color: #aaa;">Tip: keep Voyagr on-screen while driving — mobile browsers suspend the mic when the app is backgrounded or the screen is locked.</span>
                         </p>
 
                         <div class="preference-item">
