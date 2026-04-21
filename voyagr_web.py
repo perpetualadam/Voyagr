@@ -94,7 +94,19 @@ def _get_allowed_origins() -> List[str]:
     if env_origins:
         origins.extend([origin.strip() for origin in env_origins.split(',') if origin.strip()])
 
-    return origins
+    # Single canonical site URL (e.g. DuckDNS) — avoids duplicating it in ALLOWED_ORIGINS for /api CORS
+    public_origin = (os.getenv('VOYAGR_PUBLIC_ORIGIN') or '').strip().rstrip('/')
+    if public_origin:
+        origins.append(public_origin)
+
+    # De-dupe while preserving order
+    seen: Set[str] = set()
+    out: List[str] = []
+    for o in origins:
+        if o not in seen:
+            seen.add(o)
+            out.append(o)
+    return out
 
 ALLOWED_ORIGINS: List[str] = _get_allowed_origins()
 
