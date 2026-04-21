@@ -4371,8 +4371,11 @@ HTML_TEMPLATE = '''
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Voyagr">
-    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23667eea' width='192' height='192'/><text x='50%' y='50%' font-size='100' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'>V</text></svg>">
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'><rect fill='%23667eea' width='192' height='192'/><text x='50%' y='50%' font-size='100' font-weight='bold' fill='white' text-anchor='middle' dominant-baseline='central'>V</text></svg>">
+    <link rel="icon" type="image/svg+xml" href="/static/images/icons/icon.svg?v=20260421g">
+    <link rel="icon" type="image/png" sizes="48x48" href="/static/images/icons/icon-48.png?v=20260421g">
+    <link rel="icon" type="image/png" sizes="192x192" href="/static/images/icons/icon-192.png?v=20260421g">
+    <link rel="apple-touch-icon" sizes="192x192" href="/static/images/icons/icon-192.png?v=20260421g">
+    <link rel="apple-touch-icon" sizes="512x512" href="/static/images/icons/icon-512.png?v=20260421g">
     <link rel="manifest" href="/manifest.json">
     <title>Voyagr Navigation</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />

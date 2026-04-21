@@ -6,6 +6,7 @@
   "scripts": {
     "picovoice:sync": "node scripts/sync-picovoice-web.cjs",
     "postinstall": "node scripts/sync-picovoice-web.cjs",
+    "icons:rasterize": "node scripts/rasterize-icons.cjs",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",

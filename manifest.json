@@ -16,6 +16,12 @@
   },
   "icons": [
     {
+      "src": "/static/images/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
       "src": "/static/images/icons/icon-48.png",
       "sizes": "48x48",
       "type": "image/png",

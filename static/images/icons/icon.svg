@@ -1,0 +1,47 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="256" fill="#000000"/>
+
+  <!-- Gradient Background -->
+  <defs>
+    <radialGradient id="bgGradient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" style="stop-color:#00FF88;stop-opacity:0.2"/>
+      <stop offset="100%" style="stop-color:#000000;stop-opacity:1"/>
+    </radialGradient>
+    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00FF88"/>
+      <stop offset="100%" style="stop-color:#00CC66"/>
+    </linearGradient>
+  </defs>
+
+  <circle cx="256" cy="256" r="256" fill="url(#bgGradient)"/>
+
+  <!-- Navigation Arrow -->
+  <path d="M256 80 L320 200 L280 200 L280 320 L232 320 L232 200 L192 200 Z" fill="url(#iconGradient)" stroke="#FFFFFF" stroke-width="2"/>
+
+  <!-- Compass Ring -->
+  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#iconGradient)" stroke-width="4" opacity="0.6"/>
+
+  <!-- Compass Points -->
+  <circle cx="256" cy="76" r="8" fill="#00FF88"/>
+  <circle cx="436" cy="256" r="8" fill="#00FF88"/>
+  <circle cx="256" cy="436" r="8" fill="#00FF88"/>
+  <circle cx="76" cy="256" r="8" fill="#00FF88"/>
+
+  <!-- Center Dot -->
+  <circle cx="256" cy="256" r="12" fill="#FFFFFF" stroke="#00FF88" stroke-width="2"/>
+
+  <!-- Route Path -->
+  <path d="M150 350 Q200 300 250 350 Q300 400 350 350" fill="none" stroke="#00FF88" stroke-width="6" stroke-linecap="round" opacity="0.8"/>
+
+  <!-- Location Pin -->
+  <path d="M380 180 Q380 160 400 160 Q420 160 420 180 Q420 200 400 220 Q380 200 380 180 Z" fill="#FF6B6B"/>
+  <circle cx="400" cy="180" r="6" fill="#FFFFFF"/>
+
+  <!-- Speed Indicator -->
+  <rect x="120" y="380" width="60" height="30" rx="15" fill="rgba(0,255,136,0.2)" stroke="#00FF88" stroke-width="2"/>
+  <text x="150" y="400" text-anchor="middle" fill="#00FF88" font-family="Arial, sans-serif" font-size="16" font-weight="bold">65</text>
+
+  <!-- Brand Text -->
+  <text x="256" y="480" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="24" font-weight="bold">VibeVoyager</text>
+</svg>
