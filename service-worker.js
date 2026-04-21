@@ -1,6 +1,6 @@
 // Voyagr Service Worker - Enhanced for Mobile PWA
 // Version: 6.0 - Network-first for root HTML, cache JS/CSS
-const CACHE_VERSION = 'v17';
+const CACHE_VERSION = 'v18';
 const CACHE_NAME = `voyagr-${CACHE_VERSION}`;
 const STATIC_CACHE = `voyagr-static-${CACHE_VERSION}`;
 const DYNAMIC_CACHE = `voyagr-dynamic-${CACHE_VERSION}`;
@@ -34,6 +34,8 @@ const STATIC_ASSETS = [
   '/static/js/voyagr-core.js',
   '/static/js/maplibre-helpers.js',
   '/static/js/voyagr-app.js',
+  '/static/js/sherpa-kws-map-runtime.js',
+  '/static/js/sherpa-onnx-kws-spike.js',
   '/static/js/app.js',
 ];
 

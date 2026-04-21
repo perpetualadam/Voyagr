@@ -7431,9 +7431,11 @@ function loadVoicePreferences() {
 
 // ----- Picovoice Porcupine wake word (browser / PWA). Native satnav.py keeps on-device «Hey SatNav»; same UX here when a Web (WASM) .ppn is deployed. -----
 const VOYAGR_PORCUPINE_WAKE_STORAGE_KEY = 'voyagrPorcupineWakeEnabled';
-/** Wake engine: 'picovoice' | 'sherpa' (default: sherpa; Picovoice remains optional). */
+const VOYAGR_SHERPA_WAKE_STORAGE_KEY = 'voyagrSherpaWakeEnabled';
+/** Wake engine: 'picovoice' | 'sherpa' (Sherpa: WASM KWS in main PWA when enabled). */
 const VOYAGR_WAKE_BACKEND_KEY = 'voyagrWakeBackend';
 let porcupineWakePipelineRunning = false;
+let sherpaWakeStarting = false;
 let porcupineWakeResumeAfterVoice = false;
 let _porcupineWakeWorker = null;
 let _porcupineWakeBridgeEngine = null;
@@ -7464,7 +7466,7 @@ function getWakeBackend() {
     if (d === 'sherpa' || d === 'picovoice') {
         return d;
     }
-    return 'sherpa';
+    return 'picovoice';
 }
 
 function loadWakeBackendUi() {
@@ -7493,9 +7495,11 @@ function onWakeBackendSelectChange() {
     if (getWakeBackend() === 'sherpa') {
         porcupineWakeResumeAfterVoice = false;
         void stopPorcupineWakePipeline();
+        void stopSherpaWakePipeline();
         loadPorcupineWakeUi();
-        showStatus('Wake engine: Sherpa-ONNX — use the KWS lab page (link in Settings).', 'success');
+        showStatus('Wake engine: Sherpa-ONNX — use the Sherpa wake toggle below.', 'success');
     } else {
+        void stopSherpaWakePipeline();
         loadPorcupineWakeUi();
         showStatus('Wake engine: Picovoice', 'success');
     }
@@ -7540,6 +7544,126 @@ function loadPorcupineWakeUi() {
         toggle.style.borderColor = '#999';
         toggle.style.color = '#333';
     }
+    loadSherpaWakeUi();
+}
+
+function loadSherpaWakeUi() {
+    const row = document.getElementById('sherpaWakePrefRow');
+    const help = document.getElementById('sherpaWakeHelp');
+    const toggle = document.getElementById('sherpaWakeToggle');
+    if (!row || !toggle) {
+        return;
+    }
+    if (!window.VoyagrSherpaKwsLab) {
+        return;
+    }
+    if (getWakeBackend() !== 'sherpa') {
+        row.style.display = 'none';
+        if (help) {
+            help.style.display = 'none';
+        }
+        return;
+    }
+    row.style.display = '';
+    if (help) {
+        help.style.display = '';
+    }
+    const enabled = localStorage.getItem(VOYAGR_SHERPA_WAKE_STORAGE_KEY) === 'true';
+    if (enabled) {
+        toggle.classList.add('active');
+        toggle.style.background = '#4CAF50';
+        toggle.style.borderColor = '#4CAF50';
+        toggle.style.color = 'white';
+    } else {
+        toggle.classList.remove('active');
+        toggle.style.background = '#ddd';
+        toggle.style.borderColor = '#999';
+        toggle.style.color = '#333';
+    }
+}
+
+function toggleSherpaWakeWord() {
+    const button = document.getElementById('sherpaWakeToggle');
+    if (!button || typeof window.VoyagrSherpaKwsMap === 'undefined') {
+        if (button && typeof window.VoyagrSherpaKwsMap === 'undefined') {
+            showStatus('Sherpa WASM runtime not loaded (enable VOYAGR_SHERPA_KWS_LAB and deploy WASM).', 'warning');
+        }
+        return;
+    }
+    if (getWakeBackend() !== 'sherpa') {
+        showStatus('Select Sherpa as wake engine first.', 'warning');
+        return;
+    }
+    button.classList.toggle('active');
+    const enabled = button.classList.contains('active');
+    if (enabled) {
+        button.style.background = '#4CAF50';
+        button.style.borderColor = '#4CAF50';
+        button.style.color = 'white';
+    } else {
+        button.style.background = '#ddd';
+        button.style.borderColor = '#999';
+        button.style.color = '#333';
+    }
+    localStorage.setItem(VOYAGR_SHERPA_WAKE_STORAGE_KEY, enabled ? 'true' : 'false');
+    if (enabled) {
+        void startSherpaWakePipeline();
+        showStatus('Sherpa wake listening', 'success');
+    } else {
+        porcupineWakeResumeAfterVoice = false;
+        void stopSherpaWakePipeline();
+        showStatus('Sherpa wake disabled', 'success');
+    }
+    saveAllSettings();
+}
+
+async function stopSherpaWakePipeline() {
+    if (typeof window.VoyagrSherpaKwsMap === 'undefined') {
+        return;
+    }
+    try {
+        window.VoyagrSherpaKwsMap.stop();
+    } catch (e) {
+        console.warn('[Sherpa map] stop:', e);
+    }
+}
+
+async function startSherpaWakePipeline() {
+    if (getWakeBackend() !== 'sherpa') {
+        return;
+    }
+    if (typeof window.VoyagrSherpaKwsMap === 'undefined') {
+        showStatus('Sherpa runtime missing', 'error');
+        return;
+    }
+    if (localStorage.getItem(VOYAGR_SHERPA_WAKE_STORAGE_KEY) !== 'true') {
+        return;
+    }
+    if (sherpaWakeStarting || window.VoyagrSherpaKwsMap.isListening()) {
+        return;
+    }
+    if (typeof location !== 'undefined' && location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+        console.warn('[Sherpa map] Wake needs HTTPS (or localhost) for microphone access.');
+        showStatus('Sherpa wake requires HTTPS for the microphone', 'warning');
+        return;
+    }
+    sherpaWakeStarting = true;
+    try {
+        await window.VoyagrSherpaKwsMap.ensureLoaded();
+        await window.VoyagrSherpaKwsMap.start(async function () {
+            await onPorcupineWakeHotword();
+        });
+    } catch (e) {
+        console.error('[Sherpa map]', e);
+        showStatus('Sherpa wake failed: ' + (e && e.message ? e.message : String(e)), 'error');
+        try {
+            window.VoyagrSherpaKwsMap.stop();
+        } catch (e2) {
+            /* ignore */
+        }
+    } finally {
+        sherpaWakeStarting = false;
+    }
 }
 
 function togglePorcupineWakeWord() {
@@ -7548,7 +7672,7 @@ function togglePorcupineWakeWord() {
         return;
     }
     if (getWakeBackend() === 'sherpa') {
-        showStatus('Picovoice wake is disabled while Sherpa is selected — use Settings → Sherpa KWS lab.', 'warning');
+        showStatus('Picovoice wake is off while Sherpa is selected — use the Sherpa wake toggle.', 'warning');
         return;
     }
     button.classList.toggle('active');
@@ -7580,6 +7704,9 @@ function maybeResumePorcupineWakeAfterVoice() {
     }
     porcupineWakeResumeAfterVoice = false;
     if (getWakeBackend() === 'sherpa') {
+        if (localStorage.getItem(VOYAGR_SHERPA_WAKE_STORAGE_KEY) === 'true') {
+            void startSherpaWakePipeline();
+        }
         return;
     }
     if (localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) !== 'true') {
@@ -7635,9 +7762,7 @@ async function stopPorcupineWakePipeline() {
 
 async function startPorcupineWakePipeline() {
     if (getWakeBackend() === 'sherpa') {
-        if (window.VoyagrSherpaKwsLab) {
-            showStatus('Sherpa wake: open the KWS lab page from Settings (not bundled in main UI yet).', 'warning');
-        }
+        await startSherpaWakePipeline();
         return;
     }
     if (!picovoiceClientConfigured() || localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) !== 'true') {
@@ -7720,6 +7845,7 @@ async function startPorcupineWakePipeline() {
 async function onPorcupineWakeHotword() {
     porcupineWakeResumeAfterVoice = true;
     await stopPorcupineWakePipeline();
+    await stopSherpaWakePipeline();
     speakMessage('Say your command', 'high');
     await new Promise((r) => setTimeout(r, 450));
     if (!voiceRecognition && !initVoiceRecognition()) {
@@ -11839,9 +11965,14 @@ async function toggleVoiceInput() {
         voiceRecognition.stop();
         isListening = false;
     } else {
-        if (porcupineWakePipelineRunning) {
+        const sherpaListening =
+            typeof window.VoyagrSherpaKwsMap !== 'undefined' &&
+            window.VoyagrSherpaKwsMap.isListening &&
+            window.VoyagrSherpaKwsMap.isListening();
+        if (porcupineWakePipelineRunning || sherpaListening) {
             porcupineWakeResumeAfterVoice = true;
             await stopPorcupineWakePipeline();
+            await stopSherpaWakePipeline();
         }
         document.getElementById('voiceTranscript').textContent = '';
         voiceRecognition.start();
@@ -12081,8 +12212,11 @@ window.addEventListener('load', () => {
     loadVoicePreferences();
     loadPorcupineWakeUi();
     void (async () => {
-        if (
-            getWakeBackend() !== 'sherpa' &&
+        if (getWakeBackend() === 'sherpa') {
+            if (localStorage.getItem(VOYAGR_SHERPA_WAKE_STORAGE_KEY) === 'true') {
+                await startSherpaWakePipeline();
+            }
+        } else if (
             localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true' &&
             picovoiceClientConfigured()
         ) {

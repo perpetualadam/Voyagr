@@ -4389,7 +4389,10 @@ HTML_TEMPLATE = '''
     <script src="/static/vendor/picovoice/web-voice-processor.iife.js?v=pv4"></script>
     <script src="/static/vendor/picovoice/porcupine-web.iife.js?v=pv4"></script>
     {% endif %}
-    <script src="/static/js/voyagr-app.js?v=20260421b"></script>
+    {% if sherpa_kws_lab %}
+    <script src="/static/js/sherpa-kws-map-runtime.js?v=20260421e"></script>
+    {% endif %}
+    <script src="/static/js/voyagr-app.js?v=20260421e"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -5253,13 +5256,20 @@ HTML_TEMPLATE = '''
                         <div class="preference-item" id="wakeBackendPrefRow" style="display: none;">
                             <span class="preference-label">🧪 Wake engine (experimental)</span>
                             <select id="wakeBackendSelect" onchange="onWakeBackendSelectChange()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="sherpa">Sherpa-ONNX KWS (default — lab page)</option>
-                                <option value="picovoice">Picovoice</option>
+                                <option value="picovoice">Picovoice (production path)</option>
+                                <option value="sherpa">Sherpa-ONNX KWS (OSS spike — lab page)</option>
                             </select>
                         </div>
                         <p id="wakeBackendHelp" style="display: none; font-size: 11px; color: #888; margin: -6px 0 8px 0;">
-                            Sherpa path does not run inside the main map UI yet. Build WASM per <code>scripts/SHERPA_KWS_SPIKE_BUILD.txt</code>, then open
-                            <a href="/static/sherpa-kws-spike.html" target="_blank" rel="noopener">Sherpa KWS lab</a> for mic tests. Keyword: «Hey Sat Nav» (phone tokens, zh-en model).
+                            Choose engine below. Sherpa runs in this app when its wake toggle is on (WASM under <code>static/vendor/sherpa-kws/wasm/</code>). Standalone mic tests:
+                            <a href="/static/sherpa-kws-spike.html" target="_blank" rel="noopener">Sherpa KWS lab</a>.
+                        </p>
+                        <div class="preference-item" id="sherpaWakePrefRow" style="display: none;">
+                            <span class="preference-label">🎙️ Wake phrase «Hey Sat Nav» (Sherpa)</span>
+                            <button type="button" class="toggle-switch" id="sherpaWakeToggle" onclick="toggleSherpaWakeWord()"></button>
+                        </div>
+                        <p id="sherpaWakeHelp" style="display: none; font-size: 11px; color: #888; margin: -6px 0 8px 0;">
+                            On-device keyword spotting in the main PWA (same model bundle as the lab). HTTPS required for the microphone.
                         </p>
                         {% endif %}
 
