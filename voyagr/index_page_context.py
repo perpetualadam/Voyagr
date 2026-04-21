@@ -34,8 +34,8 @@ def build_index_template_kwargs() -> Dict[str, Any]:
     ).strip()
     _sherpa_lab = (os.getenv("VOYAGR_SHERPA_KWS_LAB") or "").strip().lower()
     sherpa_kws_lab = _sherpa_lab in ("1", "true", "yes", "on")
-    _wake_b = (os.getenv("VOYAGR_WAKE_BACKEND") or "picovoice").strip().lower()
-    wake_backend_default = _wake_b if _wake_b in ("picovoice", "sherpa") else "picovoice"
+    _wake_b = (os.getenv("VOYAGR_WAKE_BACKEND") or "sherpa").strip().lower()
+    wake_backend_default = _wake_b if _wake_b in ("picovoice", "sherpa") else "sherpa"
     return {
         "tomtom_api_key": os.getenv("TOMTOM_API_KEY", ""),
         "block_search_indexing": block_search_indexing(),

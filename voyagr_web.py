@@ -5253,8 +5253,8 @@ HTML_TEMPLATE = '''
                         <div class="preference-item" id="wakeBackendPrefRow" style="display: none;">
                             <span class="preference-label">🧪 Wake engine (experimental)</span>
                             <select id="wakeBackendSelect" onchange="onWakeBackendSelectChange()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="picovoice">Picovoice (production path)</option>
-                                <option value="sherpa">Sherpa-ONNX KWS (OSS spike — lab page)</option>
+                                <option value="sherpa">Sherpa-ONNX KWS (default — lab page)</option>
+                                <option value="picovoice">Picovoice</option>
                             </select>
                         </div>
                         <p id="wakeBackendHelp" style="display: none; font-size: 11px; color: #888; margin: -6px 0 8px 0;">

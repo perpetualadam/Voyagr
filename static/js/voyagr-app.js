@@ -7431,7 +7431,7 @@ function loadVoicePreferences() {
 
 // ----- Picovoice Porcupine wake word (browser / PWA). Native satnav.py keeps on-device «Hey SatNav»; same UX here when a Web (WASM) .ppn is deployed. -----
 const VOYAGR_PORCUPINE_WAKE_STORAGE_KEY = 'voyagrPorcupineWakeEnabled';
-/** Wake engine: 'picovoice' | 'sherpa' (Sherpa is OSS lab spike only until main-app integration). */
+/** Wake engine: 'picovoice' | 'sherpa' (default: sherpa; Picovoice remains optional). */
 const VOYAGR_WAKE_BACKEND_KEY = 'voyagrWakeBackend';
 let porcupineWakePipelineRunning = false;
 let porcupineWakeResumeAfterVoice = false;
@@ -7464,7 +7464,7 @@ function getWakeBackend() {
     if (d === 'sherpa' || d === 'picovoice') {
         return d;
     }
-    return 'picovoice';
+    return 'sherpa';
 }
 
 function loadWakeBackendUi() {
