@@ -17,15 +17,13 @@ from typing import Optional
 from flask import Blueprint, jsonify, render_template_string, current_app, Response
 
 from voyagr.discoverability import block_search_indexing
+from voyagr.index_page_context import build_index_template_kwargs
 
 core_bp = Blueprint('core', __name__)
 
 
 def _index_template_kwargs() -> dict:
-    return {
-        'tomtom_api_key': os.getenv('TOMTOM_API_KEY', ''),
-        'block_search_indexing': block_search_indexing(),
-    }
+    return build_index_template_kwargs()
 
 
 @core_bp.route('/')

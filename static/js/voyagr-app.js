@@ -7431,6 +7431,8 @@ function loadVoicePreferences() {
 
 // ----- Picovoice Porcupine wake word (browser / PWA). Native satnav.py keeps on-device «Hey SatNav»; same UX here when a Web (WASM) .ppn is deployed. -----
 const VOYAGR_PORCUPINE_WAKE_STORAGE_KEY = 'voyagrPorcupineWakeEnabled';
+/** Wake engine: 'picovoice' | 'sherpa' (Sherpa is OSS lab spike only until main-app integration). */
+const VOYAGR_WAKE_BACKEND_KEY = 'voyagrWakeBackend';
 let porcupineWakePipelineRunning = false;
 let porcupineWakeResumeAfterVoice = false;
 let _porcupineWakeWorker = null;
@@ -7449,11 +7451,70 @@ function picovoiceClientConfigured() {
     );
 }
 
+function getWakeBackend() {
+    try {
+        const ls = localStorage.getItem(VOYAGR_WAKE_BACKEND_KEY);
+        if (ls === 'sherpa' || ls === 'picovoice') {
+            return ls;
+        }
+    } catch (e) {
+        /* ignore */
+    }
+    const d = typeof window !== 'undefined' ? window.VoyagrWakeBackendDefault : null;
+    if (d === 'sherpa' || d === 'picovoice') {
+        return d;
+    }
+    return 'picovoice';
+}
+
+function loadWakeBackendUi() {
+    const row = document.getElementById('wakeBackendPrefRow');
+    const help = document.getElementById('wakeBackendHelp');
+    const sel = document.getElementById('wakeBackendSelect');
+    if (!row || !sel) {
+        return;
+    }
+    if (!window.VoyagrSherpaKwsLab) {
+        return;
+    }
+    row.style.display = '';
+    if (help) {
+        help.style.display = '';
+    }
+    sel.value = getWakeBackend();
+}
+
+function onWakeBackendSelectChange() {
+    const sel = document.getElementById('wakeBackendSelect');
+    if (!sel) {
+        return;
+    }
+    localStorage.setItem(VOYAGR_WAKE_BACKEND_KEY, sel.value);
+    if (getWakeBackend() === 'sherpa') {
+        porcupineWakeResumeAfterVoice = false;
+        void stopPorcupineWakePipeline();
+        loadPorcupineWakeUi();
+        showStatus('Wake engine: Sherpa-ONNX — use the KWS lab page (link in Settings).', 'success');
+    } else {
+        loadPorcupineWakeUi();
+        showStatus('Wake engine: Picovoice', 'success');
+    }
+    saveAllSettings();
+}
+
 function loadPorcupineWakeUi() {
+    loadWakeBackendUi();
     const row = document.getElementById('porcupineWakePrefRow');
     const help = document.getElementById('porcupineWakeHelp');
     const toggle = document.getElementById('porcupineWakeToggle');
     if (!row || !toggle) {
+        return;
+    }
+    if (getWakeBackend() === 'sherpa') {
+        row.style.display = 'none';
+        if (help) {
+            help.style.display = 'none';
+        }
         return;
     }
     if (!picovoiceClientConfigured()) {
@@ -7486,6 +7547,10 @@ function togglePorcupineWakeWord() {
     if (!button || !picovoiceClientConfigured()) {
         return;
     }
+    if (getWakeBackend() === 'sherpa') {
+        showStatus('Picovoice wake is disabled while Sherpa is selected — use Settings → Sherpa KWS lab.', 'warning');
+        return;
+    }
     button.classList.toggle('active');
     const enabled = button.classList.contains('active');
     if (enabled) {
@@ -7514,6 +7579,9 @@ function maybeResumePorcupineWakeAfterVoice() {
         return;
     }
     porcupineWakeResumeAfterVoice = false;
+    if (getWakeBackend() === 'sherpa') {
+        return;
+    }
     if (localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) !== 'true') {
         return;
     }
@@ -7566,6 +7634,12 @@ async function stopPorcupineWakePipeline() {
 }
 
 async function startPorcupineWakePipeline() {
+    if (getWakeBackend() === 'sherpa') {
+        if (window.VoyagrSherpaKwsLab) {
+            showStatus('Sherpa wake: open the KWS lab page from Settings (not bundled in main UI yet).', 'warning');
+        }
+        return;
+    }
     if (!picovoiceClientConfigured() || localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) !== 'true') {
         return;
     }
@@ -12007,7 +12081,11 @@ window.addEventListener('load', () => {
     loadVoicePreferences();
     loadPorcupineWakeUi();
     void (async () => {
-        if (localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true' && picovoiceClientConfigured()) {
+        if (
+            getWakeBackend() !== 'sherpa' &&
+            localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true' &&
+            picovoiceClientConfigured()
+        ) {
             await startPorcupineWakePipeline();
         }
     })();

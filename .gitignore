@@ -86,6 +86,11 @@ voyagr_web_backup.py
 voyagr_web_backup*.py
 .tmp.driveupload/
 
+# Sherpa-ONNX KWS WASM build output (large); keep directory via .gitkeep
+static/vendor/sherpa-kws/wasm/*
+!static/vendor/sherpa-kws/wasm/.gitkeep
+_sherpa_tmp/
+
 # Environment variables (contains sensitive API keys and server IPs)
 .env
 .env.local

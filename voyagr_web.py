@@ -4377,7 +4377,7 @@ HTML_TEMPLATE = '''
     <script src="/static/vendor/picovoice/web-voice-processor.iife.js?v=pv4"></script>
     <script src="/static/vendor/picovoice/porcupine-web.iife.js?v=pv4"></script>
     {% endif %}
-    <script src="/static/js/voyagr-app.js?v=20260420d"></script>
+    <script src="/static/js/voyagr-app.js?v=20260421a"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -5234,6 +5234,20 @@ HTML_TEMPLATE = '''
                         <p id="porcupineWakeHelp" style="display: none; font-size: 11px; color: #888; margin: -6px 0 8px 0;">
                             Hands-free: say the wake phrase, then your command (same flow as the native app). Train the Web (WASM) keyword in Picovoice Console and save it as
                             <code>static/vendor/picovoice/hey_satnav_wasm.ppn</code> for an exact match; otherwise the app falls back to the built-in word «Porcupine» until that file is present.
+                        </p>
+                        {% endif %}
+
+                        {% if sherpa_kws_lab %}
+                        <div class="preference-item" id="wakeBackendPrefRow" style="display: none;">
+                            <span class="preference-label">🧪 Wake engine (experimental)</span>
+                            <select id="wakeBackendSelect" onchange="onWakeBackendSelectChange()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
+                                <option value="picovoice">Picovoice (production path)</option>
+                                <option value="sherpa">Sherpa-ONNX KWS (OSS spike — lab page)</option>
+                            </select>
+                        </div>
+                        <p id="wakeBackendHelp" style="display: none; font-size: 11px; color: #888; margin: -6px 0 8px 0;">
+                            Sherpa path does not run inside the main map UI yet. Build WASM per <code>scripts/SHERPA_KWS_SPIKE_BUILD.txt</code>, then open
+                            <a href="/static/sherpa-kws-spike.html" target="_blank" rel="noopener">Sherpa KWS lab</a> for mic tests. Keyword: «Hey Sat Nav» (phone tokens, zh-en model).
                         </p>
                         {% endif %}
 
@@ -6222,36 +6236,14 @@ HTML_TEMPLATE = '''
         window.PICOVOICE_ACCESS_KEY = {{ picovoice_access_key|tojson }};
         window.VoyagrPicovoiceKeywordPath = {{ picovoice_keyword_public_path|tojson }};
         window.VoyagrPicovoiceWebAssetsOk = {{ picovoice_web_assets_ok|tojson }};
+        window.VoyagrSherpaKwsLab = {{ sherpa_kws_lab|tojson }};
+        window.VoyagrWakeBackendDefault = {{ wake_backend_default|tojson }};
     </script>
 </body>
 </html>
 '''
 
-@app.route('/')
-def index():
-    _base = os.path.dirname(os.path.abspath(__file__))
-    _pv_dir = os.path.join(_base, 'static', 'vendor', 'picovoice')
-    _porcupine_js = os.path.join(_pv_dir, 'porcupine-web.iife.js')
-    _wvp_js = os.path.join(_pv_dir, 'web-voice-processor.iife.js')
-    _pv_model = os.path.join(_pv_dir, 'porcupine_params.pv')
-    picovoice_access_key = (os.getenv('PICOVOICE_ACCESS_KEY') or '').strip()
-    picovoice_web_assets_ok = bool(
-        picovoice_access_key
-        and os.path.isfile(_porcupine_js)
-        and os.path.isfile(_wvp_js)
-        and os.path.isfile(_pv_model)
-    )
-    picovoice_keyword_public_path = (
-        os.getenv('PICOVOICE_WEB_KEYWORD_PATH') or '/static/vendor/picovoice/hey_satnav_wasm.ppn'
-    ).strip()
-    return render_template_string(
-        HTML_TEMPLATE,
-        tomtom_api_key=os.getenv('TOMTOM_API_KEY', ''),
-        block_search_indexing=block_search_indexing(),
-        picovoice_access_key=picovoice_access_key,
-        picovoice_web_assets_ok=picovoice_web_assets_ok,
-        picovoice_keyword_public_path=picovoice_keyword_public_path,
-    )
+# GET / is served by voyagr.api.core.index (registered before duplicate routes here).
 
 # Core routes (/api/config, /monitoring, /manifest.json, /service-worker.js)
 # moved to voyagr/api/core.py blueprint

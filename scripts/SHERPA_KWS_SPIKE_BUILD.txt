@@ -1,0 +1,31 @@
+Sherpa-ONNX KWS WASM spike (Voyagr)
+===================================
+
+There is NO official prebuilt WASM KWS tarball (see GitHub sherpa-onnx issue #3112).
+You must build the WASM bundle once (Emscripten), then copy the install output here.
+
+1) Clone sherpa-onnx and install Emscripten 3.1.53 (see upstream docs).
+
+2) Prepare wasm/kws/assets/ with ONNX + tokens + en.phone + keywords.txt
+   - Easiest: run scripts/prepare-sherpa-kws-wasm-assets.sh from sherpa-onnx repo root
+     (it downloads sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20 and renames files to the
+     epoch-12 filenames expected by wasm/kws/CMakeLists.txt).
+
+3) From sherpa-onnx repo root:
+     ./build-wasm-simd-kws.sh
+
+4) Copy build output into Voyagr (paths relative to Voyagr repo root):
+     cp -a build-wasm-simd-kws/install/bin/wasm/* static/vendor/sherpa-kws/wasm/
+
+5) Open in browser (HTTPS):
+     /static/sherpa-kws-spike.html
+
+Keyword line for "Hey Sat Nav" was generated with sherpa-onnx-cli text2token using
+tokens-type phone+ppinyin and en.phone from the zh-en model (see static/vendor/sherpa-kws/spike-config/).
+Regenerate after changing the phrase:
+  pip install sherpa-onnx sentencepiece pypinyin
+  sherpa-onnx-cli text2token --tokens <model>/tokens.txt --tokens-type phone+ppinyin \
+    --lexicon <model>/en.phone keywords_raw.txt keywords.txt
+
+Upstream sources (Apache-2.0):
+  https://github.com/k2-fsa/sherpa-onnx/tree/master/wasm/kws
