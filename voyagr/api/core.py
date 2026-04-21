@@ -14,7 +14,7 @@ import json
 import os
 from typing import Optional
 
-from flask import Blueprint, jsonify, render_template_string, current_app, Response
+from flask import Blueprint, jsonify, render_template_string, current_app, Response, make_response
 
 from voyagr.discoverability import block_search_indexing
 from voyagr.index_page_context import build_index_template_kwargs
@@ -30,7 +30,13 @@ def _index_template_kwargs() -> dict:
 def index():
     """Render the main application page."""
     from voyagr_web import HTML_TEMPLATE
-    return render_template_string(HTML_TEMPLATE, **_index_template_kwargs())
+    html = render_template_string(HTML_TEMPLATE, **_index_template_kwargs())
+    response = make_response(html)
+    # Shell HTML is server-rendered (wake/Sherpa flags, keys). Do not cache at CDN or browser.
+    response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    return response
 
 
 @core_bp.route('/api/config')
