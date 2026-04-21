@@ -43,5 +43,5 @@
   <text x="150" y="400" text-anchor="middle" fill="#00FF88" font-family="Arial, sans-serif" font-size="16" font-weight="bold">65</text>
 
   <!-- Brand Text -->
-  <text x="256" y="480" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="24" font-weight="bold">VibeVoyager</text>
+  <text x="256" y="480" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="22" font-weight="bold">VibeVoyager</text>
 </svg>

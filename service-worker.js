@@ -37,6 +37,10 @@ const STATIC_ASSETS = [
   '/static/js/sherpa-kws-map-runtime.js',
   '/static/js/sherpa-onnx-kws-spike.js',
   '/static/js/app.js',
+  '/static/images/icons/icon.svg',
+  '/static/images/icons/icon-192.png',
+  '/static/images/icons/icon-512.png',
+  '/static/images/icons/icon-512-maskable.png',
 ];
 
 const MAX_DYNAMIC_CACHE_SIZE = 200;

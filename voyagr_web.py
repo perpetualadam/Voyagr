@@ -4362,22 +4362,44 @@ HTML_TEMPLATE = '''
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#667eea">
-    <meta name="description" content="Full-featured navigation app with route planning, cost estimation, and trip tracking">
+    <meta name="description" content="{{ seo_description }}">
     {% if block_search_indexing %}
     <meta name="robots" content="noindex, nofollow, noarchive">
     <meta name="googlebot" content="noindex, nofollow, noarchive">
+    {% else %}
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    {% endif %}
+    {# SEO / GEO / AEO — all metadata sourced from voyagr/seo.py so tags stay consistent
+       with /robots.txt, /sitemap.xml, /llms.txt and the structured data below. #}
+    <link rel="canonical" href="{{ seo_canonical }}">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="{{ seo_site_name }}">
+    <meta property="og:title" content="{{ seo_title }}">
+    <meta property="og:description" content="{{ seo_description }}">
+    <meta property="og:url" content="{{ seo_canonical }}">
+    <meta property="og:image" content="{{ seo_og_image }}">
+    <meta property="og:image:width" content="512">
+    <meta property="og:image:height" content="512">
+    <meta property="og:locale" content="en_GB">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="{{ seo_title }}">
+    <meta name="twitter:description" content="{{ seo_description }}">
+    <meta name="twitter:image" content="{{ seo_og_image }}">
+    {% if seo_json_ld %}
+    <script type="application/ld+json">{{ seo_json_ld|safe }}</script>
     {% endif %}
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Voyagr">
     <link rel="icon" type="image/svg+xml" href="/static/images/icons/icon.svg?v=20260421g">
-    <link rel="icon" type="image/png" sizes="48x48" href="/static/images/icons/icon-48.png?v=20260421g">
-    <link rel="icon" type="image/png" sizes="192x192" href="/static/images/icons/icon-192.png?v=20260421g">
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/images/icons/favicon-32.png?v=20260421g">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/images/icons/favicon-16.png?v=20260421g">
     <link rel="apple-touch-icon" sizes="192x192" href="/static/images/icons/icon-192.png?v=20260421g">
     <link rel="apple-touch-icon" sizes="512x512" href="/static/images/icons/icon-512.png?v=20260421g">
+    <link rel="mask-icon" href="/static/images/icons/icon.svg?v=20260421g" color="#00FF88">
     <link rel="manifest" href="/manifest.json">
-    <title>Voyagr Navigation</title>
+    <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="/static/css/voyagr.css?v=20260410b" />
     <script src="/static/vendor/maplibre-gl.js"></script>

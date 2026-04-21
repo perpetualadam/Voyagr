@@ -5,6 +5,7 @@
   "main": "voyagr_web.py",
   "scripts": {
     "picovoice:sync": "node scripts/sync-picovoice-web.cjs",
+    "icons:generate": "node scripts/generate-icons.cjs",
     "postinstall": "node scripts/sync-picovoice-web.cjs",
     "icons:rasterize": "node scripts/rasterize-icons.cjs",
     "test": "jest",
@@ -27,6 +28,7 @@
     "@babel/core": "^7.23.0",
     "@babel/preset-env": "^7.23.0",
     "@playwright/test": "^1.56.1",
+    "@resvg/resvg-js": "^2.6.2",
     "@testing-library/jest-dom": "^6.1.0",
     "babel-jest": "^29.7.0",
     "jest": "^29.7.0",

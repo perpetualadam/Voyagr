@@ -58,3 +58,31 @@ def test_api_config_json(client):
     assert rv.status_code == 200
     assert rv.is_json
     assert rv.get_json().get("success") is True
+
+
+def test_index_has_seo_meta_and_jsonld(client):
+    rv = client.get("/")
+    assert rv.status_code == 200
+    body = rv.data.decode("utf-8", errors="replace")
+    # Canonical + OG + Twitter: one occurrence each, fed from voyagr.seo.
+    assert '<link rel="canonical"' in body
+    assert 'property="og:title"' in body
+    assert 'property="og:image"' in body
+    assert 'name="twitter:card"' in body
+    # Description must be present exactly once (no accidental duplication).
+    assert body.count('<meta name="description"') == 1
+
+
+def test_robots_sitemap_llms_routes(client):
+    robots = client.get("/robots.txt")
+    assert robots.status_code == 200
+    assert b"User-agent: *" in robots.data
+
+    sitemap = client.get("/sitemap.xml")
+    assert sitemap.status_code == 200
+    assert b"<urlset" in sitemap.data
+
+    llms = client.get("/llms.txt")
+    assert llms.status_code == 200
+    # llms.txt must name the app (proves it's the seo.py-rendered body, not a 404 page).
+    assert b"Voyagr" in llms.data

@@ -1,5 +1,5 @@
 <svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
-  <!-- Full-bleed background so maskable crops don't reveal transparency -->
+  <!-- Full square background so launcher masking (circle/squircle/rounded) always has fill -->
   <rect width="512" height="512" fill="#000000"/>
 
   <defs>
@@ -15,10 +15,10 @@
 
   <rect width="512" height="512" fill="url(#bgGradient)"/>
 
-  <!-- All critical content scaled/translated into the inner 80% safe zone
-       (centered around 256,256 with radius <= 205). Original 512-coord art
-       is scaled by 0.72 (effective radius ~184). -->
-  <g transform="translate(256 256) scale(0.72) translate(-256 -256)">
+  <!-- All artwork inset into the 80% safe zone required by maskable icons. -->
+  <g transform="translate(51.2 51.2) scale(0.8)">
+    <circle cx="256" cy="256" r="256" fill="none"/>
+
     <!-- Navigation Arrow -->
     <path d="M256 80 L320 200 L280 200 L280 320 L232 320 L232 200 L192 200 Z" fill="url(#iconGradient)" stroke="#FFFFFF" stroke-width="2"/>
 
@@ -44,5 +44,8 @@
     <!-- Speed Indicator -->
     <rect x="120" y="380" width="60" height="30" rx="15" fill="rgba(0,255,136,0.2)" stroke="#00FF88" stroke-width="2"/>
     <text x="150" y="400" text-anchor="middle" fill="#00FF88" font-family="Arial, sans-serif" font-size="16" font-weight="bold">65</text>
+
+    <!-- Brand Text -->
+    <text x="256" y="480" text-anchor="middle" fill="#FFFFFF" font-family="Arial, sans-serif" font-size="22" font-weight="bold">VibeVoyager</text>
   </g>
 </svg>
