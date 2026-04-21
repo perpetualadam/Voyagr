@@ -4389,7 +4389,7 @@ HTML_TEMPLATE = '''
     <script src="/static/vendor/picovoice/web-voice-processor.iife.js?v=pv4"></script>
     <script src="/static/vendor/picovoice/porcupine-web.iife.js?v=pv4"></script>
     {% endif %}
-    <script src="/static/js/voyagr-app.js?v=20260421a"></script>
+    <script src="/static/js/voyagr-app.js?v=20260421b"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>

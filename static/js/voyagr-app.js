@@ -16068,11 +16068,12 @@ function showVolumeHintForNavigation() {
             <button type="button" id="volumeHintOk" style="padding:8px 18px;border:none;border-radius:10px;background:#2196F3;color:#fff;font-weight:600;cursor:pointer;font-size:14px;">OK</button>
         </div>
     `;
-    const dismiss = document.getElementById('volumeHintDismiss');
-    if (dismiss) dismiss.onclick = () => chip.remove();
-    const ok = document.getElementById('volumeHintOk');
-    if (ok) ok.onclick = () => chip.remove();
     document.body.appendChild(chip);
+    // Must query inside `chip` (or append before getElementById): detached nodes are not in document, so getElementById returned null and clicks did nothing.
+    const dismiss = chip.querySelector('#volumeHintDismiss');
+    if (dismiss) dismiss.onclick = () => chip.remove();
+    const ok = chip.querySelector('#volumeHintOk');
+    if (ok) ok.onclick = () => chip.remove();
 
     setTimeout(() => {
         const el = document.getElementById('volumeHintBanner');
