@@ -4429,7 +4429,7 @@ HTML_TEMPLATE = '''
     {# Voyagr uses Sherpa-ONNX for on-device wake-word detection. Picovoice/Porcupine
        is no longer bundled — its legacy code paths in voyagr-app.js short-circuit
        safely when `PorcupineWeb` is undefined (see picovoiceClientConfigured()). #}
-    <script defer src="/static/js/sherpa-kws-map-runtime.js?v=20260421j"></script>
+    <script defer src="/static/js/sherpa-kws-map-runtime.js?v=20260421k"></script>
     <script defer src="/static/js/voyagr-app.js?v=20260421l"></script>
     <script defer src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->

@@ -61,10 +61,23 @@
             // Strategy 3: last-ditch — poke the WASM heap. libc++ lays a
             // std::runtime_error out with a pointer to a what-string either at
             // offset 0 (small-string case) or dereferenced once (heap-backed).
+            // Gate on "looks like a real message" (length + printable ratio) so
+            // we don't surface garbage single bytes as if they were errors.
+            function looksLikeMessage(s) {
+                if (!s || s.length < 8 || s.length > 4096) return false;
+                var printable = 0;
+                for (var i = 0; i < s.length; i++) {
+                    var c = s.charCodeAt(i);
+                    if ((c >= 0x20 && c < 0x7f) || c === 0x0a || c === 0x09) {
+                        printable++;
+                    }
+                }
+                return printable / s.length > 0.9;
+            }
             if (!decoded && mod && mod.HEAPU32 && typeof mod.UTF8ToString === 'function') {
                 try {
                     var probe = mod.UTF8ToString(e);
-                    if (probe && probe.length > 0 && probe.length < 4096) {
+                    if (looksLikeMessage(probe)) {
                         decoded = probe;
                     }
                 } catch (_e3) { /* swallow */ }
@@ -73,7 +86,7 @@
                         var indirect = mod.HEAPU32[e >> 2];
                         if (indirect) {
                             var probe2 = mod.UTF8ToString(indirect);
-                            if (probe2 && probe2.length > 0 && probe2.length < 4096) {
+                            if (looksLikeMessage(probe2)) {
                                 decoded = probe2;
                             }
                         }
@@ -95,36 +108,89 @@
     global.VoyagrSherpaFormatError = formatSherpaError;
 
     /**
-     * Dump the Emscripten virtual FS contents so we can see exactly what
-     * sherpa-onnx-wasm-kws-main.data preloaded and at what sizes. Purely
-     * diagnostic — returns an array of {name,size} objects. Safe to call
-     * only after Module.onRuntimeInitialized has fired.
+     * Recursively walk the Emscripten virtual FS and return every file found
+     * with its absolute path and size. Standard Emscripten pseudo-dirs
+     * (/tmp, /home, /dev, /proc) are skipped so the signal is the
+     * preloaded model bundle. Depth-limited to avoid runaway on pathological
+     * layouts. Purely diagnostic — safe after onRuntimeInitialized.
      */
     function dumpSherpaFs() {
         var result = [];
-        try {
-            var FS = global.Module && global.Module.FS;
-            if (!FS || typeof FS.readdir !== 'function') {
-                return result;
-            }
-            var names = FS.readdir('/');
+        var FS = global.Module && global.Module.FS;
+        if (!FS || typeof FS.readdir !== 'function' || typeof FS.stat !== 'function') {
+            return result;
+        }
+        var SKIP = { '.': 1, '..': 1, 'tmp': 1, 'home': 1, 'dev': 1, 'proc': 1 };
+        function walk(absPath, depth) {
+            if (depth > 4) return;
+            var names;
+            try { names = FS.readdir(absPath); } catch (_e) { return; }
             for (var i = 0; i < names.length; i++) {
                 var n = names[i];
-                if (n === '.' || n === '..' || n === 'tmp' || n === 'home' ||
-                    n === 'dev' || n === 'proc') {
-                    continue;
-                }
-                try {
-                    var st = FS.stat('/' + n);
-                    result.push({ name: n, size: st.size });
-                } catch (_e) {
-                    result.push({ name: n, size: -1 });
+                if (SKIP[n]) continue;
+                var child = (absPath === '/' ? '/' : absPath + '/') + n;
+                var st;
+                try { st = FS.stat(child); } catch (_e) { continue; }
+                var isDir = (typeof FS.isDir === 'function') ? FS.isDir(st.mode) : (st.mode & 0o040000) !== 0;
+                if (isDir) {
+                    result.push({ path: child + '/', size: 0 });
+                    walk(child, depth + 1);
+                } else {
+                    result.push({ path: child, size: st.size });
                 }
             }
-        } catch (_e) { /* swallow */ }
+        }
+        try { walk('/', 0); } catch (_e) { /* swallow */ }
         return result;
     }
     global.VoyagrSherpaDumpFs = dumpSherpaFs;
+
+    /**
+     * Right before calling createKws, resolve the exact paths we intend to
+     * hand to the C++ side (both CWD-relative and absolute root-rooted) and
+     * log whether each actually exists in the virtual FS + its byte size.
+     * If any file is missing this is *the* explanation for ptr exceptions
+     * coming out of SherpaOnnxCreateKeywordSpotter.
+     */
+    function probeSherpaAssets(config) {
+        var FS = global.Module && global.Module.FS;
+        if (!FS || typeof FS.stat !== 'function') {
+            console.warn('[Sherpa map] FS not available — cannot probe asset paths.');
+            return;
+        }
+        var cwd = 'unknown';
+        try { cwd = FS.cwd && FS.cwd(); } catch (_e) { /* ignore */ }
+        console.log('[Sherpa map] Emscripten FS cwd:', cwd);
+        var candidates = [];
+        try {
+            var t = config.modelConfig.transducer;
+            candidates.push(t.encoder);
+            candidates.push(t.decoder);
+            candidates.push(t.joiner);
+            candidates.push(config.modelConfig.tokens);
+        } catch (_e) { /* ignore */ }
+        for (var i = 0; i < candidates.length; i++) {
+            var rel = candidates[i];
+            if (!rel) continue;
+            var bare = rel.replace(/^\.\//, '');
+            var tryPaths = [rel, bare, '/' + bare, (cwd || '/') + (bare[0] === '/' ? bare.slice(1) : bare)];
+            var hits = [];
+            for (var j = 0; j < tryPaths.length; j++) {
+                var p = tryPaths[j];
+                try {
+                    var st = FS.stat(p);
+                    hits.push({ path: p, size: st.size });
+                } catch (_e) { /* miss */ }
+            }
+            if (hits.length) {
+                console.log('[Sherpa map] Asset found:', rel, '→', hits);
+            } else {
+                console.warn('[Sherpa map] Asset MISSING in virtual FS:', rel,
+                    '(tried:', tryPaths.join(', '), ')');
+            }
+        }
+    }
+    global.VoyagrSherpaProbeAssets = probeSherpaAssets;
 
     /**
      * Probe that every required asset is reachable before we hand control to the
@@ -284,10 +350,12 @@
                                 try {
                                     var fsSnapshot = dumpSherpaFs();
                                     if (fsSnapshot.length) {
-                                        console.log('[Sherpa map] Virtual FS contents:', fsSnapshot);
+                                        console.log('[Sherpa map] Virtual FS contents (' +
+                                            fsSnapshot.length + ' entries):', fsSnapshot);
                                     } else {
                                         console.warn('[Sherpa map] Virtual FS appears empty — .data may not have preloaded.');
                                     }
+                                    probeSherpaAssets(myConfig);
                                 } catch (_fsErr) { /* never let diagnostics break init */ }
                                 try {
                                     _recognizer = createKws(global.Module, myConfig);
