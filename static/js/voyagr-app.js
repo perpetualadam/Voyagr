@@ -7524,19 +7524,32 @@ function picovoiceClientConfigured() {
 }
 
 function getWakeBackend() {
+    // Picovoice scripts are no longer shipped; if they're not present at runtime,
+    // any stored 'picovoice' preference is effectively unusable. Fall back to
+    // 'sherpa' so users with legacy localStorage don't end up with silent wake.
+    const picovoiceAvailable = (
+        typeof PorcupineWeb !== 'undefined' &&
+        typeof WebVoiceProcessor !== 'undefined'
+    );
     try {
         const ls = localStorage.getItem(VOYAGR_WAKE_BACKEND_KEY);
-        if (ls === 'sherpa' || ls === 'picovoice') {
-            return ls;
+        if (ls === 'sherpa') {
+            return 'sherpa';
+        }
+        if (ls === 'picovoice') {
+            return picovoiceAvailable ? 'picovoice' : 'sherpa';
         }
     } catch (e) {
         /* ignore */
     }
     const d = typeof window !== 'undefined' ? window.VoyagrWakeBackendDefault : null;
-    if (d === 'sherpa' || d === 'picovoice') {
-        return d;
+    if (d === 'sherpa') {
+        return 'sherpa';
     }
-    return 'picovoice';
+    if (d === 'picovoice') {
+        return picovoiceAvailable ? 'picovoice' : 'sherpa';
+    }
+    return 'sherpa';
 }
 
 function loadWakeBackendUi() {
@@ -7735,8 +7748,19 @@ async function startSherpaWakePipeline() {
             await onPorcupineWakeHotword();
         });
     } catch (e) {
-        console.error('[Sherpa map]', e);
-        showStatus('Sherpa wake failed: ' + (e && e.message ? e.message : String(e)), 'error');
+        // Emscripten C++ exceptions arrive as raw integer pointers. Decode via the
+        // runtime's helper (which knows about Module.getExceptionMessage) so we log
+        // something useful instead of an opaque number.
+        var sherpaMsg;
+        if (typeof window.VoyagrSherpaFormatError === 'function') {
+            sherpaMsg = window.VoyagrSherpaFormatError(e);
+        } else if (typeof e === 'number') {
+            sherpaMsg = 'Sherpa WASM threw opaque exception (ptr=' + e + ')';
+        } else {
+            sherpaMsg = (e && e.message) ? e.message : String(e);
+        }
+        console.error('[Sherpa map]', sherpaMsg, e);
+        showStatus('Sherpa wake failed: ' + sherpaMsg, 'error');
         try {
             window.VoyagrSherpaKwsMap.stop();
         } catch (e2) {

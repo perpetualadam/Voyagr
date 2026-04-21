@@ -7,9 +7,13 @@ You must build the WASM bundle once (Emscripten), then copy the install output h
 1) Clone sherpa-onnx and install Emscripten 3.1.53 (see upstream docs).
 
 2) Prepare wasm/kws/assets/ with ONNX + tokens + en.phone + keywords.txt
-   - Easiest: run scripts/prepare-sherpa-kws-wasm-assets.sh from sherpa-onnx repo root
-     (it downloads sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20 and renames files to the
-     epoch-12 filenames expected by wasm/kws/CMakeLists.txt).
+   - Easiest: run scripts/prepare-sherpa-kws-wasm-assets.sh from sherpa-onnx repo root.
+     It downloads sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20 and installs the files
+     with their native epoch-13 names (which is what Voyagr's JS config now expects).
+     If you rebuild upstream WASM with the stock CMakeLists.txt its --preload-file list
+     references epoch-12 names — you'll need to either (a) patch those to epoch-13, or
+     (b) switch the build to use lazy HTTP fetch so files resolve at runtime via
+     Module.locateFile().
 
 3) From sherpa-onnx repo root:
      ./build-wasm-simd-kws.sh

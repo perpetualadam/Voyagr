@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # Run from a CLONE of https://github.com/k2-fsa/sherpa-onnx (repo root).
-# Populates wasm/kws/assets/ with sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20 files
-# renamed to the epoch-12 filenames expected by wasm/kws/CMakeLists.txt.
+# Populates wasm/kws/assets/ with sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
+# files using their native epoch-13 filenames. Voyagr's JS config now references
+# epoch-13 directly (static/js/sherpa-onnx-kws-spike.js + sherpa-kws-map-runtime.js),
+# so no renaming step is needed. If you rebuild the upstream WASM with the stock
+# CMakeLists.txt (which bakes epoch-12 names into its --preload-file list) you'll
+# need to patch those paths or use `--embed-file`/lazy-fetch so the runtime can
+# find epoch-13 files at the paths our JS asks for.
 set -euo pipefail
 ROOT="${1:-.}"
 ASSETS="$ROOT/wasm/kws/assets"
@@ -21,15 +26,12 @@ curl -sSL -o model.tar.bz2 "$MODEL_URL"
 tar xf model.tar.bz2
 M="sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20"
 
-echo "[prepare] Installing into $ASSETS (epoch-12 names for upstream wasm CMake)…"
+echo "[prepare] Installing into $ASSETS (epoch-13 names — no rename)…"
 cp -f "$M/tokens.txt" "$ASSETS/tokens.txt"
 cp -f "$M/en.phone" "$ASSETS/en.phone"
-cp -f "$M/encoder-epoch-13-avg-2-chunk-16-left-64.int8.onnx" \
-  "$ASSETS/encoder-epoch-12-avg-2-chunk-16-left-64.onnx"
-cp -f "$M/decoder-epoch-13-avg-2-chunk-16-left-64.onnx" \
-  "$ASSETS/decoder-epoch-12-avg-2-chunk-16-left-64.onnx"
-cp -f "$M/joiner-epoch-13-avg-2-chunk-16-left-64.onnx" \
-  "$ASSETS/joiner-epoch-12-avg-2-chunk-16-left-64.onnx"
+cp -f "$M/encoder-epoch-13-avg-2-chunk-16-left-64.onnx" "$ASSETS/"
+cp -f "$M/decoder-epoch-13-avg-2-chunk-16-left-64.onnx" "$ASSETS/"
+cp -f "$M/joiner-epoch-13-avg-2-chunk-16-left-64.onnx" "$ASSETS/"
 
 echo "[prepare] Done. Next from repo root: ./build-wasm-simd-kws.sh"
 echo "Then copy build-wasm-simd-kws/install/bin/wasm/* into Voyagr static/vendor/sherpa-kws/wasm/"

@@ -4414,23 +4414,24 @@ HTML_TEMPLATE = '''
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
     <link rel="stylesheet" href="/static/css/voyagr.css?v=20260410b" />
-    <script src="/static/vendor/maplibre-gl.js"></script>
-    <script src="/static/js/maplibre-helpers.js?v=20260403a"></script>
-    <script src="/static/vendor/supabase.min.js"></script>
+    {# All app scripts use `defer`: they still download in parallel with HTML parsing
+       and still execute in document order (dependencies preserved), but they no
+       longer block first paint. This is the biggest lever for shortening the PWA
+       home-screen splash, which is shown from launch until first paint. #}
+    <script defer src="/static/vendor/maplibre-gl.js"></script>
+    <script defer src="/static/js/maplibre-helpers.js?v=20260403a"></script>
+    <script defer src="/static/vendor/supabase.min.js"></script>
     <!-- Google Plus Codes Service -->
-    <script src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
+    <script defer src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
-    <script src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
-    <script src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    {% if picovoice_access_key and picovoice_web_assets_ok %}
-    <script src="/static/vendor/picovoice/web-voice-processor.iife.js?v=pv4"></script>
-    <script src="/static/vendor/picovoice/porcupine-web.iife.js?v=pv4"></script>
-    {% endif %}
-    {% if sherpa_kws_lab %}
-    <script src="/static/js/sherpa-kws-map-runtime.js?v=20260421f"></script>
-    {% endif %}
-    <script src="/static/js/voyagr-app.js?v=20260421i"></script>
-    <script src="/static/js/app.js?v=20260117t"></script>
+    <script defer src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
+    <script defer src="/static/js/voyagr-core.js?v=20260211t4"></script>
+    {# Voyagr uses Sherpa-ONNX for on-device wake-word detection. Picovoice/Porcupine
+       is no longer bundled — its legacy code paths in voyagr-app.js short-circuit
+       safely when `PorcupineWeb` is undefined (see picovoiceClientConfigured()). #}
+    <script defer src="/static/js/sherpa-kws-map-runtime.js?v=20260421h"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260421k"></script>
+    <script defer src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -5264,37 +5265,15 @@ HTML_TEMPLATE = '''
                             <button class="toggle-switch" id="voiceAnnouncementsEnabled" onclick="toggleVoiceAnnouncements()"></button>
                         </div>
 
-                        {% if picovoice_access_key and picovoice_web_assets_ok %}
-                        <div class="preference-item" id="porcupineWakePrefRow" style="display: none;">
-                            <span class="preference-label">🎙️ Wake word «Hey SatNav» (Picovoice)</span>
-                            <button type="button" class="toggle-switch" id="porcupineWakeToggle" onclick="togglePorcupineWakeWord()"></button>
-                        </div>
-                        <p id="porcupineWakeHelp" style="display: none; font-size: 11px; color: #888; margin: -6px 0 8px 0;">
-                            Hands-free: say the wake phrase, then your command (same flow as the native app). Train the Web (WASM) keyword in Picovoice Console and save it as
-                            <code>static/vendor/picovoice/hey_satnav_wasm.ppn</code> for an exact match; otherwise the app falls back to the built-in word «Porcupine» until that file is present.
-                        </p>
-                        {% endif %}
-
-                        {% if sherpa_kws_lab %}
-                        <div class="preference-item" id="wakeBackendPrefRow" style="display: none;">
-                            <span class="preference-label">🧪 Wake engine (experimental)</span>
-                            <select id="wakeBackendSelect" onchange="onWakeBackendSelectChange()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
-                                <option value="picovoice">Picovoice (production path)</option>
-                                <option value="sherpa">Sherpa-ONNX KWS (OSS spike — lab page)</option>
-                            </select>
-                        </div>
-                        <p id="wakeBackendHelp" style="display: none; font-size: 11px; color: #888; margin: -6px 0 8px 0;">
-                            Choose engine below. Sherpa runs in this app when its wake toggle is on (WASM under <code>static/vendor/sherpa-kws/wasm/</code>). Standalone mic tests:
-                            <a href="/static/sherpa-kws-spike.html" target="_blank" rel="noopener">Sherpa KWS lab</a>.
-                        </p>
-                        <div class="preference-item" id="sherpaWakePrefRow" style="display: none;">
-                            <span class="preference-label">🎙️ Wake phrase «Hey Sat Nav» (Sherpa)</span>
+                        {# Wake-word is Sherpa-ONNX only. Picovoice/Porcupine and the
+                           engine selector were removed — Sherpa runs on-device, no key. #}
+                        <div class="preference-item" id="sherpaWakePrefRow">
+                            <span class="preference-label">🎙️ Wake phrase «Hey Sat Nav»</span>
                             <button type="button" class="toggle-switch" id="sherpaWakeToggle" onclick="toggleSherpaWakeWord()"></button>
                         </div>
-                        <p id="sherpaWakeHelp" style="display: none; font-size: 11px; color: #888; margin: -6px 0 8px 0;">
-                            On-device keyword spotting in the main PWA (same model bundle as the lab). HTTPS required for the microphone.
+                        <p id="sherpaWakeHelp" style="font-size: 11px; color: #888; margin: -6px 0 8px 0;">
+                            On-device keyword spotting powered by Sherpa-ONNX. HTTPS required for the microphone.
                         </p>
-                        {% endif %}
 
                         <div class="preference-item">
                             <span class="preference-label">📷 Camera Alert Type</span>
@@ -6278,11 +6257,14 @@ HTML_TEMPLATE = '''
     <!-- API Keys injected from server -->
     <script>
         window.TOMTOM_API_KEY = '{{ tomtom_api_key }}';
-        window.PICOVOICE_ACCESS_KEY = {{ picovoice_access_key|tojson }};
-        window.VoyagrPicovoiceKeywordPath = {{ picovoice_keyword_public_path|tojson }};
-        window.VoyagrPicovoiceWebAssetsOk = {{ picovoice_web_assets_ok|tojson }};
-        window.VoyagrSherpaKwsLab = {{ sherpa_kws_lab|tojson }};
-        window.VoyagrWakeBackendDefault = {{ wake_backend_default|tojson }};
+        // Picovoice/Porcupine is no longer bundled. Force-false the legacy guards so
+        // any remaining code paths in voyagr-app.js short-circuit cleanly without
+        // requiring the runtime globals (PorcupineWeb, WebVoiceProcessor).
+        window.PICOVOICE_ACCESS_KEY = '';
+        window.VoyagrPicovoiceKeywordPath = '';
+        window.VoyagrPicovoiceWebAssetsOk = false;
+        window.VoyagrSherpaKwsLab = true;
+        window.VoyagrWakeBackendDefault = 'sherpa';
     </script>
 </body>
 </html>

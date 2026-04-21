@@ -323,10 +323,13 @@ class Kws {
 }
 
 function createKws(Module, myConfig) {
+  // Default transducer files match the sherpa-onnx-kws-zipformer-zh-en-3M-2025-12-20
+  // bundle layout (epoch-13). Callers of createKws() (the Voyagr runtime, the
+  // spike page) override this via `myConfig` when they want a different checkpoint.
   let transducerConfig = {
-    encoder: './encoder-epoch-12-avg-2-chunk-16-left-64.onnx',
-    decoder: './decoder-epoch-12-avg-2-chunk-16-left-64.onnx',
-    joiner: './joiner-epoch-12-avg-2-chunk-16-left-64.onnx',
+    encoder: './encoder-epoch-13-avg-2-chunk-16-left-64.onnx',
+    decoder: './decoder-epoch-13-avg-2-chunk-16-left-64.onnx',
+    joiner: './joiner-epoch-13-avg-2-chunk-16-left-64.onnx',
   };
   let modelConfig = {
     transducer: transducerConfig,
