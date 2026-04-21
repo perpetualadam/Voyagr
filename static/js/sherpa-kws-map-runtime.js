@@ -35,18 +35,53 @@
             return e.message;
         }
         if (typeof e === 'number') {
-            try {
-                if (global.Module && typeof global.Module.getExceptionMessage === 'function') {
-                    var pair = global.Module.getExceptionMessage(e);
+            var decoded = null;
+            var mod = global.Module;
+            // Strategy 1: modern Emscripten helper — returns [typeName, message].
+            if (!decoded && mod && typeof mod.getExceptionMessage === 'function') {
+                try {
+                    var pair = mod.getExceptionMessage(e);
                     if (Array.isArray(pair)) {
-                        return pair.filter(Boolean).join(': ');
+                        decoded = pair.filter(Boolean).join(': ');
+                    } else if (pair) {
+                        decoded = String(pair);
                     }
-                    if (pair) {
-                        return String(pair);
+                } catch (_e1) { /* swallow */ }
+            }
+            // Strategy 2: older Emscripten — ExceptionInfo class with get_what().
+            if (!decoded && mod && typeof mod.ExceptionInfo === 'function') {
+                try {
+                    var info = new mod.ExceptionInfo(e);
+                    var what = info.get_what && info.get_what();
+                    if (what) {
+                        decoded = String(what);
                     }
+                } catch (_e2) { /* swallow */ }
+            }
+            // Strategy 3: last-ditch — poke the WASM heap. libc++ lays a
+            // std::runtime_error out with a pointer to a what-string either at
+            // offset 0 (small-string case) or dereferenced once (heap-backed).
+            if (!decoded && mod && mod.HEAPU32 && typeof mod.UTF8ToString === 'function') {
+                try {
+                    var probe = mod.UTF8ToString(e);
+                    if (probe && probe.length > 0 && probe.length < 4096) {
+                        decoded = probe;
+                    }
+                } catch (_e3) { /* swallow */ }
+                if (!decoded) {
+                    try {
+                        var indirect = mod.HEAPU32[e >> 2];
+                        if (indirect) {
+                            var probe2 = mod.UTF8ToString(indirect);
+                            if (probe2 && probe2.length > 0 && probe2.length < 4096) {
+                                decoded = probe2;
+                            }
+                        }
+                    } catch (_e4) { /* swallow */ }
                 }
-            } catch (err) {
-                // fall through
+            }
+            if (decoded) {
+                return 'Sherpa C++ exception: ' + decoded + ' (ptr=' + e + ')';
             }
             return 'Sherpa WASM threw opaque exception (ptr=' + e + '). ' +
                 'Likely cause: model files missing or incompatible under ' + WASM_DIR;
@@ -58,6 +93,38 @@
         }
     }
     global.VoyagrSherpaFormatError = formatSherpaError;
+
+    /**
+     * Dump the Emscripten virtual FS contents so we can see exactly what
+     * sherpa-onnx-wasm-kws-main.data preloaded and at what sizes. Purely
+     * diagnostic — returns an array of {name,size} objects. Safe to call
+     * only after Module.onRuntimeInitialized has fired.
+     */
+    function dumpSherpaFs() {
+        var result = [];
+        try {
+            var FS = global.Module && global.Module.FS;
+            if (!FS || typeof FS.readdir !== 'function') {
+                return result;
+            }
+            var names = FS.readdir('/');
+            for (var i = 0; i < names.length; i++) {
+                var n = names[i];
+                if (n === '.' || n === '..' || n === 'tmp' || n === 'home' ||
+                    n === 'dev' || n === 'proc') {
+                    continue;
+                }
+                try {
+                    var st = FS.stat('/' + n);
+                    result.push({ name: n, size: st.size });
+                } catch (_e) {
+                    result.push({ name: n, size: -1 });
+                }
+            }
+        } catch (_e) { /* swallow */ }
+        return result;
+    }
+    global.VoyagrSherpaDumpFs = dumpSherpaFs;
 
     /**
      * Probe that every required asset is reachable before we hand control to the
@@ -198,7 +265,13 @@
                                         provider: 'cpu',
                                         modelType: '',
                                         numThreads: 1,
-                                        debug: 0,
+                                        // debug=1 makes sherpa-onnx's C++ side print the
+                                        // underlying failure reason to stderr (visible in
+                                        // console as `sherpa-onnx-wasm-kws-main.js:1 …`)
+                                        // instead of only raising an opaque WASM pointer.
+                                        // Negligible runtime cost — a few extra log lines
+                                        // during init, none during the hot audio loop.
+                                        debug: 1,
                                         modelingUnit: 'phone+ppinyin',
                                         bpeVocab: '',
                                     },
@@ -208,6 +281,14 @@
                                     keywordsThreshold: 0.28,
                                     keywords: keywordsText.trim(),
                                 };
+                                try {
+                                    var fsSnapshot = dumpSherpaFs();
+                                    if (fsSnapshot.length) {
+                                        console.log('[Sherpa map] Virtual FS contents:', fsSnapshot);
+                                    } else {
+                                        console.warn('[Sherpa map] Virtual FS appears empty — .data may not have preloaded.');
+                                    }
+                                } catch (_fsErr) { /* never let diagnostics break init */ }
                                 try {
                                     _recognizer = createKws(global.Module, myConfig);
                                 } catch (rawErr) {
