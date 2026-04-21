@@ -3402,6 +3402,12 @@ def valhalla_trip_json_to_std_route_entry(
     }
 
 
+from voyagr.services.routing.costing import (
+    VALID_ROUTE_OPTIMIZATIONS,
+    build_auto_costing_options as _build_auto_costing_options,
+)
+
+
 def build_valhalla_baseline_request_payload(
     *,
     start_lat: float,
@@ -3415,6 +3421,10 @@ def build_valhalla_baseline_request_payload(
     avoid_motorways: bool,
     avoid_ferries: bool,
     departure_time: Optional[str],
+    prefer_scenic: bool = False,
+    prefer_quiet: bool = False,
+    avoid_unpaved: bool = False,
+    route_optimization: str = 'fastest',
 ) -> Dict[str, Any]:
     """
     Valhalla /route JSON without exclude_locations — used when hazard-heavy requests fail (e.g. HTTP 400)
@@ -3436,13 +3446,15 @@ def build_valhalla_baseline_request_payload(
     elif valhalla_costing == 'bicycle':
         payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}}
     elif valhalla_costing in ('auto', 'auto_shorter'):
-        auto_opts: Dict[str, Any] = {}
-        if avoid_tolls:
-            auto_opts["use_tolls"] = 0
-        if avoid_motorways:
-            auto_opts["use_highways"] = 0
-        if avoid_ferries:
-            auto_opts["use_ferry"] = 0
+        auto_opts = _build_auto_costing_options(
+            avoid_tolls=avoid_tolls,
+            avoid_motorways=avoid_motorways,
+            avoid_ferries=avoid_ferries,
+            prefer_scenic=prefer_scenic,
+            prefer_quiet=prefer_quiet,
+            avoid_unpaved=avoid_unpaved,
+            route_optimization=route_optimization,
+        )
         if auto_opts:
             payload["costing_options"] = {valhalla_costing: auto_opts}
 
@@ -4417,7 +4429,7 @@ HTML_TEMPLATE = '''
     {% if sherpa_kws_lab %}
     <script src="/static/js/sherpa-kws-map-runtime.js?v=20260421f"></script>
     {% endif %}
-    <script src="/static/js/voyagr-app.js?v=20260421f"></script>
+    <script src="/static/js/voyagr-app.js?v=20260421i"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -4836,11 +4848,6 @@ HTML_TEMPLATE = '''
                         <h3>⚠️ Hazard Avoidance</h3>
 
                         <div class="preference-item">
-                            <span class="preference-label">Avoid Tolls</span>
-                            <button class="toggle-switch" id="avoidTolls" data-pref="tolls" onclick="togglePreference('tolls')"></button>
-                        </div>
-
-                        <div class="preference-item">
                             <span class="preference-label">Avoid CAZ</span>
                             <button class="toggle-switch" id="avoidCAZ" data-pref="caz" onclick="togglePreference('caz')"></button>
                         </div>
@@ -4894,28 +4901,6 @@ HTML_TEMPLATE = '''
                         </div>
                     </div>
 
-                    <!-- Route Avoidance Section -->
-                    <div class="preferences-section">
-                        <h3>🚫 Route Avoidance</h3>
-                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Avoid specific road types when calculating routes</p>
-
-                        <div class="preference-item">
-                            <span class="preference-label">💰 Avoid Toll Roads</span>
-                            <button class="toggle-switch" id="avoidTollRoads" onclick="toggleAvoidancePreference('tollRoads')" data-pref="tollRoads"></button>
-                        </div>
-
-                        <div class="preference-item">
-                            <span class="preference-label">🛣️ Avoid Motorways</span>
-                            <button class="toggle-switch" id="avoidMotorways" onclick="toggleAvoidancePreference('motorways')" data-pref="motorways"></button>
-                        </div>
-
-                        <div class="preference-item">
-                            <span class="preference-label">⛴️ Avoid Ferries</span>
-                            <button class="toggle-switch" id="avoidFerries" onclick="toggleAvoidancePreference('ferries')" data-pref="ferries"></button>
-                        </div>
-                        <p style="font-size: 11px; color: #888; margin: 5px 0 0 0;">These apply to all routes including multi-drop legs via Valhalla costing options</p>
-                    </div>
-
                     <!-- Navigation Automation Section -->
                     <div class="preferences-section">
                         <h3>🤖 Navigation Automation</h3>
@@ -4956,12 +4941,25 @@ HTML_TEMPLATE = '''
                     <!-- Route Preferences Section -->
                     <div class="preferences-section">
                         <h3>🛣️ Route Preferences</h3>
+                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Avoid specific road types and tune how routes are calculated</p>
+
+                        <div class="preference-item">
+                            <span class="preference-label">💰 Avoid Toll Roads</span>
+                            <button class="toggle-switch" id="avoidTollRoads" onclick="toggleAvoidancePreference('tollRoads')" data-pref="tollRoads"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🛣️ Avoid Motorways</span>
+                            <button class="toggle-switch" id="avoidMotorways" onclick="toggleAvoidancePreference('motorways')" data-pref="motorways"></button>
+                        </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">⛴️ Avoid Ferries</span>
+                            <button class="toggle-switch" id="avoidFerries" onclick="toggleAvoidancePreference('ferries')" data-pref="ferries"></button>
+                        </div>
+                        <p style="font-size: 11px; color: #888; margin: 5px 0 15px 0;">Applied to all routes including multi-drop legs via Valhalla costing options.</p>
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
-                            <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
-                                <input type="checkbox" id="avoidHighways" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
-                                <span style="font-size: 13px;">Avoid Highways</span>
-                            </label>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="preferScenic" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
                                 <span style="font-size: 13px;">Prefer Scenic</span>
@@ -6645,6 +6643,21 @@ def calculate_route():
         avoid_motorways = data.get('avoid_motorways', False)
         avoid_ferries = data.get('avoid_ferries', False)
 
+        # Additional Route Preferences (translated into Valhalla auto costing options).
+        # All are optional and default to 'off'/'fastest' — preserving previous behaviour
+        # for clients that don't send them.
+        prefer_scenic = bool(data.get('prefer_scenic', False))
+        prefer_quiet = bool(data.get('prefer_quiet', False))
+        avoid_unpaved = bool(data.get('avoid_unpaved', False))
+        route_optimization = str(data.get('route_optimization', 'fastest') or 'fastest').lower()
+        if route_optimization not in VALID_ROUTE_OPTIMIZATIONS:
+            route_optimization = 'fastest'
+        try:
+            max_detour = int(data.get('max_detour', 20))
+        except (TypeError, ValueError):
+            max_detour = 20
+        max_detour = max(0, min(100, max_detour))
+
         # VIA-POINTS AND STOPS
         via_points = data.get('via_points', [])  # [{lat, lon, name, type: 'via'}]
         stops = data.get('stops', [])  # [{lat, lon, name, type: 'stop', duration: 15}]
@@ -6756,6 +6769,10 @@ def calculate_route():
                 avoid_tolls=avoid_tolls,
                 avoid_motorways=avoid_motorways,
                 avoid_ferries=avoid_ferries,
+                prefer_scenic=prefer_scenic,
+                prefer_quiet=prefer_quiet,
+                avoid_unpaved=avoid_unpaved,
+                route_optimization=route_optimization,
                 traffic_light_hazards=md_tl_for_gh,
                 railway_crossing_hazards=md_rx_for_gh,
                 avoid_caz_zones=apply_caz_routing_avoidance,
@@ -7484,16 +7501,22 @@ def calculate_route():
             elif valhalla_costing == 'bicycle':
                 payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}}
             elif valhalla_costing in ('auto', 'auto_shorter'):
-                auto_opts = {}
-                if avoid_tolls:
-                    auto_opts["use_tolls"] = 0
-                if avoid_motorways:
-                    auto_opts["use_highways"] = 0
-                if avoid_ferries:
-                    auto_opts["use_ferry"] = 0
+                auto_opts = _build_auto_costing_options(
+                    avoid_tolls=avoid_tolls,
+                    avoid_motorways=avoid_motorways,
+                    avoid_ferries=avoid_ferries,
+                    prefer_scenic=prefer_scenic,
+                    prefer_quiet=prefer_quiet,
+                    avoid_unpaved=avoid_unpaved,
+                    route_optimization=route_optimization,
+                )
                 if auto_opts:
                     payload["costing_options"] = {valhalla_costing: auto_opts}
-                    logger.info(f"[VALHALLA] Avoidance options: tolls={avoid_tolls}, motorways={avoid_motorways}, ferries={avoid_ferries}")
+                    logger.info(
+                        f"[VALHALLA] auto costing opts: tolls={avoid_tolls} motorways={avoid_motorways} "
+                        f"ferries={avoid_ferries} scenic={prefer_scenic} quiet={prefer_quiet} "
+                        f"unpaved={avoid_unpaved} opt={route_optimization} → {auto_opts}"
+                    )
 
             # Traffic-aware routing: use departure time for time-dependent routing
             if valhalla_costing == 'auto':
@@ -8101,13 +8124,15 @@ def calculate_route():
                         elif valhalla_costing == 'bicycle':
                             retry_payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}}
                         elif valhalla_costing in ('auto', 'auto_shorter'):
-                            auto_opts = {}
-                            if avoid_tolls:
-                                auto_opts["use_tolls"] = 0
-                            if avoid_motorways:
-                                auto_opts["use_highways"] = 0
-                            if avoid_ferries:
-                                auto_opts["use_ferry"] = 0
+                            auto_opts = _build_auto_costing_options(
+                                avoid_tolls=avoid_tolls,
+                                avoid_motorways=avoid_motorways,
+                                avoid_ferries=avoid_ferries,
+                                prefer_scenic=prefer_scenic,
+                                prefer_quiet=prefer_quiet,
+                                avoid_unpaved=avoid_unpaved,
+                                route_optimization=route_optimization,
+                            )
                             if auto_opts:
                                 retry_payload["costing_options"] = {valhalla_costing: auto_opts}
 
@@ -8387,6 +8412,10 @@ def calculate_route():
                         avoid_motorways=avoid_motorways,
                         avoid_ferries=avoid_ferries,
                         departure_time=departure_time,
+                        prefer_scenic=prefer_scenic,
+                        prefer_quiet=prefer_quiet,
+                        avoid_unpaved=avoid_unpaved,
+                        route_optimization=route_optimization,
                     )
                     logger.info("[ROUTING] Recovery: requesting baseline Valhalla (no exclude_locations)")
                     vrec = requests.post(url, json=baseline_payload, timeout=15, headers=headers)
@@ -8710,6 +8739,12 @@ def calculate_multi_stop_route():
         avoid_tolls = data.get('avoid_tolls', False)
         avoid_motorways = data.get('avoid_motorways', False)
         avoid_ferries = data.get('avoid_ferries', False)
+        prefer_scenic_ms = bool(data.get('prefer_scenic', False))
+        prefer_quiet_ms = bool(data.get('prefer_quiet', False))
+        avoid_unpaved_ms = bool(data.get('avoid_unpaved', False))
+        route_optimization_ms = str(data.get('route_optimization', 'fastest') or 'fastest').lower()
+        if route_optimization_ms not in VALID_ROUTE_OPTIMIZATIONS:
+            route_optimization_ms = 'fastest'
         avoid_caz = data.get('avoid_caz', True)
         caz_exempt = data.get('caz_exempt', False)
         vehicle_type_ms = normalize_vehicle_type(data.get('vehicle_type', 'petrol_diesel'))
@@ -8804,6 +8839,10 @@ def calculate_multi_stop_route():
             avoid_tolls=avoid_tolls,
             avoid_motorways=avoid_motorways,
             avoid_ferries=avoid_ferries,
+            prefer_scenic=prefer_scenic_ms,
+            prefer_quiet=prefer_quiet_ms,
+            avoid_unpaved=avoid_unpaved_ms,
+            route_optimization=route_optimization_ms,
             avoid_caz_zones=apply_caz_ms,
         )
 

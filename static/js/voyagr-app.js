@@ -17,6 +17,44 @@ if (typeof window !== 'undefined' && window.ethereum) {
 // Unit variables: distanceUnit, currencyUnit, speedUnit, temperatureUnit
 // Currency symbols: currencySymbols
 
+// ===== ROUTE PREFERENCE MIGRATION =====
+// 'pref_avoid_tollRoads' is the canonical localStorage key for the "Avoid Toll Roads"
+// toggle in Route Preferences. Older builds used 'pref_tolls' (from a now-removed
+// Hazard Avoidance duplicate, which defaulted to ENABLED). We run a one-time
+// migration: if the new key is unset but the legacy key is present, carry the
+// user's prior choice forward. After migration, only 'pref_avoid_tollRoads' is
+// written; 'pref_tolls' is kept as a read-only fallback so rollbacks don't lose state.
+(function migrateTollPrefKey() {
+    try {
+        const canon = localStorage.getItem('pref_avoid_tollRoads');
+        const legacy = localStorage.getItem('pref_tolls');
+        if (canon === null && legacy !== null) {
+            // Old semantic: 'true' / null / missing ⇒ avoid tolls enabled; 'false' ⇒ user opted out.
+            const avoid = legacy !== 'false';
+            localStorage.setItem('pref_avoid_tollRoads', avoid ? 'true' : 'false');
+        }
+    } catch (e) {
+        console.warn('[Migration] Toll pref migration skipped:', e);
+    }
+})();
+
+/**
+ * Canonical reader for the "Avoid Toll Roads" preference. Prefers the new key;
+ * falls back to the legacy default-enabled semantic when neither is set yet.
+ * @returns {boolean}
+ */
+function isAvoidTollsEnabled() {
+    try {
+        const canon = localStorage.getItem('pref_avoid_tollRoads');
+        if (canon !== null) return canon === 'true';
+        // Legacy default was true (avoid tolls unless user opted out).
+        return localStorage.getItem('pref_tolls') !== 'false';
+    } catch (e) {
+        return false;
+    }
+}
+window.isAvoidTollsEnabled = isAvoidTollsEnabled;
+
 // Note: All global variables are declared below
 // ===== BOTTOM SHEET VARIABLES =====
 let bottomSheetStartY = 0;
@@ -1181,7 +1219,7 @@ function saveAllSettings() {
         routePreferences: {
             avoidHighways: document.getElementById('avoidHighways')?.checked || false,
             preferScenic: document.getElementById('preferScenic')?.checked || false,
-            avoidTolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
+            avoidTolls: isAvoidTollsEnabled(),
             avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
             preferQuiet: document.getElementById('preferQuiet')?.checked || false,
             avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
@@ -1191,7 +1229,7 @@ function saveAllSettings() {
 
         // Hazard avoidance
         hazardPreferences: {
-            avoidTolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
+            avoidTolls: isAvoidTollsEnabled(),  // now sourced from Route Preferences
             avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
             avoidCameras: localStorage.getItem('pref_cameras') !== 'false',  // Default: true (avoid cameras)
             avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
@@ -1285,7 +1323,12 @@ function loadAllSettings() {
 
             // Restore hazard preferences
             if (settings.hazardPreferences) {
-                localStorage.setItem('pref_tolls', settings.hazardPreferences.avoidTolls ? 'true' : 'false');
+                // 'avoidTolls' from server-side settings is now stored under the canonical
+                // Route Preferences key. Legacy 'pref_tolls' is also written so older app
+                // builds rolling back don't lose user intent.
+                const tollVal = settings.hazardPreferences.avoidTolls ? 'true' : 'false';
+                localStorage.setItem('pref_avoid_tollRoads', tollVal);
+                localStorage.setItem('pref_tolls', tollVal);
                 localStorage.setItem('pref_caz', settings.hazardPreferences.avoidCAZ ? 'true' : 'false');
                 localStorage.setItem('pref_cameras', settings.hazardPreferences.avoidCameras ? 'true' : 'false');
                 if (settings.hazardPreferences.avoidTrafficLights !== undefined) {
@@ -1553,6 +1596,7 @@ function resetAllSettings() {
             'unit_distance', 'unit_currency', 'unit_speed', 'unit_temperature',
             'vehicleType', 'routingMode',
             'routePreferences',
+            'pref_avoid_tollRoads', 'pref_avoid_motorways', 'pref_avoid_ferries',
             'pref_tolls', 'pref_caz', 'pref_cameras', 'pref_variableSpeedAlerts',
             'mapTheme', 'smartZoomEnabled',
             'parkingPreferences'
@@ -3711,12 +3755,12 @@ function displayAnalytics(data) {
  */
 function saveRoutePreferences() {
     const preferences = {
-        avoidHighways: document.getElementById('avoidHighways').checked,
-        preferScenic: document.getElementById('preferScenic').checked,
-        avoidTolls: localStorage.getItem('pref_tolls') !== 'false',
+        avoidHighways: document.getElementById('avoidHighways')?.checked || false,
+        preferScenic: document.getElementById('preferScenic')?.checked || false,
+        avoidTolls: isAvoidTollsEnabled(),
         avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
-        preferQuiet: document.getElementById('preferQuiet').checked,
-        avoidUnpaved: document.getElementById('avoidUnpaved').checked,
+        preferQuiet: document.getElementById('preferQuiet')?.checked || false,
+        avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
         routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
         maxDetour: parseInt(document.getElementById('maxDetour')?.value || 20)
     };
@@ -3778,15 +3822,25 @@ function loadRoutePreferences() {
     const saved = localStorage.getItem('routePreferences');
     if (saved) {
         const preferences = JSON.parse(saved);
-        document.getElementById('avoidHighways').checked = preferences.avoidHighways || false;
-        document.getElementById('preferScenic').checked = preferences.preferScenic || false;
-        // Note: avoidTolls and avoidCAZ are toggle-switch buttons, not checkboxes
-        // They are managed by togglePreference() and stored in localStorage as pref_tolls and pref_caz
-        document.getElementById('preferQuiet').checked = preferences.preferQuiet || false;
-        document.getElementById('avoidUnpaved').checked = preferences.avoidUnpaved || false;
-        document.getElementById('routeOptimization').value = preferences.routeOptimization || 'fastest';
-        document.getElementById('maxDetour').value = preferences.maxDetour || 20;
-        updateDetourLabel();
+        const setChecked = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.checked = !!val;
+        };
+        const setValue = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.value = val;
+        };
+        // avoidHighways is retained in the persisted schema for backwards compatibility,
+        // but the checkbox was retired in favour of the functional "Avoid Motorways" toggle.
+        setChecked('avoidHighways', preferences.avoidHighways);
+        setChecked('preferScenic', preferences.preferScenic);
+        // Note: avoidTolls is now sourced from Route Preferences → pref_avoid_tollRoads (via isAvoidTollsEnabled()).
+        // avoidCAZ is still managed by togglePreference('caz') → pref_caz.
+        setChecked('preferQuiet', preferences.preferQuiet);
+        setChecked('avoidUnpaved', preferences.avoidUnpaved);
+        setValue('routeOptimization', preferences.routeOptimization || 'fastest');
+        setValue('maxDetour', preferences.maxDetour || 20);
+        if (document.getElementById('maxDetour')) updateDetourLabel();
     }
 }
 
@@ -4297,7 +4351,7 @@ async function calculateRoute() {
     const roundTrip = localStorage.getItem('pref_roundTrip') === 'true';
     const departureTime = localStorage.getItem('pref_departureTime') || null;
 
-    const avoidTollRoads = localStorage.getItem('pref_avoid_tollRoads') === 'true';
+    const avoidTollRoads = isAvoidTollsEnabled();
     const avoidMotorways = localStorage.getItem('pref_avoid_motorways') === 'true';
     const avoidFerries = localStorage.getItem('pref_avoid_ferries') === 'true';
 
@@ -4319,6 +4373,12 @@ async function calculateRoute() {
         avoid_tolls: avoidTollRoads,
         avoid_motorways: avoidMotorways,
         avoid_ferries: avoidFerries,
+        // Extended route preferences — translated server-side into Valhalla auto costing_options.
+        prefer_scenic: !!routePrefs.preferScenic,
+        prefer_quiet: !!routePrefs.preferQuiet,
+        avoid_unpaved: !!routePrefs.avoidUnpaved,
+        route_optimization: routePrefs.routeOptimization || 'fastest',
+        max_detour: (typeof routePrefs.maxDetour === 'number') ? routePrefs.maxDetour : 20,
     };
 
     console.log('[calculateRoute] Making API request to /api/route with:', requestBody);
@@ -6126,8 +6186,10 @@ function buildRouteRequest(startLat, startLon, destination) {
         localStorage.getItem('pref_cameras') !== 'false' ||
         localStorage.getItem('pref_trafficLightsAvoid') !== 'false' ||
         localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
-        localStorage.getItem('pref_tolls') !== 'false' ||
+        isAvoidTollsEnabled() ||
         localStorage.getItem('pref_caz') !== 'false';
+
+    const routePrefs = (typeof getRoutePreferences === 'function') ? getRoutePreferences() : {};
 
     return {
         start: `${startLat},${startLon}`,
@@ -6144,8 +6206,16 @@ function buildRouteRequest(startLat, startLon, destination) {
         avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
         avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
         avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
-        avoid_tolls: localStorage.getItem('pref_tolls') !== 'false',
-        avoid_caz: localStorage.getItem('pref_caz') !== 'false'
+        avoid_tolls: isAvoidTollsEnabled(),
+        avoid_motorways: localStorage.getItem('pref_avoid_motorways') === 'true',
+        avoid_ferries: localStorage.getItem('pref_avoid_ferries') === 'true',
+        avoid_caz: localStorage.getItem('pref_caz') !== 'false',
+        // Extended route preferences — mirror calculateRoute so reroutes honour the same settings.
+        prefer_scenic: !!routePrefs.preferScenic,
+        prefer_quiet: !!routePrefs.preferQuiet,
+        avoid_unpaved: !!routePrefs.avoidUnpaved,
+        route_optimization: routePrefs.routeOptimization || 'fastest',
+        max_detour: (typeof routePrefs.maxDetour === 'number') ? routePrefs.maxDetour : 20,
     };
 }
 
@@ -8176,7 +8246,8 @@ async function selectParking(parking, destinationCoords) {
                 end: `${parking.lat},${parking.lon}`,
                 routing_mode: 'auto',
                 vehicle_type: currentVehicleType,
-                include_tolls: localStorage.getItem('pref_tolls') !== 'false',  // Default: true
+                include_tolls: localStorage.getItem('includeTolls') !== 'false',  // Default: true (separate from avoidance)
+                avoid_tolls: isAvoidTollsEnabled(),
                 avoid_caz: localStorage.getItem('pref_caz') !== 'false',        // Default: true
                 enable_hazard_avoidance: enableHazardAvoidanceParking,
                 avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
@@ -13827,7 +13898,7 @@ function logReroutingEvent(startLat, startLon, destination, route, hazardCount) 
         },
         settings: {
             avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',  // Default: true
-            avoid_tolls: localStorage.getItem('pref_tolls') !== 'false',      // Default: true
+            avoid_tolls: isAvoidTollsEnabled(),
             avoid_caz: localStorage.getItem('pref_caz') !== 'false'           // Default: true
         }
     };
@@ -14292,7 +14363,7 @@ function saveAppState() {
     try {
         const state = {
             preferences: {
-                tolls: localStorage.getItem('pref_tolls'),
+                tolls: isAvoidTollsEnabled() ? 'true' : 'false',
                 caz: localStorage.getItem('pref_caz'),
                 cameras: localStorage.getItem('pref_cameras'),
                 policeRadars: localStorage.getItem('pref_policeRadars'),
@@ -16312,9 +16383,10 @@ function togglePreference(pref) {
         return;
     }
 
-    // Map preference names to button IDs
+    // Map preference names to button IDs. Note: 'tolls' was removed — the canonical
+    // toll avoidance toggle now lives in Route Preferences (id "avoidTollRoads") and
+    // is handled by toggleAvoidancePreference('tollRoads').
     const buttonIdMap = {
-        'tolls': 'avoidTolls',
         'caz': 'avoidCAZ',
         'cameras': 'avoidCameras',
         'trafficLightsAvoid': 'avoidTrafficLights',
@@ -16349,9 +16421,6 @@ function togglePreference(pref) {
     if (pref === 'caz') {
         console.log('[Settings] CAZ avoidance:', isActive ? 'enabled' : 'disabled');
         showStatus(`🚫 CAZ avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
-    } else if (pref === 'tolls') {
-        console.log('[Settings] Toll avoidance:', isActive ? 'enabled' : 'disabled');
-        showStatus(`💰 Toll avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
     } else if (pref === 'variableSpeedAlerts') {
         console.log('[Settings] Variable speed alerts:', isActive ? 'enabled' : 'disabled');
         showStatus(`📊 Variable speed alerts ${isActive ? 'enabled' : 'disabled'}`, 'info');
@@ -16468,8 +16537,9 @@ window.loadHazardCameraTogglesFromApi = loadHazardCameraTogglesFromApi;
  * @returns {*} Return value description
  */
 function loadPreferences() {
+    // 'tolls' removed from this map: the "Avoid Toll Roads" toggle now lives in
+    // Route Preferences and is hydrated by loadRoutePreferences() / Route Prefs init.
     const buttonIdMap = {
-        'tolls': 'avoidTolls',
         'caz': 'avoidCAZ',
         'cameras': 'avoidCameras',
         'trafficLightsAvoid': 'avoidTrafficLights',
@@ -16478,9 +16548,9 @@ function loadPreferences() {
     };
 
     // Preferences that default to TRUE (enabled) when not set
-    const defaultEnabledPrefs = ['tolls', 'caz', 'cameras', 'trafficLightsAvoid', 'railwayCrossingsAvoid'];
+    const defaultEnabledPrefs = ['caz', 'cameras', 'trafficLightsAvoid', 'railwayCrossingsAvoid'];
 
-    const prefs = ['tolls', 'caz', 'cameras', 'trafficLightsAvoid', 'railwayCrossingsAvoid', 'variableSpeedAlerts'];
+    const prefs = ['caz', 'cameras', 'trafficLightsAvoid', 'railwayCrossingsAvoid', 'variableSpeedAlerts'];
     prefs.forEach(pref => {
         const saved = localStorage.getItem('pref_' + pref);
         const buttonId = buttonIdMap[pref];

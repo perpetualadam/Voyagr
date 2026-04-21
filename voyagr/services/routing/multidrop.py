@@ -18,6 +18,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 
 from voyagr.config import VALHALLA_URL, OSRM_URL, GRAPHHOPPER_URL, USE_GRAPHHOPPER_CAMERA_AVOIDANCE, GRAPHHOPPER_TIMEOUT
+from voyagr.services.routing.costing import build_auto_costing_options
 
 logger = logging.getLogger('voyagr_web')
 
@@ -308,6 +309,10 @@ def build_multidrop_route(
     avoid_tolls: bool = False,
     avoid_motorways: bool = False,
     avoid_ferries: bool = False,
+    prefer_scenic: bool = False,
+    prefer_quiet: bool = False,
+    avoid_unpaved: bool = False,
+    route_optimization: str = 'fastest',
     traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
     railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
     avoid_caz_zones: bool = False,
@@ -367,6 +372,10 @@ def build_multidrop_route(
             avoid_tolls=avoid_tolls,
             avoid_motorways=avoid_motorways,
             avoid_ferries=avoid_ferries,
+            prefer_scenic=prefer_scenic,
+            prefer_quiet=prefer_quiet,
+            avoid_unpaved=avoid_unpaved,
+            route_optimization=route_optimization,
             traffic_light_hazards=traffic_light_hazards,
             railway_crossing_hazards=railway_crossing_hazards,
             avoid_caz_zones=avoid_caz_zones,
@@ -452,6 +461,10 @@ def _route_leg(
     avoid_tolls: bool = False,
     avoid_motorways: bool = False,
     avoid_ferries: bool = False,
+    prefer_scenic: bool = False,
+    prefer_quiet: bool = False,
+    avoid_unpaved: bool = False,
+    route_optimization: str = 'fastest',
     traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
     railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
     avoid_caz_zones: bool = False,
@@ -467,8 +480,12 @@ def _route_leg(
         if gh_result:
             return gh_result
 
-    result = _valhalla_leg(from_loc, to_loc, costing, exclude_locations, departure_time,
-                           avoid_tolls=avoid_tolls, avoid_motorways=avoid_motorways, avoid_ferries=avoid_ferries)
+    result = _valhalla_leg(
+        from_loc, to_loc, costing, exclude_locations, departure_time,
+        avoid_tolls=avoid_tolls, avoid_motorways=avoid_motorways, avoid_ferries=avoid_ferries,
+        prefer_scenic=prefer_scenic, prefer_quiet=prefer_quiet, avoid_unpaved=avoid_unpaved,
+        route_optimization=route_optimization,
+    )
     if result:
         return result
 
@@ -578,6 +595,10 @@ def _valhalla_leg(
     avoid_tolls: bool = False,
     avoid_motorways: bool = False,
     avoid_ferries: bool = False,
+    prefer_scenic: bool = False,
+    prefer_quiet: bool = False,
+    avoid_unpaved: bool = False,
+    route_optimization: str = 'fastest',
 ) -> Optional[Dict[str, Any]]:
     """Route a single leg via Valhalla."""
     try:
@@ -603,13 +624,15 @@ def _valhalla_leg(
         elif costing == "bicycle":
             payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_ferry": not avoid_ferries}}
         elif costing in ("auto", "auto_shorter"):
-            auto_opts = {}
-            if avoid_tolls:
-                auto_opts["use_tolls"] = 0
-            if avoid_motorways:
-                auto_opts["use_highways"] = 0
-            if avoid_ferries:
-                auto_opts["use_ferry"] = 0
+            auto_opts = build_auto_costing_options(
+                avoid_tolls=avoid_tolls,
+                avoid_motorways=avoid_motorways,
+                avoid_ferries=avoid_ferries,
+                prefer_scenic=prefer_scenic,
+                prefer_quiet=prefer_quiet,
+                avoid_unpaved=avoid_unpaved,
+                route_optimization=route_optimization,
+            )
             if auto_opts:
                 payload["costing_options"] = {costing: auto_opts}
 
