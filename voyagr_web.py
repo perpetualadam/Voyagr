@@ -4390,9 +4390,9 @@ HTML_TEMPLATE = '''
     <script src="/static/vendor/picovoice/porcupine-web.iife.js?v=pv4"></script>
     {% endif %}
     {% if sherpa_kws_lab %}
-    <script src="/static/js/sherpa-kws-map-runtime.js?v=20260421e"></script>
+    <script src="/static/js/sherpa-kws-map-runtime.js?v=20260421f"></script>
     {% endif %}
-    <script src="/static/js/voyagr-app.js?v=20260421e"></script>
+    <script src="/static/js/voyagr-app.js?v=20260421f"></script>
     <script src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>

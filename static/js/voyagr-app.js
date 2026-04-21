@@ -7474,11 +7474,18 @@ function loadWakeBackendUi() {
     const help = document.getElementById('wakeBackendHelp');
     const sel = document.getElementById('wakeBackendSelect');
     if (!row || !sel) {
+        // Row not in DOM: server didn't render lab block; nothing to do.
+        try {
+            if (!window.__voyagrLoggedNoWakeBackendRow) {
+                window.__voyagrLoggedNoWakeBackendRow = true;
+                console.info('[Wake UI] wakeBackendPrefRow not in DOM — VOYAGR_SHERPA_KWS_LAB likely not set on server.');
+            }
+        } catch (e) { /* ignore */ }
         return;
     }
-    if (!window.VoyagrSherpaKwsLab) {
-        return;
-    }
+    // If the server rendered the row at all, the lab is enabled on the backend.
+    // Reveal unconditionally so users can switch engines even if the JS global
+    // wasn't set in time (race with inline script / stale PWA shell).
     row.style.display = '';
     if (help) {
         help.style.display = '';
@@ -7507,7 +7514,12 @@ function onWakeBackendSelectChange() {
 }
 
 function loadPorcupineWakeUi() {
-    loadWakeBackendUi();
+    // Always refresh wake engine + Sherpa rows regardless of whether the Picovoice block is in the DOM.
+    // (Previously early-returns here could skip Sherpa UI entirely when Picovoice wasn't configured
+    // or when the user had already chosen Sherpa.)
+    try { loadWakeBackendUi(); } catch (e) { console.warn('[Wake UI] loadWakeBackendUi:', e); }
+    try { loadSherpaWakeUi(); } catch (e) { console.warn('[Wake UI] loadSherpaWakeUi:', e); }
+
     const row = document.getElementById('porcupineWakePrefRow');
     const help = document.getElementById('porcupineWakeHelp');
     const toggle = document.getElementById('porcupineWakeToggle');
@@ -7544,7 +7556,6 @@ function loadPorcupineWakeUi() {
         toggle.style.borderColor = '#999';
         toggle.style.color = '#333';
     }
-    loadSherpaWakeUi();
 }
 
 function loadSherpaWakeUi() {
@@ -7554,9 +7565,9 @@ function loadSherpaWakeUi() {
     if (!row || !toggle) {
         return;
     }
-    if (!window.VoyagrSherpaKwsLab) {
-        return;
-    }
+    // Server rendered the row only when the lab is enabled. Don't gate on
+    // window.VoyagrSherpaKwsLab here to avoid hiding the toggle if the global
+    // hasn't been assigned yet.
     if (getWakeBackend() !== 'sherpa') {
         row.style.display = 'none';
         if (help) {
