@@ -10650,6 +10650,7 @@ function warmSherpaStaticCache() {
             '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.js',
             '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.wasm',
             '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.data',
+            '/static/vendor/sherpa-kws/wasm/sherpa-onnx-kws.js',
             '/static/vendor/sherpa-kws/wasm/tokens.txt',
             '/static/vendor/sherpa-kws/spike-config/keywords-hey-sat-nav.txt',
         ];

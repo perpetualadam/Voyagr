@@ -8,7 +8,13 @@
 
     var WASM_DIR = '/static/vendor/sherpa-kws/wasm/';
     var WASM_MAIN = WASM_DIR + 'sherpa-onnx-wasm-kws-main.js';
-    var SPIKE_GLUE = '/static/js/sherpa-onnx-kws-spike.js?v=20260421d';
+    // IMPORTANT: the JS glue that calls into the WASM must be the copy that
+    // was built *alongside* the .wasm / .data bundle — its struct marshalling
+    // offsets only match that exact upstream commit. A drift between our
+    // bundled static/js/sherpa-onnx-kws-spike.js and the vendor bundle here
+    // silently corrupts config fields (e.g. modelingUnit) and causes opaque
+    // integer-pointer exceptions out of SherpaOnnxCreateKeywordSpotter.
+    var SPIKE_GLUE = WASM_DIR + 'sherpa-onnx-kws.js';
     var KEYWORDS_URL = '/static/vendor/sherpa-kws/spike-config/keywords-hey-sat-nav.txt';
     // Files referenced by the hardcoded model config in sherpa-onnx-kws-spike.js/createKws.
     // Emscripten's virtual FS loads these via HTTP from WASM_DIR on startup; if any are
@@ -348,14 +354,25 @@
                                     keywords: keywordsText.trim(),
                                 };
                                 try {
-                                    var fsSnapshot = dumpSherpaFs();
-                                    if (fsSnapshot.length) {
-                                        console.log('[Sherpa map] Virtual FS contents (' +
-                                            fsSnapshot.length + ' entries):', fsSnapshot);
+                                    var FSavail = !!(global.Module && global.Module.FS
+                                        && typeof global.Module.FS.readdir === 'function');
+                                    if (FSavail) {
+                                        var fsSnapshot = dumpSherpaFs();
+                                        if (fsSnapshot.length) {
+                                            console.log('[Sherpa map] Virtual FS contents (' +
+                                                fsSnapshot.length + ' entries):', fsSnapshot);
+                                        } else {
+                                            console.warn('[Sherpa map] Virtual FS appears empty — .data may not have preloaded.');
+                                        }
+                                        probeSherpaAssets(myConfig);
                                     } else {
-                                        console.warn('[Sherpa map] Virtual FS appears empty — .data may not have preloaded.');
+                                        // Most upstream sherpa-onnx WASM builds don't include
+                                        // FORCE_FILESYSTEM / don't export FS to JS. That's fine —
+                                        // the C++ side still has the preload-file virtual FS,
+                                        // we just can't introspect it from JS. Log once so the
+                                        // absence of asset probes isn't confusing.
+                                        console.log('[Sherpa map] Module.FS not exported — skipping JS-side FS probe (C++ side still has preloaded files).');
                                     }
-                                    probeSherpaAssets(myConfig);
                                 } catch (_fsErr) { /* never let diagnostics break init */ }
                                 try {
                                     _recognizer = createKws(global.Module, myConfig);
