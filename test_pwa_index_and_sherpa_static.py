@@ -21,6 +21,8 @@ def test_get_index_returns_200(client):
     rv = client.get("/")
     assert rv.status_code == 200
     assert b"<!DOCTYPE html>" in rv.data or b"<html" in rv.data.lower()
+    cc = (rv.headers.get("Cache-Control") or "").lower()
+    assert "no-store" in cc or "no-cache" in cc
 
 
 def test_index_injects_wake_and_sherpa_globals(client):
