@@ -34,7 +34,14 @@ You must build the WASM bundle once (Emscripten), then copy the install output h
 
      patch -p1 -d /root/sherpa-onnx < /opt/voyagr/scripts/patches/sherpa-onnx-kws-GetKeywordSpotterConfig-modeling.patch
 
-   Or from the clone: `git apply /opt/voyagr/scripts/patches/...` (only if you used git; prefer `patch` for vendor trees.) If the patch does not apply cleanly,
+   Or from the clone: `git apply /opt/voyagr/scripts/patches/...` (only if you used git; prefer `patch` for vendor trees.)
+
+   If a previous attempt failed, restore the C++ file and remove rejects before retrying, e.g.:
+   `cd /root/sherpa-onnx && git checkout -- sherpa-onnx/c-api/c-api.cc` (and delete `c-api.cc.rej` if present), then `git pull` in `/opt/voyagr` to get the latest patch hunk, then re-run `patch -p1 < ...` from the sherpa root.
+
+   If the build script says **Please install emscripten first**, install and activate 3.1.53 (script prints commands), `source` the env, then re-run `build-wasm-simd-kws.sh` in the same shell.
+
+   If the patch does not apply cleanly (line numbers),
    add the same six assignments manually right after
    `spotter_config.model_config.debug = config->model_config.debug;` in
    `GetKeywordSpotterConfig` — copy the `modeling_unit` / `bpe_vocab` block from
