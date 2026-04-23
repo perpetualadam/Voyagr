@@ -4,7 +4,8 @@ Sherpa-ONNX KWS WASM spike (Voyagr)
 There is NO official prebuilt WASM KWS tarball (see GitHub sherpa-onnx issue #3112).
 You must build the WASM bundle once (Emscripten), then copy the install output here.
 
-1) Clone sherpa-onnx and install Emscripten 3.1.53 (see upstream docs).
+1) Clone sherpa-onnx and install Emscripten. Upstream docs suggest a version **in the 3.1.48
+   – 3.1.64** range (e.g. 3.1.53); 3.1.70+ is called out as problematic in official sherpa docs.
 
 2) Prepare wasm/kws/assets/ with ONNX + tokens + en.phone + keywords.txt
    - Easiest: run scripts/prepare-sherpa-kws-wasm-assets.sh from sherpa-onnx repo root.
@@ -64,6 +65,37 @@ You must build the WASM bundle once (Emscripten), then copy the install output h
 
 7) Open in browser (HTTPS):
      /static/sherpa-kws-spike.html
+
+Troubleshooting — link step: `undefined symbol: std::__2::filesystem::path::...`
+----------------------------------------------------------------
+The CMake build downloads a **prebuilt** `libonnxruntime.a` (see
+`cmake/onnxruntime-wasm-simd.cmake` in the sherpa-onnx tree). If that archive was built with a
+**different** Emscripten / libc++ than the one you use to link the final
+`sherpa-onnx-wasm-kws-main.wasm`, the linker can fail with `std::filesystem` / `__parent_path`
+errors. This is a **toolchain mismatch**, not a Voyagr bug.
+
+**Try in order (use full paths on your server):**
+
+a) **Align sherpa-onnx and ORT** — `git -C /root/sherpa-onnx pull`, then **wipe the build
+   tree** so FetchContent re-downloads the ORT zip that matches your current CMake:
+     rm -rf /root/sherpa-onnx/build-wasm-simd-kws
+   Then `source /root/emsdk/emsdk_env.sh` and run
+   `cd /root/sherpa-onnx && ./build-wasm-simd-kws.sh`.
+
+b) **Use another supported emsdk** in the 3.1.x line — many setups use 3.1.53; if the error
+   persists after (a), install and activate **3.1.64** (still within sherpa’s suggested range)
+   in `/root/emsdk`, `source /root/emsdk/emsdk_env.sh`, remove
+   `/root/sherpa-onnx/build-wasm-simd-kws` again, and rebuild.
+
+c) If it still fails, check which ORT version your `cmake/onnxruntime-wasm-simd.cmake` pins;
+   older sherpa checkouts may pull an ORT build that no longer matches a given emsdk. Either
+   move forward with a current **sherpa-onnx** `main` or match versions described in
+   [sherpa wasm install](https://k2-fsa.github.io/sherpa/onnx/wasm/install-emscripten.html)
+   and the [k2-fsa/sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) issue tracker for WASM
+   + ONNXRuntime.
+
+The previous failed link still leaves an **old** `install/bin/wasm/` — do not `cp` it to
+production until `make` completes without error.
 
 Keyword line for "Hey Sat Nav" was generated with sherpa-onnx-cli text2token using
 tokens-type phone+ppinyin and en.phone from the zh-en model (see static/vendor/sherpa-kws/spike-config/).
