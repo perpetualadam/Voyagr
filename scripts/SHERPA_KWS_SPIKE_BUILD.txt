@@ -23,9 +23,18 @@ You must build the WASM bundle once (Emscripten), then copy the install output h
    Symptoms: stderr shows `modeling_unit="cjkchar"` no matter what the JS config says,
    then opaque WASM exceptions. Apply Voyagr’s patch, then build:
 
-     patch -p1 < /path/to/Voyagr/scripts/patches/sherpa-onnx-kws-GetKeywordSpotterConfig-modeling.patch
+   **Run this from the sherpa-onnx *clone* root** (the directory that contains
+   `build-wasm-simd-kws.sh` and the nested `sherpa-onnx/c-api/c-api.cc` path), **not** from
+   `/opt/voyagr`. Example (adjust clone path, often `~/sherpa-onnx` or `/root/sherpa-onnx`):
 
-   (`git apply` the same file works if you prefer.) If the patch does not apply cleanly,
+     cd /root/sherpa-onnx
+     patch -p1 < /opt/voyagr/scripts/patches/sherpa-onnx-kws-GetKeywordSpotterConfig-modeling.patch
+
+   Equivalent in one line:
+
+     patch -p1 -d /root/sherpa-onnx < /opt/voyagr/scripts/patches/sherpa-onnx-kws-GetKeywordSpotterConfig-modeling.patch
+
+   Or from the clone: `git apply /opt/voyagr/scripts/patches/...` (only if you used git; prefer `patch` for vendor trees.) If the patch does not apply cleanly,
    add the same six assignments manually right after
    `spotter_config.model_config.debug = config->model_config.debug;` in
    `GetKeywordSpotterConfig` — copy the `modeling_unit` / `bpe_vocab` block from
