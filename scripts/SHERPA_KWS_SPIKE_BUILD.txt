@@ -17,7 +17,12 @@ You must build the WASM bundle once (Emscripten), then copy the install output h
      without the other leaves you with "transducer ... does not exist" + a silent
      dead recogniser (the C API logs "Errors in config!" and returns NULL).
 
-3) **Required for English phone+ppinyin KWS (e.g. zh-en 3M model + en.phone):**
+3) **Emscripten:** you only need one clone of `emsdk` (e.g. `/root/emsdk`). If `git clone` says
+   the path already exists, `cd` there and run `./emsdk install 3.1.53 && ./emsdk activate 3.1.53`
+   then `source /root/emsdk/emsdk_env.sh` in the same shell before `./build-wasm-simd-kws.sh`.
+   A large one-time download is normal; wait for it to finish.
+
+4) **Required for English phone+ppinyin KWS (e.g. zh-en 3M model + en.phone):**
    The stock `GetKeywordSpotterConfig` in `sherpa-onnx/c-api/c-api.cc` does not copy
    `modeling_unit` / `bpe_vocab` from the C struct (the online *recognizer* path does).
    Symptoms: stderr shows `modeling_unit="cjkchar"` no matter what the JS config says,
@@ -41,19 +46,22 @@ You must build the WASM bundle once (Emscripten), then copy the install output h
 
    If the build script says **Please install emscripten first**, install and activate 3.1.53 (script prints commands), `source` the env, then re-run `build-wasm-simd-kws.sh` in the same shell.
 
+   The patch is generated with `python3 /opt/voyagr/scripts/patches/gen_sherpa_kws_patch.py` so
+   line endings are LF and blank context lines are valid for `patch(1)`.
+
    If the patch does not apply cleanly (line numbers),
-   add the same six assignments manually right after
+   add the same block manually right after
    `spotter_config.model_config.debug = config->model_config.debug;` in
    `GetKeywordSpotterConfig` — copy the `modeling_unit` / `bpe_vocab` block from
    `GetOnlineRecognizerConfig` in the same file.
 
-4) From sherpa-onnx repo root:
+5) From sherpa-onnx repo root:
      ./build-wasm-simd-kws.sh
 
-5) Copy build output into Voyagr (paths relative to Voyagr repo root):
+6) Copy build output into Voyagr (paths relative to Voyagr repo root):
      cp -a build-wasm-simd-kws/install/bin/wasm/* static/vendor/sherpa-kws/wasm/
 
-6) Open in browser (HTTPS):
+7) Open in browser (HTTPS):
      /static/sherpa-kws-spike.html
 
 Keyword line for "Hey Sat Nav" was generated with sherpa-onnx-cli text2token using

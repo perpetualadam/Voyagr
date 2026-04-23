@@ -1,0 +1,2 @@
+# GNU patch(1) rejects CRLF in unified diffs as "malformed"
+*.patch text eol=lf
