@@ -1,0 +1,20 @@
+--- a/wasm/kws/CMakeLists.txt
++++ b/wasm/kws/CMakeLists.txt
+@@ -47,6 +47,19 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MY_FLAGS}")
+ 
+ add_executable(sherpa-onnx-wasm-kws-main sherpa-onnx-wasm-main-kws.cc)
+ target_link_libraries(sherpa-onnx-wasm-kws-main sherpa-onnx-c-api)
++# Prebuilt libonnxruntime.a calls std::filesystem. The default Emscripten link uses
++# -lc++-noexcept, which can omit the object files that define those symbols. Enable
++# exceptions so em++ uses full libc++, and whole-archive the C++ runtimes so wasm-ld
++# pulls in filesystem (and any other) TU required by the static ORT.
++if(CMAKE_SYSTEM_NAME STREQUAL "Emscripten")
++  target_compile_options(sherpa-onnx-wasm-kws-main PRIVATE -fexceptions)
++  target_link_options(sherpa-onnx-wasm-kws-main PRIVATE
++    -fexceptions
++    "-Wl,--whole-archive" "-lc++" "-lc++abi" "-Wl,--no-whole-archive"
++  )
++endif()
+ install(TARGETS sherpa-onnx-wasm-kws-main DESTINATION bin/wasm)
+ 
+ install(

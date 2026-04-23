@@ -27,7 +27,9 @@ You must build the WASM bundle once (Emscripten), then copy the install output h
    The stock `GetKeywordSpotterConfig` in `sherpa-onnx/c-api/c-api.cc` does not copy
    `modeling_unit` / `bpe_vocab` from the C struct (the online *recognizer* path does).
    Symptoms: stderr shows `modeling_unit="cjkchar"` no matter what the JS config says,
-   then opaque WASM exceptions. Apply Voyagr’s patch, then build:
+   then opaque WASM exceptions. Apply Voyagr’s c-api patch, then build. If the link step
+   fails on `std::filesystem` in `libonnxruntime.a`, use troubleshooting (a–d) below; (d) is
+   a small `wasm/kws/CMakeLists.txt` patch that forces full `libc++` for wasm-ld.
 
    **Run this from the sherpa-onnx *clone* root** (the directory that contains
    `build-wasm-simd-kws.sh` and the nested `sherpa-onnx/c-api/c-api.cc` path), **not** from
@@ -82,10 +84,11 @@ a) **Align sherpa-onnx and ORT** — `git -C /root/sherpa-onnx pull`, then **wip
    Then `source /root/emsdk/emsdk_env.sh` and run
    `cd /root/sherpa-onnx && ./build-wasm-simd-kws.sh`.
 
-b) **Use another supported emsdk** in the 3.1.x line — many setups use 3.1.53; if the error
-   persists after (a), install and activate **3.1.64** (still within sherpa’s suggested range)
-   in `/root/emsdk`, `source /root/emsdk/emsdk_env.sh`, remove
-   `/root/sherpa-onnx/build-wasm-simd-kws` again, and rebuild.
+b) **Use another supported emsdk** in the 3.1.x line. After (a), try **3.1.48** (the version
+   shown in [sherpa’s wasm emscripten doc](https://k2-fsa.github.io/sherpa/onnx/wasm/install-emscripten.html)),
+   then `3.1.53` / `3.1.64` (all ≤3.1.64 per upstream). In `/root/emsdk` run
+   `./emsdk install VERSION && ./emsdk activate VERSION`, `source emsdk_env.sh`, wipe
+   `build-wasm-simd-kws`, and rebuild.
 
 c) If it still fails, check which ORT version your `cmake/onnxruntime-wasm-simd.cmake` pins;
    older sherpa checkouts may pull an ORT build that no longer matches a given emsdk. Either
@@ -93,6 +96,21 @@ c) If it still fails, check which ORT version your `cmake/onnxruntime-wasm-simd.
    [sherpa wasm install](https://k2-fsa.github.io/sherpa/onnx/wasm/install-emscripten.html)
    and the [k2-fsa/sherpa-onnx](https://github.com/k2-fsa/sherpa-onnx) issue tracker for WASM
    + ONNXRuntime.
+
+d) **Voyagr CMake link patch (fixes `__parent_path` / `__filename` from `libonnxruntime.a`):**
+   The failure is usually because em++ links **`-lc++-noexcept`** by default, while the
+   prebuilt ORT needs **`std::filesystem` from full `libc++`**. The patch enables
+   **`-fexceptions`** and **`-Wl,--whole-archive -lc++ -lc++abi`**. The patch file must
+   exist on the server (e.g. `git pull` the Voyagr app under `/opt/voyagr` so
+   `scripts/patches/sherpa-onnx-wasm-kws-link-wholearchive-libcxx.patch` is present).
+
+   From the sherpa-onnx **clone root**, reset CMake if needed, then:
+
+     git checkout -- wasm/kws/CMakeLists.txt
+     patch -p1 < /opt/voyagr/scripts/patches/sherpa-onnx-wasm-kws-link-wholearchive-libcxx.patch
+
+   Wipe the build directory and run `./build-wasm-simd-kws.sh` again. If the patch was
+   already applied, `patch` may complain — use a manual edit matching that `.patch` file.
 
 The previous failed link still leaves an **old** `install/bin/wasm/` — do not `cp` it to
 production until `make` completes without error.
