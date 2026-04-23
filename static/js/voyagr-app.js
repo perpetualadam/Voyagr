@@ -10676,7 +10676,7 @@ function warmSherpaStaticCache() {
             // If the Sherpa vendor bundle is not deployed, every URL 404s — skip precache so the
             // service worker does not log WARM_STATIC_URLS miss for each file on every load.
             const probeUrls = [
-                '/static/vendor/sherpa-kws/wasm/sherpa-onnx-kws.js',
+                '/static/js/sherpa-onnx-kws-spike.js',
                 '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.js',
             ];
             for (const u of probeUrls) {
@@ -10686,10 +10686,10 @@ function warmSherpaStaticCache() {
                 }
             }
             const urls = [
+                '/static/js/sherpa-onnx-kws-spike.js',
                 '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.js',
                 '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.wasm',
                 '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.data',
-                '/static/vendor/sherpa-kws/wasm/sherpa-onnx-kws.js',
                 '/static/vendor/sherpa-kws/spike-config/keywords-hey-sat-nav.txt',
             ];
             ctrl.postMessage({ type: 'WARM_STATIC_URLS', urls: urls });

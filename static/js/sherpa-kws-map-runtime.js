@@ -8,13 +8,13 @@
 
     var WASM_DIR = '/static/vendor/sherpa-kws/wasm/';
     var WASM_MAIN = WASM_DIR + 'sherpa-onnx-wasm-kws-main.js';
-    // IMPORTANT: the JS glue that calls into the WASM must be the copy that
-    // was built *alongside* the .wasm / .data bundle — its struct marshalling
-    // offsets only match that exact upstream commit. A drift between our
-    // bundled static/js/sherpa-onnx-kws-spike.js and the vendor bundle here
-    // silently corrupts config fields (e.g. modelingUnit) and causes opaque
-    // integer-pointer exceptions out of SherpaOnnxCreateKeywordSpotter.
-    var SPIKE_GLUE = WASM_DIR + 'sherpa-onnx-kws.js';
+    // Load glue from /static/js (same marshalling as upstream wasm/kws/sherpa-onnx-kws.js).
+    // Vendor install/bin/wasm/ must still ship only main.js + .wasm + .data; duplicate
+    // sherpa-onnx-kws.js in vendor was a common source of drift. If the C++ KWS build
+    // does not pass modeling_unit from the C API (see upstream GetKeywordSpotterConfig),
+    // phone+ppinyin KWS still fails until WASM is rebuilt with the Voyagr patch in
+    // scripts/patches/sherpa-onnx-kws-GetKeywordSpotterConfig-modeling.patch.
+    var SPIKE_GLUE = '/static/js/sherpa-onnx-kws-spike.js';
     var KEYWORDS_URL = '/static/vendor/sherpa-kws/spike-config/keywords-hey-sat-nav.txt';
     // The glue + emscripten bundle must be HTTP-cached. Model weights and tokens
     // typically live in the .data preload, not as separate /wasm/*.txt URLs.

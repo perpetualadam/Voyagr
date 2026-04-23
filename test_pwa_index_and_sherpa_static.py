@@ -46,6 +46,14 @@ def test_sherpa_keywords_config_static(client):
     assert len(rv.data) > 0
 
 
+def test_sherpa_onnx_kws_spike_glue_served(client):
+    """KWS PWA load path uses this file (global createKws) — must 200 in prod."""
+    rv = client.get("/static/js/sherpa-onnx-kws-spike.js")
+    assert rv.status_code == 200
+    assert b"createKws" in rv.data
+    assert b"globalThis.createKws" in rv.data
+
+
 def test_manifest_and_service_worker(client):
     assert client.get("/manifest.json").status_code == 200
     sw = client.get("/service-worker.js")

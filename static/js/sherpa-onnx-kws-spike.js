@@ -373,4 +373,8 @@ if (typeof process == 'object' && typeof process.versions == 'object' &&
   module.exports = {
     createKws,
   };
+} else if (typeof globalThis !== 'undefined') {
+  // Browser: sherpa-kws-map-runtime.js expects a global after script load
+  // (same contract as vendor wasm/sherpa-onnx-kws.js from install/bin/wasm).
+  globalThis.createKws = createKws;
 }

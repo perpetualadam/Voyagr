@@ -17,13 +17,27 @@ You must build the WASM bundle once (Emscripten), then copy the install output h
      without the other leaves you with "transducer ... does not exist" + a silent
      dead recogniser (the C API logs "Errors in config!" and returns NULL).
 
-3) From sherpa-onnx repo root:
+3) **Required for English phone+ppinyin KWS (e.g. zh-en 3M model + en.phone):**
+   The stock `GetKeywordSpotterConfig` in `sherpa-onnx/c-api/c-api.cc` does not copy
+   `modeling_unit` / `bpe_vocab` from the C struct (the online *recognizer* path does).
+   Symptoms: stderr shows `modeling_unit="cjkchar"` no matter what the JS config says,
+   then opaque WASM exceptions. Apply Voyagr’s patch, then build:
+
+     patch -p1 < /path/to/Voyagr/scripts/patches/sherpa-onnx-kws-GetKeywordSpotterConfig-modeling.patch
+
+   (`git apply` the same file works if you prefer.) If the patch does not apply cleanly,
+   add the same six assignments manually right after
+   `spotter_config.model_config.debug = config->model_config.debug;` in
+   `GetKeywordSpotterConfig` — copy the `modeling_unit` / `bpe_vocab` block from
+   `GetOnlineRecognizerConfig` in the same file.
+
+4) From sherpa-onnx repo root:
      ./build-wasm-simd-kws.sh
 
-4) Copy build output into Voyagr (paths relative to Voyagr repo root):
+5) Copy build output into Voyagr (paths relative to Voyagr repo root):
      cp -a build-wasm-simd-kws/install/bin/wasm/* static/vendor/sherpa-kws/wasm/
 
-5) Open in browser (HTTPS):
+6) Open in browser (HTTPS):
      /static/sherpa-kws-spike.html
 
 Keyword line for "Hey Sat Nav" was generated with sherpa-onnx-cli text2token using
