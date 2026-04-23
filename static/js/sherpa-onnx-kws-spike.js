@@ -173,8 +173,10 @@ function initFeatureExtractorConfig(config, Module) {
 
 function initKwsConfig(config, Module) {
   if (!('featConfig' in config)) {
+    // Must use samplingRate: initFeatureExtractorConfig reads config.samplingRate
+    // (upstream wasm/kws default used sampleRate — wrong key, broke feature block).
     config.featConfig = {
-      sampleRate: 16000,
+      samplingRate: 16000,
       featureDim: 80,
     };
   }
