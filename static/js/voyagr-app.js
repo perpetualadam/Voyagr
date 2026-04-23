@@ -6230,6 +6230,7 @@ function resetVoiceAnnouncementStateForNewRoute() {
     announcedTurnThresholds.clear();
     announcedExitThresholds.clear();
     announcedKeepThresholds.clear();
+    lastTurnDetectRouteVertexIndex = 0;
     clearInitialETAAnnouncement();
     initialETAMovementRetries = 0;
 }
@@ -6250,10 +6251,12 @@ function updateRouteOnMap(newRoute) {
     console.log(`[Reroute] Route polyline decoded: ${routePolyline.length} points`);
 
     // Draw new route on map with MapLibre
+    // NOTE: weight increased from 5 → 8 so the active route line stays clearly
+    // visible at navigation zoom levels (previously the road looked too narrow).
     routeLayer = MapLibreHelpers.addPolyline(map, routePolyline, {
         color: '#667eea',
-        weight: 5,
-        opacity: 0.8
+        weight: 8,
+        opacity: 0.85
     });
 
     // === FIX: Update maneuvers / steps so turn-by-turn stays in sync ===
@@ -6270,6 +6273,7 @@ function updateRouteOnMap(newRoute) {
 
     // Reset snap-to-route index so the vehicle snaps to the new polyline correctly
     lastSnappedRouteIndex = 0;
+    lastTurnDetectRouteVertexIndex = 0;
 
     // Reset deviation tracking so we don't immediately re-trigger reroute
     deviationStartTimeCheck = null;
@@ -9511,6 +9515,43 @@ function calculateTurnDirection(bearing1, bearing2) {
     return 'sharp_right';
 }
 /**
+ * Distance along the polyline from a snapped point (snapped onto segment i0) to
+ * a target vertex, forward along the line only.
+ * @param {Array} routePolyline - [lat, lon] polyline
+ * @param {Object} snap - Result of snapToRoutePolyline (index, t, …)
+ * @param {number} targetVertexIndex - Maneuver begin_shape_index (clamped to polyline)
+ * @returns {number} Meters, >= 0
+ */
+function distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex) {
+    if (!routePolyline || routePolyline.length < 2 || !snap) return 0;
+    const n = routePolyline.length;
+    const vi = Math.max(0, Math.min(Math.floor(Number(targetVertexIndex) || 0), n - 1));
+    const i0 = Math.max(0, Math.min(snap.index, n - 2));
+    const t = snap.t !== undefined && snap.t !== null
+        ? Math.max(0, Math.min(1, Number(snap.t)))
+        : 0;
+    const a = routePolyline[i0];
+    const b = routePolyline[i0 + 1];
+    const segLen = calculateHaversineDistance(a[0], a[1], b[0], b[1]);
+    if (vi < i0) {
+        return 0;
+    }
+    let d = 0;
+    if (vi > i0) {
+        d += (1 - t) * segLen;
+        for (let j = i0 + 1; j < vi; j++) {
+            d += calculateHaversineDistance(
+                routePolyline[j][0], routePolyline[j][1],
+                routePolyline[j + 1][0], routePolyline[j + 1][1]
+            );
+        }
+    } else {
+        d += t * segLen;
+    }
+    return Math.max(0, d);
+}
+
+/**
  * detectUpcomingTurn function
  * @function detectUpcomingTurn
  * @param {*} userLat - Parameter description
@@ -9522,16 +9563,17 @@ function detectUpcomingTurn(userLat, userLon) {
         return null;
     }
 
-    // Find user's current position on the route polyline
-    let userRouteIndex = 0;
-    let minDistToRoute = Infinity;
-    for (let i = 0; i < routePolyline.length; i++) {
-        const point = routePolyline[i];
-        const dist = calculateHaversineDistance(userLat, userLon, point[0], point[1]);
-        if (dist < minDistToRoute) {
-            minDistToRoute = dist;
-            userRouteIndex = i;
-        }
+    // Snap the GPS position onto the route, then "lock" progress forward. Using the
+    // nearest *vertex* alone makes distances jump on tight curves/roundabouts when the
+    // closest vertex toggles to an earlier one frame-to-frame (e.g. 1600m → 2000m).
+    const turnSnap = snapToRoutePolyline(
+        userLat, userLon, routePolyline, lastTurnDetectRouteVertexIndex
+    );
+    let userRouteIndex = turnSnap.index;
+    if (userRouteIndex < lastTurnDetectRouteVertexIndex) {
+        userRouteIndex = lastTurnDetectRouteVertexIndex;
+    } else {
+        lastTurnDetectRouteVertexIndex = userRouteIndex;
     }
 
     // If we have maneuvers from Valhalla, use them for accurate turn instructions
@@ -9576,17 +9618,12 @@ function detectUpcomingTurn(userLat, userLon) {
             // Skip non-turn maneuvers (straight, continue, etc.)
             if (direction === null) continue;
 
-            // Calculate actual distance from user to maneuver point along the route
-            let distanceToManeuver = 0;
             const targetIndex = Math.min(maneuverShapeIndex, routePolyline.length - 1);
 
-            // Sum up distance along route from user position to maneuver
-            for (let j = userRouteIndex; j < targetIndex; j++) {
-                distanceToManeuver += calculateHaversineDistance(
-                    routePolyline[j][0], routePolyline[j][1],
-                    routePolyline[j + 1][0], routePolyline[j + 1][1]
-                );
-            }
+            // True along-route distance from snapped position to maneuver vertex
+            const distanceToManeuver = distanceAlongRouteToVertexMeters(
+                routePolyline, turnSnap, targetIndex
+            );
 
             // Extend detection range for exits (2.5km) and keep/fork (1.5km)
             const isExitDir = direction === 'exit' || direction === 'exit_right' || direction === 'exit_left';
@@ -9618,18 +9655,8 @@ function detectUpcomingTurn(userLat, userLon) {
     }
 
     // Fallback: Use geometry-based turn detection if no maneuvers available
-    // Find the closest point on the route to the user
-    let closestDistance = Infinity;
-    let closestIndex = 0;
-
-    for (let i = 0; i < routePolyline.length; i++) {
-        const point = routePolyline[i];
-        const distance = calculateHaversineDistance(userLat, userLon, point[0], point[1]);
-        if (distance < closestDistance) {
-            closestDistance = distance;
-            closestIndex = i;
-        }
-    }
+    // Reuse the snapped, monotonically non-decreasing index from the top of the function
+    const closestIndex = lastTurnDetectRouteVertexIndex;
 
     // Look ahead for significant direction changes (turns)
     let nextTurnIndex = null;
@@ -9676,9 +9703,8 @@ function detectUpcomingTurn(userLat, userLon) {
     }
 
     const nextTurnPoint = routePolyline[nextTurnIndex];
-    const distanceToTurn = calculateHaversineDistance(
-        userLat, userLon,
-        nextTurnPoint[0], nextTurnPoint[1]
+    const distanceToTurn = distanceAlongRouteToVertexMeters(
+        routePolyline, turnSnap, nextTurnIndex
     );
 
     // Calculate turn direction using proper bearing calculation
@@ -13221,6 +13247,8 @@ function computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex
 
 // Track the last snapped route index for efficient searching
 let lastSnappedRouteIndex = 0;
+/** For turn detection only: monotonic polyline vertex index (never goes backwards). */
+let lastTurnDetectRouteVertexIndex = 0;
 // Maximum distance from route to snap (meters). Beyond this, use raw GPS.
 const SNAP_TO_ROUTE_MAX_DISTANCE = 50; // Increased from 40 to cover typical GPS drift
 /**
@@ -14116,13 +14144,34 @@ function loadCameraAlertPreferences() {
  * @param {*} lon - Parameter description
  * @returns {*} Return value description
  */
+/**
+ * Spoken/notification string for a straight-line distance to a hazard, respecting
+ * distanceUnit (miles+feet vs km+meters) like the rest of the app.
+ * @param {number} distanceM
+ * @returns {string}
+ */
+function formatHazardDistanceForUserMeters(distanceM) {
+    const m = Math.max(0, Number(distanceM) || 0);
+    if (distanceUnit === 'mi') {
+        if (m < 402) {
+            return `${Math.round(m * 3.28084)} feet`;
+        }
+        const miles = m / 1609.34;
+        return miles < 10 ? `${miles.toFixed(1)} miles` : `${Math.round(miles)} miles`;
+    }
+    if (m < 1000) {
+        return `${Math.round(m)} meters`;
+    }
+    return `${(m / 1000).toFixed(1)} kilometers`;
+}
+
 function announceCameraOrHazard(hazard, distanceM, opts = {}) {
     const { unavoidableRouteCamera = false } = opts;
     const friendlyType = String(hazard.type || 'hazard').replace(/_/g, ' ');
-    const distStr = distanceM.toFixed(0);
+    const distStr = formatHazardDistanceForUserMeters(distanceM);
     const message = unavoidableRouteCamera
-        ? `${friendlyType} on your route, ${distStr} meters ahead — may be unavoidable on this path`
-        : `${friendlyType} ${distStr}m ahead`;
+        ? `${friendlyType} on your route, ${distStr} ahead — may be unavoidable on this path`
+        : `${friendlyType} ${distStr} ahead`;
     sendNotification(unavoidableRouteCamera ? 'Route hazard' : 'Hazard Alert', message, 'warning');
 
     const now = Date.now();
@@ -14136,15 +14185,15 @@ function announceCameraOrHazard(hazard, distanceM, opts = {}) {
     if (isCamera) {
         if (cameraAlertType === 'voice' || cameraAlertType === 'both') {
             const spoken = unavoidableRouteCamera
-                ? `Camera on route in ${distStr} meters. This path may still pass the camera.`
-                : `${friendlyType}, ${distStr} meters ahead`;
+                ? `Camera on route in ${distStr}. This path may still pass the camera.`
+                : `${friendlyType}, ${distStr} ahead`;
             speakMessage(spoken, 'high');
         }
         if (cameraAlertType === 'chime' || cameraAlertType === 'both') {
             playCameraChime();
         }
     } else if (voiceAnnouncementsEnabled) {
-        speakMessage(`${friendlyType}, ${distStr} meters ahead`);
+        speakMessage(`${friendlyType}, ${distStr} ahead`);
     }
 }
 
@@ -15319,6 +15368,7 @@ function startTurnByTurnNavigation(routeData) {
     currentStepIndex = 0;
     currentRouteSteps = routeData.maneuvers || [];
     lastSnappedRouteIndex = 0;
+    lastTurnDetectRouteVertexIndex = 0;
     routeJoinConfirmedForDeviation = false;
     lastETAAnnouncementTime = Date.now();
     lastAnnouncedETA = null;

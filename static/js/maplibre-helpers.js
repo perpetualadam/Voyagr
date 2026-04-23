@@ -12,8 +12,15 @@ const activeMarkers = new Map();
 // ===== POLYLINE FUNCTIONS =====
 
 /**
- * MapLibre line-width expression: full width at city zoom, tapers at high zoom
- * so dense polylines do not read as solid grey “blobs”.
+ * MapLibre line-width expression.
+ *
+ * Tuned so the route line stays comfortably wide across the zoom range that
+ * drivers actually see during navigation (roughly z15–z19). Previously the
+ * line tapered aggressively at high zoom (down to ~40% of base), which made
+ * roads look very narrow on the turn-by-turn view. We now keep most of the
+ * base width at street-level zooms and only taper slightly at extreme zoom
+ * (z22) where the underlying road casing is also narrow.
+ *
  * @param {number} baseWidth - Nominal width at ~z12 (screen pixels)
  * @returns {Array} MapLibre expression for line-width
  */
@@ -23,12 +30,12 @@ function buildZoomScaledLineWidth(baseWidth) {
         'interpolate',
         ['linear'],
         ['zoom'],
-        9, Math.min(16, b * 1.08),
+        9, Math.min(18, b * 1.05),
         12, b,
-        15, Math.max(2.5, b * 0.88),
-        17, Math.max(2, b * 0.58),
-        19, Math.max(1.5, b * 0.4),
-        22, Math.max(1.5, b * 0.28)
+        15, Math.max(4, b * 1.0),
+        17, Math.max(5, b * 1.0),
+        19, Math.max(5, b * 0.9),
+        22, Math.max(4, b * 0.75)
     ];
 }
 
