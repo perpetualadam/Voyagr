@@ -207,9 +207,14 @@
         if (typeof fetch !== 'function') {
             return Promise.resolve();
         }
-        var targets = [WASM_MAIN, KEYWORDS_URL].concat(REQUIRED_MODEL_FILES.map(function (f) {
+        // Must include SPIKE_GLUE: without it, loadScript(SPIKE_GLUE) 404s after this preflight
+        // “passes” if only main.js/keywords/tokens were checked — seen on servers that omit the
+        // glue file or a partial wasm/ copy.
+        var targets = [SPIKE_GLUE, WASM_MAIN, KEYWORDS_URL].concat(REQUIRED_MODEL_FILES.map(function (f) {
             return WASM_DIR + f;
         }));
+        targets.push(WASM_DIR + 'sherpa-onnx-wasm-kws-main.wasm');
+        targets.push(WASM_DIR + 'sherpa-onnx-wasm-kws-main.data');
         return Promise.all(targets.map(function (url) {
             return fetch(url, { method: 'HEAD', cache: 'no-store' })
                 .then(function (r) { return { url: url, ok: r.ok, status: r.status }; })

@@ -7706,7 +7706,6 @@ function toggleSherpaWakeWord() {
     localStorage.setItem(VOYAGR_SHERPA_WAKE_STORAGE_KEY, enabled ? 'true' : 'false');
     if (enabled) {
         void startSherpaWakePipeline();
-        showStatus('Sherpa wake listening', 'success');
     } else {
         porcupineWakeResumeAfterVoice = false;
         void stopSherpaWakePipeline();
@@ -7751,6 +7750,7 @@ async function startSherpaWakePipeline() {
         await window.VoyagrSherpaKwsMap.start(async function () {
             await onPorcupineWakeHotword();
         });
+        showStatus('Sherpa wake listening', 'success');
     } catch (e) {
         // Emscripten C++ exceptions arrive as raw integer pointers. Decode via the
         // runtime's helper (which knows about Module.getExceptionMessage) so we log
@@ -10667,23 +10667,37 @@ function toggleMLPredictions() {
 // is handled inside the SW (WARM_STATIC_URLS is idempotent), so repeat calls
 // are cheap no-ops.
 function warmSherpaStaticCache() {
-    try {
-        if (!('serviceWorker' in navigator)) return;
-        if (!navigator.onLine) return;
-        const ctrl = navigator.serviceWorker.controller;
-        if (!ctrl) return;
-        const urls = [
-            '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.js',
-            '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.wasm',
-            '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.data',
-            '/static/vendor/sherpa-kws/wasm/sherpa-onnx-kws.js',
-            '/static/vendor/sherpa-kws/wasm/tokens.txt',
-            '/static/vendor/sherpa-kws/spike-config/keywords-hey-sat-nav.txt',
-        ];
-        ctrl.postMessage({ type: 'WARM_STATIC_URLS', urls: urls });
-    } catch (_e) {
-        // Never let warm-up break the app.
-    }
+    void (async function warm() {
+        try {
+            if (!('serviceWorker' in navigator)) return;
+            if (!navigator.onLine) return;
+            const ctrl = navigator.serviceWorker.controller;
+            if (!ctrl) return;
+            // If the Sherpa vendor bundle is not deployed, every URL 404s — skip precache so the
+            // service worker does not log WARM_STATIC_URLS miss for each file on every load.
+            const probeUrls = [
+                '/static/vendor/sherpa-kws/wasm/sherpa-onnx-kws.js',
+                '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.js',
+            ];
+            for (const u of probeUrls) {
+                const r = await fetch(u, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
+                if (!r || !r.ok) {
+                    return;
+                }
+            }
+            const urls = [
+                '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.js',
+                '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.wasm',
+                '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.data',
+                '/static/vendor/sherpa-kws/wasm/sherpa-onnx-kws.js',
+                '/static/vendor/sherpa-kws/wasm/tokens.txt',
+                '/static/vendor/sherpa-kws/spike-config/keywords-hey-sat-nav.txt',
+            ];
+            ctrl.postMessage({ type: 'WARM_STATIC_URLS', urls: urls });
+        } catch (_e) {
+            // Never let warm-up break the app.
+        }
+    }());
 }
 
 // PWA Service Worker Registration
