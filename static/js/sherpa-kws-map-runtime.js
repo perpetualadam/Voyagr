@@ -16,19 +16,13 @@
     // integer-pointer exceptions out of SherpaOnnxCreateKeywordSpotter.
     var SPIKE_GLUE = WASM_DIR + 'sherpa-onnx-kws.js';
     var KEYWORDS_URL = '/static/vendor/sherpa-kws/spike-config/keywords-hey-sat-nav.txt';
-    // Files referenced by the hardcoded model config in sherpa-onnx-kws-spike.js/createKws.
-    // Emscripten's virtual FS loads these via HTTP from WASM_DIR on startup; if any are
-    // 404 the native _SherpaOnnxCreateKeywordSpotter() call throws an *integer pointer*
-    // exception that shows as "[Sherpa map] <number>" and is effectively useless.
-    // We HEAD-probe them up front so the user sees a clear message instead.
-    // Files we expect to be HTTP-reachable under WASM_DIR. The onnx transducer
-    // weights are intentionally *not* listed here because the upstream WASM build
-    // bakes them into sherpa-onnx-wasm-kws-main.data via Emscripten --preload-file,
-    // served from a virtual FS rather than over HTTP. Including them would cause
-    // false 404s on setups where .data is the source of truth.
-    var REQUIRED_MODEL_FILES = [
-        'tokens.txt',
-    ];
+    // The glue + emscripten bundle must be HTTP-cached. Model weights and tokens
+    // typically live in the .data preload, not as separate /wasm/*.txt URLs.
+    // Do not HEAD-probe tokens.txt or *.onnx here: the upstream KWS build preloads
+    // them into sherpa-onnx-wasm-kws-main.data (virtual FS). install/bin/wasm/ often
+    // has *no* separate tokens.txt on disk — rsyncing only that tree would delete a
+    // hand-placed copy and 404. Glue + main.js + .wasm + .data are the static HTTP
+    // surface; C++ opens ./tokens.txt from the preload bundle, not a separate URL.
 
     /**
      * Turn any thrown value into a useful human-readable message. Emscripten C++
@@ -210,11 +204,9 @@
         // Must include SPIKE_GLUE: without it, loadScript(SPIKE_GLUE) 404s after this preflight
         // “passes” if only main.js/keywords/tokens were checked — seen on servers that omit the
         // glue file or a partial wasm/ copy.
-        var targets = [SPIKE_GLUE, WASM_MAIN, KEYWORDS_URL].concat(REQUIRED_MODEL_FILES.map(function (f) {
-            return WASM_DIR + f;
-        }));
-        targets.push(WASM_DIR + 'sherpa-onnx-wasm-kws-main.wasm');
-        targets.push(WASM_DIR + 'sherpa-onnx-wasm-kws-main.data');
+        var targets = [SPIKE_GLUE, WASM_MAIN, KEYWORDS_URL,
+            WASM_DIR + 'sherpa-onnx-wasm-kws-main.wasm',
+            WASM_DIR + 'sherpa-onnx-wasm-kws-main.data'];
         return Promise.all(targets.map(function (url) {
             return fetch(url, { method: 'HEAD', cache: 'no-store' })
                 .then(function (r) { return { url: url, ok: r.ok, status: r.status }; })
