@@ -3,8 +3,8 @@
 @@ -1001,6 +1001,16 @@ static sherpa_onnx::KeywordSpotterConfig GetKeywordSpotterConfig(
  
    spotter_config.model_config.model_type =
-      SHERPA_ONNX_OR(config->model_config.model_type, "");
-  spotter_config.model_config.debug = config->model_config.debug;
+       SHERPA_ONNX_OR(config->model_config.model_type, "");
+   spotter_config.model_config.debug = config->model_config.debug;
 +  spotter_config.model_config.modeling_unit =
 +      SHERPA_ONNX_OR(config->model_config.modeling_unit, "cjkchar");
 +
@@ -16,5 +16,5 @@
 +      SHERPA_ONNX_OR(config->model_config.bpe_vocab, "");
 +
  
-  spotter_config.max_active_paths = SHERPA_ONNX_OR(config->max_active_paths, 4);
+   spotter_config.max_active_paths = SHERPA_ONNX_OR(config->max_active_paths, 4);
 

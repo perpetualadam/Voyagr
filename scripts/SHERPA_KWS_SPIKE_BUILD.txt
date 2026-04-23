@@ -47,7 +47,8 @@ You must build the WASM bundle once (Emscripten), then copy the install output h
    If the build script says **Please install emscripten first**, install and activate 3.1.53 (script prints commands), `source` the env, then re-run `build-wasm-simd-kws.sh` in the same shell.
 
    The patch is generated with `python3 /opt/voyagr/scripts/patches/gen_sherpa_kws_patch.py` so
-   line endings are LF and blank context lines are valid for `patch(1)`.
+   each context line has the required one-column diff prefix (without it, the C++ line is one
+   space too short and `patch` reports `Hunk #1 FAILED at 1001`).
 
    If the patch does not apply cleanly (line numbers),
    add the same block manually right after
