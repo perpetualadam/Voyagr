@@ -308,6 +308,11 @@ function getNavigationFollowPadding() {
 
 window.addEventListener('resize', () => {
     console.log('[Viewport] Window resized; follow padding recomputed on next frame');
+    if (typeof window.__voyagrMapResizeAndRepaint === 'function') {
+        window.__voyagrMapResizeAndRepaint();
+    } else if (typeof map !== 'undefined' && map && typeof map.resize === 'function') {
+        map.resize();
+    }
 });
 
 // ===== DARK MODE FUNCTIONS =====
@@ -17073,8 +17078,11 @@ function initMobileEnhancements() {
     document.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'visible') {
             console.log('[Mobile] App came to foreground');
-            // Refresh map if needed - MapLibre uses resize() instead of Leaflet's invalidateSize()
-            if (map && typeof map.resize === 'function') {
+            // MapLibre must remeasure the canvas after tab sleep / bfcache; use double
+            // rAF so mobile URL bar / 100dvh have settled (avoids blank map + lost markers).
+            if (typeof window.__voyagrMapResizeAndRepaint === 'function') {
+                window.__voyagrMapResizeAndRepaint();
+            } else if (map && typeof map.resize === 'function') {
                 map.resize();
             }
             // Resume GPS tracking if it was active
@@ -17084,6 +17092,24 @@ function initMobileEnhancements() {
         } else {
             console.log('[Mobile] App went to background');
         }
+    });
+
+    // BFCache / back-forward: page can restore without a full reload; map WebGL
+    // and dimensions must be refreshed the same as visibility.
+    window.addEventListener('pageshow', (ev) => {
+        if (ev.persisted && typeof window.__voyagrMapResizeAndRepaint === 'function') {
+            console.log('[Mobile] pageshow (restored from bfcache) — resyncing map');
+            window.__voyagrMapResizeAndRepaint();
+        }
+    });
+
+    // Orientation and delayed layout (safe-area / dynamic toolbars) change inner dimensions.
+    window.addEventListener('orientationchange', () => {
+        setTimeout(() => {
+            if (typeof window.__voyagrMapResizeAndRepaint === 'function') {
+                window.__voyagrMapResizeAndRepaint();
+            }
+        }, 350);
     });
 
     // Enable smooth transitions after initial load

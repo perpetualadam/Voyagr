@@ -315,6 +315,55 @@ function initializeMap() {
         }
     });
 
+    // PWA / mobile: WebGL can be lost under memory or GPU pressure. The canvas
+    // can also have stale dimensions when the mobile browser chrome shows or hides
+    // (100dvh / innerHeight change without a full reload). Both cases produce a
+    // blank basemap, no road labels, and vehicle markers that look "gone" (wrong transform).
+    function voyagrMapResizeAndRepaint() {
+        if (!map || typeof map.resize !== 'function') return;
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                try {
+                    map.resize();
+                    if (typeof map.triggerRepaint === 'function') {
+                        map.triggerRepaint();
+                    }
+                } catch (e) {
+                    /* ignore */
+                }
+            });
+        });
+    }
+    window.__voyagrMapResizeAndRepaint = voyagrMapResizeAndRepaint;
+
+    try {
+        const glCanvas = typeof map.getCanvas === 'function' ? map.getCanvas() : null;
+        if (glCanvas && glCanvas.addEventListener) {
+            glCanvas.addEventListener(
+                'webglcontextlost',
+                (e) => {
+                    console.warn('[MapLibre] WebGL context lost; browser may restore it', e);
+                    try {
+                        e.preventDefault();
+                    } catch (err) {
+                        /* must preventDefault to allow webglcontextrestored on some UAs */
+                    }
+                },
+                false
+            );
+            glCanvas.addEventListener(
+                'webglcontextrestored',
+                () => {
+                    console.warn('[MapLibre] WebGL context restored — resyncing map size and repaint');
+                    voyagrMapResizeAndRepaint();
+                },
+                false
+            );
+        }
+    } catch (e) {
+        /* non-fatal */
+    }
+
     // Attempt to center on current location on load
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
