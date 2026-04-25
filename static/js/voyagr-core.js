@@ -242,6 +242,44 @@ function initializeMap() {
         }
     }
 
+    function getMapWebGLContext() {
+        try {
+            const c = map.getCanvas && map.getCanvas();
+            if (!c) return null;
+            return c.getContext('webgl2') || c.getContext('webgl') || c.getContext('experimental-webgl');
+        } catch (e) {
+            return null;
+        }
+    }
+
+    function getMapRenderDiagnostics() {
+        const c = map.getCanvas && map.getCanvas();
+        const cont = map.getContainer && map.getContainer();
+        const gl = getMapWebGLContext();
+        let isStyleLoaded = null;
+        let mapLoaded = null;
+        try {
+            isStyleLoaded = typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : null;
+        } catch (e) {
+            isStyleLoaded = null;
+        }
+        try {
+            mapLoaded = typeof map.loaded === 'function' ? map.loaded() : null;
+        } catch (e) {
+            mapLoaded = null;
+        }
+        return {
+            isStyleLoaded,
+            mapLoaded,
+            contextLost: gl ? gl.isContextLost() : null,
+            canvas: c
+                ? { width: c.width, height: c.height, clientWidth: c.clientWidth, clientHeight: c.clientHeight }
+                : null,
+            container: cont ? { w: cont.offsetWidth, h: cont.offsetHeight } : null
+        };
+    }
+    window.__voyagrMapGetDiagnostics = getMapRenderDiagnostics;
+
     // Track how many errors we've seen so we can throttle logging.
     let _mapErrorCount = 0;
     const _MAX_LOGGED_ERRORS = 5; // Only log the first few, then go silent.
@@ -256,9 +294,18 @@ function initializeMap() {
             // Only log the first few errors to avoid flooding the console with
             // routine tile 404s (e.g. tiles outside server coverage).
             if (_mapErrorCount <= _MAX_LOGGED_ERRORS) {
-                console.warn('[MapLibre][Error]', msg);
+                console.warn(
+                    '[MapLibre][Error]',
+                    msg,
+                    Object.assign(
+                        { sourceId: evt?.sourceId, type: evt?.type },
+                        getMapRenderDiagnostics()
+                    )
+                );
             } else if (_mapErrorCount === _MAX_LOGGED_ERRORS + 1) {
                 console.warn(`[MapLibre] Suppressing further error logs (${_mapErrorCount}+ errors). Map may have tile coverage gaps.`);
+            } else if (_mapErrorCount > _MAX_LOGGED_ERRORS && _mapErrorCount % 25 === 0) {
+                console.warn(`[MapLibre][Error] periodic #${_mapErrorCount}`, getMapRenderDiagnostics());
             }
 
             // PWA worker URL resolution failure — switch to raster fallback.
@@ -348,12 +395,54 @@ function initializeMap() {
     }
     window.__voyagrMapResizeAndRepaint = voyagrMapResizeAndRepaint;
 
+    const __MAP_STYLE_RELOAD_MIN_GAP_MS = 120000;
+    const __MAP_MAX_STYLE_RELOADS = 4;
+    function voyagrMapSoftStyleReload(reason) {
+        if (!map || typeof map.getStyle !== 'function' || typeof map.setStyle !== 'function') return;
+        const now = Date.now();
+        if (now - (window.__voyagrLastMapStyleReloadTime || 0) < __MAP_STYLE_RELOAD_MIN_GAP_MS) {
+            return;
+        }
+        if ((window.__voyagrMapStyleReloadCount || 0) >= __MAP_MAX_STYLE_RELOADS) {
+            if (!window.__voyagrMapStyleReloadsExhaustedLogged) {
+                window.__voyagrMapStyleReloadsExhaustedLogged = true;
+                console.warn('[Map] Max soft style reloads reached; not retrying until page reload');
+            }
+            return;
+        }
+        window.__voyagrLastMapStyleReloadTime = now;
+        window.__voyagrMapStyleReloadCount = (window.__voyagrMapStyleReloadCount || 0) + 1;
+        console.warn(
+            '[Map] Soft style reload:',
+            reason,
+            `(${window.__voyagrMapStyleReloadCount}/${__MAP_MAX_STYLE_RELOADS})`
+        );
+        try {
+            const style = map.getStyle();
+            if (style) {
+                const clone = JSON.parse(JSON.stringify(style));
+                map.setStyle(clone, { diff: false });
+            } else if (window.__voyagrPreferredFallbackStyleUrl) {
+                map.setStyle(window.__voyagrPreferredFallbackStyleUrl, { diff: false });
+            }
+            requestAnimationFrame(() => voyagrMapResizeAndRepaint());
+        } catch (e) {
+            console.warn('[Map] Soft style reload failed', e);
+        }
+    }
+    window.__voyagrMapSoftStyleReload = voyagrMapSoftStyleReload;
+
     try {
         const glCanvas = typeof map.getCanvas === 'function' ? map.getCanvas() : null;
         if (glCanvas && glCanvas.addEventListener) {
             glCanvas.addEventListener(
                 'webglcontextlost',
                 (e) => {
+                    try {
+                        window.__voyagrMapWebGLLastLostAt = Date.now();
+                    } catch (err) {
+                        /* ignore */
+                    }
                     console.warn('[MapLibre] WebGL context lost; browser may restore it', e);
                     try {
                         e.preventDefault();
@@ -366,6 +455,11 @@ function initializeMap() {
             glCanvas.addEventListener(
                 'webglcontextrestored',
                 () => {
+                    try {
+                        window.__voyagrMapWebGLLastLostAt = 0;
+                    } catch (err) {
+                        /* ignore */
+                    }
                     console.warn('[MapLibre] WebGL context restored — resyncing map size and repaint');
                     voyagrMapResizeAndRepaint();
                 },
@@ -406,6 +500,29 @@ function initializeMap() {
                 console.warn('[Map] #map container has near-zero size; forcing resize');
             }
             voyagrMapResizeAndRepaint();
+
+            const gl = getMapWebGLContext();
+            if (gl && gl.isContextLost()) {
+                if (!window.__voyagrMapContextStuckAt) {
+                    window.__voyagrMapContextStuckAt = Date.now();
+                } else if (Date.now() - window.__voyagrMapContextStuckAt > 5000) {
+                    voyagrMapSoftStyleReload('webgl context lost >5s (heartbeat)');
+                    window.__voyagrMapContextStuckAt = 0;
+                }
+            } else {
+                window.__voyagrMapContextStuckAt = 0;
+            }
+
+            if (typeof map.isStyleLoaded === 'function' && !map.isStyleLoaded()) {
+                if (!window.__voyagrMapStyleStuckAt) {
+                    window.__voyagrMapStyleStuckAt = Date.now();
+                } else if (Date.now() - window.__voyagrMapStyleStuckAt > 45000) {
+                    voyagrMapSoftStyleReload('isStyleLoaded false for 45s+ (heartbeat)');
+                    window.__voyagrMapStyleStuckAt = 0;
+                }
+            } else {
+                window.__voyagrMapStyleStuckAt = 0;
+            }
         } catch (e) {
             /* ignore */
         }
