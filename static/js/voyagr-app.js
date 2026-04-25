@@ -17095,10 +17095,12 @@ function initMobileEnhancements() {
     });
 
     // BFCache / back-forward: page can restore without a full reload; map WebGL
-    // and dimensions must be refreshed the same as visibility.
+    // and dimensions must be refreshed. Run on any pageshow, not only bfcache.
     window.addEventListener('pageshow', (ev) => {
-        if (ev.persisted && typeof window.__voyagrMapResizeAndRepaint === 'function') {
-            console.log('[Mobile] pageshow (restored from bfcache) — resyncing map');
+        if (typeof window.__voyagrMapResizeAndRepaint === 'function') {
+            if (ev.persisted) {
+                console.log('[Mobile] pageshow (restored from bfcache) — resyncing map');
+            }
             window.__voyagrMapResizeAndRepaint();
         }
     });

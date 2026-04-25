@@ -6,6 +6,8 @@
 
 // ===== CORE VARIABLES =====
 let map = null;
+/** @type {ReturnType<typeof setInterval> | null} */
+let _mapRenderHeartbeatId = null;
 let routeLayer = null;
 let startMarker = null;
 let endMarker = null;
@@ -373,6 +375,51 @@ function initializeMap() {
     } catch (e) {
         /* non-fatal */
     }
+
+    // Long drive / mobile: WebGL and canvas size can drift or stall without user interaction
+    // (no visibility toggle). A periodic resize+repaint prevents "map vanished after ~10+ min" reports.
+    if (!window.__voyagrMapFocusHandlerAdded) {
+        window.__voyagrMapFocusHandlerAdded = true;
+        window.addEventListener(
+            'focus',
+            () => {
+                try {
+                    voyagrMapResizeAndRepaint();
+                } catch (e) {
+                    /* ignore */
+                }
+            },
+            { passive: true }
+        );
+    }
+    if (_mapRenderHeartbeatId) {
+        clearInterval(_mapRenderHeartbeatId);
+        _mapRenderHeartbeatId = null;
+    }
+    const MAP_RENDER_HEARTBEAT_MS = 90000; // 90s — balance battery vs recovery on long sessions
+    _mapRenderHeartbeatId = setInterval(() => {
+        try {
+            if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+            if (!map) return;
+            const el = map.getContainer && map.getContainer();
+            if (el && (el.offsetWidth < 2 || el.offsetHeight < 2)) {
+                console.warn('[Map] #map container has near-zero size; forcing resize');
+            }
+            voyagrMapResizeAndRepaint();
+        } catch (e) {
+            /* ignore */
+        }
+    }, MAP_RENDER_HEARTBEAT_MS);
+    window.addEventListener(
+        'beforeunload',
+        () => {
+            if (_mapRenderHeartbeatId) {
+                clearInterval(_mapRenderHeartbeatId);
+                _mapRenderHeartbeatId = null;
+            }
+        },
+        { once: true, capture: true }
+    );
 
     // Attempt to center on current location on load
     if (navigator.geolocation) {
