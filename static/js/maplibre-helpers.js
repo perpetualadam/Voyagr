@@ -9,6 +9,53 @@ let layerCounter = 0;
 const activeLayers = new Map();
 const activeMarkers = new Map();
 
+/**
+ * Widen the base map road strokes (vector tiles). OpenMapTiles / Liberty put drivable
+ * roads in the `transportation` source-layer. We wrap each `line-width` in ['*', factor, …]
+ * so existing zoom interpolation is preserved. Skips our GeoJSON route overlays.
+ * @param {import('maplibre-gl').Map} mapInstance
+ * @param {number} [factor=2]
+ */
+function applyTransportationRoadLineWidthScale(mapInstance, factor) {
+    if (!mapInstance || typeof mapInstance.getStyle !== 'function') return;
+    if (!mapInstance.isStyleLoaded()) {
+        mapInstance.once('style.load', () => applyTransportationRoadLineWidthScale(mapInstance, factor));
+        return;
+    }
+    const f = Math.max(1, Math.min(4, Number(factor) || 2));
+    const style = mapInstance.getStyle();
+    if (!style || !style.layers || !style.sources) return;
+    let changed = 0;
+    for (const layer of style.layers) {
+        if (layer.type !== 'line') continue;
+        const id = layer.id;
+        if (!id) continue;
+        if (id.startsWith('route-layer-') || id.startsWith('polyline-') || id.startsWith('multidrop-leg-')) {
+            continue;
+        }
+        const src = layer.source;
+        const srcSpec = style.sources[src];
+        if (srcSpec && srcSpec.type === 'geojson') continue;
+        if (layer['source-layer'] !== 'transportation') continue;
+        try {
+            const w = mapInstance.getPaintProperty(id, 'line-width');
+            if (w === undefined) continue;
+            if (Array.isArray(w) && w[0] === '*' && w[1] === f) {
+                continue;
+            }
+            mapInstance.setPaintProperty(id, 'line-width', ['*', f, w]);
+            changed += 1;
+        } catch (e) {
+            /* layer may be locked or not support paint updates */
+        }
+    }
+    if (changed > 0) {
+        console.log(
+            `[MapLibre] Base road line-width scaled ×${f} on ${changed} transportation layer(s).`
+        );
+    }
+}
+
 // ===== POLYLINE FUNCTIONS =====
 
 /**
@@ -1060,6 +1107,7 @@ function setRoadLabelZoomFilters(mapInstance, options = {}) {
 // ===== EXPORTS (global scope) =====
 window.MapLibreHelpers = {
     buildZoomScaledLineWidth,
+    applyTransportationRoadLineWidthScale,
     addPolyline,
     removeMapLayer,
     createMarker,

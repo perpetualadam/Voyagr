@@ -301,6 +301,16 @@ function initializeMap() {
     // After initial load and after any style switch, validate the style supports labels.
     map.once('load', validateStyleHasLabels);
     map.on('style.load', validateStyleHasLabels);
+    // Thicker on-screen base map roads (OMT `transportation`); does not affect route polylines.
+    map.on('style.load', () => {
+        try {
+            if (window.MapLibreHelpers && typeof window.MapLibreHelpers.applyTransportationRoadLineWidthScale === 'function') {
+                window.MapLibreHelpers.applyTransportationRoadLineWidthScale(map, 2);
+            }
+        } catch (e) {
+            /* non-fatal */
+        }
+    });
 
     // Handle missing images (POI icons) by providing a transparent placeholder
     // This suppresses "Image 'x' could not be loaded" errors in the console
