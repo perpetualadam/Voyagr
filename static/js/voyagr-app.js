@@ -11008,27 +11008,32 @@ window.addEventListener('load', () => {
 
 // ===== TILE PRE-CACHING FOR ROUTE CORRIDORS =====
 /**
- * Read actual vector tile URL templates from the active MapLibre style (same URLs the map loads).
- * Avoids hardcoded /map/data/gb/... which often 404 when the dataset path differs (e.g. v3 vs gb).
+ * Read vector tile URL templates plus each source minzoom/maxzoom from the active MapLibre style.
+ * Prefetch clamps desired zoom to maxzoom so we do not request tiles the renderer never loads (overzoom).
+ */
+/**
+ * @returns {Array<{ template: string, minzoom: number, maxzoom: number }>}
  */
 function collectVectorTileTemplatesFromMap() {
     if (typeof map === 'undefined' || map === null) return [];
     if (typeof map.isStyleLoaded === 'function' && !map.isStyleLoaded()) return [];
     try {
         const style = map.getStyle();
-        const templates = [];
+        const entries = [];
         const sources = style && style.sources ? style.sources : {};
         for (const key of Object.keys(sources)) {
             const src = sources[key];
             if (!src || src.type !== 'vector' || !Array.isArray(src.tiles)) continue;
+            const minzoom = typeof src.minzoom === 'number' ? src.minzoom : 0;
+            const maxzoom = typeof src.maxzoom === 'number' ? src.maxzoom : 22;
             for (const t of src.tiles) {
                 if (typeof t !== 'string') continue;
                 if (/\{z\}/i.test(t) && /\{x\}/i.test(t) && /\{y\}/i.test(t)) {
-                    templates.push(t);
+                    entries.push({ template: t, minzoom, maxzoom });
                 }
             }
         }
-        return [...new Set(templates)];
+        return entries;
     } catch (e) {
         console.warn('[TilePreCache] Could not read map style:', e);
         return [];
@@ -11059,11 +11064,13 @@ async function precacheRouteTiles(polyline) {
     for (let i = 0; i < polyline.length; i += sampleInterval) {
         const [lat, lon] = polyline[i];
         for (const z of zoomLevels) {
-            const x = Math.floor((lon + 180) / 360 * Math.pow(2, z));
-            const latRad = lat * Math.PI / 180;
-            const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, z));
-            for (const tpl of templates) {
-                tileUrls.add(expandTileTemplate(tpl, z, x, y));
+            for (const { template: tpl, minzoom: srcMin, maxzoom: srcMax } of templates) {
+                // Match MapLibre: above source maxzoom it loads parent tiles (overzoom), never requests z+1 from server.
+                const zFetch = Math.min(Math.max(z, srcMin), srcMax);
+                const x = Math.floor((lon + 180) / 360 * Math.pow(2, zFetch));
+                const latRad = lat * Math.PI / 180;
+                const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, zFetch));
+                tileUrls.add(expandTileTemplate(tpl, zFetch, x, y));
             }
         }
     }
@@ -11080,7 +11087,7 @@ async function precacheRouteTiles(polyline) {
         console.log(`[TilePreCache] Capping prefetch ${urls.length} → ${maxPrefetch} URLs`);
     }
 
-    console.log(`[TilePreCache] Pre-caching ${capped.length} tiles (${templates.length} template(s)) along route corridor`);
+    console.log(`[TilePreCache] Pre-caching ${capped.length} tiles (${templates.length} source template(s)) along route corridor`);
 
     try {
         const cacheNames = await caches.keys();

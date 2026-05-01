@@ -4430,7 +4430,7 @@ HTML_TEMPLATE = '''
        is no longer bundled — its legacy code paths in voyagr-app.js short-circuit
        safely when `PorcupineWeb` is undefined (see picovoiceClientConfigured()). #}
     <script defer src="/static/js/sherpa-kws-map-runtime.js?v=20260423b"></script>
-    <script defer src="/static/js/voyagr-app.js?v=20260501a"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260501b"></script>
     <script defer src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
