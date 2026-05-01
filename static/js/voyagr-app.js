@@ -8825,6 +8825,73 @@ let speedWidgetEnabled = localStorage.getItem('speedWidgetEnabled') !== 'false';
 let currentSpeedMph = 0;
 let currentSpeedLimitMph = 0;
 let speedLimitThreshold = 3; // mph over limit to trigger warning
+/** Min time between spoken speed-limit warnings while still exceeding (avoids GPS spam). */
+const SPEED_WIDGET_VIOLATION_SPEAK_COOLDOWN_MS = 14000;
+let _speedWidgetLastViolationSpeakAt = 0;
+/** Lazily created Web Audio context for speed-alert chime (shared, reused). */
+let _speedViolationAudioCtx = null;
+
+/**
+ * Short two-tone chime when exceeding speed limit (runs even if voice TTS is off).
+ */
+function playSpeedViolationChime() {
+    try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return;
+        if (!_speedViolationAudioCtx || _speedViolationAudioCtx.state === 'closed') {
+            _speedViolationAudioCtx = new AC();
+        }
+        const ctx = _speedViolationAudioCtx;
+        const run = () => {
+            const t0 = ctx.currentTime;
+            const tones = [880, 660];
+            tones.forEach((freq, i) => {
+                const osc = ctx.createOscillator();
+                const g = ctx.createGain();
+                osc.type = 'sine';
+                const offset = i * 0.09;
+                osc.frequency.setValueAtTime(freq, t0 + offset);
+                g.gain.setValueAtTime(0.0001, t0 + offset);
+                g.gain.linearRampToValueAtTime(0.14, t0 + offset + 0.015);
+                g.gain.linearRampToValueAtTime(0.0001, t0 + offset + 0.075);
+                osc.connect(g);
+                g.connect(ctx.destination);
+                osc.start(t0 + offset);
+                osc.stop(t0 + offset + 0.085);
+            });
+        };
+        if (ctx.state === 'suspended') {
+            ctx.resume().then(run).catch(() => {});
+        } else {
+            run();
+        }
+    } catch (_e) {
+        /* autoplay / unsupported — ignore */
+    }
+}
+
+/**
+ * Chime + optional speech when the speed widget shows exceeding (shared cooldown).
+ * Chime plays whenever we alert; TTS only if voice announcements are enabled.
+ * Speech uses high priority so minimal/important voice modes still allow safety warnings.
+ */
+function maybeAlertSpeedLimitViolation(speedDiffMph) {
+    const now = Date.now();
+    if (now - _speedWidgetLastViolationSpeakAt < SPEED_WIDGET_VIOLATION_SPEAK_COOLDOWN_MS) {
+        return;
+    }
+    _speedWidgetLastViolationSpeakAt = now;
+    playSpeedViolationChime();
+
+    if (typeof voiceAnnouncementsEnabled === 'undefined' || !voiceAnnouncementsEnabled) {
+        return;
+    }
+    const unit = getSpeedUnit();
+    const diffDisplay = speedUnit === 'mph'
+        ? Math.round(speedDiffMph)
+        : Math.round(speedDiffMph * 1.60934);
+    speakMessage(`Warning: you are over the speed limit by ${diffDisplay} ${unit}`, 'high');
+}
 
 // GPS speed tracking (FIX: Global variable to store current GPS speed)
 let currentGpsSpeedMph = 0;
@@ -8893,9 +8960,11 @@ function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
         if (speedDiff > speedLimitThreshold) {
             warningElement.style.display = 'block';
             widget.style.borderLeft = '4px solid #FF5722';
+            maybeAlertSpeedLimitViolation(speedDiff);
         } else {
             warningElement.style.display = 'none';
             widget.style.borderLeft = '4px solid #4CAF50';
+            _speedWidgetLastViolationSpeakAt = 0;
         }
     } else {
         // No speed limit data available - show '?' instead of '--'
@@ -8903,6 +8972,7 @@ function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
         document.getElementById('speedLimitUnit').textContent = displaySpeedUnit;
         document.getElementById('speedWarning').style.display = 'none';
         widget.style.borderLeft = '4px solid #999';
+        _speedWidgetLastViolationSpeakAt = 0;
         console.log('[Speed Widget] No speed limit available');
     }
 
