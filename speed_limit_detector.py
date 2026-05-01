@@ -1,8 +1,13 @@
 """
 Speed Limit Detection Module for Voyagr
-Posted limits only: OSM maxspeed (Overpass) first, then TomTom Snap to Roads.
-No regional defaults, highway-type inference, traffic-flow guesses,
-smart-motorway simulation, or vehicle-type caps.
+Posted limits: OSM maxspeed (Overpass) first, then TomTom Snap to Roads when Overpass
+fails or returns nearby highways without a usable maxspeed tag.
+Optional cross-check (SPEED_LIMIT_SNAP_CROSSCHECK): after an OSM hit, call Snap
+for metrics/logging only; OSM remains authoritative for the returned limit.
+When both OSM and TomTom yield no posted limit, optional regional defaults by
+road class (SPEED_LIMIT_ROAD_TYPE_FALLBACK, default on) use DEFAULT_SPEED_* tables.
+Configure Overpass radius with OVERPASS_SPEED_AROUND_METERS (default 30).
+No traffic-flow guesses, smart-motorway simulation, or vehicle-type caps on posted limits.
 """
 
 import json
@@ -183,6 +188,53 @@ def _parse_osm_maxspeed_to_mph(speed_str: str, region: str) -> Optional[int]:
     return int(round(val * 0.621371))
 
 
+def _snap_crosscheck_enabled() -> bool:
+    v = os.getenv('SPEED_LIMIT_SNAP_CROSSCHECK', '').strip().lower()
+    return v in ('1', 'true', 'yes')
+
+
+def _snap_crosscheck_tolerance_mph() -> int:
+    raw = os.getenv('SPEED_LIMIT_SNAP_CROSSCHECK_TOLERANCE_MPH', '2').strip()
+    try:
+        n = int(raw)
+        return max(0, min(n, 15))
+    except ValueError:
+        return 2
+
+
+def overpass_speed_around_meters() -> int:
+    """Overpass way(around:N,lat,lon) radius in meters; clamp for safety."""
+    raw = os.getenv('OVERPASS_SPEED_AROUND_METERS', '30').strip()
+    try:
+        n = int(float(raw))
+        return max(10, min(n, 120))
+    except ValueError:
+        return 30
+
+
+def road_type_speed_fallback_enabled() -> bool:
+    """When false, unknown posted limit stays None (no DEFAULT_SPEED_* inference)."""
+    v = os.getenv('SPEED_LIMIT_ROAD_TYPE_FALLBACK', 'true').strip().lower()
+    return v not in ('0', 'false', 'no', 'off')
+
+
+def infer_speed_limit_mph_from_road_type(road_type: str, region: str) -> Optional[int]:
+    """
+    Regional default mph by road class when OSM/TomTom post no limit.
+    Uses DEFAULT_SPEED_BY_REGION after ROAD_TYPE_ALIASES normalization.
+    """
+    if not road_type_speed_fallback_enabled():
+        return None
+    norm = _normalize_road_type((road_type or '').strip() or 'residential')
+    table = DEFAULT_SPEED_BY_REGION.get(region) or DEFAULT_SPEED_BY_REGION['metric']
+    mph = table.get(norm)
+    if mph is None:
+        mph = table.get('unclassified') or table.get('residential')
+    if mph is None:
+        return None
+    return int(mph)
+
+
 def _snap_tomtom_kmh_to_mph(speed_kmh: float, region: str) -> int:
     """Round TomTom km/h limit to a plausible signed speed in mph for the region."""
     speed_mph = speed_kmh * 0.621371
@@ -250,6 +302,11 @@ class SpeedLimitDetector:
             logger.info(f"[Speed Limit] Public Overpass - rate limit: {self.overpass_rate_limit} req/s")
 
         self.overpass_last_request = 0
+        self.overpass_speed_around_meters = overpass_speed_around_meters()
+        logger.info(
+            f"[Speed Limit] Overpass highway query radius: {self.overpass_speed_around_meters}m "
+            f"(OVERPASS_SPEED_AROUND_METERS)"
+        )
 
         # Speed limit change detection
         self.last_location = None  # (lat, lon) tuple for change detection
@@ -266,6 +323,12 @@ class SpeedLimitDetector:
             'overpass_maxspeed_hits': 0,
             'overpass_highway_inferred': 0,
             'overpass_failures': 0,
+            'overpass_nearby_no_usable_maxspeed': 0,
+            'snap_crosscheck_invocations': 0,
+            'snap_crosscheck_agree': 0,
+            'snap_crosscheck_disagree': 0,
+            'snap_crosscheck_no_snap_limit': 0,
+            'road_type_fallback_hits': 0,
             'cache_hits': 0,
             'cache_misses': 0,
             'default_fallbacks': 0,
@@ -411,7 +474,8 @@ class SpeedLimitDetector:
 
         Returns:
             dict: Speed limit information with change detection.
-            speed_limit_mph may be None when no posted limit is available.
+            speed_limit_mph may be None only if road-type fallback is disabled and no OSM/TomTom data.
+            source / posted_limit_source indicate OSM-maxspeed, TomTom-SnapToRoads, road-type-default, etc.
         """
         try:
             # Track total requests
@@ -426,7 +490,9 @@ class SpeedLimitDetector:
                 else {'is_smart_motorway': False, 'motorway_name': None}
             )
 
-            speed_limit = self._get_tomtom_or_osm_posted_limit(lat, lon, region)
+            speed_limit, posted_source = self._get_tomtom_or_osm_posted_limit(
+                lat, lon, region, road_type
+            )
 
             # Detect speed limit changes (skip first-ever / unknown→unknown)
             speed_limit_changed = False
@@ -456,6 +522,8 @@ class SpeedLimitDetector:
                 'motorway_name': smart_motorway_info.get('motorway_name'),
                 'speed_limit_changed': speed_limit_changed,
                 'previous_speed_limit_mph': self.previous_speed_limit,
+                'posted_limit_source': posted_source,
+                'source': posted_source,
                 'timestamp': int(time.time())
             }
         except Exception as e:
@@ -466,6 +534,8 @@ class SpeedLimitDetector:
                 'road_type': road_type,
                 'vehicle_type': vehicle_type,
                 'error': str(e),
+                'posted_limit_source': 'error',
+                'source': 'error',
                 'timestamp': int(time.time())
             }
     
@@ -513,9 +583,107 @@ class SpeedLimitDetector:
         except Exception as e:
             logger.error(f"Error getting smart motorway speed limit: {e}")
             return 70
-    
-    def _get_tomtom_or_osm_posted_limit(self, lat: float, lon: float, region: str) -> Optional[int]:
-        """OSM maxspeed (Overpass) first, then TomTom Snap to Roads. Returns None if unknown."""
+
+    def _tomtom_snap_speed_limit_mph(self, lat: float, lon: float, region: str) -> Optional[int]:
+        """TomTom Snap to Roads posted limit only; does not read/write LRU cache."""
+        tomtom_api_key = os.getenv('TOMTOM_API_KEY')
+        if not tomtom_api_key:
+            return None
+        try:
+            self.metrics['tomtom_snap_to_roads_calls'] += 1
+
+            offset = 0.0005  # ~50 meters
+            points_str = f"{lon},{lat};{lon+offset},{lat+offset}"
+
+            snap_url = "https://api.tomtom.com/snapToRoads/1"
+            params = {
+                'key': tomtom_api_key,
+                'points': points_str,
+                'headings': '0;0',
+                'timestamps': '2021-01-01T00:00:00Z;2021-01-01T00:01:00Z',
+                'fields': '{route{properties{speedLimits{value,unit,type}}}}',
+                'vehicleType': 'PassengerCar',
+                'measurementSystem': 'metric'
+            }
+
+            response = requests.get(snap_url, params=params, timeout=3)
+
+            if response.status_code == 200:
+                snap_data = response.json()
+
+                if 'route' in snap_data:
+                    route_features = snap_data['route']
+                    if isinstance(route_features, list) and len(route_features) > 0:
+                        segment = route_features[0]
+                        if 'properties' in segment and 'speedLimits' in segment['properties']:
+                            speed_limit_data = segment['properties']['speedLimits']
+                            if isinstance(speed_limit_data, dict):
+                                speed_limit_kmh = speed_limit_data.get('value', 0)
+
+                                if speed_limit_kmh > 0:
+                                    speed_limit = _snap_tomtom_kmh_to_mph(float(speed_limit_kmh), region)
+
+                                    self.metrics['tomtom_snap_to_roads_success'] += 1
+                                    self._track_tomtom_call(success=True)
+
+                                    logger.info(
+                                        f"[Speed Limit] TomTom Snap to Roads: {speed_limit_kmh} km/h -> {speed_limit} mph"
+                                    )
+                                    return speed_limit
+
+                self.metrics['tomtom_snap_to_roads_failures'] += 1
+                logger.warning("[Speed Limit] TomTom Snap to Roads returned no speed limit data")
+            else:
+                self.metrics['tomtom_snap_to_roads_failures'] += 1
+                logger.warning(
+                    f"[Speed Limit] TomTom Snap to Roads API error: status={response.status_code}"
+                )
+        except requests.exceptions.Timeout:
+            self.metrics['tomtom_snap_to_roads_failures'] += 1
+            logger.warning("[Speed Limit] TomTom Snap to Roads API timeout (3s)")
+        except Exception as e:
+            self.metrics['tomtom_snap_to_roads_failures'] += 1
+            logger.error(f"[Speed Limit] TomTom Snap to Roads failed: {e}")
+        return None
+
+    def _maybe_crosscheck_osm_vs_snap(self, osm_mph: int, lat: float, lon: float, region: str) -> None:
+        """Optional Snap call after OSM hit for metrics/logging only; OSM stays authoritative."""
+        if not _snap_crosscheck_enabled():
+            return
+        if not os.getenv('TOMTOM_API_KEY'):
+            logger.debug("[Speed Limit] Snap cross-check skipped: no TOMTOM_API_KEY")
+            return
+
+        self.metrics['snap_crosscheck_invocations'] += 1
+        tol = _snap_crosscheck_tolerance_mph()
+        snap_mph = self._tomtom_snap_speed_limit_mph(lat, lon, region)
+
+        if snap_mph is None:
+            self.metrics['snap_crosscheck_no_snap_limit'] += 1
+            logger.info(f"[Speed Limit] Snap cross-check: OSM={osm_mph} mph, Snap=no usable limit")
+            return
+
+        diff = abs(snap_mph - osm_mph)
+        if diff <= tol:
+            self.metrics['snap_crosscheck_agree'] += 1
+            logger.info(
+                f"[Speed Limit] Snap cross-check agree: OSM={osm_mph} mph, Snap={snap_mph} mph (Δ={diff})"
+            )
+        else:
+            self.metrics['snap_crosscheck_disagree'] += 1
+            logger.warning(
+                f"[Speed Limit] Snap cross-check disagree: OSM={osm_mph} mph vs Snap={snap_mph} mph "
+                f"(Δ={diff}); keeping OSM as posted limit"
+            )
+
+    def _get_tomtom_or_osm_posted_limit(
+        self,
+        lat: float,
+        lon: float,
+        region: str,
+        road_type: str = 'residential',
+    ) -> Tuple[Optional[int], str]:
+        """OSM maxspeed (Overpass), TomTom Snap, then optional DEFAULT_SPEED_* by road class."""
         # Periodic cache cleanup (every 100 requests)
         if len(self.speed_limit_cache) % 100 == 0:
             self._cleanup_expired_cache()
@@ -528,16 +696,33 @@ class SpeedLimitDetector:
                     self.speed_limit_cache.move_to_end(cache_key)
                     self.metrics['cache_hits'] += 1
                     lim = cached_data.get('speed_limit')
+                    src = cached_data.get('source', 'cache')
                     disp = 'unknown' if lim is None else f'{lim} mph'
                     logger.info(
-                        f"[Speed Limit] Cache hit: {disp} (source: {cached_data.get('source', 'unknown')})"
+                        f"[Speed Limit] Cache hit: {disp} (source: {src})"
                     )
-                    return lim
+                    if lim is None:
+                        inferred = infer_speed_limit_mph_from_road_type(road_type, region)
+                        if inferred is not None:
+                            self.metrics['road_type_fallback_hits'] += 1
+                            self._add_to_cache(cache_key, {
+                                'speed_limit': inferred,
+                                'timestamp': time.time(),
+                                'source': 'road-type-default'
+                            })
+                            logger.info(
+                                f"[Speed Limit] Cached unknown posted limit; road-type fallback "
+                                f"{inferred} mph ({road_type})"
+                            )
+                            return inferred, 'road-type-default'
+                    return lim, src
                 del self.speed_limit_cache[cache_key]
         except Exception as e:
             logger.error(f"[Speed Limit] Cache check failed: {e}")
 
         self.metrics['cache_misses'] += 1
+
+        around_m = self.overpass_speed_around_meters
 
         try:
             self.metrics['overpass_calls'] += 1
@@ -550,7 +735,7 @@ class SpeedLimitDetector:
             # parallel motorway/trunk with a higher highway=* rank but farther away.
             query = f"""
             [out:json][timeout:8];
-            way(around:45,{lat},{lon})[highway];
+            way(around:{around_m},{lat},{lon})[highway];
             out center tags;
             """
 
@@ -578,18 +763,20 @@ class SpeedLimitDetector:
                     best_explicit = None
                     best_dist_km = float('inf')
                     best_rank = -1  # highway class tie-break when distances are equal
+                    seen_drivable_center = False
 
                     for element in elements:
                         tags = element.get('tags', {})
                         hw = tags.get('highway', '')
                         if hw in excluded_hw:
                             continue
-                        if 'maxspeed' not in tags:
-                            continue
                         center = element.get('center') or {}
                         c_lat = center.get('lat')
                         c_lon = center.get('lon')
                         if c_lat is None or c_lon is None:
+                            continue
+                        seen_drivable_center = True
+                        if 'maxspeed' not in tags:
                             continue
                         dist_km = self._haversine_distance(lat, lon, float(c_lat), float(c_lon))
                         rank = HIGHWAY_RANK.get(hw, 0)
@@ -608,16 +795,24 @@ class SpeedLimitDetector:
 
                     if best_explicit is not None:
                         self.metrics['overpass_maxspeed_hits'] += 1
+                        logger.info(
+                            f"[Speed Limit] OSM maxspeed (closest way ~{best_dist_km * 1000:.0f}m): "
+                            f"{best_explicit} mph"
+                        )
+                        self._maybe_crosscheck_osm_vs_snap(best_explicit, lat, lon, region)
                         self._add_to_cache(cache_key, {
                             'speed_limit': best_explicit,
                             'timestamp': time.time(),
                             'source': 'OSM-maxspeed'
                         })
+                        return best_explicit, 'OSM-maxspeed'
+
+                    if seen_drivable_center:
+                        self.metrics['overpass_nearby_no_usable_maxspeed'] += 1
                         logger.info(
-                            f"[Speed Limit] OSM maxspeed (closest way ~{best_dist_km * 1000:.0f}m): "
-                            f"{best_explicit} mph"
+                            "[Speed Limit] OSM: nearby highway ways but no usable maxspeed tag; "
+                            "trying TomTom Snap"
                         )
-                        return best_explicit
                 else:
                     self.metrics['overpass_failures'] += 1
                     logger.warning("[Speed Limit] OSM returned no highway elements nearby")
@@ -626,78 +821,39 @@ class SpeedLimitDetector:
                 logger.warning(f"[Speed Limit] OSM API error: status={response.status_code}")
         except requests.exceptions.Timeout:
             self.metrics['overpass_failures'] += 1
-            logger.warning("[Speed Limit] OSM API timeout (5s)")
+            logger.warning("[Speed Limit] OSM API timeout (8s)")
         except Exception as e:
             self.metrics['overpass_failures'] += 1
             logger.error(f"[Speed Limit] OSM failed: {e}")
 
-        tomtom_api_key = os.getenv('TOMTOM_API_KEY')
-        if tomtom_api_key:
-            try:
-                self.metrics['tomtom_snap_to_roads_calls'] += 1
+        snap_limit = self._tomtom_snap_speed_limit_mph(lat, lon, region)
+        if snap_limit is not None:
+            self._add_to_cache(cache_key, {
+                'speed_limit': snap_limit,
+                'timestamp': time.time(),
+                'source': 'TomTom-SnapToRoads'
+            })
+            return snap_limit, 'TomTom-SnapToRoads'
 
-                offset = 0.0005  # ~50 meters
-                points_str = f"{lon},{lat};{lon+offset},{lat+offset}"
-
-                snap_url = "https://api.tomtom.com/snapToRoads/1"
-                params = {
-                    'key': tomtom_api_key,
-                    'points': points_str,
-                    'headings': '0;0',
-                    'timestamps': '2021-01-01T00:00:00Z;2021-01-01T00:01:00Z',
-                    'fields': '{route{properties{speedLimits{value,unit,type}}}}',
-                    'vehicleType': 'PassengerCar',
-                    'measurementSystem': 'metric'
-                }
-
-                response = requests.get(snap_url, params=params, timeout=3)
-
-                if response.status_code == 200:
-                    snap_data = response.json()
-
-                    if 'route' in snap_data:
-                        route_features = snap_data['route']
-                        if isinstance(route_features, list) and len(route_features) > 0:
-                            segment = route_features[0]
-                            if 'properties' in segment and 'speedLimits' in segment['properties']:
-                                speed_limit_data = segment['properties']['speedLimits']
-                                if isinstance(speed_limit_data, dict):
-                                    speed_limit_kmh = speed_limit_data.get('value', 0)
-
-                                    if speed_limit_kmh > 0:
-                                        speed_limit = _snap_tomtom_kmh_to_mph(float(speed_limit_kmh), region)
-
-                                        self.metrics['tomtom_snap_to_roads_success'] += 1
-                                        self._track_tomtom_call(success=True)
-
-                                        self._add_to_cache(cache_key, {
-                                            'speed_limit': speed_limit,
-                                            'timestamp': time.time(),
-                                            'source': 'TomTom-SnapToRoads'
-                                        })
-                                        logger.info(
-                                            f"[Speed Limit] TomTom Snap to Roads: {speed_limit_kmh} km/h -> {speed_limit} mph"
-                                        )
-                                        return speed_limit
-
-                    self.metrics['tomtom_snap_to_roads_failures'] += 1
-                    logger.warning("[Speed Limit] TomTom Snap to Roads returned no speed limit data")
-                else:
-                    self.metrics['tomtom_snap_to_roads_failures'] += 1
-                    logger.warning(
-                        f"[Speed Limit] TomTom Snap to Roads API error: status={response.status_code}"
-                    )
-            except requests.exceptions.Timeout:
-                self.metrics['tomtom_snap_to_roads_failures'] += 1
-                logger.warning("[Speed Limit] TomTom Snap to Roads API timeout (3s)")
-            except Exception as e:
-                self.metrics['tomtom_snap_to_roads_failures'] += 1
-                logger.error(f"[Speed Limit] TomTom Snap to Roads failed: {e}")
-        else:
+        if not os.getenv('TOMTOM_API_KEY'):
             logger.info("[Speed Limit] No TOMTOM_API_KEY configured, skipping TomTom")
 
+        inferred = infer_speed_limit_mph_from_road_type(road_type, region)
+        if inferred is not None:
+            self.metrics['road_type_fallback_hits'] += 1
+            self._add_to_cache(cache_key, {
+                'speed_limit': inferred,
+                'timestamp': time.time(),
+                'source': 'road-type-default'
+            })
+            logger.info(
+                f"[Speed Limit] Road-type default ({road_type} → {_normalize_road_type(road_type)}): "
+                f"{inferred} mph"
+            )
+            return inferred, 'road-type-default'
+
         self.metrics['default_fallbacks'] += 1
-        logger.info("[Speed Limit] No posted limit from OSM maxspeed or TomTom Snap to Roads")
+        logger.info("[Speed Limit] No posted limit from OSM/TomTom and road-type fallback disabled or unknown class")
 
         self._add_to_cache(cache_key, {
             'speed_limit': None,
@@ -705,7 +861,7 @@ class SpeedLimitDetector:
             'source': 'none'
         })
 
-        return None
+        return None, 'none'
 
     def _update_speed_limit(self, new_speed_limit: Optional[int]):
         """Update current speed limit and detect changes."""
@@ -818,16 +974,29 @@ class SpeedLimitDetector:
                 'total_calls': self.metrics['overpass_calls'],
                 'maxspeed_hits': self.metrics['overpass_maxspeed_hits'],
                 'highway_inferred': self.metrics['overpass_highway_inferred'],
+                'nearby_no_usable_maxspeed': self.metrics['overpass_nearby_no_usable_maxspeed'],
                 'failures': self.metrics['overpass_failures'],
                 'success_rate': round(self.metrics['overpass_maxspeed_hits'] / self.metrics['overpass_calls'] * 100, 1) if self.metrics['overpass_calls'] > 0 else 0,
                 'rate_limit': self.overpass_rate_limit,
-                'is_local': self.overpass_rate_limit == 0.0
+                'is_local': self.overpass_rate_limit == 0.0,
+                'speed_query_radius_m': self.overpass_speed_around_meters,
+                'road_type_fallback_enabled': road_type_speed_fallback_enabled(),
+                'road_type_fallback_hits': self.metrics['road_type_fallback_hits'],
+            },
+            'snap_crosscheck': {
+                'enabled_hint': _snap_crosscheck_enabled(),
+                'tolerance_mph': _snap_crosscheck_tolerance_mph(),
+                'invocations': self.metrics['snap_crosscheck_invocations'],
+                'agree': self.metrics['snap_crosscheck_agree'],
+                'disagree': self.metrics['snap_crosscheck_disagree'],
+                'snap_no_limit': self.metrics['snap_crosscheck_no_snap_limit'],
             },
             'sources': {
                 'tomtom_snap_to_roads_percentage': round(self.metrics['tomtom_snap_to_roads_success'] / total * 100, 1) if total > 0 else 0,
                 'tomtom_traffic_flow_percentage': round(self.metrics['tomtom_traffic_flow_success'] / total * 100, 1) if total > 0 else 0,
                 'overpass_maxspeed_percentage': round(self.metrics['overpass_maxspeed_hits'] / total * 100, 1) if total > 0 else 0,
                 'overpass_inferred_percentage': round(self.metrics['overpass_highway_inferred'] / total * 100, 1) if total > 0 else 0,
+                'road_type_fallback_percentage': round(self.metrics['road_type_fallback_hits'] / total * 100, 1) if total > 0 else 0,
                 'default_fallback_percentage': round(self.metrics['default_fallbacks'] / total * 100, 1) if total > 0 else 0
             },
             'speed_limit_changes': self.metrics['speed_limit_changes']
@@ -862,6 +1031,12 @@ class SpeedLimitDetector:
             'overpass_maxspeed_hits': 0,
             'overpass_highway_inferred': 0,
             'overpass_failures': 0,
+            'overpass_nearby_no_usable_maxspeed': 0,
+            'snap_crosscheck_invocations': 0,
+            'snap_crosscheck_agree': 0,
+            'snap_crosscheck_disagree': 0,
+            'snap_crosscheck_no_snap_limit': 0,
+            'road_type_fallback_hits': 0,
             'cache_hits': 0,
             'cache_misses': 0,
             'default_fallbacks': 0,

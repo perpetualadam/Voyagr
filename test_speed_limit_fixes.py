@@ -219,6 +219,7 @@ class TestAPIIntegration(unittest.TestCase):
         mock_response.status_code = 200
         mock_response.json.return_value = {
             'elements': [{
+                'center': {'lat': 51.5074, 'lon': -0.1278},
                 'tags': {'highway': 'residential', 'maxspeed': '30 mph'}
             }]
         }
@@ -236,16 +237,112 @@ class TestAPIIntegration(unittest.TestCase):
         print("\n[TEST] No default speed limit when APIs fail...")
 
         # Mock all API calls to fail
-        with patch('speed_limit_detector.requests.get') as mock_get:
-            mock_get.side_effect = Exception("API unavailable")
+        with patch.dict(os.environ, {'SPEED_LIMIT_ROAD_TYPE_FALLBACK': 'false'}, clear=False):
+            with patch('speed_limit_detector.requests.get') as mock_get:
+                mock_get.side_effect = Exception("API unavailable")
 
-            result = self.detector.get_speed_limit_for_location(
+                result = self.detector.get_speed_limit_for_location(
+                    51.5074, -0.1278, road_type='residential'
+                )
+
+                speed_limit = result.get('speed_limit_mph') if isinstance(result, dict) else result
+                self.assertIsNone(speed_limit, "Should not invent a limit without TomTom/OSM maxspeed")
+                print("   ✅ PASS: Unknown limit when no posted data")
+
+
+class TestOsmSnapPipeline(unittest.TestCase):
+    """OSM-first pipeline: Snap fallback when no usable maxspeed; optional cross-check."""
+
+    def test_snap_fallback_when_nearby_highway_has_no_maxspeed(self):
+        os.environ['TOMTOM_API_KEY'] = 'test_key'
+        self.addCleanup(lambda: os.environ.pop('TOMTOM_API_KEY', None))
+
+        detector = SpeedLimitDetector()
+        detector.speed_limit_cache.clear()
+
+        overpass_resp = Mock()
+        overpass_resp.status_code = 200
+        overpass_resp.json.return_value = {
+            'elements': [{
+                'center': {'lat': 51.5074, 'lon': -0.1278},
+                'tags': {'highway': 'primary'},
+            }]
+        }
+        snap_resp = Mock()
+        snap_resp.status_code = 200
+        snap_resp.json.return_value = {
+            'route': [{
+                'properties': {
+                    'speedLimits': {'value': 48, 'unit': 'kmph', 'type': 'Maximum'}
+                }
+            }]
+        }
+
+        with patch('speed_limit_detector.requests.get', side_effect=[overpass_resp, snap_resp]):
+            result = detector.get_speed_limit_for_location(51.5074, -0.1278)
+
+        self.assertEqual(result.get('speed_limit_mph'), 30)
+        self.assertEqual(detector.metrics['overpass_nearby_no_usable_maxspeed'], 1)
+
+    def test_snap_crosscheck_logs_disagreement_keeps_osm(self):
+        os.environ['TOMTOM_API_KEY'] = 'test_key'
+        os.environ['SPEED_LIMIT_SNAP_CROSSCHECK'] = 'true'
+        self.addCleanup(lambda: os.environ.pop('TOMTOM_API_KEY', None))
+        self.addCleanup(lambda: os.environ.pop('SPEED_LIMIT_SNAP_CROSSCHECK', None))
+
+        detector = SpeedLimitDetector()
+        detector.speed_limit_cache.clear()
+
+        overpass_resp = Mock()
+        overpass_resp.status_code = 200
+        overpass_resp.json.return_value = {
+            'elements': [{
+                'center': {'lat': 51.5074, 'lon': -0.1278},
+                'tags': {'highway': 'residential', 'maxspeed': '30 mph'},
+            }]
+        }
+        snap_resp = Mock()
+        snap_resp.status_code = 200
+        snap_resp.json.return_value = {
+            'route': [{
+                'properties': {
+                    'speedLimits': {'value': 130, 'unit': 'kmph', 'type': 'Maximum'}
+                }
+            }]
+        }
+
+        with patch('speed_limit_detector.requests.get', side_effect=[overpass_resp, snap_resp]):
+            result = detector.get_speed_limit_for_location(51.5074, -0.1278)
+
+        self.assertEqual(result.get('speed_limit_mph'), 30)
+        self.assertEqual(detector.metrics['snap_crosscheck_invocations'], 1)
+        self.assertEqual(detector.metrics['snap_crosscheck_disagree'], 1)
+        self.assertEqual(detector.metrics['snap_crosscheck_agree'], 0)
+
+
+class TestRoadTypeAndOverpassConfig(unittest.TestCase):
+    """Road-class mph fallback and OVERPASS_SPEED_AROUND_METERS."""
+
+    def test_road_type_fallback_when_apis_fail(self):
+        detector = SpeedLimitDetector()
+        detector.speed_limit_cache.clear()
+        with patch('speed_limit_detector.requests.get') as mock_get:
+            mock_get.side_effect = Exception('API unavailable')
+            result = detector.get_speed_limit_for_location(
                 51.5074, -0.1278, road_type='residential'
             )
+        self.assertEqual(result.get('speed_limit_mph'), 30)
+        self.assertEqual(result.get('source'), 'road-type-default')
 
-            speed_limit = result.get('speed_limit_mph') if isinstance(result, dict) else result
-            self.assertIsNone(speed_limit, "Should not invent a limit without TomTom/OSM maxspeed")
-            print("   ✅ PASS: Unknown limit when no posted data")
+    def test_overpass_radius_from_env(self):
+        with patch.dict(os.environ, {'OVERPASS_SPEED_AROUND_METERS': '42'}, clear=False):
+            d = SpeedLimitDetector()
+            self.assertEqual(d.overpass_speed_around_meters, 42)
+
+    def test_overpass_radius_clamped_high(self):
+        with patch.dict(os.environ, {'OVERPASS_SPEED_AROUND_METERS': '500'}, clear=False):
+            d = SpeedLimitDetector()
+            self.assertEqual(d.overpass_speed_around_meters, 120)
 
 
 def run_all_tests():
@@ -263,6 +360,8 @@ def run_all_tests():
     suite.addTests(loader.loadTestsFromTestCase(TestRateLimiting))
     suite.addTests(loader.loadTestsFromTestCase(TestGeofencing))
     suite.addTests(loader.loadTestsFromTestCase(TestAPIIntegration))
+    suite.addTests(loader.loadTestsFromTestCase(TestOsmSnapPipeline))
+    suite.addTests(loader.loadTestsFromTestCase(TestRoadTypeAndOverpassConfig))
     
     # Run tests
     runner = unittest.TextTestRunner(verbosity=2)

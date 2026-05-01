@@ -290,8 +290,9 @@ class TestSnapToRoadsResponseParsing(unittest.TestCase):
         }
         mock_get.return_value = mock_response
 
-        # No posted limit from TomTom; Overpass mock has no elements → unknown
-        result = self.detector.get_speed_limit_for_location(51.5074, -0.1278)
+        with patch.dict(os.environ, {'SPEED_LIMIT_ROAD_TYPE_FALLBACK': 'false'}, clear=False):
+            self.detector.speed_limit_cache.clear()
+            result = self.detector.get_speed_limit_for_location(51.5074, -0.1278)
 
         self.assertIsNotNone(result, "Should return response dict")
         self.assertIsNone(result.get('speed_limit_mph'), "Should not infer without maxspeed/TomTom data")

@@ -10559,6 +10559,7 @@ function warmPicovoiceStaticCache() {
                     '/static/vendor/picovoice/porcupine-web.iife.js',
                     '/static/vendor/picovoice/web-voice-processor.iife.js',
                     '/static/vendor/picovoice/porcupine_params.pv',
+                    '/static/vendor/picovoice/hey_satnav_wasm.ppn',
                 ],
             });
         } catch (_e) {
