@@ -3457,8 +3457,16 @@ function useRoute(index) {
         totalCost: totalCost
     });
 
-    // Store selected route for navigation
-    window.lastCalculatedRoute = route;
+    // Merge into prior route payload so reroute/traffic still have destination (single-route objects omit it).
+    const prev = window.lastCalculatedRoute || {};
+    window.lastCalculatedRoute = {
+        ...prev,
+        ...route,
+        destination: prev.destination || route.destination,
+        destinationName: prev.destinationName || route.destinationName,
+        end_lat: prev.end_lat != null ? prev.end_lat : route.end_lat,
+        end_lon: prev.end_lon != null ? prev.end_lon : route.end_lon,
+    };
 
     // Display traffic edges on selected route if enabled
     const polylinePoints = route.polyline || [];
@@ -6130,12 +6138,16 @@ function detectSignificantTrafficChange(previousData, currentData) {
  * Trigger reroute based on traffic changes
  */
 async function triggerTrafficBasedReroute(changeType) {
-    if (!window.lastCalculatedRoute || !window.lastCalculatedRoute.destination) {
+    const destination = resolveNavigationDestination();
+    if (!destination) {
         console.log('[Auto-Traffic] No destination stored, cannot reroute');
         return;
     }
 
-    const destination = window.lastCalculatedRoute.destination;
+    if (!window.lastCalculatedRoute) {
+        console.log('[Auto-Traffic] No route context, cannot reroute');
+        return;
+    }
     const isClosure = changeType === 'closure';
     console.log(`[Auto-Traffic] Calculating new route (reason: ${changeType})...`);
 
@@ -6181,6 +6193,34 @@ async function manualTrafficUpdate() {
     showStatus('🚦 Updating traffic...', 'info');
     await checkTrafficAndReroute();
     showStatus('🚦 Traffic updated', 'success');
+}
+
+/**
+ * Destination as "lat,lon" for reroute APIs — must survive useRoute() replacing lastCalculatedRoute with a bare route option.
+ */
+function resolveNavigationDestination() {
+    const lr = window.lastCalculatedRoute;
+    if (lr && typeof lr.destination === 'string') {
+        const d = lr.destination.trim();
+        if (d.includes(',')) return d;
+    }
+    const endEl = document.getElementById('end');
+    if (endEl && endEl.dataset && endEl.dataset.lat != null && endEl.dataset.lon != null) {
+        const lat = parseFloat(endEl.dataset.lat);
+        const lon = parseFloat(endEl.dataset.lon);
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+            return `${lat},${lon}`;
+        }
+    }
+    if (typeof routePolyline !== 'undefined' && routePolyline && routePolyline.length > 0) {
+        const last = routePolyline[routePolyline.length - 1];
+        const lat = last[0];
+        const lon = last[1];
+        if (Number.isFinite(lat) && Number.isFinite(lon)) {
+            return `${lat},${lon}`;
+        }
+    }
+    return null;
 }
 
 /**
@@ -6300,7 +6340,9 @@ function updateRouteOnMap(newRoute) {
         ...newRoute,
         geometry: newRoute.geometry,
         distance: `${displayDist} ${distUnit}`,
-        time: `${newRoute.duration_minutes} minutes`
+        time: `${newRoute.duration_minutes} minutes`,
+        destination: window.lastCalculatedRoute.destination,
+        destinationName: window.lastCalculatedRoute.destinationName,
     };
 
     console.log('[Reroute] Route updated on map with fresh maneuvers and step tracking');
@@ -6933,11 +6975,14 @@ function applyRouteUpdateDuringNavigation(routeData) {
         const durationMinutes = activeRoute.duration_minutes ??
             (routeData.time ? parseInt(routeData.time, 10) : null) ??
             window.lastCalculatedRoute.duration_minutes;
+        const prevNav = window.lastCalculatedRoute;
         window.lastCalculatedRoute = {
-            ...window.lastCalculatedRoute,
+            ...prevNav,
             ...routeData,
             ...activeRoute,
-            duration_minutes: durationMinutes
+            duration_minutes: durationMinutes,
+            destination: prevNav.destination || routeData.destination || activeRoute.destination,
+            destinationName: prevNav.destinationName || routeData.destinationName || activeRoute.destinationName,
         };
     }
 
@@ -9158,7 +9203,7 @@ function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
  */
 function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residential', retryAttempt = 0, valhallaSpeedLimit = null) {
     const now = Date.now();
-    const timeSinceLastFetch = now - lastSpeedLimitFetch;
+    const timeSinceLastFetch = lastSpeedLimitFetch ? (now - lastSpeedLimitFetch) : 0;
 
     // Calculate distance moved since last fetch
     let distanceMoved = 999; // Default to large value to trigger first fetch
@@ -10962,9 +11007,50 @@ window.addEventListener('load', () => {
 });
 
 // ===== TILE PRE-CACHING FOR ROUTE CORRIDORS =====
+/**
+ * Read actual vector tile URL templates from the active MapLibre style (same URLs the map loads).
+ * Avoids hardcoded /map/data/gb/... which often 404 when the dataset path differs (e.g. v3 vs gb).
+ */
+function collectVectorTileTemplatesFromMap() {
+    if (typeof map === 'undefined' || map === null) return [];
+    if (typeof map.isStyleLoaded === 'function' && !map.isStyleLoaded()) return [];
+    try {
+        const style = map.getStyle();
+        const templates = [];
+        const sources = style && style.sources ? style.sources : {};
+        for (const key of Object.keys(sources)) {
+            const src = sources[key];
+            if (!src || src.type !== 'vector' || !Array.isArray(src.tiles)) continue;
+            for (const t of src.tiles) {
+                if (typeof t !== 'string') continue;
+                if (/\{z\}/i.test(t) && /\{x\}/i.test(t) && /\{y\}/i.test(t)) {
+                    templates.push(t);
+                }
+            }
+        }
+        return [...new Set(templates)];
+    } catch (e) {
+        console.warn('[TilePreCache] Could not read map style:', e);
+        return [];
+    }
+}
+
+function expandTileTemplate(template, z, x, y) {
+    return template
+        .replace(/\{z\}/gi, String(z))
+        .replace(/\{x\}/gi, String(x))
+        .replace(/\{y\}/gi, String(y));
+}
+
 async function precacheRouteTiles(polyline) {
     if (!polyline || polyline.length < 2) return;
     if (!('caches' in window)) return;
+
+    const templates = collectVectorTileTemplatesFromMap();
+    if (templates.length === 0) {
+        console.log('[TilePreCache] Style has no vector tile templates yet — skipping corridor precache');
+        return;
+    }
 
     const zoomLevels = [13, 14, 15];
     const tileUrls = new Set();
@@ -10976,12 +11062,25 @@ async function precacheRouteTiles(polyline) {
             const x = Math.floor((lon + 180) / 360 * Math.pow(2, z));
             const latRad = lat * Math.PI / 180;
             const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, z));
-            tileUrls.add(`/map/data/gb/${z}/${x}/${y}.pbf`);
+            for (const tpl of templates) {
+                tileUrls.add(expandTileTemplate(tpl, z, x, y));
+            }
         }
     }
 
-    const urls = [...tileUrls];
-    console.log(`[TilePreCache] Pre-caching ${urls.length} tiles along route corridor`);
+    const urls = [...tileUrls].map((u) =>
+        (u.startsWith('http://') || u.startsWith('https://'))
+            ? u
+            : new URL(u, window.location.origin).href
+    );
+
+    const maxPrefetch = 180;
+    const capped = urls.length > maxPrefetch ? urls.slice(0, maxPrefetch) : urls;
+    if (urls.length > maxPrefetch) {
+        console.log(`[TilePreCache] Capping prefetch ${urls.length} → ${maxPrefetch} URLs`);
+    }
+
+    console.log(`[TilePreCache] Pre-caching ${capped.length} tiles (${templates.length} template(s)) along route corridor`);
 
     try {
         const cacheNames = await caches.keys();
@@ -10989,9 +11088,9 @@ async function precacheRouteTiles(polyline) {
         const cache = await caches.open(tileCacheName);
         let cached = 0;
         const batchSize = 6;
-        for (let i = 0; i < urls.length; i += batchSize) {
-            const batch = urls.slice(i, i + batchSize);
-            const results = await Promise.allSettled(
+        for (let i = 0; i < capped.length; i += batchSize) {
+            const batch = capped.slice(i, i + batchSize);
+            await Promise.allSettled(
                 batch.map(async (url) => {
                     const existing = await cache.match(url);
                     if (existing) return;
@@ -11001,7 +11100,7 @@ async function precacheRouteTiles(polyline) {
                             await cache.put(url, resp);
                             cached++;
                         }
-                    } catch (e) { /* tile server may not have this tile */ }
+                    } catch (_e) { /* tile missing or offline */ }
                 })
             );
         }
@@ -13768,12 +13867,16 @@ function checkRouteDeviation(lat, lon) {
  */
 async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon) {
     try {
-        if (!window.lastCalculatedRoute || !window.lastCalculatedRoute.destination) {
+        const destination = resolveNavigationDestination();
+        if (!destination) {
             console.log('[Rerouting] No destination stored, cannot reroute');
             return;
         }
 
-        const destination = window.lastCalculatedRoute.destination;
+        if (!window.lastCalculatedRoute) {
+            console.log('[Rerouting] No route context, cannot reroute');
+            return;
+        }
         console.log(`[Rerouting] Starting automatic reroute from (${currentLat.toFixed(4)}, ${currentLon.toFixed(4)}) to ${destination}`);
 
         // Build route request with hazard avoidance settings
