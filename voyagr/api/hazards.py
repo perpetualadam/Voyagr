@@ -17,14 +17,22 @@ import requests
 from flask import Blueprint, jsonify, request
 
 from voyagr.models import get_db_connection, return_db_connection
-from voyagr.utils import sanitize_string, require_auth
+from voyagr.utils import sanitize_string
 from voyagr.utils.camera_buckets import normalize_camera_hazard_bucket
 from voyagr.utils.geometry import get_distance_between_points
+from voyagr.utils.rate_limiting import RateLimiter, rate_limit
 from voyagr.services import invalidate_hazard_cache, invalidate_route_cache
 
 logger = logging.getLogger(__name__)
 
 hazards_bp = Blueprint('hazards', __name__)
+
+_hazard_report_limiter = RateLimiter(max_requests=40, window_seconds=3600)
+
+ALLOWED_COMMUNITY_HAZARD_TYPES = frozenset({
+    'accident', 'roadwork', 'police', 'hazard', 'congestion', 'weather', 'closure',
+    'debris', 'flooded', 'animal', 'speed_limit_correction', 'other',
+})
 
 
 @hazards_bp.route('/hazard-preferences', methods=['GET', 'POST'])
@@ -129,15 +137,17 @@ def add_camera():
 
 
 @hazards_bp.route('/hazards/report', methods=['POST'])
-@require_auth
+@rate_limit(_hazard_report_limiter)
 def report_hazard():
-    """Report a hazard (community report)."""
+    """Report a hazard (community report). Anonymous-friendly; rate-limited per IP."""
     conn = None
     try:
-        data = request.json
+        data = request.json or {}
         lat = float(data.get('lat'))
         lon = float(data.get('lon'))
-        hazard_type = data.get('hazard_type')
+        hazard_type = data.get('hazard_type') or data.get('type')
+        if hazard_type not in ALLOWED_COMMUNITY_HAZARD_TYPES:
+            return jsonify({'success': False, 'error': 'Invalid hazard_type'}), 400
         description = sanitize_string(data.get('description', ''), max_length=500) or ''
         severity = data.get('severity', 'medium')
         user_id = sanitize_string(data.get('user_id', 'anonymous'), max_length=100) or 'anonymous'

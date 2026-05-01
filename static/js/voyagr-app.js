@@ -4721,8 +4721,7 @@ async function calculateRoute() {
                     if (startNavBtnSheet) {
                         startNavBtnSheet.style.display = 'block';
                     }
-
-                    // Send notification with proper unit conversion
+                    updateRoadReportFabVisibility();
                     const distanceKm = parseFloat(data.distance_km || data.distance) || 0;
                     const distUnit = getDistanceUnit();
                     const displayDistance = convertDistance(distanceKm);
@@ -7553,13 +7552,9 @@ function loadVoicePreferences() {
     }
 }
 
-// ----- Picovoice Porcupine wake word (browser / PWA). Native satnav.py keeps on-device «Hey SatNav»; same UX here when a Web (WASM) .ppn is deployed. -----
+// ----- Picovoice Porcupine wake word (browser / PWA). -----
 const VOYAGR_PORCUPINE_WAKE_STORAGE_KEY = 'voyagrPorcupineWakeEnabled';
-const VOYAGR_SHERPA_WAKE_STORAGE_KEY = 'voyagrSherpaWakeEnabled';
-/** Wake engine: 'picovoice' | 'sherpa' (Sherpa: WASM KWS in main PWA when enabled). */
-const VOYAGR_WAKE_BACKEND_KEY = 'voyagrWakeBackend';
 let porcupineWakePipelineRunning = false;
-let sherpaWakeStarting = false;
 let porcupineWakeResumeAfterVoice = false;
 let _porcupineWakeWorker = null;
 let _porcupineWakeBridgeEngine = null;
@@ -7577,110 +7572,20 @@ function picovoiceClientConfigured() {
     );
 }
 
-function getWakeBackend() {
-    // Picovoice scripts are no longer shipped; if they're not present at runtime,
-    // any stored 'picovoice' preference is effectively unusable. Fall back to
-    // 'sherpa' so users with legacy localStorage don't end up with silent wake.
-    const picovoiceAvailable = (
-        typeof PorcupineWeb !== 'undefined' &&
-        typeof WebVoiceProcessor !== 'undefined'
-    );
-    try {
-        const ls = localStorage.getItem(VOYAGR_WAKE_BACKEND_KEY);
-        if (ls === 'sherpa') {
-            return 'sherpa';
-        }
-        if (ls === 'picovoice') {
-            return picovoiceAvailable ? 'picovoice' : 'sherpa';
-        }
-    } catch (e) {
-        /* ignore */
-    }
-    const d = typeof window !== 'undefined' ? window.VoyagrWakeBackendDefault : null;
-    if (d === 'sherpa') {
-        return 'sherpa';
-    }
-    if (d === 'picovoice') {
-        return picovoiceAvailable ? 'picovoice' : 'sherpa';
-    }
-    return 'sherpa';
-}
-
-function loadWakeBackendUi() {
-    const row = document.getElementById('wakeBackendPrefRow');
-    const help = document.getElementById('wakeBackendHelp');
-    const sel = document.getElementById('wakeBackendSelect');
-    if (!row || !sel) {
-        // Row not in DOM: server didn't render lab block; nothing to do.
-        try {
-            if (!window.__voyagrLoggedNoWakeBackendRow) {
-                window.__voyagrLoggedNoWakeBackendRow = true;
-                console.info('[Wake UI] wakeBackendPrefRow not in DOM — VOYAGR_SHERPA_KWS_LAB likely not set on server.');
-            }
-        } catch (e) { /* ignore */ }
-        return;
-    }
-    // If the server rendered the row at all, the lab is enabled on the backend.
-    // Reveal unconditionally so users can switch engines even if the JS global
-    // wasn't set in time (race with inline script / stale PWA shell).
-    row.style.display = '';
-    if (help) {
-        help.style.display = '';
-    }
-    sel.value = getWakeBackend();
-}
-
-function onWakeBackendSelectChange() {
-    const sel = document.getElementById('wakeBackendSelect');
-    if (!sel) {
-        return;
-    }
-    localStorage.setItem(VOYAGR_WAKE_BACKEND_KEY, sel.value);
-    if (getWakeBackend() === 'sherpa') {
-        porcupineWakeResumeAfterVoice = false;
-        void stopPorcupineWakePipeline();
-        void stopSherpaWakePipeline();
-        loadPorcupineWakeUi();
-        showStatus('Wake engine: Sherpa-ONNX — use the Sherpa wake toggle below.', 'success');
-    } else {
-        void stopSherpaWakePipeline();
-        loadPorcupineWakeUi();
-        showStatus('Wake engine: Picovoice', 'success');
-    }
-    saveAllSettings();
-}
-
 function loadPorcupineWakeUi() {
-    // Always refresh wake engine + Sherpa rows regardless of whether the Picovoice block is in the DOM.
-    // (Previously early-returns here could skip Sherpa UI entirely when Picovoice wasn't configured
-    // or when the user had already chosen Sherpa.)
-    try { loadWakeBackendUi(); } catch (e) { console.warn('[Wake UI] loadWakeBackendUi:', e); }
-    try { loadSherpaWakeUi(); } catch (e) { console.warn('[Wake UI] loadSherpaWakeUi:', e); }
-
     const row = document.getElementById('porcupineWakePrefRow');
     const help = document.getElementById('porcupineWakeHelp');
     const toggle = document.getElementById('porcupineWakeToggle');
     if (!row || !toggle) {
         return;
     }
-    if (getWakeBackend() === 'sherpa') {
-        row.style.display = 'none';
-        if (help) {
-            help.style.display = 'none';
-        }
-        return;
-    }
     if (!picovoiceClientConfigured()) {
         row.style.display = 'none';
-        if (help) {
-            help.style.display = 'none';
-        }
+        if (help) help.style.display = 'none';
         return;
     }
     row.style.display = '';
-    if (help) {
-        help.style.display = '';
-    }
+    if (help) help.style.display = '';
     const enabled = localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true';
     if (enabled) {
         toggle.classList.add('active');
@@ -7695,143 +7600,9 @@ function loadPorcupineWakeUi() {
     }
 }
 
-function loadSherpaWakeUi() {
-    const row = document.getElementById('sherpaWakePrefRow');
-    const help = document.getElementById('sherpaWakeHelp');
-    const toggle = document.getElementById('sherpaWakeToggle');
-    if (!row || !toggle) {
-        return;
-    }
-    // Server rendered the row only when the lab is enabled. Don't gate on
-    // window.VoyagrSherpaKwsLab here to avoid hiding the toggle if the global
-    // hasn't been assigned yet.
-    if (getWakeBackend() !== 'sherpa') {
-        row.style.display = 'none';
-        if (help) {
-            help.style.display = 'none';
-        }
-        return;
-    }
-    row.style.display = '';
-    if (help) {
-        help.style.display = '';
-    }
-    const enabled = localStorage.getItem(VOYAGR_SHERPA_WAKE_STORAGE_KEY) === 'true';
-    if (enabled) {
-        toggle.classList.add('active');
-        toggle.style.background = '#4CAF50';
-        toggle.style.borderColor = '#4CAF50';
-        toggle.style.color = 'white';
-    } else {
-        toggle.classList.remove('active');
-        toggle.style.background = '#ddd';
-        toggle.style.borderColor = '#999';
-        toggle.style.color = '#333';
-    }
-}
-
-function toggleSherpaWakeWord() {
-    const button = document.getElementById('sherpaWakeToggle');
-    if (!button || typeof window.VoyagrSherpaKwsMap === 'undefined') {
-        if (button && typeof window.VoyagrSherpaKwsMap === 'undefined') {
-            showStatus('Sherpa WASM runtime not loaded (enable VOYAGR_SHERPA_KWS_LAB and deploy WASM).', 'warning');
-        }
-        return;
-    }
-    if (getWakeBackend() !== 'sherpa') {
-        showStatus('Select Sherpa as wake engine first.', 'warning');
-        return;
-    }
-    button.classList.toggle('active');
-    const enabled = button.classList.contains('active');
-    if (enabled) {
-        button.style.background = '#4CAF50';
-        button.style.borderColor = '#4CAF50';
-        button.style.color = 'white';
-    } else {
-        button.style.background = '#ddd';
-        button.style.borderColor = '#999';
-        button.style.color = '#333';
-    }
-    localStorage.setItem(VOYAGR_SHERPA_WAKE_STORAGE_KEY, enabled ? 'true' : 'false');
-    if (enabled) {
-        void startSherpaWakePipeline();
-    } else {
-        porcupineWakeResumeAfterVoice = false;
-        void stopSherpaWakePipeline();
-        showStatus('Sherpa wake disabled', 'success');
-    }
-    saveAllSettings();
-}
-
-async function stopSherpaWakePipeline() {
-    if (typeof window.VoyagrSherpaKwsMap === 'undefined') {
-        return;
-    }
-    try {
-        window.VoyagrSherpaKwsMap.stop();
-    } catch (e) {
-        console.warn('[Sherpa map] stop:', e);
-    }
-}
-
-async function startSherpaWakePipeline() {
-    if (getWakeBackend() !== 'sherpa') {
-        return;
-    }
-    if (typeof window.VoyagrSherpaKwsMap === 'undefined') {
-        showStatus('Sherpa runtime missing', 'error');
-        return;
-    }
-    if (localStorage.getItem(VOYAGR_SHERPA_WAKE_STORAGE_KEY) !== 'true') {
-        return;
-    }
-    if (sherpaWakeStarting || window.VoyagrSherpaKwsMap.isListening()) {
-        return;
-    }
-    if (typeof location !== 'undefined' && location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        console.warn('[Sherpa map] Wake needs HTTPS (or localhost) for microphone access.');
-        showStatus('Sherpa wake requires HTTPS for the microphone', 'warning');
-        return;
-    }
-    sherpaWakeStarting = true;
-    try {
-        await window.VoyagrSherpaKwsMap.ensureLoaded();
-        await window.VoyagrSherpaKwsMap.start(async function () {
-            await onPorcupineWakeHotword();
-        });
-        showStatus('Sherpa wake listening', 'success');
-    } catch (e) {
-        // Emscripten C++ exceptions arrive as raw integer pointers. Decode via the
-        // runtime's helper (which knows about Module.getExceptionMessage) so we log
-        // something useful instead of an opaque number.
-        var sherpaMsg;
-        if (typeof window.VoyagrSherpaFormatError === 'function') {
-            sherpaMsg = window.VoyagrSherpaFormatError(e);
-        } else if (typeof e === 'number') {
-            sherpaMsg = 'Sherpa WASM threw opaque exception (ptr=' + e + ')';
-        } else {
-            sherpaMsg = (e && e.message) ? e.message : String(e);
-        }
-        console.error('[Sherpa map]', sherpaMsg, e);
-        showStatus('Sherpa wake failed: ' + sherpaMsg, 'error');
-        try {
-            window.VoyagrSherpaKwsMap.stop();
-        } catch (e2) {
-            /* ignore */
-        }
-    } finally {
-        sherpaWakeStarting = false;
-    }
-}
-
 function togglePorcupineWakeWord() {
     const button = document.getElementById('porcupineWakeToggle');
     if (!button || !picovoiceClientConfigured()) {
-        return;
-    }
-    if (getWakeBackend() === 'sherpa') {
-        showStatus('Picovoice wake is off while Sherpa is selected — use the Sherpa wake toggle.', 'warning');
         return;
     }
     button.classList.toggle('active');
@@ -7862,12 +7633,6 @@ function maybeResumePorcupineWakeAfterVoice() {
         return;
     }
     porcupineWakeResumeAfterVoice = false;
-    if (getWakeBackend() === 'sherpa') {
-        if (localStorage.getItem(VOYAGR_SHERPA_WAKE_STORAGE_KEY) === 'true') {
-            void startSherpaWakePipeline();
-        }
-        return;
-    }
     if (localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) !== 'true') {
         return;
     }
@@ -7920,10 +7685,6 @@ async function stopPorcupineWakePipeline() {
 }
 
 async function startPorcupineWakePipeline() {
-    if (getWakeBackend() === 'sherpa') {
-        await startSherpaWakePipeline();
-        return;
-    }
     if (!picovoiceClientConfigured() || localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) !== 'true') {
         return;
     }
@@ -8004,7 +7765,6 @@ async function startPorcupineWakePipeline() {
 async function onPorcupineWakeHotword() {
     porcupineWakeResumeAfterVoice = true;
     await stopPorcupineWakePipeline();
-    await stopSherpaWakePipeline();
     speakMessage('Say your command', 'high');
     await new Promise((r) => setTimeout(r, 450));
     if (!voiceRecognition && !initVoiceRecognition()) {
@@ -9601,6 +9361,66 @@ function distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex
     return Math.max(0, d);
 }
 
+/** Valhalla stores roundabout exit count on enter and/or exit maneuver — merge for UI/lane hints. */
+function effectiveRoundaboutExitCount(stepIndex) {
+    const steps = currentRouteSteps;
+    if (!steps || stepIndex == null || stepIndex < 0 || stepIndex >= steps.length) return 0;
+    const s = steps[stepIndex];
+    let n = Number(s.roundabout_exit_count) || 0;
+    if (n > 0) return n;
+    const mt = s.type || 0;
+    if (mt === 26 && stepIndex + 1 < steps.length) {
+        const next = steps[stepIndex + 1];
+        if ((next.type || 0) === 27) return Number(next.roundabout_exit_count) || 0;
+    }
+    return 0;
+}
+
+function ordinalEnglishExit(n) {
+    const j = n % 10;
+    const k = n % 100;
+    if (j === 1 && k !== 11) return `${n}st`;
+    if (j === 2 && k !== 12) return `${n}nd`;
+    if (j === 3 && k !== 13) return `${n}rd`;
+    return `${n}th`;
+}
+
+function laneOrdinalEnglish(n) {
+    if (n === 1) return '1st';
+    if (n === 2) return '2nd';
+    if (n === 3) return '3rd';
+    return `${n}th`;
+}
+
+function buildTurnLaneHintHtml(maneuver, maneuverIndex, distanceMeters) {
+    if (!maneuver) return '';
+    const mt = maneuver.type || 0;
+    const chips = [];
+    const exitCt = maneuverIndex != null ? effectiveRoundaboutExitCount(maneuverIndex) : (Number(maneuver.roundabout_exit_count) || 0);
+    if ((mt === 26 || mt === 27) && exitCt > 0) {
+        chips.push(`<span class="lane-hint-chip">${ordinalEnglishExit(exitCt)} exit</span>`);
+    }
+    const lanes = maneuver.lanes;
+    if (Array.isArray(lanes) && lanes.length > 1) {
+        let idx = lanes.findIndex((l) => l && (l.active === true || l.active_indication === true));
+        if (idx < 0) {
+            idx = lanes.findIndex((l) => l && Array.isArray(l.valid_indications) && l.valid_indications.length > 0);
+        }
+        if (idx >= 0) {
+            chips.push(`<span class="lane-hint-chip">${laneOrdinalEnglish(idx + 1)} lane</span>`);
+        }
+    }
+    const multiFork = [15, 16, 9, 10, 11, 14, 20, 21, 23, 24, 25, 35, 36].includes(mt);
+    if (multiFork && chips.length === 0 && typeof distanceMeters === 'number' && distanceMeters < 900) {
+        if ([15, 16, 14, 21, 24].includes(mt)) {
+            chips.push('<span class="lane-hint-chip">Keep left</span>');
+        } else if ([9, 10, 11, 20, 23].includes(mt)) {
+            chips.push('<span class="lane-hint-chip">Keep right</span>');
+        }
+    }
+    return chips.join(' ');
+}
+
 /**
  * detectUpcomingTurn function
  * @function detectUpcomingTurn
@@ -9643,7 +9463,7 @@ function detectUpcomingTurn(userLat, userLon) {
             let direction = null;  // null = skip this maneuver
 
             // Valhalla maneuver types: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/
-            // SKIP types 1-3, 7-8, 17, 27-28 (Start, Becomes, Continue, Ramp straight, Ferry)
+            // SKIP types 1-3, 7-8, 17 (Start, Becomes, Continue, Ramp straight); 27 handled as roundabout exit.
             if (type === 4 || type === 5 || type === 6) direction = 'destination';  // Destination
             else if (type === 9) direction = 'slight_right';   // Slight Right
             else if (type === 10) direction = 'right';          // Right
@@ -9662,6 +9482,7 @@ function detectUpcomingTurn(userLat, userLon) {
             else if (type === 24) direction = 'slight_left';    // Stay Left   (FIX: was merge)
             else if (type === 25) direction = 'merge';          // Merge
             else if (type === 26) direction = 'roundabout';     // Roundabout Enter
+            else if (type === 27) direction = 'roundabout';   // Roundabout Exit
             else if (type === 35) direction = 'merge';          // Merge Right
             else if (type === 36) direction = 'merge';          // Merge Left
 
@@ -9678,7 +9499,8 @@ function detectUpcomingTurn(userLat, userLon) {
             // Extend detection range for exits (2.5km) and keep/fork (1.5km)
             const isExitDir = direction === 'exit' || direction === 'exit_right' || direction === 'exit_left';
             const isKeepDir = direction === 'slight_right' || direction === 'slight_left';
-            const maxDetectionDistance = isExitDir ? 2500 : isKeepDir ? 1500 : 600;
+            const isRb = direction === 'roundabout';
+            const maxDetectionDistance = isExitDir ? 2500 : isKeepDir ? 1500 : isRb ? 900 : 600;
 
             // Only return turns within detection range
             if (distanceToManeuver <= maxDetectionDistance) {
@@ -9692,10 +9514,13 @@ function detectUpcomingTurn(userLat, userLon) {
                     direction: direction,
                     streetName: maneuver.street_name || (maneuver.street_names && maneuver.street_names[0]) || maneuver.begin_street_names?.[0] || '',
                     instruction: maneuver.instruction || maneuver.verbal_pre_transition_instruction || '',
-                    // Valhalla turn-by-turn: verbal_transition_alert = early; verbal_pre = immediately prior
                     verbal_transition_alert_instruction: maneuver.verbal_transition_alert_instruction || '',
                     verbal_pre_transition_instruction: maneuver.verbal_pre_transition_instruction || '',
-                    verbal_post_transition_instruction: maneuver.verbal_post_transition_instruction || ''
+                    verbal_post_transition_instruction: maneuver.verbal_post_transition_instruction || '',
+                    roundabout_exit_count: effectiveRoundaboutExitCount(i),
+                    maneuver: maneuver,
+                    maneuverIndex: i,
+                    valhallaType: type,
                 };
             }
 
@@ -10710,24 +10535,17 @@ function toggleMLPredictions() {
     saveAllSettings();
 }
 
-// Opportunistically precache large Sherpa WASM vendor assets *after* the app is
-// loaded and idle. Runs once per page load, only when online and when the SW
-// is actually controlling this page. Lets a user who toggles the wake phrase
-// for the first time while offline still have the WASM bundle ready. Skipping
-// is handled inside the SW (WARM_STATIC_URLS is idempotent), so repeat calls
-// are cheap no-ops.
-function warmSherpaStaticCache() {
+// Warm Picovoice vendor bundles after idle load (optional offline wake).
+function warmPicovoiceStaticCache() {
     void (async function warm() {
         try {
             if (!('serviceWorker' in navigator)) return;
             if (!navigator.onLine) return;
             const ctrl = navigator.serviceWorker.controller;
             if (!ctrl) return;
-            // If the Sherpa vendor bundle is not deployed, every URL 404s — skip precache so the
-            // service worker does not log WARM_STATIC_URLS miss for each file on every load.
             const probeUrls = [
-                '/static/js/sherpa-onnx-kws-spike.js',
-                '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.js',
+                '/static/vendor/picovoice/porcupine-web.iife.js',
+                '/static/vendor/picovoice/web-voice-processor.iife.js',
             ];
             for (const u of probeUrls) {
                 const r = await fetch(u, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
@@ -10735,18 +10553,95 @@ function warmSherpaStaticCache() {
                     return;
                 }
             }
-            const urls = [
-                '/static/js/sherpa-onnx-kws-spike.js',
-                '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.js',
-                '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.wasm',
-                '/static/vendor/sherpa-kws/wasm/sherpa-onnx-wasm-kws-main.data',
-                '/static/vendor/sherpa-kws/spike-config/keywords-hey-sat-nav.txt',
-            ];
-            ctrl.postMessage({ type: 'WARM_STATIC_URLS', urls: urls });
+            ctrl.postMessage({
+                type: 'WARM_STATIC_URLS',
+                urls: [
+                    '/static/vendor/picovoice/porcupine-web.iife.js',
+                    '/static/vendor/picovoice/web-voice-processor.iife.js',
+                    '/static/vendor/picovoice/porcupine_params.pv',
+                ],
+            });
         } catch (_e) {
-            // Never let warm-up break the app.
+            /* ignore */
         }
     }());
+}
+
+/** Show road-report FAB when GPS tracking, navigating, or a route is ready to start. */
+function updateRoadReportFabVisibility() {
+    const fab = document.getElementById('roadReportFab');
+    if (!fab) return;
+    const startNav = document.getElementById('startNavBtn');
+    const routeReady = startNav && startNav.style.display !== 'none';
+    fab.style.display = (routeInProgress || routeReady || isTrackingActive) ? 'block' : 'none';
+}
+
+function syncRoadReportSpeedFieldsVisibility() {
+    const sel = document.getElementById('roadReportType');
+    const box = document.getElementById('roadReportSpeedFields');
+    if (!sel || !box) return;
+    box.style.display = sel.value === 'speed_limit_correction' ? 'block' : 'none';
+}
+
+function openRoadReportModal() {
+    const m = document.getElementById('roadReportModal');
+    if (!m) return;
+    const notes = document.getElementById('roadReportNotes');
+    if (notes) notes.value = '';
+    const unitSel = document.getElementById('roadReportSpeedUnit');
+    if (unitSel) unitSel.value = (typeof distanceUnit !== 'undefined' && distanceUnit === 'mi') ? 'mph' : 'kmh';
+    syncRoadReportSpeedFieldsVisibility();
+    m.style.display = 'block';
+}
+
+function closeRoadReportModal() {
+    const m = document.getElementById('roadReportModal');
+    if (m) m.style.display = 'none';
+}
+
+async function submitRoadReport() {
+    const lat = typeof currentLat !== 'undefined' ? currentLat : null;
+    const lon = typeof currentLon !== 'undefined' ? currentLon : null;
+    if (lat == null || lon == null || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+        showStatus('Turn on GPS or wait for a position fix before reporting.', 'warning');
+        return;
+    }
+    const typeEl = document.getElementById('roadReportType');
+    const hazard_type = typeEl ? typeEl.value : 'other';
+    let description = (document.getElementById('roadReportNotes') && document.getElementById('roadReportNotes').value) || '';
+    if (hazard_type === 'speed_limit_correction') {
+        const v = document.getElementById('roadReportSpeedValue');
+        const u = document.getElementById('roadReportSpeedUnit');
+        const num = v && v.value ? parseInt(v.value, 10) : NaN;
+        if (!Number.isFinite(num) || num < 5) {
+            showStatus('Enter the speed limit number you see on the road.', 'warning');
+            return;
+        }
+        const unit = u && u.value === 'kmh' ? 'km/h' : 'mph';
+        description = `Posted limit observed: ${num} ${unit}. ${description}`.trim();
+    }
+    try {
+        const r = await fetch('/api/hazards/report', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                hazard_type,
+                lat,
+                lon,
+                description,
+                severity: hazard_type === 'accident' ? 'high' : 'medium',
+            }),
+        });
+        const data = await r.json();
+        if (data.success) {
+            showStatus('Thanks — report received.', 'success');
+            closeRoadReportModal();
+        } else {
+            showStatus(data.error || 'Report failed', 'error');
+        }
+    } catch (e) {
+        showStatus('Report failed: ' + e.message, 'error');
+    }
 }
 
 // PWA Service Worker Registration
@@ -10761,7 +10656,7 @@ if ('serviceWorker' in navigator) {
                     registration.update();
                 }, 60000); // Check every minute
 
-                // Kick off Sherpa vendor cache warm-up 8s after load (idle).
+                // Kick off Picovoice vendor cache warm-up 8s after load (idle).
                 // Prefer requestIdleCallback when available so we don't compete
                 // with first-paint work; fall back to setTimeout on Safari.
                 const scheduleWarm = (cb) => {
@@ -10771,7 +10666,7 @@ if ('serviceWorker' in navigator) {
                         setTimeout(cb, 8000);
                     }
                 };
-                scheduleWarm(warmSherpaStaticCache);
+                scheduleWarm(warmPicovoiceStaticCache);
             })
             .catch(error => {
                 console.log('[PWA] Service Worker registration failed:', error);
@@ -11488,6 +11383,11 @@ function hideTurnInstructionWidget() {
         instructionsPanelExpanded = false;
         const panel = document.getElementById('instructionsPanel');
         if (panel) panel.style.display = 'none';
+        const hintEl = document.getElementById('nextTurnLaneHint');
+        if (hintEl) {
+            hintEl.innerHTML = '';
+            hintEl.style.display = 'none';
+        }
         console.log('[Turn Widget] Hidden');
     }
 }
@@ -11580,6 +11480,7 @@ function updateTurnInstructionDisplay(turnInfo) {
     const instructionEl = document.getElementById('nextTurnInstruction');
     const streetEl = document.getElementById('nextTurnStreet');
     const iconEl = document.getElementById('nextTurnIcon');
+    const hintEl = document.getElementById('nextTurnLaneHint');
 
     if (!distanceEl || !instructionEl) return;
 
@@ -11587,7 +11488,6 @@ function updateTurnInstructionDisplay(turnInfo) {
         const formattedDistance = formatTurnDistance(turnInfo.distance);
         distanceEl.textContent = `In ${formattedDistance}`;
 
-        // Use instruction text if available, otherwise build from direction
         if (turnInfo.instruction) {
             instructionEl.textContent = turnInfo.instruction;
         } else {
@@ -11595,16 +11495,15 @@ function updateTurnInstructionDisplay(turnInfo) {
             instructionEl.textContent = dirText;
         }
 
-        // Show street name if available
-        if (turnInfo.streetName) {
-            streetEl.textContent = `onto ${turnInfo.streetName}`;
-            streetEl.style.display = 'block';
-        } else {
-            streetEl.style.display = 'none';
+        if (streetEl) {
+            if (turnInfo.streetName) {
+                streetEl.textContent = `onto ${turnInfo.streetName}`;
+                streetEl.style.display = 'block';
+            } else {
+                streetEl.style.display = 'none';
+            }
         }
 
-        // Update icon based on direction
-        // FIX: Added exit-left/exit-right, and underscore variants for compatibility
         const directionToType = {
             'left': 15,
             'right': 10,
@@ -11628,23 +11527,41 @@ function updateTurnInstructionDisplay(turnInfo) {
             'roundabout': 26,
             'destination': 4
         };
-        const type = directionToType[turnInfo.direction] || 8;
-        iconEl.textContent = getTurnIcon(type);
+        const vt = turnInfo.valhallaType;
+        const iconType = typeof vt === 'number' ? vt : (directionToType[turnInfo.direction] || 8);
+        if (iconEl) iconEl.textContent = getTurnIcon(iconType);
+
+        if (hintEl) {
+            if (turnInfo.maneuver && turnInfo.maneuverIndex != null) {
+                const hintHtml = buildTurnLaneHintHtml(turnInfo.maneuver, turnInfo.maneuverIndex, turnInfo.distance);
+                if (hintHtml) {
+                    hintEl.innerHTML = hintHtml;
+                    hintEl.style.display = 'block';
+                } else {
+                    hintEl.innerHTML = '';
+                    hintEl.style.display = 'none';
+                }
+            } else {
+                hintEl.innerHTML = '';
+                hintEl.style.display = 'none';
+            }
+        }
 
     } else {
-        // No upcoming turn - show follow route message
         distanceEl.textContent = 'Follow Route';
         instructionEl.textContent = 'Continue on current road';
-        streetEl.style.display = 'none';
-        iconEl.textContent = '↑';
+        if (streetEl) streetEl.style.display = 'none';
+        if (iconEl) iconEl.textContent = '↑';
+        if (hintEl) {
+            hintEl.innerHTML = '';
+            hintEl.style.display = 'none';
+        }
     }
 
-    // Update the instructions list if expanded
     if (instructionsPanelExpanded) {
         populateInstructionsList();
     }
 
-    // Sync with AR overlay if active
     updateARInstruction(turnInfo);
 }
 
@@ -11683,12 +11600,17 @@ function populateInstructionsList() {
         if (isCurrent) itemClass += ' current';
         if (isPassed) itemClass += ' passed';
 
+        const exitCt = effectiveRoundaboutExitCount(i);
+        const exitBadge = ((type === 26 || type === 27) && exitCt > 0)
+            ? ` <span class="lane-hint-chip" style="font-size:11px;vertical-align:middle;">${ordinalEnglishExit(exitCt)} exit</span>`
+            : '';
+
         // Add data attributes for click-to-preview
         html += `
             <div class="${itemClass}" data-step-index="${i}" data-shape-index="${shapeIndex}" onclick="previewInstructionOnMap(${i}, ${shapeIndex})">
                 <div class="instruction-item-icon">${icon}</div>
                 <div class="instruction-item-content">
-                    <div class="instruction-item-text">${instruction}</div>
+                    <div class="instruction-item-text">${instruction}${exitBadge}</div>
                     ${streetName ? `<div class="instruction-item-street">${streetName}</div>` : ''}
                     ${isPassed ? '<div class="instruction-item-status">✓ Passed</div>' : (isCurrent ? '<div class="instruction-item-status current-status">→ Next</div>' : '')}
                 </div>
@@ -11864,7 +11786,10 @@ function updateTurnWidgetFromPosition(lat, lon) {
                 distance: distanceToManeuver,
                 direction: direction,
                 instruction: maneuver.instruction || maneuver.verbal_pre_transition_instruction || '',
-                streetName: streetLabel
+                streetName: streetLabel,
+                maneuver: maneuver,
+                maneuverIndex: i,
+                valhallaType: type,
             });
 
             return;
@@ -12259,14 +12184,9 @@ async function toggleVoiceInput() {
         voiceRecognition.stop();
         isListening = false;
     } else {
-        const sherpaListening =
-            typeof window.VoyagrSherpaKwsMap !== 'undefined' &&
-            window.VoyagrSherpaKwsMap.isListening &&
-            window.VoyagrSherpaKwsMap.isListening();
-        if (porcupineWakePipelineRunning || sherpaListening) {
+        if (porcupineWakePipelineRunning) {
             porcupineWakeResumeAfterVoice = true;
             await stopPorcupineWakePipeline();
-            await stopSherpaWakePipeline();
         }
         document.getElementById('voiceTranscript').textContent = '';
         voiceRecognition.start();
@@ -12505,12 +12425,12 @@ window.addEventListener('load', () => {
     console.log('[Voice] Loading voice preferences...');
     loadVoicePreferences();
     loadPorcupineWakeUi();
+    const roadReportTypeSel = document.getElementById('roadReportType');
+    if (roadReportTypeSel) {
+        roadReportTypeSel.addEventListener('change', syncRoadReportSpeedFieldsVisibility);
+    }
     void (async () => {
-        if (getWakeBackend() === 'sherpa') {
-            if (localStorage.getItem(VOYAGR_SHERPA_WAKE_STORAGE_KEY) === 'true') {
-                await startSherpaWakePipeline();
-            }
-        } else if (
+        if (
             localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true' &&
             picovoiceClientConfigured()
         ) {
@@ -12775,6 +12695,7 @@ function startGPSTracking() {
 
             currentLat = lat;
             currentLon = lon;
+            updateRoadReportFabVisibility();
 
             // Add to tracking history
             trackingHistory.push({
@@ -12957,11 +12878,12 @@ function startGPSTracking() {
                     else if ([21].includes(mType)) maneuverDir = 'exit_left';
                     else if ([12, 13].includes(mType)) maneuverDir = 'uturn';
                     else if ([25, 35, 36].includes(mType)) maneuverDir = 'merge';
-                    else if ([26].includes(mType)) maneuverDir = 'roundabout';
+                    else if ([26, 27].includes(mType)) maneuverDir = 'roundabout';
                     else if ([4, 5, 6].includes(mType)) maneuverDir = 'destination';
                 }
-                const exitCount = (maneuverDir === 'roundabout' && nextStep)
-                    ? (nextStep.roundabout_exit_count || 0) : 0;
+                const exitCount = (maneuverDir === 'roundabout')
+                    ? effectiveRoundaboutExitCount(currentStepIndex)
+                    : 0;
                 updateLaneGuidance(lat, lon, heading, maneuverDir, exitCount);
             }
 
@@ -13021,6 +12943,7 @@ function stopGPSTracking() {
     isTrackingActive = false;
     // Hide speed widget when tracking stops (use consolidated function)
     updateSpeedWidgetVisibility();
+    updateRoadReportFabVisibility();
     showStatus('🛑 GPS Tracking stopped', 'info');
 }
 
@@ -15604,6 +15527,7 @@ function startTurnByTurnNavigation(routeData) {
     if (journeyOverviewBtn) {
         journeyOverviewBtn.style.display = 'block';
     }
+    updateRoadReportFabVisibility();
 
     // ===== SHOW SPEED WIDGET during navigation =====
     // Speed widget shows current GPS speed and road speed limit for safety (use consolidated function)
@@ -15629,7 +15553,10 @@ function startTurnByTurnNavigation(routeData) {
             distance: distanceToFirst,
             direction: 'straight',
             instruction: firstStep.instruction || 'Follow the route',
-            streetName: (firstStep.street_names || [])[0] || ''
+            streetName: (firstStep.street_names || [])[0] || '',
+            maneuver: firstStep,
+            maneuverIndex: 0,
+            valhallaType: firstStep.type != null ? firstStep.type : 8,
         });
     }
 
@@ -15727,6 +15654,8 @@ function stopTurnByTurnNavigation() {
         journeyOverviewBtn.style.display = 'none';
     }
     journeyOverviewActive = false;
+
+    updateRoadReportFabVisibility();
 
     // ===== HIDE SPEED WIDGET (use consolidated function) =====
     updateSpeedWidgetVisibility();

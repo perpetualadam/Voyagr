@@ -25,13 +25,14 @@ def test_get_index_returns_200(client):
     assert "no-store" in cc or "no-cache" in cc
 
 
-def test_index_injects_wake_and_sherpa_globals(client):
+def test_index_injects_picovoice_wake_globals(client):
     rv = client.get("/")
     assert rv.status_code == 200
     body = rv.data.decode("utf-8", errors="replace")
-    assert "window.VoyagrSherpaKwsLab" in body
     assert "window.VoyagrWakeBackendDefault" in body
     assert "window.PICOVOICE_ACCESS_KEY" in body
+    assert "window.VoyagrPicovoiceWebAssetsOk" in body
+    assert "VoyagrSherpaKwsLab" not in body
 
 
 def test_sherpa_lab_page_static(client):
@@ -59,6 +60,7 @@ def test_manifest_and_service_worker(client):
     sw = client.get("/service-worker.js")
     assert sw.status_code == 200
     assert b"serviceWorker" in sw.data or b"self" in sw.data
+    assert b"porcupine-web.iife.js" in sw.data
 
 
 def test_api_config_json(client):

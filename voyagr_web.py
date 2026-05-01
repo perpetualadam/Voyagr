@@ -2058,8 +2058,16 @@ def valhalla_maneuver_dict(maneuver: Dict[str, Any], length_in_meters: bool = Fa
         'end_shape_index': maneuver.get('end_shape_index', 0),
         'speed_limit': maneuver.get('speed_limit'),
     }
-    if maneuver.get('type') == 26:
-        out['roundabout_exit_count'] = maneuver.get('roundabout_exit_count', 0)
+    mt = maneuver.get('type', 0)
+    rc = maneuver.get('roundabout_exit_count')
+    if rc is not None and mt in (26, 27):
+        try:
+            out['roundabout_exit_count'] = int(rc)
+        except (TypeError, ValueError):
+            out['roundabout_exit_count'] = 0
+    lanes = maneuver.get('lanes')
+    if lanes:
+        out['lanes'] = lanes
     return out
 
 
@@ -4413,7 +4421,7 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260410b" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260502a" />
     {# All app scripts use `defer`: they still download in parallel with HTML parsing
        and still execute in document order (dependencies preserved), but they no
        longer block first paint. This is the biggest lever for shortening the PWA
@@ -4426,11 +4434,11 @@ HTML_TEMPLATE = '''
     <!-- External JavaScript modules -->
     <script defer src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
     <script defer src="/static/js/voyagr-core.js?v=20260211t4"></script>
-    {# Voyagr uses Sherpa-ONNX for on-device wake-word detection. Picovoice/Porcupine
-       is no longer bundled — its legacy code paths in voyagr-app.js short-circuit
-       safely when `PorcupineWeb` is undefined (see picovoiceClientConfigured()). #}
-    <script defer src="/static/js/sherpa-kws-map-runtime.js?v=20260423b"></script>
-    <script defer src="/static/js/voyagr-app.js?v=20260501b"></script>
+    {% if picovoice_web_assets_ok %}
+    <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
+    <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
+    {% endif %}
+    <script defer src="/static/js/voyagr-app.js?v=20260502a"></script>
     <script defer src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -5265,15 +5273,13 @@ HTML_TEMPLATE = '''
                             <button class="toggle-switch" id="voiceAnnouncementsEnabled" onclick="toggleVoiceAnnouncements()"></button>
                         </div>
 
-                        {# Wake-word is Sherpa-ONNX only. Picovoice/Porcupine and the
-                           engine selector were removed — Sherpa runs on-device, no key. #}
-                        <div class="preference-item" id="sherpaWakePrefRow">
-                            <span class="preference-label">🎙️ Wake phrase «Hey Sat Nav»</span>
-                            <button type="button" class="toggle-switch" id="sherpaWakeToggle" onclick="toggleSherpaWakeWord()"></button>
+                        <div class="preference-item" id="porcupineWakePrefRow">
+                            <span class="preference-label">🎙️ Wake phrase (Picovoice)</span>
+                            <button type="button" class="toggle-switch" id="porcupineWakeToggle" onclick="togglePorcupineWakeWord()"></button>
                         </div>
-                        <p id="sherpaWakeHelp" style="font-size: 11px; color: #888; margin: -6px 0 8px 0; line-height: 1.5;">
-                            On-device keyword spotting powered by Sherpa-ONNX. HTTPS required for the microphone.
-                            <br><span style="color: #aaa;">Tip: keep Voyagr on-screen while driving — mobile browsers suspend the mic when the app is backgrounded or the screen is locked.</span>
+                        <p id="porcupineWakeHelp" style="font-size: 11px; color: #888; margin: -6px 0 8px 0; line-height: 1.5;">
+                            Hands-free keyword when a Picovoice access key and web assets are configured on the server. HTTPS required for the microphone.
+                            <br><span style="color: #aaa;">Optional custom keyword file: set PICOVOICE_WEB_KEYWORD_PATH (default hey_satnav_wasm.ppn under /static/vendor/picovoice/).</span>
                         </p>
 
                         <div class="preference-item">
@@ -5826,6 +5832,7 @@ HTML_TEMPLATE = '''
                 <div class="turn-info-container">
                     <div id="nextTurnDistance" class="turn-distance">Follow Route</div>
                     <div id="nextTurnInstruction" class="turn-instruction">Continue on current road</div>
+                    <div id="nextTurnLaneHint" class="turn-lane-hint" style="display: none;"></div>
                     <div id="nextTurnStreet" class="turn-street"></div>
                 </div>
                 <div class="expand-indicator">
@@ -5878,6 +5885,44 @@ HTML_TEMPLATE = '''
             <button id="startNavBtn" class="fab" title="Start Navigation" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
             <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
             <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
+            <button id="roadReportFab" class="fab" title="Report road issue or speed limit" onclick="openRoadReportModal()" style="background: #E65100; display: none;">⚠️</button>
+        </div>
+
+        <div id="roadReportModal" class="road-report-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="roadReportModalTitle">
+            <div class="road-report-modal-backdrop" onclick="closeRoadReportModal()"></div>
+            <div class="road-report-modal-panel">
+                <h3 id="roadReportModalTitle" style="margin: 0 0 12px 0; font-size: 18px;">Report</h3>
+                <label for="roadReportType" style="font-size: 13px; color: #555;">Type</label>
+                <select id="roadReportType" style="width: 100%; margin: 6px 0 12px 0; padding: 10px; border-radius: 8px; border: 1px solid #ccc;">
+                    <option value="accident">Accident</option>
+                    <option value="roadwork">Roadworks</option>
+                    <option value="police">Police / speed check</option>
+                    <option value="hazard">Hazard on road</option>
+                    <option value="debris">Debris</option>
+                    <option value="closure">Road closed / blocked</option>
+                    <option value="congestion">Heavy congestion</option>
+                    <option value="weather">Weather / flooding</option>
+                    <option value="speed_limit_correction">Wrong speed limit shown</option>
+                    <option value="other">Other</option>
+                </select>
+                <div id="roadReportSpeedFields" style="display: none; margin-bottom: 12px;">
+                    <label for="roadReportSpeedValue" style="font-size: 13px; color: #555;">Correct limit you see on the road</label>
+                    <div style="display: flex; gap: 8px; margin-top: 6px;">
+                        <input id="roadReportSpeedValue" type="number" min="5" max="130" step="1" placeholder="e.g. 40" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #ccc;">
+                        <select id="roadReportSpeedUnit" style="width: 100px; padding: 10px; border-radius: 8px; border: 1px solid #ccc;">
+                            <option value="mph">mph</option>
+                            <option value="kmh">km/h</option>
+                        </select>
+                    </div>
+                </div>
+                <label for="roadReportNotes" style="font-size: 13px; color: #555;">Notes (optional)</label>
+                <textarea id="roadReportNotes" rows="3" maxlength="500" placeholder="Short details e.g. lane closure, object in carriageway…" style="width: 100%; margin: 6px 0 12px 0; padding: 10px; border-radius: 8px; border: 1px solid #ccc; resize: vertical; box-sizing: border-box;"></textarea>
+                <p id="roadReportGpsHint" style="font-size: 12px; color: #888; margin: 0 0 12px 0;">Uses your last GPS fix. Enable location for an accurate pin.</p>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button type="button" onclick="closeRoadReportModal()" style="padding: 10px 16px; border-radius: 8px; border: 1px solid #ccc; background: #f5f5f5; cursor: pointer;">Cancel</button>
+                    <button type="button" onclick="submitRoadReport()" style="padding: 10px 16px; border-radius: 8px; border: none; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; font-weight: 600; cursor: pointer;">Send</button>
+                </div>
+            </div>
         </div>
 
         <!-- Current Road Name Bar - Shows road name during navigation -->
@@ -6257,15 +6302,11 @@ HTML_TEMPLATE = '''
     </script>
     <!-- API Keys injected from server -->
     <script>
-        window.TOMTOM_API_KEY = '{{ tomtom_api_key }}';
-        // Picovoice/Porcupine is no longer bundled. Force-false the legacy guards so
-        // any remaining code paths in voyagr-app.js short-circuit cleanly without
-        // requiring the runtime globals (PorcupineWeb, WebVoiceProcessor).
-        window.PICOVOICE_ACCESS_KEY = '';
-        window.VoyagrPicovoiceKeywordPath = '';
-        window.VoyagrPicovoiceWebAssetsOk = false;
-        window.VoyagrSherpaKwsLab = true;
-        window.VoyagrWakeBackendDefault = 'sherpa';
+        window.TOMTOM_API_KEY = {{ tomtom_api_key | tojson }};
+        window.PICOVOICE_ACCESS_KEY = {{ picovoice_access_key | tojson }};
+        window.VoyagrPicovoiceKeywordPath = {{ picovoice_keyword_public_path | tojson }};
+        window.VoyagrPicovoiceWebAssetsOk = {{ picovoice_web_assets_ok | tojson }};
+        window.VoyagrWakeBackendDefault = {{ wake_backend_default | tojson }};
     </script>
 </body>
 </html>

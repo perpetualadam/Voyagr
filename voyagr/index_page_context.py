@@ -41,10 +41,8 @@ def build_index_template_kwargs() -> Dict[str, Any]:
     picovoice_keyword_public_path = (
         os.getenv("PICOVOICE_WEB_KEYWORD_PATH") or "/static/vendor/picovoice/hey_satnav_wasm.ppn"
     ).strip()
-    _sherpa_lab = (os.getenv("VOYAGR_SHERPA_KWS_LAB") or "").strip().lower()
-    sherpa_kws_lab = _sherpa_lab in ("1", "true", "yes", "on")
     _wake_b = (os.getenv("VOYAGR_WAKE_BACKEND") or "picovoice").strip().lower()
-    wake_backend_default = _wake_b if _wake_b in ("picovoice", "sherpa") else "picovoice"
+    wake_backend_default = _wake_b if _wake_b == "picovoice" else "picovoice"
     block_indexing = block_search_indexing()
     # Pre-serialise JSON-LD once per request so the template only needs to {{ safe }} it.
     # Using compact separators keeps the inline <script> payload small.
@@ -57,7 +55,6 @@ def build_index_template_kwargs() -> Dict[str, Any]:
         "picovoice_access_key": picovoice_access_key,
         "picovoice_web_assets_ok": picovoice_web_assets_ok,
         "picovoice_keyword_public_path": picovoice_keyword_public_path,
-        "sherpa_kws_lab": sherpa_kws_lab,
         "wake_backend_default": wake_backend_default,
         # SEO / GEO / AEO — see voyagr/seo.py for the single source of truth.
         "seo_title": seo_title(),

@@ -648,14 +648,24 @@ def _valhalla_leg(
 
                 maneuvers = []
                 for m in leg.get("maneuvers", []):
-                    maneuvers.append({
+                    mt = m.get("type", 0)
+                    entry = {
                         "instruction": m.get("instruction", ""),
-                        "type": m.get("type", 0),
+                        "type": mt,
                         "distance_km": round(m.get("length", 0), 2),
                         "time_seconds": m.get("time", 0),
                         "street_names": m.get("street_names", []),
                         "begin_shape_index": m.get("begin_shape_index", 0),
-                    })
+                    }
+                    rc = m.get("roundabout_exit_count")
+                    if rc is not None and mt in (26, 27):
+                        try:
+                            entry["roundabout_exit_count"] = int(rc)
+                        except (TypeError, ValueError):
+                            entry["roundabout_exit_count"] = 0
+                    if m.get("lanes"):
+                        entry["lanes"] = m.get("lanes")
+                    maneuvers.append(entry)
 
                 return {
                     "distance_km": summary.get("length", 0),
