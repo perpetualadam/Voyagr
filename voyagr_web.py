@@ -4438,7 +4438,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260503f"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260503g"></script>
     <script defer src="/static/js/app.js?v=20260504a"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -5933,7 +5933,7 @@ HTML_TEMPLATE = '''
             <button id="startNavBtn" class="fab" title="Start Navigation" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
             <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
             <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
-            <button id="roadReportFab" class="fab" title="Report road issue or speed limit" onclick="openRoadReportModal()" style="background: #E65100; display: none;">⚠️</button>
+            <button id="roadReportFab" class="fab" title="Report road issue or speed limit" onclick="openRoadReportModal()" style="background: #E65100;">⚠️</button>
         </div>
 
         <div id="roadReportModal" class="road-report-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="roadReportModalTitle">

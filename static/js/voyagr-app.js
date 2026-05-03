@@ -11064,13 +11064,11 @@ function warmPicovoiceStaticCache() {
     }());
 }
 
-/** Show road-report FAB when GPS tracking, navigating, or a route is ready to start. */
+/** Road-report FAB: always shown so issues can be reported without a route or navigation. */
 function updateRoadReportFabVisibility() {
     const fab = document.getElementById('roadReportFab');
     if (!fab) return;
-    const startNav = document.getElementById('startNavBtn');
-    const routeReady = startNav && startNav.style.display !== 'none';
-    fab.style.display = (routeInProgress || routeReady || isTrackingActive) ? 'block' : 'none';
+    fab.style.removeProperty('display');
 }
 
 function syncRoadReportSpeedFieldsVisibility() {
