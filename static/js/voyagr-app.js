@@ -8671,7 +8671,13 @@ async function setParkingAsDestination(parking) {
  * @returns {*} Return value description
  */
 function clearForm() {
-    document.getElementById('start').value = '';
+    const startEl = document.getElementById('start');
+    if (startEl) {
+        startEl.value = '';
+        delete startEl.dataset.lat;
+        delete startEl.dataset.lon;
+        delete startEl.dataset.displayName;
+    }
     document.getElementById('end').value = '';
     document.getElementById('result').classList.remove('show');
     document.getElementById('status').className = 'status';
@@ -8694,6 +8700,10 @@ function clearForm() {
         duration: ZOOM_ANIMATION_DURATION * 1000
     });
     lastZoomLevel = 13;
+
+    if (autoGpsEnabled) {
+        updateAutoGpsLocation();
+    }
 }
 
 // ===== PHASE 2 FEATURES: SEARCH HISTORY & FAVORITES =====
@@ -15407,6 +15417,15 @@ function stopAutoGpsLocation() {
         clearInterval(autoGpsLocationMonitor);
         autoGpsLocationMonitor = null;
     }
+    const startEl = document.getElementById('start');
+    if (startEl && startEl.dataset.lat && startEl.dataset.lon) {
+        const la = parseFloat(startEl.dataset.lat);
+        const lo = parseFloat(startEl.dataset.lon);
+        if (Number.isFinite(la) && Number.isFinite(lo)) {
+            startEl.value = `${la.toFixed(6)},${lo.toFixed(6)}`;
+            delete startEl.dataset.displayName;
+        }
+    }
     showStatus('📍 Auto GPS location disabled', 'info');
     console.log('[Auto GPS] Auto location monitoring stopped');
 }
@@ -15425,8 +15444,13 @@ function updateAutoGpsLocation() {
             const lon = position.coords.longitude;
             const accuracy = position.coords.accuracy;
 
-            // Update the start location field
-            document.getElementById('start').value = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+            const startEl = document.getElementById('start');
+            if (startEl) {
+                startEl.value = 'Current Location';
+                startEl.dataset.lat = String(lat);
+                startEl.dataset.lon = String(lon);
+                startEl.dataset.displayName = 'Current Location';
+            }
             currentLat = lat;
             currentLon = lon;
 
@@ -15510,6 +15534,13 @@ async function showAutocomplete(fieldId) {
     const input = document.getElementById(fieldId);
     const dropdown = getAutocompleteDropdown(fieldId);
     if (!input || !dropdown) return;
+
+    // Live GPS owns the start field; don't run search or wipe dataset coords on focus/input.
+    if (fieldId === 'start' && autoGpsEnabled) {
+        dropdown.classList.remove('show');
+        return;
+    }
+
     const query = input.value.trim();
 
     if (input.dataset.lat || input.dataset.lon) {
