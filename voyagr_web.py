@@ -4421,7 +4421,7 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260502a" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260503a" />
     {# All app scripts use `defer`: they still download in parallel with HTML parsing
        and still execute in document order (dependencies preserved), but they no
        longer block first paint. This is the biggest lever for shortening the PWA
@@ -4438,11 +4438,33 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260502a"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260503a"></script>
     <script defer src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
+    <div id="authRequiredGate" class="auth-required-gate" style="display: none;" aria-hidden="true">
+        <div class="auth-required-gate__panel" role="dialog" aria-modal="true" aria-labelledby="authGateTitle">
+            <h1 id="authGateTitle" class="auth-required-gate__title">Sign in to Voyagr</h1>
+            <p class="auth-required-gate__hint">This deployment requires an account. Use the same email and password as in Settings, or create a new account below.</p>
+            <div id="authGateLoading" class="auth-required-gate__loading" style="display: none;">Checking your session…</div>
+            <div id="authGateForm" class="auth-required-gate__form" style="display: none;">
+                <div id="authGateStatus" class="auth-required-gate__status" aria-live="polite"></div>
+                <div class="auth-required-gate__fields">
+                    <input id="authGateEmail" type="email" autocomplete="email" placeholder="Email"
+                           class="auth-required-gate__input"
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();authSignInEmailGate();}" />
+                    <input id="authGatePassword" type="password" autocomplete="current-password" placeholder="Password"
+                           class="auth-required-gate__input"
+                           onkeydown="if(event.key==='Enter'){event.preventDefault();authSignInEmailGate();}" />
+                </div>
+                <div class="auth-required-gate__actions">
+                    <button type="button" class="auth-required-gate__btn auth-required-gate__btn--primary" onclick="authSignInEmailGate()">Sign in</button>
+                    <button type="button" class="auth-required-gate__btn auth-required-gate__btn--secondary" onclick="authSignUpEmailGate()">Create account</button>
+                </div>
+            </div>
+        </div>
+    </div>
     <div class="app-container">
         <!-- Full-screen map -->
         <div id="map"></div>
@@ -4764,7 +4786,7 @@ HTML_TEMPLATE = '''
                             </div>
                             -->
                             <div style="font-size: 11px; color: #888; margin-top: 8px;">
-                                Tip: login lives here in Settings so it never interrupts navigation.
+                                Tip: if this server requires sign-in, you&apos;ll unlock the app on the welcome screen first; you can manage your account here anytime.
                             </div>
                         </div>
 

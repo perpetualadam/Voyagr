@@ -975,6 +975,89 @@ async function startStripeSubscriptionCheckout() {
 let supabaseClient = null;
 let supabasePublicConfig = null;
 
+function setAuthGateFormStatus(message, kind) {
+    const statusEl = document.getElementById('authGateStatus');
+    if (!statusEl) return;
+    statusEl.textContent = message || '';
+    statusEl.className = 'auth-required-gate__status';
+    if (kind === 'error') statusEl.classList.add('auth-required-gate__status--error');
+    else if (kind === 'ok') statusEl.classList.add('auth-required-gate__status--ok');
+}
+
+/**
+ * When Supabase URL + anon key exist, users must sign in before using the app.
+ * Modes: off (no overlay), loading (resolving session), signin (email form).
+ */
+function syncAuthRequiredGate(mode) {
+    const gate = document.getElementById('authRequiredGate');
+    const loadingEl = document.getElementById('authGateLoading');
+    const formEl = document.getElementById('authGateForm');
+    if (!gate) return;
+
+    if (mode === 'off') {
+        gate.style.display = 'none';
+        gate.setAttribute('aria-hidden', 'true');
+        document.body.classList.remove('auth-gate-active');
+        return;
+    }
+
+    gate.style.display = 'flex';
+    gate.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('auth-gate-active');
+
+    if (mode === 'loading') {
+        if (loadingEl) loadingEl.style.display = 'block';
+        if (formEl) formEl.style.display = 'none';
+        return;
+    }
+
+    if (mode === 'signin') {
+        setAuthGateFormStatus('', '');
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (formEl) formEl.style.display = 'block';
+    }
+}
+
+async function authSignInEmailGate() {
+    if (!supabaseClient) {
+        setAuthGateFormStatus('Sign-in is unavailable. Try again later.', 'error');
+        return;
+    }
+    const email = document.getElementById('authGateEmail')?.value?.trim();
+    const password = document.getElementById('authGatePassword')?.value || '';
+    if (!email || !password) {
+        setAuthGateFormStatus('Enter your email and password.', 'error');
+        return;
+    }
+    setAuthGateFormStatus('Signing in…', '');
+    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
+    if (error) {
+        setAuthGateFormStatus(error.message || 'Sign-in failed', 'error');
+        return;
+    }
+    setAuthGateFormStatus('', '');
+}
+
+async function authSignUpEmailGate() {
+    if (!supabaseClient) {
+        setAuthGateFormStatus('Sign-up is unavailable. Try again later.', 'error');
+        return;
+    }
+    const email = document.getElementById('authGateEmail')?.value?.trim();
+    const password = document.getElementById('authGatePassword')?.value || '';
+    if (!email || !password) {
+        setAuthGateFormStatus('Enter your email and password.', 'error');
+        return;
+    }
+    setAuthGateFormStatus('Creating account…', '');
+    const { error } = await supabaseClient.auth.signUp({ email, password });
+    if (error) {
+        setAuthGateFormStatus(error.message || 'Sign-up failed', 'error');
+        return;
+    }
+    setAuthGateFormStatus('Account created. Check your email if confirmation is required.', 'ok');
+}
+
 function setAccountUIState({ signedIn, email, message }) {
     const statusEl = document.getElementById('accountStatus');
     const signedOutEl = document.getElementById('accountSignedOut');
@@ -1004,6 +1087,7 @@ async function initSupabaseAuth() {
             });
             const accountSection = document.getElementById('accountSection');
             if (accountSection) accountSection.style.display = 'none';
+            syncAuthRequiredGate('off');
             return;
         }
 
@@ -1018,6 +1102,8 @@ async function initSupabaseAuth() {
         });
         window.supabaseClient = supabaseClient;
 
+        syncAuthRequiredGate('loading');
+
         // Initial session
         const { data: sessionData } = await supabaseClient.auth.getSession();
         await handleSupabaseSession(sessionData?.session || null);
@@ -1029,11 +1115,13 @@ async function initSupabaseAuth() {
     } catch (e) {
         console.error('[Auth] initSupabaseAuth failed:', e);
         setAccountUIState({ signedIn: false, message: 'Account login unavailable (config error).' });
+        syncAuthRequiredGate('off');
     }
 }
 
 async function handleSupabaseSession(session) {
     if (session && session.user) {
+        syncAuthRequiredGate('off');
         const userId = session.user.id;
         const email = session.user.email || '';
         setAccountUIState({ signedIn: true, email, message: 'Signed in.' });
@@ -1074,6 +1162,11 @@ async function handleSupabaseSession(session) {
     setAccountUIState({ signedIn: false, message: 'Not signed in (guest profile).' });
     switchActiveProfile('guest');
     await refreshPromoCodeSection(session || null);
+    if (supabaseClient) {
+        syncAuthRequiredGate('signin');
+    } else {
+        syncAuthRequiredGate('off');
+    }
 }
 
 async function authSignInEmail() {

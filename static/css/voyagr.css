@@ -44,6 +44,106 @@ body {
     padding-right: var(--safe-area-inset-right);
 }
 
+/* Full-screen sign-in gate when Supabase auth is configured (see voyagr-app.js) */
+.auth-required-gate {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100000;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    padding-bottom: calc(24px + var(--safe-area-inset-bottom, 0px));
+    background: linear-gradient(145deg, rgba(102, 126, 234, 0.96), rgba(118, 75, 162, 0.96));
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+}
+
+.auth-required-gate__panel {
+    width: 100%;
+    max-width: 400px;
+    background: #fff;
+    border-radius: 16px;
+    padding: 26px 22px;
+    box-shadow: 0 14px 44px rgba(0, 0, 0, 0.22);
+}
+
+.auth-required-gate__title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: #2d2d2d;
+    margin-bottom: 8px;
+}
+
+.auth-required-gate__hint {
+    font-size: 13px;
+    color: #666;
+    line-height: 1.45;
+    margin-bottom: 18px;
+}
+
+.auth-required-gate__loading {
+    text-align: center;
+    color: #555;
+    padding: 20px 8px;
+    font-size: 14px;
+}
+
+.auth-required-gate__status {
+    font-size: 13px;
+    min-height: 1.25em;
+    margin-bottom: 10px;
+}
+
+.auth-required-gate__status--error {
+    color: #c62828;
+}
+
+.auth-required-gate__status--ok {
+    color: #2e7d32;
+}
+
+.auth-required-gate__fields {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.auth-required-gate__input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 15px;
+}
+
+.auth-required-gate__actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.auth-required-gate__btn {
+    padding: 12px 10px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+}
+
+.auth-required-gate__btn--primary {
+    background: #667eea;
+    color: #fff;
+}
+
+.auth-required-gate__btn--secondary {
+    background: #f5f5f5;
+    color: #333;
+    border: 1px solid #ddd;
+}
+
 /* Full-screen map layout */
 .app-container {
     position: relative;

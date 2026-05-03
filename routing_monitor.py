@@ -15,22 +15,35 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Tuple
 import os
 
+import sys
+
+
+def _running_under_pytest() -> bool:
+    """Pytest replaces sys.std* with captured streams; re-wrapping stdout breaks capture (tmpfile closed)."""
+    return "pytest" in sys.modules or bool(os.environ.get("PYTEST_CURRENT_TEST"))
+
+
 # Configure logging with UTF-8 encoding for Windows compatibility
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('routing_monitor.log', encoding='utf-8'),
-        logging.StreamHandler()
-    ]
-)
+if not _running_under_pytest():
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.FileHandler('routing_monitor.log', encoding='utf-8'),
+            logging.StreamHandler()
+        ]
+    )
+else:
+    logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Fix Windows console encoding for emoji/unicode characters
-import sys
-if sys.platform == 'win32':
+if sys.platform == 'win32' and not _running_under_pytest():
     import io
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    try:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    except (AttributeError, OSError, ValueError):
+        pass
 
 # Routing engine URLs
 ENGINES = {
