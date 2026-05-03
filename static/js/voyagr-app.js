@@ -5547,6 +5547,24 @@ if (typeof window !== 'undefined') {
         } catch (e) {
             /* ignore */
         }
+        // setStyle() removes raster overlays; JS handles still pointed at removed layers.
+        try {
+            if (!map) return;
+            if (trafficLayer && !map.getLayer('traffic-layer')) {
+                trafficLayer = null;
+            }
+            if (weatherLayer && !map.getLayer('weather-layer')) {
+                weatherLayer = null;
+            }
+            if (showTrafficEnabled) {
+                addTrafficLayer();
+            }
+            if (showWeatherEnabled) {
+                addWeatherLayer();
+            }
+        } catch (e) {
+            /* ignore */
+        }
     });
 }
 
@@ -5665,6 +5683,14 @@ function addTrafficLayer() {
     if (!map) {
         console.log('[Traffic] Map not ready');
         return;
+    }
+
+    try {
+        if (trafficLayer && !map.getLayer('traffic-layer')) {
+            trafficLayer = null;
+        }
+    } catch (e) {
+        /* ignore */
     }
 
     // Remove existing traffic layer if any
@@ -5788,6 +5814,15 @@ function initTrafficLayer() {
     }
 
     if (showTrafficEnabled && map) {
+        try {
+            const st = map.getStyle && map.getStyle();
+            if (st && st.name === 'voyagr-bootstrap') {
+                console.log('[Traffic] Deferring traffic flow until basemap style loads');
+                return;
+            }
+        } catch (e) {
+            /* ignore */
+        }
         addTrafficLayer();
     }
 }
@@ -5861,6 +5896,14 @@ function addWeatherLayer() {
     if (!map) {
         console.log('[Weather] Map not ready');
         return;
+    }
+
+    try {
+        if (weatherLayer && !map.getLayer('weather-layer')) {
+            weatherLayer = null;
+        }
+    } catch (e) {
+        /* ignore */
     }
 
     // Remove existing weather layer if any
@@ -5971,6 +6014,15 @@ function initWeatherLayer() {
     }
 
     if (showWeatherEnabled && map) {
+        try {
+            const st = map.getStyle && map.getStyle();
+            if (st && st.name === 'voyagr-bootstrap') {
+                console.log('[Weather] Deferring weather overlay until basemap style loads');
+                return;
+            }
+        } catch (e) {
+            /* ignore */
+        }
         addWeatherLayer();
     }
 }
