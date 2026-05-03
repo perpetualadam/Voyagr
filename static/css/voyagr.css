@@ -319,6 +319,36 @@ body {
     cursor: pointer;
 }
 
+/* Mobile “hover”: long-press hint banner (above bottom sheet / thumb zone) */
+.map-hint-toast {
+    display: none;
+    position: fixed;
+    left: 50%;
+    bottom: calc(108px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 600;
+    max-width: min(92vw, 400px);
+    padding: 12px 18px;
+    margin: 0;
+    background: rgba(30, 30, 30, 0.94);
+    color: #fff;
+    border-radius: 14px;
+    font-size: 14px;
+    line-height: 1.4;
+    text-align: center;
+    box-shadow: 0 6px 28px rgba(0, 0, 0, 0.35);
+    pointer-events: none;
+    -webkit-font-smoothing: antialiased;
+}
+
+.map-hint-toast.is-visible {
+    display: block;
+}
+
+.map-hint-toast[hidden] {
+    display: none !important;
+}
+
 .fab:hover {
     transform: scale(1.08);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);

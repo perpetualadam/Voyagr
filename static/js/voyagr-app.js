@@ -11072,6 +11072,42 @@ function updateRoadReportFabVisibility() {
 }
 
 /**
+ * True for phones/tablets and other touch-first UIs (no reliable hover tooltips).
+ */
+function voyagrTouchHintsEnabled() {
+    try {
+        if (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) return true;
+        if ('ontouchstart' in window) return true;
+        if (window.matchMedia) {
+            if (window.matchMedia('(hover: none)').matches) return true;
+            if (window.matchMedia('(pointer: coarse)').matches) return true;
+        }
+    } catch (e) {
+        /* ignore */
+    }
+    return false;
+}
+
+/**
+ * Short banner at bottom of screen — easier to see on phones than top-right notifications.
+ */
+function voyagrShowMapIconHint(message) {
+    if (!message) return;
+    const el = document.getElementById('mapHintToast');
+    if (!el) return;
+    el.textContent = message;
+    el.removeAttribute('hidden');
+    el.classList.add('is-visible');
+    if (window.__voyagrMapHintToastT) {
+        clearTimeout(window.__voyagrMapHintToastT);
+    }
+    window.__voyagrMapHintToastT = setTimeout(() => {
+        el.classList.remove('is-visible');
+        el.setAttribute('hidden', '');
+    }, 4200);
+}
+
+/**
  * Modal listing visible map / toolbar buttons (mobile-friendly; desktop relies on hover titles).
  */
 function openMapControlsHintModal() {
@@ -11104,6 +11140,23 @@ function openMapControlsHintModal() {
             ul.appendChild(li);
         }
     }
+
+    const exTitle = document.createElement('li');
+    exTitle.className = 'map-hint-section-title';
+    exTitle.textContent = 'Often hidden until you need them';
+    ul.appendChild(exTitle);
+    const extras = [
+        '\u2014 After you calculate a route, \u201cStart navigation\u201d can appear on the map.',
+        '\u2014 During turn-by-turn, Zoom & follow and Journey overview may appear as round buttons.',
+        '\u2014 Long-press any round map icon ~\u00bds for this same text as a bottom banner.',
+    ];
+    for (let e = 0; e < extras.length; e++) {
+        const li = document.createElement('li');
+        li.className = 'map-hint-item';
+        li.textContent = extras[e];
+        ul.appendChild(li);
+    }
+
     m.style.display = 'block';
 }
 
@@ -11113,13 +11166,14 @@ function closeMapControlsHintModal() {
 }
 
 /**
- * Long-press on touch devices shows the same text as the title tooltip (desktop hover).
+ * Long-press (touch / pen) shows title text like a desktop hover tooltip.
  */
 function initMobileMapIconHints() {
-    const enable =
-        ('ontouchstart' in window) ||
-        (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
-    if (!enable) return;
+    if (!voyagrTouchHintsEnabled()) {
+        console.log('[Hints] Long-press map hints skipped (touch / coarse pointer not detected)');
+        return;
+    }
+    console.log('[Hints] Long-press map hints enabled (\u2248' + 420 + 'ms, bottom banner)');
 
     const roots = ['.fab-container', '#navControlButtons', '.sheet-toolbar'];
     for (let r = 0; r < roots.length; r++) {
@@ -11139,6 +11193,8 @@ function voyagrBindFabLongPressHint(el) {
     let timer = null;
     let startX = 0;
     let startY = 0;
+    const LONG_MS = 420;
+    const MOVE_PX2 = 100;
 
     const getHint = () => {
         const t = el.getAttribute('title');
@@ -11154,42 +11210,71 @@ function voyagrBindFabLongPressHint(el) {
         }
     };
 
-    el.addEventListener(
-        'touchstart',
-        (e) => {
-            if (e.touches.length !== 1) return;
-            startX = e.touches[0].clientX;
-            startY = e.touches[0].clientY;
-            clearTimer();
-            timer = setTimeout(() => {
-                timer = null;
-                const hint = getHint();
-                if (!hint) return;
-                el.dataset.voyagrSuppressClick = '1';
-                showInAppNotification('\u2139\ufe0f', hint, 'info', 3400);
-                try {
-                    if (navigator.vibrate) navigator.vibrate(15);
-                } catch (_v) {
-                    /* ignore */
-                }
-            }, 520);
-        },
-        { passive: true }
-    );
+    const scheduleHint = (cx, cy) => {
+        startX = cx;
+        startY = cy;
+        clearTimer();
+        timer = setTimeout(() => {
+            timer = null;
+            const hint = getHint();
+            if (!hint) return;
+            el.dataset.voyagrSuppressClick = '1';
+            voyagrShowMapIconHint(hint);
+            try {
+                if (navigator.vibrate) navigator.vibrate(20);
+            } catch (_v) {
+                /* ignore */
+            }
+        }, LONG_MS);
+    };
 
-    el.addEventListener(
-        'touchmove',
-        (e) => {
-            if (!timer || !e.touches[0]) return;
-            const dx = e.touches[0].clientX - startX;
-            const dy = e.touches[0].clientY - startY;
-            if (dx * dx + dy * dy > 64) clearTimer();
-        },
-        { passive: true }
-    );
+    const onMove = (cx, cy) => {
+        if (!timer) return;
+        const dx = cx - startX;
+        const dy = cy - startY;
+        if (dx * dx + dy * dy > MOVE_PX2) clearTimer();
+    };
 
-    el.addEventListener('touchend', clearTimer, { passive: true });
-    el.addEventListener('touchcancel', clearTimer, { passive: true });
+    if (window.PointerEvent) {
+        el.addEventListener(
+            'pointerdown',
+            (e) => {
+                if (!e.isPrimary) return;
+                if (e.pointerType === 'mouse') return;
+                scheduleHint(e.clientX, e.clientY);
+            },
+            { passive: true }
+        );
+        el.addEventListener(
+            'pointermove',
+            (e) => {
+                if (!timer || !e.isPrimary) return;
+                onMove(e.clientX, e.clientY);
+            },
+            { passive: true }
+        );
+        el.addEventListener('pointerup', clearTimer, { passive: true });
+        el.addEventListener('pointercancel', clearTimer, { passive: true });
+    } else {
+        el.addEventListener(
+            'touchstart',
+            (e) => {
+                if (e.touches.length !== 1) return;
+                scheduleHint(e.touches[0].clientX, e.touches[0].clientY);
+            },
+            { passive: true }
+        );
+        el.addEventListener(
+            'touchmove',
+            (e) => {
+                if (!e.touches[0]) return;
+                onMove(e.touches[0].clientX, e.touches[0].clientY);
+            },
+            { passive: true }
+        );
+        el.addEventListener('touchend', clearTimer, { passive: true });
+        el.addEventListener('touchcancel', clearTimer, { passive: true });
+    }
 
     el.addEventListener(
         'click',
