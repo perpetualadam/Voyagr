@@ -76,7 +76,8 @@ def get_config():
         'stripe_subscription_checkout_available': bool(stripe_key and sub_price),
         # Deprecated alias (same flag); remove when all clients updated
         'stripe_checkout_available': bool(stripe_key and sub_price),
-        # Shown in app UI for Checkout flow; Payment Link trials are set in Stripe Dashboard only
+        # Shown after sign-in for the Stripe trial gate; Payment Link trials can also be set in Stripe Dashboard.
+        # Example: STRIPE_SUBSCRIPTION_TRIAL_DAYS=7 with Checkout — trial_period_days is set on subscription_data.
         'stripe_subscription_trial_days': trial_days_out,
         # Optional notice (e.g. "UK only") — set VOYAGR_SERVICE_REGION_NOTE on the server
         'service_region_note': os.getenv('VOYAGR_SERVICE_REGION_NOTE', '').strip(),

@@ -4421,7 +4421,7 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260503a" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260503b" />
     {# All app scripts use `defer`: they still download in parallel with HTML parsing
        and still execute in document order (dependencies preserved), but they no
        longer block first paint. This is the biggest lever for shortening the PWA
@@ -4438,7 +4438,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260503a"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260503b"></script>
     <script defer src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -4461,6 +4461,14 @@ HTML_TEMPLATE = '''
                 <div class="auth-required-gate__actions">
                     <button type="button" class="auth-required-gate__btn auth-required-gate__btn--primary" onclick="authSignInEmailGate()">Sign in</button>
                     <button type="button" class="auth-required-gate__btn auth-required-gate__btn--secondary" onclick="authSignUpEmailGate()">Create account</button>
+                </div>
+            </div>
+            <div id="authGateStripeTrial" class="auth-required-gate__stripe" style="display: none;">
+                <p id="authGateStripeHint" class="auth-required-gate__hint"></p>
+                <div id="authGateStripeStatus" class="auth-required-gate__status" aria-live="polite"></div>
+                <div class="auth-required-gate__actions auth-required-gate__actions--stack">
+                    <button type="button" id="authGateStripePrimaryBtn" class="auth-required-gate__btn auth-required-gate__btn--primary" onclick="authGateStripeContinue()">Start free trial</button>
+                    <button type="button" class="auth-required-gate__btn auth-required-gate__btn--secondary" onclick="authGateStripeSkip()">Skip for now</button>
                 </div>
             </div>
         </div>

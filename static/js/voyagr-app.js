@@ -945,17 +945,25 @@ function applySupportLinksFromConfig(cfg) {
     }
 }
 
-async function startStripeSubscriptionCheckout() {
+async function startStripeSubscriptionCheckout(sessionOpt) {
     try {
         showStatus('Opening subscription checkout…', 'info');
         const origin = window.location.origin;
+        let session = sessionOpt;
+        if (session == null && supabaseClient) {
+            const { data } = await supabaseClient.auth.getSession();
+            session = data?.session || null;
+        }
+        const body = {
+            success_url: `${origin}/?subscribe=success`,
+            cancel_url: `${origin}/?subscribe=cancelled`,
+        };
+        if (session?.user?.email) body.customer_email = session.user.email;
+        if (session?.user?.id) body.supabase_user_id = session.user.id;
         const res = await fetch('/api/support/stripe-checkout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                success_url: `${origin}/?subscribe=success`,
-                cancel_url: `${origin}/?subscribe=cancelled`,
-            }),
+            body: JSON.stringify(body),
         });
         const data = await res.json();
         if (!res.ok || !data.success || !data.url) {
@@ -974,6 +982,135 @@ async function startStripeSubscriptionCheckout() {
 // =============================================================================
 let supabaseClient = null;
 let supabasePublicConfig = null;
+let _authGateStripeOffer = null;
+
+const _STRIPE_ONBOARD_SKIP_PREFIX = 'voyagr_skip_stripe_onboard:';
+
+function _stripeOnboardSkipKey(userId) {
+    return userId ? `${_STRIPE_ONBOARD_SKIP_PREFIX}${userId}` : null;
+}
+
+/** Subscription offer for post-auth gate (trial length from STRIPE_SUBSCRIPTION_TRIAL_DAYS /api/config). */
+function getStripeOnboardingOffer(cfg) {
+    if (!cfg) return null;
+    const pl = (cfg.stripe_payment_link_url || '').trim();
+    const checkout = !!(cfg.stripe_subscription_checkout_available || cfg.stripe_checkout_available);
+    const trialDays = parseInt(cfg.stripe_subscription_trial_days, 10);
+    const hasTrial = Number.isFinite(trialDays) && trialDays > 0;
+    if (checkout && !pl) {
+        return { kind: 'checkout', trialDays: hasTrial ? trialDays : 0 };
+    }
+    if (pl) {
+        return { kind: 'payment_link', trialDays: hasTrial ? trialDays : 0, url: pl };
+    }
+    return null;
+}
+
+function consumeStripeReturnQueryForUser(userId) {
+    try {
+        const qs = new URLSearchParams(window.location.search || '');
+        const sub = qs.get('subscribe');
+        if (sub === 'success' && userId) {
+            const k = _stripeOnboardSkipKey(userId);
+            if (k) localStorage.setItem(k, '1');
+        }
+        if (sub === 'success' || sub === 'cancelled') {
+            const url = new URL(window.location.href);
+            url.searchParams.delete('subscribe');
+            url.searchParams.delete('session_id');
+            window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+        }
+    } catch (e) {
+        console.warn('[Stripe gate] URL cleanup:', e);
+    }
+}
+
+async function showPostAuthStripeGateIfNeeded(session) {
+    const uid = session?.user?.id;
+    if (!uid || !supabasePublicConfig) {
+        syncAuthRequiredGate('off');
+        return;
+    }
+    consumeStripeReturnQueryForUser(uid);
+    try {
+        if (localStorage.getItem(_stripeOnboardSkipKey(uid)) === '1') {
+            syncAuthRequiredGate('off');
+            return;
+        }
+    } catch (e) { /* ignore quota */ }
+
+    const offer = getStripeOnboardingOffer(supabasePublicConfig);
+    if (!offer || offer.trialDays <= 0) {
+        syncAuthRequiredGate('off');
+        return;
+    }
+    _authGateStripeOffer = offer;
+    syncAuthRequiredGate('stripe_trial', offer);
+}
+
+async function authGateStripeContinue() {
+    const st = document.getElementById('authGateStripeStatus');
+    const setSt = (msg, kind) => {
+        if (!st) return;
+        st.textContent = msg || '';
+        st.className = 'auth-required-gate__status';
+        if (kind === 'error') st.classList.add('auth-required-gate__status--error');
+    };
+    const offer = _authGateStripeOffer;
+    if (!offer) {
+        syncAuthRequiredGate('off');
+        return;
+    }
+    if (!supabaseClient) {
+        setSt('Session unavailable. Refresh the page.', 'error');
+        return;
+    }
+    const { data } = await supabaseClient.auth.getSession();
+    const sess = data?.session || null;
+    if (offer.kind === 'payment_link' && offer.url) {
+        setSt('Opening Stripe checkout…', '');
+        window.open(offer.url, '_blank', 'noopener,noreferrer');
+        setSt(
+            'Complete checkout in the new tab. Tap Skip for now below when you are finished (or to use the app without subscribing).',
+            ''
+        );
+        return;
+    }
+    setSt('Opening subscription checkout…', '');
+    try {
+        const origin = window.location.origin;
+        const res = await fetch('/api/support/stripe-checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                success_url: `${origin}/?subscribe=success`,
+                cancel_url: `${origin}/?subscribe=cancelled`,
+                customer_email: sess?.user?.email || undefined,
+                supabase_user_id: sess?.user?.id || undefined,
+            }),
+        });
+        const resData = await res.json();
+        if (!res.ok || !resData.success || !resData.url) {
+            setSt(resData.error || 'Could not start checkout.', 'error');
+            return;
+        }
+        window.location.href = resData.url;
+    } catch (e) {
+        console.error('[Stripe gate] checkout', e);
+        setSt('Could not start checkout.', 'error');
+    }
+}
+
+async function authGateStripeSkip() {
+    try {
+        const { data } = await supabaseClient.auth.getSession();
+        const uid = data?.session?.user?.id;
+        const k = _stripeOnboardSkipKey(uid);
+        if (k) localStorage.setItem(k, '1');
+    } catch (e) { /* ignore */ }
+    _authGateStripeOffer = null;
+    syncAuthRequiredGate('off');
+}
 
 function setAuthGateFormStatus(message, kind) {
     const statusEl = document.getElementById('authGateStatus');
@@ -986,18 +1123,22 @@ function setAuthGateFormStatus(message, kind) {
 
 /**
  * When Supabase URL + anon key exist, users must sign in before using the app.
- * Modes: off (no overlay), loading (resolving session), signin (email form).
+ * Modes: off, loading, signin, stripe_trial (after sign-in if Stripe trial is configured).
  */
-function syncAuthRequiredGate(mode) {
+function syncAuthRequiredGate(mode, offer) {
     const gate = document.getElementById('authRequiredGate');
     const loadingEl = document.getElementById('authGateLoading');
     const formEl = document.getElementById('authGateForm');
+    const stripeEl = document.getElementById('authGateStripeTrial');
+    const titleEl = document.getElementById('authGateTitle');
     if (!gate) return;
 
     if (mode === 'off') {
+        _authGateStripeOffer = null;
         gate.style.display = 'none';
         gate.setAttribute('aria-hidden', 'true');
         document.body.classList.remove('auth-gate-active');
+        if (stripeEl) stripeEl.style.display = 'none';
         return;
     }
 
@@ -1005,16 +1146,43 @@ function syncAuthRequiredGate(mode) {
     gate.setAttribute('aria-hidden', 'false');
     document.body.classList.add('auth-gate-active');
 
+    if (stripeEl) stripeEl.style.display = 'none';
+
     if (mode === 'loading') {
+        if (titleEl) titleEl.textContent = 'Sign in to Voyagr';
         if (loadingEl) loadingEl.style.display = 'block';
         if (formEl) formEl.style.display = 'none';
         return;
     }
 
     if (mode === 'signin') {
+        if (titleEl) titleEl.textContent = 'Sign in to Voyagr';
         setAuthGateFormStatus('', '');
         if (loadingEl) loadingEl.style.display = 'none';
         if (formEl) formEl.style.display = 'block';
+        return;
+    }
+
+    if (mode === 'stripe_trial' && offer && stripeEl) {
+        if (titleEl) titleEl.textContent = 'Start your free trial';
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (formEl) formEl.style.display = 'none';
+        const hint = document.getElementById('authGateStripeHint');
+        const td = offer.trialDays;
+        if (hint) {
+            hint.textContent =
+                `Continue to Stripe to start your ${td}-day Voyager Premium trial. Billing begins after the trial unless you cancel in the Stripe portal.`;
+        }
+        const ssl = document.getElementById('authGateStripeStatus');
+        if (ssl) {
+            ssl.textContent = '';
+            ssl.className = 'auth-required-gate__status';
+        }
+        const primary = document.getElementById('authGateStripePrimaryBtn');
+        if (primary) {
+            primary.textContent = offer.kind === 'payment_link' ? 'Open Stripe checkout' : 'Continue to Stripe';
+        }
+        stripeEl.style.display = 'block';
     }
 }
 
@@ -1121,7 +1289,6 @@ async function initSupabaseAuth() {
 
 async function handleSupabaseSession(session) {
     if (session && session.user) {
-        syncAuthRequiredGate('off');
         const userId = session.user.id;
         const email = session.user.email || '';
         setAccountUIState({ signedIn: true, email, message: 'Signed in.' });
@@ -1145,6 +1312,7 @@ async function handleSupabaseSession(session) {
                 showStatus('Imported guest profile into account profile', 'success');
                 scheduleSupabaseProfileSync();
                 await refreshPromoCodeSection(session || null);
+                await showPostAuthStripeGateIfNeeded(session);
                 return;
             }
         }
@@ -1155,6 +1323,7 @@ async function handleSupabaseSession(session) {
         // If no remote snapshot exists yet, push current local snapshot.
         scheduleSupabaseProfileSync();
         await refreshPromoCodeSection(session || null);
+        await showPostAuthStripeGateIfNeeded(session);
         return;
     }
 
@@ -4525,12 +4694,34 @@ async function calculateRoute() {
                 });
             }
 
-            // Check for error status codes
+            // Check error status codes — parse body safely (408 etc. may be JSON or edge non-JSON)
             if (!response.ok) {
-                return response.json().then(data => {
-                    throw new Error(data.error || `Server error: ${response.status}`);
-                }).catch(() => {
-                    throw new Error(`Server error: ${response.status}. Please try again.`);
+                return response.text().then(text => {
+                    let msg = null;
+                    try {
+                        const parsed = JSON.parse(text);
+                        if (parsed && typeof parsed.error === 'string' && parsed.error.trim()) {
+                            msg = parsed.error.trim();
+                        }
+                    } catch {
+                        /* ignore */
+                    }
+                    if (!msg) {
+                        if (response.status === 408) {
+                            msg =
+                                'Route calculation timed out. Try a shorter route, move start and end closer, or try again in a moment.';
+                        } else if (response.status === 504) {
+                            msg =
+                                'Gateway Timeout (504): The route is too complex or the server is busy. Try a shorter route.';
+                        } else if (response.status === 502) {
+                            msg = 'Bad Gateway (502): Server communication error. Please try again.';
+                        } else if (response.status === 500) {
+                            msg = 'Internal Server Error (500). Please check server logs.';
+                        } else {
+                            msg = `Server error (${response.status}). Please try again.`;
+                        }
+                    }
+                    throw new Error(msg);
                 });
             }
 

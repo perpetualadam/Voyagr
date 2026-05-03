@@ -44,7 +44,8 @@ def create_stripe_checkout_session() -> Any:
 
     Body JSON (optional):
       success_url, cancel_url — must be valid https URLs on your domain (or localhost for dev).
-      Point success_url at domain B if you use a separate public site.
+      customer_email — prefills Stripe Checkout (e.g. signed-in Supabase user).
+      supabase_user_id — stored as Checkout client_reference_id for your reconciliation.
     """
     secret = os.getenv('STRIPE_SECRET_KEY', '').strip()
     price_id = _subscription_price_id()
@@ -64,6 +65,8 @@ def create_stripe_checkout_session() -> Any:
 
     default_origin = os.getenv('VOYAGR_PUBLIC_ORIGIN', '').strip().rstrip('/')
     payload: Dict[str, Any] = request.get_json(silent=True) or {}
+    customer_email = (payload.get('customer_email') or '').strip()
+    supabase_user_id = (payload.get('supabase_user_id') or '').strip()
     success_url = (payload.get('success_url') or os.getenv('STRIPE_SUCCESS_URL') or '').strip()
     cancel_url = (payload.get('cancel_url') or os.getenv('STRIPE_CANCEL_URL') or '').strip()
 
@@ -107,6 +110,10 @@ def create_stripe_checkout_session() -> Any:
         }
         if subscription_data:
             create_kw['subscription_data'] = subscription_data
+        if customer_email and '@' in customer_email:
+            create_kw['customer_email'] = customer_email
+        if supabase_user_id:
+            create_kw['client_reference_id'] = supabase_user_id[:200]
         session = stripe.checkout.Session.create(**create_kw)
         url: Optional[str] = session.get('url')
         if not url:
