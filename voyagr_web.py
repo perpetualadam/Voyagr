@@ -4421,7 +4421,7 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260503c" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260503d" />
     {# All app scripts use `defer`: they still download in parallel with HTML parsing
        and still execute in document order (dependencies preserved), but they no
        longer block first paint. This is the biggest lever for shortening the PWA
@@ -4438,8 +4438,8 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260503j"></script>
-    <script defer src="/static/js/app.js?v=20260504a"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260503l"></script>
+    <script defer src="/static/js/app.js?v=20260504b"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -4488,7 +4488,7 @@ HTML_TEMPLATE = '''
         <div class="fab-container">
             <button type="button" id="currentLocationFab" class="fab" title="Current Location" onclick="getCurrentLocation()">📍</button>
             <button type="button" class="fab" title="Voice control" id="voiceFab" onclick="toggleVoiceInput()" aria-label="Voice control" aria-pressed="false">🎤</button>
-
+            <button type="button" id="mapControlsHintFab" class="fab fab-hint" title="Map button guide — lists all visible map controls. On phones, long-press any round button for a quick tip." onclick="openMapControlsHintModal()" aria-label="Map button guide">i</button>
         </div>
 
         <!-- Bottom Sheet Drawer -->
@@ -5934,6 +5934,16 @@ HTML_TEMPLATE = '''
             <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
             <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
             <button id="roadReportFab" class="fab" title="Report road issue or speed limit" onclick="openRoadReportModal()" style="background: #E65100;">⚠️</button>
+        </div>
+
+        <div id="mapControlsHintModal" class="road-report-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="mapControlsHintTitle">
+            <div class="road-report-modal-backdrop" onclick="closeMapControlsHintModal()"></div>
+            <div class="road-report-modal-panel map-controls-hint-panel">
+                <h3 id="mapControlsHintTitle" class="map-controls-hint-title">Map controls</h3>
+                <p id="mapControlsHintIntro" class="map-controls-hint-intro">On a phone or tablet, <strong>press and hold</strong> any round map button for a short description (desktop: hover for tooltips). This list only shows buttons that are currently visible.</p>
+                <ul id="mapControlsHintList" class="map-controls-hint-list"></ul>
+                <button type="button" class="map-controls-hint-close" onclick="closeMapControlsHintModal()">Close</button>
+            </div>
         </div>
 
         <div id="roadReportModal" class="road-report-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="roadReportModalTitle">

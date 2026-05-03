@@ -260,6 +260,65 @@ body {
     -webkit-user-select: none;
 }
 
+/* Compact info FAB (map control guide); pair with .fab */
+.fab.fab-hint {
+    width: 44px;
+    height: 44px;
+    font-size: 16px;
+    font-weight: 700;
+    font-style: italic;
+    color: #37474f;
+}
+
+.map-controls-hint-panel .map-controls-hint-title {
+    margin: 0 0 8px 0;
+    font-size: 18px;
+}
+
+.map-controls-hint-panel .map-controls-hint-intro {
+    font-size: 13px;
+    color: #555;
+    line-height: 1.45;
+    margin: 0 0 14px 0;
+}
+
+.map-controls-hint-panel .map-controls-hint-list {
+    margin: 0 0 16px 0;
+    padding-left: 18px;
+    max-height: min(52vh, 360px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.map-controls-hint-panel .map-hint-section-title {
+    list-style: none;
+    margin: 12px 0 6px -18px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #666;
+}
+
+.map-controls-hint-panel .map-hint-item {
+    margin-bottom: 8px;
+    font-size: 14px;
+    line-height: 1.35;
+    color: #222;
+}
+
+.map-controls-hint-panel .map-controls-hint-close {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: linear-gradient(135deg, #667eea, #764ba2);
+    color: #fff;
+    font-weight: 600;
+    font-size: 15px;
+    cursor: pointer;
+}
+
 .fab:hover {
     transform: scale(1.08);
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);

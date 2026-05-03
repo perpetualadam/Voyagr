@@ -11040,9 +11040,10 @@ function warmPicovoiceStaticCache() {
 function syncBottomSheetOverlapFabs() {
     const bottomSheet = document.getElementById('bottomSheet');
     const sheetExpanded = !!(bottomSheet && bottomSheet.classList.contains('expanded'));
-    const ids = ['roadReportFab', 'startTrackingBtn', 'voiceFab', 'currentLocationFab'];
-    for (let i = 0; i < ids.length; i++) {
-        const el = document.getElementById(ids[i]);
+
+    const alwaysHideWhenExpandedIds = ['roadReportFab', 'startTrackingBtn', 'voiceFab', 'currentLocationFab', 'mapControlsHintFab'];
+    for (let i = 0; i < alwaysHideWhenExpandedIds.length; i++) {
+        const el = document.getElementById(alwaysHideWhenExpandedIds[i]);
         if (!el) continue;
         if (sheetExpanded) {
             el.style.display = 'none';
@@ -11050,11 +11051,157 @@ function syncBottomSheetOverlapFabs() {
             el.style.removeProperty('display');
         }
     }
+
+    const zoomBtn = document.getElementById('zoomFollowToggle');
+    const journeyBtn = document.getElementById('journeyOverviewBtn');
+    if (sheetExpanded && routeInProgress) {
+        if (zoomBtn) zoomBtn.style.display = 'none';
+        if (journeyBtn) journeyBtn.style.display = 'none';
+    } else if (routeInProgress) {
+        if (zoomBtn) zoomBtn.style.display = 'block';
+        if (journeyBtn) journeyBtn.style.display = 'block';
+    } else {
+        if (zoomBtn) zoomBtn.style.display = 'none';
+        if (journeyBtn) journeyBtn.style.display = 'none';
+    }
 }
 
 /** Road-report FAB: always available unless the bottom sheet is covering map controls. */
 function updateRoadReportFabVisibility() {
     syncBottomSheetOverlapFabs();
+}
+
+/**
+ * Modal listing visible map / toolbar buttons (mobile-friendly; desktop relies on hover titles).
+ */
+function openMapControlsHintModal() {
+    const m = document.getElementById('mapControlsHintModal');
+    const ul = document.getElementById('mapControlsHintList');
+    if (!m || !ul) return;
+    ul.innerHTML = '';
+    const sections = [
+        { title: 'Map (round buttons)', selector: '.fab-container .fab, #navControlButtons .fab' },
+        { title: 'Bottom sheet toolbar', selector: '.sheet-toolbar .sheet-icon-btn' },
+    ];
+    for (let s = 0; s < sections.length; s++) {
+        const sec = sections[s];
+        const secTitle = document.createElement('li');
+        secTitle.className = 'map-hint-section-title';
+        secTitle.textContent = sec.title;
+        ul.appendChild(secTitle);
+        const nodes = document.querySelectorAll(sec.selector);
+        for (let i = 0; i < nodes.length; i++) {
+            const el = nodes[i];
+            if (el.id === 'mapControlsHintFab') continue;
+            const hint = el.getAttribute('title') || el.getAttribute('aria-label');
+            if (!hint) continue;
+            const st = window.getComputedStyle(el);
+            if (st.display === 'none' || st.visibility === 'hidden') continue;
+            const icon = (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 6);
+            const li = document.createElement('li');
+            li.className = 'map-hint-item';
+            li.textContent = (icon ? icon + ' \u2014 ' : '') + hint;
+            ul.appendChild(li);
+        }
+    }
+    m.style.display = 'block';
+}
+
+function closeMapControlsHintModal() {
+    const modal = document.getElementById('mapControlsHintModal');
+    if (modal) modal.style.display = 'none';
+}
+
+/**
+ * Long-press on touch devices shows the same text as the title tooltip (desktop hover).
+ */
+function initMobileMapIconHints() {
+    const enable =
+        ('ontouchstart' in window) ||
+        (window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+    if (!enable) return;
+
+    const roots = ['.fab-container', '#navControlButtons', '.sheet-toolbar'];
+    for (let r = 0; r < roots.length; r++) {
+        const root = document.querySelector(roots[r]);
+        if (!root) continue;
+        const buttons = root.querySelectorAll('button.fab, button.sheet-icon-btn');
+        for (let i = 0; i < buttons.length; i++) {
+            voyagrBindFabLongPressHint(buttons[i]);
+        }
+    }
+}
+
+function voyagrBindFabLongPressHint(el) {
+    if (!el || el.dataset.voyagrLongPressHint === '1') return;
+    el.dataset.voyagrLongPressHint = '1';
+
+    let timer = null;
+    let startX = 0;
+    let startY = 0;
+
+    const getHint = () => {
+        const t = el.getAttribute('title');
+        if (t) return t.trim();
+        const a = el.getAttribute('aria-label');
+        return a ? a.trim() : '';
+    };
+
+    const clearTimer = () => {
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
+    };
+
+    el.addEventListener(
+        'touchstart',
+        (e) => {
+            if (e.touches.length !== 1) return;
+            startX = e.touches[0].clientX;
+            startY = e.touches[0].clientY;
+            clearTimer();
+            timer = setTimeout(() => {
+                timer = null;
+                const hint = getHint();
+                if (!hint) return;
+                el.dataset.voyagrSuppressClick = '1';
+                showInAppNotification('\u2139\ufe0f', hint, 'info', 3400);
+                try {
+                    if (navigator.vibrate) navigator.vibrate(15);
+                } catch (_v) {
+                    /* ignore */
+                }
+            }, 520);
+        },
+        { passive: true }
+    );
+
+    el.addEventListener(
+        'touchmove',
+        (e) => {
+            if (!timer || !e.touches[0]) return;
+            const dx = e.touches[0].clientX - startX;
+            const dy = e.touches[0].clientY - startY;
+            if (dx * dx + dy * dy > 64) clearTimer();
+        },
+        { passive: true }
+    );
+
+    el.addEventListener('touchend', clearTimer, { passive: true });
+    el.addEventListener('touchcancel', clearTimer, { passive: true });
+
+    el.addEventListener(
+        'click',
+        (e) => {
+            if (el.dataset.voyagrSuppressClick === '1') {
+                e.preventDefault();
+                e.stopPropagation();
+                delete el.dataset.voyagrSuppressClick;
+            }
+        },
+        true
+    );
 }
 
 function syncRoadReportSpeedFieldsVisibility() {

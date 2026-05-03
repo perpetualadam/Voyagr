@@ -32,6 +32,11 @@ function initializeApp() {
 
         // Initialize UI components
         initBottomSheet();
+        try {
+            initMobileMapIconHints();
+        } catch (e) {
+            console.warn('[App] Map icon hints:', e);
+        }
         console.log('[App] Bottom sheet initialized');
         
         // Initialize voice recognition
