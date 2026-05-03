@@ -4421,7 +4421,7 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260504a" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260503c" />
     {# All app scripts use `defer`: they still download in parallel with HTML parsing
        and still execute in document order (dependencies preserved), but they no
        longer block first paint. This is the biggest lever for shortening the PWA
@@ -4438,7 +4438,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260503b"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260503c"></script>
     <script defer src="/static/js/app.js?v=20260504a"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -4487,7 +4487,7 @@ HTML_TEMPLATE = '''
         <!-- Floating Action Buttons -->
         <div class="fab-container">
             <button class="fab" title="Current Location" onclick="getCurrentLocation()">📍</button>
-            <button class="fab" title="Voice Control" id="voiceFab" onclick="toggleVoiceInput()">🎤</button>
+            <button type="button" class="fab" title="Voice control" id="voiceFab" onclick="toggleVoiceInput()" aria-label="Voice control" aria-pressed="false">🎤</button>
 
         </div>
 
@@ -4743,20 +4743,31 @@ HTML_TEMPLATE = '''
                     <div id="mlPredictionsList"></div>
                 </div>
 
-                <!-- Voice Control Section -->
-                <div class="voice-section">
-                    <h3>🎤 Voice Control</h3>
+                <!-- Voice control -->
+                <section class="voice-section" role="region" aria-labelledby="voiceSectionTitle">
+                    <div class="voice-card__head">
+                        <h3 id="voiceSectionTitle" class="voice-card__title">Voice control</h3>
+                        <p class="voice-card__hint">Use Chrome or Edge over HTTPS. Tap Listen, speak a command, then wait for the response. The map microphone uses the same control.</p>
+                    </div>
+                    <div id="voiceStatus" class="voice-status" role="status" aria-live="polite">Ready</div>
                     <div class="voice-controls">
-                        <button id="voiceBtn" class="btn-voice" onclick="toggleVoiceInput()">
-                            <span id="voiceBtnText">🎤 Listen</span>
+                        <button type="button" id="voiceBtn" class="btn-voice" onclick="toggleVoiceInput()" aria-pressed="false">
+                            <span id="voiceBtnText">Listen</span>
                         </button>
-                        <button class="btn-voice-secondary" onclick="speakText('Voice control ready. Say a command.')">
-                            🔊 Test
+                        <button type="button" class="btn-voice-secondary" onclick="speakText('Voice control is ready. For example, say navigate to, or find nearest parking.')">
+                            Test speech
                         </button>
                     </div>
-                    <div id="voiceStatus" class="voice-status"></div>
-                    <div id="voiceTranscript" class="voice-transcript"></div>
-                </div>
+                    <div id="voiceTranscript" class="voice-transcript" aria-label="Live transcript"></div>
+                    <details class="voice-examples">
+                        <summary>Example phrases</summary>
+                        <ul>
+                            <li>Navigate to … / Go to … / Take me to …</li>
+                            <li>Find nearest petrol station, parking, or food</li>
+                            <li>Reroute, recalculate, or find new route</li>
+                        </ul>
+                    </details>
+                </section>
 
                 <button class="btn-clear" onclick="clearForm()" style="width: 100%; margin-top: 20px;">Clear All</button>
                 </div>

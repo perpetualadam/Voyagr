@@ -8110,7 +8110,9 @@ async function onPorcupineWakeHotword() {
         return;
     }
     if (!isListening) {
-        document.getElementById('voiceTranscript').textContent = '';
+        const tr = document.getElementById('voiceTranscript');
+        if (tr) tr.textContent = '';
+        _voiceFinalTranscript = '';
         voiceRecognition.start();
         isListening = true;
     }
@@ -12461,6 +12463,29 @@ let batteryStatusMonitor = null;
 // ===== VOICE CONTROL SYSTEM =====
 let voiceRecognition = null;
 let isListening = false;
+/** Latest finalized speech-to-text (interim lines are shown separately in the UI). */
+let _voiceFinalTranscript = '';
+
+function voyagrVoiceSetStatus(message) {
+    const el = document.getElementById('voiceStatus');
+    if (el) el.textContent = message || '';
+}
+
+function voyagrVoiceSetListeningUi(listening) {
+    const btn = document.getElementById('voiceBtn');
+    const btnText = document.getElementById('voiceBtnText');
+    const fab = document.getElementById('voiceFab');
+    if (btnText) btnText.textContent = listening ? 'Stop' : 'Listen';
+    if (btn) {
+        btn.classList.toggle('active', !!listening);
+        btn.setAttribute('aria-pressed', listening ? 'true' : 'false');
+    }
+    if (fab) {
+        fab.classList.toggle('fab--listening', !!listening);
+        fab.setAttribute('aria-pressed', listening ? 'true' : 'false');
+        fab.title = listening ? 'Stop voice input' : 'Voice control';
+    }
+}
 let currentLat = 51.5074;
 let currentLon = -0.1278;
 
@@ -12531,7 +12556,8 @@ function initVoiceRecognition() {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
         console.log('[Voice] Web Speech API not supported');
-        document.getElementById('voiceStatus').textContent = '❌ Voice not supported in this browser';
+        voyagrVoiceSetStatus('Voice not supported in this browser (try Chrome or Edge).');
+        voyagrVoiceSetListeningUi(false);
         return false;
     }
 
@@ -12543,34 +12569,43 @@ function initVoiceRecognition() {
 
     voiceRecognition.onstart = () => {
         console.log('[Voice] Listening started');
-        document.getElementById('voiceStatus').textContent = '🎤 Listening...';
-        document.getElementById('voiceBtnText').textContent = '⏹️ Stop Voice';
-        document.getElementById('voiceBtn').classList.add('active');
+        _voiceFinalTranscript = '';
+        voyagrVoiceSetStatus('Listening… speak now.');
+        voyagrVoiceSetListeningUi(true);
     };
 
     voiceRecognition.onresult = (event) => {
-        let transcript = '';
+        let interim = '';
         for (let i = event.resultIndex; i < event.results.length; i++) {
-            transcript += event.results[i][0].transcript;
+            const chunk = event.results[i][0].transcript;
+            if (event.results[i].isFinal) {
+                _voiceFinalTranscript += chunk;
+            } else {
+                interim += chunk;
+            }
         }
-        document.getElementById('voiceTranscript').textContent = '📝 ' + transcript;
-        console.log('[Voice] Transcript:', transcript);
+        const shown = (_voiceFinalTranscript + interim).trim();
+        const tr = document.getElementById('voiceTranscript');
+        if (tr) tr.textContent = shown;
+        console.log('[Voice] Transcript:', shown);
     };
 
     voiceRecognition.onerror = (event) => {
         console.log('[Voice] Error:', event.error);
-        document.getElementById('voiceStatus').textContent = '❌ Error: ' + event.error;
-        document.getElementById('voiceBtnText').textContent = '🎤 Start Voice';
-        document.getElementById('voiceBtn').classList.remove('active');
+        const msg =
+            event.error === 'not-allowed'
+                ? 'Microphone blocked — allow access in the browser bar.'
+                : `Could not use the microphone (${event.error}).`;
+        voyagrVoiceSetStatus(msg);
+        voyagrVoiceSetListeningUi(false);
         isListening = false;
         maybeResumePorcupineWakeAfterVoice();
     };
 
     voiceRecognition.onend = () => {
         console.log('[Voice] Listening ended');
-        document.getElementById('voiceStatus').textContent = '✅ Processing command...';
-        document.getElementById('voiceBtnText').textContent = '🎤 Start Voice';
-        document.getElementById('voiceBtn').classList.remove('active');
+        voyagrVoiceSetStatus('Processing…');
+        voyagrVoiceSetListeningUi(false);
         isListening = false;
     };
 
@@ -12597,7 +12632,9 @@ async function toggleVoiceInput() {
             porcupineWakeResumeAfterVoice = true;
             await stopPorcupineWakePipeline();
         }
-        document.getElementById('voiceTranscript').textContent = '';
+        const tr = document.getElementById('voiceTranscript');
+        if (tr) tr.textContent = '';
+        _voiceFinalTranscript = '';
         voiceRecognition.start();
         isListening = true;
     }
@@ -12624,17 +12661,17 @@ function speakText(text) {
 
     utterance.onstart = () => {
         console.log('[Voice] Speaking:', text);
-        document.getElementById('voiceStatus').textContent = '🔊 Speaking...';
+        voyagrVoiceSetStatus('Speaking…');
     };
 
     utterance.onend = () => {
         console.log('[Voice] Speech ended');
-        document.getElementById('voiceStatus').textContent = '✅ Ready';
+        voyagrVoiceSetStatus('Ready');
     };
 
     utterance.onerror = (event) => {
         console.log('[Voice] Speech error:', event.error);
-        document.getElementById('voiceStatus').textContent = '❌ Speech error: ' + event.error;
+        voyagrVoiceSetStatus('Speech playback error: ' + event.error);
     };
 
     window.speechSynthesis.speak(utterance);
@@ -12653,11 +12690,15 @@ function setupVoiceCommandProcessing() {
     voiceRecognition.onend = function () {
         originalOnEnd.call(this);
 
-        // Get the final transcript
-        const transcript = document.getElementById('voiceTranscript').textContent.replace('📝 ', '').trim();
+        let transcript = (_voiceFinalTranscript || '').trim();
+        if (!transcript) {
+            const tr = document.getElementById('voiceTranscript');
+            transcript = (tr && tr.textContent) ? String(tr.textContent).trim() : '';
+        }
         if (transcript) {
             processVoiceCommand(transcript);
         } else {
+            voyagrVoiceSetStatus('Ready');
             maybeResumePorcupineWakeAfterVoice();
         }
     };
@@ -12675,7 +12716,7 @@ function processVoiceCommand(command) {
     }
 
     console.log('[Voice] Processing command:', command);
-    document.getElementById('voiceStatus').textContent = '⚙️ Processing: ' + command;
+    voyagrVoiceSetStatus('Working on: ' + command);
 
     fetch('/api/voice/command', {
         method: 'POST',
@@ -12701,13 +12742,13 @@ function processVoiceCommand(command) {
                 speakText(data.message);
             } else {
                 speakText(data.message || 'Command not recognized');
-                document.getElementById('voiceStatus').textContent = '❌ ' + (data.message || 'Command failed');
+                voyagrVoiceSetStatus(data.message || 'Command failed');
             }
         })
         .catch(error => {
             console.log('[Voice] Error:', error);
             speakText('Error processing command');
-            document.getElementById('voiceStatus').textContent = '❌ Error: ' + error.message;
+            voyagrVoiceSetStatus('Error: ' + error.message);
         })
         .finally(() => {
             maybeResumePorcupineWakeAfterVoice();
