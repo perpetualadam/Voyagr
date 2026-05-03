@@ -5455,34 +5455,6 @@ function initBottomSheetLogic() {
 }
 
 /**
- * Expand the bottom sheet
- */
-function expandBottomSheet() {
-    const bottomSheet = document.getElementById('bottomSheet');
-    if (bottomSheet) {
-        bottomSheet.classList.add('expanded');
-        bottomSheet.setAttribute('aria-expanded', 'true');
-        bottomSheetIsExpanded = true;
-    }
-}
-
-/**
- * Collapse the bottom sheet
- */
-function collapseBottomSheet() {
-    const bottomSheet = document.getElementById('bottomSheet');
-    if (bottomSheet) {
-        bottomSheet.classList.remove('expanded');
-        bottomSheet.setAttribute('aria-expanded', 'false');
-        bottomSheetIsExpanded = false;
-
-        // Scroll content to top on collapse
-        const content = bottomSheet.querySelector('.bottom-sheet-content');
-        if (content) content.scrollTop = 0;
-    }
-}
-
-/**
  * Toggle bottom sheet state
  */
 function toggleBottomSheet() {
@@ -11064,11 +11036,13 @@ function warmPicovoiceStaticCache() {
     }());
 }
 
-/** Hide road-report and GPS FABs while the bottom sheet is expanded (avoids overlap with the panel). */
+/** Hide road-report and GPS FABs while the bottom sheet is fully expanded (map view only when collapsed). */
 function syncBottomSheetOverlapFabs() {
+    const bottomSheet = document.getElementById('bottomSheet');
     const report = document.getElementById('roadReportFab');
     const gps = document.getElementById('startTrackingBtn');
-    if (bottomSheetIsExpanded) {
+    const sheetExpanded = !!(bottomSheet && bottomSheet.classList.contains('expanded'));
+    if (sheetExpanded) {
         if (report) report.style.display = 'none';
         if (gps) gps.style.display = 'none';
     } else {
@@ -13167,6 +13141,8 @@ function initBottomSheet() {
     // Expand on input focus
     document.getElementById('start').addEventListener('focus', expandBottomSheet);
     document.getElementById('end').addEventListener('focus', expandBottomSheet);
+
+    syncBottomSheetOverlapFabs();
 }
 
 /**
@@ -13186,6 +13162,7 @@ function expandBottomSheet() {
     bottomSheet.style.transition = '';
 
     bottomSheet.classList.add('expanded');
+    bottomSheet.setAttribute('aria-expanded', 'true');
     bottomSheetIsExpanded = true;
     console.log('[BottomSheet] Expanded, classes:', bottomSheet.className);
     syncBottomSheetOverlapFabs();
@@ -13208,7 +13185,10 @@ function collapseBottomSheet() {
     bottomSheet.style.transition = '';
 
     bottomSheet.classList.remove('expanded');
+    bottomSheet.setAttribute('aria-expanded', 'false');
     bottomSheetIsExpanded = false;
+    const content = bottomSheet.querySelector('.bottom-sheet-content');
+    if (content) content.scrollTop = 0;
     syncBottomSheetOverlapFabs();
 }
 
