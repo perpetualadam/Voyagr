@@ -980,6 +980,33 @@ async function startStripeSubscriptionCheckout(sessionOpt) {
 // =============================================================================
 // Supabase Auth (optional)
 // =============================================================================
+
+function voyagrAuthGateBlocksRouting() {
+    try {
+        return document.body && document.body.classList.contains('auth-gate-active');
+    } catch (e) {
+        return false;
+    }
+}
+
+/** Vibe Voyager (strict host): map/UI init runs only after auth gate clears. */
+function voyagrRunDeferredAppInitIfNeeded() {
+    if (!window.VOYAGR_DEFER_APP_UNTIL_AUTH || window.__voyagrAppInitialized) {
+        return;
+    }
+    window.__voyagrAppInitialized = true;
+    try {
+        document.body.classList.remove('voyagr-strict-auth-pending');
+    } catch (e) { /* ignore */ }
+    if (typeof initializeApp === 'function') {
+        try {
+            initializeApp();
+        } catch (e) {
+            console.error('[App] Deferred initializeApp failed:', e);
+        }
+    }
+}
+
 let supabaseClient = null;
 let supabasePublicConfig = null;
 let _authGateStripeOffer = null;
@@ -1139,6 +1166,7 @@ function syncAuthRequiredGate(mode, offer) {
         gate.setAttribute('aria-hidden', 'true');
         document.body.classList.remove('auth-gate-active');
         if (stripeEl) stripeEl.style.display = 'none';
+        voyagrRunDeferredAppInitIfNeeded();
         return;
     }
 
@@ -4540,6 +4568,14 @@ function showStatus(message, type) {
 async function calculateRoute() {
     console.log('[calculateRoute] START - Function called');
 
+    if (voyagrAuthGateBlocksRouting()) {
+        showStatus('Please sign in before calculating a route.', 'error');
+        try {
+            setAuthGateFormStatus('Sign in to plan routes.', 'error');
+        } catch (e) { /* ignore */ }
+        return;
+    }
+
     const startInput = document.getElementById('start');
     const endInput = document.getElementById('end');
 
@@ -7215,6 +7251,10 @@ function initializeRoadLabels() {
  * @returns {*} Return value description
  */
 function startNavigation() {
+    if (voyagrAuthGateBlocksRouting()) {
+        showStatus('Please sign in to start navigation.', 'error');
+        return;
+    }
     if (!window.lastCalculatedRoute) {
         showStatus('Please calculate a route first', 'error');
         return;
@@ -11232,9 +11272,17 @@ async function getCachedSpeedLimit(lat, lon) {
 }
 
 // ===== PHASE 2: Restore app state on page load =====
+document.addEventListener('DOMContentLoaded', () => {
+    if (window.VOYAGR_DEFER_APP_UNTIL_AUTH) {
+        void initSupabaseAuth();
+    }
+});
+
 window.addEventListener('load', () => {
     restoreAppState();
-    initSupabaseAuth();
+    if (!window.VOYAGR_DEFER_APP_UNTIL_AUTH) {
+        void initSupabaseAuth();
+    }
     _tryResumeNavigation();
     initDeviceEnvironmentNotifications();
     // Show a volume reminder on app open (once per tab session).

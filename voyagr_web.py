@@ -4438,16 +4438,19 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260503b"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260503c"></script>
     <script defer src="/static/js/app.js?v=20260117t"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
-<body>
-    <div id="authRequiredGate" class="auth-required-gate" style="display: none;" aria-hidden="true">
+<body class="{% if voyagr_strict_auth_gate %}auth-gate-active voyagr-strict-auth-pending{% endif %}">
+    {% if voyagr_strict_auth_gate %}
+    <script>window.VOYAGR_DEFER_APP_UNTIL_AUTH = true;</script>
+    {% endif %}
+    <div id="authRequiredGate" class="auth-required-gate" style="display: {% if voyagr_strict_auth_gate %}flex{% else %}none{% endif %};" aria-hidden="{% if voyagr_strict_auth_gate %}false{% else %}true{% endif %}">
         <div class="auth-required-gate__panel" role="dialog" aria-modal="true" aria-labelledby="authGateTitle">
             <h1 id="authGateTitle" class="auth-required-gate__title">Sign in to Voyagr</h1>
             <p class="auth-required-gate__hint">This deployment requires an account. Use the same email and password as in Settings, or create a new account below.</p>
-            <div id="authGateLoading" class="auth-required-gate__loading" style="display: none;">Checking your session…</div>
+            <div id="authGateLoading" class="auth-required-gate__loading" style="display: {% if voyagr_strict_auth_gate %}block{% else %}none{% endif %};">Checking your session…</div>
             <div id="authGateForm" class="auth-required-gate__form" style="display: none;">
                 <div id="authGateStatus" class="auth-required-gate__status" aria-live="polite"></div>
                 <div class="auth-required-gate__fields">

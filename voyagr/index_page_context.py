@@ -24,7 +24,7 @@ def project_root() -> str:
     return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 
-def build_index_template_kwargs() -> Dict[str, Any]:
+def build_index_template_kwargs(voyagr_strict_auth_gate: bool = False) -> Dict[str, Any]:
     """All Jinja variables required by voyagr_web.HTML_TEMPLATE for GET /."""
     _base = project_root()
     _pv_dir = os.path.join(_base, "static", "vendor", "picovoice")
@@ -51,6 +51,7 @@ def build_index_template_kwargs() -> Dict[str, Any]:
     )
     return {
         "tomtom_api_key": os.getenv("TOMTOM_API_KEY", ""),
+        "voyagr_strict_auth_gate": bool(voyagr_strict_auth_gate),
         "block_search_indexing": block_indexing,
         "picovoice_access_key": picovoice_access_key,
         "picovoice_web_assets_ok": picovoice_web_assets_ok,

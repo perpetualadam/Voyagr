@@ -17,7 +17,24 @@ def client():
         yield c
 
 
-def test_get_index_returns_200(client):
+def test_index_strict_auth_gate_on_vibevoyager_host(client):
+    """Production hosts defer map init until auth; shell must expose flag and visible gate."""
+    rv = client.get("/", headers={"Host": "vibevoyager.org"})
+    assert rv.status_code == 200
+    body = rv.data.decode("utf-8", errors="replace")
+    assert "window.VOYAGR_DEFER_APP_UNTIL_AUTH = true" in body
+    assert "voyagr-strict-auth-pending" in body
+    assert "authRequiredGate" in body
+    assert "display:flex" in body.replace(" ", "")
+
+
+def test_index_no_defer_on_localhost(client):
+    rv = client.get("/", headers={"Host": "localhost"})
+    assert rv.status_code == 200
+    body = rv.data.decode("utf-8", errors="replace")
+    assert "VOYAGR_DEFER_APP_UNTIL_AUTH" not in body
+
+
     rv = client.get("/")
     assert rv.status_code == 200
     assert b"<!DOCTYPE html>" in rv.data or b"<html" in rv.data.lower()
