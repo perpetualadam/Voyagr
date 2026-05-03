@@ -26,27 +26,24 @@ SITE_URL_DEFAULT = "https://vibevoyager.org"
 
 APP_NAME = "Voyagr Navigation"
 APP_SHORT_NAME = "Voyagr"
-APP_TAGLINE = "Free GPS route planner with live turn-by-turn, trip tracking and dashcam"
+APP_TAGLINE = "GPS route planner with live turn-by-turn, trip tracking and dashcam"
 APP_DESCRIPTION = (
-    "Voyagr is a free navigation web app (PWA) with turn-by-turn directions, "
-    "multi-stop route optimisation, speed-camera and hazard alerts, voice control "
-    "with hands-free wake word, built-in dashcam, fuel and toll cost estimation, "
-    "Clean Air Zone (CAZ) awareness, and trip history analytics. Installs to your "
-    "home screen — no app store required."
+    "Voyagr is a navigation web app (PWA) with turn-by-turn directions, "
+    "multi-stop route optimisation, speed-camera and hazard alerts, built-in dashcam, "
+    "fuel and toll cost estimation, Clean Air Zone (CAZ) awareness, and trip "
+    "history analytics. Installs to your home screen — no app store required."
 )
 APP_CATEGORY = "NavigationApplication"
 APP_LANGUAGE = "en"
 APP_KEYWORDS: List[str] = [
     "navigation app",
-    "free sat nav",
+    "sat nav",
     "GPS route planner",
     "turn-by-turn directions",
     "multi-stop route optimisation",
     "delivery route planner",
     "speed camera alerts",
     "traffic light camera warnings",
-    "voice navigation",
-    "wake word sat nav",
     "dashcam PWA",
     "trip tracker",
     "fuel cost estimator",
@@ -61,11 +58,11 @@ APP_KEYWORDS: List[str] = [
 # (1-3 sentences) and fact-dense — that is what wins rich results.
 FAQ: List[Dict[str, str]] = [
     {
-        "q": "Is Voyagr free to use?",
+        "q": "What does Voyagr Navigation cost?",
         "a": (
-            "Yes. Voyagr Navigation is free to use in any modern browser, with "
-            "turn-by-turn directions, trip tracking, and dashcam included. Voyager "
-            "Premium is an optional paid subscription that unlocks advanced features."
+            "Voyagr runs in modern browsers with turn-by-turn directions, trip "
+            "tracking, and dashcam in the base experience. Voyager Premium is an "
+            "optional paid subscription for advanced features."
         ),
     },
     {
@@ -74,15 +71,6 @@ FAQ: List[Dict[str, str]] = [
             "Voyagr is a Progressive Web App (PWA). Once installed, the app shell "
             "loads offline and GPS tracking continues without connectivity. Routing "
             "and live map tiles require an internet connection."
-        ),
-    },
-    {
-        "q": "Can I use voice control and a wake word in Voyagr?",
-        "a": (
-            "Yes. Voyagr supports hands-free voice control with a 'Hey Sat Nav' wake "
-            "word. Two engines are available: Picovoice (production) and an "
-            "experimental Sherpa-ONNX keyword spotter running fully on-device. Voice "
-            "requires HTTPS and microphone permission."
         ),
     },
     {
@@ -120,13 +108,12 @@ FAQ: List[Dict[str, str]] = [
 ]
 
 FEATURE_LIST: List[str] = [
-    "Turn-by-turn voice navigation with lane guidance",
+    "Turn-by-turn navigation with lane guidance",
     "Multi-stop and delivery route optimisation",
     "Speed camera and traffic-light camera warnings",
     "UK Clean Air Zone (CAZ) awareness with charges and exemptions",
     "Built-in dashcam recording with GPS metadata",
     "Trip history with analytics, fuel and toll cost breakdown",
-    "Hands-free 'Hey Sat Nav' wake word (Picovoice or Sherpa-ONNX)",
     "Offline-capable Progressive Web App install",
     "Google Plus Codes support for destination search",
     "Hazard avoidance: tolls, motorways, ferries, unpaved, traffic lights",
