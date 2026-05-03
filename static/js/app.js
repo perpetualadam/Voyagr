@@ -151,14 +151,8 @@ function setupEventListeners() {
     console.log('[App] Event listeners setup complete');
 }
 
-// Initialize app when DOM is ready (Vibe Voyager / strict hosts defer until auth clears — see voyagr-app.js)
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.VOYAGR_DEFER_APP_UNTIL_AUTH) {
-        window.__voyagrDeferredAppInit = true;
-        return;
-    }
-    initializeApp();
-});
+// Initialize app when DOM is ready
+document.addEventListener('DOMContentLoaded', initializeApp);
 
 // Save app state before unload - defer registration until saveAppState is available
 document.addEventListener('DOMContentLoaded', function() {

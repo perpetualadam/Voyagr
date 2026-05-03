@@ -978,33 +978,48 @@ async function startStripeSubscriptionCheckout(sessionOpt) {
 }
 
 // =============================================================================
-// Supabase Auth (optional)
+// Supabase Auth (optional) — Option C: map first; soft banner invites sign-in.
 // =============================================================================
 
-function voyagrAuthGateBlocksRouting() {
+const _SOFT_AUTH_BANNER_DISMISS_KEY = 'voyagr_soft_auth_banner_dismissed';
+
+function voyagrDismissSoftAuthBanner() {
     try {
-        return document.body && document.body.classList.contains('auth-gate-active');
+        sessionStorage.setItem(_SOFT_AUTH_BANNER_DISMISS_KEY, 'true');
+    } catch (e) { /* ignore */ }
+    syncSoftAuthBannerVisibility(false);
+}
+
+function voyagrOpenSignInFromBanner() {
+    try {
+        if (typeof expandBottomSheet === 'function') {
+            expandBottomSheet();
+        }
+        switchTab('settings');
+        setTimeout(() => {
+            const el = document.getElementById('accountSection');
+            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 120);
     } catch (e) {
-        return false;
+        console.warn('[Auth] Open sign-in from banner failed:', e);
     }
 }
 
-/** Vibe Voyager (strict host): map/UI init runs only after auth gate clears. */
-function voyagrRunDeferredAppInitIfNeeded() {
-    if (!window.VOYAGR_DEFER_APP_UNTIL_AUTH || window.__voyagrAppInitialized) {
+/** Show when Supabase is configured and user is signed out; hide if dismissed this tab session. */
+function syncSoftAuthBannerVisibility(wantGuestPrompt) {
+    const el = document.getElementById('softAuthBanner');
+    if (!el) return;
+    if (!wantGuestPrompt) {
+        el.style.display = 'none';
         return;
     }
-    window.__voyagrAppInitialized = true;
     try {
-        document.body.classList.remove('voyagr-strict-auth-pending');
-    } catch (e) { /* ignore */ }
-    if (typeof initializeApp === 'function') {
-        try {
-            initializeApp();
-        } catch (e) {
-            console.error('[App] Deferred initializeApp failed:', e);
+        if (sessionStorage.getItem(_SOFT_AUTH_BANNER_DISMISS_KEY) === 'true') {
+            el.style.display = 'none';
+            return;
         }
-    }
+    } catch (e) { /* ignore */ }
+    el.style.display = 'flex';
 }
 
 let supabaseClient = null;
@@ -1166,7 +1181,6 @@ function syncAuthRequiredGate(mode, offer) {
         gate.setAttribute('aria-hidden', 'true');
         document.body.classList.remove('auth-gate-active');
         if (stripeEl) stripeEl.style.display = 'none';
-        voyagrRunDeferredAppInitIfNeeded();
         return;
     }
 
@@ -1284,6 +1298,7 @@ async function initSupabaseAuth() {
             const accountSection = document.getElementById('accountSection');
             if (accountSection) accountSection.style.display = 'none';
             syncAuthRequiredGate('off');
+            syncSoftAuthBannerVisibility(false);
             return;
         }
 
@@ -1298,9 +1313,7 @@ async function initSupabaseAuth() {
         });
         window.supabaseClient = supabaseClient;
 
-        syncAuthRequiredGate('loading');
-
-        // Initial session
+        // Initial session (no full-screen loading gate — map stays usable)
         const { data: sessionData } = await supabaseClient.auth.getSession();
         await handleSupabaseSession(sessionData?.session || null);
 
@@ -1312,11 +1325,13 @@ async function initSupabaseAuth() {
         console.error('[Auth] initSupabaseAuth failed:', e);
         setAccountUIState({ signedIn: false, message: 'Account login unavailable (config error).' });
         syncAuthRequiredGate('off');
+        syncSoftAuthBannerVisibility(false);
     }
 }
 
 async function handleSupabaseSession(session) {
     if (session && session.user) {
+        syncSoftAuthBannerVisibility(false);
         const userId = session.user.id;
         const email = session.user.email || '';
         setAccountUIState({ signedIn: true, email, message: 'Signed in.' });
@@ -1359,11 +1374,8 @@ async function handleSupabaseSession(session) {
     setAccountUIState({ signedIn: false, message: 'Not signed in (guest profile).' });
     switchActiveProfile('guest');
     await refreshPromoCodeSection(session || null);
-    if (supabaseClient) {
-        syncAuthRequiredGate('signin');
-    } else {
-        syncAuthRequiredGate('off');
-    }
+    syncAuthRequiredGate('off');
+    syncSoftAuthBannerVisibility(!!supabaseClient);
 }
 
 async function authSignInEmail() {
@@ -4568,14 +4580,6 @@ function showStatus(message, type) {
 async function calculateRoute() {
     console.log('[calculateRoute] START - Function called');
 
-    if (voyagrAuthGateBlocksRouting()) {
-        showStatus('Please sign in before calculating a route.', 'error');
-        try {
-            setAuthGateFormStatus('Sign in to plan routes.', 'error');
-        } catch (e) { /* ignore */ }
-        return;
-    }
-
     const startInput = document.getElementById('start');
     const endInput = document.getElementById('end');
 
@@ -7251,10 +7255,6 @@ function initializeRoadLabels() {
  * @returns {*} Return value description
  */
 function startNavigation() {
-    if (voyagrAuthGateBlocksRouting()) {
-        showStatus('Please sign in to start navigation.', 'error');
-        return;
-    }
     if (!window.lastCalculatedRoute) {
         showStatus('Please calculate a route first', 'error');
         return;
@@ -11272,17 +11272,9 @@ async function getCachedSpeedLimit(lat, lon) {
 }
 
 // ===== PHASE 2: Restore app state on page load =====
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.VOYAGR_DEFER_APP_UNTIL_AUTH) {
-        void initSupabaseAuth();
-    }
-});
-
 window.addEventListener('load', () => {
     restoreAppState();
-    if (!window.VOYAGR_DEFER_APP_UNTIL_AUTH) {
-        void initSupabaseAuth();
-    }
+    void initSupabaseAuth();
     _tryResumeNavigation();
     initDeviceEnvironmentNotifications();
     // Show a volume reminder on app open (once per tab session).

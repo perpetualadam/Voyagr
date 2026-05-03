@@ -4421,7 +4421,7 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260503b" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260504a" />
     {# All app scripts use `defer`: they still download in parallel with HTML parsing
        and still execute in document order (dependencies preserved), but they no
        longer block first paint. This is the biggest lever for shortening the PWA
@@ -4438,19 +4438,16 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260503c"></script>
-    <script defer src="/static/js/app.js?v=20260117t"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260504a"></script>
+    <script defer src="/static/js/app.js?v=20260504a"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
-<body class="{% if voyagr_strict_auth_gate %}auth-gate-active voyagr-strict-auth-pending{% endif %}">
-    {% if voyagr_strict_auth_gate %}
-    <script>window.VOYAGR_DEFER_APP_UNTIL_AUTH = true;</script>
-    {% endif %}
-    <div id="authRequiredGate" class="auth-required-gate" style="display: {% if voyagr_strict_auth_gate %}flex{% else %}none{% endif %};" aria-hidden="{% if voyagr_strict_auth_gate %}false{% else %}true{% endif %}">
+<body>
+    <div id="authRequiredGate" class="auth-required-gate" style="display: none;" aria-hidden="true">
         <div class="auth-required-gate__panel" role="dialog" aria-modal="true" aria-labelledby="authGateTitle">
             <h1 id="authGateTitle" class="auth-required-gate__title">Sign in to Voyagr</h1>
             <p class="auth-required-gate__hint">This deployment requires an account. Use the same email and password as in Settings, or create a new account below.</p>
-            <div id="authGateLoading" class="auth-required-gate__loading" style="display: {% if voyagr_strict_auth_gate %}block{% else %}none{% endif %};">Checking your session…</div>
+            <div id="authGateLoading" class="auth-required-gate__loading" style="display: none;">Checking your session…</div>
             <div id="authGateForm" class="auth-required-gate__form" style="display: none;">
                 <div id="authGateStatus" class="auth-required-gate__status" aria-live="polite"></div>
                 <div class="auth-required-gate__fields">
@@ -4477,6 +4474,13 @@ HTML_TEMPLATE = '''
         </div>
     </div>
     <div class="app-container">
+        <div id="softAuthBanner" class="voyagr-soft-auth-banner" style="display: none;" role="region" aria-label="Sign in prompt">
+            <div class="voyagr-soft-auth-banner__inner">
+                <span class="voyagr-soft-auth-banner__text">Sign in to sync your profile, saved routes, and your Voyager Premium trial.</span>
+                <button type="button" class="voyagr-soft-auth-banner__btn voyagr-soft-auth-banner__btn--primary" onclick="voyagrOpenSignInFromBanner()">Sign in</button>
+                <button type="button" class="voyagr-soft-auth-banner__btn voyagr-soft-auth-banner__btn--dismiss" onclick="voyagrDismissSoftAuthBanner()" title="Dismiss for this session" aria-label="Dismiss">×</button>
+            </div>
+        </div>
         <!-- Full-screen map -->
         <div id="map"></div>
 

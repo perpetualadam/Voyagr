@@ -146,6 +146,68 @@ body {
     margin-top: 4px;
 }
 
+/** Option C: non-blocking sign-in prompt (same in browser and installed PWA). */
+.voyagr-soft-auth-banner {
+    display: none;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 400;
+    padding: 10px 12px;
+    padding-top: calc(10px + var(--safe-area-inset-top, 0px));
+    justify-content: center;
+    pointer-events: none;
+}
+
+.voyagr-soft-auth-banner__inner {
+    pointer-events: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    max-width: min(560px, 100%);
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(102, 126, 234, 0.35);
+    border-radius: 12px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);
+}
+
+.voyagr-soft-auth-banner__text {
+    flex: 1 1 180px;
+    font-size: 13px;
+    line-height: 1.4;
+    color: #333;
+}
+
+.voyagr-soft-auth-banner__btn {
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 8px 14px;
+}
+
+.voyagr-soft-auth-banner__btn--primary {
+    background: #667eea;
+    color: #fff;
+}
+
+.voyagr-soft-auth-banner__btn--dismiss {
+    background: transparent;
+    color: #666;
+    font-size: 20px;
+    line-height: 1;
+    padding: 4px 8px;
+    min-width: 36px;
+}
+
+.voyagr-soft-auth-banner__btn--dismiss:hover {
+    color: #333;
+}
+
 /* Full-screen map layout */
 .app-container {
     position: relative;

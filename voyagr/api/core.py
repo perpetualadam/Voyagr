@@ -14,7 +14,7 @@ import json
 import os
 from typing import Optional
 
-from flask import Blueprint, jsonify, render_template_string, current_app, Response, make_response, request
+from flask import Blueprint, jsonify, render_template_string, current_app, Response, make_response
 
 from voyagr.discoverability import block_search_indexing
 from voyagr.index_page_context import build_index_template_kwargs
@@ -28,21 +28,11 @@ from voyagr.seo import (
 core_bp = Blueprint('core', __name__)
 
 
-_STRICT_AUTH_GATE_HOSTS = frozenset({'vibevoyager.org', 'www.vibevoyager.org'})
-
-
-def _strict_auth_gate_for_request_host(host_header: str) -> bool:
-    """Production domains where the shell blocks the app until Supabase auth (and optional Stripe step) completes."""
-    h = (host_header or '').split(':')[0].strip().lower()
-    return h in _STRICT_AUTH_GATE_HOSTS
-
-
 @core_bp.route('/')
 def index():
     """Render the main application page."""
     from voyagr_web import HTML_TEMPLATE
-    strict = _strict_auth_gate_for_request_host(request.host)
-    html = render_template_string(HTML_TEMPLATE, **build_index_template_kwargs(voyagr_strict_auth_gate=strict))
+    html = render_template_string(HTML_TEMPLATE, **build_index_template_kwargs())
     response = make_response(html)
     # Shell HTML is server-rendered (wake/Sherpa flags, keys). Do not cache at CDN or browser.
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'

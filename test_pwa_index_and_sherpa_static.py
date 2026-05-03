@@ -17,15 +17,21 @@ def client():
         yield c
 
 
-def test_index_strict_auth_gate_on_vibevoyager_host(client):
-    """Production hosts defer map init until auth; shell must expose flag and visible gate."""
-    rv = client.get("/", headers={"Host": "vibevoyager.org"})
+def test_index_includes_soft_auth_banner(client):
+    rv = client.get("/")
     assert rv.status_code == 200
     body = rv.data.decode("utf-8", errors="replace")
-    assert "window.VOYAGR_DEFER_APP_UNTIL_AUTH = true" in body
-    assert "voyagr-strict-auth-pending" in body
-    assert "authRequiredGate" in body
-    assert "display:flex" in body.replace(" ", "")
+    assert 'id="softAuthBanner"' in body
+    assert "VOYAGR_DEFER_APP_UNTIL_AUTH" not in body
+
+
+def test_index_vibevoyager_no_strict_defer(client):
+    rv = client.get("/", headers={"Host": "www.vibevoyager.org"})
+    assert rv.status_code == 200
+    body = rv.data.decode("utf-8", errors="replace")
+    assert "VOYAGR_DEFER_APP_UNTIL_AUTH" not in body
+    assert "voyagr-strict-auth-pending" not in body
+    assert 'id="softAuthBanner"' in body
 
 
 def test_index_no_defer_on_localhost(client):
@@ -35,6 +41,7 @@ def test_index_no_defer_on_localhost(client):
     assert "VOYAGR_DEFER_APP_UNTIL_AUTH" not in body
 
 
+def test_get_index_returns_200(client):
     rv = client.get("/")
     assert rv.status_code == 200
     assert b"<!DOCTYPE html>" in rv.data or b"<html" in rv.data.lower()
