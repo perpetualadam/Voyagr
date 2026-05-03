@@ -141,6 +141,38 @@ def og_image_url() -> str:
     return canonical_url("/static/images/icons/icon-512.png")
 
 
+def web_application_offers() -> List[Dict[str, Any]]:
+    """
+    Match deployed behaviour: core navigation works in-browser without Stripe;
+    Voyager Premium is an optional paid subscription (see Settings / Stripe checkout).
+    """
+    base = canonical_url("/")
+    return [
+        {
+            "@type": "Offer",
+            "name": "Voyagr base (PWA)",
+            "description": (
+                "Turn-by-turn navigation, trip tracking, dashcam, and core routing in a "
+                "modern browser without a Voyager Premium subscription."
+            ),
+            "price": "0",
+            "priceCurrency": "GBP",
+            "availability": "https://schema.org/InStock",
+            "url": base,
+        },
+        {
+            "@type": "Offer",
+            "name": "Voyager Premium",
+            "description": (
+                "Optional paid subscription via Stripe for advanced features; not required "
+                "to use the base web app."
+            ),
+            "availability": "https://schema.org/InStock",
+            "url": base,
+        },
+    ]
+
+
 def json_ld_graph() -> List[Dict[str, Any]]:
     """
     Build a single schema.org @graph containing WebSite, Organization,
@@ -183,13 +215,9 @@ def json_ld_graph() -> List[Dict[str, Any]]:
             "featureList": FEATURE_LIST,
             "keywords": ", ".join(APP_KEYWORDS),
             "inLanguage": APP_LANGUAGE,
+            # Base PWA does not require payment; Premium is optional (Stripe).
             "isAccessibleForFree": True,
-            "offers": {
-                "@type": "Offer",
-                "price": "0",
-                "priceCurrency": "GBP",
-                "availability": "https://schema.org/InStock",
-            },
+            "offers": web_application_offers(),
             "publisher": {"@id": root + "#org"},
         },
         {
