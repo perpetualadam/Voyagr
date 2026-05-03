@@ -11064,11 +11064,22 @@ function warmPicovoiceStaticCache() {
     }());
 }
 
-/** Road-report FAB: always shown so issues can be reported without a route or navigation. */
+/** Hide road-report and GPS FABs while the bottom sheet is expanded (avoids overlap with the panel). */
+function syncBottomSheetOverlapFabs() {
+    const report = document.getElementById('roadReportFab');
+    const gps = document.getElementById('startTrackingBtn');
+    if (bottomSheetIsExpanded) {
+        if (report) report.style.display = 'none';
+        if (gps) gps.style.display = 'none';
+    } else {
+        if (report) report.style.removeProperty('display');
+        if (gps) gps.style.removeProperty('display');
+    }
+}
+
+/** Road-report FAB: always available unless the bottom sheet is covering map controls. */
 function updateRoadReportFabVisibility() {
-    const fab = document.getElementById('roadReportFab');
-    if (!fab) return;
-    fab.style.removeProperty('display');
+    syncBottomSheetOverlapFabs();
 }
 
 function syncRoadReportSpeedFieldsVisibility() {
@@ -13177,6 +13188,7 @@ function expandBottomSheet() {
     bottomSheet.classList.add('expanded');
     bottomSheetIsExpanded = true;
     console.log('[BottomSheet] Expanded, classes:', bottomSheet.className);
+    syncBottomSheetOverlapFabs();
 }
 
 /**
@@ -13197,6 +13209,7 @@ function collapseBottomSheet() {
 
     bottomSheet.classList.remove('expanded');
     bottomSheetIsExpanded = false;
+    syncBottomSheetOverlapFabs();
 }
 
 // ===== GPS TRACKING FUNCTIONS =====
