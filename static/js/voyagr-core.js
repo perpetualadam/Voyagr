@@ -129,10 +129,22 @@ function initializeMap() {
     window.__voyagrResolveStyleUrls = resolveStyleUrls;
     window.__voyagrToAbsoluteOriginUrl = toAbsoluteOriginUrl;
 
-    // Synchronously fetch the style JSON, resolve all URLs, then create the map.
-    // We use synchronous XHR so that `map` is available immediately after initializeMap()
-    // returns — the rest of the app (setupMapClickHandler, loadAllSettings, etc.) depends
-    // on this being synchronous.
+    // Minimal style so `new Map` returns immediately (map non-null after initializeMap).
+    // Real vector/raster style is fetched asynchronously and applied via setStyle — avoids
+    // blocking the main thread on a synchronous XHR.
+    const VOYAGR_BOOTSTRAP_STYLE = {
+        version: 8,
+        name: 'voyagr-bootstrap',
+        sources: {},
+        layers: [
+            {
+                id: 'voyagr-bootstrap-bg',
+                type: 'background',
+                paint: { 'background-color': '#d4dbe8' }
+            }
+        ]
+    };
+
     const mapTheme =
         typeof localStorage !== 'undefined'
             ? localStorage.getItem('mapTheme') || 'standard'
@@ -145,25 +157,11 @@ function initializeMap() {
     } else {
         VECTOR_STYLE_PATH = '/map/styles/liberty/style.json';
     }
-    let resolvedStyle = null;
-
-    try {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', toAbsoluteOriginUrl(VECTOR_STYLE_PATH), false); // synchronous
-        xhr.send();
-        if (xhr.status === 200) {
-            resolvedStyle = JSON.parse(xhr.responseText);
-            resolveStyleUrls(resolvedStyle);
-            console.log('[Init] Style JSON fetched & URLs resolved to absolute');
-        }
-    } catch (e) {
-        console.warn('[Init] Sync style fetch failed, will use URL with transformRequest:', e.message);
-    }
+    const vectorStyleUrlAbs = toAbsoluteOriginUrl(VECTOR_STYLE_PATH);
 
     map = new maplibregl.Map({
         container: 'map',
-        // Prefer the pre-resolved style object; fall back to URL + transformRequest.
-        style: resolvedStyle || toAbsoluteOriginUrl(VECTOR_STYLE_PATH),
+        style: VOYAGR_BOOTSTRAP_STYLE,
         // Belt-and-suspenders: also rewrite any URL MapLibre constructs at runtime.
         transformRequest: (url /*, resourceType */) => {
             return { url: toAbsoluteOriginUrl(url) };
@@ -209,6 +207,8 @@ function initializeMap() {
         try {
             if (!map || !map.getStyle) return;
             const style = map.getStyle();
+            if (!style) return;
+            if (style.name === 'voyagr-bootstrap') return;
             const sources = style?.sources || {};
             const sourceVals = Object.values(sources);
             if (
@@ -347,19 +347,56 @@ function initializeMap() {
         }
     });
 
-    // After initial load and after any style switch, validate the style supports labels.
-    map.once('load', validateStyleHasLabels);
-    map.on('style.load', validateStyleHasLabels);
-    // Thicker on-screen base map roads (OMT `transportation`); does not affect route polylines.
-    map.on('style.load', () => {
+    function onVoyagrStyleLoaded() {
         try {
-            if (window.MapLibreHelpers && typeof window.MapLibreHelpers.applyTransportationRoadLineWidthScale === 'function') {
-                window.MapLibreHelpers.applyTransportationRoadLineWidthScale(map, 2);
+            const st = map.getStyle && map.getStyle();
+            if (!st || st.name === 'voyagr-bootstrap') return;
+
+            validateStyleHasLabels();
+
+            try {
+                if (window.MapLibreHelpers && typeof window.MapLibreHelpers.applyTransportationRoadLineWidthScale === 'function') {
+                    window.MapLibreHelpers.applyTransportationRoadLineWidthScale(map, 2);
+                }
+            } catch (e) {
+                /* non-fatal */
+            }
+
+            const buildings3DEnabled = localStorage.getItem('buildings3DEnabled') !== 'false';
+            if (buildings3DEnabled && window.MapLibreHelpers) {
+                const heightMultiplier = parseFloat(localStorage.getItem('buildings3DHeight')) || 1.0;
+                const opacity = parseFloat(localStorage.getItem('buildings3DOpacity')) || 0.6;
+                MapLibreHelpers.add3DBuildings(map, { heightMultiplier, opacity });
+            }
+
+            if (window.MapLibreHelpers) {
+                MapLibreHelpers.configureRoadLabels(map, {
+                    enabled: true,
+                    minZoom: 10,
+                    maxZoom: 22,
+                    textColor: '#000000',
+                    textHaloColor: '#ffffff',
+                    textHaloWidth: 1.5,
+                    textSize: 12
+                });
+                MapLibreHelpers.setRoadLabelZoomFilters(map, {
+                    motorwayMinZoom: 4,
+                    mainRoadMinZoom: 8,
+                    streetMinZoom: 10
+                });
+            }
+
+            try {
+                window.dispatchEvent(new Event('voyagr-vector-style-ready'));
+            } catch (_) {
+                /* ignore */
             }
         } catch (e) {
-            /* non-fatal */
+            console.warn('[Init] Post vector style setup failed:', e);
         }
-    });
+    }
+
+    map.on('style.load', onVoyagrStyleLoaded);
 
     // Handle missing images (POI icons) by providing a transparent placeholder
     // This suppresses "Image 'x' could not be loaded" errors in the console
@@ -561,35 +598,26 @@ function initializeMap() {
     // collision with speed widget and notifications in top-right
     map.addControl(new maplibregl.NavigationControl(), 'bottom-left');
 
-    // Enable 3D buildings (respect user toggle; default enabled unless explicitly disabled)
-    // Also apply user-tuned height/opacity if present.
-    const buildings3DEnabled = localStorage.getItem('buildings3DEnabled') !== 'false';
-    if (buildings3DEnabled) {
-        const heightMultiplier = parseFloat(localStorage.getItem('buildings3DHeight')) || 1.0;
-        const opacity = parseFloat(localStorage.getItem('buildings3DOpacity')) || 0.6;
-        MapLibreHelpers.add3DBuildings(map, { heightMultiplier, opacity });
-    }
+    fetch(vectorStyleUrlAbs)
+        .then((r) => {
+            if (!r.ok) throw new Error(`HTTP ${r.status}`);
+            return r.json();
+        })
+        .then((styleJson) => {
+            resolveStyleUrls(styleJson);
+            map.setStyle(styleJson, { diff: false });
+            console.log('[Init] Main map style applied (async)');
+        })
+        .catch((err) => {
+            console.warn('[Init] Async style fetch failed, using style URL + transformRequest:', err);
+            try {
+                map.setStyle(vectorStyleUrlAbs, { diff: false });
+            } catch (e2) {
+                console.error('[Init] setStyle URL fallback failed:', e2);
+            }
+        });
 
-    // Configure road name labels with zoom-level-based visibility
-    // Labels will be visible during navigation and remain readable at 65° pitch
-    MapLibreHelpers.configureRoadLabels(map, {
-        enabled: true,
-        minZoom: 10,
-        maxZoom: 22,
-        textColor: '#000000',
-        textHaloColor: '#ffffff',
-        textHaloWidth: 1.5,
-        textSize: 12
-    });
-
-    // Set zoom-level-based filtering for different road types
-    MapLibreHelpers.setRoadLabelZoomFilters(map, {
-        motorwayMinZoom: 4,      // Show motorways from zoom 4+
-        mainRoadMinZoom: 8,      // Show A/B roads from zoom 8+
-        streetMinZoom: 10        // Show all streets from zoom 10+
-    });
-
-    console.log('[Init] Map initialized successfully');
+    console.log('[Init] Map shell ready (vector style loading async)');
 }
 
 /**

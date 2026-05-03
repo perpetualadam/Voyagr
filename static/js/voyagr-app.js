@@ -4684,8 +4684,19 @@ async function calculateRoute() {
     const avoidMotorways = localStorage.getItem('pref_avoid_motorways') === 'true';
     const avoidFerries = localStorage.getItem('pref_avoid_ferries') === 'true';
 
+    const liveGpsOk =
+        routeInProgress &&
+        isTrackingActive &&
+        Array.isArray(trackingHistory) &&
+        trackingHistory.length > 0 &&
+        typeof currentLat === 'number' &&
+        Number.isFinite(currentLat) &&
+        typeof currentLon === 'number' &&
+        Number.isFinite(currentLon);
+    const routeStartCoordStr = liveGpsOk ? `${currentLat},${currentLon}` : geocodedStart;
+
     const requestBody = {
-        start: geocodedStart,
+        start: routeStartCoordStr,
         end: geocodedEnd,
         routing_mode: currentRoutingMode,
         vehicle_type: currentVehicleType,
@@ -5525,6 +5536,19 @@ function toggle3DBuildings() {
 // ===== ROAD LABELS TOGGLE =====
 // Controls road name label visibility on the map
 let roadLabelsEnabled = localStorage.getItem('roadLabelsEnabled') !== 'false'; // Default: enabled
+
+// After async style load replaces voyagr-bootstrap, re-apply saved label visibility (initializeRoadLabels may have run on empty bootstrap).
+if (typeof window !== 'undefined') {
+    window.addEventListener('voyagr-vector-style-ready', () => {
+        try {
+            if (!map || !window.MapLibreHelpers) return;
+            const on = localStorage.getItem('roadLabelsEnabled') !== 'false';
+            MapLibreHelpers.toggleRoadLabels(map, on);
+        } catch (e) {
+            /* ignore */
+        }
+    });
+}
 
 /**
  * Toggle road name labels on/off
@@ -12845,8 +12869,12 @@ function setupMapMoveHandler() {
         return;
     }
 
-    // Update current location when map is moved
+    // Keep "current" position in sync with map center for voice/hazards while browsing.
+    // During GPS tracking or turn-by-turn navigation, currentLat/currentLon are owned by
+    // watchPosition — map pans/zooms (including follow-camera) must NOT overwrite them or
+    // reroutes recalculate from the wrong place.
     map.on('move', () => {
+        if (routeInProgress || isTrackingActive) return;
         const center = map.getCenter();
         currentLat = center.lat;
         currentLon = center.lng;

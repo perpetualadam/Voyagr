@@ -4433,12 +4433,12 @@ HTML_TEMPLATE = '''
     <script defer src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
     <script defer src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
-    <script defer src="/static/js/voyagr-core.js?v=20260211t4"></script>
+    <script defer src="/static/js/voyagr-core.js?v=20260503d"></script>
     {% if picovoice_web_assets_ok %}
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260503c"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260503d"></script>
     <script defer src="/static/js/app.js?v=20260504a"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
