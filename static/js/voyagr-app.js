@@ -11036,18 +11036,19 @@ function warmPicovoiceStaticCache() {
     }());
 }
 
-/** Hide road-report and GPS FABs while the bottom sheet is fully expanded (map view only when collapsed). */
+/** Hide map-stack FABs while the bottom sheet is fully expanded (peek mode keeps them visible). */
 function syncBottomSheetOverlapFabs() {
     const bottomSheet = document.getElementById('bottomSheet');
-    const report = document.getElementById('roadReportFab');
-    const gps = document.getElementById('startTrackingBtn');
     const sheetExpanded = !!(bottomSheet && bottomSheet.classList.contains('expanded'));
-    if (sheetExpanded) {
-        if (report) report.style.display = 'none';
-        if (gps) gps.style.display = 'none';
-    } else {
-        if (report) report.style.removeProperty('display');
-        if (gps) gps.style.removeProperty('display');
+    const ids = ['roadReportFab', 'startTrackingBtn', 'voiceFab', 'currentLocationFab'];
+    for (let i = 0; i < ids.length; i++) {
+        const el = document.getElementById(ids[i]);
+        if (!el) continue;
+        if (sheetExpanded) {
+            el.style.display = 'none';
+        } else {
+            el.style.removeProperty('display');
+        }
     }
 }
 
