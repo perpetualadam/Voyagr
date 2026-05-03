@@ -983,6 +983,16 @@ async function startStripeSubscriptionCheckout(sessionOpt) {
 
 const _SOFT_AUTH_BANNER_DISMISS_KEY = 'voyagr_soft_auth_banner_dismissed';
 
+/** Soft banner only on public production hosts (not staging, localhost, or raw IPs). */
+function voyagrSoftAuthBannerAllowedHost() {
+    try {
+        const h = String(window.location.hostname || '').toLowerCase();
+        return h === 'vibevoyager.org' || h === 'www.vibevoyager.org';
+    } catch (e) {
+        return false;
+    }
+}
+
 function voyagrDismissSoftAuthBanner() {
     try {
         sessionStorage.setItem(_SOFT_AUTH_BANNER_DISMISS_KEY, 'true');
@@ -1010,6 +1020,10 @@ function syncSoftAuthBannerVisibility(wantGuestPrompt) {
     const el = document.getElementById('softAuthBanner');
     if (!el) return;
     if (!wantGuestPrompt) {
+        el.style.display = 'none';
+        return;
+    }
+    if (!voyagrSoftAuthBannerAllowedHost()) {
         el.style.display = 'none';
         return;
     }
