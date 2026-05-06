@@ -11,6 +11,9 @@ Environment variables:
 - SUPABASE_JWT_SECRET: Supabase JWT secret (HS256 verification only; server-side)
 - SUPABASE_JWT_AUD: expected audience claim (default: "authenticated")
 - SUPABASE_JWT_ISS: override issuer (default: "{SUPABASE_URL}/auth/v1")
+
+Self-hosted GoTrue sometimes issues HS256 access tokens **without** an ``iss`` claim. In that case we
+must not pass ``issuer=`` into PyJWT, or validation fails even when the signature and audience match.
 """
 
 from __future__ import annotations
@@ -28,6 +31,23 @@ from flask import jsonify, request
 F = TypeVar("F", bound=Callable[..., Any])
 
 _JWKS_CLIENT = None
+
+
+def _issuer_for_pyjwt(token: str, alg_upper: str, issuer: str) -> Optional[str]:
+    """PyJWT rejects tokens that lack ``iss`` when ``issuer=`` is set. Only verify issuer if present."""
+    if not issuer:
+        return None
+    preview = jwt.decode(
+        token,
+        key="",
+        algorithms=[alg_upper],
+        options={
+            "verify_signature": False,
+            "verify_aud": False,
+            "verify_exp": False,
+        },
+    )
+    return issuer if preview.get("iss") else None
 
 
 def _get_bearer_token() -> Optional[str]:
@@ -65,6 +85,7 @@ def verify_supabase_jwt(token: str) -> Dict[str, Any]:
         issuer = f"{supabase_url}/auth/v1"
 
     options = {"require": ["exp", "iat", "sub"]}
+    issuer_kw = _issuer_for_pyjwt(token, alg_upper, issuer)
 
     # RS*/ES*/EdDSA: verify using JWKS from Supabase
     if alg_upper.startswith(("RS", "ES")) or alg_upper == "EDDSA":
@@ -82,7 +103,7 @@ def verify_supabase_jwt(token: str) -> Dict[str, Any]:
             signing_key,
             algorithms=[alg_upper],
             audience=expected_aud,
-            issuer=issuer or None,
+            issuer=issuer_kw,
             options=options,
         )
 
@@ -96,7 +117,7 @@ def verify_supabase_jwt(token: str) -> Dict[str, Any]:
         secret,
         algorithms=[alg_upper],
         audience=expected_aud,
-        issuer=issuer or None,
+        issuer=issuer_kw,
         options=options,
     )
 
