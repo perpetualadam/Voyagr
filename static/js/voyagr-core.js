@@ -432,6 +432,55 @@ function initializeMap() {
     }
     window.__voyagrMapResizeAndRepaint = voyagrMapResizeAndRepaint;
 
+    /**
+     * After flaky mobile data (e.g. 4G↔5G) MapLibre can stop drawing basemap lines while
+     * overlays/nav keep working. Resize + repaint + a no-op jumpTo nudges tile loading.
+     */
+    function voyagrMapRecoverAfterNetworkEvent(reason) {
+        try {
+            if (!map || typeof map.getStyle !== 'function') return;
+            const now = Date.now();
+            if (now - (window.__voyagrMapRecoverLastAt || 0) < 650) {
+                return;
+            }
+            window.__voyagrMapRecoverLastAt = now;
+            voyagrMapResizeAndRepaint();
+            const kickRepaint = () => {
+                try {
+                    if (typeof map.triggerRepaint === 'function') {
+                        map.triggerRepaint();
+                    }
+                } catch (_) {
+                    /* ignore */
+                }
+            };
+            requestAnimationFrame(() => {
+                kickRepaint();
+                requestAnimationFrame(() => {
+                    kickRepaint();
+                    try {
+                        const c = map.getCenter();
+                        map.jumpTo({
+                            center: [c.lng, c.lat],
+                            zoom: map.getZoom(),
+                            bearing: map.getBearing(),
+                            pitch: map.getPitch()
+                        });
+                    } catch (_) {
+                        /* ignore */
+                    }
+                    kickRepaint();
+                });
+            });
+            if (reason) {
+                console.log('[Map] recover after connectivity:', reason);
+            }
+        } catch (_) {
+            /* ignore */
+        }
+    }
+    window.__voyagrMapRecoverAfterNetworkEvent = voyagrMapRecoverAfterNetworkEvent;
+
     const __MAP_STYLE_RELOAD_MIN_GAP_MS = 120000;
     const __MAP_MAX_STYLE_RELOADS = 4;
     function voyagrMapSoftStyleReload(reason) {
@@ -499,6 +548,7 @@ function initializeMap() {
                     }
                     console.warn('[MapLibre] WebGL context restored — resyncing map size and repaint');
                     voyagrMapResizeAndRepaint();
+                    voyagrMapRecoverAfterNetworkEvent('webglcontextrestored');
                 },
                 false
             );
@@ -516,12 +566,77 @@ function initializeMap() {
             () => {
                 try {
                     voyagrMapResizeAndRepaint();
+                    voyagrMapRecoverAfterNetworkEvent('window focus');
                 } catch (e) {
                     /* ignore */
                 }
             },
             { passive: true }
         );
+    }
+    if (!window.__voyagrMapVisibilityHandlerAdded) {
+        window.__voyagrMapVisibilityHandlerAdded = true;
+        document.addEventListener(
+            'visibilitychange',
+            () => {
+                try {
+                    if (document.visibilityState === 'visible') {
+                        voyagrMapResizeAndRepaint();
+                        voyagrMapRecoverAfterNetworkEvent('document visible');
+                    }
+                } catch (e) {
+                    /* ignore */
+                }
+            },
+            { passive: true }
+        );
+    }
+    if (!window.__voyagrPageShowHandlerAdded) {
+        window.__voyagrPageShowHandlerAdded = true;
+        window.addEventListener(
+            'pageshow',
+            (ev) => {
+                try {
+                    if (ev && ev.persisted) {
+                        voyagrMapRecoverAfterNetworkEvent('pageshow bfcache');
+                    }
+                } catch (e) {
+                    /* ignore */
+                }
+            },
+            { passive: true }
+        );
+    }
+    if (!window.__voyagrNetworkInformationHandlerAdded) {
+        try {
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            if (conn && typeof conn.addEventListener === 'function') {
+                window.__voyagrNetworkInformationHandlerAdded = true;
+                let _connRecoverTimer = null;
+                conn.addEventListener(
+                    'change',
+                    () => {
+                        try {
+                            if (_connRecoverTimer) {
+                                clearTimeout(_connRecoverTimer);
+                            }
+                            _connRecoverTimer = setTimeout(() => {
+                                _connRecoverTimer = null;
+                                voyagrMapRecoverAfterNetworkEvent(
+                                    'networkinformation ' +
+                                        String(conn.effectiveType || conn.type || 'change')
+                                );
+                            }, 450);
+                        } catch (e) {
+                            /* ignore */
+                        }
+                    },
+                    { passive: true }
+                );
+            }
+        } catch (e) {
+            /* ignore */
+        }
     }
     if (_mapRenderHeartbeatId) {
         clearInterval(_mapRenderHeartbeatId);

@@ -11462,6 +11462,9 @@ function _handleOnline() {
     if (typeof showStatus === 'function') {
         showStatus('✅ Back online', 'success');
     }
+    if (typeof window.__voyagrMapRecoverAfterNetworkEvent === 'function') {
+        window.__voyagrMapRecoverAfterNetworkEvent('window online');
+    }
 }
 
 window.addEventListener('offline', _handleOffline);
