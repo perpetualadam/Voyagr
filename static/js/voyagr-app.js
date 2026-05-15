@@ -5649,7 +5649,20 @@ function toggleTrafficLayer() {
 }
 
 /**
- * Add TomTom traffic flow tile layer to map
+ * Add TomTom traffic flow tile layer to map.
+ *
+ * Notes on race-condition handling:
+ *   - The basemap style is fetched asynchronously (see voyagr-core.js: bootstrap
+ *     style → setStyle(realStyle)). Until the real style is loaded, calling
+ *     `map.addSource()` throws "Style is not done loading."
+ *   - We previously handled this with `map.once('style.load')` *plus* a 1 s
+ *     `setTimeout` fallback. On slow first paints the setTimeout fired before
+ *     the style was ready (the error you're seeing in the console) and on the
+ *     style.load path it then fired a second time, which is why the success
+ *     line appeared 2-3 times.
+ *   - This version uses a module-level reentry guard, polls `isStyleLoaded()`
+ *     instead of blindly trying, and re-checks `isStyleLoaded()` inside the
+ *     add path so the `style.load` listener cannot fire it in an unsafe state.
  */
 function addTrafficLayer() {
     if (!map) {
@@ -5665,14 +5678,22 @@ function addTrafficLayer() {
         /* ignore */
     }
 
-    // Remove existing traffic layer if any
+    // Reentry guard. addTrafficLayer() can be invoked from initTrafficLayer(),
+    // the /api/config fetch resolver, the theme switcher and the network-recover
+    // path; without this they pile up listeners and produce duplicate
+    // "added successfully" log lines.
+    if (window.__voyagrTrafficLayerPending) {
+        return;
+    }
+
+    // Remove existing traffic layer (idempotent — no-op if absent)
     removeTrafficLayer();
 
     // TomTom Traffic Flow Tiles - relative speed coloring
     // Green = free flow, Yellow = slow, Red = congested, Black = blocked
     // Using 'relative0' style which shows all roads with traffic coloring
     const useProxy = window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true;
-    let tomtomApiKey = window.TOMTOM_API_KEY || '';
+    const tomtomApiKey = window.TOMTOM_API_KEY || '';
 
     console.log('[Traffic] API key / proxy check:', {
         useServerProxy: useProxy,
@@ -5706,8 +5727,19 @@ function addTrafficLayer() {
         return;
     }
 
-    // Wait for style to load before adding traffic layer
+    let scheduled = false;
+    const scheduleOnce = (fn) => {
+        if (scheduled) return;
+        scheduled = true;
+        fn();
+    };
+
     const addTrafficLayerNow = () => {
+        // Safety: style may have unloaded between scheduling and execution (e.g.
+        // theme switch / soft style reload). Re-check; bail to the poller below.
+        if (!map || typeof map.isStyleLoaded !== 'function' || !map.isStyleLoaded()) {
+            return false;
+        }
         try {
             const useProxyNow = window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true;
             const key = window.TOMTOM_API_KEY || '';
@@ -5718,7 +5750,7 @@ function addTrafficLayer() {
                 tiles = [`https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${key}&tileSize=256`];
             } else {
                 console.log('[Traffic] No tile URL available');
-                return;
+                return true;
             }
 
             if (!map.getSource('traffic-source')) {
@@ -5756,7 +5788,7 @@ function addTrafficLayer() {
                     minzoom: 0,
                     maxzoom: 22,
                     paint: { 'raster-opacity': 0.6 }
-                }, trafficBeforeId);  // Insert before labels so labels stay on top
+                }, trafficBeforeId);
             }
 
             trafficLayer = { id: 'traffic-layer' };
@@ -5764,18 +5796,48 @@ function addTrafficLayer() {
 
             // Ensure routes stay on top of traffic
             bringRoutesToTop();
+            return true;
         } catch (e) {
             console.error('[Traffic] Error adding traffic layer:', e);
+            return true;
         }
     };
 
+    const runOnce = () => scheduleOnce(() => {
+        try { addTrafficLayerNow(); } finally { window.__voyagrTrafficLayerPending = false; }
+    });
+
+    window.__voyagrTrafficLayerPending = true;
+
     if (map.isStyleLoaded()) {
-        addTrafficLayerNow();
-    } else {
-        console.log('[Traffic] Waiting for style to load...');
-        map.once('style.load', addTrafficLayerNow);
-        setTimeout(addTrafficLayerNow, 1000);
+        runOnce();
+        return;
     }
+
+    console.log('[Traffic] Waiting for style to load...');
+    // 1) Listen for the next style.load event.
+    map.once('style.load', runOnce);
+    // 2) Bounded poll as a belt-and-braces: if the style.load event was missed
+    //    (some MapLibre versions don't fire it on the initial async setStyle if
+    //    the bootstrap style was already "loaded"), we still recover.
+    let attempts = 0;
+    const MAX_ATTEMPTS = 40; // ~10s at 250ms
+    const poll = () => {
+        if (scheduled) return;
+        if (!map) { window.__voyagrTrafficLayerPending = false; return; }
+        if (map.isStyleLoaded()) {
+            runOnce();
+            return;
+        }
+        attempts++;
+        if (attempts >= MAX_ATTEMPTS) {
+            console.warn('[Traffic] Style not loaded after polling — giving up');
+            window.__voyagrTrafficLayerPending = false;
+            return;
+        }
+        setTimeout(poll, 250);
+    };
+    setTimeout(poll, 250);
 }
 
 /**
