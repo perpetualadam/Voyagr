@@ -679,8 +679,27 @@ function initializeMap() {
             () => {
                 try {
                     if (document.visibilityState === 'visible') {
+                        // Immediate (RAF×2) — catches the common case fast.
                         voyagrMapResizeAndRepaint();
                         voyagrMapRecoverAfterNetworkEvent('document visible');
+                        // Delayed second resize: on Android Chrome (and iOS Safari) the
+                        // address bar can show/hide a few hundred ms after the tab
+                        // becomes visible, changing innerHeight after our first resize.
+                        // A 150 ms follow-up captures the settled viewport so the
+                        // canvas doesn't render at the wrong size (a known cause of
+                        // "map looks blank / cropped after resuming the PWA").
+                        setTimeout(() => {
+                            try {
+                                if (
+                                    typeof document !== 'undefined' &&
+                                    document.visibilityState === 'visible'
+                                ) {
+                                    voyagrMapResizeAndRepaint();
+                                }
+                            } catch (e) {
+                                /* ignore */
+                            }
+                        }, 150);
                     }
                 } catch (e) {
                     /* ignore */
@@ -740,7 +759,13 @@ function initializeMap() {
         clearInterval(_mapRenderHeartbeatId);
         _mapRenderHeartbeatId = null;
     }
-    const MAP_RENDER_HEARTBEAT_MS = 90000; // 90s — balance battery vs recovery on long sessions
+    // 45s heartbeat. Long drives on mobile Chrome occasionally land in a state
+    // where the GL canvas is alive but no tiles are being painted (sources
+    // silently errored, render loop paused after a GPU process restart, etc.).
+    // 45s caps the worst-case blank window at ~45s while still being cheap —
+    // map.resize() + triggerRepaint() is a few dozen microseconds when nothing
+    // needs to change.
+    const MAP_RENDER_HEARTBEAT_MS = 45000;
     _mapRenderHeartbeatId = setInterval(() => {
         try {
             if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
@@ -772,6 +797,45 @@ function initializeMap() {
                 }
             } else {
                 window.__voyagrMapStyleStuckAt = 0;
+            }
+
+            // Tiles-stuck detector. `areTilesLoaded()` returning false is
+            // normal during pan/zoom, but on long drives we sometimes see
+            // sources silently stop completing tile requests (CDN session
+            // expired, mobile NAT swapped, etc.). isStyleLoaded() stays true
+            // and the GL context is fine, so neither check above fires — yet
+            // the user sees a blank/partial basemap. If tiles stay unloaded
+            // for two consecutive heartbeats (~90s) while the tab is visible,
+            // re-issue every source's tile requests. This is cheaper than a
+            // soft style reload and usually enough.
+            try {
+                if (typeof map.areTilesLoaded === 'function') {
+                    const tilesLoaded = map.areTilesLoaded();
+                    if (!tilesLoaded) {
+                        if (!window.__voyagrMapTilesStuckAt) {
+                            window.__voyagrMapTilesStuckAt = Date.now();
+                        } else if (
+                            Date.now() - window.__voyagrMapTilesStuckAt >
+                            MAP_RENDER_HEARTBEAT_MS + 5000 /* one full heartbeat + slack */
+                        ) {
+                            const reloaded = voyagrMapForceReloadAllSources(
+                                'tiles unloaded for >' +
+                                    Math.round(MAP_RENDER_HEARTBEAT_MS / 1000) +
+                                    's (heartbeat)'
+                            );
+                            if (reloaded === 0) {
+                                // Force reload was debounced or no sources matched —
+                                // try the cheap repaint nudge instead.
+                                voyagrMapResizeAndRepaint();
+                            }
+                            window.__voyagrMapTilesStuckAt = 0;
+                        }
+                    } else {
+                        window.__voyagrMapTilesStuckAt = 0;
+                    }
+                }
+            } catch (e) {
+                /* ignore — areTilesLoaded() can throw on transitional state */
             }
         } catch (e) {
             /* ignore */
