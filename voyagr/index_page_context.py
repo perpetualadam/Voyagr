@@ -6,7 +6,7 @@ Used by voyagr.api.core (/) so kwargs stay in sync with voyagr_web.HTML_TEMPLATE
 
 import json
 import os
-from typing import Any, Dict
+from typing import Any, Dict, Tuple
 
 from voyagr.discoverability import block_search_indexing
 from voyagr.seo import (
@@ -22,6 +22,25 @@ from voyagr.seo import (
 def project_root() -> str:
     """Repository root (parent of the voyagr package directory)."""
     return os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+
+
+def tomtom_client_surface() -> Tuple[str, bool]:
+    """TomTom key exposure policy for the browser.
+
+    Returns (inline_key_for_legacy_clients, use_server_tile_proxy).
+
+    When TOMTOM_API_KEY is set and TOMTOM_EXPOSE_CLIENT_KEY is not true, we omit the
+    key from HTML/JSON and serve raster traffic tiles via /api/tomtom/traffic-tile/…
+    so the key never appears in DevTools. Set TOMTOM_EXPOSE_CLIENT_KEY=1 to restore
+    the previous behavior (embed key in the page).
+    """
+    key = (os.getenv("TOMTOM_API_KEY") or "").strip()
+    expose = os.getenv("TOMTOM_EXPOSE_CLIENT_KEY", "").strip().lower() in ("1", "true", "yes")
+    if not key:
+        return "", False
+    if expose:
+        return key, False
+    return "", True
 
 
 def build_index_template_kwargs() -> Dict[str, Any]:
@@ -49,8 +68,10 @@ def build_index_template_kwargs() -> Dict[str, Any]:
     seo_json_ld = "" if block_indexing else json.dumps(
         json_ld_document(), separators=(",", ":"), ensure_ascii=False
     )
+    _tt_key, _tt_proxy = tomtom_client_surface()
     return {
-        "tomtom_api_key": os.getenv("TOMTOM_API_KEY", ""),
+        "tomtom_api_key": _tt_key,
+        "tomtom_traffic_proxy": _tt_proxy,
         "block_search_indexing": block_indexing,
         "picovoice_access_key": picovoice_access_key,
         "picovoice_web_assets_ok": picovoice_web_assets_ok,

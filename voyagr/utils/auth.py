@@ -10,6 +10,7 @@ from typing import Any, Callable, Dict, Optional, TypeVar
 from flask import request, jsonify
 
 from voyagr.config import VALID_API_KEYS
+from voyagr.utils.client_ip import get_client_ip, is_local_client_request
 from voyagr.utils.supabase_auth import verify_supabase_jwt
 
 logger = logging.getLogger('voyagr_web')
@@ -22,14 +23,14 @@ def require_auth(f: F) -> F:
     @wraps(f)
     def decorated_function(*args: Any, **kwargs: Any) -> Any:
         # Allow requests from localhost without auth (for development)
-        if request.remote_addr in ['127.0.0.1', 'localhost']:
+        if is_local_client_request():
             return f(*args, **kwargs)
 
         # Check for API key in header or query parameter
         api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
 
         if not api_key or api_key not in VALID_API_KEYS:
-            logger.warning(f"Unauthorized API access attempt from {request.remote_addr}")
+            logger.warning(f"Unauthorized API access attempt from {get_client_ip()}")
             return jsonify({'success': False, 'error': 'Unauthorized'}), 401
 
         return f(*args, **kwargs)
@@ -37,9 +38,8 @@ def require_auth(f: F) -> F:
 
 
 def _is_local_request() -> bool:
-    # NOTE: request.remote_addr is the direct peer address. Behind a reverse proxy,
-    # this will typically be the proxy IP unless you explicitly trust X-Forwarded-For.
-    return request.remote_addr in ['127.0.0.1', 'localhost']
+    """Loopback client, honoring X-Forwarded-For when VOYAGR_TRUST_PROXY=1."""
+    return is_local_client_request()
 
 
 def _get_bearer_token() -> Optional[str]:

@@ -39,11 +39,9 @@ except ImportError:
 # Optional rate limiting for DoS protection
 try:
     from flask_limiter import Limiter
-    from flask_limiter.util import get_remote_address
     RATE_LIMITING_AVAILABLE = True
 except ImportError:
     Limiter = None  # type: ignore
-    get_remote_address = None  # type: ignore
     RATE_LIMITING_AVAILABLE = False
 
 # Import speed limit detector
@@ -77,6 +75,18 @@ _env_path = os.path.join(_script_dir, '.env')
 load_dotenv(_env_path)
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
+
+# Reverse proxy: fix scheme / client IP when the edge sets X-Forwarded-* (Railway, nginx).
+if os.getenv('VOYAGR_TRUST_PROXY', '').strip().lower() in ('1', 'true', 'yes'):
+    try:
+        from werkzeug.middleware.proxy_fix import ProxyFix
+
+        app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1, x_port=1, x_prefix=1)
+    except Exception as _pf_err:
+        logging.getLogger(__name__).warning('[SECURITY] ProxyFix not applied: %s', _pf_err)
+
+# Client IP for in-process rate limiters (uses X-Forwarded-For when VOYAGR_TRUST_PROXY=1)
+from voyagr.utils.client_ip import get_client_ip  # noqa: E402
 
 # Enable CORS for mobile compatibility
 # Restrict origins to prevent CSRF attacks
@@ -114,7 +124,7 @@ CORS(app, resources={
     r"/api/*": {
         "origins": ALLOWED_ORIGINS if ALLOWED_ORIGINS else ["http://localhost:5000"],
         "methods": ["GET", "POST", "OPTIONS", "DELETE"],
-        "allow_headers": ["Content-Type", "Authorization"],
+        "allow_headers": ["Content-Type", "Authorization", "X-API-Key"],
         "supports_credentials": False
     }
 })
@@ -227,7 +237,7 @@ def rate_limit(limiter: RateLimiter) -> Callable[[F], F]:
     def decorator(f: F) -> F:
         @wraps(f)
         def decorated_function(*args: Any, **kwargs: Any) -> Any:
-            ip: Optional[str] = request.remote_addr
+            ip: Optional[str] = get_client_ip()
             if ip and not limiter.is_allowed(ip):
                 logger.warning(f"Rate limit exceeded for IP: {ip}")
                 return jsonify({'success': False, 'error': 'Rate limit exceeded. Try again later.'}), 429
@@ -237,15 +247,19 @@ def rate_limit(limiter: RateLimiter) -> Callable[[F], F]:
 
 # Initialize Flask-Limiter if available (more robust, supports Redis backend)
 flask_limiter: Optional[Any] = None
+_RATELIMIT_STORAGE_URI = os.getenv('RATELIMIT_STORAGE_URI', 'memory://')
 if RATE_LIMITING_AVAILABLE and Limiter is not None:
     try:
         flask_limiter = Limiter(
-            key_func=get_remote_address,
+            key_func=get_client_ip,
             app=app,
             default_limits=["500 per minute", "10000 per hour"],
-            storage_uri="memory://",  # Use Redis in production: "redis://localhost:6379"
+            storage_uri=_RATELIMIT_STORAGE_URI,
         )
-        logger.info("[SECURITY] Flask-Limiter enabled with default limits: 500/min, 10000/hr")
+        logger.info(
+            "[SECURITY] Flask-Limiter enabled (storage=%s) with default limits: 500/min, 10000/hr",
+            _RATELIMIT_STORAGE_URI.split('://')[0] if '://' in _RATELIMIT_STORAGE_URI else _RATELIMIT_STORAGE_URI,
+        )
     except Exception as e:
         logger.warning(f"[SECURITY] Flask-Limiter initialization failed: {e}. Using fallback.")
         flask_limiter = None
@@ -253,28 +267,9 @@ else:
     logger.info("[SECURITY] Flask-Limiter not available. Using in-memory rate limiting.")
 
 # ============================================================================
-# AUTHENTICATION
+# AUTHENTICATION (shared with blueprints via voyagr.utils.auth)
 # ============================================================================
-# Simple API key authentication (can be extended with JWT tokens)
-VALID_API_KEYS = set(os.getenv('API_KEYS', 'voyagr-default-key').split(','))
-
-def require_auth(f: F) -> F:
-    """Decorator for API key authentication."""
-    @wraps(f)
-    def decorated_function(*args: Any, **kwargs: Any) -> Any:
-        # Allow requests from localhost without auth (for development)
-        if request.remote_addr in ['127.0.0.1', 'localhost']:
-            return f(*args, **kwargs)
-
-        # Check for API key in header or query parameter
-        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
-
-        if not api_key or api_key not in VALID_API_KEYS:
-            logger.warning(f"Unauthorized API access attempt from {request.remote_addr}")
-            return jsonify({'success': False, 'error': 'Unauthorized'}), 401
-
-        return f(*args, **kwargs)
-    return decorated_function  # type: ignore
+from voyagr.utils.auth import require_auth  # noqa: E402
 
 # ============================================================================
 # PHASE 5: REQUEST VALIDATION HELPER FUNCTIONS
@@ -6362,6 +6357,7 @@ HTML_TEMPLATE = '''
     <!-- API Keys injected from server -->
     <script>
         window.TOMTOM_API_KEY = {{ tomtom_api_key | tojson }};
+        window.VOYAGR_TOMTOM_TRAFFIC_PROXY = {{ tomtom_traffic_proxy | tojson }};
         window.PICOVOICE_ACCESS_KEY = {{ picovoice_access_key | tojson }};
         window.VoyagrPicovoiceKeywordPath = {{ picovoice_keyword_public_path | tojson }};
         window.VoyagrPicovoiceWebAssetsOk = {{ picovoice_web_assets_ok | tojson }};

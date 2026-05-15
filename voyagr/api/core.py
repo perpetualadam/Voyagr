@@ -17,7 +17,7 @@ from typing import Optional
 from flask import Blueprint, jsonify, render_template_string, current_app, Response, make_response
 
 from voyagr.discoverability import block_search_indexing
-from voyagr.index_page_context import build_index_template_kwargs
+from voyagr.index_page_context import build_index_template_kwargs, tomtom_client_surface
 from voyagr.seo import (
     render_empty_sitemap_xml,
     render_llms_txt,
@@ -55,8 +55,10 @@ def get_config():
         tv = int(trial_raw)
         if tv > 0:
             trial_days_out = tv
+    _tt_key, _tt_proxy = tomtom_client_surface()
     response = jsonify({
-        'tomtom_api_key': os.getenv('TOMTOM_API_KEY', ''),
+        'tomtom_api_key': _tt_key,
+        'tomtom_traffic_tile_proxy': _tt_proxy,
         'openweathermap_api_key': os.getenv('OPENWEATHERMAP_API_KEY', ''),
         # Supabase (public)
         'supabase_url': os.getenv('SUPABASE_URL', ''),

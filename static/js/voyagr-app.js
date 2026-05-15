@@ -5671,29 +5671,36 @@ function addTrafficLayer() {
     // TomTom Traffic Flow Tiles - relative speed coloring
     // Green = free flow, Yellow = slow, Red = congested, Black = blocked
     // Using 'relative0' style which shows all roads with traffic coloring
+    const useProxy = window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true;
     let tomtomApiKey = window.TOMTOM_API_KEY || '';
 
-    // Debug: Log API key availability
-    console.log('[Traffic] API key check:', {
+    console.log('[Traffic] API key / proxy check:', {
+        useServerProxy: useProxy,
         windowKey: typeof window.TOMTOM_API_KEY,
         keyLength: tomtomApiKey ? tomtomApiKey.length : 0,
         hasKey: !!tomtomApiKey
     });
 
-    // If key not available from inline script, try fetching from API
-    if (!tomtomApiKey) {
-        console.log('[Traffic] Fetching API key from server...');
+    // If key not available and we are not using the server tile proxy, try fetching from /api/config
+    if (!useProxy && !tomtomApiKey) {
+        console.log('[Traffic] Fetching config from server...');
         fetch('/api/config')
             .then(r => r.json())
             .then(data => {
                 applySupportLinksFromConfig(data);
+                if (data.tomtom_traffic_tile_proxy) {
+                    window.VOYAGR_TOMTOM_TRAFFIC_PROXY = true;
+                    console.log('[Traffic] Server tile proxy enabled — key stays off the client');
+                    addTrafficLayer();
+                    return;
+                }
                 if (data.success && data.tomtom_api_key) {
                     window.TOMTOM_API_KEY = data.tomtom_api_key;
                     console.log('[Traffic] API key loaded from server, reinitializing...');
-                    addTrafficLayer(); // Retry with new key
-                } else {
-                    console.log('[Traffic] No API key from server - using route-level traffic only');
+                    addTrafficLayer();
+                    return;
                 }
+                console.log('[Traffic] No API key from server - using route-level traffic only');
             })
             .catch(err => console.log('[Traffic] Failed to fetch config:', err));
         return;
@@ -5702,11 +5709,22 @@ function addTrafficLayer() {
     // Wait for style to load before adding traffic layer
     const addTrafficLayerNow = () => {
         try {
-            // MapLibre raster tile source for traffic
+            const useProxyNow = window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true;
+            const key = window.TOMTOM_API_KEY || '';
+            let tiles;
+            if (useProxyNow) {
+                tiles = [`${window.location.origin}/api/tomtom/traffic-tile/{z}/{x}/{y}.png`];
+            } else if (key) {
+                tiles = [`https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${key}&tileSize=256`];
+            } else {
+                console.log('[Traffic] No tile URL available');
+                return;
+            }
+
             if (!map.getSource('traffic-source')) {
                 map.addSource('traffic-source', {
                     type: 'raster',
-                    tiles: [`https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${tomtomApiKey}&tileSize=256`],
+                    tiles,
                     tileSize: 256,
                     minzoom: 0,
                     maxzoom: 22,

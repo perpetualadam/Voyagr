@@ -5,20 +5,50 @@ Contains:
 - Traffic conditions
 - Route traffic flow
 - TomTom incidents
+- TomTom raster tile proxy (keeps API key off the client when enabled)
 """
 
 import logging
 import os
 import random
+import threading
+import time as time_module
 from datetime import datetime
+
 import requests
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, make_response, request
 
 from voyagr.services import fetch_tomtom_incidents
+from voyagr.utils.client_ip import get_client_ip
 
 logger = logging.getLogger(__name__)
 
 traffic_bp = Blueprint('traffic', __name__)
+
+_tile_lock = threading.Lock()
+_tomtom_tile_hits = {}  # client_ip -> [unix_ts, ...]
+
+
+def _allow_tomtom_tile_request(client_ip: str, max_per_minute: int = 300) -> bool:
+    """Very light per-IP throttle — map pans pull many tiles at once."""
+    now = time_module.time()
+    window = 60.0
+    with _tile_lock:
+        arr = _tomtom_tile_hits.setdefault(client_ip, [])
+        arr[:] = [t for t in arr if now - t < window]
+        if len(arr) >= max_per_minute:
+            return False
+        arr.append(now)
+        return True
+
+
+def _valid_slippy_tile(z: int, x: int, y: int) -> bool:
+    if z < 0 or z > 22:
+        return False
+    if x < 0 or y < 0:
+        return False
+    n = 1 << z
+    return x < n and y < n
 
 
 @traffic_bp.route('/traffic-conditions', methods=['POST'])
@@ -287,4 +317,39 @@ def get_tomtom_incidents():
     except Exception as e:
         logger.error(f"Error fetching TomTom incidents: {e}")
         return jsonify({'success': False, 'error': str(e)})
+
+
+@traffic_bp.route('/tomtom/traffic-tile/<int:z>/<int:x>/<int:y>.png')
+def tomtom_traffic_tile_proxy(z, x, y):
+    """Proxy TomTom traffic raster tiles so the browser never holds TOMTOM_API_KEY."""
+    if not _valid_slippy_tile(z, x, y):
+        return make_response('', 404)
+
+    api_key = os.getenv('TOMTOM_API_KEY', '').strip()
+    if not api_key:
+        return make_response('', 503)
+
+    client_ip = get_client_ip()
+    if not _allow_tomtom_tile_request(client_ip):
+        logger.warning('[TRAFFIC-TILE] rate limited ip=%s', client_ip)
+        return make_response('', 429)
+
+    url = (
+        f'https://api.tomtom.com/traffic/map/4/tile/flow/relative0/'
+        f'{z}/{x}/{y}.png?key={api_key}&tileSize=256'
+    )
+    try:
+        upstream = requests.get(url, timeout=12)
+    except requests.RequestException as exc:
+        logger.warning('[TRAFFIC-TILE] upstream error: %s', exc)
+        return make_response('', 502)
+
+    if upstream.status_code != 200:
+        return make_response('', upstream.status_code)
+
+    resp = make_response(upstream.content)
+    ct = upstream.headers.get('Content-Type', 'image/png')
+    resp.headers['Content-Type'] = ct
+    resp.headers['Cache-Control'] = 'public, max-age=90'
+    return resp
 
