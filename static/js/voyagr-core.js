@@ -433,8 +433,64 @@ function initializeMap() {
     window.__voyagrMapResizeAndRepaint = voyagrMapResizeAndRepaint;
 
     /**
+     * Force every map source to re-issue its tile (or TileJSON) requests.
+     *
+     * Why this exists: when a phone switches radio (e.g. 4G→5G, WiFi↔cellular)
+     * the OS tears down active TCP connections. Any in-flight MapLibre tile
+     * fetches abort silently, MapLibre marks those tiles as errored, and the
+     * basemap goes blank — but `isStyleLoaded()` still returns true, so the
+     * existing heartbeat-based recovery never fires. Resize/repaint alone do
+     * not re-request those tiles; we have to nudge the sources themselves.
+     *
+     * Uses MapLibre's stable public API:
+     *   - `source.setTiles(tiles)` for inline-tile vector/raster sources
+     *   - `source.setUrl(url)`     for TileJSON-backed sources
+     * Both reset the source's internal tile cache and re-fetch.
+     *
+     * Has its own 1.5s debounce so multiple recovery triggers don't spam.
+     */
+    function voyagrMapForceReloadAllSources(reason) {
+        try {
+            if (!map || typeof map.getStyle !== 'function' || typeof map.getSource !== 'function') return 0;
+            const now = Date.now();
+            if (now - (window.__voyagrSourceReloadLastAt || 0) < 1500) return 0;
+            window.__voyagrSourceReloadLastAt = now;
+            const style = map.getStyle();
+            if (!style || !style.sources) return 0;
+            let reloaded = 0;
+            for (const id of Object.keys(style.sources)) {
+                try {
+                    const def = style.sources[id];
+                    if (!def) continue;
+                    const source = map.getSource(id);
+                    if (!source) continue;
+                    if (Array.isArray(def.tiles) && def.tiles.length > 0 && typeof source.setTiles === 'function') {
+                        source.setTiles(def.tiles);
+                        reloaded++;
+                    } else if (def.url && typeof source.setUrl === 'function') {
+                        source.setUrl(def.url);
+                        reloaded++;
+                    }
+                } catch (_) {
+                    /* ignore per-source failures — keep going */
+                }
+            }
+            if (reloaded > 0 && reason) {
+                console.log('[Map] forced source reload (' + reloaded + ') reason:', reason);
+            }
+            return reloaded;
+        } catch (_) {
+            return 0;
+        }
+    }
+    window.__voyagrMapForceReloadAllSources = voyagrMapForceReloadAllSources;
+
+    /**
      * After flaky mobile data (e.g. 4G↔5G) MapLibre can stop drawing basemap lines while
-     * overlays/nav keep working. Resize + repaint + a no-op jumpTo nudges tile loading.
+     * overlays/nav keep working. Resize + repaint + a no-op jumpTo nudges the renderer,
+     * and `voyagrMapForceReloadAllSources` re-fetches any tiles that were aborted mid-flight
+     * when the network swapped. A delayed verification escalates to a soft style reload
+     * if the map is still not painting tiles a few seconds later.
      */
     function voyagrMapRecoverAfterNetworkEvent(reason) {
         try {
@@ -472,6 +528,48 @@ function initializeMap() {
                     kickRepaint();
                 });
             });
+
+            // Re-fetch tiles that may have been aborted by the network swap.
+            // Small delay so the radio has a moment to settle on the new network.
+            setTimeout(() => {
+                try { voyagrMapForceReloadAllSources(reason); } catch (_) { /* ignore */ }
+            }, 250);
+
+            // Verification pass: if the map still hasn't finished loading tiles
+            // a few seconds later, try one more forced reload, then escalate
+            // to a soft style reload as a last resort. The soft reload has
+            // its own internal rate limits, so this can't loop.
+            if (window.__voyagrMapRecoverVerifyTimer) {
+                clearTimeout(window.__voyagrMapRecoverVerifyTimer);
+            }
+            window.__voyagrMapRecoverVerifyTimer = setTimeout(() => {
+                window.__voyagrMapRecoverVerifyTimer = null;
+                try {
+                    if (!map) return;
+                    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+                    const styleOk = typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : true;
+                    const allLoaded = typeof map.loaded === 'function' ? map.loaded() : true;
+                    if (styleOk && allLoaded) return; // healthy, nothing to do
+                    voyagrMapForceReloadAllSources((reason || 'verify') + ' (retry)');
+                    if (window.__voyagrMapRecoverEscalateTimer) {
+                        clearTimeout(window.__voyagrMapRecoverEscalateTimer);
+                    }
+                    window.__voyagrMapRecoverEscalateTimer = setTimeout(() => {
+                        window.__voyagrMapRecoverEscalateTimer = null;
+                        try {
+                            if (!map) return;
+                            if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+                            const styleOk2 = typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : true;
+                            const allLoaded2 = typeof map.loaded === 'function' ? map.loaded() : true;
+                            if (styleOk2 && allLoaded2) return;
+                            if (typeof voyagrMapSoftStyleReload === 'function') {
+                                voyagrMapSoftStyleReload((reason || 'verify') + ' (escalate)');
+                            }
+                        } catch (_) { /* ignore */ }
+                    }, 6000);
+                } catch (_) { /* ignore */ }
+            }, 4000);
+
             if (reason) {
                 console.log('[Map] recover after connectivity:', reason);
             }
