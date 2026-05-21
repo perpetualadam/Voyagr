@@ -4578,6 +4578,91 @@ function decodePolyline(encoded, precision = 6) {
         return [];
     }
 }
+
+/**
+ * Encode decoded [lat,lon] vertices to an encoded polyline string (paired with decodePolyline / Google polyline alg).
+ * Used offline when only decoded points survived persistence.
+ *
+ * @param {Array<[number, number]>} points
+ * @param {number} precision
+ * @returns {string}
+ */
+function encodePolyline(points, precision = 6) {
+    if (!Array.isArray(points) || points.length === 0) return '';
+    const factor = Math.pow(10, precision);
+    let prevLatRounded = 0;
+    let prevLonRounded = 0;
+    let result = '';
+
+    /** Google polyline zigzag on integer delta (inverse of decodePolyline bit assembly). */
+    const encodeUnsignedChunk = (delta) => {
+        const n = Math.round(delta);
+        let u = (n << 1) ^ (n >> 31);
+        u = u >>> 0;
+        while (u >= 0x20) {
+            result += String.fromCharCode((0x20 | (u & 0x1f)) + 63);
+            u >>>= 5;
+        }
+        result += String.fromCharCode((u >>> 0) + 63);
+    };
+
+    for (let p = 0; p < points.length; p++) {
+        const pt = points[p];
+        if (!pt || pt.length < 2) continue;
+        const latR = Math.round(pt[0] * factor);
+        const lonR = Math.round(pt[1] * factor);
+        encodeUnsignedChunk(latR - prevLatRounded);
+        encodeUnsignedChunk(lonR - prevLonRounded);
+        prevLatRounded = latR;
+        prevLonRounded = lonR;
+    }
+    return result;
+}
+
+/**
+ * Before navigation decode, attach `routeOptions[selectedRouteIndex]` geometry / maneuvers so the driven line matches the UI.
+ *
+ * @param {Object|null|undefined} routeData
+ */
+function mergeNavigationRouteFromSelected(routeData) {
+    if (!routeData || typeof routeData !== 'object') return routeData;
+    try {
+        if (!routeOptions || routeOptions.length === 0) return routeData;
+        const idx = Math.max(0, Math.min(Number(selectedRouteIndex) || 0, routeOptions.length - 1));
+        const sel = routeOptions[idx];
+        if (!sel) return routeData;
+        return Object.assign({}, routeData, {
+            geometry: sel.geometry || routeData.geometry,
+            maneuvers: (sel.maneuvers && sel.maneuvers.length > 0) ? sel.maneuvers : (routeData.maneuvers || []),
+            name: sel.name || routeData.name,
+            distance_km: sel.distance_km ?? routeData.distance_km,
+            duration_minutes: sel.duration_minutes ?? routeData.duration_minutes,
+            fuel_cost: sel.fuel_cost ?? routeData.fuel_cost,
+            fuel_litres: sel.fuel_litres ?? routeData.fuel_litres,
+            toll_cost: sel.toll_cost ?? routeData.toll_cost,
+            caz_cost: sel.caz_cost ?? routeData.caz_cost,
+            source: sel.source || routeData.source,
+        });
+    } catch (_e) {
+        return routeData;
+    }
+}
+
+/**
+ * Recover `routeData` from persisted OfflineNav blob for a normal navigation bootstrap.
+ *
+ * @param {*} saved
+ */
+function buildRoutePayloadFromPersisted(saved) {
+    if (!saved || !Array.isArray(saved.polyline) || saved.polyline.length < 2) return null;
+    const base = saved.routeData && typeof saved.routeData === 'object' ? { ...saved.routeData } : {};
+    base.maneuvers = saved.steps || base.maneuvers || [];
+    if (!base.geometry || typeof base.geometry !== 'string') {
+        base.geometry = encodePolyline(saved.polyline, 6);
+        if (!base.geometry) return null;
+    }
+    return base;
+}
 /**
  * showStatus function
  * @function showStatus
@@ -9411,10 +9496,18 @@ let _lastActiveManeuverIdx = -1;
 //   4. Fall back to derived speed (dx/dt between successive fixes) when the device does
 //      not report `coords.speed` — common on some Android browsers.
 const SPEED_WIDGET_DEAD_BAND_MPH = 1.0;     // < ~0.45 m/s ≈ stationary noise
-const SPEED_WIDGET_SNAP_DELTA_MPH = 8.0;    // > 8 mph change skips smoothing
+const SPEED_WIDGET_SNAP_DELTA_MPH = 8.0;    // modest changes skip sluggish EMA
+/** Above this delta we no longer instantly snap — huge spikes decay instead (Firefox / fused GPS outliers). */
+const SPEED_WIDGET_LARGE_JUMP_MPH = 55.0;
+const SPEED_WIDGET_LARGE_JUMP_DECAY_ALPHA = 0.2; // per tick crawl toward dubious raw readings
+/** Hard ceiling for plausible road-vehicle speeds (clamp sensor + Δfix estimates). */
+const MAX_DISPLAY_GPS_SPEED_MPH = 185.0;
+
 const SPEED_WIDGET_EMA_ALPHA = 0.45;        // 0=stale, 1=raw; 0.45 ≈ ~3-tick settle
 let _smoothedSpeedMph = 0;
 let _smoothedSpeedInitAt = 0;
+/** Tracks last sane raw mph accepted by {@link pickRawSpeedMph} for outlier rejection. */
+let _lastGoodRawPickMph = 0;
 
 /**
  * Smooth a raw mph reading to reduce GPS jitter without sacrificing responsiveness.
@@ -9426,6 +9519,7 @@ let _smoothedSpeedInitAt = 0;
  */
 function smoothGpsSpeedMph(rawMph) {
     if (!Number.isFinite(rawMph) || rawMph < 0) rawMph = 0;
+    rawMph = Math.min(rawMph, MAX_DISPLAY_GPS_SPEED_MPH);
     if (rawMph < SPEED_WIDGET_DEAD_BAND_MPH) {
         _smoothedSpeedMph = 0;
         return 0;
@@ -9436,12 +9530,22 @@ function smoothGpsSpeedMph(rawMph) {
         _smoothedSpeedInitAt = now;
         return rawMph;
     }
-    if (Math.abs(rawMph - _smoothedSpeedMph) >= SPEED_WIDGET_SNAP_DELTA_MPH) {
+
+    const delta = Math.abs(rawMph - _smoothedSpeedMph);
+
+    // Huge jumps usually mean a sensor glitch — never snap-through to 1483 mph, etc.
+    if (delta >= SPEED_WIDGET_LARGE_JUMP_MPH) {
+        _smoothedSpeedMph = (1 - SPEED_WIDGET_LARGE_JUMP_DECAY_ALPHA) * _smoothedSpeedMph
+            + SPEED_WIDGET_LARGE_JUMP_DECAY_ALPHA * rawMph;
+    } else if (delta >= SPEED_WIDGET_SNAP_DELTA_MPH) {
         _smoothedSpeedMph = rawMph;
     } else {
         _smoothedSpeedMph = (1 - SPEED_WIDGET_EMA_ALPHA) * _smoothedSpeedMph
             + SPEED_WIDGET_EMA_ALPHA * rawMph;
     }
+
+    _smoothedSpeedMph = Math.min(_smoothedSpeedMph, MAX_DISPLAY_GPS_SPEED_MPH);
+
     _smoothedSpeedInitAt = now;
     return _smoothedSpeedMph;
 }
@@ -9453,27 +9557,73 @@ function smoothGpsSpeedMph(rawMph) {
  *    keeps the widget useful on devices that always report `null`.
  *
  * @param {number|null|undefined} coordsSpeed - `position.coords.speed` (m/s) for this fix.
- * @param {Array<{lat:number,lon:number,timestamp:Date|number}>} history - Recent tracking history.
- * @returns {number} Best-effort mph reading (still raw — caller may smooth it).
+ * @param {Array<{lat:number,lon:number,timestamp:Date|number,accuracy?:number}>} history - Recent fixes.
+ * @param {number|undefined|null} coordAccuracy - `coords.accuracy` (meters) for this tick.
+ * @returns {number} Best-effort mph reading (still raw — caller should run through {@link smoothGpsSpeedMph}).
  */
-function pickRawSpeedMph(coordsSpeed, history) {
+function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
+    const accCurr = Number.isFinite(coordAccuracy) && coordAccuracy > 2 ? coordAccuracy : null;
+
+    const finish = (mph) => {
+        let x = mph;
+        if (!Number.isFinite(x) || x < 0) x = 0;
+        x = Math.min(x, MAX_DISPLAY_GPS_SPEED_MPH);
+
+        _lastGoodRawPickMph = x;
+        return x;
+    };
+
     if (Number.isFinite(coordsSpeed) && coordsSpeed >= 0) {
-        return coordsSpeed * 2.237;
+        let mph = coordsSpeed * 2.237;
+        mph = Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH);
+        const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : mph;
+
+        if (prevPick > 5 && mph > prevPick + 85 && accCurr != null && accCurr > 40) {
+            mph = prevPick;
+        }
+
+        return finish(mph);
     }
+
     if (Array.isArray(history) && history.length >= 2) {
         const curr = history[history.length - 1];
         const prev = history[history.length - 2];
         const tCurr = curr && curr.timestamp ? +curr.timestamp : 0;
         const tPrev = prev && prev.timestamp ? +prev.timestamp : 0;
         const dtSec = (tCurr - tPrev) / 1000;
+        const accAvg = Number.isFinite(prev.accuracy) && Number.isFinite(curr.accuracy)
+            ? Math.max(Number(prev.accuracy), Number(curr.accuracy))
+            : (accCurr != null ? accCurr : null);
+
         if (dtSec > 0.2 && dtSec < 10) {
             const distM = calculateDistanceMeters(prev.lat, prev.lon, curr.lat, curr.lon);
-            if (distM < 500) {
-                return (distM / dtSec) * 2.237;
+            if (!Number.isFinite(distM) || distM > 500) {
+                return finish(0);
             }
+
+            let mph = (distM / dtSec) * 2.237;
+            mph = Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH);
+
+            const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : mph;
+
+            if (accAvg != null) {
+                if (mph > 95 && mph > prevPick + 70 && distM > accAvg * 2.3) {
+                    mph = prevPick;
+                }
+                if (mph > 130 && distM > 120 && distM > accAvg * 1.8 && accAvg > 55) {
+                    mph = Math.min(mph, prevPick + Math.max(20, mph * 0.15));
+                }
+            }
+
+            if (mph > 120 && dtSec < 0.42 && distM > 42) {
+                mph = Math.min(mph, Math.max(prevPick, prevPick * 1.42 + 6));
+            }
+
+            return finish(mph);
         }
     }
-    return 0;
+
+    return finish(0);
 }
 /**
  * updateSpeedWidget function
@@ -12042,14 +12192,23 @@ async function _tryResumeNavigation() {
 
         document.getElementById('resumeNavYes').onclick = () => {
             resumeBanner.remove();
-            routePolyline = saved.polyline;
-            currentRouteSteps = saved.steps;
-            currentStepIndex = saved.stepIndex || 0;
-            routeInProgress = true;
-            if (saved.routeData) window.lastCalculatedRoute = saved.routeData;
-            showStatus('🧭 Navigation resumed from saved route', 'success');
-            if (typeof startGPSTracking === 'function') startGPSTracking();
-            console.log('[OfflineNav] Route resumed');
+            const payload = buildRoutePayloadFromPersisted(saved);
+            if (payload && payload.geometry) {
+                startTurnByTurnNavigation(payload, {
+                    fromPersistedResume: true,
+                    resumeStepIndex: saved.stepIndex || 0,
+                });
+                console.log('[OfflineNav] Route resumed via full navigation bootstrap');
+            } else {
+                routePolyline = saved.polyline;
+                currentRouteSteps = saved.steps;
+                currentStepIndex = saved.stepIndex || 0;
+                routeInProgress = true;
+                if (saved.routeData) window.lastCalculatedRoute = saved.routeData;
+                showStatus('🧭 Navigation resumed from saved route', 'success');
+                if (typeof startGPSTracking === 'function') startGPSTracking();
+                console.log('[OfflineNav] Route resumed (legacy path — missing encoded geometry)');
+            }
         };
         document.getElementById('resumeNavNo').onclick = () => {
             resumeBanner.remove();
@@ -13731,6 +13890,11 @@ function startGPSTracking() {
 
     isTrackingActive = true;
     trackingHistory = [];
+    _lastGoodRawPickMph = 0;
+    _smoothedSpeedMph = 0;
+    _smoothedSpeedInitAt = 0;
+    window.__voyagrLastFollowEaseAt = 0;
+    window.__voyagrLastFollowCenterGeo = null;
     showStatus('🎯 GPS Tracking started...', 'success');
 
     // Watch position with high accuracy
@@ -13766,9 +13930,9 @@ function startGPSTracking() {
             }
 
             // Prefer device compass/course when moving; otherwise motion vector from recent fixes.
-            let heading = 0;
+            let gpsHeadingForBlend = 0;
             if (deviceHeading != null && speed > 1.5) {
-                heading = (deviceHeading + 360) % 360;
+                gpsHeadingForBlend = (deviceHeading + 360) % 360;
             } else if (trackingHistory.length > 1) {
                 const curr = trackingHistory[trackingHistory.length - 1];
                 let prev = trackingHistory[trackingHistory.length - 2];
@@ -13783,29 +13947,51 @@ function startGPSTracking() {
                 const dLon = curr.lon - prev.lon;
                 const dLat = curr.lat - prev.lat;
                 if (Math.abs(dLon) + Math.abs(dLat) > 1e-7) {
-                    heading = (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360;
+                    gpsHeadingForBlend = (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360;
                 }
             }
+            let heading = gpsHeadingForBlend;
 
-            // ===== SNAP TO ROUTE: Position vehicle on the polyline during navigation =====
+            /** Single raw-speed sample / tick (clamped inside pickRawSpeedMph) for zoom + HUD. */
+            const speedMph = pickRawSpeedMph(rawCoordsSpeed, trackingHistory, accuracy);
+
+            // SNAP TO ROUTE: blend snapped↔raw with accuracy‑widened corridor (reduces 50 m hysteresis jitter).
             let displayLat = lat;
             let displayLon = lon;
 
             if (routeInProgress && routePolyline && routePolyline.length >= 2) {
                 const snapped = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
-                if (snapped.distance <= SNAP_TO_ROUTE_MAX_DISTANCE) {
-                    displayLat = snapped.lat;
-                    displayLon = snapped.lon;
+
+                let routeBearing = gpsHeadingForBlend;
+                if (snapped.index < routePolyline.length - 1) {
+                    const rA = routePolyline[snapped.index];
+                    const rB = routePolyline[snapped.index + 1];
+                    routeBearing = calculateBearing(rA[0], rA[1], rB[0], rB[1]);
+                }
+
+                const horizAcc =
+                    typeof accuracy === 'number' && accuracy > 1 && accuracy < 520 ? accuracy : null;
+                const accExtraRaw = horizAcc != null ? horizAcc * SNAP_ROUTE_ACC_SCALE : 0;
+                const accExtra = Math.min(SNAP_ROUTE_ACC_EXTRA_CAP_METERS, Math.max(0, accExtraRaw));
+                const corridorOuter = SNAP_TO_ROUTE_BASE_METERS + accExtra;
+                const base = SNAP_TO_ROUTE_BASE_METERS;
+
+                let snapBlendWeight = 0;
+                const distSnap = snapped.distance;
+                if (distSnap <= base) {
+                    snapBlendWeight = 1;
+                } else if (distSnap <= corridorOuter) {
+                    const span = corridorOuter - base;
+                    snapBlendWeight = span > 1e-6 ? (corridorOuter - distSnap) / span : 0;
+                }
+                snapBlendWeight = Math.max(0, Math.min(1, snapBlendWeight));
+
+                displayLat = lat + (snapped.lat - lat) * snapBlendWeight;
+                displayLon = lon + (snapped.lon - lon) * snapBlendWeight;
+                heading = blendHeadingsCircular(gpsHeadingForBlend, routeBearing, snapBlendWeight);
+
+                if (snapBlendWeight > 0.18) {
                     lastSnappedRouteIndex = snapped.index;
-                    // Recalculate heading from route direction at snapped point for smoother rotation
-                    if (snapped.index < routePolyline.length - 1) {
-                        const rA = routePolyline[snapped.index];
-                        const rB = routePolyline[snapped.index + 1];
-                        heading = calculateBearing(rA[0], rA[1], rB[0], rB[1]);
-                    }
-                } else {
-                    // Too far from route — use raw GPS (driver may be off-route)
-                    console.log(`[Snap] GPS ${snapped.distance.toFixed(0)}m from route, using raw position`);
                 }
             }
 
@@ -13840,9 +14026,21 @@ function startGPSTracking() {
             }
 
             // ===== ZOOM AND FOLLOW: Center map on user with smart zoom =====
-            if (zoomAndFollowEnabled && mapFollowingActive) {
-                // Calculate smart zoom based on speed and route context
-                const speedMph = pickRawSpeedMph(rawCoordsSpeed, trackingHistory);
+            const FOLLOW_EASE_MIN_MS = 400;
+            const nowCam = Date.now();
+            let followJumpM = Number.POSITIVE_INFINITY;
+            try {
+                const lc = window.__voyagrLastFollowCenterGeo;
+                if (lc && Number.isFinite(lc.lat) && Number.isFinite(lc.lon)) {
+                    followJumpM = calculateDistanceMeters(displayLat, displayLon, lc.lat, lc.lon);
+                }
+            } catch (_ej) {
+                /* ignore */
+            }
+            const followDue = nowCam - (window.__voyagrLastFollowEaseAt || 0) >= FOLLOW_EASE_MIN_MS;
+            const followUrgent = followJumpM > 40;
+
+            if (zoomAndFollowEnabled && mapFollowingActive && map) {
                 const smartZoom = calculateSmartZoom(speedMph, null, 'motorway');
 
                 // 60° during active nav follow; preference also enables pitch when browsing with follow
@@ -13850,25 +14048,34 @@ function startGPSTracking() {
                 const padding = getNavigationFollowPadding();
                 const bearing = shouldUsePitchedDrivingCamera() ? (heading || map.getBearing()) : 0;
 
-                // Smooth animation to follow vehicle
-                map.easeTo({
-                    center: [displayLon, displayLat], // MapLibre uses [lon, lat]
-                    zoom: smartZoom,
-                    bearing: bearing,
-                    pitch: pitch,
-                    padding: padding,
-                    duration: 1000,
-                    essential: true
-                });
+                if (followDue || followUrgent) {
+                    window.__voyagrLastFollowEaseAt = nowCam;
+                    window.__voyagrLastFollowCenterGeo = { lat: displayLat, lon: displayLon };
+
+                    const dur = followJumpM > 95 ? 780 : Math.min(680, FOLLOW_EASE_MIN_MS + 240);
+                    map.easeTo({
+                        center: [displayLon, displayLat], // MapLibre uses [lon, lat]
+                        zoom: smartZoom,
+                        bearing: bearing,
+                        pitch: pitch,
+                        padding: padding,
+                        duration: dur,
+                        essential: true
+                    });
+                }
 
                 console.log(`[Navigation] View: pitch ${pitch}°, bearing ${Math.round(bearing)}°, zoom ${smartZoom.toFixed(1)}, pitchedNav: ${isActiveNavigationFollow()}, pref: ${driverPerspectiveEnabled}`);
-            } else if (!zoomAndFollowEnabled && !map._userPanned) {
-                map.easeTo({
-                    center: [displayLon, displayLat],
-                    zoom: 16,
-                    padding: routeInProgress ? getNavigationFollowPadding() : undefined,
-                    duration: 1000
-                });
+            } else if (map && !zoomAndFollowEnabled && !map._userPanned) {
+                if (followDue || followUrgent) {
+                    window.__voyagrLastFollowEaseAt = nowCam;
+                    window.__voyagrLastFollowCenterGeo = { lat: displayLat, lon: displayLon };
+                    map.easeTo({
+                        center: [displayLon, displayLat],
+                        zoom: 16,
+                        padding: routeInProgress ? getNavigationFollowPadding() : undefined,
+                        duration: followJumpM > 95 ? 650 : 420
+                    });
+                }
             }
 
             // Check for route deviation
@@ -13884,7 +14091,6 @@ function startGPSTracking() {
             updateVariableSpeedLimit(lat, lon, 'motorway', currentVehicleType);
 
             // Apply smart zoom with turn detection
-            const speedMph = pickRawSpeedMph(rawCoordsSpeed, trackingHistory);
             let distanceToNextTurn = null;
 
             // Detect upcoming turns if navigation is active
@@ -14252,6 +14458,23 @@ function findNearestRouteIndex(lat, lon, polyline) {
 }
 
 /**
+ * Interpolate clockwise from GPS-derived heading toward route-aligned bearing [0°,360°).
+ * @param {number} gpsHeadingDegrees
+ * @param {number} routeHeadingDegrees
+ * @param {number} blendTowardRoute 0 GPS only, 1 route only
+ */
+function blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowardRoute) {
+    if (!Number.isFinite(gpsHeadingDegrees)) gpsHeadingDegrees = 0;
+    if (!Number.isFinite(routeHeadingDegrees)) return gpsHeadingDegrees;
+    let t = Number(blendTowardRoute);
+    if (!Number.isFinite(t)) return gpsHeadingDegrees;
+    t = Math.max(0, Math.min(1, t));
+    let d = (((routeHeadingDegrees - gpsHeadingDegrees) % 360) + 360) % 360;
+    if (d > 180) d -= 360;
+    return (((gpsHeadingDegrees + d * t) % 360) + 360) % 360;
+}
+
+/**
  * Snap a GPS position to the closest point on the route polyline.
  * Projects the position onto each line segment and returns the closest projected point.
  * This ensures the vehicle icon follows the route line smoothly instead of jumping
@@ -14378,8 +14601,13 @@ function computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex
 let lastSnappedRouteIndex = 0;
 /** For turn detection only: monotonic polyline vertex index (never goes backwards). */
 let lastTurnDetectRouteVertexIndex = 0;
-// Maximum distance from route to snap (meters). Beyond this, use raw GPS.
-const SNAP_TO_ROUTE_MAX_DISTANCE = 50; // Increased from 40 to cover typical GPS drift
+// Near route: snap fully; degraded GPS widens corridor and blends snapped↔raw to reduce jitter.
+const SNAP_TO_ROUTE_BASE_METERS = 50;
+const SNAP_ROUTE_ACC_SCALE = 0.72;
+const SNAP_ROUTE_ACC_EXTRA_CAP_METERS = 48;
+
+/** Alias for readability in routing math that predates corridor blending. */
+const SNAP_TO_ROUTE_MAX_DISTANCE = SNAP_TO_ROUTE_BASE_METERS;
 /**
  * getTurnDirectionText function
  * @function getTurnDirectionText
@@ -16509,17 +16737,26 @@ async function geocodeLocations(startAddress, endAddress) {
 /**
  * startTurnByTurnNavigation function
  * @function startTurnByTurnNavigation
- * @param {*} routeData - Parameter description
- * @returns {*} Return value description
+ * @param {*} routeData - Route payload (`geometry`, `maneuvers`, …)
+ * @param {{ resumeStepIndex?: number, fromPersistedResume?: boolean }|null} [navStartOpts] - Optional resume / offline tweaks
  */
-function startTurnByTurnNavigation(routeData) {
+function startTurnByTurnNavigation(routeData, navStartOpts = null) {
+    routeData = mergeNavigationRouteFromSelected(routeData);
     if (!routeData || !routeData.geometry) {
         showStatus('No route geometry available', 'error');
         return;
     }
 
+    window.lastCalculatedRoute = Object.assign({}, window.lastCalculatedRoute || {}, routeData);
+
+    const isQuietResume = !!(navStartOpts && navStartOpts.fromPersistedResume);
+    let resumeStepIdx = 0;
+    if (navStartOpts != null && Number.isFinite(navStartOpts.resumeStepIndex)) {
+        resumeStepIdx = Math.max(0, Math.floor(navStartOpts.resumeStepIndex));
+    }
+
     routeInProgress = true;
-    currentStepIndex = 0;
+    currentStepIndex = resumeStepIdx;
     currentRouteSteps = routeData.maneuvers || [];
     lastSnappedRouteIndex = 0;
     lastTurnDetectRouteVertexIndex = 0;
@@ -16642,8 +16879,10 @@ function startTurnByTurnNavigation(routeData) {
     // ===== SHOW TURN INSTRUCTION WIDGET during navigation =====
     showTurnInstructionWidget();
     // Initialize with first instruction if available - calculate actual distance
+    // Initialize instruction at current maneuver (step 0 for fresh nav, resumed index for OfflineNav resume)
     if (currentRouteSteps && currentRouteSteps.length > 0 && routePolyline && routePolyline.length > 0) {
-        const firstStep = currentRouteSteps[0];
+        const initIdx = Math.min(Math.max(0, currentStepIndex || 0), currentRouteSteps.length - 1);
+        const firstStep = currentRouteSteps[initIdx];
         // Calculate distance to first maneuver from start
         const firstManeuverIndex = firstStep.begin_shape_index || 0;
         let distanceToFirst = 0;
@@ -16661,7 +16900,7 @@ function startTurnByTurnNavigation(routeData) {
             instruction: firstStep.instruction || 'Follow the route',
             streetName: (firstStep.street_names || [])[0] || '',
             maneuver: firstStep,
-            maneuverIndex: 0,
+            maneuverIndex: initIdx,
             valhallaType: firstStep.type != null ? firstStep.type : 8,
         });
     }
@@ -16684,9 +16923,15 @@ function startTurnByTurnNavigation(routeData) {
         }
     }
 
-    sendNotification('Navigation Started', 'Turn-by-turn guidance activated', 'success');
-    speakMessage('Navigation started. Follow the route.');
-    showStatus('🧭 Turn-by-turn navigation active', 'success');
+    sendNotification(
+        isQuietResume ? 'Navigation resumed' : 'Navigation Started',
+        isQuietResume ? 'Continuing your saved route.' : 'Turn-by-turn guidance activated',
+        'success'
+    );
+    if (!isQuietResume) {
+        speakMessage('Navigation started. Follow the route.');
+    }
+    showStatus(isQuietResume ? '🧭 Navigation resumed — following saved route' : '🧭 Turn-by-turn navigation active', 'success');
     try {
         // After wake-lock + other status messages (they overwrite #status).
         setTimeout(() => {
