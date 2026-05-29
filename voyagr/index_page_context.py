@@ -69,9 +69,14 @@ def build_index_template_kwargs() -> Dict[str, Any]:
         json_ld_document(), separators=(",", ":"), ensure_ascii=False
     )
     _tt_key, _tt_proxy = tomtom_client_surface()
+    # Set VOYAGR_SHOW_FIREFOX_BROWSER_HINT=0 to disable the Firefox recommendation banner.
+    show_firefox_browser_hint = os.getenv(
+        "VOYAGR_SHOW_FIREFOX_BROWSER_HINT", "true"
+    ).strip().lower() not in ("0", "false", "no")
     return {
         "tomtom_api_key": _tt_key,
         "tomtom_traffic_proxy": _tt_proxy,
+        "show_firefox_browser_hint": show_firefox_browser_hint,
         "block_search_indexing": block_indexing,
         "picovoice_access_key": picovoice_access_key,
         "picovoice_web_assets_ok": picovoice_web_assets_ok,

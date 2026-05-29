@@ -4522,6 +4522,33 @@ HTML_TEMPLATE = '''
         </div>
     </div>
 
+    <!-- Optional browser tip: recommend Firefox on non-Firefox browsers (dismissible; disable via VOYAGR_SHOW_FIREFOX_BROWSER_HINT=0) -->
+    <div id="firefoxBrowserHint" style="display: none; position: fixed; top: 0; left: 0; right: 0; z-index: 99950; padding: 10px 14px; padding-top: max(10px, env(safe-area-inset-top, 0px)); background: #fff7ed; border-bottom: 2px solid #f97316; box-shadow: 0 4px 14px rgba(0,0,0,0.12); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;" role="note" aria-labelledby="firefoxHintTitle">
+        <div style="max-width: 560px; margin: 0 auto;">
+            <div style="display: flex; gap: 10px; align-items: flex-start;">
+                <span style="font-size: 22px; line-height: 1;" aria-hidden="true">🦊</span>
+                <div style="flex: 1; min-width: 0;">
+                    <p id="firefoxHintTitle" style="margin: 0 0 4px; font-size: 14px; font-weight: 700; color: #9a3412;">Recommended browser</p>
+                    <p style="margin: 0; font-size: 13px; line-height: 1.45; color: #431407;">
+                        For the most reliable maps and navigation (including fewer blank-map issues on long trips), we recommend <strong>Mozilla Firefox</strong> on desktop and Android.
+                    </p>
+                </div>
+                <button type="button" onclick="voyagrDismissFirefoxHint(false)" aria-label="Close for now" title="Close"
+                        style="flex-shrink: 0; border: none; background: transparent; color: #9a3412; font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 6px;">×</button>
+            </div>
+            <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 10px;">
+                <button type="button" onclick="voyagrDismissFirefoxHint(true)"
+                        style="padding: 8px 14px; background: #f97316; color: #fff; border: none; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                    Don't show again
+                </button>
+                <button type="button" onclick="voyagrDismissFirefoxHint(false)"
+                        style="padding: 8px 14px; background: #fff; color: #9a3412; border: 1px solid #fdba74; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                    Remind me later
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="authRequiredGate" class="auth-required-gate" style="display: none;" aria-hidden="true">
         <div class="auth-required-gate__panel" role="dialog" aria-modal="true" aria-labelledby="authGateTitle">
             <h1 id="authGateTitle" class="auth-required-gate__title">Sign in to Voyagr</h1>
@@ -5488,6 +5515,16 @@ HTML_TEMPLATE = '''
                     <!-- PWA App Section -->
                     <div class="preferences-section">
                         <h3>📱 App Controls</h3>
+
+                        <div id="firefoxHintSettingsBlock" style="padding: 12px; background: #fff7ed; border: 1px solid #fdba74; border-radius: 8px; margin-bottom: 12px;">
+                            <p style="margin: 0 0 8px; font-size: 13px; color: #431407; line-height: 1.45;">
+                                <strong>Browser tip:</strong> Firefox usually gives the most stable map and navigation experience on Voyagr (especially compared with Chrome installed as a PWA).
+                            </p>
+                            <button type="button" onclick="voyagrShowFirefoxHint()"
+                                    style="padding: 8px 12px; background: #fff; color: #9a3412; border: 1px solid #fdba74; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                                Show browser recommendation
+                            </button>
+                        </div>
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                             <button onclick="refreshApp()" style="padding: 12px 16px; background: #2196F3; color: white; border: none; border-radius: 8px; font-size: 14px; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
@@ -6464,11 +6501,13 @@ HTML_TEMPLATE = '''
         window.VoyagrPicovoiceKeywordPath = {{ picovoice_keyword_public_path | tojson }};
         window.VoyagrPicovoiceWebAssetsOk = {{ picovoice_web_assets_ok | tojson }};
         window.VoyagrWakeBackendDefault = {{ wake_backend_default | tojson }};
+        window.VOYAGR_SHOW_FIREFOX_HINT = {{ show_firefox_browser_hint | tojson }};
     </script>
     <!-- First-run safety + privacy notice: show once until acknowledged -->
     <script>
         (function () {
             var ACK_KEY = 'voyagr_safety_ack_v1';
+
             function showSafetyNotice() {
                 var overlay = document.getElementById('safetyNoticeOverlay');
                 if (overlay) overlay.style.display = 'block';
@@ -6477,6 +6516,7 @@ HTML_TEMPLATE = '''
                 try { localStorage.setItem(ACK_KEY, new Date().toISOString()); } catch (e) { /* private mode */ }
                 var overlay = document.getElementById('safetyNoticeOverlay');
                 if (overlay) overlay.style.display = 'none';
+                setTimeout(function () { voyagrMaybeShowFirefoxHint(); }, 600);
             };
             // Opens the notice again from Settings (re-read, not a gate).
             window.voyagrShowSafetyNotice = function () {
@@ -6489,13 +6529,64 @@ HTML_TEMPLATE = '''
             function init() {
                 var acked = false;
                 try { acked = !!localStorage.getItem(ACK_KEY); } catch (e) { acked = false; }
-                if (!acked) showSafetyNotice();
+                if (!acked) {
+                    showSafetyNotice();
+                } else {
+                    setTimeout(function () { voyagrMaybeShowFirefoxHint(); }, 1200);
+                }
             }
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', init);
             } else {
                 init();
             }
+        })();
+    </script>
+    <!-- Firefox browser recommendation (non-blocking banner; remove by setting VOYAGR_SHOW_FIREFOX_BROWSER_HINT=0) -->
+    <script>
+        (function () {
+            var FIREFOX_DISMISS_KEY = 'voyagr_firefox_hint_dismiss_v1';
+            var FIREFOX_SESSION_KEY = 'voyagr_firefox_hint_session_dismiss';
+
+            function voyagrIsFirefox() {
+                var ua = navigator.userAgent || '';
+                return /Firefox/i.test(ua) && !/Seamonkey/i.test(ua);
+            }
+
+            function showFirefoxHint() {
+                var el = document.getElementById('firefoxBrowserHint');
+                if (el) el.style.display = 'block';
+            }
+
+            window.voyagrDismissFirefoxHint = function (permanent) {
+                var el = document.getElementById('firefoxBrowserHint');
+                if (el) el.style.display = 'none';
+                try {
+                    if (permanent) {
+                        localStorage.setItem(FIREFOX_DISMISS_KEY, new Date().toISOString());
+                    } else {
+                        sessionStorage.setItem(FIREFOX_SESSION_KEY, 'true');
+                    }
+                } catch (e) { /* private mode */ }
+            };
+
+            window.voyagrMaybeShowFirefoxHint = function () {
+                if (window.VOYAGR_SHOW_FIREFOX_HINT === false) return;
+                if (voyagrIsFirefox()) return;
+                try {
+                    if (localStorage.getItem(FIREFOX_DISMISS_KEY)) return;
+                    if (sessionStorage.getItem(FIREFOX_SESSION_KEY) === 'true') return;
+                } catch (e) { return; }
+                var safety = document.getElementById('safetyNoticeOverlay');
+                if (safety && safety.style.display === 'block') return;
+                showFirefoxHint();
+            };
+
+            // Settings: show tip again even if dismissed (informational only).
+            window.voyagrShowFirefoxHint = function () {
+                if (window.VOYAGR_SHOW_FIREFOX_HINT === false) return;
+                showFirefoxHint();
+            };
         })();
     </script>
 </body>
