@@ -4438,6 +4438,51 @@ HTML_TEMPLATE = '''
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
+    <!-- First-run driver safety + privacy notice (shown once; gate before app use) -->
+    <div id="safetyNoticeOverlay" style="display: none; position: fixed; inset: 0; z-index: 100000; background: rgba(17, 24, 39, 0.72); padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch;" role="dialog" aria-modal="true" aria-labelledby="safetyNoticeTitle">
+        <div style="max-width: 520px; margin: 24px auto; background: #fff; border-radius: 16px; box-shadow: 0 20px 60px rgba(0,0,0,0.35); overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+            <div style="background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; padding: 20px 22px;">
+                <h1 id="safetyNoticeTitle" style="margin: 0; font-size: 20px; font-weight: 700;">Before you drive</h1>
+                <p style="margin: 6px 0 0; font-size: 13px; opacity: 0.92;">Voyagr is a navigation aid only — not an official or certified navigation system.</p>
+            </div>
+            <div style="padding: 20px 22px; color: #333; line-height: 1.6;">
+                <p style="margin: 0 0 10px; font-size: 14px;">By continuing, you agree that:</p>
+                <ul style="margin: 0 0 16px; padding-left: 20px; font-size: 14px;">
+                    <li style="margin-bottom: 8px;">You use Voyagr <strong>at your own risk</strong>. Maps, routes, traffic, speed limits, and voice guidance may be inaccurate, incomplete, or delayed.</li>
+                    <li style="margin-bottom: 8px;">You must <strong>obey all road signs, signals, and applicable traffic laws</strong> at all times. Nothing shown in the app overrides them.</li>
+                    <li style="margin-bottom: 8px;">You remain <strong>solely responsible</strong> for safe driving, your vehicle, passengers, and compliance with restrictions (speed, weight, height, emissions zones, and tolls).</li>
+                    <li style="margin-bottom: 0;">You will only use the phone in ways that are <strong>safe and lawful</strong> (e.g. hands-free where required, or when stopped).</li>
+                </ul>
+
+                <div style="background: #f5f7ff; border: 1px solid #e5e9ff; border-radius: 10px; padding: 14px 16px; margin-bottom: 16px;">
+                    <h2 style="margin: 0 0 8px; font-size: 14px; color: #4338ca;">Privacy at a glance</h2>
+                    <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #444;">
+                        <li style="margin-bottom: 6px;"><strong>Location</strong> — used only when you allow it, for navigation, speed help, and your position on the map.</li>
+                        <li style="margin-bottom: 6px;"><strong>On your device</strong> — settings, recent places, and cached maps stay in your browser unless you sign in.</li>
+                        <li style="margin-bottom: 6px;"><strong>On our servers</strong> — route requests are processed to calculate journeys; saved trips and account data are stored only if you sign in. We do not sell your data.</li>
+                        <li style="margin-bottom: 0;"><strong>Partners</strong> — map, traffic, weather, and sign-in providers process data under their own policies.</li>
+                    </ul>
+                    <p style="margin: 10px 0 0; font-size: 12px;">
+                        <a href="/privacy" target="_blank" rel="noopener" style="color: #4338ca; font-weight: 600;">Read the full Privacy Policy →</a>
+                    </p>
+                </div>
+
+                <label style="display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: #333; cursor: pointer; margin-bottom: 16px;">
+                    <input type="checkbox" id="safetyNoticeAgree" style="margin-top: 3px; width: 18px; height: 18px; flex-shrink: 0;" onchange="document.getElementById('safetyNoticeContinue').disabled = !this.checked;" />
+                    <span>I understand and agree to drive responsibly and follow the rules of the road.</span>
+                </label>
+
+                <button type="button" id="safetyNoticeContinue" disabled onclick="voyagrAcceptSafetyNotice()"
+                        style="width: 100%; padding: 13px; background: #667eea; color: #fff; border: none; border-radius: 10px; font-size: 15px; font-weight: 700; cursor: pointer; opacity: 1;">
+                    I understand — continue
+                </button>
+                <p style="margin: 12px 0 0; text-align: center; font-size: 11px; color: #999;">
+                    You can review this anytime: Settings → Privacy &amp; your rights.
+                </p>
+            </div>
+        </div>
+    </div>
+
     <div id="authRequiredGate" class="auth-required-gate" style="display: none;" aria-hidden="true">
         <div class="auth-required-gate__panel" role="dialog" aria-modal="true" aria-labelledby="authGateTitle">
             <h1 id="authGateTitle" class="auth-required-gate__title">Sign in to Voyagr</h1>
@@ -4854,6 +4899,24 @@ HTML_TEMPLATE = '''
                             <button type="button" id="supportStripePremiumBtn" style="display: none; padding: 12px; background: #635bff; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">💳 Subscribe — Voyager Premium</button>
                             <button type="button" id="supportBmcBtn" style="display: none; padding: 12px; background: #ffdd00; color: #0d0d0d; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">☕ Tip — Buy Me a Coffee</button>
                             <button type="button" id="supportPatreonBtn" style="display: none; padding: 12px; background: #ff424d; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer;">🎭 Tip / patron — Patreon</button>
+                        </div>
+                    </div>
+
+                    <!-- Privacy & Your Rights Section -->
+                    <div class="preferences-section">
+                        <h3>🔒 Privacy &amp; your rights</h3>
+                        <p style="font-size: 12px; color: #666; margin: 0 0 12px 0;">
+                            How Voyagr handles your data, and your rights under UK GDPR / data protection law.
+                        </p>
+                        <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                            <a href="/privacy" target="_blank" rel="noopener"
+                               style="display: block; text-align: center; padding: 11px; background: #667eea; color: #fff; border-radius: 8px; font-size: 13px; font-weight: 600; text-decoration: none;">
+                                Open Privacy Policy
+                            </a>
+                            <button type="button" onclick="voyagrShowSafetyNotice && voyagrShowSafetyNotice()"
+                                    style="padding: 11px; background: #f5f5f5; color: #333; border: 1px solid #ddd; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer;">
+                                Review safety &amp; privacy notice
+                            </button>
                         </div>
                     </div>
 
@@ -6362,6 +6425,39 @@ HTML_TEMPLATE = '''
         window.VoyagrPicovoiceKeywordPath = {{ picovoice_keyword_public_path | tojson }};
         window.VoyagrPicovoiceWebAssetsOk = {{ picovoice_web_assets_ok | tojson }};
         window.VoyagrWakeBackendDefault = {{ wake_backend_default | tojson }};
+    </script>
+    <!-- First-run safety + privacy notice: show once until acknowledged -->
+    <script>
+        (function () {
+            var ACK_KEY = 'voyagr_safety_ack_v1';
+            function showSafetyNotice() {
+                var overlay = document.getElementById('safetyNoticeOverlay');
+                if (overlay) overlay.style.display = 'block';
+            }
+            window.voyagrAcceptSafetyNotice = function () {
+                try { localStorage.setItem(ACK_KEY, new Date().toISOString()); } catch (e) { /* private mode */ }
+                var overlay = document.getElementById('safetyNoticeOverlay');
+                if (overlay) overlay.style.display = 'none';
+            };
+            // Opens the notice again from Settings (re-read, not a gate).
+            window.voyagrShowSafetyNotice = function () {
+                var agree = document.getElementById('safetyNoticeAgree');
+                var btn = document.getElementById('safetyNoticeContinue');
+                if (agree) agree.checked = true;
+                if (btn) btn.disabled = false;
+                showSafetyNotice();
+            };
+            function init() {
+                var acked = false;
+                try { acked = !!localStorage.getItem(ACK_KEY); } catch (e) { acked = false; }
+                if (!acked) showSafetyNotice();
+            }
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', init);
+            } else {
+                init();
+            }
+        })();
     </script>
 </body>
 </html>

@@ -224,10 +224,16 @@ PRIVACY_POLICY_HTML = """<!DOCTYPE html>
 <body>
 <div class="container">
   <h1>Privacy Policy</h1>
-  <p class="updated">Last updated: February 2026</p>
+  <p class="updated">Last updated: May 2026</p>
 
   <p>Voyagr Navigation ("Voyagr", "we", "our") is committed to protecting your
   privacy. This policy explains what data we collect, why, and how we handle it.</p>
+
+  <h2>Who we are (Data Controller)</h2>
+  <p>Voyagr Navigation is the data controller for personal data processed through this
+  app. If you have any questions, or wish to exercise your data protection rights, you
+  can contact us at the support email address shown in the app's Settings. We will
+  respond to requests in line with UK GDPR and applicable data protection law.</p>
 
   <h2>1. Data We Collect</h2>
   <ul>
@@ -244,6 +250,10 @@ PRIVACY_POLICY_HTML = """<!DOCTYPE html>
     display name are managed by Supabase (our authentication provider).</li>
     <li><strong>Preferences</strong> &mdash; Settings such as vehicle type, units, and
     theme are stored in your browser's local storage.</li>
+    <li><strong>Account sync (only if you sign in)</strong> &mdash; When you are signed
+    in, your settings and saved routes can be synced to your account so they are
+    available on your other signed-in devices. Recent destinations used for search
+    autocomplete remain on the device and are not synced.</li>
   </ul>
 
   <h2>2. Data We Do NOT Collect</h2>
@@ -266,42 +276,74 @@ PRIVACY_POLICY_HTML = """<!DOCTYPE html>
     <li><strong>OpenFreeMap / OpenStreetMap</strong> &mdash; Map tiles and geographic data.
     <a href="https://osmfoundation.org/wiki/Privacy_Policy" target="_blank">OSM Privacy Policy</a></li>
   </ul>
+  <p>Where these providers process personal data on our behalf (for example our
+  authentication and hosting providers), they act as our processors under appropriate
+  data protection terms.</p>
 
-  <h2>4. Location Permission</h2>
+  <h2>4. Lawful Bases for Processing</h2>
+  <p>Under UK GDPR, we rely on the following lawful bases:</p>
+  <ul>
+    <li><strong>Performance of a contract / providing the service you request</strong>
+    &mdash; e.g. calculating a route, showing your position, or saving a trip you ask us
+    to save.</li>
+    <li><strong>Consent</strong> &mdash; e.g. accessing your device location, or creating
+    and syncing an account. You can withdraw consent at any time (see Location
+    Permission and Your Rights).</li>
+    <li><strong>Legitimate interests</strong> &mdash; e.g. keeping the service secure,
+    preventing abuse, and maintaining reliability, balanced against your rights.</li>
+  </ul>
+
+  <h2>5. Location Permission</h2>
   <p>Voyagr requests location access only when you actively use GPS tracking or
   navigation. You can revoke this permission at any time in your device or browser
   settings. The app functions without location access (route planning, cost estimation)
   but real-time navigation features require it.</p>
 
-  <h2>5. Data Storage and Security</h2>
+  <h2>6. Data Storage, Retention and Security</h2>
   <ul>
-    <li>User preferences are stored locally in your browser and never sent to our servers.</li>
-    <li>Trip history is stored in an encrypted server-side database.</li>
+    <li>Preferences and recent destinations are stored locally in your browser and remain
+    on your device until you clear site data (for signed-in users, settings and saved
+    routes may also sync to your account &mdash; see below).</li>
+    <li>Trip history you save while signed in is stored in a server-side database linked
+    to your account.</li>
     <li>All communication uses HTTPS encryption.</li>
-    <li>We retain trip data only as long as your account is active. You can delete your
-    data at any time by contacting us.</li>
+    <li><strong>Retention:</strong> Saved trips and account data are kept until you delete
+    them or close your account, after which they are removed within a reasonable period.
+    Route requests are processed transiently and only short-term server caching is used
+    for performance; this cache is not used to profile you. Data held only in your browser
+    stays until you clear it.</li>
+    <li>You can delete your data at any time from within the app, or by contacting us.</li>
   </ul>
 
-  <h2>6. Children's Privacy</h2>
+  <h2>7. International Data Transfers</h2>
+  <p>Some of our providers (for example our authentication and hosting providers) may
+  store or process data on servers located outside the UK or European Economic Area.
+  Where that happens, we rely on appropriate safeguards &mdash; such as UK/EU Standard
+  Contractual Clauses or an adequacy decision &mdash; so that your data receives an
+  equivalent level of protection.</p>
+
+  <h2>8. Children's Privacy</h2>
   <p>Voyagr is not directed at children under 13. We do not knowingly collect data from
   children.</p>
 
-  <h2>7. Your Rights</h2>
+  <h2>9. Your Rights</h2>
   <p>Under UK GDPR and applicable data protection laws, you have the right to:</p>
   <ul>
     <li>Access, correct, or delete your personal data</li>
-    <li>Withdraw consent for location tracking at any time</li>
+    <li>Restrict or object to certain processing</li>
+    <li>Withdraw consent for location tracking or account sync at any time</li>
     <li>Request a copy of your data in a portable format</li>
-    <li>Lodge a complaint with the Information Commissioner's Office (ICO)</li>
+    <li>Lodge a complaint with the Information Commissioner's Office (ICO) at
+    <a href="https://ico.org.uk/" target="_blank" rel="noopener">ico.org.uk</a></li>
   </ul>
 
-  <h2>8. Changes to This Policy</h2>
+  <h2>10. Changes to This Policy</h2>
   <p>We may update this privacy policy from time to time. Changes will be posted on this
   page with an updated date.</p>
 
-  <h2>9. Contact</h2>
+  <h2>11. Contact</h2>
   <p>If you have questions about this privacy policy or your data, please contact us at
-  the email address provided in the app's settings or support page.</p>
+  the email address provided in the app's settings.</p>
 
   <a href="/" class="back">&larr; Back to Voyagr</a>
 </div>
