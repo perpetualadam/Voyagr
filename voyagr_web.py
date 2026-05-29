@@ -2569,6 +2569,7 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]], rou
         hazard_weights = {
             'camera': 50.0,                  # High priority - strong avoidance
             'traffic_light': 40.0,           # OSM traffic signals (when enabled)
+            'avoid_point': 36.0,             # Congested/closed segments (traffic reroute) - must be >= 30
             'police': 30.0,                  # Medium-high priority
             'railway_crossing': 35.0,        # OSM level crossings (dynamic polygons; must be >= 30)
             'accident': 20.0,                # Medium priority
@@ -2699,6 +2700,7 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]], r
         # The weights determine PRIORITY when we hit max_hazards limit
         # UPDATED: Added TomTom real-time incident types (road_closed, lane_closed, jam)
         hazard_weights = {
+            'avoid_point': 60.0,       # Explicit client reroute avoid (congestion/closure) - top priority
             'camera': 50.0,            # Highest priority - always avoid
             'road_closed': 45.0,       # TomTom: Very high - road is impassable
             'police': 40.0,            # High priority
@@ -2933,6 +2935,7 @@ def route_with_graphhopper(
     traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
     railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
     avoid_caz_zones: bool = False,
+    avoid_points: Optional[List[Dict[str, Any]]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Route using GraphHopper with optional camera avoidance via pre-loaded areas.
@@ -2945,6 +2948,7 @@ def route_with_graphhopper(
         traffic_light_hazards: Optional OSM traffic light points to avoid (dynamic polygons)
         railway_crossing_hazards: Optional OSM level crossing points (separate from traffic lights)
         avoid_caz_zones: Penalize edges inside UK CAZ/ULEZ polygons (same data as costing)
+        avoid_points: Optional congested/closed segment points to penalise (Lever C2 traffic)
 
     Returns:
         Route data dict or None if failed
@@ -2971,7 +2975,10 @@ def route_with_graphhopper(
             "locale": "en",
             "instructions": True,
             "points_encoded": True,
-            "elevation": False
+            "elevation": False,
+            # Ask GraphHopper for per-edge speed limits so the optimised route can supply a
+            # speed-limit hint to the widget (parity with Valhalla's maneuver speed_limit).
+            "details": ["max_speed"]
         }
 
         custom_model: Optional[Dict[str, Any]] = None
@@ -2984,6 +2991,10 @@ def route_with_graphhopper(
             osm_dynamic['traffic_light'] = traffic_light_hazards
         if railway_crossing_hazards:
             osm_dynamic['railway_crossing'] = railway_crossing_hazards
+        if avoid_points:
+            # Congested/closed segments — penalise (not hard-block) so the optimised route
+            # prefers to route around them when a reasonable alternative exists.
+            osm_dynamic['avoid_point'] = avoid_points
 
         tl_rx_model: Optional[Dict[str, Any]] = None
         if osm_dynamic:
@@ -3031,6 +3042,7 @@ def route_with_graphhopper(
                 "instructions": "true",
                 "points_encoded": "true",
                 "elevation": "false",
+                "details": "max_speed",
             }
             response = requests.get(url, params=params_point, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
 
@@ -3062,6 +3074,7 @@ def route_with_graphhopper(
                     'duration_seconds': path.get('time', 0) / 1000,
                     'geometry': path.get('points', ''),  # Encoded polyline
                     'instructions': path.get('instructions', []),
+                    'details': path.get('details', {}),  # per-edge attrs incl. max_speed
                     'bbox': path.get('bbox', []),
                     'camera_avoidance': enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE
                 }
@@ -3129,19 +3142,45 @@ def build_graphhopper_optimised_route_entry(
             -3: 15, -2: 16, -1: 17, 0: 8,
             1: 9, 2: 10, 3: 11, 4: 4, 5: 0, 6: 26,
         }
+
+        # GraphHopper `details.max_speed` = [[from_idx, to_idx, value_kmh|null], ...] keyed by
+        # geometry point index. Build a lookup so each maneuver can carry the posted limit of
+        # the edge it begins on (km/h, matching Valhalla's maneuver.speed_limit convention).
+        gh_max_speed_segments = []
+        try:
+            details = graphhopper_route.get('details') or {}
+            for seg in (details.get('max_speed') or []):
+                if isinstance(seg, list) and len(seg) >= 3:
+                    frm, to, val = seg[0], seg[1], seg[2]
+                    if isinstance(val, (int, float)) and val > 0:
+                        gh_max_speed_segments.append((int(frm), int(to), float(val)))
+        except Exception:
+            gh_max_speed_segments = []
+
+        def _gh_speed_limit_kmh_at(point_idx: int):
+            for frm, to, val in gh_max_speed_segments:
+                if frm <= point_idx < to:
+                    return round(val)
+            return None
+
         gh_maneuvers = []
         for instr in graphhopper_route.get('instructions', []):
             sign = instr.get('sign', 0)
             valhalla_type = gh_sign_to_valhalla.get(sign, 8)
-            gh_maneuvers.append({
+            begin_idx = instr.get('interval', [0])[0] if instr.get('interval') else 0
+            maneuver = {
                 'instruction': instr.get('text', ''),
                 'distance': instr.get('distance', 0) / 1000,
                 'time': instr.get('time', 0) / 1000,
                 'type': valhalla_type,
                 'street_names': [instr.get('street_name', '')] if instr.get('street_name') else [],
-                'begin_shape_index': instr.get('interval', [0])[0] if instr.get('interval') else 0,
+                'begin_shape_index': begin_idx,
                 'end_shape_index': instr.get('interval', [0, 0])[1] if instr.get('interval') and len(instr.get('interval', [])) > 1 else 0,
-            })
+            }
+            sl_kmh = _gh_speed_limit_kmh_at(begin_idx)
+            if sl_kmh is not None:
+                maneuver['speed_limit'] = sl_kmh
+            gh_maneuvers.append(maneuver)
 
         return {
             'id': 0,
@@ -4433,7 +4472,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260521a"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260529b"></script>
     <script defer src="/static/js/app.js?v=20260504c"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -6833,6 +6872,25 @@ def calculate_route():
             max_detour = 20
         max_detour = max(0, min(100, max_detour))
 
+        # Explicit avoid points: lat/lon of congested or closed segments detected during
+        # navigation (Lever A traffic reroute). They are fed into the same exclude_locations
+        # pipeline as live incidents so Valhalla routes around them. Capped to keep within
+        # Valhalla's 50-avoid limit and validated to ignore garbage.
+        raw_avoid_points = data.get('avoid_points', []) or []
+        avoid_points: List[Dict[str, float]] = []
+        if isinstance(raw_avoid_points, list):
+            for ap in raw_avoid_points[:10]:
+                try:
+                    alat = float(ap.get('lat'))
+                    alon = float(ap.get('lon'))
+                except (TypeError, ValueError, AttributeError):
+                    continue
+                if -90.0 <= alat <= 90.0 and -180.0 <= alon <= 180.0:
+                    avoid_points.append({'lat': alat, 'lon': alon})
+        if avoid_points:
+            # An explicit avoid request only makes sense with the exclusion path active.
+            enable_hazard_avoidance = True
+
         # VIA-POINTS AND STOPS
         via_points = data.get('via_points', [])  # [{lat, lon, name, type: 'via'}]
         stops = data.get('stops', [])  # [{lat, lon, name, type: 'stop', duration: 15}]
@@ -7050,6 +7108,14 @@ def calculate_route():
         except Exception as e:
             logger.warning(f"[TOMTOM] Failed to fetch incidents (using cameras only): {e}")
 
+        # Fold explicit avoid_points into the hazard set so the existing exclusion
+        # prioritisation (distance-to-route, weight) handles them like any other avoid.
+        if avoid_points:
+            hazards.setdefault('avoid_point', [])
+            for ap in avoid_points:
+                hazards['avoid_point'].append({'lat': ap['lat'], 'lon': ap['lon'], 'severity': 'high'})
+            logger.info(f"[ROUTE] {len(avoid_points)} explicit avoid_points added to hazards")
+
         if not avoid_cameras:
             clear_camera_hazard_buckets(hazards)
         else:
@@ -7129,6 +7195,7 @@ def calculate_route():
                     traffic_light_hazards=_tl_gh if _tl_gh else None,
                     railway_crossing_hazards=_rx_gh if _rx_gh else None,
                     avoid_caz_zones=apply_caz_routing_avoidance,
+                    avoid_points=avoid_points if avoid_points else None,
                 )
                 if graphhopper_route and graphhopper_route.get('success'):
                     logger.info(f"[GRAPHHOPPER] ✅ Route found with camera avoidance")
@@ -7175,7 +7242,13 @@ def calculate_route():
                     closure_excludes = [{"lat": c["lat"], "lon": c["lon"]}
                                         for c in road_closures[:15]
                                         if "lat" in c and "lon" in c]
-                    remaining_slots = 50 - len(closure_excludes)
+                    # Explicit avoid_points (reroute around congestion/closures) take the
+                    # very top priority — reserve their slots before cameras/CAZ.
+                    avoid_point_hazards = hazards.get('avoid_point', [])
+                    avoid_excludes = [{"lat": c["lat"], "lon": c["lon"]}
+                                      for c in avoid_point_hazards[:10]
+                                      if "lat" in c and "lon" in c]
+                    remaining_slots = 50 - len(closure_excludes) - len(avoid_excludes)
 
                     from voyagr.services.hazards import get_caz_valhalla_exclude_points
                     caz_excludes = get_caz_valhalla_exclude_points(
@@ -7206,6 +7279,13 @@ def calculate_route():
                         ]
                         exclude_locations = exclude_locations[:50]
                         logger.info(f"[VALHALLA] Added {len(closure_excludes)} road closures to exclude_locations")
+                    if avoid_excludes:
+                        exclude_locations = avoid_excludes + [
+                            loc for loc in exclude_locations
+                            if loc not in avoid_excludes
+                        ]
+                        exclude_locations = exclude_locations[:50]
+                        logger.info(f"[VALHALLA] Added {len(avoid_excludes)} explicit avoid_points to exclude_locations")
                     if exclude_locations:
                         logger.info(f"[VALHALLA] Using {len(exclude_locations)} exclude_locations for hazard avoidance")
                     else:

@@ -6594,48 +6594,122 @@ function stopAutoTrafficUpdates() {
     }
 }
 
+// Shared along-route traffic sampler (Levers A + B). Samples live TomTom flow on the
+// portion of the active route still ahead of the driver and returns congested-segment
+// avoid points plus a realistic extra-delay estimate. Cached briefly so the ETA refresh
+// and the reroute monitor don't each hit the API.
+let _routeTrafficSampleCache = null; // { at: ms, result }
+const ROUTE_TRAFFIC_SAMPLE_TTL_MS = 60 * 1000;
+
+async function sampleRouteTrafficAhead() {
+    if (!routePolyline || routePolyline.length < 2) return null;
+    const startIdx = Math.max(0, Math.min(lastSnappedRouteIndex || 0, routePolyline.length - 2));
+    const ahead = routePolyline.slice(startIdx);
+    if (ahead.length < 2) return null;
+
+    // Send [lat, lon] points; sample so we get roughly 8 segments along the road ahead.
+    const points = ahead.map(p => [p[0], p[1]]);
+    const sampleInterval = Math.max(1, Math.floor(points.length / 8));
+
+    let data;
+    try {
+        const resp = await fetch('/api/route-traffic-flow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ points, sample_interval: sampleInterval })
+        });
+        data = await resp.json();
+    } catch (e) {
+        console.warn('[Auto-Traffic] route-traffic-flow fetch failed:', e);
+        return null;
+    }
+    if (!data || !data.success || !Array.isArray(data.segments)) return null;
+
+    let delaySec = 0;
+    let congestedCount = 0;
+    let congestionSum = 0;
+    let severe = false;
+    const congestedPoints = [];
+    for (const seg of data.segments) {
+        const lvl = seg.traffic_level;
+        const cur = Number(seg.current_speed) || 0;
+        const free = Number(seg.free_flow_speed) || 0;
+        const s = seg.start, e = seg.end;
+        if (!Array.isArray(s) || !Array.isArray(e)) continue;
+        const segMeters = calculateDistanceMeters(s[0], s[1], e[0], e[1]);
+        if (cur > 0 && free > 0 && cur < free && segMeters > 0) {
+            const km = segMeters / 1000;
+            delaySec += (km / cur - km / free) * 3600; // extra seconds vs free-flow
+        }
+        congestionSum += Number(seg.congestion_percent) || 0;
+        if (lvl === 'orange' || lvl === 'red' || lvl === 'black') {
+            congestedCount++;
+            // Only red/black are worth routing around; orange is tolerable.
+            if (lvl === 'red' || lvl === 'black') {
+                congestedPoints.push({ lat: (s[0] + e[0]) / 2, lon: (s[1] + e[1]) / 2 });
+            }
+            if (lvl === 'black') severe = true;
+        }
+    }
+
+    return {
+        delayMin: delaySec / 60,
+        congestedCount,
+        avgCongestion: data.segments.length ? Math.round(congestionSum / data.segments.length) : 0,
+        severe,
+        congestedPoints,
+        // 'TomTom' = real data; 'simulated' = no API key (must NOT drive reroutes/ETA).
+        source: data.source || 'unknown'
+    };
+}
+
+async function getRouteTrafficAhead(forceFresh = false) {
+    const now = Date.now();
+    if (!forceFresh && _routeTrafficSampleCache && (now - _routeTrafficSampleCache.at) < ROUTE_TRAFFIC_SAMPLE_TTL_MS) {
+        return _routeTrafficSampleCache.result;
+    }
+    const result = await sampleRouteTrafficAhead();
+    if (result) _routeTrafficSampleCache = { at: now, result };
+    return result;
+}
+
 /**
- * Check traffic conditions and reroute if significant changes detected
+ * Check live traffic along the route and reroute around real congestion/closures.
  */
 async function checkTrafficAndReroute() {
     if (!routeInProgress || !currentLat || !currentLon) return;
 
-    console.log('[Auto-Traffic] Checking traffic conditions...');
+    console.log('[Auto-Traffic] Sampling live traffic along route...');
 
     try {
-        // Fetch current traffic along route
-        const response = await fetch('/api/traffic-patterns', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                lat: currentLat,
-                lon: currentLon,
-                radius: 5000
-            })
-        });
-
-        const data = await response.json();
+        const flow = await getRouteTrafficAhead(true);
         lastTrafficUpdateTime = Date.now();
 
-        if (!data.success) {
-            console.log('[Auto-Traffic] Traffic fetch failed:', data.error);
+        if (!flow) {
+            console.log('[Auto-Traffic] No usable traffic data');
+            return;
+        }
+        // Never act on simulated data (no TomTom key) — it is random and would cause
+        // spurious reroutes.
+        if (flow.source !== 'TomTom') {
+            console.log('[Auto-Traffic] Traffic data is simulated; skipping reroute decision');
+            lastTrafficData = flow;
             return;
         }
 
-        // Compare with previous traffic data
-        const changeType = detectSignificantTrafficChange(lastTrafficData, data);
-        lastTrafficData = data;
+        const changeType = detectSignificantTrafficChange(lastTrafficData, flow);
+        lastTrafficData = flow;
 
         if (changeType) {
-            console.log(`[Auto-Traffic] Significant traffic change detected: ${changeType}`);
-            const notifMsg = changeType === 'closure'
-                ? 'Road closure detected! Rerouting...'
-                : 'New traffic conditions detected. Checking for better route...';
+            console.log(`[Auto-Traffic] Significant change: ${changeType} (delay ~${flow.delayMin.toFixed(1)} min, ${flow.congestedPoints.length} avoid pts)`);
+            const notifMsg = flow.severe
+                ? 'Severe congestion ahead. Checking for a faster route...'
+                : 'Heavier traffic ahead. Checking for a better route...';
             sendNotification('🚦 Traffic Update', notifMsg, 'warning');
 
-            await triggerTrafficBasedReroute(changeType);
+            await triggerTrafficBasedReroute(changeType, flow.congestedPoints, flow.delayMin);
         } else {
-            console.log('[Auto-Traffic] No significant traffic changes');
+            console.log('[Auto-Traffic] No significant traffic change');
         }
     } catch (error) {
         console.error('[Auto-Traffic] Error checking traffic:', error);
@@ -6643,51 +6717,44 @@ async function checkTrafficAndReroute() {
 }
 
 /**
- * Detect if there's a significant traffic change
+ * Decide whether a fresh route-traffic sample warrants a reroute attempt.
+ * `current`/`previous` are sampleRouteTrafficAhead() results.
  */
-function detectSignificantTrafficChange(previousData, currentData) {
-    if (!previousData || !previousData.patterns) return false;
-    if (!currentData || !currentData.patterns) return false;
+function detectSignificantTrafficChange(previous, current) {
+    if (!current) return false;
 
-    const prevPatterns = previousData.patterns || [];
-    const currPatterns = currentData.patterns || [];
-
-    const closureTypes = ['closure', 'road_closed', 'blocked'];
-    const hasClosure = currPatterns.some(p =>
-        closureTypes.includes(p.type) || (p.severity && p.severity >= 4)
-    );
-    if (hasClosure) {
-        console.log('[Auto-Traffic] Road closure or severe incident detected on route');
-        return 'closure';
+    // Severe (near-standstill / black) congestion with somewhere to route around.
+    if (current.severe && current.congestedPoints.length > 0) {
+        console.log('[Auto-Traffic] Severe congestion ahead');
+        return 'severe';
     }
-
-    const prevAvgCongestion = prevPatterns.length > 0 ?
-        prevPatterns.reduce((sum, p) => sum + (p.congestion || 0), 0) / prevPatterns.length : 0;
-    const currAvgCongestion = currPatterns.length > 0 ?
-        currPatterns.reduce((sum, p) => sum + (p.congestion || 0), 0) / currPatterns.length : 0;
-
-    const congestionIncrease = currAvgCongestion - prevAvgCongestion;
-
-    if (congestionIncrease >= 1) {
-        console.log(`[Auto-Traffic] Congestion increased: ${prevAvgCongestion.toFixed(1)} -> ${currAvgCongestion.toFixed(1)}`);
+    // A meaningful absolute delay is worth a look even on the first sample.
+    if (current.delayMin >= 4 && current.congestedPoints.length > 0) {
+        console.log(`[Auto-Traffic] Significant delay ahead (~${current.delayMin.toFixed(1)} min)`);
         return 'congestion';
     }
-
-    const prevIncidentCount = prevPatterns.filter(p => p.type === 'incident' || p.type === 'accident').length;
-    const currIncidentCount = currPatterns.filter(p => p.type === 'incident' || p.type === 'accident').length;
-
-    if (currIncidentCount > prevIncidentCount) {
-        console.log(`[Auto-Traffic] New incidents detected: ${prevIncidentCount} -> ${currIncidentCount}`);
-        return 'incident';
+    // Otherwise only act when conditions got materially worse since the last check.
+    if (previous) {
+        const delayJump = current.delayMin - (previous.delayMin || 0);
+        if (delayJump >= 3 && current.congestedPoints.length > 0) {
+            console.log(`[Auto-Traffic] Delay increased by ~${delayJump.toFixed(1)} min`);
+            return 'congestion';
+        }
+        if (current.congestedCount > (previous.congestedCount || 0) + 1 && current.congestedPoints.length > 0) {
+            console.log(`[Auto-Traffic] More congested segments: ${previous.congestedCount} -> ${current.congestedCount}`);
+            return 'congestion';
+        }
     }
-
     return false;
 }
 
 /**
- * Trigger reroute based on traffic changes
+ * Trigger a reroute that actively avoids the congested/closed segments (Lever A).
+ * @param {string} changeType - 'severe' | 'congestion'
+ * @param {Array<{lat:number,lon:number}>} avoidPoints - congested segment midpoints to avoid
+ * @param {number} measuredDelayMin - realistic extra delay on the current route (Lever B)
  */
-async function triggerTrafficBasedReroute(changeType) {
+async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measuredDelayMin = 0) {
     const destination = resolveNavigationDestination();
     if (!destination) {
         console.log('[Auto-Traffic] No destination stored, cannot reroute');
@@ -6698,11 +6765,11 @@ async function triggerTrafficBasedReroute(changeType) {
         console.log('[Auto-Traffic] No route context, cannot reroute');
         return;
     }
-    const isClosure = changeType === 'closure';
-    console.log(`[Auto-Traffic] Calculating new route (reason: ${changeType})...`);
+    const isSevere = changeType === 'severe';
+    console.log(`[Auto-Traffic] Calculating new route (reason: ${changeType}, avoid pts: ${avoidPoints.length})...`);
 
     try {
-        const routeRequest = buildRouteRequest(currentLat, currentLon, destination);
+        const routeRequest = buildRouteRequest(currentLat, currentLon, destination, avoidPoints);
         const response = await fetch('/api/route', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -6713,22 +6780,27 @@ async function triggerTrafficBasedReroute(changeType) {
 
         if (data.success && data.routes && data.routes.length > 0) {
             const newRoute = data.routes[0];
-            const oldDuration = window.lastCalculatedRoute.duration_minutes || 0;
-            const timeSaved = oldDuration - newRoute.duration_minutes;
+            const oldBase = window.lastCalculatedRoute.duration_minutes || 0;
+            // Compare the alternative against our CURRENT *delayed* time, not the
+            // optimistic free-flow base — otherwise a jam never looks worth avoiding.
+            const oldEffective = oldBase + (measuredDelayMin || 0);
+            const timeSaved = oldEffective - newRoute.duration_minutes;
 
-            if (isClosure || timeSaved >= 2) {
+            if (isSevere || timeSaved >= 2) {
                 updateRouteOnMap(newRoute);
-                const reason = isClosure ? 'road closure' : 'traffic';
-                const saveMsg = timeSaved > 0
-                    ? `Saves ${timeSaved.toFixed(0)} minutes.`
-                    : '';
+                // The new route avoids the flagged segments; drop the stale sample so the
+                // next check re-evaluates the fresh geometry.
+                _routeTrafficSampleCache = null;
+                lastTrafficData = null;
+                const reason = isSevere ? 'severe congestion' : 'traffic';
+                const saveMsg = timeSaved > 0 ? `Saves about ${timeSaved.toFixed(0)} minutes.` : '';
                 sendNotification('✅ Route Updated',
                     `New route found due to ${reason}. ${saveMsg}`, 'success');
                 if (voiceAnnouncementsEnabled) {
                     speakMessage(`Route updated due to ${reason}. ${saveMsg}`, 'high');
                 }
             } else {
-                console.log('[Auto-Traffic] New route not significantly faster, keeping current route');
+                console.log('[Auto-Traffic] Alternative not significantly faster, keeping current route');
             }
         }
     } catch (error) {
@@ -6776,7 +6848,7 @@ function resolveNavigationDestination() {
 /**
  * Build route request with current hazard avoidance settings
  */
-function buildRouteRequest(startLat, startLon, destination) {
+function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) {
     const enableHazardAvoidance =
         localStorage.getItem('pref_cameras') !== 'false' ||
         localStorage.getItem('pref_trafficLightsAvoid') !== 'false' ||
@@ -6786,9 +6858,18 @@ function buildRouteRequest(startLat, startLon, destination) {
 
     const routePrefs = (typeof getRoutePreferences === 'function') ? getRoutePreferences() : {};
 
+    // Explicit avoid points (congested/closed segments) for traffic-based reroute (Lever A).
+    const cleanAvoidPoints = Array.isArray(avoidPoints)
+        ? avoidPoints
+            .filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon))
+            .slice(0, 10)
+            .map(p => ({ lat: p.lat, lon: p.lon }))
+        : [];
+
     return {
         start: `${startLat},${startLon}`,
         end: destination,
+        avoid_points: cleanAvoidPoints,
         routing_mode: currentRoutingMode || 'auto',
         vehicle_type: currentVehicleType || 'petrol_diesel',
         fuel_efficiency: parseFloat(localStorage.getItem('fuelEfficiency') || '6.5'),
@@ -6871,6 +6952,13 @@ function updateRouteOnMap(newRoute) {
     lastTurnDetectRouteVertexIndex = 0;
     // Force re-evaluation of the active edge on the new geometry.
     _lastActiveManeuverIdx = -1;
+
+    // Clear stale speed-limit state so the widget does not keep showing the limit
+    // from the *previous* route after a reroute. Zeroing the throttle makes the next
+    // GPS tick fetch a fresh limit for the new road immediately.
+    currentSpeedLimitMph = null;
+    lastSpeedLimitFetch = 0;
+    lastSpeedLimitPosition = null;
 
     // Reset deviation tracking so we don't immediately re-trigger reroute
     deviationStartTimeCheck = null;
@@ -10217,12 +10305,14 @@ function calculateTurnDirection(bearing1, bearing2) {
     if (bearingChange > 180) bearingChange -= 360;
     if (bearingChange < -180) bearingChange += 360;
 
-    // Classify turn
+    // Classify turn. Boundary between "slight" (keep) and a full "left/right" turn is at
+    // 35 degrees: gentle motorway forks/curves stay "slight", but a genuine turn onto a
+    // slip road / side road (>=35 deg) is announced as a turn rather than "keep".
     if (bearingChange < -135) return 'sharp_left';
-    if (bearingChange < -45) return 'left';
+    if (bearingChange < -35) return 'left';
     if (bearingChange < -10) return 'slight_left';
     if (bearingChange <= 10) return 'straight';
-    if (bearingChange <= 45) return 'slight_right';
+    if (bearingChange <= 35) return 'slight_right';
     if (bearingChange <= 135) return 'right';
     return 'sharp_right';
 }
@@ -10402,7 +10492,9 @@ function detectUpcomingTurn(userLat, userLon) {
             const isExitDir = direction === 'exit' || direction === 'exit_right' || direction === 'exit_left';
             const isKeepDir = direction === 'slight_right' || direction === 'slight_left';
             const isRb = direction === 'roundabout';
-            const maxDetectionDistance = isExitDir ? 2500 : isKeepDir ? 1500 : isRb ? 900 : 600;
+            // Detection range gives the first announcement room to fire before the turn.
+            // Turns bumped 600 -> 750 m so the 500 m call still has runway at motorway speed.
+            const maxDetectionDistance = isExitDir ? 2500 : isKeepDir ? 1500 : isRb ? 900 : 750;
 
             // Only return turns within detection range
             if (distanceToManeuver <= maxDetectionDistance) {
@@ -14182,11 +14274,13 @@ function startGPSTracking() {
             }
 
             // When the active edge changes (crossed a maneuver boundary, e.g. exited the
-            // motorway), invalidate the API throttle so the next `fetchSpeedLimitThrottled`
-            // call below fires immediately — otherwise the widget could show the previous
-            // edge's limit for several seconds.
+            // motorway, or just rerouted), invalidate the API throttle so the next
+            // `fetchSpeedLimitThrottled` call below fires immediately — otherwise the
+            // widget could show the previous edge's limit for several seconds.
+            // NOTE: we also fire when moving from the reset state (-1) to a real edge so
+            // the first edge after a reroute / nav start refreshes promptly.
             if (activeManeuverIdx !== _lastActiveManeuverIdx) {
-                if (_lastActiveManeuverIdx !== -1 && activeManeuverIdx >= 0) {
+                if (activeManeuverIdx >= 0) {
                     lastSpeedLimitFetch = 0;
                     lastSpeedLimitPosition = null;
                 }
@@ -14353,29 +14447,28 @@ async function refreshNavTrafficETAIfDue(baseRemainingMinutes, progressPercent, 
     lastNavTrafficFetchAt = now;
 
     try {
-        const response = await fetch('/api/traffic-conditions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                lat: currentLat,
-                lon: currentLon,
-                duration_minutes: Math.max(1, Math.round(baseRemainingMinutes))
-            })
-        });
-        const data = await response.json();
-        if (data.success) {
+        // Lever B: sample live traffic ALONG the remaining route (not just the current
+        // point) so the ETA reflects jams further ahead. Shares the cached sample with the
+        // reroute monitor. Only real TomTom data adjusts the ETA; simulated data leaves the
+        // free-flow base ETA untouched to avoid random fluctuations.
+        const flow = await getRouteTrafficAhead(forceFetch);
+        if (flow && flow.source === 'TomTom') {
             const baseAt = Math.max(1, Math.round(baseRemainingMinutes));
+            const adjusted = Math.max(1, Math.round(baseAt + flow.delayMin));
+            const level = flow.severe ? 'Heavy' : (flow.delayMin >= 3 ? 'Moderate' : 'Light');
             window.navETASnapshot = {
                 ...window.navETASnapshot,
-                trafficAdjustedMinutes: data.updated_duration_minutes,
-                trafficLevel: data.traffic_level,
-                congestionPercent: data.congestion_percentage != null ? data.congestion_percentage : null,
+                trafficAdjustedMinutes: adjusted,
+                trafficLevel: level,
+                congestionPercent: flow.avgCongestion != null ? flow.avgCongestion : null,
                 trafficFetchAt: Date.now(),
                 baseAtTrafficFetch: baseAt
             };
+        } else {
+            window.navETASnapshot.trafficAdjustedMinutes = null;
         }
     } catch (e) {
-        console.warn('[ETA] Traffic conditions fetch failed:', e);
+        console.warn('[ETA] Traffic flow fetch failed:', e);
     }
 }
 
@@ -14869,16 +14962,24 @@ function announceUpcomingTurn(turnInfo) {
         : announcedTurnThresholds;
     const resetDistance = isExit ? 2500 : isKeep ? 1500 : 600;
 
-    // Check each threshold independently
-    for (const announcementDistance of announcementDistances) {
-        // Calculate buffer size - use 40% of threshold or max 50m, whichever is smaller
-        // This ensures small thresholds like 50m still have a reasonable window (50m -> 20m buffer)
-        const bufferSize = Math.min(50, announcementDistance * 0.4);
-
-        // Announce when: (1) within range, (2) not already announced, (3) haven't passed too far
-        if (distance <= announcementDistance &&
-            !thresholdSet.has(announcementDistance) &&
-            distance > announcementDistance - bufferSize) {
+    // Pick the most-urgent (smallest) threshold we've reached and not yet announced, then
+    // suppress any larger thresholds we've already driven past. Announcing only this one
+    // means a GPS tick that overshoots a window (common at motorway speed, where one fix
+    // can jump 30-40 m) can no longer silently drop the earlier call — you still hear the
+    // relevant, nearer announcement instead of nothing until the next threshold.
+    let announcementDistance = null;
+    for (const d of announcementDistances) {
+        if (distance <= d && !thresholdSet.has(d)) {
+            announcementDistance = d;
+        }
+    }
+    if (announcementDistance !== null) {
+        // Mark larger thresholds we've already passed as done so they don't fire late.
+        for (const d of announcementDistances) {
+            if (d > announcementDistance && distance <= d) {
+                thresholdSet.add(d);
+            }
+        }
 
             let message = '';
             const streetInfo = streetName ? ` toward ${streetName}` : '';
@@ -14906,8 +15007,14 @@ function announceUpcomingTurn(turnInfo) {
             } else if (isKeep) {
                 const keepDir = (direction === 'slight_left' || direction === 'slight-left') ? 'left' : 'right';
                 const streetOnto = streetName ? ` toward ${streetName}` : '';
+                // Prefer Valhalla's own phrasing where available: for ramps / "stay" / fork
+                // maneuvers it often says "Turn left to take the ramp" or "Take the ramp on
+                // the left", which is clearer than a synthesised "keep left" when the action
+                // is really a turn. Fall back to the distance-based synthesised wording.
                 if (announcementDistance === 1000) {
-                    if (distanceUnit === 'mi') {
+                    if (verbalAlert) {
+                        message = verbalAlert;
+                    } else if (distanceUnit === 'mi') {
                         message = `In half a mile, keep ${keepDir}${streetOnto}`;
                     } else {
                         message = `In 1 kilometer, keep ${keepDir}${streetOnto}`;
@@ -14919,9 +15026,9 @@ function announceUpcomingTurn(turnInfo) {
                         message = `In 400 meters, keep ${keepDir}${streetOnto}`;
                     }
                 } else if (announcementDistance === 150) {
-                    message = `Keep ${keepDir}${streetOnto}`;
+                    message = verbalPre || `Keep ${keepDir}${streetOnto}`;
                 } else if (announcementDistance === 50) {
-                    message = `Keep ${keepDir} now`;
+                    message = verbalPre || `Keep ${keepDir} now`;
                 }
             } else {
                 const streetOnto = streetName ? ` onto ${streetName}` : '';
@@ -14959,7 +15066,6 @@ function announceUpcomingTurn(turnInfo) {
                 speakMessage(message, 'high');
                 thresholdSet.add(announcementDistance);
             }
-        }
     }
 
     // Reset when turn/exit/keep is completely passed

@@ -368,6 +368,57 @@ class SpeedLimitDetector:
 
         return R * c
 
+    def _point_to_polyline_km(self, lat: float, lon: float, geometry: List[Dict]) -> float:
+        """Shortest distance (km) from (lat, lon) to a way's polyline geometry.
+
+        Overpass `out geom` returns a list of {lat, lon} nodes for the way. Selecting
+        the road by nearest *point on the line* (rather than the way centroid) avoids
+        picking a long parallel road whose centre happens to be closer, which was the
+        cause of the widget showing a nearby road's limit at complex junctions.
+        """
+        if not geometry or len(geometry) < 1:
+            return float('inf')
+
+        # Equirectangular projection to local kilometres around the query point.
+        R = 6371.0
+        lat_rad = math.radians(lat)
+        cos_lat = math.cos(lat_rad)
+
+        def to_xy(p_lat: float, p_lon: float) -> Tuple[float, float]:
+            x = math.radians(p_lon - lon) * cos_lat * R
+            y = math.radians(p_lat - lat) * R
+            return x, y
+
+        pts = []
+        for node in geometry:
+            nlat = node.get('lat')
+            nlon = node.get('lon')
+            if nlat is None or nlon is None:
+                continue
+            pts.append(to_xy(float(nlat), float(nlon)))
+
+        if not pts:
+            return float('inf')
+        if len(pts) == 1:
+            return math.hypot(pts[0][0], pts[0][1])
+
+        best = float('inf')
+        for i in range(len(pts) - 1):
+            ax, ay = pts[i]
+            bx, by = pts[i + 1]
+            dx, dy = bx - ax, by - ay
+            seg_len_sq = dx * dx + dy * dy
+            if seg_len_sq <= 1e-12:
+                d = math.hypot(ax, ay)
+            else:
+                t = (-ax * dx + -ay * dy) / seg_len_sq
+                t = max(0.0, min(1.0, t))
+                cx, cy = ax + t * dx, ay + t * dy
+                d = math.hypot(cx, cy)
+            if d < best:
+                best = d
+        return best
+
     def _add_to_cache(self, key: str, value: Dict) -> None:
         """
         Add entry to LRU cache with automatic cleanup.
@@ -462,7 +513,8 @@ class SpeedLimitDetector:
 
     def get_speed_limit_for_location(self, lat: float, lon: float,
                                      road_type: str = 'residential',
-                                     vehicle_type: str = 'car') -> Dict:
+                                     vehicle_type: str = 'car',
+                                     valhalla_hint_mph: Optional[int] = None) -> Dict:
         """
         Get speed limit for a specific location.
 
@@ -491,7 +543,7 @@ class SpeedLimitDetector:
             )
 
             speed_limit, posted_source = self._get_tomtom_or_osm_posted_limit(
-                lat, lon, region, road_type
+                lat, lon, region, road_type, valhalla_hint_mph=valhalla_hint_mph
             )
 
             # Detect speed limit changes (skip first-ever / unknown→unknown)
@@ -682,6 +734,7 @@ class SpeedLimitDetector:
         lon: float,
         region: str,
         road_type: str = 'residential',
+        valhalla_hint_mph: Optional[int] = None,
     ) -> Tuple[Optional[int], str]:
         """OSM maxspeed (Overpass), TomTom Snap, then optional DEFAULT_SPEED_* by road class."""
         # Periodic cache cleanup (every 100 requests)
@@ -731,12 +784,13 @@ class SpeedLimitDetector:
 
             self._wait_for_overpass_rate_limit()
 
-            # Use way centers so we pick the road the vehicle is actually on, not a
-            # parallel motorway/trunk with a higher highway=* rank but farther away.
+            # Request full way geometry so we can pick the road by nearest point ON the
+            # line, not by way centroid. Centroid selection picked long parallel roads
+            # whose centre was closer, producing wrong limits at complex junctions.
             query = f"""
             [out:json][timeout:8];
             way(around:{around_m},{lat},{lon})[highway];
-            out center tags;
+            out geom tags;
             """
 
             response = requests.get(overpass_url, params={'data': query}, timeout=8)
@@ -762,36 +816,59 @@ class SpeedLimitDetector:
 
                     best_explicit = None
                     best_dist_km = float('inf')
-                    best_rank = -1  # highway class tie-break when distances are equal
                     seen_drivable_center = False
+                    candidates = []  # (dist_km, rank, parsed_mph) for hint-aware selection
 
                     for element in elements:
                         tags = element.get('tags', {})
                         hw = tags.get('highway', '')
                         if hw in excluded_hw:
                             continue
-                        center = element.get('center') or {}
-                        c_lat = center.get('lat')
-                        c_lon = center.get('lon')
-                        if c_lat is None or c_lon is None:
+                        # Prefer full geometry (out geom); fall back to centre if missing.
+                        geometry = element.get('geometry')
+                        if geometry:
+                            dist_km = self._point_to_polyline_km(lat, lon, geometry)
+                        else:
+                            center = element.get('center') or {}
+                            c_lat = center.get('lat')
+                            c_lon = center.get('lon')
+                            if c_lat is None or c_lon is None:
+                                continue
+                            dist_km = self._haversine_distance(lat, lon, float(c_lat), float(c_lon))
+                        if not math.isfinite(dist_km):
                             continue
                         seen_drivable_center = True
                         if 'maxspeed' not in tags:
                             continue
-                        dist_km = self._haversine_distance(lat, lon, float(c_lat), float(c_lon))
                         rank = HIGHWAY_RANK.get(hw, 0)
                         speed_str = tags['maxspeed']
                         parsed = _parse_osm_maxspeed_to_mph(speed_str, region)
                         if parsed is None:
                             logger.debug(f"[Speed Limit] OSM maxspeed not parsed: '{speed_str}'")
                             continue
-                        # Prefer closest drivable way with maxspeed; break ties by higher road class.
-                        if dist_km < best_dist_km - 1e-6 or (
-                            abs(dist_km - best_dist_km) < 1e-6 and rank > best_rank
-                        ):
-                            best_explicit = parsed
-                            best_dist_km = dist_km
-                            best_rank = rank
+                        candidates.append((dist_km, rank, parsed))
+
+                    if candidates:
+                        # Nearest point on the line wins; ties broken by higher road class.
+                        candidates.sort(key=lambda c: (c[0], -c[1]))
+                        best_dist_km = candidates[0][0]
+                        best_explicit = candidates[0][2]
+                        # Hint-aware disambiguation: at junctions several ways can be almost
+                        # equidistant from the GPS point. If the route's Valhalla edge limit
+                        # matches one of the near-tie candidates, trust it — it's the road the
+                        # router actually chose, not an adjacent slip road / parallel street.
+                        if valhalla_hint_mph and valhalla_hint_mph > 0:
+                            band = best_dist_km + 0.030  # 30 m tolerance band
+                            for c_dist, _c_rank, c_parsed in candidates:
+                                if c_dist <= band and c_parsed == valhalla_hint_mph:
+                                    if c_parsed != best_explicit:
+                                        logger.info(
+                                            f"[Speed Limit] OSM near-tie resolved by Valhalla "
+                                            f"hint: {best_explicit} -> {c_parsed} mph"
+                                        )
+                                    best_explicit = c_parsed
+                                    best_dist_km = c_dist
+                                    break
 
                     if best_explicit is not None:
                         self.metrics['overpass_maxspeed_hits'] += 1

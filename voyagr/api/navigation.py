@@ -392,9 +392,21 @@ def get_speed_limit():
         lon = float(request.args.get('lon', -0.1278))
         road_type = request.args.get('road_type', 'residential')
         vehicle_type = request.args.get('vehicle_type', 'car')
+        # Optional route-accurate hint from the client's Valhalla edge (mph). Used only to
+        # disambiguate near-tie OSM ways at junctions; never trusted blindly.
+        valhalla_hint_mph = None
+        try:
+            raw_hint = request.args.get('valhalla_speed_limit')
+            if raw_hint is not None:
+                parsed_hint = int(float(raw_hint))
+                if parsed_hint > 0:
+                    valhalla_hint_mph = parsed_hint
+        except (ValueError, TypeError):
+            valhalla_hint_mph = None
 
         result = speed_limit_detector.get_speed_limit_for_location(
-            lat=lat, lon=lon, road_type=road_type, vehicle_type=vehicle_type
+            lat=lat, lon=lon, road_type=road_type, vehicle_type=vehicle_type,
+            valhalla_hint_mph=valhalla_hint_mph
         )
 
         return jsonify({'success': True, 'data': result})
