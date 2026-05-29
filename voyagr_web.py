@@ -4461,7 +4461,7 @@ HTML_TEMPLATE = '''
        longer block first paint. This is the biggest lever for shortening the PWA
        home-screen splash, which is shown from launch until first paint. #}
     <script defer src="/static/vendor/maplibre-gl.js"></script>
-    <script defer src="/static/js/maplibre-helpers.js?v=20260403a"></script>
+    <script defer src="/static/js/maplibre-helpers.js?v=20260529c"></script>
     <script defer src="/static/vendor/supabase.min.js"></script>
     <!-- Google Plus Codes Service -->
     <script defer src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
@@ -4472,7 +4472,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260529b"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260529c"></script>
     <script defer src="/static/js/app.js?v=20260504c"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -5291,7 +5291,7 @@ HTML_TEMPLATE = '''
                             <span class="preference-label">🛤️ Route Traffic Edges</span>
                             <button class="toggle-switch active" id="routeTrafficToggle" onclick="toggleRouteTraffic()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Show traffic conditions as colored edges along your route (green/orange/red/black)</p>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Highlight congestion along your route (orange/red/black only — free-flow green is hidden so the route line stays visible)</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🛣️ Road Name Labels</span>

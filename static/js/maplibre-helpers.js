@@ -153,9 +153,15 @@ function addPolyline(mapInstance, coords, options = {}) {
 
     const layer = {
         id: id,
+        outlineId: options.outlineColor ? `${id}-outline` : null,
         _coords: lngLatCoords,
         _added: success,
-        remove: function() { removeMapLayer(mapInstance, id); },
+        remove: function() {
+            removeMapLayer(mapInstance, id);
+            if (options.outlineColor) {
+                removeMapLayer(mapInstance, `${id}-outline`);
+            }
+        },
         getBounds: function() { return computeBounds(lngLatCoords); }
     };
 
@@ -209,6 +215,26 @@ function addLayerToMap(mapInstance, id, lngLatCoords, options) {
             ? baseW
             : buildZoomScaledLineWidth(baseW);
 
+        const outlineId = `${id}-outline`;
+        const useOutline = options.outline !== false && options.outlineColor;
+        if (useOutline && !mapInstance.getLayer(outlineId)) {
+            const outlineBase = options.outlineWeight != null ? options.outlineWeight : baseW + 3;
+            const outlineWidth = options.zoomScaledWidth === false
+                ? outlineBase
+                : buildZoomScaledLineWidth(outlineBase);
+            mapInstance.addLayer({
+                id: outlineId,
+                type: 'line',
+                source: id,
+                layout: { 'line-join': 'round', 'line-cap': 'round' },
+                paint: {
+                    'line-color': options.outlineColor,
+                    'line-width': outlineWidth,
+                    'line-opacity': options.outlineOpacity != null ? options.outlineOpacity : 0.95
+                }
+            }, beforeId);
+        }
+
         mapInstance.addLayer({
             id: id,
             type: 'line',
@@ -243,11 +269,13 @@ function createErrorLayer(id) {
 /**
  * Create a pending layer object (for when style isn't loaded)
  */
-function createPendingLayer(mapInstance, id, lngLatCoords, options) {
+function createPendingLayer(mapInstance, id, lngLatCoords, options = {}) {
     const layer = {
         id: id,
+        outlineId: options.outlineColor ? `${id}-outline` : null,
         _coords: lngLatCoords,
         _added: false,
+        // removeMapLayer already strips the matching `-outline` layer/source.
         remove: function() { removeMapLayer(mapInstance, id); },
         getBounds: function() { return computeBounds(lngLatCoords); }
     };
@@ -262,6 +290,10 @@ function createPendingLayer(mapInstance, id, lngLatCoords, options) {
  */
 function removeMapLayer(mapInstance, layerId) {
     try {
+        const outlineId = `${layerId}-outline`;
+        if (mapInstance.getLayer(outlineId)) {
+            mapInstance.removeLayer(outlineId);
+        }
         if (mapInstance.getLayer(layerId)) {
             mapInstance.removeLayer(layerId);
         }
@@ -269,6 +301,7 @@ function removeMapLayer(mapInstance, layerId) {
             mapInstance.removeSource(layerId);
         }
         activeLayers.delete(layerId);
+        activeLayers.delete(outlineId);
     } catch (e) {
         console.warn('[MapLibre] Error removing layer:', layerId, e);
     }

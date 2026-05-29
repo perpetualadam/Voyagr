@@ -2521,6 +2521,9 @@ const ROUTE_COLORS = [
     '#8B5CF6'   // Violet - additional routes
 ];
 
+/** Active navigation / reroute line — matches ROUTE_COLORS[0], contrasts with green traffic tiles. */
+const NAV_ACTIVE_ROUTE_COLOR = '#2563EB';
+
 /**
  * Clear ALL route layers from the map (including any orphaned layers)
  * This ensures no route artifacts remain when switching between routes
@@ -6165,9 +6168,9 @@ function initWeatherLayer() {
 }
 
 // ===== ROUTE TRAFFIC EDGE COLORING =====
-// Displays traffic congestion as colored edges along the active route
-// Only shows congested segments (orange/red/black) - green segments are hidden to reduce clutter
-// Colors: orange (moderate), red (heavy), black (blocked/severe)
+// Displays traffic congestion as coloured edges along the active route.
+// Only congested segments (orange/red/black) are drawn — free-flow green is omitted so
+// the route line stays visible against TomTom's green traffic tiles.
 
 let routeTrafficLayers = []; // Array of polylines for traffic segments
 let routeTrafficEnabled = localStorage.getItem('routeTrafficEnabled') !== 'false'; // Default: enabled
@@ -6315,10 +6318,7 @@ function displayRouteTrafficEdges(segments) {
     let lastEndIdx = 0;  // Track position along route to ensure segments are in order
 
     segments.forEach((segment, idx) => {
-        const color = TRAFFIC_COLORS[segment.traffic_level] || TRAFFIC_COLORS['green'];
-
-        // Show ALL traffic segments including green (free flow)
-        // This provides full traffic visibility on the route
+        const level = segment.traffic_level || 'green';
 
         // Find the indices in the route polyline that correspond to this segment
         const startIdx = findClosestRoutePointIndex(segment.start, lastEndIdx);
@@ -6330,6 +6330,16 @@ function displayRouteTrafficEdges(segments) {
             return;
         }
 
+        // Advance the cursor for EVERY valid segment (including skipped green ones) so
+        // congested segments after a free-flow gap still map to the correct geometry.
+        lastEndIdx = endIdx;
+
+        // Skip free-flow: green overlays hid the active route line on top of green traffic tiles.
+        if (level === 'green') {
+            return;
+        }
+        const color = TRAFFIC_COLORS[level] || TRAFFIC_COLORS['orange'];
+
         // Extract all route points between start and end to follow the curved road geometry
         let segmentPoints = routePolyline.slice(startIdx, endIdx + 1);
 
@@ -6337,9 +6347,6 @@ function displayRouteTrafficEdges(segments) {
             // Fallback to direct line if not enough points
             segmentPoints = [segment.start, segment.end];
         }
-
-        // Update lastEndIdx for next segment
-        lastEndIdx = endIdx;
 
         // Create the traffic edge polyline following the route geometry with MapLibre
         // Traffic edges are drawn ON TOP of the route line so they're visible
@@ -6351,10 +6358,11 @@ function displayRouteTrafficEdges(segments) {
         routeTrafficLayers.push(trafficLine);
     });
 
-    console.log(`[Route Traffic] Added ${routeTrafficLayers.length} traffic edge layers (valid segments)`);
+    console.log(`[Route Traffic] Added ${routeTrafficLayers.length} congested traffic edge layers`);
 
-    // Bring traffic layers to top so they're visible above routes
+    // Traffic below labels; active route line stays above traffic edges.
     bringTrafficEdgesToTop();
+    bringNavRouteAboveTrafficEdges();
 }
 
 /**
@@ -6390,6 +6398,57 @@ function bringTrafficEdgesToTop() {
         ensureLabelsOnTop();
     } catch (e) {
         console.log('[Route Traffic] Error moving traffic layers to top:', e.message);
+    }
+}
+
+/**
+ * Keep the active navigation route (and multi-route preview lines) above route-traffic
+ * edge overlays but below road labels. routeLayer is not in allRouteLayers, so reroutes
+ * were previously drawn under green/orange traffic polylines.
+ */
+function bringNavRouteAboveTrafficEdges() {
+    if (!map) return;
+
+    try {
+        const style = map.getStyle();
+        let beforeId = undefined;
+        if (style && style.layers) {
+            const symbolLayer = style.layers.find(l =>
+                l.type === 'symbol' &&
+                l.layout &&
+                l.layout['text-field']
+            );
+            if (symbolLayer) {
+                beforeId = symbolLayer.id;
+            }
+        }
+
+        const routeLineIds = [];
+        if (routeLayer && routeLayer.id) {
+            if (routeLayer.outlineId && map.getLayer(routeLayer.outlineId)) {
+                routeLineIds.push(routeLayer.outlineId);
+            }
+            if (map.getLayer(routeLayer.id)) {
+                routeLineIds.push(routeLayer.id);
+            }
+        }
+        if (allRouteLayers && allRouteLayers.length > 0) {
+            allRouteLayers.forEach(layer => {
+                if (layer && layer.id && map.getLayer(layer.id)) {
+                    routeLineIds.push(layer.id);
+                }
+            });
+        }
+
+        if (routeLineIds.length === 0) return;
+
+        routeLineIds.forEach(layerId => {
+            map.moveLayer(layerId, beforeId);
+        });
+        ensureLabelsOnTop();
+        console.log('[Routes] Navigation route above traffic edges:', routeLineIds.join(', '));
+    } catch (e) {
+        console.warn('[Routes] bringNavRouteAboveTrafficEdges:', e.message);
     }
 }
 
@@ -6926,14 +6985,19 @@ function updateRouteOnMap(newRoute) {
     routePolyline = decodePolyline(newRoute.geometry, 6);
     console.log(`[Reroute] Route polyline decoded: ${routePolyline.length} points`);
 
-    // Draw new route on map with MapLibre
-    // NOTE: weight increased from 5 → 8 so the active route line stays clearly
-    // visible at navigation zoom levels (previously the road looked too narrow).
+    // Bright blue + white casing so the line stays visible over TomTom traffic tiles.
+    // Zoom-scaled widths (default) keep the line/casing proportional like the rest of
+    // the app's route rendering instead of a flat width that looks thin when zoomed out.
     routeLayer = MapLibreHelpers.addPolyline(map, routePolyline, {
-        color: '#667eea',
+        color: NAV_ACTIVE_ROUTE_COLOR,
         weight: 8,
-        opacity: 0.85
+        opacity: 0.95,
+        outline: true,
+        outlineColor: '#ffffff',
+        outlineWeight: 11,
+        outlineOpacity: 0.92
     });
+    bringNavRouteAboveTrafficEdges();
 
     // === FIX: Update maneuvers / steps so turn-by-turn stays in sync ===
     if (newRoute.maneuvers && newRoute.maneuvers.length > 0) {
