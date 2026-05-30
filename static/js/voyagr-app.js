@@ -3618,7 +3618,9 @@ function selectRoute(index) {
             ...prev,
             ...selectedRoute,
             destination: prev.destination || selectedRoute.destination,
-            destinationName: prev.destinationName || selectedRoute.destinationName
+            destinationName: prev.destinationName || selectedRoute.destinationName,
+            end_lat: prev.end_lat != null ? prev.end_lat : selectedRoute.end_lat,
+            end_lon: prev.end_lon != null ? prev.end_lon : selectedRoute.end_lon,
         };
         console.log(`[Routes] Selected route "${selectedRoute.name}" with ${(selectedRoute.maneuvers || []).length} maneuvers`);
 
@@ -8521,13 +8523,128 @@ function toggleVoiceAnnouncements() {
     saveAllSettings();
 }
 
+async function resolveParkingDestinationCoords(lastRoute, endInput) {
+    const lr = lastRoute || {};
+
+    if (lr.end_lat != null && lr.end_lon != null) {
+        const lat = Number(lr.end_lat);
+        const lon = Number(lr.end_lon);
+        if (!isNaN(lat) && !isNaN(lon)) return { lat, lon };
+    }
+
+    if (lr.destination) {
+        const parts = String(lr.destination).split(',');
+        if (parts.length >= 2) {
+            const lat = parseFloat(parts[0]);
+            const lon = parseFloat(parts[1]);
+            if (!isNaN(lat) && !isNaN(lon)) return { lat, lon };
+        }
+    }
+
+    if (routeOptions && routeOptions.length > 0) {
+        const idx = Math.max(0, Math.min(Number(selectedRouteIndex) || 0, routeOptions.length - 1));
+        const route = routeOptions[idx];
+        const poly = route && route.polyline;
+        if (poly && poly.length > 0) {
+            const last = poly[poly.length - 1];
+            if (Array.isArray(last) && last.length >= 2) {
+                return { lat: last[0], lon: last[1] };
+            }
+            if (last && last.lat != null && last.lon != null) {
+                return { lat: last.lat, lon: last.lon };
+            }
+        }
+        if (route && route.geometry && typeof decodePolyline === 'function') {
+            const precision = Number.isFinite(route.geometry_precision) ? route.geometry_precision : 6;
+            const pts = decodePolyline(route.geometry, precision);
+            if (pts.length > 0) {
+                const last = pts[pts.length - 1];
+                return { lat: last[0], lon: last[1] };
+            }
+        }
+    }
+
+    if (lr.routes && lr.routes[0]) {
+        const route = lr.routes[0];
+        if (route.end_lat != null && route.end_lon != null) {
+            return { lat: Number(route.end_lat), lon: Number(route.end_lon) };
+        }
+        if (route.geometry && typeof decodePolyline === 'function') {
+            const precision = Number.isFinite(route.geometry_precision) ? route.geometry_precision : 6;
+            const pts = decodePolyline(route.geometry, precision);
+            if (pts.length > 0) {
+                const last = pts[pts.length - 1];
+                return { lat: last[0], lon: last[1] };
+            }
+        }
+    }
+
+    if (lr.geometry && typeof decodePolyline === 'function') {
+        const precision = Number.isFinite(lr.geometry_precision) ? lr.geometry_precision : 6;
+        const pts = decodePolyline(lr.geometry, precision);
+        if (pts.length > 0) {
+            const last = pts[pts.length - 1];
+            return { lat: last[0], lon: last[1] };
+        }
+    }
+
+    const endEl = document.getElementById('end');
+    if (endEl && endEl.dataset.lat && endEl.dataset.lon) {
+        const lat = parseFloat(endEl.dataset.lat);
+        const lon = parseFloat(endEl.dataset.lon);
+        if (!isNaN(lat) && !isNaN(lon)) return { lat, lon };
+    }
+
+    if (endInput && typeof geocodeLocations === 'function') {
+        const geocoded = await geocodeLocations('', endInput);
+        if (geocoded && geocoded.end) {
+            const parts = geocoded.end.split(',');
+            if (parts.length >= 2) {
+                const lat = parseFloat(parts[0]);
+                const lon = parseFloat(parts[1]);
+                if (!isNaN(lat) && !isNaN(lon)) return { lat, lon };
+            }
+        }
+    }
+
+    return null;
+}
+
+async function fetchParkingSearch(params) {
+    const response = await fetch('/api/parking-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(params)
+    });
+    return response.json();
+}
+
+function scrollParkingResultsIntoView() {
+    const parkingSection = document.getElementById('parkingSection');
+    const content = document.querySelector('.bottom-sheet-content');
+    if (!parkingSection || !content) return;
+    if (typeof expandBottomSheet === 'function') expandBottomSheet();
+    requestAnimationFrame(() => {
+        content.scrollTop = Math.max(0, parkingSection.offsetTop - 12);
+    });
+}
+
+function showParkingEmptyState(message) {
+    const parkingSection = document.getElementById('parkingSection');
+    const parkingListDiv = document.getElementById('parkingList');
+    if (!parkingSection || !parkingListDiv) return;
+    parkingListDiv.innerHTML = `<div style="font-size:13px;color:#666;line-height:1.5;padding:4px 0;">${message}</div>`;
+    parkingSection.style.display = 'block';
+    scrollParkingResultsIntoView();
+}
+
 async function findParkingNearDestination() {
     console.log('[Parking] findParkingNearDestination called');
     console.log('[Parking] lastCalculatedRoute:', window.lastCalculatedRoute);
 
     if (!window.lastCalculatedRoute) {
         console.error('[Parking] No route calculated');
-        showStatus('No route calculated yet', 'error');
+        showStatus('Calculate a route first, then tap Find Parking', 'error');
         return;
     }
 
@@ -8541,140 +8658,90 @@ async function findParkingNearDestination() {
     showStatus('🔍 Searching for parking near destination...', 'loading');
 
     try {
-        // Get destination coordinates from last route
-        let endCoords = null;
-
-        // Try multiple ways to get destination coordinates
-        if (window.lastCalculatedRoute.end_lat && window.lastCalculatedRoute.end_lon) {
-            // Method 1: Direct lat/lon properties
-            endCoords = {
-                lat: window.lastCalculatedRoute.end_lat,
-                lon: window.lastCalculatedRoute.end_lon
-            };
-            console.log('[Parking] Method 1: Got coords from end_lat/end_lon');
-        } else if (window.lastCalculatedRoute.destination) {
-            // Method 2: Parse from destination string "lat,lon"
-            const parts = window.lastCalculatedRoute.destination.split(',');
-            if (parts.length === 2) {
-                endCoords = {
-                    lat: parseFloat(parts[0]),
-                    lon: parseFloat(parts[1])
-                };
-                console.log('[Parking] Method 2: Got coords from destination string');
-            }
-        } else if (window.lastCalculatedRoute.routes && window.lastCalculatedRoute.routes[0]) {
-            // Method 3: Get from first route's end coordinates
-            const route = window.lastCalculatedRoute.routes[0];
-            if (route.end_lat && route.end_lon) {
-                endCoords = {
-                    lat: route.end_lat,
-                    lon: route.end_lon
-                };
-                console.log('[Parking] Method 3: Got coords from routes[0]');
-            }
-        } else if (window.lastCalculatedRoute.polyline && window.lastCalculatedRoute.polyline.length > 0) {
-            // Method 4: Get last point from polyline (destination)
-            const lastPoint = window.lastCalculatedRoute.polyline[window.lastCalculatedRoute.polyline.length - 1];
-            console.log('[Parking] Method 4: Last polyline point:', lastPoint);
-
-            // Handle both {lat, lon} and [lat, lon] formats
-            if (lastPoint.lat !== undefined && lastPoint.lon !== undefined) {
-                endCoords = {
-                    lat: lastPoint.lat,
-                    lon: lastPoint.lon
-                };
-            } else if (Array.isArray(lastPoint) && lastPoint.length >= 2) {
-                endCoords = {
-                    lat: lastPoint[0],
-                    lon: lastPoint[1]
-                };
-            } else if (lastPoint[0] !== undefined && lastPoint[1] !== undefined) {
-                endCoords = {
-                    lat: lastPoint[0],
-                    lon: lastPoint[1]
-                };
-            }
-
-            if (endCoords) {
-                console.log('[Parking] Method 4: Got coords from last polyline point');
-            }
-        } else {
-            // Method 5: Geocode the destination input field
-            console.log('[Parking] Method 5: Attempting to geocode destination input');
-            const geocoded = await geocodeLocations('', endInput);
-            if (geocoded && geocoded.end) {
-                const parts = geocoded.end.split(',');
-                if (parts.length === 2) {
-                    endCoords = {
-                        lat: parseFloat(parts[0]),
-                        lon: parseFloat(parts[1])
-                    };
-                    console.log('[Parking] Method 5: Got coords from geocoding');
-                }
-            }
-        }
-
+        const endCoords = await resolveParkingDestinationCoords(window.lastCalculatedRoute, endInput);
         console.log('[Parking] End coordinates:', endCoords);
 
         if (!endCoords || isNaN(endCoords.lat) || isNaN(endCoords.lon)) {
             console.error('[Parking] Could not determine destination coordinates');
-            console.error('[Parking] lastCalculatedRoute:', window.lastCalculatedRoute);
             showStatus('Could not determine destination coordinates', 'error');
             return;
         }
 
-        // Get parking preferences
-        const maxWalkingDist = parseInt(document.getElementById('parkingMaxWalkingDistance').value) || 10;
-        const radiusMeters = maxWalkingDist * 80; // Approximate: 1 min walk ≈ 80m
+        const maxWalkingEl = document.getElementById('parkingMaxWalkingDistance');
+        const typeEl = document.getElementById('parkingPreferredType');
+        const priceEl = document.getElementById('parkingPricePreference');
+        const maxWalkingDist = maxWalkingEl ? parseInt(maxWalkingEl.value, 10) : 10;
+        const radiusMeters = (isNaN(maxWalkingDist) ? 10 : maxWalkingDist) * 80;
+        const parkingType = typeEl ? typeEl.value : 'any';
+        const pricePref = priceEl ? priceEl.value : 'any';
 
-        // Search for parking
-        const searchParams = {
+        let searchParams = {
             lat: endCoords.lat,
             lon: endCoords.lon,
             radius: radiusMeters,
-            type: document.getElementById('parkingPreferredType').value,
-            price: document.getElementById('parkingPricePreference').value
+            type: parkingType,
+            price: pricePref
         };
 
         console.log('[Parking] Search parameters:', searchParams);
-
-        const response = await fetch('/api/parking-search', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(searchParams)
-        });
-
-        console.log('[Parking] Response status:', response.status);
-        const data = await response.json();
+        let data = await fetchParkingSearch(searchParams);
         console.log('[Parking] Response data:', data);
 
         if (!data.success) {
-            console.error('[Parking] API returned success=false:', data.error);
             showStatus('Parking search failed: ' + (data.error || 'Unknown error'), 'error');
             return;
         }
 
         if (!data.parking || data.parking.length === 0) {
-            console.warn('[Parking] No parking found in response');
-            showStatus('No parking found nearby. Try adjusting your search radius or price filter.', 'warning');
+            const hasStrictFilters = parkingType !== 'any' || pricePref !== 'any' || radiusMeters < 1200;
+            if (hasStrictFilters) {
+                showStatus('No parking with current filters — widening search…', 'info');
+                searchParams = {
+                    lat: endCoords.lat,
+                    lon: endCoords.lon,
+                    radius: Math.max(radiusMeters, 1200),
+                    type: 'any',
+                    price: 'any'
+                };
+                data = await fetchParkingSearch(searchParams);
+            }
+        }
+
+        if (!data.parking || data.parking.length === 0) {
+            showParkingEmptyState(
+                'No parking found near your destination. Try Settings → Parking Preferences to increase walking distance or relax price/type filters.'
+            );
+            showStatus('No parking found nearby. Adjust Parking Preferences in Settings.', 'warning');
             return;
         }
 
         console.log('[Parking] Found', data.parking.length, 'parking options');
-
-        // Display parking options
         displayParkingOptions(data.parking, endCoords);
-        showStatus(`✅ Found ${data.parking.length} parking options`, 'success');
+        showStatus(`✅ Found ${data.parking.length} parking options — scroll down to choose`, 'success');
+        scrollParkingResultsIntoView();
 
-        // Switch to route preview tab to show parking options
-        console.log('[Parking] Switching to route preview to show parking options');
-        switchTab('routePreview');
+        if (typeof fitMapToParkingResults === 'function') {
+            fitMapToParkingResults(data.parking, endCoords);
+        }
 
     } catch (error) {
         console.error('[Parking] Error:', error);
         showStatus('Error searching for parking: ' + error.message, 'error');
     }
 }
+function fitMapToParkingResults(parkingList, destinationCoords) {
+    if (!map || !parkingList || parkingList.length === 0) return;
+    try {
+        const coords = parkingList.slice(0, 5).map(p => [p.lat, p.lon]);
+        if (destinationCoords) coords.push([destinationCoords.lat, destinationCoords.lon]);
+        if (typeof MapLibreHelpers !== 'undefined' && MapLibreHelpers.fitMapBounds) {
+            MapLibreHelpers.fitMapBounds(map, coords, { padding: 60, maxZoom: 16 });
+        }
+    } catch (e) {
+        console.warn('[Parking] fitMapToParkingResults:', e);
+    }
+}
+
 /**
  * displayParkingOptions function
  * @function displayParkingOptions
@@ -8710,20 +8777,24 @@ function displayParkingOptions(parkingList, destinationCoords) {
         const parkingDistUnit = getDistanceUnit();
 
         // Add marker to map with MapLibre
-        const marker = MapLibreHelpers.createMarker(parking.lat, parking.lon, {
-            html: `<div style="background: #FF9800; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>`,
-            iconSize: [32, 32],
-            className: 'parking-marker',
-            popup: `<strong>${parking.name}</strong><br>Distance: ${parkingDisplayDist} ${parkingDistUnit}`
-        }).addTo(map);
+        try {
+            const marker = MapLibreHelpers.createMarker(parking.lat, parking.lon, {
+                html: `<div style="background: #FF9800; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>`,
+                iconSize: [32, 32],
+                className: 'parking-marker',
+                popup: `<strong>${parking.name}</strong><br>Distance: ${parkingDisplayDist} ${parkingDistUnit}`
+            }).addTo(map);
 
-        marker.parkingData = parking;
-        marker.on('click', () => selectParking(parking, destinationCoords));
-        parkingMarkers.push(marker);
+            marker.parkingData = parking;
+            marker.on('click', () => selectParking(parking, destinationCoords));
+            parkingMarkers.push(marker);
+        } catch (markerErr) {
+            console.warn('[Parking] Marker error:', markerErr);
+        }
 
         // Add to list
         const walkingTime = Math.round(parking.distance_m / 1.4); // 1.4 m/s walking speed
-        const walkingMinutes = Math.round(walkingTime / 60);
+        const walkingMinutes = Math.max(1, Math.round(walkingTime / 60));
 
         const item = document.createElement('div');
         item.style.cssText = 'background: white; padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; transition: all 0.2s;';
@@ -8737,16 +8808,24 @@ function displayParkingOptions(parkingList, destinationCoords) {
                 <br>🚶 ${walkingMinutes} min walk
             </div>
             <div style="display: flex; gap: 6px; margin-top: 8px;">
-                <button onclick="event.stopPropagation(); selectParking(${JSON.stringify(parking).replace(/"/g, '&quot;')}, ${JSON.stringify(destinationCoords).replace(/"/g, '&quot;')})"
-                        style="flex: 1; background: #2196F3; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer;">
+                <button type="button" class="parking-show-route-btn" style="flex: 1; background: #2196F3; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer;">
                     🗺️ Show Route
                 </button>
-                <button onclick="event.stopPropagation(); setParkingAsDestination(${JSON.stringify(parking).replace(/"/g, '&quot;')})"
-                        style="flex: 1; background: #4CAF50; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer;">
+                <button type="button" class="parking-set-dest-btn" style="flex: 1; background: #4CAF50; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer;">
                     📍 Set as Destination
                 </button>
             </div>
         `;
+
+        item.querySelector('.parking-show-route-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            selectParking(parking, destinationCoords);
+        });
+        item.querySelector('.parking-set-dest-btn').addEventListener('click', (e) => {
+            e.stopPropagation();
+            setParkingAsDestination(parking);
+        });
+        item.addEventListener('click', () => selectParking(parking, destinationCoords));
 
         item.onmouseover = () => item.style.background = '#FFF3E0';
         item.onmouseout = () => item.style.background = 'white';

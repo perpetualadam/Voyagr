@@ -4472,7 +4472,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260530a"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260530b"></script>
     <script defer src="/static/js/app.js?v=20260530a"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -5903,15 +5903,6 @@ HTML_TEMPLATE = '''
                             <div id="previewAlternativeRoutesList"></div>
                         </div>
 
-                        <!-- Parking Section -->
-                        <div id="parkingSection" style="display: none; background: #FFF3E0; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #FF9800;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #E65100;">🅿️ Parking Options</h4>
-                            <div id="parkingList" style="margin-bottom: 10px;"></div>
-                            <button onclick="clearParkingSelection()" style="width: 100%; background: #FF9800; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                                ✕ Clear Parking Selection
-                            </button>
-                        </div>
-
                         <!-- Action Buttons -->
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
                             <button onclick="overviewRoute()" style="background: #9C27B0; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
@@ -5927,6 +5918,14 @@ HTML_TEMPLATE = '''
                             </button>
                             <button onclick="showRouteComparison()" style="background: #FF5722; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: 600; font-size: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;">
                                 📊 Compare Routes
+                            </button>
+                        </div>
+                        <!-- Parking results appear directly below Find Parking -->
+                        <div id="parkingSection" style="display: none; background: #FFF3E0; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #FF9800;">
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #E65100;">🅿️ Parking Options</h4>
+                            <div id="parkingList" style="margin-bottom: 10px;"></div>
+                            <button onclick="clearParkingSelection()" style="width: 100%; background: #FF9800; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">
+                                ✕ Clear Parking Selection
                             </button>
                         </div>
                         <div style="display: grid; grid-template-columns: 1fr; gap: 10px; margin-bottom: 10px;">
