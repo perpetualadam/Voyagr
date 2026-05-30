@@ -324,33 +324,45 @@ def search_parking():
         if lat == 0 or lon == 0:
             return jsonify({'success': False, 'error': 'Invalid coordinates'})
 
-        url = OVERPASS_API_URL
         overpass_query = f"""
-        [out:json][timeout:5];
+        [out:json][timeout:25];
         (
           node["amenity"="parking"](around:{radius},{lat},{lon});
           way["amenity"="parking"](around:{radius},{lat},{lon});
         );
-        out center tags {min(20, radius // 50)};
+        out center tags {min(20, max(1, radius // 50))};
         """
 
-        logger.info(f"[Parking] Querying Overpass API for parking near ({lat},{lon}) radius={radius}m")
+        logger.info(f"[Parking] Querying Overpass for parking near ({lat},{lon}) radius={radius}m")
 
+        # Use the shared Overpass helper, which retries and falls back to public
+        # mirrors when a self-hosted instance (OVERPASS_API_URL) is unreachable.
+        # Previously this endpoint hit OVERPASS_API_URL directly with no fallback,
+        # so parking search silently returned nothing whenever the local Overpass
+        # was down (unlike POI search, which already uses this helper).
         elements = []
         try:
-            response = requests.post(url, data={'data': overpass_query}, timeout=10)
-            if response.status_code == 429:
-                time.sleep(2)
-                response = requests.post(url, data={'data': overpass_query}, timeout=10)
-
-            if response.status_code == 200:
-                results = response.json()
-                elements = results.get('elements', [])
-                logger.info(f"[Parking] Overpass API returned {len(elements)} elements")
-        except requests.exceptions.Timeout:
-            logger.warning(f"[Parking] Overpass API timeout")
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"[Parking] Overpass API request failed: {str(e)}")
+            from overpass_helper import query_overpass
+            cache_key = f"parking_{lat:.4f}_{lon:.4f}_{radius}"
+            result = query_overpass(overpass_query, cache_key=cache_key, cache_ttl=300)
+            if result.get('success'):
+                elements = result.get('elements', [])
+                logger.info(f"[Parking] Overpass returned {len(elements)} elements")
+            else:
+                logger.warning(f"[Parking] Overpass query failed: {result.get('error')}")
+        except ImportError:
+            # Fallback: direct request if the helper module is unavailable.
+            try:
+                headers = {'User-Agent': 'Voyagr-PWA/1.0'}
+                response = requests.post(OVERPASS_API_URL, data={'data': overpass_query}, timeout=10, headers=headers)
+                if response.status_code == 429:
+                    time.sleep(2)
+                    response = requests.post(OVERPASS_API_URL, data={'data': overpass_query}, timeout=10, headers=headers)
+                if response.status_code == 200:
+                    elements = response.json().get('elements', [])
+                    logger.info(f"[Parking] Overpass API returned {len(elements)} elements")
+            except requests.exceptions.RequestException as e:
+                logger.warning(f"[Parking] Overpass direct request failed: {str(e)}")
 
         if not elements:
             return jsonify({'success': True, 'parking': []})
