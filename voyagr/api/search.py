@@ -385,9 +385,15 @@ def search_parking():
                 # Filter by price preference
                 if price_pref != 'any':
                     fee_tag = tags.get('fee', '').lower()
+                    parking_subtype = tags.get('parking', '').lower()
                     if price_pref == 'free' and fee_tag != 'no':
                         continue
                     elif price_pref == 'paid' and fee_tag != 'yes':
+                        continue
+                    elif price_pref == 'free_street' and (
+                        fee_tag != 'no'
+                        or parking_subtype not in ['street_side', 'lane', 'on_street']
+                    ):
                         continue
 
                 name = tags.get('name', 'Parking')
