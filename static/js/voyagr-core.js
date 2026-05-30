@@ -129,6 +129,55 @@ function initializeMap() {
     window.__voyagrResolveStyleUrls = resolveStyleUrls;
     window.__voyagrToAbsoluteOriginUrl = toAbsoluteOriginUrl;
 
+    function showMapLoadingOverlay() {
+        try {
+            let el = document.getElementById('mapLoadingOverlay');
+            if (!el) {
+                el = document.createElement('div');
+                el.id = 'mapLoadingOverlay';
+                el.setAttribute('aria-live', 'polite');
+                el.setAttribute('aria-busy', 'true');
+                el.style.cssText = [
+                    'position:absolute',
+                    'top:0',
+                    'left:0',
+                    'right:0',
+                    'bottom:0',
+                    'z-index:5',
+                    'display:flex',
+                    'align-items:center',
+                    'justify-content:center',
+                    'flex-direction:column',
+                    'gap:10px',
+                    'background:#d4dbe8',
+                    'color:#334',
+                    'font:600 14px/1.4 -apple-system,BlinkMacSystemFont,sans-serif',
+                    'pointer-events:none'
+                ].join(';');
+                el.innerHTML = '<div style="font-size:28px;line-height:1">🗺️</div><div>Loading map…</div>';
+                const host = document.querySelector('.app-container') || document.getElementById('map')?.parentElement;
+                if (host) host.appendChild(el);
+            }
+            el.style.display = 'flex';
+        } catch (e) {
+            /* non-fatal */
+        }
+    }
+
+    function hideMapLoadingOverlay() {
+        try {
+            const el = document.getElementById('mapLoadingOverlay');
+            if (el) {
+                el.style.display = 'none';
+                el.setAttribute('aria-busy', 'false');
+            }
+        } catch (e) {
+            /* non-fatal */
+        }
+    }
+    window.__voyagrShowMapLoadingOverlay = showMapLoadingOverlay;
+    window.__voyagrHideMapLoadingOverlay = hideMapLoadingOverlay;
+
     // Minimal style so `new Map` returns immediately (map non-null after initializeMap).
     // Real vector/raster style is fetched asynchronously and applied via setStyle — avoids
     // blocking the main thread on a synchronous XHR.
@@ -173,6 +222,7 @@ function initializeMap() {
         maxPitch: 85, // Allow steep pitch for driving perspective
         pitchWithRotate: true // Enable pitch control with mouse/touch
     });
+    showMapLoadingOverlay();
 
     // Log MapLibre errors with useful context. Some style/tile combinations can produce
     // expression evaluation errors like "Expected value to be of type number, but found null instead."
@@ -351,6 +401,13 @@ function initializeMap() {
         try {
             const st = map.getStyle && map.getStyle();
             if (!st || st.name === 'voyagr-bootstrap') return;
+
+            hideMapLoadingOverlay();
+            if (typeof voyagrMapResizeAndRepaint === 'function') {
+                voyagrMapResizeAndRepaint();
+                requestAnimationFrame(voyagrMapResizeAndRepaint);
+                setTimeout(voyagrMapResizeAndRepaint, 300);
+            }
 
             validateStyleHasLabels();
 
@@ -891,6 +948,7 @@ function initializeMap() {
                 map.setStyle(vectorStyleUrlAbs, { diff: false });
             } catch (e2) {
                 console.error('[Init] setStyle URL fallback failed:', e2);
+                hideMapLoadingOverlay();
             }
         });
 

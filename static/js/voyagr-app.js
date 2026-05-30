@@ -5607,6 +5607,9 @@ if (typeof window !== 'undefined') {
         } catch (e) {
             /* ignore */
         }
+        if (typeof scheduleMapRepaintAfterUiChange === 'function') {
+            scheduleMapRepaintAfterUiChange();
+        }
         // setStyle() removes raster overlays; JS handles still pointed at removed layers.
         try {
             if (!map) return;
@@ -11988,11 +11991,8 @@ if ('serviceWorker' in navigator) {
         } else {
             // Safe to reload immediately
             showStatus('🔄 Applying app update...', 'success');
-            // Save state before reload
             saveAppState();
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
+            scheduleAppReload('service-worker-update', 1000);
         }
     });
 }
@@ -15996,6 +15996,55 @@ function refreshWeatherData() {
 }
 
 // ===== PHASE 2: PWA AUTO-RELOAD FUNCTIONS =====
+
+/** Prevent duplicate reloads when Check Updates and Refresh App fire close together. */
+function scheduleAppReload(reason, delayMs) {
+    if (window.__voyagrReloadScheduled) {
+        console.log('[PWA] Reload already scheduled, skipping:', reason);
+        return false;
+    }
+    window.__voyagrReloadScheduled = true;
+    setTimeout(() => {
+        window.location.reload();
+    }, delayMs);
+    return true;
+}
+
+/** Repaint map after bottom-sheet/tab layout changes (common after PWA reload). */
+function scheduleMapRepaintAfterUiChange() {
+    const repaint = () => {
+        if (typeof window.__voyagrMapResizeAndRepaint === 'function') {
+            window.__voyagrMapResizeAndRepaint();
+        }
+    };
+    repaint();
+    requestAnimationFrame(repaint);
+    setTimeout(repaint, 300);
+    setTimeout(repaint, 1000);
+}
+
+/** Restore active tab and bottom-sheet state saved before a reload/update. */
+function restoreUiStateAfterReload() {
+    const pending = window.__voyagrPendingUiRestore;
+    if (!pending) return;
+    window.__voyagrPendingUiRestore = null;
+
+    try {
+        if (pending.activeTab && typeof switchTab === 'function') {
+            switchTab(pending.activeTab);
+        }
+        if (pending.bottomSheetExpanded === true && typeof expandBottomSheet === 'function') {
+            expandBottomSheet();
+        } else if (pending.bottomSheetExpanded === false && typeof collapseBottomSheet === 'function') {
+            collapseBottomSheet();
+        }
+        scheduleMapRepaintAfterUiChange();
+        console.log('[PWA] UI state restored after reload:', pending);
+    } catch (e) {
+        console.warn('[PWA] UI restore error:', e);
+    }
+}
+
 /**
  * saveAppState function
  * @function saveAppState
@@ -16025,6 +16074,10 @@ function saveAppState() {
                 avoidRoadClosures: localStorage.getItem('pref_avoidRoadClosures'),
                 avoidIncidents: localStorage.getItem('pref_avoidIncidents')
             },
+            ui: {
+                activeTab: typeof getCurrentVisibleTab === 'function' ? getCurrentVisibleTab() : 'navigation',
+                bottomSheetExpanded: typeof bottomSheetIsExpanded !== 'undefined' ? bottomSheetIsExpanded : true
+            },
             timestamp: Date.now()
         };
         localStorage.setItem('appState', JSON.stringify(state));
@@ -16050,11 +16103,14 @@ function restoreAppState() {
         if (saved) {
             const state = JSON.parse(saved);
             // Restore preferences
-            Object.keys(state.preferences).forEach(key => {
+            Object.keys(state.preferences || {}).forEach(key => {
                 if (state.preferences[key]) {
                     localStorage.setItem('pref_' + key, state.preferences[key]);
                 }
             });
+            if (state.ui) {
+                window.__voyagrPendingUiRestore = state.ui;
+            }
             localStorage.removeItem('appState');
             console.log('[PWA] App state restored');
         }
@@ -16069,13 +16125,12 @@ function restoreAppState() {
 function refreshApp() {
     showStatus('🔄 Refreshing app...', 'info');
 
-    // Save current app state
+    // Save current app state (tab, bottom sheet, preferences)
     saveAppState();
 
-    // Short delay to show status message
-    setTimeout(() => {
-        window.location.reload(true); // Force reload from server
-    }, 500);
+    if (!scheduleAppReload('manual-refresh', 500)) {
+        showStatus('🔄 Refresh already in progress...', 'info');
+    }
 }
 
 /**
@@ -16093,8 +16148,9 @@ async function checkForUpdates() {
                 await registration.update();
 
                 if (registration.waiting) {
-                    // New version waiting - activate it
-                    showStatus('📥 New update found! Installing...', 'success');
+                    // New version waiting - activate it (controllerchange will reload)
+                    showStatus('📥 New update found! Reloading...', 'success');
+                    saveAppState();
                     registration.waiting.postMessage({ type: 'SKIP_WAITING' });
                 } else if (registration.installing) {
                     showStatus('📥 Update installing...', 'info');

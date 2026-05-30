@@ -38,6 +38,11 @@ function initializeApp() {
             console.warn('[App] Map icon hints:', e);
         }
         console.log('[App] Bottom sheet initialized');
+
+        // Restore tab + bottom-sheet layout after Refresh App / SW update reload
+        if (typeof restoreUiStateAfterReload === 'function') {
+            restoreUiStateAfterReload();
+        }
         
         // Initialize voice recognition
         initVoiceRecognition();
