@@ -55,6 +55,32 @@ function isAvoidTollsEnabled() {
 }
 window.isAvoidTollsEnabled = isAvoidTollsEnabled;
 
+/** UK retail fuel/energy defaults (May 2026) — overridable via localStorage. */
+const DEFAULT_ROUTE_COST_PARAMS = {
+    petrol_diesel: { fuel_price: 1.60, fuel_efficiency: 6.5, electricity_price: 0.32, energy_efficiency: 18.5 },
+    electric: { fuel_price: 1.60, fuel_efficiency: 6.5, electricity_price: 0.32, energy_efficiency: 18.5 },
+    hybrid: { fuel_price: 1.60, fuel_efficiency: 6.5, electricity_price: 0.32, energy_efficiency: 18.5 },
+    pedestrian: { fuel_price: 1.60, fuel_efficiency: 6.5, electricity_price: 0.32, energy_efficiency: 18.5 },
+    bicycle: { fuel_price: 1.60, fuel_efficiency: 6.5, electricity_price: 0.32, energy_efficiency: 18.5 },
+};
+
+/**
+ * Fuel/energy params for route cost — localStorage overrides, then vehicle-type defaults.
+ * @param {string} [vehicleType]
+ * @returns {{fuel_efficiency: number, fuel_price: number, energy_efficiency: number, electricity_price: number}}
+ */
+function getRouteCostParams(vehicleType) {
+    const vt = vehicleType || (typeof currentVehicleType !== 'undefined' ? currentVehicleType : null) || 'petrol_diesel';
+    const defaults = DEFAULT_ROUTE_COST_PARAMS[vt] || DEFAULT_ROUTE_COST_PARAMS.petrol_diesel;
+    return {
+        fuel_efficiency: parseFloat(localStorage.getItem('fuelEfficiency') || String(defaults.fuel_efficiency)),
+        fuel_price: parseFloat(localStorage.getItem('fuelPrice') || String(defaults.fuel_price)),
+        energy_efficiency: parseFloat(localStorage.getItem('energyEfficiency') || String(defaults.energy_efficiency)),
+        electricity_price: parseFloat(localStorage.getItem('electricityPrice') || String(defaults.electricity_price)),
+    };
+}
+window.getRouteCostParams = getRouteCostParams;
+
 // Note: All global variables are declared below
 // ===== BOTTOM SHEET VARIABLES =====
 let bottomSheetStartY = 0;
@@ -4790,6 +4816,7 @@ async function calculateRoute() {
         end: geocodedEnd,
         routing_mode: currentRoutingMode,
         vehicle_type: currentVehicleType,
+        ...getRouteCostParams(currentVehicleType),
         enable_hazard_avoidance: enableHazardAvoidance,
         avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
         avoid_caz: localStorage.getItem('pref_caz') !== 'false',
@@ -6936,10 +6963,7 @@ function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) 
         avoid_points: cleanAvoidPoints,
         routing_mode: currentRoutingMode || 'auto',
         vehicle_type: currentVehicleType || 'petrol_diesel',
-        fuel_efficiency: parseFloat(localStorage.getItem('fuelEfficiency') || '6.5'),
-        fuel_price: parseFloat(localStorage.getItem('fuelPrice') || '1.40'),
-        energy_efficiency: parseFloat(localStorage.getItem('energyEfficiency') || '18.5'),
-        electricity_price: parseFloat(localStorage.getItem('electricityPrice') || '0.30'),
+        ...getRouteCostParams(currentVehicleType),
         include_tolls: localStorage.getItem('includeTolls') !== 'false',
         include_caz: localStorage.getItem('includeCAZ') !== 'false',
         enable_hazard_avoidance: enableHazardAvoidance,
@@ -8873,6 +8897,7 @@ async function selectParking(parking, destinationCoords) {
                 end: `${parking.lat},${parking.lon}`,
                 routing_mode: 'auto',
                 vehicle_type: currentVehicleType,
+                ...getRouteCostParams(currentVehicleType),
                 include_tolls: localStorage.getItem('includeTolls') !== 'false',  // Default: true (separate from avoidance)
                 avoid_tolls: isAvoidTollsEnabled(),
                 avoid_caz: localStorage.getItem('pref_caz') !== 'false',        // Default: true

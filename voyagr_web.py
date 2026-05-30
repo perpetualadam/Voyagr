@@ -135,6 +135,7 @@ CORS(app, resources={
 # Import and register API blueprints from voyagr.api module
 # These blueprints contain extracted route handlers organized by functionality
 from voyagr.discoverability import block_search_indexing
+from voyagr.config.rates import resolve_route_cost_params
 from voyagr.api import (
     register_blueprints,
     set_route_cache,
@@ -398,10 +399,11 @@ def validate_route_request(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
 
     # Validate numeric fields
     try:
-        fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
-        fuel_price = float(data.get('fuel_price', 1.40))
-        energy_efficiency = float(data.get('energy_efficiency', 18.5))
-        electricity_price = float(data.get('electricity_price', 0.30))
+        cost_params = resolve_route_cost_params(data)
+        fuel_efficiency = cost_params['fuel_efficiency']
+        fuel_price = cost_params['fuel_price']
+        energy_efficiency = cost_params['energy_efficiency']
+        electricity_price = cost_params['electricity_price']
 
         if fuel_efficiency < 0 or fuel_price < 0 or energy_efficiency < 0 or electricity_price < 0:
             return False, "Numeric values cannot be negative"
@@ -4472,7 +4474,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260530b"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260530c"></script>
     <script defer src="/static/js/app.js?v=20260530a"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
@@ -6924,10 +6926,11 @@ def calculate_route():
         # Valhalla costing: must be auto, pedestrian, or bicycle for correct routes/ETAs
         valhalla_costing = routing_mode if routing_mode in ('auto', 'pedestrian', 'bicycle') else 'auto'
         vehicle_type = data.get('vehicle_type', 'petrol_diesel')
-        fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
-        fuel_price = float(data.get('fuel_price', 1.40))
-        energy_efficiency = float(data.get('energy_efficiency', 18.5))
-        electricity_price = float(data.get('electricity_price', 0.30))
+        cost_params = resolve_route_cost_params(data)
+        fuel_efficiency = cost_params['fuel_efficiency']
+        fuel_price = cost_params['fuel_price']
+        energy_efficiency = cost_params['energy_efficiency']
+        electricity_price = cost_params['electricity_price']
         include_tolls = data.get('include_tolls', True)
         include_caz = data.get('include_caz', True)
         caz_exempt = data.get('caz_exempt', False)

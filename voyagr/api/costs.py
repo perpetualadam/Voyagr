@@ -12,6 +12,8 @@ Contains:
 import logging
 from flask import Blueprint, jsonify, request
 
+from voyagr.config.rates import resolve_route_cost_params
+
 logger = logging.getLogger(__name__)
 
 costs_bp = Blueprint('costs', __name__)
@@ -43,10 +45,11 @@ def get_cost_breakdown():
         distance_km = float(data.get('distance_km', 0))
         duration_minutes = float(data.get('duration_minutes', 0))
         vehicle_type = data.get('vehicle_type', 'petrol_diesel')
-        fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
-        fuel_price = float(data.get('fuel_price', 1.40))
-        energy_efficiency = float(data.get('energy_efficiency', 18.5))
-        electricity_price = float(data.get('electricity_price', 0.30))
+        cost_params = resolve_route_cost_params(data)
+        fuel_efficiency = cost_params['fuel_efficiency']
+        fuel_price = cost_params['fuel_price']
+        energy_efficiency = cost_params['energy_efficiency']
+        electricity_price = cost_params['electricity_price']
         include_tolls = data.get('include_tolls', True)
         include_caz = data.get('include_caz', True)
         caz_exempt = data.get('caz_exempt', False)
@@ -111,10 +114,11 @@ def predict_cost():
         data = request.json or {}
         distance_km = float(data.get('distance_km', 0))
         vehicle_type = data.get('vehicle_type', 'petrol_diesel')
-        fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
-        fuel_price = float(data.get('fuel_price', 1.40))
-        energy_efficiency = float(data.get('energy_efficiency', 18.5))
-        electricity_price = float(data.get('electricity_price', 0.30))
+        cost_params = resolve_route_cost_params(data)
+        fuel_efficiency = cost_params['fuel_efficiency']
+        fuel_price = cost_params['fuel_price']
+        energy_efficiency = cost_params['energy_efficiency']
+        electricity_price = cost_params['electricity_price']
         include_tolls = data.get('include_tolls', True)
         include_caz = data.get('include_caz', True)
 
@@ -139,10 +143,11 @@ def optimize_route_cost():
         data = request.json or {}
         routes = data.get('routes', [])
         vehicle_type = data.get('vehicle_type', 'petrol_diesel')
-        fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
-        fuel_price = float(data.get('fuel_price', 1.40))
-        energy_efficiency = float(data.get('energy_efficiency', 18.5))
-        electricity_price = float(data.get('electricity_price', 0.30))
+        cost_params = resolve_route_cost_params(data)
+        fuel_efficiency = cost_params['fuel_efficiency']
+        fuel_price = cost_params['fuel_price']
+        energy_efficiency = cost_params['energy_efficiency']
+        electricity_price = cost_params['electricity_price']
 
         if not routes:
             return jsonify({'success': False, 'error': 'No routes provided'})

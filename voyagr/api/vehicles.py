@@ -11,6 +11,7 @@ from flask import Blueprint, jsonify, request
 from voyagr.config import CAZ_PASS_TYPES
 from voyagr.models import get_db_connection, return_db_connection
 from voyagr.utils import normalize_vehicle_type, validate_vehicle_type, rate_limit
+from voyagr.config.rates import resolve_route_cost_params
 
 vehicles_bp = Blueprint('vehicles', __name__)
 
@@ -64,10 +65,11 @@ def manage_vehicles():
                 return jsonify({'success': False, 'error': f'Invalid vehicle_type: {vehicle_type}'}), 400
 
             try:
-                fuel_efficiency = float(data.get('fuel_efficiency', 6.5))
-                fuel_price = float(data.get('fuel_price', 1.40))
-                energy_efficiency = float(data.get('energy_efficiency', 18.5))
-                electricity_price = float(data.get('electricity_price', 0.30))
+                cost_params = resolve_route_cost_params(data)
+                fuel_efficiency = cost_params['fuel_efficiency']
+                fuel_price = cost_params['fuel_price']
+                energy_efficiency = cost_params['energy_efficiency']
+                electricity_price = cost_params['electricity_price']
 
                 if fuel_efficiency < 0 or fuel_price < 0 or energy_efficiency < 0 or electricity_price < 0:
                     return jsonify({'success': False, 'error': 'Numeric values cannot be negative'}), 400

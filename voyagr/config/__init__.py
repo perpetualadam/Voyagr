@@ -25,6 +25,13 @@ from voyagr.config.rates import (
     TOLL_RATES,
     CAZ_RATES,
     CAZ_ENTRY_FREQUENCY_KM,
+    FUEL_PRICE_PETROL_GBP,
+    FUEL_PRICE_DIESEL_GBP,
+    ELECTRICITY_PRICE_GBP,
+    DEFAULT_FUEL_EFFICIENCY_L_PER_100KM,
+    DEFAULT_ENERGY_EFFICIENCY_KWH_PER_100KM,
+    fuel_price_for_vehicle_type,
+    resolve_route_cost_params,
 )
 
 from voyagr.config.caz_zones import (
@@ -46,6 +53,13 @@ __all__ = [
     'TOLL_RATES',
     'CAZ_RATES',
     'CAZ_ENTRY_FREQUENCY_KM',
+    'FUEL_PRICE_PETROL_GBP',
+    'FUEL_PRICE_DIESEL_GBP',
+    'ELECTRICITY_PRICE_GBP',
+    'DEFAULT_FUEL_EFFICIENCY_L_PER_100KM',
+    'DEFAULT_ENERGY_EFFICIENCY_KWH_PER_100KM',
+    'fuel_price_for_vehicle_type',
+    'resolve_route_cost_params',
     'CAZ_ZONES_DATA',
     'CAZ_PASS_TYPES',
 ]
