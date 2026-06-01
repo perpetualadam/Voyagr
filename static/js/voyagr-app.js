@@ -4927,18 +4927,10 @@ async function calculateRoute() {
                     console.log('[calculateRoute] Navigation active — using in-nav reroute path');
                     hideRouteProgressBar();
 
-                    // Pick the best-matching route: prefer same-name match as the
-                    // previously selected route, then fall back to routes[0].
-                    let activeRoute = (data.routes && data.routes.length > 0) ? data.routes[0] : data;
-                    if (data.routes && data.routes.length > 1 && window.lastCalculatedRoute) {
-                        const prevName = (window.lastCalculatedRoute.name || '').toLowerCase();
-                        if (prevName) {
-                            const match = data.routes.find(r => (r.name || '').toLowerCase() === prevName);
-                            if (match) {
-                                activeRoute = match;
-                                console.log(`[Reroute] Matched previous route "${match.name}"`);
-                            }
-                        }
+                    const activeRoute = pickActiveRouteDuringNavigation(data.routes, data);
+                    if (!activeRoute) {
+                        showStatus('❌ No route returned', 'error');
+                        return;
                     }
                     if (activeRoute.geometry) {
                         updateRouteOnMap(activeRoute);
@@ -6594,6 +6586,39 @@ const DEVIATION_TIME_THRESHOLD_MS = 10000; // 10 seconds
 /** Require GPS to be this close to the polyline before deviation reroutes fire (lower = sooner real-world reroutes). */
 const ROUTE_JOIN_GATE_METERS = 85;
 let routeJoinConfirmedForDeviation = false;
+/** After GPS deviation reroute, next in-nav route pick uses primary only (no name-based alt). */
+let _preferPrimaryRouteOnNextNavUpdate = false;
+
+/**
+ * Pick which route object to apply during active navigation.
+ * Name-based matching is skipped once after automatic deviation reroute.
+ *
+ * @param {Array<Object>|null|undefined} routeList - `data.routes` from /api/route
+ * @param {Object|null|undefined} singleRoutePayload - fallback when no list
+ * @returns {Object|null}
+ */
+function pickActiveRouteDuringNavigation(routeList, singleRoutePayload) {
+    if (!routeList || routeList.length === 0) {
+        return singleRoutePayload || null;
+    }
+    if (_preferPrimaryRouteOnNextNavUpdate) {
+        _preferPrimaryRouteOnNextNavUpdate = false;
+        console.log('[Reroute] Using primary route (post-deviation; skipping name match)');
+        return routeList[0];
+    }
+    let activeRoute = routeList[0];
+    if (routeList.length > 1 && window.lastCalculatedRoute) {
+        const prevName = (window.lastCalculatedRoute.name || '').toLowerCase();
+        if (prevName) {
+            const match = routeList.find(r => (r.name || '').toLowerCase() === prevName);
+            if (match) {
+                activeRoute = match;
+                console.log(`[Reroute] Matched previous route "${match.name}"`);
+            }
+        }
+    }
+    return activeRoute;
+}
 
 /**
  * Toggle auto-traffic update on/off
@@ -7017,15 +7042,7 @@ function updateRouteOnMap(newRoute) {
     // Bright blue + white casing so the line stays visible over TomTom traffic tiles.
     // Zoom-scaled widths (default) keep the line/casing proportional like the rest of
     // the app's route rendering instead of a flat width that looks thin when zoomed out.
-    routeLayer = MapLibreHelpers.addPolyline(map, routePolyline, {
-        color: NAV_ACTIVE_ROUTE_COLOR,
-        weight: 8,
-        opacity: 0.95,
-        outline: true,
-        outlineColor: '#ffffff',
-        outlineWeight: 11,
-        outlineOpacity: 0.92
-    });
+    routeLayer = MapLibreHelpers.addPolyline(map, routePolyline, getNavActiveRoutePolylineOptions());
     bringNavRouteAboveTrafficEdges();
 
     // === FIX: Update maneuvers / steps so turn-by-turn stays in sync ===
@@ -7037,14 +7054,15 @@ function updateRouteOnMap(newRoute) {
         console.log(`[Reroute] Maneuvers from legs updated: ${currentRouteSteps.length} steps`);
     }
 
-    // Reset step tracking to the beginning of the new route
-    currentStepIndex = 0;
-
-    // Reset snap-to-route index so the vehicle snaps to the new polyline correctly
-    lastSnappedRouteIndex = 0;
-    lastTurnDetectRouteVertexIndex = 0;
-    // Force re-evaluation of the active edge on the new geometry.
+    // Seed progress from current GPS on the new geometry (not index 0).
     _lastActiveManeuverIdx = -1;
+    if (currentLat != null && currentLon != null) {
+        seedNavigationProgressOnNewRoute(currentLat, currentLon);
+    } else {
+        currentStepIndex = 0;
+        lastSnappedRouteIndex = 0;
+        lastTurnDetectRouteVertexIndex = 0;
+    }
 
     // Clear stale speed-limit state so the widget does not keep showing the limit
     // from the *previous* route after a reroute. Zeroing the throttle makes the next
@@ -7079,6 +7097,153 @@ function updateRouteOnMap(newRoute) {
     };
 
     console.log('[Reroute] Route updated on map with fresh maneuvers and step tracking');
+}
+
+/**
+ * Shared polyline style for the active navigation route line.
+ * @returns {Object} MapLibreHelpers.addPolyline options
+ */
+function getNavActiveRoutePolylineOptions() {
+    return {
+        color: NAV_ACTIVE_ROUTE_COLOR,
+        weight: 8,
+        opacity: 0.95,
+        outline: true,
+        outlineColor: '#ffffff',
+        outlineWeight: 11,
+        outlineOpacity: 0.92
+    };
+}
+
+/**
+ * After reroute or map style recovery, re-draw the navigation route line on the map.
+ * @param {string} [reason] - Log context
+ */
+function redrawNavigationRouteLayer(reason) {
+    if (!routeInProgress || !map || !routePolyline || routePolyline.length < 2) return;
+    try {
+        if (routeLayer && typeof routeLayer.remove === 'function') {
+            routeLayer.remove();
+        }
+        routeLayer = MapLibreHelpers.addPolyline(map, routePolyline, getNavActiveRoutePolylineOptions());
+        bringNavRouteAboveTrafficEdges();
+        if (reason) {
+            console.log('[Nav] Route layer redrawn:', reason);
+        }
+    } catch (e) {
+        console.warn('[Nav] Route layer redraw failed:', e);
+    }
+}
+
+/**
+ * Re-attach vehicle marker after WebGL/style recovery (layers may be wiped).
+ * @param {string} [reason] - Log context
+ */
+function redrawNavigationVehicleMarker(reason) {
+    if (!routeInProgress || !map) return;
+    const lat = currentLat;
+    const lon = currentLon;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    try {
+        let displayLat = lat;
+        let displayLon = lon;
+        if (routePolyline && routePolyline.length >= 2) {
+            const snapped = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+            displayLat = snapped.lat;
+            displayLon = snapped.lon;
+        }
+        const heading = currentUserMarker && Number.isFinite(currentUserMarker.heading)
+            ? currentUserMarker.heading
+            : 0;
+        const speed = currentUserMarker && Number.isFinite(currentUserMarker.speed)
+            ? currentUserMarker.speed
+            : 0;
+        const acc = currentUserMarker && Number.isFinite(currentUserMarker.accuracy)
+            ? currentUserMarker.accuracy
+            : null;
+
+        if (currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
+            currentUserMarker.setLngLat([displayLon, displayLat]);
+            if (!currentUserMarker._map && typeof currentUserMarker.addTo === 'function') {
+                currentUserMarker.addTo(map);
+            }
+        } else {
+            if (currentUserMarker && typeof currentUserMarker.remove === 'function') {
+                currentUserMarker.remove();
+            }
+            currentUserMarker = createVehicleMarker(displayLat, displayLon, speed, acc, heading);
+            currentUserMarker.addTo(map);
+        }
+        if (reason) {
+            console.log('[Nav] Vehicle marker redrawn:', reason);
+        }
+    } catch (e) {
+        console.warn('[Nav] Vehicle marker redraw failed:', e);
+    }
+}
+
+/**
+ * Called from voyagr-core after map/WebGL recovery so nav overlays survive setStyle.
+ * @param {string} [reason]
+ */
+function redrawNavigationOverlaysAfterMapRecovery(reason) {
+    if (!routeInProgress) return;
+    redrawNavigationRouteLayer(reason);
+    redrawNavigationVehicleMarker(reason);
+    if (currentLat != null && currentLon != null) {
+        updateTurnWidgetFromPosition(currentLat, currentLon);
+    }
+}
+
+window.__voyagrRedrawNavigationOverlays = redrawNavigationOverlaysAfterMapRecovery;
+
+/**
+ * Snap current GPS onto the new polyline and seed progress indices (post-reroute).
+ * Avoids speed limit / turn widget sticking at the start of the route.
+ *
+ * @param {number} lat
+ * @param {number} lon
+ */
+function seedNavigationProgressOnNewRoute(lat, lon) {
+    if (!routePolyline || routePolyline.length < 2) return;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+
+    const snap = snapToRoutePolyline(lat, lon, routePolyline, 0);
+    const idx = Math.max(0, Math.min(snap.index, routePolyline.length - 2));
+    lastSnappedRouteIndex = idx;
+    lastTurnDetectRouteVertexIndex = idx;
+
+    if (currentRouteSteps && currentRouteSteps.length > 0) {
+        let stepIdx = 0;
+        for (let i = 0; i < currentRouteSteps.length; i++) {
+            const begin = currentRouteSteps[i].begin_shape_index || 0;
+            if (begin <= idx + 5) {
+                stepIdx = i;
+            } else {
+                break;
+            }
+        }
+        for (let i = stepIdx; i < currentRouteSteps.length; i++) {
+            const begin = currentRouteSteps[i].begin_shape_index || 0;
+            if (begin >= idx - 5) {
+                currentStepIndex = i;
+                break;
+            }
+        }
+    } else {
+        currentStepIndex = 0;
+    }
+
+    _lastActiveManeuverIdx = getActiveRouteManeuverIndex(idx);
+
+    if (snap.distance <= ROUTE_JOIN_GATE_METERS) {
+        routeJoinConfirmedForDeviation = true;
+    }
+
+    console.log(
+        `[Reroute] Seeded progress: snapIdx=${idx}, step=${currentStepIndex}, ` +
+        `maneuver=${_lastActiveManeuverIdx}, offRoute=${snap.distance.toFixed(0)}m`
+    );
 }
 
 /**
@@ -7691,13 +7856,10 @@ function startNavigation() {
 function applyRouteUpdateDuringNavigation(routeData) {
     console.log('[Route Preview] Navigation active — silent route update (no preview UI / no sheet)');
 
-    let activeRoute = (routeData.routes && routeData.routes.length > 0) ? routeData.routes[0] : routeData;
-    if (routeData.routes && routeData.routes.length > 1 && window.lastCalculatedRoute) {
-        const prevName = (window.lastCalculatedRoute.name || '').toLowerCase();
-        if (prevName) {
-            const match = routeData.routes.find(r => (r.name || '').toLowerCase() === prevName);
-            if (match) activeRoute = match;
-        }
+    const activeRoute = pickActiveRouteDuringNavigation(routeData.routes, routeData);
+    if (!activeRoute) {
+        showStatus('❌ No route to apply', 'error');
+        return;
     }
 
     if (activeRoute.geometry) {
@@ -9820,6 +9982,24 @@ function smoothGpsSpeedMph(rawMph) {
  * @param {number|undefined|null} coordAccuracy - `coords.accuracy` (meters) for this tick.
  * @returns {number} Best-effort mph reading (still raw — caller should run through {@link smoothGpsSpeedMph}).
  */
+/**
+ * Reject implausible GPS speed spikes (e.g. 145 mph) before display smoothing.
+ * @param {number} mph - Candidate speed in mph
+ * @param {number} prevPick - Last accepted raw mph
+ * @returns {number}
+ */
+function rejectGpsSpeedSpikeMph(mph, prevPick) {
+    if (!Number.isFinite(mph) || mph < 0) return mph;
+    const prev = Number.isFinite(prevPick) ? prevPick : mph;
+    if (mph > 100) {
+        return prev > 5 ? prev : Math.min(mph, 100);
+    }
+    if (prev > 5 && mph > prev + 40) {
+        return prev;
+    }
+    return mph;
+}
+
 function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
     const accCurr = Number.isFinite(coordAccuracy) && coordAccuracy > 2 ? coordAccuracy : null;
 
@@ -9837,6 +10017,7 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
         mph = Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH);
         const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : mph;
 
+        mph = rejectGpsSpeedSpikeMph(mph, prevPick);
         if (prevPick > 5 && mph > prevPick + 85 && accCurr != null && accCurr > 40) {
             mph = prevPick;
         }
@@ -9864,6 +10045,7 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
             mph = Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH);
 
             const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : mph;
+            mph = rejectGpsSpeedSpikeMph(mph, prevPick);
 
             if (accAvg != null) {
                 if (mph > 95 && mph > prevPick + 70 && distM > accAvg * 2.3) {
@@ -13143,10 +13325,16 @@ function updateTurnWidgetFromPosition(lat, lon) {
     if (!routeInProgress || !currentRouteSteps || currentRouteSteps.length === 0) {
         return;
     }
+    if (!routePolyline || routePolyline.length < 2) {
+        return;
+    }
 
-    // Find the next maneuver ahead of user's position
-    // FIX: Pass [lat, lon] as array, not separate arguments
-    const userRouteIndex = findClosestRoutePointIndex([lat, lon], 0);
+    // Same snap + monotonic progress as detectUpcomingTurn (segment projection, not vertex scan from 0).
+    const turnSnap = snapToRoutePolyline(lat, lon, routePolyline, lastTurnDetectRouteVertexIndex);
+    let userRouteIndex = turnSnap.index;
+    if (userRouteIndex < lastTurnDetectRouteVertexIndex) {
+        userRouteIndex = lastTurnDetectRouteVertexIndex;
+    }
 
     for (let i = currentStepIndex; i < currentRouteSteps.length; i++) {
         const maneuver = currentRouteSteps[i];
@@ -13163,8 +13351,10 @@ function updateTurnWidgetFromPosition(lat, lon) {
 
         // Calculate distance to this maneuver
         if (routePolyline && maneuverShapeIndex < routePolyline.length) {
-            const maneuverPoint = routePolyline[maneuverShapeIndex];
-            const distanceToManeuver = calculateDistance(lat, lon, maneuverPoint[0], maneuverPoint[1]);
+            const targetIndex = Math.min(maneuverShapeIndex, routePolyline.length - 1);
+            const distanceToManeuver = distanceAlongRouteToVertexMeters(
+                routePolyline, turnSnap, targetIndex
+            );
 
             // Update the display with this maneuver info
             const type = maneuver.type || 0;
@@ -14250,7 +14440,10 @@ function startGPSTracking() {
                 displayLon = lon + (snapped.lon - lon) * snapBlendWeight;
                 heading = blendHeadingsCircular(gpsHeadingForBlend, routeBearing, snapBlendWeight);
 
-                if (snapBlendWeight > 0.18) {
+                // Advance along-route index when moving forward (not only when blend is high).
+                if (snapped.index >= lastSnappedRouteIndex) {
+                    lastSnappedRouteIndex = snapped.index;
+                } else if (snapBlendWeight > 0.18) {
                     lastSnappedRouteIndex = snapped.index;
                 }
             }
@@ -15417,6 +15610,9 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
             if (hazardCount > 0) {
                 handleUnavoidableHazards(newRoute, hazardsList, hazardCount);
             }
+
+            // Next in-nav calculateRoute should not re-bind an old alt by name (e.g. "Balanced").
+            _preferPrimaryRouteOnNextNavUpdate = true;
 
             // Update route on map
             updateRouteOnMap(newRoute);

@@ -448,6 +448,15 @@ function initializeMap() {
             } catch (_) {
                 /* ignore */
             }
+
+            // Nav route line + vehicle marker are custom layers — restore after setStyle / WebGL recovery.
+            try {
+                if (typeof window.__voyagrRedrawNavigationOverlays === 'function') {
+                    window.__voyagrRedrawNavigationOverlays('style.load');
+                }
+            } catch (_) {
+                /* ignore */
+            }
         } catch (e) {
             console.warn('[Init] Post vector style setup failed:', e);
         }
@@ -590,6 +599,13 @@ function initializeMap() {
             // Small delay so the radio has a moment to settle on the new network.
             setTimeout(() => {
                 try { voyagrMapForceReloadAllSources(reason); } catch (_) { /* ignore */ }
+                try {
+                    if (typeof window.__voyagrRedrawNavigationOverlays === 'function') {
+                        window.__voyagrRedrawNavigationOverlays(reason || 'map recover');
+                    }
+                } catch (_) {
+                    /* ignore */
+                }
             }, 250);
 
             // Verification pass: if the map still hasn't finished loading tiles
@@ -667,6 +683,15 @@ function initializeMap() {
                 map.setStyle(window.__voyagrPreferredFallbackStyleUrl, { diff: false });
             }
             requestAnimationFrame(() => voyagrMapResizeAndRepaint());
+            map.once('style.load', () => {
+                try {
+                    if (typeof window.__voyagrRedrawNavigationOverlays === 'function') {
+                        window.__voyagrRedrawNavigationOverlays('soft style reload');
+                    }
+                } catch (_) {
+                    /* ignore */
+                }
+            });
         } catch (e) {
             console.warn('[Map] Soft style reload failed', e);
         }
