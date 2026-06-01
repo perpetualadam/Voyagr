@@ -6068,6 +6068,7 @@ HTML_TEMPLATE = '''
             <button id="startTrackingBtn" class="fab" title="Start GPS Tracking" onclick="startGPSTracking()" style="background: #4285F4;">📡</button>
             <button id="startNavBtn" class="fab" title="Start Navigation" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
             <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
+            <button id="endNavigationBtn" data-testid="end-navigation" class="fab" title="End navigation" onclick="stopTurnByTurnNavigation()" style="background: #E53935; display: none; font-size: 18px; font-weight: 700;">⏹</button>
             <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
             <button id="roadReportFab" class="fab" title="Report road issue or speed limit" onclick="openRoadReportModal()" style="background: #E65100;">⚠️</button>
         </div>

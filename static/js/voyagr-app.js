@@ -7071,6 +7071,8 @@ function updateRouteOnMap(newRoute) {
     lastSpeedLimitFetch = 0;
     lastSpeedLimitPosition = null;
 
+    resetNavigationArrivalState();
+
     // Reset deviation tracking so we don't immediately re-trigger reroute
     deviationStartTimeCheck = null;
     rerouteAttemptCount = 0;
@@ -11933,15 +11935,19 @@ function syncBottomSheetOverlapFabs() {
 
     const zoomBtn = document.getElementById('zoomFollowToggle');
     const journeyBtn = document.getElementById('journeyOverviewBtn');
+    const endNavBtn = document.getElementById('endNavigationBtn');
     if (sheetExpanded && routeInProgress) {
         if (zoomBtn) zoomBtn.style.display = 'none';
         if (journeyBtn) journeyBtn.style.display = 'none';
+        if (endNavBtn) endNavBtn.style.display = 'none';
     } else if (routeInProgress) {
         if (zoomBtn) zoomBtn.style.display = 'block';
         if (journeyBtn) journeyBtn.style.display = 'block';
+        if (endNavBtn) endNavBtn.style.display = 'block';
     } else {
         if (zoomBtn) zoomBtn.style.display = 'none';
         if (journeyBtn) journeyBtn.style.display = 'none';
+        if (endNavBtn) endNavBtn.style.display = 'none';
     }
 }
 
@@ -14563,6 +14569,8 @@ function startGPSTracking() {
                 // NEW: Announce distance to destination
                 announceDistanceToDestination(lat, lon);
 
+                checkNavigationArrival(lat, lon, speed);
+
                 // FIXED: Removed announceETAUpdate() from GPS callback
                 // ETA is now announced only via interval timer (every 10 minutes)
                 // This prevents ETA from being announced every 1-5 seconds
@@ -14705,6 +14713,17 @@ let announcedKeepThresholds = new Set();
 // Distance-to-destination announcement variables
 let lastDestinationAnnouncementDistance = Infinity;
 const DESTINATION_ANNOUNCEMENT_DISTANCES = [10000, 5000, 2000, 1000, 500, 100]; // meters (10km, 5km, 2km, 1km, 500m, 100m)
+
+/** Along-route remaining distance (m) at or below which navigation auto-ends. */
+const NAV_ARRIVAL_END_REMAINING_M = 40;
+/** Wider zone: slow/stopped dwell also ends navigation (car parks, last leg). */
+const NAV_ARRIVAL_DWELL_REMAINING_M = 55;
+const NAV_ARRIVAL_DWELL_MS = 3500;
+const NAV_ARRIVAL_MAX_SPEED_MS = 1.2;
+/** Suppress deviation reroute near destination (Waze-style parking-lot loops). */
+const NAV_ARRIVAL_SUPPRESS_REROUTE_METERS = 100;
+let _navigationArrivalTriggered = false;
+let _navigationArrivalZoneSince = 0;
 
 // ETA announcement variables
 let lastETAAnnouncementTime = 0;
@@ -15051,6 +15070,68 @@ function computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex
     return Math.max(0, remaining);
 }
 
+/**
+ * Remaining meters along the active route polyline (snapped progress). Shared by voice, ETA bar, and arrival.
+ * @param {number} lat
+ * @param {number} lon
+ * @returns {number}
+ */
+function getNavigationRemainingDistanceMeters(lat, lon) {
+    if (!routePolyline || routePolyline.length < 2) return Infinity;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return Infinity;
+    return computeRemainingDistanceAlongRoute(lat, lon, routePolyline, lastSnappedRouteIndex);
+}
+
+function resetNavigationArrivalState() {
+    _navigationArrivalTriggered = false;
+    _navigationArrivalZoneSince = 0;
+}
+
+/**
+ * Auto-end navigation when the driver reaches the destination (along-route distance + optional dwell).
+ * @param {number} lat
+ * @param {number} lon
+ * @param {number} speedMs - GPS speed in m/s
+ */
+function checkNavigationArrival(lat, lon, speedMs) {
+    if (!routeInProgress || _navigationArrivalTriggered) return;
+
+    const remainingM = getNavigationRemainingDistanceMeters(lat, lon);
+    const speed = Number.isFinite(speedMs) && speedMs >= 0 ? speedMs : 0;
+
+    if (remainingM <= NAV_ARRIVAL_END_REMAINING_M) {
+        console.log(`[Navigation] Arrival (${remainingM.toFixed(0)}m remaining) — ending trip`);
+        sendArrivalNotification();
+        return;
+    }
+
+    if (remainingM <= NAV_ARRIVAL_DWELL_REMAINING_M && speed <= NAV_ARRIVAL_MAX_SPEED_MS) {
+        const now = Date.now();
+        if (!_navigationArrivalZoneSince) {
+            _navigationArrivalZoneSince = now;
+        } else if (now - _navigationArrivalZoneSince >= NAV_ARRIVAL_DWELL_MS) {
+            console.log(`[Navigation] Arrival dwell (${remainingM.toFixed(0)}m, slow) — ending trip`);
+            sendArrivalNotification();
+        }
+        return;
+    }
+
+    _navigationArrivalZoneSince = 0;
+}
+
+/** Show/hide map FABs that depend on active turn-by-turn navigation. */
+function updateNavigationFabVisibility() {
+    const endBtn = document.getElementById('endNavigationBtn');
+    const startBtn = document.getElementById('startNavBtn');
+    if (routeInProgress) {
+        if (endBtn) endBtn.style.display = 'block';
+        if (startBtn) startBtn.style.display = 'none';
+    } else {
+        if (endBtn) endBtn.style.display = 'none';
+    }
+    syncBottomSheetOverlapFabs();
+}
+
 // Track the last snapped route index for efficient searching
 let lastSnappedRouteIndex = 0;
 /** For turn detection only: monotonic polyline vertex index (never goes backwards). */
@@ -15105,28 +15186,7 @@ function announceDistanceToDestination(currentLat, currentLon) {
     // FIXED: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
     if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceAnnouncementsEnabled) return;
 
-    // Calculate remaining distance from current position to destination
-    let remainingDistance = 0;
-    let closestIndex = 0;
-    let closestDistance = Infinity;
-
-    // Find closest point on route
-    for (let i = 0; i < routePolyline.length; i++) {
-        const point = routePolyline[i];
-        const distance = calculateHaversineDistance(currentLat, currentLon, point[0], point[1]);
-        if (distance < closestDistance) {
-            closestDistance = distance;
-            closestIndex = i;
-        }
-    }
-
-    // Calculate remaining distance from closest point to destination
-    for (let i = closestIndex; i < routePolyline.length - 1; i++) {
-        remainingDistance += calculateDistance(
-            routePolyline[i][0], routePolyline[i][1],
-            routePolyline[i + 1][0], routePolyline[i + 1][1]
-        );
-    }
+    const remainingDistance = getNavigationRemainingDistanceMeters(currentLat, currentLon);
 
     // Check if we should announce at this distance
     for (const announcementDistance of DESTINATION_ANNOUNCEMENT_DISTANCES) {
@@ -15501,6 +15561,11 @@ function checkRouteDeviation(lat, lon) {
     }
 
     if (!routePolyline || routePolyline.length === 0) return;
+
+    const remainingToDest = getNavigationRemainingDistanceMeters(lat, lon);
+    if (remainingToDest <= NAV_ARRIVAL_SUPPRESS_REROUTE_METERS) {
+        return;
+    }
 
     const snap = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
     const minDistance = snap.distance;
@@ -17290,6 +17355,7 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     // correctly flagged as an edge transition (and the API throttle is invalidated).
     _lastActiveManeuverIdx = -1;
     routeJoinConfirmedForDeviation = false;
+    resetNavigationArrivalState();
     lastETAAnnouncementTime = Date.now();
     lastAnnouncedETA = null;
     lastNavTrafficFetchAt = 0;
@@ -17434,6 +17500,13 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     // ===== SHOW JOURNEY SUMMARY BAR during navigation =====
     showJourneySummaryBar();
 
+    updateNavigationFabVisibility();
+    try {
+        voyagrShowMapIconHint('Tap the red ⏹ button to end navigation when you arrive.');
+    } catch (_hintErr) {
+        /* ignore */
+    }
+
     // ===== SHOW AR AND 3D VIEW BUTTONS during navigation =====
     const arModeBtn = document.getElementById('arModeBtn');
     if (arModeBtn) {
@@ -17478,6 +17551,13 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
  * @returns {*} Return value description
  */
 function stopTurnByTurnNavigation() {
+    if (!routeInProgress && !isTrackingActive) {
+        updateNavigationFabVisibility();
+        return;
+    }
+
+    resetNavigationArrivalState();
+
     // Show summary if we have a valid route and were actually navigating
     if (window.lastCalculatedRoute && routeInProgress) {
         void persistCompletedTrip(window.lastCalculatedRoute);
@@ -17535,6 +17615,7 @@ function stopTurnByTurnNavigation() {
     journeyOverviewActive = false;
 
     updateRoadReportFabVisibility();
+    updateNavigationFabVisibility();
 
     // ===== HIDE SPEED WIDGET (use consolidated function) =====
     updateSpeedWidgetVisibility();
@@ -18412,6 +18493,10 @@ function sendETANotification(eta, distance) {
  * @returns {*} Return value description
  */
 function sendArrivalNotification() {
+    if (!routeInProgress || _navigationArrivalTriggered) {
+        return;
+    }
+    _navigationArrivalTriggered = true;
     sendNotification('🎉 Destination Reached', 'You have arrived at your destination', 'success');
     speakMessage('You have arrived at your destination');
     stopTurnByTurnNavigation();
