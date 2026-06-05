@@ -6582,6 +6582,10 @@ let deviationStartTime = null;
 let isCurrentlyDeviated = false;
 const DEVIATION_THRESHOLD_METERS = 50;
 const DEVIATION_TIME_THRESHOLD_MS = 10000; // 10 seconds
+// Ignore fixes worse than this (metres) for deviation — too unreliable to act on.
+const DEVIATION_MAX_TRUST_ACCURACY_M = 65;
+// Cap on how much GPS error can widen the deviation threshold.
+const DEVIATION_ACC_EXTRA_CAP_M = 40;
 /** Until GPS is this close to the route line, skip deviation alerts/reroute (e.g. start point ≠ current location). */
 /** Require GPS to be this close to the polyline before deviation reroutes fire (lower = sooner real-world reroutes). */
 const ROUTE_JOIN_GATE_METERS = 85;
@@ -14385,6 +14389,28 @@ function startGPSTracking() {
                 trackingHistory.splice(0, trackingHistory.length - 40);
             }
 
+            // Whole-journey odometer: sum plausible movement between raw fixes. Gating on a
+            // minimum step (drops stationary GPS jitter) and a max step/speed (drops teleports)
+            // keeps it close to real driven distance for the end-of-trip summary.
+            if (routeInProgress) {
+                const odoNow = Date.now();
+                if (_navOdometerLastGeo) {
+                    const segM = calculateDistanceMeters(_navOdometerLastGeo.lat, _navOdometerLastGeo.lon, lat, lon);
+                    const dtS = (odoNow - _navOdometerLastGeo.t) / 1000;
+                    if (dtS > 0.2 && dtS < 30) {
+                        const segSpeedMph = Number.isFinite(segM) ? (segM / dtS) * 2.237 : Infinity;
+                        if (Number.isFinite(segM) && segM >= 3 && segM < 400 && segSpeedMph <= 160) {
+                            _navTraveledMeters += segM;
+                        }
+                        // Advance the anchor each sane tick so a rejected jump can't make the
+                        // next segment measure from a stale point.
+                        _navOdometerLastGeo = { lat, lon, t: odoNow };
+                    }
+                } else {
+                    _navOdometerLastGeo = { lat, lon, t: odoNow };
+                }
+            }
+
             // Prefer device compass/course when moving; otherwise motion vector from recent fixes.
             let gpsHeadingForBlend = 0;
             if (deviceHeading != null && speed > 1.5) {
@@ -14427,18 +14453,27 @@ function startGPSTracking() {
 
                 const horizAcc =
                     typeof accuracy === 'number' && accuracy > 1 && accuracy < 520 ? accuracy : null;
-                const accExtraRaw = horizAcc != null ? horizAcc * SNAP_ROUTE_ACC_SCALE : 0;
-                const accExtra = Math.min(SNAP_ROUTE_ACC_EXTRA_CAP_METERS, Math.max(0, accExtraRaw));
-                const corridorOuter = SNAP_TO_ROUTE_BASE_METERS + accExtra;
-                const base = SNAP_TO_ROUTE_BASE_METERS;
 
-                let snapBlendWeight = 0;
+                // Lock the vehicle icon to the route whenever we are plausibly near it.
+                // Within `snapLockMeters` the marker snaps fully (weight 1) so it rides the
+                // polyline like Google/Waze instead of oscillating between the snapped point
+                // and noisy raw GPS (the "jumping" that also spammed false reroutes). The lock
+                // radius widens with poor GPS accuracy. Past a short release band we fall back
+                // to raw GPS, because that far off the line is a genuine deviation.
                 const distSnap = snapped.distance;
-                if (distSnap <= base) {
+                const snapLockMeters = Math.max(
+                    SNAP_NEAR_ROUTE_FORCE_METERS,
+                    horizAcc != null ? horizAcc * SNAP_LOCK_ACC_SCALE : 0
+                );
+                const snapReleaseMeters = snapLockMeters + SNAP_RELEASE_BAND_METERS;
+
+                let snapBlendWeight;
+                if (distSnap <= snapLockMeters) {
                     snapBlendWeight = 1;
-                } else if (distSnap <= corridorOuter) {
-                    const span = corridorOuter - base;
-                    snapBlendWeight = span > 1e-6 ? (corridorOuter - distSnap) / span : 0;
+                } else if (distSnap <= snapReleaseMeters) {
+                    snapBlendWeight = (snapReleaseMeters - distSnap) / SNAP_RELEASE_BAND_METERS;
+                } else {
+                    snapBlendWeight = 0;
                 }
                 snapBlendWeight = Math.max(0, Math.min(1, snapBlendWeight));
 
@@ -14539,7 +14574,7 @@ function startGPSTracking() {
 
             // Check for route deviation
             if (routeInProgress && routePolyline) {
-                checkRouteDeviation(lat, lon);
+                checkRouteDeviation(lat, lon, accuracy);
             }
 
             // Check for hazards nearby (DB) + cameras stored on the active route geometry
@@ -14662,11 +14697,14 @@ function startGPSTracking() {
             const displaySpeedMph = smoothGpsSpeedMph(speedMph);
             updateSpeedWidget(displaySpeedMph, shownLimit);
 
-            // Query speed limits at polyline-snapped position when on-route (aligns OSM ways with driven road)
-            fetchSpeedLimitThrottled(displayLat, displayLon, displaySpeedMph, roadType, 0, valhallaSpeedLimitMph);
+            // Query speed limit / road name at the TRUE GPS position, not the route-snapped
+            // point. Snapping to the route was sending the OSM lookup to the wrong (often the
+            // old, pre-reroute) road, so the widget reported the wrong limit and street name.
+            // High-accuracy GPS identifies the road actually under the wheels far more reliably.
+            fetchSpeedLimitThrottled(lat, lon, displaySpeedMph, roadType, 0, valhallaSpeedLimitMph);
 
             if (routeInProgress) {
-                fetchRoadNameThrottled(displayLat, displayLon);
+                fetchRoadNameThrottled(lat, lon);
             }
         },
         (error) => {
@@ -14724,6 +14762,13 @@ const NAV_ARRIVAL_MAX_SPEED_MS = 1.2;
 const NAV_ARRIVAL_SUPPRESS_REROUTE_METERS = 100;
 let _navigationArrivalTriggered = false;
 let _navigationArrivalZoneSince = 0;
+
+// Odometer for the whole journey actually driven. Accumulated from GPS fixes so the
+// end-of-trip summary reflects real distance travelled (including reroutes/detours),
+// not just the final route leg stored in window.lastCalculatedRoute.
+let _navTraveledMeters = 0;
+let _navOdometerLastGeo = null;
+let _navStartedAt = 0;
 
 // ETA announcement variables
 let lastETAAnnouncementTime = 0;
@@ -15141,6 +15186,13 @@ const SNAP_TO_ROUTE_BASE_METERS = 50;
 const SNAP_ROUTE_ACC_SCALE = 0.72;
 const SNAP_ROUTE_ACC_EXTRA_CAP_METERS = 48;
 
+// Active-navigation snap lock: keep the vehicle marker glued to the polyline while it
+// is plausibly near the route, so GPS noise can't make it jump off the line (which also
+// triggered phantom reroutes). Lock radius scales up with poor GPS accuracy.
+const SNAP_NEAR_ROUTE_FORCE_METERS = 130;
+const SNAP_LOCK_ACC_SCALE = 1.5;
+const SNAP_RELEASE_BAND_METERS = 40;
+
 /** Alias for readability in routing math that predates corridor blending. */
 const SNAP_TO_ROUTE_MAX_DISTANCE = SNAP_TO_ROUTE_BASE_METERS;
 /**
@@ -15554,7 +15606,7 @@ function scheduleAutomaticRerouteRetry() {
  * Only triggers reroute if user is >50m off-route for >10 seconds
  * Respects auto-reroute toggle setting
  */
-function checkRouteDeviation(lat, lon) {
+function checkRouteDeviation(lat, lon, accuracy) {
     // Check if auto-reroute is enabled
     if (!autoRerouteOnDeviationEnabled) {
         return;
@@ -15566,6 +15618,17 @@ function checkRouteDeviation(lat, lon) {
     if (remainingToDest <= NAV_ARRIVAL_SUPPRESS_REROUTE_METERS) {
         return;
     }
+
+    // A very inaccurate fix can read tens of metres off a road we're actually on.
+    // Don't let it start or sustain a deviation — just wait for a trustworthy fix.
+    const acc = Number.isFinite(accuracy) && accuracy > 0 ? accuracy : 0;
+    if (acc > DEVIATION_MAX_TRUST_ACCURACY_M) {
+        return;
+    }
+
+    // Widen the off-route threshold by part of the GPS error so noisy-but-on-road
+    // fixes don't count as a deviation. Genuine wrong-road deviations are far larger.
+    const effectiveThreshold = DEVIATION_THRESHOLD_METERS + Math.min(DEVIATION_ACC_EXTRA_CAP_M, acc * 0.5);
 
     const snap = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
     const minDistance = snap.distance;
@@ -15583,12 +15646,12 @@ function checkRouteDeviation(lat, lon) {
 
     const now = Date.now();
 
-    // If deviation > 50 meters
-    if (minDistance > DEVIATION_THRESHOLD_METERS) {
+    // If deviation beyond the accuracy-aware threshold
+    if (minDistance > effectiveThreshold) {
         // Start tracking deviation time if not already
         if (!deviationStartTimeCheck) {
             deviationStartTimeCheck = now;
-            console.log(`[Rerouting] Deviation started: ${minDistance.toFixed(0)}m off route`);
+            console.log(`[Rerouting] Deviation started: ${minDistance.toFixed(0)}m off route (threshold ${effectiveThreshold.toFixed(0)}m)`);
         }
 
         const deviationDuration = now - deviationStartTimeCheck;
@@ -17356,6 +17419,9 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     _lastActiveManeuverIdx = -1;
     routeJoinConfirmedForDeviation = false;
     resetNavigationArrivalState();
+    _navTraveledMeters = 0;
+    _navOdometerLastGeo = null;
+    _navStartedAt = Date.now();
     lastETAAnnouncementTime = Date.now();
     lastAnnouncedETA = null;
     lastNavTrafficFetchAt = 0;
@@ -17558,10 +17624,13 @@ function stopTurnByTurnNavigation() {
 
     resetNavigationArrivalState();
 
-    // Show summary if we have a valid route and were actually navigating
+    // Show summary if we have a valid route and were actually navigating.
+    // Use the real driven distance/time (odometer) so reroutes/detours are reflected,
+    // not just the final route leg stored in window.lastCalculatedRoute.
     if (window.lastCalculatedRoute && routeInProgress) {
-        void persistCompletedTrip(window.lastCalculatedRoute);
-        showJourneySummary(window.lastCalculatedRoute);
+        const summaryRoute = buildTraveledJourneyRoute(window.lastCalculatedRoute);
+        void persistCompletedTrip(summaryRoute);
+        showJourneySummary(summaryRoute);
     }
 
     routeInProgress = false;
@@ -19216,6 +19285,44 @@ window.debugScrollIssue = function() {
 };
 
 // ===== JOURNEY SUMMARY & SETTINGS CONSOLIDATION =====
+
+/**
+ * Build the route object used for the end-of-trip summary / history, overriding the
+ * planned distance and duration with what was actually driven (GPS odometer + elapsed
+ * navigation time). After one or more reroutes the stored route only covers the final
+ * leg, so without this the summary under-reports the whole journey.
+ * @param {Object} route - The active route (window.lastCalculatedRoute)
+ * @returns {Object} Route with corrected distance_km / duration_minutes when available
+ */
+function buildTraveledJourneyRoute(route) {
+    if (!route) return route;
+    const traveledKm = _navTraveledMeters / 1000;
+    const out = { ...route };
+
+    // Only override distance when we accumulated a meaningful amount of real movement.
+    if (traveledKm > 0.05) {
+        out.distance_km = Number(traveledKm.toFixed(2));
+        // Keep any string display field consistent with the corrected distance.
+        if ('distance' in out) {
+            try {
+                out.distance = `${convertDistance(out.distance_km)} ${getDistanceUnit()}`;
+            } catch (_e) {
+                delete out.distance;
+            }
+        }
+    }
+
+    // Actual elapsed navigation time is a truer journey duration than the planned ETA.
+    if (Number.isFinite(_navStartedAt) && _navStartedAt > 0) {
+        const mins = (Date.now() - _navStartedAt) / 60000;
+        if (mins > 0.1) {
+            out.duration_minutes = Math.round(mins);
+            if ('time' in out) out.time = `${out.duration_minutes} minutes`;
+        }
+    }
+
+    return out;
+}
 
 /**
  * showJourneySummary function
