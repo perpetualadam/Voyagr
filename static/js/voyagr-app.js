@@ -11943,7 +11943,9 @@ function syncBottomSheetOverlapFabs() {
     if (sheetExpanded && routeInProgress) {
         if (zoomBtn) zoomBtn.style.display = 'none';
         if (journeyBtn) journeyBtn.style.display = 'none';
-        if (endNavBtn) endNavBtn.style.display = 'none';
+        // Keep End navigation visible even when the sheet is expanded — it is the
+        // primary way to stop guidance and must stay reachable on mobile.
+        if (endNavBtn) endNavBtn.style.display = 'block';
     } else if (routeInProgress) {
         if (zoomBtn) zoomBtn.style.display = 'block';
         if (journeyBtn) journeyBtn.style.display = 'block';
