@@ -5,11 +5,9 @@ Updates shared memory with data every 5 minutes within 10km radius.
 """
 
 import requests
-import json
 import time
 import sqlite3
 import os
-from datetime import datetime, timedelta
 from dotenv import load_dotenv
 
 # Load environment variables from .env file

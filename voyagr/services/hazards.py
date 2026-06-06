@@ -30,7 +30,7 @@ try:
 except ImportError:
     polyline = None
 
-from voyagr.config import GRAPHHOPPER_CAMERA_AREAS_COUNT, USE_GRAPHHOPPER_CAMERA_AVOIDANCE
+from voyagr.config import GRAPHHOPPER_CAMERA_AREAS_COUNT
 from voyagr.models import get_db_connection, return_db_connection
 from voyagr.utils import get_distance_between_points
 

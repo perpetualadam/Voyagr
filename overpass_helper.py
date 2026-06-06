@@ -21,7 +21,6 @@ import logging
 import time
 from typing import Any, Dict, List, Optional, Tuple
 import requests
-from functools import lru_cache
 
 logger = logging.getLogger(__name__)
 

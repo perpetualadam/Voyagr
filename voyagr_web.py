@@ -5,7 +5,7 @@ Run this on your PC and access from any device with a browser
 Features: Route calculation, cost estimation, multi-stop routing, trip history, vehicle profiles
 """
 
-from flask import Flask, render_template_string, request, jsonify, send_file, after_this_request
+from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 import os
@@ -18,6 +18,7 @@ import math
 import time
 from functools import wraps
 from collections import OrderedDict
+from contextlib import contextmanager
 import logging
 from typing import List, Dict, Tuple, Optional, Any, Callable, TypeVar, Set
 
@@ -60,7 +61,7 @@ except ImportError:
 
 # Import Overpass API helper with caching and retry logic
 try:
-    from overpass_helper import query_overpass, build_traffic_signals_query, build_corridor_traffic_signals_query, build_poi_query, get_overpass_cache_stats
+    from overpass_helper import query_overpass, build_traffic_signals_query, build_poi_query, get_overpass_cache_stats
     OVERPASS_HELPER_AVAILABLE = True
 except ImportError:
     query_overpass = None  # type: ignore
@@ -266,11 +267,6 @@ if RATE_LIMITING_AVAILABLE and Limiter is not None:
         flask_limiter = None
 else:
     logger.info("[SECURITY] Flask-Limiter not available. Using in-memory rate limiting.")
-
-# ============================================================================
-# AUTHENTICATION (shared with blueprints via voyagr.utils.auth)
-# ============================================================================
-from voyagr.utils.auth import require_auth  # noqa: E402
 
 # ============================================================================
 # PHASE 5: REQUEST VALIDATION HELPER FUNCTIONS
@@ -1627,34 +1623,33 @@ class CostCalculator:
                          vehicle_type: str, route_data: Dict[str, Any], source: str) -> bool:
         """Cache a route to the database for long-term storage and analytics."""
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            with db_connection() as conn:
+                cursor = conn.cursor()
 
-            distance_km = route_data.get('distance_km', 0)
-            duration_minutes = route_data.get('duration_minutes', 0)
-            fuel_cost = route_data.get('fuel_cost', 0)
-            toll_cost = route_data.get('toll_cost', 0)
-            caz_cost = route_data.get('caz_cost', 0)
-            total_cost = fuel_cost + toll_cost + caz_cost
+                distance_km = route_data.get('distance_km', 0)
+                duration_minutes = route_data.get('duration_minutes', 0)
+                fuel_cost = route_data.get('fuel_cost', 0)
+                toll_cost = route_data.get('toll_cost', 0)
+                caz_cost = route_data.get('caz_cost', 0)
+                total_cost = fuel_cost + toll_cost + caz_cost
 
-            # Try to insert or update
-            cursor.execute('''
-                INSERT OR REPLACE INTO persistent_route_cache
-                (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                 route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
-                 total_cost, source, access_count, last_accessed)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                        COALESCE((SELECT access_count FROM persistent_route_cache
-                                 WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
-                                 AND routing_mode=? AND vehicle_type=?), 0) + 1,
-                        CURRENT_TIMESTAMP)
-            ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                  json.dumps(route_data), distance_km, duration_minutes, fuel_cost, toll_cost,
-                  caz_cost, total_cost, source, start_lat, start_lon, end_lat, end_lon,
-                  routing_mode, vehicle_type))
+                # Try to insert or update
+                cursor.execute('''
+                    INSERT OR REPLACE INTO persistent_route_cache
+                    (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                     route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
+                     total_cost, source, access_count, last_accessed)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                            COALESCE((SELECT access_count FROM persistent_route_cache
+                                     WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
+                                     AND routing_mode=? AND vehicle_type=?), 0) + 1,
+                            CURRENT_TIMESTAMP)
+                ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                      json.dumps(route_data), distance_km, duration_minutes, fuel_cost, toll_cost,
+                      caz_cost, total_cost, source, start_lat, start_lon, end_lat, end_lon,
+                      routing_mode, vehicle_type))
 
-            conn.commit()
-            return_db_connection(conn)
+                conn.commit()
             return True
         except Exception as e:
             logger.error(f"[Cache] Error caching route to DB: {e}")
@@ -1664,30 +1659,28 @@ class CostCalculator:
                                 routing_mode: str, vehicle_type: str) -> Optional[Dict[str, Any]]:
         """Retrieve a cached route from the database."""
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            with db_connection() as conn:
+                cursor = conn.cursor()
 
-            cursor.execute('''
-                SELECT route_data, access_count FROM persistent_route_cache
-                WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
-                AND routing_mode=? AND vehicle_type=?
-            ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type))
-
-            result = cursor.fetchone()
-            if result:
-                route_data_str = result[0]
-                # Update access count
                 cursor.execute('''
-                    UPDATE persistent_route_cache
-                    SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
+                    SELECT route_data, access_count FROM persistent_route_cache
                     WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
                     AND routing_mode=? AND vehicle_type=?
                 ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type))
-                conn.commit()
-                return_db_connection(conn)
-                return json.loads(route_data_str)
 
-            return_db_connection(conn)
+                result = cursor.fetchone()
+                if result:
+                    route_data_str = result[0]
+                    # Update access count
+                    cursor.execute('''
+                        UPDATE persistent_route_cache
+                        SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
+                        WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
+                        AND routing_mode=? AND vehicle_type=?
+                    ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type))
+                    conn.commit()
+                    return json.loads(route_data_str)
+
             return None
         except Exception as e:
             logger.error(f"[Cache] Error retrieving cached route: {e}")
@@ -1696,30 +1689,28 @@ class CostCalculator:
     def get_cache_statistics(self) -> Dict[str, Any]:
         """Get statistics about the persistent route cache."""
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            with db_connection() as conn:
+                cursor = conn.cursor()
 
-            # Total cached routes
-            cursor.execute('SELECT COUNT(*) FROM persistent_route_cache')
-            total_routes = cursor.fetchone()[0]
+                # Total cached routes
+                cursor.execute('SELECT COUNT(*) FROM persistent_route_cache')
+                total_routes = cursor.fetchone()[0]
 
-            # Most accessed routes
-            cursor.execute('''
-                SELECT start_lat, start_lon, end_lat, end_lon, access_count
-                FROM persistent_route_cache
-                ORDER BY access_count DESC LIMIT 5
-            ''')
-            most_accessed = cursor.fetchall()
+                # Most accessed routes
+                cursor.execute('''
+                    SELECT start_lat, start_lon, end_lat, end_lon, access_count
+                    FROM persistent_route_cache
+                    ORDER BY access_count DESC LIMIT 5
+                ''')
+                most_accessed = cursor.fetchall()
 
-            # Average cost
-            cursor.execute('SELECT AVG(total_cost) FROM persistent_route_cache')
-            avg_cost = cursor.fetchone()[0] or 0
+                # Average cost
+                cursor.execute('SELECT AVG(total_cost) FROM persistent_route_cache')
+                avg_cost = cursor.fetchone()[0] or 0
 
-            # Total distance cached
-            cursor.execute('SELECT SUM(distance_km) FROM persistent_route_cache')
-            total_distance = cursor.fetchone()[0] or 0
-
-            return_db_connection(conn)
+                # Total distance cached
+                cursor.execute('SELECT SUM(distance_km) FROM persistent_route_cache')
+                total_distance = cursor.fetchone()[0] or 0
 
             return {
                 'total_cached_routes': total_routes,
@@ -1742,19 +1733,17 @@ class CostCalculator:
         """Predict cost for a route using historical data and ML-based estimation."""
         try:
             # Get historical average cost per km for similar routes
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            with db_connection() as conn:
+                cursor = conn.cursor()
 
-            cursor.execute('''
-                SELECT AVG(total_cost / distance_km) as avg_cost_per_km
-                FROM persistent_route_cache
-                WHERE vehicle_type = ? AND distance_km > ? AND distance_km < ?
-            ''', (vehicle_type, distance_km * 0.8, distance_km * 1.2))
+                cursor.execute('''
+                    SELECT AVG(total_cost / distance_km) as avg_cost_per_km
+                    FROM persistent_route_cache
+                    WHERE vehicle_type = ? AND distance_km > ? AND distance_km < ?
+                ''', (vehicle_type, distance_km * 0.8, distance_km * 1.2))
 
-            result = cursor.fetchone()
-            historical_cost_per_km = result[0] if result and result[0] else None
-
-            return_db_connection(conn)
+                result = cursor.fetchone()
+                historical_cost_per_km = result[0] if result and result[0] else None
 
             # Calculate base cost
             base_costs = self.calculate_costs(
@@ -1868,50 +1857,49 @@ class CostCalculator:
                                 routing_mode: str, vehicle_type: str, routes_data: List[Dict[str, Any]]) -> bool:
         """Cache alternative routes with smart TTL and invalidation strategy."""
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            with db_connection() as conn:
+                cursor = conn.cursor()
 
-            # Store each alternative route
-            for idx, route in enumerate(routes_data):
-                distance_km = route.get('distance_km', 0)
-                duration_minutes = route.get('duration_minutes', 0)
-                fuel_cost = route.get('fuel_cost', 0)
-                toll_cost = route.get('toll_cost', 0)
-                caz_cost = route.get('caz_cost', 0)
-                total_cost = fuel_cost + toll_cost + caz_cost
+                # Store each alternative route
+                for idx, route in enumerate(routes_data):
+                    distance_km = route.get('distance_km', 0)
+                    duration_minutes = route.get('duration_minutes', 0)
+                    fuel_cost = route.get('fuel_cost', 0)
+                    toll_cost = route.get('toll_cost', 0)
+                    caz_cost = route.get('caz_cost', 0)
+                    total_cost = fuel_cost + toll_cost + caz_cost
 
-                # Determine TTL based on route characteristics
-                # Longer routes get longer TTL (more stable)
-                # Routes with tolls/CAZ get shorter TTL (prices change)
-                # base_ttl: 3600 seconds = 1 hour (kept for reference, TTL not currently used)
-                if distance_km > 100:
-                    ttl_multiplier: float = 2  # 2 hours for long routes
-                elif distance_km > 50:
-                    ttl_multiplier = 1.5  # 1.5 hours for medium routes
-                else:
-                    ttl_multiplier = 1  # 1 hour for short routes
+                    # Determine TTL based on route characteristics
+                    # Longer routes get longer TTL (more stable)
+                    # Routes with tolls/CAZ get shorter TTL (prices change)
+                    # base_ttl: 3600 seconds = 1 hour (kept for reference, TTL not currently used)
+                    if distance_km > 100:
+                        ttl_multiplier: float = 2  # 2 hours for long routes
+                    elif distance_km > 50:
+                        ttl_multiplier = 1.5  # 1.5 hours for medium routes
+                    else:
+                        ttl_multiplier = 1  # 1 hour for short routes
 
-                # Reduce TTL if route has tolls or CAZ
-                if toll_cost > 0 or caz_cost > 0:
-                    ttl_multiplier *= 0.7  # 30% reduction
+                    # Reduce TTL if route has tolls or CAZ
+                    if toll_cost > 0 or caz_cost > 0:
+                        ttl_multiplier *= 0.7  # 30% reduction
 
-                # TTL calculation available for future use: int(base_ttl * ttl_multiplier)
+                    # TTL calculation available for future use: int(base_ttl * ttl_multiplier)
 
-                # Insert alternative route
-                cursor.execute('''
-                    INSERT INTO persistent_route_cache
-                    (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                     route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
-                     total_cost, source, access_count, last_accessed)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
-                    ON CONFLICT(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
-                    DO UPDATE SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
-                ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
-                      json.dumps(route), distance_km, duration_minutes, fuel_cost, toll_cost,
-                      caz_cost, total_cost, f'Alternative-{idx+1}'))
+                    # Insert alternative route
+                    cursor.execute('''
+                        INSERT INTO persistent_route_cache
+                        (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                         route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
+                         total_cost, source, access_count, last_accessed)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                        ON CONFLICT(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
+                        DO UPDATE SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
+                    ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                          json.dumps(route), distance_km, duration_minutes, fuel_cost, toll_cost,
+                          caz_cost, total_cost, f'Alternative-{idx+1}'))
 
-            conn.commit()
-            return_db_connection(conn)
+                conn.commit()
             return True
         except Exception as e:
             logger.error(f"[Cache] Error caching alternative routes: {e}")
@@ -1920,17 +1908,16 @@ class CostCalculator:
     def get_alternative_route_cache_info(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, Any]:
         """Get cache information for alternative routes."""
         try:
-            conn = get_db_connection()
-            cursor = conn.cursor()
+            with db_connection() as conn:
+                cursor = conn.cursor()
 
-            cursor.execute('''
-                SELECT COUNT(*), AVG(total_cost), SUM(access_count)
-                FROM persistent_route_cache
-                WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
-            ''', (start_lat, start_lon, end_lat, end_lon))
+                cursor.execute('''
+                    SELECT COUNT(*), AVG(total_cost), SUM(access_count)
+                    FROM persistent_route_cache
+                    WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
+                ''', (start_lat, start_lon, end_lat, end_lon))
 
-            result = cursor.fetchone()
-            return_db_connection(conn)
+                result = cursor.fetchone()
 
             if result:
                 count, avg_cost, total_accesses = result
@@ -1963,17 +1950,16 @@ if speed_limit_detector:
 def invalidate_hazard_cache():
     """Invalidate hazard-related caches when hazard data is updated."""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with db_connection() as conn:
+            cursor = conn.cursor()
 
-        # Clear expired hazard reports (older than 24 hours)
-        cursor.execute('''
-            DELETE FROM community_hazard_reports
-            WHERE expiry_timestamp < ?
-        ''', (int(time.time()),))
+            # Clear expired hazard reports (older than 24 hours)
+            cursor.execute('''
+                DELETE FROM community_hazard_reports
+                WHERE expiry_timestamp < ?
+            ''', (int(time.time()),))
 
-        conn.commit()
-        return_db_connection(conn)
+            conn.commit()
         logger.info("Hazard cache invalidated and expired reports cleaned")
         return True
     except Exception as e:
@@ -1983,17 +1969,16 @@ def invalidate_hazard_cache():
 def invalidate_route_cache():
     """Invalidate route cache when preferences change."""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with db_connection() as conn:
+            cursor = conn.cursor()
 
-        # Clear routes older than 24 hours
-        cursor.execute('''
-            DELETE FROM persistent_route_cache
-            WHERE last_accessed < datetime('now', '-24 hours')
-        ''')
+            # Clear routes older than 24 hours
+            cursor.execute('''
+                DELETE FROM persistent_route_cache
+                WHERE last_accessed < datetime('now', '-24 hours')
+            ''')
 
-        conn.commit()
-        return_db_connection(conn)
+            conn.commit()
         logger.info("Route cache invalidated and old routes cleaned")
         return True
     except Exception as e:
@@ -2209,19 +2194,33 @@ def get_distance_between_points(lat1: float, lon1: float, lat2: float, lon2: flo
 
 def get_db_connection():
     """Get a database connection from the pool."""
-    global db_pool
     if db_pool is None:
-        # Fallback if pool not initialized
-        return sqlite3.connect(DB_FILE)
+        # Fallback if pool not initialized: keep row_factory consistent with the pool
+        conn = sqlite3.connect(DB_FILE)
+        conn.row_factory = sqlite3.Row
+        return conn
     return db_pool.get_connection()
 
 def return_db_connection(conn: Any) -> None:
     """Return a database connection to the pool."""
-    global db_pool
     if db_pool is not None:
         db_pool.return_connection(conn)
     else:
         conn.close()
+
+
+@contextmanager
+def db_connection():
+    """Yield a pooled connection and always return it, even if the caller raises.
+
+    Prevents pool exhaustion / connection leaks when an exception occurs between
+    acquiring and returning a connection.
+    """
+    conn = get_db_connection()
+    try:
+        yield conn
+    finally:
+        return_db_connection(conn)
 
 
 def clear_camera_hazard_buckets(hazards: Dict[str, Any]) -> None:
@@ -2234,13 +2233,12 @@ def clear_camera_hazard_buckets(hazards: Dict[str, Any]) -> None:
 def filter_camera_hazards_by_preferences(hazards: Dict[str, Any]) -> None:
     """Remove disabled camera subtypes from routing/scoring inputs (respects hazard_preferences)."""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT hazard_type, enabled FROM hazard_preferences WHERE hazard_type LIKE 'camera_%' OR hazard_type = 'camera'"
-        )
-        rows = cursor.fetchall()
-        return_db_connection(conn)
+        with db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT hazard_type, enabled FROM hazard_preferences WHERE hazard_type LIKE 'camera_%' OR hazard_type = 'camera'"
+            )
+            rows = cursor.fetchall()
         pref_on = {h[0]: bool(h[1]) for h in rows}
         for key in list(hazards.keys()):
             if (key.startswith('camera_') or key == 'camera') and key in pref_on and not pref_on[key]:
@@ -2257,67 +2255,65 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
     """Fetch hazards within bounding box of route."""
     try:
         # ====================================================================
-        # PHASE 3 OPTIMIZATION: Use connection pool instead of direct connect
+        # PHASE 3 OPTIMIZATION: Use pooled connection via leak-safe context manager
         # ====================================================================
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with db_connection() as conn:
+            cursor = conn.cursor()
 
-        # Calculate bounding box with 10km buffer
-        north = max(start_lat, end_lat) + 0.1
-        south = min(start_lat, end_lat) - 0.1
-        east = max(start_lon, end_lon) + 0.1
-        west = min(start_lon, end_lon) - 0.1
+            # Calculate bounding box with 10km buffer
+            north = max(start_lat, end_lat) + 0.1
+            south = min(start_lat, end_lat) - 0.1
+            east = max(start_lon, end_lon) + 0.1
+            west = min(start_lon, end_lon) - 0.1
 
-        # Check cache (10-minute expiry)
-        cursor.execute(
-            "SELECT hazards_data, timestamp FROM route_hazards_cache WHERE north >= ? AND south <= ? AND east >= ? AND west <= ?",
-            (south, north, west, east)
-        )
-        cached = cursor.fetchone()
-        if cached:
-            cached_data, timestamp = cached
-            if time.time() - timestamp < 600:  # 10-minute cache
-                return_db_connection(conn)
-                parsed: Dict[str, Any] = json.loads(cached_data)
-                if parsed.get('camera') and not any(k.startswith('camera_') for k in parsed):
-                    parsed['camera_speed'] = parsed.pop('camera', [])
-                return parsed
+            # Check cache (10-minute expiry)
+            cursor.execute(
+                "SELECT hazards_data, timestamp FROM route_hazards_cache WHERE north >= ? AND south <= ? AND east >= ? AND west <= ?",
+                (south, north, west, east)
+            )
+            cached = cursor.fetchone()
+            if cached:
+                cached_data, timestamp = cached
+                if time.time() - timestamp < 600:  # 10-minute cache
+                    parsed: Dict[str, Any] = json.loads(cached_data)
+                    if parsed.get('camera') and not any(k.startswith('camera_') for k in parsed):
+                        parsed['camera_speed'] = parsed.pop('camera', [])
+                    return parsed
 
-        hazards: Dict[str, List[Dict[str, Any]]] = {
-            'camera_speed': [],
-            'camera_red_light': [],
-            'camera_average_speed': [],
-            'camera_bus_lane': [],
-            'camera_mobile': [],
-            'camera_other': [],
-            'police': [],
-            'roadworks': [],
-            'accident': [],
-            'railway_crossing': [],
-            'pothole': [],
-            'debris': []
-        }
+            hazards: Dict[str, List[Dict[str, Any]]] = {
+                'camera_speed': [],
+                'camera_red_light': [],
+                'camera_average_speed': [],
+                'camera_bus_lane': [],
+                'camera_mobile': [],
+                'camera_other': [],
+                'police': [],
+                'roadworks': [],
+                'accident': [],
+                'railway_crossing': [],
+                'pothole': [],
+                'debris': []
+            }
 
-        cursor.execute(
-            "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
-            (south, north, west, east)
-        )
-        for lat, lon, camera_type, desc in cursor.fetchall():
-            bucket = normalize_camera_hazard_bucket(camera_type)
-            if bucket not in hazards:
-                bucket = 'camera_other'
-            hazards[bucket].append({
-                'lat': lat,
-                'lon': lon,
-                'type': bucket,
-                'description': desc or '',
-                'severity': 'high',
-            })
+            cursor.execute(
+                "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
+                (south, north, west, east)
+            )
+            for lat, lon, camera_type, desc in cursor.fetchall():
+                bucket = normalize_camera_hazard_bucket(camera_type)
+                if bucket not in hazards:
+                    bucket = 'camera_other'
+                hazards[bucket].append({
+                    'lat': lat,
+                    'lon': lon,
+                    'type': bucket,
+                    'description': desc or '',
+                    'severity': 'high',
+                })
 
-        # Skip community reports for custom model (only cameras are used for avoidance)
-        # Community reports are still used for post-processing hazard scoring
+            # Skip community reports for custom model (only cameras are used for avoidance)
+            # Community reports are still used for post-processing hazard scoring
 
-        return_db_connection(conn)
         return hazards
     except Exception as e:
         logger.error(f"Error fetching hazards: {e}")
@@ -3536,15 +3532,13 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[
     Returns hazards with their lat, lon, type, and description.
     """
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         hazards_on_route = []
 
         # Get hazard preferences
-        cursor.execute("SELECT hazard_type, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
-        preferences = {row[0]: {'threshold': row[1]} for row in cursor.fetchall()}
-        return_db_connection(conn)
+        with db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT hazard_type, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
+            preferences = {row[0]: {'threshold': row[1]} for row in cursor.fetchall()}
 
         # Decode polyline to get route points
         try:
@@ -3609,19 +3603,34 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
     Closer cameras receive exponentially higher penalties to strongly discourage routes passing near them.
     """
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         total_penalty = 0
         hazard_count = 0
 
         # Get hazard preferences from database, or use defaults if table doesn't exist
-        try:
-            cursor.execute("SELECT hazard_type, penalty_seconds, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
-            preferences = {row[0]: {'penalty': row[1], 'threshold': row[2]} for row in cursor.fetchall()}
-            if not preferences:
-                # Table exists but is empty - use defaults
-                logger.info(f"[HAZARDS] hazard_preferences table is empty, using defaults")
+        with db_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT hazard_type, penalty_seconds, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
+                preferences = {row[0]: {'penalty': row[1], 'threshold': row[2]} for row in cursor.fetchall()}
+                if not preferences:
+                    # Table exists but is empty - use defaults
+                    logger.info("[HAZARDS] hazard_preferences table is empty, using defaults")
+                    preferences = {
+                        'camera_speed': {'penalty': 800, 'threshold': 500},
+                        'camera_red_light': {'penalty': 1200, 'threshold': 120},
+                        'camera_average_speed': {'penalty': 800, 'threshold': 500},
+                        'camera_bus_lane': {'penalty': 800, 'threshold': 500},
+                        'camera_mobile': {'penalty': 800, 'threshold': 500},
+                        'camera_other': {'penalty': 800, 'threshold': 500},
+                        'camera': {'penalty': 800, 'threshold': 500},
+                        'traffic_light': {'penalty': 45, 'threshold': 80},
+                        'police': {'penalty': 30, 'threshold': 1000},
+                        'roadworks': {'penalty': 15, 'threshold': 500},
+                        'accident': {'penalty': 30, 'threshold': 500}
+                    }
+            except Exception as e:
+                # Table doesn't exist - use default preferences for all camera types
+                logger.info(f"[HAZARDS] hazard_preferences table not found, using defaults: {e}")
                 preferences = {
                     'camera_speed': {'penalty': 800, 'threshold': 500},
                     'camera_red_light': {'penalty': 1200, 'threshold': 120},
@@ -3635,24 +3644,6 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]], hazards: Dic
                     'roadworks': {'penalty': 15, 'threshold': 500},
                     'accident': {'penalty': 30, 'threshold': 500}
                 }
-        except Exception as e:
-            # Table doesn't exist - use default preferences for all camera types
-            logger.info(f"[HAZARDS] hazard_preferences table not found, using defaults: {e}")
-            preferences = {
-                'camera_speed': {'penalty': 800, 'threshold': 500},
-                'camera_red_light': {'penalty': 1200, 'threshold': 120},
-                'camera_average_speed': {'penalty': 800, 'threshold': 500},
-                'camera_bus_lane': {'penalty': 800, 'threshold': 500},
-                'camera_mobile': {'penalty': 800, 'threshold': 500},
-                'camera_other': {'penalty': 800, 'threshold': 500},
-                'camera': {'penalty': 800, 'threshold': 500},
-                'traffic_light': {'penalty': 45, 'threshold': 80},
-                'police': {'penalty': 30, 'threshold': 1000},
-                'roadworks': {'penalty': 15, 'threshold': 500},
-                'accident': {'penalty': 30, 'threshold': 500}
-            }
-
-        return_db_connection(conn)
 
         logger.info(f"[HAZARDS] Scoring with preferences: {list(preferences.keys())}")
         logger.info(f"[HAZARDS] Hazards to score: {[(k, len(v)) for k, v in hazards.items() if v]}")

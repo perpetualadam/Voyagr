@@ -64,7 +64,7 @@ def get_traffic_conditions():
 
         if tomtom_api_key:
             try:
-                tomtom_url = f"https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
+                tomtom_url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
                 params = {
                     'key': tomtom_api_key,
                     'point': f"{lat},{lon}",

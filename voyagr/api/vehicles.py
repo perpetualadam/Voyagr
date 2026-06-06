@@ -10,7 +10,7 @@ from flask import Blueprint, jsonify, request
 
 from voyagr.config import CAZ_PASS_TYPES
 from voyagr.models import get_db_connection, return_db_connection
-from voyagr.utils import normalize_vehicle_type, validate_vehicle_type, rate_limit
+from voyagr.utils import normalize_vehicle_type, validate_vehicle_type
 from voyagr.config.rates import resolve_route_cost_params
 
 vehicles_bp = Blueprint('vehicles', __name__)

@@ -10,16 +10,14 @@ Configure Overpass radius with OVERPASS_SPEED_AROUND_METERS (default 30).
 No traffic-flow guesses, smart-motorway simulation, or vehicle-type caps on posted limits.
 """
 
-import json
 import time
 import requests
 import math
 import os
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 from collections import OrderedDict
-from functools import lru_cache
 
 # Set up logging
 logger = logging.getLogger(__name__)

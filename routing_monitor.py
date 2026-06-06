@@ -9,13 +9,19 @@ import requests
 import sqlite3
 import threading
 import time
-import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, date, timedelta
 from typing import Dict, List, Tuple
 import os
 
 import sys
+
+
+# Python 3.12+ deprecates the implicit date/datetime sqlite3 adapters. Register
+# explicit adapters that reproduce the historical output exactly so stored values
+# and string comparisons against TEXT/DATETIME columns remain unchanged.
+sqlite3.register_adapter(datetime, lambda val: val.isoformat(" "))
+sqlite3.register_adapter(date, lambda val: val.isoformat())
 
 
 def _running_under_pytest() -> bool:
@@ -235,7 +241,6 @@ class RoutingMonitor:
         ''', (engine_name,))
         result = cursor.fetchone()
         consecutive_failures = result[0] if result else 0
-        previous_status = result[1] if result else 'unknown'
 
         # Update consecutive failures and status
         if status == 'up':

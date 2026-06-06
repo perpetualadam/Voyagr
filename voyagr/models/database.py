@@ -5,11 +5,20 @@ Database connection pooling and initialization for Voyagr.
 import sqlite3
 import threading
 import logging
-from typing import Any, List, Optional
+from contextlib import contextmanager
+from datetime import date, datetime
+from typing import Any, Iterator, List, Optional
 
 from voyagr.config import DB_FILE
 
 logger = logging.getLogger('voyagr_web')
+
+
+# Python 3.12+ deprecates the implicit date/datetime sqlite3 adapters. Register
+# explicit adapters that reproduce the historical output exactly so stored values
+# and string comparisons against TEXT/DATETIME columns remain unchanged.
+sqlite3.register_adapter(datetime, lambda val: val.isoformat(" "))
+sqlite3.register_adapter(date, lambda val: val.isoformat())
 
 
 class DatabasePool:
@@ -71,26 +80,70 @@ class DatabasePool:
             self.available.clear()
 
 
-# Global database pool - initialized after DB creation
+# Global database pool - lazily initialized on first use (or explicitly via init_db()).
 db_pool: Optional[DatabasePool] = None
+_pool_init_lock = threading.Lock()
+
+
+def _ensure_pool() -> Optional[DatabasePool]:
+    """Lazily create the shared connection pool (thread-safe).
+
+    Blueprints import these helpers directly, so a connection can be requested
+    before ``init_db()`` runs. Creating the pool on demand means callers get
+    pooled connections with a consistent ``row_factory`` instead of ad-hoc
+    connections (which previously disabled pooling and dropped ``sqlite3.Row``).
+    """
+    global db_pool
+    if db_pool is None:
+        with _pool_init_lock:
+            if db_pool is None:
+                try:
+                    db_pool = DatabasePool(DB_FILE)
+                except Exception as e:
+                    logger.warning("[DB POOL] Lazy initialization failed: %s", e)
+                    return None
+    return db_pool
 
 
 def get_db_connection() -> Any:
-    """Get a database connection from the pool."""
-    global db_pool
-    if db_pool is None:
-        # Fallback if pool not initialized
-        return sqlite3.connect(DB_FILE)
-    return db_pool.get_connection()
+    """Get a database connection from the shared pool.
+
+    Falls back to a standalone connection (still using ``sqlite3.Row``) if the
+    pool cannot be created, so callers always get consistent row access.
+    """
+    pool = _ensure_pool()
+    if pool is not None:
+        return pool.get_connection()
+    conn = sqlite3.connect(DB_FILE)
+    conn.row_factory = sqlite3.Row
+    return conn
 
 
 def return_db_connection(conn: Any) -> None:
-    """Return a database connection to the pool."""
-    global db_pool
+    """Return a database connection to the pool (or close it if there is no pool)."""
     if db_pool is not None:
         db_pool.return_connection(conn)
     else:
-        conn.close()
+        try:
+            conn.close()
+        except Exception:
+            pass
+
+
+@contextmanager
+def db_connection() -> Iterator[Any]:
+    """Yield a pooled connection and always return it, even if the caller raises.
+
+    Prevents pool exhaustion / connection leaks::
+
+        with db_connection() as conn:
+            conn.execute(...)
+    """
+    conn = get_db_connection()
+    try:
+        yield conn
+    finally:
+        return_db_connection(conn)
 
 
 def init_db() -> None:
@@ -392,7 +445,10 @@ def init_db() -> None:
     conn.commit()
     conn.close()
 
-    # Initialize connection pool
-    db_pool = DatabasePool(DB_FILE)
+    # Initialize connection pool (close any pool created earlier via lazy init).
+    with _pool_init_lock:
+        if db_pool is not None:
+            db_pool.close_all()
+        db_pool = DatabasePool(DB_FILE)
     logger.info(f"[DB POOL] Initialized with {db_pool.pool_size} connections")
 

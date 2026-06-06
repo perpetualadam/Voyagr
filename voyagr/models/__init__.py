@@ -12,6 +12,7 @@ from voyagr.models.database import (
     init_db,
     get_db_connection,
     return_db_connection,
+    db_connection,
     db_pool,
     DB_FILE,
 )
@@ -21,6 +22,7 @@ __all__ = [
     'init_db',
     'get_db_connection',
     'return_db_connection',
+    'db_connection',
     'db_pool',
     'DB_FILE',
 ]
