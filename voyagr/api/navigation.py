@@ -16,7 +16,7 @@ from typing import Any, Dict
 import requests
 from flask import Blueprint, jsonify, request, send_file, after_this_request
 
-from voyagr.models import get_db_connection, return_db_connection
+from voyagr.models import get_db_connection, return_db_connection, db_connection
 from voyagr.utils.rate_limiting import RateLimiter
 
 logger = logging.getLogger(__name__)
@@ -779,25 +779,23 @@ def get_weather():
 def get_analytics():
     """Get trip analytics and statistics."""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
+        with db_connection() as conn:
+            cursor = conn.cursor()
 
-        cursor.execute('SELECT COUNT(*) FROM trips')
-        total_trips = cursor.fetchone()[0]
+            cursor.execute('SELECT COUNT(*) FROM trips')
+            total_trips = cursor.fetchone()[0]
 
-        cursor.execute('SELECT SUM(distance_km) FROM trips')
-        total_distance = cursor.fetchone()[0] or 0
+            cursor.execute('SELECT SUM(distance_km) FROM trips')
+            total_distance = cursor.fetchone()[0] or 0
 
-        cursor.execute('SELECT SUM(fuel_cost), SUM(toll_cost), SUM(caz_cost) FROM trips')
-        fuel_cost, toll_cost, caz_cost = cursor.fetchone()
+            cursor.execute('SELECT SUM(fuel_cost), SUM(toll_cost), SUM(caz_cost) FROM trips')
+            fuel_cost, toll_cost, caz_cost = cursor.fetchone()
 
-        cursor.execute('SELECT AVG(distance_km), AVG(duration_minutes) FROM trips')
-        avg_distance, avg_duration = cursor.fetchone()
+            cursor.execute('SELECT AVG(distance_km), AVG(duration_minutes) FROM trips')
+            avg_distance, avg_duration = cursor.fetchone()
 
-        cursor.execute('SELECT routing_mode, COUNT(*) FROM trips GROUP BY routing_mode')
-        mode_breakdown = {row[0]: row[1] for row in cursor.fetchall()}
-
-        return_db_connection(conn)
+            cursor.execute('SELECT routing_mode, COUNT(*) FROM trips GROUP BY routing_mode')
+            mode_breakdown = {row[0]: row[1] for row in cursor.fetchall()}
 
         return jsonify({
             'success': True,

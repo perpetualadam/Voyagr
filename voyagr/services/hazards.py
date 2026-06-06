@@ -31,7 +31,7 @@ except ImportError:
     polyline = None
 
 from voyagr.config import GRAPHHOPPER_CAMERA_AREAS_COUNT
-from voyagr.models import get_db_connection, return_db_connection
+from voyagr.models import db_connection
 from voyagr.utils import get_distance_between_points
 
 logger = logging.getLogger('voyagr_web')
@@ -69,42 +69,6 @@ load_camera_areas()
 def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, List[Dict[str, Any]]]:
     """Fetch hazards within bounding box of route."""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
-        # Calculate bounding box with 10km buffer
-        north = max(start_lat, end_lat) + 0.1
-        south = min(start_lat, end_lat) - 0.1
-        east = max(start_lon, end_lon) + 0.1
-        west = min(start_lon, end_lon) - 0.1
-
-        # Check cache (10-minute expiry)
-        cursor.execute(
-            "SELECT hazards_data, timestamp FROM route_hazards_cache WHERE north >= ? AND south <= ? AND east >= ? AND west <= ?",
-            (south, north, west, east)
-        )
-        cached = cursor.fetchone()
-        if cached:
-            cached_data, timestamp = cached
-            if time.time() - timestamp < 600:  # 10-minute cache
-                return_db_connection(conn)
-                return json.loads(cached_data)
-
-        hazards: Dict[str, List[Dict[str, Any]]] = {
-            'camera_speed': [],
-            'camera_red_light': [],
-            'camera_average_speed': [],
-            'camera_bus_lane': [],
-            'camera_mobile': [],
-            'camera_other': [],
-            'police': [],
-            'roadworks': [],
-            'accident': [],
-            'railway_crossing': [],
-            'pothole': [],
-            'debris': []
-        }
-
         def _norm_cam(t: Optional[str]) -> str:
             if not t:
                 return 'camera_speed'
@@ -121,23 +85,57 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
                 return 'camera_mobile'
             return 'camera_other'
 
-        cursor.execute(
-            "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
-            (south, north, west, east)
-        )
-        for lat, lon, camera_type, desc in cursor.fetchall():
-            bucket = _norm_cam(camera_type)
-            if bucket not in hazards:
-                bucket = 'camera_other'
-            hazards[bucket].append({
-                'lat': lat,
-                'lon': lon,
-                'type': bucket,
-                'description': desc or '',
-                'severity': 'high',
-            })
+        with db_connection() as conn:
+            cursor = conn.cursor()
 
-        return_db_connection(conn)
+            # Calculate bounding box with 10km buffer
+            north = max(start_lat, end_lat) + 0.1
+            south = min(start_lat, end_lat) - 0.1
+            east = max(start_lon, end_lon) + 0.1
+            west = min(start_lon, end_lon) - 0.1
+
+            # Check cache (10-minute expiry)
+            cursor.execute(
+                "SELECT hazards_data, timestamp FROM route_hazards_cache WHERE north >= ? AND south <= ? AND east >= ? AND west <= ?",
+                (south, north, west, east)
+            )
+            cached = cursor.fetchone()
+            if cached:
+                cached_data, timestamp = cached
+                if time.time() - timestamp < 600:  # 10-minute cache
+                    return json.loads(cached_data)
+
+            hazards: Dict[str, List[Dict[str, Any]]] = {
+                'camera_speed': [],
+                'camera_red_light': [],
+                'camera_average_speed': [],
+                'camera_bus_lane': [],
+                'camera_mobile': [],
+                'camera_other': [],
+                'police': [],
+                'roadworks': [],
+                'accident': [],
+                'railway_crossing': [],
+                'pothole': [],
+                'debris': []
+            }
+
+            cursor.execute(
+                "SELECT lat, lon, type, description FROM cameras WHERE lat BETWEEN ? AND ? AND lon BETWEEN ? AND ?",
+                (south, north, west, east)
+            )
+            for lat, lon, camera_type, desc in cursor.fetchall():
+                bucket = _norm_cam(camera_type)
+                if bucket not in hazards:
+                    bucket = 'camera_other'
+                hazards[bucket].append({
+                    'lat': lat,
+                    'lon': lon,
+                    'type': bucket,
+                    'description': desc or '',
+                    'severity': 'high',
+                })
+
         return hazards
     except Exception as e:
         logger.error(f"Error fetching hazards: {e}")
@@ -519,14 +517,12 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]],
                          hazards: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
     """Get list of hazards that are on or near the route."""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         hazards_on_route = []
 
-        cursor.execute("SELECT hazard_type, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
-        preferences = {row[0]: {'threshold': row[1]} for row in cursor.fetchall()}
-        return_db_connection(conn)
+        with db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT hazard_type, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
+            preferences = {row[0]: {'threshold': row[1]} for row in cursor.fetchall()}
 
         try:
             if isinstance(route_points, str):
@@ -578,17 +574,29 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
                            hazards: Dict[str, List[Dict[str, Any]]]) -> Tuple[float, int]:
     """Calculate hazard score for a route based on proximity to hazards."""
     try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-
         total_penalty = 0
         hazard_count = 0
 
         # Get hazard preferences from database, or use defaults
-        try:
-            cursor.execute("SELECT hazard_type, penalty_seconds, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
-            preferences = {row[0]: {'penalty': row[1], 'threshold': row[2]} for row in cursor.fetchall()}
-            if not preferences:
+        with db_connection() as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute("SELECT hazard_type, penalty_seconds, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
+                preferences = {row[0]: {'penalty': row[1], 'threshold': row[2]} for row in cursor.fetchall()}
+                if not preferences:
+                    preferences = {
+                        'camera_speed': {'penalty': 800, 'threshold': 500},
+                        'camera_red_light': {'penalty': 1200, 'threshold': 120},
+                        'camera_average_speed': {'penalty': 800, 'threshold': 500},
+                        'camera_bus_lane': {'penalty': 800, 'threshold': 500},
+                        'camera_mobile': {'penalty': 800, 'threshold': 500},
+                        'camera_other': {'penalty': 800, 'threshold': 500},
+                        'camera': {'penalty': 800, 'threshold': 500},
+                        'police': {'penalty': 30, 'threshold': 1000},
+                        'roadworks': {'penalty': 15, 'threshold': 500},
+                        'accident': {'penalty': 30, 'threshold': 500}
+                    }
+            except Exception:
                 preferences = {
                     'camera_speed': {'penalty': 800, 'threshold': 500},
                     'camera_red_light': {'penalty': 1200, 'threshold': 120},
@@ -601,21 +609,6 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
                     'roadworks': {'penalty': 15, 'threshold': 500},
                     'accident': {'penalty': 30, 'threshold': 500}
                 }
-        except Exception:
-            preferences = {
-                'camera_speed': {'penalty': 800, 'threshold': 500},
-                'camera_red_light': {'penalty': 1200, 'threshold': 120},
-                'camera_average_speed': {'penalty': 800, 'threshold': 500},
-                'camera_bus_lane': {'penalty': 800, 'threshold': 500},
-                'camera_mobile': {'penalty': 800, 'threshold': 500},
-                'camera_other': {'penalty': 800, 'threshold': 500},
-                'camera': {'penalty': 800, 'threshold': 500},
-                'police': {'penalty': 30, 'threshold': 1000},
-                'roadworks': {'penalty': 15, 'threshold': 500},
-                'accident': {'penalty': 30, 'threshold': 500}
-            }
-
-        return_db_connection(conn)
 
         try:
             if isinstance(route_points, str):
