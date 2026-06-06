@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """Simple route test - finds nodes in same connected component"""
 
+# --- Windows console UTF-8 (auto-added) ---
+import sys as _vsys
+if _vsys.platform == "win32":
+    try:
+        _vsys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        _vsys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 from custom_router.graph import RoadNetwork
 from custom_router.dijkstra import Router
 import time

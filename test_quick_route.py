@@ -1,6 +1,16 @@
 """
 Quick route test - just test routing without full graph load
 """
+
+# --- Windows console UTF-8 (auto-added) ---
+import sys as _vsys
+if _vsys.platform == "win32":
+    try:
+        _vsys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        _vsys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 import time
 from custom_router_service import initialize_router
 

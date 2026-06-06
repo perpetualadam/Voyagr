@@ -3,6 +3,16 @@ Performance Profiler for Custom Routing Engine
 Analyzes routing performance and identifies bottlenecks
 """
 
+# --- Windows console UTF-8 (auto-added) ---
+import sys as _vsys
+if _vsys.platform == "win32":
+    try:
+        _vsys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        _vsys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 import time
 import statistics
 from typing import List, Tuple, Dict

@@ -4,6 +4,16 @@ Comprehensive Test Runner for Voyagr PWA
 Runs all test suites and generates a summary report
 """
 
+# --- Windows console UTF-8 (auto-added) ---
+import sys as _vsys
+if _vsys.platform == "win32":
+    try:
+        _vsys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        _vsys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 import subprocess
 import sys
 import os

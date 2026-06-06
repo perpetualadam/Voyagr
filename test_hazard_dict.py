@@ -1,6 +1,16 @@
 #!/usr/bin/env python3
 """Test if empty hazard dict is truthy"""
 
+# --- Windows console UTF-8 (auto-added) ---
+import sys as _vsys
+if _vsys.platform == "win32":
+    try:
+        _vsys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        _vsys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 # This is what the code does
 hazards = {
     'speed_camera': [],

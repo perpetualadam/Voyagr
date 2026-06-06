@@ -10,6 +10,16 @@ This script tests:
 NOTE: Custom router is NOT tested - only GraphHopper and Valhalla polygon avoidance.
 """
 
+# --- Windows console UTF-8 (auto-added) ---
+import sys as _vsys
+if _vsys.platform == "win32":
+    try:
+        _vsys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        _vsys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 import requests
 import json
 import time

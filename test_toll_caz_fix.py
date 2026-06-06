@@ -5,6 +5,16 @@ This test verifies the fix for the issue where toll/CAZ costs were always 0 beca
 route coordinates were not being passed to the cost calculation functions.
 """
 
+# --- Windows console UTF-8 (auto-added) ---
+import sys as _vsys
+if _vsys.platform == "win32":
+    try:
+        _vsys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        _vsys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 import sys
 sys.path.insert(0, '.')
 

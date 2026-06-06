@@ -10,6 +10,16 @@ This script tests the custom router with Phase 1 optimizations to verify:
 Expected improvement: 2-3x speedup (5.41s → 2.0s average)
 """
 
+# --- Windows console UTF-8 (auto-added) ---
+import sys as _vsys
+if _vsys.platform == "win32":
+    try:
+        _vsys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        _vsys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 import time
 from custom_router.graph import RoadNetwork
 from custom_router.dijkstra import Router

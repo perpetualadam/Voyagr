@@ -4,6 +4,16 @@ Test Valhalla and GraphHopper polygon-based hazard avoidance with SCDB camera da
 Tests Valhalla as primary engine, GraphHopper as secondary.
 """
 
+# --- Windows console UTF-8 (auto-added) ---
+import sys as _vsys
+if _vsys.platform == "win32":
+    try:
+        _vsys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        _vsys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 import requests
 import json
 import time
