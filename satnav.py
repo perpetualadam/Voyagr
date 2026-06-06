@@ -26,8 +26,12 @@ import requests
 import json
 import os
 from dotenv import load_dotenv
-from icalendar import Calendar
 from datetime import datetime, timedelta
+
+try:
+    from icalendar import Calendar
+except ImportError:
+    Calendar = None  # type: ignore
 
 try:
     from jnius import autoclass
@@ -6719,6 +6723,10 @@ class SatNavApp(App):
     def import_calendar_events(self, ics_file_path=None):
         """Import calendar events from iCalendar file (.ics format)."""
         try:
+            if Calendar is None:
+                notification.notify(title="Calendar Unavailable", message="iCalendar support not installed")
+                return []
+
             if not ics_file_path:
                 notification.notify(title="No File", message="Please select an iCalendar file")
                 return []
