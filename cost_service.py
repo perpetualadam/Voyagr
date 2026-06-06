@@ -4,8 +4,7 @@ Consolidates all cost-related business logic into a single service.
 Eliminates duplicate code and improves maintainability.
 """
 
-from typing import Dict, Tuple
-import sqlite3
+from typing import Dict
 
 
 class CostService:

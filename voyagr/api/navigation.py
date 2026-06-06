@@ -188,7 +188,6 @@ def get_lane_guidance():
     try:
         lat = float(request.args.get('lat', 0))
         lon = float(request.args.get('lon', 0))
-        heading = float(request.args.get('heading', 0))
         next_maneuver = request.args.get('maneuver', 'straight')
         distance_to_maneuver = float(request.args.get('distance', 9999))
         road_type = request.args.get('road_type', 'unknown')

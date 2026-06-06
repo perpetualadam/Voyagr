@@ -7,8 +7,7 @@ Eliminates code duplication and improves maintainability.
 import requests
 import os
 import polyline
-import json
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional
 from dotenv import load_dotenv
 
 load_dotenv()

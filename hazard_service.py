@@ -8,7 +8,7 @@ import math
 import time
 import json
 import polyline
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 
 class HazardService:

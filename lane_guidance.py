@@ -3,11 +3,9 @@ Lane Guidance Module for Voyagr
 Provides lane-level navigation with visual and voice guidance.
 """
 
-import json
 import time
 import requests
-from typing import Dict, List, Optional, Tuple
-from datetime import datetime
+from typing import Dict, Optional
 
 # Lane configuration for different road types
 LANE_CONFIGURATIONS = {
@@ -181,8 +179,7 @@ class LaneGuidance:
         """Get recommended lane for maneuver."""
         try:
             total_lanes = lane_data['total_lanes']
-            turn_lanes = lane_data.get('turn_lanes', '')
-            
+
             if maneuver == 'left':
                 # Recommend left lane
                 return 1

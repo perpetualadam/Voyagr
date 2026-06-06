@@ -6,7 +6,7 @@ Provides connection pooling and consistent error handling.
 
 import sqlite3
 import threading
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict
 from contextlib import contextmanager
 
 
