@@ -1,222 +1,176 @@
 /**
- * @file Features Modules Unit Tests
- * @module __tests__/modules/features.test.js
+ * @file Feature Modules Unit Tests (REAL modules)
+ *
+ * Imports the real HazardsManager, WeatherManager, TrafficManager and the
+ * createFeaturesSystem factory, asserting their actual behaviour (fetch + events,
+ * weather impact maths, traffic level helpers, combined stats) against mocked fetch.
  */
 
-describe('Features Modules', () => {
-    describe('HazardsManager', () => {
-        let hazards;
+import {
+    HazardsManager,
+    WeatherManager,
+    TrafficManager,
+    createFeaturesSystem,
+} from '../../modules/features/index.js';
 
-        beforeEach(() => {
-            hazards = {
-                nearbyHazards: [],
-                reportedHazards: [],
-                hazardTypes: ['speed_camera', 'traffic_camera', 'police', 'roadworks', 'accident', 'railway_crossing', 'pothole', 'debris'],
-                fetchNearbyHazards: function(lat, lon, radius = 5) {
-                    return Promise.resolve([
-                        { type: 'speed_camera', lat: lat + 0.01, lon: lon + 0.01, distance: 1.5 }
-                    ]);
-                },
-                reportHazard: function(type, lat, lon, description) {
-                    this.reportedHazards.push({ type, lat, lon, description, timestamp: Date.now() });
-                    return Promise.resolve({ success: true });
-                },
-                getHazardsOnRoute: function(route) {
-                    return this.nearbyHazards.filter(h => this.isHazardOnRoute(h, route));
-                },
-                isHazardOnRoute: function(hazard, route) {
-                    return true; // Simplified
-                },
-                clearReports: function() {
-                    this.reportedHazards = [];
-                }
-            };
-        });
+function mockFetchJson(data, ok = true, status = 200) {
+    return jest.fn().mockResolvedValue({ ok, status, json: async () => data });
+}
 
-        test('should fetch nearby hazards', async () => {
-            const result = await hazards.fetchNearbyHazards(51.5, -0.1);
-            expect(result).toBeDefined();
-            expect(result.length).toBeGreaterThanOrEqual(0);
-        });
+describe('HazardsManager (real module)', () => {
+    afterEach(() => { delete global.fetch; });
 
-        test('should report hazard', async () => {
-            const result = await hazards.reportHazard('speed_camera', 51.5, -0.1, 'Speed camera on M1');
-            expect(result.success).toBe(true);
-            expect(hazards.reportedHazards.length).toBe(1);
-        });
-
-        test('should get hazards on route', () => {
-            hazards.nearbyHazards = [
-                { type: 'speed_camera', lat: 51.5, lon: -0.1 }
-            ];
-            const route = { geometry: [] };
-            const result = hazards.getHazardsOnRoute(route);
-            expect(result).toBeDefined();
-        });
-
-        test('should clear reports', () => {
-            hazards.reportedHazards = [{ type: 'speed_camera' }];
-            hazards.clearReports();
-            expect(hazards.reportedHazards.length).toBe(0);
-        });
-
-        test('should have valid hazard types', () => {
-            expect(hazards.hazardTypes).toContain('speed_camera');
-            expect(hazards.hazardTypes).toContain('accident');
-        });
+    test('fetchNearbyHazards stores hazards and emits hazardsUpdated', async () => {
+        global.fetch = mockFetchJson({ hazards: [{ type: 'camera', lat: 51.5, lon: -0.1 }] });
+        const m = new HazardsManager();
+        const cb = jest.fn();
+        m.on('hazardsUpdated', cb);
+        const res = await m.fetchNearbyHazards(51.5, -0.1);
+        expect(res).toHaveLength(1);
+        expect(cb).toHaveBeenCalled();
+        expect(m.getHazards()).toHaveLength(1);
     });
 
-    describe('WeatherManager', () => {
-        let weather;
-
-        beforeEach(() => {
-            weather = {
-                currentWeather: null,
-                forecast: [],
-                weatherEndpoint: '/api/weather',
-                fetchWeather: function(lat, lon) {
-                    return Promise.resolve({
-                        temperature: 15,
-                        condition: 'Cloudy',
-                        humidity: 65,
-                        windSpeed: 10
-                    });
-                },
-                getForecast: function(lat, lon, days = 5) {
-                    return Promise.resolve([
-                        { day: 'Monday', high: 18, low: 12, condition: 'Sunny' }
-                    ]);
-                },
-                getWeatherAlert: function() {
-                    return null;
-                },
-                isWeatherSevere: function() {
-                    return false;
-                }
-            };
-        });
-
-        test('should fetch weather', async () => {
-            const result = await weather.fetchWeather(51.5, -0.1);
-            expect(result).toBeDefined();
-            expect(result.temperature).toBeDefined();
-            expect(result.condition).toBeDefined();
-        });
-
-        test('should get forecast', async () => {
-            const result = await weather.getForecast(51.5, -0.1, 5);
-            expect(result).toBeDefined();
-            expect(Array.isArray(result)).toBe(true);
-        });
-
-        test('should get weather alert', () => {
-            const alert = weather.getWeatherAlert();
-            expect(alert === null || typeof alert === 'object').toBe(true);
-        });
-
-        test('should check if weather is severe', () => {
-            const isSevere = weather.isWeatherSevere();
-            expect(typeof isSevere).toBe('boolean');
-        });
+    test('fetchNearbyHazards returns [] and emits error on failure', async () => {
+        global.fetch = jest.fn().mockRejectedValue(new Error('down'));
+        const m = new HazardsManager();
+        const err = jest.fn();
+        m.on('error', err);
+        const res = await m.fetchNearbyHazards(51.5, -0.1);
+        expect(res).toEqual([]);
+        expect(err).toHaveBeenCalledWith({ message: 'down' });
     });
 
-    describe('TrafficManager', () => {
-        let traffic;
-
-        beforeEach(() => {
-            traffic = {
-                trafficData: new Map(),
-                updateInterval: 300000,
-                lastUpdate: null,
-                fetchTraffic: function(lat, lon, radius = 10) {
-                    return Promise.resolve({
-                        congestion: 'light',
-                        averageSpeed: 60,
-                        incidents: []
-                    });
-                },
-                getTrafficOnRoute: function(route) {
-                    return { congestion: 'light', averageSpeed: 60 };
-                },
-                shouldAutoUpdate: function() {
-                    if (!this.lastUpdate) return true;
-                    return Date.now() - this.lastUpdate > this.updateInterval;
-                },
-                updateTraffic: function() {
-                    this.lastUpdate = Date.now();
-                    return Promise.resolve();
-                },
-                getTrafficStats: function() {
-                    return {
-                        dataPoints: this.trafficData.size,
-                        lastUpdate: this.lastUpdate
-                    };
-                }
-            };
-        });
-
-        test('should fetch traffic', async () => {
-            const result = await traffic.fetchTraffic(51.5, -0.1);
-            expect(result).toBeDefined();
-            expect(result.congestion).toBeDefined();
-        });
-
-        test('should get traffic on route', () => {
-            const route = { geometry: [] };
-            const result = traffic.getTrafficOnRoute(route);
-            expect(result).toBeDefined();
-            expect(result.congestion).toBeDefined();
-        });
-
-        test('should check if should auto update', () => {
-            expect(traffic.shouldAutoUpdate()).toBe(true);
-            traffic.lastUpdate = Date.now();
-            expect(traffic.shouldAutoUpdate()).toBe(false);
-        });
-
-        test('should update traffic', async () => {
-            await traffic.updateTraffic();
-            expect(traffic.lastUpdate).not.toBeNull();
-        });
-
-        test('should get traffic stats', () => {
-            const stats = traffic.getTrafficStats();
-            expect(stats).toBeDefined();
-            expect(stats.dataPoints).toBeDefined();
-        });
+    test('getHazardsOnRoute filters by proximity (<100m)', () => {
+        const m = new HazardsManager();
+        m.hazards = [
+            { type: 'pothole', lat: 51.5000, lon: -0.1000 },
+            { type: 'camera', lat: 52.0000, lon: -1.0000 },
+        ];
+        const onRoute = m.getHazardsOnRoute([[51.5000, -0.1000]]);
+        expect(onRoute).toHaveLength(1);
+        expect(onRoute[0].type).toBe('pothole');
     });
 
-    describe('FeaturesSystem', () => {
-        let features;
-
-        beforeEach(() => {
-            features = {
-                hazards: { fetchNearbyHazards: () => Promise.resolve([]) },
-                weather: { fetchWeather: () => Promise.resolve({}) },
-                traffic: { fetchTraffic: () => Promise.resolve({}) },
-                initialize: function(lat, lon) {
-                    return Promise.resolve();
-                },
-                getStats: function() {
-                    return {
-                        hazards: 0,
-                        weather: {},
-                        traffic: {}
-                    };
-                }
-            };
-        });
-
-        test('should initialize features', async () => {
-            await features.initialize(51.5, -0.1);
-            expect(features).toBeDefined();
-        });
-
-        test('should get features stats', () => {
-            const stats = features.getStats();
-            expect(stats).toBeDefined();
-            expect(stats.hazards).toBeDefined();
-        });
+    test('enable/disable avoidance', () => {
+        const m = new HazardsManager();
+        m.disableAvoidance();
+        expect(m.avoidanceEnabled).toBe(false);
+        m.enableAvoidance();
+        expect(m.avoidanceEnabled).toBe(true);
     });
 });
 
+describe('WeatherManager (real module)', () => {
+    afterEach(() => { delete global.fetch; });
+
+    test('fetchWeather stores data and emits weatherUpdated', async () => {
+        global.fetch = mockFetchJson({ condition: 'clear', temperature: 18 });
+        const m = new WeatherManager();
+        const cb = jest.fn();
+        m.on('weatherUpdated', cb);
+        const data = await m.fetchWeather(51.5, -0.1);
+        expect(data.condition).toBe('clear');
+        expect(cb).toHaveBeenCalled();
+    });
+
+    test('fetchWeather serves from cache within cacheTime', async () => {
+        global.fetch = mockFetchJson({ condition: 'clear' });
+        const m = new WeatherManager();
+        await m.fetchWeather(51.5, -0.1);
+        await m.fetchWeather(51.5, -0.1);
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    test('isSevereWeather detects storms / high severity', () => {
+        const m = new WeatherManager();
+        m.weatherData = { condition: 'thunderstorm', severity: 'low' };
+        expect(m.isSevereWeather()).toBe(true);
+        m.weatherData = { condition: 'clear', severity: 'high' };
+        expect(m.isSevereWeather()).toBe(true);
+        m.weatherData = { condition: 'clear', severity: 'low' };
+        expect(m.isSevereWeather()).toBe(false);
+    });
+
+    test('getWeatherImpact reduces speed and warns for rain', () => {
+        const m = new WeatherManager();
+        m.weatherData = { condition: 'rain', temperature: 12 };
+        const impact = m.getWeatherImpact();
+        expect(impact.speedReduction).toBe(10);
+        expect(impact.warnings).toContain('Wet roads - reduce speed');
+    });
+
+    test('getWeatherImpact escalates for snow / sub-zero', () => {
+        const m = new WeatherManager();
+        m.weatherData = { condition: 'snow', temperature: -2 };
+        const impact = m.getWeatherImpact();
+        expect(impact.speedReduction).toBe(20);
+    });
+});
+
+describe('TrafficManager (real module)', () => {
+    afterEach(() => {
+        delete global.fetch;
+        jest.useRealTimers();
+    });
+
+    test('fetchTraffic stores data and emits trafficUpdated', async () => {
+        global.fetch = mockFetchJson({ level: 'moderate', average_speed: 40 });
+        const m = new TrafficManager();
+        const cb = jest.fn();
+        m.on('trafficUpdated', cb);
+        await m.fetchTraffic(51.5, -0.1);
+        expect(cb).toHaveBeenCalled();
+        expect(m.getTrafficLevel()).toBe('moderate');
+        expect(m.getAverageSpeed()).toBe(40);
+    });
+
+    test('isHeavyTraffic for heavy/congested only', () => {
+        const m = new TrafficManager();
+        m.trafficData = { level: 'heavy' };
+        expect(m.isHeavyTraffic()).toBe(true);
+        m.trafficData = { level: 'light' };
+        expect(m.isHeavyTraffic()).toBe(false);
+    });
+
+    test('getters default sensibly when no data', () => {
+        const m = new TrafficManager();
+        expect(m.getTrafficLevel()).toBe('unknown');
+        expect(m.getAverageSpeed()).toBeNull();
+        expect(m.getCongestionPercentage()).toBe(0);
+        expect(m.getEstimatedDelay()).toBe(0);
+    });
+
+    test('startAutoUpdate fetches immediately then on interval; stop clears it', async () => {
+        jest.useFakeTimers();
+        global.fetch = mockFetchJson({ level: 'free' });
+        const m = new TrafficManager({ updateInterval: 1000 });
+        m.startAutoUpdate(51.5, -0.1);
+        expect(global.fetch).toHaveBeenCalledTimes(1); // immediate
+        jest.advanceTimersByTime(1000);
+        expect(global.fetch).toHaveBeenCalledTimes(2); // interval tick
+        m.stopAutoUpdate();
+        expect(m.updateTimer).toBeNull();
+    });
+});
+
+describe('createFeaturesSystem (real factory)', () => {
+    afterEach(() => { delete global.fetch; });
+
+    test('wires the three managers and aggregates stats', () => {
+        const sys = createFeaturesSystem();
+        expect(sys.hazards).toBeInstanceOf(HazardsManager);
+        expect(sys.weather).toBeInstanceOf(WeatherManager);
+        expect(sys.traffic).toBeInstanceOf(TrafficManager);
+        const stats = sys.getStats();
+        expect(stats.hazards.count).toBe(0);
+        expect(stats.traffic.level).toBe('unknown');
+    });
+
+    test('initialize fetches all three features', async () => {
+        global.fetch = mockFetchJson({ hazards: [], condition: 'clear', level: 'free' });
+        const sys = createFeaturesSystem();
+        await sys.initialize(51.5, -0.1);
+        expect(global.fetch).toHaveBeenCalledTimes(3);
+    });
+});

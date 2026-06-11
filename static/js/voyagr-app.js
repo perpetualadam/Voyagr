@@ -6044,13 +6044,14 @@ function setWeatherLayerType(type) {
         addWeatherLayer();
     }
 
-    const typeNames = {
+    const WL = (typeof VoyagrWeatherLayer !== 'undefined') ? VoyagrWeatherLayer : null;
+    const typeName = WL ? WL.weatherLayerDisplayName(type) : ({
         'precipitation_new': 'Precipitation',
         'clouds_new': 'Clouds',
         'temp_new': 'Temperature',
         'wind_new': 'Wind'
-    };
-    showStatus(`🌧️ Weather layer: ${typeNames[type] || type}`, 'info');
+    }[type] || type);
+    showStatus(`🌧️ Weather layer: ${typeName}`, 'info');
 }
 
 /**
@@ -6100,12 +6101,17 @@ function addWeatherLayer() {
     // Wait for style to load before adding weather layer
     const addWeatherLayerNow = () => {
         try {
-            // OpenWeatherMap weather tiles
+            // OpenWeatherMap weather tiles. Tile URL + source/layer specs come from the
+            // pure, unit-tested modules/map/weather-layer.js helper when present, with an
+            // inline fallback so the app keeps working if that script failed to load.
             // Available layers: precipitation_new, clouds_new, temp_new, wind_new, pressure_new
-            const tileUrl = `https://tile.openweathermap.org/map/${weatherLayerType}/{z}/{x}/{y}.png?appid=${owmApiKey}`;
+            const WL = (typeof VoyagrWeatherLayer !== 'undefined') ? VoyagrWeatherLayer : null;
+            const tileUrl = WL
+                ? WL.buildWeatherTileUrl(weatherLayerType, owmApiKey)
+                : `https://tile.openweathermap.org/map/${weatherLayerType}/{z}/{x}/{y}.png?appid=${owmApiKey}`;
 
             if (!map.getSource('weather-source')) {
-                map.addSource('weather-source', {
+                map.addSource('weather-source', WL ? WL.buildWeatherSourceSpec(tileUrl) : {
                     type: 'raster',
                     tiles: [tileUrl],
                     tileSize: 256,
@@ -6117,7 +6123,7 @@ function addWeatherLayer() {
 
             if (!map.getLayer('weather-layer')) {
                 // Add weather layer below route layers but above base map
-                map.addLayer({
+                map.addLayer(WL ? WL.buildWeatherLayerSpec() : {
                     id: 'weather-layer',
                     type: 'raster',
                     source: 'weather-source',
@@ -12892,11 +12898,6 @@ function isActiveNavigationFollow() {
     return !!(routeInProgress && zoomAndFollowEnabled && mapFollowingActive);
 }
 
-/** Heading-up follow camera: active nav follow, or user enabled driver view while browsing */
-function shouldUsePitchedDrivingCamera() {
-    return isActiveNavigationFollow() || driverPerspectiveEnabled;
-}
-
 /**
  * True when the user has explicitly chosen the flat 2D map view (Settings → 3D Map View off).
  * Read from localStorage so it is safe to call before the in-memory flag initialises and so it
@@ -12907,12 +12908,36 @@ function userPrefersFlat2D() {
 }
 
 /**
+ * Single source of truth for the follow/tilt decision, delegated to the pure, unit-tested
+ * camera-pitch helper (static/js/modules/navigation/camera-pitch.js). The inline fallback only
+ * runs if that helper script failed to load, and mirrors the same logic.
+ * @returns {{ followHeading: boolean, tilt: boolean }}
+ */
+function decideDrivingCameraState() {
+    const state = {
+        activeNavFollow: isActiveNavigationFollow(),
+        driverPerspectiveEnabled: driverPerspectiveEnabled,
+        prefersFlat2D: userPrefersFlat2D(),
+    };
+    if (typeof decideDrivingCamera === 'function') {
+        return decideDrivingCamera(state);
+    }
+    const followHeading = state.activeNavFollow || state.driverPerspectiveEnabled;
+    return { followHeading: followHeading, tilt: followHeading && !state.prefersFlat2D };
+}
+
+/** Heading-up follow camera: active nav follow, or user enabled driver view while browsing */
+function shouldUsePitchedDrivingCamera() {
+    return decideDrivingCameraState().followHeading;
+}
+
+/**
  * Whether the follow camera should be tilted (3D pitch). This is the heading-up follow decision
  * minus an explicit 2D preference — so 2D navigation still follows/rotates with heading but stays
  * flat (pitch 0) instead of tilted (pitch 60).
  */
 function shouldTiltDrivingCamera() {
-    return shouldUsePitchedDrivingCamera() && !userPrefersFlat2D();
+    return decideDrivingCameraState().tilt;
 }
 
 /** One-shot camera after nav start or when forcing driver framing */

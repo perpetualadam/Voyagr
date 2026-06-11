@@ -1,200 +1,194 @@
 /**
- * @file Navigation Modules Unit Tests
- * @module __tests__/modules/navigation.test.js
+ * @file Navigation Modules Unit Tests (REAL modules)
+ *
+ * Imports the real TurnByTurnNavigator, VoiceNavigator and LocationTracker and
+ * asserts their actual behaviour (event emission, turn detection, voice phrasing,
+ * GPS history) instead of re-implementing them inline.
  */
 
-describe('Navigation Modules', () => {
-    describe('TurnByTurnNavigator', () => {
-        let navigator;
+import { TurnByTurnNavigator } from '../../modules/navigation/turn-by-turn.js';
+import { VoiceNavigator } from '../../modules/navigation/voice.js';
+import { LocationTracker } from '../../modules/navigation/tracking.js';
 
-        beforeEach(() => {
-            navigator = {
-                route: null,
-                currentStep: 0,
-                currentLocation: null,
-                isNavigating: false,
-                listeners: new Map(),
-                startNavigation: function(route) {
-                    this.route = route;
-                    this.currentStep = 0;
-                    this.isNavigating = true;
-                },
-                stopNavigation: function() {
-                    this.isNavigating = false;
-                    this.route = null;
-                    this.currentStep = 0;
-                },
-                updateLocation: function(lat, lon) {
-                    this.currentLocation = { lat, lon };
-                },
-                getCurrentInstruction: function() {
-                    if (!this.route || !this.route.instructions) return null;
-                    return this.route.instructions[this.currentStep] || null;
-                },
-                on: function(event, callback) {
-                    if (!this.listeners.has(event)) {
-                        this.listeners.set(event, []);
-                    }
-                    this.listeners.get(event).push(callback);
-                }
-            };
-        });
+describe('TurnByTurnNavigator (real module)', () => {
+    let nav;
+    beforeEach(() => { nav = new TurnByTurnNavigator(); });
 
-        test('should start navigation', () => {
-            const route = { instructions: [] };
-            navigator.startNavigation(route);
-            
-            expect(navigator.isNavigating).toBe(true);
-            expect(navigator.route).toEqual(route);
-            expect(navigator.currentStep).toBe(0);
-        });
-
-        test('should stop navigation', () => {
-            navigator.startNavigation({ instructions: [] });
-            navigator.stopNavigation();
-            
-            expect(navigator.isNavigating).toBe(false);
-            expect(navigator.route).toBeNull();
-        });
-
-        test('should update location', () => {
-            navigator.updateLocation(51.5, -0.1);
-            
-            expect(navigator.currentLocation).toEqual({ lat: 51.5, lon: -0.1 });
-        });
-
-        test('should get current instruction', () => {
-            const instructions = [
-                { text: 'Turn left', distance: 100 },
-                { text: 'Turn right', distance: 200 }
-            ];
-            navigator.route = { instructions };
-            
-            expect(navigator.getCurrentInstruction()).toEqual(instructions[0]);
-        });
-
-        test('should support event listeners', () => {
-            let eventFired = false;
-            navigator.on('navigationStarted', () => {
-                eventFired = true;
-            });
-            
-            expect(navigator.listeners.has('navigationStarted')).toBe(true);
-        });
+    test('startNavigation sets state and emits navigationStarted', () => {
+        const cb = jest.fn();
+        nav.on('navigationStarted', cb);
+        const route = { instructions: [] };
+        nav.startNavigation(route);
+        expect(nav.isNavigating).toBe(true);
+        expect(nav.route).toBe(route);
+        expect(cb).toHaveBeenCalledWith({ route });
     });
 
-    describe('VoiceNavigator', () => {
-        let voice;
-
-        beforeEach(() => {
-            voice = {
-                enabled: true,
-                language: 'en-US',
-                rate: 1.0,
-                pitch: 1.0,
-                volume: 1.0,
-                isSpeaking: false,
-                synth: null,
-                enable: function() { this.enabled = true; },
-                disable: function() { this.enabled = false; },
-                setLanguage: function(lang) { this.language = lang; },
-                isSpeakingNow: function() { return this.isSpeaking; }
-            };
-        });
-
-        test('should enable voice', () => {
-            voice.disable();
-            voice.enable();
-            expect(voice.enabled).toBe(true);
-        });
-
-        test('should disable voice', () => {
-            voice.disable();
-            expect(voice.enabled).toBe(false);
-        });
-
-        test('should set language', () => {
-            voice.setLanguage('fr-FR');
-            expect(voice.language).toBe('fr-FR');
-        });
-
-        test('should check if speaking', () => {
-            expect(voice.isSpeakingNow()).toBe(false);
-            voice.isSpeaking = true;
-            expect(voice.isSpeakingNow()).toBe(true);
-        });
+    test('stopNavigation clears state and emits navigationStopped', () => {
+        const cb = jest.fn();
+        nav.on('navigationStopped', cb);
+        nav.startNavigation({ instructions: [] });
+        nav.stopNavigation();
+        expect(nav.isNavigating).toBe(false);
+        expect(nav.route).toBeNull();
+        expect(cb).toHaveBeenCalled();
     });
 
-    describe('LocationTracker', () => {
-        let tracker;
+    test('getCurrentInstruction / getNextInstruction follow currentStep', () => {
+        const instructions = [{ text: 'Turn left' }, { text: 'Turn right' }];
+        nav.startNavigation({ instructions });
+        expect(nav.getCurrentInstruction()).toEqual({ text: 'Turn left' });
+        expect(nav.getNextInstruction()).toEqual({ text: 'Turn right' });
+    });
 
-        beforeEach(() => {
-            tracker = {
-                isTracking: false,
-                currentLocation: null,
-                locationHistory: [],
-                maxHistorySize: 1000,
-                listeners: new Map(),
-                startTracking: function() { this.isTracking = true; },
-                stopTracking: function() { this.isTracking = false; },
-                getCurrentLocation: function() { return this.currentLocation; },
-                getLocationHistory: function() { return [...this.locationHistory]; },
-                clearHistory: function() { this.locationHistory = []; },
-                on: function(event, callback) {
-                    if (!this.listeners.has(event)) {
-                        this.listeners.set(event, []);
-                    }
-                    this.listeners.get(event).push(callback);
-                },
-                calculateDistanceTraveled: function() {
-                    if (this.locationHistory.length < 2) return 0;
-                    let distance = 0;
-                    for (let i = 1; i < this.locationHistory.length; i++) {
-                        const prev = this.locationHistory[i - 1];
-                        const curr = this.locationHistory[i];
-                        distance += this.haversineDistance(prev.lat, prev.lon, curr.lat, curr.lon);
-                    }
-                    return distance;
-                },
-                haversineDistance: function(lat1, lon1, lat2, lon2) {
-                    const R = 6371;
-                    const dLat = (lat2 - lat1) * Math.PI / 180;
-                    const dLon = (lon2 - lon1) * Math.PI / 180;
-                    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-                    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                    return R * c;
-                }
-            };
-        });
+    test('updateLocation advances the step and emits turnReached when within 20m', () => {
+        const reached = jest.fn();
+        nav.on('turnReached', reached);
+        // Instruction co-located with the user -> distance ~0 -> turn reached.
+        nav.startNavigation({ instructions: [{ text: 'Turn left', lat: 51.5, lon: -0.1 }] });
+        nav.updateLocation(51.5, -0.1);
+        expect(reached).toHaveBeenCalled();
+        expect(nav.currentStep).toBe(1);
+    });
 
-        test('should start tracking', () => {
-            tracker.startTracking();
-            expect(tracker.isTracking).toBe(true);
-        });
+    test('emits navigationComplete once past the last instruction', () => {
+        const done = jest.fn();
+        nav.on('navigationComplete', done);
+        nav.startNavigation({ instructions: [{ text: 'Arrive', lat: 51.5, lon: -0.1 }] });
+        nav.updateLocation(51.5, -0.1); // reaches turn -> step 1
+        nav.updateLocation(51.5, -0.1); // step >= length -> complete
+        expect(done).toHaveBeenCalled();
+    });
 
-        test('should stop tracking', () => {
-            tracker.startTracking();
-            tracker.stopTracking();
-            expect(tracker.isTracking).toBe(false);
-        });
-
-        test('should clear history', () => {
-            tracker.locationHistory = [{ lat: 51.5, lon: -0.1 }];
-            tracker.clearHistory();
-            expect(tracker.locationHistory.length).toBe(0);
-        });
-
-        test('should calculate distance traveled', () => {
-            tracker.locationHistory = [
-                { lat: 51.5, lon: -0.1 },
-                { lat: 51.51, lon: -0.1 }
-            ];
-            
-            const distance = tracker.calculateDistanceTraveled();
-            expect(distance).toBeGreaterThan(0);
-        });
+    test('calculateDistance returns metres (Haversine)', () => {
+        // ~111 m per 0.001 deg latitude.
+        const d = nav.calculateDistance(51.5, -0.1, 51.501, -0.1);
+        expect(d).toBeGreaterThan(100);
+        expect(d).toBeLessThan(120);
     });
 });
 
+describe('VoiceNavigator (real module)', () => {
+    let speakSpy;
+    beforeEach(() => {
+        speakSpy = jest.fn();
+        global.window.speechSynthesis = {
+            cancel: jest.fn(),
+            speak: speakSpy,
+            getVoices: () => [],
+            pause: jest.fn(),
+            resume: jest.fn(),
+        };
+        global.SpeechSynthesisUtterance = function (text) { this.text = text; };
+    });
+    afterEach(() => {
+        delete global.window.speechSynthesis;
+        delete global.SpeechSynthesisUtterance;
+    });
+
+    test('enable/disable toggles enabled flag', () => {
+        const v = new VoiceNavigator();
+        v.disable();
+        expect(v.enabled).toBe(false);
+        v.enable();
+        expect(v.enabled).toBe(true);
+    });
+
+    test('setLanguage and setRate (clamped 0.5..2.0)', () => {
+        const v = new VoiceNavigator();
+        v.setLanguage('fr-FR');
+        expect(v.language).toBe('fr-FR');
+        v.setRate(5);
+        expect(v.rate).toBe(2.0);
+        v.setRate(0.1);
+        expect(v.rate).toBe(0.5);
+    });
+
+    test('formatDistance phrasing', () => {
+        const v = new VoiceNavigator();
+        expect(v.formatDistance(1500)).toBe('1.5 kilometres');
+        expect(v.formatDistance(450)).toBe('450 metres');
+        expect(v.formatDistance(42)).toBe('42 metres');
+    });
+
+    test('speak sends an utterance and records lastSpokenText', () => {
+        const v = new VoiceNavigator();
+        v.speak('Turn left');
+        expect(speakSpy).toHaveBeenCalledTimes(1);
+        expect(v.lastSpokenText).toBe('Turn left');
+    });
+
+    test('disabled navigator does not speak', () => {
+        const v = new VoiceNavigator({ enabled: false });
+        v.speak('Turn left');
+        expect(speakSpy).not.toHaveBeenCalled();
+    });
+
+    test('announceConfirmation maps known maneuvers', () => {
+        const v = new VoiceNavigator();
+        v.announceConfirmation('left');
+        expect(v.lastSpokenText).toBe('You have turned left');
+    });
+
+    test('isSpeakingNow reflects internal state', () => {
+        const v = new VoiceNavigator();
+        expect(v.isSpeakingNow()).toBe(false);
+        v.isSpeaking = true;
+        expect(v.isSpeakingNow()).toBe(true);
+    });
+});
+
+describe('LocationTracker (real module)', () => {
+    beforeEach(() => {
+        navigator.geolocation.clearWatch = jest.fn();
+    });
+
+    test('startTracking uses geolocation.watchPosition and emits trackingStarted', () => {
+        const started = jest.fn();
+        navigator.geolocation.watchPosition.mockReturnValue(7);
+        const t = new LocationTracker();
+        t.on('trackingStarted', started);
+        t.startTracking();
+        expect(t.isTracking).toBe(true);
+        expect(t.watchId).toBe(7);
+        expect(started).toHaveBeenCalled();
+    });
+
+    test('stopTracking clears the watch and emits trackingStopped', () => {
+        navigator.geolocation.watchPosition.mockReturnValue(7);
+        const stopped = jest.fn();
+        const t = new LocationTracker();
+        t.on('trackingStopped', stopped);
+        t.startTracking();
+        t.stopTracking();
+        expect(t.isTracking).toBe(false);
+        expect(navigator.geolocation.clearWatch).toHaveBeenCalledWith(7);
+        expect(stopped).toHaveBeenCalled();
+    });
+
+    test('handleLocationUpdate stores location and bounds history', () => {
+        const t = new LocationTracker({ maxHistorySize: 2 });
+        const mk = (lat) => ({ coords: { latitude: lat, longitude: -0.1, accuracy: 5 } });
+        t.handleLocationUpdate(mk(51.50));
+        t.handleLocationUpdate(mk(51.51));
+        t.handleLocationUpdate(mk(51.52));
+        expect(t.getLocationHistory()).toHaveLength(2); // oldest dropped
+        expect(t.getCurrentLocation().lat).toBe(51.52);
+    });
+
+    test('clearHistory empties history', () => {
+        const t = new LocationTracker();
+        t.handleLocationUpdate({ coords: { latitude: 51.5, longitude: -0.1 } });
+        t.clearHistory();
+        expect(t.getLocationHistory()).toHaveLength(0);
+    });
+
+    test('calculateDistanceTraveled sums consecutive legs (km)', () => {
+        const t = new LocationTracker();
+        t.handleLocationUpdate({ coords: { latitude: 51.5, longitude: -0.1 } });
+        t.handleLocationUpdate({ coords: { latitude: 53.4808, longitude: -2.2426 } });
+        const km = t.calculateDistanceTraveled();
+        expect(km).toBeGreaterThan(250);
+        expect(km).toBeLessThan(270);
+    });
+});

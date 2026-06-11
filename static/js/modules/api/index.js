@@ -3,6 +3,12 @@
  * @module api
  */
 
+// Local import so `createAPIClient` has a real binding to APIClient. A bare
+// `export { APIClient } from './client.js'` re-export does NOT create a local
+// binding per the ES module spec, so referencing it inside this module would be a
+// ReferenceError in a real ESM/bundled environment.
+import { APIClient } from './client.js';
+
 export { RequestDeduplicator } from './deduplicator.js';
 export { CacheManager } from './cache.js';
 export { BatchRequestManager } from './batcher.js';

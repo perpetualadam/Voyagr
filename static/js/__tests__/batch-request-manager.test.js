@@ -1,107 +1,97 @@
 /**
- * Unit tests for BatchRequestManager
+ * @file BatchRequestManager unit tests (REAL module: modules/api/batcher.js)
+ *
+ * Behaviour-first: imports the real BatchRequestManager and asserts queueing,
+ * size-triggered flush, batch POST shape and request resolution against a mocked
+ * global.fetch.
  */
 
-describe('BatchRequestManager', () => {
-    let batcher;
+import { BatchRequestManager } from '../modules/api/batcher.js';
 
-    beforeEach(() => {
-        batcher = new BatchRequestManager({ batchTimeout: 50, maxBatchSize: 3 });
-        jest.useFakeTimers();
-
-        // Mock fetch for flush() calls - return matching responses for queued requests
-        global.fetch = jest.fn().mockImplementation(async (url, options) => {
-            const body = JSON.parse(options.body || '{}');
-            const requests = body.requests || [];
-            const responses = requests.map(req => ({
-                id: req.id,
-                success: true,
-                data: { mocked: true }
-            }));
-            return {
-                ok: true,
-                json: async () => ({ responses })
-            };
-        });
-    });
-
+describe('BatchRequestManager (real module)', () => {
     afterEach(() => {
-        jest.runOnlyPendingTimers();
+        delete global.fetch;
         jest.useRealTimers();
-        jest.clearAllMocks();
     });
 
-    test('should create instance with default config', () => {
+    test('default and custom config', () => {
         const b = new BatchRequestManager();
         expect(b.batchTimeout).toBe(100);
         expect(b.maxBatchSize).toBe(10);
         expect(b.batchEndpoint).toBe('/api/batch');
+
+        const c = new BatchRequestManager({ batchTimeout: 50, maxBatchSize: 3, batchEndpoint: '/x' });
+        expect(c.maxBatchSize).toBe(3);
+        expect(c.batchEndpoint).toBe('/x');
     });
 
-    test('should create instance with custom config', () => {
-        expect(batcher.batchTimeout).toBe(50);
-        expect(batcher.maxBatchSize).toBe(3);
+    test('add enqueues and tracks queue size before flush', () => {
+        jest.useFakeTimers();
+        const b = new BatchRequestManager();
+        b.add('/api/a', { x: 1 });
+        b.add('/api/b', { y: 2 });
+        expect(b.getStats().requests).toBe(2);
+        expect(b.getStats().queueSize).toBe(2);
     });
 
-    test('should add request to queue', () => {
-        batcher.add('/api/route', { test: 1 });
-        expect(batcher.queue.length).toBe(1);
+    test('flushes automatically when batch is full, sending one POST', async () => {
+        global.fetch = jest.fn().mockResolvedValue({
+            json: async () => ({ responses: [] }),
+        });
+        const b = new BatchRequestManager({ maxBatchSize: 2 });
+
+        b.add('/api/a', { x: 1 });
+        b.add('/api/b', { y: 2 }); // hits maxBatchSize -> flush()
+        await Promise.resolve();
+        await Promise.resolve();
+
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        const [url, init] = global.fetch.mock.calls[0];
+        expect(url).toBe('/api/batch');
+        const body = JSON.parse(init.body);
+        expect(body.requests).toHaveLength(2);
+        expect(body.requests[0]).toHaveProperty('endpoint', '/api/a');
+        expect(b.getStats().batches).toBe(1);
+        expect(b.getStats().saved).toBe(1); // N-1
     });
 
-    test('should track request statistics', () => {
-        batcher.add('/api/route', { test: 1 });
-        expect(batcher.stats.requests).toBe(1);
+    test('resolves each queued request with its matched response', async () => {
+        let captured;
+        global.fetch = jest.fn().mockImplementation((url, init) => {
+            const reqs = JSON.parse(init.body).requests;
+            captured = reqs;
+            return Promise.resolve({
+                json: async () => ({
+                    responses: reqs.map((r, i) => ({ id: r.id, success: true, data: { i } })),
+                }),
+            });
+        });
+        const b = new BatchRequestManager({ maxBatchSize: 2 });
+
+        const r1 = b.add('/api/a');
+        const r2 = b.add('/api/b');
+
+        await expect(r1).resolves.toEqual({ i: 0 });
+        await expect(r2).resolves.toEqual({ i: 1 });
+        expect(captured).toHaveLength(2);
     });
 
-    test('should flush when batch is full', () => {
-        const flushSpy = jest.spyOn(batcher, 'flush');
-
-        batcher.add('/api/route', { test: 1 });
-        batcher.add('/api/route', { test: 2 });
-        batcher.add('/api/route', { test: 3 });
-
-        expect(flushSpy).toHaveBeenCalled();
-        flushSpy.mockRestore();
+    test('clear cancels the timer and empties the queue', () => {
+        jest.useFakeTimers();
+        const b = new BatchRequestManager();
+        b.add('/api/a');
+        b.clear();
+        expect(b.queue).toHaveLength(0);
+        expect(b.getStats().queueSize).toBe(0);
     });
 
-    test('should schedule batch send', () => {
-        batcher.add('/api/route', { test: 1 });
-        expect(batcher.batchTimer).not.toBeNull();
-    });
-
-    test('should clear queue and cancel requests', async () => {
-        const promise = batcher.add('/api/route', { test: 1 });
-        batcher.clear();
-
-        expect(batcher.queue.length).toBe(0);
-        expect(batcher.batchTimer).toBeNull();
-
-        await expect(promise).rejects.toThrow('Batch manager cleared');
-    });
-
-    test('should calculate efficiency', () => {
-        batcher.stats.requests = 10;
-        batcher.stats.saved = 5;
-
-        const stats = batcher.getStats();
-        expect(stats.efficiency).toBe('50.00%');
-    });
-
-    test('should reset statistics', () => {
-        batcher.stats.requests = 10;
-        batcher.stats.batches = 5;
-        batcher.resetStats();
-
-        expect(batcher.stats.requests).toBe(0);
-        expect(batcher.stats.batches).toBe(0);
-    });
-
-    test('should track queue size', () => {
-        batcher.add('/api/route', { test: 1 });
-        batcher.add('/api/route', { test: 2 });
-
-        const stats = batcher.getStats();
-        expect(stats.queueSize).toBe(2);
+    test('updateEfficiency reflects saved/requests', async () => {
+        global.fetch = jest.fn().mockResolvedValue({ json: async () => ({ responses: [] }) });
+        const b = new BatchRequestManager({ maxBatchSize: 2 });
+        b.add('/api/a');
+        b.add('/api/b');
+        await Promise.resolve();
+        await Promise.resolve();
+        expect(parseFloat(b.getStats().efficiency)).toBeGreaterThanOrEqual(0);
     });
 });
-

@@ -22,6 +22,7 @@ import logging
 from typing import List, Dict, Tuple, Optional, Any, Callable, TypeVar, Set
 
 from voyagr.utils.camera_buckets import normalize_camera_hazard_bucket
+from voyagr.utils.graphhopper import GH_SIGN_TO_VALHALLA
 
 F = TypeVar('F', bound=Callable[..., Any])
 
@@ -2586,10 +2587,7 @@ def build_graphhopper_optimised_route_entry(
         # GraphHopper sign -> Valhalla maneuver type. Valhalla numbering:
         # 12=U-turn R, 13=U-turn L, 14=Sharp L, 15=Left, 16=Slight L, 23=Stay R, 24=Stay L.
         # (Left turns were previously off-by-one, surfacing "keep left"/straight-arrow bugs.)
-        gh_sign_to_valhalla = {
-            -98: 13, -8: 13, -7: 24, -3: 14, -2: 15, -1: 16, 0: 8,
-            1: 9, 2: 10, 3: 11, 4: 4, 5: 0, 6: 26, 7: 23, 8: 12,
-        }
+        gh_sign_to_valhalla = GH_SIGN_TO_VALHALLA
 
         # GraphHopper `details.max_speed` = [[from_idx, to_idx, value_kmh|null], ...] keyed by
         # geometry point index. Build a lookup so each maneuver can carry the posted limit of
@@ -3910,6 +3908,8 @@ HTML_TEMPLATE = '''
     <script defer src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
     <!-- External JavaScript modules -->
     <script defer src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
+    <script defer src="/static/js/modules/navigation/camera-pitch.js?v=20260611a"></script>
+    <script defer src="/static/js/modules/map/weather-layer.js?v=20260611a"></script>
     <script defer src="/static/js/voyagr-core.js?v=20260530a"></script>
     {% if picovoice_web_assets_ok %}
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
@@ -7739,23 +7739,7 @@ def calculate_route():
                                 #   16=Slight L, 23=Stay R, 24=Stay L. Left turns were previously
                                 #   off-by-one (sharp->15, left->16, slight->17), which made real
                                 #   left turns read as "keep left" and slight-left show a straight arrow.
-                                gh_sign_to_valhalla = {
-                                    -98: 13,  # U-turn (unknown) -> Valhalla U-turn Left (13)
-                                    -8: 13,   # U-turn left -> Valhalla U-turn Left (13)
-                                    -7: 24,   # Keep left -> Valhalla Stay Left (24)
-                                    -3: 14,   # Sharp left -> Valhalla Sharp Left (14)
-                                    -2: 15,   # Left -> Valhalla Left (15)
-                                    -1: 16,   # Slight left -> Valhalla Slight Left (16)
-                                    0: 8,     # Straight -> Valhalla Continue (8)
-                                    1: 9,     # Slight right -> Valhalla Slight Right (9)
-                                    2: 10,    # Right -> Valhalla Right (10)
-                                    3: 11,    # Sharp right -> Valhalla Sharp Right (11)
-                                    4: 4,     # Finish -> Valhalla Destination (4)
-                                    5: 0,     # Via -> Valhalla None (0)
-                                    6: 26,    # Roundabout -> Valhalla Enter Roundabout (26)
-                                    7: 23,    # Keep right -> Valhalla Stay Right (23)
-                                    8: 12,    # U-turn right -> Valhalla U-turn Right (12)
-                                }
+                                gh_sign_to_valhalla = GH_SIGN_TO_VALHALLA
 
                                 for instr in gh_instructions:
                                     sign = instr.get('sign', 0)
@@ -8081,10 +8065,7 @@ def calculate_route():
 
                                             gh_instructions = graphhopper_route.get('instructions', [])
                                             # See valhalla numbering note above; left turns were off-by-one.
-                                            gh_sign_to_valhalla = {
-                                                -98: 13, -8: 13, -7: 24, -3: 14, -2: 15, -1: 16, 0: 8,
-                                                1: 9, 2: 10, 3: 11, 4: 4, 5: 0, 6: 26, 7: 23, 8: 12,
-                                            }
+                                            gh_sign_to_valhalla = GH_SIGN_TO_VALHALLA
                                             gh_maneuvers = []
                                             for instr in gh_instructions:
                                                 sign = instr.get('sign', 0)

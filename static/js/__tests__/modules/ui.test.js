@@ -1,240 +1,196 @@
 /**
- * @file UI Modules Unit Tests
- * @module __tests__/modules/ui.test.js
+ * @file UI Modules Unit Tests (REAL modules)
+ *
+ * Imports the real MapManager, ControlsManager, PanelsManager and createUISystem.
+ * Controls/Panels are exercised against real jsdom elements; MapManager is exercised
+ * against a minimal chainable Leaflet (`L`) test double so we assert the real wiring
+ * (route/marker layers, fly-to) rather than re-implementing it.
  */
 
-describe('UI Modules', () => {
-    describe('MapManager', () => {
-        let map;
+import {
+    MapManager,
+    ControlsManager,
+    PanelsManager,
+    createUISystem,
+} from '../../modules/ui/index.js';
 
-        beforeEach(() => {
-            map = {
-                mapElement: null,
-                mapInstance: null,
-                markers: new Map(),
-                routes: [],
-                zoom: 15,
-                center: { lat: 51.5, lon: -0.1 },
-                initialize: function(elementId, lat, lon) {
-                    this.mapElement = document.getElementById(elementId);
-                    this.center = { lat, lon };
-                },
-                addMarker: function(id, lat, lon, options = {}) {
-                    this.markers.set(id, { lat, lon, ...options });
-                },
-                removeMarker: function(id) {
-                    this.markers.delete(id);
-                },
-                addRoute: function(route) {
-                    this.routes.push(route);
-                },
-                clearRoutes: function() {
-                    this.routes = [];
-                },
-                setZoom: function(zoom) {
-                    this.zoom = Math.max(1, Math.min(zoom, 20));
-                },
-                getZoom: function() {
-                    return this.zoom;
-                },
-                fitBounds: function(bounds) {
-                    // Simulate fitting bounds
-                    return true;
-                }
-            };
-        });
-
-        test('should initialize map', () => {
-            map.initialize('map', 51.5, -0.1);
-            expect(map.center).toEqual({ lat: 51.5, lon: -0.1 });
-        });
-
-        test('should add marker', () => {
-            map.addMarker('start', 51.5, -0.1);
-            expect(map.markers.has('start')).toBe(true);
-        });
-
-        test('should remove marker', () => {
-            map.addMarker('start', 51.5, -0.1);
-            map.removeMarker('start');
-            expect(map.markers.has('start')).toBe(false);
-        });
-
-        test('should add route', () => {
-            const route = { id: 1, geometry: [] };
-            map.addRoute(route);
-            expect(map.routes.length).toBe(1);
-        });
-
-        test('should clear routes', () => {
-            map.addRoute({ id: 1 });
-            map.addRoute({ id: 2 });
-            map.clearRoutes();
-            expect(map.routes.length).toBe(0);
-        });
-
-        test('should set zoom level', () => {
-            map.setZoom(18);
-            expect(map.getZoom()).toBe(18);
-        });
-
-        test('should clamp zoom level', () => {
-            map.setZoom(25);
-            expect(map.getZoom()).toBe(20);
-            map.setZoom(-5);
-            expect(map.getZoom()).toBe(1);
-        });
-
-        test('should fit bounds', () => {
-            const result = map.fitBounds({ north: 52, south: 51, east: 0, west: -1 });
-            expect(result).toBe(true);
-        });
+describe('ControlsManager (real module)', () => {
+    let mgr, btn;
+    beforeEach(() => {
+        mgr = new ControlsManager();
+        btn = document.createElement('button');
     });
 
-    describe('ControlsManager', () => {
-        let controls;
-
-        beforeEach(() => {
-            controls = {
-                buttons: new Map(),
-                panels: new Map(),
-                addButton: function(id, label, callback) {
-                    this.buttons.set(id, { label, callback });
-                },
-                removeButton: function(id) {
-                    this.buttons.delete(id);
-                },
-                clickButton: function(id) {
-                    const btn = this.buttons.get(id);
-                    if (btn && btn.callback) {
-                        btn.callback();
-                    }
-                },
-                addPanel: function(id, title, content) {
-                    this.panels.set(id, { title, content, visible: false });
-                },
-                showPanel: function(id) {
-                    const panel = this.panels.get(id);
-                    if (panel) panel.visible = true;
-                },
-                hidePanel: function(id) {
-                    const panel = this.panels.get(id);
-                    if (panel) panel.visible = false;
-                },
-                isPanelVisible: function(id) {
-                    const panel = this.panels.get(id);
-                    return panel ? panel.visible : false;
-                }
-            };
-        });
-
-        test('should add button', () => {
-            controls.addButton('start', 'Start', () => {});
-            expect(controls.buttons.has('start')).toBe(true);
-        });
-
-        test('should remove button', () => {
-            controls.addButton('start', 'Start', () => {});
-            controls.removeButton('start');
-            expect(controls.buttons.has('start')).toBe(false);
-        });
-
-        test('should click button', () => {
-            let clicked = false;
-            controls.addButton('test', 'Test', () => { clicked = true; });
-            controls.clickButton('test');
-            expect(clicked).toBe(true);
-        });
-
-        test('should add panel', () => {
-            controls.addPanel('menu', 'Menu', '<div>Menu</div>');
-            expect(controls.panels.has('menu')).toBe(true);
-        });
-
-        test('should show panel', () => {
-            controls.addPanel('menu', 'Menu', '<div>Menu</div>');
-            controls.showPanel('menu');
-            expect(controls.isPanelVisible('menu')).toBe(true);
-        });
-
-        test('should hide panel', () => {
-            controls.addPanel('menu', 'Menu', '<div>Menu</div>');
-            controls.showPanel('menu');
-            controls.hidePanel('menu');
-            expect(controls.isPanelVisible('menu')).toBe(false);
-        });
+    test('registerControl stores element and click handler', () => {
+        const onClick = jest.fn();
+        mgr.registerControl('go', btn, { onClick });
+        btn.click();
+        expect(mgr.getControl('go')).toBe(btn);
+        expect(onClick).toHaveBeenCalled();
     });
 
-    describe('PanelsManager', () => {
-        let panels;
+    test('registerControl ignores a missing element', () => {
+        mgr.registerControl('missing', null);
+        expect(mgr.getAllControls().size).toBe(0);
+    });
 
-        beforeEach(() => {
-            panels = {
-                modals: new Map(),
-                activeModal: null,
-                createModal: function(id, title, content) {
-                    this.modals.set(id, { id, title, content, visible: false });
-                },
-                openModal: function(id) {
-                    const modal = this.modals.get(id);
-                    if (modal) {
-                        modal.visible = true;
-                        this.activeModal = id;
-                    }
-                },
-                closeModal: function(id) {
-                    const modal = this.modals.get(id);
-                    if (modal) {
-                        modal.visible = false;
-                        if (this.activeModal === id) {
-                            this.activeModal = null;
-                        }
-                    }
-                },
-                closeAll: function() {
-                    this.modals.forEach(modal => modal.visible = false);
-                    this.activeModal = null;
-                },
-                getActiveModal: function() {
-                    return this.activeModal;
-                }
-            };
-        });
+    test('disable/enable toggles disabled + class', () => {
+        mgr.registerControl('go', btn);
+        mgr.disableControl('go');
+        expect(btn.disabled).toBe(true);
+        expect(btn.classList.contains('disabled')).toBe(true);
+        mgr.enableControl('go');
+        expect(btn.disabled).toBe(false);
+        expect(btn.classList.contains('disabled')).toBe(false);
+    });
 
-        test('should create modal', () => {
-            panels.createModal('confirm', 'Confirm', '<p>Are you sure?</p>');
-            expect(panels.modals.has('confirm')).toBe(true);
-        });
+    test('show/hide toggles display', () => {
+        mgr.registerControl('go', btn);
+        mgr.hideControl('go');
+        expect(btn.style.display).toBe('none');
+        mgr.showControl('go');
+        expect(btn.style.display).toBe('');
+    });
 
-        test('should open modal', () => {
-            panels.createModal('confirm', 'Confirm', '<p>Are you sure?</p>');
-            panels.openModal('confirm');
-            expect(panels.modals.get('confirm').visible).toBe(true);
-        });
+    test('updateControlText sets textContent', () => {
+        mgr.registerControl('go', btn);
+        mgr.updateControlText('go', 'Start');
+        expect(btn.textContent).toBe('Start');
+    });
 
-        test('should close modal', () => {
-            panels.createModal('confirm', 'Confirm', '<p>Are you sure?</p>');
-            panels.openModal('confirm');
-            panels.closeModal('confirm');
-            expect(panels.modals.get('confirm').visible).toBe(false);
-        });
-
-        test('should close all modals', () => {
-            panels.createModal('modal1', 'Modal 1', '<p>1</p>');
-            panels.createModal('modal2', 'Modal 2', '<p>2</p>');
-            panels.openModal('modal1');
-            panels.openModal('modal2');
-            panels.closeAll();
-            
-            expect(panels.modals.get('modal1').visible).toBe(false);
-            expect(panels.modals.get('modal2').visible).toBe(false);
-        });
-
-        test('should get active modal', () => {
-            panels.createModal('confirm', 'Confirm', '<p>Are you sure?</p>');
-            panels.openModal('confirm');
-            expect(panels.getActiveModal()).toBe('confirm');
-        });
+    test('clearControls empties the registry', () => {
+        mgr.registerControl('go', btn);
+        mgr.clearControls();
+        expect(mgr.getAllControls().size).toBe(0);
     });
 });
 
+describe('PanelsManager (real module)', () => {
+    let mgr, el;
+    beforeEach(() => {
+        mgr = new PanelsManager();
+        el = document.createElement('div');
+    });
+
+    test('showPanel makes it visible and active', () => {
+        mgr.registerPanel('settings', el);
+        mgr.showPanel('settings');
+        expect(el.style.display).toBe('block');
+        expect(mgr.getActivePanels()).toContain('settings');
+    });
+
+    test('hidePanel hides and deactivates', () => {
+        mgr.registerPanel('settings', el);
+        mgr.showPanel('settings');
+        mgr.hidePanel('settings');
+        expect(el.style.display).toBe('none');
+        expect(mgr.getActivePanels()).not.toContain('settings');
+    });
+
+    test('togglePanel flips visibility', () => {
+        mgr.registerPanel('settings', el);
+        mgr.togglePanel('settings');
+        expect(mgr.getActivePanels()).toContain('settings');
+        mgr.togglePanel('settings');
+        expect(mgr.getActivePanels()).not.toContain('settings');
+    });
+
+    test('updatePanelContent sets innerHTML', () => {
+        mgr.registerPanel('settings', el);
+        mgr.updatePanelContent('settings', '<span>hi</span>');
+        expect(el.innerHTML).toBe('<span>hi</span>');
+    });
+
+    test('closeAllPanels hides every active panel', () => {
+        const el2 = document.createElement('div');
+        mgr.registerPanel('a', el);
+        mgr.registerPanel('b', el2);
+        mgr.showPanel('a');
+        mgr.showPanel('b');
+        mgr.closeAllPanels();
+        expect(mgr.getActivePanels()).toHaveLength(0);
+    });
+
+    test('operations on unknown panels are no-ops', () => {
+        expect(() => mgr.showPanel('nope')).not.toThrow();
+        expect(mgr.getActivePanels()).toHaveLength(0);
+    });
+});
+
+describe('MapManager (real module, Leaflet test double)', () => {
+    let layerStub;
+    beforeEach(() => {
+        layerStub = { addTo: jest.fn().mockReturnThis(), clearLayers: jest.fn(), bindPopup: jest.fn() };
+        global.L = {
+            map: jest.fn(() => ({
+                setView: jest.fn().mockReturnThis(),
+                fitBounds: jest.fn(),
+                flyTo: jest.fn(),
+                getCenter: () => ({ lat: 51.5, lng: -0.1 }),
+            })),
+            tileLayer: jest.fn(() => layerStub),
+            featureGroup: jest.fn(() => layerStub),
+            polyline: jest.fn(() => layerStub),
+            marker: jest.fn(() => layerStub),
+            icon: jest.fn(() => ({})),
+            latLngBounds: jest.fn((c) => c),
+        };
+    });
+    afterEach(() => { delete global.L; });
+
+    test('initializeMap wires the map and layers when Leaflet is present', () => {
+        const m = new MapManager();
+        const map = m.initializeMap(51.5, -0.1);
+        expect(map).not.toBeNull();
+        expect(global.L.map).toHaveBeenCalledWith('map');
+        expect(m.routeLayer).toBe(layerStub);
+        expect(m.markerLayer).toBe(layerStub);
+    });
+
+    test('initializeMap returns null when Leaflet is missing', () => {
+        delete global.L;
+        const m = new MapManager();
+        expect(m.initializeMap(51.5, -0.1)).toBeNull();
+    });
+
+    test('drawRoute is a no-op before init, draws after', () => {
+        const m = new MapManager();
+        expect(m.drawRoute([[51.5, -0.1]])).toBeUndefined();
+        m.initializeMap(51.5, -0.1);
+        m.drawRoute([[51.5, -0.1], [51.6, -0.2]]);
+        expect(global.L.polyline).toHaveBeenCalled();
+    });
+
+    test('addMarker draws through markerLayer after init', () => {
+        const m = new MapManager();
+        m.initializeMap(51.5, -0.1);
+        const marker = m.addMarker(51.5, -0.1, { popup: 'Here' });
+        expect(global.L.marker).toHaveBeenCalled();
+        expect(marker.bindPopup).toHaveBeenCalledWith('Here');
+    });
+
+    test('animateTo flies and updates zoom', () => {
+        const m = new MapManager();
+        m.initializeMap(51.5, -0.1);
+        m.animateTo(52, -1, 16);
+        expect(m.getZoom()).toBe(16);
+    });
+
+    test('getCenter maps lng -> lon', () => {
+        const m = new MapManager();
+        m.initializeMap(51.5, -0.1);
+        expect(m.getCenter()).toEqual({ lat: 51.5, lon: -0.1 });
+    });
+});
+
+describe('createUISystem (real factory)', () => {
+    test('wires the three managers and reports stats', () => {
+        const sys = createUISystem();
+        expect(sys.map).toBeInstanceOf(MapManager);
+        expect(sys.controls).toBeInstanceOf(ControlsManager);
+        expect(sys.panels).toBeInstanceOf(PanelsManager);
+        const stats = sys.getStats();
+        expect(stats.controls.count).toBe(0);
+        expect(stats.panels.count).toBe(0);
+    });
+});
