@@ -2,7 +2,11 @@ name: CI
 
 # Runs the full test suite on every push/PR to main:
 #   - JS: tautological-test guard (lint:tests) + Jest with coverage thresholds
-#   - Python: behaviour-first unit tests (lane recommendation, GraphHopper mapping)
+#   - Python: behaviour-first unit tests (lane recommendation, GraphHopper mapping,
+#     lane guidance, speed-limit detector). All chosen suites exercise real module
+#     logic and tolerate missing network (live Overpass/TomTom calls fall back to
+#     defaults), so they stay green offline. Suites needing the Kivy/satnav desktop
+#     stack, a local custom_router package, or live servers are intentionally excluded.
 
 on:
   push:
@@ -64,4 +68,9 @@ jobs:
           pip install pytest
 
       - name: Run Python behaviour tests
-        run: pytest test_graphhopper_sign_mapping.py test_lane_recommendation.py -q
+        run: >-
+          pytest -q
+          test_graphhopper_sign_mapping.py
+          test_lane_recommendation.py
+          test_lane_guidance.py
+          test_speed_limit_detector.py
