@@ -132,8 +132,8 @@
  *    ❌ const api = await import('./api/client.js');
  * 
  * 5. Mark unused code for removal
- *    ✅ /* @__PURE__ */ function unused() {}
- *    ❌ function unused() {}
+ *    Annotate side-effect-free helpers with a PURE annotation comment so the
+ *    bundler can drop them, e.g. the @__PURE__ marker before the call/declaration.
  */
 
 /**

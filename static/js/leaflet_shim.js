@@ -1,3 +1,82 @@
-// Leaflet shim for MapLibre compatibility\n// This file provides minimal stubs for Leaflet functions used in the app, mapping them to MapLibre GL JS equivalents.\n// It is NOT a full Leaflet implementation, but enough to prevent runtime errors during migration.\n\nwindow.L = {};
-\n// No-op for map.eachLayer (used in theme handling)\nL.eachLayer = function(callback) { /* No layers to iterate in MapLibre */ };
-\n// TileLayer shim – returns an object with addTo that does nothing (MapLibre uses style URL)\nL.tileLayer = function(url, options) {\n    return {\n        addTo: function(map) { /* MapLibre handles tiles via style */ }\n    };\n};\n\n// Marker shim – creates a MapLibre marker\nL.marker = function(latlng, options) {\n    const [lat, lon] = Array.isArray(latlng) ? [latlng[0], latlng[1]] : [latlng.lat, latlng.lng];\n    const marker = new maplibregl.Marker(options && options.icon ? { element: options.icon } : {});\n    marker.setLngLat([lon, lat]);\n    return {\n        addTo: function(map) { marker.addTo(map); return marker; },\n        setIcon: function(icon) { /* not needed */ },\n        bindPopup: function(content) { /* optional */ },\n        on: function(event, handler) { marker.on(event, handler); }\n    };\n};\n\n// CircleMarker shim – uses a simple marker with CSS class\nL.circleMarker = function(latlng, options) {\n    const [lat, lon] = Array.isArray(latlng) ? [latlng[0], latlng[1]] : [latlng.lat, latlng.lng];\n    const el = document.createElement('div');\n    el.className = 'circle-marker';\n    el.style.width = (options && options.radius ? options.radius * 2 : 10) + 'px';\n    el.style.height = (options && options.radius ? options.radius * 2 : 10) + 'px';\n    el.style.background = (options && options.color) || '#ff0000';\n    el.style.borderRadius = '50%';\n    const marker = new maplibregl.Marker(el);\n    marker.setLngLat([lon, lat]);\n    return {\n        addTo: function(map) { marker.addTo(map); return marker; },\n        setStyle: function(style) { Object.assign(el.style, style); }\n    };\n};\n\n// Polyline shim – creates a GeoJSON line source and layer\nL.polyline = function(latlngs, options) {\n    const coordinates = latlngs.map(function(pt) {\n        const [lat, lon] = Array.isArray(pt) ? [pt[0], pt[1]] : [pt.lat, pt.lng];\n        return [lon, lat];\n    });\n    const id = 'polyline-' + Math.random().toString(36).substr(2, 9);\n    return {\n        addTo: function(map) {\n            map.addSource(id, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coordinates } } });\n            map.addLayer({ id: id, type: 'line', source: id, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': (options && options.color) || '#ff0000', 'line-width': (options && options.weight) || 2 } });\n            return this;\n        },\n        setStyle: function(style) {\n            if (style && style.color) { map.setPaintProperty(id, 'line-color', style.color); }\n            if (style && style.weight) { map.setPaintProperty(id, 'line-width', style.weight); }\n        }\n    };\n};\n\n// DivIcon shim – creates a simple HTML element\nL.divIcon = function(options) {\n    const el = document.createElement('div');\n    if (options && options.html) el.innerHTML = options.html;\n    if (options && options.className) el.className = options.className;\n    return el;\n};\n\n// Control shim – placeholder for map controls (e.g., navigation)\nL.control = {\n    scale: function(options) { return { addTo: function(map) {} }; },\n    zoom: function(options) { return { addTo: function(map) {} }; }\n};\n\n// Export L globally\nwindow.L = L;
+// Leaflet shim for MapLibre compatibility
+// This file provides minimal stubs for Leaflet functions used in the app, mapping them to MapLibre GL JS equivalents.
+// It is NOT a full Leaflet implementation, but enough to prevent runtime errors during migration.
+
+window.L = {};
+
+// No-op for map.eachLayer (used in theme handling)
+L.eachLayer = function(callback) { /* No layers to iterate in MapLibre */ };
+
+// TileLayer shim – returns an object with addTo that does nothing (MapLibre uses style URL)
+L.tileLayer = function(url, options) {
+    return {
+        addTo: function(map) { /* MapLibre handles tiles via style */ }
+    };
+};
+
+// Marker shim – creates a MapLibre marker
+L.marker = function(latlng, options) {
+    const [lat, lon] = Array.isArray(latlng) ? [latlng[0], latlng[1]] : [latlng.lat, latlng.lng];
+    const marker = new maplibregl.Marker(options && options.icon ? { element: options.icon } : {});
+    marker.setLngLat([lon, lat]);
+    return {
+        addTo: function(map) { marker.addTo(map); return marker; },
+        setIcon: function(icon) { /* not needed */ },
+        bindPopup: function(content) { /* optional */ },
+        on: function(event, handler) { marker.on(event, handler); }
+    };
+};
+
+// CircleMarker shim – uses a simple marker with CSS class
+L.circleMarker = function(latlng, options) {
+    const [lat, lon] = Array.isArray(latlng) ? [latlng[0], latlng[1]] : [latlng.lat, latlng.lng];
+    const el = document.createElement('div');
+    el.className = 'circle-marker';
+    el.style.width = (options && options.radius ? options.radius * 2 : 10) + 'px';
+    el.style.height = (options && options.radius ? options.radius * 2 : 10) + 'px';
+    el.style.background = (options && options.color) || '#ff0000';
+    el.style.borderRadius = '50%';
+    const marker = new maplibregl.Marker(el);
+    marker.setLngLat([lon, lat]);
+    return {
+        addTo: function(map) { marker.addTo(map); return marker; },
+        setStyle: function(style) { Object.assign(el.style, style); }
+    };
+};
+
+// Polyline shim – creates a GeoJSON line source and layer
+L.polyline = function(latlngs, options) {
+    const coordinates = latlngs.map(function(pt) {
+        const [lat, lon] = Array.isArray(pt) ? [pt[0], pt[1]] : [pt.lat, pt.lng];
+        return [lon, lat];
+    });
+    const id = 'polyline-' + Math.random().toString(36).substr(2, 9);
+    return {
+        addTo: function(map) {
+            map.addSource(id, { type: 'geojson', data: { type: 'Feature', geometry: { type: 'LineString', coordinates: coordinates } } });
+            map.addLayer({ id: id, type: 'line', source: id, layout: { 'line-join': 'round', 'line-cap': 'round' }, paint: { 'line-color': (options && options.color) || '#ff0000', 'line-width': (options && options.weight) || 2 } });
+            return this;
+        },
+        setStyle: function(style) {
+            if (style && style.color) { map.setPaintProperty(id, 'line-color', style.color); }
+            if (style && style.weight) { map.setPaintProperty(id, 'line-width', style.weight); }
+        }
+    };
+};
+
+// DivIcon shim – creates a simple HTML element
+L.divIcon = function(options) {
+    const el = document.createElement('div');
+    if (options && options.html) el.innerHTML = options.html;
+    if (options && options.className) el.className = options.className;
+    return el;
+};
+
+// Control shim – placeholder for map controls (e.g., navigation)
+L.control = {
+    scale: function(options) { return { addTo: function(map) {} }; },
+    zoom: function(options) { return { addTo: function(map) {} }; }
+};
+
+// Export L globally
+window.L = L;

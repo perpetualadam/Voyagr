@@ -18876,9 +18876,10 @@ clearForm = function () {
 
 // Update calculateRoute to show trip info
 const originalCalculateRoute = calculateRoute;
-calculateRoute = function () {
-    originalCalculateRoute();
-    // Trip info will be updated when route is calculated
+calculateRoute = function (...args) {
+    // calculateRoute is async; forward its promise so `await calculateRoute()`
+    // callers actually wait for the calculation to finish (and not resolve early).
+    return originalCalculateRoute.apply(this, args);
 }
 
 // ===== MOBILE PWA ENHANCEMENTS =====
