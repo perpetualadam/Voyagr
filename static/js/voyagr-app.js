@@ -7026,6 +7026,8 @@ function resetVoiceAnnouncementStateForNewRoute() {
     lastTurnDetectRouteVertexIndex = 0;
     clearInitialETAAnnouncement();
     initialETAMovementRetries = 0;
+    // Drop any stale lane voice key so the new geometry re-announces lane guidance.
+    _lastLaneVoiceKey = '';
 }
 
 /**
@@ -9634,6 +9636,24 @@ let lastLaneGuidanceManeuver = '';
 let lastLaneGuidancePosition = null;
 let _lastLaneVoiceKey = '';
 
+// Short client-side cache of lane-guidance responses so the overlay shows instantly when
+// revisiting the same approach and so a slow/unavailable Overpass doesn't blank it out.
+const _laneGuidanceCache = new Map();        // key -> { data, ts, fallback }
+const LANE_GUIDANCE_CACHE_TTL = 20000;       // reuse OSM-derived guidance for 20s
+const LANE_GUIDANCE_FALLBACK_TTL = 8000;     // shorter reuse for deterministic fallback (keep retrying OSM)
+const LANE_GUIDANCE_FETCH_TIMEOUT = 2500;    // treat Overpass as "slow" beyond this and fall back
+
+function _pruneLaneGuidanceCache() {
+    const now = Date.now();
+    for (const [k, v] of _laneGuidanceCache) {
+        if (now - v.ts > LANE_GUIDANCE_CACHE_TTL) _laneGuidanceCache.delete(k);
+    }
+    while (_laneGuidanceCache.size > 40) {
+        const firstKey = _laneGuidanceCache.keys().next().value;
+        _laneGuidanceCache.delete(firstKey);
+    }
+}
+
 function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
     roundaboutExitCount = roundaboutExitCount || 0;
     const now = Date.now();
@@ -9663,52 +9683,144 @@ function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
     lastLaneGuidanceManeuver = maneuver;
     lastLaneGuidancePosition = { lat, lon };
 
-    fetch(`/api/lane-guidance?lat=${lat}&lon=${lon}&heading=${heading}&maneuver=${maneuver}&distance=${distToManeuver}&road_type=${roadType}&roundabout_exit_count=${roundaboutExitCount}`)
+    // Serve a fresh cached result instantly (key bucketed to ~110m so nearby ticks reuse it).
+    const cacheKey = `${maneuver}|${roundaboutExitCount}|${roadType}|${lat.toFixed(3)},${lon.toFixed(3)}`;
+    const cached = _laneGuidanceCache.get(cacheKey);
+    if (cached) {
+        const ttl = cached.fallback ? LANE_GUIDANCE_FALLBACK_TTL : LANE_GUIDANCE_CACHE_TTL;
+        if (now - cached.ts < ttl) {
+            // Reuse the cached lane STRUCTURE but recompute urgency from the live distance.
+            const lanePos = _laneNameFor(cached.data.recommended_lane, cached.data.total_lanes);
+            renderLaneGuidanceUI({
+                ...cached.data,
+                ..._laneUrgencyFields(distToManeuver, lanePos, maneuver, roundaboutExitCount),
+            });
+            return;
+        }
+    }
+
+    const url = `/api/lane-guidance?lat=${lat}&lon=${lon}&heading=${heading}&maneuver=${maneuver}&distance=${distToManeuver}&road_type=${roadType}&roundabout_exit_count=${roundaboutExitCount}`;
+
+    // Abort (and fall back) if Overpass is slow, so the overlay never stalls.
+    const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), LANE_GUIDANCE_FETCH_TIMEOUT) : null;
+
+    const useFallback = (reason) => {
+        const fb = _buildDeterministicLaneGuidance(maneuver, distToManeuver, roundaboutExitCount, roadType);
+        _laneGuidanceCache.set(cacheKey, { data: fb, ts: Date.now(), fallback: true });
+        _pruneLaneGuidanceCache();
+        console.warn('[Lane Guidance] using deterministic fallback:', reason);
+        renderLaneGuidanceUI(fb);
+    };
+
+    fetch(url, controller ? { signal: controller.signal } : undefined)
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
+            if (timeoutId) clearTimeout(timeoutId);
+            if (data && data.success) {
+                _laneGuidanceCache.set(cacheKey, { data, ts: Date.now(), fallback: false });
+                _pruneLaneGuidanceCache();
                 renderLaneGuidanceUI(data);
+            } else {
+                useFallback('no data');
             }
         })
         .catch(error => {
-            console.error('[Lane Guidance] Error:', error);
-            if (_voyagrIsOffline || !navigator.onLine) {
-                _offlineLaneGuidanceFallback(maneuver, distToManeuver, roundaboutExitCount);
-            }
+            if (timeoutId) clearTimeout(timeoutId);
+            useFallback((error && error.name === 'AbortError') ? 'timeout' : (error && error.message) || 'error');
         });
 }
 
-function _offlineLaneGuidanceFallback(maneuver, distance, exitCount) {
-    const totalLanes = 2;
-    let lane = 1;
+/**
+ * Deterministic, network-free lane guidance used when Overpass is slow/unavailable.
+ * Lane count comes from the road class; the recommended lane mirrors the backend UK
+ * heuristic. Single-lane roads return total_lanes=1 so the overlay stays hidden.
+ */
+function _buildDeterministicLaneGuidance(maneuver, distance, exitCount, roadType) {
+    const LANE_DEFAULTS = {
+        motorway: 3, trunk: 3, primary: 2, secondary: 2,
+        tertiary: 1, residential: 1, unclassified: 1,
+    };
+    let totalLanes = LANE_DEFAULTS[roadType] || 2;
+    if (totalLanes < 1) totalLanes = 1;
+
+    let lane;
+    let dir = 'through';
     if (maneuver === 'roundabout' && exitCount > 0) {
         lane = exitCount >= 3 ? totalLanes : 1;
-    } else if (['right','slight_right','sharp_right','exit_right','exit'].includes(maneuver)) {
+        dir = exitCount >= 3 ? 'right' : (exitCount <= 1 ? 'left' : 'through');
+    } else if (['left', 'slight_left', 'sharp_left', 'exit_left'].includes(maneuver)) {
+        lane = 1;
+        dir = maneuver.indexOf('slight') >= 0 ? 'slight_left' : 'left';
+    } else if (['right', 'slight_right', 'sharp_right', 'exit_right', 'exit'].includes(maneuver)) {
         lane = totalLanes;
+        dir = maneuver.indexOf('slight') >= 0 ? 'slight_right' : 'right';
+    } else if (maneuver === 'uturn') {
+        lane = totalLanes;
+        dir = 'right';
+    } else {
+        lane = Math.max(1, Math.ceil(totalLanes / 2));
+        dir = 'through';
     }
-    const lanePos = lane === 1 ? 'left' : 'right';
-    let urgency = 'none', urgencyText = '';
-    if (distance <= 100) { urgency = 'now'; urgencyText = `Get in the ${lanePos} lane now!`; }
-    else if (distance <= 300) { urgency = 'soon'; urgencyText = `Move to the ${lanePos} lane`; }
-    else if (distance <= 800) { urgency = 'ahead'; urgencyText = `Prepare to use the ${lanePos} lane`; }
-    let guidanceText = `Use the ${lanePos} lane`;
-    if (maneuver === 'roundabout' && exitCount > 0) {
-        guidanceText = `Use the ${lanePos} lane, take the ${_ordinal(exitCount)} exit`;
+
+    const ARROW = { left: '←', slight_left: '↖', through: '↑', slight_right: '↗', right: '→' };
+    const lane_arrows = [];
+    for (let i = 1; i <= totalLanes; i++) {
+        const isRec = i === lane;
+        lane_arrows.push({
+            directions: [isRec ? dir : 'through'],
+            arrow: isRec ? (ARROW[dir] || '↑') : '↑',
+            primary: isRec ? dir : 'through',
+        });
     }
-    renderLaneGuidanceUI({
+
+    const lanePos = _laneNameFor(lane, totalLanes);
+    const urgencyFields = _laneUrgencyFields(distance, lanePos, maneuver, exitCount);
+
+    return {
         success: true, total_lanes: totalLanes, recommended_lane: lane,
-        lane_arrows: [{directions:['through'],arrow:'↑',primary:'through'},{directions:['through'],arrow:'↑',primary:'through'}],
-        lane_change_needed: urgency !== 'none', next_maneuver: maneuver,
-        distance_to_maneuver: distance, urgency, urgency_text: urgencyText,
-        guidance_text: guidanceText, road_name: '', highway_type: 'unknown',
-        has_osm_data: false, has_turn_lanes: false, roundabout_exit_count: exitCount
-    });
+        lane_arrows, next_maneuver: maneuver,
+        ...urgencyFields,
+        road_name: '', highway_type: roadType || 'unknown',
+        has_osm_data: false, has_turn_lanes: false, roundabout_exit_count: exitCount,
+        estimated: true,
+    };
 }
 
 function _ordinal(n) {
     const s = ['th','st','nd','rd'];
     const v = n % 100;
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
+}
+
+/** Human-friendly name for a 1-based lane (mirrors backend _descriptive_lane_name). */
+function _laneNameFor(lane, total) {
+    if (total <= 1) return 'lane';
+    if (lane === 1) return 'left lane';
+    if (lane === total) return 'right lane';
+    if (total === 3 && lane === 2) return 'middle lane';
+    return `lane ${lane}`;
+}
+
+/**
+ * Distance-derived urgency fields (mirrors the backend thresholds). Recomputed from the
+ * live distance so a cached lane structure never shows stale urgency as you approach.
+ */
+function _laneUrgencyFields(distance, lanePos, maneuver, exitCount) {
+    let urgency = 'none', urgency_text = '';
+    if (distance <= 100) { urgency = 'now'; urgency_text = `Get in the ${lanePos} now!`; }
+    else if (distance <= 300) { urgency = 'soon'; urgency_text = `Move to the ${lanePos}`; }
+    else if (distance <= 800) { urgency = 'ahead'; urgency_text = `Prepare to use the ${lanePos}`; }
+    else if (distance <= 1500) { urgency = 'info'; urgency_text = `Stay in the ${lanePos}`; }
+    let guidance_text = `Use the ${lanePos}`;
+    if (maneuver === 'roundabout' && exitCount > 0) {
+        guidance_text = `Use the ${lanePos} and take the ${_ordinal(exitCount)} exit`;
+    }
+    return {
+        urgency, urgency_text, guidance_text,
+        lane_change_needed: ['now', 'soon', 'ahead'].includes(urgency),
+        distance_to_maneuver: distance,
+    };
 }
 
 function renderLaneGuidanceUI(data) {
@@ -9722,6 +9834,18 @@ function renderLaneGuidanceUI(data) {
     if (data.total_lanes <= 1 || data.urgency === 'none') {
         display.classList.remove('show');
         return;
+    }
+
+    // Mark non-OSM (estimated / fallback) guidance so the driver knows it's approximate.
+    const badge = document.getElementById('laneGuidanceBadge');
+    if (badge) {
+        if (data.has_osm_data) {
+            badge.textContent = '';
+            badge.style.display = 'none';
+        } else {
+            badge.textContent = 'Estimated';
+            badge.style.display = 'inline-block';
+        }
     }
 
     // Build lane visual with direction arrows
@@ -10712,6 +10836,67 @@ function distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex
     return Math.max(0, d);
 }
 
+/**
+ * Map a Valhalla maneuver type to a turn-by-turn direction key, or null when it is not
+ * an announceable maneuver (start / continue / straight / ramp-straight / stay-straight).
+ * Shared by the advance "Then" maneuver (widget + voice). Kept in sync with the inline
+ * mappings in detectUpcomingTurn / updateTurnWidgetFromPosition.
+ */
+function maneuverTypeToDirectionKey(type) {
+    if ([4, 5, 6].includes(type)) return 'destination';
+    if (type === 9 || type === 18 || type === 23) return 'slight_right';
+    if (type === 10) return 'right';
+    if (type === 11) return 'sharp_right';
+    if (type === 16 || type === 19 || type === 24) return 'slight_left';
+    if (type === 15) return 'left';
+    if (type === 14) return 'sharp_left';
+    if (type === 12 || type === 13) return 'uturn';
+    if (type === 20) return 'exit_right';
+    if (type === 21) return 'exit_left';
+    if (type === 25 || type === 35 || type === 36) return 'merge';
+    if (type === 26 || type === 27) return 'roundabout';
+    return null;  // 0,1,2,3,7,8,17,22 and transit/ferry types are not "turns"
+}
+
+/** Cumulative along-route distance (m) between two polyline vertex indices. */
+function cumulativeRouteDistanceBetween(i, j) {
+    if (!routePolyline || routePolyline.length < 2) return Infinity;
+    let a = Math.max(0, Math.min(i | 0, routePolyline.length - 1));
+    let b = Math.max(0, Math.min(j | 0, routePolyline.length - 1));
+    if (b < a) { const t = a; a = b; b = t; }
+    let d = 0;
+    for (let k = a; k < b; k++) {
+        d += calculateHaversineDistance(
+            routePolyline[k][0], routePolyline[k][1],
+            routePolyline[k + 1][0], routePolyline[k + 1][1]
+        );
+    }
+    return d;
+}
+
+/**
+ * Find the first announceable maneuver AFTER the given step index, plus the along-route
+ * gap (m) from that step to it. Used to surface the upcoming maneuver in advance.
+ * @returns {{ direction, valhallaType, streetName, gapMeters, index, maneuver } | null}
+ */
+function getFollowingManeuver(currentIndex) {
+    if (!currentRouteSteps || currentIndex == null || currentIndex < 0) return null;
+    const current = currentRouteSteps[currentIndex];
+    if (!current) return null;
+    const currentShapeIdx = current.begin_shape_index || 0;
+    for (let j = currentIndex + 1; j < currentRouteSteps.length; j++) {
+        const m = currentRouteSteps[j];
+        const type = m.type || 0;
+        const dir = maneuverTypeToDirectionKey(type);
+        if (!dir) continue;
+        const gapMeters = cumulativeRouteDistanceBetween(currentShapeIdx, m.begin_shape_index || 0);
+        const streetNames = m.street_names || [];
+        const streetName = streetNames.length > 0 ? streetNames[0] : (m.street_name || '');
+        return { direction: dir, valhallaType: type, streetName, gapMeters, index: j, maneuver: m };
+    }
+    return null;
+}
+
 /** Valhalla stores roundabout exit count on enter and/or exit maneuver — merge for UI/lane hints. */
 function effectiveRoundaboutExitCount(stepIndex) {
     const steps = currentRouteSteps;
@@ -10761,11 +10946,16 @@ function buildTurnLaneHintHtml(maneuver, maneuverIndex, distanceMeters) {
             chips.push(`<span class="lane-hint-chip">${laneOrdinalEnglish(idx + 1)} lane</span>`);
         }
     }
-    const multiFork = [15, 16, 9, 10, 11, 14, 20, 21, 23, 24, 25, 35, 36].includes(mt);
-    if (multiFork && chips.length === 0 && typeof distanceMeters === 'number' && distanceMeters < 900) {
-        if ([15, 16, 14, 21, 24].includes(mt)) {
+    // "Keep left/right" lane hints only make sense for forks / keeps / ramps / exits /
+    // merges — NOT hard turns. A genuine "Turn left" (15) or "Turn right" (10) must never
+    // be annotated "Keep left/right", which previously read as "keep left instead of turn left".
+    const keepLeftTypes = [16, 19, 21, 24, 36];   // slight/ramp/exit/stay/merge LEFT
+    const keepRightTypes = [9, 18, 20, 23, 35];   // slight/ramp/exit/stay/merge RIGHT
+    const showsKeepHint = keepLeftTypes.includes(mt) || keepRightTypes.includes(mt);
+    if (showsKeepHint && chips.length === 0 && typeof distanceMeters === 'number' && distanceMeters < 900) {
+        if (keepLeftTypes.includes(mt)) {
             chips.push('<span class="lane-hint-chip">Keep left</span>');
-        } else if ([9, 10, 11, 20, 23].includes(mt)) {
+        } else if (keepRightTypes.includes(mt)) {
             chips.push('<span class="lane-hint-chip">Keep right</span>');
         }
     }
@@ -13001,6 +13191,8 @@ function hideTurnInstructionWidget() {
             hintEl.innerHTML = '';
             hintEl.style.display = 'none';
         }
+        const thenEl = document.getElementById('nextTurnThen');
+        if (thenEl) thenEl.style.display = 'none';
         console.log('[Turn Widget] Hidden');
     }
 }
@@ -13171,11 +13363,46 @@ function updateTurnInstructionDisplay(turnInfo) {
         }
     }
 
+    // Advance "Then …" row: surface the maneuver that follows the next turn.
+    updateThenRow(turnInfo ? turnInfo.maneuverIndex : null, turnInfo ? turnInfo.distance : null);
+
     if (instructionsPanelExpanded) {
         populateInstructionsList();
     }
 
     updateARInstruction(turnInfo);
+}
+
+/**
+ * Show/hide the advance "Then <maneuver>" row. It appears while approaching the next
+ * turn (<= 700 m) when another maneuver follows close behind (<= 900 m gap), e.g.
+ * "Turn left … Then turn right".
+ * @param {number|null} maneuverIndex - Index of the current/next maneuver in currentRouteSteps
+ * @param {number|null} currentDistance - Distance (m) to the current maneuver
+ */
+function updateThenRow(maneuverIndex, currentDistance) {
+    const thenEl = document.getElementById('nextTurnThen');
+    if (!thenEl) return;
+    const iconEl = document.getElementById('nextTurnThenIcon');
+    const textEl = document.getElementById('nextTurnThenText');
+
+    let show = false;
+    if (maneuverIndex != null && typeof currentDistance === 'number' && currentDistance <= 700) {
+        const follow = getFollowingManeuver(maneuverIndex);
+        if (follow && follow.gapMeters <= 900) {
+            let label = getTurnDirectionText(follow.direction);
+            label = label.charAt(0).toUpperCase() + label.slice(1);
+            if (follow.direction === 'roundabout') {
+                const exitCt = effectiveRoundaboutExitCount(follow.index);
+                if (exitCt > 0) label = `Roundabout, ${ordinalEnglishExit(exitCt)} exit`;
+            }
+            const onto = follow.streetName ? ` onto ${follow.streetName}` : '';
+            if (iconEl) iconEl.textContent = getTurnIcon(follow.valhallaType);
+            if (textEl) textEl.textContent = `${label}${onto}`;
+            show = true;
+        }
+    }
+    thenEl.style.display = show ? 'flex' : 'none';
 }
 
 /**
@@ -15532,6 +15759,21 @@ function announceUpcomingTurn(turnInfo) {
                     }
                 } else if (announcementDistance === 50) {
                     message = `${directionText}${streetOnto}`;
+                }
+            }
+
+            // At the most-imminent threshold, chain the very next maneuver if it follows
+            // immediately (e.g. "Turn left, then turn right") so the driver hears it in advance.
+            const isImminentThreshold = announcementDistance === announcementDistances[announcementDistances.length - 1];
+            if (message && isImminentThreshold && turnInfo.maneuverIndex != null) {
+                const follow = getFollowingManeuver(turnInfo.maneuverIndex);
+                if (follow && follow.gapMeters <= 250) {
+                    let followText = getTurnDirectionText(follow.direction);
+                    if (follow.direction === 'roundabout') {
+                        const exitCt = effectiveRoundaboutExitCount(follow.index);
+                        if (exitCt > 0) followText = `at the roundabout take the ${ordinalEnglishExit(exitCt)} exit`;
+                    }
+                    message += `, then ${followText}`;
                 }
             }
 

@@ -42,12 +42,15 @@ _LANE_CACHE_EXPIRY = 300  # 5 minutes
 # Lane arrow symbols for display
 LANE_ARROWS = {
     'left': '←',
+    'sharp_left': '↰',
     'slight_left': '↖',
     'through': '↑',
     'slight_right': '↗',
     'right': '→',
+    'sharp_right': '↱',
     'merge_to_left': '↰',
     'merge_to_right': '↱',
+    'reverse': '↩',
     'none': '↑',
 }
 
@@ -120,22 +123,46 @@ def _parse_turn_lanes(turn_lanes_str, total_lanes):
     return [p.split(';') for p in parts]
 
 
-def _recommend_lane_from_turn_lanes(lane_dirs, maneuver):
-    """Given parsed turn:lanes and a maneuver, pick the best lane index (1-based)."""
+def _recommend_lane_from_turn_lanes(lane_dirs, maneuver, roundabout_exit_count=0):
+    """Given parsed turn:lanes and a maneuver, pick the best lane index (1-based).
+
+    Roundabouts are resolved from the *exit* you leave by: the early exits leave to
+    the left, the middle exit(s) go straight through, later exits leave to the right.
+    This lets real lane markings win — e.g. when the left lane is "left-turn only" and
+    going straight ahead actually requires the middle/right lane.
+    """
     if not lane_dirs:
         return None
 
+    # Maneuver -> preferred OSM turn:lanes indications (most-preferred first). Every
+    # maneuver the client can send is recognised here so lane selection never silently
+    # falls back to "through" for a real turn (e.g. a sharp left used to do that).
     maneuver_map = {
         'left': ['left', 'slight_left'],
+        'sharp_left': ['sharp_left', 'left', 'slight_left'],
         'slight_left': ['slight_left', 'left'],
         'right': ['right', 'slight_right'],
+        'sharp_right': ['sharp_right', 'right', 'slight_right'],
         'slight_right': ['slight_right', 'right'],
         'straight': ['through', 'none', ''],
         'exit_right': ['right', 'slight_right', 'merge_to_right'],
         'exit_left': ['left', 'slight_left', 'merge_to_left'],
         'exit': ['right', 'slight_right'],
         'merge': ['through', 'none', ''],
+        'uturn': ['reverse', 'left', 'slight_left'],
+        'destination': ['through', 'none', ''],
     }
+
+    # Roundabouts are exit-dependent, so their entry is derived and folded into the same
+    # map: early exits leave to the left, the middle exit goes straight through (never a
+    # turn-only lane), later exits leave to the right.
+    if maneuver == 'roundabout':
+        if roundabout_exit_count <= 1:
+            maneuver_map['roundabout'] = ['left', 'slight_left', 'through']
+        elif roundabout_exit_count == 2:
+            maneuver_map['roundabout'] = ['through', 'none', '', 'slight_left', 'slight_right']
+        else:
+            maneuver_map['roundabout'] = ['right', 'slight_right', 'through']
 
     wanted = maneuver_map.get(maneuver, ['through', 'none', ''])
 
@@ -157,21 +184,22 @@ def _recommend_lane_from_turn_lanes(lane_dirs, maneuver):
 def _get_recommended_lane_simple(maneuver, total_lanes, roundabout_exit_count=0):
     """Fallback lane recommendation when no OSM turn:lanes data is available.
 
-    For roundabouts (UK, left-hand traffic):
-      Exit 1 (first/left exit)  -> left lane
-      Exit 2 (straight on)      -> left lane (2-lane) or middle (3+)
-      Exit 3+ (right turn)      -> right lane
+    For roundabouts (UK, left-hand traffic), per Highway Code:
+      Exit 1 (first/left exit)     -> left lane
+      Exit 2 (straight ahead)      -> left lane
+      Exit 3+ (right / full circle) -> right lane
+    Approaches up to and including "straight ahead" stay in the LEFT lane; only
+    exits past straight (turning right) use the right lane. This matches the
+    client's offline fallback. (Previously the 2nd exit on 3+ lane roundabouts
+    returned the middle lane, telling drivers "middle" when the answer was left.)
     """
     if total_lanes <= 1:
         return 1
 
     if maneuver == 'roundabout' and roundabout_exit_count > 0:
-        if roundabout_exit_count <= 1:
-            return 1  # First exit -> left lane
-        elif roundabout_exit_count == 2:
-            return 1 if total_lanes <= 2 else max(1, (total_lanes + 1) // 2)
-        else:
-            return total_lanes  # 3rd+ exit -> right lane
+        if roundabout_exit_count <= 2:
+            return 1  # 1st/2nd exit (left or straight ahead) -> left lane
+        return total_lanes  # 3rd+ exit (right) -> right lane
     elif maneuver in ('left', 'slight_left', 'sharp_left', 'exit_left'):
         return 1
     elif maneuver in ('right', 'slight_right', 'sharp_right', 'exit_right', 'exit'):
@@ -237,7 +265,9 @@ def get_lane_guidance():
         # Determine recommended lane
         recommended_lane = None
         if parsed_lanes:
-            recommended_lane = _recommend_lane_from_turn_lanes(parsed_lanes, next_maneuver)
+            recommended_lane = _recommend_lane_from_turn_lanes(
+                parsed_lanes, next_maneuver, roundabout_exit_count
+            )
 
         if recommended_lane is None:
             recommended_lane = _get_recommended_lane_simple(

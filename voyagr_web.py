@@ -2583,9 +2583,12 @@ def build_graphhopper_optimised_route_entry(
         gh_hazards_list = get_hazards_on_route(gh_coords, hazards)
         gh_duration_min = gh_duration_min * traffic_multiplier
 
+        # GraphHopper sign -> Valhalla maneuver type. Valhalla numbering:
+        # 12=U-turn R, 13=U-turn L, 14=Sharp L, 15=Left, 16=Slight L, 23=Stay R, 24=Stay L.
+        # (Left turns were previously off-by-one, surfacing "keep left"/straight-arrow bugs.)
         gh_sign_to_valhalla = {
-            -3: 15, -2: 16, -1: 17, 0: 8,
-            1: 9, 2: 10, 3: 11, 4: 4, 5: 0, 6: 26,
+            -98: 13, -8: 13, -7: 24, -3: 14, -2: 15, -1: 16, 0: 8,
+            1: 9, 2: 10, 3: 11, 4: 4, 5: 0, 6: 26, 7: 23, 8: 12,
         }
 
         # GraphHopper `details.max_speed` = [[from_idx, to_idx, value_kmh|null], ...] keyed by
@@ -4180,15 +4183,8 @@ HTML_TEMPLATE = '''
                     <div class="favorites-grid" id="favoritesGrid"></div>
                 </div>
 
-                <!-- Lane Guidance Display (Phase 2 - Enhanced Smart Lane Recognition) -->
-                <div class="lane-guidance-display" id="laneGuidanceDisplay">
-                    <div class="lane-guidance-header">
-                        <span class="lane-guidance-title">🛣️ Lane Guidance</span>
-                        <span class="lane-guidance-badge" id="laneGuidanceBadge"></span>
-                    </div>
-                    <div class="lane-visual" id="laneVisual"></div>
-                    <div class="lane-guidance-text" id="laneGuidanceText"></div>
-                </div>
+                <!-- Lane Guidance Display moved into #turnInstructionWidget so it surfaces
+                     as a live navigation overlay (was hidden here inside the sidebar). -->
 
                 <!-- Speed Warning Display (Phase 2) -->
                 <div class="speed-warning-display" id="speedWarningDisplay">
@@ -5459,6 +5455,26 @@ HTML_TEMPLATE = '''
                 <div class="expand-indicator">
                     <span id="expandIcon">▼</span>
                 </div>
+            </div>
+
+            <!-- Advance "Then" row: the maneuver that immediately follows the next turn,
+                 so the driver gets the upcoming maneuver in advance (e.g. "Then turn right"). -->
+            <div id="nextTurnThen" class="next-turn-then" style="display: none;">
+                <span class="next-turn-then-label">Then</span>
+                <span id="nextTurnThenIcon" class="next-turn-then-icon">↑</span>
+                <span id="nextTurnThenText" class="next-turn-then-text"></span>
+            </div>
+
+            <!-- Lane Guidance Overlay (Phase 2 - Smart Lane Recognition).
+                 Lives inside the turn widget so the recommended lane + arrows show as a
+                 live overlay under the next-turn card during navigation. -->
+            <div class="lane-guidance-display" id="laneGuidanceDisplay">
+                <div class="lane-guidance-header">
+                    <span class="lane-guidance-title">🛣️ Lane Guidance</span>
+                    <span class="lane-guidance-badge" id="laneGuidanceBadge"></span>
+                </div>
+                <div class="lane-visual" id="laneVisual"></div>
+                <div class="lane-guidance-text" id="laneGuidanceText"></div>
             </div>
 
             <!-- Expandable Full Instructions Panel -->
@@ -7710,21 +7726,30 @@ def calculate_route():
                                 gh_instructions = graphhopper_route.get('instructions', [])
                                 gh_maneuvers = []
 
-                                # GraphHopper sign values to Valhalla type mapping
-                                # GraphHopper signs: -3=sharp left, -2=left, -1=slight left, 0=straight,
-                                #                   1=slight right, 2=right, 3=sharp right, 4=finish,
-                                #                   5=via, 6=roundabout
+                                # GraphHopper sign values to Valhalla type mapping.
+                                # GraphHopper signs: -98/-8=u-turn, -7=keep left, -3=sharp left,
+                                #   -2=left, -1=slight left, 0=straight, 1=slight right, 2=right,
+                                #   3=sharp right, 4=finish, 5=via, 6=roundabout, 7=keep right, 8=u-turn.
+                                # Valhalla types: 12=U-turn R, 13=U-turn L, 14=Sharp L, 15=Left,
+                                #   16=Slight L, 23=Stay R, 24=Stay L. Left turns were previously
+                                #   off-by-one (sharp->15, left->16, slight->17), which made real
+                                #   left turns read as "keep left" and slight-left show a straight arrow.
                                 gh_sign_to_valhalla = {
-                                    -3: 15,  # Sharp left -> Valhalla sharp left (15)
-                                    -2: 16,  # Left -> Valhalla left (16)
-                                    -1: 17,  # Slight left -> Valhalla slight left (17)
-                                    0: 8,    # Straight -> Valhalla continue (8)
-                                    1: 9,    # Slight right -> Valhalla slight right (9)
-                                    2: 10,   # Right -> Valhalla right (10)
-                                    3: 11,   # Sharp right -> Valhalla sharp right (11)
-                                    4: 4,    # Finish -> Valhalla destination (4)
-                                    5: 0,    # Via -> Valhalla none (0)
-                                    6: 26,   # Roundabout -> Valhalla enter roundabout (26)
+                                    -98: 13,  # U-turn (unknown) -> Valhalla U-turn Left (13)
+                                    -8: 13,   # U-turn left -> Valhalla U-turn Left (13)
+                                    -7: 24,   # Keep left -> Valhalla Stay Left (24)
+                                    -3: 14,   # Sharp left -> Valhalla Sharp Left (14)
+                                    -2: 15,   # Left -> Valhalla Left (15)
+                                    -1: 16,   # Slight left -> Valhalla Slight Left (16)
+                                    0: 8,     # Straight -> Valhalla Continue (8)
+                                    1: 9,     # Slight right -> Valhalla Slight Right (9)
+                                    2: 10,    # Right -> Valhalla Right (10)
+                                    3: 11,    # Sharp right -> Valhalla Sharp Right (11)
+                                    4: 4,     # Finish -> Valhalla Destination (4)
+                                    5: 0,     # Via -> Valhalla None (0)
+                                    6: 26,    # Roundabout -> Valhalla Enter Roundabout (26)
+                                    7: 23,    # Keep right -> Valhalla Stay Right (23)
+                                    8: 12,    # U-turn right -> Valhalla U-turn Right (12)
                                 }
 
                                 for instr in gh_instructions:
@@ -8050,9 +8075,10 @@ def calculate_route():
                                             gh_hazards_list = get_hazards_on_route(gh_coords, hazards)
 
                                             gh_instructions = graphhopper_route.get('instructions', [])
+                                            # See valhalla numbering note above; left turns were off-by-one.
                                             gh_sign_to_valhalla = {
-                                                -3: 15, -2: 16, -1: 17, 0: 8,
-                                                1: 9, 2: 10, 3: 11, 4: 4, 5: 0, 6: 26,
+                                                -98: 13, -8: 13, -7: 24, -3: 14, -2: 15, -1: 16, 0: 8,
+                                                1: 9, 2: 10, 3: 11, 4: 4, 5: 0, 6: 26, 7: 23, 8: 12,
                                             }
                                             gh_maneuvers = []
                                             for instr in gh_instructions:

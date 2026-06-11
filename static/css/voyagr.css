@@ -1385,6 +1385,13 @@ h1 {
     animation: laneSlideIn 0.3s ease-out;
 }
 
+/* When mounted inside the turn-by-turn widget it acts as a live overlay attached
+   beneath the next-turn card (no sidebar margin, matched corners). */
+.turn-instruction-widget .lane-guidance-display {
+    margin-top: 8px;
+    margin-bottom: 0;
+}
+
 @keyframes laneSlideIn {
     from { opacity: 0; transform: translateY(-10px); }
     to { opacity: 1; transform: translateY(0); }
@@ -2288,6 +2295,44 @@ body.dark-mode .form-group[style*="background: #f5f5f5"] {
     max-width: calc(100% - 180px);
     /* Leave room for speed widget on right */
     min-width: 280px;
+}
+
+/* Advance "Then" row - shows the maneuver following the next turn */
+.next-turn-then {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 6px;
+    padding: 7px 14px;
+    background: linear-gradient(135deg, #15396b 0%, #0d2a52 100%);
+    color: rgba(255, 255, 255, 0.95);
+    border-radius: 12px;
+    box-shadow: 0 3px 12px rgba(13, 42, 82, 0.35);
+    font-size: 14px;
+}
+
+.next-turn-then-label {
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-size: 10px;
+    font-weight: 700;
+    opacity: 0.8;
+}
+
+.next-turn-then-icon {
+    font-size: 18px;
+    line-height: 1;
+}
+
+.next-turn-then-text {
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+body.dark-mode .next-turn-then {
+    background: linear-gradient(135deg, #0b2347 0%, #071a36 100%);
 }
 
 /* Next Turn Display - Main clickable area */
