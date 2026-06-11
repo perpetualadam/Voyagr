@@ -11379,7 +11379,8 @@ function applySmartZoomWithAnimation(speedMph, distanceToNextTurn = null, roadTy
             if (navFollow) {
                 padding = getNavigationFollowPadding();
                 if (shouldUsePitchedDrivingCamera()) {
-                    pitch = 60;
+                    // Heading-up; flat (0°) when the user picked 2D map view, else tilted (60°).
+                    pitch = shouldTiltDrivingCamera() ? 60 : 0;
                     bearing = (currentUserMarker && typeof currentUserMarker.heading === 'number')
                         ? currentUserMarker.heading
                         : map.getBearing();
@@ -12891,9 +12892,27 @@ function isActiveNavigationFollow() {
     return !!(routeInProgress && zoomAndFollowEnabled && mapFollowingActive);
 }
 
-/** 60° + heading + padding: active nav follow, or user enabled driver view while browsing */
+/** Heading-up follow camera: active nav follow, or user enabled driver view while browsing */
 function shouldUsePitchedDrivingCamera() {
     return isActiveNavigationFollow() || driverPerspectiveEnabled;
+}
+
+/**
+ * True when the user has explicitly chosen the flat 2D map view (Settings → 3D Map View off).
+ * Read from localStorage so it is safe to call before the in-memory flag initialises and so it
+ * stays correct across the whole camera pipeline. Default (no saved value) is treated as 3D.
+ */
+function userPrefersFlat2D() {
+    return localStorage.getItem('mapView3DEnabled') === 'false';
+}
+
+/**
+ * Whether the follow camera should be tilted (3D pitch). This is the heading-up follow decision
+ * minus an explicit 2D preference — so 2D navigation still follows/rotates with heading but stays
+ * flat (pitch 0) instead of tilted (pitch 60).
+ */
+function shouldTiltDrivingCamera() {
+    return shouldUsePitchedDrivingCamera() && !userPrefersFlat2D();
 }
 
 /** One-shot camera after nav start or when forcing driver framing */
@@ -12904,12 +12923,12 @@ function applyLiveNavigationCamera() {
         : map.getBearing();
     map.easeTo({
         duration: 1000,
-        pitch: 60,
+        pitch: shouldTiltDrivingCamera() ? 60 : 0,
         bearing: heading,
         center: [currentLon, currentLat],
         padding: getNavigationFollowPadding(),
     });
-    console.log('[Driver View] 60° navigation camera (follow padding)');
+    console.log(`[Driver View] ${shouldTiltDrivingCamera() ? '60°' : 'flat 2D'} navigation camera (follow padding)`);
 }
 
 /**
@@ -12963,14 +12982,14 @@ function applyDriverPerspective() {
     };
 
     if (shouldUsePitchedDrivingCamera()) {
-        easeOptions.pitch = 60;
+        easeOptions.pitch = shouldTiltDrivingCamera() ? 60 : 0;
         easeOptions.bearing = heading;
         easeOptions.padding = getNavigationFollowPadding();
         if (currentLat != null && currentLon != null) {
             easeOptions.center = [currentLon, currentLat];
         }
         map.easeTo(easeOptions);
-        console.log('[Driver View] 60° (navigation follow or preference)');
+        console.log(`[Driver View] ${shouldTiltDrivingCamera() ? '60°' : 'flat 2D heading-up'} (navigation follow or preference)`);
     } else {
         easeOptions.pitch = 0;
         easeOptions.bearing = 0;
@@ -12983,10 +13002,11 @@ function applyDriverPerspective() {
 
 // ===== 2D / 3D MAP VIEW (scene preset) =====
 // One user-facing switch that bundles the existing camera-tilt + 3D-building controls:
-//   3D = tilted browsing camera (driver perspective) + 3D building extrusions
-//   2D = flat top-down camera + no building extrusions
-// It reuses the existing flags/functions (no separate state), and active turn-by-turn
-// navigation still tilts to 60° regardless (handled by shouldUsePitchedDrivingCamera()).
+//   3D = tilted camera (driver perspective) + 3D building extrusions
+//   2D = flat camera (pitch 0) + no building extrusions
+// It reuses the existing flags/functions (no separate state). The choice applies while
+// browsing AND during turn-by-turn navigation: 2D navigation still follows heading-up,
+// it just stays flat instead of tilting to 60° (see shouldTiltDrivingCamera()).
 let mapView3DEnabled = (localStorage.getItem('mapView3DEnabled') !== null)
     ? (localStorage.getItem('mapView3DEnabled') === 'true')
     : (driverPerspectiveEnabled || buildings3DEnabled);
@@ -14840,8 +14860,9 @@ function startGPSTracking() {
             if (zoomAndFollowEnabled && mapFollowingActive && map) {
                 const smartZoom = calculateSmartZoom(speedMph, null, 'motorway');
 
-                // 60° during active nav follow; preference also enables pitch when browsing with follow
-                const pitch = shouldUsePitchedDrivingCamera() ? 60 : 0;
+                // Heading-up follow during active nav (or driver-view browsing). Tilt to 60° unless
+                // the user picked the flat 2D map view, in which case stay heading-up but flat.
+                const pitch = shouldTiltDrivingCamera() ? 60 : 0;
                 const padding = getNavigationFollowPadding();
                 const bearing = shouldUsePitchedDrivingCamera() ? (heading || map.getBearing()) : 0;
 

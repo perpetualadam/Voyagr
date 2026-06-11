@@ -4780,7 +4780,7 @@ HTML_TEMPLATE = '''
                                 <span class="preference-label">🗺️ 3D Map View</span>
                                 <button class="toggle-switch" id="mapView3DToggle" onclick="toggleMapView3D()"></button>
                             </div>
-                            <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Switch the whole map between flat 2D (top-down) and tilted 3D (perspective + 3D buildings). Turn-by-turn navigation always stays tilted.</p>
+                            <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Switch the whole map between flat 2D and tilted 3D (perspective + 3D buildings). Applies while browsing and during navigation — 2D navigation still follows heading-up, just flat.</p>
                             <div class="preference-item">
                                 <span class="preference-label">👓 AR Navigation</span>
                                 <button class="toggle-switch" id="arModeBtn" onclick="toggleARMode()"></button>
