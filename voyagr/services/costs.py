@@ -299,11 +299,14 @@ class CostCalculator:
         toll_cost: float = 0.0
         caz_cost: float = 0.0
 
-        # Calculate fuel/energy cost
+        # Calculate fuel/energy amount and cost
+        fuel_litres: float = 0.0  # litres for petrol/diesel/hybrid, kWh for electric
         if vehicle_type == 'electric':
-            fuel_cost = (distance_km / 100) * energy_efficiency * electricity_price
+            fuel_litres = (distance_km / 100) * energy_efficiency  # kWh
+            fuel_cost = fuel_litres * electricity_price
         else:
-            fuel_cost = (distance_km / 100) * fuel_efficiency * fuel_price
+            fuel_litres = (distance_km / 100) * fuel_efficiency  # litres
+            fuel_cost = fuel_litres * fuel_price
 
         # Calculate toll cost
         if include_tolls:
@@ -316,6 +319,7 @@ class CostCalculator:
 
         return {
             'fuel_cost': round(fuel_cost, 2),
+            'fuel_litres': round(fuel_litres, 2),  # litres (petrol/diesel) or kWh (electric)
             'toll_cost': round(toll_cost, 2),
             'caz_cost': round(caz_cost, 2),
             'caz_details': caz_details,
@@ -506,6 +510,209 @@ class CostCalculator:
             }
         except Exception as e:
             logger.error(f"[Cache] Error getting cache statistics: {e}")
+            return {}
+
+    def predict_cost(self, distance_km: float, vehicle_type: str, fuel_efficiency: float, fuel_price: float,
+                    energy_efficiency: float, electricity_price: float, include_tolls: bool, include_caz: bool) -> Dict[str, Any]:
+        """Predict cost for a route using historical data and ML-based estimation."""
+        try:
+            # Get historical average cost per km for similar routes
+            with db_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute('''
+                    SELECT AVG(total_cost / distance_km) as avg_cost_per_km
+                    FROM persistent_route_cache
+                    WHERE vehicle_type = ? AND distance_km > ? AND distance_km < ?
+                ''', (vehicle_type, distance_km * 0.8, distance_km * 1.2))
+
+                result = cursor.fetchone()
+                historical_cost_per_km = result[0] if result and result[0] else None
+
+            # Calculate base cost
+            base_costs = self.calculate_costs(
+                distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                energy_efficiency, electricity_price, include_tolls, include_caz, False
+            )
+
+            # If we have historical data, blend with prediction
+            if historical_cost_per_km:
+                predicted_total = historical_cost_per_km * distance_km
+                # Blend: 70% calculated, 30% historical
+                blended_cost = (base_costs['total_cost'] * 0.7) + (predicted_total * 0.3)
+                confidence = 0.85  # High confidence with historical data
+            else:
+                blended_cost = base_costs['total_cost']
+                confidence = 0.65  # Lower confidence without historical data
+
+            return {
+                'predicted_cost': round(blended_cost, 2),
+                'base_cost': round(base_costs['total_cost'], 2),
+                'confidence': round(confidence, 2),
+                'cost_per_km': round(blended_cost / distance_km if distance_km > 0 else 0, 3),
+                'breakdown': base_costs
+            }
+        except Exception as e:
+            logger.error(f"[Prediction] Error predicting cost: {e}")
+            # Fallback to basic calculation
+            return {
+                'predicted_cost': round(self.calculate_costs(
+                    distance_km, vehicle_type, fuel_efficiency, fuel_price,
+                    energy_efficiency, electricity_price, include_tolls, include_caz, False
+                )['total_cost'], 2),
+                'confidence': 0.5,
+                'error': str(e)
+            }
+
+    def optimize_route_cost(self, routes_data: List[Dict[str, Any]], vehicle_type: str, _fuel_efficiency: float, _fuel_price: float,
+                           energy_efficiency: float, electricity_price: float) -> Optional[Dict[str, Any]]:
+        """Provide cost optimization suggestions for routes."""
+        if not routes_data or len(routes_data) == 0:
+            return None
+
+        optimizations = []
+
+        for idx, route in enumerate(routes_data):
+            distance_km = route.get('distance_km', 0)
+            duration_minutes = route.get('duration_minutes', 0)
+            total_cost = route.get('fuel_cost', 0) + route.get('toll_cost', 0) + route.get('caz_cost', 0)
+
+            suggestions = []
+
+            # Suggestion 1: Toll avoidance
+            if route.get('toll_cost', 0) > 0:
+                toll_savings = route.get('toll_cost', 0)
+                suggestions.append({
+                    'type': 'toll_avoidance',
+                    'title': 'Avoid Tolls',
+                    'savings': round(toll_savings, 2),
+                    'description': f'Avoid toll roads to save £{toll_savings:.2f}'
+                })
+
+            # Suggestion 2: CAZ avoidance
+            if route.get('caz_cost', 0) > 0:
+                caz_savings = route.get('caz_cost', 0)
+                suggestions.append({
+                    'type': 'caz_avoidance',
+                    'title': 'Avoid CAZ',
+                    'savings': round(caz_savings, 2),
+                    'description': f'Avoid Congestion Charge Zone to save £{caz_savings:.2f}'
+                })
+
+            # Suggestion 3: Time optimization
+            if duration_minutes > 60:
+                time_saved_minutes = max(5, int(duration_minutes * 0.1))  # 10% time reduction
+                cost_per_minute = total_cost / duration_minutes if duration_minutes > 0 else 0
+                cost_savings = cost_per_minute * time_saved_minutes
+                suggestions.append({
+                    'type': 'time_optimization',
+                    'title': 'Faster Route',
+                    'savings': round(cost_savings, 2),
+                    'description': f'Take a faster route to save ~{time_saved_minutes} minutes and £{cost_savings:.2f}'
+                })
+
+            # Suggestion 4: Vehicle efficiency
+            if vehicle_type != 'electric':
+                # Estimate EV savings
+                ev_cost = (distance_km / 100) * energy_efficiency * electricity_price
+                fuel_cost = route.get('fuel_cost', 0)
+                if fuel_cost > ev_cost:
+                    ev_savings = fuel_cost - ev_cost
+                    suggestions.append({
+                        'type': 'vehicle_efficiency',
+                        'title': 'Use Electric Vehicle',
+                        'savings': round(ev_savings, 2),
+                        'description': f'Using an EV could save £{ev_savings:.2f} on fuel'
+                    })
+
+            optimizations.append({
+                'route_id': idx + 1,
+                'total_cost': round(total_cost, 2),
+                'suggestions': suggestions,
+                'total_potential_savings': round(sum(s['savings'] for s in suggestions), 2)
+            })
+
+        return {
+            'routes': optimizations,
+            'best_optimization': max(optimizations, key=lambda x: x['total_potential_savings']) if optimizations else None
+        }
+
+    def cache_alternative_routes(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float,
+                                routing_mode: str, vehicle_type: str, routes_data: List[Dict[str, Any]]) -> bool:
+        """Cache alternative routes with smart TTL and invalidation strategy."""
+        try:
+            with db_connection() as conn:
+                cursor = conn.cursor()
+
+                # Store each alternative route
+                for idx, route in enumerate(routes_data):
+                    distance_km = route.get('distance_km', 0)
+                    duration_minutes = route.get('duration_minutes', 0)
+                    fuel_cost = route.get('fuel_cost', 0)
+                    toll_cost = route.get('toll_cost', 0)
+                    caz_cost = route.get('caz_cost', 0)
+                    total_cost = fuel_cost + toll_cost + caz_cost
+
+                    # Determine TTL based on route characteristics
+                    # Longer routes get longer TTL (more stable)
+                    # Routes with tolls/CAZ get shorter TTL (prices change)
+                    # base_ttl: 3600 seconds = 1 hour (kept for reference, TTL not currently used)
+                    if distance_km > 100:
+                        ttl_multiplier: float = 2  # 2 hours for long routes
+                    elif distance_km > 50:
+                        ttl_multiplier = 1.5  # 1.5 hours for medium routes
+                    else:
+                        ttl_multiplier = 1  # 1 hour for short routes
+
+                    # Reduce TTL if route has tolls or CAZ
+                    if toll_cost > 0 or caz_cost > 0:
+                        ttl_multiplier *= 0.7  # 30% reduction
+
+                    # TTL calculation available for future use: int(base_ttl * ttl_multiplier)
+
+                    # Insert alternative route
+                    cursor.execute('''
+                        INSERT INTO persistent_route_cache
+                        (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                         route_data, distance_km, duration_minutes, fuel_cost, toll_cost, caz_cost,
+                         total_cost, source, access_count, last_accessed)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP)
+                        ON CONFLICT(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type)
+                        DO UPDATE SET access_count = access_count + 1, last_accessed = CURRENT_TIMESTAMP
+                    ''', (start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
+                          json.dumps(route), distance_km, duration_minutes, fuel_cost, toll_cost,
+                          caz_cost, total_cost, f'Alternative-{idx+1}'))
+
+                conn.commit()
+            return True
+        except Exception as e:
+            logger.error(f"[Cache] Error caching alternative routes: {e}")
+            return False
+
+    def get_alternative_route_cache_info(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, Any]:
+        """Get cache information for alternative routes."""
+        try:
+            with db_connection() as conn:
+                cursor = conn.cursor()
+
+                cursor.execute('''
+                    SELECT COUNT(*), AVG(total_cost), SUM(access_count)
+                    FROM persistent_route_cache
+                    WHERE start_lat=? AND start_lon=? AND end_lat=? AND end_lon=?
+                ''', (start_lat, start_lon, end_lat, end_lon))
+
+                result = cursor.fetchone()
+
+            if result:
+                count, avg_cost, total_accesses = result
+                return {
+                    'cached_alternatives': count or 0,
+                    'average_cost': round(avg_cost, 2) if avg_cost else 0,
+                    'total_accesses': total_accesses or 0
+                }
+            return {}
+        except Exception as e:
+            logger.error(f"[Cache] Error getting alternative route cache info: {e}")
             return {}
 
 

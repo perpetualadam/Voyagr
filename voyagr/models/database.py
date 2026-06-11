@@ -105,6 +105,17 @@ def _ensure_pool() -> Optional[DatabasePool]:
     return db_pool
 
 
+def get_pool() -> Optional[DatabasePool]:
+    """Return the shared connection pool, creating it lazily if needed.
+
+    Prefer this accessor over importing the module-level ``db_pool`` value:
+    ``db_pool`` is bound to ``None`` at import time and only populated on first
+    use, so a direct ``from voyagr.models import db_pool`` would capture a stale
+    ``None``.
+    """
+    return _ensure_pool()
+
+
 def get_db_connection() -> Any:
     """Get a database connection from the shared pool.
 
