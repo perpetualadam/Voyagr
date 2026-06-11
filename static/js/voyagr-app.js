@@ -6003,17 +6003,24 @@ let weatherLayerType = localStorage.getItem('weatherLayerType') || 'precipitatio
  */
 function toggleWeatherLayer() {
     showWeatherEnabled = !showWeatherEnabled;
-    localStorage.setItem('showWeatherEnabled', showWeatherEnabled ? 'true' : 'false');
-
+    // Persist + restyle via the pure, unit-tested modules/ui/toggle-ui.js helper when
+    // present, with an inline fallback so the toggle still works if it failed to load.
+    const T = (typeof VoyagrToggleUI !== 'undefined') ? VoyagrToggleUI : null;
     const toggle = document.getElementById('showWeatherToggle');
-    if (toggle) {
-        toggle.classList.toggle('active', showWeatherEnabled);
-        if (showWeatherEnabled) {
-            toggle.style.background = '#4CAF50';
-            toggle.style.borderColor = '#4CAF50';
-        } else {
-            toggle.style.background = '#ddd';
-            toggle.style.borderColor = '#999';
+    if (T) {
+        T.writeBoolPref('showWeatherEnabled', showWeatherEnabled);
+        T.applyToggleButton(toggle, showWeatherEnabled);
+    } else {
+        localStorage.setItem('showWeatherEnabled', showWeatherEnabled ? 'true' : 'false');
+        if (toggle) {
+            toggle.classList.toggle('active', showWeatherEnabled);
+            if (showWeatherEnabled) {
+                toggle.style.background = '#4CAF50';
+                toggle.style.borderColor = '#4CAF50';
+            } else {
+                toggle.style.background = '#ddd';
+                toggle.style.borderColor = '#999';
+            }
         }
     }
 
@@ -6172,8 +6179,11 @@ function removeWeatherLayer() {
  * Initialize weather layer based on saved preference
  */
 function initWeatherLayer() {
+    const T = (typeof VoyagrToggleUI !== 'undefined') ? VoyagrToggleUI : null;
     const toggle = document.getElementById('showWeatherToggle');
-    if (toggle) {
+    if (T) {
+        T.applyToggleButton(toggle, showWeatherEnabled);
+    } else if (toggle) {
         toggle.classList.toggle('active', showWeatherEnabled);
         if (showWeatherEnabled) {
             toggle.style.background = '#4CAF50';
@@ -6222,17 +6232,22 @@ const TRAFFIC_COLORS = {
  */
 function toggleRouteTraffic() {
     routeTrafficEnabled = !routeTrafficEnabled;
-    localStorage.setItem('routeTrafficEnabled', routeTrafficEnabled ? 'true' : 'false');
-
+    const T = (typeof VoyagrToggleUI !== 'undefined') ? VoyagrToggleUI : null;
     const toggle = document.getElementById('routeTrafficToggle');
-    if (toggle) {
-        toggle.classList.toggle('active', routeTrafficEnabled);
-        if (routeTrafficEnabled) {
-            toggle.style.background = '#4CAF50';
-            toggle.style.borderColor = '#4CAF50';
-        } else {
-            toggle.style.background = '#ddd';
-            toggle.style.borderColor = '#999';
+    if (T) {
+        T.writeBoolPref('routeTrafficEnabled', routeTrafficEnabled);
+        T.applyToggleButton(toggle, routeTrafficEnabled);
+    } else {
+        localStorage.setItem('routeTrafficEnabled', routeTrafficEnabled ? 'true' : 'false');
+        if (toggle) {
+            toggle.classList.toggle('active', routeTrafficEnabled);
+            if (routeTrafficEnabled) {
+                toggle.style.background = '#4CAF50';
+                toggle.style.borderColor = '#4CAF50';
+            } else {
+                toggle.style.background = '#ddd';
+                toggle.style.borderColor = '#999';
+            }
         }
     }
 

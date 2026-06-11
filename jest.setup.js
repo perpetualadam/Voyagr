@@ -3,16 +3,10 @@
  * Configures test environment and global mocks
  */
 
-// Import and expose test classes globally
-const RequestDeduplicator = require('./static/js/request-deduplicator.js');
-const CacheManager = require('./static/js/cache-manager.js');
-const BatchRequestManager = require('./static/js/batch-request-manager.js');
-const APIClient = require('./static/js/api-client.js');
-
-global.RequestDeduplicator = RequestDeduplicator;
-global.CacheManager = CacheManager;
-global.BatchRequestManager = BatchRequestManager;
-global.APIClient = APIClient;
+// NOTE: The optimization classes (RequestDeduplicator, CacheManager,
+// BatchRequestManager, APIClient) are no longer exposed as globals. Tests import the
+// canonical implementations directly from static/js/modules/api/* so there is a single
+// source of truth. (The old top-level static/js/*.js duplicates have been removed.)
 
 // Mock localStorage
 const localStorageMock = {

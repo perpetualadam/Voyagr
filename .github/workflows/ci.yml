@@ -1,0 +1,67 @@
+name: CI
+
+# Runs the full test suite on every push/PR to main:
+#   - JS: tautological-test guard (lint:tests) + Jest with coverage thresholds
+#   - Python: behaviour-first unit tests (lane recommendation, GraphHopper mapping)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Frontend (Jest + coverage)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # --ignore-scripts skips the picovoice postinstall sync (not needed for tests).
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Guard against tautological tests
+        run: npm run lint:tests
+
+      - name: Run Jest with coverage thresholds
+        run: npm run test:ci
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: js-coverage
+          path: coverage/
+          if-no-files-found: ignore
+
+  backend:
+    name: Backend (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-web.txt
+          pip install pytest
+
+      - name: Run Python behaviour tests
+        run: pytest test_graphhopper_sign_mapping.py test_lane_recommendation.py -q
