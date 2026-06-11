@@ -9,6 +9,7 @@
     "postinstall": "node scripts/sync-picovoice-web.cjs",
     "icons:rasterize": "node scripts/rasterize-icons.cjs",
     "test": "jest",
+    "lint:tests": "node scripts/check-tautological-tests.cjs",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
     "test:integration": "jest -- integration.test.js",
