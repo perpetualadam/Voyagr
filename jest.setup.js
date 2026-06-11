@@ -35,6 +35,17 @@ global.sessionStorage = sessionStorageMock;
 // Mock fetch
 global.fetch = jest.fn();
 
+// jsdom does not expose structuredClone; provide the real Node implementation when
+// available (Node 17+), otherwise a JSON-based fallback. fake-indexeddb needs it.
+if (typeof global.structuredClone !== 'function') {
+    try {
+        const { structuredClone: nodeStructuredClone } = require('node:util');
+        global.structuredClone = nodeStructuredClone || ((v) => JSON.parse(JSON.stringify(v)));
+    } catch (_) {
+        global.structuredClone = (v) => JSON.parse(JSON.stringify(v));
+    }
+}
+
 // Mock console methods to reduce noise
 global.console = {
     ...console,

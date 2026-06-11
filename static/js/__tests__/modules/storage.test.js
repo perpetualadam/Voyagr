@@ -5,10 +5,12 @@
  * localStorage is a non-persisting jest.fn() mock, so these tests install a real
  * in-memory localStorage to exercise actual persistence behaviour.
  *
- * DatabaseManager wraps IndexedDB, which jsdom does not provide; only the parts that
- * don't require a live IndexedDB are asserted here (constructor defaults + close()).
+ * DatabaseManager wraps IndexedDB, which jsdom does not provide, so we load
+ * fake-indexeddb/auto to supply a real, spec-compliant IndexedDB and exercise full
+ * add/get/update/delete/clear round-trips against the real module.
  */
 
+import 'fake-indexeddb/auto';
 import { CacheStorage } from '../../modules/storage/cache.js';
 import { SettingsStorage } from '../../modules/storage/settings.js';
 import { DatabaseManager } from '../../modules/storage/database.js';
@@ -119,7 +121,7 @@ describe('SettingsStorage (real module)', () => {
     });
 });
 
-describe('DatabaseManager (real module, no IndexedDB env)', () => {
+describe('DatabaseManager (real module)', () => {
     test('constructor applies defaults', () => {
         const db = new DatabaseManager();
         expect(db.dbName).toBe('VoyagrDB');
@@ -137,5 +139,81 @@ describe('DatabaseManager (real module, no IndexedDB env)', () => {
     test('close() is safe when no db is open', () => {
         const db = new DatabaseManager();
         expect(() => db.close()).not.toThrow();
+    });
+
+    describe('IndexedDB round-trips (fake-indexeddb)', () => {
+        let unique = 0;
+        function freshDb(stores = ['routes']) {
+            // Unique db name per test so stores/data never leak between tests.
+            unique += 1;
+            return new DatabaseManager({ dbName: `TestDB_${unique}_${Date.now()}`, stores });
+        }
+
+        test('initialize creates the configured object stores', async () => {
+            const db = freshDb(['routes', 'trips']);
+            const idb = await db.initialize();
+            expect(Array.from(idb.objectStoreNames)).toEqual(
+                expect.arrayContaining(['routes', 'trips'])
+            );
+            db.close();
+        });
+
+        test('addItem returns an auto-increment id and getItem reads it back', async () => {
+            const db = freshDb(['routes']);
+            await db.initialize();
+            const id = await db.addItem('routes', { name: 'Home->Work' });
+            expect(typeof id).toBe('number');
+            const item = await db.getItem('routes', id);
+            expect(item).toMatchObject({ id, name: 'Home->Work' });
+            db.close();
+        });
+
+        test('getAllItems returns every stored record', async () => {
+            const db = freshDb(['routes']);
+            await db.initialize();
+            await db.addItem('routes', { name: 'A' });
+            await db.addItem('routes', { name: 'B' });
+            const all = await db.getAllItems('routes');
+            expect(all).toHaveLength(2);
+            expect(all.map(r => r.name).sort()).toEqual(['A', 'B']);
+            db.close();
+        });
+
+        test('updateItem (put) overwrites an existing record', async () => {
+            const db = freshDb(['routes']);
+            await db.initialize();
+            const id = await db.addItem('routes', { name: 'old' });
+            await db.updateItem('routes', { id, name: 'new' });
+            const item = await db.getItem('routes', id);
+            expect(item.name).toBe('new');
+            db.close();
+        });
+
+        test('deleteItem removes a record', async () => {
+            const db = freshDb(['routes']);
+            await db.initialize();
+            const id = await db.addItem('routes', { name: 'temp' });
+            await db.deleteItem('routes', id);
+            const item = await db.getItem('routes', id);
+            expect(item).toBeUndefined();
+            db.close();
+        });
+
+        test('clearStore empties a store', async () => {
+            const db = freshDb(['routes']);
+            await db.initialize();
+            await db.addItem('routes', { name: 'A' });
+            await db.addItem('routes', { name: 'B' });
+            await db.clearStore('routes');
+            expect(await db.getAllItems('routes')).toHaveLength(0);
+            db.close();
+        });
+
+        test('addItem rejects for an unknown store', async () => {
+            const db = freshDb(['routes']);
+            await db.initialize();
+            await expect(db.addItem('does-not-exist', { x: 1 })).rejects.toBeDefined();
+            db.close();
+        });
     });
 });
