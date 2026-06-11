@@ -426,6 +426,11 @@ function initializeMap() {
                 MapLibreHelpers.add3DBuildings(map, { heightMultiplier, opacity });
             }
 
+            // Reflect saved 2D/3D scene preference on the Settings toggle.
+            if (typeof syncMapView3DToggleUI === 'function') {
+                try { syncMapView3DToggleUI(); } catch (_) { /* ignore */ }
+            }
+
             if (window.MapLibreHelpers) {
                 MapLibreHelpers.configureRoadLabels(map, {
                     enabled: true,

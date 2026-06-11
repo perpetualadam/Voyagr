@@ -5611,6 +5611,7 @@ function toggle3DBuildings() {
         console.log('[3D Buildings] Disabled');
     }
 
+    if (typeof _recomputeMapView3DFromGranular === 'function') _recomputeMapView3DFromGranular();
     saveAllSettings();
 }
 
@@ -12943,6 +12944,7 @@ function toggleDriverPerspective() {
     } else {
         showStatus('🗺️ Standard view', 'info');
     }
+    if (typeof _recomputeMapView3DFromGranular === 'function') _recomputeMapView3DFromGranular();
     saveAllSettings();
 }
 
@@ -12977,6 +12979,78 @@ function applyDriverPerspective() {
         map.easeTo(easeOptions);
         console.log('[Driver View] Standard top-down');
     }
+}
+
+// ===== 2D / 3D MAP VIEW (scene preset) =====
+// One user-facing switch that bundles the existing camera-tilt + 3D-building controls:
+//   3D = tilted browsing camera (driver perspective) + 3D building extrusions
+//   2D = flat top-down camera + no building extrusions
+// It reuses the existing flags/functions (no separate state), and active turn-by-turn
+// navigation still tilts to 60° regardless (handled by shouldUsePitchedDrivingCamera()).
+let mapView3DEnabled = (localStorage.getItem('mapView3DEnabled') !== null)
+    ? (localStorage.getItem('mapView3DEnabled') === 'true')
+    : (driverPerspectiveEnabled || buildings3DEnabled);
+
+/** Reflect the current 2D/3D state on the master toggle and the two granular toggles. */
+function syncMapView3DToggleUI() {
+    const master = document.getElementById('mapView3DToggle');
+    if (master) {
+        master.classList.toggle('active', mapView3DEnabled);
+        master.style.background = mapView3DEnabled ? '#4CAF50' : '';
+        master.style.borderColor = mapView3DEnabled ? '#4CAF50' : '';
+    }
+    const driverBtn = document.getElementById('driverPerspectiveToggle');
+    if (driverBtn) driverBtn.classList.toggle('active', driverPerspectiveEnabled);
+    const buildingsBtn = document.getElementById('buildings3DToggle');
+    if (buildingsBtn) {
+        buildingsBtn.classList.toggle('active', buildings3DEnabled);
+        buildingsBtn.style.background = buildings3DEnabled ? '#4CAF50' : '#ddd';
+        buildingsBtn.style.borderColor = buildings3DEnabled ? '#4CAF50' : '#999';
+    }
+}
+
+/** Apply a 2D/3D scene preset by driving the existing tilt + buildings machinery. */
+function setMapView3D(enabled) {
+    mapView3DEnabled = !!enabled;
+    localStorage.setItem('mapView3DEnabled', mapView3DEnabled ? 'true' : 'false');
+
+    // Camera tilt (reuses driver-perspective flag + camera logic).
+    driverPerspectiveEnabled = mapView3DEnabled;
+    localStorage.setItem('driverPerspectiveEnabled', driverPerspectiveEnabled.toString());
+    if (map) applyDriverPerspective();
+
+    // 3D building extrusions follow the scene.
+    buildings3DEnabled = mapView3DEnabled;
+    localStorage.setItem('buildings3DEnabled', buildings3DEnabled ? 'true' : 'false');
+    if (map && typeof MapLibreHelpers !== 'undefined') {
+        if (buildings3DEnabled) {
+            MapLibreHelpers.add3DBuildings(map, {
+                heightMultiplier: buildings3DHeightMultiplier,
+                opacity: buildings3DOpacity
+            });
+        } else {
+            MapLibreHelpers.remove3DBuildings(map);
+        }
+    }
+
+    syncMapView3DToggleUI();
+}
+
+/** Toggle between 2D and 3D map view (Settings → AR & 3D View). */
+function toggleMapView3D() {
+    setMapView3D(!mapView3DEnabled);
+    showStatus(mapView3DEnabled ? '🏙️ 3D map view' : '🗺️ 2D map view', 'info');
+    if (typeof saveAllSettings === 'function') saveAllSettings();
+}
+
+/**
+ * Keep the 2D/3D master in sync when a granular toggle (camera tilt or 3D buildings)
+ * is changed on its own. The scene reads as "3D" if either aspect is on.
+ */
+function _recomputeMapView3DFromGranular() {
+    mapView3DEnabled = !!(driverPerspectiveEnabled || buildings3DEnabled);
+    localStorage.setItem('mapView3DEnabled', mapView3DEnabled ? 'true' : 'false');
+    syncMapView3DToggleUI();
 }
 
 // ===== AR NAVIGATION MODE =====

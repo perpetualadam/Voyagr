@@ -4777,6 +4777,11 @@ HTML_TEMPLATE = '''
                         <div style="background: #f5f5f5; padding: 12px; border-radius: 8px; margin-top: 15px;">
                             <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #333;">📷 AR & 3D View</h4>
                             <div class="preference-item">
+                                <span class="preference-label">🗺️ 3D Map View</span>
+                                <button class="toggle-switch" id="mapView3DToggle" onclick="toggleMapView3D()"></button>
+                            </div>
+                            <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Switch the whole map between flat 2D (top-down) and tilted 3D (perspective + 3D buildings). Turn-by-turn navigation always stays tilted.</p>
+                            <div class="preference-item">
                                 <span class="preference-label">👓 AR Navigation</span>
                                 <button class="toggle-switch" id="arModeBtn" onclick="toggleARMode()"></button>
                             </div>
