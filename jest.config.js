@@ -14,6 +14,7 @@ module.exports = {
     collectCoverageFrom: [
         'static/js/modules/map/weather-layer.js',
         'static/js/modules/navigation/camera-pitch.js',
+        'static/js/modules/navigation/turn-instructions.js',
         'static/js/modules/ui/toggle-ui.js',
         'static/js/modules/services/google-plus-codes-service.js',
         'static/js/maplibre-helpers.js'
@@ -34,6 +35,9 @@ module.exports = {
         },
         'static/js/modules/navigation/camera-pitch.js': {
             statements: 100, branches: 80, functions: 100, lines: 100
+        },
+        'static/js/modules/navigation/turn-instructions.js': {
+            statements: 100, branches: 90, functions: 100, lines: 100
         },
         'static/js/modules/ui/toggle-ui.js': {
             statements: 95, branches: 70, functions: 100, lines: 100

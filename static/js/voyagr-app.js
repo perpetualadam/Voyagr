@@ -10804,6 +10804,11 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
  * @returns {*} Return value description
  */
 function calculateTurnDirection(bearing1, bearing2) {
+    // Delegate to the pure, unit-tested modules/navigation/turn-instructions.js helper when
+    // present, with an inline fallback so navigation still works if that script failed to load.
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    if (TI) return TI.calculateTurnDirection(bearing1, bearing2);
+
     let bearingChange = bearing2 - bearing1;
 
     // Normalize to -180 to 180 range
@@ -10865,6 +10870,9 @@ function distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex
  * mappings in detectUpcomingTurn / updateTurnWidgetFromPosition.
  */
 function maneuverTypeToDirectionKey(type) {
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    if (TI) return TI.maneuverTypeToDirectionKey(type);
+
     if ([4, 5, 6].includes(type)) return 'destination';
     if (type === 9 || type === 18 || type === 23) return 'slight_right';
     if (type === 10) return 'right';
@@ -13338,7 +13346,10 @@ function hideTurnInstructionWidget() {
  */
 function getTurnIcon(type) {
     // Valhalla maneuver types: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/
-    // FIX: Corrected arrow directions - left maneuvers show left arrows, right show right
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    if (TI) return TI.getTurnIcon(type);
+
+    // Inline fallback. Left maneuvers show left arrows, right show right.
     const iconMap = {
         0: '↑',    // None/Continue
         1: '↑',    // Start
@@ -13387,6 +13398,9 @@ function getTurnIcon(type) {
  * @returns {string} Formatted distance string
  */
 function formatTurnDistance(distanceMeters) {
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    if (TI) return TI.formatTurnDistance(distanceMeters, distanceUnit);
+
     const useMiles = distanceUnit === 'mi';
 
     if (useMiles) {
@@ -15566,6 +15580,9 @@ const SNAP_TO_ROUTE_MAX_DISTANCE = SNAP_TO_ROUTE_BASE_METERS;
  * @returns {*} Return value description
  */
 function getTurnDirectionText(direction) {
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    if (TI) return TI.getTurnDirectionText(direction);
+
     const directionMap = {
         'sharp_left': 'turn sharply left',
         'sharp-left': 'turn sharply left',
