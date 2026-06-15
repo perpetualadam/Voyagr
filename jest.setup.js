@@ -3,10 +3,9 @@
  * Configures test environment and global mocks
  */
 
-// NOTE: The optimization classes (RequestDeduplicator, CacheManager,
-// BatchRequestManager, APIClient) are no longer exposed as globals. Tests import the
-// canonical implementations directly from static/js/modules/api/* so there is a single
-// source of truth. (The old top-level static/js/*.js duplicates have been removed.)
+// Tests import the real, app-wired modules directly (single source of truth).
+// The unwired parallel module trees (api/storage/services/features/routing/core)
+// were pruned; only modules the running app loads are kept and tested.
 
 // Mock localStorage
 const localStorageMock = {
