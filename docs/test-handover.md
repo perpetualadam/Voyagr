@@ -1,6 +1,15 @@
 # Handover: Voyagr test rewrites / updates — remaining work
 
-_Last updated: 2026-06-11_
+_Last updated: 2026-06-15_
+
+> **2026-06-15 update (P1 done):** The large unwired `static/js/modules/{api,core,features,routing,storage}`
+> trees plus the unwired `navigation/ui/services` files (41 modules) and their 13 module-only
+> tests were **pruned** — they were a never-connected reimplementation of logic the
+> `voyagr-app.js` monolith already runs (verified: no bundler; only 6 modules are loaded —
+> 5 via `<script>`, `ar-navigation.js` via dynamic `import()`). Jest coverage is now scoped to
+> the wired+tested files; the global floor was retuned to real numbers. Surviving JS tests:
+> `camera-pitch`, `weather-layer`, `toggle-ui`, `google-plus-codes`, `road-labels`,
+> `meta/no-tautological-tests` (62 tests, green). See commit `05537d9`.
 
 ## Current baseline (green)
 
@@ -10,18 +19,20 @@ _Last updated: 2026-06-11_
   `test_graphhopper_sign_mapping.py`, `test_lane_recommendation.py`,
   `test_lane_guidance.py`, `test_speed_limit_detector.py` → **71 passed in ~24s**,
   deterministic offline.
-- **Coverage (`jest.config.js`):** global floor `branches/lines/statements: 25`,
-  `functions: 33` (a regression FLOOR, not an aspiration). Per-file locks on 7
-  modules: `api/deduplicator`, `api/cache`, `api/batcher`, `api/client`,
-  `map/weather-layer`, `navigation/camera-pitch`, `ui/toggle-ui`. The monolith
-  scripts (`voyagr-app.js`, `voyagr-core.js`, `app.js`) are **excluded** from coverage.
+- **Coverage (`jest.config.js`):** after the P1 prune, `collectCoverageFrom` is scoped to the
+  wired+tested files (`weather-layer`, `camera-pitch`, `toggle-ui`, `google-plus-codes-service`,
+  `maplibre-helpers`). Global floor `statements/branches/lines: 24`, `functions: 20` (a regression
+  FLOOR, just below real numbers — `maplibre-helpers.js` is a large grab-bag whose road-label slice
+  is the only part under test, which pulls the function ratio down). Per-file locks on
+  `map/weather-layer`, `navigation/camera-pitch`, `ui/toggle-ui`. `ar-navigation.js` and
+  `traffic-lights.js` are **wired but untested** — next test targets.
 
 ## What's DONE (do not redo)
 
+- **P1 prune (2026-06-15, `05537d9`):** deleted 41 unwired modules + 13 module-only tests.
+  The running frontend is `voyagr-app.js` (no bundler); only 6 modules are loaded.
 - 13 tautological JS tests rewritten to import real modules; `driver-perspective.test.js`
   retired (superseded by `camera-pitch.test.js`).
-- Duplicate top-level `static/js/{api-client,request-deduplicator,cache-manager,batch-request-manager}.js`
-  deleted; `modules/api/*` is the single source of truth.
 - UI toggle glue extracted to `modules/ui/toggle-ui.js`; weather raster overlay to
   `modules/map/weather-layer.js`; camera tilt/follow to
   `modules/navigation/camera-pitch.js` — all with behavior tests.
@@ -70,9 +81,11 @@ coverage lock. Remaining extraction candidates in `voyagr-app.js`:
 
 ### 3. Coverage floor raise plan
 
-As modules gain fuller tests, bump the global floor above 25 and add per-file locks for
-already-converted-but-unlocked modules: `routing/engine.js`, `routing/calculator.js`,
-`storage/*`, `services/*`, `features/*`, `ui/{controls,panels,map}.js`.
+The per-module trees that used to live here were pruned (P1). To raise coverage now,
+write tests for the **wired-but-untested** files and add them to `collectCoverageFrom`
+with per-file locks: `modules/ar-navigation.js`, `modules/traffic-lights.js`, and the
+untested parts of `maplibre-helpers.js`. As `voyagr-app.js` logic is extracted into new
+wired modules (section 1), test each and bump the global floor accordingly.
 
 ## Gotchas the next agent must know
 

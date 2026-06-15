@@ -70,7 +70,7 @@ jobs:
       - name: Run Python behaviour tests
         run: >-
           pytest -q
-          test_graphhopper_sign_mapping.py
-          test_lane_recommendation.py
-          test_lane_guidance.py
-          test_speed_limit_detector.py
+          tests/test_graphhopper_sign_mapping.py
+          tests/test_lane_recommendation.py
+          tests/test_lane_guidance.py
+          tests/test_speed_limit_detector.py

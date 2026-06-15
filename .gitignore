@@ -63,8 +63,19 @@ bin/
 # Valhalla
 tiles/
 *.tar
+*.tar.bz2
+*.tar.gz
+*.bz2
 *.pbf
 *.osm
+
+# Downloaded ML/KWS model bundles (large, not source)
+sherpa-onnx-kws-*/
+kws.tar.bz2
+
+# Test/report output
+playwright-report/
+test-results/
 
 # Logs
 *.log
