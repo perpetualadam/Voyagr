@@ -120,3 +120,7 @@ def test_robots_sitemap_llms_routes(client):
     assert llms.status_code == 200
     # llms.txt must name the app (proves it's the seo.py-rendered body, not a 404 page).
     assert b"Voyagr" in llms.data
+
+    llms_full = client.get("/llms-full.txt")
+    assert llms_full.status_code == 200
+    assert b"extended LLM context" in llms_full.data

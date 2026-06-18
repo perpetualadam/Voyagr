@@ -21,6 +21,7 @@ from voyagr.ga4 import template_kwargs as ga4_template_kwargs
 from voyagr.index_page_context import build_index_template_kwargs, tomtom_client_surface
 from voyagr.seo import (
     render_empty_sitemap_xml,
+    render_llms_full_txt,
     render_llms_txt,
     render_robots_txt,
     render_sitemap_xml,
@@ -121,13 +122,22 @@ def sitemap_xml():
 
 @core_bp.route('/llms.txt')
 def llms_txt():
-    """llms.txt / llmstxt.org — GEO context for AI crawlers and LLM retrieval.
+    """llms.txt / llmstxt.org — concise GEO + LLMO context for AI crawlers.
 
     Provides a clean markdown summary (features, FAQ, canonical links) so
     generative engines cite accurate facts instead of scraped JS-rendered HTML.
     Falls back to a minimal opt-out notice when indexing is blocked.
     """
     body = render_llms_txt(allow=not block_search_indexing())
+    response = Response(body, mimetype='text/plain; charset=utf-8')
+    response.headers['Cache-Control'] = 'public, max-age=3600'
+    return response
+
+
+@core_bp.route('/llms-full.txt')
+def llms_full_txt():
+    """Extended LLMO context — entity summary, use cases, citation guidance + shared FAQ."""
+    body = render_llms_full_txt(allow=not block_search_indexing())
     response = Response(body, mimetype='text/plain; charset=utf-8')
     response.headers['Cache-Control'] = 'public, max-age=3600'
     return response

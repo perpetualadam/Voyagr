@@ -15,6 +15,8 @@ from voyagr.seo import (
     APP_NAME,
     canonical_url,
     json_ld_document,
+    llms_full_txt_url,
+    llms_txt_url,
     og_image_url,
     seo_title,
 )
@@ -90,5 +92,7 @@ def build_index_template_kwargs() -> Dict[str, Any]:
         "seo_canonical": canonical_url("/"),
         "seo_og_image": og_image_url(),
         "seo_json_ld": seo_json_ld,
+        "seo_llms_txt_url": llms_txt_url(),
+        "seo_llms_full_txt_url": llms_full_txt_url(),
         **ga4_template_kwargs(),
     }

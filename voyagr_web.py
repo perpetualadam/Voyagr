@@ -3866,9 +3866,13 @@ HTML_TEMPLATE = '''
     {% else %}
     <meta name="robots" content="index, follow, max-image-preview:large">
     {% endif %}
-    {# SEO / GEO / AEO — all metadata sourced from voyagr/seo.py so tags stay consistent
-       with /robots.txt, /sitemap.xml, /llms.txt and the structured data below. #}
+    {# SEO / GEO / AEO / LLMO — all metadata sourced from voyagr/seo.py so tags stay consistent
+       with /robots.txt, /sitemap.xml, /llms.txt, /llms-full.txt and the structured data below. #}
     <link rel="canonical" href="{{ seo_canonical }}">
+    {% if not block_search_indexing %}
+    <link rel="alternate" type="text/markdown" href="{{ seo_llms_txt_url }}" title="LLM context (llms.txt)">
+    <link rel="alternate" type="text/markdown" href="{{ seo_llms_full_txt_url }}" title="Extended LLM context (llms-full.txt)">
+    {% endif %}
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="{{ seo_site_name }}">
     <meta property="og:title" content="{{ seo_title }}">

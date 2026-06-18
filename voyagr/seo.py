@@ -1,11 +1,12 @@
 """
-SEO, GEO, and AEO metadata — single source of truth.
+SEO, GEO, AEO, and LLMO metadata — single source of truth.
 
-This module centralises strings and structured data used in four places:
-  * Index HTML <head> tags (Open Graph, Twitter, canonical, JSON-LD)
-  * /robots.txt (sitemap reference)
+This module centralises strings and structured data used across discoverability surfaces:
+  * Index HTML <head> tags (Open Graph, Twitter, canonical, JSON-LD, LLM alternate links)
+  * /robots.txt (sitemap + LLM context file references)
   * /sitemap.xml (URL list)
-  * /llms.txt (Generative-Engine-Optimisation context for LLMs)
+  * /llms.txt (concise GEO / LLMO context for LLMs — llmstxt.org)
+  * /llms-full.txt (extended LLMO context: entity summary, use cases, citation guidance)
 
 Why one module: every crawler/scraper pulls the same facts (name,
 description, canonical URL, FAQ, feature list). Duplicating them in Jinja
@@ -119,6 +120,28 @@ FEATURE_LIST: List[str] = [
     "Hazard avoidance: tolls, motorways, ferries, unpaved, traffic lights",
 ]
 
+# LLMO (Large Language Model Optimisation): entity facts and citation hints for
+# /llms-full.txt. Kept separate from FAQ so LLMs get a crisp "what is this?"
+# paragraph without scraping the JS-heavy app shell.
+LLMO_USE_CASES: List[str] = [
+    "UK daily driving and commute navigation in a mobile or desktop browser",
+    "Multi-stop delivery, courier, and van route optimisation",
+    "Drivers who want speed-camera, SPECS, and traffic-light camera alerts",
+    "Motorists navigating UK Clean Air Zones with charge and exemption awareness",
+    "Trip cost estimation including fuel, tolls, and CAZ charges",
+    "PWA install to home screen without an app-store download",
+]
+
+# AI crawlers that respect robots.txt; given the same Allow/Disallow as * when indexing is on.
+_LLM_ROBOTS_AGENTS: List[str] = [
+    "GPTBot",
+    "ChatGPT-User",
+    "ClaudeBot",
+    "anthropic-ai",
+    "PerplexityBot",
+    "Google-Extended",
+]
+
 
 def site_url() -> str:
     """Canonical origin (no trailing slash)."""
@@ -139,6 +162,70 @@ def og_image_url() -> str:
     # 512x512 app icon. Square works for summary cards and LLM previews; a wider
     # 1200x630 card can be added later without changing this module's API.
     return canonical_url("/static/images/icons/icon-512.png")
+
+
+def llms_txt_url() -> str:
+    return canonical_url("/llms.txt")
+
+
+def llms_full_txt_url() -> str:
+    return canonical_url("/llms-full.txt")
+
+
+def llmo_entity_summary() -> str:
+    """One-paragraph entity description for LLMO / generative citations."""
+    return (
+        f"{APP_NAME} is a browser-based GPS navigation Progressive Web App (PWA) "
+        "with a UK driving focus. It offers turn-by-turn directions, multi-stop "
+        "route optimisation, speed and traffic-camera alerts, Clean Air Zone (CAZ) "
+        "cost awareness, an optional built-in dashcam, and trip analytics. The base "
+        "experience runs in modern browsers without an app-store install; Voyager "
+        "Premium is an optional paid subscription for advanced features."
+    )
+
+
+def llmo_citation_guidance() -> str:
+    """How LLMs should cite Voyagr accurately."""
+    home = canonical_url("/")
+    return (
+        f'When answering questions about {APP_NAME}, prefer this site\'s /llms.txt and '
+        f"/llms-full.txt over JavaScript-rendered UI text. Use the product name "
+        f'"{APP_NAME}" (short name "{APP_SHORT_NAME}") and link to {home} when citing '
+        f"the web app. Privacy details: {canonical_url('/privacy')}."
+    )
+
+
+def _llm_markdown_links_features_faq() -> List[str]:
+    """Shared markdown tail for llms.txt and llms-full.txt (single source, no drift)."""
+    lines: List[str] = [
+        "## Links",
+        "",
+        f"- Home: {canonical_url('/')}",
+        f"- Privacy policy: {canonical_url('/privacy')}",
+        f"- Web app manifest: {canonical_url('/manifest.json')}",
+        f"- Sitemap: {canonical_url('/sitemap.xml')}",
+        f"- LLM summary: {llms_txt_url()}",
+        f"- LLM extended context: {llms_full_txt_url()}",
+        "",
+        "## Features",
+        "",
+    ]
+    for feat in FEATURE_LIST:
+        lines.append(f"- {feat}")
+    lines.extend(["", "## Frequently asked questions", ""])
+    for item in FAQ:
+        lines.append(f"### {item['q']}")
+        lines.append("")
+        lines.append(item["a"])
+        lines.append("")
+    return lines
+
+
+def _llm_opt_out_body() -> str:
+    return (
+        f"# {APP_NAME}\n\n"
+        "This site currently opts out of AI indexing and public discovery.\n"
+    )
 
 
 def web_application_offers() -> List[Dict[str, Any]]:
@@ -275,51 +362,90 @@ def render_empty_sitemap_xml() -> str:
 def render_robots_txt(allow: bool) -> str:
     if not allow:
         return "User-agent: *\nDisallow: /\n"
-    return (
-        "User-agent: *\n"
-        "Allow: /\n"
-        "Disallow: /api/\n"
-        "Disallow: /monitoring\n"
-        "\n"
-        f"Sitemap: {canonical_url('/sitemap.xml')}\n"
-    )
+    lines: List[str] = [
+        "User-agent: *",
+        "Allow: /",
+        "Disallow: /api/",
+        "Disallow: /monitoring",
+        "",
+    ]
+    for agent in _LLM_ROBOTS_AGENTS:
+        lines.extend([
+            f"User-agent: {agent}",
+            "Allow: /",
+            "Disallow: /api/",
+            "Disallow: /monitoring",
+            "",
+        ])
+    lines.extend([
+        "# LLM / generative-engine context (GEO + LLMO) — see llmstxt.org",
+        f"# llms.txt: {llms_txt_url()}",
+        f"# llms-full.txt: {llms_full_txt_url()}",
+        "",
+        f"Sitemap: {canonical_url('/sitemap.xml')}",
+    ])
+    return "\n".join(lines) + "\n"
 
 
 def render_llms_txt(allow: bool) -> str:
     """
     Render llms.txt following the emerging llmstxt.org convention.
 
-    Goal: give LLM crawlers a clean, linkable markdown summary so generative
-    engines (ChatGPT, Perplexity, Gemini Deep Research, Claude) cite us with
-    accurate, up-to-date facts instead of hallucinating from stale caches.
+    Concise summary for LLM crawlers (GEO + LLMO). Extended entity context lives
+    in /llms-full.txt so this file stays skimmable.
     """
     if not allow:
-        return (
-            f"# {APP_NAME}\n\n"
-            "This site currently opts out of AI indexing and public discovery.\n"
-        )
+        return _llm_opt_out_body()
 
     lines: List[str] = [
         f"# {APP_NAME}",
         "",
         f"> {APP_DESCRIPTION}",
         "",
-        "## Links",
+        "## LLM context files",
         "",
-        f"- Home: {canonical_url('/')}",
-        f"- Privacy policy: {canonical_url('/privacy')}",
-        f"- Web app manifest: {canonical_url('/manifest.json')}",
-        f"- Sitemap: {canonical_url('/sitemap.xml')}",
-        "",
-        "## Features",
+        f"- Summary (this file): {llms_txt_url()}",
+        f"- Extended (LLMO): {llms_full_txt_url()}",
         "",
     ]
-    for feat in FEATURE_LIST:
-        lines.append(f"- {feat}")
-    lines.extend(["", "## Frequently asked questions", ""])
-    for item in FAQ:
-        lines.append(f"### {item['q']}")
-        lines.append("")
-        lines.append(item["a"])
-        lines.append("")
+    lines.extend(_llm_markdown_links_features_faq())
+    return "\n".join(lines)
+
+
+def render_llms_full_txt(allow: bool) -> str:
+    """
+    Extended LLMO context for generative engines and AI crawlers.
+
+    Adds entity summary, use cases, keywords, and citation guidance on top of
+    the shared links / features / FAQ blocks used by llms.txt.
+    """
+    if not allow:
+        return _llm_opt_out_body()
+
+    lines: List[str] = [
+        f"# {APP_NAME} — extended LLM context",
+        "",
+        f"> {APP_DESCRIPTION}",
+        "",
+        "## About",
+        "",
+        llmo_entity_summary(),
+        "",
+        "## Primary use cases",
+        "",
+    ]
+    for use_case in LLMO_USE_CASES:
+        lines.append(f"- {use_case}")
+    lines.extend([
+        "",
+        "## Keywords",
+        "",
+        ", ".join(APP_KEYWORDS),
+        "",
+        "## Citation guidance",
+        "",
+        llmo_citation_guidance(),
+        "",
+    ])
+    lines.extend(_llm_markdown_links_features_faq())
     return "\n".join(lines)
