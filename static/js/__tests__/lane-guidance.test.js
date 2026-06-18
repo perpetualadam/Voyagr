@@ -1,0 +1,226 @@
+/**
+ * Behaviour tests for the real modules/navigation/lane-guidance.js module.
+ * These assert the deterministic fallback data rules and the overlay view-model decisions
+ * the app must follow, not a re-implementation of them.
+ */
+const LG = require('../modules/navigation/lane-guidance.js');
+
+describe('lane-guidance module surface', () => {
+    test('exposes the expected pure functions', () => {
+        ['ordinal', 'laneNameFor', 'laneUrgencyFields', 'buildDeterministicLaneGuidance',
+            'shouldShow', 'badge', 'urgencyClass', 'displayText', 'laneIndicators']
+            .forEach((fn) => expect(typeof LG[fn]).toBe('function'));
+    });
+});
+
+describe('ordinal', () => {
+    test('basic ordinals', () => {
+        expect(LG.ordinal(1)).toBe('1st');
+        expect(LG.ordinal(2)).toBe('2nd');
+        expect(LG.ordinal(3)).toBe('3rd');
+        expect(LG.ordinal(4)).toBe('4th');
+    });
+
+    test('the 11/12/13 exception', () => {
+        expect(LG.ordinal(11)).toBe('11th');
+        expect(LG.ordinal(12)).toBe('12th');
+        expect(LG.ordinal(13)).toBe('13th');
+        expect(LG.ordinal(21)).toBe('21st');
+    });
+});
+
+describe('laneNameFor', () => {
+    test('single-lane road is just "lane"', () => {
+        expect(LG.laneNameFor(1, 1)).toBe('lane');
+    });
+    test('first/last lanes are left/right', () => {
+        expect(LG.laneNameFor(1, 3)).toBe('left lane');
+        expect(LG.laneNameFor(3, 3)).toBe('right lane');
+    });
+    test('the middle lane of three is "middle lane"', () => {
+        expect(LG.laneNameFor(2, 3)).toBe('middle lane');
+    });
+    test('otherwise numbered by index', () => {
+        expect(LG.laneNameFor(2, 4)).toBe('lane 2');
+    });
+});
+
+describe('laneUrgencyFields', () => {
+    test('distance thresholds map to urgency levels', () => {
+        expect(LG.laneUrgencyFields(80, 'left lane', 'left', 0).urgency).toBe('now');
+        expect(LG.laneUrgencyFields(250, 'left lane', 'left', 0).urgency).toBe('soon');
+        expect(LG.laneUrgencyFields(600, 'left lane', 'left', 0).urgency).toBe('ahead');
+        expect(LG.laneUrgencyFields(1200, 'left lane', 'left', 0).urgency).toBe('info');
+        expect(LG.laneUrgencyFields(3000, 'left lane', 'left', 0).urgency).toBe('none');
+    });
+
+    test('lane_change_needed is only set for now/soon/ahead', () => {
+        expect(LG.laneUrgencyFields(80, 'left lane', 'left', 0).lane_change_needed).toBe(true);
+        expect(LG.laneUrgencyFields(1200, 'left lane', 'left', 0).lane_change_needed).toBe(false);
+        expect(LG.laneUrgencyFields(3000, 'left lane', 'left', 0).lane_change_needed).toBe(false);
+    });
+
+    test('urgency text references the lane position', () => {
+        expect(LG.laneUrgencyFields(80, 'right lane', 'right', 0).urgency_text)
+            .toBe('Get in the right lane now!');
+        expect(LG.laneUrgencyFields(250, 'middle lane', 'through', 0).urgency_text)
+            .toBe('Move to the middle lane');
+    });
+
+    test('roundabout guidance text includes the ordinal exit', () => {
+        const f = LG.laneUrgencyFields(600, 'right lane', 'roundabout', 3);
+        expect(f.guidance_text).toBe('Use the right lane and take the 3rd exit');
+    });
+});
+
+describe('buildDeterministicLaneGuidance', () => {
+    test('lane count comes from road class', () => {
+        expect(LG.buildDeterministicLaneGuidance('through', 500, 0, 'motorway').total_lanes).toBe(3);
+        expect(LG.buildDeterministicLaneGuidance('through', 500, 0, 'primary').total_lanes).toBe(2);
+        expect(LG.buildDeterministicLaneGuidance('through', 500, 0, 'residential').total_lanes).toBe(1);
+        // Unknown road class defaults to 2 lanes.
+        expect(LG.buildDeterministicLaneGuidance('through', 500, 0, 'mystery').total_lanes).toBe(2);
+    });
+
+    test('left maneuvers recommend the leftmost lane', () => {
+        const g = LG.buildDeterministicLaneGuidance('left', 200, 0, 'primary');
+        expect(g.recommended_lane).toBe(1);
+        expect(g.lane_arrows[0].primary).toBe('left');
+        expect(g.lane_arrows[0].arrow).toBe('←');
+    });
+
+    test('right maneuvers recommend the rightmost lane', () => {
+        const g = LG.buildDeterministicLaneGuidance('right', 200, 0, 'motorway');
+        expect(g.recommended_lane).toBe(3);
+        expect(g.lane_arrows[2].primary).toBe('right');
+        expect(g.lane_arrows[2].arrow).toBe('→');
+    });
+
+    test('slight turns keep the slight direction/arrow', () => {
+        const g = LG.buildDeterministicLaneGuidance('slight_right', 200, 0, 'motorway');
+        expect(g.lane_arrows[2].primary).toBe('slight_right');
+        expect(g.lane_arrows[2].arrow).toBe('↗');
+    });
+
+    test('through maneuvers recommend the central-ish lane', () => {
+        const g = LG.buildDeterministicLaneGuidance('through', 200, 0, 'motorway');
+        expect(g.recommended_lane).toBe(2);
+    });
+
+    test('roundabout with 3+ exits goes right, 1 exit goes left, 2 stays through', () => {
+        expect(LG.buildDeterministicLaneGuidance('roundabout', 200, 3, 'primary').lane_arrows
+            .find((a) => a.primary !== 'through').primary).toBe('right');
+        expect(LG.buildDeterministicLaneGuidance('roundabout', 200, 1, 'primary').lane_arrows
+            .find((a) => a.primary !== 'through').primary).toBe('left');
+        // A 2-exit roundabout keeps the recommended lane "through" (no found non-through arrow).
+        const two = LG.buildDeterministicLaneGuidance('roundabout', 200, 2, 'primary');
+        expect(two.lane_arrows.every((a) => a.primary === 'through')).toBe(true);
+        expect(two.recommended_lane).toBe(1); // exitCount < 3 => leftmost
+    });
+
+    test('uturn recommends the rightmost lane (UK)', () => {
+        const g = LG.buildDeterministicLaneGuidance('uturn', 200, 0, 'primary');
+        expect(g.recommended_lane).toBe(2);
+    });
+
+    test('fallback metadata flags it as estimated, non-OSM', () => {
+        const g = LG.buildDeterministicLaneGuidance('left', 200, 0, 'primary');
+        expect(g.estimated).toBe(true);
+        expect(g.has_osm_data).toBe(false);
+        expect(g.has_turn_lanes).toBe(false);
+        expect(g.success).toBe(true);
+    });
+
+    test('embeds the recomputed urgency fields', () => {
+        const g = LG.buildDeterministicLaneGuidance('left', 80, 0, 'primary');
+        expect(g.urgency).toBe('now');
+        expect(g.distance_to_maneuver).toBe(80);
+    });
+});
+
+describe('view-model: shouldShow', () => {
+    test('hidden for single-lane roads', () => {
+        expect(LG.shouldShow({ total_lanes: 1, urgency: 'now' })).toBe(false);
+    });
+    test('hidden when no maneuver is approaching (urgency none)', () => {
+        expect(LG.shouldShow({ total_lanes: 3, urgency: 'none' })).toBe(false);
+    });
+    test('shown for a multi-lane road with an approaching maneuver', () => {
+        expect(LG.shouldShow({ total_lanes: 3, urgency: 'soon' })).toBe(true);
+    });
+    test('null data is hidden', () => {
+        expect(LG.shouldShow(null)).toBe(false);
+    });
+});
+
+describe('view-model: badge', () => {
+    test('OSM data shows no badge', () => {
+        expect(LG.badge({ has_osm_data: true })).toEqual({ text: '', visible: false });
+    });
+    test('estimated/fallback data shows the Estimated badge', () => {
+        expect(LG.badge({ has_osm_data: false })).toEqual({ text: 'Estimated', visible: true });
+        expect(LG.badge(null)).toEqual({ text: 'Estimated', visible: true });
+    });
+});
+
+describe('view-model: urgencyClass', () => {
+    test('maps urgency to a CSS class', () => {
+        expect(LG.urgencyClass('now')).toBe('urgency-now');
+        expect(LG.urgencyClass('soon')).toBe('urgency-soon');
+        expect(LG.urgencyClass('ahead')).toBe('urgency-ahead');
+    });
+    test('info and none have no class', () => {
+        expect(LG.urgencyClass('info')).toBe('');
+        expect(LG.urgencyClass('none')).toBe('');
+    });
+});
+
+describe('view-model: displayText', () => {
+    test('uses urgency text once the maneuver is imminent', () => {
+        expect(LG.displayText({ urgency: 'now', urgency_text: 'Get in the left lane now!', guidance_text: 'Use the left lane' }))
+            .toBe('Get in the left lane now!');
+    });
+    test('uses steady guidance text at info/none urgency', () => {
+        expect(LG.displayText({ urgency: 'info', urgency_text: 'Stay in the left lane', guidance_text: 'Use the left lane' }))
+            .toBe('Use the left lane');
+    });
+    test('null data is empty', () => {
+        expect(LG.displayText(null)).toBe('');
+    });
+});
+
+describe('view-model: laneIndicators', () => {
+    test('marks the recommended lane and carries the arrow glyph', () => {
+        const data = {
+            total_lanes: 3, recommended_lane: 3, has_turn_lanes: true,
+            lane_arrows: [
+                { arrow: '↑', directions: ['through'] },
+                { arrow: '↑', directions: ['through'] },
+                { arrow: '→', directions: ['right'] }
+            ]
+        };
+        const inds = LG.laneIndicators(data);
+        expect(inds).toHaveLength(3);
+        expect(inds[2]).toEqual({ arrow: '→', recommended: true, hasDirection: true });
+        expect(inds[0].recommended).toBe(false);
+    });
+
+    test('hasDirection is false when has_turn_lanes is off', () => {
+        const data = {
+            total_lanes: 1, recommended_lane: 1, has_turn_lanes: false,
+            lane_arrows: [{ arrow: '→', directions: ['right'] }]
+        };
+        expect(LG.laneIndicators(data)[0].hasDirection).toBe(false);
+    });
+
+    test('missing arrow info falls back to a straight arrow', () => {
+        const data = { total_lanes: 2, recommended_lane: 1, lane_arrows: [] };
+        const inds = LG.laneIndicators(data);
+        expect(inds[0]).toEqual({ arrow: '↑', recommended: true, hasDirection: false });
+        expect(inds[1].arrow).toBe('↑');
+    });
+
+    test('null data yields no indicators', () => {
+        expect(LG.laneIndicators(null)).toEqual([]);
+    });
+});

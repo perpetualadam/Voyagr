@@ -47,13 +47,27 @@ _Last updated: 2026-06-15_
 `voyagr-app.js` / `voyagr-core.js` are excluded from coverage and hold untested
 user-facing logic. Established pattern: extract a pure function → UMD module under
 `modules/*` with an inline fallback in the monolith → behavior test → add a per-file
-coverage lock. Remaining extraction candidates in `voyagr-app.js`:
+coverage lock.
 
-- Turn-by-turn **instruction text / arrow-icon** builder (the motorway-vs-normal-road
-  standardization + the "Then…" advance-maneuver instruction).
-- **Lane guidance UI** rendering (`#laneGuidanceDisplay`, chip logic).
-- **Voice announcement** text builder.
-- **Reroute handling** + GPS-tick processing decision logic.
+**Done (2026-06-18):**
+- ✅ Turn-by-turn **instruction text / arrow-icon** builder →
+  `modules/navigation/turn-instructions.js`.
+- ✅ **Voice announcement** text builder → `modules/navigation/voice-announcements.js`
+  (`__tests__/voice-announcements.test.js`, 24 tests, per-file lock).
+- ✅ **Lane guidance** (deterministic data + overlay view-model) →
+  `modules/navigation/lane-guidance.js` (`__tests__/lane-guidance.test.js`, 35 tests, lock).
+- ✅ **Reroute / GPS-tick** decision logic → `modules/navigation/reroute-decision.js`
+  (`__tests__/reroute-decision.test.js`, 21 tests, lock). The pure decision returns the
+  action + new tracking state; `checkRouteDeviation` applies the side effects.
+
+JS baseline is now **165 tests across 10 suites** (was 109/8).
+
+**Remaining extraction candidates in `voyagr-app.js`:**
+- The "Then…" advance-maneuver instruction builder (chains the next maneuver onto an
+  imminent announcement; still inline in `announceUpcomingTurn`).
+- **ETA announcement** text builder.
+- The **lane voice** message builder (lines ~9929-9965, still inline — depends on
+  `speakMessage` + `_lastLaneVoiceKey`; extract the text, keep the speak call inline).
 
 ### 2. Python — only 4 of 108 files are in CI. Backlog by category:
 

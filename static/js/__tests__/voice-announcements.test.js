@@ -1,0 +1,175 @@
+/**
+ * Behaviour tests for the real modules/navigation/voice-announcements.js module.
+ * These assert the spoken phrasing rules the app must follow (threshold wording, unit
+ * wording, street joining, Valhalla-phrase preference), not a re-implementation of them.
+ */
+const VA = require('../modules/navigation/voice-announcements.js');
+
+describe('voice-announcements module surface', () => {
+    test('exposes the expected pure functions', () => {
+        expect(typeof VA.isExitDirection).toBe('function');
+        expect(typeof VA.isKeepDirection).toBe('function');
+        expect(typeof VA.buildTurnAnnouncement).toBe('function');
+        expect(typeof VA.buildDestinationAnnouncement).toBe('function');
+    });
+});
+
+describe('isExitDirection / isKeepDirection', () => {
+    test('exit keys (underscore and hyphen) are exits', () => {
+        ['exit', 'exit_left', 'exit_right', 'exit-left', 'exit-right'].forEach((d) => {
+            expect(VA.isExitDirection(d)).toBe(true);
+        });
+    });
+
+    test('keep keys (underscore and hyphen) are keeps', () => {
+        ['slight_left', 'slight_right', 'slight-left', 'slight-right'].forEach((d) => {
+            expect(VA.isKeepDirection(d)).toBe(true);
+        });
+    });
+
+    test('plain turns are neither exit nor keep', () => {
+        ['left', 'right', 'straight', 'uturn'].forEach((d) => {
+            expect(VA.isExitDirection(d)).toBe(false);
+            expect(VA.isKeepDirection(d)).toBe(false);
+        });
+    });
+});
+
+describe('buildTurnAnnouncement — plain turns', () => {
+    const base = { direction: 'left', directionText: 'turn left', streetName: 'High Street' };
+
+    test('500 m threshold: metric vs imperial wording', () => {
+        expect(VA.buildTurnAnnouncement({ ...base, announcementDistance: 500 }))
+            .toBe('In 500 meters, turn left onto High Street');
+        expect(VA.buildTurnAnnouncement({ ...base, announcementDistance: 500, distanceUnit: 'mi' }))
+            .toBe('In 1600 feet, turn left onto High Street');
+    });
+
+    test('200 m and 100 m thresholds', () => {
+        expect(VA.buildTurnAnnouncement({ ...base, announcementDistance: 200 }))
+            .toBe('In 200 meters, turn left onto High Street');
+        expect(VA.buildTurnAnnouncement({ ...base, announcementDistance: 100, distanceUnit: 'mi' }))
+            .toBe('In 300 feet, turn left onto High Street');
+    });
+
+    test('50 m threshold is the bare instruction', () => {
+        expect(VA.buildTurnAnnouncement({ ...base, announcementDistance: 50 }))
+            .toBe('turn left onto High Street');
+    });
+
+    test('plain turns join the street with " onto " (not " toward ")', () => {
+        const msg = VA.buildTurnAnnouncement({ ...base, announcementDistance: 200 });
+        expect(msg).toContain(' onto ');
+        expect(msg).not.toContain(' toward ');
+    });
+
+    test('no street name omits the join phrase entirely', () => {
+        expect(VA.buildTurnAnnouncement({ direction: 'right', directionText: 'turn right', announcementDistance: 50 }))
+            .toBe('turn right');
+    });
+
+    test('Valhalla verbal alert is preferred at the 500 m threshold', () => {
+        expect(VA.buildTurnAnnouncement({
+            ...base, announcementDistance: 500, verbalAlert: 'Turn left to stay on the A1'
+        })).toBe('Turn left to stay on the A1');
+    });
+
+    test('Valhalla verbal pre-instruction is preferred at the 100 m threshold', () => {
+        expect(VA.buildTurnAnnouncement({
+            ...base, announcementDistance: 100, verbalPre: 'Turn left now'
+        })).toBe('Turn left now');
+    });
+});
+
+describe('buildTurnAnnouncement — exits', () => {
+    test('2 km threshold wording, with side and street', () => {
+        expect(VA.buildTurnAnnouncement({
+            direction: 'exit_right', announcementDistance: 2000, streetName: 'M1'
+        })).toBe('In 2 kilometers, take the exit on the right toward M1');
+        expect(VA.buildTurnAnnouncement({
+            direction: 'exit_right', announcementDistance: 2000, streetName: 'M1', distanceUnit: 'mi'
+        })).toBe('In about 1 mile, take the exit on the right toward M1');
+    });
+
+    test('left exits say "on the left"', () => {
+        expect(VA.buildTurnAnnouncement({ direction: 'exit_left', announcementDistance: 800 }))
+            .toBe('In 800 meters, prepare to exit on the left');
+    });
+
+    test('near thresholds are urgent and unitless', () => {
+        expect(VA.buildTurnAnnouncement({ direction: 'exit_right', announcementDistance: 200 }))
+            .toBe('Exit ahead on the right');
+        expect(VA.buildTurnAnnouncement({ direction: 'exit_right', announcementDistance: 100 }))
+            .toBe('Exit now on the right');
+    });
+
+    test('exits join the street with " toward "', () => {
+        const msg = VA.buildTurnAnnouncement({ direction: 'exit_left', announcementDistance: 200, streetName: 'Services' });
+        expect(msg).toBe('Exit ahead on the left toward Services');
+    });
+});
+
+describe('buildTurnAnnouncement — keeps', () => {
+    test('1 km threshold prefers verbal alert, else synthesises keep wording', () => {
+        expect(VA.buildTurnAnnouncement({ direction: 'slight_left', announcementDistance: 1000 }))
+            .toBe('In 1 kilometer, keep left');
+        expect(VA.buildTurnAnnouncement({ direction: 'slight_left', announcementDistance: 1000, distanceUnit: 'mi' }))
+            .toBe('In half a mile, keep left');
+        expect(VA.buildTurnAnnouncement({
+            direction: 'slight_left', announcementDistance: 1000, verbalAlert: 'Keep left to take the ramp'
+        })).toBe('Keep left to take the ramp');
+    });
+
+    test('400 m threshold wording', () => {
+        expect(VA.buildTurnAnnouncement({ direction: 'slight_right', announcementDistance: 400 }))
+            .toBe('In 400 meters, keep right');
+        expect(VA.buildTurnAnnouncement({ direction: 'slight_right', announcementDistance: 400, distanceUnit: 'mi' }))
+            .toBe('In 1300 feet, keep right');
+    });
+
+    test('near thresholds prefer verbal pre, else synthesise', () => {
+        expect(VA.buildTurnAnnouncement({ direction: 'slight_right', announcementDistance: 150 }))
+            .toBe('Keep right');
+        expect(VA.buildTurnAnnouncement({ direction: 'slight_right', announcementDistance: 50 }))
+            .toBe('Keep right now');
+        expect(VA.buildTurnAnnouncement({
+            direction: 'slight_right', announcementDistance: 50, verbalPre: 'Bear right onto the slip road'
+        })).toBe('Bear right onto the slip road');
+    });
+});
+
+describe('buildTurnAnnouncement — defensive', () => {
+    test('unknown threshold returns empty string', () => {
+        expect(VA.buildTurnAnnouncement({ direction: 'left', directionText: 'turn left', announcementDistance: 12345 }))
+            .toBe('');
+    });
+
+    test('no options returns empty string', () => {
+        expect(VA.buildTurnAnnouncement()).toBe('');
+    });
+});
+
+describe('buildDestinationAnnouncement', () => {
+    test('long-range milestones use the unit label, imperial converts km->mi', () => {
+        expect(VA.buildDestinationAnnouncement(10000, 'km')).toBe('10 km to destination');
+        expect(VA.buildDestinationAnnouncement(5000, 'km')).toBe('5 km to destination');
+        expect(VA.buildDestinationAnnouncement(2000, 'km')).toBe('2 km to destination');
+        expect(VA.buildDestinationAnnouncement(1000, 'km')).toBe('1 km to destination');
+        expect(VA.buildDestinationAnnouncement(10000, 'mi')).toBe('6.2 mi to destination');
+        expect(VA.buildDestinationAnnouncement(2000, 'mi')).toBe('1.2 mi to destination');
+        expect(VA.buildDestinationAnnouncement(1000, 'mi')).toBe('0.6 mi to destination');
+    });
+
+    test('500 m milestone has fixed metric/imperial wording', () => {
+        expect(VA.buildDestinationAnnouncement(500, 'km')).toBe('500 meters to destination');
+        expect(VA.buildDestinationAnnouncement(500, 'mi')).toBe('1600 feet to destination');
+    });
+
+    test('100 m milestone is the arrival phrase', () => {
+        expect(VA.buildDestinationAnnouncement(100, 'km')).toBe('Arriving at destination');
+    });
+
+    test('unknown milestone returns empty string', () => {
+        expect(VA.buildDestinationAnnouncement(750, 'km')).toBe('');
+    });
+});

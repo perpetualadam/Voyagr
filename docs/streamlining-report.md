@@ -42,12 +42,22 @@ solo-maintained app.)
   (real modules imported by the app must stay at root; only genuine one-off scripts move to
   `scripts/`). Do this as a separate, verified pass.
 
-### P2 — Extract & test `voyagr-app.js` glue — ⬜ TODO (highest user value)
+### P2 — Extract & test `voyagr-app.js` glue — 🔄 IN PROGRESS (highest user value)
 Use the proven pattern: extract a pure function → UMD module (`modules/*`, CommonJS export +
 browser global) → `<script>` tag with cache-busting `?v=` → delegate from the monolith with an
-**inline fallback** → behavior test → per-file coverage lock. First targets: turn-by-turn
-instruction text + arrow-icon selection; lane-guidance UI; voice-announcement text; reroute/GPS
-decision logic.
+**inline fallback** → behavior test → per-file coverage lock.
+- ✅ Turn-by-turn instruction text + arrow-icon selection → `modules/navigation/turn-instructions.js`.
+- ✅ Voice-announcement text → `modules/navigation/voice-announcements.js` (turn/exit/keep +
+  destination phrasing; 24 tests). Wired in `announceUpcomingTurn` / `announceDistanceToDestination`.
+- ✅ Lane-guidance → `modules/navigation/lane-guidance.js` (deterministic fallback data +
+  overlay view-model: `shouldShow`/`badge`/`urgencyClass`/`displayText`/`laneIndicators`; 35
+  tests). Wired in `_buildDeterministicLaneGuidance`/`_ordinal`/`_laneNameFor`/
+  `_laneUrgencyFields`/`renderLaneGuidanceUI`.
+- ✅ Reroute/GPS-tick decision → `modules/navigation/reroute-decision.js` (accuracy gating,
+  accuracy-widened threshold, route-join gate, dwell timer, debounce; 21 tests). Wired in
+  `checkRouteDeviation` (pure decision + side-effecting orchestration kept in the monolith).
+- ⬜ Remaining candidates: the "Then…" advance-maneuver instruction builder; ETA-announcement
+  text; the lane *voice* message builder (lines ~9929-9965, still inline, uses `speakMessage`).
 
 ### P3 — Finish `voyagr_web.py` → `voyagr/` migration — ⬜ TODO
 Move duplicated inline route/cost/hazard logic into `voyagr/services/*`; replace lazy imports

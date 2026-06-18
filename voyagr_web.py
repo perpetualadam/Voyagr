@@ -3910,6 +3910,9 @@ HTML_TEMPLATE = '''
     <script defer src="/static/js/modules/traffic-lights.js?v=20260409c"></script>
     <script defer src="/static/js/modules/navigation/camera-pitch.js?v=20260611a"></script>
     <script defer src="/static/js/modules/navigation/turn-instructions.js?v=20260615a"></script>
+    <script defer src="/static/js/modules/navigation/voice-announcements.js?v=20260618a"></script>
+    <script defer src="/static/js/modules/navigation/lane-guidance.js?v=20260618a"></script>
+    <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20260618a"></script>
     <script defer src="/static/js/modules/map/weather-layer.js?v=20260611a"></script>
     <script defer src="/static/js/modules/ui/toggle-ui.js?v=20260611a"></script>
     <script defer src="/static/js/voyagr-core.js?v=20260530a"></script>

@@ -15,6 +15,9 @@ module.exports = {
         'static/js/modules/map/weather-layer.js',
         'static/js/modules/navigation/camera-pitch.js',
         'static/js/modules/navigation/turn-instructions.js',
+        'static/js/modules/navigation/voice-announcements.js',
+        'static/js/modules/navigation/lane-guidance.js',
+        'static/js/modules/navigation/reroute-decision.js',
         'static/js/modules/ui/toggle-ui.js',
         'static/js/modules/services/google-plus-codes-service.js',
         'static/js/maplibre-helpers.js'
@@ -37,6 +40,17 @@ module.exports = {
             statements: 100, branches: 80, functions: 100, lines: 100
         },
         'static/js/modules/navigation/turn-instructions.js': {
+            statements: 100, branches: 90, functions: 100, lines: 100
+        },
+        'static/js/modules/navigation/voice-announcements.js': {
+            statements: 100, branches: 85, functions: 100, lines: 100
+        },
+        // statements <100 only because of the defensive `totalLanes < 1` guard mirrored
+        // from the monolith, which no road class can actually trigger.
+        'static/js/modules/navigation/lane-guidance.js': {
+            statements: 95, branches: 85, functions: 100, lines: 100
+        },
+        'static/js/modules/navigation/reroute-decision.js': {
             statements: 100, branches: 90, functions: 100, lines: 100
         },
         'static/js/modules/ui/toggle-ui.js': {

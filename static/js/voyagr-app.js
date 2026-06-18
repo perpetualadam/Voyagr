@@ -9768,6 +9768,12 @@ function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
  * heuristic. Single-lane roads return total_lanes=1 so the overlay stays hidden.
  */
 function _buildDeterministicLaneGuidance(maneuver, distance, exitCount, roadType) {
+    // Delegate to the pure, unit-tested modules/navigation/lane-guidance.js helper when
+    // present, with an inline fallback so lane guidance still works if that script failed
+    // to load.
+    const LG = (typeof VoyagrLaneGuidance !== 'undefined') ? VoyagrLaneGuidance : null;
+    if (LG) return LG.buildDeterministicLaneGuidance(maneuver, distance, exitCount, roadType);
+
     const LANE_DEFAULTS = {
         motorway: 3, trunk: 3, primary: 2, secondary: 2,
         tertiary: 1, residential: 1, unclassified: 1,
@@ -9819,6 +9825,9 @@ function _buildDeterministicLaneGuidance(maneuver, distance, exitCount, roadType
 }
 
 function _ordinal(n) {
+    const LG = (typeof VoyagrLaneGuidance !== 'undefined') ? VoyagrLaneGuidance : null;
+    if (LG) return LG.ordinal(n);
+
     const s = ['th','st','nd','rd'];
     const v = n % 100;
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
@@ -9826,6 +9835,9 @@ function _ordinal(n) {
 
 /** Human-friendly name for a 1-based lane (mirrors backend _descriptive_lane_name). */
 function _laneNameFor(lane, total) {
+    const LG = (typeof VoyagrLaneGuidance !== 'undefined') ? VoyagrLaneGuidance : null;
+    if (LG) return LG.laneNameFor(lane, total);
+
     if (total <= 1) return 'lane';
     if (lane === 1) return 'left lane';
     if (lane === total) return 'right lane';
@@ -9838,6 +9850,9 @@ function _laneNameFor(lane, total) {
  * live distance so a cached lane structure never shows stale urgency as you approach.
  */
 function _laneUrgencyFields(distance, lanePos, maneuver, exitCount) {
+    const LG = (typeof VoyagrLaneGuidance !== 'undefined') ? VoyagrLaneGuidance : null;
+    if (LG) return LG.laneUrgencyFields(distance, lanePos, maneuver, exitCount);
+
     let urgency = 'none', urgency_text = '';
     if (distance <= 100) { urgency = 'now'; urgency_text = `Get in the ${lanePos} now!`; }
     else if (distance <= 300) { urgency = 'soon'; urgency_text = `Move to the ${lanePos}`; }
@@ -9861,69 +9876,67 @@ function renderLaneGuidanceUI(data) {
 
     if (!display || !visual || !text) return;
 
+    // Delegate the rendering *decisions* to the pure, unit-tested
+    // modules/navigation/lane-guidance.js view-model when present, with inline fallbacks so
+    // the overlay still renders if that script failed to load.
+    const LG = (typeof VoyagrLaneGuidance !== 'undefined') ? VoyagrLaneGuidance : null;
+
     // Don't show lane guidance for single-lane roads or when no maneuver is approaching
-    if (data.total_lanes <= 1 || data.urgency === 'none') {
+    const show = LG ? LG.shouldShow(data) : (data.total_lanes > 1 && data.urgency !== 'none');
+    if (!show) {
         display.classList.remove('show');
         return;
     }
 
     // Mark non-OSM (estimated / fallback) guidance so the driver knows it's approximate.
-    const badge = document.getElementById('laneGuidanceBadge');
-    if (badge) {
-        if (data.has_osm_data) {
-            badge.textContent = '';
-            badge.style.display = 'none';
-        } else {
-            badge.textContent = 'Estimated';
-            badge.style.display = 'inline-block';
-        }
+    const badgeEl = document.getElementById('laneGuidanceBadge');
+    if (badgeEl) {
+        const badge = LG ? LG.badge(data)
+            : (data.has_osm_data ? { text: '', visible: false } : { text: 'Estimated', visible: true });
+        badgeEl.textContent = badge.text;
+        badgeEl.style.display = badge.visible ? 'inline-block' : 'none';
     }
 
     // Build lane visual with direction arrows
     visual.innerHTML = '';
-    const laneArrows = data.lane_arrows || [];
+    const indicators = LG ? LG.laneIndicators(data) : (function () {
+        const laneArrows = data.lane_arrows || [];
+        const out = [];
+        for (let i = 0; i < data.total_lanes; i++) {
+            const arrowInfo = laneArrows[i];
+            out.push({
+                arrow: arrowInfo ? arrowInfo.arrow : '↑',
+                recommended: (i + 1) === data.recommended_lane,
+                hasDirection: !!(arrowInfo && arrowInfo.directions && data.has_turn_lanes)
+            });
+        }
+        return out;
+    })();
 
-    for (let i = 0; i < data.total_lanes; i++) {
+    for (const ind of indicators) {
         const lane = document.createElement('div');
         lane.className = 'lane-indicator';
-        const laneNum = i + 1;
-
-        // Highlight recommended lane
-        if (laneNum === data.recommended_lane) {
-            lane.classList.add('recommended');
-        }
-
-        // Show arrow direction for each lane
-        const arrowInfo = laneArrows[i];
-        if (arrowInfo) {
-            lane.innerHTML = `<span class="lane-arrow">${arrowInfo.arrow}</span>`;
-            // Mark lanes that match the maneuver direction
-            if (arrowInfo.directions && data.has_turn_lanes) {
-                lane.classList.add('has-direction');
-            }
-        } else {
-            lane.innerHTML = `<span class="lane-arrow">↑</span>`;
-        }
-
+        if (ind.recommended) lane.classList.add('recommended');
+        lane.innerHTML = `<span class="lane-arrow">${ind.arrow}</span>`;
+        if (ind.hasDirection) lane.classList.add('has-direction');
         visual.appendChild(lane);
     }
 
     // Set urgency styling
     display.className = 'lane-guidance-display show';
-    if (data.urgency === 'now') {
-        display.classList.add('urgency-now');
-    } else if (data.urgency === 'soon') {
-        display.classList.add('urgency-soon');
-    } else if (data.urgency === 'ahead') {
-        display.classList.add('urgency-ahead');
-    }
+    const urgencyCls = LG ? LG.urgencyClass(data.urgency)
+        : (data.urgency === 'now' ? 'urgency-now'
+            : data.urgency === 'soon' ? 'urgency-soon'
+            : data.urgency === 'ahead' ? 'urgency-ahead' : '');
+    if (urgencyCls) display.classList.add(urgencyCls);
 
     // Build guidance text with distance context
-    let displayText = data.guidance_text || '';
-    if (data.urgency_text && data.urgency !== 'none' && data.urgency !== 'info') {
-        displayText = data.urgency_text;
-    }
-    text.textContent = displayText;
+    const guidanceText = LG ? LG.displayText(data) : (function () {
+        let t = data.guidance_text || '';
+        if (data.urgency_text && data.urgency !== 'none' && data.urgency !== 'info') t = data.urgency_text;
+        return t;
+    })();
+    text.textContent = guidanceText;
 
     // Voice announcement for lane guidance at junctions, roundabouts, and urgent lane changes
     if (voiceAnnouncementsEnabled && data.recommended_lane && data.total_lanes > 1) {
@@ -15676,8 +15689,13 @@ function announceDistanceToDestination(currentLat, currentLon) {
             let message = '';
             const distUnit = getDistanceUnit();
 
-            // Convert distances based on user preference
-            if (announcementDistance === 10000) {
+            // Delegate to the pure, unit-tested modules/navigation/voice-announcements.js
+            // helper when present, with an inline fallback so milestone announcements still
+            // work if that script failed to load.
+            const VA = (typeof VoyagrVoiceAnnouncements !== 'undefined') ? VoyagrVoiceAnnouncements : null;
+            if (VA) {
+                message = VA.buildDestinationAnnouncement(announcementDistance, distUnit);
+            } else if (announcementDistance === 10000) {
                 const displayDist = distUnit === 'mi' ? (10 * 0.621371).toFixed(1) : '10';
                 message = `${displayDist} ${distUnit} to destination`;
             } else if (announcementDistance === 5000) {
@@ -15850,10 +15868,16 @@ function announceUpcomingTurn(turnInfo) {
     // Valhalla: verbal_transition_alert_instruction (early), verbal_pre_transition_instruction (immediately prior)
     const verbalAlert = (turnInfo.verbal_transition_alert_instruction || '').trim();
     const verbalPre = (turnInfo.verbal_pre_transition_instruction || '').trim();
-    const isExit = direction === 'exit' || direction === 'exit_right' || direction === 'exit_left'
-        || direction === 'exit-right' || direction === 'exit-left';
-    const isKeep = direction === 'slight_right' || direction === 'slight_left'
-        || direction === 'slight-right' || direction === 'slight-left';
+    // Delegate phrasing/predicates to the pure, unit-tested
+    // modules/navigation/voice-announcements.js helper when present, with inline fallbacks
+    // so spoken guidance still works if that script failed to load.
+    const VA = (typeof VoyagrVoiceAnnouncements !== 'undefined') ? VoyagrVoiceAnnouncements : null;
+    const isExit = VA ? VA.isExitDirection(direction)
+        : (direction === 'exit' || direction === 'exit_right' || direction === 'exit_left'
+            || direction === 'exit-right' || direction === 'exit-left');
+    const isKeep = VA ? VA.isKeepDirection(direction)
+        : (direction === 'slight_right' || direction === 'slight_left'
+            || direction === 'slight-right' || direction === 'slight-left');
 
     // Exits and keep-right/left on motorways need earlier warnings at highway speeds
     const announcementDistances = isExit ? EXIT_ANNOUNCEMENT_DISTANCES
@@ -15884,6 +15908,18 @@ function announceUpcomingTurn(turnInfo) {
         }
 
             let message = '';
+
+            if (VA) {
+                message = VA.buildTurnAnnouncement({
+                    announcementDistance: announcementDistance,
+                    direction: direction,
+                    distanceUnit: distanceUnit,
+                    streetName: streetName,
+                    directionText: directionText,
+                    verbalAlert: verbalAlert,
+                    verbalPre: verbalPre
+                });
+            } else {
             const streetInfo = streetName ? ` toward ${streetName}` : '';
 
             if (isExit) {
@@ -15960,6 +15996,7 @@ function announceUpcomingTurn(turnInfo) {
                 } else if (announcementDistance === 50) {
                     message = `${directionText}${streetOnto}`;
                 }
+            }
             }
 
             // At the most-imminent threshold, chain the very next maneuver if it follows
@@ -16070,12 +16107,60 @@ function checkRouteDeviation(lat, lon, accuracy) {
         return;
     }
 
+    const snap = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+    const minDistance = snap.distance;
+    const now = Date.now();
+
+    // Delegate the (pure) off-route decision to the unit-tested
+    // modules/navigation/reroute-decision.js helper when present. It returns the action +
+    // the new tracking state; the side effects (logging, notification, reroute) stay here.
+    const VRD = (typeof VoyagrRerouteDecision !== 'undefined') ? VoyagrRerouteDecision : null;
+    if (VRD) {
+        const wasJoined = routeJoinConfirmedForDeviation;
+        const decision = VRD.decideRouteDeviation({
+            autoRerouteEnabled: autoRerouteOnDeviationEnabled,
+            hasRoute: true,
+            remainingToDest: remainingToDest,
+            accuracy: accuracy,
+            minDistance: minDistance,
+            routeJoinConfirmed: routeJoinConfirmedForDeviation,
+            deviationStartTime: deviationStartTimeCheck,
+            lastRerouteTime: lastRerouteTime,
+            now: now
+        });
+
+        routeJoinConfirmedForDeviation = decision.routeJoinConfirmed;
+        deviationStartTimeCheck = decision.deviationStartTime;
+
+        if (!wasJoined && decision.routeJoinConfirmed) {
+            console.log('[Rerouting] Route join detected — deviation monitoring active');
+        }
+
+        if (decision.action === 'reroute') {
+            lastRerouteTime = decision.lastRerouteTime;
+            lastRerouteDeviation = minDistance;
+            rerouteAttemptCount++;
+            console.log(`[Rerouting] Deviation confirmed: ${minDistance.toFixed(0)}m for ${(decision.deviationDuration / 1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
+
+            let deviationDisplay;
+            if (distanceUnit === 'mi') {
+                const deviationFeet = Math.round(minDistance * 3.28084);
+                deviationDisplay = `${deviationFeet} ft`;
+            } else {
+                deviationDisplay = `${minDistance.toFixed(0)} m`;
+            }
+            sendNotification('🔄 Route Deviation', `You are ${deviationDisplay} off route for ${(decision.deviationDuration / 1000).toFixed(0)}s. Recalculating...`, 'warning');
+            triggerAutomaticRerouteWithHazardHandling(lat, lon);
+        } else if (decision.action === 'debounced' || decision.action === 'waiting') {
+            lastRerouteDeviation = minDistance;
+        }
+        return;
+    }
+
+    // ----- Inline fallback (reroute-decision module failed to load) -----
     // Widen the off-route threshold by part of the GPS error so noisy-but-on-road
     // fixes don't count as a deviation. Genuine wrong-road deviations are far larger.
     const effectiveThreshold = DEVIATION_THRESHOLD_METERS + Math.min(DEVIATION_ACC_EXTRA_CAP_M, acc * 0.5);
-
-    const snap = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
-    const minDistance = snap.distance;
 
     if (!routeJoinConfirmedForDeviation) {
         if (minDistance <= ROUTE_JOIN_GATE_METERS) {
@@ -16087,8 +16172,6 @@ function checkRouteDeviation(lat, lon, accuracy) {
             return;
         }
     }
-
-    const now = Date.now();
 
     // If deviation beyond the accuracy-aware threshold
     if (minDistance > effectiveThreshold) {
