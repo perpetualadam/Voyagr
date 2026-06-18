@@ -11283,6 +11283,30 @@ function updateUserMarkerIcon() {
     currentUserMarkerIcon = iconPath;
     console.log('[Marker] Icon updated to:', iconPath);
 }
+
+/**
+ * Build the inline SVG used for the vehicle position marker.
+ *
+ * A Starfleet-delta-style arrowhead drawn pointing straight "up" (heading 0° / north). The
+ * caller rotates the containing element by the GPS heading so the arrow points in the
+ * direction of travel. Deliberately contains no text, digits, or sign-like glyphs so it can
+ * never be confused with a regulatory road sign, and is fully self-contained (no external
+ * asset request that could fail and leave the marker blank).
+ *
+ * @returns {string} SVG markup sized to fill its 60×60 container.
+ */
+function buildVehicleArrowSvg() {
+    return `
+        <svg viewBox="0 0 100 100" width="100%" height="100%"
+             xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"
+             style="display:block;width:100%;height:100%;overflow:visible;">
+            <path d="M50 5 C 55 28 68 62 89 95 C 70 83 58 79 50 79 C 42 79 30 83 11 95 C 32 62 45 28 50 5 Z"
+                  fill="#1E88E5" stroke="#FFFFFF" stroke-width="6"
+                  stroke-linejoin="round" stroke-linecap="round"></path>
+        </svg>
+    `;
+}
+
 /**
  * createVehicleMarker function
  * @function createVehicleMarker
@@ -11294,11 +11318,9 @@ function updateUserMarkerIcon() {
  * @returns {*} Return value description
  */
 function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
-    // Get the custom SVG icon path
-    const iconPath = vehicleIcons[currentRoutingMode] || vehicleIcons[currentVehicleType] || vehicleIcons['petrol_diesel'];
     const iconEmoji = vehicleIconEmojis[currentRoutingMode] || vehicleIconEmojis[currentVehicleType] || '🚗';
 
-    // Create a div element for the marker with custom SVG icon
+    // Create a div element for the marker with an inline SVG arrowhead.
     // Larger size for better visibility in 3D aerial view
     const markerDiv = document.createElement('div');
     markerDiv.style.width = '60px';
@@ -11319,14 +11341,12 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
     // Enable 3D transforms
     markerDiv.style.transformStyle = 'preserve-3d';
 
-    // Create the SVG image element
-    const imgElement = document.createElement('img');
-    imgElement.src = iconPath;
-    imgElement.style.width = '100%';
-    imgElement.style.height = '100%';
-    imgElement.style.objectFit = 'contain';
-
-    markerDiv.appendChild(imgElement);
+    // Inline directional arrowhead (Starfleet-delta style). Drawn pointing "up" (north / 0°);
+    // the heading rotation applied to markerDiv turns it to face the direction of travel.
+    // It is a self-contained SVG (no external file fetch that can fail / 404, which is why the
+    // old <img>-based icon could vanish) and carries NO text/numbers/symbols, so it can never
+    // be mistaken for a regulatory road sign.
+    markerDiv.innerHTML = buildVehicleArrowSvg();
 
     // Create custom marker with MapLibre
     const speedKmh = speed ? (speed * 3.6).toFixed(1) : 0;
