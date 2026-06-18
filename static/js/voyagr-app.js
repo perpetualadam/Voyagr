@@ -5189,6 +5189,12 @@ async function calculateRoute() {
 
                     try {
                         recordRecentDestination(end, endCoords[0], endCoords[1], 'route');
+                        // Save the start location too, so it appears in the recent-locations
+                        // list for both fields. Skip the live-GPS placeholder ("Current
+                        // Location"), which is not a re-pickable named place.
+                        if (start && !/^\s*current location\s*$/i.test(start)) {
+                            recordRecentDestination(start, startCoords[0], startCoords[1], 'route');
+                        }
                     } catch (_) { /* ignore */ }
                 } catch (e) {
                     showStatus('Error parsing coordinates: ' + e.message, 'error');
@@ -9351,10 +9357,13 @@ function clearForm() {
 // ===== PHASE 2 FEATURES: SEARCH HISTORY & FAVORITES =====
 
 /**
- * Fill destination autocomplete with recent (local) + server search history when query is short.
- * @param {HTMLElement} dropdown - #autocompleteEnd
+ * Fill a location field's autocomplete with recent (local) + server search history when the
+ * query is short. Shared by the Start and Destination inputs (and the "show history" affordance)
+ * so both fields offer the same "pick a previous location" experience from one code path.
+ * @param {HTMLElement} dropdown - The field's autocomplete dropdown (#autocompleteStart / #autocompleteEnd).
+ * @param {string} [fieldId='end'] - Which input the chosen suggestion populates ('start' | 'end').
  */
-async function renderEndDestinationSuggestions(dropdown) {
+async function renderEndDestinationSuggestions(dropdown, fieldId = 'end') {
     if (!dropdown) return;
 
     const recent = loadRecentDestinations();
@@ -9369,14 +9378,14 @@ async function renderEndDestinationSuggestions(dropdown) {
     };
 
     if (recent.length) {
-        appendSectionTitle('Recent destinations');
+        appendSectionTitle('Recent locations');
         recent.forEach((item) => {
             const div = document.createElement('div');
             div.className = 'autocomplete-item';
             const kindLabel = item.kind === 'route' ? 'Used in a route' : 'Recent search';
             const labelEsc = escapeHtml(item.label);
             div.innerHTML = `<div class="autocomplete-item-icon">🕐</div><div class="autocomplete-item-text"><div class="autocomplete-item-name">${labelEsc}</div><div class="autocomplete-item-address">${kindLabel}</div></div>`;
-            div.onclick = () => selectAutocompleteResult('end', item.lat, item.lon, item.label);
+            div.onclick = () => selectAutocompleteResult(fieldId, item.lat, item.lon, item.label);
             dropdown.appendChild(div);
         });
     }
@@ -9395,12 +9404,12 @@ async function renderEndDestinationSuggestions(dropdown) {
                 const meta = escapeHtml(item.result_name || '');
                 if (Number.isFinite(lat) && Number.isFinite(lon)) {
                     div.innerHTML = `<div class="autocomplete-item-icon">🔎</div><div class="autocomplete-item-text"><div class="autocomplete-item-name">${primary}</div>${meta ? `<div class="autocomplete-item-address">${meta}</div>` : ''}</div>`;
-                    div.onclick = () => selectAutocompleteResult('end', lat, lon, item.result_name || item.query);
+                    div.onclick = () => selectAutocompleteResult(fieldId, lat, lon, item.result_name || item.query);
                 } else {
                     div.innerHTML = `<div class="autocomplete-item-icon">🔎</div><div class="autocomplete-item-text"><div class="autocomplete-item-name">${primary}</div></div>`;
                     div.onclick = () => {
-                        const endInput = document.getElementById('end');
-                        if (endInput) endInput.value = item.query || '';
+                        const fieldInput = document.getElementById(fieldId);
+                        if (fieldInput) fieldInput.value = item.query || '';
                         dropdown.classList.remove('show');
                     };
                 }
@@ -9413,7 +9422,7 @@ async function renderEndDestinationSuggestions(dropdown) {
     }
 
     if (!recent.length && serverCount === 0) {
-        dropdown.innerHTML = '<div class="autocomplete-no-results">Type at least 2 letters to search. Recent destinations appear here after you select places or calculate a route.</div>';
+        dropdown.innerHTML = '<div class="autocomplete-no-results">Type at least 2 letters to search. Recent locations appear here after you select places or calculate a route.</div>';
     }
     dropdown.classList.add('show');
 }
@@ -17466,7 +17475,10 @@ async function showAutocomplete(fieldId) {
     }
 
     if (!query || query.length < 2) {
-        if (fieldId === 'end') {
+        // Start and Destination both offer "pick a previous location" when empty. (The Start
+        // field only reaches here when auto-GPS is off — the guard above hands the field to
+        // live GPS otherwise.)
+        if (fieldId === 'end' || fieldId === 'start') {
             const histEl = document.getElementById('searchHistoryDropdown');
             if (histEl) {
                 histEl.classList.remove('show');
@@ -17474,9 +17486,9 @@ async function showAutocomplete(fieldId) {
             }
             dropdown.innerHTML = '<div class="autocomplete-loading">Loading…</div>';
             dropdown.classList.add('show');
-            renderEndDestinationSuggestions(dropdown).catch((err) => {
-                console.error('[Recent destinations]', err);
-                dropdown.innerHTML = '<div class="autocomplete-no-results">Could not load recent destinations.</div>';
+            renderEndDestinationSuggestions(dropdown, fieldId).catch((err) => {
+                console.error('[Recent locations]', err);
+                dropdown.innerHTML = '<div class="autocomplete-no-results">Could not load recent locations.</div>';
             });
             return;
         }
@@ -17641,7 +17653,9 @@ function selectAutocompleteResult(fieldId, lat, lon, name) {
 
     if (dropdown) dropdown.classList.remove('show');
 
-    if (fieldId === 'end') {
+    // Save the chosen place for either endpoint so it can be re-picked from the recent
+    // locations list in the Start or Destination field next time.
+    if (fieldId === 'end' || fieldId === 'start') {
         recordRecentDestination(name, lat, lon, 'search');
     }
 
