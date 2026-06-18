@@ -10144,7 +10144,12 @@ function rejectGpsSpeedSpikeMph(mph, prevPick) {
     if (!Number.isFinite(mph) || mph < 0) return mph;
     const prev = Number.isFinite(prevPick) ? prevPick : mph;
     if (mph > 100) {
-        return prev > 5 ? prev : Math.min(mph, 100);
+        // A reading above 100 mph is almost always a GPS glitch. The old code, when we were
+        // previously stopped/slow (prev <= 5), snapped to Math.min(mph, 100) === 100 — so a
+        // single bad fix from a standstill flashed "100" on the HUD and fired a false
+        // "you are N over the limit" alarm. A vehicle cannot jump 0 -> 100 in one fix, so
+        // hold the previous value instead and let speed ramp legitimately over later ticks.
+        return prev;
     }
     if (prev > 5 && mph > prev + 40) {
         return prev;
@@ -10164,7 +10169,14 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
         return x;
     };
 
-    if (Number.isFinite(coordsSpeed) && coordsSpeed >= 0) {
+    // Trust a *positive* device speed reading. NOTE: we deliberately do NOT trust an exact
+    // 0 here. Some Android browsers / WebViews report a constant coords.speed === 0 even
+    // while driving, which used to peg the widget at 0 mph for the whole trip (bug #2). We
+    // fall through to the displacement estimate in that case, but remember the device claimed
+    // "stopped" so we can reject parked GPS drift below.
+    const deviceReportsStopped = Number.isFinite(coordsSpeed) && coordsSpeed === 0;
+
+    if (Number.isFinite(coordsSpeed) && coordsSpeed > 0) {
         let mph = coordsSpeed * 2.237;
         mph = Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH);
         const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : mph;
@@ -10191,6 +10203,20 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
             const distM = calculateDistanceMeters(prev.lat, prev.lon, curr.lat, curr.lon);
             if (!Number.isFinite(distM) || distM > 500) {
                 return finish(0);
+            }
+
+            // If the device explicitly reported coords.speed === 0 (it believes we are
+            // parked), only override that with a displacement estimate when the movement
+            // clearly exceeds GPS position noise. A stationary phone routinely "walks" a few
+            // metres between fixes; counting that drift as motion produced phantom speed and a
+            // false "over the limit" announcement at a standstill (bug #6). Devices that report
+            // null speed keep their previous behaviour (no extra gate), so this cannot regress
+            // the long-standing displacement fallback.
+            if (deviceReportsStopped) {
+                const noiseFloorM = Math.max(Number.isFinite(accAvg) ? accAvg : 8, 8);
+                if (distM < noiseFloorM) {
+                    return finish(0);
+                }
             }
 
             let mph = (distM / dtSec) * 2.237;
@@ -10271,7 +10297,13 @@ function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
         if (speedDiff > speedLimitThreshold) {
             warningElement.style.display = 'block';
             widget.style.borderLeft = '4px solid #FF5722';
-            maybeAlertSpeedLimitViolation(speedDiff);
+            // Movement floor: never sound/voice the over-limit alarm while essentially
+            // stationary. Residual GPS jitter (or a very low posted limit) could otherwise
+            // fire "you are N over the limit" at a standstill / crawl — a bug users reported.
+            // The visual cue above still shows; only the audible + spoken alert is gated.
+            if (currentSpeedInMph >= 5) {
+                maybeAlertSpeedLimitViolation(speedDiff);
+            }
         } else {
             warningElement.style.display = 'none';
             widget.style.borderLeft = '4px solid #4CAF50';
@@ -11852,17 +11884,12 @@ function enableBatterySavingMode() {
         button.style.borderColor = '#4CAF50';
     }
 
-    // Reduce GPS update frequency
-    if (gpsWatchId !== null) {
-        navigator.geolocation.clearWatch(gpsWatchId);
-        gpsWatchId = navigator.geolocation.watchPosition(
-            (position) => {
-                // GPS callback - will be handled by existing tracking
-            },
-            (error) => console.error('GPS error:', error),
-            { enableHighAccuracy: false, timeout: 10000, maximumAge: 5000 }
-        );
-    }
+    // NOTE: We intentionally do NOT re-create the GPS watcher here. The previous code cleared
+    // the active navigation watcher (gpsWatchId) and replaced it with an EMPTY callback, which
+    // silently froze all position/speed/turn updates — the vehicle marker stopped moving and
+    // the speed widget stuck at 0 — whenever battery saving toggled (including the automatic
+    // toggle below 15% battery). Battery is still saved via the reduced animations below; the
+    // real navigation watcher keeps running so the app does not break.
 
     // Disable animations
     document.body.style.animation = 'none';
@@ -11893,17 +11920,9 @@ function disableBatterySavingMode() {
         button.style.borderColor = '#999';
     }
 
-    // Restore GPS update frequency
-    if (gpsWatchId !== null) {
-        navigator.geolocation.clearWatch(gpsWatchId);
-        gpsWatchId = navigator.geolocation.watchPosition(
-            (position) => {
-                // GPS callback
-            },
-            (error) => console.error('GPS error:', error),
-            { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-        );
-    }
+    // NOTE: As in enableBatterySavingMode, we no longer tear down and re-create the navigation
+    // GPS watcher here. The old empty-callback replacement broke live tracking; the active
+    // high-accuracy watcher created by the navigation flow stays in place.
 
     // Re-enable animations
     document.body.style.animation = '';
