@@ -19735,8 +19735,20 @@ function buildTraveledJourneyRoute(route) {
     const traveledKm = _navTraveledMeters / 1000;
     const out = { ...route };
 
-    // Only override distance when we accumulated a meaningful amount of real movement.
-    if (traveledKm > 0.05) {
+    const haveRealDistance = traveledKm > 0.05;
+
+    let elapsedMin = null;
+    if (Number.isFinite(_navStartedAt) && _navStartedAt > 0) {
+        const mins = (Date.now() - _navStartedAt) / 60000;
+        if (mins > 0.1) elapsedMin = mins;
+    }
+
+    // Substitute the actually-driven distance and the actual elapsed time *together* only.
+    // Overriding just one of them produced absurd average speeds in the summary (e.g. 520 mph):
+    // when the GPS odometer captured no distance (short test, stationary, or no fixes), the
+    // planned full-route distance was paired with the short real elapsed time. If we don't have
+    // a real driven distance we keep BOTH planned values so distance ÷ duration stays sane.
+    if (haveRealDistance && elapsedMin != null) {
         out.distance_km = Number(traveledKm.toFixed(2));
         // Keep any string display field consistent with the corrected distance.
         if ('distance' in out) {
@@ -19746,15 +19758,8 @@ function buildTraveledJourneyRoute(route) {
                 delete out.distance;
             }
         }
-    }
-
-    // Actual elapsed navigation time is a truer journey duration than the planned ETA.
-    if (Number.isFinite(_navStartedAt) && _navStartedAt > 0) {
-        const mins = (Date.now() - _navStartedAt) / 60000;
-        if (mins > 0.1) {
-            out.duration_minutes = Math.round(mins);
-            if ('time' in out) out.time = `${out.duration_minutes} minutes`;
-        }
+        out.duration_minutes = Math.round(elapsedMin);
+        if ('time' in out) out.time = `${out.duration_minutes} minutes`;
     }
 
     return out;
@@ -19776,10 +19781,17 @@ function showJourneySummary(routeData) {
     const durationMin = routeData.duration_minutes || 0;
     const cost = routeData.total_cost || 0;
 
-    // Calculate average speed (km/h)
+    // Calculate average speed (km/h). Guard against implausible values from any residual
+    // distance/duration mismatch so the summary can never show nonsense like 520 mph.
     let avgSpeed = 0;
-    if (durationMin > 0) {
+    if (durationMin > 0 && distanceKm > 0) {
         avgSpeed = distanceKm / (durationMin / 60);
+        const MAX_PLAUSIBLE_AVG_KMH = 300; // ~186 mph — above any real road-journey average
+        if (!Number.isFinite(avgSpeed) || avgSpeed > MAX_PLAUSIBLE_AVG_KMH) {
+            console.warn(`[Journey Summary] Implausible average speed ${avgSpeed} km/h ` +
+                `(dist ${distanceKm} km, dur ${durationMin} min) — clamping`);
+            avgSpeed = Math.min(Math.max(avgSpeed, 0), MAX_PLAUSIBLE_AVG_KMH);
+        }
     }
 
     const distUnit = getDistanceUnit();
