@@ -17,6 +17,7 @@ from typing import Optional
 from flask import Blueprint, jsonify, render_template_string, current_app, Response, make_response
 
 from voyagr.discoverability import block_search_indexing
+from voyagr.ga4 import template_kwargs as ga4_template_kwargs
 from voyagr.index_page_context import build_index_template_kwargs, tomtom_client_surface
 from voyagr.seo import (
     render_empty_sitemap_xml,
@@ -136,7 +137,7 @@ def llms_txt():
 def monitoring_dashboard():
     """Monitoring dashboard for routing engines."""
     from voyagr_web import MONITORING_DASHBOARD_HTML
-    return render_template_string(MONITORING_DASHBOARD_HTML)
+    return render_template_string(MONITORING_DASHBOARD_HTML, **ga4_template_kwargs())
 
 
 @core_bp.route('/manifest.json')
@@ -202,6 +203,7 @@ def asset_links():
 PRIVACY_POLICY_HTML = """<!DOCTYPE html>
 <html lang="en">
 <head>
+{{ ga4_head_snippet|safe }}
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Privacy Policy - Voyagr Navigation</title>
@@ -258,8 +260,8 @@ PRIVACY_POLICY_HTML = """<!DOCTYPE html>
 
   <h2>2. Data We Do NOT Collect</h2>
   <ul>
-    <li>We do not sell or share your personal data with advertisers.</li>
-    <li>We do not use tracking pixels, fingerprinting, or cross-site tracking.</li>
+    <li>We do not sell or share your personal data with advertisers for their own marketing.</li>
+    <li>We do not use cross-site tracking or device fingerprinting.</li>
     <li>We do not collect contacts, messages, photos, or files from your device.</li>
   </ul>
 
@@ -275,6 +277,9 @@ PRIVACY_POLICY_HTML = """<!DOCTYPE html>
     <a href="https://supabase.com/privacy" target="_blank">Supabase Privacy Policy</a></li>
     <li><strong>OpenFreeMap / OpenStreetMap</strong> &mdash; Map tiles and geographic data.
     <a href="https://osmfoundation.org/wiki/Privacy_Policy" target="_blank">OSM Privacy Policy</a></li>
+    <li><strong>Google Analytics</strong> &mdash; Anonymous usage statistics (page views, device type,
+    general location at country/region level) to understand how the app is used and improve it.
+    <a href="https://policies.google.com/privacy" target="_blank">Google Privacy Policy</a></li>
   </ul>
   <p>Where these providers process personal data on our behalf (for example our
   authentication and hosting providers), they act as our processors under appropriate
@@ -354,5 +359,5 @@ PRIVACY_POLICY_HTML = """<!DOCTYPE html>
 @core_bp.route('/privacy')
 def privacy_policy():
     """Serve the privacy policy page (required by Google Play Store)."""
-    return render_template_string(PRIVACY_POLICY_HTML)
+    return render_template_string(PRIVACY_POLICY_HTML, **ga4_template_kwargs())
 

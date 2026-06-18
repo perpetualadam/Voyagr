@@ -3185,6 +3185,7 @@ MONITORING_DASHBOARD_HTML = '''
 <!DOCTYPE html>
 <html>
 <head>
+    {{ ga4_head_snippet|safe }}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Voyagr Routing Monitoring Dashboard</title>
@@ -3854,6 +3855,7 @@ HTML_TEMPLATE = '''
 <!DOCTYPE html>
 <html>
 <head>
+    {{ ga4_head_snippet|safe }}
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="theme-color" content="#667eea">

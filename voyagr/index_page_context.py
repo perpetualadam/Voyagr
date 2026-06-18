@@ -9,6 +9,7 @@ import os
 from typing import Any, Dict, Tuple
 
 from voyagr.discoverability import block_search_indexing
+from voyagr.ga4 import template_kwargs as ga4_template_kwargs
 from voyagr.seo import (
     APP_DESCRIPTION,
     APP_NAME,
@@ -89,4 +90,5 @@ def build_index_template_kwargs() -> Dict[str, Any]:
         "seo_canonical": canonical_url("/"),
         "seo_og_image": og_image_url(),
         "seo_json_ld": seo_json_ld,
+        **ga4_template_kwargs(),
     }
