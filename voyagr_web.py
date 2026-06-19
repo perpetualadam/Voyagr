@@ -3919,6 +3919,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/js/modules/navigation/voice-announcements.js?v=20260618a"></script>
     <script defer src="/static/js/modules/navigation/lane-guidance.js?v=20260618a"></script>
     <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20260618a"></script>
+    <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260619a"></script>
     <script defer src="/static/js/modules/map/weather-layer.js?v=20260611a"></script>
     <script defer src="/static/js/modules/ui/toggle-ui.js?v=20260611a"></script>
     <script defer src="/static/js/voyagr-core.js?v=20260530a"></script>
@@ -3926,7 +3927,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260619a"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260619b"></script>
     <script defer src="/static/js/app.js?v=20260530a"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>

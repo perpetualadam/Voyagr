@@ -18,6 +18,7 @@ module.exports = {
         'static/js/modules/navigation/voice-announcements.js',
         'static/js/modules/navigation/lane-guidance.js',
         'static/js/modules/navigation/reroute-decision.js',
+        'static/js/modules/navigation/speed-gps.js',
         'static/js/modules/ui/toggle-ui.js',
         'static/js/modules/services/google-plus-codes-service.js',
         'static/js/maplibre-helpers.js'
@@ -52,6 +53,9 @@ module.exports = {
         },
         'static/js/modules/navigation/reroute-decision.js': {
             statements: 100, branches: 90, functions: 100, lines: 100
+        },
+        'static/js/modules/navigation/speed-gps.js': {
+            statements: 95, branches: 85, functions: 100, lines: 95
         },
         'static/js/modules/ui/toggle-ui.js': {
             statements: 95, branches: 70, functions: 100, lines: 100

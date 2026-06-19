@@ -10128,6 +10128,18 @@ let _consecutiveDisplacementMoves = 0;
  * @returns {number} Smoothed mph value to show in the widget.
  */
 function smoothGpsSpeedMph(rawMph) {
+    const SG = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+    if (SG) {
+        const r = SG.stepSmoothGpsSpeedMph(
+            { smoothedMph: _smoothedSpeedMph, initAt: _smoothedSpeedInitAt },
+            rawMph,
+            Date.now()
+        );
+        _smoothedSpeedMph = r.state.smoothedMph;
+        _smoothedSpeedInitAt = r.state.initAt;
+        return r.value;
+    }
+
     if (!Number.isFinite(rawMph) || rawMph < 0) rawMph = 0;
     rawMph = Math.min(rawMph, MAX_DISPLAY_GPS_SPEED_MPH);
     // Wake the display quickly when motion starts — lingering at 0 felt like "latency".
@@ -10184,6 +10196,9 @@ function smoothGpsSpeedMph(rawMph) {
  * @returns {number}
  */
 function rejectGpsSpeedSpikeMph(mph, prevPick) {
+    const SG = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+    if (SG) return SG.rejectGpsSpeedSpikeMph(mph, prevPick);
+
     if (!Number.isFinite(mph) || mph < 0) return mph;
     const prev = Number.isFinite(prevPick) ? prevPick : mph;
     if (mph > 100) {
@@ -10259,9 +10274,12 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
             // null speed keep their previous behaviour (no extra gate), so this cannot regress
             // the long-standing displacement fallback.
             if (deviceReportsStopped) {
-                const noiseFloorM = (_consecutiveDisplacementMoves >= 3)
-                    ? Math.max(Number.isFinite(accAvg) ? accAvg * 0.35 : 4, 4)
-                    : Math.max(Number.isFinite(accAvg) ? accAvg : 8, 8);
+                const SG = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+                const noiseFloorM = SG
+                    ? SG.displacementNoiseFloorMeters(deviceReportsStopped, _consecutiveDisplacementMoves, accAvg)
+                    : ((_consecutiveDisplacementMoves >= 3)
+                        ? Math.max(Number.isFinite(accAvg) ? accAvg * 0.35 : 4, 4)
+                        : Math.max(Number.isFinite(accAvg) ? accAvg : 8, 8));
                 if (distM < noiseFloorM) {
                     return finish(0);
                 }
@@ -10659,6 +10677,9 @@ function getCurrentRoadType(maneuverIdxOverride) {
  * @returns {string}
  */
 function getManeuverStreetLabel(maneuver, preferCurrentRoad = false) {
+    const SG = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+    if (SG) return SG.getManeuverStreetLabel(maneuver, preferCurrentRoad);
+
     if (!maneuver) return '';
     if (preferCurrentRoad) {
         const begin = maneuver.begin_street_names || [];
@@ -10680,6 +10701,9 @@ function getManeuverStreetLabel(maneuver, preferCurrentRoad = false) {
  * @returns {number|null}
  */
 function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
+    const SG = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+    if (SG) return SG.normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph);
+
     const raw = Number(rawSl);
     if (!Number.isFinite(raw) || raw <= 0) return null;
 
@@ -10715,6 +10739,9 @@ function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
  * @returns {boolean} true when the value looks usable.
  */
 function isPlausibleEdgeSpeedLimitMph(mph, roadClass, gpsSpeedMph) {
+    const SG = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+    if (SG) return SG.isPlausibleEdgeSpeedLimitMph(mph, roadClass, gpsSpeedMph);
+
     if (!Number.isFinite(mph) || mph <= 0 || mph > 100) return false;
     const rc = String(roadClass || '').toLowerCase();
     if (rc === 'motorway' && mph < 30) return false;
@@ -14956,22 +14983,33 @@ function startGPSTracking() {
                     horizAcc != null ? horizAcc * SNAP_LOCK_ACC_SCALE : 0
                 );
                 const snapReleaseMeters = snapLockMeters + SNAP_RELEASE_BAND_METERS;
-                const releaseMeters = (_snapBlendWeightState > 0.55)
-                    ? snapReleaseMeters + SNAP_LOCK_HYSTERESIS_METERS
-                    : snapReleaseMeters;
-
-                let snapBlendWeight;
-                if (distSnap <= snapLockMeters) {
-                    snapBlendWeight = 1;
-                } else if (distSnap <= releaseMeters) {
-                    snapBlendWeight = (releaseMeters - distSnap) / SNAP_RELEASE_BAND_METERS;
+                const SGsnap = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+                let effectiveBlend;
+                if (SGsnap) {
+                    const snapBlend = SGsnap.computeSnapBlendWeight({
+                        distSnap: distSnap,
+                        snapLockMeters: snapLockMeters,
+                        prevWeightState: _snapBlendWeightState
+                    });
+                    _snapBlendWeightState = snapBlend.weightState;
+                    effectiveBlend = snapBlend.effectiveBlend;
                 } else {
-                    snapBlendWeight = 0;
+                    const releaseMeters = (_snapBlendWeightState > 0.55)
+                        ? snapReleaseMeters + SNAP_LOCK_HYSTERESIS_METERS
+                        : snapReleaseMeters;
+                    let snapBlendWeight;
+                    if (distSnap <= snapLockMeters) {
+                        snapBlendWeight = 1;
+                    } else if (distSnap <= releaseMeters) {
+                        snapBlendWeight = (releaseMeters - distSnap) / SNAP_RELEASE_BAND_METERS;
+                    } else {
+                        snapBlendWeight = 0;
+                    }
+                    snapBlendWeight = Math.max(0, Math.min(1, snapBlendWeight));
+                    _snapBlendWeightState = (1 - SNAP_BLEND_EMA_ALPHA) * _snapBlendWeightState
+                        + SNAP_BLEND_EMA_ALPHA * snapBlendWeight;
+                    effectiveBlend = _snapBlendWeightState;
                 }
-                snapBlendWeight = Math.max(0, Math.min(1, snapBlendWeight));
-                _snapBlendWeightState = (1 - SNAP_BLEND_EMA_ALPHA) * _snapBlendWeightState
-                    + SNAP_BLEND_EMA_ALPHA * snapBlendWeight;
-                const effectiveBlend = _snapBlendWeightState;
 
                 displayLat = lat + (snapped.lat - lat) * effectiveBlend;
                 displayLon = lon + (snapped.lon - lon) * effectiveBlend;
@@ -15000,9 +15038,15 @@ function startGPSTracking() {
                 _smoothDisplayLat = displayLat;
                 _smoothDisplayLon = displayLon;
             } else {
-                const posAlpha = followJumpM > 40 ? 0.88 : DISPLAY_POS_EMA_ALPHA;
-                _smoothDisplayLat += (displayLat - _smoothDisplayLat) * posAlpha;
-                _smoothDisplayLon += (displayLon - _smoothDisplayLon) * posAlpha;
+                const SGpos = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+                if (SGpos) {
+                    _smoothDisplayLat = SGpos.smoothDisplayCoordinate(_smoothDisplayLat, displayLat, followJumpM);
+                    _smoothDisplayLon = SGpos.smoothDisplayCoordinate(_smoothDisplayLon, displayLon, followJumpM);
+                } else {
+                    const posAlpha = followJumpM > 40 ? 0.88 : DISPLAY_POS_EMA_ALPHA;
+                    _smoothDisplayLat += (displayLat - _smoothDisplayLat) * posAlpha;
+                    _smoothDisplayLon += (displayLon - _smoothDisplayLon) * posAlpha;
+                }
             }
             const markerLat = _smoothDisplayLat;
             const markerLon = _smoothDisplayLon;
