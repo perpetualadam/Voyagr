@@ -3926,7 +3926,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260530c"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260619a"></script>
     <script defer src="/static/js/app.js?v=20260530a"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>

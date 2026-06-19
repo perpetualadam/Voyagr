@@ -7105,6 +7105,14 @@ function updateRouteOnMap(newRoute) {
     lastSpeedLimitFetch = 0;
     lastSpeedLimitPosition = null;
 
+    // Road-name bar was still showing the pre-reroute street until the 5 s throttle expired.
+    lastRoadNameFetch = 0;
+    lastRoadNamePosition = null;
+    currentRoadDisplayName = '';
+    _smoothDisplayLat = null;
+    _smoothDisplayLon = null;
+    _snapBlendWeightState = 0;
+
     resetNavigationArrivalState();
 
     // Reset deviation tracking so we don't immediately re-trigger reroute
@@ -7114,6 +7122,7 @@ function updateRouteOnMap(newRoute) {
     // Refresh the turn instruction widget immediately with new route data
     if (currentLat && currentLon) {
         updateTurnWidgetFromPosition(currentLat, currentLon);
+        fetchRoadNameThrottled(currentLat, currentLon);
     }
 
     // Update trip info
@@ -10090,7 +10099,7 @@ let _lastActiveManeuverIdx = -1;
 //      so the widget stays responsive when it matters.
 //   4. Fall back to derived speed (dx/dt between successive fixes) when the device does
 //      not report `coords.speed` — common on some Android browsers.
-const SPEED_WIDGET_DEAD_BAND_MPH = 1.0;     // < ~0.45 m/s ≈ stationary noise
+const SPEED_WIDGET_DEAD_BAND_MPH = 0.5;     // < ~0.22 m/s ≈ stationary noise (was 1.0 — hid slow crawl)
 const SPEED_WIDGET_SNAP_DELTA_MPH = 8.0;    // modest changes skip sluggish EMA
 /** Above this delta we no longer instantly snap — huge spikes decay instead (Firefox / fused GPS outliers). */
 const SPEED_WIDGET_LARGE_JUMP_MPH = 55.0;
@@ -10103,6 +10112,12 @@ let _smoothedSpeedMph = 0;
 let _smoothedSpeedInitAt = 0;
 /** Tracks last sane raw mph accepted by {@link pickRawSpeedMph} for outlier rejection. */
 let _lastGoodRawPickMph = 0;
+/**
+ * Count of consecutive displacement-derived speed samples while the device keeps
+ * reporting coords.speed === 0. Once high enough we stop treating the device as
+ * "parked" and use a lower noise floor so the speedometer wakes up faster.
+ */
+let _consecutiveDisplacementMoves = 0;
 
 /**
  * Smooth a raw mph reading to reduce GPS jitter without sacrificing responsiveness.
@@ -10115,6 +10130,12 @@ let _lastGoodRawPickMph = 0;
 function smoothGpsSpeedMph(rawMph) {
     if (!Number.isFinite(rawMph) || rawMph < 0) rawMph = 0;
     rawMph = Math.min(rawMph, MAX_DISPLAY_GPS_SPEED_MPH);
+    // Wake the display quickly when motion starts — lingering at 0 felt like "latency".
+    if (_smoothedSpeedMph < SPEED_WIDGET_DEAD_BAND_MPH && rawMph >= 3) {
+        _smoothedSpeedMph = rawMph;
+        _smoothedSpeedInitAt = Date.now();
+        return rawMph;
+    }
     if (rawMph < SPEED_WIDGET_DEAD_BAND_MPH) {
         _smoothedSpeedMph = 0;
         return 0;
@@ -10207,6 +10228,9 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
         if (prevPick > 5 && mph > prevPick + 85 && accCurr != null && accCurr > 40) {
             mph = prevPick;
         }
+        if (mph >= 2) {
+            _consecutiveDisplacementMoves = Math.min(_consecutiveDisplacementMoves + 1, 20);
+        }
 
         return finish(mph);
     }
@@ -10235,7 +10259,9 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
             // null speed keep their previous behaviour (no extra gate), so this cannot regress
             // the long-standing displacement fallback.
             if (deviceReportsStopped) {
-                const noiseFloorM = Math.max(Number.isFinite(accAvg) ? accAvg : 8, 8);
+                const noiseFloorM = (_consecutiveDisplacementMoves >= 3)
+                    ? Math.max(Number.isFinite(accAvg) ? accAvg * 0.35 : 4, 4)
+                    : Math.max(Number.isFinite(accAvg) ? accAvg : 8, 8);
                 if (distM < noiseFloorM) {
                     return finish(0);
                 }
@@ -10246,6 +10272,12 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
 
             const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : mph;
             mph = rejectGpsSpeedSpikeMph(mph, prevPick);
+
+            if (deviceReportsStopped && mph >= 2) {
+                _consecutiveDisplacementMoves = Math.min(_consecutiveDisplacementMoves + 1, 20);
+            } else if (mph >= 2) {
+                _consecutiveDisplacementMoves = Math.min(_consecutiveDisplacementMoves + 1, 20);
+            }
 
             if (accAvg != null) {
                 if (mph > 95 && mph > prevPick + 70 && distM > accAvg * 2.3) {
@@ -10620,6 +10652,58 @@ function getCurrentRoadType(maneuverIdxOverride) {
 }
 
 /**
+ * Best street label for a Valhalla maneuver. `preferCurrentRoad` reads begin_street_names
+ * (the edge being driven) instead of street_names (the road after the maneuver).
+ * @param {object|null} maneuver
+ * @param {boolean} [preferCurrentRoad=false]
+ * @returns {string}
+ */
+function getManeuverStreetLabel(maneuver, preferCurrentRoad = false) {
+    if (!maneuver) return '';
+    if (preferCurrentRoad) {
+        const begin = maneuver.begin_street_names || [];
+        if (begin.length > 0 && begin[0]) return begin[0];
+    }
+    const names = maneuver.street_names || [];
+    if (names.length > 0 && names[0]) return names[0];
+    return maneuver.street_name || '';
+}
+
+/**
+ * Convert a Valhalla / GraphHopper maneuver speed_limit to mph.
+ * Both engines document km/h, but some payloads already carry mph — detect that so we
+ * don't turn a 30 mph limit into ~19 mph and trigger false over-limit alarms.
+ *
+ * @param {number} rawSl - Raw maneuver speed_limit value.
+ * @param {string|null} roadClass - Valhalla road_class of the active edge.
+ * @param {number} gpsSpeedMph - Current GPS speed in mph.
+ * @returns {number|null}
+ */
+function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
+    const raw = Number(rawSl);
+    if (!Number.isFinite(raw) || raw <= 0) return null;
+
+    const asKmhMph = Math.round(raw * 0.621371);
+    const asDirectMph = Math.round(raw);
+    const typicalMph = [20, 30, 40, 50, 60, 70];
+
+    // Exact UK-style mph postings (20/30/40/50/60/70) that are NOT also typical km/h values.
+    if (typicalMph.includes(asDirectMph) && !typicalMph.includes(asKmhMph)) {
+        if (isPlausibleEdgeSpeedLimitMph(asDirectMph, roadClass, gpsSpeedMph)) {
+            return asDirectMph;
+        }
+    }
+
+    if (isPlausibleEdgeSpeedLimitMph(asKmhMph, roadClass, gpsSpeedMph)) {
+        return asKmhMph;
+    }
+    if (isPlausibleEdgeSpeedLimitMph(asDirectMph, roadClass, gpsSpeedMph)) {
+        return asDirectMph;
+    }
+    return null;
+}
+
+/**
  * Plausibility check for a Valhalla edge speed-limit hint.
  * Bad geometry, missing OSM tags, and (rarely) unit confusion can let an
  * implausible value through (e.g. 5 mph on a motorway). Reject those rather
@@ -10974,8 +11058,7 @@ function getFollowingManeuver(currentIndex) {
         const dir = maneuverTypeToDirectionKey(type);
         if (!dir) continue;
         const gapMeters = cumulativeRouteDistanceBetween(currentShapeIdx, m.begin_shape_index || 0);
-        const streetNames = m.street_names || [];
-        const streetName = streetNames.length > 0 ? streetNames[0] : (m.street_name || '');
+        const streetName = getManeuverStreetLabel(m, false);
         return { direction: dir, valhallaType: type, streetName, gapMeters, index: j, maneuver: m };
     }
     return null;
@@ -11139,7 +11222,7 @@ function detectUpcomingTurn(userLat, userLon) {
                 return {
                     distance: distanceToManeuver,
                     direction: direction,
-                    streetName: maneuver.street_name || (maneuver.street_names && maneuver.street_names[0]) || maneuver.begin_street_names?.[0] || '',
+                    streetName: getManeuverStreetLabel(maneuver, false),
                     instruction: maneuver.instruction || maneuver.verbal_pre_transition_instruction || '',
                     verbal_transition_alert_instruction: maneuver.verbal_transition_alert_instruction || '',
                     verbal_pre_transition_instruction: maneuver.verbal_pre_transition_instruction || '',
@@ -13499,8 +13582,10 @@ function updateTurnInstructionDisplay(turnInfo) {
     if (!distanceEl || !instructionEl) return;
 
     if (turnInfo) {
-        const formattedDistance = formatTurnDistance(turnInfo.distance);
-        distanceEl.textContent = `In ${formattedDistance}`;
+        const onCurrentRoad = turnInfo.direction === 'straight'
+            && (turnInfo.distance == null || turnInfo.distance < 15);
+        const formattedDistance = formatTurnDistance(turnInfo.distance || 0);
+        distanceEl.textContent = onCurrentRoad ? 'On' : `In ${formattedDistance}`;
 
         if (turnInfo.instruction) {
             instructionEl.textContent = turnInfo.instruction;
@@ -13511,7 +13596,8 @@ function updateTurnInstructionDisplay(turnInfo) {
 
         if (streetEl) {
             if (turnInfo.streetName) {
-                streetEl.textContent = `onto ${turnInfo.streetName}`;
+                const prefix = onCurrentRoad ? 'on' : 'onto';
+                streetEl.textContent = `${prefix} ${turnInfo.streetName}`;
                 streetEl.style.display = 'block';
             } else {
                 streetEl.style.display = 'none';
@@ -13765,7 +13851,11 @@ function hidePreviewMarker() {
 }
 
 /**
- * Update turn widget from maneuver data (called from GPS tracking)
+ * Update turn widget from maneuver data (called from GPS tracking).
+ * Delegates to {@link detectUpcomingTurn} so street names / distances stay in sync with
+ * voice announcements — the old loop from `currentStepIndex` could show the wrong road
+ * after a reroute when progress indices were re-seeded.
+ *
  * @param {number} lat - Current latitude
  * @param {number} lon - Current longitude
  */
@@ -13777,84 +13867,42 @@ function updateTurnWidgetFromPosition(lat, lon) {
         return;
     }
 
-    // Same snap + monotonic progress as detectUpcomingTurn (segment projection, not vertex scan from 0).
-    const turnSnap = snapToRoutePolyline(lat, lon, routePolyline, lastTurnDetectRouteVertexIndex);
-    let userRouteIndex = turnSnap.index;
-    if (userRouteIndex < lastTurnDetectRouteVertexIndex) {
-        userRouteIndex = lastTurnDetectRouteVertexIndex;
+    const turnInfo = detectUpcomingTurn(lat, lon);
+    if (turnInfo) {
+        updateTurnInstructionDisplay({
+            distance: turnInfo.distance,
+            direction: turnInfo.direction,
+            instruction: turnInfo.instruction || '',
+            streetName: turnInfo.streetName || '',
+            maneuver: turnInfo.maneuver,
+            maneuverIndex: turnInfo.maneuverIndex,
+            valhallaType: turnInfo.valhallaType,
+        });
+        return;
     }
 
-    for (let i = currentStepIndex; i < currentRouteSteps.length; i++) {
-        const maneuver = currentRouteSteps[i];
-        const maneuverShapeIndex = maneuver.begin_shape_index || 0;
+    // No turn in detection range — show the road currently being driven.
+    const activeIdx = getActiveRouteManeuverIndex(lastSnappedRouteIndex);
+    const activeM = (activeIdx >= 0 && activeIdx < currentRouteSteps.length)
+        ? currentRouteSteps[activeIdx]
+        : null;
+    const currentStreet = activeM
+        ? getManeuverStreetLabel(activeM, true)
+        : (currentRoadDisplayName || '');
 
-        // Skip maneuvers that are behind the user
-        if (maneuverShapeIndex < userRouteIndex - 5) {
-            // Update current step index as we pass maneuvers
-            if (i === currentStepIndex && i < currentRouteSteps.length - 1) {
-                currentStepIndex = i + 1;
-            }
-            continue;
-        }
-
-        // Calculate distance to this maneuver
-        if (routePolyline && maneuverShapeIndex < routePolyline.length) {
-            const targetIndex = Math.min(maneuverShapeIndex, routePolyline.length - 1);
-            const distanceToManeuver = distanceAlongRouteToVertexMeters(
-                routePolyline, turnSnap, targetIndex
-            );
-
-            // Update the display with this maneuver info
-            const type = maneuver.type || 0;
-            let direction = 'straight';
-
-            // Map Valhalla types to directions (FIX: corrected mappings)
-            // Types 9=Slight Right, 18=Ramp Right, 23=Stay Right
-            if ([9, 18, 23].includes(type)) direction = 'slight-right';
-            // Type 10=Right
-            else if ([10].includes(type)) direction = 'right';
-            // Type 11=Sharp Right
-            else if ([11].includes(type)) direction = 'sharp-right';
-            // Types 16=Slight Left, 19=Ramp Left, 24=Stay Left
-            else if ([16, 19, 24].includes(type)) direction = 'slight-left';
-            // Type 15=Left
-            else if ([15].includes(type)) direction = 'left';
-            // Type 14=Sharp Left
-            else if ([14].includes(type)) direction = 'sharp-left';
-            // Types 12=U-turn Right, 13=U-turn Left
-            else if ([12, 13].includes(type)) direction = 'u-turn';
-            // Type 20=Exit Right (FIX: separate from Exit Left)
-            else if ([20].includes(type)) direction = 'exit-right';
-            // Type 21=Exit Left (FIX: was grouped with exit right)
-            else if ([21].includes(type)) direction = 'exit-left';
-            // Type 22=Stay Straight (FIX: was missing, was wrong)
-            else if ([22].includes(type)) direction = 'straight';
-            // Types 25,35,36=Merge
-            else if ([25, 35, 36].includes(type)) direction = 'merge';
-            // Types 26,27=Roundabout
-            else if ([26, 27].includes(type)) direction = 'roundabout';
-            // Types 4,5,6=Destination
-            else if ([4, 5, 6].includes(type)) direction = 'destination';
-
-            const streetNames = maneuver.street_names || [];
-            const streetLabel = streetNames.length > 0 ? streetNames[0] : (maneuver.street_name || '');
-
-            updateTurnInstructionDisplay({
-                distance: distanceToManeuver,
-                direction: direction,
-                instruction: maneuver.instruction || maneuver.verbal_pre_transition_instruction || '',
-                streetName: streetLabel,
-                maneuver: maneuver,
-                maneuverIndex: i,
-                valhallaType: type,
-            });
-
-            return;
-        }
+    if (currentStreet) {
+        updateTurnInstructionDisplay({
+            distance: 0,
+            direction: 'straight',
+            instruction: 'Continue',
+            streetName: currentStreet,
+            maneuver: activeM,
+            maneuverIndex: activeIdx >= 0 ? activeIdx : null,
+            valhallaType: 8,
+        });
+    } else {
+        updateTurnInstructionDisplay(null);
     }
-
-    // No upcoming maneuvers - near destination or following route
-    updateTurnInstructionDisplay(null);
 }
 
 // ===== JOURNEY SUMMARY BAR =====
@@ -14789,8 +14837,12 @@ function startGPSTracking() {
     isTrackingActive = true;
     trackingHistory = [];
     _lastGoodRawPickMph = 0;
+    _consecutiveDisplacementMoves = 0;
     _smoothedSpeedMph = 0;
     _smoothedSpeedInitAt = 0;
+    _smoothDisplayLat = null;
+    _smoothDisplayLon = null;
+    _snapBlendWeightState = 0;
     window.__voyagrLastFollowEaseAt = 0;
     window.__voyagrLastFollowCenterGeo = null;
     showStatus('🎯 GPS Tracking started...', 'success');
@@ -14904,35 +14956,63 @@ function startGPSTracking() {
                     horizAcc != null ? horizAcc * SNAP_LOCK_ACC_SCALE : 0
                 );
                 const snapReleaseMeters = snapLockMeters + SNAP_RELEASE_BAND_METERS;
+                const releaseMeters = (_snapBlendWeightState > 0.55)
+                    ? snapReleaseMeters + SNAP_LOCK_HYSTERESIS_METERS
+                    : snapReleaseMeters;
 
                 let snapBlendWeight;
                 if (distSnap <= snapLockMeters) {
                     snapBlendWeight = 1;
-                } else if (distSnap <= snapReleaseMeters) {
-                    snapBlendWeight = (snapReleaseMeters - distSnap) / SNAP_RELEASE_BAND_METERS;
+                } else if (distSnap <= releaseMeters) {
+                    snapBlendWeight = (releaseMeters - distSnap) / SNAP_RELEASE_BAND_METERS;
                 } else {
                     snapBlendWeight = 0;
                 }
                 snapBlendWeight = Math.max(0, Math.min(1, snapBlendWeight));
+                _snapBlendWeightState = (1 - SNAP_BLEND_EMA_ALPHA) * _snapBlendWeightState
+                    + SNAP_BLEND_EMA_ALPHA * snapBlendWeight;
+                const effectiveBlend = _snapBlendWeightState;
 
-                displayLat = lat + (snapped.lat - lat) * snapBlendWeight;
-                displayLon = lon + (snapped.lon - lon) * snapBlendWeight;
-                heading = blendHeadingsCircular(gpsHeadingForBlend, routeBearing, snapBlendWeight);
+                displayLat = lat + (snapped.lat - lat) * effectiveBlend;
+                displayLon = lon + (snapped.lon - lon) * effectiveBlend;
+                heading = blendHeadingsCircular(gpsHeadingForBlend, routeBearing, effectiveBlend);
 
-                // Advance along-route index when moving forward (not only when blend is high).
+                // Advance along-route index when moving forward. Never jump backwards while
+                // driving — that made the marker hop to an earlier polyline vertex each tick.
                 if (snapped.index >= lastSnappedRouteIndex) {
                     lastSnappedRouteIndex = snapped.index;
-                } else if (snapBlendWeight > 0.18) {
+                } else if (speedMph < 2) {
                     lastSnappedRouteIndex = snapped.index;
                 }
             }
+
+            // Smooth the displayed position so raw↔snap blend changes don't jerk the icon.
+            let followJumpM = Number.POSITIVE_INFINITY;
+            try {
+                const lc = window.__voyagrLastFollowCenterGeo;
+                if (lc && Number.isFinite(lc.lat) && Number.isFinite(lc.lon)) {
+                    followJumpM = calculateDistanceMeters(displayLat, displayLon, lc.lat, lc.lon);
+                }
+            } catch (_ej) {
+                /* ignore */
+            }
+            if (_smoothDisplayLat == null || _smoothDisplayLon == null) {
+                _smoothDisplayLat = displayLat;
+                _smoothDisplayLon = displayLon;
+            } else {
+                const posAlpha = followJumpM > 40 ? 0.88 : DISPLAY_POS_EMA_ALPHA;
+                _smoothDisplayLat += (displayLat - _smoothDisplayLat) * posAlpha;
+                _smoothDisplayLon += (displayLon - _smoothDisplayLon) * posAlpha;
+            }
+            const markerLat = _smoothDisplayLat;
+            const markerLon = _smoothDisplayLon;
 
             // Update user marker on map with vehicle icon and heading
             // FIX: Reuse the existing marker and call setLngLat for smooth movement
             // instead of removing and recreating every tick (which kills CSS transitions)
             if (currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
                 // Move existing marker smoothly
-                currentUserMarker.setLngLat([displayLon, displayLat]);
+                currentUserMarker.setLngLat([markerLon, markerLat]);
 
                 // Update heading rotation on the inner element
                 const markerEl = currentUserMarker.getElement ? currentUserMarker.getElement() : null;
@@ -14953,22 +15033,13 @@ function startGPSTracking() {
                 if (currentUserMarker && typeof currentUserMarker.remove === 'function') {
                     currentUserMarker.remove();
                 }
-                currentUserMarker = createVehicleMarker(displayLat, displayLon, speed, accuracy, heading);
+                currentUserMarker = createVehicleMarker(markerLat, markerLon, speed, accuracy, heading);
                 currentUserMarker.addTo(map);
             }
 
             // ===== ZOOM AND FOLLOW: Center map on user with smart zoom =====
             const FOLLOW_EASE_MIN_MS = 400;
             const nowCam = Date.now();
-            let followJumpM = Number.POSITIVE_INFINITY;
-            try {
-                const lc = window.__voyagrLastFollowCenterGeo;
-                if (lc && Number.isFinite(lc.lat) && Number.isFinite(lc.lon)) {
-                    followJumpM = calculateDistanceMeters(displayLat, displayLon, lc.lat, lc.lon);
-                }
-            } catch (_ej) {
-                /* ignore */
-            }
             const followDue = nowCam - (window.__voyagrLastFollowEaseAt || 0) >= FOLLOW_EASE_MIN_MS;
             const followUrgent = followJumpM > 40;
 
@@ -14983,11 +15054,11 @@ function startGPSTracking() {
 
                 if (followDue || followUrgent) {
                     window.__voyagrLastFollowEaseAt = nowCam;
-                    window.__voyagrLastFollowCenterGeo = { lat: displayLat, lon: displayLon };
+                    window.__voyagrLastFollowCenterGeo = { lat: markerLat, lon: markerLon };
 
                     const dur = followJumpM > 95 ? 780 : Math.min(680, FOLLOW_EASE_MIN_MS + 240);
                     map.easeTo({
-                        center: [displayLon, displayLat], // MapLibre uses [lon, lat]
+                        center: [markerLon, markerLat], // MapLibre uses [lon, lat]
                         zoom: smartZoom,
                         bearing: bearing,
                         pitch: pitch,
@@ -15001,9 +15072,9 @@ function startGPSTracking() {
             } else if (map && !zoomAndFollowEnabled && !map._userPanned) {
                 if (followDue || followUrgent) {
                     window.__voyagrLastFollowEaseAt = nowCam;
-                    window.__voyagrLastFollowCenterGeo = { lat: displayLat, lon: displayLon };
+                    window.__voyagrLastFollowCenterGeo = { lat: markerLat, lon: markerLon };
                     map.easeTo({
-                        center: [displayLon, displayLat],
+                        center: [markerLon, markerLat],
                         zoom: 16,
                         padding: routeInProgress ? getNavigationFollowPadding() : undefined,
                         duration: followJumpM > 95 ? 650 : 420
@@ -15084,9 +15155,6 @@ function startGPSTracking() {
                 updateLaneGuidance(lat, lon, heading, maneuverDir, exitCount);
             }
 
-            // Update speed warnings (assume local roads by default)
-            updateSpeedWarning(lat, lon, speedMph, 'local');
-
             // ===== UPDATE SPEED WIDGET =====
             // Pick the maneuver whose shape range contains our snapped position. This is the
             // edge currently under the wheels, NOT the upcoming maneuver — the previous code
@@ -15108,11 +15176,11 @@ function startGPSTracking() {
             if (activeManeuver) {
                 const rawSl = activeManeuver.speed_limit != null ? Number(activeManeuver.speed_limit) : NaN;
                 if (Number.isFinite(rawSl) && rawSl > 0) {
-                    // Valhalla maneuver `speed_limit` is documented in km/h.
-                    const candidate = Math.round(rawSl * 0.621371);
-                    if (isPlausibleEdgeSpeedLimitMph(candidate, inferRoadClassFromManeuver(activeManeuver), speedMph)) {
-                        valhallaSpeedLimitMph = candidate;
-                    }
+                    valhallaSpeedLimitMph = normalizeManeuverSpeedLimitMph(
+                        rawSl,
+                        inferRoadClassFromManeuver(activeManeuver),
+                        speedMph
+                    );
                 }
             }
 
@@ -15135,6 +15203,9 @@ function startGPSTracking() {
                 : (valhallaSpeedLimitMph && valhallaSpeedLimitMph > 0 ? valhallaSpeedLimitMph : null);
             const displaySpeedMph = smoothGpsSpeedMph(speedMph);
             updateSpeedWidget(displaySpeedMph, shownLimit);
+
+            // Phase-2 speed warning banner — use smoothed speed + active road class (not hardcoded 'local').
+            updateSpeedWarning(lat, lon, displaySpeedMph, roadType);
 
             // Query speed limit / road name at the TRUE GPS position, not the route-snapped
             // point. Snapping to the route was sending the OSM lookup to the wrong (often the
@@ -15631,6 +15702,14 @@ const SNAP_ROUTE_ACC_EXTRA_CAP_METERS = 48;
 const SNAP_NEAR_ROUTE_FORCE_METERS = 130;
 const SNAP_LOCK_ACC_SCALE = 1.5;
 const SNAP_RELEASE_BAND_METERS = 40;
+/** Extra hysteresis so snap lock doesn't flicker on/off at the corridor edge. */
+const SNAP_LOCK_HYSTERESIS_METERS = 18;
+/** EMA for blending snapped↔raw marker position (reduces icon jumping). */
+const DISPLAY_POS_EMA_ALPHA = 0.52;
+const SNAP_BLEND_EMA_ALPHA = 0.4;
+let _smoothDisplayLat = null;
+let _smoothDisplayLon = null;
+let _snapBlendWeightState = 0;
 
 /** Alias for readability in routing math that predates corridor blending. */
 const SNAP_TO_ROUTE_MAX_DISTANCE = SNAP_TO_ROUTE_BASE_METERS;
