@@ -30,7 +30,8 @@
         DISPLACEMENT_MOVE_THRESHOLD: 3,
         DISPLACEMENT_NOISE_FLOOR_MOVING: 4,
         DISPLACEMENT_NOISE_ACC_SCALE_MOVING: 0.35,
-        DISPLACEMENT_NOISE_FLOOR_PARKED: 8
+        DISPLACEMENT_NOISE_FLOOR_PARKED: 8,
+        REVERSE_INDEX_MAX_SPEED_MPH: 2
     };
 
     var TYPICAL_MPH_LIMITS = [20, 30, 40, 50, 60, 70];
@@ -220,6 +221,111 @@
         return { value: smoothed, state: { smoothedMph: smoothed, initAt: now } };
     }
 
+    /**
+     * Map a snapped polyline vertex index to the maneuver describing the edge under the wheels.
+     * @param {Array<object>|null} steps - Valhalla maneuvers.
+     * @param {number} snappedIndex - Index into route polyline.
+     * @returns {number} Maneuver index, or -1 when unavailable.
+     */
+    function getActiveRouteManeuverIndex(steps, snappedIndex) {
+        if (!Array.isArray(steps) || steps.length === 0) return -1;
+        if (!Number.isFinite(snappedIndex) || snappedIndex < 0) return 0;
+        var best = 0;
+        for (var i = 0; i < steps.length; i++) {
+            var begin = steps[i] && Number.isFinite(steps[i].begin_shape_index)
+                ? steps[i].begin_shape_index
+                : 0;
+            if (begin <= snappedIndex) {
+                best = i;
+            } else {
+                break;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Monotonic along-route index: only move backward when nearly stopped (U-turn / parking).
+     * @param {number} snappedIndex
+     * @param {number} lastIndex
+     * @param {number} speedMph
+     * @param {object} [constants]
+     * @returns {number}
+     */
+    function advanceSnappedRouteIndex(snappedIndex, lastIndex, speedMph, constants) {
+        var c = constants || DEFAULTS;
+        if (!Number.isFinite(snappedIndex)) return lastIndex;
+        if (!Number.isFinite(lastIndex)) return snappedIndex;
+        if (snappedIndex >= lastIndex) return snappedIndex;
+        if (Number.isFinite(speedMph) && speedMph < c.REVERSE_INDEX_MAX_SPEED_MPH) return snappedIndex;
+        return lastIndex;
+    }
+
+    /**
+     * Turn-widget payload when no upcoming turn is in detection range — show current road.
+     * @param {object|null} activeManeuver
+     * @param {number} activeIdx
+     * @param {string} [currentRoadDisplayName]
+     * @returns {object|null}
+     */
+    function buildBetweenTurnDisplay(activeManeuver, activeIdx, currentRoadDisplayName) {
+        var street = getManeuverStreetLabel(activeManeuver, true)
+            || (currentRoadDisplayName || '');
+        if (!street) return null;
+        return {
+            distance: 0,
+            direction: 'straight',
+            instruction: 'Continue',
+            streetName: street,
+            maneuver: activeManeuver,
+            maneuverIndex: (activeIdx >= 0) ? activeIdx : null,
+            valhallaType: 8
+        };
+    }
+
+    /**
+     * Derive mph from displacement between two fixes (null ⇒ treat as stationary / below noise).
+     * @param {object} params
+     * @returns {number|null}
+     */
+    function estimateDisplacementSpeedMph(params) {
+        params = params || {};
+        var c = params.constants || DEFAULTS;
+        var distM = params.distM;
+        var dtSec = params.dtSec;
+        if (!Number.isFinite(distM) || distM > 500) return null;
+        if (!Number.isFinite(dtSec) || dtSec <= 0.2 || dtSec >= 10) return null;
+
+        if (params.deviceReportsStopped) {
+            var floor = displacementNoiseFloorMeters(
+                true,
+                params.consecutiveDisplacementMoves || 0,
+                params.accAvg,
+                c
+            );
+            if (distM < floor) return null;
+        }
+
+        var mph = (distM / dtSec) * c.MS_TO_MPH;
+        mph = Math.min(mph, c.MAX_DISPLAY_GPS_SPEED_MPH);
+        var prevPick = Number.isFinite(params.prevPickMph) ? params.prevPickMph : mph;
+        mph = rejectGpsSpeedSpikeMph(mph, prevPick);
+
+        var accAvg = params.accAvg;
+        if (accAvg != null) {
+            if (mph > 95 && mph > prevPick + 70 && distM > accAvg * 2.3) {
+                mph = prevPick;
+            }
+            if (mph > 130 && distM > 120 && distM > accAvg * 1.8 && accAvg > 55) {
+                mph = Math.min(mph, prevPick + Math.max(20, mph * 0.15));
+            }
+        }
+        if (mph > 120 && dtSec < 0.42 && distM > 42) {
+            mph = Math.min(mph, Math.max(prevPick, prevPick * 1.42 + 6));
+        }
+        return mph;
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         rejectGpsSpeedSpikeMph: rejectGpsSpeedSpikeMph,
@@ -229,7 +335,11 @@
         displacementNoiseFloorMeters: displacementNoiseFloorMeters,
         computeSnapBlendWeight: computeSnapBlendWeight,
         smoothDisplayCoordinate: smoothDisplayCoordinate,
-        stepSmoothGpsSpeedMph: stepSmoothGpsSpeedMph
+        stepSmoothGpsSpeedMph: stepSmoothGpsSpeedMph,
+        getActiveRouteManeuverIndex: getActiveRouteManeuverIndex,
+        advanceSnappedRouteIndex: advanceSnappedRouteIndex,
+        buildBetweenTurnDisplay: buildBetweenTurnDisplay,
+        estimateDisplacementSpeedMph: estimateDisplacementSpeedMph
     };
 
     if (typeof module !== 'undefined' && module.exports) {

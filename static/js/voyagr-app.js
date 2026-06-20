@@ -10099,15 +10099,9 @@ let _lastActiveManeuverIdx = -1;
 //      so the widget stays responsive when it matters.
 //   4. Fall back to derived speed (dx/dt between successive fixes) when the device does
 //      not report `coords.speed` — common on some Android browsers.
-const SPEED_WIDGET_DEAD_BAND_MPH = 0.5;     // < ~0.22 m/s ≈ stationary noise (was 1.0 — hid slow crawl)
-const SPEED_WIDGET_SNAP_DELTA_MPH = 8.0;    // modest changes skip sluggish EMA
-/** Above this delta we no longer instantly snap — huge spikes decay instead (Firefox / fused GPS outliers). */
-const SPEED_WIDGET_LARGE_JUMP_MPH = 55.0;
-const SPEED_WIDGET_LARGE_JUMP_DECAY_ALPHA = 0.2; // per tick crawl toward dubious raw readings
 /** Hard ceiling for plausible road-vehicle speeds (clamp sensor + Δfix estimates). */
 const MAX_DISPLAY_GPS_SPEED_MPH = 185.0;
 
-const SPEED_WIDGET_EMA_ALPHA = 0.45;        // 0=stale, 1=raw; 0.45 ≈ ~3-tick settle
 let _smoothedSpeedMph = 0;
 let _smoothedSpeedInitAt = 0;
 /** Tracks last sane raw mph accepted by {@link pickRawSpeedMph} for outlier rejection. */
@@ -10119,6 +10113,11 @@ let _lastGoodRawPickMph = 0;
  */
 let _consecutiveDisplacementMoves = 0;
 
+/** Unit-tested speed/GPS helpers (modules/navigation/speed-gps.js). */
+function _speedGps() {
+    return (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+}
+
 /**
  * Smooth a raw mph reading to reduce GPS jitter without sacrificing responsiveness.
  * Treats very small values as "stationary" (dead-band) and snaps through the EMA
@@ -10128,54 +10127,18 @@ let _consecutiveDisplacementMoves = 0;
  * @returns {number} Smoothed mph value to show in the widget.
  */
 function smoothGpsSpeedMph(rawMph) {
-    const SG = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
-    if (SG) {
-        const r = SG.stepSmoothGpsSpeedMph(
-            { smoothedMph: _smoothedSpeedMph, initAt: _smoothedSpeedInitAt },
-            rawMph,
-            Date.now()
-        );
-        _smoothedSpeedMph = r.state.smoothedMph;
-        _smoothedSpeedInitAt = r.state.initAt;
-        return r.value;
+    const SG = _speedGps();
+    if (!SG) {
+        return Number.isFinite(rawMph) && rawMph > 0 ? rawMph : 0;
     }
-
-    if (!Number.isFinite(rawMph) || rawMph < 0) rawMph = 0;
-    rawMph = Math.min(rawMph, MAX_DISPLAY_GPS_SPEED_MPH);
-    // Wake the display quickly when motion starts — lingering at 0 felt like "latency".
-    if (_smoothedSpeedMph < SPEED_WIDGET_DEAD_BAND_MPH && rawMph >= 3) {
-        _smoothedSpeedMph = rawMph;
-        _smoothedSpeedInitAt = Date.now();
-        return rawMph;
-    }
-    if (rawMph < SPEED_WIDGET_DEAD_BAND_MPH) {
-        _smoothedSpeedMph = 0;
-        return 0;
-    }
-    const now = Date.now();
-    if (!_smoothedSpeedInitAt || now - _smoothedSpeedInitAt > 5000) {
-        _smoothedSpeedMph = rawMph;
-        _smoothedSpeedInitAt = now;
-        return rawMph;
-    }
-
-    const delta = Math.abs(rawMph - _smoothedSpeedMph);
-
-    // Huge jumps usually mean a sensor glitch — never snap-through to 1483 mph, etc.
-    if (delta >= SPEED_WIDGET_LARGE_JUMP_MPH) {
-        _smoothedSpeedMph = (1 - SPEED_WIDGET_LARGE_JUMP_DECAY_ALPHA) * _smoothedSpeedMph
-            + SPEED_WIDGET_LARGE_JUMP_DECAY_ALPHA * rawMph;
-    } else if (delta >= SPEED_WIDGET_SNAP_DELTA_MPH) {
-        _smoothedSpeedMph = rawMph;
-    } else {
-        _smoothedSpeedMph = (1 - SPEED_WIDGET_EMA_ALPHA) * _smoothedSpeedMph
-            + SPEED_WIDGET_EMA_ALPHA * rawMph;
-    }
-
-    _smoothedSpeedMph = Math.min(_smoothedSpeedMph, MAX_DISPLAY_GPS_SPEED_MPH);
-
-    _smoothedSpeedInitAt = now;
-    return _smoothedSpeedMph;
+    const r = SG.stepSmoothGpsSpeedMph(
+        { smoothedMph: _smoothedSpeedMph, initAt: _smoothedSpeedInitAt },
+        rawMph,
+        Date.now()
+    );
+    _smoothedSpeedMph = r.state.smoothedMph;
+    _smoothedSpeedInitAt = r.state.initAt;
+    return r.value;
 }
 
 /**
@@ -10196,23 +10159,9 @@ function smoothGpsSpeedMph(rawMph) {
  * @returns {number}
  */
 function rejectGpsSpeedSpikeMph(mph, prevPick) {
-    const SG = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+    const SG = _speedGps();
     if (SG) return SG.rejectGpsSpeedSpikeMph(mph, prevPick);
-
-    if (!Number.isFinite(mph) || mph < 0) return mph;
-    const prev = Number.isFinite(prevPick) ? prevPick : mph;
-    if (mph > 100) {
-        // A reading above 100 mph is almost always a GPS glitch. The old code, when we were
-        // previously stopped/slow (prev <= 5), snapped to Math.min(mph, 100) === 100 — so a
-        // single bad fix from a standstill flashed "100" on the HUD and fired a false
-        // "you are N over the limit" alarm. A vehicle cannot jump 0 -> 100 in one fix, so
-        // hold the previous value instead and let speed ramp legitimately over later ticks.
-        return prev;
-    }
-    if (prev > 5 && mph > prev + 40) {
-        return prev;
-    }
-    return mph;
+    return Number.isFinite(mph) && mph >= 0 ? mph : 0;
 }
 
 function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
@@ -10274,40 +10223,37 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
             // null speed keep their previous behaviour (no extra gate), so this cannot regress
             // the long-standing displacement fallback.
             if (deviceReportsStopped) {
-                const SG = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+                const SG = _speedGps();
                 const noiseFloorM = SG
                     ? SG.displacementNoiseFloorMeters(deviceReportsStopped, _consecutiveDisplacementMoves, accAvg)
-                    : ((_consecutiveDisplacementMoves >= 3)
-                        ? Math.max(Number.isFinite(accAvg) ? accAvg * 0.35 : 4, 4)
-                        : Math.max(Number.isFinite(accAvg) ? accAvg : 8, 8));
+                    : Math.max(Number.isFinite(accAvg) ? accAvg : 8, 8);
                 if (distM < noiseFloorM) {
                     return finish(0);
                 }
             }
 
-            let mph = (distM / dtSec) * 2.237;
-            mph = Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH);
+            const SG = _speedGps();
+            const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : 0;
+            let mph = SG
+                ? SG.estimateDisplacementSpeedMph({
+                    distM,
+                    dtSec,
+                    prevPickMph: prevPick,
+                    accAvg,
+                    deviceReportsStopped,
+                    consecutiveDisplacementMoves: _consecutiveDisplacementMoves
+                })
+                : null;
 
-            const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : mph;
-            mph = rejectGpsSpeedSpikeMph(mph, prevPick);
+            if (mph == null) {
+                mph = (distM / dtSec) * 2.237;
+                mph = rejectGpsSpeedSpikeMph(Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH), prevPick);
+            }
 
             if (deviceReportsStopped && mph >= 2) {
                 _consecutiveDisplacementMoves = Math.min(_consecutiveDisplacementMoves + 1, 20);
             } else if (mph >= 2) {
                 _consecutiveDisplacementMoves = Math.min(_consecutiveDisplacementMoves + 1, 20);
-            }
-
-            if (accAvg != null) {
-                if (mph > 95 && mph > prevPick + 70 && distM > accAvg * 2.3) {
-                    mph = prevPick;
-                }
-                if (mph > 130 && distM > 120 && distM > accAvg * 1.8 && accAvg > 55) {
-                    mph = Math.min(mph, prevPick + Math.max(20, mph * 0.15));
-                }
-            }
-
-            if (mph > 120 && dtSec < 0.42 && distM > 42) {
-                mph = Math.min(mph, Math.max(prevPick, prevPick * 1.42 + 6));
             }
 
             return finish(mph);
@@ -10607,19 +10553,10 @@ function fetchSpeedLimitThrottled(lat, lon, _currentSpeedMph, roadType = 'reside
  * @returns {number} Index into `currentRouteSteps`, or -1 if not available.
  */
 function getActiveRouteManeuverIndex(snappedIndex) {
+    const SG = _speedGps();
+    if (SG) return SG.getActiveRouteManeuverIndex(currentRouteSteps, snappedIndex);
     if (!Array.isArray(currentRouteSteps) || currentRouteSteps.length === 0) return -1;
-    if (!Number.isFinite(snappedIndex) || snappedIndex < 0) return 0;
-    let best = 0;
-    for (let i = 0; i < currentRouteSteps.length; i++) {
-        const m = currentRouteSteps[i];
-        const begin = m && Number.isFinite(m.begin_shape_index) ? m.begin_shape_index : 0;
-        if (begin <= snappedIndex) {
-            best = i;
-        } else {
-            break;
-        }
-    }
-    return best;
+    return 0;
 }
 
 /**
@@ -10677,17 +10614,9 @@ function getCurrentRoadType(maneuverIdxOverride) {
  * @returns {string}
  */
 function getManeuverStreetLabel(maneuver, preferCurrentRoad = false) {
-    const SG = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+    const SG = _speedGps();
     if (SG) return SG.getManeuverStreetLabel(maneuver, preferCurrentRoad);
-
-    if (!maneuver) return '';
-    if (preferCurrentRoad) {
-        const begin = maneuver.begin_street_names || [];
-        if (begin.length > 0 && begin[0]) return begin[0];
-    }
-    const names = maneuver.street_names || [];
-    if (names.length > 0 && names[0]) return names[0];
-    return maneuver.street_name || '';
+    return '';
 }
 
 /**
@@ -10701,29 +10630,8 @@ function getManeuverStreetLabel(maneuver, preferCurrentRoad = false) {
  * @returns {number|null}
  */
 function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
-    const SG = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+    const SG = _speedGps();
     if (SG) return SG.normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph);
-
-    const raw = Number(rawSl);
-    if (!Number.isFinite(raw) || raw <= 0) return null;
-
-    const asKmhMph = Math.round(raw * 0.621371);
-    const asDirectMph = Math.round(raw);
-    const typicalMph = [20, 30, 40, 50, 60, 70];
-
-    // Exact UK-style mph postings (20/30/40/50/60/70) that are NOT also typical km/h values.
-    if (typicalMph.includes(asDirectMph) && !typicalMph.includes(asKmhMph)) {
-        if (isPlausibleEdgeSpeedLimitMph(asDirectMph, roadClass, gpsSpeedMph)) {
-            return asDirectMph;
-        }
-    }
-
-    if (isPlausibleEdgeSpeedLimitMph(asKmhMph, roadClass, gpsSpeedMph)) {
-        return asKmhMph;
-    }
-    if (isPlausibleEdgeSpeedLimitMph(asDirectMph, roadClass, gpsSpeedMph)) {
-        return asDirectMph;
-    }
     return null;
 }
 
@@ -10739,16 +10647,9 @@ function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
  * @returns {boolean} true when the value looks usable.
  */
 function isPlausibleEdgeSpeedLimitMph(mph, roadClass, gpsSpeedMph) {
-    const SG = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+    const SG = _speedGps();
     if (SG) return SG.isPlausibleEdgeSpeedLimitMph(mph, roadClass, gpsSpeedMph);
-
-    if (!Number.isFinite(mph) || mph <= 0 || mph > 100) return false;
-    const rc = String(roadClass || '').toLowerCase();
-    if (rc === 'motorway' && mph < 30) return false;
-    if (rc === 'trunk' && mph < 25) return false;
-    if ((rc === 'residential' || rc === 'service' || rc === 'living_street') && mph > 50) return false;
-    if (mph < 10 && gpsSpeedMph > 25) return false;
-    return true;
+    return false;
 }
 
 /**
@@ -13913,20 +13814,13 @@ function updateTurnWidgetFromPosition(lat, lon) {
     const activeM = (activeIdx >= 0 && activeIdx < currentRouteSteps.length)
         ? currentRouteSteps[activeIdx]
         : null;
-    const currentStreet = activeM
-        ? getManeuverStreetLabel(activeM, true)
-        : (currentRoadDisplayName || '');
+    const SGtw = _speedGps();
+    const betweenTurn = SGtw
+        ? SGtw.buildBetweenTurnDisplay(activeM, activeIdx, currentRoadDisplayName)
+        : null;
 
-    if (currentStreet) {
-        updateTurnInstructionDisplay({
-            distance: 0,
-            direction: 'straight',
-            instruction: 'Continue',
-            streetName: currentStreet,
-            maneuver: activeM,
-            maneuverIndex: activeIdx >= 0 ? activeIdx : null,
-            valhallaType: 8,
-        });
+    if (betweenTurn) {
+        updateTurnInstructionDisplay(betweenTurn);
     } else {
         updateTurnInstructionDisplay(null);
     }
@@ -14982,9 +14876,8 @@ function startGPSTracking() {
                     SNAP_NEAR_ROUTE_FORCE_METERS,
                     horizAcc != null ? horizAcc * SNAP_LOCK_ACC_SCALE : 0
                 );
-                const snapReleaseMeters = snapLockMeters + SNAP_RELEASE_BAND_METERS;
-                const SGsnap = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
-                let effectiveBlend;
+                const SGsnap = _speedGps();
+                let effectiveBlend = 0;
                 if (SGsnap) {
                     const snapBlend = SGsnap.computeSnapBlendWeight({
                         distSnap: distSnap,
@@ -14993,22 +14886,6 @@ function startGPSTracking() {
                     });
                     _snapBlendWeightState = snapBlend.weightState;
                     effectiveBlend = snapBlend.effectiveBlend;
-                } else {
-                    const releaseMeters = (_snapBlendWeightState > 0.55)
-                        ? snapReleaseMeters + SNAP_LOCK_HYSTERESIS_METERS
-                        : snapReleaseMeters;
-                    let snapBlendWeight;
-                    if (distSnap <= snapLockMeters) {
-                        snapBlendWeight = 1;
-                    } else if (distSnap <= releaseMeters) {
-                        snapBlendWeight = (releaseMeters - distSnap) / SNAP_RELEASE_BAND_METERS;
-                    } else {
-                        snapBlendWeight = 0;
-                    }
-                    snapBlendWeight = Math.max(0, Math.min(1, snapBlendWeight));
-                    _snapBlendWeightState = (1 - SNAP_BLEND_EMA_ALPHA) * _snapBlendWeightState
-                        + SNAP_BLEND_EMA_ALPHA * snapBlendWeight;
-                    effectiveBlend = _snapBlendWeightState;
                 }
 
                 displayLat = lat + (snapped.lat - lat) * effectiveBlend;
@@ -15017,11 +14894,10 @@ function startGPSTracking() {
 
                 // Advance along-route index when moving forward. Never jump backwards while
                 // driving — that made the marker hop to an earlier polyline vertex each tick.
-                if (snapped.index >= lastSnappedRouteIndex) {
-                    lastSnappedRouteIndex = snapped.index;
-                } else if (speedMph < 2) {
-                    lastSnappedRouteIndex = snapped.index;
-                }
+                const SGidx = _speedGps();
+                lastSnappedRouteIndex = SGidx
+                    ? SGidx.advanceSnappedRouteIndex(snapped.index, lastSnappedRouteIndex, speedMph)
+                    : Math.max(lastSnappedRouteIndex, snapped.index);
             }
 
             // Smooth the displayed position so raw↔snap blend changes don't jerk the icon.
@@ -15038,14 +14914,13 @@ function startGPSTracking() {
                 _smoothDisplayLat = displayLat;
                 _smoothDisplayLon = displayLon;
             } else {
-                const SGpos = (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+                const SGpos = _speedGps();
                 if (SGpos) {
                     _smoothDisplayLat = SGpos.smoothDisplayCoordinate(_smoothDisplayLat, displayLat, followJumpM);
                     _smoothDisplayLon = SGpos.smoothDisplayCoordinate(_smoothDisplayLon, displayLon, followJumpM);
                 } else {
-                    const posAlpha = followJumpM > 40 ? 0.88 : DISPLAY_POS_EMA_ALPHA;
-                    _smoothDisplayLat += (displayLat - _smoothDisplayLat) * posAlpha;
-                    _smoothDisplayLon += (displayLon - _smoothDisplayLon) * posAlpha;
+                    _smoothDisplayLat = displayLat;
+                    _smoothDisplayLon = displayLon;
                 }
             }
             const markerLat = _smoothDisplayLat;
@@ -15745,12 +15620,6 @@ const SNAP_ROUTE_ACC_EXTRA_CAP_METERS = 48;
 // triggered phantom reroutes). Lock radius scales up with poor GPS accuracy.
 const SNAP_NEAR_ROUTE_FORCE_METERS = 130;
 const SNAP_LOCK_ACC_SCALE = 1.5;
-const SNAP_RELEASE_BAND_METERS = 40;
-/** Extra hysteresis so snap lock doesn't flicker on/off at the corridor edge. */
-const SNAP_LOCK_HYSTERESIS_METERS = 18;
-/** EMA for blending snapped↔raw marker position (reduces icon jumping). */
-const DISPLAY_POS_EMA_ALPHA = 0.52;
-const SNAP_BLEND_EMA_ALPHA = 0.4;
 let _smoothDisplayLat = null;
 let _smoothDisplayLon = null;
 let _snapBlendWeightState = 0;
