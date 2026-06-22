@@ -13,6 +13,8 @@ import logging
 import math
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeout
+
 import requests
 from flask import Blueprint, jsonify, request
 
@@ -28,6 +30,21 @@ logger = logging.getLogger(__name__)
 hazards_bp = Blueprint('hazards', __name__)
 
 _hazard_report_limiter = RateLimiter(max_requests=40, window_seconds=3600)
+_osm_area_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='osm-area')
+_OSM_AREA_FETCH_TIMEOUT_SEC = 12
+
+
+def _run_osm_area_fetch(fetch_fn, *args, **kwargs):
+    """Cap Overpass-backed viewport fetches so nginx never returns a 504 HTML page."""
+    future = _osm_area_executor.submit(fetch_fn, *args, **kwargs)
+    try:
+        return future.result(timeout=_OSM_AREA_FETCH_TIMEOUT_SEC)
+    except FuturesTimeout:
+        logger.warning('[OSM area] %s timed out after %ss', getattr(fetch_fn, '__name__', 'fetch'), _OSM_AREA_FETCH_TIMEOUT_SEC)
+        return []
+    except Exception as exc:
+        logger.warning('[OSM area] %s failed: %s', getattr(fetch_fn, '__name__', 'fetch'), exc)
+        return []
 
 ALLOWED_COMMUNITY_HAZARD_TYPES = frozenset({
     'accident', 'roadwork', 'police', 'hazard', 'congestion', 'weather', 'closure',
@@ -237,7 +254,9 @@ def get_traffic_lights_in_area():
             return jsonify({'success': True, 'traffic_lights': [], 'message': 'Zoom in to see traffic lights'})
 
         from voyagr.services.hazards import fetch_traffic_lights_osm_bbox
-        lights = fetch_traffic_lights_osm_bbox(south, north, west, east, max_nodes=200)
+        lights = _run_osm_area_fetch(
+            fetch_traffic_lights_osm_bbox, south, north, west, east, max_nodes=200
+        )
         out = [{'lat': x['lat'], 'lon': x['lon'], 'type': 'traffic_light', 'description': x.get('description', '')} for x in lights]
         return jsonify({'success': True, 'traffic_lights': out, 'count': len(out)})
     except Exception as e:
@@ -258,7 +277,9 @@ def get_railway_crossings_in_area():
             return jsonify({'success': True, 'railway_crossings': [], 'message': 'Zoom in to see railway crossings'})
 
         from voyagr.services.hazards import fetch_railway_crossings_osm_bbox
-        crossings = fetch_railway_crossings_osm_bbox(south, north, west, east, max_nodes=200)
+        crossings = _run_osm_area_fetch(
+            fetch_railway_crossings_osm_bbox, south, north, west, east, max_nodes=200
+        )
         out = [
             {
                 'lat': x['lat'],

@@ -7684,6 +7684,34 @@ function clearOsmRailwayCrossingMarkers() {
     window.osmRailwayCrossingMarkers = [];
 }
 
+const OSM_OVERLAY_MAX_BBOX_DEG = 0.35;
+
+function isOsmOverlayBboxTooLarge(north, south, east, west) {
+    return Math.abs(north - south) > OSM_OVERLAY_MAX_BBOX_DEG
+        || Math.abs(east - west) > OSM_OVERLAY_MAX_BBOX_DEG;
+}
+
+/**
+ * Fetch an OSM map-overlay endpoint; never parse HTML error pages as JSON.
+ * @param {string} url
+ * @param {string} logLabel
+ * @returns {Promise<object|null>}
+ */
+function fetchOsmAreaOverlay(url, logLabel) {
+    return fetch(url)
+        .then((response) => {
+            if (!response.ok) {
+                console.warn(`[${logLabel}] HTTP ${response.status} (overlay skipped)`);
+                return null;
+            }
+            return response.json();
+        })
+        .catch((err) => {
+            console.warn(`[${logLabel}]`, err.message || err);
+            return null;
+        });
+}
+
 function fetchAndDisplayOsmTrafficLights() {
     if (!showOsmTrafficLightsEnabled || !map) return;
     const zoom = map.getZoom();
@@ -7696,14 +7724,18 @@ function fetchAndDisplayOsmTrafficLights() {
     const south = bounds.getSouth();
     const east = bounds.getEast();
     const west = bounds.getWest();
-    fetch(`/api/traffic-lights/area?north=${north}&south=${south}&east=${east}&west=${west}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.traffic_lights) {
-                displayOsmTrafficLightMarkers(data.traffic_lights);
-            }
-        })
-        .catch(err => console.error('[OSM Traffic Lights]', err));
+    if (isOsmOverlayBboxTooLarge(north, south, east, west)) {
+        clearOsmTrafficLightMarkers();
+        return;
+    }
+    fetchOsmAreaOverlay(
+        `/api/traffic-lights/area?north=${north}&south=${south}&east=${east}&west=${west}`,
+        'OSM Traffic Lights'
+    ).then((data) => {
+        if (data && data.success && data.traffic_lights) {
+            displayOsmTrafficLightMarkers(data.traffic_lights);
+        }
+    });
 }
 
 function fetchAndDisplayOsmRailwayCrossings() {
@@ -7718,14 +7750,18 @@ function fetchAndDisplayOsmRailwayCrossings() {
     const south = bounds.getSouth();
     const east = bounds.getEast();
     const west = bounds.getWest();
-    fetch(`/api/railway-crossings/area?north=${north}&south=${south}&east=${east}&west=${west}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success && data.railway_crossings) {
-                displayOsmRailwayCrossingMarkers(data.railway_crossings);
-            }
-        })
-        .catch(err => console.error('[OSM Railway Crossings]', err));
+    if (isOsmOverlayBboxTooLarge(north, south, east, west)) {
+        clearOsmRailwayCrossingMarkers();
+        return;
+    }
+    fetchOsmAreaOverlay(
+        `/api/railway-crossings/area?north=${north}&south=${south}&east=${east}&west=${west}`,
+        'OSM Railway Crossings'
+    ).then((data) => {
+        if (data && data.success && data.railway_crossings) {
+            displayOsmRailwayCrossingMarkers(data.railway_crossings);
+        }
+    });
 }
 
 function displayOsmTrafficLightMarkers(lights) {
@@ -7828,15 +7864,22 @@ function initializeCameraLayer() {
     }
 
     // Fetch cameras on map move (with debounce)
+    let osmOverlayFetchTimeout = null;
     map.on('moveend', () => {
         if (cameraFetchTimeout) {
             clearTimeout(cameraFetchTimeout);
         }
         cameraFetchTimeout = setTimeout(() => {
             fetchAndDisplayCameras();
+        }, 500);
+        if (osmOverlayFetchTimeout) {
+            clearTimeout(osmOverlayFetchTimeout);
+        }
+        // OSM Overpass queries are slow — debounce longer and skip huge viewports.
+        osmOverlayFetchTimeout = setTimeout(() => {
             fetchAndDisplayOsmTrafficLights();
             fetchAndDisplayOsmRailwayCrossings();
-        }, 500); // 500ms debounce
+        }, 2000);
     });
 
     // Initial fetch if enabled
