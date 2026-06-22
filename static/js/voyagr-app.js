@@ -7112,8 +7112,9 @@ function updateRouteOnMap(newRoute) {
 
     // Seed progress from current GPS on the new geometry (not index 0).
     _lastActiveManeuverIdx = -1;
+    resetVehicleMarkerDisplayState();
     if (currentLat != null && currentLon != null) {
-        seedNavigationProgressOnNewRoute(currentLat, currentLon);
+        primeVehicleMarkerOnRoute(currentLat, currentLon);
     } else {
         currentStepIndex = 0;
         lastSnappedRouteIndex = 0;
@@ -7131,9 +7132,6 @@ function updateRouteOnMap(newRoute) {
     lastRoadNameFetch = 0;
     lastRoadNamePosition = null;
     currentRoadDisplayName = '';
-    _smoothDisplayLat = null;
-    _smoothDisplayLon = null;
-    _snapBlendWeightState = 0;
 
     resetNavigationArrivalState();
 
@@ -14836,9 +14834,7 @@ function startGPSTracking() {
     _consecutiveDisplacementMoves = 0;
     _smoothedSpeedMph = 0;
     _smoothedSpeedInitAt = 0;
-    _smoothDisplayLat = null;
-    _smoothDisplayLon = null;
-    _snapBlendWeightState = 0;
+    resetVehicleMarkerDisplayState();
     window.__voyagrLastFollowEaseAt = 0;
     window.__voyagrLastFollowCenterGeo = null;
     showStatus('🎯 GPS Tracking started...', 'success');
@@ -14984,6 +14980,14 @@ function startGPSTracking() {
                 }
             } catch (_ej) {
                 /* ignore */
+            }
+            if (_smoothDisplayLat != null && _smoothDisplayLon != null) {
+                const smoothDeltaM = calculateDistanceMeters(
+                    _smoothDisplayLat, _smoothDisplayLon, displayLat, displayLon
+                );
+                if (Number.isFinite(smoothDeltaM)) {
+                    followJumpM = Math.max(followJumpM, smoothDeltaM);
+                }
             }
             if (_smoothDisplayLat == null || _smoothDisplayLon == null) {
                 _smoothDisplayLat = displayLat;
@@ -15234,6 +15238,7 @@ function stopGPSTracking() {
         gpsWatchId = null;
     }
     isTrackingActive = false;
+    resetVehicleMarkerDisplayState();
     // Hide speed widget when tracking stops (use consolidated function)
     updateSpeedWidgetVisibility();
     updateRoadReportFabVisibility();
@@ -15698,6 +15703,37 @@ const SNAP_LOCK_ACC_SCALE = 1.5;
 let _smoothDisplayLat = null;
 let _smoothDisplayLon = null;
 let _snapBlendWeightState = 0;
+
+/**
+ * Clear EMA-smoothed marker position and follow-camera bookkeeping.
+ * Without this, a second journey in the same session inherits journey-1 coords
+ * and the icon jumps while the smoother catches up.
+ */
+function resetVehicleMarkerDisplayState() {
+    _smoothDisplayLat = null;
+    _smoothDisplayLon = null;
+    _snapBlendWeightState = 0;
+    window.__voyagrLastFollowCenterGeo = null;
+    window.__voyagrLastFollowEaseAt = 0;
+}
+
+/**
+ * Seed route progress and place the vehicle icon on the new polyline immediately.
+ * @param {number} lat
+ * @param {number} lon
+ */
+function primeVehicleMarkerOnRoute(lat, lon) {
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
+    if (!routePolyline || routePolyline.length < 2) return;
+    seedNavigationProgressOnNewRoute(lat, lon);
+    const snapped = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+    _smoothDisplayLat = snapped.lat;
+    _smoothDisplayLon = snapped.lon;
+    _snapBlendWeightState = 1;
+    if (currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
+        currentUserMarker.setLngLat([snapped.lon, snapped.lat]);
+    }
+}
 
 /** Alias for readability in routing math that predates corridor blending. */
 const SNAP_TO_ROUTE_MAX_DISTANCE = SNAP_TO_ROUTE_BASE_METERS;
@@ -18011,12 +18047,12 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     routeInProgress = true;
     currentStepIndex = resumeStepIdx;
     currentRouteSteps = routeData.maneuvers || [];
-    lastSnappedRouteIndex = 0;
     lastTurnDetectRouteVertexIndex = 0;
     // Reset edge-change tracker so the *first* maneuver of the new route is
     // correctly flagged as an edge transition (and the API throttle is invalidated).
     _lastActiveManeuverIdx = -1;
     routeJoinConfirmedForDeviation = false;
+    resetVehicleMarkerDisplayState();
     resetNavigationArrivalState();
     _navTraveledMeters = 0;
     _navOdometerLastGeo = null;
@@ -18048,6 +18084,12 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
             console.error('[Navigation] Failed to decode route geometry - polyline is empty');
             showStatus('Error: Invalid route geometry', 'error');
             return;
+        }
+
+        if (currentLat != null && currentLon != null) {
+            primeVehicleMarkerOnRoute(currentLat, currentLon);
+        } else {
+            lastSnappedRouteIndex = 0;
         }
     } catch (e) {
         console.error('Could not decode geometry:', e);
@@ -18239,6 +18281,7 @@ function stopTurnByTurnNavigation() {
     currentRouteSteps = [];
     // Drop the active-edge tracker so a subsequent route doesn't inherit it.
     _lastActiveManeuverIdx = -1;
+    resetVehicleMarkerDisplayState();
     clearPersistedRoute();
     stopGPSTracking();
     hideRoadNameBar();
