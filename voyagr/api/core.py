@@ -178,6 +178,8 @@ def service_worker():
         response = current_app.make_response(f.read())
         response.headers['Content-Type'] = 'application/javascript'
         response.headers['Service-Worker-Allowed'] = '/'
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
         return response
 
 

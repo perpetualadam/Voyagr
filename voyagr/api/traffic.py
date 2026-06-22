@@ -14,6 +14,7 @@ import os
 import random
 import threading
 import time as time_module
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 import requests
@@ -37,6 +38,12 @@ _TRANSPARENT_TILE_PNG = base64.b64decode(
 _TILE_CACHE_TTL_SEC = 90.0
 _TILE_FAIL_CACHE_TTL_SEC = 45.0
 _TILE_STALE_GRACE_SEC = 300.0
+
+_MAX_ROUTE_TRAFFIC_SEGMENTS = 8
+_ROUTE_TRAFFIC_SEGMENT_TIMEOUT_SEC = 2.5
+_ROUTE_TRAFFIC_OVERALL_TIMEOUT_SEC = 10.0
+_ROUTE_TRAFFIC_FAIL_BACKOFF_SEC = 45.0
+_route_traffic_fail_until = 0.0
 
 
 def _tile_png_response(body: bytes, max_age: int) -> object:
@@ -206,9 +213,105 @@ def get_traffic_conditions():
         return jsonify({'success': False, 'error': str(e)})
 
 
+def _green_route_traffic_segment(start_point, end_point):
+    return {
+        'start': start_point,
+        'end': end_point,
+        'traffic_level': 'green',
+        'current_speed': 60,
+        'free_flow_speed': 60,
+        'congestion_percent': 0,
+    }
+
+
+def _simulate_route_traffic_segments(points):
+    segments = []
+    effective_interval = max(1, len(points) // _MAX_ROUTE_TRAFFIC_SEGMENTS)
+
+    i = 0
+    while i < len(points) - 1:
+        end_idx = min(i + effective_interval, len(points) - 1)
+        level = random.choice(['green', 'green', 'green', 'green', 'orange', 'red'])
+        segments.append({
+            'start': points[i],
+            'end': points[end_idx],
+            'traffic_level': level,
+            'current_speed': random.randint(30, 70),
+            'free_flow_speed': 70,
+            'congestion_percent': random.randint(10, 60) if level != 'green' else random.randint(0, 15),
+        })
+        i = end_idx
+        if i >= len(points) - 1:
+            break
+
+    return segments
+
+
+def _sample_route_points(points, sample_interval):
+    """Sample route polyline to at most _MAX_ROUTE_TRAFFIC_SEGMENTS segments."""
+    interval = max(1, int(sample_interval or 1))
+    min_interval = max(1, (len(points) - 1) // _MAX_ROUTE_TRAFFIC_SEGMENTS)
+    interval = max(interval, min_interval)
+
+    sampled_points = []
+    for i in range(0, len(points), interval):
+        sampled_points.append(points[i])
+    if points[-1] not in sampled_points:
+        sampled_points.append(points[-1])
+    return sampled_points
+
+
+def _fetch_tomtom_route_segment(start_point, end_point, tomtom_api_key):
+    mid_lat = (start_point[0] + end_point[0]) / 2
+    mid_lon = (start_point[1] + end_point[1]) / 2
+    tomtom_url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
+    params = {
+        'key': tomtom_api_key,
+        'point': f"{mid_lat},{mid_lon}",
+        'unit': 'KMPH',
+    }
+    response = requests.get(
+        tomtom_url,
+        params=params,
+        timeout=_ROUTE_TRAFFIC_SEGMENT_TIMEOUT_SEC,
+    )
+    if response.status_code != 200:
+        return _green_route_traffic_segment(start_point, end_point)
+
+    flow_data = response.json().get('flowSegmentData', {})
+    current_speed = flow_data.get('currentSpeed', 50)
+    free_flow_speed = flow_data.get('freeFlowSpeed', 60)
+
+    if free_flow_speed > 0:
+        speed_ratio = current_speed / free_flow_speed
+        congestion = int((1 - speed_ratio) * 100)
+    else:
+        speed_ratio = 1.0
+        congestion = 0
+
+    if speed_ratio >= 0.75:
+        traffic_level = 'green'
+    elif speed_ratio >= 0.5:
+        traffic_level = 'orange'
+    elif speed_ratio >= 0.25:
+        traffic_level = 'red'
+    else:
+        traffic_level = 'black'
+
+    return {
+        'start': start_point,
+        'end': end_point,
+        'traffic_level': traffic_level,
+        'current_speed': current_speed,
+        'free_flow_speed': free_flow_speed,
+        'congestion_percent': max(0, min(congestion, 100)),
+    }
+
+
 @traffic_bp.route('/route-traffic-flow', methods=['POST'])
 def get_route_traffic_flow():
     """Get traffic flow data for route segments using TomTom Traffic Flow API."""
+    global _route_traffic_fail_until
     try:
         data = request.json or {}
         points = data.get('points', [])
@@ -221,106 +324,58 @@ def get_route_traffic_flow():
 
         if not tomtom_api_key:
             logger.warning("[ROUTE-TRAFFIC] No TomTom API key - returning simulated data")
-            segments = []
-            effective_interval = max(1, min(sample_interval, len(points) // 10))
-
-            i = 0
-            while i < len(points) - 1:
-                end_idx = min(i + effective_interval, len(points) - 1)
-                level = random.choice(['green', 'green', 'green', 'green', 'orange', 'red'])
-                segments.append({
-                    'start': points[i],
-                    'end': points[end_idx],
-                    'traffic_level': level,
-                    'current_speed': random.randint(30, 70),
-                    'free_flow_speed': 70,
-                    'congestion_percent': random.randint(10, 60) if level != 'green' else random.randint(0, 15)
-                })
-                i = end_idx
-                if i >= len(points) - 1:
-                    break
-
+            segments = _simulate_route_traffic_segments(points)
             logger.info(f"[ROUTE-TRAFFIC] Simulated {len(segments)} traffic segments")
             return jsonify({'success': True, 'segments': segments, 'source': 'simulated'})
 
-        sampled_points = []
-        for i in range(0, len(points), sample_interval):
-            sampled_points.append(points[i])
-        if points[-1] not in sampled_points:
-            sampled_points.append(points[-1])
+        now = time_module.time()
+        if now < _route_traffic_fail_until:
+            logger.info("[ROUTE-TRAFFIC] Recent upstream failures — returning empty segments")
+            return jsonify({'success': True, 'segments': [], 'source': 'unavailable'})
 
-        segments = []
+        sampled_points = _sample_route_points(points, sample_interval)
+        segment_pairs = [
+            (sampled_points[i], sampled_points[i + 1])
+            for i in range(len(sampled_points) - 1)
+        ]
+        segments = [None] * len(segment_pairs)
+        had_upstream_error = False
 
-        for i in range(len(sampled_points) - 1):
-            start_point = sampled_points[i]
-            end_point = sampled_points[i + 1]
-            mid_lat = (start_point[0] + end_point[0]) / 2
-            mid_lon = (start_point[1] + end_point[1]) / 2
-
+        with ThreadPoolExecutor(max_workers=min(4, len(segment_pairs) or 1)) as executor:
+            futures = {
+                executor.submit(_fetch_tomtom_route_segment, start_point, end_point, tomtom_api_key): idx
+                for idx, (start_point, end_point) in enumerate(segment_pairs)
+            }
             try:
-                tomtom_url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
-                params = {
-                    'key': tomtom_api_key,
-                    'point': f"{mid_lat},{mid_lon}",
-                    'unit': 'KMPH'
-                }
-                response = requests.get(tomtom_url, params=params, timeout=3)
+                for future in as_completed(futures, timeout=_ROUTE_TRAFFIC_OVERALL_TIMEOUT_SEC):
+                    idx = futures[future]
+                    try:
+                        segments[idx] = future.result()
+                    except Exception as seg_error:
+                        had_upstream_error = True
+                        logger.warning(f"[ROUTE-TRAFFIC] Segment error: {seg_error}")
+                        start_point, end_point = segment_pairs[idx]
+                        segments[idx] = _green_route_traffic_segment(start_point, end_point)
+            except Exception as batch_error:
+                had_upstream_error = True
+                logger.warning(f"[ROUTE-TRAFFIC] Batch timeout/error: {batch_error}")
 
-                if response.status_code == 200:
-                    flow_data = response.json().get('flowSegmentData', {})
-                    current_speed = flow_data.get('currentSpeed', 50)
-                    free_flow_speed = flow_data.get('freeFlowSpeed', 60)
+        for idx, segment in enumerate(segments):
+            if segment is None:
+                had_upstream_error = True
+                start_point, end_point = segment_pairs[idx]
+                segments[idx] = _green_route_traffic_segment(start_point, end_point)
 
-                    if free_flow_speed > 0:
-                        speed_ratio = current_speed / free_flow_speed
-                        congestion = int((1 - speed_ratio) * 100)
-                    else:
-                        speed_ratio = 1.0
-                        congestion = 0
-
-                    if speed_ratio >= 0.75:
-                        traffic_level = 'green'
-                    elif speed_ratio >= 0.5:
-                        traffic_level = 'orange'
-                    elif speed_ratio >= 0.25:
-                        traffic_level = 'red'
-                    else:
-                        traffic_level = 'black'
-
-                    segments.append({
-                        'start': start_point,
-                        'end': end_point,
-                        'traffic_level': traffic_level,
-                        'current_speed': current_speed,
-                        'free_flow_speed': free_flow_speed,
-                        'congestion_percent': max(0, min(congestion, 100))
-                    })
-                else:
-                    segments.append({
-                        'start': start_point,
-                        'end': end_point,
-                        'traffic_level': 'green',
-                        'current_speed': 60,
-                        'free_flow_speed': 60,
-                        'congestion_percent': 0
-                    })
-            except Exception as seg_error:
-                logger.warning(f"[ROUTE-TRAFFIC] Segment error: {seg_error}")
-                segments.append({
-                    'start': start_point,
-                    'end': end_point,
-                    'traffic_level': 'green',
-                    'current_speed': 60,
-                    'free_flow_speed': 60,
-                    'congestion_percent': 0
-                })
+        if had_upstream_error:
+            _route_traffic_fail_until = now + _ROUTE_TRAFFIC_FAIL_BACKOFF_SEC
 
         logger.info(f"[ROUTE-TRAFFIC] Fetched traffic for {len(segments)} segments")
         return jsonify({'success': True, 'segments': segments, 'source': 'TomTom'})
 
     except Exception as e:
         logger.error(f"Error fetching route traffic flow: {e}")
-        return jsonify({'success': False, 'error': str(e)})
+        _route_traffic_fail_until = time_module.time() + _ROUTE_TRAFFIC_FAIL_BACKOFF_SEC
+        return jsonify({'success': True, 'segments': [], 'source': 'unavailable'})
 
 
 @traffic_bp.route('/tomtom-incidents', methods=['POST'])

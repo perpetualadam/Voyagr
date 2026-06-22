@@ -6327,25 +6327,20 @@ async function fetchAndDisplayRouteTraffic() {
         // Sample route points (every 10th point to reduce API calls)
         const sampleInterval = Math.max(1, Math.floor(routePolyline.length / 20));
 
-        const response = await fetch('/api/route-traffic-flow', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                points: routePolyline,
-                sample_interval: sampleInterval
-            })
-        });
-
-        const data = await response.json();
+        const data = await fetchRouteTrafficFlowPayload(routePolyline, sampleInterval);
+        if (!data) {
+            console.debug('[Route Traffic] No traffic data (backoff or upstream unavailable)');
+            return;
+        }
 
         if (data.success && data.segments && data.segments.length > 0) {
             displayRouteTrafficEdges(data.segments);
             console.log(`[Route Traffic] Displayed ${data.segments.length} traffic segments (source: ${data.source})`);
         } else {
-            console.log('[Route Traffic] No traffic segments returned');
+            console.debug('[Route Traffic] No traffic segments returned');
         }
     } catch (error) {
-        console.error('[Route Traffic] Error fetching traffic:', error);
+        console.debug('[Route Traffic] Error fetching traffic:', error);
     }
 }
 
@@ -6770,6 +6765,47 @@ function stopAutoTrafficUpdates() {
 // and the reroute monitor don't each hit the API.
 let _routeTrafficSampleCache = null; // { at: ms, result }
 const ROUTE_TRAFFIC_SAMPLE_TTL_MS = 60 * 1000;
+let _routeTrafficFlowBackoffUntil = 0;
+
+async function fetchRouteTrafficFlowPayload(points, sampleInterval) {
+    if (Date.now() < _routeTrafficFlowBackoffUntil) {
+        return null;
+    }
+
+    let response;
+    try {
+        response = await fetch('/api/route-traffic-flow', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ points, sample_interval: sampleInterval })
+        });
+    } catch (e) {
+        _routeTrafficFlowBackoffUntil = Date.now() + 60000;
+        console.debug('[Route Traffic] network error:', e && e.message);
+        return null;
+    }
+
+    if (!response.ok) {
+        _routeTrafficFlowBackoffUntil = Date.now() + (response.status >= 500 ? 90000 : 30000);
+        console.debug('[Route Traffic] HTTP', response.status);
+        return null;
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('application/json')) {
+        _routeTrafficFlowBackoffUntil = Date.now() + 60000;
+        console.debug('[Route Traffic] non-JSON response');
+        return null;
+    }
+
+    try {
+        return await response.json();
+    } catch (e) {
+        _routeTrafficFlowBackoffUntil = Date.now() + 60000;
+        console.debug('[Route Traffic] JSON parse failed:', e && e.message);
+        return null;
+    }
+}
 
 async function sampleRouteTrafficAhead() {
     if (!routePolyline || routePolyline.length < 2) return null;
@@ -6783,16 +6819,12 @@ async function sampleRouteTrafficAhead() {
 
     let data;
     try {
-        const resp = await fetch('/api/route-traffic-flow', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ points, sample_interval: sampleInterval })
-        });
-        data = await resp.json();
+        data = await fetchRouteTrafficFlowPayload(points, sampleInterval);
     } catch (e) {
-        console.warn('[Auto-Traffic] route-traffic-flow fetch failed:', e);
+        console.debug('[Auto-Traffic] route-traffic-flow fetch failed:', e);
         return null;
     }
+    if (!data) return null;
     if (!data || !data.success || !Array.isArray(data.segments)) return null;
 
     let delaySec = 0;
@@ -12615,16 +12647,43 @@ async function submitRoadReport() {
 }
 
 // PWA Service Worker Registration
+let _swUpdateInFlight = false;
+let _swUpdateBackoffUntil = 0;
+
+async function safeServiceWorkerUpdate(registration, reason) {
+    if (!registration || !('serviceWorker' in navigator)) return;
+    if (!navigator.onLine) return;
+    if (_swUpdateInFlight || Date.now() < _swUpdateBackoffUntil) return;
+    if (registration.installing) return;
+
+    _swUpdateInFlight = true;
+    try {
+        await registration.update();
+    } catch (e) {
+        // InvalidStateError / NotFound are common when offline or mid-install.
+        _swUpdateBackoffUntil = Date.now() + (5 * 60 * 1000);
+        console.debug('[PWA] Service worker update skipped:', e && e.name, reason || '');
+    } finally {
+        _swUpdateInFlight = false;
+    }
+}
+
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('/service-worker.js')
             .then(registration => {
                 console.log('[PWA] Service Worker registered:', registration);
 
-                // Check for updates periodically
+                // Check for updates periodically (avoid aggressive polling — it spams InvalidStateError).
                 setInterval(() => {
-                    registration.update();
-                }, 60000); // Check every minute
+                    void safeServiceWorkerUpdate(registration, 'periodic');
+                }, 30 * 60 * 1000);
+
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible') {
+                        void safeServiceWorkerUpdate(registration, 'visible');
+                    }
+                });
 
                 // Kick off Picovoice vendor cache warm-up 8s after load (idle).
                 // Prefer requestIdleCallback when available so we don't compete
@@ -17203,7 +17262,7 @@ async function checkForUpdates() {
 
             if (registration) {
                 // Force service worker to check for updates
-                await registration.update();
+                await safeServiceWorkerUpdate(registration, 'manual');
 
                 if (registration.waiting) {
                     // New version waiting - activate it (controllerchange will reload)
