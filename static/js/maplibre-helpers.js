@@ -74,6 +74,9 @@ function applyTransportationRoadLineWidthScale(mapInstance, factor) {
 
 // ===== POLYLINE FUNCTIONS =====
 
+/** Route / overlay polyline stroke scale — matches the ~40% base-road visibility boost. */
+const POLYLINE_LINE_WIDTH_SCALE = 1.4;
+
 /**
  * MapLibre line-width expression.
  *
@@ -88,7 +91,7 @@ function applyTransportationRoadLineWidthScale(mapInstance, factor) {
  * @returns {Array} MapLibre expression for line-width
  */
 function buildZoomScaledLineWidth(baseWidth) {
-    const b = Math.max(1, Number(baseWidth) || 4);
+    const b = Math.max(1, Number(baseWidth) || 4) * POLYLINE_LINE_WIDTH_SCALE;
     return [
         'interpolate',
         ['linear'],
@@ -1156,6 +1159,7 @@ function setRoadLabelZoomFilters(mapInstance, options = {}) {
 // ===== EXPORTS (global scope) =====
 window.MapLibreHelpers = {
     BASE_MAP_ROAD_LINE_WIDTH_SCALE,
+    POLYLINE_LINE_WIDTH_SCALE,
     baseLineWidthExpression,
     buildZoomScaledLineWidth,
     applyTransportationRoadLineWidthScale,

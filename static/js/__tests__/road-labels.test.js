@@ -137,5 +137,11 @@ describe('MapLibreHelpers road-label functions (real implementation)', () => {
             expect(Helpers.baseLineWidthExpression(['*', 2, inner])).toEqual(inner);
             expect(Helpers.baseLineWidthExpression(inner)).toEqual(inner);
         });
+
+        test('buildZoomScaledLineWidth applies POLYLINE_LINE_WIDTH_SCALE at z12', () => {
+            const expr = Helpers.buildZoomScaledLineWidth(10);
+            expect(expr[0]).toBe('interpolate');
+            expect(expr[6]).toBeCloseTo(10 * Helpers.POLYLINE_LINE_WIDTH_SCALE, 5);
+        });
     });
 });
