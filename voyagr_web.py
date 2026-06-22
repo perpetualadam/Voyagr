@@ -3902,7 +3902,7 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260504c" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260619j" />
     {# All app scripts use `defer`: they still download in parallel with HTML parsing
        and still execute in document order (dependencies preserved), but they no
        longer block first paint. This is the biggest lever for shortening the PWA
@@ -3927,8 +3927,8 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260619i"></script>
-    <script defer src="/static/js/app.js?v=20260530a"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260619j"></script>
+    <script defer src="/static/js/app.js?v=20260619j"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -5539,6 +5539,11 @@ HTML_TEMPLATE = '''
             <button id="startTrackingBtn" class="fab" title="Start GPS Tracking" onclick="startGPSTracking()" style="background: #4285F4;">📡</button>
             <button id="startNavBtn" class="fab" title="Start Navigation" onclick="startNavigation()" style="background: #34A853; display: none;">🧭</button>
             <button id="zoomFollowToggle" class="fab active" title="Zoom & Follow Vehicle" onclick="toggleZoomAndFollow()" style="background: #FF9800; display: none;">📍</button>
+            <button type="button" id="recenterVehicleFab" class="fab fab-recenter" title="Recenter on vehicle" onclick="recenterOnVehicle()" style="display: none;" aria-label="Recenter on vehicle">
+                <svg class="fab-recenter-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path fill="currentColor" d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/>
+                </svg>
+            </button>
             <button id="endNavigationBtn" data-testid="end-navigation" class="fab" title="End navigation" onclick="stopTurnByTurnNavigation()" style="background: #E53935; display: none; font-size: 18px; font-weight: 700;">⏹</button>
             <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
             <button id="roadReportFab" class="fab" title="Report road issue or speed limit" onclick="openRoadReportModal()" style="background: #E65100;">⚠️</button>

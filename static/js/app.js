@@ -26,6 +26,9 @@ function initializeApp() {
         setupMapMoveHandler();
         console.log('[App] Map move handler setup');
 
+        setupMapExploreHandlers();
+        console.log('[App] Map explore handlers setup');
+
         // Load user preferences
         loadAllSettings();
         console.log('[App] Settings loaded');

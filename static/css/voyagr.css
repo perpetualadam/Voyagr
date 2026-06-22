@@ -359,6 +359,28 @@ body {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 }
 
+.fab.fab-recenter {
+    background: #1E88E5;
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.35);
+    box-shadow: 0 4px 14px rgba(30, 136, 229, 0.45);
+}
+
+.fab.fab-recenter .fab-recenter-icon {
+    width: 28px;
+    height: 28px;
+    display: block;
+}
+
+.fab.fab-recenter:hover {
+    background: #1976D2;
+}
+
+body.dark-mode .fab.fab-recenter {
+    background: #42A5F5;
+    color: #0d1b2a;
+}
+
 .fab.fab--listening {
     background: linear-gradient(135deg, #40c057 0%, #37b24d 100%);
     color: #fff;

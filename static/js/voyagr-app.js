@@ -10812,6 +10812,108 @@ function toggleZoomAndFollow() {
         showStatus('📍 Zoom & Follow disabled - map is free to pan', 'info');
         console.log('[Zoom & Follow] Disabled');
     }
+    updateRecenterButtonVisibility();
+}
+
+const RECENTER_MIN_DISTANCE_M = 70;
+
+/** Lat/lon for the vehicle icon (snapped to route during navigation). */
+function getVehicleDisplayCoordinates() {
+    let lat = currentLat;
+    let lon = currentLon;
+    if (
+        routeInProgress &&
+        routePolyline &&
+        routePolyline.length >= 2 &&
+        Number.isFinite(lat) &&
+        Number.isFinite(lon)
+    ) {
+        const snapped = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+        lat = snapped.lat;
+        lon = snapped.lon;
+    }
+    return { lat, lon };
+}
+
+function metersMapCenterFromVehicle() {
+    if (!map || currentLat == null || currentLon == null) return 0;
+    const center = map.getCenter();
+    const vehicle = getVehicleDisplayCoordinates();
+    return calculateDistanceMeters(vehicle.lat, vehicle.lon, center.lat, center.lng);
+}
+
+function shouldShowRecenterVehicleButton() {
+    if (!map || currentLat == null || currentLon == null) return false;
+    if (!routeInProgress && !isTrackingActive) return false;
+    if (journeyOverviewActive) return true;
+    if (routeInProgress && zoomAndFollowEnabled && !mapFollowingActive) return true;
+    return metersMapCenterFromVehicle() >= RECENTER_MIN_DISTANCE_M;
+}
+
+function updateRecenterButtonVisibility() {
+    const btn = document.getElementById('recenterVehicleFab');
+    if (!btn) return;
+    btn.style.display = shouldShowRecenterVehicleButton() ? 'flex' : 'none';
+}
+
+/**
+ * Waze-style recenter: return to the vehicle icon and resume follow during navigation.
+ */
+function recenterOnVehicle() {
+    if (!map || currentLat == null || currentLon == null) {
+        showStatus('Waiting for GPS position…', 'info');
+        return;
+    }
+
+    if (journeyOverviewActive) {
+        journeyOverviewActive = false;
+        const journeyBtn = document.getElementById('journeyOverviewBtn');
+        if (journeyBtn) {
+            journeyBtn.style.background = '#9C27B0';
+            journeyBtn.innerHTML = '🗺️';
+            journeyBtn.title = 'Journey Overview';
+        }
+        savedMapState = null;
+    }
+
+    const { lat, lon } = getVehicleDisplayCoordinates();
+
+    if (routeInProgress) {
+        mapFollowingActive = true;
+        const speedMps = currentUserMarker && Number.isFinite(currentUserMarker.speed)
+            ? currentUserMarker.speed
+            : 0;
+        const speedMph = speedMps * 2.23694;
+        const smartZoom = calculateSmartZoom(speedMph, null, 'motorway');
+        const pitch = shouldTiltDrivingCamera() ? 60 : 0;
+        const bearing = shouldUsePitchedDrivingCamera()
+            ? ((currentUserMarker && Number.isFinite(currentUserMarker.heading)) ? currentUserMarker.heading : map.getBearing())
+            : 0;
+
+        window.__voyagrLastFollowCenterGeo = { lat, lon };
+        window.__voyagrLastFollowEaseAt = Date.now();
+        map.easeTo({
+            center: [lon, lat],
+            zoom: smartZoom,
+            bearing,
+            pitch,
+            padding: getNavigationFollowPadding(),
+            duration: 600,
+            essential: true,
+        });
+        showStatus('📍 Recentered on vehicle', 'success');
+    } else {
+        mapFollowingActive = true;
+        map.easeTo({
+            center: [lon, lat],
+            zoom: Math.max(map.getZoom(), 16),
+            duration: 500,
+            essential: true,
+        });
+        showStatus('📍 Recentered on your location', 'success');
+    }
+
+    updateRecenterButtonVisibility();
 }
 
 // Journey Overview state
@@ -10858,6 +10960,7 @@ function toggleJourneyOverview() {
         }
         showStatus('🗺️ Journey Overview - Tap again to return', 'info');
         console.log('[Navigation] Journey overview activated');
+        updateRecenterButtonVisibility();
     } else {
         // Return to navigation view
         journeyOverviewActive = false;
@@ -10886,6 +10989,7 @@ function toggleJourneyOverview() {
         }
         showStatus('📍 Returned to navigation view', 'success');
         console.log('[Navigation] Journey overview deactivated');
+        updateRecenterButtonVisibility();
     }
 }
 
@@ -12327,7 +12431,7 @@ function syncBottomSheetOverlapFabs() {
     const bottomSheet = document.getElementById('bottomSheet');
     const sheetExpanded = !!(bottomSheet && bottomSheet.classList.contains('expanded'));
 
-    const alwaysHideWhenExpandedIds = ['roadReportFab', 'startTrackingBtn', 'voiceFab', 'currentLocationFab', 'mapControlsHintFab'];
+    const alwaysHideWhenExpandedIds = ['roadReportFab', 'startTrackingBtn', 'voiceFab', 'currentLocationFab', 'mapControlsHintFab', 'recenterVehicleFab'];
     for (let i = 0; i < alwaysHideWhenExpandedIds.length; i++) {
         const el = document.getElementById(alwaysHideWhenExpandedIds[i]);
         if (!el) continue;
@@ -12439,7 +12543,7 @@ function openMapControlsHintModal() {
     ul.appendChild(exTitle);
     const extras = [
         '\u2014 After you calculate a route, \u201cStart navigation\u201d can appear on the map.',
-        '\u2014 During turn-by-turn, Zoom & follow and Journey overview may appear as round buttons.',
+        '\u2014 During turn-by-turn, Zoom & follow, Recenter, and Journey overview may appear as round buttons.',
         '\u2014 Long-press any round map icon ~\u00bds for this same text as a bottom banner.',
     ];
     for (let e = 0; e < extras.length; e++) {
@@ -14607,6 +14711,36 @@ function setupMapMoveHandler() {
     });
 }
 
+/**
+ * Pause follow when the user explores the map (Waze-style) and show the recenter button.
+ */
+function setupMapExploreHandlers() {
+    if (!map) {
+        console.log('[Map] Map not initialized yet, deferring explore handler setup');
+        return;
+    }
+    if (window.__voyagrMapExploreHandlersInitialized) return;
+    window.__voyagrMapExploreHandlersInitialized = true;
+
+    const onUserMapGesture = (e) => {
+        if (!e || !e.originalEvent) return;
+        if (!routeInProgress && !isTrackingActive) return;
+        if (routeInProgress && zoomAndFollowEnabled && mapFollowingActive) {
+            mapFollowingActive = false;
+            console.log('[Nav] User explored map — follow paused');
+        }
+        updateRecenterButtonVisibility();
+    };
+
+    map.on('dragstart', onUserMapGesture);
+    map.on('zoomstart', onUserMapGesture);
+    map.on('rotatestart', onUserMapGesture);
+    map.on('pitchstart', onUserMapGesture);
+    map.on('moveend', () => {
+        updateRecenterButtonVisibility();
+    });
+}
+
 // Initialize voice recognition on page load
 window.addEventListener('load', () => {
     console.log('[Voice] Initializing voice system');
@@ -15129,6 +15263,7 @@ function startGPSTracking() {
                 }
 
                 console.log(`[Navigation] View: pitch ${pitch}°, bearing ${Math.round(bearing)}°, zoom ${smartZoom.toFixed(1)}, pitchedNav: ${isActiveNavigationFollow()}, pref: ${driverPerspectiveEnabled}`);
+                updateRecenterButtonVisibility();
             } else if (map && !zoomAndFollowEnabled && !map._userPanned) {
                 if (followDue || followUrgent) {
                     window.__voyagrLastFollowEaseAt = nowCam;
@@ -15746,6 +15881,7 @@ function updateNavigationFabVisibility() {
         if (endBtn) endBtn.style.display = 'none';
     }
     syncBottomSheetOverlapFabs();
+    updateRecenterButtonVisibility();
 }
 
 // Track the last snapped route index for efficient searching
@@ -18232,6 +18368,7 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
         journeyOverviewBtn.style.display = 'block';
     }
     updateRoadReportFabVisibility();
+    updateRecenterButtonVisibility();
 
     // ===== SHOW SPEED WIDGET during navigation =====
     // Speed widget shows current GPS speed and road speed limit for safety (use consolidated function)
@@ -18378,6 +18515,11 @@ function stopTurnByTurnNavigation() {
     const zoomFollowBtn = document.getElementById('zoomFollowToggle');
     if (zoomFollowBtn) {
         zoomFollowBtn.style.display = 'none';
+    }
+
+    const recenterBtn = document.getElementById('recenterVehicleFab');
+    if (recenterBtn) {
+        recenterBtn.style.display = 'none';
     }
 
     // ===== HIDE JOURNEY OVERVIEW BUTTON =====
