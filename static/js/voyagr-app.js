@@ -5878,7 +5878,7 @@ function addTrafficLayer() {
                     tiles,
                     tileSize: 256,
                     minzoom: 0,
-                    maxzoom: 17,
+                    maxzoom: 16,
                     bounds: [-180, -85.0511, 180, 85.0511]
                 });
             }
@@ -5905,7 +5905,7 @@ function addTrafficLayer() {
                     type: 'raster',
                     source: 'traffic-source',
                     minzoom: 0,
-                    maxzoom: 17,
+                    maxzoom: 16,
                     paint: { 'raster-opacity': 0.6 }
                 }, trafficBeforeId);
             }
@@ -5979,12 +5979,12 @@ let _trafficTileErrorStreak = 0;
 let _trafficLayerPausedUntil = 0;
 
 /**
- * Back off TomTom raster traffic when the tile proxy returns 429/502 (rate limit / overload).
+ * Back off TomTom raster traffic when the tile proxy errors (rate limit / upstream).
  * Called from voyagr-core map error handler.
  * @param {number} statusCode
  */
 function voyagrOnTrafficTileLoadError(statusCode) {
-    if (statusCode !== 429 && statusCode !== 502) return;
+    if (statusCode !== 429 && statusCode !== 500 && statusCode !== 502 && statusCode !== 503) return;
     _trafficTileErrorStreak++;
     if (_trafficTileErrorStreak < 3) return;
     if (Date.now() < _trafficLayerPausedUntil) return;

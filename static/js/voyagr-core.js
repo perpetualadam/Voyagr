@@ -358,10 +358,12 @@ function initializeMap() {
                 console.warn(`[MapLibre][Error] periodic #${_mapErrorCount}`, getMapRenderDiagnostics());
             }
 
-            // TomTom traffic tile proxy rate limit — back off instead of hammering the server.
-            if (evt?.sourceId === 'traffic-source' && (msg.includes('429') || msg.includes('502'))) {
-                const code = msg.includes('429') ? 429 : 502;
-                if (typeof window.voyagrOnTrafficTileLoadError === 'function') {
+            // TomTom traffic tile proxy errors — back off instead of hammering the server.
+            if (evt?.sourceId === 'traffic-source') {
+                const m = String(msg || '');
+                const codeMatch = m.match(/\((\d{3})\)/);
+                const code = codeMatch ? parseInt(codeMatch[1], 10) : 0;
+                if (code >= 429 && typeof window.voyagrOnTrafficTileLoadError === 'function') {
                     window.voyagrOnTrafficTileLoadError(code);
                 }
             }

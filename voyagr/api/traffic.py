@@ -8,6 +8,7 @@ Contains:
 - TomTom raster tile proxy (keeps API key off the client when enabled)
 """
 
+import base64
 import logging
 import os
 import random
@@ -28,6 +29,47 @@ traffic_bp = Blueprint('traffic', __name__)
 _tile_lock = threading.Lock()
 _tomtom_tile_hits = {}  # client_ip -> [unix_ts, ...]
 _tile_cache = {}  # (z, x, y) -> (bytes, content_type, expires_at)
+
+# 1x1 transparent PNG — MapLibre stretches it across the tile (no traffic overlay).
+_TRANSPARENT_TILE_PNG = base64.b64decode(
+    'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUCAYAAAC3eQ2rAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='
+)
+_TILE_CACHE_TTL_SEC = 90.0
+_TILE_FAIL_CACHE_TTL_SEC = 45.0
+_TILE_STALE_GRACE_SEC = 300.0
+
+
+def _tile_png_response(body: bytes, max_age: int) -> object:
+    resp = make_response(body)
+    resp.headers['Content-Type'] = 'image/png'
+    resp.headers['Cache-Control'] = f'public, max-age={max_age}'
+    return resp
+
+
+def _transparent_tile_response(max_age: int = 45) -> object:
+    return _tile_png_response(_TRANSPARENT_TILE_PNG, max_age)
+
+
+def _cache_tile(cache_key, body: bytes, content_type: str, ttl_sec: float) -> None:
+    now = time_module.time()
+    with _tile_lock:
+        if len(_tile_cache) > 4000:
+            _tile_cache.clear()
+        _tile_cache[cache_key] = (body, content_type, now + ttl_sec)
+
+
+def _get_cached_tile(cache_key, allow_stale: bool = False):
+    now = time_module.time()
+    with _tile_lock:
+        cached = _tile_cache.get(cache_key)
+    if not cached:
+        return None
+    body, content_type, expires_at = cached
+    if expires_at > now:
+        return body, content_type
+    if allow_stale and (now - expires_at) < _TILE_STALE_GRACE_SEC:
+        return body, content_type
+    return None
 
 
 def _allow_tomtom_tile_request(client_ip: str, max_per_minute: int = 900) -> bool:
@@ -323,51 +365,65 @@ def get_tomtom_incidents():
 @traffic_bp.route('/tomtom/traffic-tile/<int:z>/<int:x>/<int:y>.png')
 def tomtom_traffic_tile_proxy(z, x, y):
     """Proxy TomTom traffic raster tiles so the browser never holds TOMTOM_API_KEY."""
-    if not _valid_slippy_tile(z, x, y):
-        return make_response('', 404)
-
-    api_key = os.getenv('TOMTOM_API_KEY', '').strip()
-    if not api_key:
-        return make_response('', 503)
-
-    cache_key = (z, x, y)
-    now = time_module.time()
-    with _tile_lock:
-        cached = _tile_cache.get(cache_key)
-        if cached and cached[2] > now:
-            body, content_type, _ = cached
-            resp = make_response(body)
-            resp.headers['Content-Type'] = content_type
-            resp.headers['Cache-Control'] = 'public, max-age=90'
-            return resp
-
-    client_ip = get_client_ip()
-    if not _allow_tomtom_tile_request(client_ip):
-        logger.warning('[TRAFFIC-TILE] rate limited ip=%s', client_ip)
-        return make_response('', 429)
-
-    url = (
-        f'https://api.tomtom.com/traffic/map/4/tile/flow/relative0/'
-        f'{z}/{x}/{y}.png?key={api_key}&tileSize=256'
-    )
     try:
-        upstream = requests.get(url, timeout=12)
-    except requests.RequestException as exc:
-        logger.warning('[TRAFFIC-TILE] upstream error: %s', exc)
-        return make_response('', 502)
+        if not _valid_slippy_tile(z, x, y):
+            return make_response('', 404)
 
-    if upstream.status_code != 200:
-        return make_response('', upstream.status_code)
+        api_key = os.getenv('TOMTOM_API_KEY', '').strip()
+        if not api_key:
+            return _transparent_tile_response(60)
 
-    body = upstream.content
-    ct = upstream.headers.get('Content-Type', 'image/png')
-    with _tile_lock:
-        if len(_tile_cache) > 4000:
-            _tile_cache.clear()
-        _tile_cache[cache_key] = (body, ct, now + 90.0)
+        cache_key = (z, x, y)
+        fresh = _get_cached_tile(cache_key, allow_stale=False)
+        if fresh:
+            body, content_type = fresh
+            return _tile_png_response(body, int(_TILE_CACHE_TTL_SEC))
 
-    resp = make_response(body)
-    resp.headers['Content-Type'] = ct
-    resp.headers['Cache-Control'] = 'public, max-age=90'
-    return resp
+        client_ip = get_client_ip()
+        if not _allow_tomtom_tile_request(client_ip):
+            logger.warning('[TRAFFIC-TILE] rate limited ip=%s z=%s', client_ip, z)
+            stale = _get_cached_tile(cache_key, allow_stale=True)
+            if stale:
+                body, _ct = stale
+                return _tile_png_response(body, 30)
+            _cache_tile(cache_key, _TRANSPARENT_TILE_PNG, 'image/png', _TILE_FAIL_CACHE_TTL_SEC)
+            return _transparent_tile_response(30)
+
+        url = (
+            f'https://api.tomtom.com/traffic/map/4/tile/flow/relative0/'
+            f'{z}/{x}/{y}.png?key={api_key}&tileSize=256'
+        )
+        try:
+            upstream = requests.get(url, timeout=10)
+        except requests.RequestException as exc:
+            logger.warning('[TRAFFIC-TILE] upstream error z=%s/%s/%s: %s', z, x, y, exc)
+            stale = _get_cached_tile(cache_key, allow_stale=True)
+            if stale:
+                body, _ct = stale
+                return _tile_png_response(body, 30)
+            _cache_tile(cache_key, _TRANSPARENT_TILE_PNG, 'image/png', _TILE_FAIL_CACHE_TTL_SEC)
+            return _transparent_tile_response(30)
+
+        if upstream.status_code != 200:
+            logger.warning(
+                '[TRAFFIC-TILE] upstream HTTP %s z=%s/%s/%s',
+                upstream.status_code, z, x, y,
+            )
+            stale = _get_cached_tile(cache_key, allow_stale=True)
+            if stale:
+                body, _ct = stale
+                return _tile_png_response(body, 30)
+            _cache_tile(cache_key, _TRANSPARENT_TILE_PNG, 'image/png', _TILE_FAIL_CACHE_TTL_SEC)
+            return _transparent_tile_response(30)
+
+        body = upstream.content
+        if not body:
+            _cache_tile(cache_key, _TRANSPARENT_TILE_PNG, 'image/png', _TILE_FAIL_CACHE_TTL_SEC)
+            return _transparent_tile_response(30)
+
+        _cache_tile(cache_key, body, upstream.headers.get('Content-Type', 'image/png'), _TILE_CACHE_TTL_SEC)
+        return _tile_png_response(body, int(_TILE_CACHE_TTL_SEC))
+    except Exception as exc:
+        logger.error('[TRAFFIC-TILE] unhandled error z=%s/%s/%s: %s', z, x, y, exc)
+        return _transparent_tile_response(30)
 
