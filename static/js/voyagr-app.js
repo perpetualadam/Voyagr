@@ -11457,6 +11457,9 @@ function buildVehicleArrowSvg() {
  */
 function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
     const iconEmoji = vehicleIconEmojis[currentRoutingMode] || vehicleIconEmojis[currentVehicleType] || '🚗';
+    const safeHeading = Number.isFinite(heading) ? heading : 0;
+    const safeAccuracy = Number.isFinite(accuracy) ? accuracy : null;
+    const accuracyLabel = safeAccuracy != null ? `±${safeAccuracy.toFixed(0)}m` : '—';
 
     // Create a div element for the marker with an inline SVG arrowhead.
     // Larger size for better visibility in 3D aerial view
@@ -11469,7 +11472,7 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
     markerDiv.style.position = 'relative';
 
     const mapBr = map && typeof map.getBearing === 'function' ? map.getBearing() : 0;
-    const rot = ((heading - mapBr) % 360 + 360) % 360;
+    const rot = ((safeHeading - mapBr) % 360 + 360) % 360;
     markerDiv.style.transform = `rotate(${rot}deg)`;
     markerDiv.style.transition = 'transform 0.3s ease-out';
 
@@ -11487,7 +11490,7 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
     markerDiv.innerHTML = buildVehicleArrowSvg();
 
     // Create custom marker with MapLibre
-    const speedKmh = speed ? (speed * 3.6).toFixed(1) : 0;
+    const speedKmh = Number.isFinite(speed) ? (speed * 3.6).toFixed(1) : '0.0';
     const speedUnit = getSpeedUnit();
     const displaySpeed = convertSpeed(speedKmh);
 
@@ -11506,17 +11509,17 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
                 <strong style="font-size: 14px;">${iconEmoji} Current Position</strong><br>
                 <div style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 8px;">
                     <div>Speed: <strong>${displaySpeed} ${speedUnit}</strong></div>
-                    <div>Heading: <strong>${Math.round(heading)}°</strong></div>
-                    <div>Accuracy: <strong>±${accuracy.toFixed(0)}m</strong></div>
+                    <div>Heading: <strong>${Math.round(safeHeading)}°</strong></div>
+                    <div>Accuracy: <strong>${accuracyLabel}</strong></div>
                 </div>
             </div>
         `
     });
 
     // Store heading and speed for later updates
-    marker.heading = heading;
-    marker.speed = speed;
-    marker.accuracy = accuracy;
+    marker.heading = safeHeading;
+    marker.speed = Number.isFinite(speed) ? speed : 0;
+    marker.accuracy = safeAccuracy;
 
     return marker;
 }
