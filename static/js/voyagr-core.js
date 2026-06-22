@@ -358,6 +358,14 @@ function initializeMap() {
                 console.warn(`[MapLibre][Error] periodic #${_mapErrorCount}`, getMapRenderDiagnostics());
             }
 
+            // TomTom traffic tile proxy rate limit — back off instead of hammering the server.
+            if (evt?.sourceId === 'traffic-source' && (msg.includes('429') || msg.includes('502'))) {
+                const code = msg.includes('429') ? 429 : 502;
+                if (typeof window.voyagrOnTrafficTileLoadError === 'function') {
+                    window.voyagrOnTrafficTileLoadError(code);
+                }
+            }
+
             // PWA worker URL resolution failure — switch to raster fallback.
             if (
                 msg.includes('Failed to parse URL') ||

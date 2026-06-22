@@ -27,10 +27,11 @@ traffic_bp = Blueprint('traffic', __name__)
 
 _tile_lock = threading.Lock()
 _tomtom_tile_hits = {}  # client_ip -> [unix_ts, ...]
+_tile_cache = {}  # (z, x, y) -> (bytes, content_type, expires_at)
 
 
-def _allow_tomtom_tile_request(client_ip: str, max_per_minute: int = 300) -> bool:
-    """Very light per-IP throttle — map pans pull many tiles at once."""
+def _allow_tomtom_tile_request(client_ip: str, max_per_minute: int = 900) -> bool:
+    """Per-IP throttle — map pans at zoom 17+ pull dozens of tiles per frame."""
     now = time_module.time()
     window = 60.0
     with _tile_lock:
@@ -329,6 +330,17 @@ def tomtom_traffic_tile_proxy(z, x, y):
     if not api_key:
         return make_response('', 503)
 
+    cache_key = (z, x, y)
+    now = time_module.time()
+    with _tile_lock:
+        cached = _tile_cache.get(cache_key)
+        if cached and cached[2] > now:
+            body, content_type, _ = cached
+            resp = make_response(body)
+            resp.headers['Content-Type'] = content_type
+            resp.headers['Cache-Control'] = 'public, max-age=90'
+            return resp
+
     client_ip = get_client_ip()
     if not _allow_tomtom_tile_request(client_ip):
         logger.warning('[TRAFFIC-TILE] rate limited ip=%s', client_ip)
@@ -347,8 +359,14 @@ def tomtom_traffic_tile_proxy(z, x, y):
     if upstream.status_code != 200:
         return make_response('', upstream.status_code)
 
-    resp = make_response(upstream.content)
+    body = upstream.content
     ct = upstream.headers.get('Content-Type', 'image/png')
+    with _tile_lock:
+        if len(_tile_cache) > 4000:
+            _tile_cache.clear()
+        _tile_cache[cache_key] = (body, ct, now + 90.0)
+
+    resp = make_response(body)
     resp.headers['Content-Type'] = ct
     resp.headers['Cache-Control'] = 'public, max-age=90'
     return resp

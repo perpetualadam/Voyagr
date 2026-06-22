@@ -5,11 +5,22 @@ Tests speed limit detection, smart motorway support, and speed warnings
 
 import unittest
 import time
-from speed_limit_detector import SpeedLimitDetector, SMART_MOTORWAYS, DEFAULT_SPEED_LIMITS_UK
+from speed_limit_detector import (
+    SpeedLimitDetector,
+    SMART_MOTORWAYS,
+    DEFAULT_SPEED_LIMITS_UK,
+    _is_plausible_limit_for_road_type,
+)
 
 
 class TestSpeedLimitDetector(unittest.TestCase):
     """Test cases for SpeedLimitDetector class."""
+
+    def test_plausible_limit_for_road_type(self):
+        """Residential must not accept motorway-class defaults."""
+        self.assertFalse(_is_plausible_limit_for_road_type(70, 'residential'))
+        self.assertTrue(_is_plausible_limit_for_road_type(30, 'residential'))
+        self.assertTrue(_is_plausible_limit_for_road_type(70, 'motorway'))
     
     def setUp(self):
         """Set up test fixtures."""

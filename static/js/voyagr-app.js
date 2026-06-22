@@ -5878,7 +5878,7 @@ function addTrafficLayer() {
                     tiles,
                     tileSize: 256,
                     minzoom: 0,
-                    maxzoom: 22,
+                    maxzoom: 17,
                     bounds: [-180, -85.0511, 180, 85.0511]
                 });
             }
@@ -5905,7 +5905,7 @@ function addTrafficLayer() {
                     type: 'raster',
                     source: 'traffic-source',
                     minzoom: 0,
-                    maxzoom: 22,
+                    maxzoom: 17,
                     paint: { 'raster-opacity': 0.6 }
                 }, trafficBeforeId);
             }
@@ -5973,6 +5973,28 @@ function removeTrafficLayer() {
         trafficLayer = null;
         console.log('[Traffic] Traffic layer removed');
     }
+}
+
+let _trafficTileErrorStreak = 0;
+let _trafficLayerPausedUntil = 0;
+
+/**
+ * Back off TomTom raster traffic when the tile proxy returns 429/502 (rate limit / overload).
+ * Called from voyagr-core map error handler.
+ * @param {number} statusCode
+ */
+function voyagrOnTrafficTileLoadError(statusCode) {
+    if (statusCode !== 429 && statusCode !== 502) return;
+    _trafficTileErrorStreak++;
+    if (_trafficTileErrorStreak < 3) return;
+    if (Date.now() < _trafficLayerPausedUntil) return;
+    _trafficLayerPausedUntil = Date.now() + 120000;
+    _trafficTileErrorStreak = 0;
+    removeTrafficLayer();
+    console.warn('[Traffic] Pausing traffic overlay for 2 min after repeated tile errors');
+}
+if (typeof window !== 'undefined') {
+    window.voyagrOnTrafficTileLoadError = voyagrOnTrafficTileLoadError;
 }
 
 /**
@@ -10400,10 +10422,15 @@ function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
  * @param {*} mph - Candidate value (any type).
  * @returns {number|null} Numeric mph if sane, else null.
  */
-function _coerceApiSpeedLimitMph(mph) {
+function _coerceApiSpeedLimitMph(mph, roadClass, gpsSpeedMph) {
     const n = Number(mph);
     if (!Number.isFinite(n) || n < 5 || n > 100) return null;
-    return Math.round(n);
+    const rounded = Math.round(n);
+    const SG = _speedGps();
+    if (SG && typeof SG.sanitizeApiSpeedLimitMph === 'function') {
+        return SG.sanitizeApiSpeedLimitMph(rounded, roadClass, gpsSpeedMph);
+    }
+    return rounded;
 }
 
 /**
@@ -10480,11 +10507,16 @@ function fetchSpeedLimitThrottled(lat, lon, _currentSpeedMph, roadType = 'reside
                 }
                 // Prefer mph (canonical field). Fall back to km/h when only that is
                 // populated — the legacy `speed_limit` field was dead code, gone now.
-                let apiLimitMph = _coerceApiSpeedLimitMph(data.data.speed_limit_mph);
+                const apiRoadType = data.data.road_type || roadType;
+                let apiLimitMph = _coerceApiSpeedLimitMph(
+                    data.data.speed_limit_mph, apiRoadType, _currentSpeedMph
+                );
                 if (apiLimitMph == null) {
                     const kmh = Number(data.data.speed_limit_kmh);
                     if (Number.isFinite(kmh) && kmh > 0) {
-                        apiLimitMph = _coerceApiSpeedLimitMph(kmh * 0.621371);
+                        apiLimitMph = _coerceApiSpeedLimitMph(
+                            kmh * 0.621371, apiRoadType, _currentSpeedMph
+                        );
                     }
                 }
                 console.log('[Speed Limit] API response:', data.data, 'Extracted mph:', apiLimitMph);

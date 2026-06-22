@@ -49,6 +49,18 @@ describe('normalizeManeuverSpeedLimitMph', () => {
     });
 });
 
+describe('sanitizeApiSpeedLimitMph', () => {
+    test('rejects 70 mph on residential from stale API/cache', () => {
+        expect(SG.sanitizeApiSpeedLimitMph(70, 'residential', 0)).toBeNull();
+    });
+    test('accepts 30 mph on residential', () => {
+        expect(SG.sanitizeApiSpeedLimitMph(30, 'residential', 28)).toBe(30);
+    });
+    test('accepts 70 mph on motorway', () => {
+        expect(SG.sanitizeApiSpeedLimitMph(70, 'motorway', 65)).toBe(70);
+    });
+});
+
 describe('getManeuverStreetLabel', () => {
     test('prefers begin_street_names when on current road', () => {
         const m = {

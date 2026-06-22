@@ -138,6 +138,26 @@ def _normalize_road_type(road_type: str) -> str:
     return ROAD_TYPE_ALIASES.get(road_type, road_type)
 
 
+def _is_plausible_limit_for_road_type(mph: Optional[int], road_type: str) -> bool:
+    """Reject obvious mismatches (e.g. 70 mph default on a residential edge)."""
+    if mph is None:
+        return True
+    try:
+        n = int(mph)
+    except (TypeError, ValueError):
+        return False
+    if n <= 0 or n > 100:
+        return False
+    norm = _normalize_road_type((road_type or '').strip() or 'residential')
+    if norm in ('residential', 'living_street', 'service') and n > 50:
+        return False
+    if norm == 'motorway' and n < 30:
+        return False
+    if norm == 'trunk_road' and n < 25:
+        return False
+    return True
+
+
 def _region_from_lat_lon(lat: float, lon: float) -> str:
     """
     Choose default-limit family: uk, us, or metric (EU / rest of world).
@@ -740,6 +760,7 @@ class SpeedLimitDetector:
             self._cleanup_expired_cache()
 
         cache_key = f"{lat:.4f},{lon:.4f}"
+        norm_road = _normalize_road_type(road_type)
         try:
             if cache_key in self.speed_limit_cache:
                 cached_data = self.speed_limit_cache[cache_key]
@@ -748,6 +769,15 @@ class SpeedLimitDetector:
                     self.metrics['cache_hits'] += 1
                     lim = cached_data.get('speed_limit')
                     src = cached_data.get('source', 'cache')
+                    cached_road = cached_data.get('road_type')
+                    # Road-type fallbacks are keyed only by lat/lon — discard when the
+                    # client's active edge class changes (e.g. motorway → residential).
+                    if src == 'road-type-default' and cached_road and cached_road != norm_road:
+                        lim = None
+                        src = 'cache'
+                    elif lim is not None and not _is_plausible_limit_for_road_type(lim, road_type):
+                        lim = None
+                        src = 'cache'
                     disp = 'unknown' if lim is None else f'{lim} mph'
                     logger.info(
                         f"[Speed Limit] Cache hit: {disp} (source: {src})"
@@ -759,7 +789,8 @@ class SpeedLimitDetector:
                             self._add_to_cache(cache_key, {
                                 'speed_limit': inferred,
                                 'timestamp': time.time(),
-                                'source': 'road-type-default'
+                                'source': 'road-type-default',
+                                'road_type': norm_road,
                             })
                             logger.info(
                                 f"[Speed Limit] Cached unknown posted limit; road-type fallback "
@@ -869,6 +900,14 @@ class SpeedLimitDetector:
                                     break
 
                     if best_explicit is not None:
+                        if not _is_plausible_limit_for_road_type(best_explicit, road_type):
+                            logger.info(
+                                f"[Speed Limit] OSM maxspeed {best_explicit} mph implausible for "
+                                f"{road_type}; ignoring"
+                            )
+                            best_explicit = None
+
+                    if best_explicit is not None:
                         self.metrics['overpass_maxspeed_hits'] += 1
                         logger.info(
                             f"[Speed Limit] OSM maxspeed (closest way ~{best_dist_km * 1000:.0f}m): "
@@ -902,13 +941,17 @@ class SpeedLimitDetector:
             logger.error(f"[Speed Limit] OSM failed: {e}")
 
         snap_limit = self._tomtom_snap_speed_limit_mph(lat, lon, region)
-        if snap_limit is not None:
+        if snap_limit is not None and _is_plausible_limit_for_road_type(snap_limit, road_type):
             self._add_to_cache(cache_key, {
                 'speed_limit': snap_limit,
                 'timestamp': time.time(),
                 'source': 'TomTom-SnapToRoads'
             })
             return snap_limit, 'TomTom-SnapToRoads'
+        elif snap_limit is not None:
+            logger.info(
+                f"[Speed Limit] TomTom Snap {snap_limit} mph implausible for {road_type}; ignoring"
+            )
 
         if not os.getenv('TOMTOM_API_KEY'):
             logger.info("[Speed Limit] No TOMTOM_API_KEY configured, skipping TomTom")
@@ -919,7 +962,8 @@ class SpeedLimitDetector:
             self._add_to_cache(cache_key, {
                 'speed_limit': inferred,
                 'timestamp': time.time(),
-                'source': 'road-type-default'
+                'source': 'road-type-default',
+                'road_type': norm_road,
             })
             logger.info(
                 f"[Speed Limit] Road-type default ({road_type} → {_normalize_road_type(road_type)}): "

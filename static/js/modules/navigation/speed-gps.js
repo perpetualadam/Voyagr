@@ -92,6 +92,22 @@
      * @param {number} gpsSpeedMph
      * @returns {number|null}
      */
+    /**
+     * Reject API speed limits that are implausible for the active road class
+     * (e.g. 70 mph on residential from stale cache or nearby motorway OSM ways).
+     * @param {number|null} mph
+     * @param {string|null} roadClass
+     * @param {number} gpsSpeedMph
+     * @returns {number|null}
+     */
+    function sanitizeApiSpeedLimitMph(mph, roadClass, gpsSpeedMph) {
+        var n = Number(mph);
+        if (!Number.isFinite(n) || n <= 0) return null;
+        var rounded = Math.round(n);
+        if (!isPlausibleEdgeSpeedLimitMph(rounded, roadClass, gpsSpeedMph)) return null;
+        return rounded;
+    }
+
     function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
         var raw = Number(rawSl);
         if (!Number.isFinite(raw) || raw <= 0) return null;
@@ -330,6 +346,7 @@
         DEFAULTS: DEFAULTS,
         rejectGpsSpeedSpikeMph: rejectGpsSpeedSpikeMph,
         isPlausibleEdgeSpeedLimitMph: isPlausibleEdgeSpeedLimitMph,
+        sanitizeApiSpeedLimitMph: sanitizeApiSpeedLimitMph,
         getManeuverStreetLabel: getManeuverStreetLabel,
         normalizeManeuverSpeedLimitMph: normalizeManeuverSpeedLimitMph,
         displacementNoiseFloorMeters: displacementNoiseFloorMeters,
