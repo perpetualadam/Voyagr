@@ -126,4 +126,16 @@ describe('MapLibreHelpers road-label functions (real implementation)', () => {
             expect(() => Helpers.setRoadLabelZoomFilters(null)).not.toThrow();
         });
     });
+
+    describe('base road line-width scale', () => {
+        test('BASE_MAP_ROAD_LINE_WIDTH_SCALE is ~40% above the prior 2× default', () => {
+            expect(Helpers.BASE_MAP_ROAD_LINE_WIDTH_SCALE).toBeCloseTo(2.8, 5);
+        });
+
+        test('baseLineWidthExpression unwraps an existing scale wrapper', () => {
+            const inner = ['interpolate', ['linear'], ['zoom'], 12, 2, 16, 6];
+            expect(Helpers.baseLineWidthExpression(['*', 2, inner])).toEqual(inner);
+            expect(Helpers.baseLineWidthExpression(inner)).toEqual(inner);
+        });
+    });
 });

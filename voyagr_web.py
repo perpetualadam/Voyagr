@@ -3908,7 +3908,7 @@ HTML_TEMPLATE = '''
        longer block first paint. This is the biggest lever for shortening the PWA
        home-screen splash, which is shown from launch until first paint. #}
     <script defer src="/static/vendor/maplibre-gl.js"></script>
-    <script defer src="/static/js/maplibre-helpers.js?v=20260529c"></script>
+    <script defer src="/static/js/maplibre-helpers.js?v=20260619k"></script>
     <script defer src="/static/vendor/supabase.min.js"></script>
     <!-- Google Plus Codes Service -->
     <script defer src="/static/js/modules/services/google-plus-codes-service.js?v=20260117t"></script>
@@ -3922,7 +3922,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260619d"></script>
     <script defer src="/static/js/modules/map/weather-layer.js?v=20260611a"></script>
     <script defer src="/static/js/modules/ui/toggle-ui.js?v=20260611a"></script>
-    <script defer src="/static/js/voyagr-core.js?v=20260619h"></script>
+    <script defer src="/static/js/voyagr-core.js?v=20260619k"></script>
     {% if picovoice_web_assets_ok %}
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>

@@ -423,7 +423,7 @@ function initializeMap() {
 
             try {
                 if (window.MapLibreHelpers && typeof window.MapLibreHelpers.applyTransportationRoadLineWidthScale === 'function') {
-                    window.MapLibreHelpers.applyTransportationRoadLineWidthScale(map, 2);
+                    window.MapLibreHelpers.applyTransportationRoadLineWidthScale(map);
                 }
             } catch (e) {
                 /* non-fatal */
