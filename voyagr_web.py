@@ -3919,7 +3919,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/js/modules/navigation/voice-announcements.js?v=20260618a"></script>
     <script defer src="/static/js/modules/navigation/lane-guidance.js?v=20260618a"></script>
     <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20260618a"></script>
-    <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260619d"></script>
+    <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260701a"></script>
     <script defer src="/static/js/modules/map/weather-layer.js?v=20260611a"></script>
     <script defer src="/static/js/modules/ui/toggle-ui.js?v=20260611a"></script>
     <script defer src="/static/js/voyagr-core.js?v=20260619k"></script>
@@ -4198,24 +4198,6 @@ HTML_TEMPLATE = '''
                 <!-- Lane Guidance Display moved into #turnInstructionWidget so it surfaces
                      as a live navigation overlay (was hidden here inside the sidebar). -->
 
-                <!-- Speed Warning Display (Phase 2) -->
-                <div class="speed-warning-display" id="speedWarningDisplay">
-                    <div class="speed-warning-text" id="speedWarningText"></div>
-                    <div class="speed-warning-details" id="speedWarningDetails"></div>
-                </div>
-
-                <!-- Variable Speed Limit Display (NEW) -->
-                <div class="variable-speed-display" id="variableSpeedDisplay" style="display: none;">
-                    <div class="variable-speed-header">
-                        <span class="variable-speed-icon">🚗</span>
-                        <span class="variable-speed-title">Variable Speed Limit</span>
-                    </div>
-                    <div class="variable-speed-content">
-                        <div class="variable-speed-limit" id="variableSpeedLimit">70 mph</div>
-                        <div class="variable-speed-info" id="variableSpeedInfo"></div>
-                    </div>
-                </div>
-
                 <!-- Quick Search Buttons -->
                 <div class="quick-search">
                     <button class="quick-search-btn" onclick="quickSearch('parking')">
@@ -4436,7 +4418,7 @@ HTML_TEMPLATE = '''
 
                     <!-- Unit Preferences Section -->
                     <div class="preferences-section">
-                        <h3>📏 Unit Preferences</h3>
+                        <h3>📏 Units</h3>
 
                         <div class="preference-item">
                             <span class="preference-label">📏 Distance Unit</span>
@@ -4453,6 +4435,12 @@ HTML_TEMPLATE = '''
                                 <option value="mph">mph</option>
                             </select>
                         </div>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 12px 0; line-height: 1.45;">
+                            Voyagr shows your <strong>GPS speed only</strong> — not posted speed limits. Speed limits change often and vary by vehicle; we do not show limit signs or over-limit alerts here.
+                            If you want limit signs and warnings, use a dedicated app alongside Voyagr — for example
+                            <a href="https://play.google.com/store/apps/details?id=com.map.speedlimits" target="_blank" rel="noopener noreferrer" style="color: #667eea;">Map Speed Limits and Alerts</a>
+                            on Android, or similar apps such as Waze or Google Maps for limit display and alerts.
+                        </p>
 
                         <div class="preference-item">
                             <span class="preference-label">🌡️ Temperature</span>
@@ -4472,96 +4460,109 @@ HTML_TEMPLATE = '''
                         </div>
                     </div>
 
-                    <!-- Hazard Avoidance Section -->
+                    <!-- Routing preferences (route planning & map data) -->
                     <div class="preferences-section">
-                        <h3>⚠️ Hazard Avoidance</h3>
+                        <h3>🛣️ Routing</h3>
+                        <p style="font-size: 12px; color: #666; margin: 0 0 12px 0; line-height: 1.45;">
+                            Choose what your routes should favour or steer clear of. You remain responsible for following road signs and local rules.
+                        </p>
 
-                        <div class="preference-item">
-                            <span class="preference-label">Avoid CAZ</span>
-                            <button class="toggle-switch" id="avoidCAZ" data-pref="caz" onclick="togglePreference('caz')"></button>
-                        </div>
+                        <div class="preferences-subsection">
+                            <h4 class="preferences-subsection-title">Route around</h4>
+                            <p class="preferences-subsection-help">Prefer paths that skip these areas or features when a practical alternative exists.</p>
 
-                        <div class="preference-item">
-                            <span class="preference-label">⚡ Optimised Routing (cameras)</span>
-                            <button class="toggle-switch" id="avoidCameras" data-pref="cameras" onclick="togglePreference('cameras')"></button>
-                        </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 8px 0;">When on, routing can avoid camera locations. Use the toggles below to include or exclude each camera class (from your camera database, e.g. SCDB). Each setting is stored in hazard preferences.</p>
+                            <div class="preference-item">
+                                <span class="preference-label">Emissions charge zones</span>
+                                <button class="toggle-switch" id="avoidCAZ" data-pref="caz" onclick="togglePreference('caz')"></button>
+                            </div>
 
-                        <div class="preference-item">
-                            <span class="preference-label">📷 Speed cameras</span>
-                            <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_speed" onclick="toggleHazardPreferenceApi('camera_speed', event)"></button>
-                        </div>
-                        <div class="preference-item">
-                            <span class="preference-label">🚦 Traffic-light cameras</span>
-                            <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_red_light" onclick="toggleHazardPreferenceApi('camera_red_light', event)"></button>
-                        </div>
-                        <div class="preference-item">
-                            <span class="preference-label">📉 Average-speed (SPECS)</span>
-                            <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_average_speed" onclick="toggleHazardPreferenceApi('camera_average_speed', event)"></button>
-                        </div>
-                        <div class="preference-item">
-                            <span class="preference-label">🚌 Bus lane cameras</span>
-                            <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_bus_lane" onclick="toggleHazardPreferenceApi('camera_bus_lane', event)"></button>
-                        </div>
-                        <div class="preference-item">
-                            <span class="preference-label">🚔 Mobile cameras</span>
-                            <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_mobile" onclick="toggleHazardPreferenceApi('camera_mobile', event)"></button>
-                        </div>
-                        <div class="preference-item">
-                            <span class="preference-label">❔ Other cameras</span>
-                            <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_other" onclick="toggleHazardPreferenceApi('camera_other', event)"></button>
+                            <div class="preference-item">
+                                <span class="preference-label">Traffic signals</span>
+                                <button class="toggle-switch" id="avoidTrafficLights" data-pref="trafficLightsAvoid" onclick="togglePreference('trafficLightsAvoid')"></button>
+                            </div>
+                            <p class="preferences-subsection-help">Uses OpenStreetMap signal locations. Works independently of other routing options below.</p>
+
+                            <div class="preference-item">
+                                <span class="preference-label">Level crossings</span>
+                                <button class="toggle-switch" id="avoidRailwayCrossings" data-pref="railwayCrossingsAvoid" onclick="togglePreference('railwayCrossingsAvoid')"></button>
+                            </div>
+                            <p class="preferences-subsection-help">OpenStreetMap <code>railway=level_crossing</code> nodes. Best with smarter routing enabled.</p>
                         </div>
 
-                        <div class="preference-item">
-                            <span class="preference-label">🚦 Avoid Traffic Lights (OSM)</span>
-                            <button class="toggle-switch" id="avoidTrafficLights" data-pref="trafficLightsAvoid" onclick="togglePreference('trafficLightsAvoid')"></button>
-                        </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Uses OpenStreetMap traffic signal locations. Independent of Optimised Routing and railway crossings — enable only what you need.</p>
+                        <div class="preferences-subsection">
+                            <h4 class="preferences-subsection-title">Smarter routing</h4>
+                            <p class="preferences-subsection-help">Uses mapped roadside points (e.g. SCDB) to prefer alternative paths when calculating routes.</p>
 
-                        <div class="preference-item">
-                            <span class="preference-label">🚂 Avoid Railway Crossings (OSM)</span>
-                            <button class="toggle-switch" id="avoidRailwayCrossings" data-pref="railwayCrossingsAvoid" onclick="togglePreference('railwayCrossingsAvoid')"></button>
+                            <div class="preference-item">
+                                <span class="preference-label">Use map data in routing</span>
+                                <button class="toggle-switch" id="avoidCameras" data-pref="cameras" onclick="togglePreference('cameras')"></button>
+                            </div>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Uses OpenStreetMap <code>railway=level_crossing</code> nodes. Separate from traffic lights; works best with Optimised Routing enabled for GraphHopper avoidance.</p>
 
-                        <div class="preference-item">
-                            <span class="preference-label">📊 Variable Speed Alerts</span>
-                            <button class="toggle-switch" id="variableSpeedAlerts" data-pref="variableSpeedAlerts" onclick="togglePreference('variableSpeedAlerts')"></button>
+                        <div class="preferences-subsection">
+                            <h4 class="preferences-subsection-title">Map data filters</h4>
+                            <p class="preferences-subsection-help">When smarter routing is on, include or exclude each point type from route planning.</p>
+
+                            <div class="preference-item">
+                                <span class="preference-label">Fixed points</span>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_speed" onclick="toggleHazardPreferenceApi('camera_speed', event)"></button>
+                            </div>
+                            <div class="preference-item">
+                                <span class="preference-label">Junction signals</span>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_red_light" onclick="toggleHazardPreferenceApi('camera_red_light', event)"></button>
+                            </div>
+                            <div class="preference-item">
+                                <span class="preference-label">Average-speed zones</span>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_average_speed" onclick="toggleHazardPreferenceApi('camera_average_speed', event)"></button>
+                            </div>
+                            <div class="preference-item">
+                                <span class="preference-label">Bus lanes</span>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_bus_lane" onclick="toggleHazardPreferenceApi('camera_bus_lane', event)"></button>
+                            </div>
+                            <div class="preference-item">
+                                <span class="preference-label">Mobile units</span>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_mobile" onclick="toggleHazardPreferenceApi('camera_mobile', event)"></button>
+                            </div>
+                            <div class="preference-item">
+                                <span class="preference-label">Other mapped points</span>
+                                <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_other" onclick="toggleHazardPreferenceApi('camera_other', event)"></button>
+                            </div>
                         </div>
+
                     </div>
 
                     <!-- Navigation Automation Section -->
                     <div class="preferences-section">
-                        <h3>🤖 Navigation Automation</h3>
-                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Automatic updates and rerouting during navigation</p>
+                        <h3>🤖 While navigating</h3>
+                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Automatic traffic checks and rerouting during a trip</p>
 
                         <div class="preference-item">
-                            <span class="preference-label">🚦 Auto-Update Traffic</span>
+                            <span class="preference-label">Live traffic updates</span>
                             <button class="toggle-switch active" id="autoTrafficUpdateToggle" onclick="toggleAutoTrafficUpdate()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Automatically check traffic every 5 minutes and reroute if faster route found</p>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Checks traffic about every 5 minutes and offers a faster route when found</p>
 
                         <div class="preference-item">
-                            <span class="preference-label">🔄 Auto-Reroute on Deviation</span>
+                            <span class="preference-label">Reroute when off course</span>
                             <button class="toggle-switch active" id="autoRerouteDeviationToggle" onclick="toggleAutoRerouteOnDeviation()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Automatically recalculate route when you go off-route for more than 10 seconds</p>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Recalculates after you leave the route for more than about 10 seconds</p>
 
                         <div class="preference-item">
-                            <span class="preference-label">🔔 Manual Traffic Update</span>
+                            <span class="preference-label">Traffic check now</span>
                             <button onclick="manualTrafficUpdate()" style="padding: 8px 16px; background: #2196F3; color: white; border: none; border-radius: 6px; font-size: 12px; cursor: pointer;">
-                                Update Now
+                                Update now
                             </button>
                         </div>
                     </div>
 
                     <!-- CAZ Information Section -->
                     <div class="preferences-section">
-                        <h3>🚗 Clean Air Zones (CAZ)</h3>
-                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">UK Clean Air Zones with charges, passes, and exemptions</p>
+                        <h3>🌿 Emissions charge zones</h3>
+                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">UK zones with daily charges, passes, and vehicle exemptions</p>
 
                         <button onclick="showCAZInfo()" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 600; cursor: pointer; margin-bottom: 10px;">
-                            📋 View CAZ Zones & Pricing
+                            📋 Zone charges &amp; passes
                         </button>
 
                         <div id="cazInfoContainer" style="display: none; border: 1px solid #ddd; border-radius: 8px; padding: 10px; background: #fafafa;"></div>
@@ -4569,37 +4570,37 @@ HTML_TEMPLATE = '''
 
                     <!-- Route Preferences Section -->
                     <div class="preferences-section">
-                        <h3>🛣️ Route Preferences</h3>
-                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Avoid specific road types and tune how routes are calculated</p>
+                        <h3>🛣️ Route style</h3>
+                        <p style="font-size: 12px; color: #666; margin-bottom: 10px;">Road types and how routes are calculated</p>
 
                         <div class="preference-item">
-                            <span class="preference-label">💰 Avoid Toll Roads</span>
+                            <span class="preference-label">Prefer routes without tolls</span>
                             <button class="toggle-switch" id="avoidTollRoads" onclick="toggleAvoidancePreference('tollRoads')" data-pref="tollRoads"></button>
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">🛣️ Avoid Motorways</span>
+                            <span class="preference-label">Prefer non-motorway routes</span>
                             <button class="toggle-switch" id="avoidMotorways" onclick="toggleAvoidancePreference('motorways')" data-pref="motorways"></button>
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">⛴️ Avoid Ferries</span>
+                            <span class="preference-label">Prefer routes without ferries</span>
                             <button class="toggle-switch" id="avoidFerries" onclick="toggleAvoidancePreference('ferries')" data-pref="ferries"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: 5px 0 15px 0;">Applied to all routes including multi-drop legs via Valhalla costing options.</p>
+                        <p style="font-size: 11px; color: #888; margin: 5px 0 15px 0;">Applied to all routes, including multi-stop legs.</p>
 
                         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="preferScenic" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
-                                <span style="font-size: 13px;">Prefer Scenic</span>
+                                <span style="font-size: 13px;">Scenic roads</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="preferQuiet" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
-                                <span style="font-size: 13px;">Prefer Quiet</span>
+                                <span style="font-size: 13px;">Quieter roads</span>
                             </label>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="avoidUnpaved" onchange="saveRoutePreferences()" style="width: 18px; height: 18px; cursor: pointer;">
-                                <span style="font-size: 13px;">Avoid Unpaved</span>
+                                <span style="font-size: 13px;">Paved surfaces only</span>
                             </label>
                         </div>
 
@@ -4653,15 +4654,15 @@ HTML_TEMPLATE = '''
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="avoidRoadClosures" checked onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
                                 <div>
-                                    <span style="font-size: 13px; font-weight: 500;">Avoid Road Closures</span>
-                                    <div style="font-size: 11px; color: #888;">Automatically route around closed roads and incidents</div>
+                                    <span style="font-size: 13px; font-weight: 500;">Route around closures</span>
+                                    <div style="font-size: 11px; color: #888;">Skips reported road closures when possible</div>
                                 </div>
                             </label>
                             <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
                                 <input type="checkbox" id="avoidIncidents" checked onchange="saveMultiDropPreferences()" style="width: 18px; height: 18px; cursor: pointer;">
                                 <div>
-                                    <span style="font-size: 13px; font-weight: 500;">Avoid Accidents & Roadworks</span>
-                                    <div style="font-size: 11px; color: #888;">Route around reported accidents, roadworks, and hazards</div>
+                                    <span style="font-size: 13px; font-weight: 500;">Route around incidents</span>
+                                    <div style="font-size: 11px; color: #888;">Skips accidents, roadworks, and similar reports when possible</div>
                                 </div>
                             </label>
                         </div>
@@ -4689,7 +4690,7 @@ HTML_TEMPLATE = '''
 
                     <!-- Display Preferences Section -->
                     <div class="preferences-section">
-                        <h3>🎨 Display Preferences</h3>
+                        <h3>🎨 Map &amp; display</h3>
 
                         <div class="preference-item">
                             <span class="preference-label">🗺️ Map Theme</span>
@@ -4730,23 +4731,23 @@ HTML_TEMPLATE = '''
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">📷 Show Cameras on Map</span>
+                            <span class="preference-label">Mapped points on map</span>
                             <button class="toggle-switch active" id="showCamerasToggle" onclick="toggleShowCameras()"></button>
                         </div>
 
                         <div class="preference-item">
                             <span class="preference-label preference-label--with-tl-icon">
                                 <span class="settings-osm-traffic-light-pill" aria-hidden="true"><svg viewBox="0 0 16 36" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"/><circle cx="8" cy="18" r="4.2" fill="#f59e0b"/><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"/></svg></span>
-                                <span>OSM Traffic Lights on Map</span>
+                                <span>Traffic signals (map)</span>
                             </span>
                             <button class="toggle-switch active" id="showOsmTrafficLightsToggle" onclick="toggleShowOsmTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">🛤️ OSM Railway Crossings on Map</span>
+                            <span class="preference-label">Level crossings (map)</span>
                             <button class="toggle-switch active" id="showOsmRailwayCrossingsToggle" onclick="toggleShowOsmRailwayCrossings()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Level crossings from OpenStreetMap (<code>railway=level_crossing</code>). Independent of the “Avoid railway crossings” routing option.</p>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">OpenStreetMap overlays. Separate from the routing toggles above.</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🚦 Show Traffic Flow</span>
@@ -4840,7 +4841,7 @@ HTML_TEMPLATE = '''
 
                     <!-- Voice Preferences Section -->
                     <div class="preferences-section">
-                        <h3>🎤 Voice Preferences</h3>
+                        <h3>🎤 Voice &amp; alerts</h3>
 
 
 
@@ -4908,18 +4909,18 @@ HTML_TEMPLATE = '''
                         </p>
 
                         <div class="preference-item">
-                            <span class="preference-label">📷 Camera Alert Type</span>
+                            <span class="preference-label">Roadside alert style</span>
                             <select id="cameraAlertType" onchange="saveCameraAlertPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="off">Off</option>
-                                <option value="voice" selected>Voice Only</option>
-                                <option value="chime">Chime Only</option>
-                                <option value="both">Voice + Chime</option>
+                                <option value="voice" selected>Voice only</option>
+                                <option value="chime">Chime only</option>
+                                <option value="both">Voice + chime</option>
                             </select>
-                            <div style="font-size: 11px; color: #888; margin-top: 4px;">Alert when approaching speed cameras and traffic light cameras</div>
+                            <div style="font-size: 11px; color: #888; margin-top: 4px;">When approaching mapped roadside points along your route</div>
                         </div>
 
                         <div class="preference-item">
-                            <span class="preference-label">📷 Camera Alert Distance</span>
+                            <span class="preference-label">Roadside alert distance</span>
                             <select id="cameraAlertDistance" onchange="saveCameraAlertPreferences()" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px;">
                                 <option value="200">200 meters</option>
                                 <option value="300">300 meters</option>
@@ -5506,23 +5507,11 @@ HTML_TEMPLATE = '''
             </div>
         </div>
 
-        <!-- Speed Widget - Driver-friendly speedometer with speed limit display -->
+        <!-- Speed Widget - GPS speedometer (no posted speed limit) -->
         <!-- z-index: 300 in mobile layout hierarchy -->
-        <div id="speedWidget" class="speed-widget" style="position: absolute; top: 20px; right: 20px; z-index: 300; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); display: none; min-width: 100px; text-align: center; border-left: 4px solid #4CAF50;">
-            <!-- Current Speed (large, prominent) -->
-            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
-                <div>
-                    <div id="speedValue" style="font-size: 42px; font-weight: bold; color: #333; line-height: 1;">0</div>
-                    <div id="speedUnitDisplay" style="font-size: 12px; color: #666; margin-top: -4px;">km/h</div>
-                </div>
-                <!-- Speed Limit Circle (like road signs) -->
-                <div id="speedLimitCircle" style="width: 50px; height: 50px; border-radius: 50%; border: 4px solid #E53935; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                    <div id="speedLimitValue" style="font-size: 18px; font-weight: bold; color: #333; line-height: 1;">…</div>
-                    <div id="speedLimitUnit" style="font-size: 8px; color: #666;">km/h</div>
-                </div>
-            </div>
-            <!-- Speeding Warning -->
-            <div id="speedWarning" style="font-size: 12px; color: #FF5722; font-weight: bold; display: none; margin-top: 6px; background: #FFEBEE; padding: 4px 8px; border-radius: 4px;">⚠️ OVER LIMIT</div>
+        <div id="speedWidget" class="speed-widget" style="position: absolute; top: 20px; right: 20px; z-index: 300; background: rgba(255,255,255,0.95); padding: 12px 16px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); display: none; min-width: 72px; text-align: center; border-left: 4px solid #4285F4;">
+            <div id="speedValue" style="font-size: 42px; font-weight: bold; color: #333; line-height: 1;">0</div>
+            <div id="speedUnitDisplay" style="font-size: 12px; color: #666; margin-top: -4px;">km/h</div>
         </div>
 
         <!-- Notification Container -->
@@ -5546,7 +5535,7 @@ HTML_TEMPLATE = '''
             </button>
             <button id="endNavigationBtn" data-testid="end-navigation" class="fab" title="End navigation" onclick="stopTurnByTurnNavigation()" style="background: #E53935; display: none; font-size: 18px; font-weight: 700;">⏹</button>
             <button id="journeyOverviewBtn" class="fab" title="Journey Overview" onclick="toggleJourneyOverview()" style="background: #9C27B0; display: none;">🗺️</button>
-            <button id="roadReportFab" class="fab" title="Report road issue or speed limit" onclick="openRoadReportModal()" style="background: #E65100;">⚠️</button>
+            <button id="roadReportFab" class="fab" title="Report road issue" onclick="openRoadReportModal()" style="background: #E65100;">⚠️</button>
         </div>
 
         <div id="mapControlsHintModal" class="road-report-modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="mapControlsHintTitle">
@@ -5573,19 +5562,8 @@ HTML_TEMPLATE = '''
                     <option value="closure">Road closed / blocked</option>
                     <option value="congestion">Heavy congestion</option>
                     <option value="weather">Weather / flooding</option>
-                    <option value="speed_limit_correction">Wrong speed limit shown</option>
                     <option value="other">Other</option>
                 </select>
-                <div id="roadReportSpeedFields" style="display: none; margin-bottom: 12px;">
-                    <label for="roadReportSpeedValue" style="font-size: 13px; color: #555;">Correct limit you see on the road</label>
-                    <div style="display: flex; gap: 8px; margin-top: 6px;">
-                        <input id="roadReportSpeedValue" type="number" min="5" max="130" step="1" placeholder="e.g. 40" style="flex: 1; padding: 10px; border-radius: 8px; border: 1px solid #ccc;">
-                        <select id="roadReportSpeedUnit" style="width: 100px; padding: 10px; border-radius: 8px; border: 1px solid #ccc;">
-                            <option value="mph">mph</option>
-                            <option value="kmh">km/h</option>
-                        </select>
-                    </div>
-                </div>
                 <label for="roadReportNotes" style="font-size: 13px; color: #555;">Notes (optional)</label>
                 <textarea id="roadReportNotes" rows="3" maxlength="500" placeholder="Short details e.g. lane closure, object in carriageway…" style="width: 100%; margin: 6px 0 12px 0; padding: 10px; border-radius: 8px; border: 1px solid #ccc; resize: vertical; box-sizing: border-box;"></textarea>
                 <p id="roadReportGpsHint" style="font-size: 12px; color: #888; margin: 0 0 12px 0;">Uses your last GPS fix. Enable location for an accurate pin.</p>

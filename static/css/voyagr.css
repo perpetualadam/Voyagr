@@ -814,6 +814,25 @@ button {
     letter-spacing: 0.5px;
 }
 
+.preferences-subsection {
+    margin: 14px 0 6px 0;
+}
+
+.preferences-subsection-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+    margin: 0 0 8px 0;
+    letter-spacing: 0.02em;
+}
+
+.preferences-subsection-help {
+    font-size: 11px;
+    color: #888;
+    margin: -4px 0 10px 0;
+    line-height: 1.45;
+}
+
 .preference-item {
     display: flex;
     align-items: center;
@@ -3003,19 +3022,10 @@ body.dark-mode .journey-summary-bar {
    ============================================ */
 body.dark-mode .speed-widget {
     background: rgba(30, 30, 30, 0.95) !important;
-    border-left-color: #66BB6A !important;
+    border-left-color: #64B5F6 !important;
 }
 
 body.dark-mode .speed-widget #speedValue {
-    color: #e0e0e0 !important;
-}
-
-body.dark-mode .speed-widget #speedLimitCircle {
-    background: #2a2a2a !important;
-    border-color: #EF5350 !important;
-}
-
-body.dark-mode .speed-widget #speedLimitValue {
     color: #e0e0e0 !important;
 }
 

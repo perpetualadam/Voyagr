@@ -35,6 +35,82 @@
     };
 
     var TYPICAL_MPH_LIMITS = [20, 30, 40, 50, 60, 70];
+    /** km/h → mph */
+    var KMH_TO_MPH = 0.621371192237334;
+    /** Values above this in coords.speed are almost certainly km/h, not m/s (~123 mph). */
+    var COORD_SPEED_LIKELY_KMH_THRESHOLD = 55;
+
+    function metersPerSecondToMph(mps) {
+        if (!Number.isFinite(mps) || mps <= 0) return 0;
+        return mps * DEFAULTS.MS_TO_MPH;
+    }
+
+    function kmhToMph(kmh) {
+        if (!Number.isFinite(kmh) || kmh <= 0) return 0;
+        return kmh * KMH_TO_MPH;
+    }
+
+    /**
+     * Normalize user speed-unit preference strings from settings / localStorage.
+     * @param {string} unitPref
+     * @returns {'mph'|'kmh'}
+     */
+    function normalizeSpeedUnitPref(unitPref) {
+        if (unitPref == null || unitPref === '') return 'mph';
+        var s = String(unitPref).toLowerCase().replace(/\s+/g, '');
+        if (s === 'mph' || s === 'mi/h' || s === 'milesperhour') return 'mph';
+        return 'kmh';
+    }
+
+    /**
+     * Convert a canonical mph value to the user's chosen display unit.
+     * @param {number} mph
+     * @param {string} unitPref
+     * @returns {number}
+     */
+    function mphToDisplaySpeed(mph, unitPref) {
+        if (!Number.isFinite(mph) || mph < 0) mph = 0;
+        if (normalizeSpeedUnitPref(unitPref) === 'mph') return mph;
+        return mph * (1 / KMH_TO_MPH);
+    }
+
+    /**
+     * Display label for a normalized speed unit preference.
+     * @param {string} unitPref
+     * @returns {'mph'|'km/h'}
+     */
+    function speedUnitLabel(unitPref) {
+        return normalizeSpeedUnitPref(unitPref) === 'mph' ? 'mph' : 'km/h';
+    }
+
+    /**
+     * Interpret `position.coords.speed` as mph.
+     *
+     * W3C Geolocation specifies m/s, but some Android WebViews emit km/h.
+     *
+     * @param {number|null|undefined} raw - coords.speed from Geolocation API.
+     * @param {number|null|undefined} [derivedMphHint] - optional mph from Δposition/Δt.
+     * @returns {number|null} mph, or null when raw is not a positive finite number.
+     */
+    function normalizeGeolocationSpeedToMph(raw, derivedMphHint) {
+        if (!Number.isFinite(raw) || raw <= 0) return null;
+
+        var fromMs = metersPerSecondToMph(raw);
+        var fromKmh = kmhToMph(raw);
+
+        if (raw > COORD_SPEED_LIKELY_KMH_THRESHOLD) {
+            return fromKmh;
+        }
+
+        if (Number.isFinite(derivedMphHint) && derivedMphHint > 1) {
+            var diffMs = Math.abs(fromMs - derivedMphHint);
+            var diffKmh = Math.abs(fromKmh - derivedMphHint);
+            if (diffKmh + 8 < diffMs) return fromKmh;
+            if (diffMs + 8 < diffKmh) return fromMs;
+        }
+
+        return fromMs;
+    }
 
     /**
      * Reject implausible GPS speed spikes before display smoothing.
@@ -344,6 +420,14 @@
 
     var api = {
         DEFAULTS: DEFAULTS,
+        KMH_TO_MPH: KMH_TO_MPH,
+        COORD_SPEED_LIKELY_KMH_THRESHOLD: COORD_SPEED_LIKELY_KMH_THRESHOLD,
+        metersPerSecondToMph: metersPerSecondToMph,
+        kmhToMph: kmhToMph,
+        normalizeSpeedUnitPref: normalizeSpeedUnitPref,
+        mphToDisplaySpeed: mphToDisplaySpeed,
+        speedUnitLabel: speedUnitLabel,
+        normalizeGeolocationSpeedToMph: normalizeGeolocationSpeedToMph,
         rejectGpsSpeedSpikeMph: rejectGpsSpeedSpikeMph,
         isPlausibleEdgeSpeedLimitMph: isPlausibleEdgeSpeedLimitMph,
         sanitizeApiSpeedLimitMph: sanitizeApiSpeedLimitMph,

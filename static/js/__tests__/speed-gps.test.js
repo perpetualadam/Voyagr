@@ -12,6 +12,8 @@ const STEPS = [
 describe('speed-gps module surface', () => {
     test('exposes the expected pure functions', () => {
         expect(typeof SG.rejectGpsSpeedSpikeMph).toBe('function');
+        expect(typeof SG.normalizeGeolocationSpeedToMph).toBe('function');
+        expect(typeof SG.mphToDisplaySpeed).toBe('function');
         expect(typeof SG.normalizeManeuverSpeedLimitMph).toBe('function');
         expect(typeof SG.getManeuverStreetLabel).toBe('function');
         expect(typeof SG.computeSnapBlendWeight).toBe('function');
@@ -201,5 +203,35 @@ describe('stepSmoothGpsSpeedMph', () => {
     test('dead-band returns zero for noise', () => {
         const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 0, initAt: 1000 }, 0.3, 2000);
         expect(r.value).toBe(0);
+    });
+});
+
+describe('normalizeGeolocationSpeedToMph', () => {
+    test('m/s to mph at highway speed (~60 mph)', () => {
+        const mps = 60 / SG.DEFAULTS.MS_TO_MPH;
+        expect(Math.round(SG.metersPerSecondToMph(mps))).toBe(60);
+    });
+
+    test('km/h misreported in coords.speed (~96.6) normalizes to ~60 mph', () => {
+        const mph = SG.normalizeGeolocationSpeedToMph(96.56, null);
+        expect(Math.round(mph)).toBe(60);
+    });
+
+    test('ambiguous raw value picks interpretation closest to derived hint', () => {
+        const mph = SG.normalizeGeolocationSpeedToMph(43, 27);
+        expect(Math.round(mph)).toBe(27);
+    });
+});
+
+describe('mphToDisplaySpeed', () => {
+    test('display mph when user prefers mph', () => {
+        expect(Math.round(SG.mphToDisplaySpeed(60, 'mph'))).toBe(60);
+        expect(SG.speedUnitLabel('mph')).toBe('mph');
+    });
+
+    test('display km/h when user prefers kmh / km/h', () => {
+        expect(Math.round(SG.mphToDisplaySpeed(60, 'kmh'))).toBe(97);
+        expect(Math.round(SG.mphToDisplaySpeed(60, 'km/h'))).toBe(97);
+        expect(SG.speedUnitLabel('km/h')).toBe('km/h');
     });
 });

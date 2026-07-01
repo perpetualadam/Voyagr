@@ -222,6 +222,14 @@ function getDistanceUnit() {
  * @returns {*} Return value description
  */
 function convertSpeed(kmh) {
+    const SG = _speedGps();
+    const n = Number(kmh);
+    if (!Number.isFinite(n)) return '0.0';
+    if (SG) {
+        const mph = SG.kmhToMph(n);
+        const display = SG.mphToDisplaySpeed(mph, speedUnit);
+        return display.toFixed(1);
+    }
     if (speedUnit === 'mph') {
         return (kmh * 0.621371).toFixed(1);
     }
@@ -234,6 +242,8 @@ function convertSpeed(kmh) {
  * @returns {*} Return value description
  */
 function getSpeedUnit() {
+    const SG = _speedGps();
+    if (SG) return SG.speedUnitLabel(speedUnit);
     return speedUnit === 'mph' ? 'mph' : 'km/h';
 }
 
@@ -1580,8 +1590,7 @@ function saveAllSettings() {
             avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
             avoidCameras: localStorage.getItem('pref_cameras') !== 'false',  // Default: true (avoid cameras)
             avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
-            variableSpeedAlerts: localStorage.getItem('pref_variableSpeedAlerts') === 'true'
+            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false'
         },
 
         // Display preferences
@@ -1684,7 +1693,6 @@ function loadAllSettings() {
                 if (settings.hazardPreferences.avoidRailwayCrossings !== undefined) {
                     localStorage.setItem('pref_railwayCrossingsAvoid', settings.hazardPreferences.avoidRailwayCrossings ? 'true' : 'false');
                 }
-                localStorage.setItem('pref_variableSpeedAlerts', settings.hazardPreferences.variableSpeedAlerts ? 'true' : 'false');
             }
 
             // Restore display preferences
@@ -1944,7 +1952,7 @@ function resetAllSettings() {
             'vehicleType', 'routingMode',
             'routePreferences',
             'pref_avoid_tollRoads', 'pref_avoid_motorways', 'pref_avoid_ferries',
-            'pref_tolls', 'pref_caz', 'pref_cameras', 'pref_variableSpeedAlerts',
+            'pref_tolls', 'pref_caz', 'pref_cameras',
             'mapTheme', 'smartZoomEnabled',
             'parkingPreferences'
         ];
@@ -2074,7 +2082,9 @@ function updateAllCostDisplays() {
  * @returns {*} Return value description
  */
 function updateAllSpeedDisplays() {
-    // This will be called when speed updates occur
+    if (Number.isFinite(currentGpsSpeedMph) && currentGpsSpeedMph >= 0) {
+        updateSpeedWidget(currentGpsSpeedMph);
+    }
     console.log('[Units] Speed unit updated to', speedUnit);
 }
 
@@ -7143,7 +7153,6 @@ function updateRouteOnMap(newRoute) {
     }
 
     // Seed progress from current GPS on the new geometry (not index 0).
-    _lastActiveManeuverIdx = -1;
     resetVehicleMarkerDisplayState();
     if (currentLat != null && currentLon != null) {
         primeVehicleMarkerOnRoute(currentLat, currentLon);
@@ -7152,13 +7161,6 @@ function updateRouteOnMap(newRoute) {
         lastSnappedRouteIndex = 0;
         lastTurnDetectRouteVertexIndex = 0;
     }
-
-    // Clear stale speed-limit state so the widget does not keep showing the limit
-    // from the *previous* route after a reroute. Zeroing the throttle makes the next
-    // GPS tick fetch a fresh limit for the new road immediately.
-    currentSpeedLimitMph = null;
-    lastSpeedLimitFetch = 0;
-    lastSpeedLimitPosition = null;
 
     // Road-name bar was still showing the pre-reroute street until the 5 s throttle expired.
     lastRoadNameFetch = 0;
@@ -7331,15 +7333,13 @@ function seedNavigationProgressOnNewRoute(lat, lon) {
         currentStepIndex = 0;
     }
 
-    _lastActiveManeuverIdx = getActiveRouteManeuverIndex(idx);
-
     if (snap.distance <= ROUTE_JOIN_GATE_METERS) {
         routeJoinConfirmedForDeviation = true;
     }
 
     console.log(
         `[Reroute] Seeded progress: snapIdx=${idx}, step=${currentStepIndex}, ` +
-        `maneuver=${_lastActiveManeuverIdx}, offRoute=${snap.distance.toFixed(0)}m`
+        `offRoute=${snap.distance.toFixed(0)}m`
     );
 }
 
@@ -10082,110 +10082,15 @@ function renderLaneGuidanceUI(data) {
     }
 }
 
-// ===== PHASE 2 FEATURES: SPEED WARNINGS =====
+// ===== GPS SPEED WIDGET =====
 
-// Speed widget variables - default to enabled for safety awareness
+// Speed widget variables - default to enabled
 let speedWidgetEnabled = localStorage.getItem('speedWidgetEnabled') !== 'false';  // Default true
 let currentSpeedMph = 0;
-// `null` ⇒ unknown limit (renders as "?" and disables the over-limit chime).
-// Numeric value ⇒ mph. Always treat as nullable; never compare with == 0.
-let currentSpeedLimitMph = null;
-let speedLimitThreshold = 3; // mph over limit to trigger warning
-/** Min time between spoken speed-limit warnings while still exceeding (avoids GPS spam). */
-const SPEED_WIDGET_VIOLATION_SPEAK_COOLDOWN_MS = 14000;
-let _speedWidgetLastViolationSpeakAt = 0;
-/** Lazily created Web Audio context for speed-alert chime (shared, reused). */
-let _speedViolationAudioCtx = null;
 
-/**
- * Short two-tone chime when exceeding speed limit (runs even if voice TTS is off).
- */
-function playSpeedViolationChime() {
-    try {
-        const AC = window.AudioContext || window.webkitAudioContext;
-        if (!AC) return;
-        if (!_speedViolationAudioCtx || _speedViolationAudioCtx.state === 'closed') {
-            _speedViolationAudioCtx = new AC();
-        }
-        const ctx = _speedViolationAudioCtx;
-        const run = () => {
-            const t0 = ctx.currentTime;
-            const tones = [880, 660];
-            tones.forEach((freq, i) => {
-                const osc = ctx.createOscillator();
-                const g = ctx.createGain();
-                osc.type = 'sine';
-                const offset = i * 0.09;
-                osc.frequency.setValueAtTime(freq, t0 + offset);
-                g.gain.setValueAtTime(0.0001, t0 + offset);
-                g.gain.linearRampToValueAtTime(0.14, t0 + offset + 0.015);
-                g.gain.linearRampToValueAtTime(0.0001, t0 + offset + 0.075);
-                osc.connect(g);
-                g.connect(ctx.destination);
-                osc.start(t0 + offset);
-                osc.stop(t0 + offset + 0.085);
-            });
-        };
-        if (ctx.state === 'suspended') {
-            ctx.resume().then(run).catch(() => {});
-        } else {
-            run();
-        }
-    } catch (_e) {
-        /* autoplay / unsupported — ignore */
-    }
-}
-
-/**
- * Chime + optional speech when the speed widget shows exceeding (shared cooldown).
- * Chime plays whenever we alert; TTS only if voice announcements are enabled.
- * Speech uses high priority so minimal/important voice modes still allow safety warnings.
- */
-function maybeAlertSpeedLimitViolation(speedDiffMph) {
-    const now = Date.now();
-    if (now - _speedWidgetLastViolationSpeakAt < SPEED_WIDGET_VIOLATION_SPEAK_COOLDOWN_MS) {
-        return;
-    }
-    _speedWidgetLastViolationSpeakAt = now;
-    playSpeedViolationChime();
-
-    if (typeof voiceAnnouncementsEnabled === 'undefined' || !voiceAnnouncementsEnabled) {
-        return;
-    }
-    const unit = getSpeedUnit();
-    const diffDisplay = speedUnit === 'mph'
-        ? Math.round(speedDiffMph)
-        : Math.round(speedDiffMph * 1.60934);
-    speakMessage(`Warning: you are over the speed limit by ${diffDisplay} ${unit}`, 'high');
-}
-
-// GPS speed tracking (FIX: Global variable to store current GPS speed)
+// GPS speed tracking
 let currentGpsSpeedMph = 0;
 let currentGpsSpeedKmh = 0;
-
-// Speed limit API throttling (FIX: Prevent API spam while remaining responsive)
-let lastSpeedLimitFetch = 0;
-let lastSpeedLimitPosition = null;
-const SPEED_LIMIT_FETCH_INTERVAL = 4000;   // 4 seconds (was 10s – too sluggish on road changes)
-const SPEED_LIMIT_DISTANCE_THRESHOLD = 50;  // 50 meters (was 100m – react faster to new roads)
-
-// In-flight guard: only ever one /api/speed-limit fetch outstanding. Without this
-// a slow mobile network (response > 4 s) would let every GPS tick fire another
-// request, racking up 2-5 parallel fetches and producing out-of-order results.
-let _speedLimitFetchInFlight = false;
-// Monotonic request sequence number. When responses arrive out of order (mobile
-// data switching cells / radios), older responses are discarded so they cannot
-// clobber a fresher limit value already on the widget.
-let _speedLimitFetchSeq = 0;
-let _speedLimitFetchAppliedSeq = 0;
-
-// Edge-change detection so the widget refreshes the limit immediately when crossing
-// a Valhalla maneuver boundary (e.g. exiting a motorway onto a slip road). Without
-// this, the 4 s / 50 m throttle in `fetchSpeedLimitThrottled` could leave the old
-// edge's limit on screen for several seconds after the road class changed.
-let _lastActiveManeuverIdx = -1;
-
-// Lightweight EMA-style smoothing for the GPS-derived speed display.
 // Goals:
 //   1. Hide sub-noise readings while genuinely stationary (GPS can drift to 0.2-0.5 m/s
 //      while parked, which used to flicker the widget between 0 and 1 mph).
@@ -10260,26 +10165,39 @@ function rejectGpsSpeedSpikeMph(mph, prevPick) {
 }
 
 function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
+    const SG = _speedGps();
     const accCurr = Number.isFinite(coordAccuracy) && coordAccuracy > 2 ? coordAccuracy : null;
 
     const finish = (mph) => {
         let x = mph;
         if (!Number.isFinite(x) || x < 0) x = 0;
         x = Math.min(x, MAX_DISPLAY_GPS_SPEED_MPH);
-
         _lastGoodRawPickMph = x;
         return x;
     };
 
-    // Trust a *positive* device speed reading. NOTE: we deliberately do NOT trust an exact
-    // 0 here. Some Android browsers / WebViews report a constant coords.speed === 0 even
-    // while driving, which used to peg the widget at 0 mph for the whole trip (bug #2). We
-    // fall through to the displacement estimate in that case, but remember the device claimed
-    // "stopped" so we can reject parked GPS drift below.
     const deviceReportsStopped = Number.isFinite(coordsSpeed) && coordsSpeed === 0;
 
     if (Number.isFinite(coordsSpeed) && coordsSpeed > 0) {
-        let mph = coordsSpeed * 2.237;
+        let derivedHint = null;
+        if (Array.isArray(history) && history.length >= 2) {
+            const curr = history[history.length - 1];
+            const prev = history[history.length - 2];
+            const tCurr = curr && curr.timestamp ? +curr.timestamp : 0;
+            const tPrev = prev && prev.timestamp ? +prev.timestamp : 0;
+            const dtSec = (tCurr - tPrev) / 1000;
+            if (dtSec > 0.2 && dtSec < 10) {
+                const distM = calculateDistanceMeters(prev.lat, prev.lon, curr.lat, curr.lon);
+                if (Number.isFinite(distM) && distM <= 500) {
+                    derivedHint = Math.min((distM / dtSec) * 2.237, MAX_DISPLAY_GPS_SPEED_MPH);
+                }
+            }
+        }
+
+        let mph = SG && SG.normalizeGeolocationSpeedToMph
+            ? SG.normalizeGeolocationSpeedToMph(coordsSpeed, derivedHint)
+            : coordsSpeed * 2.237;
+        if (mph == null || !Number.isFinite(mph)) mph = coordsSpeed * 2.237;
         mph = Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH);
         const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : mph;
 
@@ -10310,15 +10228,7 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
                 return finish(0);
             }
 
-            // If the device explicitly reported coords.speed === 0 (it believes we are
-            // parked), only override that with a displacement estimate when the movement
-            // clearly exceeds GPS position noise. A stationary phone routinely "walks" a few
-            // metres between fixes; counting that drift as motion produced phantom speed and a
-            // false "over the limit" announcement at a standstill (bug #6). Devices that report
-            // null speed keep their previous behaviour (no extra gate), so this cannot regress
-            // the long-standing displacement fallback.
             if (deviceReportsStopped) {
-                const SG = _speedGps();
                 const noiseFloorM = SG
                     ? SG.displacementNoiseFloorMeters(deviceReportsStopped, _consecutiveDisplacementMoves, accAvg)
                     : Math.max(Number.isFinite(accAvg) ? accAvg : 8, 8);
@@ -10327,7 +10237,6 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
                 }
             }
 
-            const SG = _speedGps();
             const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : 0;
             let mph = SG
                 ? SG.estimateDisplacementSpeedMph({
@@ -10361,82 +10270,24 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
  * updateSpeedWidget function
  * @function updateSpeedWidget
  * @param {number} currentSpeedInMph - Current GPS speed in MPH (always MPH internally)
- * @param {number|null} speedLimitInMph - Speed limit in MPH (from API, can be null)
  * @returns {void}
  */
-function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
+function updateSpeedWidget(currentSpeedInMph) {
     const widget = document.getElementById('speedWidget');
     if (!widget) return;
 
-    // Store in global variable for other functions to access
     currentGpsSpeedMph = currentSpeedInMph;
-    currentGpsSpeedKmh = currentSpeedInMph * 1.60934;
+    currentGpsSpeedKmh = currentSpeedInMph * 1.609344;
 
-    // Get user's preferred unit using global speedUnit variable
+    const SG = _speedGps();
     const displaySpeedUnit = getSpeedUnit();
+    const displaySpeed = SG
+        ? SG.mphToDisplaySpeed(currentSpeedInMph, speedUnit)
+        : (speedUnit === 'mph' ? currentSpeedInMph : currentSpeedInMph * 1.609344);
 
-    // Convert from MPH to user's preferred unit
-    // currentSpeedInMph is always in mph internally, convert for display
-    let displaySpeed;
-    if (speedUnit === 'mph') {
-        displaySpeed = currentSpeedInMph;
-    } else {
-        // Convert mph to km/h
-        displaySpeed = currentSpeedInMph * 1.60934;
-    }
-
-    // Update current speed display
     document.getElementById('speedValue').textContent = Math.round(displaySpeed);
     document.getElementById('speedUnitDisplay').textContent = displaySpeedUnit;
 
-    // Update speed limit if provided
-    if (speedLimitInMph !== null && speedLimitInMph > 0) {
-        // Store in global variable
-        currentSpeedLimitMph = speedLimitInMph;
-
-        let displaySpeedLimit;
-        if (speedUnit === 'mph') {
-            displaySpeedLimit = speedLimitInMph;
-        } else {
-            // Convert mph to km/h
-            displaySpeedLimit = speedLimitInMph * 1.60934;
-        }
-        document.getElementById('speedLimitValue').textContent = Math.round(displaySpeedLimit);
-        document.getElementById('speedLimitUnit').textContent = displaySpeedUnit;
-
-        // Check if speeding (compare in same units - mph)
-        const speedDiff = currentSpeedInMph - speedLimitInMph;
-        const warningElement = document.getElementById('speedWarning');
-        if (speedDiff > speedLimitThreshold) {
-            warningElement.style.display = 'block';
-            widget.style.borderLeft = '4px solid #FF5722';
-            // Movement floor: never sound/voice the over-limit alarm while essentially
-            // stationary. Residual GPS jitter (or a very low posted limit) could otherwise
-            // fire "you are N over the limit" at a standstill / crawl — a bug users reported.
-            // The visual cue above still shows; only the audible + spoken alert is gated.
-            if (currentSpeedInMph >= 5) {
-                maybeAlertSpeedLimitViolation(speedDiff);
-            }
-        } else {
-            warningElement.style.display = 'none';
-            widget.style.borderLeft = '4px solid #4CAF50';
-            _speedWidgetLastViolationSpeakAt = 0;
-        }
-    } else {
-        // No speed limit data available - show '?' instead of '--'
-        document.getElementById('speedLimitValue').textContent = '?';
-        document.getElementById('speedLimitUnit').textContent = displaySpeedUnit;
-        document.getElementById('speedWarning').style.display = 'none';
-        widget.style.borderLeft = '4px solid #999';
-        // NOTE: deliberately *not* resetting _speedWidgetLastViolationSpeakAt here.
-        // A transient API miss between two non-null limits used to clear the cooldown,
-        // which then re-fired the chime if the driver was still over the same threshold
-        // when the limit came back. Resetting on "unknown" doesn't reflect new safety
-        // information; we leave the cooldown alone until we observe "under the limit".
-        console.log('[Speed Widget] No speed limit available');
-    }
-
-    // Use consolidated visibility function
     updateSpeedWidgetVisibility();
 }
 
@@ -10483,176 +10334,13 @@ function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
 }
 
 /**
- * Sanity bound for a speed-limit value coming back from the /api/speed-limit endpoint.
- * Deliberately permissive: the detector already does road-class-aware filtering
- * server-side; we only catch values that are physically impossible (negative, zero,
- * absurdly high) so a misparsed OSM tag can't trigger a bogus over-limit chime.
- *
- * The stricter, road-class-aware check (`isPlausibleEdgeSpeedLimitMph`) stays
- * reserved for Valhalla edge speed hints, where unit-mixup and missing OSM
- * tagging are both more common.
- *
- * @param {*} mph - Candidate value (any type).
- * @returns {number|null} Numeric mph if sane, else null.
- */
-function _coerceApiSpeedLimitMph(mph, roadClass, gpsSpeedMph) {
-    const n = Number(mph);
-    if (!Number.isFinite(n) || n < 5 || n > 100) return null;
-    const rounded = Math.round(n);
-    const SG = _speedGps();
-    if (SG && typeof SG.sanitizeApiSpeedLimitMph === 'function') {
-        return SG.sanitizeApiSpeedLimitMph(rounded, roadClass, gpsSpeedMph);
-    }
-    return rounded;
-}
-
-/**
- * Fetch the speed limit for the current location, with a throttle, an in-flight
- * guard, and a response-sequence guard.
- *
- * Behaviour notes:
- *   - Only one request is ever outstanding (`_speedLimitFetchInFlight`).
- *   - Throttle bookkeeping (`lastSpeedLimitFetch`, `lastSpeedLimitPosition`) is
- *     written *before* the fetch, not after — that's what stops slow networks
- *     from racking up parallel requests.
- *   - Each request gets a monotonic sequence number; responses arriving out of
- *     order (common on cell-network handovers) are silently dropped instead of
- *     overwriting a fresher value on the widget.
- *   - There is no async retry. If a request fails, the next GPS tick (1 Hz) will
- *     naturally re-fire with the *current* position — that's both simpler and
- *     more accurate than scheduling a retry against a stale coordinate.
- *
- * @param {number} lat
- * @param {number} lon
- * @param {number} _currentSpeedMph - kept for API stability; no longer used.
- * @param {string} roadType - e.g. 'motorway', 'residential' (used by detector).
- * @param {number} _retryAttempt - kept for API stability; no longer used.
- * @param {number|null} valhallaSpeedLimit - Edge limit (mph) for offline fallback.
- */
-function fetchSpeedLimitThrottled(lat, lon, _currentSpeedMph, roadType = 'residential', _retryAttempt = 0, valhallaSpeedLimit = null) {
-    if (_speedLimitFetchInFlight) return;
-
-    const now = Date.now();
-    const timeSinceLastFetch = lastSpeedLimitFetch ? (now - lastSpeedLimitFetch) : Infinity;
-
-    let distanceMoved = Infinity;
-    if (lastSpeedLimitPosition) {
-        distanceMoved = calculateDistanceMeters(
-            lat, lon,
-            lastSpeedLimitPosition.lat,
-            lastSpeedLimitPosition.lon
-        );
-    }
-
-    if (!(timeSinceLastFetch > SPEED_LIMIT_FETCH_INTERVAL || distanceMoved > SPEED_LIMIT_DISTANCE_THRESHOLD)) {
-        return;
-    }
-
-    // Reserve the slot *now*, before the fetch leaves. This is what prevents
-    // multiple in-flight requests on slow networks.
-    _speedLimitFetchInFlight = true;
-    lastSpeedLimitFetch = now;
-    lastSpeedLimitPosition = { lat, lon };
-    const mySeq = ++_speedLimitFetchSeq;
-
-    // Discard responses that arrive out of order. Strictly `<`: ties (same seq) win.
-    const acceptIfFresh = (apply) => {
-        if (mySeq < _speedLimitFetchAppliedSeq) return;
-        _speedLimitFetchAppliedSeq = mySeq;
-        apply();
-    };
-
-    console.log(`[Speed Limit] Fetching (time: ${Number.isFinite(timeSinceLastFetch) ? timeSinceLastFetch + 'ms' : 'first'}, distance: ${Number.isFinite(distanceMoved) ? distanceMoved.toFixed(0) + 'm' : 'first'}, seq: ${mySeq})`);
-
-    const vslParam = valhallaSpeedLimit ? `&valhalla_speed_limit=${valhallaSpeedLimit}` : '';
-    fetch(`/api/speed-limit?lat=${lat}&lon=${lon}&road_type=${roadType}${vslParam}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            acceptIfFresh(() => {
-                if (!data || !data.success || !data.data) {
-                    console.warn('[Speed Limit] success:false or no data:', data);
-                    return; // Throttle already recorded, so we won't spam-retry.
-                }
-                // Prefer mph (canonical field). Fall back to km/h when only that is
-                // populated — the legacy `speed_limit` field was dead code, gone now.
-                const apiRoadType = data.data.road_type || roadType;
-                let apiLimitMph = _coerceApiSpeedLimitMph(
-                    data.data.speed_limit_mph, apiRoadType, _currentSpeedMph
-                );
-                if (apiLimitMph == null) {
-                    const kmh = Number(data.data.speed_limit_kmh);
-                    if (Number.isFinite(kmh) && kmh > 0) {
-                        apiLimitMph = _coerceApiSpeedLimitMph(
-                            kmh * 0.621371, apiRoadType, _currentSpeedMph
-                        );
-                    }
-                }
-                console.log('[Speed Limit] API response:', data.data, 'Extracted mph:', apiLimitMph);
-
-                if (apiLimitMph != null) {
-                    currentSpeedLimitMph = apiLimitMph;
-                    cacheSpeedLimit(lat, lon, apiLimitMph, data.data.source || 'api');
-                } else {
-                    // Detector explicitly said "unknown" for this cell — clear the stale
-                    // value so the widget can fall back to Valhalla edge speed or "?".
-                    currentSpeedLimitMph = null;
-                }
-
-                const edge = (Number.isFinite(valhallaSpeedLimit) && valhallaSpeedLimit > 0)
-                    ? valhallaSpeedLimit
-                    : null;
-                const displayLimit = apiLimitMph != null ? apiLimitMph : edge;
-                updateSpeedWidget(currentGpsSpeedMph, displayLimit);
-            });
-        })
-        .catch(async (err) => {
-            console.error('[Speed Limit] API error:', err);
-            if (_voyagrIsOffline || !navigator.onLine) {
-                let fallbackLimit = null;
-                let fallbackSource = '';
-                try {
-                    const cached = await getCachedSpeedLimit(lat, lon);
-                    if (cached && Number.isFinite(cached.speedLimit) && cached.speedLimit > 0) {
-                        fallbackLimit = cached.speedLimit;
-                        fallbackSource = `cache (${cached.source || 'unknown'})`;
-                    }
-                } catch (_) { /* ignore */ }
-                if (fallbackLimit == null && Number.isFinite(valhallaSpeedLimit) && valhallaSpeedLimit > 0) {
-                    fallbackLimit = valhallaSpeedLimit;
-                    fallbackSource = 'valhalla edge';
-                }
-                if (fallbackLimit != null) {
-                    acceptIfFresh(() => {
-                        currentSpeedLimitMph = fallbackLimit;
-                        updateSpeedWidget(currentGpsSpeedMph, fallbackLimit);
-                        console.log(`[Speed Limit] Offline fallback: ${fallbackLimit} mph (${fallbackSource})`);
-                    });
-                }
-            }
-            // No async retry. The throttle has already been recorded, so the next
-            // GPS tick (or the next 50 m of travel, whichever comes first) will
-            // re-fire with the current position rather than this stale one.
-        })
-        .finally(() => {
-            _speedLimitFetchInFlight = false;
-        });
-}
-
-/**
  * Map a snapped polyline vertex index to the Valhalla maneuver describing the edge
  * the driver is currently traversing.
  *
  * Valhalla maneuver i describes the road segment from `begin_shape_index[i]` (inclusive)
- * to `begin_shape_index[i+1]` (exclusive). The pre-existing speed widget logic looked
- * at `currentRouteSteps[currentStepIndex]`, but `currentStepIndex` tracks the *upcoming*
- * maneuver (the next turn). While driving between turns that meant the displayed speed
- * limit / road class belonged to the road *after* the next turn, not the road under
- * the wheels right now. Picking the maneuver by snapped vertex fixes that.
+ * to `begin_shape_index[i+1]` (exclusive). `currentStepIndex` tracks the *upcoming*
+ * maneuver (the next turn). Picking the maneuver by snapped vertex fixes turn display
+ * for the road currently under the wheels.
  *
  * @param {number} snappedIndex - Index into `routePolyline` of the snapped GPS position.
  * @returns {number} Index into `currentRouteSteps`, or -1 if not available.
@@ -10666,7 +10354,6 @@ function getActiveRouteManeuverIndex(snappedIndex) {
 
 /**
  * Get the road class for a specific maneuver, falling back to instruction-text inference.
- * Pure helper used by `getCurrentRoadType` and the speed widget's edge-aware lookup.
  *
  * @param {Object|null} step - A Valhalla maneuver object (or null).
  * @returns {string|null} Road class string, or null when nothing useful could be inferred.
@@ -10688,10 +10375,8 @@ function inferRoadClassFromManeuver(step) {
 /**
  * Get current road type from route data or default to safe value.
  *
- * @param {number} [maneuverIdxOverride] - Optional maneuver index (typically from
- *   `getActiveRouteManeuverIndex(lastSnappedRouteIndex)`). When supplied, the road
- *   class is taken from that maneuver — i.e. the edge currently being driven —
- *   rather than from `currentStepIndex` (which points at the *upcoming* maneuver).
+ * @param {number} [maneuverIdxOverride] - Optional maneuver index. When supplied, the road
+ *   class is taken from that maneuver rather than from `currentStepIndex`.
  * @returns {string} Road type (residential, motorway, primary, etc.)
  */
 function getCurrentRoadType(maneuverIdxOverride) {
@@ -10722,39 +10407,6 @@ function getManeuverStreetLabel(maneuver, preferCurrentRoad = false) {
     const SG = _speedGps();
     if (SG) return SG.getManeuverStreetLabel(maneuver, preferCurrentRoad);
     return '';
-}
-
-/**
- * Convert a Valhalla / GraphHopper maneuver speed_limit to mph.
- * Both engines document km/h, but some payloads already carry mph — detect that so we
- * don't turn a 30 mph limit into ~19 mph and trigger false over-limit alarms.
- *
- * @param {number} rawSl - Raw maneuver speed_limit value.
- * @param {string|null} roadClass - Valhalla road_class of the active edge.
- * @param {number} gpsSpeedMph - Current GPS speed in mph.
- * @returns {number|null}
- */
-function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
-    const SG = _speedGps();
-    if (SG) return SG.normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph);
-    return null;
-}
-
-/**
- * Plausibility check for a Valhalla edge speed-limit hint.
- * Bad geometry, missing OSM tags, and (rarely) unit confusion can let an
- * implausible value through (e.g. 5 mph on a motorway). Reject those rather
- * than display them — the widget will then fall back to the API value or "?".
- *
- * @param {number} mph - Candidate speed limit in mph.
- * @param {string|null} roadClass - Valhalla road_class of the active edge.
- * @param {number} gpsSpeedMph - Current GPS speed in mph (helps catch implausibly low values).
- * @returns {boolean} true when the value looks usable.
- */
-function isPlausibleEdgeSpeedLimitMph(mph, roadClass, gpsSpeedMph) {
-    const SG = _speedGps();
-    if (SG) return SG.isPlausibleEdgeSpeedLimitMph(mph, roadClass, gpsSpeedMph);
-    return false;
 }
 
 /**
@@ -10991,44 +10643,6 @@ function toggleJourneyOverview() {
         console.log('[Navigation] Journey overview deactivated');
         updateRecenterButtonVisibility();
     }
-}
-
-/**
- * updateSpeedWarning function
- * @function updateSpeedWarning
- * @param {*} lat - Parameter description
- * @param {*} lon - Parameter description
- * @param {*} currentSpeed - Parameter description
- * @param {*} roadType - Parameter description
- * @returns {*} Return value description
- */
-function updateSpeedWarning(lat, lon, currentSpeed, roadType) {
-    fetch(`/api/speed-warnings?lat=${lat}&lon=${lon}&speed=${currentSpeed}&road_type=${roadType}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const display = document.getElementById('speedWarningDisplay');
-                const text = document.getElementById('speedWarningText');
-                const details = document.getElementById('speedWarningDetails');
-
-                display.className = `speed-warning-display show ${data.status}`;
-                text.textContent = data.message;
-
-                // Convert speeds based on user preference
-                const userSpeedUnit = getSpeedUnit();
-                let displayLimit, displayCurrent;
-                if (speedUnit === 'mph') {
-                    displayLimit = Math.round(data.speed_limit_mph);
-                    displayCurrent = Math.round(data.current_speed_mph);
-                } else {
-                    // Convert mph to km/h
-                    displayLimit = Math.round(data.speed_limit_mph * 1.60934);
-                    displayCurrent = Math.round(data.current_speed_mph * 1.60934);
-                }
-                details.textContent = `Limit: ${displayLimit} ${userSpeedUnit} | Current: ${displayCurrent} ${userSpeedUnit}`;
-            }
-        })
-        .catch(error => console.error('Error updating speed warning:', error));
 }
 
 // ===== DISTANCE CALCULATION & TURN DETECTION =====
@@ -11769,117 +11383,6 @@ function toggleSmartZoom() {
     saveAllSettings();
     showStatus(`🔍 Smart Zoom ${smartZoomEnabled ? 'enabled' : 'disabled'}`, 'info');
     console.log('[SmartZoom] Toggled to:', smartZoomEnabled);
-}
-
-// ===== VARIABLE SPEED LIMIT DETECTION =====
-/**
- * updateVariableSpeedLimit function
- * @function updateVariableSpeedLimit
- * @param {*} lat - Parameter description
- * @param {*} lon - Parameter description
- * @param {*} roadType - Parameter description
- * @param {*} vehicleType - Parameter description
- * @returns {*} Return value description
- */
-function updateVariableSpeedLimit(lat, lon, roadType = 'motorway', vehicleType = 'car') {
-    fetch(`/api/speed-limit?lat=${lat}&lon=${lon}&road_type=${roadType}&vehicle_type=${vehicleType}`)
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const display = document.getElementById('variableSpeedDisplay');
-                const limitEl = document.getElementById('variableSpeedLimit');
-                const infoEl = document.getElementById('variableSpeedInfo');
-
-                const speedData = data.data;
-                const vslMph = speedData.speed_limit_mph;
-                limitEl.textContent = (vslMph != null && vslMph > 0) ? `${vslMph} mph` : '—';
-
-                let infoHtml = '';
-                if (speedData.is_smart_motorway) {
-                    infoHtml += `<div class="variable-speed-info-item">🚗 Smart Motorway: ${speedData.motorway_name}</div>`;
-                }
-                infoHtml += `<div class="variable-speed-info-item">Road: ${speedData.road_type.replace(/_/g, ' ')}</div>`;
-
-                infoEl.innerHTML = infoHtml;
-                display.classList.add('show');
-            }
-        })
-        .catch(error => console.error('Error updating variable speed limit:', error));
-}
-
-/**
- * Fire-and-forget log of driver feedback on the displayed speed limit (analytics).
- * @param {'confirmed'|'wrong_sign'} outcome
- * @param {{ source?: string }} [extra]
- */
-function postSpeedLimitFeedback(outcome, extra) {
-    if (outcome !== 'confirmed' && outcome !== 'wrong_sign') {
-        return;
-    }
-    const lat = typeof currentLat === 'number' && Number.isFinite(currentLat) ? currentLat : null;
-    const lon = typeof currentLon === 'number' && Number.isFinite(currentLon) ? currentLon : null;
-    if (lat == null || lon == null) {
-        return;
-    }
-    const mph =
-        typeof currentSpeedLimitMph !== 'undefined' &&
-        currentSpeedLimitMph != null &&
-        Number.isFinite(currentSpeedLimitMph) &&
-        currentSpeedLimitMph > 0
-            ? Math.round(currentSpeedLimitMph)
-            : null;
-    const payload = {
-        outcome,
-        lat,
-        lon,
-        displayed_mph: mph,
-        source: (extra && extra.source) || 'client',
-        client_ts: Date.now()
-    };
-    try {
-        fetch('/api/speed-limit/feedback', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            keepalive: true
-        }).catch((e) => console.debug('[SpeedLimitFeedback]', e));
-    } catch (e) {
-        console.debug('[SpeedLimitFeedback]', e);
-    }
-}
-
-/**
- * checkSpeedViolation function
- * @function checkSpeedViolation
- * @param {*} currentSpeedMph - Parameter description
- * @param {*} speedLimitMph - Parameter description
- * @param {*} threshold - Parameter description
- * @returns {*} Return value description
- */
-function checkSpeedViolation(currentSpeedMph, speedLimitMph, threshold = 5) {
-    fetch('/api/speed-violation', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            current_speed_mph: currentSpeedMph,
-            speed_limit_mph: speedLimitMph,
-            warning_threshold_mph: threshold
-        })
-    })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                const violation = data.data;
-                console.log(`[Speed] Status: ${violation.status}, Diff: ${violation.speed_diff_mph} mph`);
-
-                // Announce speed violations via voice if enabled
-                // FIX: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
-                if (violation.status === 'exceeding' && voiceAnnouncementsEnabled) {
-                    speakMessage(`⚠️ Exceeding speed limit by ${violation.speed_diff_mph} mph`);
-                }
-            }
-        })
-        .catch(error => console.error('Error checking speed violation:', error));
 }
 
 // Initialize Phase 2 features on page load
@@ -12685,21 +12188,11 @@ function voyagrBindFabLongPressHint(el) {
     );
 }
 
-function syncRoadReportSpeedFieldsVisibility() {
-    const sel = document.getElementById('roadReportType');
-    const box = document.getElementById('roadReportSpeedFields');
-    if (!sel || !box) return;
-    box.style.display = sel.value === 'speed_limit_correction' ? 'block' : 'none';
-}
-
 function openRoadReportModal() {
     const m = document.getElementById('roadReportModal');
     if (!m) return;
     const notes = document.getElementById('roadReportNotes');
     if (notes) notes.value = '';
-    const unitSel = document.getElementById('roadReportSpeedUnit');
-    if (unitSel) unitSel.value = (typeof distanceUnit !== 'undefined' && distanceUnit === 'mi') ? 'mph' : 'kmh';
-    syncRoadReportSpeedFieldsVisibility();
     m.style.display = 'block';
 }
 
@@ -12717,18 +12210,7 @@ async function submitRoadReport() {
     }
     const typeEl = document.getElementById('roadReportType');
     const hazard_type = typeEl ? typeEl.value : 'other';
-    let description = (document.getElementById('roadReportNotes') && document.getElementById('roadReportNotes').value) || '';
-    if (hazard_type === 'speed_limit_correction') {
-        const v = document.getElementById('roadReportSpeedValue');
-        const u = document.getElementById('roadReportSpeedUnit');
-        const num = v && v.value ? parseInt(v.value, 10) : NaN;
-        if (!Number.isFinite(num) || num < 5) {
-            showStatus('Enter the speed limit number you see on the road.', 'warning');
-            return;
-        }
-        const unit = u && u.value === 'kmh' ? 'km/h' : 'mph';
-        description = `Posted limit observed: ${num} ${unit}. ${description}`.trim();
-    }
+    const description = (document.getElementById('roadReportNotes') && document.getElementById('roadReportNotes').value) || '';
     try {
         const r = await fetch('/api/hazards/report', {
             method: 'POST',
@@ -12897,7 +12379,6 @@ if (!navigator.onLine) {
 const ROUTE_DB_NAME = 'voyagr-nav';
 const ROUTE_DB_VERSION = 1;
 const ROUTE_STORE = 'active_route';
-const SPEED_CACHE_STORE = 'speed_limits';
 
 function _openRouteDB() {
     return new Promise((resolve, reject) => {
@@ -12906,9 +12387,6 @@ function _openRouteDB() {
             const db = e.target.result;
             if (!db.objectStoreNames.contains(ROUTE_STORE)) {
                 db.createObjectStore(ROUTE_STORE, { keyPath: 'id' });
-            }
-            if (!db.objectStoreNames.contains(SPEED_CACHE_STORE)) {
-                db.createObjectStore(SPEED_CACHE_STORE, { keyPath: 'key' });
             }
         };
         req.onsuccess = () => resolve(req.result);
@@ -12979,37 +12457,6 @@ function schedulePersistRoute() {
         _persistRouteTimer = null;
         persistActiveRoute();
     }, 5000);
-}
-
-// ===== OFFLINE SPEED LIMIT CACHE =====
-async function cacheSpeedLimit(lat, lon, speedLimit, source) {
-    try {
-        const key = `${lat.toFixed(4)}_${lon.toFixed(4)}`;
-        const db = await _openRouteDB();
-        const tx = db.transaction(SPEED_CACHE_STORE, 'readwrite');
-        tx.objectStore(SPEED_CACHE_STORE).put({
-            key, speedLimit, source, cachedAt: Date.now()
-        });
-        await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
-        db.close();
-    } catch (e) { /* ignore */ }
-}
-
-async function getCachedSpeedLimit(lat, lon) {
-    try {
-        const key = `${lat.toFixed(4)}_${lon.toFixed(4)}`;
-        const db = await _openRouteDB();
-        const tx = db.transaction(SPEED_CACHE_STORE, 'readonly');
-        const req = tx.objectStore(SPEED_CACHE_STORE).get(key);
-        const result = await new Promise((res, rej) => {
-            req.onsuccess = () => res(req.result);
-            req.onerror = () => rej(req.error);
-        });
-        db.close();
-        if (!result) return null;
-        if (Date.now() - result.cachedAt > 24 * 60 * 60 * 1000) return null;
-        return result;
-    } catch (e) { return null; }
 }
 
 // ===== PHASE 2: Restore app state on page load =====
@@ -14580,11 +14027,7 @@ function processVoiceCommand(command) {
         body: JSON.stringify({
             command: command,
             lat: currentLat,
-            lon: currentLon,
-            speed_limit_mph_hint:
-                typeof currentSpeedLimitMph !== 'undefined' && currentSpeedLimitMph > 0
-                    ? currentSpeedLimitMph
-                    : null
+            lon: currentLon
         })
     })
         .then(response => response.json())
@@ -14663,16 +14106,6 @@ function handleVoiceAction(data) {
                     }
                 })
                 .catch((e) => console.warn('[Voice] Hazard report failed:', e));
-            break;
-
-        case 'confirm_speed_display':
-            speakMessage(data.message || 'Speed limit noted.', 'high');
-            postSpeedLimitFeedback('confirmed', { source: 'voice_confirm' });
-            break;
-
-        case 'reject_speed_display':
-            speakMessage(data.message || 'Thanks, we noted the limit may be wrong.', 'high');
-            postSpeedLimitFeedback('wrong_sign', { source: 'voice_reject' });
             break;
 
         case 'reroute':
@@ -14763,10 +14196,7 @@ window.addEventListener('load', () => {
     console.log('[Voice] Loading voice preferences...');
     loadVoicePreferences();
     loadPorcupineWakeUi();
-    const roadReportTypeSel = document.getElementById('roadReportType');
-    if (roadReportTypeSel) {
-        roadReportTypeSel.addEventListener('change', syncRoadReportSpeedFieldsVisibility);
-    }
+
     void (async () => {
         if (
             localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true' &&
@@ -15286,9 +14716,6 @@ function startGPSTracking() {
             checkNearbyHazards(lat, lon);
             checkRouteHazardCamerasAhead(lat, lon);
 
-            // Check for variable speed limits
-            updateVariableSpeedLimit(lat, lon, 'motorway', currentVehicleType);
-
             // Apply smart zoom with turn detection
             let distanceToNextTurn = null;
 
@@ -15318,13 +14745,7 @@ function startGPSTracking() {
 
             applySmartZoomWithAnimation(speedMph, distanceToNextTurn, 'motorway', lat, lon);
 
-            // ===== PHASE 2: Update lane guidance and speed warnings =====
-            // Convert speed from m/s to mph (already done above)
-            const speedMphFormatted = speedMph.toFixed(1);
-
-            // Heading already calculated above when creating vehicle marker
-
-            // Update lane guidance if navigating (FIX: extract maneuver direction from Valhalla type)
+            // Update lane guidance if navigating
             if (routeInProgress && currentRouteSteps.length > 0) {
                 const nextStep = currentRouteSteps[currentStepIndex];
                 let maneuverDir = 'straight';
@@ -15350,63 +14771,8 @@ function startGPSTracking() {
                 updateLaneGuidance(lat, lon, heading, maneuverDir, exitCount);
             }
 
-            // ===== UPDATE SPEED WIDGET =====
-            // Pick the maneuver whose shape range contains our snapped position. This is the
-            // edge currently under the wheels, NOT the upcoming maneuver — the previous code
-            // used `currentRouteSteps[currentStepIndex]` which advances to the next turn well
-            // before the driver reaches it, so the displayed limit and road class belonged to
-            // the road *after* the next turn instead of the road being driven.
-            const activeManeuverIdx = (routeInProgress && routePolyline && routePolyline.length >= 2)
-                ? getActiveRouteManeuverIndex(lastSnappedRouteIndex)
-                : -1;
-            const activeManeuver = (activeManeuverIdx >= 0 && currentRouteSteps && activeManeuverIdx < currentRouteSteps.length)
-                ? currentRouteSteps[activeManeuverIdx]
-                : null;
+            updateSpeedWidget(smoothGpsSpeedMph(speedMph));
 
-            const roadType = activeManeuverIdx >= 0
-                ? getCurrentRoadType(activeManeuverIdx)
-                : getCurrentRoadType();
-
-            let valhallaSpeedLimitMph = null;
-            if (activeManeuver) {
-                const rawSl = activeManeuver.speed_limit != null ? Number(activeManeuver.speed_limit) : NaN;
-                if (Number.isFinite(rawSl) && rawSl > 0) {
-                    valhallaSpeedLimitMph = normalizeManeuverSpeedLimitMph(
-                        rawSl,
-                        inferRoadClassFromManeuver(activeManeuver),
-                        speedMph
-                    );
-                }
-            }
-
-            // When the active edge changes (crossed a maneuver boundary, e.g. exited the
-            // motorway, or just rerouted), invalidate the API throttle so the next
-            // `fetchSpeedLimitThrottled` call below fires immediately — otherwise the
-            // widget could show the previous edge's limit for several seconds.
-            // NOTE: we also fire when moving from the reset state (-1) to a real edge so
-            // the first edge after a reroute / nav start refreshes promptly.
-            if (activeManeuverIdx !== _lastActiveManeuverIdx) {
-                if (activeManeuverIdx >= 0) {
-                    lastSpeedLimitFetch = 0;
-                    lastSpeedLimitPosition = null;
-                }
-                _lastActiveManeuverIdx = activeManeuverIdx;
-            }
-
-            const shownLimit = (currentSpeedLimitMph && currentSpeedLimitMph > 0)
-                ? currentSpeedLimitMph
-                : (valhallaSpeedLimitMph && valhallaSpeedLimitMph > 0 ? valhallaSpeedLimitMph : null);
-            const displaySpeedMph = smoothGpsSpeedMph(speedMph);
-            updateSpeedWidget(displaySpeedMph, shownLimit);
-
-            // Phase-2 speed warning banner — use smoothed speed + active road class (not hardcoded 'local').
-            updateSpeedWarning(lat, lon, displaySpeedMph, roadType);
-
-            // Query speed limit / road name at the TRUE GPS position, not the route-snapped
-            // point. Snapping to the route was sending the OSM lookup to the wrong (often the
-            // old, pre-reroute) road, so the widget reported the wrong limit and street name.
-            // High-accuracy GPS identifies the road actually under the wheels far more reliably.
-            fetchSpeedLimitThrottled(lat, lon, displaySpeedMph, roadType, 0, valhallaSpeedLimitMph);
 
             if (routeInProgress) {
                 fetchRoadNameThrottled(lat, lon);
@@ -18246,9 +17612,6 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     currentStepIndex = resumeStepIdx;
     currentRouteSteps = routeData.maneuvers || [];
     lastTurnDetectRouteVertexIndex = 0;
-    // Reset edge-change tracker so the *first* maneuver of the new route is
-    // correctly flagged as an edge transition (and the API throttle is invalidated).
-    _lastActiveManeuverIdx = -1;
     routeJoinConfirmedForDeviation = false;
     resetVehicleMarkerDisplayState();
     resetNavigationArrivalState();
@@ -18478,8 +17841,6 @@ function stopTurnByTurnNavigation() {
     clearRerouteFailureRetries();
     currentStepIndex = 0;
     currentRouteSteps = [];
-    // Drop the active-edge tracker so a subsequent route doesn't inherit it.
-    _lastActiveManeuverIdx = -1;
     resetVehicleMarkerDisplayState();
     clearPersistedRoute();
     stopGPSTracking();
@@ -19438,8 +18799,7 @@ function togglePreference(pref) {
         'caz': 'avoidCAZ',
         'cameras': 'avoidCameras',
         'trafficLightsAvoid': 'avoidTrafficLights',
-        'railwayCrossingsAvoid': 'avoidRailwayCrossings',
-        'variableSpeedAlerts': 'variableSpeedAlerts'
+        'railwayCrossingsAvoid': 'avoidRailwayCrossings'
     };
 
     const buttonId = buttonIdMap[pref] || ('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1));
@@ -19467,20 +18827,17 @@ function togglePreference(pref) {
 
     // Handle specific preference behaviors
     if (pref === 'caz') {
-        console.log('[Settings] CAZ avoidance:', isActive ? 'enabled' : 'disabled');
-        showStatus(`🚫 CAZ avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
-    } else if (pref === 'variableSpeedAlerts') {
-        console.log('[Settings] Variable speed alerts:', isActive ? 'enabled' : 'disabled');
-        showStatus(`📊 Variable speed alerts ${isActive ? 'enabled' : 'disabled'}`, 'info');
+        console.log('[Settings] Charge zones routing:', isActive ? 'enabled' : 'disabled');
+        showStatus(`Emissions charge zones ${isActive ? 'on' : 'off'} for routing`, 'info');
     } else if (pref === 'cameras') {
-        console.log('[Settings] Optimised routing:', isActive ? 'enabled' : 'disabled');
-        showStatus(`⚡ Optimised routing ${isActive ? 'enabled' : 'disabled'}`, 'info');
+        console.log('[Settings] Smarter routing:', isActive ? 'enabled' : 'disabled');
+        showStatus(`Map-based routing ${isActive ? 'on' : 'off'}`, 'info');
     } else if (pref === 'trafficLightsAvoid') {
-        console.log('[Settings] Avoid traffic lights:', isActive ? 'enabled' : 'disabled');
-        showStatus(`🚦 Traffic light avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
+        console.log('[Settings] Traffic signals routing:', isActive ? 'enabled' : 'disabled');
+        showStatus(`Traffic signals ${isActive ? 'on' : 'off'} for routing`, 'info');
     } else if (pref === 'railwayCrossingsAvoid') {
-        console.log('[Settings] Avoid railway crossings:', isActive ? 'enabled' : 'disabled');
-        showStatus(`🚂 Railway crossing avoidance ${isActive ? 'enabled' : 'disabled'}`, 'info');
+        console.log('[Settings] Level crossings routing:', isActive ? 'enabled' : 'disabled');
+        showStatus(`Level crossings ${isActive ? 'on' : 'off'} for routing`, 'info');
     }
 
     // Save all settings to persistent storage
@@ -19591,14 +18948,13 @@ function loadPreferences() {
         'caz': 'avoidCAZ',
         'cameras': 'avoidCameras',
         'trafficLightsAvoid': 'avoidTrafficLights',
-        'railwayCrossingsAvoid': 'avoidRailwayCrossings',
-        'variableSpeedAlerts': 'variableSpeedAlerts'
+        'railwayCrossingsAvoid': 'avoidRailwayCrossings'
     };
 
     // Preferences that default to TRUE (enabled) when not set
     const defaultEnabledPrefs = ['caz', 'cameras', 'trafficLightsAvoid', 'railwayCrossingsAvoid'];
 
-    const prefs = ['caz', 'cameras', 'trafficLightsAvoid', 'railwayCrossingsAvoid', 'variableSpeedAlerts'];
+    const prefs = ['caz', 'cameras', 'trafficLightsAvoid', 'railwayCrossingsAvoid'];
     prefs.forEach(pref => {
         const saved = localStorage.getItem('pref_' + pref);
         const buttonId = buttonIdMap[pref];
@@ -19606,7 +18962,6 @@ function loadPreferences() {
 
         if (button) {
             // Tolls, CAZ, cameras, traffic lights, railway: default enabled if not set
-            // variableSpeedAlerts: default off if not set
             const isDefaultEnabled = defaultEnabledPrefs.includes(pref);
             const isEnabled = saved === null ? isDefaultEnabled : saved === 'true';
 
