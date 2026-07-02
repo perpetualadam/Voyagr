@@ -51,7 +51,6 @@
 | **Hazards** | GPS update | GPS update | Real-time |
 | **Weather** | On-demand | Automatic | 30 min (nav) / 60 min (idle) |
 | **ETA** | Manual | Automatic | 30 seconds |
-| **Speed Limits** | Static | Static | 24 hours |
 | **ML Predictions** | On-demand | Automatic | 60 min (nav) |
 
 ---
@@ -75,8 +74,8 @@ USER STARTS NAVIGATION
          ├─► Lane Guidance Update (Every GPS update) ✅
          │   └─► Current lane + recommended lane
          │
-         ├─► Speed Warning Update (Every GPS update) ✅
-         │   └─► Compare current speed vs limit
+         ├─► GPS Speed Update (Every GPS update) ✅
+         │   └─► Current speed only (no posted limits)
          │
          ├─► Turn Guidance Update (Every GPS update) ✅
          │   └─► Distance to next turn
@@ -122,7 +121,8 @@ USER STARTS NAVIGATION
          │
          ├─► Lane Guidance Update (Every GPS update) ✅
          │
-         ├─► Speed Warning Update (Every GPS update) ✅
+         ├─► GPS Speed Update (Every GPS update) ✅
+         │   └─► Current speed only (no posted limits)
          │
          ├─► Turn Guidance Update (Every GPS update) ✅
          │

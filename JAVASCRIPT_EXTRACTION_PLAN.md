@@ -40,7 +40,7 @@ The HTML_TEMPLATE in voyagr_web.py contains **5,726 lines of embedded JavaScript
   - Turn-by-turn navigation
   - GPS tracking
   - Location updates
-  - Speed limit detection
+  - GPS speed display
   - Lane guidance
   - Voice announcements
 - **Estimated Lines**: ~1,500

@@ -14,7 +14,7 @@
 - [x] Trip History & Analytics (tracking, statistics)
 - [x] Charging Stations (finder, details, availability)
 - [x] Weather Integration (current conditions, alerts)
-- [x] Speed Limit Detection (road types, warnings)
+- [x] GPS speedometer (GPS-only during nav/tracking)
 - [x] Offline Functionality (works without internet)
 - [x] PWA Features (installable, standalone, notifications)
 - [x] Database (SQLite, local storage)
@@ -34,7 +34,8 @@
 - [x] GET /api/charging-stations - EV charging
 - [x] GET /api/weather - Weather data
 - [x] GET /api/analytics - Statistics
-- [x] GET /api/speed-limit - Speed limits
+
+Legacy (server only, not used by PWA UI): `/api/speed-limit`, `/api/speed-violation`
 
 ### Database Tables ✅
 - [x] trips (13 columns)
@@ -86,7 +87,7 @@ http://localhost:5000
 | Analytics | ✅ | All data | ✅ | ✅ |
 | Charging | ✅ | EV routes | ✅ | ✅ |
 | Weather | ✅ | All routes | ⚠️ | ✅ |
-| Speed Limit | ✅ | All routes | ✅ | ✅ |
+| GPS speed | ✅ | Nav/tracking | ✅ | — |
 | Offline | ✅ | Cached | ✅ | ✅ |
 
 ---

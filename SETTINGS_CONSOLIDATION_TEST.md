@@ -1,5 +1,7 @@
 # Settings Consolidation - Test & Verification
 
+> **PWA note (2026):** The PWA shows **GPS speed only** during navigation. No posted speed limits, over-limit alerts, or variable speed limit settings.
+
 ## ✅ Consolidation Complete
 
 The Voyagr PWA now has a **unified Settings tab** that combines all preferences into one centralized location.
@@ -19,7 +21,6 @@ The Voyagr PWA now has a **unified Settings tab** that combines all preferences 
 - Avoid CAZ (Congestion Charge Zone)
 - Avoid Speed Cameras
 - Avoid Traffic Cameras
-- Variable Speed Alerts
 
 ### 3. 🛣️ Route Preferences
 - Avoid Highways
@@ -119,7 +120,6 @@ All settings are saved to localStorage with these keys:
 - `pref_caz` (true/false)
 - `pref_speedCameras` (true/false)
 - `pref_trafficCameras` (true/false)
-- `pref_variableSpeedAlerts` (true/false)
 
 **Route Preferences:**
 - `routePreferences` (JSON object with all route settings)

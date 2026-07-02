@@ -226,7 +226,7 @@ All features include comprehensive console logging for debugging:
 - `[Voice]` - Voice announcements and commands
 - `[SmartZoom]` - Zoom level changes
 - `[Rerouting]` - Rerouting events
-- `[Speed Limit]` - Speed limit updates
+- `[Speed Widget]` - GPS speed updates
 
 ---
 

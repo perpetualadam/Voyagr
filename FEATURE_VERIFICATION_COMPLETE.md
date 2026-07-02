@@ -1,8 +1,10 @@
 # Voyagr PWA - Feature Verification & Fixes Complete
 
+> **PWA note (2026):** The PWA shows **GPS speed only** during navigation. No posted speed limits, over-limit alerts, or variable speed limit settings.
+
 ## Summary
 
-Investigated all reported missing/broken features. Found that **3 toggles are fully implemented**, **1 feature was missing** (now fixed), and **dark mode CSS is properly implemented**.
+Investigated all reported missing/broken features. Found that **2 toggles are fully implemented**, **1 feature was missing** (now fixed), and **dark mode CSS is properly implemented**.
 
 ---
 
@@ -24,15 +26,7 @@ Investigated all reported missing/broken features. Found that **3 toggles are fu
 - **API:** Calls `/api/app-settings` endpoint
 - **Verification:** Toggle button exists, API integration working, loads predictions when enabled
 
-### 3. Variable Speed Alerts Toggle ✅
-- **Status:** Fully implemented and working
-- **Location:** Settings → Hazard Avoidance section
-- **HTML:** Line 3116-3117
-- **JavaScript:** `togglePreference('variableSpeedAlerts')` function (line 8907)
-- **Storage:** localStorage key `pref_variableSpeedAlerts`
-- **Verification:** Toggle button exists, event handler attached, saves to localStorage
-
-### 4. Dark Mode for Bottom Sheet ✅
+### 3. Dark Mode for Bottom Sheet ✅
 - **Status:** CSS fully implemented
 - **Location:** Lines 2457-2855 in CSS section
 - **CSS Classes:** `body.dark-mode .bottom-sheet`, `.bottom-sheet-content`, `.preferences-section`, etc.
@@ -112,7 +106,6 @@ Investigated all reported missing/broken features. Found that **3 toggles are fu
 - [ ] Open Settings tab
 - [ ] Verify "Avoid CAZ" toggle is visible and clickable
 - [ ] Verify "Smart Route Predictions" toggle is visible and clickable
-- [ ] Verify "Variable Speed Alerts" toggle is visible and clickable
 - [ ] Change route preferences (avoid highways, prefer scenic, etc.)
 - [ ] Click "Recalculate Route" button
 - [ ] Verify route recalculates with new preferences

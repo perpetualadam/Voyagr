@@ -47,11 +47,10 @@ A full-featured Progressive Web App for navigation, route planning, cost estimat
 - **Impact:** Route recommendations
 - **Updates:** Real-time data
 
-### 🚦 Speed Limits
-- **Detection:** Current speed limit display
-- **Road Type:** Identify road classification
-- **Warnings:** Alert when exceeding limit
-- **Guidance:** Lane recommendations
+### 📍 GPS Speedometer
+- **Display:** Current speed from device GPS while navigating or tracking
+- **Units:** mph or km/h (Settings → Units)
+- **Note:** Posted road speed limits are not shown in the PWA. Settings links to third-party apps (e.g. [Map Speed Limits and Alerts](https://play.google.com/store/apps/details?id=com.map.speedlimits)) if you want limit alerts.
 
 ### 📴 Offline Mode
 - **Works Offline:** Full functionality without internet
@@ -118,10 +117,10 @@ POST /api/trip-history
 ### Services
 ```
 GET /api/charging-stations
-GET /api/weather
-GET /api/speed-limit
 GET /api/analytics
 ```
+
+Legacy server endpoints (`/api/speed-limit`, `/api/speed-violation`) exist for backend tooling but are **not used by the PWA UI**, which shows GPS speed only.
 
 See `API_DOCUMENTATION.md` for full details.
 
@@ -157,7 +156,6 @@ OPENWEATHERMAP_API_KEY=your_key_here
 - Energy: 18.5 kWh/100km @ £0.30/kWh
 - Tolls: Enabled
 - CAZ: Enabled
-- Speed Alerts: Enabled
 
 ---
 

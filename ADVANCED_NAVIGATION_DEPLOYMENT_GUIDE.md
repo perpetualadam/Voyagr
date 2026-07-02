@@ -1,5 +1,7 @@
 # Advanced Navigation Features - Deployment Guide
 
+> **PWA note (2026):** Speed limit sections in this guide apply to the **native app (`satnav.py`) and backend APIs only**. The **PWA shows GPS speed only** — it does not deploy or use `speed_limit_detector.py` for user-facing alerts.
+
 ## 🚀 Deployment Checklist
 
 ### Pre-Deployment Verification
@@ -17,10 +19,10 @@
 
 ## 📦 Files to Deploy
 
-### New Modules
+### New Modules (Native / Backend)
 
 ```
-speed_limit_detector.py          (280 lines)
+speed_limit_detector.py          (280 lines — native/backend only)
 lane_guidance.py                 (280 lines)
 ```
 
@@ -56,7 +58,6 @@ vehicle_icons/pedestrian.png
 
 ```
 ADVANCED_NAVIGATION_IMPLEMENTATION_SUMMARY.md
-ADVANCED_NAVIGATION_QUICK_REFERENCE.md
 ADVANCED_NAVIGATION_DEPLOYMENT_GUIDE.md
 ```
 
@@ -172,7 +173,7 @@ for icon in icons:
 print("✅ All vehicle icons present")
 ```
 
-### 4. Functionality Test
+### 4. Functionality Test (Native App — speed limit sections not used by PWA)
 
 ```python
 from satnav import SatNavApp
@@ -220,7 +221,7 @@ python satnav.py
 
 ## 📊 Performance Monitoring
 
-### Monitor Speed Limit Detection
+### Monitor Speed Limit Detection (Native / Backend Only)
 
 ```python
 import time
@@ -295,7 +296,7 @@ Warning: Icon not found at vehicle_icons/triangle.png
 2. Verify triangle.png exists: `ls vehicle_icons/triangle.png`
 3. Check file permissions
 
-### Issue: API Timeout
+### Issue: API Timeout (Native / Backend Speed Limit Module)
 
 ```
 Error querying OSM speed limit: Connection timeout
@@ -364,7 +365,7 @@ Error querying OSM speed limit: Connection timeout
 ## 🎯 Success Criteria
 
 ✅ All 63 tests passing
-✅ Speed limit detection < 100ms
+✅ Speed limit detection < 100ms (native/backend)
 ✅ Lane guidance < 50ms
 ✅ Database tables created
 ✅ Vehicle icons generated

@@ -22,7 +22,7 @@
 
 ### Test Suites
 1. **Route Calculation** (7 tests) - Calculate routes, cost breakdown, preferences
-2. **Navigation** (7 tests) - Turn-by-turn, location updates, speed limits
+2. **Navigation** (7 tests) - Turn-by-turn, location updates, GPS speed display
 3. **Settings** (8 tests) - Units, vehicle type, dark mode, preferences
 4. **Trip History** (8 tests) - Record, details, analytics, export
 5. **Voice Commands** (10 tests) - Recognition, feedback, error handling

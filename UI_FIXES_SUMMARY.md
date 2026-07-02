@@ -1,42 +1,15 @@
-# UI and Default Speed Limit Fixes
+# UI Fixes Summary
 
 **Date**: 2026-01-16  
 **Status**: ✅ COMPLETE
+
+> **PWA speed display:** The PWA shows **GPS speed only**. It does not display posted speed limits or over-limit alerts.
 
 ---
 
 ## 🎯 Issues Fixed
 
-### 1. ✅ Remaining 70 mph Default Speed Limit
-
-**Issue**: The `/api/speed-violation` endpoint still had a hardcoded default of 70 mph, even though the earlier fix (commit 20dd787) changed `/api/speed-limit` to default to 'residential' (30 mph).
-
-**Context**:
-- **Earlier fix (20dd787)**: Changed `/api/speed-limit` road_type default from 'motorway' → 'residential'
-- **This fix**: Changed `/api/speed-violation` speed_limit_mph parameter default from 70 → 30
-
-**Location**: `voyagr_web.py` line 8127
-
-**Before**:
-```python
-speed_limit_mph = int(data.get('speed_limit_mph', 70))
-```
-
-**After**:
-```python
-# FIX: Changed default from 70mph (motorway) to 30mph (residential) for safety
-speed_limit_mph = int(data.get('speed_limit_mph', 30))
-```
-
-**Impact**:
-- Safer default when speed limit data is missing
-- Consistent with `/api/speed-limit` endpoint that now defaults to 30 mph
-- Prevents false "safe" readings on residential roads
-- Completes the speed limit default standardization across all endpoints
-
----
-
-### 2. ✅ Battery Indicator Blocking Speed Widget
+### 1. ✅ Battery Indicator Blocking Speed Widget
 
 **Issue**: Battery percentage indicator was positioned at `top: 10px; right: 10px`, which overlapped with the speed widget at `top: 20px; right: 20px`.
 
@@ -69,7 +42,7 @@ speed_limit_mph = int(data.get('speed_limit_mph', 30))
 
 ---
 
-### 3. ✅ Turn Instructions Showing "--" and "Calculating route..."
+### 2. ✅ Turn Instructions Showing "--" and "Calculating route..."
 
 **Issue**: When navigation started, the turn instruction widget showed placeholder text "--" for distance and "Calculating route..." for instruction, which persisted until the first turn was detected.
 
@@ -99,7 +72,6 @@ speed_limit_mph = int(data.get('speed_limit_mph', 30))
 
 | File | Lines Changed | Description |
 |------|---------------|-------------|
-| `voyagr_web.py` | 8127 | Changed speed violation default from 70 to 30 mph |
 | `voyagr_web.py` | 4663-4664 | Updated turn instruction default text |
 | `static/css/voyagr.css` | 1290 | Moved battery indicator down 80px |
 
@@ -107,24 +79,18 @@ speed_limit_mph = int(data.get('speed_limit_mph', 30))
 
 ## ✅ Testing Checklist
 
-- [ ] Speed violation API returns 30 mph default when no limit provided
 - [ ] Battery indicator appears below speed widget without overlap
+- [ ] Speed widget shows current GPS speed (no posted limit display)
 - [ ] Turn instruction widget shows "Follow Route" / "Continue on current road" by default
 - [ ] Turn instructions update correctly when approaching actual turns
-- [ ] All three widgets remain visible and readable on mobile devices
+- [ ] All widgets remain visible and readable on mobile devices
 
 ---
 
 ## 🔍 Related Files
 
-### Speed Limit Defaults
-All endpoints now consistently default to 30 mph (residential):
-- ✅ `/api/speed-limit` - line 8107 (fixed in commit 20dd787: road_type default 'motorway' → 'residential')
-- ✅ `/api/speed-violation` - line 8127 (fixed in this commit: speed_limit_mph default 70 → 30)
-- ✅ `/api/speed-warning` - line 8996 (uses lookup table with 30 mph fallback)
-
 ### Widget Positioning
-- Speed Widget: `top: 20px; right: 20px` (z-index: 100)
+- Speed Widget: `top: 20px; right: 20px` (z-index: 100) — GPS speed only
 - Battery Indicator: `top: 90px; right: 10px` (z-index: 150)
 - Notification Container: `top: 20px; right: 20px` (z-index: 200)
 
@@ -132,10 +98,8 @@ All endpoints now consistently default to 30 mph (residential):
 
 ## 🎉 Result
 
-All three issues have been resolved:
-1. ✅ No more 70 mph defaults in the codebase
-2. ✅ Battery indicator no longer blocks speed widget
-3. ✅ Turn instructions show user-friendly default text
+Both issues have been resolved:
+1. ✅ Battery indicator no longer blocks speed widget
+2. ✅ Turn instructions show user-friendly default text
 
 **Status**: Ready for deployment
-

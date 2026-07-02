@@ -22,8 +22,7 @@ Successfully consolidated the scattered Preferences and Settings sections in the
 │   ├── Avoid Tolls
 │   ├── Avoid CAZ
 │   ├── Avoid Speed Cameras
-│   ├── Avoid Traffic Cameras
-│   └── Variable Speed Alerts
+│   └── Avoid Traffic Cameras
 │
 ├── 🛣️ Route Preferences
 │   ├── Avoid Highways
@@ -114,7 +113,7 @@ All existing keys still work:
 unit_distance, unit_speed, unit_temperature, unit_currency
 
 // Hazard Avoidance
-pref_tolls, pref_caz, pref_speedCameras, pref_trafficCameras, pref_variableSpeedAlerts
+pref_tolls, pref_caz, pref_speedCameras, pref_trafficCameras
 
 // Route Preferences
 routePreferences (JSON)

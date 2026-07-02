@@ -91,7 +91,6 @@ Updated `window.addEventListener('load')` to:
 - Avoid CAZ
 - Avoid speed cameras
 - Avoid traffic cameras
-- Variable speed alerts
 
 **Display Preferences:**
 - Map theme (standard/satellite/dark)

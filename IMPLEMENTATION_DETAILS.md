@@ -8,8 +8,7 @@ detectUpcomingTurn()           Line 6295  ✅ Fully implemented
 calculateHaversineDistance()   Line 6243  ✅ Fully implemented
 calculateBearing()             Line 6258  ✅ Fully implemented
 calculateTurnDirection()       Line 6274  ✅ Fully implemented
-updateSpeedWidget()            Line 6166  ✅ Fully implemented
-updateVariableSpeedLimit()     Line 6536  ✅ Fully implemented
+updateSpeedWidget()            Line 6166  ✅ GPS speed display (no posted limits)
 announceUpcomingTurn()         Line 7799  ✅ Fully implemented
 announceDistanceToDestination() Line 7668 ✅ Fully implemented
 announceETAUpdate()            Line 7731  ✅ Fully implemented
@@ -138,9 +137,6 @@ deleteRoute()                  Line 5040  ✅ Fully implemented
 - `/api/parking-search` (Line 10189) - POST - Parking search
 
 ### Navigation Features
-- `/api/speed-limit` (Line 9978) - GET - Speed limit detection
-- `/api/speed-violation` (Line 9998) - POST - Speed violation check
-- `/api/speed-warnings` (Line 10434) - GET - Speed warnings
 - `/api/lane-guidance` (Line 10400) - GET - Lane guidance
 - `/api/charging-stations` (Line 9139) - GET - Charging stations
 - `/api/weather` (Line 9906) - GET - Weather data
@@ -179,7 +175,6 @@ All tables initialized in `init_db()` function:
 - `community_hazard_reports` - Community reports
 - `search_history` - Search history
 - `favorite_locations` - Favorite locations
-- `speed_limit_cache` - Speed limit cache
 - `lane_guidance_cache` - Lane guidance cache
 - `app_settings` - App settings
 - `ml_route_predictions` - ML predictions
@@ -238,7 +233,7 @@ function saveAllSettings() {
 1. **Turn-by-Turn Navigation**
    - Test automatic rerouting when off-route
    - Verify voice announcements at correct distances
-   - Check speed limit display accuracy
+   - Verify GPS speed widget shows current speed in user's preferred unit
 
 2. **Persistent Settings**
    - Clear localStorage and verify defaults load

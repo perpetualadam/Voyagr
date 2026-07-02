@@ -1,6 +1,8 @@
 # 🚀 Deployment Instructions for Contabo
 
-**Commit**: `20dd787` - Fix speed limit system  
+> **Scope:** Backend/native speed limit system (`speed_limit_detector.py`, `/api/speed-limit`). The **PWA shows GPS speed only** — it does not call these endpoints or display posted limits.
+
+**Commit**: `20dd787` - Fix speed limit system (backend/native)  
 **Status**: ✅ Committed and pushed to GitHub  
 **Tests**: ✅ 9/9 passed
 
@@ -12,8 +14,8 @@
 2. **LRU Cache** - Max 1000 entries with automatic cleanup
 3. **Overpass API Rate Limiting** - 2 req/s for self-hosted instance
 4. **Error Handling** - Exponential backoff retry (3 attempts)
-5. **Widget Visibility** - Consolidated to single function
-6. **Default Speed Limit** - 70mph → 30mph (safer fallback)
+5. **Widget Visibility** - Consolidated to single function (GPS speed widget — PWA does not show posted limits)
+6. **Default Speed Limit** - 70mph → 30mph (safer fallback for backend API)
 
 ---
 
@@ -161,14 +163,14 @@ OK
 
 ---
 
-## 🌐 Step 10: Test from Browser
+## 🌐 Step 10: Test from Browser (PWA)
 
 1. Open Voyagr in browser: `http://81.0.246.97:5000` (or your domain)
 2. Start navigation
 3. Check browser console for:
-   - `[Speed Limit] Inferred from highway=...`
-   - `[Speed Widget] Visible (tracking: true ...)`
+   - `[Speed Widget] Visible (tracking: true ...)` — GPS speed only
    - No errors or excessive API calls
+4. Confirm the speed widget shows **GPS speed only** — no posted limit or over-limit alert UI
 
 ---
 
@@ -181,7 +183,7 @@ OK
 - [ ] Voyagr application restarted
 - [ ] No errors in logs
 - [ ] Tests pass (optional)
-- [ ] Browser console shows correct behavior
+- [ ] Browser shows GPS speed widget only (no posted limit UI)
 
 ---
 
@@ -225,7 +227,7 @@ Then restart Voyagr.
 
 ## 🎉 Success!
 
-Once all steps are complete, your Voyagr instance will have:
+Once all steps are complete, your Voyagr backend will have:
 - ✅ Accurate smart motorway detection (100m radius)
 - ✅ Efficient caching (max 1000 entries)
 - ✅ Rate-limited Overpass API calls

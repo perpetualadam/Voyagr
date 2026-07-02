@@ -3918,8 +3918,10 @@ HTML_TEMPLATE = '''
     <script defer src="/static/js/modules/navigation/turn-instructions.js?v=20260615a"></script>
     <script defer src="/static/js/modules/navigation/voice-announcements.js?v=20260618a"></script>
     <script defer src="/static/js/modules/navigation/lane-guidance.js?v=20260618a"></script>
-    <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20260618a"></script>
+    <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20260701b"></script>
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260701a"></script>
+    <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20260701a"></script>
+    <script defer src="/static/js/modules/navigation/speed-limit-widget.js?v=20260701a"></script>
     <script defer src="/static/js/modules/map/weather-layer.js?v=20260611a"></script>
     <script defer src="/static/js/modules/ui/toggle-ui.js?v=20260611a"></script>
     <script defer src="/static/js/voyagr-core.js?v=20260619k"></script>
@@ -4435,11 +4437,13 @@ HTML_TEMPLATE = '''
                                 <option value="mph">mph</option>
                             </select>
                         </div>
+
+                        <div class="preference-item">
+                            <span class="preference-label">🚗 Speedometer &amp; limit</span>
+                            <button type="button" class="toggle-switch active" id="speedWidgetToggle" onclick="toggleSpeedWidget()" title="Show GPS speed and posted limit on the map"></button>
+                        </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 12px 0; line-height: 1.45;">
-                            Voyagr shows your <strong>GPS speed only</strong> — not posted speed limits. Speed limits change often and vary by vehicle; we do not show limit signs or over-limit alerts here.
-                            If you want limit signs and warnings, use a dedicated app alongside Voyagr — for example
-                            <a href="https://play.google.com/store/apps/details?id=com.map.speedlimits" target="_blank" rel="noopener noreferrer" style="color: #667eea;">Map Speed Limits and Alerts</a>
-                            on Android, or similar apps such as Waze or Google Maps for limit display and alerts.
+                            The speed widget shows your <strong>GPS speed</strong> and the <strong>posted limit</strong> for your current road (from map data when available). Limits can change and vary by vehicle — always follow road signs.
                         </p>
 
                         <div class="preference-item">
@@ -5507,11 +5511,19 @@ HTML_TEMPLATE = '''
             </div>
         </div>
 
-        <!-- Speed Widget - GPS speedometer (no posted speed limit) -->
+        <!-- Speed Widget - GPS speedometer + posted limit circle -->
         <!-- z-index: 300 in mobile layout hierarchy -->
-        <div id="speedWidget" class="speed-widget" style="position: absolute; top: 20px; right: 20px; z-index: 300; background: rgba(255,255,255,0.95); padding: 12px 16px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); display: none; min-width: 72px; text-align: center; border-left: 4px solid #4285F4;">
-            <div id="speedValue" style="font-size: 42px; font-weight: bold; color: #333; line-height: 1;">0</div>
-            <div id="speedUnitDisplay" style="font-size: 12px; color: #666; margin-top: -4px;">km/h</div>
+        <div id="speedWidget" class="speed-widget" style="position: absolute; top: 20px; right: 20px; z-index: 300; background: rgba(255,255,255,0.95); padding: 12px; border-radius: 16px; box-shadow: 0 4px 15px rgba(0,0,0,0.25); display: none; min-width: 100px; text-align: center; border-left: 4px solid #4285F4;">
+            <div style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                <div style="text-align: center;">
+                    <div id="speedValue" style="font-size: 42px; font-weight: bold; color: #333; line-height: 1;">0</div>
+                    <div id="speedUnitDisplay" style="font-size: 12px; color: #666; margin-top: -4px;">km/h</div>
+                </div>
+                <div id="speedLimitCircle" style="width: 50px; height: 50px; border-radius: 50%; border: 4px solid #E53935; background: white; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                    <div id="speedLimitValue" style="font-size: 18px; font-weight: bold; color: #333; line-height: 1;">…</div>
+                    <div id="speedLimitUnit" style="font-size: 8px; color: #666;">km/h</div>
+                </div>
+            </div>
         </div>
 
         <!-- Notification Container -->

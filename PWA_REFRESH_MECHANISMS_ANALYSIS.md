@@ -246,18 +246,6 @@ function updateETA() {
 etaRefreshInterval = setInterval(updateETA, 30000);
 ```
 
-### Speed Limit Data
-
-**Current Implementation**:
-- **Source**: Mock data (road type based)
-- **Refresh**: Static (no refresh)
-- **Cache**: None
-
-**Recommended Improvements**:
-- Use OpenStreetMap for real speed limits
-- Cache for 24 hours (speed limits rarely change)
-- Update on route recalculation
-
 ### ML Predictions
 
 **Current Implementation**:
@@ -281,7 +269,6 @@ etaRefreshInterval = setInterval(updateETA, 30000);
 | **Hazards** | GPS update | 5 min | 10 min | Low |
 | **Weather** | 30 min | 60 min | 30 min | Low |
 | **ETA** | 30 sec | N/A | Real-time | Medium |
-| **Speed Limits** | On route calc | N/A | 24 hours | Very Low |
 | **ML Predictions** | 60 min | On startup | 24 hours | Very Low |
 | **Service Worker** | Disabled | 5-10 min | N/A | Very Low |
 
@@ -311,7 +298,6 @@ etaRefreshInterval = setInterval(updateETA, 30000);
 - [ ] Implement adaptive refresh intervals
 
 **Phase 3 (Low Priority)**:
-- [ ] Real speed limit data from OSM
 - [ ] ML prediction refresh during navigation
 - [ ] Advanced battery optimization
 

@@ -170,8 +170,7 @@ Implement a "Trip History" tab in the PWA to display past trips with:
    - Smart zoom adjusts automatically
    - Turn instructions displayed
    - Lane guidance shown
-   - Speed warnings active
-   - Variable speed limits displayed
+   - GPS speed displayed (current speed only; no posted limits or over-limit alerts)
 
 **Voice Commands Available:**
 - "Start navigation"
@@ -255,7 +254,6 @@ Add Settings tab to PWA with:
 3. **Preferences**
    - Include tolls toggle
    - Avoid CAZ toggle
-   - Speed alerts toggle
    - Smart zoom toggle
 
 ---

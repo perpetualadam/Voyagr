@@ -1,5 +1,7 @@
 # Voyagr PWA - Manual UI Testing Guide
 
+> **PWA note (2026):** The PWA shows **GPS speed only** during navigation. It does not display posted speed limits, over-limit alerts, or variable speed limit settings.
+
 ## How to Test UI Elements
 
 ### Prerequisites
@@ -40,7 +42,6 @@
 - [ ] **Avoid CAZ**: Click toggle → Should turn green, localStorage shows `pref_caz=true`
 - [ ] **Avoid Speed Cameras**: Click toggle → Should turn green, localStorage shows `pref_speedCameras=true`
 - [ ] **Avoid Traffic Cameras**: Click toggle → Should turn green, localStorage shows `pref_trafficCameras=true`
-- [ ] **Variable Speed Alerts**: Click toggle → Should turn green, localStorage shows `pref_variableSpeedAlerts=true`
 
 ### Persistence Test
 1. Toggle all hazard switches ON

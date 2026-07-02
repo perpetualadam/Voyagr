@@ -210,18 +210,9 @@ etaRefreshInterval = setInterval(() => {
 }, 30000); // 30 seconds
 ```
 
-### Speed Limit Data - Is This Static or Does It Update?
+### Speed Limit Data
 
-**Current Implementation**:
-- **Source**: Mock data (road-type based)
-- **Refresh**: Static (no refresh)
-- **Accuracy**: Low (generic values)
-
-**Recommended improvements**:
-- **Source**: OpenStreetMap (real speed limits)
-- **Refresh**: On route recalculation
-- **Cache**: 24 hours (speed limits rarely change)
-- **Accuracy**: High (actual road speed limits)
+**Not applicable to PWA.** The PWA shows GPS speed only and does not refresh or display posted speed limits. Backend `/api/speed-limit` may exist but is unused by the PWA.
 
 ### ML Predictions - When Do These Refresh?
 
@@ -249,7 +240,6 @@ etaRefreshInterval = setInterval(() => {
 | **Hazards** | GPS update | Safety critical | Low |
 | **Weather** | 30 min | Safety/comfort | Low |
 | **ETA** | 30 sec | Real-time arrival | Low |
-| **Speed Limits** | On route calc | Rarely change | None |
 | **ML Predictions** | 60 min | Route optimization | Low |
 | **Service Worker** | 5-10 min | App updates | Very Low |
 
@@ -261,7 +251,6 @@ etaRefreshInterval = setInterval(() => {
 | **Hazards** | 5 min | Awareness | Very Low |
 | **Weather** | 60 min | General awareness | Very Low |
 | **ETA** | N/A | Not needed | None |
-| **Speed Limits** | N/A | Not needed | None |
 | **ML Predictions** | On startup | Load suggestions | Very Low |
 | **Service Worker** | 5-10 min | App updates | Very Low |
 
@@ -301,7 +290,6 @@ etaRefreshInterval = setInterval(() => {
 
 **Phase 3 (Low Priority)** - 40 minutes:
 - [ ] Adaptive refresh intervals based on battery
-- [ ] Real speed limit data from OSM
 - [ ] ML prediction refresh during navigation
 
 **Total estimated time**: ~2.5 hours

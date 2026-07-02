@@ -41,7 +41,7 @@
 ### Phase 6: Advanced Features ✅
 - [x] Charging Station Finder
 - [x] Weather Integration
-- [x] Speed Limit Detection
+- [x] GPS speedometer (GPS-only; no posted limit display)
 - [x] Offline Functionality
 - [x] Background Sync
 
@@ -71,8 +71,9 @@
 ### Services
 - `GET /api/charging-stations` - Find charging stations
 - `GET /api/weather` - Get weather data
-- `GET /api/speed-limit` - Get speed limit info
 - `GET /api/analytics` - Get trip statistics
+
+Legacy (not used by PWA UI): `GET /api/speed-limit`, `GET /api/speed-violation`
 
 ### PWA
 - `GET /manifest.json` - PWA manifest

@@ -36,7 +36,7 @@
 - Start navigation from calculated route
 - Display turn-by-turn instructions
 - Update location during navigation
-- Display speed limit during navigation
+- Display GPS speed during navigation
 - Allow pause/resume navigation
 - End navigation
 - Handle navigation errors

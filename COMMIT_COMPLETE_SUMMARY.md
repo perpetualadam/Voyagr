@@ -17,7 +17,7 @@
 - `buildozer.spec` - Android build config
 
 ### Supporting Modules (10 files)
-- Hazard detection, speed limits, lane guidance
+- Hazard detection, lane guidance
 - Vehicle profiles, charging stations, maintenance
 - 4 ML prediction modules
 

@@ -1,0 +1,11 @@
+---
+description: Voyagr coding standards — modular changes, no duplication, spec-driven tests
+alwaysApply: true
+---
+
+# Voyagr development standards
+
+- **Modular additions**: Put reusable navigation logic in `static/js/modules/navigation/` with pure helpers and a `Voyagr*` global. Keep `voyagr-app.js` as orchestration (DOM, network, state), not duplicated algorithms.
+- **No duplicate code**: Before adding logic, search for an existing module (`speed-gps.js`, `hazard-alerts.js`, `speed-limit-widget.js`, `reroute-decision.js`, etc.) and extend or delegate to it.
+- **Test intended behaviour**: Jest tests must assert what the product should do (units, offline route hazards, reroute debounce), not mirror bugs or tautologies. Prefer testing modules directly.
+- **Do not break the app**: Minimal diffs; match existing naming and patterns; run `npm test` after navigation changes.

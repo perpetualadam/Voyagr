@@ -44,11 +44,11 @@
 - **Route Impact:** Adjust routes based on weather
 - **Real-time Updates:** Live weather data
 
-### 7. **Speed Limit Detection** 🚦
-- **Speed Limits:** Current speed limit display
-- **Road Type:** Identify road type (motorway, A-road, etc.)
-- **Speed Warnings:** Alert when exceeding limit
-- **Lane Guidance:** Recommended lane for upcoming turns
+### 7. **GPS Speedometer** 📍
+- **GPS Speed:** Current speed from device GPS during navigation or tracking
+- **Units:** mph or km/h (Settings → Units)
+- **Lane Guidance:** Recommended lane for upcoming turns (separate from speed display)
+- **No posted limits:** The PWA does not show road speed limits or over-limit alerts; Settings links to third-party limit-alert apps
 
 ### 8. **Offline Functionality** 📴
 - **Offline Maps:** Cached map tiles
@@ -146,14 +146,8 @@ GET /api/weather?lat=51.5074&lon=-0.1278
 GET /api/analytics
 ```
 
-### Speed Limit
-```
-GET /api/speed-limit?lat=51.5074&lon=-0.1278
-```
+Legacy: `GET /api/speed-limit` remains on the server for tooling but is not called by the PWA (GPS speed only).
 
----
-
-## 🔧 Configuration
 
 ### Environment Variables (.env)
 ```
@@ -168,7 +162,6 @@ OPENWEATHERMAP_API_KEY=your_key_here
 - **Fuel Price:** £1.40/L
 - **Energy Efficiency:** 18.5 kWh/100km
 - **Electricity Price:** £0.30/kWh
-- **Speed Alert Threshold:** 8 km/h over limit
 
 ---
 

@@ -230,7 +230,6 @@
 - [ ] Toll costs calculated
 - [ ] Fuel costs calculated
 - [ ] CAZ charges calculated
-- [ ] Speed limits respected
 
 ### Pedestrian Mode
 - [ ] Toggle "Pedestrian (Walking)" works
@@ -249,13 +248,6 @@
 ---
 
 ## 7. Alerts & Notifications
-
-### Speed Alerts
-- [ ] Speed alert toggle works
-- [ ] Alert triggers when speeding
-- [ ] Notification shows current/limit speeds
-- [ ] Voice alert plays (if enabled)
-- [ ] Alert cooldown prevents spam (5 seconds)
 
 ### Traffic Alerts
 - [ ] Traffic alert toggle works

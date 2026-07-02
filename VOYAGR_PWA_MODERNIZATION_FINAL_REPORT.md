@@ -67,7 +67,7 @@ Successfully completed comprehensive modernization of the Voyagr Progressive Web
 - Vehicle management (get, create)
 - Trip history (get, save)
 - Voice features (speak, command)
-- Analytics, speed limits, weather
+- Analytics, weather
 
 **Existing Tests**: `test_pwa_voice_features.py`
 - **22 voice feature tests** - 100% passing
@@ -183,7 +183,6 @@ Voice Feature Tests: 22/22 ✅
 - `/api/vehicles` - Vehicle management
 - `/api/trip-history` - Trip tracking
 - `/api/analytics` - Analytics
-- `/api/speed-limit` - Speed limits
 - `/api/weather` - Weather data
 - Plus 6 more endpoints
 

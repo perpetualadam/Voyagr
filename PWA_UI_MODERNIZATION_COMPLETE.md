@@ -85,7 +85,7 @@ Successfully modernized the Voyagr PWA with a full-screen map layout, sliding bo
   - Vehicle management (get, create)
   - Trip history (get, save)
   - Voice features (speak, command)
-  - Analytics, speed limits, weather
+  - Analytics, weather
 
 **Existing Tests:**
 - `test_pwa_voice_features.py` - 22/22 passing ✅
@@ -187,7 +187,6 @@ Successfully modernized the Voyagr PWA with a full-screen map layout, sliding bo
 - `/api/vehicles` - Vehicle management
 - `/api/trip-history` - Trip tracking
 - `/api/analytics` - Analytics
-- `/api/speed-limit` - Speed limits
 - `/api/weather` - Weather data
 
 ---

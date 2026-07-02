@@ -2,14 +2,16 @@
 **Date**: October 29, 2025  
 **Status**: ✅ COMPLETE
 
+> **PWA note (2026):** The Voyagr PWA displays **GPS speed only** during navigation. It does not show posted speed limits, over-limit alerts, or variable speed limit UI. Backend endpoints such as `/api/speed-limit` may exist but are not used by the PWA. The speed alert system below applies to the **native app (`satnav.py`)** only.
+
 ---
 
 ## 🎯 FEATURES IMPLEMENTED
 
-### Feature 1: Speed Limit Alert System ✅ COMPLETE
+### Feature 1: Speed Limit Alert System ✅ COMPLETE (Native App Only)
 
 **What Was Added:**
-A real-time speeding alert system that monitors vehicle speed from GPS data and triggers alerts when exceeding speed limits.
+A real-time speeding alert system in the native app that monitors vehicle speed from GPS data and triggers alerts when exceeding posted speed limits.
 
 **Implementation Details:**
 

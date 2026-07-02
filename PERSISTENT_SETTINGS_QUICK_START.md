@@ -11,7 +11,7 @@ Everything in the Settings tab:
 - **Vehicle**: Car type (petrol/electric/motorcycle/truck/van)
 - **Routing**: Mode (auto/walk/bike)
 - **Route Preferences**: Avoid highways, scenic routes, quiet roads, unpaved roads, optimization type, max detour
-- **Hazards**: Tolls, CAZ, speed cameras, traffic cameras, variable speed alerts
+- **Hazards**: Tolls, CAZ, speed cameras, traffic cameras
 - **Display**: Map theme (standard/satellite/dark), smart zoom on/off
 
 ## 🚀 How to Use

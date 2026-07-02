@@ -19,6 +19,8 @@ function tick(overrides) {
         routeJoinConfirmed: true,
         deviationStartTime: null,
         lastRerouteTime: 0,
+        lastRerouteAttemptTime: 0,
+        offRouteStreak: 0,
         now: 1000000
     }, overrides || {});
 }
@@ -109,8 +111,18 @@ describe('decideRouteDeviation — route-join gate', () => {
 });
 
 describe('decideRouteDeviation — deviation timing', () => {
-    test('a fresh deviation starts the dwell timer (waiting)', () => {
-        const d = RD.decideRouteDeviation(tick({ minDistance: 120, deviationStartTime: null }));
+    test('requires consecutive off-route ticks before starting dwell timer', () => {
+        let streak = 0;
+        let d = RD.decideRouteDeviation(tick({ minDistance: 120, offRouteStreak: streak }));
+        expect(d.action).toBe('waiting');
+        expect(d.deviationStartTime).toBeNull();
+        streak = d.offRouteStreak;
+
+        d = RD.decideRouteDeviation(tick({ minDistance: 120, offRouteStreak: streak }));
+        expect(d.deviationStartTime).toBeNull();
+        streak = d.offRouteStreak;
+
+        d = RD.decideRouteDeviation(tick({ minDistance: 120, offRouteStreak: streak }));
         expect(d.action).toBe('waiting');
         expect(d.deviationStartTime).toBe(1000000);
         expect(d.shouldReroute).toBe(false);
@@ -119,7 +131,10 @@ describe('decideRouteDeviation — deviation timing', () => {
     test('still waiting before the dwell threshold elapses', () => {
         const start = 1000000;
         const d = RD.decideRouteDeviation(tick({
-            minDistance: 120, deviationStartTime: start, now: start + 9000
+            minDistance: 120,
+            deviationStartTime: start,
+            offRouteStreak: 3,
+            now: start + 9000
         }));
         expect(d.action).toBe('waiting');
         expect(d.deviationStartTime).toBe(start);
@@ -128,24 +143,34 @@ describe('decideRouteDeviation — deviation timing', () => {
     test('reroutes once deviated past threshold for long enough and debounce is clear', () => {
         const start = 1000000;
         const d = RD.decideRouteDeviation(tick({
-            minDistance: 120, deviationStartTime: start, now: start + 10000, lastRerouteTime: 0
+            minDistance: 120,
+            deviationStartTime: start,
+            offRouteStreak: 3,
+            now: start + 10000,
+            lastRerouteTime: 0,
+            lastRerouteAttemptTime: 0
         }));
         expect(d.action).toBe('reroute');
         expect(d.shouldReroute).toBe(true);
-        expect(d.deviationStartTime).toBeNull(); // reset after reroute
-        expect(d.lastRerouteTime).toBe(start + 10000);
+        expect(d.deviationStartTime).toBeNull();
+        expect(d.lastRerouteAttemptTime).toBe(start + 10000);
+        expect(d.lastRerouteTime).toBe(0);
         expect(d.deviationDuration).toBe(10000);
     });
 
-    test('debounced when a reroute fired too recently', () => {
+    test('debounced when a reroute attempt fired too recently', () => {
         const start = 1000000;
         const now = start + 10000;
         const d = RD.decideRouteDeviation(tick({
-            minDistance: 120, deviationStartTime: start, now: now, lastRerouteTime: now - 1000
+            minDistance: 120,
+            deviationStartTime: start,
+            offRouteStreak: 3,
+            now: now,
+            lastRerouteAttemptTime: now - 1000
         }));
         expect(d.action).toBe('debounced');
         expect(d.shouldReroute).toBe(false);
-        expect(d.deviationStartTime).toBe(start); // timer kept, not reset
+        expect(d.deviationStartTime).toBe(start);
     });
 
     test('the accuracy-widened threshold keeps a noisy-but-on-road fix on route', () => {
@@ -169,7 +194,7 @@ describe('decideRouteDeviation — custom constants', () => {
         const constants = Object.assign({}, C, { DEVIATION_TIME_THRESHOLD_MS: 2000 });
         const start = 1000000;
         const d = RD.decideRouteDeviation(tick({
-            minDistance: 120, deviationStartTime: start, now: start + 2500, constants: constants
+            minDistance: 120, deviationStartTime: start, offRouteStreak: 3, now: start + 2500, constants: constants
         }));
         expect(d.action).toBe('reroute');
     });

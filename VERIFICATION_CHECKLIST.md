@@ -1,5 +1,7 @@
 # Pre-Commit Verification Checklist
 
+> **Scope:** Backend/native speed limit system verification. The **PWA shows GPS speed only** — no posted limits or over-limit alerts in the web UI.
+
 ## ✅ Code Changes
 
 ### speed_limit_detector.py
@@ -21,6 +23,7 @@
 - [x] All widget show/hide calls use consolidated function
 - [x] Error handling with HTTP status check
 - [x] Retry timeout management
+- [x] GPS speed widget only — no posted speed limit display in PWA
 
 ### .env.example
 - [x] Added `OVERPASS_API_URL` documentation

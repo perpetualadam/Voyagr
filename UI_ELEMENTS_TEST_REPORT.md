@@ -1,5 +1,7 @@
 # Voyagr PWA - UI Elements Functionality Test Report
 
+> **PWA note (2026):** The PWA shows **GPS speed only** during navigation. No posted speed limits, over-limit alerts, or variable speed limit UI.
+
 ## Executive Summary
 ✅ **ALL UI ELEMENTS ARE FUNCTIONAL** - Comprehensive investigation confirms all interactive elements on Route Preview screen and Settings tab are properly implemented with correct event handlers, CSS styling, and JavaScript functions.
 
@@ -36,7 +38,6 @@
 | Avoid CAZ | avoidCAZ | togglePreference('caz') | pref_caz | ✅ |
 | Avoid Speed Cameras | avoidSpeedCameras | togglePreference('speedCameras') | pref_speedCameras | ✅ |
 | Avoid Traffic Cameras | avoidTrafficCameras | togglePreference('trafficCameras') | pref_trafficCameras | ✅ |
-| Variable Speed Alerts | variableSpeedAlerts | togglePreference('variableSpeedAlerts') | pref_variableSpeedAlerts | ✅ |
 
 ### Unit Preference Selectors
 | Selector | Function | localStorage | Status |

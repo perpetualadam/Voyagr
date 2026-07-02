@@ -1,5 +1,7 @@
 # Advanced Navigation Features - Final Report
 
+> **PWA note (2026):** Variable speed limit recognition and speed violation alerts are **native app / backend** features only. The **PWA shows GPS speed only** — no posted limits, over-limit alerts, or variable speed limit UI. Lane guidance sections below also apply to the native app unless noted otherwise.
+
 ## 🎉 PROJECT COMPLETE & PRODUCTION READY ✅
 
 **Date:** 2025-10-28  
@@ -16,7 +18,7 @@ Successfully implemented **two advanced navigation features** plus **additional 
 
 ### Key Achievements
 
-✅ **Variable Speed Limit Recognition** - Real-time speed limit detection with UK smart motorway support  
+✅ **Variable Speed Limit Recognition** - Real-time speed limit detection with UK smart motorway support (**native app / backend — not PWA UI**)  
 ✅ **Intelligent Lane Guidance System** - Lane-level navigation with visual and voice guidance  
 ✅ **Additional Vehicle Icons** - Triangle icon and bicycle as vehicle type  
 ✅ **100% Test Coverage** - 63 comprehensive tests, all passing  
@@ -43,7 +45,7 @@ Successfully implemented **two advanced navigation features** plus **additional 
 
 ## 🎯 Features Implemented
 
-### 1. Variable Speed Limit Recognition
+### 1. Variable Speed Limit Recognition (Native App / Backend Only)
 
 **Module:** `speed_limit_detector.py`
 
@@ -168,19 +170,13 @@ Successfully implemented **two advanced navigation features** plus **additional 
    - Database schema details
    - Integration information
 
-2. **ADVANCED_NAVIGATION_QUICK_REFERENCE.md**
-   - Quick start guide
-   - API reference
-   - Configuration options
-   - Troubleshooting
-
-3. **ADVANCED_NAVIGATION_DEPLOYMENT_GUIDE.md**
+2. **ADVANCED_NAVIGATION_DEPLOYMENT_GUIDE.md**
    - Installation steps
    - Verification procedures
    - Rollback procedures
-   - Performance monitoring
+   - Performance monitoring (native/backend APIs where applicable)
 
-4. **ADVANCED_NAVIGATION_FINAL_REPORT.md** (this file)
+3. **ADVANCED_NAVIGATION_FINAL_REPORT.md** (this file)
    - Project summary
    - Implementation statistics
    - Test results
@@ -264,9 +260,8 @@ Successfully implemented **two advanced navigation features** plus **additional 
 - car.png, electric.png, motorcycle.png, truck.png
 - van.png, bicycle.png, pedestrian.png, triangle.png
 
-### Documentation (4)
+### Documentation (3)
 - ADVANCED_NAVIGATION_IMPLEMENTATION_SUMMARY.md
-- ADVANCED_NAVIGATION_QUICK_REFERENCE.md
 - ADVANCED_NAVIGATION_DEPLOYMENT_GUIDE.md
 - ADVANCED_NAVIGATION_FINAL_REPORT.md
 

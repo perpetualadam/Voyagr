@@ -41,9 +41,9 @@ C:/Users/Brian/OneDrive/Documents/augment-projects/Voyagr
    - 18 existing hazard tests
 
 ✅ 63/63 Existing Tests PASSING (100%)
-   - Speed Limit Detector: 20 tests
    - Lane Guidance: 26 tests
    - Vehicle Markers: 17 tests
+   - Optional backend: `test_speed_limit_detector.py` (20 tests — not a PWA user feature)
 
 ✅ 83/83 TOTAL TESTS PASSING (100%)
 ✅ 0 REGRESSIONS

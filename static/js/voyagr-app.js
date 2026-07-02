@@ -1604,6 +1604,7 @@ function saveAllSettings() {
         // Navigation automation
         autoTrafficUpdateEnabled: autoTrafficUpdateEnabled,
         autoRerouteOnDeviationEnabled: autoRerouteOnDeviationEnabled,
+        speedWidgetEnabled: speedWidgetEnabled,
 
         // Parking preferences
         parkingPreferences: {
@@ -1728,6 +1729,10 @@ function loadAllSettings() {
             if (settings.autoRerouteOnDeviationEnabled !== undefined) {
                 autoRerouteOnDeviationEnabled = settings.autoRerouteOnDeviationEnabled;
                 localStorage.setItem('autoRerouteOnDeviation', autoRerouteOnDeviationEnabled ? 'true' : 'false');
+            }
+            if (settings.speedWidgetEnabled !== undefined) {
+                speedWidgetEnabled = !!settings.speedWidgetEnabled;
+                localStorage.setItem('speedWidgetEnabled', speedWidgetEnabled ? 'true' : 'false');
             }
 
             // Restore parking preferences
@@ -1931,6 +1936,8 @@ function applySettingsToUI() {
                 autoRerouteToggle.style.borderColor = '#999';
             }
         }
+
+        applySpeedWidgetToggleUi();
 
         console.log('[Settings] All settings applied to UI');
     } catch (error) {
@@ -7156,6 +7163,14 @@ function updateRouteOnMap(newRoute) {
 
     // Seed progress from current GPS on the new geometry (not index 0).
     resetVehicleMarkerDisplayState();
+    _lastActiveManeuverIdx = -1;
+    currentSpeedLimitMph = null;
+    const slState = _getSpeedLimitFetchState();
+    if (slState) {
+        slState.lastFetchAt = 0;
+        slState.lastPosition = null;
+        slState.currentLimitMph = null;
+    }
     if (currentLat != null && currentLon != null) {
         primeVehicleMarkerOnRoute(currentLat, currentLon);
     } else {
@@ -7176,8 +7191,11 @@ function updateRouteOnMap(newRoute) {
     rerouteAttemptCount = 0;
     postRerouteGraceUntil = Date.now() + POST_REROUTE_GRACE_MS;
     routeJoinConfirmedForDeviation = false;
+    deviationOffRouteStreak = 0;
     lastRerouteTime = Date.now();
+    lastRerouteAttemptTime = Date.now();
     rerouteInProgress = false;
+    clearRerouteFailureRetries();
 
     // Refresh the turn instruction widget immediately with new route data
     if (currentLat && currentLon) {
@@ -10097,6 +10115,16 @@ let currentSpeedMph = 0;
 // GPS speed tracking
 let currentGpsSpeedMph = 0;
 let currentGpsSpeedKmh = 0;
+let currentSpeedLimitMph = null;
+let _speedLimitFetchState = null;
+let _lastActiveManeuverIdx = -1;
+function _getSpeedLimitFetchState() {
+    const SL = _speedLimitWidget();
+    if (!_speedLimitFetchState && SL) {
+        _speedLimitFetchState = SL.createFetchState();
+    }
+    return _speedLimitFetchState;
+}
 // Goals:
 //   1. Hide sub-noise readings while genuinely stationary (GPS can drift to 0.2-0.5 m/s
 //      while parked, which used to flicker the widget between 0 and 1 mph).
@@ -10122,6 +10150,16 @@ let _consecutiveDisplacementMoves = 0;
 /** Unit-tested speed/GPS helpers (modules/navigation/speed-gps.js). */
 function _speedGps() {
     return (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
+}
+
+/** Unit-tested hazard alert helpers (modules/navigation/hazard-alerts.js). */
+function _hazardAlerts() {
+    return (typeof VoyagrHazardAlerts !== 'undefined') ? VoyagrHazardAlerts : null;
+}
+
+/** Unit-tested speed-limit widget helpers (modules/navigation/speed-limit-widget.js). */
+function _speedLimitWidget() {
+    return (typeof VoyagrSpeedLimitWidget !== 'undefined') ? VoyagrSpeedLimitWidget : null;
 }
 
 /**
@@ -10276,9 +10314,10 @@ function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
  * updateSpeedWidget function
  * @function updateSpeedWidget
  * @param {number} currentSpeedInMph - Current GPS speed in MPH (always MPH internally)
+ * @param {number|null} [speedLimitInMph] - Posted limit in MPH when known
  * @returns {void}
  */
-function updateSpeedWidget(currentSpeedInMph) {
+function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
     const widget = document.getElementById('speedWidget');
     if (!widget) return;
 
@@ -10286,13 +10325,37 @@ function updateSpeedWidget(currentSpeedInMph) {
     currentGpsSpeedKmh = currentSpeedInMph * 1.609344;
 
     const SG = _speedGps();
+    const SL = _speedLimitWidget();
     const displaySpeedUnit = getSpeedUnit();
-    const displaySpeed = SG
-        ? SG.mphToDisplaySpeed(currentSpeedInMph, speedUnit)
-        : (speedUnit === 'mph' ? currentSpeedInMph : currentSpeedInMph * 1.609344);
+    const gpsDisplay = SL
+        ? SL.formatSpeedForWidget(currentSpeedInMph, speedUnit, SG)
+        : {
+            value: Math.round(SG ? SG.mphToDisplaySpeed(currentSpeedInMph, speedUnit) : currentSpeedInMph),
+            unitLabel: displaySpeedUnit
+        };
 
-    document.getElementById('speedValue').textContent = Math.round(displaySpeed);
-    document.getElementById('speedUnitDisplay').textContent = displaySpeedUnit;
+    const speedValueEl = document.getElementById('speedValue');
+    const speedUnitEl = document.getElementById('speedUnitDisplay');
+    if (speedValueEl) speedValueEl.textContent = gpsDisplay.value;
+    if (speedUnitEl) speedUnitEl.textContent = gpsDisplay.unitLabel;
+
+    const limitValueEl = document.getElementById('speedLimitValue');
+    const limitUnitEl = document.getElementById('speedLimitUnit');
+    if (limitValueEl && limitUnitEl) {
+        if (speedLimitInMph !== null && speedLimitInMph > 0) {
+            currentSpeedLimitMph = speedLimitInMph;
+            const limitDisplay = SL
+                ? SL.formatSpeedForWidget(speedLimitInMph, speedUnit, SG)
+                : { value: Math.round(speedLimitInMph), unitLabel: displaySpeedUnit };
+            limitValueEl.textContent = limitDisplay.value;
+            limitUnitEl.textContent = limitDisplay.unitLabel;
+            widget.style.borderLeft = '4px solid #4285F4';
+        } else {
+            limitValueEl.textContent = '?';
+            limitUnitEl.textContent = displaySpeedUnit;
+            widget.style.borderLeft = '4px solid #999';
+        }
+    }
 
     updateSpeedWidgetVisibility();
 }
@@ -10416,19 +10479,118 @@ function getManeuverStreetLabel(maneuver, preferCurrentRoad = false) {
 }
 
 /**
+ * Normalize a Valhalla maneuver speed_limit field to mph.
+ * @param {number} rawSl
+ * @param {string|null} roadClass
+ * @param {number} gpsSpeedMph
+ * @returns {number|null}
+ */
+function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
+    const SG = _speedGps();
+    if (SG) return SG.normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph);
+    return null;
+}
+
+/**
+ * Fetch posted speed limit for current GPS position (throttled, offline cache fallback).
+ */
+function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residential', valhallaSpeedLimit = null) {
+    const SL = _speedLimitWidget();
+    const SG = _speedGps();
+    const state = _getSpeedLimitFetchState();
+    if (!SL || !state) return;
+
+    const now = Date.now();
+    if (!SL.shouldFetchSpeedLimit(state, lat, lon, now, calculateDistanceMeters)) {
+        return;
+    }
+
+    state.inFlight = true;
+    state.lastFetchAt = now;
+    state.lastPosition = { lat, lon };
+    const mySeq = ++state.seq;
+
+    const acceptIfFresh = (apply) => {
+        if (mySeq < state.appliedSeq) return;
+        state.appliedSeq = mySeq;
+        apply();
+    };
+
+    const applyLimit = (limitMph) => {
+        const displayLimit = SL.pickDisplaySpeedLimitMph(limitMph, valhallaSpeedLimit);
+        if (limitMph != null) {
+            state.currentLimitMph = limitMph;
+            currentSpeedLimitMph = limitMph;
+        }
+        updateSpeedWidget(currentGpsSpeedMph, displayLimit);
+    };
+
+    const url = SL.buildSpeedLimitApiUrl(lat, lon, roadType, valhallaSpeedLimit);
+    fetch(url)
+        .then((response) => {
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            return response.json();
+        })
+        .then((data) => {
+            acceptIfFresh(() => {
+                const parsed = SL.parseSpeedLimitApiResponse(data, roadType, currentSpeedMph, SG);
+                if (parsed.limitMph != null) {
+                    void cacheSpeedLimit(lat, lon, parsed.limitMph, parsed.source || 'api');
+                }
+                applyLimit(parsed.limitMph);
+            });
+        })
+        .catch(async () => {
+            let fallbackLimit = null;
+            if (_voyagrIsOffline || !navigator.onLine) {
+                try {
+                    const cached = await getCachedSpeedLimit(lat, lon);
+                    fallbackLimit = SL.readCachedLimitMph(cached, now);
+                } catch (_) { /* ignore */ }
+            }
+            if (fallbackLimit == null && Number.isFinite(valhallaSpeedLimit) && valhallaSpeedLimit > 0) {
+                fallbackLimit = valhallaSpeedLimit;
+            }
+            if (fallbackLimit != null) {
+                acceptIfFresh(() => applyLimit(fallbackLimit));
+            }
+        })
+        .finally(() => {
+            state.inFlight = false;
+        });
+}
+
+/**
+ * Sync the settings toggle and map widget visibility with speedWidgetEnabled.
+ */
+function applySpeedWidgetToggleUi() {
+    const toggle = document.getElementById('speedWidgetToggle');
+    if (toggle) {
+        toggle.classList.toggle('active', speedWidgetEnabled);
+        if (speedWidgetEnabled) {
+            toggle.style.background = '#4CAF50';
+            toggle.style.borderColor = '#4CAF50';
+            toggle.style.color = 'white';
+        } else {
+            toggle.style.background = '#ddd';
+            toggle.style.borderColor = '#999';
+            toggle.style.color = '#333';
+        }
+    }
+    _lastSpeedWidgetVisible = null;
+    updateSpeedWidgetVisibility();
+}
+
+/**
  * toggleSpeedWidget function
  * @function toggleSpeedWidget
  * @returns {*} Return value description
  */
 function toggleSpeedWidget() {
     speedWidgetEnabled = !speedWidgetEnabled;
-    const widget = document.getElementById('speedWidget');
-    if (speedWidgetEnabled && isTrackingActive) {
-        widget.style.display = 'block';
-    } else {
-        widget.style.display = 'none';
-    }
-    localStorage.setItem('speedWidgetEnabled', speedWidgetEnabled);
+    localStorage.setItem('speedWidgetEnabled', speedWidgetEnabled ? 'true' : 'false');
+    applySpeedWidgetToggleUi();
+    saveAllSettings();
 }
 
 /**
@@ -12391,8 +12553,9 @@ if (!navigator.onLine) {
 
 // ===== OFFLINE ROUTE PERSISTENCE (IndexedDB) =====
 const ROUTE_DB_NAME = 'voyagr-nav';
-const ROUTE_DB_VERSION = 1;
+const ROUTE_DB_VERSION = 2;
 const ROUTE_STORE = 'active_route';
+const SPEED_CACHE_STORE = 'speed_limits';
 
 function _openRouteDB() {
     return new Promise((resolve, reject) => {
@@ -12402,10 +12565,47 @@ function _openRouteDB() {
             if (!db.objectStoreNames.contains(ROUTE_STORE)) {
                 db.createObjectStore(ROUTE_STORE, { keyPath: 'id' });
             }
+            if (!db.objectStoreNames.contains(SPEED_CACHE_STORE)) {
+                db.createObjectStore(SPEED_CACHE_STORE, { keyPath: 'key' });
+            }
         };
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
     });
+}
+
+async function cacheSpeedLimit(lat, lon, speedLimit, source) {
+    const SL = _speedLimitWidget();
+    if (!SL) return;
+    try {
+        const key = SL.speedLimitCacheKey(lat, lon);
+        const db = await _openRouteDB();
+        const tx = db.transaction(SPEED_CACHE_STORE, 'readwrite');
+        tx.objectStore(SPEED_CACHE_STORE).put({
+            key, speedLimit, source, cachedAt: Date.now()
+        });
+        await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+        db.close();
+    } catch (e) { /* ignore */ }
+}
+
+async function getCachedSpeedLimit(lat, lon) {
+    const SL = _speedLimitWidget();
+    if (!SL) return null;
+    try {
+        const key = SL.speedLimitCacheKey(lat, lon);
+        const db = await _openRouteDB();
+        const tx = db.transaction(SPEED_CACHE_STORE, 'readonly');
+        const req = tx.objectStore(SPEED_CACHE_STORE).get(key);
+        const result = await new Promise((res, rej) => {
+            req.onsuccess = () => res(req.result);
+            req.onerror = () => rej(req.error);
+        });
+        db.close();
+        return result || null;
+    } catch (e) {
+        return null;
+    }
 }
 
 async function persistActiveRoute() {
@@ -14721,9 +14921,8 @@ function startGPSTracking() {
                 checkRouteDeviation(lat, lon, accuracy);
             }
 
-            // Check for hazards nearby (DB) + cameras stored on the active route geometry
-            checkNearbyHazards(lat, lon);
-            checkRouteHazardCamerasAhead(lat, lon);
+            // Hazards: route-embedded alerts work offline; nearby API when online
+            processNavigationHazardAlerts(lat, lon);
 
             // Apply smart zoom with turn detection
             let distanceToNextTurn = null;
@@ -14780,8 +14979,47 @@ function startGPSTracking() {
                 updateLaneGuidance(lat, lon, heading, maneuverDir, exitCount);
             }
 
-            updateSpeedWidget(smoothGpsSpeedMph(speedMph));
+            const displaySpeedMph = smoothGpsSpeedMph(speedMph);
 
+            if (routeInProgress || isTrackingActive) {
+                const activeManeuverIdx = (routeInProgress && routePolyline && routePolyline.length >= 2)
+                    ? getActiveRouteManeuverIndex(lastSnappedRouteIndex)
+                    : -1;
+                const activeManeuver = (activeManeuverIdx >= 0 && currentRouteSteps && activeManeuverIdx < currentRouteSteps.length)
+                    ? currentRouteSteps[activeManeuverIdx]
+                    : null;
+                const roadType = activeManeuverIdx >= 0
+                    ? getCurrentRoadType(activeManeuverIdx)
+                    : getCurrentRoadType();
+
+                let valhallaSpeedLimitMph = null;
+                if (activeManeuver) {
+                    const rawSl = activeManeuver.speed_limit != null ? Number(activeManeuver.speed_limit) : NaN;
+                    if (Number.isFinite(rawSl) && rawSl > 0) {
+                        valhallaSpeedLimitMph = normalizeManeuverSpeedLimitMph(
+                            rawSl, activeManeuver.road_class || roadType, displaySpeedMph
+                        );
+                    }
+                }
+
+                if (activeManeuverIdx >= 0 && activeManeuverIdx !== _lastActiveManeuverIdx) {
+                    _lastActiveManeuverIdx = activeManeuverIdx;
+                    const state = _getSpeedLimitFetchState();
+                    if (state) {
+                        state.lastFetchAt = 0;
+                        state.lastPosition = null;
+                    }
+                }
+
+                const SL = _speedLimitWidget();
+                const shownLimit = SL
+                    ? SL.pickDisplaySpeedLimitMph(currentSpeedLimitMph, valhallaSpeedLimitMph)
+                    : (currentSpeedLimitMph && currentSpeedLimitMph > 0 ? currentSpeedLimitMph : valhallaSpeedLimitMph);
+                updateSpeedWidget(displaySpeedMph, shownLimit);
+                fetchSpeedLimitThrottled(lat, lon, displaySpeedMph, roadType, valhallaSpeedLimitMph);
+            } else {
+                updateSpeedWidget(displaySpeedMph, null);
+            }
 
             if (routeInProgress) {
                 fetchRoadNameThrottled(lat, lon);
@@ -15733,13 +15971,15 @@ function announceUpcomingTurn(turnInfo) {
 
 // Rerouting debounce variables
 let lastRerouteTime = 0;
-const REROUTE_DEBOUNCE_MS = 30000; // Wait 30 seconds between reroute attempts
+let lastRerouteAttemptTime = 0;
+const REROUTE_DEBOUNCE_MS = 30000;
 let lastRerouteDeviation = 0;
-let deviationStartTimeCheck = null; // Track when deviation started
-let rerouteAttemptCount = 0; // Track reroute attempts for logging
+let deviationStartTimeCheck = null;
+let deviationOffRouteStreak = 0;
+let rerouteAttemptCount = 0;
 let rerouteInProgress = false;
 let postRerouteGraceUntil = 0;
-const POST_REROUTE_GRACE_MS = 45000;
+const POST_REROUTE_GRACE_MS = 90000;
 let lastRerouteAnnouncementTime = 0;
 const REROUTE_ANNOUNCE_MIN_INTERVAL_MS = 60000;
 
@@ -15759,6 +15999,12 @@ function clearRerouteFailureRetries() {
 function scheduleAutomaticRerouteRetry() {
     if (!routeInProgress || !autoRerouteOnDeviationEnabled) {
         clearRerouteFailureRetries();
+        return;
+    }
+    if (Date.now() < postRerouteGraceUntil) {
+        return;
+    }
+    if (rerouteInProgress) {
         return;
     }
     if (rerouteFailureRetryCount >= REROUTE_FAILURE_RETRY_DELAYS_MS.length) {
@@ -15835,18 +16081,21 @@ function checkRouteDeviation(lat, lon, accuracy) {
             routeJoinConfirmed: routeJoinConfirmedForDeviation,
             deviationStartTime: deviationStartTimeCheck,
             lastRerouteTime: lastRerouteTime,
+            lastRerouteAttemptTime: lastRerouteAttemptTime,
+            offRouteStreak: deviationOffRouteStreak,
             now: now
         });
 
         routeJoinConfirmedForDeviation = decision.routeJoinConfirmed;
         deviationStartTimeCheck = decision.deviationStartTime;
+        deviationOffRouteStreak = decision.offRouteStreak != null ? decision.offRouteStreak : 0;
 
         if (!wasJoined && decision.routeJoinConfirmed) {
             console.log('[Rerouting] Route join detected — deviation monitoring active');
         }
 
         if (decision.action === 'reroute') {
-            lastRerouteTime = decision.lastRerouteTime;
+            lastRerouteAttemptTime = decision.lastRerouteAttemptTime || now;
             lastRerouteDeviation = minDistance;
             rerouteAttemptCount++;
             console.log(`[Rerouting] Deviation confirmed: ${minDistance.toFixed(0)}m for ${(decision.deviationDuration / 1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
@@ -15937,10 +16186,20 @@ function checkRouteDeviation(lat, lon, accuracy) {
  * This enhanced version handles unavoidable hazards gracefully
  */
 async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon) {
+    const now = Date.now();
     if (rerouteInProgress) {
         console.log('[Rerouting] Already in progress — skipping duplicate trigger');
         return;
     }
+    if (now - lastRerouteAttemptTime < REROUTE_DEBOUNCE_MS) {
+        console.log('[Rerouting] Attempt debounced — too soon after last try');
+        return;
+    }
+    if (now < postRerouteGraceUntil) {
+        console.log('[Rerouting] Post-reroute grace active — skipping');
+        return;
+    }
+    lastRerouteAttemptTime = now;
     if (!navigator.onLine) {
         console.log('[Rerouting] Offline — deferring automatic reroute');
         scheduleAutomaticRerouteRetry();
@@ -16267,6 +16526,8 @@ const CAMERA_HAZARD_TYPES = [
  * Backend returns { cameras: [], reports: [] }; older code expected a single array.
  */
 function flattenNearbyHazardsPayload(hazardsPayload) {
+    const HA = _hazardAlerts();
+    if (HA) return HA.flattenNearbyHazardsPayload(hazardsPayload);
     if (!hazardsPayload) return [];
     if (Array.isArray(hazardsPayload)) return hazardsPayload;
     const out = [];
@@ -16276,10 +16537,11 @@ function flattenNearbyHazardsPayload(hazardsPayload) {
 }
 
 function isCameraHazardType(typeStr) {
+    const HA = _hazardAlerts();
+    if (HA) return HA.isCameraHazardType(typeStr);
     if (typeStr == null || typeStr === '') return false;
     const t = String(typeStr).toLowerCase();
-    if (CAMERA_HAZARD_TYPES.includes(t)) return true;
-    return t.includes('camera') || t === 'speed_camera' || t === 'traffic_light_camera';
+    return t.includes('camera');
 }
 
 /**
@@ -16365,17 +16627,15 @@ function loadCameraAlertPreferences() {
  * @returns {string}
  */
 function formatHazardDistanceForUserMeters(distanceM) {
+    const HA = _hazardAlerts();
+    if (HA) return HA.formatHazardDistanceForUserMeters(distanceM, distanceUnit);
     const m = Math.max(0, Number(distanceM) || 0);
     if (distanceUnit === 'mi') {
-        if (m < 402) {
-            return `${Math.round(m * 3.28084)} feet`;
-        }
+        if (m < 402) return `${Math.round(m * 3.28084)} feet`;
         const miles = m / 1609.34;
         return miles < 10 ? `${miles.toFixed(1)} miles` : `${Math.round(miles)} miles`;
     }
-    if (m < 1000) {
-        return `${Math.round(m)} meters`;
-    }
+    if (m < 1000) return `${Math.round(m)} meters`;
     return `${(m / 1000).toFixed(1)} kilometers`;
 }
 
@@ -16411,47 +16671,57 @@ function announceCameraOrHazard(hazard, distanceM, opts = {}) {
     }
 }
 
-function checkNearbyHazards(lat, lon) {
-    if (_voyagrIsOffline || !navigator.onLine) return;
-    fetch(`/api/hazards/nearby?lat=${lat}&lon=${lon}&radius=0.5`)
-        .then(response => response.json())
-        .then(data => {
-            if (!data.success || !data.hazards) return;
-            const list = flattenNearbyHazardsPayload(data.hazards);
-            if (list.length === 0) return;
-            list.forEach(hazard => {
-                if (hazard.lat == null || hazard.lon == null) return;
-                const distance = hazard.distance_meters != null
-                    ? Number(hazard.distance_meters)
-                    : calculateDistance(lat, lon, hazard.lat, hazard.lon);
-                const isCamera = isCameraHazardType(hazard.type);
-                const alertDist = isCamera ? cameraAlertDistance : HAZARD_WARNING_DISTANCE;
+function evaluateAndAnnounceHazards(lat, lon, nearbyPayload, includeNearby) {
+    const HA = _hazardAlerts();
+    if (!HA) return;
 
-                if (distance < alertDist) {
-                    announceCameraOrHazard(hazard, distance, { unavoidableRouteCamera: false });
-                }
-            });
-        })
-        .catch(error => console.log('Hazard check error:', error));
+    const alerts = HA.collectHazardsToAnnounce({
+        lat,
+        lon,
+        route: window.lastCalculatedRoute,
+        includeNearby: !!includeNearby,
+        nearbyPayload,
+        routePolyline: routePolyline,
+        snappedRouteIndex: lastSnappedRouteIndex,
+        cameraAlertDistanceM: cameraAlertDistance,
+        generalHazardDistanceM: HAZARD_WARNING_DISTANCE,
+        preferAlongRouteForRouteHazards: true,
+        calculateDistance: calculateDistance
+    });
+
+    alerts.forEach(({ hazard, distanceM, unavoidableRouteCamera }) => {
+        if (cameraAlertType === 'off' && isCameraHazardType(hazard.type)) return;
+        announceCameraOrHazard(hazard, distanceM, { unavoidableRouteCamera });
+    });
 }
 
 /**
- * Alerts for cameras already attached to the active route (always "on path"),
- * including when nearby DB query misses due to bbox vs radius.
+ * Route-embedded hazards work offline; nearby API augments when online.
  */
+function processNavigationHazardAlerts(lat, lon) {
+    if (!routeInProgress && !isTrackingActive) return;
+
+    evaluateAndAnnounceHazards(lat, lon, null, false);
+
+    if (_voyagrIsOffline || !navigator.onLine) return;
+
+    fetch(`/api/hazards/nearby?lat=${lat}&lon=${lon}&radius_km=0.8`)
+        .then((response) => response.json())
+        .then((data) => {
+            if (!data.success || !data.hazards) return;
+            evaluateAndAnnounceHazards(lat, lon, data.hazards, true);
+        })
+        .catch((error) => console.log('Hazard check error:', error));
+}
+
+/** @deprecated Use processNavigationHazardAlerts — kept for live refresh interval. */
+function checkNearbyHazards(lat, lon) {
+    processNavigationHazardAlerts(lat, lon);
+}
+
+/** @deprecated Merged into processNavigationHazardAlerts. */
 function checkRouteHazardCamerasAhead(lat, lon) {
-    if (!routeInProgress || cameraAlertType === 'off') return;
-    const route = window.lastCalculatedRoute;
-    const list = route && Array.isArray(route.hazards) ? route.hazards : [];
-    if (list.length === 0) return;
-    list.forEach(hazard => {
-        if (!isCameraHazardType(hazard.type)) return;
-        if (hazard.lat == null || hazard.lon == null) return;
-        const distance = calculateDistance(lat, lon, hazard.lat, hazard.lon);
-        if (distance < cameraAlertDistance) {
-            announceCameraOrHazard(hazard, distance, { unavoidableRouteCamera: true });
-        }
-    });
+    /* no-op: route cameras handled in processNavigationHazardAlerts */
 }
 
 // ===== PHASE 1: LIVE DATA REFRESH FUNCTIONS =====
@@ -19087,6 +19357,8 @@ function loadPreferences() {
             console.log('[Battery] Battery saving mode restored from localStorage');
         }
     }
+
+    applySpeedWidgetToggleUi();
 }
 
 // Update trip info display

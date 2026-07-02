@@ -10,7 +10,7 @@
 
 ---
 
-## Test 1: Speed Limit Display
+## Test 1: GPS Speed Display
 
 ### Steps
 1. Open Voyagr PWA
@@ -19,15 +19,13 @@
 4. Look at the speed widget (top-right corner)
 
 ### Expected Results
-- ✅ Current speed displays correctly (e.g., "45 km/h")
-- ✅ Speed limit displays actual value (e.g., "50 km/h") NOT "--"
-- ✅ Speed limit updates as you move to different roads
-- ✅ Console shows `[Speed Widget] Updated limit: XX km/h`
+- ✅ Current GPS speed displays correctly (e.g., "45" with unit mph or km/h per Settings)
+- ✅ Widget shows GPS speed only — no posted speed limit circle or "over limit" banner
+- ✅ Console may show `[Speed Widget]` visibility logs
 
 ### Troubleshooting
-- If speed limit shows "?": API returned no data for location
-- Check console for `[Speed Limit] API response:` logs
-- Verify `/api/speed-limit` endpoint is responding
+- If speed stays at 0 while moving: check GPS accuracy and browser location permission
+- Speed unit follows Settings → Units (mph / km/h)
 
 ---
 
@@ -132,8 +130,7 @@
 3. Filter by typing in search box
 
 ### Key Log Prefixes
-- `[Speed Widget]` - Speed limit updates
-- `[Speed Limit]` - API responses
+- `[Speed Widget]` - GPS speed widget visibility and updates
 - `[Rerouting]` - Rerouting events
 - `[Voice]` - Voice announcements
 - `[SmartZoom]` - Zoom level changes
@@ -141,7 +138,7 @@
 
 ### Example Console Output
 ```
-[Speed Widget] Updated limit: 50 km/h
+[Speed Widget] Visible (tracking: true route: true)
 [Rerouting] Deviation detected: 75m (threshold: 50m)
 [Rerouting] Starting automatic reroute from (51.5074, -0.1278) to destination
 [Voice] Announcing turn: In 500 meters, prepare for upcoming turn (distance: 487m)
@@ -169,7 +166,7 @@
 ## Performance Metrics
 
 ### Expected Performance
-- Speed limit update: <500ms
+- GPS speed widget update: each GPS tick (~1 Hz)
 - Rerouting trigger: 5-10 seconds (with 5s debounce)
 - Voice announcement: <100ms
 - Map centering: <300ms smooth animation
@@ -184,7 +181,7 @@
 
 ## Known Limitations
 
-1. **Speed Limit Data:** Depends on OSM data availability
+1. **GPS speed:** Widget shows device GPS speed only; no posted limit data in the PWA
 2. **Turn Detection:** Uses polyline points, not actual turn instructions
 3. **Voice Announcements:** Requires Web Speech API support
 4. **Rerouting:** Requires active internet connection

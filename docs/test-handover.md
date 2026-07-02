@@ -17,7 +17,7 @@ _Last updated: 2026-06-15_
   (`npm run lint:tests`) passes clean. Run `npm test` to confirm the baseline.
 - **Python (CI):** 4 suites are wired into `.github/workflows/ci.yml` (backend job):
   `test_graphhopper_sign_mapping.py`, `test_lane_recommendation.py`,
-  `test_lane_guidance.py`, `test_speed_limit_detector.py` → **71 passed in ~24s**,
+  `test_lane_guidance.py`, `test_speed_limit_detector.py` (optional backend; not a PWA user feature) → **71 passed in ~24s**,
   deterministic offline.
 - **Coverage (`jest.config.js`):** after the P1 prune, `collectCoverageFrom` is scoped to the
   wired+tested files (`weather-layer`, `camera-pitch`, `toggle-ui`, `google-plus-codes-service`,
@@ -114,7 +114,7 @@ wired modules (section 1), test each and bump the global floor accordingly.
   `navigator.geolocation.clearWatch` must be mocked.
 - **`modules/api/index.js`** needs the explicit `import { APIClient } from './client.js'`
   for the `createAPIClient` binding — don't "simplify" it away.
-- **Network-tolerant Python suites** (`test_lane_guidance`, `test_speed_limit_detector`)
+- **Network-tolerant Python suites** (`test_lane_guidance`, optional `test_speed_limit_detector` for backend)
   pass offline by design (fall back to defaults) but add a few seconds via timeouts.
   Optionally add an env flag to short-circuit network for speed/determinism.
 - Windows-only `comtypes` shutdown log noise appears when `satnav`/`pyttsx3` import —

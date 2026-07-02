@@ -132,7 +132,7 @@ Cycling: 8.00 km, 30 min
 ### Traffic Camera Alerts
 - **Detection**: 500m proximity
 - **Frequency**: Every 5 seconds
-- **Output**: Camera location, distance, speed limit
+- **Output**: Camera location and distance
 - **Feedback**: Notification + voice
 
 ### Hazard Alerts

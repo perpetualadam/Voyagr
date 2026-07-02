@@ -15,7 +15,7 @@
 | Vehicle Profiles | ✅ | ✅ | Parity |
 | Trip History & Analytics | ✅ | ✅ | Parity |
 | Hazard Avoidance (8 types) | ✅ | ✅ | Parity |
-| Speed Limit Detection | ✅ | ✅ | Parity |
+| GPS Speed Display | ✅ | ✅ | Parity (PWA: current GPS speed only; no posted limits) |
 | Weather Integration | ✅ | ✅ | Parity |
 | Charging Stations | ✅ | ✅ | Parity |
 | Voice Control (22+ commands) | ✅ | ✅ | Parity |
@@ -32,7 +32,7 @@
 | **GPS Tracking** | ✅ | ❌ | HIGH | Real-time location updates |
 | **Turn-by-Turn Navigation** | ✅ | ❌ | HIGH | Active route guidance |
 | **Lane Guidance** | ✅ | ❌ | MEDIUM | Lane recommendations |
-| **Speed Warnings** | ✅ | ❌ | MEDIUM | Alert when exceeding limit |
+| **Speed Warnings (posted-limit alerts)** | ✅ | ❌ | N/A | Native app only; PWA shows GPS speed only |
 | **Gesture Control** | ✅ | ❌ | LOW | Shake detection |
 | **Wake Word Detection** | ✅ | ❌ | LOW | "Hey SatNav" activation |
 | **Notifications** | ✅ | ❌ | MEDIUM | System notifications |
@@ -100,9 +100,8 @@
 
 ### Phase 2: MEDIUM PRIORITY (Enhanced UX)
 1. **Lane Guidance** - Lane recommendations
-2. **Speed Warnings** - Speed limit alerts
-3. **Search History** - Recent searches
-4. **Favorite Locations** - Saved places
+2. **Search History** - Recent searches (speed warnings not planned for PWA)
+3. **Favorite Locations** - Saved places
 
 ### Phase 3: LOW PRIORITY (Nice to Have)
 1. **Gesture Control** - Shake detection
@@ -149,9 +148,8 @@
 
 ### Short-term
 1. Add lane guidance
-2. Add speed warnings
-3. Add search history
-4. Add favorite locations
+2. Add search history
+3. Add favorite locations
 
 ### Long-term
 1. Add ML features

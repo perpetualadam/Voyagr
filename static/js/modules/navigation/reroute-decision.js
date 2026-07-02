@@ -31,7 +31,9 @@
         DEVIATION_ACC_EXTRA_CAP_M: 40,
         ROUTE_JOIN_GATE_METERS: 85,
         REROUTE_DEBOUNCE_MS: 30000,
-        NAV_ARRIVAL_SUPPRESS_REROUTE_METERS: 100
+        NAV_ARRIVAL_SUPPRESS_REROUTE_METERS: 100,
+        /** Consecutive off-route GPS ticks before the dwell timer may start. */
+        MIN_OFF_ROUTE_STREAK: 3
     };
 
     /** Treat non-finite / non-positive accuracy as 0 (unknown) for gating purposes. */
@@ -66,7 +68,9 @@
      * @param {number} params.minDistance - Snapped distance from the route line (m).
      * @param {boolean} params.routeJoinConfirmed - Has GPS joined the route yet?
      * @param {number|null} params.deviationStartTime - When the current deviation began (ms).
-     * @param {number} params.lastRerouteTime - When the last reroute fired (ms).
+     * @param {number} params.lastRerouteTime - When the last successful reroute completed (ms).
+     * @param {number} params.lastRerouteAttemptTime - When the last reroute attempt started (ms).
+     * @param {number} params.offRouteStreak - Consecutive ticks beyond the off-route threshold.
      * @param {number} params.now - Current time (ms).
      * @param {object} [params.constants] - Override the tuning constants (tests).
      * @returns {{
@@ -87,6 +91,8 @@
         var routeJoinConfirmed = !!params.routeJoinConfirmed;
         var deviationStartTime = (params.deviationStartTime != null) ? params.deviationStartTime : null;
         var lastRerouteTime = params.lastRerouteTime || 0;
+        var lastRerouteAttemptTime = params.lastRerouteAttemptTime || 0;
+        var offRouteStreak = Number.isFinite(params.offRouteStreak) ? params.offRouteStreak : 0;
         var minDistance = params.minDistance;
         var now = params.now;
 
@@ -97,6 +103,8 @@
                 routeJoinConfirmed: routeJoinConfirmed,
                 deviationStartTime: deviationStartTime,
                 lastRerouteTime: lastRerouteTime,
+                lastRerouteAttemptTime: lastRerouteAttemptTime,
+                offRouteStreak: offRouteStreak,
                 effectiveThreshold: 0,
                 minDistance: minDistance,
                 deviationDuration: 0
@@ -132,17 +140,24 @@
         }
 
         if (minDistance > effectiveThreshold) {
-            if (!deviationStartTime) deviationStartTime = now;
-            var deviationDuration = now - deviationStartTime;
+            offRouteStreak += 1;
+            if (offRouteStreak >= c.MIN_OFF_ROUTE_STREAK) {
+                if (!deviationStartTime) deviationStartTime = now;
+            } else {
+                deviationStartTime = null;
+            }
+            var deviationDuration = deviationStartTime ? (now - deviationStartTime) : 0;
 
-            if (deviationDuration >= c.DEVIATION_TIME_THRESHOLD_MS) {
-                var timeSinceLastReroute = now - lastRerouteTime;
+            if (deviationStartTime && deviationDuration >= c.DEVIATION_TIME_THRESHOLD_MS) {
+                var debounceSince = Math.max(lastRerouteTime, lastRerouteAttemptTime);
+                var timeSinceLastReroute = now - debounceSince;
                 if (timeSinceLastReroute > c.REROUTE_DEBOUNCE_MS) {
                     return base('reroute', {
                         shouldReroute: true,
                         routeJoinConfirmed: routeJoinConfirmed,
                         deviationStartTime: null,
-                        lastRerouteTime: now,
+                        offRouteStreak: 0,
+                        lastRerouteAttemptTime: now,
                         effectiveThreshold: effectiveThreshold,
                         deviationDuration: deviationDuration
                     });
@@ -150,6 +165,7 @@
                 return base('debounced', {
                     routeJoinConfirmed: routeJoinConfirmed,
                     deviationStartTime: deviationStartTime,
+                    offRouteStreak: offRouteStreak,
                     effectiveThreshold: effectiveThreshold,
                     deviationDuration: deviationDuration
                 });
@@ -157,6 +173,7 @@
             return base('waiting', {
                 routeJoinConfirmed: routeJoinConfirmed,
                 deviationStartTime: deviationStartTime,
+                offRouteStreak: offRouteStreak,
                 effectiveThreshold: effectiveThreshold,
                 deviationDuration: deviationDuration
             });
@@ -166,6 +183,7 @@
         return base('on-route', {
             routeJoinConfirmed: routeJoinConfirmed,
             deviationStartTime: null,
+            offRouteStreak: 0,
             effectiveThreshold: effectiveThreshold
         });
     }

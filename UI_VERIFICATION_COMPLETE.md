@@ -22,7 +22,6 @@ Comprehensive investigation of all interactive UI elements on the Route Preview 
 - **Avoid CAZ**: ✅ Toggle switch with localStorage persistence
 - **Avoid Speed Cameras**: ✅ Toggle switch with localStorage persistence
 - **Avoid Traffic Cameras**: ✅ Toggle switch with localStorage persistence
-- **Variable Speed Alerts**: ✅ Toggle switch with localStorage persistence
 
 ### ✅ Settings Tab - Unit Preferences - ALL FUNCTIONAL
 - **Distance Unit**: ✅ Dropdown with `updateDistanceUnit()`

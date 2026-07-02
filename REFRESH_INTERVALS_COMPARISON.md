@@ -12,12 +12,11 @@
 | **GPS Position** | Real-time | Real-time | Safety critical | High | Low |
 | **Hazard Detection** | Real-time | Real-time | Safety critical | Low | Low |
 | **Lane Guidance** | Real-time | Real-time | UX critical | Low | Low |
-| **Speed Warnings** | Real-time | Real-time | Safety critical | Low | Low |
+| **GPS Speed Display** | Real-time | Real-time | Current GPS speed only | Low | Low |
 | **Turn Guidance** | Real-time | Real-time | UX critical | Low | Low |
 | **Traffic Data** | Manual ❌ | 5 minutes ✅ | Avoid congestion | Medium | Medium |
 | **ETA Calculation** | Manual ❌ | 30 seconds ✅ | Real-time arrival | Low | Very Low |
 | **Weather Alerts** | Manual ❌ | 30 minutes ✅ | Safety/comfort | Low | Low |
-| **Speed Limits** | Static | Static | Rarely change | None | None |
 | **ML Predictions** | Manual ❌ | 60 minutes ✅ | Route optimization | Low | Low |
 | **Service Worker** | 60 sec | 5-10 min | App updates | Very Low | Very Low |
 
@@ -29,7 +28,6 @@
 | **Hazard Detection** | Off | 5 minutes | Awareness | Very Low | Very Low |
 | **Traffic Data** | Manual ❌ | 15 minutes ✅ | General awareness | Very Low | Very Low |
 | **Weather Alerts** | Manual ❌ | 60 minutes ✅ | General awareness | Very Low | Very Low |
-| **Speed Limits** | Static | Static | Not needed | None | None |
 | **ML Predictions** | Manual ❌ | On startup ✅ | Load suggestions | Very Low | Very Low |
 | **Service Worker** | 60 sec | 5-10 min | App updates | Very Low | Very Low |
 
@@ -102,28 +100,6 @@ Integration: None
 ```
 
 **Recommendation**: Implement 30-minute refresh with severe weather alerts
-
----
-
-### Speed Limit Data
-
-**Native App**:
-```
-Source: OSM (OpenStreetMap) tags
-Refresh: On route recalculation
-Accuracy: Road-type based
-Display: Real-time speed limit
-```
-
-**PWA**:
-```
-Source: Mock data (road-type based)
-Refresh: Static (no refresh)
-Accuracy: Low (generic values)
-Display: Not implemented
-```
-
-**Recommendation**: Implement real OSM data with 24-hour cache
 
 ---
 
@@ -201,7 +177,7 @@ Route Calculation:                 ~50-100 KB
 Map Tiles (Leaflet):              ~2-5 MB
 Hazard Checks (every GPS update): ~100-200 KB
 Lane Guidance:                     ~10-20 KB
-Speed Warnings:                    ~5-10 KB
+GPS speed updates:                 ~5-10 KB
 ─────────────────────────────────────────────
 TOTAL:                            ~2.2-5.3 MB per hour
 ```
@@ -216,7 +192,7 @@ Traffic Checks (every 5 min):     ~50-100 KB (+)
 ETA Calculations:                 ~5-10 KB (+)
 Weather Checks (every 30 min):    ~10-20 KB (+)
 Lane Guidance:                     ~10-20 KB
-Speed Warnings:                    ~5-10 KB
+GPS speed updates:                 ~5-10 KB
 ─────────────────────────────────────────────
 TOTAL:                            ~2.3-5.5 MB per hour (+0.1-0.2 MB)
 ```
@@ -232,7 +208,6 @@ Traffic Refresh:      3 minutes (more frequent - congestion critical)
 ETA Refresh:          30 seconds (important for long trips)
 Weather Refresh:      30 minutes (standard)
 Hazard Refresh:       GPS update (real-time)
-Speed Limit Refresh:  On route calc (static)
 ```
 
 ### Scenario 2: City Navigation (Short Distance)
@@ -242,7 +217,6 @@ Traffic Refresh:      5 minutes (standard)
 ETA Refresh:          30 seconds (standard)
 Weather Refresh:      30 minutes (standard)
 Hazard Refresh:       GPS update (real-time)
-Speed Limit Refresh:  On route calc (static)
 ```
 
 ### Scenario 3: Low Battery Mode (<30%)
@@ -252,7 +226,6 @@ Traffic Refresh:      10 minutes (less frequent)
 ETA Refresh:          60 seconds (less frequent)
 Weather Refresh:      60 minutes (less frequent)
 Hazard Refresh:       GPS update (real-time - safety critical)
-Speed Limit Refresh:  On route calc (static)
 GPS Accuracy:         Reduced (enableHighAccuracy: false)
 ```
 
@@ -263,7 +236,6 @@ Traffic Refresh:      Disabled (no network)
 ETA Refresh:          Local calculation only
 Weather Refresh:      Disabled (no network)
 Hazard Refresh:       Cached data only
-Speed Limit Refresh:  Cached data only
 GPS Tracking:         Enabled (for offline navigation)
 ```
 

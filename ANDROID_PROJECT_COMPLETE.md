@@ -152,7 +152,7 @@ Database (Room) + Network (Retrofit)
 ### ✅ Voice System
 - Text-to-Speech
 - Turn announcements
-- Speed limit alerts
+- Speed limit alerts (native app — posted limit TTS; PWA is GPS speed only)
 
 ### ✅ Data Persistence
 - Trip history

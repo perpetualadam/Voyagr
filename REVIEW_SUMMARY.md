@@ -33,13 +33,12 @@ Based on the conversation history, I verified implementation of 10 major feature
 ## Implementation Status by Feature
 
 ### 1. Turn-by-Turn Navigation ✅
-- **Speed limit display:** Fixed - shows current vs limit with visual warning (line 6166)
-- **Automatic rerouting:** Fixed - implements actual rerouting with 5s debounce, 50m threshold (line 7875)
-- **Voice instructions:** Announces at 500m, 200m, 100m, 50m distances (line 7799)
-- **Distance announcements:** Announces remaining distance at intervals (line 7668)
-- **ETA announcements:** Announces ETA updates when changed significantly (line 7731)
-- **Variable speed limits:** Detects motorway variable speed limits (line 6536)
-- **Hazard checking:** Checks for hazards within 500m radius (line 7978)
+- **GPS speed display:** GPS-only widget (mph/km/h per Settings); no posted limits or over-limit UI
+- **Automatic rerouting:** Fixed - implements actual rerouting with debounce and deviation threshold
+- **Voice instructions:** Announces at distance thresholds (turns, exits, roundabouts)
+- **Distance announcements:** Announces remaining distance at intervals
+- **ETA announcements:** Announces ETA updates when changed significantly
+- **Hazard checking:** Checks for hazards within 500m radius
 
 ### 2. Persistent Settings ✅
 - **saveAllSettings()** (line 4051) - Saves 15+ preferences to localStorage

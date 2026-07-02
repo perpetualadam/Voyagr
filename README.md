@@ -40,6 +40,11 @@ A feature-rich, cost-free satellite navigation application with toll road cost e
 - **Incidents**: Road closures, accidents
 - **Weather Alerts**: Severe weather warnings with temperature
 
+### Progressive Web App (`voyagr_web.py`)
+- **Browser navigation**: Turn-by-turn routing, voice guidance, hazard alerts
+- **GPS speedometer**: Shows current GPS speed only (mph or km/h) — no posted speed limits or over-limit alerts in the PWA
+- **Details**: See [README_PWA.md](README_PWA.md)
+
 ### Hands-Free Operation
 - **Voice Wake Word**: "Hey SatNav" activation (Porcupine)
 - **Gesture Control**: Two-shake detection for reporting

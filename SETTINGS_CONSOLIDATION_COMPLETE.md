@@ -1,5 +1,7 @@
 # ✅ Settings Consolidation - COMPLETE
 
+> **PWA note (2026):** The PWA shows **GPS speed only** during navigation. No posted speed limits, over-limit alerts, or variable speed limit settings.
+
 ## Summary
 
 Successfully consolidated the scattered **Preferences** and **Settings** sections into a single unified **Settings Tab** with 5 organized sections.
@@ -19,7 +21,7 @@ Created 5 logical sections with clear headers and emojis:
 ```
 ⚙️ Settings Tab
 ├── 📏 Unit Preferences (4 controls)
-├── ⚠️ Hazard Avoidance (5 toggles)
+├── ⚠️ Hazard Avoidance (4 toggles)
 ├── 🛣️ Route Preferences (6 controls)
 ├── 🎨 Display Preferences (2 controls)
 └── ⚙️ Advanced Features (3 controls)
@@ -54,7 +56,6 @@ Created 5 logical sections with clear headers and emojis:
 - Avoid CAZ (toggle)
 - Avoid Speed Cameras (toggle)
 - Avoid Traffic Cameras (toggle)
-- Variable Speed Alerts (toggle)
 
 ### 🛣️ Route Preferences
 - Avoid Highways (checkbox)
@@ -156,7 +157,7 @@ Created 5 logical sections with clear headers and emojis:
 unit_distance, unit_speed, unit_temperature, unit_currency
 
 // Hazard Avoidance
-pref_tolls, pref_caz, pref_speedCameras, pref_trafficCameras, pref_variableSpeedAlerts
+pref_tolls, pref_caz, pref_speedCameras, pref_trafficCameras
 
 // Route Preferences
 routePreferences (JSON)

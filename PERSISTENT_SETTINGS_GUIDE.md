@@ -1,5 +1,7 @@
 # Voyagr PWA - Persistent Settings Storage Guide
 
+> **PWA note (2026):** The PWA shows **GPS speed only** during navigation. No posted speed limits, over-limit alerts, or variable speed limit settings.
+
 ## Overview
 
 The Voyagr PWA now includes comprehensive persistent settings storage using browser localStorage. All user preferences are automatically saved when changed and restored when the page is reloaded or the user returns to the app later.
@@ -13,7 +15,7 @@ All user preferences are automatically saved to localStorage whenever they chang
 - **Unit Preferences**: Distance (km/mi), Currency (GBP/USD/EUR), Speed (km/h/mph), Temperature (°C/°F)
 - **Vehicle & Routing**: Vehicle type (car/electric/motorcycle/truck/van), Routing mode (auto/pedestrian/bicycle)
 - **Route Preferences**: Avoid highways, prefer scenic, prefer quiet, avoid unpaved, route optimization, max detour
-- **Hazard Avoidance**: Avoid tolls, avoid CAZ, avoid speed cameras, avoid traffic cameras, variable speed alerts
+- **Hazard Avoidance**: Avoid tolls, avoid CAZ, avoid speed cameras, avoid traffic cameras
 - **Display Preferences**: Map theme (standard/satellite/dark), Smart zoom enabled/disabled
 
 ### 🔄 Automatic Restoration
@@ -94,8 +96,7 @@ Imports settings from a previously exported JSON file.
     "avoidTolls": false,
     "avoidCAZ": false,
     "avoidSpeedCameras": false,
-    "avoidTrafficCameras": false,
-    "variableSpeedAlerts": false
+    "avoidTrafficCameras": false
   },
   
   // Display preferences

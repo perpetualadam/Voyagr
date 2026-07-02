@@ -1,12 +1,13 @@
 # Voyagr PWA - Feature Investigation Report
 
+> **PWA note (2026):** The PWA shows **GPS speed only** during navigation. No posted speed limits, over-limit alerts, or variable speed limit settings.
+
 ## Issues Reported by User
 
 1. **Avoid CAZ toggle** - Not visible or not working
 2. **Smart Route Predictions toggle** - Not visible or not working
-3. **Variable Speed Alerts toggle** - Not visible or not working
-4. **Recalculating routes in settings** - Not working
-5. **Dark mode for bottom sheet** - Not applying to slide-up menu
+3. **Recalculating routes in settings** - Not working
+4. **Dark mode for bottom sheet** - Not applying to slide-up menu
 
 ---
 
@@ -58,30 +59,7 @@
 
 ---
 
-### ✅ Issue 3: Variable Speed Alerts Toggle
-
-**Status:** FOUND & WORKING ✅
-
-**Location:** `voyagr_web.py` line 3116-3117
-
-```html
-<div class="preference-item">
-    <span class="preference-label">📊 Variable Speed Alerts</span>
-    <button class="toggle-switch" id="variableSpeedAlerts" onclick="togglePreference('variableSpeedAlerts')"></button>
-</div>
-```
-
-**JavaScript Handler:** `togglePreference('variableSpeedAlerts')` function (line 8907-8965)
-- Maps to button ID: `variableSpeedAlerts`
-- Saves to localStorage: `pref_variableSpeedAlerts`
-- Shows status message when toggled
-- Properly handles visual state updates
-
-**Conclusion:** Toggle exists and is properly wired. Should be visible in Settings tab under "Hazard Avoidance" section.
-
----
-
-### ❌ Issue 4: Recalculating Routes in Settings
+### ❌ Issue 3: Recalculating Routes in Settings
 
 **Status:** MISSING ❌
 
@@ -105,7 +83,7 @@ Add a "Recalculate Route" button in the Settings tab that:
 
 ---
 
-### ✅ Issue 5: Dark Mode for Bottom Sheet
+### ✅ Issue 4: Dark Mode for Bottom Sheet
 
 **Status:** IMPLEMENTED ✅
 
@@ -148,7 +126,6 @@ body.dark-mode .preferences-section {
 |---------|--------|----------|-------|
 | Avoid CAZ | ✅ Working | Line 3101 | None - fully implemented |
 | Smart Route Predictions | ✅ Working | Line 3295 | None - fully implemented |
-| Variable Speed Alerts | ✅ Working | Line 3116 | None - fully implemented |
 | Recalculate Route Button | ❌ Missing | Settings Tab | No button to trigger recalculation |
 | Dark Mode CSS | ✅ Implemented | Lines 2457-2855 | CSS exists, may need UI verification |
 

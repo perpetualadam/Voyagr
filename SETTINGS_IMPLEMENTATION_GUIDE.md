@@ -82,14 +82,12 @@ POST /api/app-settings
 - Avoid CAZ (toggle)
 - Avoid Speed Cameras (toggle)
 - Avoid Traffic Cameras (toggle)
-- Variable Speed Alerts (toggle)
 
 **localStorage Keys:**
 - `pref_tolls` (true/false)
 - `pref_caz` (true/false)
 - `pref_speedCameras` (true/false)
 - `pref_trafficCameras` (true/false)
-- `pref_variableSpeedAlerts` (true/false)
 
 **Functions:**
 - `togglePreference(pref)` - Toggles preference on/off

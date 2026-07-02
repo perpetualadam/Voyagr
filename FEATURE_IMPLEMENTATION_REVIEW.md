@@ -56,18 +56,11 @@
    - Triggers when ETA changes significantly
 
 6. **`updateSpeedWidget()`** (line ~6166)
-   - ✅ FIXED: Speed limit display working correctly
-   - Shows current speed vs speed limit
-   - Visual warning when exceeding limit (red border)
-   - Supports unit conversion (mph/kmh)
-
-7. **`updateVariableSpeedLimit()`** (line ~6536)
-   - Detects variable speed limits on motorways
-   - Fetches from `/api/speed-limit` endpoint
-   - Updates display with current limit
+   - Shows current GPS speed during navigation
+   - Respects user's speed unit preference (mph/kmh)
+   - **No posted speed limit display** — PWA does not use `/api/speed-limit`
 
 ### Database Support:
-- `speed_limit_cache` table for caching speed limits
 - `lane_guidance_cache` table for lane data
 
 ---
@@ -104,7 +97,7 @@
 
 ### Storage Details:
 - Primary key: `voyagr_all_settings` (comprehensive JSON)
-- Individual keys for backward compatibility: `unit_distance`, `unit_currency`, `unit_speed`, `unit_temperature`, `vehicleType`, `routingMode`, `routePreferences`, `pref_tolls`, `pref_caz`, `pref_speedCameras`, `pref_trafficCameras`, `pref_variableSpeedAlerts`, `mapTheme`, `smartZoomEnabled`, `parkingPreferences`
+- Individual keys for backward compatibility: `unit_distance`, `unit_currency`, `unit_speed`, `unit_temperature`, `vehicleType`, `routingMode`, `routePreferences`, `pref_tolls`, `pref_caz`, `pref_speedCameras`, `pref_trafficCameras`, `mapTheme`, `smartZoomEnabled`, `parkingPreferences`
 
 ---
 
@@ -389,10 +382,7 @@
 - `/api/app-settings` - App settings
 - `/api/parking-search` - Parking search
 
-### Navigation Features (6)
-- `/api/speed-limit` - Speed limit detection
-- `/api/speed-violation` - Speed violation check
-- `/api/speed-warnings` - Speed warnings
+### Navigation Features (3)
 - `/api/lane-guidance` - Lane guidance
 - `/api/charging-stations` - Charging stations
 - `/api/weather` - Weather data

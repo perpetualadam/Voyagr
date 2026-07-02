@@ -23,6 +23,7 @@ REQUIRED_SETTINGS_CONTROL_IDS = [
     'avoidFerries',
     'cameraAlertType',
     'cameraAlertDistance',
+    'speedWidgetToggle',
     'speedUnit',
     'distanceUnit',
 ]

@@ -65,16 +65,17 @@
 - **Tests**: Integration tests passing
 - **Note**: Tile building completed on OCI
 
-### 5. **Speed Limit Detection (OSM Integration)**
-- **Status**: ✅ COMPLETE
+### 5. **Speed Limit Detection (OSM Integration)** — Backend / Native App
+- **Status**: ✅ COMPLETE (not exposed in PWA UI)
 - **Location**: `speed_limit_detector.py` (248 lines)
 - **Features**:
-  - Speed limit detection from OSM data
+  - Speed limit detection from OSM data (native app and optional backend APIs)
   - Smart motorway detection
   - Vehicle-specific limits
   - Speed violation checking
+- **PWA**: Shows GPS speed only; does not call `/api/speed-limit` or display posted limits
 - **Integration**: Initialized in `satnav.py` line 299
-- **Tests**: Passing (20 tests)
+- **Tests**: Passing (20 tests) — optional backend suite: `test_speed_limit_detector.py`
 
 ### 6. **Lane Guidance (Advanced Navigation)**
 - **Status**: ✅ COMPLETE

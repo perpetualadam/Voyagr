@@ -2,7 +2,7 @@
 
 ## Summary
 
-Found **10 toggle switches** in Settings tab. **2 are broken**, **3 are working correctly**, **5 need verification/fixes**.
+Found **9 toggle switches** in Settings tab. **2 are broken**, **3 are working correctly**, **4 need verification/fixes**.
 
 ---
 
@@ -44,16 +44,7 @@ Found **10 toggle switches** in Settings tab. **2 are broken**, **3 are working 
 - **localStorage:** Saves as `pref_trafficCameras` ✓
 - **Load on Init:** Yes, via `loadPreferences()` ✓
 
-### 5. ✅ Variable Speed Alerts
-- **ID:** `variableSpeedAlerts`
-- **Function:** `togglePreference('variableSpeedAlerts')`
-- **Status:** ✅ WORKING CORRECTLY
-- **Pattern:** Uses `classList.toggle('active')` ✓
-- **Visual State:** Updates background color ✓
-- **localStorage:** Saves as `pref_variableSpeedAlerts` ✓
-- **Load on Init:** Yes, via `loadPreferences()` ✓
-
-### 6. ✅ Smart Zoom
+### 5. ✅ Smart Zoom
 - **ID:** `smartZoomToggle`
 - **Function:** `toggleSmartZoom()`
 - **Status:** ✅ WORKING CORRECTLY
@@ -62,7 +53,7 @@ Found **10 toggle switches** in Settings tab. **2 are broken**, **3 are working 
 - **localStorage:** Saves as `smartZoomEnabled` ✓
 - **Load on Init:** Yes, via `applySettingsToUI()` ✓
 
-### 7. ❌ Voice Announcements
+### 6. ❌ Voice Announcements
 - **ID:** `voiceAnnouncementsEnabled`
 - **Function:** `toggleVoiceAnnouncements()`
 - **Status:** ❌ BROKEN
@@ -71,7 +62,7 @@ Found **10 toggle switches** in Settings tab. **2 are broken**, **3 are working 
 - **Issue:** Button elements don't have `.checked` property
 - **Fix Needed:** Replace with `classList.toggle('active')` pattern
 
-### 8. ✅ Smart Route Predictions
+### 7. ✅ Smart Route Predictions
 - **ID:** `mlPredictionsEnabled`
 - **Function:** `toggleMLPredictions()`
 - **Status:** ✅ FIXED (was broken, now working)
@@ -80,7 +71,7 @@ Found **10 toggle switches** in Settings tab. **2 are broken**, **3 are working 
 - **localStorage:** Saves as `mlPredictionsEnabled` ✓
 - **Load on Init:** Yes, via `applySettingsToUI()` ✓
 
-### 9. ⚠️ Battery Saving Mode
+### 8. ⚠️ Battery Saving Mode
 - **ID:** `batterySavingMode`
 - **Function:** `toggleBatterySavingMode()`
 - **Status:** ⚠️ PARTIALLY WORKING
@@ -91,7 +82,7 @@ Found **10 toggle switches** in Settings tab. **2 are broken**, **3 are working 
 - **Issue:** No code in `applySettingsToUI()` to restore state on page load
 - **Fix Needed:** Add state restoration in `applySettingsToUI()`
 
-### 10. ✅ Gesture Control
+### 9. ✅ Gesture Control
 - **ID:** `gestureEnabled`
 - **Function:** `toggleGestureControl()`
 - **Status:** ✅ WORKING CORRECTLY
@@ -116,8 +107,7 @@ Found **10 toggle switches** in Settings tab. **2 are broken**, **3 are working 
 2. Avoid CAZ ✓
 3. Avoid Speed Cameras ✓
 4. Avoid Traffic Cameras ✓
-5. Variable Speed Alerts ✓
-6. Smart Zoom ✓
+5. Smart Zoom ✓
 7. Smart Route Predictions ✓ (recently fixed)
 
 ---

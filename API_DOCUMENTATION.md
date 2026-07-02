@@ -247,19 +247,17 @@ Response:
 
 ---
 
-## 🚦 Speed Limit
+## 📍 GPS speed (PWA)
 
-### Get Speed Limit
+The navigation speed widget shows **GPS speed only** (mph or km/h per Settings → Units). It does not display posted road limits or over-limit warnings. Settings includes a link to third-party speed-limit apps.
+
+### Legacy backend endpoints (not used by PWA UI)
+
+These remain for server tooling and legacy clients:
+
 ```
 GET /api/speed-limit?lat=51.5074&lon=-0.1278
-
-Response:
-{
-  "success": true,
-  "speed_limit_mph": 30,
-  "road_type": "residential",
-  "unit": "mph"
-}
+GET /api/speed-violation?...
 ```
 
 ---

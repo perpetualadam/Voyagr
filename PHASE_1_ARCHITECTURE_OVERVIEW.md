@@ -1,5 +1,7 @@
 # Phase 1 Architecture Overview
 
+> **PWA note (2026):** The PWA shows **GPS speed only** during navigation. `/api/speed-limit` is a **legacy backend API** — the PWA does not call it or display posted limits.
+
 ## System Architecture
 
 ```
@@ -44,7 +46,7 @@
         │  - /api/weather                │
         │  - /api/batch (NEW)            │
         │  - /api/traffic-patterns       │
-        │  - /api/speed-limit            │
+        │  - /api/speed-limit (legacy)   │
         │  - /api/hazards/nearby         │
         └────────────────────────────────┘
 ```

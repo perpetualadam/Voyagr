@@ -15,7 +15,7 @@ All features from the Voyagr codebase have been successfully integrated into the
 - [x] Trip History & Analytics (tracking, statistics)
 - [x] Charging Stations (finder, details, availability)
 - [x] Weather Integration (current conditions, alerts)
-- [x] Speed Limit Detection (road types, warnings)
+- [x] GPS speedometer (GPS-only during navigation/tracking)
 - [x] Offline Functionality (works without internet)
 - [x] PWA Features (installable, standalone, notifications)
 - [x] Database (SQLite, local storage)
@@ -44,7 +44,8 @@ All features from the Voyagr codebase have been successfully integrated into the
 - [x] GET /api/charging-stations - EV charging
 - [x] GET /api/weather - Weather data
 - [x] GET /api/analytics - Statistics
-- [x] GET /api/speed-limit - Speed limits
+
+Legacy (not used by PWA UI): `/api/speed-limit`, `/api/speed-violation`
 
 ### ✅ PWA Features
 - [x] Service Worker (offline, caching, sync)

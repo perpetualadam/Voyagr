@@ -8,12 +8,11 @@
 
 | Feature | Status | Line | Notes |
 |---------|--------|------|-------|
-| Speed limit display | ✅ | 6166 | Fixed - shows current vs limit with visual warning |
+| GPS speed display | ✅ | — | GPS-only widget; mph/km/h from device GPS |
 | Automatic rerouting | ✅ | 7875 | Fixed - implements actual rerouting (5s debounce, 50m threshold) |
 | Voice instructions | ✅ | 7799 | Announces at 500m, 200m, 100m, 50m distances |
 | Distance announcements | ✅ | 7668 | Announces remaining distance at intervals |
 | ETA announcements | ✅ | 7731 | Announces ETA updates when changed significantly |
-| Variable speed limits | ✅ | 6536 | Detects motorway variable speed limits |
 | Hazard checking | ✅ | 7978 | Checks for hazards within 500m radius |
 
 **Status:** ✅ FULLY IMPLEMENTED
@@ -215,7 +214,7 @@
 | community_hazard_reports | ✅ | Community reports |
 | search_history | ✅ | Search history |
 | favorite_locations | ✅ | Favorite locations |
-| speed_limit_cache | ✅ | Speed limit cache |
+| speed_limit_cache | — | Legacy backend cache; not used by PWA UI |
 | lane_guidance_cache | ✅ | Lane guidance cache |
 | app_settings | ✅ | App settings |
 | ml_route_predictions | ✅ | ML predictions |

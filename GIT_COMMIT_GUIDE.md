@@ -167,7 +167,7 @@ nothing to commit, working tree clean
 
 ### Supporting Modules
 - `hazard_parser.py` - Hazard detection and parsing
-- `speed_limit_detector.py` - Speed limit recognition
+- `speed_limit_detector.py` - Speed limit recognition (native/backend — not PWA UI)
 - `lane_guidance.py` - Lane guidance system
 - `vehicle_profile_manager.py` - Vehicle profile management
 - `charging_station_manager.py` - Charging station management
@@ -187,7 +187,7 @@ nothing to commit, working tree clean
 - `test_hazard_avoidance.py` - Hazard avoidance tests
 - `test_vehicle_integration.py` - Vehicle integration tests
 - `test_ml_features.py` - ML feature tests
-- `test_speed_limit_detector.py` - Speed limit tests
+- `test_speed_limit_detector.py` - Speed limit tests (native/backend module)
 - `test_lane_guidance.py` - Lane guidance tests
 - `test_valhalla_integration.py` - Valhalla integration tests
 - `test_api_integration.py` - API integration tests

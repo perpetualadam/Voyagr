@@ -9,12 +9,15 @@ Successfully fixed all critical issues with the Voyagr PWA turn-by-turn navigati
 
 ## Issues Fixed
 
-### 1. ✅ Speed Limit Display Not Working
-**Problem:** Speed limit indicator showed "--" instead of actual values
+### 1. ~~Speed Limit Display Not Working~~ (Historical — removed from PWA)
+
+> **Superseded (2026):** The PWA no longer displays posted speed limits. The speed widget shows **GPS speed only**. Backend `/api/speed-limit` may exist but the PWA does not call it. The fix below is retained for historical context only.
+
+**Problem (historical):** Speed limit indicator showed "--" instead of actual values
 
 **Root Cause:** API response parsing error - the speed limit value was nested in `data.data` object but code was looking for `data.speed_limit`
 
-**Solution Implemented:**
+**Solution Implemented (historical):**
 ```javascript
 // FIXED: Extract speed_limit_mph from data.data object
 const speedLimitMph = data.data.speed_limit_mph || data.data.speed_limit;
@@ -22,12 +25,7 @@ console.log('[Speed Limit] API response:', data.data, 'Extracted limit:', speedL
 updateSpeedWidget(speedMph, speedLimitMph);
 ```
 
-**Changes:**
-- Lines 6740-6758: Updated API response parsing in GPS tracking loop
-- Lines 5421-5434: Updated `updateSpeedWidget()` to show '?' instead of '--' when no data available
-- Added console logging for debugging
-
-**Result:** Speed limit now displays correctly during navigation
+**Result:** Posted speed limit display was later removed; widget now shows GPS speed only.
 
 ---
 
@@ -124,12 +122,11 @@ function announceUpcomingTurn(turnInfo) {
 5. **GPS Tracking Loop** - Enhanced with voice announcement calls
 
 ### API Endpoints Used
-- `/api/speed-limit` - Fetches speed limit for current location
 - `/api/route` - Recalculates route during automatic rerouting
 
 ### Console Logging
 All features include comprehensive console logging for debugging:
-- `[Speed Widget]` - Speed limit updates
+- `[Speed Widget]` - GPS speed updates
 - `[Rerouting]` - Rerouting events and debouncing
 - `[Voice]` - Turn announcements
 - `[SmartZoom]` - Zoom level changes
@@ -138,10 +135,10 @@ All features include comprehensive console logging for debugging:
 
 ## Testing Recommendations
 
-### 1. Speed Limit Display
-- Navigate to a location with known speed limits
-- Verify speed limit displays correctly in speed widget
-- Check console for `[Speed Limit]` logs
+### 1. GPS Speed Display
+- Start navigation and verify the speed widget shows current GPS speed
+- Confirm no posted speed limit or over-limit indicator is shown
+- Check console for `[Speed Widget]` logs
 
 ### 2. Automatic Rerouting
 - Calculate a route

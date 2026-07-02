@@ -23,8 +23,11 @@ Successfully fixed and tested the TomTom Snap to Roads API integration. The API 
 - `timestamps`: Timestamp for each point (e.g., "2021-01-01T00:00:00Z;2021-01-01T00:01:00Z")
 **Commit**: `faa413a`
 
-### 4. Wrong Response Parsing
-**Problem**: Treating `speedLimits` as an array when it's an object
+### Snap to Roads Response Parsing (internal)
+
+**Note:** TomTom Snap to Roads responses may include `speedLimits` metadata used internally for road snapping. The **PWA does not display posted speed limits** to users — only GPS speed.
+
+**Problem (historical):** Treating `speedLimits` as an array when it's an object
 **Fix**: Changed parsing to handle object structure
 **Response Structure**:
 ```json
@@ -105,9 +108,6 @@ TomTom Snap to Roads: 32 km/h -> 20 mph
 ```bash
 # Run Snap to Roads API tests
 python test_snap_to_roads.py
-
-# Run all speed limit tests
-python test_speed_limit_fixes.py
 ```
 
 ## 📝 API Request Format
@@ -145,6 +145,6 @@ systemctl restart voyagr
 
 - **13/13 tests passing** (100%)
 - **100% API success rate** in production
-- **Accurate speed limits** from road network data
+- **Reliable road snapping** from TomTom Snap to Roads API
 - **Proper fallback** to Traffic Flow API when needed
 

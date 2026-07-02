@@ -2,9 +2,11 @@
 **Date**: October 29, 2025  
 **Status**: ✅ ALL FEATURES COMPLETE & VERIFIED
 
+> **PWA note (2026):** Speed limit alert verification below documents the **native app (`satnav.py`)** only. The PWA displays GPS speed only and does not implement posted speed limits or over-limit alerts.
+
 ---
 
-## ✅ FEATURE 1: SPEED LIMIT ALERT SYSTEM
+## ✅ FEATURE 1: SPEED LIMIT ALERT SYSTEM (Native App Only)
 
 ### Code Changes Verification
 

@@ -1,14 +1,16 @@
 # Advanced Navigation Features - Implementation Summary
 
+> **PWA note (2026):** Variable speed limit recognition and speed violation UI are implemented for the **native app** and optional backend APIs. The **PWA shows GPS speed only** — no posted limits, over-limit alerts, or variable speed limit UI.
+
 ## 🎉 Project Complete & Production Ready ✅
 
-Successfully implemented **two advanced navigation features** plus **additional vehicle icons** for the Voyagr satellite navigation app.
+Successfully implemented **lane guidance** plus **additional vehicle icons** for the Voyagr satellite navigation app. Speed limit detection remains available as a backend/native module (`speed_limit_detector.py`) but is not a PWA user feature.
 
 ---
 
 ## 📦 Deliverables
 
-### 1. Variable Speed Limit Recognition (✅ COMPLETE)
+### 1. Variable Speed Limit Recognition (✅ Backend / Native — not PWA UI)
 
 **Module:** `speed_limit_detector.py` (280 lines)
 
@@ -310,9 +312,8 @@ print(f"Warning: {warning}")  # "Prepare to change lane in 300m"
 
 1. **Real-time Highways England API integration** for live smart motorway data
 2. **Machine learning** for predicting lane changes
-3. **Voice announcements** for lane changes and speed limit updates
+3. **Voice announcements** for lane changes
 4. **Visual lane indicators** on map display
-5. **Predictive speed limit warnings** based on route
 
 ---
 

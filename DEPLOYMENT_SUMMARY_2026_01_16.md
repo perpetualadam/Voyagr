@@ -1,5 +1,7 @@
 # Deployment Summary - January 16, 2026
 
+> **PWA note (2026):** The PWA shows **GPS speed only**. Speed limit backend endpoints below are for native app / legacy API — not PWA user features.
+
 ## ✅ All Changes Committed and Pushed to GitHub
 
 **Latest Commit**: `b287411`  
@@ -13,7 +15,7 @@
 ### 1. UI Fixes (Commit: a980c1e)
 - ✅ Fixed battery indicator position (moved from top: 10px to top: 90px)
 - ✅ Fixed turn instructions default text (changed from "--" to "Follow Route")
-- ✅ Fixed speed violation endpoint default (changed from 70 mph to 30 mph)
+- ✅ Fixed speed violation endpoint default (changed from 70 mph to 30 mph) — **backend/native API only**
 
 ### 2. Documentation Updates (Commit: 4a2395a)
 - ✅ Updated UI_FIXES_SUMMARY.md to clarify speed limit fix context
@@ -81,11 +83,7 @@ After deployment, verify these changes:
 - [ ] Check turn widget shows "Follow Route" instead of "--"
 - [ ] Check turn widget shows "Continue on current road" instead of "Calculating route..."
 
-### 3. Speed Limit Defaults
-- [ ] Test speed violation endpoint with no speed limit provided
-- [ ] Should default to 30 mph (residential) instead of 70 mph (motorway)
-
-### 4. Service Status
+### 3. Service Status
 - [ ] `systemctl status voyagr` shows "active (running)"
 - [ ] No errors in `journalctl -u voyagr -n 50`
 - [ ] HTTP response returns 200 OK
@@ -151,12 +149,12 @@ Web App (Python)
 
 ## 🎯 What's Fixed
 
-### Speed Limit System
+### Backend Speed Limit API (native app — not PWA UI)
 - ✅ `/api/speed-limit` defaults to 30 mph (fixed in commit 20dd787)
 - ✅ `/api/speed-violation` defaults to 30 mph (fixed in commit a980c1e)
 - ✅ All endpoints now consistently default to residential speed (30 mph)
 
-### UI/UX Improvements
+### UI/UX Improvements (PWA)
 - ✅ Battery indicator no longer blocks speed widget
 - ✅ Turn instructions show helpful text instead of placeholders
 - ✅ Better user experience during navigation

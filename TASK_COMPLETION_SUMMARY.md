@@ -36,12 +36,11 @@ Consolidated all preferences into a single Settings tab with **5 organized secti
 │   ├── Temperature (°C/°F)
 │   └── Currency (GBP/USD/EUR)
 │
-├── ⚠️ Hazard Avoidance (5 toggles)
+├── ⚠️ Hazard Avoidance (4 toggles)
 │   ├── Avoid Tolls
 │   ├── Avoid CAZ
 │   ├── Avoid Speed Cameras
-│   ├── Avoid Traffic Cameras
-│   └── Variable Speed Alerts
+│   └── Avoid Traffic Cameras
 │
 ├── 🛣️ Route Preferences (6 controls)
 │   ├── Avoid Highways
@@ -130,7 +129,6 @@ Consolidated all preferences into a single Settings tab with **5 organized secti
 - Avoid CAZ (toggle)
 - Avoid Speed Cameras (toggle)
 - Avoid Traffic Cameras (toggle)
-- Variable Speed Alerts (toggle)
 
 ### 🛣️ Route Preferences
 - Avoid Highways (checkbox)
@@ -160,7 +158,7 @@ All existing localStorage keys preserved:
 unit_distance, unit_speed, unit_temperature, unit_currency
 
 // Hazard Avoidance
-pref_tolls, pref_caz, pref_speedCameras, pref_trafficCameras, pref_variableSpeedAlerts
+pref_tolls, pref_caz, pref_speedCameras, pref_trafficCameras
 
 // Route Preferences
 routePreferences (JSON object)

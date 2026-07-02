@@ -117,7 +117,7 @@ Once deployed, you can monitor your app:
 ✅ Vehicle profiles
 ✅ Cost estimation
 ✅ Hazard avoidance
-✅ Speed limit detection
+✅ GPS speed display (PWA — no posted speed limits)
 ✅ Voice commands
 ✅ Offline mode
 ✅ Dark mode

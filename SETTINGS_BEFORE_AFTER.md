@@ -16,7 +16,6 @@ Navigation Content (Bottom Sheet)
     ├── Avoid CAZ
     ├── Avoid Speed Cameras
     ├── Avoid Traffic Cameras
-    ├── Variable Speed Alerts
     ├── Smart Zoom
     ├── Gesture Control
     ├── Battery Saving Mode
@@ -62,8 +61,7 @@ Settings Tab (separate)
 │   ├── Avoid Tolls
 │   ├── Avoid CAZ
 │   ├── Avoid Speed Cameras
-│   ├── Avoid Traffic Cameras
-│   └── Variable Speed Alerts
+│   └── Avoid Traffic Cameras
 │
 ├── 🛣️ Route Preferences
 │   ├── Avoid Highways
@@ -155,7 +153,6 @@ User wants to avoid tolls:
 │ ├─ Avoid CAZ                    │
 │ ├─ Speed Cameras                │
 │ ├─ Traffic Cameras              │
-│ ├─ Variable Speed Alerts        │
 │ ├─ Smart Zoom                   │
 │ ├─ Gesture Control              │
 │ ├─ Battery Saving               │
@@ -202,7 +199,6 @@ User wants to avoid tolls:
 │ ├─ Avoid CAZ                    │
 │ ├─ Avoid Speed Cameras          │
 │ ├─ Avoid Traffic Cameras        │
-│ └─ Variable Speed Alerts        │
 │ ─────────────────────────────── │
 │ 🛣️ Route Preferences            │
 │ ├─ Avoid Highways               │

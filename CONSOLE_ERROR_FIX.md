@@ -1,5 +1,7 @@
 # Console Error Fix - Hazard Preference Buttons ✅
 
+> **PWA note (2026):** The PWA shows **GPS speed only** during navigation. Hazard toggles below are for route avoidance only — not posted speed limit alerts.
+
 ## Problem Identified
 
 You were seeing this error in the browser console:
@@ -27,7 +29,7 @@ When `togglePreference()` received `undefined`, it tried to call `.charAt()` on 
 
 ### 1. Added data-pref Attributes (voyagr_web.py)
 
-Added `data-pref` attribute to all 5 hazard preference buttons:
+Added `data-pref` attribute to all 4 hazard preference buttons:
 
 ```html
 <!-- Before -->
@@ -42,7 +44,6 @@ Applied to:
 - Avoid CAZ (data-pref="caz")
 - Avoid Speed Cameras (data-pref="speedCameras")
 - Avoid Traffic Cameras (data-pref="trafficCameras")
-- Variable Speed Alerts (data-pref="variableSpeedAlerts")
 
 ### 2. Added Safety Check (static/js/voyagr-app.js)
 
