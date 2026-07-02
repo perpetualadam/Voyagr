@@ -7174,6 +7174,7 @@ function updateRouteOnMap(newRoute) {
     resetVehicleMarkerDisplayState();
     _lastActiveManeuverIdx = -1;
     currentSpeedLimitMph = null;
+    lastDetectedRoadType = null;
     const slState = _getSpeedLimitFetchState();
     if (slState) {
         slState.lastFetchAt = 0;
