@@ -433,9 +433,18 @@ def get_speed_limit():
         except (ValueError, TypeError):
             valhalla_hint_mph = None
 
+        heading_deg = None
+        try:
+            raw_heading = request.args.get('heading')
+            if raw_heading is not None:
+                heading_deg = float(raw_heading)
+        except (ValueError, TypeError):
+            heading_deg = None
+
         result = speed_limit_detector.get_speed_limit_for_location(
             lat=lat, lon=lon, road_type=road_type, vehicle_type=vehicle_type,
-            valhalla_hint_mph=valhalla_hint_mph
+            valhalla_hint_mph=valhalla_hint_mph,
+            heading_deg=heading_deg,
         )
 
         return jsonify({'success': True, 'data': result})

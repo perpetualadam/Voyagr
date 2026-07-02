@@ -49,20 +49,63 @@
         return elapsed > c.FETCH_INTERVAL_MS || moved > c.DISTANCE_THRESHOLD_M;
     }
 
+    var ROAD_TYPE_DEFAULT_MPH_UK = {
+        motorway: 70,
+        trunk_road: 70,
+        trunk: 70,
+        primary_road: 50,
+        primary: 50,
+        secondary_road: 50,
+        secondary: 50,
+        residential: 30,
+        living_street: 20,
+        unclassified: 30
+    };
+
+    /**
+     * Regional default mph by road class (client-side immediate fallback).
+     * @param {string} roadType
+     * @param {string} [region] - uk | us | metric
+     * @returns {number|null}
+     */
+    function inferRoadTypeDefaultLimitMph(roadType, region) {
+        var rt = String(roadType || 'residential').toLowerCase();
+        if (rt === 'motorway_link') rt = 'motorway';
+        if (rt === 'trunk_link') rt = 'trunk';
+        if (rt === 'primary_link') rt = 'primary';
+        if (rt === 'secondary_link') rt = 'secondary';
+        var reg = String(region || 'uk').toLowerCase();
+        if (reg === 'us') {
+            var us = { motorway: 70, trunk: 55, trunk_road: 55, primary: 55, primary_road: 55,
+                secondary: 55, secondary_road: 55, residential: 25, living_street: 15, unclassified: 35 };
+            return us[rt] != null ? us[rt] : us.residential;
+        }
+        if (reg === 'metric') {
+            var eu = { motorway: 81, trunk: 62, trunk_road: 62, primary: 56, primary_road: 56,
+                secondary: 50, secondary_road: 50, residential: 31, living_street: 19, unclassified: 31 };
+            return eu[rt] != null ? eu[rt] : eu.residential;
+        }
+        return ROAD_TYPE_DEFAULT_MPH_UK[rt] != null ? ROAD_TYPE_DEFAULT_MPH_UK[rt] : ROAD_TYPE_DEFAULT_MPH_UK.residential;
+    }
+
     /**
      * @param {number} lat
      * @param {number} lon
      * @param {string} roadType
      * @param {number|null} valhallaSpeedLimitMph
+     * @param {number|null} [headingDeg]
      * @returns {string}
      */
-    function buildSpeedLimitApiUrl(lat, lon, roadType, valhallaSpeedLimitMph) {
+    function buildSpeedLimitApiUrl(lat, lon, roadType, valhallaSpeedLimitMph, headingDeg) {
         var vslParam = (Number.isFinite(valhallaSpeedLimitMph) && valhallaSpeedLimitMph > 0)
             ? '&valhalla_speed_limit=' + valhallaSpeedLimitMph
             : '';
+        var headingParam = (Number.isFinite(headingDeg))
+            ? '&heading=' + encodeURIComponent(String(headingDeg))
+            : '';
         return '/api/speed-limit?lat=' + lat + '&lon=' + lon
             + '&road_type=' + encodeURIComponent(roadType || 'residential')
-            + vslParam;
+            + vslParam + headingParam;
     }
 
     /**
@@ -72,10 +115,11 @@
      * @param {object|null} speedGpsModule - VoyagrSpeedGps
      * @returns {number|null}
      */
-    function coerceApiSpeedLimitMph(mph, roadClass, gpsSpeedMph, speedGpsModule) {
+    function coerceApiSpeedLimitMph(mph, roadClass, gpsSpeedMph, speedGpsModule, trustServer) {
         var n = Number(mph);
         if (!Number.isFinite(n) || n < 5 || n > 100) return null;
         var rounded = Math.round(n);
+        if (trustServer) return rounded;
         if (speedGpsModule && typeof speedGpsModule.sanitizeApiSpeedLimitMph === 'function') {
             return speedGpsModule.sanitizeApiSpeedLimitMph(rounded, roadClass, gpsSpeedMph);
         }
@@ -92,33 +136,52 @@
      */
     function parseSpeedLimitApiResponse(data, roadType, gpsSpeedMph, speedGpsModule) {
         if (!data || !data.success || !data.data) {
-            return { limitMph: null, roadType: roadType, source: null };
+            return { limitMph: null, roadType: roadType, source: null, region: null };
         }
         var payload = data.data;
-        var apiRoadType = payload.road_type || roadType;
-        var limitMph = coerceApiSpeedLimitMph(payload.speed_limit_mph, apiRoadType, gpsSpeedMph, speedGpsModule);
+        var apiRoadType = payload.detected_road_type || payload.road_type || roadType;
+        var source = payload.source || payload.posted_limit_source || 'api';
+        var authoritative = /tomtom|osm|road-type-default|highway-inferred/i.test(String(source));
+        var limitMph = coerceApiSpeedLimitMph(
+            payload.speed_limit_mph, apiRoadType, gpsSpeedMph, speedGpsModule, authoritative
+        );
         if (limitMph == null) {
             var kmh = Number(payload.speed_limit_kmh);
             if (Number.isFinite(kmh) && kmh > 0) {
-                limitMph = coerceApiSpeedLimitMph(kmh * 0.621371, apiRoadType, gpsSpeedMph, speedGpsModule);
+                limitMph = coerceApiSpeedLimitMph(
+                    kmh * 0.621371, apiRoadType, gpsSpeedMph, speedGpsModule, authoritative
+                );
             }
         }
         return {
             limitMph: limitMph,
             roadType: apiRoadType,
-            source: payload.source || 'api'
+            source: source,
+            region: payload.speed_limit_region || null
         };
     }
 
     /**
-     * @param {number|null} valhallaLimitMph
      * @param {number|null} apiLimitMph
+     * @param {number|null} valhallaLimitMph
+     * @param {string} [roadType]
+     * @param {string} [region]
      * @returns {number|null}
      */
-    function pickDisplaySpeedLimitMph(apiLimitMph, valhallaLimitMph) {
+    function pickDisplaySpeedLimitMph(apiLimitMph, valhallaLimitMph, roadType, region) {
         if (apiLimitMph != null && apiLimitMph > 0) return apiLimitMph;
         if (Number.isFinite(valhallaLimitMph) && valhallaLimitMph > 0) return valhallaLimitMph;
-        return null;
+        var fallback = inferRoadTypeDefaultLimitMph(roadType, region);
+        return fallback != null && fallback > 0 ? fallback : null;
+    }
+
+    /**
+     * @param {number} displayValue
+     * @returns {number}
+     */
+    function sanitizeWidgetDisplayNumber(displayValue) {
+        var n = Number(displayValue);
+        return Number.isFinite(n) && n >= 0 ? Math.round(n) : 0;
     }
 
     /**
@@ -131,13 +194,13 @@
         var n = Number.isFinite(mph) ? mph : 0;
         if (speedGpsModule) {
             return {
-                value: Math.round(speedGpsModule.mphToDisplaySpeed(n, speedUnitPref)),
+                value: sanitizeWidgetDisplayNumber(speedGpsModule.mphToDisplaySpeed(n, speedUnitPref)),
                 unitLabel: speedGpsModule.speedUnitLabel(speedUnitPref)
             };
         }
         var isMph = String(speedUnitPref).toLowerCase() === 'mph';
         return {
-            value: Math.round(isMph ? n : n * 1.609344),
+            value: sanitizeWidgetDisplayNumber(isMph ? n : n * 1.609344),
             unitLabel: isMph ? 'mph' : 'km/h'
         };
     }
@@ -174,6 +237,8 @@
         coerceApiSpeedLimitMph: coerceApiSpeedLimitMph,
         parseSpeedLimitApiResponse: parseSpeedLimitApiResponse,
         pickDisplaySpeedLimitMph: pickDisplaySpeedLimitMph,
+        inferRoadTypeDefaultLimitMph: inferRoadTypeDefaultLimitMph,
+        sanitizeWidgetDisplayNumber: sanitizeWidgetDisplayNumber,
         formatSpeedForWidget: formatSpeedForWidget,
         speedLimitCacheKey: speedLimitCacheKey,
         readCachedLimitMph: readCachedLimitMph

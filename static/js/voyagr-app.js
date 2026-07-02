@@ -2089,8 +2089,17 @@ function updateAllCostDisplays() {
  * @returns {*} Return value description
  */
 function updateAllSpeedDisplays() {
+    const SL = _speedLimitWidget();
+    const shownLimit = SL
+        ? SL.pickDisplaySpeedLimitMph(
+            currentSpeedLimitMph,
+            null,
+            lastDetectedRoadType || getCurrentRoadType(),
+            lastSpeedLimitRegion
+        )
+        : currentSpeedLimitMph;
     if (Number.isFinite(currentGpsSpeedMph) && currentGpsSpeedMph >= 0) {
-        updateSpeedWidget(currentGpsSpeedMph);
+        updateSpeedWidget(currentGpsSpeedMph, shownLimit);
     }
     console.log('[Units] Speed unit updated to', speedUnit);
 }
@@ -10116,6 +10125,8 @@ let currentSpeedMph = 0;
 let currentGpsSpeedMph = 0;
 let currentGpsSpeedKmh = 0;
 let currentSpeedLimitMph = null;
+let lastDetectedRoadType = null;
+let lastSpeedLimitRegion = 'uk';
 let _speedLimitFetchState = null;
 let _lastActiveManeuverIdx = -1;
 function _getSpeedLimitFetchState() {
@@ -10336,22 +10347,34 @@ function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
 
     const speedValueEl = document.getElementById('speedValue');
     const speedUnitEl = document.getElementById('speedUnitDisplay');
-    if (speedValueEl) speedValueEl.textContent = gpsDisplay.value;
+    if (speedValueEl) {
+        speedValueEl.textContent = String(
+            SL ? SL.sanitizeWidgetDisplayNumber(gpsDisplay.value) : gpsDisplay.value
+        );
+    }
     if (speedUnitEl) speedUnitEl.textContent = gpsDisplay.unitLabel;
 
     const limitValueEl = document.getElementById('speedLimitValue');
     const limitUnitEl = document.getElementById('speedLimitUnit');
     if (limitValueEl && limitUnitEl) {
-        if (speedLimitInMph !== null && speedLimitInMph > 0) {
-            currentSpeedLimitMph = speedLimitInMph;
+        const resolvedLimit = (speedLimitInMph !== null && speedLimitInMph > 0)
+            ? speedLimitInMph
+            : (SL ? SL.pickDisplaySpeedLimitMph(
+                null, null, lastDetectedRoadType || getCurrentRoadType(), lastSpeedLimitRegion
+            ) : null);
+
+        if (resolvedLimit !== null && resolvedLimit > 0) {
+            currentSpeedLimitMph = resolvedLimit;
             const limitDisplay = SL
-                ? SL.formatSpeedForWidget(speedLimitInMph, speedUnit, SG)
-                : { value: Math.round(speedLimitInMph), unitLabel: displaySpeedUnit };
-            limitValueEl.textContent = limitDisplay.value;
+                ? SL.formatSpeedForWidget(resolvedLimit, speedUnit, SG)
+                : { value: Math.round(resolvedLimit), unitLabel: displaySpeedUnit };
+            limitValueEl.textContent = String(
+                SL ? SL.sanitizeWidgetDisplayNumber(limitDisplay.value) : limitDisplay.value
+            );
             limitUnitEl.textContent = limitDisplay.unitLabel;
             widget.style.borderLeft = '4px solid #4285F4';
         } else {
-            limitValueEl.textContent = '?';
+            limitValueEl.textContent = '…';
             limitUnitEl.textContent = displaySpeedUnit;
             widget.style.borderLeft = '4px solid #999';
         }
@@ -10494,7 +10517,7 @@ function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
 /**
  * Fetch posted speed limit for current GPS position (throttled, offline cache fallback).
  */
-function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residential', valhallaSpeedLimit = null) {
+function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residential', valhallaSpeedLimit = null, headingDeg = null) {
     const SL = _speedLimitWidget();
     const SG = _speedGps();
     const state = _getSpeedLimitFetchState();
@@ -10516,8 +10539,12 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
         apply();
     };
 
-    const applyLimit = (limitMph) => {
-        const displayLimit = SL.pickDisplaySpeedLimitMph(limitMph, valhallaSpeedLimit);
+    const applyLimit = (limitMph, detectedRoadType, region) => {
+        if (detectedRoadType) lastDetectedRoadType = detectedRoadType;
+        if (region) lastSpeedLimitRegion = region;
+        const displayLimit = SL.pickDisplaySpeedLimitMph(
+            limitMph, valhallaSpeedLimit, roadType, lastSpeedLimitRegion
+        );
         if (limitMph != null) {
             state.currentLimitMph = limitMph;
             currentSpeedLimitMph = limitMph;
@@ -10525,7 +10552,7 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
         updateSpeedWidget(currentGpsSpeedMph, displayLimit);
     };
 
-    const url = SL.buildSpeedLimitApiUrl(lat, lon, roadType, valhallaSpeedLimit);
+    const url = SL.buildSpeedLimitApiUrl(lat, lon, roadType, valhallaSpeedLimit, headingDeg);
     fetch(url)
         .then((response) => {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -10534,10 +10561,12 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
         .then((data) => {
             acceptIfFresh(() => {
                 const parsed = SL.parseSpeedLimitApiResponse(data, roadType, currentSpeedMph, SG);
+                if (parsed.roadType) lastDetectedRoadType = parsed.roadType;
+                if (parsed.region) lastSpeedLimitRegion = parsed.region;
                 if (parsed.limitMph != null) {
                     void cacheSpeedLimit(lat, lon, parsed.limitMph, parsed.source || 'api');
                 }
-                applyLimit(parsed.limitMph);
+                applyLimit(parsed.limitMph, parsed.roadType, parsed.region);
             });
         })
         .catch(async () => {
@@ -10551,8 +10580,11 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
             if (fallbackLimit == null && Number.isFinite(valhallaSpeedLimit) && valhallaSpeedLimit > 0) {
                 fallbackLimit = valhallaSpeedLimit;
             }
+            if (fallbackLimit == null) {
+                fallbackLimit = SL.inferRoadTypeDefaultLimitMph(roadType, lastSpeedLimitRegion);
+            }
             if (fallbackLimit != null) {
-                acceptIfFresh(() => applyLimit(fallbackLimit));
+                acceptIfFresh(() => applyLimit(fallbackLimit, roadType, lastSpeedLimitRegion));
             }
         })
         .finally(() => {
@@ -15013,10 +15045,15 @@ function startGPSTracking() {
 
                 const SL = _speedLimitWidget();
                 const shownLimit = SL
-                    ? SL.pickDisplaySpeedLimitMph(currentSpeedLimitMph, valhallaSpeedLimitMph)
+                    ? SL.pickDisplaySpeedLimitMph(
+                        currentSpeedLimitMph,
+                        valhallaSpeedLimitMph,
+                        roadType,
+                        lastSpeedLimitRegion
+                    )
                     : (currentSpeedLimitMph && currentSpeedLimitMph > 0 ? currentSpeedLimitMph : valhallaSpeedLimitMph);
                 updateSpeedWidget(displaySpeedMph, shownLimit);
-                fetchSpeedLimitThrottled(lat, lon, displaySpeedMph, roadType, valhallaSpeedLimitMph);
+                fetchSpeedLimitThrottled(lat, lon, displaySpeedMph, roadType, valhallaSpeedLimitMph, heading);
             } else {
                 updateSpeedWidget(displaySpeedMph, null);
             }

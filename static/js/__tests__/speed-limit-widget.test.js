@@ -31,6 +31,24 @@ describe('speed-limit-widget module', () => {
         expect(SL.pickDisplaySpeedLimitMph(null, 60)).toBe(60);
     });
 
+    test('pickDisplaySpeedLimitMph falls back to road-type default', () => {
+        expect(SL.pickDisplaySpeedLimitMph(null, null, 'motorway', 'uk')).toBe(70);
+        expect(SL.pickDisplaySpeedLimitMph(null, null, 'residential', 'uk')).toBe(30);
+    });
+
+    test('parseSpeedLimitApiResponse trusts server motorway limits with detected road type', () => {
+        const parsed = SL.parseSpeedLimitApiResponse({
+            success: true,
+            data: {
+                speed_limit_mph: 70,
+                detected_road_type: 'motorway',
+                source: 'TomTom-SnapToRoads'
+            }
+        }, 'residential', 65, SG);
+        expect(parsed.limitMph).toBe(70);
+        expect(parsed.roadType).toBe('motorway');
+    });
+
     test('formatSpeedForWidget converts mph to km/h display', () => {
         const mph = SL.formatSpeedForWidget(60, 'mph', SG);
         expect(mph.value).toBe(60);

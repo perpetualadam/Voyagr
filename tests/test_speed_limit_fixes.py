@@ -261,7 +261,7 @@ class TestAPIIntegration(unittest.TestCase):
 
 
 class TestOsmSnapPipeline(unittest.TestCase):
-    """OSM-first pipeline: Snap fallback when no usable maxspeed; optional cross-check."""
+    """TomTom-first pipeline: Overpass fallback when TomTom has no usable limit."""
 
     def test_snap_fallback_when_nearby_highway_has_no_maxspeed(self):
         os.environ['TOMTOM_API_KEY'] = 'test_key'
@@ -270,6 +270,9 @@ class TestOsmSnapPipeline(unittest.TestCase):
         detector = SpeedLimitDetector()
         detector.speed_limit_cache.clear()
 
+        snap_resp = Mock()
+        snap_resp.status_code = 200
+        snap_resp.json.return_value = {'route': []}
         overpass_resp = Mock()
         overpass_resp.status_code = 200
         overpass_resp.json.return_value = {
@@ -278,23 +281,14 @@ class TestOsmSnapPipeline(unittest.TestCase):
                 'tags': {'highway': 'primary'},
             }]
         }
-        snap_resp = Mock()
-        snap_resp.status_code = 200
-        snap_resp.json.return_value = {
-            'route': [{
-                'properties': {
-                    'speedLimits': {'value': 48, 'unit': 'kmph', 'type': 'Maximum'}
-                }
-            }]
-        }
 
-        with patch('speed_limit_detector.requests.get', side_effect=[overpass_resp, snap_resp]):
+        with patch('speed_limit_detector.requests.get', side_effect=[snap_resp, overpass_resp]):
             result = detector.get_speed_limit_for_location(51.5074, -0.1278)
 
-        self.assertEqual(result.get('speed_limit_mph'), 30)
+        self.assertEqual(result.get('speed_limit_mph'), 50)
         self.assertEqual(detector.metrics['overpass_nearby_no_usable_maxspeed'], 1)
 
-    def test_snap_crosscheck_logs_disagreement_keeps_osm(self):
+    def test_snap_crosscheck_logs_disagreement_keeps_tomtom(self):
         os.environ['TOMTOM_API_KEY'] = 'test_key'
         os.environ['SPEED_LIMIT_SNAP_CROSSCHECK'] = 'true'
         self.addCleanup(lambda: os.environ.pop('TOMTOM_API_KEY', None))
@@ -303,14 +297,6 @@ class TestOsmSnapPipeline(unittest.TestCase):
         detector = SpeedLimitDetector()
         detector.speed_limit_cache.clear()
 
-        overpass_resp = Mock()
-        overpass_resp.status_code = 200
-        overpass_resp.json.return_value = {
-            'elements': [{
-                'center': {'lat': 51.5074, 'lon': -0.1278},
-                'tags': {'highway': 'residential', 'maxspeed': '30 mph'},
-            }]
-        }
         snap_resp = Mock()
         snap_resp.status_code = 200
         snap_resp.json.return_value = {
@@ -320,11 +306,20 @@ class TestOsmSnapPipeline(unittest.TestCase):
                 }
             }]
         }
+        overpass_resp = Mock()
+        overpass_resp.status_code = 200
+        overpass_resp.json.return_value = {
+            'elements': [{
+                'center': {'lat': 51.5074, 'lon': -0.1278},
+                'tags': {'highway': 'residential', 'maxspeed': '30 mph'},
+            }]
+        }
 
-        with patch('speed_limit_detector.requests.get', side_effect=[overpass_resp, snap_resp]):
+        with patch('speed_limit_detector.requests.get', side_effect=[snap_resp, overpass_resp]):
             result = detector.get_speed_limit_for_location(51.5074, -0.1278)
 
-        self.assertEqual(result.get('speed_limit_mph'), 30)
+        self.assertEqual(result.get('speed_limit_mph'), 70)
+        self.assertEqual(result.get('source'), 'TomTom-SnapToRoads')
         self.assertEqual(detector.metrics['snap_crosscheck_invocations'], 1)
         self.assertEqual(detector.metrics['snap_crosscheck_disagree'], 1)
         self.assertEqual(detector.metrics['snap_crosscheck_agree'], 0)
