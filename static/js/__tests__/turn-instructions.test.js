@@ -78,6 +78,29 @@ describe('maneuverTypeToDirectionKey', () => {
     });
 });
 
+describe('refineManeuverDirection', () => {
+    test('promotes ramp left on motorway to exit_left', () => {
+        expect(TI.refineManeuverDirection(19, 'slight_left', 'motorway')).toBe('exit_left');
+    });
+    test('promotes left turn on motorway to exit_left', () => {
+        expect(TI.refineManeuverDirection(15, 'left', 'motorway')).toBe('exit_left');
+    });
+    test('does not change residential left turn', () => {
+        expect(TI.refineManeuverDirection(15, 'left', 'residential')).toBe('left');
+    });
+});
+
+describe('buildTurnDisplayInstruction', () => {
+    test('prefers exit phrasing over raw turn-left engine text', () => {
+        expect(TI.buildTurnDisplayInstruction('exit_left', 'Turn left onto A556', 21, 0))
+            .toBe('take the exit on the left');
+    });
+    test('roundabout exit count phrasing', () => {
+        expect(TI.buildTurnDisplayInstruction('roundabout', '', 26, 2))
+            .toBe('at the roundabout, take the 2nd exit');
+    });
+});
+
 describe('getTurnIcon', () => {
     test('left/right arrows match the maneuver side', () => {
         expect(TI.getTurnIcon(15)).toBe('←');

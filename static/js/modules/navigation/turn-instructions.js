@@ -147,12 +147,90 @@
         return DIRECTION_TEXT_MAP[direction] || 'continue';
     }
 
+    function isMotorwayRoadClass(roadClass) {
+        if (roadClass == null || roadClass === '') return false;
+        var rc = String(roadClass).toLowerCase();
+        return rc === 'motorway' || rc === 'motorway_link' || rc === 'trunk' || rc === 'trunk_link';
+    }
+
+    /**
+     * Promote ramp/turn types to exit_left/exit_right when leaving a motorway/trunk.
+     * @param {number} type - Valhalla maneuver type.
+     * @param {string|null} direction - Base direction key from maneuverTypeToDirectionKey.
+     * @param {string|null} roadClass - Valhalla road_class for the maneuver edge.
+     * @returns {string|null}
+     */
+    function refineManeuverDirection(type, direction, roadClass) {
+        if (!direction || !isMotorwayRoadClass(roadClass)) return direction;
+        if (direction === 'exit_left' || direction === 'exit_right') return direction;
+
+        if (type === 18 || type === 9 || type === 23 || type === 10) return 'exit_right';
+        if (type === 19 || type === 16 || type === 24 || type === 15 || type === 14) return 'exit_left';
+        return direction;
+    }
+
+    function ordinalExit(n) {
+        var j = n % 10;
+        var k = n % 100;
+        if (j === 1 && k !== 11) return n + 'st';
+        if (j === 2 && k !== 12) return n + 'nd';
+        if (j === 3 && k !== 13) return n + 'rd';
+        return n + 'th';
+    }
+
+    /**
+     * Roundabout-specific phrasing (enter vs leave / exit count).
+     * @param {number} valhallaType - 26 enter, 27 exit.
+     * @param {number} [exitCount]
+     * @returns {string}
+     */
+    function getRoundaboutDirectionText(valhallaType, exitCount) {
+        var n = Number(exitCount) || 0;
+        if (valhallaType === 27 && n > 0) {
+            return 'take the ' + ordinalExit(n) + ' exit';
+        }
+        if (valhallaType === 26 && n > 0) {
+            return 'at the roundabout, take the ' + ordinalExit(n) + ' exit';
+        }
+        return valhallaType === 27 ? 'leave the roundabout' : 'enter the roundabout';
+    }
+
+    /**
+     * Widget/voice instruction line — prefer exit/keep phrasing over raw engine text.
+     * @param {string} direction
+     * @param {string} [rawInstruction]
+     * @param {number} [valhallaType]
+     * @param {number} [roundaboutExitCount]
+     * @returns {string}
+     */
+    function buildTurnDisplayInstruction(direction, rawInstruction, valhallaType, roundaboutExitCount) {
+        if (direction === 'roundabout') {
+            return getRoundaboutDirectionText(valhallaType, roundaboutExitCount);
+        }
+        if (direction === 'exit' || direction === 'exit_left' || direction === 'exit_right'
+            || direction === 'exit-left' || direction === 'exit-right') {
+            return getTurnDirectionText(direction);
+        }
+        if (direction === 'slight_left' || direction === 'slight_right'
+            || direction === 'slight-left' || direction === 'slight-right') {
+            return getTurnDirectionText(direction);
+        }
+        if (rawInstruction && String(rawInstruction).trim()) {
+            return String(rawInstruction).trim();
+        }
+        return getTurnDirectionText(direction || 'straight');
+    }
+
     var api = {
         calculateTurnDirection: calculateTurnDirection,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,
         getTurnIcon: getTurnIcon,
         formatTurnDistance: formatTurnDistance,
         getTurnDirectionText: getTurnDirectionText,
+        isMotorwayRoadClass: isMotorwayRoadClass,
+        refineManeuverDirection: refineManeuverDirection,
+        getRoundaboutDirectionText: getRoundaboutDirectionText,
+        buildTurnDisplayInstruction: buildTurnDisplayInstruction,
         TURN_ICON_MAP: TURN_ICON_MAP,
         DIRECTION_TEXT_MAP: DIRECTION_TEXT_MAP
     };

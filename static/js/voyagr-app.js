@@ -7115,6 +7115,8 @@ function resetVoiceAnnouncementStateForNewRoute() {
     announcedTurnThresholds.clear();
     announcedExitThresholds.clear();
     announcedKeepThresholds.clear();
+    _voiceAnnouncedForManeuverIndex = null;
+    _voiceAnnouncedCategory = null;
     lastTurnDetectRouteVertexIndex = 0;
     clearInitialETAAnnouncement();
     initialETAMovementRetries = 0;
@@ -7172,6 +7174,10 @@ function updateRouteOnMap(newRoute) {
     // Reset deviation tracking so we don't immediately re-trigger reroute
     deviationStartTimeCheck = null;
     rerouteAttemptCount = 0;
+    postRerouteGraceUntil = Date.now() + POST_REROUTE_GRACE_MS;
+    routeJoinConfirmedForDeviation = false;
+    lastRerouteTime = Date.now();
+    rerouteInProgress = false;
 
     // Refresh the turn instruction widget immediately with new route data
     if (currentLat && currentLon) {
@@ -10777,6 +10783,31 @@ function maneuverTypeToDirectionKey(type) {
     return null;  // 0,1,2,3,7,8,17,22 and transit/ferry types are not "turns"
 }
 
+/** Promote ramp/turn to exit phrasing when leaving motorway/trunk. */
+function refineManeuverDirectionForRoute(type, direction, maneuver) {
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    const roadClass = maneuver && (maneuver.road_class || inferRoadClassFromManeuver(maneuver));
+    if (TI && TI.refineManeuverDirection) {
+        return TI.refineManeuverDirection(type, direction, roadClass);
+    }
+    return direction;
+}
+
+/** Widget instruction line — exit/keep/roundabout phrasing over raw engine text when clearer. */
+function buildTurnDisplayInstruction(turnInfo) {
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    if (!turnInfo) return 'Continue on current road';
+    if (TI && TI.buildTurnDisplayInstruction) {
+        return TI.buildTurnDisplayInstruction(
+            turnInfo.direction,
+            turnInfo.instruction,
+            turnInfo.valhallaType,
+            turnInfo.roundabout_exit_count
+        );
+    }
+    return turnInfo.instruction || getTurnDirectionText(turnInfo.direction || 'straight');
+}
+
 /** Cumulative along-route distance (m) between two polyline vertex indices. */
 function cumulativeRouteDistanceBetween(i, j) {
     if (!routePolyline || routePolyline.length < 2) return Infinity;
@@ -10806,8 +10837,9 @@ function getFollowingManeuver(currentIndex) {
     for (let j = currentIndex + 1; j < currentRouteSteps.length; j++) {
         const m = currentRouteSteps[j];
         const type = m.type || 0;
-        const dir = maneuverTypeToDirectionKey(type);
-        if (!dir) continue;
+        const baseDir = maneuverTypeToDirectionKey(type);
+        if (!baseDir) continue;
+        const dir = refineManeuverDirectionForRoute(type, baseDir, m);
         const gapMeters = cumulativeRouteDistanceBetween(currentShapeIdx, m.begin_shape_index || 0);
         const streetName = getManeuverStreetLabel(m, false);
         return { direction: dir, valhallaType: type, streetName, gapMeters, index: j, maneuver: m };
@@ -10917,36 +10949,11 @@ function detectUpcomingTurn(userLat, userLon) {
                 continue;
             }
 
-            // Map Valhalla maneuver types to our direction system
+            // Map Valhalla maneuver types to direction keys (shared with voice + "Then" row).
             const type = maneuver.type || 0;
-            let direction = null;  // null = skip this maneuver
-
-            // Valhalla maneuver types: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/
-            // SKIP types 1-3, 7-8, 17 (Start, Becomes, Continue, Ramp straight); 27 handled as roundabout exit.
-            if (type === 4 || type === 5 || type === 6) direction = 'destination';  // Destination
-            else if (type === 9) direction = 'slight_right';   // Slight Right
-            else if (type === 10) direction = 'right';          // Right
-            else if (type === 11) direction = 'sharp_right';    // Sharp Right
-            else if (type === 12) direction = 'uturn';          // U-turn Right
-            else if (type === 13) direction = 'uturn';          // U-turn Left
-            else if (type === 14) direction = 'sharp_left';     // Sharp Left
-            else if (type === 15) direction = 'left';           // Left
-            else if (type === 16) direction = 'slight_left';    // Slight Left
-            else if (type === 18) direction = 'slight_right';   // Ramp Right
-            else if (type === 19) direction = 'slight_left';    // Ramp Left
-            else if (type === 20) direction = 'exit_right';     // Exit Right  (FIX: preserve direction)
-            else if (type === 21) direction = 'exit_left';      // Exit Left   (FIX: preserve direction)
-            else if (type === 22) direction = 'straight';       // Stay Straight (FIX: was slight_right)
-            else if (type === 23) direction = 'slight_right';   // Stay Right  (FIX: was slight_left)
-            else if (type === 24) direction = 'slight_left';    // Stay Left   (FIX: was merge)
-            else if (type === 25) direction = 'merge';          // Merge
-            else if (type === 26) direction = 'roundabout';     // Roundabout Enter
-            else if (type === 27) direction = 'roundabout';   // Roundabout Exit
-            else if (type === 35) direction = 'merge';          // Merge Right
-            else if (type === 36) direction = 'merge';          // Merge Left
-
-            // Skip non-turn maneuvers (straight, continue, etc.)
+            let direction = maneuverTypeToDirectionKey(type);
             if (direction === null) continue;
+            direction = refineManeuverDirectionForRoute(type, direction, maneuver);
 
             const targetIndex = Math.min(maneuverShapeIndex, routePolyline.length - 1);
 
@@ -10990,6 +10997,10 @@ function detectUpcomingTurn(userLat, userLon) {
         }
     }
 
+    // Geometry fallback only when the route has no maneuvers. If maneuvers exist but the
+    // next one is far away (e.g. motorway exit in 19 mi), show "Continue" — not a false
+    // "turn left" from polyline bearing noise.
+    if (!currentRouteSteps || currentRouteSteps.length === 0) {
     // Fallback: Use geometry-based turn detection if no maneuvers available
     // Reuse the snapped, monotonically non-decreasing index from the top of the function
     const closestIndex = lastTurnDetectRouteVertexIndex;
@@ -11064,6 +11075,9 @@ function detectUpcomingTurn(userLat, userLon) {
         direction: turnDirection,
         streetName: ''
     };
+    }
+
+    return null;
 }
 
 // ===== VEHICLE TYPE & ROUTING MODE MANAGEMENT =====
@@ -13201,12 +13215,7 @@ function updateTurnInstructionDisplay(turnInfo) {
         const formattedDistance = formatTurnDistance(turnInfo.distance || 0);
         distanceEl.textContent = onCurrentRoad ? 'On' : `In ${formattedDistance}`;
 
-        if (turnInfo.instruction) {
-            instructionEl.textContent = turnInfo.instruction;
-        } else {
-            const dirText = getTurnDirectionText(turnInfo.direction || 'straight');
-            instructionEl.textContent = dirText;
-        }
+        instructionEl.textContent = buildTurnDisplayInstruction(turnInfo);
 
         if (streetEl) {
             if (turnInfo.streetName) {
@@ -14819,6 +14828,9 @@ let announcedExitThresholds = new Set();  // Track exit announcements separately
 // Keep right/left (fork/veer) announcement distances — earlier than turns, less than exits
 const KEEP_ANNOUNCEMENT_DISTANCES = [1000, 400, 150, 50]; // meters
 let announcedKeepThresholds = new Set();
+/** Per-maneuver voice dedup — cleared when maneuver index or category changes. */
+let _voiceAnnouncedForManeuverIndex = null;
+let _voiceAnnouncedCategory = null;
 
 // Distance-to-destination announcement variables
 let lastDestinationAnnouncementDistance = Infinity;
@@ -15530,7 +15542,16 @@ function announceUpcomingTurn(turnInfo) {
     }
 
     const direction = turnInfo.direction || 'straight';
-    const directionText = getTurnDirectionText(direction);
+    let directionText = getTurnDirectionText(direction);
+    if (direction === 'roundabout') {
+        const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+        if (TI && TI.getRoundaboutDirectionText) {
+            directionText = TI.getRoundaboutDirectionText(
+                turnInfo.valhallaType,
+                turnInfo.roundabout_exit_count
+            );
+        }
+    }
     const streetName = turnInfo.streetName || '';
     // Valhalla: verbal_transition_alert_instruction (early), verbal_pre_transition_instruction (immediately prior)
     const verbalAlert = (turnInfo.verbal_transition_alert_instruction || '').trim();
@@ -15553,6 +15574,13 @@ function announceUpcomingTurn(turnInfo) {
     const thresholdSet = isExit ? announcedExitThresholds
         : isKeep ? announcedKeepThresholds
         : announcedTurnThresholds;
+    const category = isExit ? 'exit' : isKeep ? 'keep' : 'turn';
+    const maneuverIdx = turnInfo.maneuverIndex;
+    if (maneuverIdx != null && (maneuverIdx !== _voiceAnnouncedForManeuverIndex || category !== _voiceAnnouncedCategory)) {
+        thresholdSet.clear();
+        _voiceAnnouncedForManeuverIndex = maneuverIdx;
+        _voiceAnnouncedCategory = category;
+    }
     const resetDistance = isExit ? 2500 : isKeep ? 1500 : 600;
 
     // Pick the most-urgent (smallest) threshold we've reached and not yet announced, then
@@ -15584,7 +15612,9 @@ function announceUpcomingTurn(turnInfo) {
                     streetName: streetName,
                     directionText: directionText,
                     verbalAlert: verbalAlert,
-                    verbalPre: verbalPre
+                    verbalPre: verbalPre,
+                    valhallaType: turnInfo.valhallaType,
+                    roundaboutExitCount: turnInfo.roundabout_exit_count
                 });
             } else {
             const streetInfo = streetName ? ` toward ${streetName}` : '';
@@ -15671,7 +15701,7 @@ function announceUpcomingTurn(turnInfo) {
             const isImminentThreshold = announcementDistance === announcementDistances[announcementDistances.length - 1];
             if (message && isImminentThreshold && turnInfo.maneuverIndex != null) {
                 const follow = getFollowingManeuver(turnInfo.maneuverIndex);
-                if (follow && follow.gapMeters <= 250) {
+                if (follow && follow.gapMeters <= 900) {
                     let followText = getTurnDirectionText(follow.direction);
                     if (follow.direction === 'roundabout') {
                         const exitCt = effectiveRoundaboutExitCount(follow.index);
@@ -15703,10 +15733,15 @@ function announceUpcomingTurn(turnInfo) {
 
 // Rerouting debounce variables
 let lastRerouteTime = 0;
-const REROUTE_DEBOUNCE_MS = 5000; // Wait 5 seconds between reroute attempts
+const REROUTE_DEBOUNCE_MS = 30000; // Wait 30 seconds between reroute attempts
 let lastRerouteDeviation = 0;
 let deviationStartTimeCheck = null; // Track when deviation started
 let rerouteAttemptCount = 0; // Track reroute attempts for logging
+let rerouteInProgress = false;
+let postRerouteGraceUntil = 0;
+const POST_REROUTE_GRACE_MS = 45000;
+let lastRerouteAnnouncementTime = 0;
+const REROUTE_ANNOUNCE_MIN_INTERVAL_MS = 60000;
 
 /** After a failed deviation reroute API call, retry with backoff (does not replace GPS deviation timing). */
 let rerouteFailureRetryTimer = null;
@@ -15762,6 +15797,14 @@ function checkRouteDeviation(lat, lon, accuracy) {
 
     if (!routePolyline || routePolyline.length === 0) return;
 
+    const now = Date.now();
+    if (postRerouteGraceUntil > now) {
+        return;
+    }
+    if (rerouteInProgress) {
+        return;
+    }
+
     const remainingToDest = getNavigationRemainingDistanceMeters(lat, lon);
     if (remainingToDest <= NAV_ARRIVAL_SUPPRESS_REROUTE_METERS) {
         return;
@@ -15776,7 +15819,6 @@ function checkRouteDeviation(lat, lon, accuracy) {
 
     const snap = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
     const minDistance = snap.distance;
-    const now = Date.now();
 
     // Delegate the (pure) off-route decision to the unit-tested
     // modules/navigation/reroute-decision.js helper when present. It returns the action +
@@ -15895,15 +15937,27 @@ function checkRouteDeviation(lat, lon, accuracy) {
  * This enhanced version handles unavoidable hazards gracefully
  */
 async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon) {
+    if (rerouteInProgress) {
+        console.log('[Rerouting] Already in progress — skipping duplicate trigger');
+        return;
+    }
+    if (!navigator.onLine) {
+        console.log('[Rerouting] Offline — deferring automatic reroute');
+        scheduleAutomaticRerouteRetry();
+        return;
+    }
+    rerouteInProgress = true;
     try {
         const destination = resolveNavigationDestination();
         if (!destination) {
             console.log('[Rerouting] No destination stored, cannot reroute');
+            rerouteInProgress = false;
             return;
         }
 
         if (!window.lastCalculatedRoute) {
             console.log('[Rerouting] No route context, cannot reroute');
+            rerouteInProgress = false;
             return;
         }
         console.log(`[Rerouting] Starting automatic reroute from (${currentLat.toFixed(4)}, ${currentLon.toFixed(4)}) to ${destination}`);
@@ -15942,8 +15996,7 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
             // Log rerouting event
             logReroutingEvent(currentLat, currentLon, destination, newRoute, hazardCount);
 
-            // Announce reroute via voice
-            // FIX: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
+            // Announce reroute via voice (deduped so poor GPS cannot loop "new route")
             if (voiceAnnouncementsEnabled) {
                 const distUnit = getDistanceUnit();
                 const displayDist = convertDistance(newRoute.distance_km);
@@ -15951,7 +16004,13 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
                 if (hazardCount > 0) {
                     voiceMsg += `. Warning: ${hazardCount} hazard${hazardCount > 1 ? 's' : ''} on route.`;
                 }
-                speakMessage(voiceMsg, 'high');
+                const announceNow = Date.now();
+                if (announceNow - lastRerouteAnnouncementTime >= REROUTE_ANNOUNCE_MIN_INTERVAL_MS) {
+                    lastRerouteAnnouncementTime = announceNow;
+                    speakMessage(voiceMsg, 'high');
+                } else {
+                    console.log('[Voice] Skipping duplicate reroute announcement');
+                }
             }
 
             if (hazardCount > 0) {
@@ -15969,6 +16028,7 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
                 sendNotification('❌ Rerouting Failed', 'Could not calculate new route. Retrying automatically…', 'error');
             }
             scheduleAutomaticRerouteRetry();
+            rerouteInProgress = false;
         }
     } catch (error) {
         console.error('[Rerouting] Error during automatic reroute:', error);
@@ -15976,6 +16036,7 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
             sendNotification('❌ Rerouting Error', 'Network or server error. Retrying automatically…', 'error');
         }
         scheduleAutomaticRerouteRetry();
+        rerouteInProgress = false;
     }
 }
 
@@ -17739,30 +17800,31 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
 
     // ===== SHOW TURN INSTRUCTION WIDGET during navigation =====
     showTurnInstructionWidget();
-    // Initialize with first instruction if available - calculate actual distance
-    // Initialize instruction at current maneuver (step 0 for fresh nav, resumed index for OfflineNav resume)
-    if (currentRouteSteps && currentRouteSteps.length > 0 && routePolyline && routePolyline.length > 0) {
+    // Initialize with first instruction if available
+    if (currentLat != null && currentLon != null) {
+        updateTurnWidgetFromPosition(currentLat, currentLon);
+    } else if (currentRouteSteps && currentRouteSteps.length > 0 && routePolyline && routePolyline.length > 0) {
         const initIdx = Math.min(Math.max(0, currentStepIndex || 0), currentRouteSteps.length - 1);
         const firstStep = currentRouteSteps[initIdx];
-        // Calculate distance to first maneuver from start
+        const type = firstStep.type || 0;
+        let direction = maneuverTypeToDirectionKey(type) || 'straight';
+        direction = refineManeuverDirectionForRoute(type, direction, firstStep);
         const firstManeuverIndex = firstStep.begin_shape_index || 0;
-        let distanceToFirst = 0;
+        let distanceToFirst = firstStep.distance || 0;
         if (firstManeuverIndex > 0 && firstManeuverIndex < routePolyline.length) {
             const startPoint = routePolyline[0];
             const firstManeuverPoint = routePolyline[firstManeuverIndex];
             distanceToFirst = calculateDistance(startPoint[0], startPoint[1], firstManeuverPoint[0], firstManeuverPoint[1]);
-        } else {
-            // Use the step's distance if available
-            distanceToFirst = firstStep.distance || 0;
         }
         updateTurnInstructionDisplay({
             distance: distanceToFirst,
-            direction: 'straight',
-            instruction: firstStep.instruction || 'Follow the route',
+            direction: direction,
+            instruction: firstStep.instruction || '',
             streetName: (firstStep.street_names || [])[0] || '',
             maneuver: firstStep,
             maneuverIndex: initIdx,
-            valhallaType: firstStep.type != null ? firstStep.type : 8,
+            valhallaType: type,
+            roundabout_exit_count: effectiveRoundaboutExitCount(initIdx),
         });
     }
 

@@ -38,6 +38,15 @@
             || direction === 'slight-right' || direction === 'slight-left';
     }
 
+    function ordinalExit(n) {
+        var j = n % 10;
+        var k = n % 100;
+        if (j === 1 && k !== 11) return n + 'st';
+        if (j === 2 && k !== 12) return n + 'nd';
+        if (j === 3 && k !== 13) return n + 'rd';
+        return n + 'th';
+    }
+
     /**
      * Build the spoken phrase for an upcoming turn/exit/keep at a given threshold.
      * Returns '' when the threshold has no phrase (defensive — caller should only pass a
@@ -87,6 +96,32 @@
             } else if (announcementDistance === 100) {
                 message = 'Exit now' + exitSide + streetInfo;
             }
+        } else if (direction === 'roundabout') {
+            var rbExit = Number(opts.roundaboutExitCount) || 0;
+            var rbType = Number(opts.valhallaType) || 26;
+            var rbStreet = streetName ? ' onto ' + streetName : '';
+            var exitPhrase = rbExit > 0
+                ? 'take the ' + ordinalExit(rbExit) + ' exit'
+                : (rbType === 27 ? 'leave the roundabout' : 'enter the roundabout');
+            if (announcementDistance === 500) {
+                if (verbalAlert) {
+                    message = verbalAlert;
+                } else {
+                    message = distanceUnit === 'mi'
+                        ? 'In 1600 feet, ' + exitPhrase + rbStreet
+                        : 'In 500 meters, ' + exitPhrase + rbStreet;
+                }
+            } else if (announcementDistance === 200) {
+                message = distanceUnit === 'mi'
+                    ? 'In 600 feet, ' + exitPhrase + rbStreet
+                    : 'In 200 meters, ' + exitPhrase + rbStreet;
+            } else if (announcementDistance === 100) {
+                message = verbalPre || (distanceUnit === 'mi'
+                    ? 'In 300 feet, ' + exitPhrase + rbStreet
+                    : 'In 100 meters, ' + exitPhrase + rbStreet);
+            } else if (announcementDistance === 50) {
+                message = verbalPre || (exitPhrase + rbStreet);
+            }
         } else if (isKeep) {
             var keepDir = (direction === 'slight_left' || direction === 'slight-left') ? 'left' : 'right';
             if (announcementDistance === 1000) {
@@ -129,7 +164,7 @@
                         : 'In 100 meters, ' + directionText + streetOnto;
                 }
             } else if (announcementDistance === 50) {
-                message = directionText + streetOnto;
+                message = verbalPre || (directionText + streetOnto);
             }
         }
 

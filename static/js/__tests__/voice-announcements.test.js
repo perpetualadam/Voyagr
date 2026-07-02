@@ -138,6 +138,28 @@ describe('buildTurnAnnouncement — keeps', () => {
     });
 });
 
+describe('buildTurnAnnouncement — roundabouts', () => {
+    test('500 m threshold with exit count', () => {
+        expect(VA.buildTurnAnnouncement({
+            direction: 'roundabout',
+            announcementDistance: 500,
+            valhallaType: 26,
+            roundaboutExitCount: 3,
+            streetName: 'High Street'
+        })).toBe('In 500 meters, take the 3rd exit onto High Street');
+    });
+
+    test('prefers verbal pre at 50 m', () => {
+        expect(VA.buildTurnAnnouncement({
+            direction: 'roundabout',
+            announcementDistance: 50,
+            valhallaType: 26,
+            roundaboutExitCount: 2,
+            verbalPre: 'Take the second exit'
+        })).toBe('Take the second exit');
+    });
+});
+
 describe('buildTurnAnnouncement — defensive', () => {
     test('unknown threshold returns empty string', () => {
         expect(VA.buildTurnAnnouncement({ direction: 'left', directionText: 'turn left', announcementDistance: 12345 }))
