@@ -427,7 +427,9 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
 
         for hazard_type, hazard_list in hazards.items():
             weight = hazard_weights.get(hazard_type, 10.0)
-            if hazard_type.startswith('camera_'):
+            if hazard_type == 'camera_red_light':
+                weight = 100.0
+            elif hazard_type.startswith('camera_'):
                 weight = hazard_weights.get('camera', 50.0)
             for hazard in hazard_list:
                 if route_bbox:

@@ -2848,9 +2848,16 @@ def fetch_valhalla_auto_json(
     locations: List[Dict[str, Any]],
     exclude_locations: Optional[List[Dict[str, Any]]] = None,
     timeout: int = 10,
+    *,
+    require_exclusions: bool = False,
 ) -> Optional[Dict[str, Any]]:
     from voyagr.services.routing.optimised_route import fetch_valhalla_auto_json as _fetch
-    return _fetch(url, headers, locations, exclude_locations=exclude_locations, timeout=timeout)
+    return _fetch(
+        url, headers, locations,
+        exclude_locations=exclude_locations,
+        timeout=timeout,
+        require_exclusions=require_exclusions,
+    )
 
 
 def graphhopper_qualifies_as_optimised(
@@ -2890,21 +2897,25 @@ def ensure_optimised_camera_avoiding_route(
 ) -> List[Dict[str, Any]]:
     """
     Ensure a ⚡ Optimised route exists that avoids cameras like Fast/Short routes.
-    Drops GraphHopper Optimised entries that ran without a custom model, then adds
-    Valhalla auto + exclude_locations when no qualifying Optimised remains.
+    Prunes Optimised entries that lack real avoidance, then adds Valhalla auto with
+    exclude_locations (no bare fallback) when no qualifying Optimised remains.
     """
+    from voyagr.services.routing.optimised_route import (
+        baseline_camera_hazard_count,
+        prune_non_qualifying_optimised_routes,
+    )
+
     if not (enable_hazard_avoidance and avoid_cameras):
         return routes
 
-    gh_ok = graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
-    if not gh_ok:
-        routes = [
-            r for r in routes
-            if not ('Optimised' in (r.get('name') or '') and r.get('source') == 'GraphHopper')
-        ]
+    routes = prune_non_qualifying_optimised_routes(
+        routes, graphhopper_route=graphhopper_route, avoid_cameras=avoid_cameras,
+    )
 
-    if any('Optimised' in (r.get('name') or '') for r in routes):
+    if any(is_primary_optimised_route(r) for r in routes):
         return routes
+
+    baseline = baseline_camera_hazard_count(routes)
 
     ensure_exclude: List[Dict[str, Any]] = []
     if hazards:
@@ -2917,14 +2928,20 @@ def ensure_optimised_camera_avoiding_route(
         except Exception as ex:
             logger.warning(f'[VALHALLA] ensure Optimised: exclude build failed: {ex}')
 
+    if not ensure_exclude:
+        logger.warning('[VALHALLA] ensure Optimised: no exclude_locations available')
+        return routes
+
     locs = route_locations if has_waypoints else [
         {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
     ]
     opt_data = fetch_valhalla_auto_json(
         url, headers, locs,
-        exclude_locations=ensure_exclude if ensure_exclude else None,
+        exclude_locations=ensure_exclude,
+        require_exclusions=True,
     )
     if not opt_data:
+        logger.warning('[VALHALLA] ensure Optimised: Valhalla could not route with camera exclusions')
         return routes
 
     next_id = len(routes) + 1
@@ -2935,11 +2952,17 @@ def ensure_optimised_camera_avoiding_route(
         electricity_price=electricity_price, include_tolls=include_tolls,
         include_caz=include_caz, caz_exempt=caz_exempt,
     )
-    if entry:
+    if entry and int(entry.get('hazard_count') or 0) <= baseline:
+        entry['camera_exclusions_applied'] = True
         routes.append(entry)
         logger.info(
             f'[VALHALLA] Added Optimised route (ensure): {entry["distance_km"]:.1f}km, '
-            f'{entry.get("hazard_count", 0)} cameras'
+            f'{entry.get("hazard_count", 0)} cameras (baseline {baseline})'
+        )
+    elif entry:
+        logger.warning(
+            f'[VALHALLA] ensure Optimised: excluded route still has '
+            f'{entry.get("hazard_count", 0)} cameras (baseline {baseline}) — not offered'
         )
     return routes
 
@@ -7773,10 +7796,11 @@ def calculate_route():
                                             disc_geom = disc_data['trip']['legs'][0]['shape']
                                             disc_dist = disc_data['trip']['summary']['length']
                                             disc_time = disc_data['trip']['summary']['time']
-                                            route_entry = build_std_route_entry('⚡ Optimised', disc_geom, disc_dist, disc_time, next_route_id, disc_data)
+                                            route_entry = build_std_route_entry('⚡ Optimised Discovery', disc_geom, disc_dist, disc_time, next_route_id, disc_data)
                                             if route_entry['hazard_count'] < hazard_count:
+                                                route_entry['camera_exclusions_applied'] = True
                                                 routes.append(route_entry)
-                                                logger.info(f"[VALHALLA] Added Optimised route: {disc_dist:.1f}km, {route_entry['hazard_count']} cameras")
+                                                logger.info(f"[VALHALLA] Added Optimised Discovery route: {disc_dist:.1f}km, {route_entry['hazard_count']} cameras")
                         except Exception as e:
                             logger.warning(f"[VALHALLA] Optimised route failed: {e}")
 
@@ -7887,31 +7911,42 @@ def calculate_route():
 
                                 logger.info(f"[GRAPHHOPPER] Converted {len(gh_maneuvers)} instructions to maneuvers")
 
-                                gh_route_entry = {
-                                    'id': 0,  # Will be renumbered
-                                    'name': '⚡ Optimised',
-                                    'distance_km': round(gh_distance_km, 2),
-                                    'duration_minutes': round(gh_duration_min, 0),
-                                    'fuel_cost': round(gh_costs['fuel_cost'], 2),
-                                    'fuel_litres': round(gh_costs['fuel_litres'], 2),
-                                    'toll_cost': round(gh_costs['toll_cost'], 2),
-                                    'caz_cost': round(gh_costs['caz_cost'], 2),
-                                    'geometry': gh_geometry_p6,
-                                    'geometry_precision': 6,
-                                    'hazard_penalty_seconds': round(gh_hazard_penalty, 0),
-                                    'hazard_count': gh_hazard_count,
-                                    'hazards': gh_hazards_list,
-                                    'maneuvers': gh_maneuvers,
-                                    'source': 'GraphHopper'
-                                }
+                                from voyagr.services.routing.optimised_route import (
+                                    baseline_camera_hazard_count,
+                                    is_primary_optimised_route,
+                                )
+                                gh_baseline = baseline_camera_hazard_count(routes)
+                                if gh_hazard_count > gh_baseline:
+                                    logger.warning(
+                                        f"[GRAPHHOPPER] Skipping Optimised: {gh_hazard_count} cameras "
+                                        f"vs baseline {gh_baseline} (Valhalla exclusions work better)"
+                                    )
+                                else:
+                                    gh_route_entry = {
+                                        'id': 0,  # Will be renumbered
+                                        'name': '⚡ Optimised',
+                                        'distance_km': round(gh_distance_km, 2),
+                                        'duration_minutes': round(gh_duration_min, 0),
+                                        'fuel_cost': round(gh_costs['fuel_cost'], 2),
+                                        'fuel_litres': round(gh_costs['fuel_litres'], 2),
+                                        'toll_cost': round(gh_costs['toll_cost'], 2),
+                                        'caz_cost': round(gh_costs['caz_cost'], 2),
+                                        'geometry': gh_geometry_p6,
+                                        'geometry_precision': 6,
+                                        'hazard_penalty_seconds': round(gh_hazard_penalty, 0),
+                                        'hazard_count': gh_hazard_count,
+                                        'hazards': gh_hazards_list,
+                                        'maneuvers': gh_maneuvers,
+                                        'source': 'GraphHopper'
+                                    }
 
-                                # Remove any existing Valhalla "Optimised" route to avoid duplicates
-                                # GraphHopper's camera avoidance is superior (uses pre-loaded area polygons)
-                                routes = [r for r in routes if 'Optimised' not in r.get('name', '')]
+                                    # Remove any existing Valhalla "Optimised" route to avoid duplicates
+                                    # GraphHopper's camera avoidance is superior (uses pre-loaded area polygons)
+                                    routes = [r for r in routes if not is_primary_optimised_route(r)]
 
-                                # Insert at the beginning as the optimised option
-                                routes.insert(0, gh_route_entry)
-                                logger.info(f"[GRAPHHOPPER] Added Optimised route (replaced Valhalla Optimised): {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
+                                    # Insert at the beginning as the optimised option
+                                    routes.insert(0, gh_route_entry)
+                                    logger.info(f"[GRAPHHOPPER] Added Optimised route (replaced Valhalla Optimised): {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
                         except Exception as e:
                             logger.warning(f"[GRAPHHOPPER] Failed to add GraphHopper route: {e}")
                     elif graphhopper_route and graphhopper_route.get('success') and avoid_cameras:
@@ -8265,9 +8300,20 @@ def calculate_route():
                                                 'source': 'GraphHopper'
                                             }
 
-                                            routes = [r for r in routes if 'Optimised' not in r.get('name', '')]
-                                            routes.insert(0, gh_route_entry)
-                                            logger.info(f"[GRAPHHOPPER] Added Optimised route to retry: {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
+                                            from voyagr.services.routing.optimised_route import (
+                                                baseline_camera_hazard_count,
+                                                is_primary_optimised_route,
+                                            )
+                                            gh_baseline = baseline_camera_hazard_count(routes)
+                                            if gh_hazard_count <= gh_baseline:
+                                                routes = [r for r in routes if not is_primary_optimised_route(r)]
+                                                routes.insert(0, gh_route_entry)
+                                                logger.info(f"[GRAPHHOPPER] Added Optimised route to retry: {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
+                                            else:
+                                                logger.warning(
+                                                    f"[GRAPHHOPPER] Skipping Optimised on retry: "
+                                                    f"{gh_hazard_count} cameras vs baseline {gh_baseline}"
+                                                )
                                     except Exception as e:
                                         logger.warning(f"[GRAPHHOPPER] Failed to add GraphHopper route to retry: {e}")
 
