@@ -4,6 +4,7 @@ Application settings and environment configuration.
 
 import logging
 import os
+from pathlib import Path
 from typing import List
 from dotenv import load_dotenv
 
@@ -37,15 +38,9 @@ DB_FILE = 'voyagr_web.db'
 # ============================================================================
 # AUTHENTICATION
 # ============================================================================
-_api_keys_raw = os.getenv('API_KEYS')
-if _api_keys_raw is None or not str(_api_keys_raw).strip():
-    VALID_API_KEYS = {'voyagr-default-key'}
-    _log.warning(
-        '[SECURITY] API_KEYS is not set - using built-in development default only. '
-        'Set API_KEYS (comma-separated) on any Internet-exposed deployment.'
-    )
-else:
-    VALID_API_KEYS = {k.strip() for k in str(_api_keys_raw).split(',') if k.strip()}
+from voyagr.config.api_keys import load_valid_api_keys
+
+VALID_API_KEYS = load_valid_api_keys(Path(_script_dir))
 
 
 def _get_allowed_origins() -> List[str]:

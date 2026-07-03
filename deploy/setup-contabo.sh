@@ -34,13 +34,20 @@ pip install -r requirements-web.txt
 # Copy environment file
 echo "[5/7] Configuring environment..."
 cp .env.example .env 2>/dev/null || cp .env .env.backup
-cat > .env << 'EOF'
+API_KEY=$(openssl rand -hex 32 2>/dev/null || python3 -c "import secrets; print(secrets.token_hex(32))")
+cat > .env << EOF
 VALHALLA_URL=http://localhost:8002
 GRAPHHOPPER_URL=http://localhost:8989
 GRAPHHOPPER_TIMEOUT=30
 VALHALLA_TIMEOUT=30
 USE_CUSTOM_ROUTER=false
+FLASK_ENV=production
+ENVIRONMENT=production
+API_KEYS=${API_KEY}
+VOYAGR_TRUST_PROXY=1
 EOF
+chmod 600 .env
+echo "  API_KEYS written to /opt/voyagr/.env (not logged)"
 
 # Setup systemd service
 echo "[6/7] Installing systemd service..."

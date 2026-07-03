@@ -8,6 +8,7 @@ Group=root
 WorkingDirectory=/opt/voyagr
 Environment="PATH=/opt/voyagr/venv/bin"
 Environment="FLASK_ENV=production"
+EnvironmentFile=-/opt/voyagr/.env
 Environment="VALHALLA_URL=http://localhost:8002"
 Environment="GRAPHHOPPER_URL=http://localhost:8989"
 # Tune workers: ~ (2 × CPU cores) + 1 for CPU-bound work; fewer if RAM is tight.

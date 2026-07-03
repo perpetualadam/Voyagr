@@ -107,6 +107,7 @@ _sherpa_tmp/
 .env
 .env.local
 .env.*.local
+.api_key
 
 # Android signing keys (TWA)
 *.jks
