@@ -49,12 +49,9 @@ EOF
 chmod 600 .env
 echo "  API_KEYS written to /opt/voyagr/.env (not logged)"
 
-# Setup systemd service
-echo "[6/7] Installing systemd service..."
-cp deploy/voyagr.service /etc/systemd/system/
-systemctl daemon-reload
-systemctl enable voyagr
-systemctl restart voyagr
+# Run gunicorn as non-root voyagr user
+echo "[6/7] Setting up voyagr service user and systemd..."
+bash deploy/setup-voyagr-user.sh
 
 # Setup nginx
 echo "[7/7] Configuring nginx..."

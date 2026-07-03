@@ -52,3 +52,7 @@ echo ""
 echo "Expect in logs:"
 echo "  [SECURITY] Redis rate-limit storage OK"
 echo "  [SECURITY] Flask-Limiter enabled (storage=redis)"
+
+if id voyagr &>/dev/null && [[ -f "$APP_DIR/deploy/setup-voyagr-user.sh" ]]; then
+  bash "$APP_DIR/deploy/setup-voyagr-user.sh" --permissions-only
+fi

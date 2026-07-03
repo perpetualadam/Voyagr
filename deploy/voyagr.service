@@ -3,9 +3,11 @@ Description=Voyagr Navigation PWA
 After=network.target
 
 [Service]
-User=root
-Group=root
+User=voyagr
+Group=voyagr
 WorkingDirectory=/opt/voyagr
+# Restrict new file modes (db, logs, .api_key); existing secrets keep their mode.
+UMask=0077
 Environment="PATH=/opt/voyagr/venv/bin"
 Environment="FLASK_ENV=production"
 EnvironmentFile=-/opt/voyagr/.env

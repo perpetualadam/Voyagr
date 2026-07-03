@@ -64,3 +64,7 @@ echo "  $KEY_FILE"
 echo ""
 echo "Restart Voyagr:"
 echo "  sudo systemctl restart voyagr"
+
+if id voyagr &>/dev/null && [[ -f "$APP_DIR/deploy/setup-voyagr-user.sh" ]]; then
+  bash "$APP_DIR/deploy/setup-voyagr-user.sh" --permissions-only
+fi
