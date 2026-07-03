@@ -2740,12 +2740,6 @@ def ensure_optimised_camera_avoiding_route(
     Prunes Optimised entries that lack real avoidance, then adds Valhalla auto with
     exclude_locations (no bare fallback) when no qualifying Optimised remains.
     """
-    from voyagr.services.routing.optimised_route import (
-        baseline_camera_hazard_count,
-        is_primary_optimised_route,
-        prune_non_qualifying_optimised_routes,
-    )
-
     if not (enable_hazard_avoidance and avoid_cameras):
         return routes
 
@@ -2882,6 +2876,11 @@ def valhalla_trip_json_to_std_route_entry(
 from voyagr.services.routing.costing import (
     VALID_ROUTE_OPTIMIZATIONS,
     build_auto_costing_options as _build_auto_costing_options,
+)
+from voyagr.services.routing.optimised_route import (
+    baseline_camera_hazard_count,
+    is_primary_optimised_route,
+    prune_non_qualifying_optimised_routes,
 )
 
 
@@ -7762,10 +7761,6 @@ def calculate_route():
 
                                 logger.info(f"[GRAPHHOPPER] Converted {len(gh_maneuvers)} instructions to maneuvers")
 
-                                from voyagr.services.routing.optimised_route import (
-                                    baseline_camera_hazard_count,
-                                    is_primary_optimised_route,
-                                )
                                 gh_baseline = baseline_camera_hazard_count(routes)
                                 if gh_hazard_count > gh_baseline:
                                     logger.warning(
@@ -8152,10 +8147,6 @@ def calculate_route():
                                                 'source': 'GraphHopper'
                                             }
 
-                                            from voyagr.services.routing.optimised_route import (
-                                                baseline_camera_hazard_count,
-                                                is_primary_optimised_route,
-                                            )
                                             gh_baseline = baseline_camera_hazard_count(routes)
                                             if gh_hazard_count <= gh_baseline:
                                                 routes = [r for r in routes if not is_primary_optimised_route(r)]
