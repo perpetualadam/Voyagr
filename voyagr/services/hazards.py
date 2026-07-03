@@ -146,7 +146,9 @@ def build_graphhopper_combined_camera_model(
         area_model = build_graphhopper_camera_avoidance_model(route_bbox)
         if area_model:
             parts.append(area_model)
-    if camera_hazards and any(camera_hazards.values()):
+    # SCDB inline zones only when server-side area sections are unavailable (non-UK / empty bbox).
+    # Merging both inflates the custom model and can cause GraphHopper POST failures on dense routes.
+    if not parts and camera_hazards and any(camera_hazards.values()):
         filtered = build_graphhopper_filtered_camera_model(
             camera_hazards, route_bbox=route_bbox, max_hazards=max_scdb_hazards,
         )

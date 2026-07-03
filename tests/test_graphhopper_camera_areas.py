@@ -69,7 +69,7 @@ class TestCameraAreaBboxFiltering:
 
 
 class TestCombinedCameraModel:
-    def test_area_sections_always_used_with_scdb(self, sample_camera_areas):
+    def test_scdb_fallback_only_when_no_area_sections(self, sample_camera_areas):
         bbox = {'min_lat': 53.45, 'max_lat': 53.65, 'min_lon': -1.6, 'max_lon': -1.3}
         camera_hazards = {
             'camera_speed': [{'lat': 53.55, 'lon': -1.45, 'type': 'camera_speed'}],
@@ -77,8 +77,17 @@ class TestCombinedCameraModel:
         model = hz.build_graphhopper_combined_camera_model(camera_hazards, bbox)
         rules = ' '.join(r['if'] for r in model.get('priority', []))
         assert 'in_camera_area_10' in rules
-        assert 'in_hazard_0' in rules
-        assert model.get('areas')
+        assert 'in_hazard_0' not in rules
+        assert 'areas' not in model
+
+    def test_scdb_used_when_area_sections_unavailable(self, monkeypatch):
+        monkeypatch.setattr(hz, 'build_graphhopper_camera_avoidance_model', lambda bbox: {})
+        bbox = {'min_lat': 53.45, 'max_lat': 53.65, 'min_lon': -1.6, 'max_lon': -1.3}
+        camera_hazards = {
+            'camera_speed': [{'lat': 53.55, 'lon': -1.45, 'type': 'camera_speed'}],
+        }
+        model = hz.build_graphhopper_combined_camera_model(camera_hazards, bbox)
+        assert any('in_hazard_' in r.get('if', '') for r in model.get('priority', []))
 
     def test_area_sections_without_scdb(self, sample_camera_areas):
         bbox = {'min_lat': 53.45, 'max_lat': 53.65, 'min_lon': -1.6, 'max_lon': -1.3}

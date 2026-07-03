@@ -8199,10 +8199,12 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     const penaltyRow = hazardContainer ? hazardContainer.querySelector('#previewHazardPenalty')?.closest('div') : null;
 
     if (hazardContainer) {
-        if (hazardCount > 0 && hazardPenaltySeconds > 0) {
+        const countEl = document.getElementById('previewHazardCount');
+        const penaltyEl = document.getElementById('previewHazardPenalty');
+        if (hazardCount > 0 && hazardPenaltySeconds > 0 && countEl && penaltyEl) {
             const hazardPenaltyMinutes = Math.round(hazardPenaltySeconds / 60);
-            document.getElementById('previewHazardCount').textContent = hazardCount;
-            document.getElementById('previewHazardPenalty').textContent = hazardPenaltyMinutes + ' min';
+            countEl.textContent = hazardCount;
+            penaltyEl.textContent = hazardPenaltyMinutes + ' min';
             if (hazardTitleEl) hazardTitleEl.textContent = '⚠️ Hazards Detected';
             if (penaltyRow) penaltyRow.style.display = 'flex';
             hazardContainer.style.background = '#FFF3E0';
@@ -8211,9 +8213,10 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
             console.log('[Hazards] Route preview hazards:', { count: hazardCount, penalty: hazardPenaltyMinutes + ' min' });
         } else if (
             hazardCount === 0 &&
+            countEl &&
             (String(cameraEngine).includes('GraphHopper') || previewRoute.source === 'GraphHopper')
         ) {
-            document.getElementById('previewHazardCount').textContent = '0 on route';
+            countEl.textContent = '0 on route';
             if (hazardTitleEl) hazardTitleEl.textContent = '✅ Camera Avoidance Active';
             if (penaltyRow) penaltyRow.style.display = 'none';
             hazardContainer.style.background = '#E8F5E9';
