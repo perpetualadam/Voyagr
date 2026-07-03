@@ -3,14 +3,28 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import requests
+
+from voyagr.utils.geometry import get_distance_between_points
 
 logger = logging.getLogger(__name__)
 
 PRIMARY_OPTIMISED_NAME = '⚡ Optimised'
 SHORTEST_ROUTE_NAME = '📏 Shortest'
+
+CAMERA_HAZARD_BUCKETS: Tuple[str, ...] = (
+    'camera_speed',
+    'camera_red_light',
+    'camera_average_speed',
+    'camera_bus_lane',
+    'camera_mobile',
+    'camera_other',
+)
+
+# Tighter than default 500m scoring — catches cameras the user sees on the map near the line.
+SHORTEST_CAMERA_PROXIMITY_METERS = 150
 
 
 def is_primary_optimised_route(route: Dict[str, Any]) -> bool:
@@ -19,6 +33,7 @@ def is_primary_optimised_route(route: Dict[str, Any]) -> bool:
 
 
 def is_shortest_route(route: Dict[str, Any]) -> bool:
+    """True only for auto_shorter 📏 Shortest — not Valhalla alternates named 'Shortest'."""
     return (route.get('name') or '').strip() == SHORTEST_ROUTE_NAME
 
 
@@ -44,6 +59,118 @@ def merge_valhalla_exclude_locations(
             if len(merged) >= max_points:
                 return merged
     return merged
+
+
+def decode_route_coords(route: Dict[str, Any]) -> List[Tuple[float, float]]:
+    """Decode a /api/route-style route entry geometry to (lat, lon) pairs."""
+    geom = route.get('geometry')
+    if not geom:
+        return []
+    if isinstance(geom, list):
+        return [(float(p[0]), float(p[1])) for p in geom if len(p) >= 2]
+    if not isinstance(geom, str):
+        return []
+    try:
+        import polyline as pl
+    except ImportError:
+        return []
+    prec = int(route.get('geometry_precision') or 6)
+    return pl.decode(geom, precision=prec)
+
+
+def iter_camera_hazards(hazards: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for bucket in CAMERA_HAZARD_BUCKETS:
+        out.extend(hazards.get(bucket) or [])
+    legacy = hazards.get('camera') or []
+    out.extend(legacy)
+    return out
+
+
+def count_cameras_near_polyline(
+    route_points: Union[str, Sequence[Tuple[float, float]], Dict[str, Any]],
+    hazards: Dict[str, List[Dict[str, Any]]],
+    *,
+    threshold_m: float = SHORTEST_CAMERA_PROXIMITY_METERS,
+    max_samples: int = 500,
+) -> int:
+    """Count distinct cameras within threshold_m of a route polyline (dense sample)."""
+    if isinstance(route_points, dict):
+        coords = decode_route_coords(route_points)
+    elif isinstance(route_points, str):
+        coords = decode_route_coords({'geometry': route_points, 'geometry_precision': 6})
+    else:
+        coords = list(route_points)
+    if not coords:
+        return 0
+
+    cameras = iter_camera_hazards(hazards)
+    if not cameras:
+        return 0
+
+    sample_interval = max(1, len(coords) // max_samples)
+    sampled = coords[::sample_interval]
+    seen: set = set()
+    count = 0
+    for cam in cameras:
+        try:
+            clat = float(cam['lat'])
+            clon = float(cam['lon'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        key = (round(clat, 5), round(clon, 5))
+        if key in seen:
+            continue
+        min_dist = float('inf')
+        for plat, plon in sampled:
+            dist = get_distance_between_points(clat, clon, plat, plon)
+            min_dist = min(min_dist, dist)
+            if min_dist <= threshold_m:
+                break
+        if min_dist <= threshold_m:
+            seen.add(key)
+            count += 1
+    return count
+
+
+def cameras_near_polyline_exclude_points(
+    route_points: Union[str, Sequence[Tuple[float, float]], Dict[str, Any]],
+    hazards: Dict[str, List[Dict[str, Any]]],
+    *,
+    threshold_m: float = SHORTEST_CAMERA_PROXIMITY_METERS,
+    max_points: int = 50,
+    max_samples: int = 500,
+) -> List[Dict[str, float]]:
+    """Cameras near the polyline as Valhalla exclude_locations (closest first)."""
+    if isinstance(route_points, dict):
+        coords = decode_route_coords(route_points)
+    elif isinstance(route_points, str):
+        coords = decode_route_coords({'geometry': route_points, 'geometry_precision': 6})
+    else:
+        coords = list(route_points)
+    if not coords:
+        return []
+
+    cameras = iter_camera_hazards(hazards)
+    if not cameras:
+        return []
+
+    sample_interval = max(1, len(coords) // max_samples)
+    sampled = coords[::sample_interval]
+    near: List[Tuple[float, float, float]] = []
+    for cam in cameras:
+        try:
+            clat = float(cam['lat'])
+            clon = float(cam['lon'])
+        except (KeyError, TypeError, ValueError):
+            continue
+        min_dist = float('inf')
+        for plat, plon in sampled:
+            min_dist = min(min_dist, get_distance_between_points(clat, clon, plat, plon))
+        if min_dist <= threshold_m:
+            near.append((min_dist, clat, clon))
+    near.sort(key=lambda x: x[0])
+    return [{'lat': lat, 'lon': lon} for _, lat, lon in near[:max_points]]
 
 
 def fetch_valhalla_auto_json(

@@ -838,7 +838,7 @@ class RouteCache:
 
     def _make_key(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False, avoid_caz_zones: bool = False) -> str:
         """Create cache key from route parameters."""
-        return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type},{enable_hazard_avoidance},{int(avoid_traffic_lights)},{int(avoid_cameras)},{int(avoid_railway_crossings)},{int(avoid_caz_zones)}"
+        return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type},{enable_hazard_avoidance},{int(avoid_traffic_lights)},{int(avoid_cameras)},{int(avoid_railway_crossings)},{int(avoid_caz_zones)},rv5"
 
     def get(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False, avoid_caz_zones: bool = False) -> Optional[Dict[str, Any]]:
         """Get cached route if available and not expired."""
@@ -2620,7 +2620,7 @@ def valhalla_route_json_to_standard_routes(
                 alt_hazard_penalty, alt_hazard_count = score_route_by_hazards(alt_geometry, hazards)
                 alt_hazards_list = get_hazards_on_route(alt_geometry, hazards)
 
-            route_names = ['Shortest', 'Balanced', 'Alternative']
+            route_names = ['Alternate', 'Balanced', 'Alternative']
             routes.append({
                 'id': idx + 2,
                 'name': route_names[idx] if idx < len(route_names) else f'Alternative {idx}',
@@ -2667,7 +2667,8 @@ def _valhalla_shortest_exclusions_required(
     exclude_locations: Optional[List[Dict[str, Any]]],
 ) -> bool:
     """When camera avoidance is on, Shortest must not silently drop Valhalla exclude_locations."""
-    return bool(enable_hazard_avoidance and avoid_cameras and exclude_locations)
+    del exclude_locations  # kept for call-site compatibility
+    return bool(enable_hazard_avoidance and avoid_cameras)
 
 
 def fetch_valhalla_auto_json(
@@ -2822,6 +2823,8 @@ def ensure_shortest_respects_camera_avoidance(
     """
     from voyagr.services.routing.optimised_route import (
         SHORTEST_ROUTE_NAME,
+        cameras_near_polyline_exclude_points,
+        count_cameras_near_polyline,
         is_primary_optimised_route,
         is_shortest_route,
         merge_valhalla_exclude_locations,
@@ -2830,27 +2833,15 @@ def ensure_shortest_respects_camera_avoidance(
     if not (enable_hazard_avoidance and avoid_cameras):
         return routes
 
-    idx = next((i for i, r in enumerate(routes) if is_shortest_route(r)), None)
-    if idx is None:
+    shortest_indices = [i for i, r in enumerate(routes) if is_shortest_route(r)]
+    if not shortest_indices:
         return routes
 
-    shortest = routes[idx]
-    haz_count = int(shortest.get('hazard_count') or 0)
-    opt_counts = [int(r.get('hazard_count') or 0) for r in routes if is_primary_optimised_route(r)]
-    target = min(opt_counts) if opt_counts else baseline_camera_hazard_count(routes)
-
-    if haz_count <= target and shortest.get('camera_exclusions_applied'):
-        return routes
-    if haz_count <= target:
-        return routes
-
-    on_route = shortest.get('hazards') or []
-    camera_pts = [
-        {'lat': h['lat'], 'lon': h['lon']}
-        for h in on_route
-        if h.get('lat') is not None and h.get('lon') is not None
-        and 'camera' in str(h.get('type', '')).lower()
-    ]
+    opt_routes = [r for r in routes if is_primary_optimised_route(r)]
+    if opt_routes:
+        target_cam = min(count_cameras_near_polyline(r, hazards) for r in opt_routes)
+    else:
+        target_cam = 0
 
     base_exclude: List[Dict[str, Any]] = []
     if hazards:
@@ -2863,46 +2854,64 @@ def ensure_shortest_respects_camera_avoidance(
         except Exception as ex:
             logger.warning('[VALHALLA] ensure Shortest: exclude build failed: %s', ex)
 
-    merged = merge_valhalla_exclude_locations(camera_pts, base_exclude, max_points=50)
-    if not merged:
-        logger.warning('[VALHALLA] ensure Shortest: no exclude_locations to retry with')
-        return routes
-
     locs = route_locations if has_waypoints else [
         {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
     ]
-    sh_data = fetch_valhalla_auto_shorter_json(
-        url, headers, locs,
-        exclude_locations=merged,
-        require_exclusions=True,
-    )
-    if not sh_data:
-        logger.warning('[VALHALLA] ensure Shortest: could not re-route with camera exclusions')
-        return routes
 
-    entry = valhalla_trip_json_to_std_route_entry(
-        SHORTEST_ROUTE_NAME, sh_data, shortest.get('id', idx + 1), hazards, cost_calculator,
-        vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
-        fuel_price=fuel_price, energy_efficiency=energy_efficiency,
-        electricity_price=electricity_price, include_tolls=include_tolls,
-        include_caz=include_caz, caz_exempt=caz_exempt,
-    )
-    if not entry:
-        return routes
+    for idx in reversed(shortest_indices):
+        shortest = routes[idx]
+        short_cam = count_cameras_near_polyline(shortest, hazards)
+        if short_cam <= target_cam:
+            continue
 
-    new_count = int(entry.get('hazard_count') or 0)
-    if new_count < haz_count or new_count <= target:
-        entry['camera_exclusions_applied'] = True
-        routes[idx] = entry
         logger.info(
-            '[VALHALLA] Shortest re-routed with camera exclusions: %.1fkm, %d cameras (was %d)',
-            entry['distance_km'], new_count, haz_count,
+            '[VALHALLA] Shortest has %d cameras near polyline (target %d from Optimised) — re-routing',
+            short_cam, target_cam,
         )
-    else:
-        logger.warning(
-            '[VALHALLA] Shortest retry still has %d cameras (was %d) — keeping original',
-            new_count, haz_count,
+
+        camera_pts = cameras_near_polyline_exclude_points(shortest, hazards)
+        merged = merge_valhalla_exclude_locations(camera_pts, base_exclude, max_points=50)
+        if not merged:
+            logger.warning('[VALHALLA] ensure Shortest: no exclude_locations to retry with')
+            routes.pop(idx)
+            continue
+
+        sh_data = fetch_valhalla_auto_shorter_json(
+            url, headers, locs,
+            exclude_locations=merged,
+            require_exclusions=True,
         )
+        if not sh_data:
+            logger.warning('[VALHALLA] ensure Shortest: no camera-aware auto_shorter route — removing option')
+            routes.pop(idx)
+            continue
+
+        entry = valhalla_trip_json_to_std_route_entry(
+            SHORTEST_ROUTE_NAME, sh_data, shortest.get('id', idx + 1), hazards, cost_calculator,
+            vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+            fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+            electricity_price=electricity_price, include_tolls=include_tolls,
+            include_caz=include_caz, caz_exempt=caz_exempt,
+        )
+        if not entry:
+            routes.pop(idx)
+            continue
+
+        new_cam = count_cameras_near_polyline(entry, hazards)
+        if new_cam <= target_cam:
+            entry['camera_exclusions_applied'] = True
+            routes[idx] = entry
+            logger.info(
+                '[VALHALLA] Shortest re-routed with camera exclusions: %.1fkm, %d cameras (was %d)',
+                entry['distance_km'], new_cam, short_cam,
+            )
+        else:
+            logger.warning(
+                '[VALHALLA] Shortest retry still has %d cameras (target %d) — removing option',
+                new_cam, target_cam,
+            )
+            routes.pop(idx)
+
     return routes
 
 
@@ -3066,6 +3075,35 @@ def _hazard_marker_display_type(hazard_category: str, hazard: Dict[str, Any]) ->
     return s
 
 
+def _default_hazard_proximity_preferences() -> Dict[str, Dict[str, Any]]:
+    return {
+        'camera_speed': {'threshold': 500},
+        'camera_red_light': {'threshold': 120},
+        'camera_average_speed': {'threshold': 500},
+        'camera_bus_lane': {'threshold': 500},
+        'camera_mobile': {'threshold': 500},
+        'camera_other': {'threshold': 500},
+        'camera': {'threshold': 500},
+        'traffic_light': {'threshold': 80},
+        'police': {'threshold': 1000},
+        'roadworks': {'threshold': 500},
+        'accident': {'threshold': 500},
+    }
+
+
+def _load_hazard_proximity_preferences(cursor: sqlite3.Cursor) -> Dict[str, Dict[str, Any]]:
+    try:
+        cursor.execute(
+            "SELECT hazard_type, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1"
+        )
+        preferences = {row[0]: {'threshold': row[1]} for row in cursor.fetchall()}
+        if preferences:
+            return preferences
+    except Exception as e:
+        logger.info("[HAZARDS] hazard_preferences lookup failed, using defaults: %s", e)
+    return _default_hazard_proximity_preferences()
+
+
 def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
     """
     Get list of hazards that are on or near the route.
@@ -3074,11 +3112,9 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[
     try:
         hazards_on_route = []
 
-        # Get hazard preferences
         with db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT hazard_type, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
-            preferences = {row[0]: {'threshold': row[1]} for row in cursor.fetchall()}
+            preferences = _load_hazard_proximity_preferences(cursor)
 
         # Decode polyline to get route points
         try:
@@ -3092,8 +3128,8 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]], hazards: Dict[
             logger.error(f"Error decoding polyline: {e}")
             return []
 
-        # OPTIMIZATION: Sample route points for faster hazard detection
-        sample_interval = max(1, len(decoded_points) // 100)  # Max 100 sample points
+        # Sample route points — match score_route density so hazard lists align with counts.
+        sample_interval = max(1, len(decoded_points) // 500)
         sampled_points = decoded_points[::sample_interval]
 
         # Check each hazard against route
@@ -4021,8 +4057,8 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260619j"></script>
-    <script defer src="/static/js/app.js?v=20260619j"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260703b"></script>
+    <script defer src="/static/js/app.js?v=20260703b"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -7621,7 +7657,7 @@ def calculate_route():
                                     alt_hazards_list = get_hazards_on_route(alt_geometry, hazards)
                                     logger.info(f"[HAZARDS] Valhalla alt route {idx+1}: penalty={alt_hazard_penalty:.0f}s, count={alt_hazard_count}, hazards_list={len(alt_hazards_list)}")
 
-                                route_names = ['Shortest', 'Balanced', 'Alternative']
+                                route_names = ['Alternate', 'Balanced', 'Alternative']
                                 routes.append({
                                     'id': idx + 2,
                                     'name': route_names[idx] if idx < len(route_names) else f'Alternative {idx}',

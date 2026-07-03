@@ -6,6 +6,8 @@ from voyagr.services.routing.optimised_route import (
     PRIMARY_OPTIMISED_NAME,
     SHORTEST_ROUTE_NAME,
     baseline_camera_hazard_count,
+    cameras_near_polyline_exclude_points,
+    count_cameras_near_polyline,
     fetch_valhalla_auto_json,
     fetch_valhalla_auto_shorter_json,
     graphhopper_qualifies_as_optimised,
@@ -104,6 +106,32 @@ class TestShortestRouteNaming:
     def test_shortest_name_detection(self):
         assert is_shortest_route({'name': SHORTEST_ROUTE_NAME}) is True
         assert is_shortest_route({'name': 'Shortest'}) is False
+        assert is_shortest_route({'name': 'Alternate'}) is False
+
+
+class TestPolylineCameraCounting:
+    def test_counts_camera_near_route_geometry(self):
+        hazards = {
+            'camera_speed': [{'lat': 51.500, 'lon': -0.100}],
+        }
+        route = {
+            'geometry': [[51.5001, -0.1001], [51.501, -0.101]],
+            'geometry_precision': 6,
+        }
+        assert count_cameras_near_polyline(route, hazards, threshold_m=150) == 1
+
+    def test_exclude_points_for_cameras_on_route(self):
+        hazards = {
+            'camera_speed': [{'lat': 51.500, 'lon': -0.100}],
+        }
+        route = {
+            'geometry': [[51.5001, -0.1001], [51.501, -0.101]],
+            'geometry_precision': 6,
+        }
+        pts = cameras_near_polyline_exclude_points(route, hazards, threshold_m=150)
+        assert len(pts) == 1
+        assert pts[0]['lat'] == 51.500
+        assert pts[0]['lon'] == -0.100
 
 
 class TestOptimisedRouteQualification:
