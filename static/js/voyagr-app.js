@@ -17913,7 +17913,7 @@ async function geocodeAddress(address) {
 
     try {
         console.log('[Geocoding] Fetching:', trimmedAddress);
-        const response = await fetch(`${NOMINATIM_API}?q=${encodeURIComponent(trimmedAddress)}&limit=1`, {
+        const response = await fetch(`${NOMINATIM_API}?q=${encodeURIComponent(trimmedAddress)}&limit=8`, {
             headers: {
                 'User-Agent': 'Voyagr-PWA/1.0'
             }

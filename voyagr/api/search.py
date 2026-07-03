@@ -20,6 +20,15 @@ from flask import Blueprint, jsonify, request
 from voyagr.models import get_db_connection, return_db_connection
 from voyagr.utils import sanitize_string, require_private_user
 from voyagr.utils.geometry import get_distance_between_points
+from voyagr.services.geocoding import (
+    build_nominatim_structured_params,
+    dedupe_results,
+    nominatim_extra_params_for_query,
+    parse_address_query,
+    query_has_house_number,
+    rank_geocode_results,
+    should_fetch_tomtom,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +62,20 @@ def _nominatim_email_params(params: dict) -> None:
 
 def _has_house_number(query: str) -> bool:
     """Check if query likely contains a street number."""
-    return bool(re.match(r'^\d+[\s,]', query.strip()))
+    return query_has_house_number(query)
+
+
+def _nominatim_search(params: dict, headers: dict) -> tuple:
+    """Run Nominatim /search; returns (results, http_ok)."""
+    url = f"{NOMINATIM_BASE_URL}/search"
+    _nominatim_email_params(params)
+    resp = requests.get(url, params=params, headers=headers, timeout=10)
+    if resp.status_code != 200:
+        logger.warning(f"[Geocode] Nominatim HTTP {resp.status_code} params={list(params.keys())}")
+        return [], False
+    raw = resp.json()
+    data = raw if isinstance(raw, list) else []
+    return data, True
 
 
 def _tomtom_geocode(query: str, limit: int) -> list:
@@ -102,6 +124,7 @@ def _tomtom_geocode(query: str, limit: int) -> list:
                 'name': name,
                 'type': r.get('type', 'address').lower(),
                 'address': address_obj,
+                '_source': 'tomtom',
             })
         return results
     except Exception as e:
@@ -138,62 +161,64 @@ def geocode():
             limit = 8
         limit = max(1, min(limit, 10))
 
-        url = f"{NOMINATIM_BASE_URL}/search"
+        headers = _nominatim_headers()
+        fetch_limit = max(limit, 10)
+        parsed = parse_address_query(q)
+
         params = {
             'q': q,
             'format': 'json',
-            'limit': str(limit),
+            'limit': str(fetch_limit),
             'addressdetails': '1',
         }
+        params.update(nominatim_extra_params_for_query(q))
         if NOMINATIM_COUNTRYCODES:
             params['countrycodes'] = NOMINATIM_COUNTRYCODES
-        _nominatim_email_params(params)
 
-        headers = _nominatim_headers()
-        resp = requests.get(url, params=params, headers=headers, timeout=10)
         data: list = []
-        if resp.status_code == 200:
-            raw = resp.json()
-            data = raw if isinstance(raw, list) else []
-        else:
-            logger.warning(f"[Geocode] Nominatim HTTP {resp.status_code} for q={q[:80]!r}")
+        nominatim_http_ok = False
+
+        batch, ok = _nominatim_search(params, headers)
+        data = dedupe_results(batch)
+        nominatim_http_ok = nominatim_http_ok or ok
 
         if (not data) and (',' not in q) and (not NOMINATIM_COUNTRYCODES):
-            retry_q = f"{q}, United Kingdom"
-            params['q'] = retry_q
-            _nominatim_email_params(params)
-            resp2 = requests.get(url, params=params, headers=headers, timeout=10)
-            if resp2.status_code == 200:
-                raw2 = resp2.json()
-                data = raw2 if isinstance(raw2, list) else []
+            retry_params = dict(params)
+            retry_params['q'] = f"{q}, United Kingdom"
+            batch, ok = _nominatim_search(retry_params, headers)
+            if batch:
+                data = dedupe_results(list(batch) + list(data))
+            nominatim_http_ok = nominatim_http_ok or ok
 
-        query_has_number = _has_house_number(q)
-        nominatim_has_match = any(
-            r.get('address', {}).get('house_number') for r in (data or [])
-        )
+        structured = build_nominatim_structured_params(parsed)
+        if structured:
+            if NOMINATIM_COUNTRYCODES:
+                structured['countrycodes'] = NOMINATIM_COUNTRYCODES
+            batch, ok = _nominatim_search(structured, headers)
+            if batch:
+                data = dedupe_results(list(batch) + list(data))
+            nominatim_http_ok = nominatim_http_ok or ok
 
-        if query_has_number and not nominatim_has_match:
-            tomtom_results = _tomtom_geocode(q, limit)
+        if os.getenv('TOMTOM_API_KEY', '').strip() and should_fetch_tomtom(q, data):
+            tomtom_results = _tomtom_geocode(q, fetch_limit)
             if tomtom_results:
-                seen = set()
-                for r in (data or []):
-                    key = (round(float(r.get('lat', 0)), 4), round(float(r.get('lon', 0)), 4))
-                    seen.add(key)
-                for tr in tomtom_results:
-                    key = (round(float(tr['lat']), 4), round(float(tr['lon']), 4))
-                    if key not in seen:
-                        data.insert(0, tr)
-                        seen.add(key)
+                data = dedupe_results(list(tomtom_results) + list(data))
 
-        if not data:
-            tomtom_fallback = _tomtom_geocode(q, limit)
+        if not data and os.getenv('TOMTOM_API_KEY', '').strip():
+            tomtom_fallback = _tomtom_geocode(q, fetch_limit)
             if tomtom_fallback:
                 data = tomtom_fallback
 
-        if not data and resp.status_code != 200:
-            return jsonify({'success': False, 'error': f'Geocode failed (HTTP {resp.status_code})'}), 502
+        if data:
+            ranked = rank_geocode_results(q, data)
+            # Drop internal scoring metadata before JSON response
+            for r in ranked:
+                r.pop('_source', None)
+            data = ranked[:limit]
+        elif not nominatim_http_ok and not os.getenv('TOMTOM_API_KEY', '').strip():
+            return jsonify({'success': False, 'error': 'Geocode failed (Nominatim unavailable)'}), 502
 
-        out = jsonify(data[:limit] if data else [])
+        out = jsonify(data if data else [])
         out.headers['Cache-Control'] = 'no-store'
         return out
     except Exception as e:
