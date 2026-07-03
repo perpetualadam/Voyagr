@@ -2361,8 +2361,15 @@ async function getSupabaseAccessToken() {
 
 async function fetchJsonWithAuth(url, options = {}) {
     const token = await getSupabaseAccessToken();
+    if (!token) {
+        // Guest / signed-out: skip network (avoids noisy 401s for account-only APIs).
+        return {
+            res: { status: 401, ok: false, headers: { get: () => '' } },
+            data: { success: false, error: 'Unauthorized' },
+        };
+    }
     const headers = { ...(options.headers || {}) };
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    headers['Authorization'] = `Bearer ${token}`;
     const res = await fetch(url, { ...options, headers });
     const contentType = res.headers.get('content-type') || '';
     const data = contentType.includes('application/json') ? await res.json() : await res.text();
@@ -9640,8 +9647,8 @@ function addToSearchHistory(query, resultName, lat, lon) {
         recordRecentDestination(resultName || query, lat, lon, 'search');
     }
     getSupabaseAccessToken().then(token => {
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
+        if (!token) return;
+        const headers = { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` };
         return fetch('/api/search-history', {
         method: 'POST',
             headers,
