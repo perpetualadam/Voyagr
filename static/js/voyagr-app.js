@@ -5126,9 +5126,10 @@ async function calculateRoute() {
 
                     console.log(`[Route] Stored route with duration_minutes: ${durationMinutes}`);
 
-                    // Display hazard markers if hazards are present
-                    if (data.routes && data.routes.length > 0 && data.routes[0].hazards) {
-                        displayHazardMarkers(data.routes[0].hazards);
+                    // Display hazard markers for cameras/hazards on the primary route only
+                    const primaryHazards = data.routes?.[0]?.hazards;
+                    if (primaryHazards && primaryHazards.length > 0) {
+                        displayHazardMarkers(primaryHazards);
                     }
 
                     // IMPORTANT: Populate routeOptions BEFORE showing route preview
@@ -8058,6 +8059,20 @@ function applyRouteUpdateDuringNavigation(routeData) {
 }
 
 /**
+ * Resolve the route object used for preview (full API payload or single route option).
+ * @param {Object} routeData
+ * @returns {Object}
+ */
+function resolvePreviewRoute(routeData) {
+    if (!routeData) return {};
+    if (routeData.routes && routeData.routes.length > 0) {
+        const idx = Math.max(0, Math.min(Number(selectedRouteIndex) || 0, routeData.routes.length - 1));
+        return routeData.routes[idx];
+    }
+    return routeData;
+}
+
+/**
  * showRoutePreview function
  * @function showRoutePreview
  * @param {*} routeData - Route data to display in preview
@@ -8174,21 +8189,41 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         cazDetails: cazDetails
     });
 
-    // Update hazard information
-    const hazardCount = routeData.hazard_count || 0;
-    const hazardPenaltySeconds = routeData.hazard_penalty_seconds || 0;
+    // Update hazard information (from primary/selected route, not just top-level API fields)
+    const previewRoute = resolvePreviewRoute(routeData);
+    const hazardCount = previewRoute.hazard_count ?? routeData.hazard_count ?? 0;
+    const hazardPenaltySeconds = previewRoute.hazard_penalty_seconds ?? routeData.hazard_penalty_seconds ?? 0;
+    const cameraEngine = routeData.camera_avoidance_engine || previewRoute.source || '';
     const hazardContainer = document.getElementById('hazardInfoContainer');
+    const hazardTitleEl = hazardContainer ? hazardContainer.querySelector('h4') : null;
+    const penaltyRow = hazardContainer ? hazardContainer.querySelector('#previewHazardPenalty')?.closest('div') : null;
 
-    if (hazardCount > 0 && hazardPenaltySeconds > 0) {
-        // Convert seconds to minutes
-        const hazardPenaltyMinutes = Math.round(hazardPenaltySeconds / 60);
-        document.getElementById('previewHazardCount').textContent = hazardCount;
-        document.getElementById('previewHazardPenalty').textContent = hazardPenaltyMinutes + ' min';
-        hazardContainer.style.display = 'block';
-        console.log('[Hazards] Route preview hazards:', { count: hazardCount, penalty: hazardPenaltyMinutes + ' min' });
-    } else {
-        hazardContainer.style.display = 'none';
-        console.log('[Hazards] No hazards detected for this route');
+    if (hazardContainer) {
+        if (hazardCount > 0 && hazardPenaltySeconds > 0) {
+            const hazardPenaltyMinutes = Math.round(hazardPenaltySeconds / 60);
+            document.getElementById('previewHazardCount').textContent = hazardCount;
+            document.getElementById('previewHazardPenalty').textContent = hazardPenaltyMinutes + ' min';
+            if (hazardTitleEl) hazardTitleEl.textContent = '⚠️ Hazards Detected';
+            if (penaltyRow) penaltyRow.style.display = 'flex';
+            hazardContainer.style.background = '#FFF3E0';
+            hazardContainer.style.borderLeftColor = '#FF9800';
+            hazardContainer.style.display = 'block';
+            console.log('[Hazards] Route preview hazards:', { count: hazardCount, penalty: hazardPenaltyMinutes + ' min' });
+        } else if (
+            hazardCount === 0 &&
+            (String(cameraEngine).includes('GraphHopper') || previewRoute.source === 'GraphHopper')
+        ) {
+            document.getElementById('previewHazardCount').textContent = '0 on route';
+            if (hazardTitleEl) hazardTitleEl.textContent = '✅ Camera Avoidance Active';
+            if (penaltyRow) penaltyRow.style.display = 'none';
+            hazardContainer.style.background = '#E8F5E9';
+            hazardContainer.style.borderLeftColor = '#4CAF50';
+            hazardContainer.style.display = 'block';
+            console.log('[Hazards] GraphHopper Optimised route — 0 cameras on route geometry');
+        } else {
+            hazardContainer.style.display = 'none';
+            console.log('[Hazards] No hazards detected for this route');
+        }
     }
 
     // Update route details (routing engine stack is hidden from the preview UI)

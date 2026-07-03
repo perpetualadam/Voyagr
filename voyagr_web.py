@@ -2855,6 +2855,16 @@ def ensure_optimised_camera_avoiding_route(
     return routes
 
 
+def primary_route_api_fields(routes: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Top-level hazard fields for /api/route (mirrors routes[0] for frontend preview)."""
+    primary = routes[0] if routes else {}
+    return {
+        'hazard_count': primary.get('hazard_count', 0),
+        'hazard_penalty_seconds': primary.get('hazard_penalty_seconds', 0),
+        'hazards': primary.get('hazards', []),
+    }
+
+
 def valhalla_trip_json_to_std_route_entry(
     name: str,
     trip_json: Dict[str, Any],
@@ -7920,6 +7930,7 @@ def calculate_route():
                         'caz_details': routes[0].get('caz_details', {}),
                         'maneuvers': routes[0].get('maneuvers', []),
                         'cached': False,
+                        **primary_route_api_fields(routes),
                         'camera_avoidance_engine': (
                             'GraphHopper' if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
                             else 'Valhalla'
@@ -8263,6 +8274,7 @@ def calculate_route():
                                     'caz_cost': routes[0]['caz_cost'],
                                     'maneuvers': routes[0].get('maneuvers', []),
                                     'cached': False,
+                                    **primary_route_api_fields(routes),
                                     'camera_avoidance_engine': (
                                         'GraphHopper' if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
                                         else 'Valhalla'
@@ -8626,7 +8638,8 @@ def calculate_route():
                             'start_lat': start_lat,
                             'start_lon': start_lon,
                             'end_lat': end_lat,
-                            'end_lon': end_lon
+                            'end_lon': end_lon,
+                            **primary_route_api_fields(routes),
                         }
 
                         # ================================================================
