@@ -13,6 +13,12 @@ Valhalla maneuver type reference (subset used here):
     24 StayLeft         26  RoundaboutEnter
 """
 
+from __future__ import annotations
+
+from typing import List, Sequence, Tuple
+
+from voyagr.utils.geometry import get_distance_between_points
+
 # GraphHopper instruction ``sign`` -> Valhalla ``maneuver.type``.
 GH_SIGN_TO_VALHALLA = {
     -98: 13,  # U-turn (unknown)   -> Uturn Left
@@ -40,3 +46,28 @@ DEFAULT_VALHALLA_TYPE = 8
 def gh_sign_to_valhalla_type(sign, default=DEFAULT_VALHALLA_TYPE):
     """Translate a GraphHopper instruction ``sign`` to a Valhalla maneuver type."""
     return GH_SIGN_TO_VALHALLA.get(sign, default)
+
+
+def remap_shape_index_after_reencode(
+    src_coords: Sequence[Tuple[float, float]],
+    dst_coords: Sequence[Tuple[float, float]],
+    src_idx: int,
+) -> int:
+    """
+    Map a GraphHopper instruction interval index (source polyline) to the nearest
+    vertex on a re-encoded polyline (e.g. precision 5 -> precision 6 for the API).
+    """
+    if not dst_coords:
+        return 0
+    if not src_coords:
+        return max(0, min(int(src_idx), len(dst_coords) - 1))
+    src_idx = max(0, min(int(src_idx), len(src_coords) - 1))
+    target_lat, target_lon = src_coords[src_idx]
+    best_i = 0
+    best_d = float('inf')
+    for i, (lat, lon) in enumerate(dst_coords):
+        d = get_distance_between_points(target_lat, target_lon, lat, lon)
+        if d < best_d:
+            best_d = d
+            best_i = i
+    return best_i

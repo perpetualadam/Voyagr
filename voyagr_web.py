@@ -22,7 +22,7 @@ import logging
 from typing import List, Dict, Tuple, Optional, Any, Callable, TypeVar, Set
 
 from voyagr.utils.camera_buckets import normalize_camera_hazard_bucket
-from voyagr.utils.graphhopper import GH_SIGN_TO_VALHALLA
+from voyagr.utils.graphhopper import GH_SIGN_TO_VALHALLA, remap_shape_index_after_reencode
 
 F = TypeVar('F', bound=Callable[..., Any])
 
@@ -2426,6 +2426,7 @@ def build_graphhopper_optimised_route_entry(
 
         gh_coords = polyline.decode(gh_geometry, precision=5)
         gh_geometry_p6 = polyline.encode(gh_coords, precision=6)
+        gh_coords_p6 = polyline.decode(gh_geometry_p6, precision=6)
 
         gh_costs = cost_calculator.calculate_costs(
             gh_distance_km, vehicle_type, fuel_efficiency, fuel_price,
@@ -2466,17 +2467,23 @@ def build_graphhopper_optimised_route_entry(
         for instr in graphhopper_route.get('instructions', []):
             sign = instr.get('sign', 0)
             valhalla_type = gh_sign_to_valhalla.get(sign, 8)
-            begin_idx = instr.get('interval', [0])[0] if instr.get('interval') else 0
+            interval = instr.get('interval') or [0, 0]
+            begin_src = interval[0] if interval else 0
+            end_src = interval[1] if len(interval) > 1 else begin_src
+            begin_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, begin_src)
+            end_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, end_src)
+            instr_text = instr.get('text', '')
             maneuver = {
-                'instruction': instr.get('text', ''),
-                'distance': instr.get('distance', 0) / 1000,
-                'time': instr.get('time', 0) / 1000,
+                'instruction': instr_text,
+                'verbal_pre_transition_instruction': instr_text,
+                'distance': instr.get('distance', 0) / 1000.0,
+                'time': instr.get('time', 0) / 1000.0,
                 'type': valhalla_type,
                 'street_names': [instr.get('street_name', '')] if instr.get('street_name') else [],
                 'begin_shape_index': begin_idx,
-                'end_shape_index': instr.get('interval', [0, 0])[1] if instr.get('interval') and len(instr.get('interval', [])) > 1 else 0,
+                'end_shape_index': end_idx,
             }
-            sl_kmh = _gh_speed_limit_kmh_at(begin_idx)
+            sl_kmh = _gh_speed_limit_kmh_at(begin_src)
             if sl_kmh is not None:
                 maneuver['speed_limit'] = sl_kmh
             gh_maneuvers.append(maneuver)
@@ -4168,8 +4175,8 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260703c"></script>
-    <script defer src="/static/js/app.js?v=20260703c"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260703d"></script>
+    <script defer src="/static/js/app.js?v=20260703d"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>

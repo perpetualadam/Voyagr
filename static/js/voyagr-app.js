@@ -3667,29 +3667,57 @@ function selectRoute(index) {
     // Update the route list display
     displayRouteComparison();
 
-    // CRITICAL: Update window.lastCalculatedRoute with the selected route
-    // This ensures maneuvers and all route data are available for navigation
     if (routeOptions && routeOptions[index]) {
+        syncLastCalculatedRouteFromSelection(index);
         const selectedRoute = routeOptions[index];
-        const prev = window.lastCalculatedRoute || {};
-        // Preserve destination strings for auto-reroute / traffic reroute (not on per-route option objects)
-        window.lastCalculatedRoute = {
-            ...prev,
-            ...selectedRoute,
-            destination: prev.destination || selectedRoute.destination,
-            destinationName: prev.destinationName || selectedRoute.destinationName,
-            end_lat: prev.end_lat != null ? prev.end_lat : selectedRoute.end_lat,
-            end_lon: prev.end_lon != null ? prev.end_lon : selectedRoute.end_lon,
-        };
         console.log(`[Routes] Selected route "${selectedRoute.name}" with ${(selectedRoute.maneuvers || []).length} maneuvers`);
 
-        // Update the route preview with the selected route data
-        // Pass skipMapDisplay=true since displaySingleRoute already handled the map
-        showRoutePreview(selectedRoute, true);
+        // Keep navigation tab trip summary aligned with the chosen alternative
+        updateTripInfoFromRouteOption(selectedRoute);
 
-        // Auto-collapse logic removed to keep Route Preview visible
-        // collapseBottomSheet();
+        // Full API payload when available so preview hazard/cost fields stay coherent
+        const previewPayload = window.lastRouteApiResponse
+            ? { ...window.lastRouteApiResponse, routes: routeOptions }
+            : selectedRoute;
+        showRoutePreview(previewPayload, true);
     }
+}
+
+/**
+ * Update navigation tab distance/time/cost from a route option object.
+ * @param {Object} route
+ */
+function updateTripInfoFromRouteOption(route) {
+    if (!route) return;
+    const distance = convertDistance(route.distance_km);
+    const distUnit = getDistanceUnit();
+    const symbol = getCurrencySymbol();
+    const fuelCost = parseFloat(route.fuel_cost || 0);
+    const tollCost = parseFloat(route.toll_cost || 0);
+    const cazCost = parseFloat(route.caz_cost || 0);
+
+    const distanceEl = document.getElementById('distance');
+    const timeEl = document.getElementById('time');
+    const fuelEl = document.getElementById('fuelCost');
+    const tollEl = document.getElementById('tollCost');
+    if (distanceEl) {
+        distanceEl.textContent = distance + ' ' + distUnit;
+        distanceEl.dataset.km = route.distance_km;
+    }
+    if (timeEl) timeEl.textContent = route.duration_minutes + ' min';
+    if (fuelEl) {
+        fuelEl.textContent = symbol + fuelCost.toFixed(2);
+        fuelEl.dataset.value = fuelCost;
+    }
+    if (tollEl) {
+        tollEl.textContent = symbol + tollCost.toFixed(2);
+        tollEl.dataset.value = tollCost;
+    }
+    console.log('[Cost] Route selected with costs:', {
+        fuelCost: fuelCost.toFixed(2),
+        tollCost: tollCost.toFixed(2),
+        cazCost: cazCost.toFixed(2),
+    });
 }
 
 /**
@@ -3808,45 +3836,9 @@ function useRoute(index) {
     const route = routeOptions[index];
     if (!route) return;
 
-    // NOTE: Don't draw route here - displaySingleRoute() handles map display
-    // This function now just updates trip info and stores the selected route
-
-    // Update trip info with unit-adjusted costs
-    const distance = convertDistance(route.distance_km);
-    const distUnit = getDistanceUnit();
-    const symbol = getCurrencySymbol();
-
-    const fuelCost = parseFloat(route.fuel_cost || 0);
-    const tollCost = parseFloat(route.toll_cost || 0);
-    const cazCost = parseFloat(route.caz_cost || 0);
-    const totalCost = (fuelCost + tollCost + cazCost).toFixed(2);
-
-    document.getElementById('distance').textContent = distance + ' ' + distUnit;
-    document.getElementById('distance').dataset.km = route.distance_km;
-    document.getElementById('time').textContent = route.duration_minutes + ' min';
-    document.getElementById('fuelCost').textContent = symbol + fuelCost.toFixed(2);
-    document.getElementById('fuelCost').dataset.value = fuelCost;
-    document.getElementById('tollCost').textContent = symbol + tollCost.toFixed(2);
-    document.getElementById('tollCost').dataset.value = tollCost;
-
-    console.log('[Cost] Route selected with costs:', {
-        distanceUnit: distanceUnit,
-        fuelCost: fuelCost.toFixed(2),
-        tollCost: tollCost.toFixed(2),
-        cazCost: cazCost.toFixed(2),
-        totalCost: totalCost
-    });
-
-    // Merge into prior route payload so reroute/traffic still have destination (single-route objects omit it).
-    const prev = window.lastCalculatedRoute || {};
-    window.lastCalculatedRoute = {
-        ...prev,
-        ...route,
-        destination: prev.destination || route.destination,
-        destinationName: prev.destinationName || route.destinationName,
-        end_lat: prev.end_lat != null ? prev.end_lat : route.end_lat,
-        end_lon: prev.end_lon != null ? prev.end_lon : route.end_lon,
-    };
+    selectedRouteIndex = index;
+    syncLastCalculatedRouteFromSelection(index);
+    updateTripInfoFromRouteOption(route);
 
     // Display traffic edges on selected route if enabled
     const polylinePoints = route.polyline || [];
@@ -4695,8 +4687,10 @@ function mergeNavigationRouteFromSelected(routeData) {
         const idx = Math.max(0, Math.min(Number(selectedRouteIndex) || 0, routeOptions.length - 1));
         const sel = routeOptions[idx];
         if (!sel) return routeData;
+        const prec = Number.isFinite(sel.geometry_precision) ? sel.geometry_precision : 6;
         return Object.assign({}, routeData, {
             geometry: sel.geometry || routeData.geometry,
+            geometry_precision: prec,
             maneuvers: (sel.maneuvers && sel.maneuvers.length > 0) ? sel.maneuvers : (routeData.maneuvers || []),
             name: sel.name || routeData.name,
             distance_km: sel.distance_km ?? routeData.distance_km,
@@ -4706,10 +4700,31 @@ function mergeNavigationRouteFromSelected(routeData) {
             toll_cost: sel.toll_cost ?? routeData.toll_cost,
             caz_cost: sel.caz_cost ?? routeData.caz_cost,
             source: sel.source || routeData.source,
+            hazards: sel.hazards || routeData.hazards || [],
         });
     } catch (_e) {
         return routeData;
     }
+}
+
+/**
+ * Apply selected route option fields to window.lastCalculatedRoute (geometry + maneuvers for TBT).
+ */
+function syncLastCalculatedRouteFromSelection(index) {
+    if (!routeOptions || !routeOptions[index]) return;
+    const route = routeOptions[index];
+    const prev = window.lastCalculatedRoute || {};
+    window.lastCalculatedRoute = {
+        ...prev,
+        ...route,
+        geometry: route.geometry || prev.geometry,
+        geometry_precision: Number.isFinite(route.geometry_precision) ? route.geometry_precision : (prev.geometry_precision || 6),
+        maneuvers: route.maneuvers || prev.maneuvers || [],
+        destination: prev.destination || route.destination,
+        destinationName: prev.destinationName || route.destinationName,
+        end_lat: prev.end_lat != null ? prev.end_lat : route.end_lat,
+        end_lon: prev.end_lon != null ? prev.end_lon : route.end_lon,
+    };
 }
 
 /**
@@ -5136,6 +5151,7 @@ async function calculateRoute() {
                         ? data.routes[0].duration_minutes
                         : (data.total_duration_minutes || (data.time ? parseInt(data.time) : 0));
 
+                    window.lastRouteApiResponse = data;
                     window.lastCalculatedRoute = {
                         ...data,
                         duration_minutes: durationMinutes,  // FIXED: Ensure duration_minutes is at top level
@@ -8119,15 +8135,14 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
 
     console.log('[Route Preview] Currency:', symbol, 'Distance Unit:', distUnit);
 
-    // Update route preview information
-    // Use distance_km from routes array if available, otherwise parse from distance string
-    let distanceKm = 0;
-    if (routeData.routes && routeData.routes.length > 0) {
+    // Update route preview information (selected alternative when available)
+    const previewRouteSlice = resolvePreviewRoute(routeData);
+    let distanceKm = previewRouteSlice.distance_km || 0;
+    if (!distanceKm && routeData.routes && routeData.routes.length > 0) {
         distanceKm = routeData.routes[0].distance_km || 0;
-    } else if (routeData.distance_km) {
+    } else if (!distanceKm && routeData.distance_km) {
         distanceKm = routeData.distance_km;
-    } else if (routeData.distance) {
-        // Parse distance string like "1.31 km" to extract number
+    } else if (!distanceKm && routeData.distance) {
         distanceKm = parseFloat(routeData.distance) || 0;
     }
 
@@ -8137,7 +8152,8 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         previewDistanceEl.dataset.km = distanceKm;
         previewDistanceEl.textContent = convertDistance(distanceKm) + ' ' + distUnit;
     }
-    document.getElementById('previewDuration').textContent = (routeData.time || routeData.duration_minutes || 0) + ' min';
+    document.getElementById('previewDuration').textContent =
+        (previewRouteSlice.duration_minutes ?? routeData.time ?? routeData.duration_minutes ?? 0) + ' min';
 
     // Build route description
     const startInput = document.getElementById('start').value;
@@ -8149,11 +8165,11 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     // They should NOT be adjusted based on distance unit preference (km vs miles)
     // The distance unit is just for display - the actual cost is the same regardless
     // Get costs - check top-level first, then routes[0] fallback
-    const primaryRoute = (routeData.routes && routeData.routes.length > 0) ? routeData.routes[0] : routeData;
-    const fuelCost = parseFloat(routeData.fuel_cost || primaryRoute.fuel_cost || 0);
-    const fuelLitres = parseFloat(routeData.fuel_litres || primaryRoute.fuel_litres || 0);
-    const tollCost = parseFloat(routeData.toll_cost || primaryRoute.toll_cost || 0);
-    const cazCost = parseFloat(routeData.caz_cost || primaryRoute.caz_cost || 0);
+    const primaryRoute = previewRouteSlice;
+    const fuelCost = parseFloat(previewRouteSlice.fuel_cost ?? routeData.fuel_cost ?? 0);
+    const fuelLitres = parseFloat(previewRouteSlice.fuel_litres ?? routeData.fuel_litres ?? 0);
+    const tollCost = parseFloat(previewRouteSlice.toll_cost ?? routeData.toll_cost ?? 0);
+    const cazCost = parseFloat(previewRouteSlice.caz_cost ?? routeData.caz_cost ?? 0);
     const totalCost = fuelCost + tollCost + cazCost;
 
     document.getElementById('previewFuelCost').textContent = symbol + fuelCost.toFixed(2);
@@ -8338,11 +8354,8 @@ function showAlternativeRoutesInPreview() {
         div.onmouseover = () => { div.style.borderColor = routeColor; div.style.background = '#f0f4ff'; };
         div.onmouseout = () => { div.style.borderColor = '#ddd'; div.style.background = 'white'; };
         div.onclick = () => {
-            selectedRouteIndex = index;
-            displaySingleRoute(index);  // Show only the selected route on map
+            selectRoute(index);
             useRoute(index);
-            // Pass skipMapDisplay=true since displaySingleRoute already handled the map
-            showRoutePreview(routeOptions[index], true);
         };
         container.appendChild(div);
     });
@@ -8530,6 +8543,8 @@ function startNavigationFromPreview() {
         showStatus('No route available', 'error');
         return;
     }
+
+    syncLastCalculatedRouteFromSelection(selectedRouteIndex);
 
     // Hide the start navigation buttons
     const startNavBtn = document.getElementById('startNavBtn');
@@ -18059,6 +18074,9 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     window.lastCalculatedRoute = Object.assign({}, window.lastCalculatedRoute || {}, routeData);
 
     const isQuietResume = !!(navStartOpts && navStartOpts.fromPersistedResume);
+    if (!isQuietResume) {
+        resetVoiceAnnouncementStateForNewRoute();
+    }
     let resumeStepIdx = 0;
     if (navStartOpts != null && Number.isFinite(navStartOpts.resumeStepIndex)) {
         resumeStepIdx = Math.max(0, Math.floor(navStartOpts.resumeStepIndex));
@@ -18089,8 +18107,9 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     };
 
     try {
-        routePolyline = decodePolyline(routeData.geometry, 6);
-        console.log('Route polyline decoded:', routePolyline.length, 'points');
+        const navPrecision = Number.isFinite(routeData.geometry_precision) ? routeData.geometry_precision : 6;
+        routePolyline = decodePolyline(routeData.geometry, navPrecision);
+        console.log('Route polyline decoded:', routePolyline.length, 'points', `(precision ${navPrecision})`);
         console.log('Route maneuvers:', currentRouteSteps.length, 'steps');
 
         persistActiveRoute();
