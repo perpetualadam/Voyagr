@@ -2742,6 +2742,7 @@ def ensure_optimised_camera_avoiding_route(
     """
     from voyagr.services.routing.optimised_route import (
         baseline_camera_hazard_count,
+        is_primary_optimised_route,
         prune_non_qualifying_optimised_routes,
     )
 
