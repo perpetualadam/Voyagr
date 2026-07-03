@@ -178,6 +178,71 @@ function initializeMap() {
     window.__voyagrShowMapLoadingOverlay = showMapLoadingOverlay;
     window.__voyagrHideMapLoadingOverlay = hideMapLoadingOverlay;
 
+    /** Set once the real vector/raster style (not bootstrap shell) has loaded. */
+    window.__voyagrMainStyleReady = false;
+    window.__voyagrMapInitAt = Date.now();
+
+    const MAP_INIT_GRACE_MS = 22000;
+
+    function voyagrMapIsBootstrapStyle() {
+        try {
+            const st = map && map.getStyle && map.getStyle();
+            return !st || st.name === 'voyagr-bootstrap';
+        } catch (_) {
+            return true;
+        }
+    }
+
+    function voyagrMapStillInInitGracePeriod() {
+        return Date.now() - (window.__voyagrMapInitAt || 0) < MAP_INIT_GRACE_MS;
+    }
+
+    /** During first load the bootstrap shell is grey — skip soft reload / escalate. */
+    function voyagrMapShouldSkipAggressiveRecovery() {
+        if (window.__voyagrMainStyleReady) return false;
+        return voyagrMapStillInInitGracePeriod() || voyagrMapIsBootstrapStyle();
+    }
+
+    function voyagrMapCancelRecoverTimers() {
+        if (window.__voyagrMapRecoverVerifyTimer) {
+            clearTimeout(window.__voyagrMapRecoverVerifyTimer);
+            window.__voyagrMapRecoverVerifyTimer = null;
+        }
+        if (window.__voyagrMapRecoverEscalateTimer) {
+            clearTimeout(window.__voyagrMapRecoverEscalateTimer);
+            window.__voyagrMapRecoverEscalateTimer = null;
+        }
+    }
+    window.__voyagrMapCancelRecoverTimers = voyagrMapCancelRecoverTimers;
+
+    function voyagrMapFlyToUserWhenReady(lat, lon) {
+        const doFly = () => {
+            try {
+                if (!map || typeof map.flyTo !== 'function') return;
+                console.log(`[Init] Centering on user: [${lat}, ${lon}]`);
+                map.flyTo({
+                    center: [lon, lat],
+                    zoom: 15,
+                    duration: 2000
+                });
+            } catch (_) {
+                /* ignore */
+            }
+        };
+        // Let London (default center) paint briefly once the real style is ready.
+        const scheduleFly = () => setTimeout(doFly, 900);
+        if (window.__voyagrMainStyleReady) {
+            scheduleFly();
+            return;
+        }
+        const onReady = () => scheduleFly();
+        window.addEventListener('voyagr-vector-style-ready', onReady, { once: true });
+        setTimeout(() => {
+            window.removeEventListener('voyagr-vector-style-ready', onReady);
+            if (!window.__voyagrMainStyleReady) scheduleFly();
+        }, 15000);
+    }
+
     // Minimal style so `new Map` returns immediately (map non-null after initializeMap).
     // Real vector/raster style is fetched asynchronously and applied via setStyle — avoids
     // blocking the main thread on a synchronous XHR.
@@ -412,6 +477,9 @@ function initializeMap() {
             const st = map.getStyle && map.getStyle();
             if (!st || st.name === 'voyagr-bootstrap') return;
 
+            window.__voyagrMainStyleReady = true;
+            voyagrMapCancelRecoverTimers();
+
             hideMapLoadingOverlay();
             if (typeof voyagrMapResizeAndRepaint === 'function') {
                 voyagrMapResizeAndRepaint();
@@ -576,6 +644,12 @@ function initializeMap() {
     function voyagrMapRecoverAfterNetworkEvent(reason) {
         try {
             if (!map || typeof map.getStyle !== 'function') return;
+            if (voyagrMapShouldSkipAggressiveRecovery()) {
+                if (reason) {
+                    console.log('[Map] recover skipped during init:', reason);
+                }
+                return;
+            }
             const now = Date.now();
             if (now - (window.__voyagrMapRecoverLastAt || 0) < 650) {
                 return;
@@ -635,6 +709,7 @@ function initializeMap() {
                 try {
                     if (!map) return;
                     if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+                    if (voyagrMapShouldSkipAggressiveRecovery()) return;
                     const styleOk = typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : true;
                     const allLoaded = typeof map.loaded === 'function' ? map.loaded() : true;
                     if (styleOk && allLoaded) return; // healthy, nothing to do
@@ -647,6 +722,7 @@ function initializeMap() {
                         try {
                             if (!map) return;
                             if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+                            if (voyagrMapShouldSkipAggressiveRecovery()) return;
                             const styleOk2 = typeof map.isStyleLoaded === 'function' ? map.isStyleLoaded() : true;
                             const allLoaded2 = typeof map.loaded === 'function' ? map.loaded() : true;
                             if (styleOk2 && allLoaded2) return;
@@ -671,6 +747,7 @@ function initializeMap() {
     const __MAP_MAX_STYLE_RELOADS = 4;
     function voyagrMapSoftStyleReload(reason) {
         if (!map || typeof map.getStyle !== 'function' || typeof map.setStyle !== 'function') return;
+        if (voyagrMapIsBootstrapStyle()) return;
         const now = Date.now();
         if (now - (window.__voyagrLastMapStyleReloadTime || 0) < __MAP_STYLE_RELOAD_MIN_GAP_MS) {
             return;
@@ -690,6 +767,18 @@ function initializeMap() {
             `(${window.__voyagrMapStyleReloadCount}/${__MAP_MAX_STYLE_RELOADS})`
         );
         try {
+            let savedView = null;
+            try {
+                const c = map.getCenter();
+                savedView = {
+                    center: [c.lng, c.lat],
+                    zoom: map.getZoom(),
+                    bearing: map.getBearing(),
+                    pitch: map.getPitch()
+                };
+            } catch (_) {
+                savedView = null;
+            }
             const style = map.getStyle();
             if (style) {
                 const clone = JSON.parse(JSON.stringify(style));
@@ -700,6 +789,9 @@ function initializeMap() {
             requestAnimationFrame(() => voyagrMapResizeAndRepaint());
             map.once('style.load', () => {
                 try {
+                    if (savedView) {
+                        map.jumpTo(savedView);
+                    }
                     if (typeof window.__voyagrRedrawNavigationOverlays === 'function') {
                         window.__voyagrRedrawNavigationOverlays('soft style reload');
                     }
@@ -949,18 +1041,14 @@ function initializeMap() {
         { once: true, capture: true }
     );
 
-    // Attempt to center on current location on load
+    // Attempt to center on current location after the basemap has painted (London default first).
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(
             (position) => {
-                const lat = position.coords.latitude;
-                const lon = position.coords.longitude;
-                console.log(`[Init] Centering on user: [${lat}, ${lon}]`);
-                map.flyTo({
-                    center: [lon, lat],
-                    zoom: 15,
-                    duration: 2000
-                });
+                voyagrMapFlyToUserWhenReady(
+                    position.coords.latitude,
+                    position.coords.longitude
+                );
             },
             (error) => {
                 console.log('[Init] Geolocation failed or denied:', error.message);
