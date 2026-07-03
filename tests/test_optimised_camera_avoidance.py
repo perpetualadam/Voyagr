@@ -92,6 +92,27 @@ class TestFetchValhallaAutoShorterJson:
         assert result is None
         assert mock_post.call_count == 1
 
+    def test_preferring_exclusions_falls_back_to_bare_route(self):
+        from voyagr.services.routing.optimised_route import fetch_valhalla_auto_shorter_preferring_exclusions
+
+        resp_fail = MagicMock(status_code=400)
+        resp_bare_ok = MagicMock(status_code=200)
+        resp_bare_ok.json.return_value = {'trip': {'legs': [{'shape': 'abc'}]}}
+
+        with patch(
+            'voyagr.services.routing.optimised_route.requests.post',
+            side_effect=[resp_fail, resp_bare_ok],
+        ) as mock_post:
+            data, applied = fetch_valhalla_auto_shorter_preferring_exclusions(
+                'http://v/route', {}, [{'lat': 1, 'lon': 2}],
+                exclude_locations=[{'lat': 1.5, 'lon': 2.5}],
+                prefer_exclusions=True,
+            )
+
+        assert data is not None
+        assert applied is False
+        assert mock_post.call_count == 2
+
     def test_merge_exclude_locations_prioritises_first_group(self):
         merged = merge_valhalla_exclude_locations(
             [{'lat': 1.0, 'lon': 2.0}],

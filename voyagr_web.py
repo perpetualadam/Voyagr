@@ -838,7 +838,7 @@ class RouteCache:
 
     def _make_key(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False, avoid_caz_zones: bool = False) -> str:
         """Create cache key from route parameters."""
-        return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type},{enable_hazard_avoidance},{int(avoid_traffic_lights)},{int(avoid_cameras)},{int(avoid_railway_crossings)},{int(avoid_caz_zones)},rv5"
+        return f"{start_lat:.4f},{start_lon:.4f},{end_lat:.4f},{end_lon:.4f},{routing_mode},{vehicle_type},{enable_hazard_avoidance},{int(avoid_traffic_lights)},{int(avoid_cameras)},{int(avoid_railway_crossings)},{int(avoid_caz_zones)},rv6"
 
     def get(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float, routing_mode: str, vehicle_type: str, enable_hazard_avoidance: bool = False, avoid_traffic_lights: bool = False, avoid_cameras: bool = True, avoid_railway_crossings: bool = False, avoid_caz_zones: bool = False) -> Optional[Dict[str, Any]]:
         """Get cached route if available and not expired."""
@@ -2666,9 +2666,31 @@ def _valhalla_shortest_exclusions_required(
     avoid_cameras: bool,
     exclude_locations: Optional[List[Dict[str, Any]]],
 ) -> bool:
-    """When camera avoidance is on, Shortest must not silently drop Valhalla exclude_locations."""
-    del exclude_locations  # kept for call-site compatibility
+    """Deprecated: use fetch_shortest_route_json (kept for call-site compatibility)."""
+    del exclude_locations
     return bool(enable_hazard_avoidance and avoid_cameras)
+
+
+def fetch_shortest_route_json(
+    url: str,
+    headers: Dict[str, str],
+    locations: List[Dict[str, Any]],
+    exclude_locations: Optional[List[Dict[str, Any]]],
+    *,
+    enable_hazard_avoidance: bool,
+    avoid_cameras: bool,
+    timeout: int = 10,
+) -> Tuple[Optional[Dict[str, Any]], bool]:
+    """auto_shorter with exclusion-first behaviour; always falls back so 📏 Shortest is offered."""
+    from voyagr.services.routing.optimised_route import fetch_valhalla_auto_shorter_preferring_exclusions
+
+    prefer = bool(enable_hazard_avoidance and avoid_cameras and exclude_locations)
+    return fetch_valhalla_auto_shorter_preferring_exclusions(
+        url, headers, locations,
+        exclude_locations=exclude_locations or None,
+        timeout=timeout,
+        prefer_exclusions=prefer,
+    )
 
 
 def fetch_valhalla_auto_json(
@@ -2873,7 +2895,7 @@ def ensure_shortest_respects_camera_avoidance(
         merged = merge_valhalla_exclude_locations(camera_pts, base_exclude, max_points=50)
         if not merged:
             logger.warning('[VALHALLA] ensure Shortest: no exclude_locations to retry with')
-            routes.pop(idx)
+            shortest['routing_preferences_limited'] = True
             continue
 
         sh_data = fetch_valhalla_auto_shorter_json(
@@ -2882,8 +2904,8 @@ def ensure_shortest_respects_camera_avoidance(
             require_exclusions=True,
         )
         if not sh_data:
-            logger.warning('[VALHALLA] ensure Shortest: no camera-aware auto_shorter route — removing option')
-            routes.pop(idx)
+            logger.warning('[VALHALLA] ensure Shortest: no camera-aware auto_shorter route — keeping option')
+            shortest['routing_preferences_limited'] = True
             continue
 
         entry = valhalla_trip_json_to_std_route_entry(
@@ -2894,7 +2916,7 @@ def ensure_shortest_respects_camera_avoidance(
             include_caz=include_caz, caz_exempt=caz_exempt,
         )
         if not entry:
-            routes.pop(idx)
+            shortest['routing_preferences_limited'] = True
             continue
 
         new_cam = count_cameras_near_polyline(entry, hazards)
@@ -2907,11 +2929,100 @@ def ensure_shortest_respects_camera_avoidance(
             )
         else:
             logger.warning(
-                '[VALHALLA] Shortest retry still has %d cameras (target %d) — removing option',
+                '[VALHALLA] Shortest retry still has %d cameras (target %d) — keeping with preference flag',
                 new_cam, target_cam,
             )
-            routes.pop(idx)
+            entry['routing_preferences_limited'] = True
+            routes[idx] = entry
 
+    return routes
+
+
+def ensure_scenic_valhalla_route(
+    routes: List[Dict[str, Any]],
+    *,
+    url: str,
+    headers: Dict[str, str],
+    route_locations: List[Dict[str, Any]],
+    has_waypoints: bool,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    route_bbox: Dict[str, float],
+    hazards: Dict[str, List[Dict[str, Any]]],
+    enable_hazard_avoidance: bool,
+    avoid_cameras: bool,
+    cost_calculator: Any,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+) -> List[Dict[str, Any]]:
+    """Add a distinct Valhalla preference route (🌿 Scenic) when primary Optimised exists."""
+    from voyagr.services.routing.optimised_route import (
+        SCENIC_ROUTE_NAME,
+        is_primary_optimised_route,
+        routes_are_distinct,
+    )
+
+    if not (enable_hazard_avoidance and avoid_cameras):
+        return routes
+    if any((r.get('name') or '').strip() == SCENIC_ROUTE_NAME for r in routes):
+        return routes
+
+    primary = next((r for r in routes if is_primary_optimised_route(r)), None)
+    if not primary:
+        return routes
+
+    exclude: List[Dict[str, Any]] = []
+    if hazards:
+        try:
+            exclude = build_valhalla_exclude_locations(
+                hazards, route_bbox=route_bbox, max_hazards=40,
+                start_lat=start_lat, start_lon=start_lon,
+                end_lat=end_lat, end_lon=end_lon,
+            )
+        except Exception as ex:
+            logger.warning('[VALHALLA] ensure Scenic: exclude build failed: %s', ex)
+    if not exclude:
+        return routes
+
+    locs = route_locations if has_waypoints else [
+        {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
+    ]
+    scenic_data = fetch_valhalla_auto_json(
+        url, headers, locs,
+        exclude_locations=exclude,
+        require_exclusions=True,
+    )
+    if not scenic_data:
+        return routes
+
+    next_id = max((int(r.get('id') or 0) for r in routes), default=0) + 1
+    entry = valhalla_trip_json_to_std_route_entry(
+        SCENIC_ROUTE_NAME, scenic_data, next_id, hazards, cost_calculator,
+        vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+        fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+        electricity_price=electricity_price, include_tolls=include_tolls,
+        include_caz=include_caz, caz_exempt=caz_exempt,
+    )
+    if not entry:
+        return routes
+    if not routes_are_distinct(entry, primary):
+        logger.info('[VALHALLA] Scenic route too similar to Optimised — not offered')
+        return routes
+
+    entry['camera_exclusions_applied'] = True
+    routes.append(entry)
+    logger.info(
+        '[VALHALLA] Added Scenic preference route: %.1fkm, %d cameras near route',
+        entry['distance_km'], entry.get('cameras_near_route', entry.get('hazard_count', 0)),
+    )
     return routes
 
 
@@ -4057,8 +4168,8 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260703b"></script>
-    <script defer src="/static/js/app.js?v=20260703b"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260703c"></script>
+    <script defer src="/static/js/app.js?v=20260703c"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
@@ -5446,10 +5557,10 @@ HTML_TEMPLATE = '''
 
                         <!-- Hazard Information -->
                         <div id="hazardInfoContainer" style="display: none; background: #FFF3E0; padding: 12px; border-radius: 8px; margin-bottom: 15px; border-left: 4px solid #FF9800;">
-                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #E65100;">⚠️ Hazards Detected</h4>
+                            <h4 style="margin: 0 0 10px 0; font-size: 14px; color: #E65100;">Route preferences</h4>
                             <div style="font-size: 13px; line-height: 1.6;">
                                 <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                    <span style="color: #666;">Hazard Count:</span>
+                                    <span style="color: #666;" data-hazard-count-label>Route score:</span>
                                     <strong id="previewHazardCount">0</strong>
                                 </div>
                                 <div style="display: flex; justify-content: space-between;">
@@ -7741,13 +7852,11 @@ def calculate_route():
                             shortest_locs = route_locations if has_waypoints else [
                                 {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
                             ]
-                            sh_require = _valhalla_shortest_exclusions_required(
-                                enable_hazard_avoidance, avoid_cameras, alt_exclude,
-                            )
-                            sh_data = fetch_valhalla_auto_shorter_json(
+                            sh_data, sh_exclusions_applied = fetch_shortest_route_json(
                                 url, headers, shortest_locs,
-                                exclude_locations=alt_exclude if alt_exclude else None,
-                                require_exclusions=sh_require,
+                                alt_exclude if alt_exclude else None,
+                                enable_hazard_avoidance=enable_hazard_avoidance,
+                                avoid_cameras=avoid_cameras,
                             )
                             if sh_data:
                                 entry = valhalla_trip_json_to_std_route_entry(
@@ -7758,7 +7867,7 @@ def calculate_route():
                                     include_caz=include_caz, caz_exempt=caz_exempt,
                                 )
                                 if entry:
-                                    if sh_require:
+                                    if sh_exclusions_applied:
                                         entry['camera_exclusions_applied'] = True
                                     routes.append(entry)
                                     next_route_id += 1
@@ -7821,13 +7930,11 @@ def calculate_route():
                                 locs_ensure = route_locations if has_waypoints else [
                                     {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
                                 ]
-                                sh_require = _valhalla_shortest_exclusions_required(
-                                    enable_hazard_avoidance, avoid_cameras, ensure_exclude,
-                                )
-                                sh_ensure = fetch_valhalla_auto_shorter_json(
+                                sh_ensure, sh_ensure_excl = fetch_shortest_route_json(
                                     url, headers, locs_ensure,
-                                    exclude_locations=ensure_exclude if ensure_exclude else None,
-                                    require_exclusions=sh_require,
+                                    ensure_exclude if ensure_exclude else None,
+                                    enable_hazard_avoidance=enable_hazard_avoidance,
+                                    avoid_cameras=avoid_cameras,
                                 )
                                 if sh_ensure:
                                     next_id = len(routes) + 1
@@ -7839,7 +7946,7 @@ def calculate_route():
                                         include_caz=include_caz, caz_exempt=caz_exempt,
                                     )
                                     if ent:
-                                        if sh_require:
+                                        if sh_ensure_excl:
                                             ent['camera_exclusions_applied'] = True
                                         routes.append(ent)
                                         logger.info(
@@ -7979,6 +8086,31 @@ def calculate_route():
                         caz_exempt=caz_exempt,
                     )
 
+                    routes = ensure_scenic_valhalla_route(
+                        routes,
+                        url=url,
+                        headers=headers,
+                        route_locations=route_locations,
+                        has_waypoints=has_waypoints,
+                        start_lat=start_lat,
+                        start_lon=start_lon,
+                        end_lat=end_lat,
+                        end_lon=end_lon,
+                        route_bbox=route_bbox,
+                        hazards=hazards,
+                        enable_hazard_avoidance=enable_hazard_avoidance,
+                        avoid_cameras=avoid_cameras,
+                        cost_calculator=cost_calculator,
+                        vehicle_type=vehicle_type,
+                        fuel_efficiency=fuel_efficiency,
+                        fuel_price=fuel_price,
+                        energy_efficiency=energy_efficiency,
+                        electricity_price=electricity_price,
+                        include_tolls=include_tolls,
+                        include_caz=include_caz,
+                        caz_exempt=caz_exempt,
+                    )
+
                     routes = ensure_shortest_respects_camera_avoidance(
                         routes,
                         url=url,
@@ -8003,6 +8135,9 @@ def calculate_route():
                         include_caz=include_caz,
                         caz_exempt=caz_exempt,
                     )
+
+                    from voyagr.services.routing.optimised_route import annotate_routes_camera_proximity
+                    routes = annotate_routes_camera_proximity(routes, hazards)
 
                     # ================================================================
                     # HAZARD AVOIDANCE: Reorder routes by hazard penalty if enabled
@@ -8243,13 +8378,11 @@ def calculate_route():
                                     logger.info(
                                         f"[VALHALLA] Retry: Requesting Shortest route with {len(retry_locations)} exclusions"
                                     )
-                                    sh_require = _valhalla_shortest_exclusions_required(
-                                        enable_hazard_avoidance, avoid_cameras, retry_locations,
-                                    )
-                                    sh_data = fetch_valhalla_auto_shorter_json(
+                                    sh_data, sh_excl_applied = fetch_shortest_route_json(
                                         url, headers, retry_short_locs,
-                                        exclude_locations=retry_locations if retry_locations else None,
-                                        require_exclusions=sh_require,
+                                        retry_locations if retry_locations else None,
+                                        enable_hazard_avoidance=enable_hazard_avoidance,
+                                        avoid_cameras=avoid_cameras,
                                     )
                                     if sh_data:
                                         rent = valhalla_trip_json_to_std_route_entry(
@@ -8260,7 +8393,7 @@ def calculate_route():
                                             include_caz=include_caz, caz_exempt=caz_exempt,
                                         )
                                         if rent:
-                                            if sh_require:
+                                            if sh_excl_applied:
                                                 rent['camera_exclusions_applied'] = True
                                             routes.append(rent)
                                             logger.info(
@@ -8369,6 +8502,31 @@ def calculate_route():
                                     caz_exempt=caz_exempt,
                                 )
 
+                                routes = ensure_scenic_valhalla_route(
+                                    routes,
+                                    url=url,
+                                    headers=headers,
+                                    route_locations=route_locations,
+                                    has_waypoints=has_waypoints,
+                                    start_lat=start_lat,
+                                    start_lon=start_lon,
+                                    end_lat=end_lat,
+                                    end_lon=end_lon,
+                                    route_bbox=route_bbox,
+                                    hazards=hazards,
+                                    enable_hazard_avoidance=enable_hazard_avoidance,
+                                    avoid_cameras=avoid_cameras,
+                                    cost_calculator=cost_calculator,
+                                    vehicle_type=vehicle_type,
+                                    fuel_efficiency=fuel_efficiency,
+                                    fuel_price=fuel_price,
+                                    energy_efficiency=energy_efficiency,
+                                    electricity_price=electricity_price,
+                                    include_tolls=include_tolls,
+                                    include_caz=include_caz,
+                                    caz_exempt=caz_exempt,
+                                )
+
                                 routes = ensure_shortest_respects_camera_avoidance(
                                     routes,
                                     url=url,
@@ -8393,6 +8551,9 @@ def calculate_route():
                                     include_caz=include_caz,
                                     caz_exempt=caz_exempt,
                                 )
+
+                                from voyagr.services.routing.optimised_route import annotate_routes_camera_proximity
+                                routes = annotate_routes_camera_proximity(routes, hazards)
 
                                 # Reorder by hazard penalty if avoidance enabled
                                 if enable_hazard_avoidance and hazards:
@@ -8561,13 +8722,11 @@ def calculate_route():
                                 locs_rec = route_locations if has_waypoints else [
                                     {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
                                 ]
-                                sh_rec_require = _valhalla_shortest_exclusions_required(
-                                    enable_hazard_avoidance, avoid_cameras, rec_excl,
-                                )
-                                sh_rec = fetch_valhalla_auto_shorter_json(
+                                sh_rec, sh_rec_excl = fetch_shortest_route_json(
                                     url, headers, locs_rec,
-                                    exclude_locations=rec_excl if rec_excl else None,
-                                    require_exclusions=sh_rec_require,
+                                    rec_excl if rec_excl else None,
+                                    enable_hazard_avoidance=enable_hazard_avoidance,
+                                    avoid_cameras=avoid_cameras,
                                 )
                                 if sh_rec:
                                     rid = len(routes_out) + 1
@@ -8579,7 +8738,7 @@ def calculate_route():
                                         include_caz=include_caz, caz_exempt=caz_exempt,
                                     )
                                     if rent:
-                                        if sh_rec_require:
+                                        if sh_rec_excl:
                                             rent['camera_exclusions_applied'] = True
                                         routes_out.append(rent)
                                         logger.info('[ROUTING] Recovery: added 📏 Shortest (auto_shorter)')
@@ -8602,6 +8761,31 @@ def calculate_route():
                             enable_hazard_avoidance=enable_hazard_avoidance,
                             avoid_cameras=avoid_cameras,
                             graphhopper_route=graphhopper_route,
+                            cost_calculator=cost_calculator,
+                            vehicle_type=vehicle_type,
+                            fuel_efficiency=fuel_efficiency,
+                            fuel_price=fuel_price,
+                            energy_efficiency=energy_efficiency,
+                            electricity_price=electricity_price,
+                            include_tolls=include_tolls,
+                            include_caz=include_caz,
+                            caz_exempt=caz_exempt,
+                        )
+
+                        routes_out = ensure_scenic_valhalla_route(
+                            routes_out,
+                            url=url,
+                            headers=headers,
+                            route_locations=route_locations,
+                            has_waypoints=has_waypoints,
+                            start_lat=start_lat,
+                            start_lon=start_lon,
+                            end_lat=end_lat,
+                            end_lon=end_lon,
+                            route_bbox=route_bbox,
+                            hazards=hazards,
+                            enable_hazard_avoidance=enable_hazard_avoidance,
+                            avoid_cameras=avoid_cameras,
                             cost_calculator=cost_calculator,
                             vehicle_type=vehicle_type,
                             fuel_efficiency=fuel_efficiency,
@@ -8637,6 +8821,9 @@ def calculate_route():
                             include_caz=include_caz,
                             caz_exempt=caz_exempt,
                         )
+
+                        from voyagr.services.routing.optimised_route import annotate_routes_camera_proximity
+                        routes_out = annotate_routes_camera_proximity(routes_out, hazards)
 
                     if routes_out:
                         if enable_hazard_avoidance and hazards:

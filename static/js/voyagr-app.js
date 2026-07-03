@@ -5172,6 +5172,7 @@ async function calculateRoute() {
                             toll_cost: route.toll_cost,
                             caz_cost: route.caz_cost,
                             hazard_count: route.hazard_count || 0,
+                            cameras_near_route: route.cameras_near_route ?? route.hazard_count ?? 0,
                             geometry_precision: Number.isFinite(route.geometry_precision) ? route.geometry_precision : defaultPrecision,
                             polyline: decodePolyline(route.geometry || '', Number.isFinite(route.geometry_precision) ? route.geometry_precision : defaultPrecision),
                             geometry: route.geometry,
@@ -8208,43 +8209,43 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         cazDetails: cazDetails
     });
 
-    // Update hazard information (from primary/selected route, not just top-level API fields)
+    // Update hazard / preference information (from primary/selected route)
     const previewRoute = resolvePreviewRoute(routeData);
     const hazardCount = previewRoute.hazard_count ?? routeData.hazard_count ?? 0;
+    const camerasNearRoute = previewRoute.cameras_near_route ?? hazardCount;
     const hazardPenaltySeconds = previewRoute.hazard_penalty_seconds ?? routeData.hazard_penalty_seconds ?? 0;
-    const cameraEngine = routeData.camera_avoidance_engine || previewRoute.source || '';
+    const preferencesApplied = localStorage.getItem('pref_cameras') !== 'false';
     const hazardContainer = document.getElementById('hazardInfoContainer');
     const hazardTitleEl = hazardContainer ? hazardContainer.querySelector('h4') : null;
+    const hazardCountLabel = hazardContainer ? hazardContainer.querySelector('[data-hazard-count-label]') : null;
     const penaltyRow = hazardContainer ? hazardContainer.querySelector('#previewHazardPenalty')?.closest('div') : null;
 
     if (hazardContainer) {
         const countEl = document.getElementById('previewHazardCount');
         const penaltyEl = document.getElementById('previewHazardPenalty');
-        if (hazardCount > 0 && hazardPenaltySeconds > 0 && countEl && penaltyEl) {
+        if (preferencesApplied && countEl) {
+            countEl.textContent = String(camerasNearRoute);
+            if (hazardCountLabel) hazardCountLabel.textContent = 'Route score:';
+            if (hazardTitleEl) hazardTitleEl.textContent = '✓ Route preferences applied';
+            if (penaltyRow) penaltyRow.style.display = hazardPenaltySeconds > 0 ? 'flex' : 'none';
+            if (penaltyEl && hazardPenaltySeconds > 0) {
+                penaltyEl.textContent = Math.round(hazardPenaltySeconds / 60) + ' min';
+            }
+            hazardContainer.style.background = camerasNearRoute === 0 ? '#E8F5E9' : '#FFF3E0';
+            hazardContainer.style.borderLeftColor = camerasNearRoute === 0 ? '#4CAF50' : '#FF9800';
+            hazardContainer.style.display = 'block';
+        } else if (hazardCount > 0 && hazardPenaltySeconds > 0 && countEl && penaltyEl) {
             const hazardPenaltyMinutes = Math.round(hazardPenaltySeconds / 60);
             countEl.textContent = hazardCount;
+            if (hazardCountLabel) hazardCountLabel.textContent = 'Route score:';
             penaltyEl.textContent = hazardPenaltyMinutes + ' min';
-            if (hazardTitleEl) hazardTitleEl.textContent = '⚠️ Hazards Detected';
+            if (hazardTitleEl) hazardTitleEl.textContent = '⚠️ Route alerts';
             if (penaltyRow) penaltyRow.style.display = 'flex';
             hazardContainer.style.background = '#FFF3E0';
             hazardContainer.style.borderLeftColor = '#FF9800';
             hazardContainer.style.display = 'block';
-            console.log('[Hazards] Route preview hazards:', { count: hazardCount, penalty: hazardPenaltyMinutes + ' min' });
-        } else if (
-            hazardCount === 0 &&
-            countEl &&
-            (String(cameraEngine).includes('GraphHopper') || previewRoute.source === 'GraphHopper')
-        ) {
-            countEl.textContent = '0 on route';
-            if (hazardTitleEl) hazardTitleEl.textContent = '✅ Camera Avoidance Active';
-            if (penaltyRow) penaltyRow.style.display = 'none';
-            hazardContainer.style.background = '#E8F5E9';
-            hazardContainer.style.borderLeftColor = '#4CAF50';
-            hazardContainer.style.display = 'block';
-            console.log('[Hazards] GraphHopper Optimised route — 0 cameras on route geometry');
         } else {
             hazardContainer.style.display = 'none';
-            console.log('[Hazards] No hazards detected for this route');
         }
     }
 
@@ -8318,19 +8319,19 @@ function showAlternativeRoutesInPreview() {
         const totalCost = (fuelCost + tollCost + cazCost).toFixed(2);
         const routeColor = ROUTE_COLORS[index % ROUTE_COLORS.length];
         const routeName = route.name || `Route ${index + 1}`;
-        const hazardCount = route.hazard_count || 0;
+        const hazardCount = route.cameras_near_route ?? route.hazard_count ?? 0;
         const hazardColor = hazardCount === 0 ? '#4CAF50' : (hazardCount <= 2 ? '#FF9800' : '#F44336');
         const div = document.createElement('div');
-        div.style.cssText = `background: white; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid ${routeColor}; border: 2px solid #ddd; cursor: pointer; transition: all 0.3s ease;`;
+        div.style.cssText = `background: white; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid ${routeColor}; border: 2px solid #ddd; cursor: pointer; transition: all 0.3s ease; overflow: hidden;`;
         div.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="display: inline-block; width: 12px; height: 12px; background: ${routeColor}; border-radius: 50%;"></span>
-                    <strong style="color: #333;">${routeName}</strong>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px; min-width: 0;">
+                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
+                    <span style="display: inline-block; width: 12px; height: 12px; background: ${routeColor}; border-radius: 50%; flex-shrink: 0;"></span>
+                    <strong style="color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${routeName}</strong>
                 </div>
-                <span style="background: ${hazardColor}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px;">📷 ${hazardCount}</span>
+                <span style="background: ${hazardColor}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; flex-shrink: 0;">Score ${hazardCount}</span>
             </div>
-            <div style="font-size: 12px; color: #666;">
+            <div style="font-size: 12px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
                 ⏱️ ${route.duration_minutes} min | 📏 ${convertDistance(route.distance_km)} ${distUnit} | ⛽ ${parseFloat(route.fuel_litres || 0).toFixed(1)} ${currentVehicleType === 'electric' ? 'kWh' : 'L'} | 💰 ${symbol}${totalCost}
             </div>
         `;

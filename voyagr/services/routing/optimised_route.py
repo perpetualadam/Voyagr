@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 PRIMARY_OPTIMISED_NAME = '⚡ Optimised'
 SHORTEST_ROUTE_NAME = '📏 Shortest'
+SCENIC_ROUTE_NAME = '🌿 Scenic'
+ROUTE_B_NAME = '🛣️ Route B'
 
 CAMERA_HAZARD_BUCKETS: Tuple[str, ...] = (
     'camera_speed',
@@ -260,6 +262,76 @@ def fetch_valhalla_auto_shorter_json(
         except Exception as e:
             logger.warning('[VALHALLA] auto_shorter request failed: %s', e)
     return None
+
+
+def fetch_valhalla_auto_shorter_preferring_exclusions(
+    url: str,
+    headers: Dict[str, str],
+    locations: List[Dict[str, Any]],
+    exclude_locations: Optional[List[Dict[str, Any]]] = None,
+    timeout: int = 10,
+    *,
+    prefer_exclusions: bool = False,
+) -> Tuple[Optional[Dict[str, Any]], bool]:
+    """
+    Request auto_shorter; try exclude_locations first when prefer_exclusions is True.
+    Falls back to a bare auto_shorter route so 📏 Shortest is still offered for later
+    ensure_shortest_respects_camera_avoidance to refine or flag.
+    Returns (trip_json, exclusions_applied).
+    """
+    if prefer_exclusions and exclude_locations:
+        avoided = fetch_valhalla_auto_shorter_json(
+            url, headers, locations,
+            exclude_locations=exclude_locations,
+            timeout=timeout,
+            require_exclusions=True,
+        )
+        if avoided:
+            return avoided, True
+    bare = fetch_valhalla_auto_shorter_json(
+        url, headers, locations,
+        exclude_locations=None,
+        timeout=timeout,
+        require_exclusions=False,
+    )
+    return (bare, False) if bare else (None, False)
+
+
+def annotate_routes_camera_proximity(
+    routes: List[Dict[str, Any]],
+    hazards: Dict[str, List[Dict[str, Any]]],
+) -> List[Dict[str, Any]]:
+    """Add cameras_near_route (polyline proximity) for UI scoring display."""
+    for route in routes:
+        route['cameras_near_route'] = count_cameras_near_polyline(route, hazards)
+    return routes
+
+
+def routes_are_distinct(
+    route_a: Dict[str, Any],
+    route_b: Dict[str, Any],
+    *,
+    min_distance_delta_km: float = 0.25,
+) -> bool:
+    """True when two routes differ enough to show as separate options."""
+    try:
+        dist_a = float(route_a.get('distance_km') or 0)
+        dist_b = float(route_b.get('distance_km') or 0)
+    except (TypeError, ValueError):
+        return True
+    if abs(dist_a - dist_b) >= min_distance_delta_km:
+        return True
+    geom_a = decode_route_coords(route_a)
+    geom_b = decode_route_coords(route_b)
+    if not geom_a or not geom_b:
+        return dist_a != dist_b
+    if len(geom_a) != len(geom_b):
+        return True
+    sample = max(1, len(geom_a) // 20)
+    for i in range(0, min(len(geom_a), len(geom_b)), sample):
+        if abs(geom_a[i][0] - geom_b[i][0]) > 0.0003 or abs(geom_a[i][1] - geom_b[i][1]) > 0.0003:
+            return True
+    return False
 
 
 def graphhopper_qualifies_as_optimised(
