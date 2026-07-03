@@ -8579,6 +8579,15 @@ def calculate_route():
                             'success': True,
                             'routes': routes,
                             'source': 'OSRM (Fallback)',
+                            'routing_degraded': True,
+                            'routing_warning': (
+                                'Local Valhalla/GraphHopper unavailable — basic route only, '
+                                'no camera avoidance or multi-route comparison.'
+                            ),
+                            'engines_failed': {
+                                'valhalla': valhalla_error,
+                                'graphhopper': graphhopper_error,
+                            },
                             'distance': f'{routes[0]["distance_km"]:.2f} km',
                             'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
                             'geometry': routes[0]['geometry'],

@@ -4946,6 +4946,18 @@ async function calculateRoute() {
                 routesCount: data.routes ? data.routes.length : 0
             });
 
+            if (data.routing_degraded) {
+                console.warn(
+                    '[Route API] Degraded routing — local engines failed:',
+                    data.routing_warning || data.source,
+                    data.engines_failed || {}
+                );
+                showStatus(
+                    '⚠️ Basic route only (Valhalla/GraphHopper offline). No camera avoidance.',
+                    'warning'
+                );
+            }
+
             if (data.success) {
                 // ===== FIX: If navigation is in progress, take a streamlined reroute path =====
                 // This avoids clearing markers, fitting bounds, or switching to the route preview tab.
