@@ -47,6 +47,13 @@ echo "=== Voyagr non-root service user ==="
 echo "App dir: $APP_DIR"
 echo "User:    $SERVICE_USER"
 
+ensure_git_safe_directory() {
+  if [[ -d "$APP_DIR/.git" ]] && ! git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$APP_DIR"; then
+    git config --global --add safe.directory "$APP_DIR"
+    echo "[git] Registered safe.directory=$APP_DIR (root can git pull after chown to $SERVICE_USER)"
+  fi
+}
+
 fix_permissions() {
   echo "[perms] Ensuring $SERVICE_USER can read app and write runtime files..."
 
@@ -83,18 +90,21 @@ fix_permissions() {
 
 if [[ "$PERMISSIONS_ONLY" -eq 0 ]]; then
   if ! id "$SERVICE_USER" &>/dev/null; then
-    echo "[1/4] Creating system user $SERVICE_USER..."
+    echo "[1/5] Creating system user $SERVICE_USER..."
     useradd --system --home-dir "$APP_DIR" --shell /usr/sbin/nologin \
       --comment "Voyagr PWA (gunicorn)" "$SERVICE_USER"
   else
-    echo "[1/4] User $SERVICE_USER already exists"
+    echo "[1/5] User $SERVICE_USER already exists"
     usermod -d "$APP_DIR" -s /usr/sbin/nologin "$SERVICE_USER" 2>/dev/null || true
   fi
 
-  echo "[2/4] Fixing ownership and permissions..."
+  echo "[2/5] Allowing root git access to repo owned by $SERVICE_USER..."
+  ensure_git_safe_directory
+
+  echo "[3/5] Fixing ownership and permissions..."
   fix_permissions
 
-  echo "[3/4] Installing systemd unit (User=$SERVICE_USER)..."
+  echo "[4/5] Installing systemd unit (User=$SERVICE_USER)..."
   if [[ -f "$APP_DIR/deploy/voyagr.service" ]]; then
     cp "$APP_DIR/deploy/voyagr.service" /etc/systemd/system/voyagr.service
     systemctl daemon-reload
@@ -102,7 +112,7 @@ if [[ "$PERMISSIONS_ONLY" -eq 0 ]]; then
     echo "Warning: $APP_DIR/deploy/voyagr.service not found — update unit manually" >&2
   fi
 
-  echo "[4/4] Enabling and restarting voyagr..."
+  echo "[5/5] Enabling and restarting voyagr..."
   systemctl enable voyagr
   systemctl restart voyagr
   sleep 2
@@ -122,6 +132,7 @@ if [[ "$PERMISSIONS_ONLY" -eq 0 ]]; then
     exit 1
   fi
 else
+  ensure_git_safe_directory
   fix_permissions
   if [[ "$DO_RESTART" -eq 1 ]]; then
     echo "Restarting voyagr..."
@@ -133,5 +144,8 @@ else
 fi
 
 echo ""
-echo "After future git pulls as root, re-run:"
+echo "Deploy updates (recommended):"
+echo "  sudo bash $APP_DIR/deploy/deploy-pull.sh"
+echo ""
+echo "Or manually after git pull as root:"
 echo "  sudo bash $APP_DIR/deploy/setup-voyagr-user.sh --permissions-only --restart"
