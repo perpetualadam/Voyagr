@@ -516,10 +516,9 @@ def _graphhopper_leg(
     """Route a single leg via GraphHopper with camera avoidance custom model."""
     try:
         from voyagr.services.hazards import (
-            build_graphhopper_camera_avoidance_model,
+            build_graphhopper_combined_camera_model,
             build_graphhopper_caz_avoidance_model,
             build_graphhopper_custom_model,
-            build_graphhopper_filtered_camera_model,
             merge_graphhopper_custom_model_parts,
         )
 
@@ -534,13 +533,10 @@ def _graphhopper_leg(
             "elevation": False,
         }
 
-        cam_model = None
-        if camera_hazards and any(camera_hazards.values()):
-            cam_model = build_graphhopper_filtered_camera_model(
-                camera_hazards, route_bbox=route_bbox, max_hazards=40
-            ) or None
-        else:
-            cam_model = build_graphhopper_camera_avoidance_model(route_bbox) or None
+        cam_model = build_graphhopper_combined_camera_model(
+            camera_hazards if camera_hazards and any(camera_hazards.values()) else None,
+            route_bbox=route_bbox,
+        ) or None
         osm_dynamic: Dict[str, List[Dict[str, Any]]] = {}
         if traffic_light_hazards:
             osm_dynamic['traffic_light'] = traffic_light_hazards

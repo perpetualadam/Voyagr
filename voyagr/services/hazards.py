@@ -66,6 +66,95 @@ def load_camera_areas() -> Optional[Dict[str, Any]]:
 load_camera_areas()
 
 
+def get_graphhopper_camera_areas_count() -> int:
+    """Number of server-side camera_area_N sections (from geojson or env, default 128)."""
+    env_val = os.getenv('GRAPHHOPPER_CAMERA_AREAS_COUNT')
+    if env_val and str(env_val).strip().isdigit():
+        return int(env_val)
+    if CAMERA_AREAS_DATA and CAMERA_AREAS_DATA.get('features'):
+        return len(CAMERA_AREAS_DATA['features'])
+    return 128
+
+
+def _camera_area_indices_for_bbox(
+    route_bbox: Dict[str, float],
+    *,
+    margin_scale: float = 0.2,
+    min_margin_deg: float = 0.15,
+) -> List[int]:
+    """Return camera_area_N indices whose MultiPolygon intersects an expanded route bbox."""
+    if not CAMERA_AREAS_DATA:
+        return []
+
+    lat_span = route_bbox['max_lat'] - route_bbox['min_lat']
+    lon_span = route_bbox['max_lon'] - route_bbox['min_lon']
+    lat_margin = max(lat_span * margin_scale, min_margin_deg)
+    lon_margin = max(lon_span * margin_scale, min_margin_deg)
+
+    bbox_min_lat = route_bbox['min_lat'] - lat_margin
+    bbox_max_lat = route_bbox['max_lat'] + lat_margin
+    bbox_min_lon = route_bbox['min_lon'] - lon_margin
+    bbox_max_lon = route_bbox['max_lon'] + lon_margin
+
+    indices: List[int] = []
+    for feature in CAMERA_AREAS_DATA.get('features', []):
+        area_id = feature.get('id', '')
+        if not area_id.startswith('camera_area_'):
+            continue
+        try:
+            area_index = int(area_id.replace('camera_area_', ''))
+        except ValueError:
+            continue
+
+        geometry = feature.get('geometry', {})
+        if geometry.get('type') != 'MultiPolygon':
+            continue
+
+        intersects = False
+        for polygon in geometry.get('coordinates', []):
+            for ring in polygon:
+                for coord in ring:
+                    lon, lat = coord[0], coord[1]
+                    if bbox_min_lat <= lat <= bbox_max_lat and bbox_min_lon <= lon <= bbox_max_lon:
+                        intersects = True
+                        break
+                if intersects:
+                    break
+            if intersects:
+                break
+
+        if intersects:
+            indices.append(area_index)
+
+    return sorted(set(indices))
+
+
+def build_graphhopper_combined_camera_model(
+    camera_hazards: Optional[Dict[str, List[Dict[str, Any]]]] = None,
+    route_bbox: Optional[Dict[str, float]] = None,
+    *,
+    max_scdb_hazards: int = 40,
+    use_area_sections: bool = True,
+) -> Dict[str, Any]:
+    """
+    GraphHopper camera avoidance: UK grid sections (camera_area_N on server) plus optional
+    SCDB inline zones for map-data filter precision. Area sections are primary — they
+    cover all cameras in populated grid cells, not just the top 40 by weight.
+    """
+    parts: List[Optional[Dict[str, Any]]] = []
+    if use_area_sections:
+        area_model = build_graphhopper_camera_avoidance_model(route_bbox)
+        if area_model:
+            parts.append(area_model)
+    if camera_hazards and any(camera_hazards.values()):
+        filtered = build_graphhopper_filtered_camera_model(
+            camera_hazards, route_bbox=route_bbox, max_hazards=max_scdb_hazards,
+        )
+        if filtered:
+            parts.append(filtered)
+    return merge_graphhopper_custom_model_parts(*parts) or {}
+
+
 def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, List[Dict[str, Any]]]:
     """Fetch hazards within bounding box of route."""
     try:
@@ -480,65 +569,55 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
 
 
 def build_graphhopper_camera_avoidance_model(route_bbox: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
-    """Build GraphHopper custom model that references camera areas within route bounding box."""
+    """
+    Build GraphHopper custom model referencing server-side UK camera grid sections.
+
+    GraphHopper loads camera_areas.geojson at startup; each feature camera_area_N exposes
+    in_camera_area_N in the custom model. We filter sections by route bbox for performance.
+    """
     try:
-        area_conditions = []
+        total_areas = get_graphhopper_camera_areas_count()
+        area_conditions: List[str] = []
 
         if route_bbox and CAMERA_AREAS_DATA:
-            margin = 0.2
-            lat_margin = (route_bbox['max_lat'] - route_bbox['min_lat']) * margin
-            lon_margin = (route_bbox['max_lon'] - route_bbox['min_lon']) * margin
-
-            bbox_min_lat = route_bbox['min_lat'] - lat_margin
-            bbox_max_lat = route_bbox['max_lat'] + lat_margin
-            bbox_min_lon = route_bbox['min_lon'] - lon_margin
-            bbox_max_lon = route_bbox['max_lon'] + lon_margin
-
+            indices = _camera_area_indices_for_bbox(route_bbox)
+            if not indices:
+                indices = _camera_area_indices_for_bbox(
+                    route_bbox, margin_scale=0.5, min_margin_deg=0.25,
+                )
+            area_conditions = [f'in_camera_area_{i}' for i in indices]
+            logger.info(
+                f'[GRAPHHOPPER] Filtered to {len(area_conditions)} camera area sections '
+                f'within route bbox (from {total_areas} UK sections)'
+            )
+        elif CAMERA_AREAS_DATA:
             for feature in CAMERA_AREAS_DATA.get('features', []):
                 area_id = feature.get('id', '')
-                if not area_id.startswith('camera_area_'):
-                    continue
-
-                try:
-                    area_index = int(area_id.replace('camera_area_', ''))
-                except ValueError:
-                    continue
-
-                geometry = feature.get('geometry', {})
-                if geometry.get('type') == 'MultiPolygon':
-                    coordinates = geometry.get('coordinates', [])
-                    intersects = False
-                    for polygon in coordinates:
-                        for ring in polygon:
-                            for coord in ring:
-                                lon, lat = coord[0], coord[1]
-                                if (bbox_min_lat <= lat <= bbox_max_lat and bbox_min_lon <= lon <= bbox_max_lon):
-                                    intersects = True
-                                    break
-                            if intersects:
-                                break
-                        if intersects:
-                            break
-
-                    if intersects:
-                        area_conditions.append(f"in_camera_area_{area_index}")
-
-            logger.info(f"[GRAPHHOPPER] Filtered to {len(area_conditions)} camera areas within route bbox")
+                if area_id.startswith('camera_area_'):
+                    try:
+                        area_conditions.append(f"in_camera_area_{int(area_id.replace('camera_area_', ''))}")
+                    except ValueError:
+                        continue
+            logger.info(f'[GRAPHHOPPER] Using ALL {len(area_conditions)} camera area sections')
         else:
-            for i in range(GRAPHHOPPER_CAMERA_AREAS_COUNT):
-                area_conditions.append(f"in_camera_area_{i}")
-            logger.info(f"[GRAPHHOPPER] Using ALL {len(area_conditions)} camera areas")
+            for i in range(total_areas):
+                area_conditions.append(f'in_camera_area_{i}')
+            logger.info(
+                f'[GRAPHHOPPER] Using {len(area_conditions)} camera area sections '
+                f'(geojson not loaded, count from env/default)'
+            )
 
         if not area_conditions:
-            logger.warning("[GRAPHHOPPER] No camera areas found - using empty model")
+            logger.warning('[GRAPHHOPPER] No camera area sections matched route bbox')
             return {}
 
-        condition_str = " || ".join(area_conditions)
-        custom_model = {"priority": [{"if": condition_str, "multiply_by": "0.01"}]}
-        return custom_model
+        condition_str = ' || '.join(area_conditions)
+        return {
+            'priority': [{'if': condition_str, 'multiply_by': '0.01'}],
+        }
 
     except Exception as e:
-        logger.error(f"[GRAPHHOPPER] Error building camera avoidance model: {e}")
+        logger.error(f'[GRAPHHOPPER] Error building camera avoidance model: {e}')
         return {}
 
 

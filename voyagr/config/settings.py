@@ -26,7 +26,7 @@ USE_OSRM = os.getenv('USE_OSRM', 'false').lower() == 'true'
 # GRAPHHOPPER CAMERA AVOIDANCE CONFIGURATION
 # ============================================================================
 USE_GRAPHHOPPER_CAMERA_AVOIDANCE = os.getenv('USE_GRAPHHOPPER_CAMERA_AVOIDANCE', 'true').lower() == 'true'
-GRAPHHOPPER_CAMERA_AREAS_COUNT = int(os.getenv('GRAPHHOPPER_CAMERA_AREAS_COUNT', '137'))
+GRAPHHOPPER_CAMERA_AREAS_COUNT = int(os.getenv('GRAPHHOPPER_CAMERA_AREAS_COUNT', '128'))
 GRAPHHOPPER_TIMEOUT = int(os.getenv('GRAPHHOPPER_TIMEOUT', '30'))
 
 # ============================================================================

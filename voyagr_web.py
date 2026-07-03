@@ -440,21 +440,7 @@ logger.info(f"[ROUTING] Valhalla: {VALHALLA_URL}, GraphHopper: {GRAPHHOPPER_URL}
 # GraphHopper with pre-loaded camera areas for camera avoidance
 # Priority: GraphHopper (if camera avoidance enabled) → Valhalla → OSRM
 USE_GRAPHHOPPER_CAMERA_AVOIDANCE = os.getenv('USE_GRAPHHOPPER_CAMERA_AVOIDANCE', 'true').lower() == 'true'
-GRAPHHOPPER_CAMERA_AREAS_COUNT = int(os.getenv('GRAPHHOPPER_CAMERA_AREAS_COUNT', '128'))  # Number of camera_area_N features (UK only)
 GRAPHHOPPER_TIMEOUT = int(os.getenv('GRAPHHOPPER_TIMEOUT', '30'))  # Increased timeout for long routes
-
-# Load camera areas from geojson file for bbox filtering
-CAMERA_AREAS_DATA = None
-try:
-    camera_areas_path = os.path.join(os.path.dirname(__file__), 'camera_areas.geojson')
-    if os.path.exists(camera_areas_path):
-        with open(camera_areas_path, 'r') as f:
-            CAMERA_AREAS_DATA = json.load(f)
-        logger.info(f"[GRAPHHOPPER] Loaded {len(CAMERA_AREAS_DATA.get('features', []))} camera areas from geojson")
-    else:
-        logger.warning(f"[GRAPHHOPPER] camera_areas.geojson not found at {camera_areas_path}")
-except Exception as e:
-    logger.error(f"[GRAPHHOPPER] Failed to load camera_areas.geojson: {e}")
 
 # ============================================================================
 # ROUTING ENGINE CONFIGURATION
@@ -2275,103 +2261,7 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]], r
 # ============================================================================
 # GRAPHHOPPER CAMERA AVOIDANCE ROUTING
 # ============================================================================
-# Uses pre-loaded camera areas from camera_areas.geojson for efficient routing
-
-def build_graphhopper_camera_avoidance_model(route_bbox: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
-    """
-    Build GraphHopper custom model that references camera areas within route bounding box.
-
-    The camera areas are loaded at GraphHopper startup from camera_areas.geojson.
-    This function filters areas by route bounding box to improve performance on long routes.
-
-    Args:
-        route_bbox: Optional bounding box with keys: min_lat, max_lat, min_lon, max_lon
-                   If provided, only camera areas intersecting this bbox will be included
-
-    Returns:
-        GraphHopper custom_model dict with priority rules
-    """
-    try:
-        area_conditions = []
-
-        # If we have bbox and camera areas data, filter by bbox
-        if route_bbox and CAMERA_AREAS_DATA:
-            # Add 20% margin to bbox to catch cameras on detour routes
-            margin = 0.2
-            lat_margin = (route_bbox['max_lat'] - route_bbox['min_lat']) * margin
-            lon_margin = (route_bbox['max_lon'] - route_bbox['min_lon']) * margin
-
-            bbox_min_lat = route_bbox['min_lat'] - lat_margin
-            bbox_max_lat = route_bbox['max_lat'] + lat_margin
-            bbox_min_lon = route_bbox['min_lon'] - lon_margin
-            bbox_max_lon = route_bbox['max_lon'] + lon_margin
-
-            # Filter camera areas by bounding box
-            for feature in CAMERA_AREAS_DATA.get('features', []):
-                area_id = feature.get('id', '')
-                if not area_id.startswith('camera_area_'):
-                    continue
-
-                # Extract area index from ID (e.g., "camera_area_42" -> 42)
-                try:
-                    area_index = int(area_id.replace('camera_area_', ''))
-                except ValueError:
-                    continue
-
-                # Get geometry to check if it intersects with route bbox
-                geometry = feature.get('geometry', {})
-                if geometry.get('type') == 'MultiPolygon':
-                    coordinates = geometry.get('coordinates', [])
-
-                    # Check if any polygon in the MultiPolygon intersects with bbox
-                    intersects = False
-                    for polygon in coordinates:
-                        for ring in polygon:
-                            for coord in ring:
-                                lon, lat = coord[0], coord[1]
-                                if (bbox_min_lat <= lat <= bbox_max_lat and
-                                    bbox_min_lon <= lon <= bbox_max_lon):
-                                    intersects = True
-                                    break
-                            if intersects:
-                                break
-                        if intersects:
-                            break
-
-                    if intersects:
-                        area_conditions.append(f"in_camera_area_{area_index}")
-
-            logger.info(f"[GRAPHHOPPER] Filtered to {len(area_conditions)} camera areas within route bbox (from {GRAPHHOPPER_CAMERA_AREAS_COUNT} total)")
-
-        else:
-            # No bbox filtering - include ALL camera areas (fallback for short routes)
-            for i in range(GRAPHHOPPER_CAMERA_AREAS_COUNT):
-                area_conditions.append(f"in_camera_area_{i}")
-            logger.info(f"[GRAPHHOPPER] Using ALL {len(area_conditions)} camera areas (no bbox filtering)")
-
-        # If no areas match, return empty model
-        if not area_conditions:
-            logger.warning("[GRAPHHOPPER] No camera areas found for route bbox - using empty model")
-            return {}
-
-        # Build the condition string with filtered areas
-        condition_str = " || ".join(area_conditions)
-
-        custom_model = {
-            "priority": [
-                {
-                    "if": condition_str,
-                    "multiply_by": "0.01"  # Strong avoidance (99% penalty)
-                }
-            ]
-        }
-
-        return custom_model
-
-    except Exception as e:
-        logger.error(f"[GRAPHHOPPER] Error building camera avoidance model: {e}")
-        return {}
-
+# UK camera grid sections (camera_areas.geojson) — see voyagr.services.hazards
 
 def route_with_graphhopper(
     start_lat: float, start_lon: float,
@@ -2405,7 +2295,7 @@ def route_with_graphhopper(
             merge_graphhopper_custom_model_parts,
             build_graphhopper_caz_avoidance_model,
             build_graphhopper_custom_model as gh_build_hazard_model,
-            build_graphhopper_filtered_camera_model,
+            build_graphhopper_combined_camera_model,
         )
 
         url = f"{GRAPHHOPPER_URL}/route"
@@ -2432,15 +2322,13 @@ def route_with_graphhopper(
         custom_model: Optional[Dict[str, Any]] = None
         custom_model_applied = False
         cam_model: Optional[Dict[str, Any]] = None
-        if enable_camera_avoidance:
-            if camera_hazards and any(camera_hazards.values()):
-                cam_model = build_graphhopper_filtered_camera_model(
-                    camera_hazards, route_bbox=route_bbox, max_hazards=40
-                ) or None
-                if cam_model:
-                    logger.info("[GRAPHHOPPER] Using filtered camera hazard zones (map-data filters)")
-            elif USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
-                cam_model = build_graphhopper_camera_avoidance_model(route_bbox) or None
+        if enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
+            cam_model = build_graphhopper_combined_camera_model(
+                camera_hazards if camera_hazards and any(camera_hazards.values()) else None,
+                route_bbox=route_bbox,
+            ) or None
+            if cam_model:
+                logger.info('[GRAPHHOPPER] Using UK camera area sections (+ SCDB filters when enabled)')
 
         osm_dynamic: Dict[str, List[Dict[str, Any]]] = {}
         if traffic_light_hazards:
