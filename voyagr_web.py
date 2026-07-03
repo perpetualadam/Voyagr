@@ -3960,7 +3960,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/js/modules/navigation/speed-limit-widget.js?v=20260701a"></script>
     <script defer src="/static/js/modules/map/weather-layer.js?v=20260611a"></script>
     <script defer src="/static/js/modules/ui/toggle-ui.js?v=20260611a"></script>
-    <script defer src="/static/js/voyagr-core.js?v=20260619k"></script>
+    <script defer src="/static/js/voyagr-core.js?v=20260703a"></script>
     {% if picovoice_web_assets_ok %}
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
