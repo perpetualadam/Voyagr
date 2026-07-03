@@ -2430,6 +2430,7 @@ def route_with_graphhopper(
         }
 
         custom_model: Optional[Dict[str, Any]] = None
+        custom_model_applied = False
         cam_model: Optional[Dict[str, Any]] = None
         if enable_camera_avoidance:
             if camera_hazards and any(camera_hazards.values()):
@@ -2484,7 +2485,9 @@ def route_with_graphhopper(
                 timeout=GRAPHHOPPER_TIMEOUT,
                 headers=headers,
             )
-            if response.status_code != 200:
+            if response.status_code == 200:
+                custom_model_applied = True
+            else:
                 logger.warning(f"[GRAPHHOPPER] POST(custom_model) failed (HTTP {response.status_code}); retrying GET(no custom_model)")
                 response = None
 
@@ -2531,7 +2534,8 @@ def route_with_graphhopper(
                     'instructions': path.get('instructions', []),
                     'details': path.get('details', {}),  # per-edge attrs incl. max_speed
                     'bbox': path.get('bbox', []),
-                    'camera_avoidance': enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE
+                    'camera_avoidance': custom_model_applied,
+                    'custom_model_applied': custom_model_applied,
                 }
 
                 logger.info(f"[GRAPHHOPPER] Route found: {route_data['distance_km']:.1f}km, {route_data['duration_seconds']/60:.0f}min")
@@ -2836,6 +2840,108 @@ def fetch_valhalla_auto_shorter_json(
         except Exception as e:
             logger.warning(f'[VALHALLA] auto_shorter request failed: {e}')
     return None
+
+
+def fetch_valhalla_auto_json(
+    url: str,
+    headers: Dict[str, str],
+    locations: List[Dict[str, Any]],
+    exclude_locations: Optional[List[Dict[str, Any]]] = None,
+    timeout: int = 10,
+) -> Optional[Dict[str, Any]]:
+    from voyagr.services.routing.optimised_route import fetch_valhalla_auto_json as _fetch
+    return _fetch(url, headers, locations, exclude_locations=exclude_locations, timeout=timeout)
+
+
+def graphhopper_qualifies_as_optimised(
+    graphhopper_route: Optional[Dict[str, Any]],
+    *,
+    avoid_cameras: bool,
+) -> bool:
+    from voyagr.services.routing.optimised_route import graphhopper_qualifies_as_optimised as _qualifies
+    return _qualifies(graphhopper_route, avoid_cameras=avoid_cameras)
+
+
+def ensure_optimised_camera_avoiding_route(
+    routes: List[Dict[str, Any]],
+    *,
+    url: str,
+    headers: Dict[str, str],
+    route_locations: List[Dict[str, Any]],
+    has_waypoints: bool,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    route_bbox: Dict[str, float],
+    hazards: Dict[str, List[Dict[str, Any]]],
+    enable_hazard_avoidance: bool,
+    avoid_cameras: bool,
+    graphhopper_route: Optional[Dict[str, Any]] = None,
+    cost_calculator: Any,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+) -> List[Dict[str, Any]]:
+    """
+    Ensure a ⚡ Optimised route exists that avoids cameras like Fast/Short routes.
+    Drops GraphHopper Optimised entries that ran without a custom model, then adds
+    Valhalla auto + exclude_locations when no qualifying Optimised remains.
+    """
+    if not (enable_hazard_avoidance and avoid_cameras):
+        return routes
+
+    gh_ok = graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
+    if not gh_ok:
+        routes = [
+            r for r in routes
+            if not ('Optimised' in (r.get('name') or '') and r.get('source') == 'GraphHopper')
+        ]
+
+    if any('Optimised' in (r.get('name') or '') for r in routes):
+        return routes
+
+    ensure_exclude: List[Dict[str, Any]] = []
+    if hazards:
+        try:
+            ensure_exclude = build_valhalla_exclude_locations(
+                hazards, route_bbox=route_bbox, max_hazards=50,
+                start_lat=start_lat, start_lon=start_lon,
+                end_lat=end_lat, end_lon=end_lon,
+            )
+        except Exception as ex:
+            logger.warning(f'[VALHALLA] ensure Optimised: exclude build failed: {ex}')
+
+    locs = route_locations if has_waypoints else [
+        {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
+    ]
+    opt_data = fetch_valhalla_auto_json(
+        url, headers, locs,
+        exclude_locations=ensure_exclude if ensure_exclude else None,
+    )
+    if not opt_data:
+        return routes
+
+    next_id = len(routes) + 1
+    entry = valhalla_trip_json_to_std_route_entry(
+        '⚡ Optimised', opt_data, next_id, hazards, cost_calculator,
+        vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+        fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+        electricity_price=electricity_price, include_tolls=include_tolls,
+        include_caz=include_caz, caz_exempt=caz_exempt,
+    )
+    if entry:
+        routes.append(entry)
+        logger.info(
+            f'[VALHALLA] Added Optimised route (ensure): {entry["distance_km"]:.1f}km, '
+            f'{entry.get("hazard_count", 0)} cameras'
+        )
+    return routes
 
 
 def valhalla_trip_json_to_std_route_entry(
@@ -7720,8 +7826,12 @@ def calculate_route():
 
                     # ================================================================
                     # GRAPHHOPPER CAMERA-AVOIDING ROUTE: Add as priority option
+                    # Only when the custom model was actually applied (not GET fallback).
                     # ================================================================
-                    if graphhopper_route and graphhopper_route.get('success') and enable_hazard_avoidance:
+                    if (
+                        graphhopper_route and graphhopper_route.get('success') and enable_hazard_avoidance
+                        and graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
+                    ):
                         try:
                             gh_distance_km = graphhopper_route.get('distance_km', 0)
                             gh_duration_min = graphhopper_route.get('duration_seconds', 0) / 60
@@ -7804,6 +7914,37 @@ def calculate_route():
                                 logger.info(f"[GRAPHHOPPER] Added Optimised route (replaced Valhalla Optimised): {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
                         except Exception as e:
                             logger.warning(f"[GRAPHHOPPER] Failed to add GraphHopper route: {e}")
+                    elif graphhopper_route and graphhopper_route.get('success') and avoid_cameras:
+                        logger.warning(
+                            "[GRAPHHOPPER] Skipping unfiltered route as Optimised "
+                            "(custom model not applied); will use Valhalla exclude_locations"
+                        )
+
+                    routes = ensure_optimised_camera_avoiding_route(
+                        routes,
+                        url=url,
+                        headers=headers,
+                        route_locations=route_locations,
+                        has_waypoints=has_waypoints,
+                        start_lat=start_lat,
+                        start_lon=start_lon,
+                        end_lat=end_lat,
+                        end_lon=end_lon,
+                        route_bbox=route_bbox,
+                        hazards=hazards,
+                        enable_hazard_avoidance=enable_hazard_avoidance,
+                        avoid_cameras=avoid_cameras,
+                        graphhopper_route=graphhopper_route,
+                        cost_calculator=cost_calculator,
+                        vehicle_type=vehicle_type,
+                        fuel_efficiency=fuel_efficiency,
+                        fuel_price=fuel_price,
+                        energy_efficiency=energy_efficiency,
+                        electricity_price=electricity_price,
+                        include_tolls=include_tolls,
+                        include_caz=include_caz,
+                        caz_exempt=caz_exempt,
+                    )
 
                     # ================================================================
                     # HAZARD AVOIDANCE: Reorder routes by hazard penalty if enabled
@@ -7834,7 +7975,7 @@ def calculate_route():
 
                     # Determine source based on what was used
                     routing_source = 'Valhalla ✅'
-                    if graphhopper_route and graphhopper_route.get('success'):
+                    if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras):
                         routing_source = 'GraphHopper+Valhalla ✅'
 
                     response_data = {
@@ -7856,7 +7997,10 @@ def calculate_route():
                         'caz_details': routes[0].get('caz_details', {}),
                         'maneuvers': routes[0].get('maneuvers', []),
                         'cached': False,
-                        'camera_avoidance_engine': 'GraphHopper' if (graphhopper_route and graphhopper_route.get('success')) else 'Valhalla',
+                        'camera_avoidance_engine': (
+                            'GraphHopper' if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
+                            else 'Valhalla'
+                        ),
                         'start_lat': start_lat,
                         'start_lon': start_lon,
                         'end_lat': end_lat,
@@ -8064,7 +8208,10 @@ def calculate_route():
                                 # GRAPHHOPPER CAMERA-AVOIDING ROUTE: Add to retry routes
                                 # (Same logic as the primary success path)
                                 # ================================================================
-                                if graphhopper_route and graphhopper_route.get('success') and enable_hazard_avoidance:
+                                if (
+                                    graphhopper_route and graphhopper_route.get('success') and enable_hazard_avoidance
+                                    and graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
+                                ):
                                     try:
                                         gh_distance_km = graphhopper_route.get('distance_km', 0)
                                         gh_duration_min = graphhopper_route.get('duration_seconds', 0) / 60
@@ -8124,6 +8271,32 @@ def calculate_route():
                                     except Exception as e:
                                         logger.warning(f"[GRAPHHOPPER] Failed to add GraphHopper route to retry: {e}")
 
+                                routes = ensure_optimised_camera_avoiding_route(
+                                    routes,
+                                    url=url,
+                                    headers=headers,
+                                    route_locations=route_locations,
+                                    has_waypoints=has_waypoints,
+                                    start_lat=start_lat,
+                                    start_lon=start_lon,
+                                    end_lat=end_lat,
+                                    end_lon=end_lon,
+                                    route_bbox=route_bbox,
+                                    hazards=hazards,
+                                    enable_hazard_avoidance=enable_hazard_avoidance,
+                                    avoid_cameras=avoid_cameras,
+                                    graphhopper_route=graphhopper_route,
+                                    cost_calculator=cost_calculator,
+                                    vehicle_type=vehicle_type,
+                                    fuel_efficiency=fuel_efficiency,
+                                    fuel_price=fuel_price,
+                                    energy_efficiency=energy_efficiency,
+                                    electricity_price=electricity_price,
+                                    include_tolls=include_tolls,
+                                    include_caz=include_caz,
+                                    caz_exempt=caz_exempt,
+                                )
+
                                 # Reorder by hazard penalty if avoidance enabled
                                 if enable_hazard_avoidance and hazards:
                                     routes = sorted(routes, key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)))
@@ -8138,7 +8311,7 @@ def calculate_route():
 
                                 # Determine source
                                 retry_source = 'Valhalla ✅ (Retry)'
-                                if graphhopper_route and graphhopper_route.get('success'):
+                                if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras):
                                     retry_source = 'GraphHopper+Valhalla ✅'
 
                                 # Build response
@@ -8156,7 +8329,10 @@ def calculate_route():
                                     'caz_cost': routes[0]['caz_cost'],
                                     'maneuvers': routes[0].get('maneuvers', []),
                                     'cached': False,
-                                    'camera_avoidance_engine': 'GraphHopper' if (graphhopper_route and graphhopper_route.get('success')) else 'Valhalla',
+                                    'camera_avoidance_engine': (
+                                        'GraphHopper' if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
+                                        else 'Valhalla'
+                                    ),
                                     'start_lat': start_lat,
                                     'start_lon': start_lon,
                                     'end_lat': end_lat,
@@ -8201,20 +8377,22 @@ def calculate_route():
                     tr_mult = 1.0
                     if valhalla_costing == 'auto':
                         tr_mult, _ = get_traffic_duration_multiplier(start_lat, start_lon)
-                    gh_entry = build_graphhopper_optimised_route_entry(
-                        graphhopper_route,
-                        hazards,
-                        cost_calculator,
-                        vehicle_type=vehicle_type,
-                        fuel_efficiency=fuel_efficiency,
-                        fuel_price=fuel_price,
-                        energy_efficiency=energy_efficiency,
-                        electricity_price=electricity_price,
-                        include_tolls=include_tolls,
-                        include_caz=include_caz,
-                        caz_exempt=caz_exempt,
-                        traffic_multiplier=tr_mult,
-                    )
+                    gh_entry = None
+                    if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras):
+                        gh_entry = build_graphhopper_optimised_route_entry(
+                            graphhopper_route,
+                            hazards,
+                            cost_calculator,
+                            vehicle_type=vehicle_type,
+                            fuel_efficiency=fuel_efficiency,
+                            fuel_price=fuel_price,
+                            energy_efficiency=energy_efficiency,
+                            electricity_price=electricity_price,
+                            include_tolls=include_tolls,
+                            include_caz=include_caz,
+                            caz_exempt=caz_exempt,
+                            traffic_multiplier=tr_mult,
+                        )
                     routes_out: List[Dict[str, Any]] = []
                     if gh_entry:
                         routes_out.append(gh_entry)
@@ -8305,6 +8483,33 @@ def calculate_route():
                                 logger.warning(f'[ROUTING] Recovery Shortest failed: {rec_s_e}')
 
                     if routes_out:
+                        routes_out = ensure_optimised_camera_avoiding_route(
+                            routes_out,
+                            url=url,
+                            headers=headers,
+                            route_locations=route_locations,
+                            has_waypoints=has_waypoints,
+                            start_lat=start_lat,
+                            start_lon=start_lon,
+                            end_lat=end_lat,
+                            end_lon=end_lon,
+                            route_bbox=route_bbox,
+                            hazards=hazards,
+                            enable_hazard_avoidance=enable_hazard_avoidance,
+                            avoid_cameras=avoid_cameras,
+                            graphhopper_route=graphhopper_route,
+                            cost_calculator=cost_calculator,
+                            vehicle_type=vehicle_type,
+                            fuel_efficiency=fuel_efficiency,
+                            fuel_price=fuel_price,
+                            energy_efficiency=energy_efficiency,
+                            electricity_price=electricity_price,
+                            include_tolls=include_tolls,
+                            include_caz=include_caz,
+                            caz_exempt=caz_exempt,
+                        )
+
+                    if routes_out:
                         if enable_hazard_avoidance and hazards:
                             routes_out = sorted(
                                 routes_out,
@@ -8338,7 +8543,10 @@ def calculate_route():
                             'caz_details': routes_out[0].get('caz_details', {}),
                             'maneuvers': routes_out[0].get('maneuvers', []),
                             'cached': False,
-                            'camera_avoidance_engine': 'GraphHopper',
+                            'camera_avoidance_engine': (
+                                'GraphHopper' if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
+                                else 'Valhalla'
+                            ),
                             'start_lat': start_lat,
                             'start_lon': start_lon,
                             'end_lat': end_lat,

@@ -247,6 +247,7 @@ def route_with_graphhopper(
         }
 
         custom_model: Optional[Dict[str, Any]] = None
+        custom_model_applied = False
         if enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
             custom_model = build_graphhopper_camera_avoidance_model(route_bbox)
             if custom_model:
@@ -264,7 +265,9 @@ def route_with_graphhopper(
                 timeout=GRAPHHOPPER_TIMEOUT,
                 headers=headers,
             )
-            if response.status_code != 200:
+            if response.status_code == 200:
+                custom_model_applied = True
+            else:
                 logger.warning(f"[GRAPHHOPPER] POST(custom_model) failed (HTTP {response.status_code}); retrying GET(no custom_model)")
                 response = None
 
@@ -305,7 +308,8 @@ def route_with_graphhopper(
                     'geometry': path.get('points', ''),
                     'instructions': path.get('instructions', []),
                     'bbox': path.get('bbox', []),
-                    'camera_avoidance': enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE
+                    'camera_avoidance': custom_model_applied,
+                    'custom_model_applied': custom_model_applied,
                 }
 
                 logger.info(f"[GRAPHHOPPER] Route found: {route_data['distance_km']:.1f}km, {route_data['duration_seconds']/60:.0f}min")
