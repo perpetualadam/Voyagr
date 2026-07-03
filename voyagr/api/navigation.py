@@ -22,7 +22,9 @@ from voyagr.utils.admin_auth import register_admin_before_request
 
 logger = logging.getLogger(__name__)
 
-_speed_limit_feedback_limiter = RateLimiter(max_requests=40, window_seconds=60)
+_speed_limit_feedback_limiter = RateLimiter(
+    max_requests=40, window_seconds=60, key_prefix='voyagr:rl:speed-feedback',
+)
 
 navigation_bp = Blueprint('navigation', __name__)
 

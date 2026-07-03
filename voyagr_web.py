@@ -188,68 +188,20 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # RATE LIMITING
 # ============================================================================
-class RateLimiter:
-    """Simple in-memory rate limiter for API endpoints."""
-    def __init__(self, max_requests: int = 100, window_seconds: int = 60) -> None:
-        self.max_requests: int = max_requests
-        self.window_seconds: int = window_seconds
-        self.requests: Dict[str, List[Tuple[float, int]]] = {}  # {ip: [(timestamp, count)]}
-        self.lock: threading.Lock = threading.Lock()
+from voyagr.config.rate_limit_storage import rate_limit_storage_uri
+from voyagr.utils.rate_limiting import RateLimiter, rate_limit
 
-    def is_allowed(self, ip: str) -> bool:
-        """Check if IP is allowed to make a request."""
-        with self.lock:
-            now: float = time.time()
-            if ip not in self.requests:
-                self.requests[ip] = []
-
-            # Remove old requests outside the window
-            self.requests[ip] = [
-                (ts, count) for ts, count in self.requests[ip]
-                if now - ts < self.window_seconds
-            ]
-
-            # Count total requests in window
-            total: int = sum(count for _, count in self.requests[ip])
-
-            if total >= self.max_requests:
-                return False
-
-            # Add new request
-            if self.requests[ip] and self.requests[ip][-1][0] == now:
-                # Same second, increment count
-                ts, count = self.requests[ip][-1]
-                self.requests[ip][-1] = (ts, count + 1)
-            else:
-                self.requests[ip].append((now, 1))
-
-            return True
-
-# Initialize rate limiters for different endpoints
-route_limiter = RateLimiter(max_requests=100, window_seconds=60)  # 100 requests/min for routes
-api_limiter = RateLimiter(max_requests=500, window_seconds=60)    # 500 requests/min for general APIs
-auth_limiter = RateLimiter(max_requests=20, window_seconds=60)    # 20 requests/min for auth endpoints
-voice_limiter = RateLimiter(max_requests=60, window_seconds=60)   # 60 requests/min for voice endpoints
+route_limiter = RateLimiter(max_requests=100, window_seconds=60, key_prefix='voyagr:rl:route')
+api_limiter = RateLimiter(max_requests=500, window_seconds=60, key_prefix='voyagr:rl:api')
+auth_limiter = RateLimiter(max_requests=20, window_seconds=60, key_prefix='voyagr:rl:auth')
+voice_limiter = RateLimiter(max_requests=60, window_seconds=60, key_prefix='voyagr:rl:voice')
 
 # Set voice_limiter for navigation blueprint
 set_voice_limiter(voice_limiter)
 
-def rate_limit(limiter: RateLimiter) -> Callable[[F], F]:
-    """Decorator for rate limiting endpoints using in-memory limiter."""
-    def decorator(f: F) -> F:
-        @wraps(f)
-        def decorated_function(*args: Any, **kwargs: Any) -> Any:
-            ip: Optional[str] = get_client_ip()
-            if ip and not limiter.is_allowed(ip):
-                logger.warning(f"Rate limit exceeded for IP: {ip}")
-                return jsonify({'success': False, 'error': 'Rate limit exceeded. Try again later.'}), 429
-            return f(*args, **kwargs)
-        return decorated_function  # type: ignore
-    return decorator
-
 # Initialize Flask-Limiter if available (more robust, supports Redis backend)
 flask_limiter: Optional[Any] = None
-_RATELIMIT_STORAGE_URI = os.getenv('RATELIMIT_STORAGE_URI', 'memory://')
+_RATELIMIT_STORAGE_URI = rate_limit_storage_uri()
 if RATE_LIMITING_AVAILABLE and Limiter is not None:
     try:
         flask_limiter = Limiter(

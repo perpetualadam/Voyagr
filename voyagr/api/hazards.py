@@ -30,7 +30,9 @@ logger = logging.getLogger(__name__)
 
 hazards_bp = Blueprint('hazards', __name__)
 
-_hazard_report_limiter = RateLimiter(max_requests=40, window_seconds=3600)
+_hazard_report_limiter = RateLimiter(
+    max_requests=40, window_seconds=3600, key_prefix='voyagr:rl:hazard-report',
+)
 _osm_area_executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='osm-area')
 _OSM_AREA_FETCH_TIMEOUT_SEC = 12
 
