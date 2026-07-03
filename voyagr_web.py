@@ -23,6 +23,7 @@ from typing import List, Dict, Tuple, Optional, Any, Callable, TypeVar, Set
 
 from voyagr.utils.camera_buckets import normalize_camera_hazard_bucket
 from voyagr.utils.graphhopper import GH_SIGN_TO_VALHALLA, remap_shape_index_after_reencode
+from voyagr.utils.osrm import build_osrm_maneuvers, infer_road_class_from_names
 
 F = TypeVar('F', bound=Callable[..., Any])
 
@@ -1470,6 +1471,12 @@ def valhalla_maneuver_dict(maneuver: Dict[str, Any], length_in_meters: bool = Fa
     lanes = maneuver.get('lanes')
     if lanes:
         out['lanes'] = lanes
+    rc = infer_road_class_from_names(
+        None,
+        maneuver.get('begin_street_names') or maneuver.get('street_names') or [],
+    )
+    if rc:
+        out['road_class'] = rc
     return out
 
 
@@ -2486,6 +2493,10 @@ def build_graphhopper_optimised_route_entry(
             sl_kmh = _gh_speed_limit_kmh_at(begin_src)
             if sl_kmh is not None:
                 maneuver['speed_limit'] = sl_kmh
+            street_label = instr.get('street_name', '') or ''
+            gh_rc = infer_road_class_from_names(street_label, maneuver.get('street_names'))
+            if gh_rc:
+                maneuver['road_class'] = gh_rc
             gh_maneuvers.append(maneuver)
 
         return {
@@ -7973,60 +7984,26 @@ def calculate_route():
                         and graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
                     ):
                         try:
-                            gh_distance_km = graphhopper_route.get('distance_km', 0)
-                            gh_duration_min = graphhopper_route.get('duration_seconds', 0) / 60
-                            gh_geometry = graphhopper_route.get('geometry', '')
-
-                            # GraphHopper uses precision 5
-                            if gh_geometry and polyline:
-                                gh_coords = polyline.decode(gh_geometry, precision=5)
-                                # Re-encode with precision 6 for consistency with Valhalla
-                                gh_geometry_p6 = polyline.encode(gh_coords, precision=6)
-
-                                # Calculate costs for GraphHopper route
-                                gh_costs = cost_calculator.calculate_costs(
-                                    gh_distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                                    energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
-                                    route_coords=gh_coords
+                            gh_route_entry = build_graphhopper_optimised_route_entry(
+                                graphhopper_route,
+                                hazards,
+                                cost_calculator,
+                                vehicle_type=vehicle_type,
+                                fuel_efficiency=fuel_efficiency,
+                                fuel_price=fuel_price,
+                                energy_efficiency=energy_efficiency,
+                                electricity_price=electricity_price,
+                                include_tolls=include_tolls,
+                                include_caz=include_caz,
+                                caz_exempt=caz_exempt,
+                                traffic_multiplier=traffic_multiplier,
+                            )
+                            if gh_route_entry:
+                                gh_hazard_count = gh_route_entry.get('hazard_count', 0)
+                                gh_distance_km = gh_route_entry.get('distance_km', 0)
+                                logger.info(
+                                    f"[GRAPHHOPPER] Converted {len(gh_route_entry.get('maneuvers', []))} instructions to maneuvers"
                                 )
-
-                                # Score for hazards (should be very low since GraphHopper avoided them)
-                                gh_hazard_penalty, gh_hazard_count = score_route_by_hazards(gh_coords, hazards)
-                                gh_hazards_list = get_hazards_on_route(gh_coords, hazards)
-
-                                # Apply traffic multiplier
-                                gh_duration_min = gh_duration_min * traffic_multiplier
-
-                                # Convert GraphHopper instructions to Valhalla-compatible maneuvers
-                                gh_instructions = graphhopper_route.get('instructions', [])
-                                gh_maneuvers = []
-
-                                # GraphHopper sign values to Valhalla type mapping.
-                                # GraphHopper signs: -98/-8=u-turn, -7=keep left, -3=sharp left,
-                                #   -2=left, -1=slight left, 0=straight, 1=slight right, 2=right,
-                                #   3=sharp right, 4=finish, 5=via, 6=roundabout, 7=keep right, 8=u-turn.
-                                # Valhalla types: 12=U-turn R, 13=U-turn L, 14=Sharp L, 15=Left,
-                                #   16=Slight L, 23=Stay R, 24=Stay L. Left turns were previously
-                                #   off-by-one (sharp->15, left->16, slight->17), which made real
-                                #   left turns read as "keep left" and slight-left show a straight arrow.
-                                gh_sign_to_valhalla = GH_SIGN_TO_VALHALLA
-
-                                for instr in gh_instructions:
-                                    sign = instr.get('sign', 0)
-                                    valhalla_type = gh_sign_to_valhalla.get(sign, 8)  # Default to continue
-
-                                    gh_maneuvers.append({
-                                        'instruction': instr.get('text', ''),
-                                        'distance': instr.get('distance', 0) / 1000,  # meters to km
-                                        'time': instr.get('time', 0) / 1000,  # ms to seconds
-                                        'type': valhalla_type,
-                                        'street_names': [instr.get('street_name', '')] if instr.get('street_name') else [],
-                                        'begin_shape_index': instr.get('interval', [0])[0] if instr.get('interval') else 0,
-                                        'end_shape_index': instr.get('interval', [0, 0])[1] if instr.get('interval') and len(instr.get('interval', [])) > 1 else 0
-                                    })
-
-                                logger.info(f"[GRAPHHOPPER] Converted {len(gh_maneuvers)} instructions to maneuvers")
-
                                 gh_baseline = baseline_camera_hazard_count(routes)
                                 if gh_hazard_count > gh_baseline:
                                     logger.warning(
@@ -8034,31 +8011,12 @@ def calculate_route():
                                         f"vs baseline {gh_baseline} (Valhalla exclusions work better)"
                                     )
                                 else:
-                                    gh_route_entry = {
-                                        'id': 0,  # Will be renumbered
-                                        'name': '⚡ Optimised',
-                                        'distance_km': round(gh_distance_km, 2),
-                                        'duration_minutes': round(gh_duration_min, 0),
-                                        'fuel_cost': round(gh_costs['fuel_cost'], 2),
-                                        'fuel_litres': round(gh_costs['fuel_litres'], 2),
-                                        'toll_cost': round(gh_costs['toll_cost'], 2),
-                                        'caz_cost': round(gh_costs['caz_cost'], 2),
-                                        'geometry': gh_geometry_p6,
-                                        'geometry_precision': 6,
-                                        'hazard_penalty_seconds': round(gh_hazard_penalty, 0),
-                                        'hazard_count': gh_hazard_count,
-                                        'hazards': gh_hazards_list,
-                                        'maneuvers': gh_maneuvers,
-                                        'source': 'GraphHopper'
-                                    }
-
-                                    # Remove any existing Valhalla "Optimised" route to avoid duplicates
-                                    # GraphHopper's camera avoidance is superior (uses pre-loaded area polygons)
                                     routes = [r for r in routes if not is_primary_optimised_route(r)]
-
-                                    # Insert at the beginning as the optimised option
                                     routes.insert(0, gh_route_entry)
-                                    logger.info(f"[GRAPHHOPPER] Added Optimised route (replaced Valhalla Optimised): {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
+                                    logger.info(
+                                        f"[GRAPHHOPPER] Added Optimised route (replaced Valhalla Optimised): "
+                                        f"{gh_distance_km:.1f}km, {gh_hazard_count} cameras"
+                                    )
                         except Exception as e:
                             logger.warning(f"[GRAPHHOPPER] Failed to add GraphHopper route: {e}")
                     elif graphhopper_route and graphhopper_route.get('success') and avoid_cameras:
@@ -8418,63 +8376,31 @@ def calculate_route():
                                     and graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
                                 ):
                                     try:
-                                        gh_distance_km = graphhopper_route.get('distance_km', 0)
-                                        gh_duration_min = graphhopper_route.get('duration_seconds', 0) / 60
-                                        gh_geometry = graphhopper_route.get('geometry', '')
-
-                                        if gh_geometry and polyline:
-                                            gh_coords = polyline.decode(gh_geometry, precision=5)
-                                            gh_geometry_p6 = polyline.encode(gh_coords, precision=6)
-
-                                            gh_costs = cost_calculator.calculate_costs(
-                                                gh_distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                                                energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
-                                                route_coords=gh_coords
-                                            )
-
-                                            gh_hazard_penalty, gh_hazard_count = score_route_by_hazards(gh_coords, hazards)
-                                            gh_hazards_list = get_hazards_on_route(gh_coords, hazards)
-
-                                            gh_instructions = graphhopper_route.get('instructions', [])
-                                            # See valhalla numbering note above; left turns were off-by-one.
-                                            gh_sign_to_valhalla = GH_SIGN_TO_VALHALLA
-                                            gh_maneuvers = []
-                                            for instr in gh_instructions:
-                                                sign = instr.get('sign', 0)
-                                                valhalla_type = gh_sign_to_valhalla.get(sign, 8)
-                                                gh_maneuvers.append({
-                                                    'instruction': instr.get('text', ''),
-                                                    'distance': instr.get('distance', 0) / 1000,
-                                                    'time': instr.get('time', 0) / 1000,
-                                                    'type': valhalla_type,
-                                                    'street_names': [instr.get('street_name', '')] if instr.get('street_name') else [],
-                                                    'begin_shape_index': instr.get('interval', [0])[0] if instr.get('interval') else 0,
-                                                    'end_shape_index': instr.get('interval', [0, 0])[1] if instr.get('interval') and len(instr.get('interval', [])) > 1 else 0
-                                                })
-
-                                            gh_route_entry = {
-                                                'id': 0,
-                                                'name': '⚡ Optimised',
-                                                'distance_km': round(gh_distance_km, 2),
-                                                'duration_minutes': round(gh_duration_min, 0),
-                                                'fuel_cost': round(gh_costs['fuel_cost'], 2),
-                                                'fuel_litres': round(gh_costs['fuel_litres'], 2),
-                                                'toll_cost': round(gh_costs['toll_cost'], 2),
-                                                'caz_cost': round(gh_costs['caz_cost'], 2),
-                                                'geometry': gh_geometry_p6,
-                                                'geometry_precision': 6,
-                                                'hazard_penalty_seconds': round(gh_hazard_penalty, 0),
-                                                'hazard_count': gh_hazard_count,
-                                                'hazards': gh_hazards_list,
-                                                'maneuvers': gh_maneuvers,
-                                                'source': 'GraphHopper'
-                                            }
-
+                                        gh_route_entry = build_graphhopper_optimised_route_entry(
+                                            graphhopper_route,
+                                            hazards,
+                                            cost_calculator,
+                                            vehicle_type=vehicle_type,
+                                            fuel_efficiency=fuel_efficiency,
+                                            fuel_price=fuel_price,
+                                            energy_efficiency=energy_efficiency,
+                                            electricity_price=electricity_price,
+                                            include_tolls=include_tolls,
+                                            include_caz=include_caz,
+                                            caz_exempt=caz_exempt,
+                                            traffic_multiplier=traffic_multiplier,
+                                        )
+                                        if gh_route_entry:
+                                            gh_hazard_count = gh_route_entry.get('hazard_count', 0)
+                                            gh_distance_km = gh_route_entry.get('distance_km', 0)
                                             gh_baseline = baseline_camera_hazard_count(routes)
                                             if gh_hazard_count <= gh_baseline:
                                                 routes = [r for r in routes if not is_primary_optimised_route(r)]
                                                 routes.insert(0, gh_route_entry)
-                                                logger.info(f"[GRAPHHOPPER] Added Optimised route to retry: {gh_distance_km:.1f}km, {gh_hazard_count} cameras")
+                                                logger.info(
+                                                    f"[GRAPHHOPPER] Added Optimised route to retry: "
+                                                    f"{gh_distance_km:.1f}km, {gh_hazard_count} cameras"
+                                                )
                                             else:
                                                 logger.warning(
                                                     f"[GRAPHHOPPER] Skipping Optimised on retry: "
@@ -8894,7 +8820,10 @@ def calculate_route():
             # Fallback to OSRM (public service); use profile matching routing mode
             osrm_profile = 'driving' if valhalla_costing == 'auto' else ('foot' if valhalla_costing == 'pedestrian' else 'bike')
             logger.info(f"[OSRM] Trying fallback with profile={osrm_profile} ({start_lon},{start_lat}) to ({end_lon},{end_lat})")
-            osrm_url = f"{OSRM_URL}/{osrm_profile}/{start_lon},{start_lat};{end_lon},{end_lat}?alternatives=true&overview=full&steps=true"
+            osrm_url = (
+                f"{OSRM_URL}/{osrm_profile}/{start_lon},{start_lat};{end_lon},{end_lat}"
+                f"?alternatives=true&overview=full&steps=true&annotations=maxspeed"
+            )
             try:
                 headers = {
                     'User-Agent': 'Voyagr-PWA/1.0',
@@ -8964,6 +8893,8 @@ def calculate_route():
                                 hazards_list = get_hazards_on_route(route_geometry, hazards)
                                 logger.info(f"[HAZARDS] OSRM route {idx+1}: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
 
+                            osrm_maneuvers = build_osrm_maneuvers(route, route_coords)
+
                             routes.append({
                                 'id': idx + 1,
                                 'name': route_type,
@@ -8978,6 +8909,7 @@ def calculate_route():
                                 'hazard_penalty_seconds': round(hazard_penalty, 0),
                                 'hazard_count': hazard_count,
                                 'hazards': hazards_list,
+                                'maneuvers': osrm_maneuvers,
                                 'source': 'OSRM',
                             })
 
