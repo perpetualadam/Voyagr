@@ -69,7 +69,8 @@
      * @returns {number|null}
      */
     function inferRoadTypeDefaultLimitMph(roadType, region) {
-        var rt = String(roadType || 'residential').toLowerCase();
+        var rt = String(roadType || '').toLowerCase();
+        if (!rt || rt === 'unknown') return null;
         if (rt === 'motorway_link') rt = 'motorway';
         if (rt === 'trunk_link') rt = 'trunk';
         if (rt === 'primary_link') rt = 'primary';
@@ -104,7 +105,7 @@
             ? '&heading=' + encodeURIComponent(String(headingDeg))
             : '';
         return '/api/speed-limit?lat=' + lat + '&lon=' + lon
-            + '&road_type=' + encodeURIComponent(roadType || 'residential')
+            + '&road_type=' + encodeURIComponent(roadType || 'unknown')
             + vslParam + headingParam;
     }
 
@@ -166,13 +167,18 @@
      * @param {number|null} valhallaLimitMph
      * @param {string} [roadType]
      * @param {string} [region]
+     * @param {{ allowRoadTypeFallback?: boolean }} [options]
      * @returns {number|null}
      */
-    function pickDisplaySpeedLimitMph(apiLimitMph, valhallaLimitMph, roadType, region) {
+    function pickDisplaySpeedLimitMph(apiLimitMph, valhallaLimitMph, roadType, region, options) {
+        options = options || {};
         if (apiLimitMph != null && apiLimitMph > 0) return apiLimitMph;
         if (Number.isFinite(valhallaLimitMph) && valhallaLimitMph > 0) return valhallaLimitMph;
-        var fallback = inferRoadTypeDefaultLimitMph(roadType, region);
-        return fallback != null && fallback > 0 ? fallback : null;
+        if (options.allowRoadTypeFallback) {
+            var fallback = inferRoadTypeDefaultLimitMph(roadType, region);
+            return fallback != null && fallback > 0 ? fallback : null;
+        }
+        return null;
     }
 
     /**

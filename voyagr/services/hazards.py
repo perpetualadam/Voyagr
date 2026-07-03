@@ -303,6 +303,31 @@ def merge_hazards_with_tomtom_incidents(hazards: Dict[str, List[Dict[str, Any]]]
     return merged
 
 
+CAMERA_HAZARD_BUCKET_KEYS = (
+    'camera_speed',
+    'camera_red_light',
+    'camera_average_speed',
+    'camera_bus_lane',
+    'camera_mobile',
+    'camera_other',
+    'camera',
+)
+
+
+def build_graphhopper_filtered_camera_model(
+    hazards: Dict[str, List[Dict[str, Any]]],
+    route_bbox: Optional[Dict[str, float]] = None,
+    max_hazards: int = 40,
+) -> Dict[str, Any]:
+    """GraphHopper avoidance zones for enabled camera_* buckets (respects map-data filters)."""
+    camera_only = {k: list(hazards.get(k, [])) for k in CAMERA_HAZARD_BUCKET_KEYS if hazards.get(k)}
+    if not any(camera_only.values()):
+        return {}
+    return build_graphhopper_custom_model(
+        camera_only, route_bbox=route_bbox, max_hazards=max_hazards
+    )
+
+
 def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
                                    route_bbox: Optional[Dict[str, float]] = None,
                                    max_hazards: int = 25) -> Dict[str, Any]:
@@ -322,7 +347,9 @@ def build_graphhopper_custom_model(hazards: Dict[str, List[Dict[str, Any]]],
 
         for hazard_type, hazard_list in hazards.items():
             weight = hazard_weights.get(hazard_type, 10.0)
-            if hazard_type.startswith('camera_'):
+            if hazard_type == 'camera_red_light':
+                weight = 100.0
+            elif hazard_type.startswith('camera_'):
                 weight = hazard_weights.get('camera', 50.0)
             if weight >= 30.0:
                 for hazard in hazard_list:

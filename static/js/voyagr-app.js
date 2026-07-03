@@ -2094,7 +2094,7 @@ function updateAllSpeedDisplays() {
         ? SL.pickDisplaySpeedLimitMph(
             currentSpeedLimitMph,
             null,
-            lastDetectedRoadType || getCurrentRoadType(),
+            lastDetectedRoadType || getCurrentRoadType(undefined, currentGpsSpeedMph),
             lastSpeedLimitRegion
         )
         : currentSpeedLimitMph;
@@ -7846,7 +7846,7 @@ function displayOsmTrafficLightMarkers(lights) {
             html: pill,
             iconSize: [26, 38],
             iconAnchor: [13, 19],
-            popup: `<div style="text-align:center;font-size:12px;max-width:200px;">${popupPill}<strong>Traffic light</strong><div style="color:#666;margin-top:4px;">OpenStreetMap</div></div>`
+            popup: `<div style="text-align:center;font-size:12px;max-width:200px;">${popupPill}<strong>Traffic light</strong></div>`
         }).addTo(map);
         window.osmTrafficLightMarkers.push(marker);
     });
@@ -7863,7 +7863,6 @@ function displayOsmRailwayCrossingMarkers(crossings) {
         <div style="text-align:center;font-size:12px;max-width:220px;">
             <div style="margin-bottom:6px;display:flex;justify-content:center;">${RAILWAY_CROSSING_MAP_ICON_SVG}</div>
             <strong>Level crossing</strong>
-            <div style="color:#666;margin-top:4px;">OpenStreetMap · <code style="font-size:10px;">railway=level_crossing</code></div>
         </div>`;
     crossings.forEach(cx => {
         const key = `${Number(cx.lat).toFixed(5)},${Number(cx.lon).toFixed(5)}`;
@@ -10360,9 +10359,7 @@ function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
     if (limitValueEl && limitUnitEl) {
         const resolvedLimit = (speedLimitInMph !== null && speedLimitInMph > 0)
             ? speedLimitInMph
-            : (SL ? SL.pickDisplaySpeedLimitMph(
-                null, null, lastDetectedRoadType || getCurrentRoadType(), lastSpeedLimitRegion
-            ) : null);
+            : null;
 
         if (resolvedLimit !== null && resolvedLimit > 0) {
             currentSpeedLimitMph = resolvedLimit;
@@ -10466,13 +10463,29 @@ function inferRoadClassFromManeuver(step) {
 }
 
 /**
+ * Infer road class from UK-style road numbers in street names (M1, A40, B1234).
+ * @param {string[]|null|undefined} streetNames
+ * @returns {string|null}
+ */
+function inferRoadClassFromStreetNames(streetNames) {
+    if (!Array.isArray(streetNames) || streetNames.length === 0) return null;
+    const raw = String(streetNames[0] || '').trim().toUpperCase();
+    if (!raw) return null;
+    if (/^M\d/.test(raw) || raw.includes('MOTORWAY')) return 'motorway';
+    if (/^A\d/.test(raw)) return 'primary';
+    if (/^B\d/.test(raw)) return 'secondary';
+    return null;
+}
+
+/**
  * Get current road type from route data or default to safe value.
  *
  * @param {number} [maneuverIdxOverride] - Optional maneuver index. When supplied, the road
  *   class is taken from that maneuver rather than from `currentStepIndex`.
- * @returns {string} Road type (residential, motorway, primary, etc.)
+ * @param {number} [gpsSpeedMph] - Optional GPS speed hint when route metadata is missing.
+ * @returns {string} Road type (motorway, primary, residential, unknown, etc.)
  */
-function getCurrentRoadType(maneuverIdxOverride) {
+function getCurrentRoadType(maneuverIdxOverride, gpsSpeedMph) {
     let stepIndex = -1;
     if (Number.isFinite(maneuverIdxOverride) && maneuverIdxOverride >= 0) {
         stepIndex = maneuverIdxOverride;
@@ -10481,12 +10494,23 @@ function getCurrentRoadType(maneuverIdxOverride) {
     }
 
     if (stepIndex >= 0 && currentRouteSteps && stepIndex < currentRouteSteps.length) {
-        const inferred = inferRoadClassFromManeuver(currentRouteSteps[stepIndex]);
+        const step = currentRouteSteps[stepIndex];
+        const fromStreet = inferRoadClassFromStreetNames(
+            step.begin_street_names || step.street_names
+        );
+        if (fromStreet) return fromStreet;
+        const inferred = inferRoadClassFromManeuver(step);
         if (inferred) return inferred;
+        if (step.road_class) return step.road_class;
     }
 
-    // Safe default: residential (30 mph in UK) instead of motorway (70 mph)
-    return 'residential';
+    if (lastDetectedRoadType) return lastDetectedRoadType;
+
+    const spd = Number(gpsSpeedMph);
+    if (Number.isFinite(spd) && spd >= 65) return 'motorway';
+    if (Number.isFinite(spd) && spd >= 45) return 'primary';
+
+    return 'unknown';
 }
 
 /**
@@ -10544,7 +10568,9 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
         if (detectedRoadType) lastDetectedRoadType = detectedRoadType;
         if (region) lastSpeedLimitRegion = region;
         const displayLimit = SL.pickDisplaySpeedLimitMph(
-            limitMph, valhallaSpeedLimit, roadType, lastSpeedLimitRegion
+            limitMph, valhallaSpeedLimit,
+            detectedRoadType || roadType, lastSpeedLimitRegion,
+            { allowRoadTypeFallback: limitMph == null }
         );
         if (limitMph != null) {
             state.currentLimitMph = limitMph;
@@ -10582,7 +10608,10 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
                 fallbackLimit = valhallaSpeedLimit;
             }
             if (fallbackLimit == null) {
-                fallbackLimit = SL.inferRoadTypeDefaultLimitMph(roadType, lastSpeedLimitRegion);
+                const rt = lastDetectedRoadType || (roadType !== 'unknown' ? roadType : null);
+                if (rt) {
+                    fallbackLimit = SL.inferRoadTypeDefaultLimitMph(rt, lastSpeedLimitRegion);
+                }
             }
             if (fallbackLimit != null) {
                 acceptIfFresh(() => applyLimit(fallbackLimit, roadType, lastSpeedLimitRegion));
@@ -15022,8 +15051,8 @@ function startGPSTracking() {
                     ? currentRouteSteps[activeManeuverIdx]
                     : null;
                 const roadType = activeManeuverIdx >= 0
-                    ? getCurrentRoadType(activeManeuverIdx)
-                    : getCurrentRoadType();
+                    ? getCurrentRoadType(activeManeuverIdx, displaySpeedMph)
+                    : getCurrentRoadType(undefined, displaySpeedMph);
 
                 let valhallaSpeedLimitMph = null;
                 if (activeManeuver) {

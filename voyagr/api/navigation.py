@@ -1000,7 +1000,7 @@ def _parse_voice_command(
             else:
                 msg = (
                     'Noted. After you stop safely, you can report a map issue from settings; '
-                    'the detector uses OpenStreetMap and live services.'
+                    'the detector uses mapped and live speed-limit data.'
                 )
             return {'success': True, 'action': 'confirm_speed_display', 'message': msg}
 

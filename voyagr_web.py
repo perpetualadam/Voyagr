@@ -2382,6 +2382,7 @@ def route_with_graphhopper(
     railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
     avoid_caz_zones: bool = False,
     avoid_points: Optional[List[Dict[str, Any]]] = None,
+    camera_hazards: Optional[Dict[str, List[Dict[str, Any]]]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Route using GraphHopper with optional camera avoidance via pre-loaded areas.
@@ -2404,6 +2405,7 @@ def route_with_graphhopper(
             merge_graphhopper_custom_model_parts,
             build_graphhopper_caz_avoidance_model,
             build_graphhopper_custom_model as gh_build_hazard_model,
+            build_graphhopper_filtered_camera_model,
         )
 
         url = f"{GRAPHHOPPER_URL}/route"
@@ -2429,8 +2431,15 @@ def route_with_graphhopper(
 
         custom_model: Optional[Dict[str, Any]] = None
         cam_model: Optional[Dict[str, Any]] = None
-        if enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
-            cam_model = build_graphhopper_camera_avoidance_model(route_bbox) or None
+        if enable_camera_avoidance:
+            if camera_hazards and any(camera_hazards.values()):
+                cam_model = build_graphhopper_filtered_camera_model(
+                    camera_hazards, route_bbox=route_bbox, max_hazards=40
+                ) or None
+                if cam_model:
+                    logger.info("[GRAPHHOPPER] Using filtered camera hazard zones (map-data filters)")
+            elif USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
+                cam_model = build_graphhopper_camera_avoidance_model(route_bbox) or None
 
         osm_dynamic: Dict[str, List[Dict[str, Any]]] = {}
         if traffic_light_hazards:
@@ -4443,7 +4452,7 @@ HTML_TEMPLATE = '''
                             <button type="button" class="toggle-switch active" id="speedWidgetToggle" onclick="toggleSpeedWidget()" title="Show GPS speed and posted limit on the map"></button>
                         </div>
                         <p style="font-size: 11px; color: #888; margin: -5px 0 12px 0; line-height: 1.45;">
-                            The speed widget shows your <strong>GPS speed</strong> and the <strong>posted limit</strong> for your current road (from map data when available). Limits can change and vary by vehicle — always follow road signs.
+                            The speed widget shows your <strong>GPS speed</strong> and the <strong>posted limit</strong> for your current road when known. Limits can change and vary by vehicle — always follow road signs.
                         </p>
 
                         <div class="preference-item">
@@ -4484,18 +4493,16 @@ HTML_TEMPLATE = '''
                                 <span class="preference-label">Traffic signals</span>
                                 <button class="toggle-switch" id="avoidTrafficLights" data-pref="trafficLightsAvoid" onclick="togglePreference('trafficLightsAvoid')"></button>
                             </div>
-                            <p class="preferences-subsection-help">Uses OpenStreetMap signal locations. Works independently of other routing options below.</p>
 
                             <div class="preference-item">
                                 <span class="preference-label">Level crossings</span>
                                 <button class="toggle-switch" id="avoidRailwayCrossings" data-pref="railwayCrossingsAvoid" onclick="togglePreference('railwayCrossingsAvoid')"></button>
                             </div>
-                            <p class="preferences-subsection-help">OpenStreetMap <code>railway=level_crossing</code> nodes. Best with smarter routing enabled.</p>
                         </div>
 
                         <div class="preferences-subsection">
                             <h4 class="preferences-subsection-title">Smarter routing</h4>
-                            <p class="preferences-subsection-help">Uses mapped roadside points (e.g. SCDB) to prefer alternative paths when calculating routes.</p>
+                            <p class="preferences-subsection-help">Prefer alternative paths that steer clear of mapped enforcement points when calculating routes.</p>
 
                             <div class="preference-item">
                                 <span class="preference-label">Use map data in routing</span>
@@ -4508,11 +4515,11 @@ HTML_TEMPLATE = '''
                             <p class="preferences-subsection-help">When smarter routing is on, include or exclude each point type from route planning.</p>
 
                             <div class="preference-item">
-                                <span class="preference-label">Fixed points</span>
+                                <span class="preference-label">Speed cameras</span>
                                 <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_speed" onclick="toggleHazardPreferenceApi('camera_speed', event)"></button>
                             </div>
                             <div class="preference-item">
-                                <span class="preference-label">Junction signals</span>
+                                <span class="preference-label">Traffic light cameras</span>
                                 <button type="button" class="toggle-switch hazard-pref-toggle" data-hazard-type="camera_red_light" onclick="toggleHazardPreferenceApi('camera_red_light', event)"></button>
                             </div>
                             <div class="preference-item">
@@ -4751,7 +4758,7 @@ HTML_TEMPLATE = '''
                             <span class="preference-label">Level crossings (map)</span>
                             <button class="toggle-switch active" id="showOsmRailwayCrossingsToggle" onclick="toggleShowOsmRailwayCrossings()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">OpenStreetMap overlays. Separate from the routing toggles above.</p>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Map overlays for traffic signals and level crossings. Separate from the routing toggles above.</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🚦 Show Traffic Flow</span>
@@ -4765,7 +4772,7 @@ HTML_TEMPLATE = '''
                             </span>
                             <button class="toggle-switch active" id="trafficLightsToggle" onclick="toggleTrafficLights()" style="background: #4CAF50; border-color: #4CAF50;"></button>
                         </div>
-                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Same vertical OSM-style icon as on the map (red → amber → green), shown along your route.</p>
+                        <p style="font-size: 11px; color: #888; margin: -5px 0 10px 0;">Vertical traffic-light icon (red → amber → green) shown along your route.</p>
 
                         <div class="preference-item">
                             <span class="preference-label">🛤️ Route Traffic Edges</span>
@@ -6748,6 +6755,11 @@ def calculate_route():
             try:
                 _tl_gh = hazards.get('traffic_light', []) if avoid_traffic_lights else []
                 _rx_gh = hazards.get('railway_crossing', []) if avoid_railway_crossings else []
+                _cam_gh = {
+                    k: hazards.get(k, [])
+                    for k in CAMERA_HAZARD_BUCKETS
+                    if hazards.get(k)
+                } if avoid_cameras else None
                 graphhopper_route = route_with_graphhopper(
                     start_lat, start_lon, end_lat, end_lon,
                     enable_camera_avoidance=avoid_cameras,
@@ -6756,6 +6768,7 @@ def calculate_route():
                     railway_crossing_hazards=_rx_gh if _rx_gh else None,
                     avoid_caz_zones=apply_caz_routing_avoidance,
                     avoid_points=avoid_points if avoid_points else None,
+                    camera_hazards=_cam_gh if _cam_gh and any(_cam_gh.values()) else None,
                 )
                 if graphhopper_route and graphhopper_route.get('success'):
                     logger.info("[GRAPHHOPPER] ✅ Route found with camera avoidance")

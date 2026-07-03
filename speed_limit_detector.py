@@ -81,7 +81,7 @@ ROAD_TYPE_ALIASES = {
     'secondary_link': 'secondary_road',
     'tertiary': 'secondary_road',
     'tertiary_link': 'secondary_road',
-    'unclassified': 'residential',
+    'unclassified': 'unclassified',
     'service': 'residential',
 }
 
@@ -134,8 +134,19 @@ VEHICLE_SPEED_LIMITS = {
 
 def _normalize_road_type(road_type: str) -> str:
     if not road_type:
-        return 'residential'
-    return ROAD_TYPE_ALIASES.get(road_type, road_type)
+        return 'unknown'
+    low = str(road_type).strip().lower()
+    if low in ('unknown', 'none', ''):
+        return 'unknown'
+    return ROAD_TYPE_ALIASES.get(low, low)
+
+
+def _client_road_type_for_fallback(road_type: str) -> Optional[str]:
+    """Road class from the client; None when unknown so we do not assume 30 mph residential."""
+    norm = _normalize_road_type(road_type)
+    if norm == 'unknown':
+        return None
+    return norm
 
 
 def _is_plausible_limit_for_road_type(mph: Optional[int], road_type: str) -> bool:
@@ -148,7 +159,9 @@ def _is_plausible_limit_for_road_type(mph: Optional[int], road_type: str) -> boo
         return False
     if n <= 0 or n > 100:
         return False
-    norm = _normalize_road_type((road_type or '').strip() or 'residential')
+    norm = _normalize_road_type((road_type or '').strip() or 'unknown')
+    if norm == 'unknown':
+        return True
     if norm in ('residential', 'living_street', 'service') and n > 50:
         return False
     if norm == 'motorway' and n < 30:
@@ -255,7 +268,9 @@ def infer_speed_limit_mph_from_road_type(road_type: str, region: str) -> Optiona
     """
     if not road_type_speed_fallback_enabled():
         return None
-    norm = _normalize_road_type((road_type or '').strip() or 'residential')
+    norm = _client_road_type_for_fallback(road_type)
+    if norm is None:
+        return None
     table = DEFAULT_SPEED_BY_REGION.get(region) or DEFAULT_SPEED_BY_REGION['metric']
     mph = table.get(norm)
     if mph is None:
@@ -1061,21 +1076,32 @@ class SpeedLimitDetector:
             logger.info("[Speed Limit] No TOMTOM_API_KEY configured, skipping TomTom")
 
         # 3) Regional default by road class (e.g. motorway → 70 mph UK)
-        inferred = infer_speed_limit_mph_from_road_type(road_type, region)
+        fallback_class = _client_road_type_for_fallback(road_type)
+        if fallback_class is None and valhalla_hint_mph and valhalla_hint_mph > 0:
+            if valhalla_hint_mph >= 60:
+                fallback_class = 'motorway'
+            elif valhalla_hint_mph >= 45:
+                fallback_class = 'primary'
+            elif valhalla_hint_mph >= 35:
+                fallback_class = 'secondary'
+            elif valhalla_hint_mph >= 20:
+                fallback_class = 'residential'
+        inferred = infer_speed_limit_mph_from_road_type(fallback_class or 'unknown', region) if fallback_class else None
         if inferred is not None:
             self.metrics['road_type_fallback_hits'] += 1
+            detected_fb = fallback_class or norm_road
             self._add_to_cache(cache_key, {
                 'speed_limit': inferred,
                 'timestamp': time.time(),
                 'source': 'road-type-default',
-                'road_type': norm_road,
-                'detected_road_type': norm_road,
+                'road_type': detected_fb,
+                'detected_road_type': detected_fb,
             })
             logger.info(
-                f"[Speed Limit] Road-type default ({road_type} → {_normalize_road_type(road_type)}): "
+                f"[Speed Limit] Road-type default ({road_type} → {detected_fb}): "
                 f"{inferred} mph"
             )
-            return inferred, 'road-type-default', norm_road
+            return inferred, 'road-type-default', detected_fb
 
         self.metrics['default_fallbacks'] += 1
         logger.info("[Speed Limit] No posted limit from TomTom/OSM and road-type fallback disabled or unknown class")

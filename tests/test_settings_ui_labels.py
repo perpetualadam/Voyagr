@@ -40,8 +40,9 @@ RETIRED_SETTINGS_PHRASES = [
     'Avoid CAZ',
     'Hazard Avoidance',
     'Optimised Routing (cameras)',
-    'Speed cameras',
     'Avoid Traffic Lights',
+    'OpenStreetMap',
+    'SCDB',
 ]
 
 
@@ -98,6 +99,11 @@ class TestSettingsUILabels(unittest.TestCase):
         for phrase in RETIRED_SETTINGS_PHRASES:
             with self.subTest(phrase=phrase):
                 self.assertNotIn(phrase, html)
+
+    def test_settings_camera_filter_labels_present(self):
+        html = self._settings_html()
+        self.assertIn('Speed cameras', html)
+        self.assertIn('Traffic light cameras', html)
 
     def test_settings_responsibility_notice_present(self):
         html = self._settings_html()

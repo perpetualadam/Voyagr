@@ -31,9 +31,10 @@ describe('speed-limit-widget module', () => {
         expect(SL.pickDisplaySpeedLimitMph(null, 60)).toBe(60);
     });
 
-    test('pickDisplaySpeedLimitMph falls back to road-type default', () => {
-        expect(SL.pickDisplaySpeedLimitMph(null, null, 'motorway', 'uk')).toBe(70);
-        expect(SL.pickDisplaySpeedLimitMph(null, null, 'residential', 'uk')).toBe(30);
+    test('pickDisplaySpeedLimitMph falls back to road-type default when allowed', () => {
+        expect(SL.pickDisplaySpeedLimitMph(null, null, 'motorway', 'uk', { allowRoadTypeFallback: true })).toBe(70);
+        expect(SL.pickDisplaySpeedLimitMph(null, null, 'motorway', 'uk')).toBeNull();
+        expect(SL.pickDisplaySpeedLimitMph(null, null, 'unknown', 'uk', { allowRoadTypeFallback: true })).toBeNull();
     });
 
     test('parseSpeedLimitApiResponse trusts server motorway limits with detected road type', () => {

@@ -511,6 +511,7 @@ def _graphhopper_leg(
     traffic_light_hazards: Optional[List[Dict[str, Any]]] = None,
     railway_crossing_hazards: Optional[List[Dict[str, Any]]] = None,
     avoid_caz_zones: bool = False,
+    camera_hazards: Optional[Dict[str, List[Dict[str, Any]]]] = None,
 ) -> Optional[Dict[str, Any]]:
     """Route a single leg via GraphHopper with camera avoidance custom model."""
     try:
@@ -518,6 +519,7 @@ def _graphhopper_leg(
             build_graphhopper_camera_avoidance_model,
             build_graphhopper_caz_avoidance_model,
             build_graphhopper_custom_model,
+            build_graphhopper_filtered_camera_model,
             merge_graphhopper_custom_model_parts,
         )
 
@@ -532,7 +534,13 @@ def _graphhopper_leg(
             "elevation": False,
         }
 
-        cam_model = build_graphhopper_camera_avoidance_model(route_bbox) or None
+        cam_model = None
+        if camera_hazards and any(camera_hazards.values()):
+            cam_model = build_graphhopper_filtered_camera_model(
+                camera_hazards, route_bbox=route_bbox, max_hazards=40
+            ) or None
+        else:
+            cam_model = build_graphhopper_camera_avoidance_model(route_bbox) or None
         osm_dynamic: Dict[str, List[Dict[str, Any]]] = {}
         if traffic_light_hazards:
             osm_dynamic['traffic_light'] = traffic_light_hazards
