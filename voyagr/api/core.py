@@ -26,6 +26,7 @@ from voyagr.seo import (
     render_robots_txt,
     render_sitemap_xml,
 )
+from voyagr.utils.admin_auth import require_admin_if_configured
 
 core_bp = Blueprint('core', __name__)
 
@@ -144,6 +145,7 @@ def llms_full_txt():
 
 
 @core_bp.route('/monitoring')
+@require_admin_if_configured
 def monitoring_dashboard():
     """Monitoring dashboard for routing engines."""
     from voyagr_web import MONITORING_DASHBOARD_HTML

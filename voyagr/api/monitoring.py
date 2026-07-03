@@ -12,9 +12,16 @@ import logging
 from datetime import datetime
 from flask import Blueprint, jsonify, request, send_file
 
+from voyagr.utils.admin_auth import register_admin_before_request
+
 logger = logging.getLogger(__name__)
 
 monitoring_bp = Blueprint('monitoring', __name__)
+
+register_admin_before_request(
+    monitoring_bp,
+    path_prefixes=('/monitoring',),
+)
 
 # Global reference to monitor (set by main app)
 _monitor = None

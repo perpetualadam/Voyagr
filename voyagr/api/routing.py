@@ -23,10 +23,27 @@ from flask import Blueprint, jsonify, request
 
 from voyagr.config import VALHALLA_URL, GRAPHHOPPER_URL, OSRM_URL
 from voyagr.utils import validate_coordinates
+from voyagr.utils.admin_auth import register_admin_before_request
 
 logger = logging.getLogger(__name__)
 
 routing_bp = Blueprint('routing', __name__)
+
+register_admin_before_request(
+    routing_bp,
+    exact_paths={
+        '/test-routing-engines',
+        '/debug-route',
+        '/cache-stats',
+        '/cache-clear',
+        '/fallback-chain-health',
+        '/fallback-chain-status',
+        '/parallel-routing',
+        '/routing-performance-report',
+        '/batch',
+    },
+    path_prefixes=('/monitoring/phase5',),
+)
 
 # Global references (set by main app)
 _route_cache = None

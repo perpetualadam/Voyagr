@@ -13,6 +13,7 @@ from datetime import datetime
 from flask import Blueprint, jsonify, request
 
 from voyagr.models import db_connection
+from voyagr.utils.admin_auth import require_admin_if_configured_methods
 
 logger = logging.getLogger(__name__)
 
@@ -91,6 +92,7 @@ def log_gesture_event():
 
 
 @settings_bp.route('/ml-predictions', methods=['GET', 'POST'])
+@require_admin_if_configured_methods('POST')
 def manage_ml_predictions():
     """Get ML route predictions based on trip history."""
     try:
@@ -147,6 +149,7 @@ def manage_ml_predictions():
 
 
 @settings_bp.route('/traffic-patterns', methods=['GET', 'POST'])
+@require_admin_if_configured_methods('POST')
 def manage_traffic_patterns():
     """Manage ML traffic pattern data."""
     try:

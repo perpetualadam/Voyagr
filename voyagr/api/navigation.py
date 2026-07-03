@@ -18,12 +18,22 @@ from flask import Blueprint, jsonify, request, send_file, after_this_request
 
 from voyagr.models import get_db_connection, return_db_connection, db_connection
 from voyagr.utils.rate_limiting import RateLimiter
+from voyagr.utils.admin_auth import register_admin_before_request
 
 logger = logging.getLogger(__name__)
 
 _speed_limit_feedback_limiter = RateLimiter(max_requests=40, window_seconds=60)
 
 navigation_bp = Blueprint('navigation', __name__)
+
+register_admin_before_request(
+    navigation_bp,
+    exact_paths={
+        '/speed-limit/metrics',
+        '/speed-limit/quota',
+        '/speed-limit/metrics/reset',
+    },
+)
 
 # Global reference to speed_limit_detector (set by main app)
 speed_limit_detector = None

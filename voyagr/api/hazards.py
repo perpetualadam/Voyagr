@@ -20,6 +20,7 @@ from flask import Blueprint, jsonify, request
 
 from voyagr.models import get_db_connection, return_db_connection
 from voyagr.utils import sanitize_string
+from voyagr.utils.admin_auth import require_admin_if_configured
 from voyagr.utils.camera_buckets import normalize_camera_hazard_bucket
 from voyagr.utils.geometry import get_distance_between_points
 from voyagr.utils.rate_limiting import RateLimiter, rate_limit
@@ -126,6 +127,7 @@ def hazard_preferences():
 
 
 @hazards_bp.route('/hazards/add-camera', methods=['POST'])
+@require_admin_if_configured
 def add_camera():
     """Add a speed/traffic camera location."""
     conn = None
