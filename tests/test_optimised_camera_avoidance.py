@@ -4,10 +4,14 @@ from unittest.mock import MagicMock, patch
 
 from voyagr.services.routing.optimised_route import (
     PRIMARY_OPTIMISED_NAME,
+    SHORTEST_ROUTE_NAME,
     baseline_camera_hazard_count,
     fetch_valhalla_auto_json,
+    fetch_valhalla_auto_shorter_json,
     graphhopper_qualifies_as_optimised,
     is_primary_optimised_route,
+    is_shortest_route,
+    merge_valhalla_exclude_locations,
     optimised_route_entry_qualifies,
     prune_non_qualifying_optimised_routes,
 )
@@ -65,6 +69,41 @@ class TestFetchValhallaAutoJson:
 
         assert result is None
         assert mock_post.call_count == 1
+
+
+class TestFetchValhallaAutoShorterJson:
+    def test_require_exclusions_skips_bare_fallback(self):
+        resp_fail = MagicMock(status_code=400)
+        resp_bare_ok = MagicMock(status_code=200)
+        resp_bare_ok.json.return_value = {'trip': {'legs': [{'shape': 'x'}]}}
+
+        with patch(
+            'voyagr.services.routing.optimised_route.requests.post',
+            side_effect=[resp_fail, resp_bare_ok],
+        ) as mock_post:
+            result = fetch_valhalla_auto_shorter_json(
+                'http://v/route', {}, [{'lat': 1, 'lon': 2}],
+                exclude_locations=[{'lat': 1.5, 'lon': 2.5}],
+                require_exclusions=True,
+            )
+
+        assert result is None
+        assert mock_post.call_count == 1
+
+    def test_merge_exclude_locations_prioritises_first_group(self):
+        merged = merge_valhalla_exclude_locations(
+            [{'lat': 1.0, 'lon': 2.0}],
+            [{'lat': 1.0, 'lon': 2.0}, {'lat': 3.0, 'lon': 4.0}],
+            max_points=50,
+        )
+        assert len(merged) == 2
+        assert merged[0] == {'lat': 1.0, 'lon': 2.0}
+
+
+class TestShortestRouteNaming:
+    def test_shortest_name_detection(self):
+        assert is_shortest_route({'name': SHORTEST_ROUTE_NAME}) is True
+        assert is_shortest_route({'name': 'Shortest'}) is False
 
 
 class TestOptimisedRouteQualification:

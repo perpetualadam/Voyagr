@@ -10,11 +10,40 @@ import requests
 logger = logging.getLogger(__name__)
 
 PRIMARY_OPTIMISED_NAME = '⚡ Optimised'
+SHORTEST_ROUTE_NAME = '📏 Shortest'
 
 
 def is_primary_optimised_route(route: Dict[str, Any]) -> bool:
     """True only for the main Optimised option, not discovery/alternate labels."""
     return (route.get('name') or '').strip() == PRIMARY_OPTIMISED_NAME
+
+
+def is_shortest_route(route: Dict[str, Any]) -> bool:
+    return (route.get('name') or '').strip() == SHORTEST_ROUTE_NAME
+
+
+def merge_valhalla_exclude_locations(
+    *groups: List[Dict[str, Any]],
+    max_points: int = 50,
+) -> List[Dict[str, Any]]:
+    """Dedupe lat/lon exclude points; earlier groups take priority (e.g. on-route cameras first)."""
+    seen: set = set()
+    merged: List[Dict[str, Any]] = []
+    for group in groups:
+        for loc in group:
+            try:
+                lat = float(loc['lat'])
+                lon = float(loc['lon'])
+            except (KeyError, TypeError, ValueError):
+                continue
+            key = (round(lat, 5), round(lon, 5))
+            if key in seen:
+                continue
+            seen.add(key)
+            merged.append({'lat': lat, 'lon': lon})
+            if len(merged) >= max_points:
+                return merged
+    return merged
 
 
 def fetch_valhalla_auto_json(
@@ -59,6 +88,50 @@ def fetch_valhalla_auto_json(
                 return data
         except Exception as e:
             logger.warning(f'[VALHALLA] auto request failed: {e}')
+    return None
+
+
+def fetch_valhalla_auto_shorter_json(
+    url: str,
+    headers: Dict[str, str],
+    locations: List[Dict[str, Any]],
+    exclude_locations: Optional[List[Dict[str, Any]]] = None,
+    timeout: int = 10,
+    *,
+    require_exclusions: bool = False,
+) -> Optional[Dict[str, Any]]:
+    """
+    Valhalla auto_shorter (distance-focused). Tries exclude_locations first when provided.
+    Unless require_exclusions is True, retries without exclusions if the avoided route fails.
+    """
+    base_payload: Dict[str, Any] = {
+        'locations': locations,
+        'costing': 'auto_shorter',
+        'units': 'kilometers',
+        'language': 'en-GB',
+        'directions_options': {'generalize': 0},
+    }
+    attempts: List[Dict[str, Any]] = []
+    if exclude_locations:
+        w = dict(base_payload)
+        w['exclude_locations'] = exclude_locations
+        attempts.append(w)
+    elif require_exclusions:
+        return None
+    if not require_exclusions:
+        attempts.append(base_payload)
+    for payload in attempts:
+        try:
+            resp = requests.post(url, json=payload, timeout=timeout, headers=headers)
+            if resp.status_code != 200:
+                continue
+            data = resp.json()
+            if data.get('error'):
+                continue
+            if 'trip' in data and 'legs' in data['trip'] and data['trip']['legs']:
+                return data
+        except Exception as e:
+            logger.warning('[VALHALLA] auto_shorter request failed: %s', e)
     return None
 
 

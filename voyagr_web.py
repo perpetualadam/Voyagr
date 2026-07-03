@@ -2649,37 +2649,25 @@ def fetch_valhalla_auto_shorter_json(
     locations: List[Dict[str, Any]],
     exclude_locations: Optional[List[Dict[str, Any]]] = None,
     timeout: int = 10,
+    *,
+    require_exclusions: bool = False,
 ) -> Optional[Dict[str, Any]]:
-    """
-    Valhalla auto_shorter (distance-focused). If exclude_locations is non-empty, try that first;
-    on non-success, retry without exclusions so routing still succeeds when avoids over-constrain the graph.
-    """
-    base_payload: Dict[str, Any] = {
-        'locations': locations,
-        'costing': 'auto_shorter',
-        'units': 'kilometers',
-        'language': 'en-GB',
-        'directions_options': {'generalize': 0},
-    }
-    attempts: List[Dict[str, Any]] = []
-    if exclude_locations:
-        w = dict(base_payload)
-        w['exclude_locations'] = exclude_locations
-        attempts.append(w)
-    attempts.append(base_payload)
-    for payload in attempts:
-        try:
-            resp = requests.post(url, json=payload, timeout=timeout, headers=headers)
-            if resp.status_code != 200:
-                continue
-            data = resp.json()
-            if data.get('error'):
-                continue
-            if 'trip' in data and 'legs' in data['trip'] and data['trip']['legs']:
-                return data
-        except Exception as e:
-            logger.warning(f'[VALHALLA] auto_shorter request failed: {e}')
-    return None
+    from voyagr.services.routing.optimised_route import fetch_valhalla_auto_shorter_json as _fetch
+    return _fetch(
+        url, headers, locations,
+        exclude_locations=exclude_locations,
+        timeout=timeout,
+        require_exclusions=require_exclusions,
+    )
+
+
+def _valhalla_shortest_exclusions_required(
+    enable_hazard_avoidance: bool,
+    avoid_cameras: bool,
+    exclude_locations: Optional[List[Dict[str, Any]]],
+) -> bool:
+    """When camera avoidance is on, Shortest must not silently drop Valhalla exclude_locations."""
+    return bool(enable_hazard_avoidance and avoid_cameras and exclude_locations)
 
 
 def fetch_valhalla_auto_json(
@@ -2798,6 +2786,122 @@ def ensure_optimised_camera_avoiding_route(
         logger.warning(
             f'[VALHALLA] ensure Optimised: excluded route still has '
             f'{entry.get("hazard_count", 0)} cameras (baseline {baseline}) — not offered'
+        )
+    return routes
+
+
+def ensure_shortest_respects_camera_avoidance(
+    routes: List[Dict[str, Any]],
+    *,
+    url: str,
+    headers: Dict[str, str],
+    route_locations: List[Dict[str, Any]],
+    has_waypoints: bool,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    route_bbox: Dict[str, float],
+    hazards: Dict[str, List[Dict[str, Any]]],
+    enable_hazard_avoidance: bool,
+    avoid_cameras: bool,
+    cost_calculator: Any,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+) -> List[Dict[str, Any]]:
+    """
+    Re-request 📏 Shortest via Valhalla auto_shorter when it still hits cameras.
+    Optimised uses GraphHopper area avoidance; Shortest is Valhalla-only and must not
+    silently drop exclude_locations when camera avoidance is enabled.
+    """
+    from voyagr.services.routing.optimised_route import (
+        SHORTEST_ROUTE_NAME,
+        is_primary_optimised_route,
+        is_shortest_route,
+        merge_valhalla_exclude_locations,
+    )
+
+    if not (enable_hazard_avoidance and avoid_cameras):
+        return routes
+
+    idx = next((i for i, r in enumerate(routes) if is_shortest_route(r)), None)
+    if idx is None:
+        return routes
+
+    shortest = routes[idx]
+    haz_count = int(shortest.get('hazard_count') or 0)
+    opt_counts = [int(r.get('hazard_count') or 0) for r in routes if is_primary_optimised_route(r)]
+    target = min(opt_counts) if opt_counts else baseline_camera_hazard_count(routes)
+
+    if haz_count <= target and shortest.get('camera_exclusions_applied'):
+        return routes
+    if haz_count <= target:
+        return routes
+
+    on_route = shortest.get('hazards') or []
+    camera_pts = [
+        {'lat': h['lat'], 'lon': h['lon']}
+        for h in on_route
+        if h.get('lat') is not None and h.get('lon') is not None
+        and 'camera' in str(h.get('type', '')).lower()
+    ]
+
+    base_exclude: List[Dict[str, Any]] = []
+    if hazards:
+        try:
+            base_exclude = build_valhalla_exclude_locations(
+                hazards, route_bbox=route_bbox, max_hazards=50,
+                start_lat=start_lat, start_lon=start_lon,
+                end_lat=end_lat, end_lon=end_lon,
+            )
+        except Exception as ex:
+            logger.warning('[VALHALLA] ensure Shortest: exclude build failed: %s', ex)
+
+    merged = merge_valhalla_exclude_locations(camera_pts, base_exclude, max_points=50)
+    if not merged:
+        logger.warning('[VALHALLA] ensure Shortest: no exclude_locations to retry with')
+        return routes
+
+    locs = route_locations if has_waypoints else [
+        {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
+    ]
+    sh_data = fetch_valhalla_auto_shorter_json(
+        url, headers, locs,
+        exclude_locations=merged,
+        require_exclusions=True,
+    )
+    if not sh_data:
+        logger.warning('[VALHALLA] ensure Shortest: could not re-route with camera exclusions')
+        return routes
+
+    entry = valhalla_trip_json_to_std_route_entry(
+        SHORTEST_ROUTE_NAME, sh_data, shortest.get('id', idx + 1), hazards, cost_calculator,
+        vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+        fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+        electricity_price=electricity_price, include_tolls=include_tolls,
+        include_caz=include_caz, caz_exempt=caz_exempt,
+    )
+    if not entry:
+        return routes
+
+    new_count = int(entry.get('hazard_count') or 0)
+    if new_count < haz_count or new_count <= target:
+        entry['camera_exclusions_applied'] = True
+        routes[idx] = entry
+        logger.info(
+            '[VALHALLA] Shortest re-routed with camera exclusions: %.1fkm, %d cameras (was %d)',
+            entry['distance_km'], new_count, haz_count,
+        )
+    else:
+        logger.warning(
+            '[VALHALLA] Shortest retry still has %d cameras (was %d) — keeping original',
+            new_count, haz_count,
         )
     return routes
 
@@ -7601,9 +7705,13 @@ def calculate_route():
                             shortest_locs = route_locations if has_waypoints else [
                                 {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
                             ]
+                            sh_require = _valhalla_shortest_exclusions_required(
+                                enable_hazard_avoidance, avoid_cameras, alt_exclude,
+                            )
                             sh_data = fetch_valhalla_auto_shorter_json(
                                 url, headers, shortest_locs,
                                 exclude_locations=alt_exclude if alt_exclude else None,
+                                require_exclusions=sh_require,
                             )
                             if sh_data:
                                 entry = valhalla_trip_json_to_std_route_entry(
@@ -7614,6 +7722,8 @@ def calculate_route():
                                     include_caz=include_caz, caz_exempt=caz_exempt,
                                 )
                                 if entry:
+                                    if sh_require:
+                                        entry['camera_exclusions_applied'] = True
                                     routes.append(entry)
                                     next_route_id += 1
                                     logger.info(f"[VALHALLA] Added Shortest route: {entry['distance_km']:.1f}km")
@@ -7675,9 +7785,13 @@ def calculate_route():
                                 locs_ensure = route_locations if has_waypoints else [
                                     {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
                                 ]
+                                sh_require = _valhalla_shortest_exclusions_required(
+                                    enable_hazard_avoidance, avoid_cameras, ensure_exclude,
+                                )
                                 sh_ensure = fetch_valhalla_auto_shorter_json(
                                     url, headers, locs_ensure,
                                     exclude_locations=ensure_exclude if ensure_exclude else None,
+                                    require_exclusions=sh_require,
                                 )
                                 if sh_ensure:
                                     next_id = len(routes) + 1
@@ -7689,6 +7803,8 @@ def calculate_route():
                                         include_caz=include_caz, caz_exempt=caz_exempt,
                                     )
                                     if ent:
+                                        if sh_require:
+                                            ent['camera_exclusions_applied'] = True
                                         routes.append(ent)
                                         logger.info(
                                             f'[VALHALLA] Added Shortest route (ensure): {ent["distance_km"]:.1f}km'
@@ -7816,6 +7932,31 @@ def calculate_route():
                         enable_hazard_avoidance=enable_hazard_avoidance,
                         avoid_cameras=avoid_cameras,
                         graphhopper_route=graphhopper_route,
+                        cost_calculator=cost_calculator,
+                        vehicle_type=vehicle_type,
+                        fuel_efficiency=fuel_efficiency,
+                        fuel_price=fuel_price,
+                        energy_efficiency=energy_efficiency,
+                        electricity_price=electricity_price,
+                        include_tolls=include_tolls,
+                        include_caz=include_caz,
+                        caz_exempt=caz_exempt,
+                    )
+
+                    routes = ensure_shortest_respects_camera_avoidance(
+                        routes,
+                        url=url,
+                        headers=headers,
+                        route_locations=route_locations,
+                        has_waypoints=has_waypoints,
+                        start_lat=start_lat,
+                        start_lon=start_lon,
+                        end_lat=end_lat,
+                        end_lon=end_lon,
+                        route_bbox=route_bbox,
+                        hazards=hazards,
+                        enable_hazard_avoidance=enable_hazard_avoidance,
+                        avoid_cameras=avoid_cameras,
                         cost_calculator=cost_calculator,
                         vehicle_type=vehicle_type,
                         fuel_efficiency=fuel_efficiency,
@@ -8066,9 +8207,13 @@ def calculate_route():
                                     logger.info(
                                         f"[VALHALLA] Retry: Requesting Shortest route with {len(retry_locations)} exclusions"
                                     )
+                                    sh_require = _valhalla_shortest_exclusions_required(
+                                        enable_hazard_avoidance, avoid_cameras, retry_locations,
+                                    )
                                     sh_data = fetch_valhalla_auto_shorter_json(
                                         url, headers, retry_short_locs,
                                         exclude_locations=retry_locations if retry_locations else None,
+                                        require_exclusions=sh_require,
                                     )
                                     if sh_data:
                                         rent = valhalla_trip_json_to_std_route_entry(
@@ -8079,6 +8224,8 @@ def calculate_route():
                                             include_caz=include_caz, caz_exempt=caz_exempt,
                                         )
                                         if rent:
+                                            if sh_require:
+                                                rent['camera_exclusions_applied'] = True
                                             routes.append(rent)
                                             logger.info(
                                                 f"[VALHALLA] Retry: Added Shortest route: {rent['distance_km']:.1f}km"
@@ -8175,6 +8322,31 @@ def calculate_route():
                                     enable_hazard_avoidance=enable_hazard_avoidance,
                                     avoid_cameras=avoid_cameras,
                                     graphhopper_route=graphhopper_route,
+                                    cost_calculator=cost_calculator,
+                                    vehicle_type=vehicle_type,
+                                    fuel_efficiency=fuel_efficiency,
+                                    fuel_price=fuel_price,
+                                    energy_efficiency=energy_efficiency,
+                                    electricity_price=electricity_price,
+                                    include_tolls=include_tolls,
+                                    include_caz=include_caz,
+                                    caz_exempt=caz_exempt,
+                                )
+
+                                routes = ensure_shortest_respects_camera_avoidance(
+                                    routes,
+                                    url=url,
+                                    headers=headers,
+                                    route_locations=route_locations,
+                                    has_waypoints=has_waypoints,
+                                    start_lat=start_lat,
+                                    start_lon=start_lon,
+                                    end_lat=end_lat,
+                                    end_lon=end_lon,
+                                    route_bbox=route_bbox,
+                                    hazards=hazards,
+                                    enable_hazard_avoidance=enable_hazard_avoidance,
+                                    avoid_cameras=avoid_cameras,
                                     cost_calculator=cost_calculator,
                                     vehicle_type=vehicle_type,
                                     fuel_efficiency=fuel_efficiency,
@@ -8353,9 +8525,13 @@ def calculate_route():
                                 locs_rec = route_locations if has_waypoints else [
                                     {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
                                 ]
+                                sh_rec_require = _valhalla_shortest_exclusions_required(
+                                    enable_hazard_avoidance, avoid_cameras, rec_excl,
+                                )
                                 sh_rec = fetch_valhalla_auto_shorter_json(
                                     url, headers, locs_rec,
                                     exclude_locations=rec_excl if rec_excl else None,
+                                    require_exclusions=sh_rec_require,
                                 )
                                 if sh_rec:
                                     rid = len(routes_out) + 1
@@ -8367,6 +8543,8 @@ def calculate_route():
                                         include_caz=include_caz, caz_exempt=caz_exempt,
                                     )
                                     if rent:
+                                        if sh_rec_require:
+                                            rent['camera_exclusions_applied'] = True
                                         routes_out.append(rent)
                                         logger.info('[ROUTING] Recovery: added 📏 Shortest (auto_shorter)')
                             except Exception as rec_s_e:
@@ -8388,6 +8566,31 @@ def calculate_route():
                             enable_hazard_avoidance=enable_hazard_avoidance,
                             avoid_cameras=avoid_cameras,
                             graphhopper_route=graphhopper_route,
+                            cost_calculator=cost_calculator,
+                            vehicle_type=vehicle_type,
+                            fuel_efficiency=fuel_efficiency,
+                            fuel_price=fuel_price,
+                            energy_efficiency=energy_efficiency,
+                            electricity_price=electricity_price,
+                            include_tolls=include_tolls,
+                            include_caz=include_caz,
+                            caz_exempt=caz_exempt,
+                        )
+
+                        routes_out = ensure_shortest_respects_camera_avoidance(
+                            routes_out,
+                            url=url,
+                            headers=headers,
+                            route_locations=route_locations,
+                            has_waypoints=has_waypoints,
+                            start_lat=start_lat,
+                            start_lon=start_lon,
+                            end_lat=end_lat,
+                            end_lon=end_lon,
+                            route_bbox=route_bbox,
+                            hazards=hazards,
+                            enable_hazard_avoidance=enable_hazard_avoidance,
+                            avoid_cameras=avoid_cameras,
                             cost_calculator=cost_calculator,
                             vehicle_type=vehicle_type,
                             fuel_efficiency=fuel_efficiency,
