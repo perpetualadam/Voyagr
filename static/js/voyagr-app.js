@@ -10435,19 +10435,12 @@ function updateSpeedWidgetVisibility() {
  * @param {number} lon2 - Longitude of second point
  * @returns {number} Distance in meters
  */
+// calculateDistanceMeters / calculateHaversineDistance / calculateDistance moved to
+// modules/navigation/route-geometry.js (VoyagrRouteGeometry.haversineDistanceMeters).
+// Thin stubs below keep all existing callers working.
 function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // Earth's radius in meters
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c; // Distance in meters
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.haversineDistanceMeters(lat1, lon1, lat2, lon2) : 0;
 }
 
 /**
@@ -10913,14 +10906,8 @@ function toggleJourneyOverview() {
  * @returns {*} Return value description
  */
 function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // Earth's radius in meters
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.haversineDistanceMeters(lat1, lon1, lat2, lon2) : 0;
 }
 /**
  * calculateBearing function
@@ -10932,15 +10919,8 @@ function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
  * @returns {*} Return value description
  */
 function calculateBearing(lat1, lon1, lat2, lon2) {
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const lat1Rad = lat1 * Math.PI / 180;
-    const lat2Rad = lat2 * Math.PI / 180;
-
-    const y = Math.sin(dLon) * Math.cos(lat2Rad);
-    const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
-    const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-
-    return bearing;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.bearing(lat1, lon1, lat2, lon2) : 0;
 }
 /**
  * calculateTurnDirection function
@@ -15435,14 +15415,10 @@ function findNearestRouteIndex(lat, lon, polyline) {
  * @param {number} blendTowardRoute 0 GPS only, 1 route only
  */
 function blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowardRoute) {
-    if (!Number.isFinite(gpsHeadingDegrees)) gpsHeadingDegrees = 0;
-    if (!Number.isFinite(routeHeadingDegrees)) return gpsHeadingDegrees;
-    let t = Number(blendTowardRoute);
-    if (!Number.isFinite(t)) return gpsHeadingDegrees;
-    t = Math.max(0, Math.min(1, t));
-    let d = (((routeHeadingDegrees - gpsHeadingDegrees) % 360) + 360) % 360;
-    if (d > 180) d -= 360;
-    return (((gpsHeadingDegrees + d * t) % 360) + 360) % 360;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    if (RG) return RG.blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowardRoute);
+    if (!Number.isFinite(gpsHeadingDegrees)) return 0;
+    return gpsHeadingDegrees;
 }
 
 /**
@@ -15463,109 +15439,36 @@ function blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowa
  * We scale the longitude axis by cos(latitude) so the dot-product gives the true
  * perpendicular foot on the segment, producing an accurate snap.
  */
+// _projectToSegment / snapToRoutePolyline / getTotalPolylineLengthMeters /
+// computeRemainingDistanceAlongRoute moved to modules/navigation/route-geometry.js.
+// Thin stubs delegate to VoyagrRouteGeometry; all existing callers work unchanged.
+
 function _projectToSegment(lat, lon, ax, ay, bx, by, cosLat) {
-    // Scale lon axis so 1 unit ≈ same metres as 1 unit of lat
-    const sAy = ay * cosLat;
-    const sBy = by * cosLat;
-    const sLon = lon * cosLat;
-
-    const abx = bx - ax;
-    const aby = sBy - sAy;
-    const apx = lat - ax;
-    const apy = sLon - sAy;
-
-    const ab2 = abx * abx + aby * aby;
-    let t = ab2 === 0 ? 0 : (apx * abx + apy * aby) / ab2;
-    t = Math.max(0, Math.min(1, t));
-
-    const projLat = ax + t * (bx - ax);
-    const projLon = ay + t * (by - ay); // Interpolate in original lon space
-    return { projLat, projLon, t };
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    if (RG) return RG.projectToSegment(lat, lon, ax, ay, bx, by, cosLat);
+    return { projLat: ax, projLon: ay, t: 0 };
 }
 
 function snapToRoutePolyline(lat, lon, polyline, searchStartIndex = 0) {
-    if (!polyline || polyline.length < 2) {
-        return { lat, lon, index: 0, distance: 0, t: 0 };
-    }
-
-    // Precompute cos(latitude) once for longitude scaling
-    const cosLat = Math.cos(lat * Math.PI / 180);
-
-    let bestLat = polyline[0][0];
-    let bestLon = polyline[0][1];
-    let bestDist = Infinity;
-    let bestIndex = 0;
-    let bestT = 0;
-
-    // Helper: test one segment
-    const testSegment = (i) => {
-        const ax = polyline[i][0], ay = polyline[i][1];
-        const bx = polyline[i + 1][0], by = polyline[i + 1][1];
-        const { projLat, projLon, t } = _projectToSegment(lat, lon, ax, ay, bx, by, cosLat);
-        const dist = calculateDistance(lat, lon, projLat, projLon);
-        if (dist < bestDist) {
-            bestDist = dist;
-            bestLat = projLat;
-            bestLon = projLon;
-            bestIndex = i;
-            bestT = t;
-        }
-    };
-
-    // Search a window around the expected position first (fast path)
-    const searchStart = Math.max(0, searchStartIndex - 15);
-    const searchEnd = Math.min(polyline.length - 1, searchStartIndex + 250);
-    for (let i = searchStart; i < searchEnd; i++) {
-        testSegment(i);
-    }
-
-    // If nothing close found, search the full polyline
-    if (bestDist > 60 && (searchStart > 0 || searchEnd < polyline.length - 1)) {
-        for (let i = 0; i < polyline.length - 1; i++) {
-            if (i >= searchStart && i < searchEnd) continue;
-            testSegment(i);
-        }
-    }
-
-    return { lat: bestLat, lon: bestLon, index: bestIndex, distance: bestDist, t: bestT };
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    if (RG) return RG.snapToRoutePolyline(lat, lon, polyline, searchStartIndex);
+    return { lat, lon, index: 0, distance: 0, t: 0 };
 }
 
 /**
  * Total path length along the polyline (meters).
  */
 function getTotalPolylineLengthMeters(polyline) {
-    if (!polyline || polyline.length < 2) return 0;
-    let total = 0;
-    for (let i = 0; i < polyline.length - 1; i++) {
-        total += calculateDistance(
-            polyline[i][0], polyline[i][1],
-            polyline[i + 1][0], polyline[i + 1][1]
-        );
-    }
-    return total;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.totalPolylineLengthMeters(polyline) : 0;
 }
 
 /**
  * Remaining distance (meters) along the polyline from the snapped GPS position to the route end.
- * Uses the same snap logic as the map marker so ETA tracks progress along the line.
  */
 function computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex = 0) {
-    if (!polyline || polyline.length < 2) return 0;
-    const snap = snapToRoutePolyline(lat, lon, polyline, searchStartIndex);
-    const i = snap.index;
-    const t = snap.t !== undefined ? snap.t : 0;
-    const segLen = calculateDistance(
-        polyline[i][0], polyline[i][1],
-        polyline[i + 1][0], polyline[i + 1][1]
-    );
-    let remaining = (1 - t) * segLen;
-    for (let j = i + 1; j < polyline.length - 1; j++) {
-        remaining += calculateDistance(
-            polyline[j][0], polyline[j][1],
-            polyline[j + 1][0], polyline[j + 1][1]
-        );
-    }
-    return Math.max(0, remaining);
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex) : 0;
 }
 
 /**
@@ -16618,16 +16521,10 @@ async function triggerAutomaticReroute(currentLat, currentLon) {
  * @param {*} lon2 - Parameter description
  * @returns {*} Return value description
  */
+// calculateDistance moved to route-geometry (unified with calculateHaversineDistance).
 function calculateDistance(lat1, lon1, lat2, lon2) {
-    // Haversine formula for distance calculation
-    const R = 6371; // Earth's radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c * 1000; // Return in meters
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.haversineDistanceMeters(lat1, lon1, lat2, lon2) : 0;
 }
 
 // Hazard announcement debouncing
