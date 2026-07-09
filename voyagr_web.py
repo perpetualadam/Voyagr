@@ -3001,6 +3001,7 @@ from voyagr.services.routing.request_params import parse_route_request
 from voyagr.services.routing.enrichment import RouteEnrichmentContext, apply_valhalla_route_enrichment
 from voyagr.services.routing.hazard_prep import HazardPrefs, prepare_route_hazards
 from voyagr.services.routing.orchestrator import build_valhalla_route_payload
+from voyagr.services.routing.osrm_fallback import OsrmRouteContext, build_osrm_routes
 from voyagr.services.routing.optimised_route import (
     baseline_camera_hazard_count,
     is_primary_optimised_route,
@@ -7887,80 +7888,24 @@ def calculate_route():
                 if response.status_code == 200:
                     route_data = response.json()
                     if route_data.get('code') == 'Ok' and 'routes' in route_data:
-                        routes = []
-
-                        # Process all available routes (up to 4)
-                        for idx, route in enumerate(route_data['routes'][:4]):
-                            distance = route.get('distance', 0)
-                            duration = route.get('duration', 0)
-
-                            distance_km = distance / 1000
-                            time_min = duration / 60
-
-                            # Extract route geometry from OSRM (polyline format)
-                            route_geometry = route.get('geometry', None)
-
-                            # Decode route geometry to get coordinates for toll/CAZ detection
-                            route_coords = decode_route_geometry(route_geometry)
-
-                            # Calculate costs
-                            fuel_cost = 0
-                            fuel_litres = 0  # litres for petrol/diesel, kWh for electric
-                            toll_cost = 0
-                            caz_cost = 0
-
-                            if vehicle_type == 'electric':
-                                fuel_litres = (distance_km / 100) * energy_efficiency  # kWh
-                                fuel_cost = fuel_litres * electricity_price
-                            else:
-                                fuel_litres = (distance_km / 100) * fuel_efficiency  # litres
-                                fuel_cost = fuel_litres * fuel_price
-
-                            if include_tolls:
-                                toll_cost = calculate_toll_cost(distance_km, 'motorway', route_coords=route_coords)
-
-                            caz_details = {}
-                            if include_caz and not caz_exempt:
-                                caz_cost, caz_details = calculate_caz_cost(distance_km, vehicle_type, caz_exempt, route_coords=route_coords)
-
-                            # Determine route type
-                            if idx == 0:
-                                route_type = 'Fastest'
-                            elif idx == 1:
-                                route_type = 'Shortest'
-                            elif idx == 2:
-                                route_type = 'Balanced'
-                            else:
-                                route_type = f'Alternative {idx}'
-
-                            # Score route by hazards (always score, regardless of avoidance setting)
-                            hazard_penalty = 0
-                            hazard_count = 0
-                            hazards_list = []
-                            if hazards:
-                                hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
-                                hazards_list = get_hazards_on_route(route_geometry, hazards)
-                                logger.info(f"[HAZARDS] OSRM route {idx+1}: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
-
-                            osrm_maneuvers = build_osrm_maneuvers(route, route_coords)
-
-                            routes.append({
-                                'id': idx + 1,
-                                'name': route_type,
-                                'distance_km': round(distance_km, 2),
-                                'duration_minutes': round(time_min, 0),
-                                'fuel_cost': round(fuel_cost, 2),
-                                'fuel_litres': round(fuel_litres, 2),
-                                'toll_cost': round(toll_cost, 2),
-                                'caz_cost': round(caz_cost, 2),
-                                'geometry': route_geometry,
-                                'geometry_precision': 5,
-                                'hazard_penalty_seconds': round(hazard_penalty, 0),
-                                'hazard_count': hazard_count,
-                                'hazards': hazards_list,
-                                'maneuvers': osrm_maneuvers,
-                                'source': 'OSRM',
-                            })
+                        # Build standard route entries from OSRM alternatives.
+                        # Extracted to voyagr.services.routing.osrm_fallback for
+                        # offline testing; behaviour (cost estimate, hazard
+                        # scoring, maneuvers) is unchanged.
+                        routes = build_osrm_routes(
+                            route_data,
+                            OsrmRouteContext(
+                                hazards=hazards,
+                                vehicle_type=vehicle_type,
+                                fuel_efficiency=fuel_efficiency,
+                                fuel_price=fuel_price,
+                                energy_efficiency=energy_efficiency,
+                                electricity_price=electricity_price,
+                                include_tolls=include_tolls,
+                                include_caz=include_caz,
+                                caz_exempt=caz_exempt,
+                            ),
+                        )
 
                         print(f"[OSRM] SUCCESS: {len(routes)} routes found")
 
