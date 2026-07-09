@@ -5910,6 +5910,9 @@ def calculate_route():
         # Defaults if Valhalla try exits early; overwritten when waypoints are processed.
         route_locations = [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}]
         has_waypoints = False
+        # Default traffic factors so the retry/recovery paths (which run only when the
+        # main success block never set them) always have a defined value.
+        traffic_multiplier, traffic_level = 1.0, 'N/A'
         try:
             url = f"{VALHALLA_URL}/route"
 
@@ -6450,69 +6453,20 @@ def calculate_route():
                                 logger.info(f"[VALHALLA] RETRY SUCCESS with {retry_limit} exclusions!")
                                 print(f"[Valhalla] RETRY SUCCESS: Route found with {retry_limit} exclusions")
 
-                                # Process the retry response (same as initial success)
-                                routes = []
-
-                                # Extract main route data
-                                distance = retry_data['trip']['summary']['length']
-                                duration_seconds = retry_data['trip']['summary']['time']
-                                distance_km = distance  # Valhalla returns km
-                                time_minutes = duration_seconds / 60
-
-                                # Extract geometry
-                                route_geometry = None
-                                if 'legs' in retry_data['trip']:
-                                    for leg in retry_data['trip']['legs']:
-                                        if 'shape' in leg:
-                                            route_geometry = leg['shape']
-                                            break
-
-                                # Decode route geometry
-                                route_coords = decode_route_geometry(route_geometry, precision=6)
-
-                                # Calculate costs
-                                costs = cost_calculator.calculate_costs(
-                                    distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                                    energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
-                                    route_coords=route_coords
-                                )
-                                fuel_cost = costs['fuel_cost']
-                                fuel_litres = costs['fuel_litres']
-                                toll_cost = costs['toll_cost']
-                                caz_cost = costs['caz_cost']
-
-                                # Score route by hazards
-                                hazard_penalty = 0
-                                hazard_count = 0
-                                hazards_list = []
-                                if hazards:
-                                    hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
-                                    hazards_list = get_hazards_on_route(route_geometry, hazards)
-                                    logger.info(f"[HAZARDS] Valhalla retry route: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
-
-                                # Extract maneuvers from retry response
-                                retry_maneuvers = extract_valhalla_maneuvers(
-                                    retry_data.get('trip'), length_in_meters=True,
-                                )
-                                logger.info(f"[VALHALLA] Retry route has {len(retry_maneuvers)} maneuvers")
-
-                                routes.append({
-                                    'id': 1,
-                                    'name': 'Fastest',
-                                    'distance_km': round(distance_km, 2),
-                                    'duration_minutes': round(time_minutes, 0),
-                                    'fuel_cost': round(fuel_cost, 2),
-                                    'fuel_litres': round(fuel_litres, 2),
-                                    'toll_cost': round(toll_cost, 2),
-                                    'caz_cost': round(caz_cost, 2),
-                                    'geometry': route_geometry,
-                                    'geometry_precision': 6,
-                                    'hazard_penalty_seconds': round(hazard_penalty, 0),
-                                    'hazard_count': hazard_count,
-                                    'hazards': hazards_list,
-                                    'maneuvers': retry_maneuvers,
-                                    'source': 'Valhalla',
-                                })
+                                # Process the retry response via the shared route-entry
+                                # builder (no traffic adjustment; maneuver lengths in metres,
+                                # matching the previous inline retry behaviour).
+                                routes = [build_valhalla_route_entry(
+                                    trip=retry_data['trip'], name='Fastest', route_id=1,
+                                    traffic_multiplier=1.0, include_traffic_fields=False,
+                                    maneuver_length_in_meters=True,
+                                    hazards=hazards, cost_calculator=cost_calculator,
+                                    vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                                    fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                                    electricity_price=electricity_price, include_tolls=include_tolls,
+                                    include_caz=include_caz, caz_exempt=caz_exempt,
+                                )]
+                                logger.info(f"[VALHALLA] Retry route has {len(routes[0].get('maneuvers') or [])} maneuvers")
 
                                 # Also request Shortest (auto_shorter); retry without exclusions if reduced avoids still block routing
                                 try:
