@@ -1,3 +1,7 @@
+# Node dependencies (dev-only: jest/babel/playwright). Never served by the app —
+# browser assets come from static/vendor + CDN. Install locally with `npm install`.
+node_modules/
+
 # Python
 __pycache__/
 *.py[cod]
