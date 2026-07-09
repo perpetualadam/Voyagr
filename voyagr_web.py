@@ -2435,7 +2435,12 @@ from voyagr.services.routing.costing import (
 from voyagr.services.routing.request_params import parse_route_request
 from voyagr.services.routing.enrichment import RouteEnrichmentContext, apply_valhalla_route_enrichment
 from voyagr.services.routing.hazard_prep import HazardPrefs, prepare_route_hazards
-from voyagr.services.routing.orchestrator import build_valhalla_route_payload, build_valhalla_retry_payload
+from voyagr.services.routing.orchestrator import (
+    build_valhalla_baseline_request_payload,
+    build_valhalla_retry_payload,
+    build_valhalla_route_payload,
+    classify_valhalla_route_data,
+)
 from voyagr.services.routing.osrm_fallback import OsrmRouteContext, build_osrm_routes
 # Hazard helpers: single source of truth is voyagr.services.hazards. These were
 # previously duplicated inline in this module; imported here so /api/route,
@@ -2455,63 +2460,8 @@ from voyagr.services.routing.optimised_route import (
 )
 
 
-def build_valhalla_baseline_request_payload(
-    *,
-    start_lat: float,
-    start_lon: float,
-    end_lat: float,
-    end_lon: float,
-    route_locations: List[Dict[str, Any]],
-    has_waypoints: bool,
-    valhalla_costing: str,
-    avoid_tolls: bool,
-    avoid_motorways: bool,
-    avoid_ferries: bool,
-    departure_time: Optional[str],
-    prefer_scenic: bool = False,
-    prefer_quiet: bool = False,
-    avoid_unpaved: bool = False,
-    route_optimization: str = 'fastest',
-) -> Dict[str, Any]:
-    """
-    Valhalla /route JSON without exclude_locations — used when hazard-heavy requests fail (e.g. HTTP 400)
-    but we still want Valhalla fastest + alternates alongside GraphHopper.
-    """
-    payload: Dict[str, Any] = {
-        "locations": route_locations if has_waypoints else [
-            {"lat": start_lat, "lon": start_lon},
-            {"lat": end_lat, "lon": end_lon},
-        ],
-        "costing": valhalla_costing,
-        "alternates": 3 if (valhalla_costing == 'auto' and not has_waypoints) else 0,
-        "units": "kilometers",
-        "language": "en-GB",
-        "directions_options": {"generalize": 0},
-    }
-    if valhalla_costing == 'pedestrian':
-        payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}}
-    elif valhalla_costing == 'bicycle':
-        payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}}
-    elif valhalla_costing in ('auto', 'auto_shorter'):
-        auto_opts = _build_auto_costing_options(
-            avoid_tolls=avoid_tolls,
-            avoid_motorways=avoid_motorways,
-            avoid_ferries=avoid_ferries,
-            prefer_scenic=prefer_scenic,
-            prefer_quiet=prefer_quiet,
-            avoid_unpaved=avoid_unpaved,
-            route_optimization=route_optimization,
-        )
-        if auto_opts:
-            payload["costing_options"] = {valhalla_costing: auto_opts}
-
-    if valhalla_costing == 'auto':
-        if departure_time:
-            payload["date_time"] = {"type": 1, "value": departure_time}
-        else:
-            from datetime import datetime as dt_now
-            payload["date_time"] = {"type": 1, "value": dt_now.now().strftime('%Y-%m-%dT%H:%M')}
-    return payload
+# build_valhalla_baseline_request_payload lives in
+# voyagr.services.routing.orchestrator (imported at module scope below).
 
 
 # get_hazards_on_route and score_route_by_hazards (plus the proximity/marker
@@ -6200,14 +6150,14 @@ def calculate_route():
                 route_data = response.json()
                 print(f"[Valhalla] Response keys: {route_data.keys()}", flush=True)
 
-                # DEBUG: Check for error in response
-                if 'error' in route_data:
-                    print(f"[Valhalla] ERROR in response: {route_data['error']}", flush=True)
-                    valhalla_error = f"Valhalla returned error: {route_data['error']}"
-                elif 'trip' not in route_data:
-                    print(f"[Valhalla] ERROR: No 'trip' key in response. Keys: {list(route_data.keys())}", flush=True)
-                    print(f"[Valhalla] Full response: {json.dumps(route_data, indent=2)[:1000]}", flush=True)
-                    valhalla_error = "Valhalla response missing 'trip' key"
+                # Classify the parsed 200 body (error / missing trip). Extracted to
+                # orchestrator.classify_valhalla_route_data (pure; control flow unchanged).
+                valhalla_error = classify_valhalla_route_data(route_data)
+                if valhalla_error:
+                    print(f"[Valhalla] {valhalla_error}", flush=True)
+                    if 'trip' not in route_data:
+                        print(f"[Valhalla] Response keys: {list(route_data.keys())}", flush=True)
+                        print(f"[Valhalla] Full response: {json.dumps(route_data, indent=2)[:1000]}", flush=True)
 
                 if 'trip' in route_data and 'legs' in route_data['trip']:
                     # Extract all available routes
