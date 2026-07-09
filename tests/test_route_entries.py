@@ -57,6 +57,18 @@ class BuildValhallaRouteEntryTest(unittest.TestCase):
         self.assertEqual(len(e['maneuvers']), 2)
         self.assertEqual(e['caz_details'], {'zone': 'none'})
 
+    def test_maneuver_length_in_meters_scales_distances(self):
+        km = build_valhalla_route_entry(
+            trip=_trip(), name='Fastest', route_id=1, traffic_multiplier=1.0, **COMMON,
+        )
+        m = build_valhalla_route_entry(
+            trip=_trip(), name='Fastest', route_id=1, traffic_multiplier=1.0,
+            maneuver_length_in_meters=True, **COMMON,
+        )
+        # First maneuver length 10.0 -> km leaves 10.0, meters scales to 10000.0
+        self.assertEqual(km['maneuvers'][0]['distance'], 10.0)
+        self.assertEqual(m['maneuvers'][0]['distance'], 10000.0)
+
     def test_alternate_entry_omits_traffic_fields(self):
         e = build_valhalla_route_entry(
             trip=_trip(), name='Alternate', route_id=2,

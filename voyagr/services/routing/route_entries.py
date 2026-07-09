@@ -46,6 +46,7 @@ def build_valhalla_route_entry(
     caz_exempt: bool,
     include_traffic_fields: bool = False,
     traffic_level: str = 'N/A',
+    maneuver_length_in_meters: bool = False,
 ) -> Dict[str, Any]:
     """
     Build one standard route dict from a Valhalla ``trip``.
@@ -77,7 +78,7 @@ def build_valhalla_route_entry(
         hazard_penalty, hazard_count = score_route_by_hazards(geometry, hazards)
         hazards_list = get_hazards_on_route(geometry, hazards)
 
-    maneuvers = extract_valhalla_maneuvers(trip, length_in_meters=False)
+    maneuvers = extract_valhalla_maneuvers(trip, length_in_meters=maneuver_length_in_meters)
 
     entry: Dict[str, Any] = {
         'id': route_id,
