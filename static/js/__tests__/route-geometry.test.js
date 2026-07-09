@@ -185,6 +185,42 @@ describe('inferRoadClassFromStreetNames', () => {
     });
 });
 
+describe('calculateSmartZoom', () => {
+    const ZL = { motorway_high_speed: 14, main_road_medium_speed: 15, urban_low_speed: 16, parking_very_low_speed: 17, turn_ahead: 18 };
+    const T = 500;
+
+    test('turn within threshold → turn_ahead', () => {
+        expect(RG.calculateSmartZoom(60, 400, 'motorway', ZL, T)).toBe(ZL.turn_ahead);
+    });
+
+    test('no turn + fast → motorway zoom', () => {
+        expect(RG.calculateSmartZoom(110, null, 'motorway', ZL, T)).toBe(ZL.motorway_high_speed);
+    });
+
+    test('50-100 mph → main_road', () => {
+        expect(RG.calculateSmartZoom(70, null, 'primary', ZL, T)).toBe(ZL.main_road_medium_speed);
+    });
+
+    test('20-50 mph → urban', () => {
+        expect(RG.calculateSmartZoom(30, null, 'residential', ZL, T)).toBe(ZL.urban_low_speed);
+    });
+
+    test('< 20 mph → parking', () => {
+        expect(RG.calculateSmartZoom(5, null, 'residential', ZL, T)).toBe(ZL.parking_very_low_speed);
+    });
+
+    test('turn beyond threshold ignored', () => {
+        expect(RG.calculateSmartZoom(60, 600, 'primary', ZL, T)).toBe(ZL.main_road_medium_speed);
+    });
+});
+
+describe('calculateDriverViewCenter', () => {
+    test('returns raw [lat, lon] (MapLibre padding handles offset)', () => {
+        const r = RG.calculateDriverViewCenter(51.5, -0.1, 90, 15);
+        expect(r).toEqual([51.5, -0.1]);
+    });
+});
+
 describe('computeRemainingDistanceAlongRoute', () => {
     const polyline = [
         [51.50, -0.12],

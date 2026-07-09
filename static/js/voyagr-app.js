@@ -6937,31 +6937,14 @@ async function checkTrafficAndReroute() {
  * Decide whether a fresh route-traffic sample warrants a reroute attempt.
  * `current`/`previous` are sampleRouteTrafficAhead() results.
  */
+// detectSignificantTrafficChange moved to modules/navigation/traffic-change.js (VoyagrTrafficChange).
 function detectSignificantTrafficChange(previous, current) {
+    const TC = (typeof VoyagrTrafficChange !== 'undefined') ? VoyagrTrafficChange : null;
+    if (TC) return TC.detectSignificantTrafficChange(previous, current);
+    // Inline fallback.
     if (!current) return false;
-
-    // Severe (near-standstill / black) congestion with somewhere to route around.
-    if (current.severe && current.congestedPoints.length > 0) {
-        console.log('[Auto-Traffic] Severe congestion ahead');
-        return 'severe';
-    }
-    // A meaningful absolute delay is worth a look even on the first sample.
-    if (current.delayMin >= 4 && current.congestedPoints.length > 0) {
-        console.log(`[Auto-Traffic] Significant delay ahead (~${current.delayMin.toFixed(1)} min)`);
-        return 'congestion';
-    }
-    // Otherwise only act when conditions got materially worse since the last check.
-    if (previous) {
-        const delayJump = current.delayMin - (previous.delayMin || 0);
-        if (delayJump >= 3 && current.congestedPoints.length > 0) {
-            console.log(`[Auto-Traffic] Delay increased by ~${delayJump.toFixed(1)} min`);
-            return 'congestion';
-        }
-        if (current.congestedCount > (previous.congestedCount || 0) + 1 && current.congestedPoints.length > 0) {
-            console.log(`[Auto-Traffic] More congested segments: ${previous.congestedCount} -> ${current.congestedCount}`);
-            return 'congestion';
-        }
-    }
+    if (current.severe && current.congestedPoints.length > 0) return 'severe';
+    if (current.delayMin >= 4 && current.congestedPoints.length > 0) return 'congestion';
     return false;
 }
 
@@ -11375,32 +11358,19 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
  * @param {*} roadType - Parameter description
  * @returns {*} Return value description
  */
+// calculateSmartZoom moved to modules/navigation/route-geometry.js (VoyagrRouteGeometry).
+// Stub passes the global constants so live behaviour is unchanged.
 function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
-    let zoomLevel = ZOOM_LEVELS.urban_low_speed; // Default
-
-    // Priority 1: Turn-based zoom (highest priority)
-    if (distanceToNextTurn !== null && distanceToNextTurn < TURN_ZOOM_THRESHOLD) {
-        // Zoom in for turn details when within 500m
-        zoomLevel = ZOOM_LEVELS.turn_ahead;
-        return zoomLevel;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    if (RG && RG.calculateSmartZoom) {
+        return RG.calculateSmartZoom(speedMph, distanceToNextTurn, roadType, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD);
     }
-
-    // Priority 2: Speed-based zoom
-    if (speedMph > 100) {
-        // Motorway - zoom out to see more ahead
-        zoomLevel = ZOOM_LEVELS.motorway_high_speed;
-    } else if (speedMph > 50) {
-        // Main road - medium zoom
-        zoomLevel = ZOOM_LEVELS.main_road_medium_speed;
-    } else if (speedMph > 20) {
-        // Urban - normal zoom
-        zoomLevel = ZOOM_LEVELS.urban_low_speed;
-    } else {
-        // Parking/very slow - zoom in
-        zoomLevel = ZOOM_LEVELS.parking_very_low_speed;
-    }
-
-    return zoomLevel;
+    // Inline fallback.
+    if (distanceToNextTurn !== null && distanceToNextTurn < TURN_ZOOM_THRESHOLD) return ZOOM_LEVELS.turn_ahead;
+    if (speedMph > 100) return ZOOM_LEVELS.motorway_high_speed;
+    if (speedMph > 50)  return ZOOM_LEVELS.main_road_medium_speed;
+    if (speedMph > 20)  return ZOOM_LEVELS.urban_low_speed;
+    return ZOOM_LEVELS.parking_very_low_speed;
 }
 
 /**
@@ -11412,9 +11382,10 @@ function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urb
  * @param {number} zoomLevel - Current zoom level
  * @returns {Array} [offsetLat, offsetLon] - Offset center coordinates
  */
+// calculateDriverViewCenter moved to route-geometry.js (pure stub — MapLibre padding handles offset).
 function calculateDriverViewCenter(lat, lon, heading, zoomLevel) {
-    // MapLibre native: We use padding to offset the center, so we return the raw coords here.
-    return [lat, lon];
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG && RG.calculateDriverViewCenter ? RG.calculateDriverViewCenter(lat, lon, heading, zoomLevel) : [lat, lon];
 }
 /**
  * applySmartZoomWithAnimation function
