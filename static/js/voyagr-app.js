@@ -4591,88 +4591,42 @@ function setupMapClickHandler() {
  * @param {*} precision - Precision level (5 for OSRM/GraphHopper, 6 for Valhalla). Default: 6
  * @returns {*} Array of [lat, lon] coordinates
  */
+// decodePolyline / encodePolyline moved to modules/navigation/polyline-codec.js
+// (VoyagrPolylineCodec global). Thin stubs below keep all existing callers working.
+
+/**
+ * Decode an encoded polyline string to [lat,lon] pairs.
+ * Delegates to VoyagrPolylineCodec (pure, unit-tested). Precision 6 = Valhalla, 5 = OSRM/GH.
+ * @param {string} encoded
+ * @param {number} [precision=6]
+ * @returns {Array<[number, number]>}
+ */
 function decodePolyline(encoded, precision = 6) {
+    const PC = (typeof VoyagrPolylineCodec !== 'undefined') ? VoyagrPolylineCodec : null;
     if (!encoded || typeof encoded !== 'string') {
         console.warn('[decodePolyline] Invalid input:', encoded);
         return [];
     }
-
-    // Valhalla uses precision 6 (1e6), OSRM/GraphHopper use precision 5 (1e5)
-    const inv = 1.0 / Math.pow(10, precision);
-    const decoded = [];
-    let previous = [0, 0];
-    let i = 0;
-
-    try {
-        while (i < encoded.length) {
-            let ll = [0, 0];
-            for (let j = 0; j < 2; j++) {
-                let shift = 0;
-                let result = 0;
-                let byte = 0;
-                do {
-                    byte = encoded.charCodeAt(i++) - 63;
-                    result |= (byte & 0x1f) << shift;
-                    shift += 5;
-                } while (byte >= 0x20);
-                ll[j] = previous[j] + (result & 1 ? ~(result >> 1) : result >> 1);
-                previous[j] = ll[j];
-            }
-            // Polyline format is [lat, lon], which is what Leaflet expects
-            decoded.push([ll[0] * inv, ll[1] * inv]);
-        }
-
-        console.log(`[decodePolyline] Decoded ${decoded.length} points with precision ${precision}`);
-        if (decoded.length > 0) {
-            console.log(`[decodePolyline] First point: [${decoded[0][0]}, ${decoded[0][1]}]`);
-            console.log(`[decodePolyline] Last point: [${decoded[decoded.length - 1][0]}, ${decoded[decoded.length - 1][1]}]`);
-        }
-
-        return decoded;
-    } catch (error) {
-        console.error('[decodePolyline] Error decoding polyline:', error);
-        return [];
+    const decoded = PC ? PC.decodePolyline(encoded, precision) : [];
+    console.log(`[decodePolyline] Decoded ${decoded.length} points with precision ${precision}`);
+    if (decoded.length > 0) {
+        console.log(`[decodePolyline] First point: [${decoded[0][0]}, ${decoded[0][1]}]`);
+        console.log(`[decodePolyline] Last point: [${decoded[decoded.length - 1][0]}, ${decoded[decoded.length - 1][1]}]`);
     }
+    return decoded;
 }
 
 /**
- * Encode decoded [lat,lon] vertices to an encoded polyline string (paired with decodePolyline / Google polyline alg).
- * Used offline when only decoded points survived persistence.
- *
+ * Encode [lat,lon] vertex pairs to an encoded polyline string.
+ * Delegates to VoyagrPolylineCodec. Used offline when only decoded points survived persistence.
  * @param {Array<[number, number]>} points
- * @param {number} precision
+ * @param {number} [precision=6]
  * @returns {string}
  */
 function encodePolyline(points, precision = 6) {
+    const PC = (typeof VoyagrPolylineCodec !== 'undefined') ? VoyagrPolylineCodec : null;
     if (!Array.isArray(points) || points.length === 0) return '';
-    const factor = Math.pow(10, precision);
-    let prevLatRounded = 0;
-    let prevLonRounded = 0;
-    let result = '';
-
-    /** Google polyline zigzag on integer delta (inverse of decodePolyline bit assembly). */
-    const encodeUnsignedChunk = (delta) => {
-        const n = Math.round(delta);
-        let u = (n << 1) ^ (n >> 31);
-        u = u >>> 0;
-        while (u >= 0x20) {
-            result += String.fromCharCode((0x20 | (u & 0x1f)) + 63);
-            u >>>= 5;
-        }
-        result += String.fromCharCode((u >>> 0) + 63);
-    };
-
-    for (let p = 0; p < points.length; p++) {
-        const pt = points[p];
-        if (!pt || pt.length < 2) continue;
-        const latR = Math.round(pt[0] * factor);
-        const lonR = Math.round(pt[1] * factor);
-        encodeUnsignedChunk(latR - prevLatRounded);
-        encodeUnsignedChunk(lonR - prevLonRounded);
-        prevLatRounded = latR;
-        prevLonRounded = lonR;
-    }
-    return result;
+    return PC ? PC.encodePolyline(points, precision) : '';
 }
 
 /**
