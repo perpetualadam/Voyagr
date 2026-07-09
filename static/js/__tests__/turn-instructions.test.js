@@ -239,6 +239,76 @@ describe('buildTurnDisplayInstruction', () => {
     });
 });
 
+describe('ordinalEnglishExit', () => {
+    test('1st, 2nd, 3rd, 4th, 11th, 12th, 13th, 21st', () => {
+        expect(TI.ordinalEnglishExit(1)).toBe('1st');
+        expect(TI.ordinalEnglishExit(2)).toBe('2nd');
+        expect(TI.ordinalEnglishExit(3)).toBe('3rd');
+        expect(TI.ordinalEnglishExit(4)).toBe('4th');
+        expect(TI.ordinalEnglishExit(11)).toBe('11th');
+        expect(TI.ordinalEnglishExit(12)).toBe('12th');
+        expect(TI.ordinalEnglishExit(13)).toBe('13th');
+        expect(TI.ordinalEnglishExit(21)).toBe('21st');
+    });
+});
+
+describe('laneOrdinalEnglish', () => {
+    test('1st-3rd then nth', () => {
+        expect(TI.laneOrdinalEnglish(1)).toBe('1st');
+        expect(TI.laneOrdinalEnglish(2)).toBe('2nd');
+        expect(TI.laneOrdinalEnglish(3)).toBe('3rd');
+        expect(TI.laneOrdinalEnglish(4)).toBe('4th');
+    });
+});
+
+describe('buildTurnLaneHintHtml', () => {
+    test('roundabout exit count badge', () => {
+        const html = TI.buildTurnLaneHintHtml({ type: 27, lanes: null }, 2, 500);
+        expect(html).toContain('2nd exit');
+    });
+
+    test('keep-left chip for slight-left type within 900m', () => {
+        const html = TI.buildTurnLaneHintHtml({ type: 16, lanes: null }, 0, 400);
+        expect(html).toContain('Keep left');
+    });
+
+    test('no keep chip beyond 900m', () => {
+        const html = TI.buildTurnLaneHintHtml({ type: 16, lanes: null }, 0, 1000);
+        expect(html).toBe('');
+    });
+
+    test('hard turn types get no keep chip', () => {
+        // type 15 = left turn, should NOT get "Keep left"
+        const html = TI.buildTurnLaneHintHtml({ type: 15, lanes: null }, 0, 500);
+        expect(html).not.toContain('Keep left');
+    });
+
+    test('null maneuver returns empty string', () => {
+        expect(TI.buildTurnLaneHintHtml(null, 0, 500)).toBe('');
+    });
+
+    test('keep-right chip for slight-right type within 900m', () => {
+        const html = TI.buildTurnLaneHintHtml({ type: 9, lanes: null }, 0, 400);
+        expect(html).toContain('Keep right');
+    });
+
+    test('active lane indicator shows lane ordinal chip', () => {
+        const html = TI.buildTurnLaneHintHtml(
+            { type: 10, lanes: [{ active: false }, { active: true }] },
+            0, 500
+        );
+        expect(html).toContain('2nd lane');
+    });
+
+    test('valid_indications fallback sets lane chip when no active flag', () => {
+        const html = TI.buildTurnLaneHintHtml(
+            { type: 10, lanes: [{ valid_indications: [] }, { valid_indications: ['right'] }] },
+            0, 500
+        );
+        expect(html).toContain('2nd lane');
+    });
+});
+
 describe('isMotorwayRoadClass', () => {
     test('null/empty road class is not a motorway', () => {
         expect(TI.isMotorwayRoadClass(null)).toBe(false);
