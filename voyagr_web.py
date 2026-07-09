@@ -2392,6 +2392,7 @@ from voyagr.services.routing.orchestrator import (
     build_valhalla_discovery_payload,
     build_valhalla_retry_payload,
     build_valhalla_route_payload,
+    build_route_success_response,
     classify_valhalla_route_data,
     find_baseline_cameras_on_route,
     post_valhalla_route,
@@ -6342,43 +6343,24 @@ def calculate_route():
                     # ================================================================
                     # PHASE 3 OPTIMIZATION: Cache the successful route
                     # ================================================================
-                    # Add total stop time to duration if stops exist
-                    total_duration_with_stops = routes[0]["duration_minutes"] + total_stop_time
-
                     # Determine source based on what was used
                     routing_source = 'Valhalla ✅'
                     if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras):
                         routing_source = 'GraphHopper+Valhalla ✅'
 
-                    response_data = {
-                        'success': True,
-                        'routes': routes,
-                        'source': routing_source,
-                        'distance': f'{routes[0]["distance_km"]:.2f} km',
-                        'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
-                        'total_time_with_stops': f'{total_duration_with_stops:.0f} minutes',
-                        'total_stop_time': total_stop_time,
-                        'via_points_count': len(via_points),
-                        'stops_count': len(stops),
-                        'geometry': routes[0]['geometry'],
-                        'geometry_precision': routes[0].get('geometry_precision', 6),
-                        'fuel_cost': routes[0]['fuel_cost'],
-                        'fuel_litres': routes[0].get('fuel_litres', 0),
-                        'toll_cost': routes[0]['toll_cost'],
-                        'caz_cost': routes[0]['caz_cost'],
-                        'caz_details': routes[0].get('caz_details', {}),
-                        'maneuvers': routes[0].get('maneuvers', []),
-                        'cached': False,
-                        **primary_route_api_fields(routes),
-                        'camera_avoidance_engine': (
+                    response_data = build_route_success_response(
+                        routes,
+                        source=routing_source,
+                        camera_avoidance_engine=(
                             'GraphHopper' if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
                             else 'Valhalla'
                         ),
-                        'start_lat': start_lat,
-                        'start_lon': start_lon,
-                        'end_lat': end_lat,
-                        'end_lon': end_lon
-                    }
+                        total_stop_time=total_stop_time,
+                        via_points_count=len(via_points),
+                        stops_count=len(stops),
+                        start_lat=start_lat, start_lon=start_lon,
+                        end_lat=end_lat, end_lon=end_lon,
+                    )
 
                     # Cache the route for future requests
                     route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings, apply_caz_routing_avoidance)
@@ -6591,31 +6573,20 @@ def calculate_route():
                                 if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras):
                                     retry_source = 'GraphHopper+Valhalla ✅'
 
-                                # Build response
-                                response_data = {
-                                    'success': True,
-                                    'routes': routes,
-                                    'source': retry_source,
-                                    'distance': f'{routes[0]["distance_km"]:.2f} km',
-                                    'time': f'{routes[0]["duration_minutes"]:.0f} minutes',
-                                    'geometry': routes[0]['geometry'],
-                                    'geometry_precision': routes[0].get('geometry_precision', 6),
-                                    'fuel_cost': routes[0]['fuel_cost'],
-                                    'fuel_litres': routes[0].get('fuel_litres', 0),
-                                    'toll_cost': routes[0]['toll_cost'],
-                                    'caz_cost': routes[0]['caz_cost'],
-                                    'maneuvers': routes[0].get('maneuvers', []),
-                                    'cached': False,
-                                    **primary_route_api_fields(routes),
-                                    'camera_avoidance_engine': (
+                                # Build response (shared shape with primary/recovery paths)
+                                response_data = build_route_success_response(
+                                    routes,
+                                    source=retry_source,
+                                    camera_avoidance_engine=(
                                         'GraphHopper' if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
                                         else 'Valhalla'
                                     ),
-                                    'start_lat': start_lat,
-                                    'start_lon': start_lon,
-                                    'end_lat': end_lat,
-                                    'end_lon': end_lon
-                                }
+                                    total_stop_time=total_stop_time,
+                                    via_points_count=len(via_points),
+                                    stops_count=len(stops),
+                                    start_lat=start_lat, start_lon=start_lon,
+                                    end_lat=end_lat, end_lon=end_lon,
+                                )
 
                                 # Cache the route
                                 route_cache.set(start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type, response_data, enable_hazard_avoidance, avoid_traffic_lights, avoid_cameras, avoid_railway_crossings, apply_caz_routing_avoidance)
@@ -6794,35 +6765,19 @@ def calculate_route():
                             if valhalla_baseline_ok
                             else 'GraphHopper (Valhalla hazard request failed)'
                         )
-                        total_dur_stops = routes_out[0]['duration_minutes'] + total_stop_time
-                        recovery_data = {
-                            'success': True,
-                            'routes': routes_out,
-                            'source': routing_source,
-                            'distance': f'{routes_out[0]["distance_km"]:.2f} km',
-                            'time': f'{routes_out[0]["duration_minutes"]:.0f} minutes',
-                            'total_time_with_stops': f'{total_dur_stops:.0f} minutes',
-                            'total_stop_time': total_stop_time,
-                            'via_points_count': len(via_points),
-                            'stops_count': len(stops),
-                            'geometry': routes_out[0]['geometry'],
-                            'geometry_precision': routes_out[0].get('geometry_precision', 6),
-                            'fuel_cost': routes_out[0]['fuel_cost'],
-                            'fuel_litres': routes_out[0].get('fuel_litres', 0),
-                            'toll_cost': routes_out[0]['toll_cost'],
-                            'caz_cost': routes_out[0]['caz_cost'],
-                            'caz_details': routes_out[0].get('caz_details', {}),
-                            'maneuvers': routes_out[0].get('maneuvers', []),
-                            'cached': False,
-                            'camera_avoidance_engine': (
+                        recovery_data = build_route_success_response(
+                            routes_out,
+                            source=routing_source,
+                            camera_avoidance_engine=(
                                 'GraphHopper' if graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
                                 else 'Valhalla'
                             ),
-                            'start_lat': start_lat,
-                            'start_lon': start_lon,
-                            'end_lat': end_lat,
-                            'end_lon': end_lon,
-                        }
+                            total_stop_time=total_stop_time,
+                            via_points_count=len(via_points),
+                            stops_count=len(stops),
+                            start_lat=start_lat, start_lon=start_lon,
+                            end_lat=end_lat, end_lon=end_lon,
+                        )
                         route_cache.set(
                             start_lat, start_lon, end_lat, end_lon, routing_mode, vehicle_type,
                             recovery_data, enable_hazard_avoidance, avoid_traffic_lights,
