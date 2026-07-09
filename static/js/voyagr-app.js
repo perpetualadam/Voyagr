@@ -11093,9 +11093,14 @@ function effectiveRoundaboutExitCount(stepIndex) {
     return 0;
 }
 
+// ordinalEnglishExit / laneOrdinalEnglish / buildTurnLaneHintHtml moved to
+// modules/navigation/turn-instructions.js. Thin stubs keep all callers working.
+
 function ordinalEnglishExit(n) {
-    const j = n % 10;
-    const k = n % 100;
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    if (TI) return TI.ordinalEnglishExit(n);
+    // Inline fallback (module not yet loaded).
+    const j = n % 10, k = n % 100;
     if (j === 1 && k !== 11) return `${n}st`;
     if (j === 2 && k !== 12) return `${n}nd`;
     if (j === 3 && k !== 13) return `${n}rd`;
@@ -11103,44 +11108,22 @@ function ordinalEnglishExit(n) {
 }
 
 function laneOrdinalEnglish(n) {
-    if (n === 1) return '1st';
-    if (n === 2) return '2nd';
-    if (n === 3) return '3rd';
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    if (TI) return TI.laneOrdinalEnglish(n);
+    if (n <= 3) return ['1st', '2nd', '3rd'][n - 1] || `${n}th`;
     return `${n}th`;
 }
 
+// buildTurnLaneHintHtml: the module version takes an explicit exitCount instead of a
+// maneuverIndex, so callers resolve the count and pass it. The stub signature keeps
+// the original (maneuverIndex) for backward compatibility and resolves the count here.
 function buildTurnLaneHintHtml(maneuver, maneuverIndex, distanceMeters) {
-    if (!maneuver) return '';
-    const mt = maneuver.type || 0;
-    const chips = [];
-    const exitCt = maneuverIndex != null ? effectiveRoundaboutExitCount(maneuverIndex) : (Number(maneuver.roundabout_exit_count) || 0);
-    if ((mt === 26 || mt === 27) && exitCt > 0) {
-        chips.push(`<span class="lane-hint-chip">${ordinalEnglishExit(exitCt)} exit</span>`);
-    }
-    const lanes = maneuver.lanes;
-    if (Array.isArray(lanes) && lanes.length > 1) {
-        let idx = lanes.findIndex((l) => l && (l.active === true || l.active_indication === true));
-        if (idx < 0) {
-            idx = lanes.findIndex((l) => l && Array.isArray(l.valid_indications) && l.valid_indications.length > 0);
-        }
-        if (idx >= 0) {
-            chips.push(`<span class="lane-hint-chip">${laneOrdinalEnglish(idx + 1)} lane</span>`);
-        }
-    }
-    // "Keep left/right" lane hints only make sense for forks / keeps / ramps / exits /
-    // merges — NOT hard turns. A genuine "Turn left" (15) or "Turn right" (10) must never
-    // be annotated "Keep left/right", which previously read as "keep left instead of turn left".
-    const keepLeftTypes = [16, 19, 21, 24, 36];   // slight/ramp/exit/stay/merge LEFT
-    const keepRightTypes = [9, 18, 20, 23, 35];   // slight/ramp/exit/stay/merge RIGHT
-    const showsKeepHint = keepLeftTypes.includes(mt) || keepRightTypes.includes(mt);
-    if (showsKeepHint && chips.length === 0 && typeof distanceMeters === 'number' && distanceMeters < 900) {
-        if (keepLeftTypes.includes(mt)) {
-            chips.push('<span class="lane-hint-chip">Keep left</span>');
-        } else if (keepRightTypes.includes(mt)) {
-            chips.push('<span class="lane-hint-chip">Keep right</span>');
-        }
-    }
-    return chips.join(' ');
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    if (!TI) return '';
+    const exitCt = maneuverIndex != null
+        ? effectiveRoundaboutExitCount(maneuverIndex)
+        : (Number((maneuver || {}).roundabout_exit_count) || 0);
+    return TI.buildTurnLaneHintHtml(maneuver, exitCt, distanceMeters);
 }
 
 /**
