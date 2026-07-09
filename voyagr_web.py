@@ -191,6 +191,20 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 from voyagr.config.rate_limit_storage import rate_limit_storage_uri
 from voyagr.utils.rate_limiting import RateLimiter, rate_limit
+# Canonical validation + geometry helpers live in the voyagr package. Import them here
+# instead of redefining, so the monolith and API blueprints share one implementation.
+from voyagr.utils.validation import (
+    sanitize_string,
+    validate_coordinates,
+    validate_routing_mode,
+    normalize_vehicle_type,
+    validate_vehicle_type,
+)
+from voyagr.utils.geometry import (
+    point_in_polygon,
+    get_distance_between_points,
+    decode_route_geometry,
+)
 
 route_limiter = RateLimiter(max_requests=100, window_seconds=60, key_prefix='voyagr:rl:route')
 api_limiter = RateLimiter(max_requests=500, window_seconds=60, key_prefix='voyagr:rl:api')
@@ -224,84 +238,11 @@ else:
 # ============================================================================
 # PHASE 5: REQUEST VALIDATION HELPER FUNCTIONS
 # ============================================================================
-
-def sanitize_string(value: str, max_length: int = 500) -> Optional[str]:
-    """
-    Sanitize string input to prevent SQL injection and XSS.
-    Returns sanitized string or None if invalid.
-    """
-    if not value:
-        return None
-
-    # Limit length
-    value = value[:max_length]
-
-    # Remove potentially dangerous characters
-    # Allow alphanumeric, spaces, and common punctuation
-    import re
-    sanitized = re.sub(r'[^\w\s\-.,&\'()]', '', value)
-
-    return sanitized.strip() if sanitized else None
-
-def validate_coordinates(coord_str: str) -> Optional[Tuple[float, float]]:
-    """
-    Validate coordinate string in format 'lat,lon'.
-    Returns (lat, lon) tuple or None if invalid.
-    """
-    try:
-        parts: List[str] = coord_str.strip().split(',')
-        if len(parts) != 2:
-            return None
-        lat: float = float(parts[0].strip())
-        lon: float = float(parts[1].strip())
-        # Validate ranges
-        if lat < -90 or lat > 90 or lon < -180 or lon > 180:
-            return None
-        return (lat, lon)
-    except (ValueError, AttributeError):
-        return None
-
-def validate_routing_mode(mode: str) -> bool:
-    """Validate routing mode."""
-    valid_modes: List[str] = ['auto', 'pedestrian', 'bicycle']
-    return mode in valid_modes
-
-def normalize_vehicle_type(vehicle_type: Any) -> str:
-    """
-    Normalize vehicle type values coming from clients.
-
-    Canonical internal values:
-    - petrol_diesel
-    - electric
-    - hybrid
-    - pedestrian
-    - bicycle
-    """
-    if vehicle_type is None:
-        return 'petrol_diesel'
-
-    vt = str(vehicle_type).strip().lower()
-    aliases = {
-        # Common client values
-        'petrol': 'petrol_diesel',
-        'diesel': 'petrol_diesel',
-        'gas': 'petrol_diesel',
-        'gasoline': 'petrol_diesel',
-        'ice': 'petrol_diesel',
-        # Some UIs might send generic values
-        'car': 'petrol_diesel',
-    }
-    return aliases.get(vt, vt)
-
-def validate_vehicle_type(vehicle_type: str) -> bool:
-    """Validate vehicle type.
-
-    Note: 'pedestrian' and 'bicycle' are valid when routing_mode matches,
-    as they represent the travel mode rather than actual vehicle types.
-    """
-    vt = normalize_vehicle_type(vehicle_type)
-    valid_types: List[str] = ['petrol_diesel', 'electric', 'hybrid', 'pedestrian', 'bicycle']
-    return vt in valid_types
+# sanitize_string, validate_coordinates, validate_routing_mode,
+# normalize_vehicle_type, and validate_vehicle_type are imported from
+# voyagr.utils.validation (single source of truth, shared with the blueprints).
+# validate_route_request stays here because it also enforces monolith-specific
+# cost/waypoint rules via resolve_route_cost_params.
 
 def validate_route_request(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     """
@@ -722,33 +663,6 @@ CAZ_PASS_TYPES = [
     {'id': 'pass_annual', 'name': 'Annual Pass', 'description': 'Valid annual pass for specific zones'},
     {'id': 'auto_pay', 'name': 'Auto Pay Registered', 'description': 'Registered for automatic payment (TfL Auto Pay, etc.)'}
 ]
-
-
-def point_in_polygon(lat: float, lon: float, polygon: List[Tuple[float, float]]) -> bool:
-    """
-    Check if a point (lat, lon) is inside a polygon using ray casting algorithm.
-
-    Args:
-        lat: Latitude of the point
-        lon: Longitude of the point
-        polygon: List of (lat, lon) tuples defining the polygon vertices
-
-    Returns:
-        True if point is inside polygon, False otherwise
-    """
-    n = len(polygon)
-    inside = False
-
-    j = n - 1
-    for i in range(n):
-        xi, yi = polygon[i]
-        xj, yj = polygon[j]
-
-        if ((yi > lon) != (yj > lon)) and (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi):
-            inside = not inside
-        j = i
-
-    return inside
 
 
 def check_route_in_caz(route_coords: List[Tuple[float, float]], vehicle_caz_pass: str = 'none') -> Dict[str, Any]:
@@ -1407,33 +1321,7 @@ def invalidate_route_cache():
         return False
 
 # Cost calculation functions
-def decode_route_geometry(geometry: str, precision: int = 5) -> List[Tuple[float, float]]:
-    """Decode route geometry (polyline) to list of coordinates.
-
-    Args:
-        geometry: Encoded polyline string or list of coordinates
-        precision: Polyline precision (5 for OSRM/GraphHopper, 6 for Valhalla)
-
-    Returns:
-        List of (lat, lon) tuples
-    """
-    if not geometry:
-        return []
-
-    try:
-        # If it's already a list, return it
-        if isinstance(geometry, list):
-            return geometry
-
-        # If it's a string, try to decode as polyline
-        # OSRM and GraphHopper use precision 5, Valhalla uses precision 6
-        if isinstance(geometry, str) and polyline:
-            decoded = polyline.decode(geometry, precision)
-            return decoded
-    except Exception as e:
-        logger.warning(f"Error decoding geometry: {e}")
-
-    return []
+# decode_route_geometry is imported from voyagr.utils.geometry (single source of truth).
 
 
 def valhalla_maneuver_dict(maneuver: Dict[str, Any], length_in_meters: bool = False) -> Dict[str, Any]:
@@ -1603,17 +1491,7 @@ def calculate_caz_cost(_distance_km: float, vehicle_type: str = 'petrol_diesel',
 
 # Hazard avoidance functions
 
-def get_distance_between_points(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate distance between two points in meters using Haversine formula."""
-    R = 6371000  # Earth radius in meters
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    delta_phi = math.radians(lat2 - lat1)
-    delta_lambda = math.radians(lon2 - lon1)
-
-    a = math.sin(delta_phi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    return R * c
+# get_distance_between_points is imported from voyagr.utils.geometry (single source of truth).
 
 
 def clear_camera_hazard_buckets(hazards: Dict[str, Any]) -> None:
@@ -3119,6 +2997,8 @@ from voyagr.services.routing.costing import (
     VALID_ROUTE_OPTIMIZATIONS,
     build_auto_costing_options as _build_auto_costing_options,
 )
+from voyagr.services.routing.request_params import parse_route_request
+from voyagr.services.routing.enrichment import RouteEnrichmentContext, apply_valhalla_route_enrichment
 from voyagr.services.routing.optimised_route import (
     baseline_camera_hazard_count,
     is_primary_optimised_route,
@@ -6642,82 +6522,48 @@ def calculate_route():
             logger.warning(f"[VALIDATION] Request validation failed: {error_msg}")
             return jsonify({'success': False, 'error': error_msg}), 400
 
-        start = data.get('start', '').strip()
-        end = data.get('end', '').strip()
-        routing_mode = data.get('routing_mode', 'auto')
-        # Valhalla costing: must be auto, pedestrian, or bicycle for correct routes/ETAs
-        valhalla_costing = routing_mode if routing_mode in ('auto', 'pedestrian', 'bicycle') else 'auto'
-        vehicle_type = data.get('vehicle_type', 'petrol_diesel')
-        cost_params = resolve_route_cost_params(data)
-        fuel_efficiency = cost_params['fuel_efficiency']
-        fuel_price = cost_params['fuel_price']
-        energy_efficiency = cost_params['energy_efficiency']
-        electricity_price = cost_params['electricity_price']
-        include_tolls = data.get('include_tolls', True)
-        include_caz = data.get('include_caz', True)
-        caz_exempt = data.get('caz_exempt', False)
-        avoid_caz = data.get('avoid_caz', True)
-        enable_hazard_avoidance = data.get('enable_hazard_avoidance', False)
-        avoid_traffic_lights = data.get('avoid_traffic_lights', True)
-        avoid_railway_crossings = data.get('avoid_railway_crossings', True)
-        avoid_cameras = data.get('avoid_cameras', True)
-
-        # Align with calculate_caz_cost: no routing penalties when exempt or fully electric
-        apply_caz_routing_avoidance = bool(
-            avoid_caz and not caz_exempt and vehicle_type != 'electric'
-        )
-
-        # Route avoidance preferences (Valhalla costing options)
-        avoid_tolls = data.get('avoid_tolls', False)
-        avoid_motorways = data.get('avoid_motorways', False)
-        avoid_ferries = data.get('avoid_ferries', False)
-
-        # Additional Route Preferences (translated into Valhalla auto costing options).
-        # All are optional and default to 'off'/'fastest' — preserving previous behaviour
-        # for clients that don't send them.
-        prefer_scenic = bool(data.get('prefer_scenic', False))
-        prefer_quiet = bool(data.get('prefer_quiet', False))
-        avoid_unpaved = bool(data.get('avoid_unpaved', False))
-        route_optimization = str(data.get('route_optimization', 'fastest') or 'fastest').lower()
-        if route_optimization not in VALID_ROUTE_OPTIMIZATIONS:
-            route_optimization = 'fastest'
-        try:
-            max_detour = int(data.get('max_detour', 20))
-        except (TypeError, ValueError):
-            max_detour = 20
-        max_detour = max(0, min(100, max_detour))
-
-        # Explicit avoid points: lat/lon of congested or closed segments detected during
-        # navigation (Lever A traffic reroute). They are fed into the same exclude_locations
-        # pipeline as live incidents so Valhalla routes around them. Capped to keep within
-        # Valhalla's 50-avoid limit and validated to ignore garbage.
-        raw_avoid_points = data.get('avoid_points', []) or []
-        avoid_points: List[Dict[str, float]] = []
-        if isinstance(raw_avoid_points, list):
-            for ap in raw_avoid_points[:10]:
-                try:
-                    alat = float(ap.get('lat'))
-                    alon = float(ap.get('lon'))
-                except (TypeError, ValueError, AttributeError):
-                    continue
-                if -90.0 <= alat <= 90.0 and -180.0 <= alon <= 180.0:
-                    avoid_points.append({'lat': alat, 'lon': alon})
-        if avoid_points:
-            # An explicit avoid request only makes sense with the exclusion path active.
-            enable_hazard_avoidance = True
-
-        # VIA-POINTS AND STOPS
-        via_points = data.get('via_points', [])  # [{lat, lon, name, type: 'via'}]
-        stops = data.get('stops', [])  # [{lat, lon, name, type: 'stop', duration: 15}]
-
-        # Multi-drop settings from frontend
-        optimize_stop_order = data.get('optimize_stop_order', False)
-        round_trip = data.get('round_trip', False)
-        departure_time = data.get('departure_time')
-        time_windows = data.get('time_windows')
-
-        # Calculate total stop time
-        total_stop_time = sum(s.get('duration', 15) for s in stops)
+        # Parse + normalize the request body (pure; unit-tested in
+        # tests/test_route_request_params.py). Unpack into the local names the
+        # rest of this handler already uses so downstream logic is unchanged.
+        p = parse_route_request(data)
+        start = p.start
+        end = p.end
+        routing_mode = p.routing_mode
+        valhalla_costing = p.valhalla_costing
+        vehicle_type = p.vehicle_type
+        fuel_efficiency = p.fuel_efficiency
+        fuel_price = p.fuel_price
+        energy_efficiency = p.energy_efficiency
+        electricity_price = p.electricity_price
+        include_tolls = p.include_tolls
+        include_caz = p.include_caz
+        caz_exempt = p.caz_exempt
+        avoid_caz = p.avoid_caz
+        enable_hazard_avoidance = p.enable_hazard_avoidance
+        avoid_traffic_lights = p.avoid_traffic_lights
+        avoid_railway_crossings = p.avoid_railway_crossings
+        avoid_cameras = p.avoid_cameras
+        apply_caz_routing_avoidance = p.apply_caz_routing_avoidance
+        avoid_tolls = p.avoid_tolls
+        avoid_motorways = p.avoid_motorways
+        avoid_ferries = p.avoid_ferries
+        prefer_scenic = p.prefer_scenic
+        prefer_quiet = p.prefer_quiet
+        avoid_unpaved = p.avoid_unpaved
+        route_optimization = p.route_optimization
+        max_detour = p.max_detour
+        avoid_points = p.avoid_points
+        via_points = p.via_points
+        stops = p.stops
+        optimize_stop_order = p.optimize_stop_order
+        round_trip = p.round_trip
+        departure_time = p.departure_time
+        time_windows = p.time_windows
+        total_stop_time = p.total_stop_time
+        start_coords = p.start_coords
+        end_coords = p.end_coords
+        start_lat, start_lon = p.start_lat, p.start_lon
+        end_lat, end_lon = p.end_lat, p.end_lon
 
         logger.info(f"[ROUTE] Via-points: {len(via_points)}, Stops: {len(stops)}, Total stop time: {total_stop_time} min")
 
@@ -6727,12 +6573,6 @@ def calculate_route():
         print(f"[API REQUEST] enable_hazard_avoidance={enable_hazard_avoidance}")
         print(f"{'='*80}\n")
         logger.info(f"[API REQUEST] Route calculation started: ({start},{end}), hazard_avoidance={enable_hazard_avoidance}")
-
-        # Parse coordinates
-        start_coords = validate_coordinates(start)
-        end_coords = validate_coordinates(end)
-        start_lat, start_lon = start_coords
-        end_lat, end_lon = end_coords
 
         # ====================================================================
         # MULTI-DROP ROUTING: When optimize_stop_order is enabled and there
@@ -7167,6 +7007,18 @@ def calculate_route():
 
             if has_waypoints:
                 logger.info(f"[ROUTE] Multi-stop route with {len(route_locations)} locations")
+
+            enrich_ctx = RouteEnrichmentContext(
+                url=url, headers=headers, route_locations=route_locations,
+                has_waypoints=has_waypoints, start_lat=start_lat, start_lon=start_lon,
+                end_lat=end_lat, end_lon=end_lon, route_bbox=route_bbox, hazards=hazards,
+                enable_hazard_avoidance=enable_hazard_avoidance, avoid_cameras=avoid_cameras,
+                graphhopper_route=graphhopper_route, cost_calculator=cost_calculator,
+                vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                electricity_price=electricity_price, include_tolls=include_tolls,
+                include_caz=include_caz, caz_exempt=caz_exempt,
+            )
 
             # ================================================================
             # SEGMENTED ROUTING - DISABLED
@@ -7975,149 +7827,9 @@ def calculate_route():
 
                     print(f"[Valhalla] SUCCESS: {len(routes)} routes found")
 
-                    # ================================================================
-                    # GRAPHHOPPER CAMERA-AVOIDING ROUTE: Add as priority option
-                    # Only when the custom model was actually applied (not GET fallback).
-                    # ================================================================
-                    if (
-                        graphhopper_route and graphhopper_route.get('success') and enable_hazard_avoidance
-                        and graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
-                    ):
-                        try:
-                            gh_route_entry = build_graphhopper_optimised_route_entry(
-                                graphhopper_route,
-                                hazards,
-                                cost_calculator,
-                                vehicle_type=vehicle_type,
-                                fuel_efficiency=fuel_efficiency,
-                                fuel_price=fuel_price,
-                                energy_efficiency=energy_efficiency,
-                                electricity_price=electricity_price,
-                                include_tolls=include_tolls,
-                                include_caz=include_caz,
-                                caz_exempt=caz_exempt,
-                                traffic_multiplier=traffic_multiplier,
-                            )
-                            if gh_route_entry:
-                                gh_hazard_count = gh_route_entry.get('hazard_count', 0)
-                                gh_distance_km = gh_route_entry.get('distance_km', 0)
-                                logger.info(
-                                    f"[GRAPHHOPPER] Converted {len(gh_route_entry.get('maneuvers', []))} instructions to maneuvers"
-                                )
-                                gh_baseline = baseline_camera_hazard_count(routes)
-                                if gh_hazard_count > gh_baseline:
-                                    logger.warning(
-                                        f"[GRAPHHOPPER] Skipping Optimised: {gh_hazard_count} cameras "
-                                        f"vs baseline {gh_baseline} (Valhalla exclusions work better)"
-                                    )
-                                else:
-                                    routes = [r for r in routes if not is_primary_optimised_route(r)]
-                                    routes.insert(0, gh_route_entry)
-                                    logger.info(
-                                        f"[GRAPHHOPPER] Added Optimised route (replaced Valhalla Optimised): "
-                                        f"{gh_distance_km:.1f}km, {gh_hazard_count} cameras"
-                                    )
-                        except Exception as e:
-                            logger.warning(f"[GRAPHHOPPER] Failed to add GraphHopper route: {e}")
-                    elif graphhopper_route and graphhopper_route.get('success') and avoid_cameras:
-                        logger.warning(
-                            "[GRAPHHOPPER] Skipping unfiltered route as Optimised "
-                            "(custom model not applied); will use Valhalla exclude_locations"
-                        )
-
-                    routes = ensure_optimised_camera_avoiding_route(
-                        routes,
-                        url=url,
-                        headers=headers,
-                        route_locations=route_locations,
-                        has_waypoints=has_waypoints,
-                        start_lat=start_lat,
-                        start_lon=start_lon,
-                        end_lat=end_lat,
-                        end_lon=end_lon,
-                        route_bbox=route_bbox,
-                        hazards=hazards,
-                        enable_hazard_avoidance=enable_hazard_avoidance,
-                        avoid_cameras=avoid_cameras,
-                        graphhopper_route=graphhopper_route,
-                        cost_calculator=cost_calculator,
-                        vehicle_type=vehicle_type,
-                        fuel_efficiency=fuel_efficiency,
-                        fuel_price=fuel_price,
-                        energy_efficiency=energy_efficiency,
-                        electricity_price=electricity_price,
-                        include_tolls=include_tolls,
-                        include_caz=include_caz,
-                        caz_exempt=caz_exempt,
-                    )
-
-                    routes = ensure_scenic_valhalla_route(
-                        routes,
-                        url=url,
-                        headers=headers,
-                        route_locations=route_locations,
-                        has_waypoints=has_waypoints,
-                        start_lat=start_lat,
-                        start_lon=start_lon,
-                        end_lat=end_lat,
-                        end_lon=end_lon,
-                        route_bbox=route_bbox,
-                        hazards=hazards,
-                        enable_hazard_avoidance=enable_hazard_avoidance,
-                        avoid_cameras=avoid_cameras,
-                        cost_calculator=cost_calculator,
-                        vehicle_type=vehicle_type,
-                        fuel_efficiency=fuel_efficiency,
-                        fuel_price=fuel_price,
-                        energy_efficiency=energy_efficiency,
-                        electricity_price=electricity_price,
-                        include_tolls=include_tolls,
-                        include_caz=include_caz,
-                        caz_exempt=caz_exempt,
-                    )
-
-                    routes = ensure_shortest_respects_camera_avoidance(
-                        routes,
-                        url=url,
-                        headers=headers,
-                        route_locations=route_locations,
-                        has_waypoints=has_waypoints,
-                        start_lat=start_lat,
-                        start_lon=start_lon,
-                        end_lat=end_lat,
-                        end_lon=end_lon,
-                        route_bbox=route_bbox,
-                        hazards=hazards,
-                        enable_hazard_avoidance=enable_hazard_avoidance,
-                        avoid_cameras=avoid_cameras,
-                        cost_calculator=cost_calculator,
-                        vehicle_type=vehicle_type,
-                        fuel_efficiency=fuel_efficiency,
-                        fuel_price=fuel_price,
-                        energy_efficiency=energy_efficiency,
-                        electricity_price=electricity_price,
-                        include_tolls=include_tolls,
-                        include_caz=include_caz,
-                        caz_exempt=caz_exempt,
-                    )
-
-                    from voyagr.services.routing.optimised_route import annotate_routes_camera_proximity
-                    routes = annotate_routes_camera_proximity(routes, hazards)
-
-                    # ================================================================
-                    # HAZARD AVOIDANCE: Reorder routes by hazard penalty if enabled
-                    # ================================================================
-                    if enable_hazard_avoidance and hazards:
-                        # Sort routes by hazard penalty (ascending - fewer hazards first)
-                        routes_sorted = sorted(routes, key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)))
-                        print("[HAZARDS] Routes reordered by hazard penalty:")
-                        for idx, route in enumerate(routes_sorted):
-                            print(f"  Route {idx+1}: {route['name']} - Hazard penalty: {route.get('hazard_penalty_seconds', 0):.0f}s, Count: {route.get('hazard_count', 0)}")
-                        routes = routes_sorted
-
-                        # Renumber route IDs
-                        for idx, route in enumerate(routes):
-                            route['id'] = idx + 1
+                    # Post-Valhalla enrichment (GH Optimised merge, ensure_*, annotate, reorder)
+                    enrich_ctx.traffic_multiplier = traffic_multiplier
+                    routes = apply_valhalla_route_enrichment(routes, enrich_ctx, log_label='primary')
 
                     # ================================================================
                     # PHASE 5: Record success in fallback chain optimizer
@@ -8367,132 +8079,21 @@ def calculate_route():
                                 except Exception as e:
                                     logger.warning(f"[VALHALLA] Retry Shortest route failed: {e}")
 
-                                # ================================================================
-                                # GRAPHHOPPER CAMERA-AVOIDING ROUTE: Add to retry routes
-                                # (Same logic as the primary success path)
-                                # ================================================================
-                                if (
-                                    graphhopper_route and graphhopper_route.get('success') and enable_hazard_avoidance
-                                    and graphhopper_qualifies_as_optimised(graphhopper_route, avoid_cameras=avoid_cameras)
-                                ):
-                                    try:
-                                        gh_route_entry = build_graphhopper_optimised_route_entry(
-                                            graphhopper_route,
-                                            hazards,
-                                            cost_calculator,
-                                            vehicle_type=vehicle_type,
-                                            fuel_efficiency=fuel_efficiency,
-                                            fuel_price=fuel_price,
-                                            energy_efficiency=energy_efficiency,
-                                            electricity_price=electricity_price,
-                                            include_tolls=include_tolls,
-                                            include_caz=include_caz,
-                                            caz_exempt=caz_exempt,
-                                            traffic_multiplier=traffic_multiplier,
-                                        )
-                                        if gh_route_entry:
-                                            gh_hazard_count = gh_route_entry.get('hazard_count', 0)
-                                            gh_distance_km = gh_route_entry.get('distance_km', 0)
-                                            gh_baseline = baseline_camera_hazard_count(routes)
-                                            if gh_hazard_count <= gh_baseline:
-                                                routes = [r for r in routes if not is_primary_optimised_route(r)]
-                                                routes.insert(0, gh_route_entry)
-                                                logger.info(
-                                                    f"[GRAPHHOPPER] Added Optimised route to retry: "
-                                                    f"{gh_distance_km:.1f}km, {gh_hazard_count} cameras"
-                                                )
-                                            else:
-                                                logger.warning(
-                                                    f"[GRAPHHOPPER] Skipping Optimised on retry: "
-                                                    f"{gh_hazard_count} cameras vs baseline {gh_baseline}"
-                                                )
-                                    except Exception as e:
-                                        logger.warning(f"[GRAPHHOPPER] Failed to add GraphHopper route to retry: {e}")
-
-                                routes = ensure_optimised_camera_avoiding_route(
-                                    routes,
-                                    url=url,
-                                    headers=headers,
-                                    route_locations=route_locations,
-                                    has_waypoints=has_waypoints,
-                                    start_lat=start_lat,
-                                    start_lon=start_lon,
-                                    end_lat=end_lat,
-                                    end_lon=end_lon,
-                                    route_bbox=route_bbox,
-                                    hazards=hazards,
-                                    enable_hazard_avoidance=enable_hazard_avoidance,
-                                    avoid_cameras=avoid_cameras,
-                                    graphhopper_route=graphhopper_route,
-                                    cost_calculator=cost_calculator,
-                                    vehicle_type=vehicle_type,
-                                    fuel_efficiency=fuel_efficiency,
-                                    fuel_price=fuel_price,
-                                    energy_efficiency=energy_efficiency,
-                                    electricity_price=electricity_price,
-                                    include_tolls=include_tolls,
-                                    include_caz=include_caz,
-                                    caz_exempt=caz_exempt,
+                                retry_enrich = RouteEnrichmentContext(
+                                    url=url, headers=headers, route_locations=route_locations,
+                                    has_waypoints=has_waypoints, start_lat=start_lat, start_lon=start_lon,
+                                    end_lat=end_lat, end_lon=end_lon, route_bbox=route_bbox, hazards=hazards,
+                                    enable_hazard_avoidance=enable_hazard_avoidance, avoid_cameras=avoid_cameras,
+                                    graphhopper_route=graphhopper_route, cost_calculator=cost_calculator,
+                                    vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                                    fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                                    electricity_price=electricity_price, include_tolls=include_tolls,
+                                    include_caz=include_caz, caz_exempt=caz_exempt,
+                                    traffic_multiplier=traffic_multiplier,
                                 )
-
-                                routes = ensure_scenic_valhalla_route(
-                                    routes,
-                                    url=url,
-                                    headers=headers,
-                                    route_locations=route_locations,
-                                    has_waypoints=has_waypoints,
-                                    start_lat=start_lat,
-                                    start_lon=start_lon,
-                                    end_lat=end_lat,
-                                    end_lon=end_lon,
-                                    route_bbox=route_bbox,
-                                    hazards=hazards,
-                                    enable_hazard_avoidance=enable_hazard_avoidance,
-                                    avoid_cameras=avoid_cameras,
-                                    cost_calculator=cost_calculator,
-                                    vehicle_type=vehicle_type,
-                                    fuel_efficiency=fuel_efficiency,
-                                    fuel_price=fuel_price,
-                                    energy_efficiency=energy_efficiency,
-                                    electricity_price=electricity_price,
-                                    include_tolls=include_tolls,
-                                    include_caz=include_caz,
-                                    caz_exempt=caz_exempt,
+                                routes = apply_valhalla_route_enrichment(
+                                    routes, retry_enrich, log_label='retry',
                                 )
-
-                                routes = ensure_shortest_respects_camera_avoidance(
-                                    routes,
-                                    url=url,
-                                    headers=headers,
-                                    route_locations=route_locations,
-                                    has_waypoints=has_waypoints,
-                                    start_lat=start_lat,
-                                    start_lon=start_lon,
-                                    end_lat=end_lat,
-                                    end_lon=end_lon,
-                                    route_bbox=route_bbox,
-                                    hazards=hazards,
-                                    enable_hazard_avoidance=enable_hazard_avoidance,
-                                    avoid_cameras=avoid_cameras,
-                                    cost_calculator=cost_calculator,
-                                    vehicle_type=vehicle_type,
-                                    fuel_efficiency=fuel_efficiency,
-                                    fuel_price=fuel_price,
-                                    energy_efficiency=energy_efficiency,
-                                    electricity_price=electricity_price,
-                                    include_tolls=include_tolls,
-                                    include_caz=include_caz,
-                                    caz_exempt=caz_exempt,
-                                )
-
-                                from voyagr.services.routing.optimised_route import annotate_routes_camera_proximity
-                                routes = annotate_routes_camera_proximity(routes, hazards)
-
-                                # Reorder by hazard penalty if avoidance enabled
-                                if enable_hazard_avoidance and hazards:
-                                    routes = sorted(routes, key=lambda r: (r.get('hazard_penalty_seconds', 0), r.get('duration_minutes', 0)))
-                                    for idx, route in enumerate(routes):
-                                        route['id'] = idx + 1
 
                                 print(f"[Valhalla] RETRY SUCCESS: {len(routes)} routes found")
 
@@ -8679,84 +8280,20 @@ def calculate_route():
                                 logger.warning(f'[ROUTING] Recovery Shortest failed: {rec_s_e}')
 
                     if routes_out:
-                        routes_out = ensure_optimised_camera_avoiding_route(
-                            routes_out,
-                            url=url,
-                            headers=headers,
-                            route_locations=route_locations,
-                            has_waypoints=has_waypoints,
-                            start_lat=start_lat,
-                            start_lon=start_lon,
-                            end_lat=end_lat,
-                            end_lon=end_lon,
-                            route_bbox=route_bbox,
-                            hazards=hazards,
-                            enable_hazard_avoidance=enable_hazard_avoidance,
-                            avoid_cameras=avoid_cameras,
-                            graphhopper_route=graphhopper_route,
-                            cost_calculator=cost_calculator,
-                            vehicle_type=vehicle_type,
-                            fuel_efficiency=fuel_efficiency,
-                            fuel_price=fuel_price,
-                            energy_efficiency=energy_efficiency,
-                            electricity_price=electricity_price,
-                            include_tolls=include_tolls,
-                            include_caz=include_caz,
-                            caz_exempt=caz_exempt,
+                        recovery_enrich = RouteEnrichmentContext(
+                            url=url, headers=headers, route_locations=route_locations,
+                            has_waypoints=has_waypoints, start_lat=start_lat, start_lon=start_lon,
+                            end_lat=end_lat, end_lon=end_lon, route_bbox=route_bbox, hazards=hazards,
+                            enable_hazard_avoidance=enable_hazard_avoidance, avoid_cameras=avoid_cameras,
+                            graphhopper_route=graphhopper_route, cost_calculator=cost_calculator,
+                            vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                            fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                            electricity_price=electricity_price, include_tolls=include_tolls,
+                            include_caz=include_caz, caz_exempt=caz_exempt,
                         )
-
-                        routes_out = ensure_scenic_valhalla_route(
-                            routes_out,
-                            url=url,
-                            headers=headers,
-                            route_locations=route_locations,
-                            has_waypoints=has_waypoints,
-                            start_lat=start_lat,
-                            start_lon=start_lon,
-                            end_lat=end_lat,
-                            end_lon=end_lon,
-                            route_bbox=route_bbox,
-                            hazards=hazards,
-                            enable_hazard_avoidance=enable_hazard_avoidance,
-                            avoid_cameras=avoid_cameras,
-                            cost_calculator=cost_calculator,
-                            vehicle_type=vehicle_type,
-                            fuel_efficiency=fuel_efficiency,
-                            fuel_price=fuel_price,
-                            energy_efficiency=energy_efficiency,
-                            electricity_price=electricity_price,
-                            include_tolls=include_tolls,
-                            include_caz=include_caz,
-                            caz_exempt=caz_exempt,
+                        routes_out = apply_valhalla_route_enrichment(
+                            routes_out, recovery_enrich, merge_graphhopper=False, log_label='recovery',
                         )
-
-                        routes_out = ensure_shortest_respects_camera_avoidance(
-                            routes_out,
-                            url=url,
-                            headers=headers,
-                            route_locations=route_locations,
-                            has_waypoints=has_waypoints,
-                            start_lat=start_lat,
-                            start_lon=start_lon,
-                            end_lat=end_lat,
-                            end_lon=end_lon,
-                            route_bbox=route_bbox,
-                            hazards=hazards,
-                            enable_hazard_avoidance=enable_hazard_avoidance,
-                            avoid_cameras=avoid_cameras,
-                            cost_calculator=cost_calculator,
-                            vehicle_type=vehicle_type,
-                            fuel_efficiency=fuel_efficiency,
-                            fuel_price=fuel_price,
-                            energy_efficiency=energy_efficiency,
-                            electricity_price=electricity_price,
-                            include_tolls=include_tolls,
-                            include_caz=include_caz,
-                            caz_exempt=caz_exempt,
-                        )
-
-                        from voyagr.services.routing.optimised_route import annotate_routes_camera_proximity
-                        routes_out = annotate_routes_camera_proximity(routes_out, hazards)
 
                     if routes_out:
                         if enable_hazard_avoidance and hazards:
