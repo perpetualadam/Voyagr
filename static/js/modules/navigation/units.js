@@ -70,6 +70,32 @@
         return distanceUnit === 'mi' ? 'MPG' : 'L/100km';
     }
 
+    /**
+     * Canonical currency-code → symbol map.  Covers the three currencies the app
+     * currently supports; unknown codes fall back to '£'.
+     */
+    var CURRENCY_SYMBOLS = { GBP: '£', USD: '$', EUR: '€' };
+
+    /**
+     * Return the symbol for a given ISO currency code.
+     * @param {string} currencyCode - e.g. 'GBP', 'USD', 'EUR'
+     * @returns {string}
+     */
+    function getCurrencySymbol(currencyCode) {
+        return CURRENCY_SYMBOLS[String(currencyCode || '').toUpperCase()] || '£';
+    }
+
+    /**
+     * Pass-through: currency totals from the API are absolute amounts (£/$/€) and must
+     * not be rescaled when the user switches between mi and km — only distance *labels*
+     * change, not prices.
+     * @param {number} cost
+     * @returns {number}
+     */
+    function adjustCostForUnits(cost) {
+        return cost;
+    }
+
     var api = {
         convertDistance: convertDistance,
         getDistanceUnit: getDistanceUnit,
@@ -77,6 +103,9 @@
         getTemperatureUnit: getTemperatureUnit,
         getFuelEfficiencyInUnits: getFuelEfficiencyInUnits,
         getFuelEfficiencyLabel: getFuelEfficiencyLabel,
+        getCurrencySymbol: getCurrencySymbol,
+        adjustCostForUnits: adjustCostForUnits,
+        CURRENCY_SYMBOLS: CURRENCY_SYMBOLS,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

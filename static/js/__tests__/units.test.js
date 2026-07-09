@@ -60,3 +60,19 @@ describe('getFuelEfficiencyLabel', () => {
     test('mi → MPG', () => expect(U.getFuelEfficiencyLabel('mi')).toBe('MPG'));
     test('km → L/100km', () => expect(U.getFuelEfficiencyLabel('km')).toBe('L/100km'));
 });
+
+describe('getCurrencySymbol', () => {
+    test('GBP → £', () => expect(U.getCurrencySymbol('GBP')).toBe('£'));
+    test('USD → $', () => expect(U.getCurrencySymbol('USD')).toBe('$'));
+    test('EUR → €', () => expect(U.getCurrencySymbol('EUR')).toBe('€'));
+    test('unknown → £ fallback', () => expect(U.getCurrencySymbol('XYZ')).toBe('£'));
+    test('null/empty → £ fallback', () => expect(U.getCurrencySymbol(null)).toBe('£'));
+    test('lowercase works', () => expect(U.getCurrencySymbol('usd')).toBe('$'));
+});
+
+describe('adjustCostForUnits', () => {
+    test('pass-through — returns cost unchanged', () => {
+        expect(U.adjustCostForUnits(3.14)).toBe(3.14);
+        expect(U.adjustCostForUnits(0)).toBe(0);
+    });
+});

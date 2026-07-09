@@ -275,8 +275,10 @@ function getTemperatureUnit() {
  * @function getCurrencySymbol
  * @returns {*} Return value description
  */
+// getCurrencySymbol / adjustCostForUnits moved to modules/navigation/units.js (VoyagrUnits).
 function getCurrencySymbol() {
-    return currencySymbols[currencyUnit] || '£';
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.getCurrencySymbol(currencyUnit) : (currencySymbols[currencyUnit] || '£');
 }
 /**
  * adjustCostForUnits function
@@ -286,9 +288,8 @@ function getCurrencySymbol() {
  * @returns {*} Return value description
  */
 function adjustCostForUnits(cost, costType = 'fuel') {
-    // Currency totals from the API are absolute amounts (£ / $ / €).
-    // Distance unit (mi vs km) must not rescale money — only distance labels change.
-    return cost;
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.adjustCostForUnits(cost) : cost;
 }
 /**
  * getFuelEfficiencyInUnits function
