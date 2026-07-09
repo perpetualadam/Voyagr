@@ -236,6 +236,58 @@ describe('stepSmoothGpsSpeedMph', () => {
     });
 });
 
+describe('stepPickRawSpeedMph', () => {
+    const emptyState = () => ({ lastGoodRawPickMph: 0, consecutiveDisplacementMoves: 0 });
+
+    test('exposes the function', () => {
+        expect(typeof SG.stepPickRawSpeedMph).toBe('function');
+    });
+
+    test('returns 0 with no data', () => {
+        const r = SG.stepPickRawSpeedMph(emptyState(), null, [], null);
+        expect(r.value).toBe(0);
+        expect(r.state.lastGoodRawPickMph).toBe(0);
+    });
+
+    test('trusts a valid device coords.speed (m/s) directly', () => {
+        // 20 m/s ≈ 44.7 mph
+        const r = SG.stepPickRawSpeedMph(emptyState(), 20, [], null);
+        expect(r.value).toBeGreaterThan(40);
+        expect(r.value).toBeLessThan(55);
+        expect(r.state.lastGoodRawPickMph).toBe(r.value);
+    });
+
+    test('returns 0 when device explicitly reports stopped', () => {
+        const r = SG.stepPickRawSpeedMph(emptyState(), 0, [], null);
+        expect(r.value).toBe(0);
+    });
+
+    test('derives speed from two close history fixes (normal driving ~35 mph)', () => {
+        const now = Date.now();
+        // ~11 m apart in 0.7 s ≈ 15.7 m/s ≈ 35 mph — plausible urban driving
+        const hist = [
+            { lat: 51.5000, lon: -0.1000, timestamp: now - 700 },
+            { lat: 51.5001, lon: -0.1000, timestamp: now },
+        ];
+        const r = SG.stepPickRawSpeedMph(emptyState(), null, hist, null);
+        expect(r.value).toBeGreaterThan(20);
+        expect(r.value).toBeLessThan(60);
+        expect(r.state.consecutiveDisplacementMoves).toBeGreaterThanOrEqual(1);
+    });
+
+    test('caps at MAX_DISPLAY_GPS_SPEED_MPH', () => {
+        // Unrealistically fast coords.speed (1000 m/s → 2237 mph) must be capped
+        const r = SG.stepPickRawSpeedMph(emptyState(), 1000, [], null);
+        expect(r.value).toBeLessThanOrEqual(SG.DEFAULTS.MAX_DISPLAY_GPS_SPEED_MPH);
+    });
+
+    test('state threads through successive calls', () => {
+        const r1 = SG.stepPickRawSpeedMph(emptyState(), 20, [], null);
+        const r2 = SG.stepPickRawSpeedMph(r1.state, 22, [], null);
+        expect(r2.state.lastGoodRawPickMph).toBeGreaterThan(0);
+    });
+});
+
 describe('normalizeGeolocationSpeedToMph', () => {
     test('m/s to mph at highway speed (~60 mph)', () => {
         const mps = 60 / SG.DEFAULTS.MS_TO_MPH;

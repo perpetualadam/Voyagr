@@ -10246,107 +10246,29 @@ function rejectGpsSpeedSpikeMph(mph, prevPick) {
     return Number.isFinite(mph) && mph >= 0 ? mph : 0;
 }
 
+// pickRawSpeedMph body moved to modules/navigation/speed-gps.js as the pure
+// stepPickRawSpeedMph step function. This orchestration wrapper holds the mutable
+// state and calls it, matching the pattern of smoothGpsSpeedMph / stepSmoothGpsSpeedMph.
 function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
     const SG = _speedGps();
+    if (SG && SG.stepPickRawSpeedMph) {
+        const r = SG.stepPickRawSpeedMph(
+            { lastGoodRawPickMph: _lastGoodRawPickMph, consecutiveDisplacementMoves: _consecutiveDisplacementMoves },
+            coordsSpeed, history, coordAccuracy
+        );
+        _lastGoodRawPickMph = r.state.lastGoodRawPickMph;
+        _consecutiveDisplacementMoves = r.state.consecutiveDisplacementMoves;
+        return r.value;
+    }
+    // Inline fallback when module is not yet loaded.
     const accCurr = Number.isFinite(coordAccuracy) && coordAccuracy > 2 ? coordAccuracy : null;
-
-    const finish = (mph) => {
-        let x = mph;
-        if (!Number.isFinite(x) || x < 0) x = 0;
-        x = Math.min(x, MAX_DISPLAY_GPS_SPEED_MPH);
-        _lastGoodRawPickMph = x;
-        return x;
-    };
-
-    const deviceReportsStopped = Number.isFinite(coordsSpeed) && coordsSpeed === 0;
-
     if (Number.isFinite(coordsSpeed) && coordsSpeed > 0) {
-        let derivedHint = null;
-        if (Array.isArray(history) && history.length >= 2) {
-            const curr = history[history.length - 1];
-            const prev = history[history.length - 2];
-            const tCurr = curr && curr.timestamp ? +curr.timestamp : 0;
-            const tPrev = prev && prev.timestamp ? +prev.timestamp : 0;
-            const dtSec = (tCurr - tPrev) / 1000;
-            if (dtSec > 0.2 && dtSec < 10) {
-                const distM = calculateDistanceMeters(prev.lat, prev.lon, curr.lat, curr.lon);
-                if (Number.isFinite(distM) && distM <= 500) {
-                    derivedHint = Math.min((distM / dtSec) * 2.237, MAX_DISPLAY_GPS_SPEED_MPH);
-                }
-            }
-        }
-
-        let mph = SG && SG.normalizeGeolocationSpeedToMph
-            ? SG.normalizeGeolocationSpeedToMph(coordsSpeed, derivedHint)
-            : coordsSpeed * 2.237;
-        if (mph == null || !Number.isFinite(mph)) mph = coordsSpeed * 2.237;
+        let mph = coordsSpeed * 2.237;
         mph = Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH);
-        const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : mph;
-
-        mph = rejectGpsSpeedSpikeMph(mph, prevPick);
-        if (prevPick > 5 && mph > prevPick + 85 && accCurr != null && accCurr > 40) {
-            mph = prevPick;
-        }
-        if (mph >= 2) {
-            _consecutiveDisplacementMoves = Math.min(_consecutiveDisplacementMoves + 1, 20);
-        }
-
-        return finish(mph);
+        _lastGoodRawPickMph = mph;
+        return mph;
     }
-
-    if (Array.isArray(history) && history.length >= 2) {
-        const curr = history[history.length - 1];
-        const prev = history[history.length - 2];
-        const tCurr = curr && curr.timestamp ? +curr.timestamp : 0;
-        const tPrev = prev && prev.timestamp ? +prev.timestamp : 0;
-        const dtSec = (tCurr - tPrev) / 1000;
-        const accAvg = Number.isFinite(prev.accuracy) && Number.isFinite(curr.accuracy)
-            ? Math.max(Number(prev.accuracy), Number(curr.accuracy))
-            : (accCurr != null ? accCurr : null);
-
-        if (dtSec > 0.2 && dtSec < 10) {
-            const distM = calculateDistanceMeters(prev.lat, prev.lon, curr.lat, curr.lon);
-            if (!Number.isFinite(distM) || distM > 500) {
-                return finish(0);
-            }
-
-            if (deviceReportsStopped) {
-                const noiseFloorM = SG
-                    ? SG.displacementNoiseFloorMeters(deviceReportsStopped, _consecutiveDisplacementMoves, accAvg)
-                    : Math.max(Number.isFinite(accAvg) ? accAvg : 8, 8);
-                if (distM < noiseFloorM) {
-                    return finish(0);
-                }
-            }
-
-            const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : 0;
-            let mph = SG
-                ? SG.estimateDisplacementSpeedMph({
-                    distM,
-                    dtSec,
-                    prevPickMph: prevPick,
-                    accAvg,
-                    deviceReportsStopped,
-                    consecutiveDisplacementMoves: _consecutiveDisplacementMoves
-                })
-                : null;
-
-            if (mph == null) {
-                mph = (distM / dtSec) * 2.237;
-                mph = rejectGpsSpeedSpikeMph(Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH), prevPick);
-            }
-
-            if (deviceReportsStopped && mph >= 2) {
-                _consecutiveDisplacementMoves = Math.min(_consecutiveDisplacementMoves + 1, 20);
-            } else if (mph >= 2) {
-                _consecutiveDisplacementMoves = Math.min(_consecutiveDisplacementMoves + 1, 20);
-            }
-
-            return finish(mph);
-        }
-    }
-
-    return finish(0);
+    return 0;
 }
 /**
  * updateSpeedWidget function

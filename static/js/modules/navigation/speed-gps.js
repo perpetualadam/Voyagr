@@ -440,8 +440,134 @@
         getActiveRouteManeuverIndex: getActiveRouteManeuverIndex,
         advanceSnappedRouteIndex: advanceSnappedRouteIndex,
         buildBetweenTurnDisplay: buildBetweenTurnDisplay,
-        estimateDisplacementSpeedMph: estimateDisplacementSpeedMph
+        estimateDisplacementSpeedMph: estimateDisplacementSpeedMph,
+        stepPickRawSpeedMph: stepPickRawSpeedMph
     };
+
+    // ======================================================================
+    // stepPickRawSpeedMph — stateless raw-speed picker (extracted from voyagr-app.js)
+    // Mirrors the pattern of stepSmoothGpsSpeedMph: caller holds state,
+    // function is a pure tick that returns { value, state }.
+    // ======================================================================
+
+    /**
+     * Pick the best GPS-speed estimate for this tick (device m/s or displacement).
+     *
+     * @param {object} state - Mutable-by-caller state: { lastGoodRawPickMph, consecutiveDisplacementMoves }
+     * @param {number|null|undefined} coordsSpeed - coords.speed in m/s (null = device doesn't report)
+     * @param {Array<{lat,lon,timestamp,accuracy?}>} history - Recent fix history (newest last)
+     * @param {number|null|undefined} coordAccuracy - coords.accuracy in metres
+     * @param {object} [constants] - Override DEFAULTS (for tests)
+     * @returns {{ value: number, state: { lastGoodRawPickMph, consecutiveDisplacementMoves } }}
+     */
+    function stepPickRawSpeedMph(state, coordsSpeed, history, coordAccuracy, constants) {
+        var c = constants || DEFAULTS;
+        state = state || { lastGoodRawPickMph: 0, consecutiveDisplacementMoves: 0 };
+        var lastGoodRawPickMph = Number.isFinite(state.lastGoodRawPickMph) ? state.lastGoodRawPickMph : 0;
+        var consecutiveDisplacementMoves = state.consecutiveDisplacementMoves | 0;
+
+        var accCurr = (Number.isFinite(coordAccuracy) && coordAccuracy > 2) ? coordAccuracy : null;
+
+        function finish(mph) {
+            var x = (Number.isFinite(mph) && mph >= 0) ? Math.min(mph, c.MAX_DISPLAY_GPS_SPEED_MPH) : 0;
+            return {
+                value: x,
+                state: { lastGoodRawPickMph: x, consecutiveDisplacementMoves: consecutiveDisplacementMoves }
+            };
+        }
+
+        var deviceReportsStopped = Number.isFinite(coordsSpeed) && coordsSpeed === 0;
+
+        if (Number.isFinite(coordsSpeed) && coordsSpeed > 0) {
+            var derivedHint = null;
+            if (Array.isArray(history) && history.length >= 2) {
+                var curr1 = history[history.length - 1];
+                var prev1 = history[history.length - 2];
+                var tCurr1 = curr1 && curr1.timestamp ? +curr1.timestamp : 0;
+                var tPrev1 = prev1 && prev1.timestamp ? +prev1.timestamp : 0;
+                var dt1 = (tCurr1 - tPrev1) / 1000;
+                if (dt1 > 0.2 && dt1 < 10) {
+                    // Haversine distance (metres) between two fixes
+                    var dLat1 = (curr1.lat - prev1.lat) * Math.PI / 180;
+                    var dLon1 = (curr1.lon - prev1.lon) * Math.PI / 180;
+                    var a1 = Math.sin(dLat1 / 2) * Math.sin(dLat1 / 2) +
+                        Math.cos(prev1.lat * Math.PI / 180) * Math.cos(curr1.lat * Math.PI / 180) *
+                        Math.sin(dLon1 / 2) * Math.sin(dLon1 / 2);
+                    var distM1 = 6371000 * 2 * Math.atan2(Math.sqrt(a1), Math.sqrt(1 - a1));
+                    if (Number.isFinite(distM1) && distM1 <= 500) {
+                        derivedHint = Math.min((distM1 / dt1) * 2.237, c.MAX_DISPLAY_GPS_SPEED_MPH);
+                    }
+                }
+            }
+
+            var mph = normalizeGeolocationSpeedToMph(coordsSpeed, derivedHint);
+            if (mph == null || !Number.isFinite(mph)) mph = coordsSpeed * 2.237;
+            mph = Math.min(mph, c.MAX_DISPLAY_GPS_SPEED_MPH);
+            var prevPick1 = Number.isFinite(lastGoodRawPickMph) ? lastGoodRawPickMph : mph;
+            mph = rejectGpsSpeedSpikeMph(mph, prevPick1);
+            if (prevPick1 > 5 && mph > prevPick1 + 85 && accCurr != null && accCurr > 40) {
+                mph = prevPick1;
+            }
+            if (mph >= 2) {
+                consecutiveDisplacementMoves = Math.min(consecutiveDisplacementMoves + 1, 20);
+            }
+            return finish(mph);
+        }
+
+        if (Array.isArray(history) && history.length >= 2) {
+            var curr2 = history[history.length - 1];
+            var prev2 = history[history.length - 2];
+            var tCurr2 = curr2 && curr2.timestamp ? +curr2.timestamp : 0;
+            var tPrev2 = prev2 && prev2.timestamp ? +prev2.timestamp : 0;
+            var dt2 = (tCurr2 - tPrev2) / 1000;
+            var accAvg = Number.isFinite(prev2.accuracy) && Number.isFinite(curr2.accuracy)
+                ? Math.max(Number(prev2.accuracy), Number(curr2.accuracy))
+                : (accCurr != null ? accCurr : null);
+
+            if (dt2 > 0.2 && dt2 < 10) {
+                var dLat2 = (curr2.lat - prev2.lat) * Math.PI / 180;
+                var dLon2 = (curr2.lon - prev2.lon) * Math.PI / 180;
+                var a2 = Math.sin(dLat2 / 2) * Math.sin(dLat2 / 2) +
+                    Math.cos(prev2.lat * Math.PI / 180) * Math.cos(curr2.lat * Math.PI / 180) *
+                    Math.sin(dLon2 / 2) * Math.sin(dLon2 / 2);
+                var distM2 = 6371000 * 2 * Math.atan2(Math.sqrt(a2), Math.sqrt(1 - a2));
+
+                if (!Number.isFinite(distM2) || distM2 > 500) {
+                    return finish(0);
+                }
+
+                if (deviceReportsStopped) {
+                    var noiseFloor = displacementNoiseFloorMeters(deviceReportsStopped, consecutiveDisplacementMoves, accAvg);
+                    if (distM2 < noiseFloor) {
+                        return finish(0);
+                    }
+                }
+
+                var prevPick2 = Number.isFinite(lastGoodRawPickMph) ? lastGoodRawPickMph : 0;
+                var mph2 = estimateDisplacementSpeedMph({
+                    distM: distM2,
+                    dtSec: dt2,
+                    prevPickMph: prevPick2,
+                    accAvg: accAvg,
+                    deviceReportsStopped: deviceReportsStopped,
+                    consecutiveDisplacementMoves: consecutiveDisplacementMoves
+                });
+
+                if (mph2 == null) {
+                    mph2 = (distM2 / dt2) * 2.237;
+                    mph2 = rejectGpsSpeedSpikeMph(Math.min(mph2, c.MAX_DISPLAY_GPS_SPEED_MPH), prevPick2);
+                }
+
+                if (mph2 >= 2) {
+                    consecutiveDisplacementMoves = Math.min(consecutiveDisplacementMoves + 1, 20);
+                }
+
+                return finish(mph2);
+            }
+        }
+
+        return finish(0);
+    }
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api;
