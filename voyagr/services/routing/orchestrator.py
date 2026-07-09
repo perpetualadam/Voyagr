@@ -310,3 +310,56 @@ def build_valhalla_discovery_payload(
         "exclude_locations": exclude_locations,
         "directions_options": {"generalize": 0},
     }
+
+
+def build_route_success_response(
+    routes: List[Dict[str, Any]],
+    *,
+    source: str,
+    camera_avoidance_engine: str,
+    total_stop_time: float,
+    via_points_count: int,
+    stops_count: int,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+) -> Dict[str, Any]:
+    """
+    Build the /api/route success envelope from an ordered ``routes`` list.
+
+    Single shared shape for the primary, retry and recovery paths (previously three
+    drifted inline dicts). Top-level preview fields mirror ``routes[0]``; multi-drop
+    totals, ``caz_details`` and the top-level hazard summary are always included so
+    every success path returns a consistent body.
+    """
+    primary = routes[0] if routes else {}
+    total_duration_with_stops = primary.get('duration_minutes', 0) + total_stop_time
+    return {
+        'success': True,
+        'routes': routes,
+        'source': source,
+        'distance': f'{primary["distance_km"]:.2f} km',
+        'time': f'{primary["duration_minutes"]:.0f} minutes',
+        'total_time_with_stops': f'{total_duration_with_stops:.0f} minutes',
+        'total_stop_time': total_stop_time,
+        'via_points_count': via_points_count,
+        'stops_count': stops_count,
+        'geometry': primary['geometry'],
+        'geometry_precision': primary.get('geometry_precision', 6),
+        'fuel_cost': primary['fuel_cost'],
+        'fuel_litres': primary.get('fuel_litres', 0),
+        'toll_cost': primary['toll_cost'],
+        'caz_cost': primary['caz_cost'],
+        'caz_details': primary.get('caz_details', {}),
+        'maneuvers': primary.get('maneuvers', []),
+        'cached': False,
+        'hazard_count': primary.get('hazard_count', 0),
+        'hazard_penalty_seconds': primary.get('hazard_penalty_seconds', 0),
+        'hazards': primary.get('hazards', []),
+        'camera_avoidance_engine': camera_avoidance_engine,
+        'start_lat': start_lat,
+        'start_lon': start_lon,
+        'end_lat': end_lat,
+        'end_lon': end_lon,
+    }
