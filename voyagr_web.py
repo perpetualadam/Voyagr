@@ -1324,48 +1324,8 @@ def invalidate_route_cache():
 # decode_route_geometry is imported from voyagr.utils.geometry (single source of truth).
 
 
-def valhalla_maneuver_dict(maneuver: Dict[str, Any], length_in_meters: bool = False) -> Dict[str, Any]:
-    """
-    Normalize a Valhalla leg maneuver for the Voyagr API JSON.
-    See Valhalla turn-by-turn reference: instruction, verbal_transition_alert_instruction,
-    verbal_pre_transition_instruction, verbal_post_transition_instruction, street_names, length, etc.
-    """
-    sn = maneuver.get('street_names') or []
-    length = maneuver.get('length', 0)
-    if length_in_meters:
-        length = float(length) * 1000.0
-    out: Dict[str, Any] = {
-        'instruction': maneuver.get('instruction', ''),
-        'verbal_transition_alert_instruction': maneuver.get('verbal_transition_alert_instruction', ''),
-        'verbal_pre_transition_instruction': maneuver.get('verbal_pre_transition_instruction', ''),
-        'verbal_post_transition_instruction': maneuver.get('verbal_post_transition_instruction', ''),
-        'distance': length,
-        'time': maneuver.get('time', 0),
-        'type': maneuver.get('type', 0),
-        'street_name': sn[0] if sn else '',
-        'street_names': sn,
-        'begin_street_names': maneuver.get('begin_street_names', []),
-        'begin_shape_index': maneuver.get('begin_shape_index', 0),
-        'end_shape_index': maneuver.get('end_shape_index', 0),
-        'speed_limit': maneuver.get('speed_limit'),
-    }
-    mt = maneuver.get('type', 0)
-    rc = maneuver.get('roundabout_exit_count')
-    if rc is not None and mt in (26, 27):
-        try:
-            out['roundabout_exit_count'] = int(rc)
-        except (TypeError, ValueError):
-            out['roundabout_exit_count'] = 0
-    lanes = maneuver.get('lanes')
-    if lanes:
-        out['lanes'] = lanes
-    rc = infer_road_class_from_names(
-        None,
-        maneuver.get('begin_street_names') or maneuver.get('street_names') or [],
-    )
-    if rc:
-        out['road_class'] = rc
-    return out
+# valhalla_maneuver_dict and extract_valhalla_maneuvers live in
+# voyagr.services.routing.maneuvers (imported at module scope below).
 
 
 def calculate_fuel_cost(distance_km: float, fuel_efficiency_l_per_100km: float, fuel_price_gbp_per_l: float) -> float:
@@ -1890,11 +1850,7 @@ def valhalla_route_json_to_standard_routes(
         hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
         hazards_list = get_hazards_on_route(route_geometry, hazards)
 
-    maneuvers = []
-    for leg in route_data['trip']['legs']:
-        if 'maneuvers' in leg:
-            for maneuver in leg['maneuvers']:
-                maneuvers.append(valhalla_maneuver_dict(maneuver, length_in_meters=False))
+    maneuvers = extract_valhalla_maneuvers(route_data['trip'], length_in_meters=False)
 
     routes.append({
         'id': 1,
@@ -2402,11 +2358,7 @@ def valhalla_trip_json_to_std_route_entry(
         energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
         route_coords=coords,
     )
-    route_maneuvers = []
-    for leg in legs:
-        if 'maneuvers' in leg:
-            for m in leg['maneuvers']:
-                route_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=True))
+    route_maneuvers = extract_valhalla_maneuvers({'legs': legs}, length_in_meters=True)
 
     return {
         'id': route_id,
@@ -2442,6 +2394,7 @@ from voyagr.services.routing.orchestrator import (
     classify_valhalla_route_data,
 )
 from voyagr.services.routing.osrm_fallback import OsrmRouteContext, build_osrm_routes
+from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers, valhalla_maneuver_dict
 # Hazard helpers: single source of truth is voyagr.services.hazards. These were
 # previously duplicated inline in this module; imported here so /api/route,
 # /api/multi-stop-route and GraphHopper avoidance all share one implementation.
@@ -6219,12 +6172,7 @@ def calculate_route():
                         logger.info(f"[HAZARDS] Valhalla main route: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
 
                     # Extract turn-by-turn maneuvers from Valhalla response
-                    maneuvers = []
-                    if 'legs' in route_data['trip']:
-                        for leg in route_data['trip']['legs']:
-                            if 'maneuvers' in leg:
-                                for maneuver in leg['maneuvers']:
-                                    maneuvers.append(valhalla_maneuver_dict(maneuver, length_in_meters=False))
+                    maneuvers = extract_valhalla_maneuvers(route_data['trip'], length_in_meters=False)
                     logger.info(f"[VALHALLA] Extracted {len(maneuvers)} maneuvers from route")
 
                     routes.append({
@@ -6350,12 +6298,10 @@ def calculate_route():
                             )
 
                             # Extract maneuvers from Valhalla response if available
-                            route_maneuvers = []
-                            if valhalla_data and 'trip' in valhalla_data and 'legs' in valhalla_data['trip']:
-                                for leg in valhalla_data['trip']['legs']:
-                                    if 'maneuvers' in leg:
-                                        for m in leg['maneuvers']:
-                                            route_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=True))
+                            route_maneuvers = extract_valhalla_maneuvers(
+                                valhalla_data.get('trip') if valhalla_data else None,
+                                length_in_meters=True,
+                            )
 
                             return {
                                 'id': route_id,
@@ -6668,12 +6614,9 @@ def calculate_route():
                                     logger.info(f"[HAZARDS] Valhalla retry route: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
 
                                 # Extract maneuvers from retry response
-                                retry_maneuvers = []
-                                if 'trip' in retry_data and 'legs' in retry_data['trip']:
-                                    for leg in retry_data['trip']['legs']:
-                                        if 'maneuvers' in leg:
-                                            for m in leg['maneuvers']:
-                                                retry_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=True))
+                                retry_maneuvers = extract_valhalla_maneuvers(
+                                    retry_data.get('trip'), length_in_meters=True,
+                                )
                                 logger.info(f"[VALHALLA] Retry route has {len(retry_maneuvers)} maneuvers")
 
                                 routes.append({
