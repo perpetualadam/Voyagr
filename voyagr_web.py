@@ -6143,8 +6143,10 @@ def calculate_route():
                         include_caz=include_caz, caz_exempt=caz_exempt,
                     ))
                     logger.info(f"[VALHALLA] Extracted {len(routes[0].get('maneuvers') or [])} maneuvers from route")
-                    # Primary route geometry is reused below by the Optimised Discovery step.
+                    # Primary route geometry + hazard count are reused below by the
+                    # Optimised Discovery step (baseline it compares against).
                     route_geometry = routes[0].get('geometry')
+                    hazard_count = routes[0].get('hazard_count', 0)
 
                     # Alternative routes (if available) - Valhalla uses 'alternates' not 'alternatives'
                     if 'alternates' in route_data:
