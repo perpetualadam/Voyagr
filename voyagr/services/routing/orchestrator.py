@@ -99,3 +99,61 @@ def build_valhalla_route_payload(
         logger.debug(f"[VALHALLA] Added {len(exclude_locations)} exclude_locations to request")
 
     return payload
+
+
+def build_valhalla_retry_payload(
+    *,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    valhalla_costing: str,
+    exclude_locations: List[Dict[str, float]],
+    avoid_tolls: bool,
+    avoid_motorways: bool,
+    avoid_ferries: bool,
+    prefer_scenic: bool,
+    prefer_quiet: bool,
+    avoid_unpaved: bool,
+    route_optimization: str,
+) -> Dict[str, Any]:
+    """
+    Build the reduced-exclusion retry payload for the "route not found" fallback.
+
+    Mirrors the previous inline retry logic exactly: a simple 2-point request with
+    the reduced exclude_locations and the same costing options as the primary
+    request, but WITHOUT time-dependent routing (the retry omits ``date_time``).
+    """
+    payload: Dict[str, Any] = {
+        "locations": [
+            {"lat": start_lat, "lon": start_lon},
+            {"lat": end_lat, "lon": end_lon},
+        ],
+        "costing": valhalla_costing,
+        "alternates": 3 if valhalla_costing == 'auto' else 0,
+        "exclude_locations": exclude_locations,
+        "units": "kilometers",
+        "language": "en-GB",
+        "directions_options": {"generalize": 0},
+    }
+    if valhalla_costing == 'pedestrian':
+        payload["costing_options"] = {
+            "pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}
+        }
+    elif valhalla_costing == 'bicycle':
+        payload["costing_options"] = {
+            "bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}
+        }
+    elif valhalla_costing in ('auto', 'auto_shorter'):
+        auto_opts = build_auto_costing_options(
+            avoid_tolls=avoid_tolls,
+            avoid_motorways=avoid_motorways,
+            avoid_ferries=avoid_ferries,
+            prefer_scenic=prefer_scenic,
+            prefer_quiet=prefer_quiet,
+            avoid_unpaved=avoid_unpaved,
+            route_optimization=route_optimization,
+        )
+        if auto_opts:
+            payload["costing_options"] = {valhalla_costing: auto_opts}
+    return payload
