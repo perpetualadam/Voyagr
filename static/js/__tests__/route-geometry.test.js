@@ -118,6 +118,73 @@ describe('totalPolylineLengthMeters', () => {
     });
 });
 
+describe('cumulativeDistanceBetweenVertices', () => {
+    const poly = [[51.50, -0.12], [51.51, -0.11], [51.52, -0.10]];
+
+    test('same vertex → 0', () => {
+        expect(RG.cumulativeDistanceBetweenVertices(poly, 1, 1)).toBe(0);
+    });
+
+    test('0→2 is greater than 0→1', () => {
+        const d01 = RG.cumulativeDistanceBetweenVertices(poly, 0, 1);
+        const d02 = RG.cumulativeDistanceBetweenVertices(poly, 0, 2);
+        expect(d02).toBeGreaterThan(d01);
+    });
+
+    test('order does not matter (j < i swapped)', () => {
+        expect(RG.cumulativeDistanceBetweenVertices(poly, 0, 2))
+            .toBeCloseTo(RG.cumulativeDistanceBetweenVertices(poly, 2, 0), 5);
+    });
+
+    test('invalid polyline returns Infinity', () => {
+        expect(RG.cumulativeDistanceBetweenVertices(null, 0, 1)).toBe(Infinity);
+        expect(RG.cumulativeDistanceBetweenVertices([], 0, 1)).toBe(Infinity);
+    });
+});
+
+describe('inferRoadClassFromManeuver', () => {
+    test('returns road_class when set', () => {
+        expect(RG.inferRoadClassFromManeuver({ road_class: 'motorway' })).toBe('motorway');
+    });
+
+    test('infers motorway from instruction text', () => {
+        expect(RG.inferRoadClassFromManeuver({ instruction: 'Join the motorway' })).toBe('motorway');
+        expect(RG.inferRoadClassFromManeuver({ instruction: 'Continue on M1' })).toBe('motorway');
+    });
+
+    test('infers primary from A-road text', () => {
+        expect(RG.inferRoadClassFromManeuver({ instruction: 'Turn onto the A road' })).toBe('primary');
+    });
+
+    test('returns null when no match', () => {
+        expect(RG.inferRoadClassFromManeuver({ instruction: 'Turn left' })).toBeNull();
+        expect(RG.inferRoadClassFromManeuver(null)).toBeNull();
+    });
+});
+
+describe('inferRoadClassFromStreetNames', () => {
+    test('M-prefixed street → motorway', () => {
+        expect(RG.inferRoadClassFromStreetNames(['M1', 'London Road'])).toBe('motorway');
+    });
+
+    test('A-prefixed street → primary', () => {
+        expect(RG.inferRoadClassFromStreetNames(['A40'])).toBe('primary');
+    });
+
+    test('B-prefixed street → secondary', () => {
+        expect(RG.inferRoadClassFromStreetNames(['B1234'])).toBe('secondary');
+    });
+
+    test('unknown name → null', () => {
+        expect(RG.inferRoadClassFromStreetNames(['High Street'])).toBeNull();
+    });
+
+    test('empty / null → null', () => {
+        expect(RG.inferRoadClassFromStreetNames([])).toBeNull();
+        expect(RG.inferRoadClassFromStreetNames(null)).toBeNull();
+    });
+});
+
 describe('computeRemainingDistanceAlongRoute', () => {
     const polyline = [
         [51.50, -0.12],

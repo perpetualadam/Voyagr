@@ -193,7 +193,71 @@
         distanceAlongRouteToVertexMeters: distanceAlongRouteToVertexMeters,
         totalPolylineLengthMeters: totalPolylineLengthMeters,
         computeRemainingDistanceAlongRoute: computeRemainingDistanceAlongRoute,
+        cumulativeDistanceBetweenVertices: cumulativeDistanceBetweenVertices,
+        inferRoadClassFromManeuver: inferRoadClassFromManeuver,
+        inferRoadClassFromStreetNames: inferRoadClassFromStreetNames,
     };
+
+    // ======================================================================
+    // cumulativeDistanceBetweenVertices — pure explicit-arg version of the
+    // previously global-reading cumulativeRouteDistanceBetween
+    // ======================================================================
+
+    /**
+     * Cumulative along-polyline distance (metres) between two vertex indices.
+     * Indices are clamped to valid range; order does not matter (swapped if b < a).
+     * Returns Infinity when the polyline is invalid (matching the monolith's contract).
+     * @param {Array<[number,number]>} polyline
+     * @param {number} i
+     * @param {number} j
+     * @returns {number}
+     */
+    function cumulativeDistanceBetweenVertices(polyline, i, j) {
+        if (!polyline || polyline.length < 2) return Infinity;
+        var n = polyline.length;
+        var a = Math.max(0, Math.min(i | 0, n - 1));
+        var b = Math.max(0, Math.min(j | 0, n - 1));
+        if (b < a) { var t = a; a = b; b = t; }
+        var d = 0;
+        for (var k = a; k < b; k++) {
+            d += haversineDistanceMeters(polyline[k][0], polyline[k][1], polyline[k + 1][0], polyline[k + 1][1]);
+        }
+        return d;
+    }
+
+    // ======================================================================
+    // Road-class inference — pure, no global state, extracted from voyagr-app.js
+    // ======================================================================
+
+    /**
+     * Infer a Valhalla road_class from a maneuver's explicit field or instruction text.
+     * @param {object|null} step - Valhalla maneuver object
+     * @returns {string|null}
+     */
+    function inferRoadClassFromManeuver(step) {
+        if (!step) return null;
+        if (step.road_class) return step.road_class;
+        var instruction = String(step.instruction || '').toLowerCase();
+        if (instruction.indexOf('motorway') >= 0 || instruction.indexOf('m1') >= 0 || instruction.indexOf('m25') >= 0) return 'motorway';
+        if (instruction.indexOf('a-road') >= 0 || instruction.indexOf('a road') >= 0) return 'primary';
+        if (instruction.indexOf('b-road') >= 0 || instruction.indexOf('b road') >= 0) return 'secondary';
+        return null;
+    }
+
+    /**
+     * Infer road class from UK-style road numbers in street names (M1, A40, B1234).
+     * @param {string[]|null|undefined} streetNames
+     * @returns {string|null}
+     */
+    function inferRoadClassFromStreetNames(streetNames) {
+        if (!Array.isArray(streetNames) || streetNames.length === 0) return null;
+        var raw = String(streetNames[0] || '').trim().toUpperCase();
+        if (!raw) return null;
+        if (/^M\d/.test(raw) || raw.indexOf('MOTORWAY') >= 0) return 'motorway';
+        if (/^A\d/.test(raw)) return 'primary';
+        if (/^B\d/.test(raw)) return 'secondary';
+        return null;
+    }
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api;
