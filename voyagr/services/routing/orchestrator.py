@@ -231,3 +231,47 @@ def classify_valhalla_route_data(route_data: Dict[str, Any]) -> Optional[str]:
     if 'trip' not in route_data:
         return "Valhalla response missing 'trip' key"
     return None
+
+
+def find_baseline_cameras_on_route(
+    baseline_coords: List[Any],
+    candidate_hazards: List[Dict[str, float]],
+    max_candidates: int = 30,
+    sample_step: int = 10,
+    proximity_deg: float = 0.001,
+) -> List[Dict[str, float]]:
+    """
+    Return the subset of ``candidate_hazards`` (Valhalla exclude_locations) that lie
+    on/near the baseline route. Mirrors the previous inline Optimised-Discovery scan:
+    the top ``max_candidates`` are checked against every ``sample_step``-th baseline
+    coordinate, and kept when within ``proximity_deg`` (~100 m) of the route.
+    """
+    on_route: List[Dict[str, float]] = []
+    for hazard in (candidate_hazards or [])[:max_candidates]:
+        for coord in (baseline_coords or [])[::sample_step]:
+            dist = ((hazard['lat'] - coord[0]) ** 2 + (hazard['lon'] - coord[1]) ** 2) ** 0.5
+            if dist < proximity_deg:
+                on_route.append(hazard)
+                break
+    return on_route
+
+
+def build_valhalla_discovery_payload(
+    *,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    exclude_locations: List[Dict[str, float]],
+) -> Dict[str, Any]:
+    """
+    Build the Optimised-Discovery Valhalla payload: a plain 2-point auto request
+    that aggressively excludes the baseline route's cameras. Mirrors the previous
+    inline dict exactly (exclude_locations capped to 50 by the caller).
+    """
+    return {
+        "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
+        "costing": "auto",
+        "exclude_locations": exclude_locations,
+        "directions_options": {"generalize": 0},
+    }
