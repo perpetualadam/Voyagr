@@ -4859,31 +4859,31 @@ async function calculateRoute() {
         Number.isFinite(currentLon);
     const routeStartCoordStr = liveGpsOk ? `${currentLat},${currentLon}` : geocodedStart;
 
+    // Shared hazard/avoidance/cost/preference fields are built by the pure
+    // VoyagrRoutingRequest module (shared with the reroute path); this handler
+    // adds start/end and the multi-drop fields it alone sends.
     const requestBody = {
         start: routeStartCoordStr,
         end: geocodedEnd,
-        routing_mode: currentRoutingMode,
-        vehicle_type: currentVehicleType,
-        ...getRouteCostParams(currentVehicleType),
-        enable_hazard_avoidance: enableHazardAvoidance,
-        avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
-        avoid_caz: localStorage.getItem('pref_caz') !== 'false',
-        avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-        avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+        ...VoyagrRoutingRequest.buildSharedRouteOptions({
+            routingMode: currentRoutingMode,
+            vehicleType: currentVehicleType,
+            costParams: getRouteCostParams(currentVehicleType),
+            enableHazardAvoidance: enableHazardAvoidance,
+            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
+            avoidCaz: localStorage.getItem('pref_caz') !== 'false',
+            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
+            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+            avoidTolls: avoidTollRoads,
+            avoidMotorways: avoidMotorways,
+            avoidFerries: avoidFerries,
+            routePrefs: routePrefs,
+        }),
         via_points: viaPointsData,
         stops: stopsData,
         optimize_stop_order: optimizeOrder,
         round_trip: roundTrip,
         departure_time: departureTime,
-        avoid_tolls: avoidTollRoads,
-        avoid_motorways: avoidMotorways,
-        avoid_ferries: avoidFerries,
-        // Extended route preferences — translated server-side into Valhalla auto costing_options.
-        prefer_scenic: !!routePrefs.preferScenic,
-        prefer_quiet: !!routePrefs.preferQuiet,
-        avoid_unpaved: !!routePrefs.avoidUnpaved,
-        route_optimization: routePrefs.routeOptimization || 'fastest',
-        max_detour: (typeof routePrefs.maxDetour === 'number') ? routePrefs.maxDetour : 20,
     };
 
     console.log('[calculateRoute] Making API request to /api/route with:', requestBody);
@@ -7131,29 +7131,29 @@ function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) 
             .map(p => ({ lat: p.lat, lon: p.lon }))
         : [];
 
+    // Shared hazard/avoidance/cost/preference fields come from the pure
+    // VoyagrRoutingRequest module (shared with calculateRoute); this path adds
+    // start/end, explicit avoid_points, and the include_tolls/include_caz flags.
     return {
         start: `${startLat},${startLon}`,
         end: destination,
         avoid_points: cleanAvoidPoints,
-        routing_mode: currentRoutingMode || 'auto',
-        vehicle_type: currentVehicleType || 'petrol_diesel',
-        ...getRouteCostParams(currentVehicleType),
         include_tolls: localStorage.getItem('includeTolls') !== 'false',
         include_caz: localStorage.getItem('includeCAZ') !== 'false',
-        enable_hazard_avoidance: enableHazardAvoidance,
-        avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
-        avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-        avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
-        avoid_tolls: isAvoidTollsEnabled(),
-        avoid_motorways: localStorage.getItem('pref_avoid_motorways') === 'true',
-        avoid_ferries: localStorage.getItem('pref_avoid_ferries') === 'true',
-        avoid_caz: localStorage.getItem('pref_caz') !== 'false',
-        // Extended route preferences — mirror calculateRoute so reroutes honour the same settings.
-        prefer_scenic: !!routePrefs.preferScenic,
-        prefer_quiet: !!routePrefs.preferQuiet,
-        avoid_unpaved: !!routePrefs.avoidUnpaved,
-        route_optimization: routePrefs.routeOptimization || 'fastest',
-        max_detour: (typeof routePrefs.maxDetour === 'number') ? routePrefs.maxDetour : 20,
+        ...VoyagrRoutingRequest.buildSharedRouteOptions({
+            routingMode: currentRoutingMode || 'auto',
+            vehicleType: currentVehicleType || 'petrol_diesel',
+            costParams: getRouteCostParams(currentVehicleType),
+            enableHazardAvoidance: enableHazardAvoidance,
+            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
+            avoidCaz: localStorage.getItem('pref_caz') !== 'false',
+            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
+            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+            avoidTolls: isAvoidTollsEnabled(),
+            avoidMotorways: localStorage.getItem('pref_avoid_motorways') === 'true',
+            avoidFerries: localStorage.getItem('pref_avoid_ferries') === 'true',
+            routePrefs: routePrefs,
+        }),
     };
 }
 
