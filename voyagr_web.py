@@ -2400,9 +2400,10 @@ from voyagr.services.routing.orchestrator import (
 from voyagr.services.routing.osrm_fallback import OsrmRouteContext, build_osrm_routes
 from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers, valhalla_maneuver_dict
 from voyagr.services.routing.route_entries import build_valhalla_route_entry
-# FallbackChainOptimizer lives in voyagr.services.routing.engines (single source of
-# truth). ParallelRoutingEngine there is used by the routing debug blueprint.
-from voyagr.services.routing.engines import FallbackChainOptimizer
+# FallbackChainOptimizer / get_traffic_duration_multiplier live in
+# voyagr.services.routing.engines (single source of truth). ParallelRoutingEngine
+# there is used by the routing debug blueprint.
+from voyagr.services.routing.engines import FallbackChainOptimizer, get_traffic_duration_multiplier
 # Hazard helpers: single source of truth is voyagr.services.hazards. These were
 # previously duplicated inline in this module; imported here so /api/route,
 # /api/multi-stop-route and GraphHopper avoidance all share one implementation.
@@ -5335,73 +5336,7 @@ HTML_TEMPLATE = '''
 
 
 
-def get_traffic_duration_multiplier(lat: float, lon: float) -> tuple:
-    """
-    Get traffic-based duration multiplier for more accurate ETAs.
-    Returns (multiplier, traffic_level) tuple.
-
-    Valhalla uses historical average speeds which often underestimate travel time
-    during peak hours. This function queries real-time traffic to adjust the ETA.
-    """
-    try:
-        tomtom_api_key = os.getenv('TOMTOM_API_KEY', '')
-        if not tomtom_api_key:
-            # No API key - use time-of-day based estimation
-            hour = datetime.now().hour
-            day_of_week = datetime.now().weekday()
-
-            # Peak hours: 7-9am and 4-7pm on weekdays
-            is_weekday = day_of_week < 5
-            is_morning_peak = 7 <= hour <= 9
-            is_evening_peak = 16 <= hour <= 19
-
-            if is_weekday and (is_morning_peak or is_evening_peak):
-                return (1.35, 'Peak Hours')  # 35% longer during rush hour
-            elif is_weekday and 9 < hour < 16:
-                return (1.15, 'Daytime')  # 15% longer during day
-            else:
-                return (1.0, 'Off-Peak')  # No adjustment
-
-        # Query TomTom Traffic Flow API
-        url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/relative0/10/json"
-        params = {
-            'key': tomtom_api_key,
-            'point': f"{lat},{lon}",
-            'unit': 'KMPH'
-        }
-
-        response = requests.get(url, params=params, timeout=3)
-        if response.status_code == 200:
-            data = response.json()
-            flow_data = data.get('flowSegmentData', {})
-            current_speed = flow_data.get('currentSpeed', 50)
-            free_flow_speed = flow_data.get('freeFlowSpeed', 50)
-
-            if free_flow_speed > 0 and current_speed > 0:
-                # Calculate multiplier: if current is 50% of free flow, multiply by 2
-                multiplier = min(free_flow_speed / current_speed, 2.0)  # Cap at 2x
-
-                # Determine traffic level
-                ratio = current_speed / free_flow_speed
-                if ratio >= 0.9:
-                    traffic_level = 'Free Flow'
-                elif ratio >= 0.7:
-                    traffic_level = 'Light Traffic'
-                    multiplier = max(multiplier, 1.1)  # At least 10% increase
-                elif ratio >= 0.5:
-                    traffic_level = 'Moderate Traffic'
-                    multiplier = max(multiplier, 1.25)  # At least 25% increase
-                else:
-                    traffic_level = 'Heavy Traffic'
-                    multiplier = max(multiplier, 1.5)  # At least 50% increase
-
-                logger.info(f"[TRAFFIC] Multiplier: {multiplier:.2f}x ({traffic_level}), speeds: {current_speed}/{free_flow_speed} km/h")
-                return (multiplier, traffic_level)
-
-        return (1.0, 'Unknown')
-    except Exception as e:
-        logger.warning(f"[TRAFFIC] Failed to get traffic multiplier: {e}")
-        return (1.0, 'Unknown')
+# get_traffic_duration_multiplier moved to voyagr.services.routing.engines (imported above).
 
 
 @app.route('/api/route', methods=['POST'])
