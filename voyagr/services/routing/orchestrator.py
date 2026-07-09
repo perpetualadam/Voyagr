@@ -1,10 +1,10 @@
 """
 Valhalla routing orchestration helpers.
 
-Phase 1 extracts the pure Valhalla `/route` request-payload builder from
-``voyagr_web.calculate_route``. The HTTP call, response parsing, retry, and
-recovery logic remain in the monolith for now (they are return/jsonify-heavy and
-require live-engine verification to move safely).
+Extracts the pure Valhalla `/route` request-payload builders (primary, retry and
+baseline) and response error-classification from ``voyagr_web.calculate_route``.
+The HTTP call and route-assembly remain in the monolith for now (they are
+return/jsonify-heavy and require live-engine verification to move safely).
 """
 
 from __future__ import annotations
@@ -157,3 +157,77 @@ def build_valhalla_retry_payload(
         if auto_opts:
             payload["costing_options"] = {valhalla_costing: auto_opts}
     return payload
+
+
+def build_valhalla_baseline_request_payload(
+    *,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    route_locations: List[Dict[str, Any]],
+    has_waypoints: bool,
+    valhalla_costing: str,
+    avoid_tolls: bool,
+    avoid_motorways: bool,
+    avoid_ferries: bool,
+    departure_time: Optional[str],
+    prefer_scenic: bool = False,
+    prefer_quiet: bool = False,
+    avoid_unpaved: bool = False,
+    route_optimization: str = 'fastest',
+) -> Dict[str, Any]:
+    """
+    Valhalla /route JSON without exclude_locations — used when hazard-heavy requests fail (e.g. HTTP 400)
+    but we still want Valhalla fastest + alternates alongside GraphHopper.
+    """
+    payload: Dict[str, Any] = {
+        "locations": route_locations if has_waypoints else [
+            {"lat": start_lat, "lon": start_lon},
+            {"lat": end_lat, "lon": end_lon},
+        ],
+        "costing": valhalla_costing,
+        "alternates": 3 if (valhalla_costing == 'auto' and not has_waypoints) else 0,
+        "units": "kilometers",
+        "language": "en-GB",
+        "directions_options": {"generalize": 0},
+    }
+    if valhalla_costing == 'pedestrian':
+        payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}}
+    elif valhalla_costing == 'bicycle':
+        payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}}
+    elif valhalla_costing in ('auto', 'auto_shorter'):
+        auto_opts = build_auto_costing_options(
+            avoid_tolls=avoid_tolls,
+            avoid_motorways=avoid_motorways,
+            avoid_ferries=avoid_ferries,
+            prefer_scenic=prefer_scenic,
+            prefer_quiet=prefer_quiet,
+            avoid_unpaved=avoid_unpaved,
+            route_optimization=route_optimization,
+        )
+        if auto_opts:
+            payload["costing_options"] = {valhalla_costing: auto_opts}
+
+    if valhalla_costing == 'auto':
+        if departure_time:
+            payload["date_time"] = {"type": 1, "value": departure_time}
+        else:
+            payload["date_time"] = {"type": 1, "value": datetime.now().strftime('%Y-%m-%dT%H:%M')}
+    return payload
+
+
+def classify_valhalla_route_data(route_data: Dict[str, Any]) -> Optional[str]:
+    """
+    Classify a parsed Valhalla HTTP-200 ``/route`` JSON body.
+
+    Returns a ``valhalla_error`` string when the response is unusable (Valhalla
+    reported an error, or there is no ``trip``), or ``None`` when the body looks
+    usable. Pure — mirrors the previous inline checks in ``calculate_route`` so
+    control flow in the caller is unchanged.
+    """
+    if 'error' in route_data:
+        return f"Valhalla returned error: {route_data['error']}"
+    if 'trip' not in route_data:
+        return "Valhalla response missing 'trip' key"
+    return None
