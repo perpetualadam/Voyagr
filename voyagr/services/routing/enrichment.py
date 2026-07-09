@@ -53,6 +53,11 @@ class RouteEnrichmentContext:
 
 
 def _ensure_kwargs(ctx: RouteEnrichmentContext) -> Dict[str, Any]:
+    """Common kwargs shared by all three ensure_* helpers.
+
+    Note: ``graphhopper_route`` is intentionally NOT included — only
+    ``ensure_optimised_camera_avoiding_route`` accepts it (scenic/shortest do not).
+    """
     return {
         'url': ctx.url,
         'headers': ctx.headers,
@@ -66,7 +71,6 @@ def _ensure_kwargs(ctx: RouteEnrichmentContext) -> Dict[str, Any]:
         'hazards': ctx.hazards,
         'enable_hazard_avoidance': ctx.enable_hazard_avoidance,
         'avoid_cameras': ctx.avoid_cameras,
-        'graphhopper_route': ctx.graphhopper_route,
         'cost_calculator': ctx.cost_calculator,
         'vehicle_type': ctx.vehicle_type,
         'fuel_efficiency': ctx.fuel_efficiency,
@@ -175,7 +179,10 @@ def apply_valhalla_route_enrichment(
     if merge_graphhopper:
         routes = merge_graphhopper_optimised_route(routes, ctx, log_label=log_label)
 
-    routes = vw.ensure_optimised_camera_avoiding_route(routes, **ensure_kw)
+    # Only ensure_optimised_* takes graphhopper_route; scenic/shortest do not.
+    routes = vw.ensure_optimised_camera_avoiding_route(
+        routes, graphhopper_route=ctx.graphhopper_route, **ensure_kw
+    )
     routes = vw.ensure_scenic_valhalla_route(routes, **ensure_kw)
     routes = vw.ensure_shortest_respects_camera_avoidance(routes, **ensure_kw)
     routes = annotate_routes_camera_proximity(routes, ctx.hazards)
