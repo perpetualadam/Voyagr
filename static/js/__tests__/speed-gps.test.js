@@ -204,6 +204,36 @@ describe('stepSmoothGpsSpeedMph', () => {
         const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 0, initAt: 1000 }, 0.3, 2000);
         expect(r.value).toBe(0);
     });
+
+    test('resets to the raw value when the init window has elapsed', () => {
+        // moving (smoothed >= dead band), fix well past INIT_RESET_MS (5000)
+        const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 20, initAt: 1000 }, 30, 7000);
+        expect(r.value).toBe(30);
+        expect(r.state.smoothedMph).toBe(30);
+    });
+
+    test('resets to the raw value when there is no prior init timestamp', () => {
+        const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 20, initAt: 0 }, 28, 2000);
+        expect(r.value).toBe(28);
+    });
+
+    test('a very large jump decays gradually instead of snapping fully', () => {
+        // delta 60 >= LARGE_JUMP_MPH(55): smoothed = 0.8*10 + 0.2*70 = 22
+        const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 10, initAt: 1000 }, 70, 2000);
+        expect(r.value).toBeCloseTo(22, 5);
+    });
+
+    test('a medium jump snaps to the raw value', () => {
+        // delta 10 in [SNAP_DELTA_MPH(8), LARGE_JUMP_MPH(55)) -> snap
+        const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 10, initAt: 1000 }, 20, 2000);
+        expect(r.value).toBe(20);
+    });
+
+    test('a small delta is EMA-smoothed', () => {
+        // delta 3 < SNAP_DELTA_MPH: smoothed = 0.55*10 + 0.45*13 = 11.35
+        const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 10, initAt: 1000 }, 13, 2000);
+        expect(r.value).toBeCloseTo(11.35, 5);
+    });
 });
 
 describe('normalizeGeolocationSpeedToMph', () => {

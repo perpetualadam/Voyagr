@@ -158,6 +158,41 @@ describe('buildTurnAnnouncement — roundabouts', () => {
             verbalPre: 'Take the second exit'
         })).toBe('Take the second exit');
     });
+
+    test('500 m prefers a Valhalla verbal alert when present', () => {
+        expect(VA.buildTurnAnnouncement({
+            direction: 'roundabout', announcementDistance: 500, valhallaType: 26,
+            roundaboutExitCount: 2, verbalAlert: 'Enter the roundabout and take the 2nd exit'
+        })).toBe('Enter the roundabout and take the 2nd exit');
+    });
+
+    test('200 m threshold wording (metric), with an "nth" ordinal exit', () => {
+        expect(VA.buildTurnAnnouncement({
+            direction: 'roundabout', announcementDistance: 200, valhallaType: 26,
+            roundaboutExitCount: 4, streetName: 'Mill Lane'
+        })).toBe('In 200 meters, take the 4th exit onto Mill Lane');
+    });
+
+    test('100 m threshold synthesises wording when no verbal pre is given', () => {
+        expect(VA.buildTurnAnnouncement({
+            direction: 'roundabout', announcementDistance: 100, valhallaType: 27,
+            roundaboutExitCount: 1
+        })).toBe('In 100 meters, take the 1st exit');
+    });
+
+    test('100 m threshold prefers verbal pre when present', () => {
+        expect(VA.buildTurnAnnouncement({
+            direction: 'roundabout', announcementDistance: 100, valhallaType: 26,
+            roundaboutExitCount: 2, verbalPre: 'Take the 2nd exit now'
+        })).toBe('Take the 2nd exit now');
+    });
+
+    test('200 m imperial wording', () => {
+        expect(VA.buildTurnAnnouncement({
+            direction: 'roundabout', announcementDistance: 200, valhallaType: 26,
+            roundaboutExitCount: 2, distanceUnit: 'mi'
+        })).toBe('In 600 feet, take the 2nd exit');
+    });
 });
 
 describe('buildTurnAnnouncement — defensive', () => {
