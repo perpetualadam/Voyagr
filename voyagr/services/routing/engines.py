@@ -214,7 +214,12 @@ def route_with_graphhopper(
     start_lat: float, start_lon: float,
     end_lat: float, end_lon: float,
     enable_camera_avoidance: bool = True,
-    route_bbox: Optional[Dict[str, float]] = None
+    route_bbox: Optional[Dict[str, float]] = None,
+    traffic_light_hazards: Optional[list] = None,
+    railway_crossing_hazards: Optional[list] = None,
+    avoid_caz_zones: bool = False,
+    avoid_points: Optional[list] = None,
+    camera_hazards: Optional[Dict[str, list]] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Route using GraphHopper with optional camera avoidance via pre-loaded areas.
@@ -224,11 +229,22 @@ def route_with_graphhopper(
         end_lat, end_lon: End coordinates
         enable_camera_avoidance: Whether to use camera avoidance custom model
         route_bbox: Bounding box of route for area selection
+        traffic_light_hazards: Optional OSM traffic light points to avoid (dynamic polygons)
+        railway_crossing_hazards: Optional OSM level crossing points (separate from traffic lights)
+        avoid_caz_zones: Penalize edges inside UK CAZ/ULEZ polygons (same data as costing)
+        avoid_points: Optional congested/closed segment points to penalise (Lever C2 traffic)
 
     Returns:
         Route data dict or None if failed
     """
     try:
+        from voyagr.services.hazards import (
+            merge_graphhopper_custom_model_parts,
+            build_graphhopper_caz_avoidance_model,
+            build_graphhopper_custom_model as gh_build_hazard_model,
+            build_graphhopper_combined_camera_model,
+        )
+
         url = f"{GRAPHHOPPER_URL}/route"
 
         headers = {
@@ -237,27 +253,66 @@ def route_with_graphhopper(
             'Accept': 'application/json'
         }
 
+        # Build request payload (used for POST + custom_model flows)
         payload: Dict[str, Any] = {
-            "points": [[start_lon, start_lat], [end_lon, end_lat]],
+            "points": [[start_lon, start_lat], [end_lon, end_lat]],  # GraphHopper uses [lon, lat]
             "profile": "car",
             "locale": "en",
             "instructions": True,
             "points_encoded": True,
-            "elevation": False
+            "elevation": False,
+            # Ask GraphHopper for per-edge speed limits so the optimised route can supply a
+            # speed-limit hint to the widget (parity with Valhalla's maneuver speed_limit).
+            "details": ["max_speed"]
         }
 
         custom_model: Optional[Dict[str, Any]] = None
         custom_model_applied = False
+        cam_model: Optional[Dict[str, Any]] = None
         if enable_camera_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE:
-            custom_model = build_graphhopper_camera_avoidance_model(route_bbox)
-            if custom_model:
-                payload["custom_model"] = custom_model
-                logger.info("[GRAPHHOPPER] Using camera avoidance custom model")
+            cam_model = build_graphhopper_combined_camera_model(
+                camera_hazards if camera_hazards and any(camera_hazards.values()) else None,
+                route_bbox=route_bbox,
+            ) or None
+            if cam_model:
+                logger.info('[GRAPHHOPPER] Using UK camera area sections (+ SCDB filters when enabled)')
+
+        osm_dynamic: Dict[str, list] = {}
+        if traffic_light_hazards:
+            osm_dynamic['traffic_light'] = traffic_light_hazards
+        if railway_crossing_hazards:
+            osm_dynamic['railway_crossing'] = railway_crossing_hazards
+        if avoid_points:
+            # Congested/closed segments — penalise (not hard-block) so the optimised route
+            # prefers to route around them when a reasonable alternative exists.
+            osm_dynamic['avoid_point'] = avoid_points
+
+        tl_rx_model: Optional[Dict[str, Any]] = None
+        if osm_dynamic:
+            tl_rx_model = gh_build_hazard_model(
+                osm_dynamic,
+                route_bbox=route_bbox,
+                max_hazards=22,
+            ) or None
+
+        caz_model: Optional[Dict[str, Any]] = None
+        if avoid_caz_zones:
+            caz_model = build_graphhopper_caz_avoidance_model(route_bbox) or None
+
+        custom_model = merge_graphhopper_custom_model_parts(cam_model, tl_rx_model, caz_model)
+        if custom_model:
+            payload["custom_model"] = custom_model
+            logger.info("[GRAPHHOPPER] Using custom model (cameras, OSM hazards, and/or CAZ polygons)")
 
         logger.info(f"[GRAPHHOPPER] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
 
+        # GraphHopper deployments vary:
+        # - Many self-hosted instances support GET /route with query params.
+        # - Custom models generally require POST with JSON + ch.disable=true.
         response: Optional[requests.Response] = None
+
         if custom_model:
+            # Custom model + CH disable must be sent as a query param.
             response = requests.post(
                 url,
                 params={"ch.disable": "true"},
@@ -272,6 +327,7 @@ def route_with_graphhopper(
                 response = None
 
         if response is None:
+            # Prefer GET for broad compatibility.
             params_point = {
                 "point": [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"],
                 "profile": "car",
@@ -279,6 +335,7 @@ def route_with_graphhopper(
                 "instructions": "true",
                 "points_encoded": "true",
                 "elevation": "false",
+                "details": "max_speed",
             }
             response = requests.get(url, params=params_point, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
 
@@ -288,6 +345,8 @@ def route_with_graphhopper(
                 params_points.pop("point", None)
                 params_points["points"] = [f"{start_lat},{start_lon}", f"{end_lat},{end_lon}"]
                 response = requests.get(url, params=params_points, timeout=GRAPHHOPPER_TIMEOUT, headers={'User-Agent': 'Voyagr-PWA/1.0', 'Accept': 'application/json'})
+
+            # If GET fails, try POST without a custom model (some deployments accept JSON POST only).
             if response.status_code != 200:
                 logger.warning(f"[GRAPHHOPPER] GET failed (HTTP {response.status_code}); retrying POST(no custom_model)")
                 payload_no_model = dict(payload)
@@ -300,13 +359,15 @@ def route_with_graphhopper(
             if 'paths' in data and len(data['paths']) > 0:
                 path = data['paths'][0]
 
+                # Extract route data
                 route_data = {
                     'success': True,
                     'source': 'GraphHopper',
                     'distance_km': path.get('distance', 0) / 1000,
                     'duration_seconds': path.get('time', 0) / 1000,
-                    'geometry': path.get('points', ''),
+                    'geometry': path.get('points', ''),  # Encoded polyline
                     'instructions': path.get('instructions', []),
+                    'details': path.get('details', {}),  # per-edge attrs incl. max_speed
                     'bbox': path.get('bbox', []),
                     'camera_avoidance': custom_model_applied,
                     'custom_model_applied': custom_model_applied,
