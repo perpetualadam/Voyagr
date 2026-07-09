@@ -120,7 +120,16 @@
         var n = Number(mph);
         if (!Number.isFinite(n) || n < 5 || n > 100) return null;
         var rounded = Math.round(n);
-        if (trustServer) return rounded;
+        if (trustServer) {
+            // Trust authoritative sources (OSM / TomTom / road-type-default) for
+            // plausible values, but still reject data errors that are impossible for
+            // the road type (e.g. a residential way mis-tagged 70 mph).
+            if (speedGpsModule && typeof speedGpsModule.isPlausibleEdgeSpeedLimitMph === 'function'
+                    && !speedGpsModule.isPlausibleEdgeSpeedLimitMph(rounded, roadClass, gpsSpeedMph)) {
+                return null;
+            }
+            return rounded;
+        }
         if (speedGpsModule && typeof speedGpsModule.sanitizeApiSpeedLimitMph === 'function') {
             return speedGpsModule.sanitizeApiSpeedLimitMph(rounded, roadClass, gpsSpeedMph);
         }
