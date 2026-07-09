@@ -13,11 +13,21 @@ Cloud agents **cannot** reach your VPS or live Valhalla/GraphHopper. This workfl
 
 ## Standard deploy (run first)
 
+**User’s usual command** (works; restarts voyagr):
+
+```bash
+cd /opt/voyagr && git pull origin main && systemctl restart voyagr && systemctl status voyagr
+```
+
+**Repo script** (same idea + ownership fix for non-root `voyagr` user):
+
 ```bash
 sudo bash /opt/voyagr/deploy/deploy-pull.sh
 ```
 
-Paste the full output. Expect: `Deploy complete`, HTTP `200` from app-settings curl.
+`deploy-pull.sh` also runs `deploy/setup-voyagr-user.sh --permissions-only --restart`. If you only `git pull` + `restart` as root, that’s fine when ownership is already correct.
+
+Paste full output from either deploy path before running verification below.
 
 ---
 
@@ -148,7 +158,7 @@ After **PR #13** merge, also expect:
 
 ## For the next desktop agent
 
-**Workflow:** Agent codes → PR → user merges → user runs this doc on VPS → user pastes output → agent confirms Tier 3 or diagnoses failures.
+**Workflow:** Agent codes → PR → user merges → user deploys (`git pull` + `restart` or `deploy-pull.sh`) → user runs verification block below → user pastes output → agent confirms Tier 3 or diagnoses failures.
 
 **Do not** assume VPS state from cloud-only test runs. **Do** ask the user to run `docs/handover-vps-verification.md` when:
 - Merging routing/backend PRs
