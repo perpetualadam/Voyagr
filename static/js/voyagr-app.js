@@ -199,11 +199,12 @@ window.debugScrollIssue = function() {
  * @param {*} km - Parameter description
  * @returns {*} Return value description
  */
+// convertDistance / getDistanceUnit / convertTemperature / getTemperatureUnit /
+// getFuelEfficiencyInUnits / getFuelEfficiencyLabel moved to modules/navigation/units.js
+// (VoyagrUnits). Thin stubs pass the global setting as an explicit arg.
 function convertDistance(km) {
-    if (distanceUnit === 'mi') {
-        return (km * 0.621371).toFixed(2);
-    }
-    return km.toFixed(2);
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.convertDistance(km, distanceUnit) : Number(km).toFixed(2);
 }
 
 /**
@@ -212,7 +213,8 @@ function convertDistance(km) {
  * @returns {*} Return value description
  */
 function getDistanceUnit() {
-    return distanceUnit === 'mi' ? 'mi' : 'km';
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.getDistanceUnit(distanceUnit) : (distanceUnit === 'mi' ? 'mi' : 'km');
 }
 
 /**
@@ -254,10 +256,8 @@ function getSpeedUnit() {
  * @returns {*} Return value description
  */
 function convertTemperature(celsius) {
-    if (temperatureUnit === 'fahrenheit') {
-        return ((celsius * 9 / 5) + 32).toFixed(1);
-    }
-    return celsius.toFixed(1);
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.convertTemperature(celsius, temperatureUnit) : Number(celsius).toFixed(1);
 }
 
 /**
@@ -266,7 +266,8 @@ function convertTemperature(celsius) {
  * @returns {*} Return value description
  */
 function getTemperatureUnit() {
-    return temperatureUnit === 'fahrenheit' ? '°F' : '°C';
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.getTemperatureUnit(temperatureUnit) : (temperatureUnit === 'fahrenheit' ? '°F' : '°C');
 }
 
 /**
@@ -296,12 +297,8 @@ function adjustCostForUnits(cost, costType = 'fuel') {
  * @returns {*} Return value description
  */
 function getFuelEfficiencyInUnits(liters_per_100km) {
-    if (distanceUnit === 'mi') {
-        // Convert L/100km to MPG (miles per gallon)
-        // 1 L/100km ≈ 235.214 / L/100km = MPG
-        return (235.214 / liters_per_100km).toFixed(1);
-    }
-    return liters_per_100km.toFixed(1);
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.getFuelEfficiencyInUnits(liters_per_100km, distanceUnit) : Number(liters_per_100km).toFixed(1);
 }
 
 /**
@@ -310,7 +307,8 @@ function getFuelEfficiencyInUnits(liters_per_100km) {
  * @returns {*} Return value description
  */
 function getFuelEfficiencyLabel() {
-    return distanceUnit === 'mi' ? 'MPG' : 'L/100km';
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.getFuelEfficiencyLabel(distanceUnit) : (distanceUnit === 'mi' ? 'MPG' : 'L/100km');
 }
 
 // ===== NAVIGATION VARIABLES =====
@@ -10390,33 +10388,16 @@ function getActiveRouteManeuverIndex(snappedIndex) {
  * @param {Object|null} step - A Valhalla maneuver object (or null).
  * @returns {string|null} Road class string, or null when nothing useful could be inferred.
  */
+// inferRoadClassFromManeuver / inferRoadClassFromStreetNames moved to
+// modules/navigation/route-geometry.js. Thin stubs keep all callers working.
 function inferRoadClassFromManeuver(step) {
-    if (!step) return null;
-    if (step.road_class) return step.road_class;
-    const instruction = (step.instruction || '').toLowerCase();
-    if (instruction.includes('motorway') || instruction.includes('m1') || instruction.includes('m25')) {
-        return 'motorway';
-    } else if (instruction.includes('a-road') || instruction.includes('a road')) {
-        return 'primary';
-    } else if (instruction.includes('b-road') || instruction.includes('b road')) {
-        return 'secondary';
-    }
-    return null;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.inferRoadClassFromManeuver(step) : (step && step.road_class) || null;
 }
 
-/**
- * Infer road class from UK-style road numbers in street names (M1, A40, B1234).
- * @param {string[]|null|undefined} streetNames
- * @returns {string|null}
- */
 function inferRoadClassFromStreetNames(streetNames) {
-    if (!Array.isArray(streetNames) || streetNames.length === 0) return null;
-    const raw = String(streetNames[0] || '').trim().toUpperCase();
-    if (!raw) return null;
-    if (/^M\d/.test(raw) || raw.includes('MOTORWAY')) return 'motorway';
-    if (/^A\d/.test(raw)) return 'primary';
-    if (/^B\d/.test(raw)) return 'secondary';
-    return null;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.inferRoadClassFromStreetNames(streetNames) : null;
 }
 
 /**
@@ -10962,19 +10943,12 @@ function buildTurnDisplayInstruction(turnInfo) {
 }
 
 /** Cumulative along-route distance (m) between two polyline vertex indices. */
+// cumulativeRouteDistanceBetween: pure version (explicit polyline arg) is in
+// route-geometry.js as cumulativeDistanceBetweenVertices. This wrapper still reads
+// the global routePolyline — it stays as orchestration glue.
 function cumulativeRouteDistanceBetween(i, j) {
-    if (!routePolyline || routePolyline.length < 2) return Infinity;
-    let a = Math.max(0, Math.min(i | 0, routePolyline.length - 1));
-    let b = Math.max(0, Math.min(j | 0, routePolyline.length - 1));
-    if (b < a) { const t = a; a = b; b = t; }
-    let d = 0;
-    for (let k = a; k < b; k++) {
-        d += calculateHaversineDistance(
-            routePolyline[k][0], routePolyline[k][1],
-            routePolyline[k + 1][0], routePolyline[k + 1][1]
-        );
-    }
-    return d;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.cumulativeDistanceBetweenVertices(routePolyline, i, j) : Infinity;
 }
 
 /**
