@@ -4,9 +4,11 @@ import unittest
 
 from voyagr.services.routing.orchestrator import (
     build_valhalla_baseline_request_payload,
+    build_valhalla_discovery_payload,
     build_valhalla_retry_payload,
     build_valhalla_route_payload,
     classify_valhalla_route_data,
+    find_baseline_cameras_on_route,
 )
 
 
@@ -132,6 +134,37 @@ class TestClassifyValhallaRouteData(unittest.TestCase):
 
     def test_usable_body_returns_none(self):
         self.assertIsNone(classify_valhalla_route_data({'trip': {'legs': []}}))
+
+
+class TestDiscoveryHelpers(unittest.TestCase):
+    def test_discovery_payload_shape(self):
+        excl = [{'lat': 53.45, 'lon': -1.2}]
+        p = build_valhalla_discovery_payload(
+            start_lat=53.5, start_lon=-1.4, end_lat=53.4, end_lon=-1.1,
+            exclude_locations=excl,
+        )
+        self.assertEqual(p['costing'], 'auto')
+        self.assertEqual(p['exclude_locations'], excl)
+        self.assertEqual(len(p['locations']), 2)
+        self.assertNotIn('alternates', p)
+
+    def test_baseline_cameras_kept_when_near_route(self):
+        coords = [(53.50, -1.40), (53.45, -1.20), (53.40, -1.10)]
+        near = {'lat': 53.4500, 'lon': -1.2000}   # on a sampled vertex
+        far = {'lat': 10.0, 'lon': 10.0}
+        out = find_baseline_cameras_on_route(coords, [near, far], sample_step=1)
+        self.assertIn(near, out)
+        self.assertNotIn(far, out)
+
+    def test_baseline_cameras_respects_max_candidates(self):
+        coords = [(53.45, -1.20)]
+        cands = [{'lat': 53.45, 'lon': -1.20} for _ in range(50)]
+        out = find_baseline_cameras_on_route(coords, cands, max_candidates=5, sample_step=1)
+        self.assertEqual(len(out), 5)
+
+    def test_baseline_cameras_empty_inputs(self):
+        self.assertEqual(find_baseline_cameras_on_route([], [{'lat': 1, 'lon': 2}]), [])
+        self.assertEqual(find_baseline_cameras_on_route([(1, 2)], []), [])
 
 
 if __name__ == '__main__':

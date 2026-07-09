@@ -2389,9 +2389,11 @@ from voyagr.services.routing.enrichment import RouteEnrichmentContext, apply_val
 from voyagr.services.routing.hazard_prep import HazardPrefs, prepare_route_hazards
 from voyagr.services.routing.orchestrator import (
     build_valhalla_baseline_request_payload,
+    build_valhalla_discovery_payload,
     build_valhalla_retry_payload,
     build_valhalla_route_payload,
     classify_valhalla_route_data,
+    find_baseline_cameras_on_route,
 )
 from voyagr.services.routing.osrm_fallback import OsrmRouteContext, build_osrm_routes
 from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers, valhalla_maneuver_dict
@@ -6253,21 +6255,14 @@ def calculate_route():
                         try:
                             if route_geometry:
                                 baseline_coords = polyline.decode(route_geometry, precision=6)
-                                baseline_cameras = []
-                                for hazard in alt_exclude[:30]:
-                                    for coord in baseline_coords[::10]:
-                                        dist = ((hazard['lat'] - coord[0])**2 + (hazard['lon'] - coord[1])**2)**0.5
-                                        if dist < 0.001:
-                                            baseline_cameras.append(hazard)
-                                            break
+                                baseline_cameras = find_baseline_cameras_on_route(baseline_coords, alt_exclude)
 
                                 if baseline_cameras:
-                                    disc_payload = {
-                                        "locations": [{"lat": start_lat, "lon": start_lon}, {"lat": end_lat, "lon": end_lon}],
-                                        "costing": "auto",
-                                        "exclude_locations": baseline_cameras[:50],
-                                        "directions_options": {"generalize": 0}
-                                    }
+                                    disc_payload = build_valhalla_discovery_payload(
+                                        start_lat=start_lat, start_lon=start_lon,
+                                        end_lat=end_lat, end_lon=end_lon,
+                                        exclude_locations=baseline_cameras[:50],
+                                    )
                                     disc_response = requests.post(url, json=disc_payload, timeout=10, headers=headers)
                                     if disc_response.status_code == 200:
                                         disc_data = disc_response.json()
