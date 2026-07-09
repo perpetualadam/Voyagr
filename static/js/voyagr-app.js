@@ -13545,16 +13545,20 @@ function updateTurnInstructionDisplay(turnInfo) {
     if (!distanceEl || !instructionEl) return;
 
     if (turnInfo) {
-        const onCurrentRoad = turnInfo.direction === 'straight'
-            && (turnInfo.distance == null || turnInfo.distance < 15);
+        // "Continue"/straight keeps you on the current road (prefix "on"); real turns join
+        // a new road (prefix "onto"). Show the running countdown "In <dist>" whenever we
+        // have a meaningful distance (in the user's units), and only fall back to a bare
+        // "On" when essentially at/using the current road (< 15 m or no distance).
+        const isContinue = turnInfo.direction === 'straight';
+        const hasCountdown = turnInfo.distance != null && turnInfo.distance >= 15;
         const formattedDistance = formatTurnDistance(turnInfo.distance || 0);
-        distanceEl.textContent = onCurrentRoad ? 'On' : `In ${formattedDistance}`;
+        distanceEl.textContent = hasCountdown ? `In ${formattedDistance}` : 'On';
 
         instructionEl.textContent = buildTurnDisplayInstruction(turnInfo);
 
         if (streetEl) {
             if (turnInfo.streetName) {
-                const prefix = onCurrentRoad ? 'on' : 'onto';
+                const prefix = isContinue ? 'on' : 'onto';
                 streetEl.textContent = `${prefix} ${turnInfo.streetName}`;
                 streetEl.style.display = 'block';
             } else {
@@ -13850,6 +13854,20 @@ function updateTurnWidgetFromPosition(lat, lon) {
         : null;
 
     if (betweenTurn) {
+        // The next actionable maneuver is beyond the turn-detection range, so show how
+        // far until it (in the user's units) instead of a bare "On". Reuse the same snap +
+        // along-route helpers detectUpcomingTurn uses (no duplicated distance logic).
+        const nextManeuver = (activeIdx >= 0 && activeIdx + 1 < currentRouteSteps.length)
+            ? currentRouteSteps[activeIdx + 1]
+            : null;
+        if (nextManeuver) {
+            const snap = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+            const targetIdx = Math.min(nextManeuver.begin_shape_index || 0, routePolyline.length - 1);
+            const distToNext = distanceAlongRouteToVertexMeters(routePolyline, snap, targetIdx);
+            if (Number.isFinite(distToNext) && distToNext >= 15) {
+                betweenTurn.distance = distToNext;
+            }
+        }
         updateTurnInstructionDisplay(betweenTurn);
     } else {
         updateTurnInstructionDisplay(null);
@@ -15134,6 +15152,18 @@ function startGPSTracking() {
                         valhallaSpeedLimitMph = normalizeManeuverSpeedLimitMph(
                             rawSl, activeManeuver.road_class || roadType, displaySpeedMph
                         );
+                    }
+                }
+                // The hint above is validated against the maneuver's own road_class, which can
+                // outlast the road you're actually on (e.g. a 70 mph motorway edge lingering
+                // after you turn onto a 30 mph street). This is the display fallback used when
+                // the speed-limit API has no data, so re-check it against the CURRENT road type
+                // and drop it if implausible — mirrors the API-side road-type sanitisation.
+                if (valhallaSpeedLimitMph != null) {
+                    const _sgLimit = _speedGps();
+                    if (_sgLimit && typeof _sgLimit.isPlausibleEdgeSpeedLimitMph === 'function'
+                        && !_sgLimit.isPlausibleEdgeSpeedLimitMph(valhallaSpeedLimitMph, roadType, displaySpeedMph)) {
+                        valhallaSpeedLimitMph = null;
                     }
                 }
 
