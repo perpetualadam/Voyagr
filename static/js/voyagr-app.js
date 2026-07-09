@@ -13654,8 +13654,11 @@ function updateThenRow(maneuverIndex, currentDistance) {
                 if (exitCt > 0) label = `Roundabout, ${ordinalEnglishExit(exitCt)} exit`;
             }
             const onto = follow.streetName ? ` onto ${follow.streetName}` : '';
+            // Distance to the following maneuver, formatted in the user's selected units
+            // via the same helper as the main turn row (respects the mph/km UI choice).
+            const thenDistance = formatTurnDistance(follow.gapMeters);
             if (iconEl) iconEl.textContent = getTurnIcon(follow.valhallaType);
-            if (textEl) textEl.textContent = `${label}${onto}`;
+            if (textEl) textEl.textContent = `In ${thenDistance} · ${label}${onto}`;
             show = true;
         }
     }

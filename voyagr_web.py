@@ -2978,7 +2978,7 @@ HTML_TEMPLATE = '''
     <link rel="manifest" href="/manifest.json">
     <title>{{ seo_title }}</title>
     <link href="/static/vendor/maplibre-gl.css" rel="stylesheet" />
-    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260619j" />
+    <link rel="stylesheet" href="/static/css/voyagr.css?v=20260709b" />
     {# All app scripts use `defer`: they still download in parallel with HTML parsing
        and still execute in document order (dependencies preserved), but they no
        longer block first paint. This is the biggest lever for shortening the PWA
@@ -3006,8 +3006,8 @@ HTML_TEMPLATE = '''
     <script defer src="/static/vendor/picovoice/porcupine-web.iife.js"></script>
     <script defer src="/static/vendor/picovoice/web-voice-processor.iife.js"></script>
     {% endif %}
-    <script defer src="/static/js/voyagr-app.js?v=20260709a"></script>
-    <script defer src="/static/js/app.js?v=20260709a"></script>
+    <script defer src="/static/js/voyagr-app.js?v=20260709b"></script>
+    <script defer src="/static/js/app.js?v=20260709b"></script>
     <!-- CSS moved to /static/css/voyagr.css -->
 </head>
 <body>
