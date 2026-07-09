@@ -3206,6 +3206,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/js/modules/navigation/voice-announcements.js?v=20260618a"></script>
     <script defer src="/static/js/modules/navigation/lane-guidance.js?v=20260618a"></script>
     <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20260701b"></script>
+    <script defer src="/static/js/modules/navigation/routing-request.js?v=20260709a"></script>
     <script defer src="/static/js/modules/navigation/speed-gps.js?v=20260701a"></script>
     <script defer src="/static/js/modules/navigation/hazard-alerts.js?v=20260701a"></script>
     <script defer src="/static/js/modules/navigation/speed-limit-widget.js?v=20260701a"></script>
