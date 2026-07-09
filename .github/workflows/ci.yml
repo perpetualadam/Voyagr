@@ -2,9 +2,15 @@ name: CI
 
 # Runs the full test suite on every push/PR to main:
 #   - JS: tautological-test guard (lint:tests) + Jest with coverage thresholds
-#   - Python: behaviour-first unit tests (lane recommendation, GraphHopper mapping,
-#     lane guidance, speed-limit detector). All chosen suites exercise real module
-#     logic and tolerate missing network (live Overpass/TomTom calls fall back to
+#   - Python: behaviour-first unit tests. Two groups:
+#       * navigation/detector suites (lane recommendation, GraphHopper mapping,
+#         lane guidance, speed-limit detector)
+#       * routing-service suites guarding the /api/route modularization (request
+#         parsing, Valhalla payloads/classifier/POST, route entries, response
+#         envelope, maneuvers, OSRM fallback, hazard dedup, enrichment, and a
+#         Flask-level smoke of calculate_route with mocked engines)
+#     All chosen suites exercise real module logic and tolerate missing network/DB
+#     (live Overpass/TomTom calls and absent hazard_preferences fall back to
 #     defaults), so they stay green offline. Suites needing the Kivy/satnav desktop
 #     stack, a local custom_router package, or live servers are intentionally excluded.
 
@@ -74,3 +80,13 @@ jobs:
           tests/test_lane_recommendation.py
           tests/test_lane_guidance.py
           tests/test_speed_limit_detector.py
+          tests/test_route_request_params.py
+          tests/test_valhalla_payload.py
+          tests/test_valhalla_maneuvers.py
+          tests/test_osrm_maneuvers.py
+          tests/test_route_entries.py
+          tests/test_route_success_response.py
+          tests/test_route_enrichment.py
+          tests/test_osrm_fallback.py
+          tests/test_hazards_dedup.py
+          tests/test_calculate_route_smoke.py
