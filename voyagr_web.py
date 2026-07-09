@@ -2999,6 +2999,8 @@ from voyagr.services.routing.costing import (
 )
 from voyagr.services.routing.request_params import parse_route_request
 from voyagr.services.routing.enrichment import RouteEnrichmentContext, apply_valhalla_route_enrichment
+from voyagr.services.routing.hazard_prep import HazardPrefs, prepare_route_hazards
+from voyagr.services.routing.orchestrator import build_valhalla_route_payload
 from voyagr.services.routing.optimised_route import (
     baseline_camera_hazard_count,
     is_primary_optimised_route,
@@ -6725,91 +6727,19 @@ def calculate_route():
             cached_route['cache_stats'] = route_cache.get_stats()
             return jsonify(cached_route)
 
-        # Fetch hazards (always fetch for scoring, even if avoidance is disabled)
-        hazard_start = time.time()
-        hazards = fetch_hazards_for_route(start_lat, start_lon, end_lat, end_lon)
-        hazard_elapsed = (time.time() - hazard_start) * 1000
-        logger.info(f"[HAZARDS] Fetched camera hazards in {hazard_elapsed:.0f}ms: {[(k, len(v)) for k, v in hazards.items() if v]}")
-
-        # ====================================================================
-        # HYBRID INTEGRATION: Fetch TomTom real-time incidents
-        # Combines SCDB cameras with TomTom accidents, roadworks, closures
-        # ====================================================================
-        tomtom_start = time.time()
-        try:
-            # Build bounding box for TomTom API
-            tomtom_bbox = {
-                'north': max(start_lat, end_lat) + 0.1,  # 10km buffer
-                'south': min(start_lat, end_lat) - 0.1,
-                'east': max(start_lon, end_lon) + 0.1,
-                'west': min(start_lon, end_lon) - 0.1
-            }
-
-            # Fetch real-time incidents from TomTom
-            tomtom_incidents = fetch_tomtom_incidents(tomtom_bbox)
-
-            if tomtom_incidents:
-                hazards = merge_hazards_with_tomtom_incidents(hazards, tomtom_incidents)
-                tomtom_elapsed = (time.time() - tomtom_start) * 1000
-                logger.info(f"[TOMTOM] Merged real-time incidents in {tomtom_elapsed:.0f}ms")
-
-                # Extract road closures as additional exclude_locations
-                road_closures = tomtom_incidents.get('road_closed', [])
-                if road_closures:
-                    closure_count = len(road_closures)
-                    logger.info(f"[TOMTOM] {closure_count} road closures found - will be excluded from routing")
-            else:
-                logger.debug("[TOMTOM] No real-time incidents found for route area")
-        except Exception as e:
-            logger.warning(f"[TOMTOM] Failed to fetch incidents (using cameras only): {e}")
-
-        # Fold explicit avoid_points into the hazard set so the existing exclusion
-        # prioritisation (distance-to-route, weight) handles them like any other avoid.
-        if avoid_points:
-            hazards.setdefault('avoid_point', [])
-            for ap in avoid_points:
-                hazards['avoid_point'].append({'lat': ap['lat'], 'lon': ap['lon'], 'severity': 'high'})
-            logger.info(f"[ROUTE] {len(avoid_points)} explicit avoid_points added to hazards")
-
-        if not avoid_cameras:
-            clear_camera_hazard_buckets(hazards)
-        else:
-            filter_camera_hazards_by_preferences(hazards)
-
-        if avoid_traffic_lights:
-            try:
-                from voyagr.services.hazards import fetch_traffic_lights_osm_bbox
-                _south = min(start_lat, end_lat) - 0.1
-                _north = max(start_lat, end_lat) + 0.1
-                _west = min(start_lon, end_lon) - 0.1
-                _east = max(start_lon, end_lon) + 0.1
-                hazards['traffic_light'] = fetch_traffic_lights_osm_bbox(_south, _north, _west, _east)
-                logger.info(f"[TRAFFIC_LIGHTS] Merged {len(hazards.get('traffic_light', []))} OSM traffic signals for routing")
-            except Exception as e:
-                logger.warning(f"[TRAFFIC_LIGHTS] Could not load OSM traffic lights: {e}")
-                hazards['traffic_light'] = []
-        else:
-            hazards['traffic_light'] = []
-
-        if avoid_railway_crossings:
-            try:
-                from voyagr.services.hazards import fetch_railway_crossings_osm_bbox
-                _rs = min(start_lat, end_lat) - 0.1
-                _rn = max(start_lat, end_lat) + 0.1
-                _rw = min(start_lon, end_lon) - 0.1
-                _re = max(start_lon, end_lon) + 0.1
-                hazards['railway_crossing'] = fetch_railway_crossings_osm_bbox(_rs, _rn, _rw, _re)
-                logger.info(f"[RAILWAY_CROSSINGS] Merged {len(hazards.get('railway_crossing', []))} OSM level crossings for routing")
-            except Exception as e:
-                logger.warning(f"[RAILWAY_CROSSINGS] Could not load OSM railway crossings: {e}")
-                hazards['railway_crossing'] = []
-        else:
-            hazards['railway_crossing'] = []
-
-        if enable_hazard_avoidance:
-            logger.info("[HAZARDS] Hazard avoidance ENABLED - will use exclude_locations")
-        else:
-            logger.info("[HAZARDS] Hazard avoidance DISABLED - will score route but not avoid hazards")
+        # Fetch + assemble hazards (SCDB cameras, TomTom incidents, avoid_points,
+        # camera-preference filter, OSM traffic-light/railway overlays). Extracted to
+        # voyagr.services.routing.hazard_prep; behaviour/logging unchanged.
+        hazards = prepare_route_hazards(
+            start_lat, start_lon, end_lat, end_lon,
+            HazardPrefs(
+                avoid_points=avoid_points,
+                avoid_cameras=avoid_cameras,
+                avoid_traffic_lights=avoid_traffic_lights,
+                avoid_railway_crossings=avoid_railway_crossings,
+                enable_hazard_avoidance=enable_hazard_avoidance,
+            ),
+        )
 
         # ====================================================================
         # ROUTING ENGINE PRIORITY:
@@ -7410,56 +7340,24 @@ def calculate_route():
                     logger.error(f"[VALHALLA] Traceback: {traceback.format_exc()}")
                     use_segmented_routing = False
 
-            # Build request payload (standard 2-point routing)
-            payload = {
-                "locations": route_locations if has_waypoints else [
-                    {"lat": start_lat, "lon": start_lon},
-                    {"lat": end_lat, "lon": end_lon}
-                ],
-                "costing": valhalla_costing,
-                "alternates": 3 if (valhalla_costing == 'auto' and not has_waypoints) else 0,
-                # Valhalla API: units/language at top level affect narration (turn-by-turn API reference)
-                "units": "kilometers",
-                "language": "en-GB",
-                "directions_options": {"generalize": 0}
-            }
-
-            if valhalla_costing == 'pedestrian':
-                payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}}
-            elif valhalla_costing == 'bicycle':
-                payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}}
-            elif valhalla_costing in ('auto', 'auto_shorter'):
-                auto_opts = _build_auto_costing_options(
-                    avoid_tolls=avoid_tolls,
-                    avoid_motorways=avoid_motorways,
-                    avoid_ferries=avoid_ferries,
-                    prefer_scenic=prefer_scenic,
-                    prefer_quiet=prefer_quiet,
-                    avoid_unpaved=avoid_unpaved,
-                    route_optimization=route_optimization,
-                )
-                if auto_opts:
-                    payload["costing_options"] = {valhalla_costing: auto_opts}
-                    logger.info(
-                        f"[VALHALLA] auto costing opts: tolls={avoid_tolls} motorways={avoid_motorways} "
-                        f"ferries={avoid_ferries} scenic={prefer_scenic} quiet={prefer_quiet} "
-                        f"unpaved={avoid_unpaved} opt={route_optimization} → {auto_opts}"
-                    )
-
-            # Traffic-aware routing: use departure time for time-dependent routing
-            if valhalla_costing == 'auto':
-                if departure_time:
-                    payload["date_time"] = {"type": 1, "value": departure_time}
-                    logger.info(f"[VALHALLA] Time-dependent routing with departure: {departure_time}")
-                else:
-                    from datetime import datetime as dt_now
-                    now_str = dt_now.now().strftime('%Y-%m-%dT%H:%M')
-                    payload["date_time"] = {"type": 1, "value": now_str}
-                    logger.info(f"[VALHALLA] Time-dependent routing with current time: {now_str}")
-
-            if exclude_locations:
-                payload["exclude_locations"] = exclude_locations
-                logger.debug(f"[VALHALLA] Added {len(exclude_locations)} exclude_locations to request")
+            # Build request payload (standard 2-point routing). Extracted to
+            # voyagr.services.routing.orchestrator.build_valhalla_route_payload.
+            payload = build_valhalla_route_payload(
+                route_locations=route_locations,
+                has_waypoints=has_waypoints,
+                start_lat=start_lat, start_lon=start_lon,
+                end_lat=end_lat, end_lon=end_lon,
+                valhalla_costing=valhalla_costing,
+                avoid_tolls=avoid_tolls,
+                avoid_motorways=avoid_motorways,
+                avoid_ferries=avoid_ferries,
+                prefer_scenic=prefer_scenic,
+                prefer_quiet=prefer_quiet,
+                avoid_unpaved=avoid_unpaved,
+                route_optimization=route_optimization,
+                departure_time=departure_time,
+                exclude_locations=exclude_locations,
+            )
 
             # Calculate distance to determine appropriate timeout
             # Longer routes need more time (Valhalla can take 30+ seconds for 500+ km routes)
