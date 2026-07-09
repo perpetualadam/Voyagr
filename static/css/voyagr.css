@@ -1410,7 +1410,8 @@ h1 {
 }
 
 .lane-guidance-display {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    /* Match the primary turn-by-turn card's colour stream (.next-turn-display). */
+    background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
     color: white;
     padding: 14px 16px;
     border-radius: 12px;
@@ -1451,7 +1452,9 @@ h1 {
 }
 
 .lane-guidance-display.urgency-ahead {
-    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    /* Non-urgent state matches the primary turn card (urgency-now/soon keep their
+       red/orange alert colours below). */
+    background: linear-gradient(135deg, #1976D2 0%, #1565C0 100%);
     border-left-color: #3498db;
 }
 
@@ -3002,6 +3005,18 @@ body.dark-mode .journey-summary-bar {
 .speed-widget {
     z-index: 300 !important;
     transition: transform 0.2s ease;
+}
+
+/* When the offline banner occupies the top of the screen, push the top-anchored nav
+   widgets down so it doesn't cover them. The turn widget contains the main turn card,
+   the "Then" row and the lane-guidance overlay, so shifting it moves all three; the
+   speed widget is shifted separately (its top is an inline style, hence !important). */
+body.voyagr-has-offline-banner .turn-instruction-widget {
+    top: 72px;
+}
+
+body.voyagr-has-offline-banner #speedWidget {
+    top: 72px !important;
 }
 
 /* Notification Container Styles */

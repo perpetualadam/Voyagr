@@ -12649,6 +12649,9 @@ function _createOfflineBanner() {
     `;
     banner.innerHTML = `<span>📡</span><span>You're offline — GPS & cached map tiles still work</span>`;
     document.body.prepend(banner);
+    // Push the top-anchored nav widgets (turn card + Then row + lane guidance, and the
+    // speed widget) down so this full-width banner doesn't cover them (see CSS).
+    document.body.classList.add('voyagr-has-offline-banner');
 }
 
 function _removeOfflineBanner() {
@@ -12657,6 +12660,7 @@ function _removeOfflineBanner() {
         banner.style.transform = 'translateY(-100%)';
         setTimeout(() => banner.remove(), 350);
     }
+    document.body.classList.remove('voyagr-has-offline-banner');
 }
 
 function _handleOffline() {
