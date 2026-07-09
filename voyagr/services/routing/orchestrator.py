@@ -1,0 +1,101 @@
+"""
+Valhalla routing orchestration helpers.
+
+Phase 1 extracts the pure Valhalla `/route` request-payload builder from
+``voyagr_web.calculate_route``. The HTTP call, response parsing, retry, and
+recovery logic remain in the monolith for now (they are return/jsonify-heavy and
+require live-engine verification to move safely).
+"""
+
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from voyagr.services.routing.costing import build_auto_costing_options
+
+logger = logging.getLogger('voyagr_web')
+
+
+def build_valhalla_route_payload(
+    *,
+    route_locations: List[Dict[str, float]],
+    has_waypoints: bool,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    valhalla_costing: str,
+    avoid_tolls: bool,
+    avoid_motorways: bool,
+    avoid_ferries: bool,
+    prefer_scenic: bool,
+    prefer_quiet: bool,
+    avoid_unpaved: bool,
+    route_optimization: str,
+    departure_time: Optional[Any],
+    exclude_locations: Optional[List[Dict[str, float]]],
+    now_str: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Build the Valhalla ``/route`` request payload (standard 2-point or waypoint routing).
+
+    Mirrors the previous inline logic exactly: costing options per mode, time-dependent
+    routing for auto, and exclude_locations. ``now_str`` is injected only for tests; when
+    omitted the current time is used (auto mode, no explicit departure_time).
+    """
+    payload: Dict[str, Any] = {
+        "locations": route_locations if has_waypoints else [
+            {"lat": start_lat, "lon": start_lon},
+            {"lat": end_lat, "lon": end_lon},
+        ],
+        "costing": valhalla_costing,
+        "alternates": 3 if (valhalla_costing == 'auto' and not has_waypoints) else 0,
+        # Valhalla API: units/language at top level affect narration (turn-by-turn API reference)
+        "units": "kilometers",
+        "language": "en-GB",
+        "directions_options": {"generalize": 0},
+    }
+
+    if valhalla_costing == 'pedestrian':
+        payload["costing_options"] = {
+            "pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}
+        }
+    elif valhalla_costing == 'bicycle':
+        payload["costing_options"] = {
+            "bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}
+        }
+    elif valhalla_costing in ('auto', 'auto_shorter'):
+        auto_opts = build_auto_costing_options(
+            avoid_tolls=avoid_tolls,
+            avoid_motorways=avoid_motorways,
+            avoid_ferries=avoid_ferries,
+            prefer_scenic=prefer_scenic,
+            prefer_quiet=prefer_quiet,
+            avoid_unpaved=avoid_unpaved,
+            route_optimization=route_optimization,
+        )
+        if auto_opts:
+            payload["costing_options"] = {valhalla_costing: auto_opts}
+            logger.info(
+                f"[VALHALLA] auto costing opts: tolls={avoid_tolls} motorways={avoid_motorways} "
+                f"ferries={avoid_ferries} scenic={prefer_scenic} quiet={prefer_quiet} "
+                f"unpaved={avoid_unpaved} opt={route_optimization} → {auto_opts}"
+            )
+
+    # Traffic-aware routing: use departure time for time-dependent routing (auto only)
+    if valhalla_costing == 'auto':
+        if departure_time:
+            payload["date_time"] = {"type": 1, "value": departure_time}
+            logger.info(f"[VALHALLA] Time-dependent routing with departure: {departure_time}")
+        else:
+            value = now_str or datetime.now().strftime('%Y-%m-%dT%H:%M')
+            payload["date_time"] = {"type": 1, "value": value}
+            logger.info(f"[VALHALLA] Time-dependent routing with current time: {value}")
+
+    if exclude_locations:
+        payload["exclude_locations"] = exclude_locations
+        logger.debug(f"[VALHALLA] Added {len(exclude_locations)} exclude_locations to request")
+
+    return payload

@@ -3000,6 +3000,7 @@ from voyagr.services.routing.costing import (
 from voyagr.services.routing.request_params import parse_route_request
 from voyagr.services.routing.enrichment import RouteEnrichmentContext, apply_valhalla_route_enrichment
 from voyagr.services.routing.hazard_prep import HazardPrefs, prepare_route_hazards
+from voyagr.services.routing.orchestrator import build_valhalla_route_payload
 from voyagr.services.routing.optimised_route import (
     baseline_camera_hazard_count,
     is_primary_optimised_route,
@@ -7339,56 +7340,24 @@ def calculate_route():
                     logger.error(f"[VALHALLA] Traceback: {traceback.format_exc()}")
                     use_segmented_routing = False
 
-            # Build request payload (standard 2-point routing)
-            payload = {
-                "locations": route_locations if has_waypoints else [
-                    {"lat": start_lat, "lon": start_lon},
-                    {"lat": end_lat, "lon": end_lon}
-                ],
-                "costing": valhalla_costing,
-                "alternates": 3 if (valhalla_costing == 'auto' and not has_waypoints) else 0,
-                # Valhalla API: units/language at top level affect narration (turn-by-turn API reference)
-                "units": "kilometers",
-                "language": "en-GB",
-                "directions_options": {"generalize": 0}
-            }
-
-            if valhalla_costing == 'pedestrian':
-                payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}}
-            elif valhalla_costing == 'bicycle':
-                payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}}
-            elif valhalla_costing in ('auto', 'auto_shorter'):
-                auto_opts = _build_auto_costing_options(
-                    avoid_tolls=avoid_tolls,
-                    avoid_motorways=avoid_motorways,
-                    avoid_ferries=avoid_ferries,
-                    prefer_scenic=prefer_scenic,
-                    prefer_quiet=prefer_quiet,
-                    avoid_unpaved=avoid_unpaved,
-                    route_optimization=route_optimization,
-                )
-                if auto_opts:
-                    payload["costing_options"] = {valhalla_costing: auto_opts}
-                    logger.info(
-                        f"[VALHALLA] auto costing opts: tolls={avoid_tolls} motorways={avoid_motorways} "
-                        f"ferries={avoid_ferries} scenic={prefer_scenic} quiet={prefer_quiet} "
-                        f"unpaved={avoid_unpaved} opt={route_optimization} → {auto_opts}"
-                    )
-
-            # Traffic-aware routing: use departure time for time-dependent routing
-            if valhalla_costing == 'auto':
-                if departure_time:
-                    payload["date_time"] = {"type": 1, "value": departure_time}
-                    logger.info(f"[VALHALLA] Time-dependent routing with departure: {departure_time}")
-                else:
-                    from datetime import datetime as dt_now
-                    now_str = dt_now.now().strftime('%Y-%m-%dT%H:%M')
-                    payload["date_time"] = {"type": 1, "value": now_str}
-                    logger.info(f"[VALHALLA] Time-dependent routing with current time: {now_str}")
-
-            if exclude_locations:
-                payload["exclude_locations"] = exclude_locations
-                logger.debug(f"[VALHALLA] Added {len(exclude_locations)} exclude_locations to request")
+            # Build request payload (standard 2-point routing). Extracted to
+            # voyagr.services.routing.orchestrator.build_valhalla_route_payload.
+            payload = build_valhalla_route_payload(
+                route_locations=route_locations,
+                has_waypoints=has_waypoints,
+                start_lat=start_lat, start_lon=start_lon,
+                end_lat=end_lat, end_lon=end_lon,
+                valhalla_costing=valhalla_costing,
+                avoid_tolls=avoid_tolls,
+                avoid_motorways=avoid_motorways,
+                avoid_ferries=avoid_ferries,
+                prefer_scenic=prefer_scenic,
+                prefer_quiet=prefer_quiet,
+                avoid_unpaved=avoid_unpaved,
+                route_optimization=route_optimization,
+                departure_time=departure_time,
+                exclude_locations=exclude_locations,
+            )
 
             # Calculate distance to determine appropriate timeout
             # Longer routes need more time (Valhalla can take 30+ seconds for 500+ km routes)
