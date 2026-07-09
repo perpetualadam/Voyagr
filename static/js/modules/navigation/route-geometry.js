@@ -259,8 +259,66 @@
         return null;
     }
 
+    // ======================================================================
+    // Smart zoom helpers — pure, constants injected so they can be overridden in tests
+    // ======================================================================
+
+    /** Default zoom levels (matches ZOOM_LEVELS in voyagr-app.js). */
+    var DEFAULT_ZOOM_LEVELS = {
+        motorway_high_speed:  14,
+        main_road_medium_speed: 15,
+        urban_low_speed:      16,
+        parking_very_low_speed: 17,
+        turn_ahead:           18,
+    };
+
+    /** Default turn-detection threshold in metres. */
+    var DEFAULT_TURN_ZOOM_THRESHOLD = 500;
+
+    /**
+     * Choose the appropriate map zoom level given speed and proximity to the next turn.
+     *
+     * @param {number} speedMph
+     * @param {number|null} [distanceToNextTurn] - Metres to next maneuver, or null
+     * @param {string} [roadType] - Informational; current logic uses speed only
+     * @param {object} [zoomLevels] - Override DEFAULT_ZOOM_LEVELS (for tests)
+     * @param {number} [turnZoomThreshold] - Override DEFAULT_TURN_ZOOM_THRESHOLD (for tests)
+     * @returns {number} Zoom level
+     */
+    function calculateSmartZoom(speedMph, distanceToNextTurn, roadType, zoomLevels, turnZoomThreshold) {
+        var ZL = zoomLevels || DEFAULT_ZOOM_LEVELS;
+        var threshold = (turnZoomThreshold != null) ? turnZoomThreshold : DEFAULT_TURN_ZOOM_THRESHOLD;
+
+        if (distanceToNextTurn != null && distanceToNextTurn < threshold) {
+            return ZL.turn_ahead;
+        }
+        if (speedMph > 100) return ZL.motorway_high_speed;
+        if (speedMph > 50)  return ZL.main_road_medium_speed;
+        if (speedMph > 20)  return ZL.urban_low_speed;
+        return ZL.parking_very_low_speed;
+    }
+
+    /**
+     * Calculate the offset map-center point for a driver's-view perspective.
+     * MapLibre's padding API handles the visual offset, so this returns the raw coords.
+     *
+     * @param {number} lat
+     * @param {number} lon
+     * @param {number} _heading - Unused (padding handles orientation)
+     * @param {number} _zoomLevel - Unused
+     * @returns {[number, number]}
+     */
+    function calculateDriverViewCenter(lat, lon, _heading, _zoomLevel) {
+        return [lat, lon];
+    }
+
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api;
     }
     root.VoyagrRouteGeometry = api;
+
+    // Append the new functions to the already-created api object so they are exported
+    // both via CommonJS (module.exports = api, set above) and via the global.
+    api.calculateSmartZoom = calculateSmartZoom;
+    api.calculateDriverViewCenter = calculateDriverViewCenter;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
