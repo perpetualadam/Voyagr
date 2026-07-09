@@ -2395,6 +2395,7 @@ from voyagr.services.routing.orchestrator import (
 )
 from voyagr.services.routing.osrm_fallback import OsrmRouteContext, build_osrm_routes
 from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers, valhalla_maneuver_dict
+from voyagr.services.routing.route_entries import build_valhalla_route_entry
 # Hazard helpers: single source of truth is voyagr.services.hazards. These were
 # previously duplicated inline in this module; imported here so /api/route,
 # /api/multi-stop-route and GraphHopper avoidance all share one implementation.
@@ -6117,155 +6118,49 @@ def calculate_route():
                     # Extract all available routes
                     routes = []
 
-                    # Main route
-                    # NOTE: Valhalla returns distance in kilometers, not meters!
-                    distance = route_data['trip']['summary']['length']
-                    duration_seconds = route_data['trip']['summary']['time']
-                    distance_km = distance  # Already in km, don't divide by 1000
-                    base_time_minutes = duration_seconds / 60
-
-                    # Extract route geometry
-                    route_geometry = None
-                    if 'legs' in route_data['trip']:
-                        for leg in route_data['trip']['legs']:
-                            if 'shape' in leg:
-                                route_geometry = leg['shape']
-                                break
-
                     # ================================================================
                     # TRAFFIC-ADJUSTED ETA: Apply only for auto (car) mode
                     # Walking/cycling times should not be adjusted by road traffic
                     # ================================================================
+                    base_time_minutes = route_data['trip']['summary']['time'] / 60
                     if valhalla_costing == 'auto':
                         traffic_multiplier, traffic_level = get_traffic_duration_multiplier(start_lat, start_lon)
-                        time_minutes = base_time_minutes * traffic_multiplier
-                        logger.info(f"[ETA] Base: {base_time_minutes:.0f}min, Traffic: {traffic_level} ({traffic_multiplier:.2f}x), Adjusted: {time_minutes:.0f}min")
+                        logger.info(f"[ETA] Base: {base_time_minutes:.0f}min, Traffic: {traffic_level} ({traffic_multiplier:.2f}x), Adjusted: {base_time_minutes * traffic_multiplier:.0f}min")
                     else:
                         traffic_multiplier, traffic_level = 1.0, 'N/A'
-                        time_minutes = base_time_minutes
                         logger.info(f"[ETA] {valhalla_costing}: {base_time_minutes:.0f} min (no traffic adjustment)")
 
-                    # ================================================================
-                    # PHASE 3 OPTIMIZATION: Use cost calculator with route coordinates
-                    # ================================================================
-                    # Valhalla returns shape as encoded polyline string
-                    route_coords = decode_route_geometry(route_geometry, precision=6)
-
-                    costs = cost_calculator.calculate_costs(
-                        distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                        energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
-                        route_coords=route_coords
-                    )
-                    fuel_cost = costs['fuel_cost']
-                    fuel_litres = costs['fuel_litres']
-                    toll_cost = costs['toll_cost']
-                    caz_cost = costs['caz_cost']
-                    caz_details = costs.get('caz_details', {})
-
-                    # Score route by hazards (always score, regardless of avoidance setting)
-                    hazard_penalty = 0
-                    hazard_count = 0
-                    hazards_list = []
-                    if hazards:
-                        hazard_penalty, hazard_count = score_route_by_hazards(route_geometry, hazards)
-                        hazards_list = get_hazards_on_route(route_geometry, hazards)
-                        logger.info(f"[HAZARDS] Valhalla main route: penalty={hazard_penalty:.0f}s, count={hazard_count}, hazards_list={len(hazards_list)}")
-
-                    # Extract turn-by-turn maneuvers from Valhalla response
-                    maneuvers = extract_valhalla_maneuvers(route_data['trip'], length_in_meters=False)
-                    logger.info(f"[VALHALLA] Extracted {len(maneuvers)} maneuvers from route")
-
-                    routes.append({
-                        'id': 1,
-                        'name': 'Fastest',
-                        'distance_km': round(distance_km, 2),
-                        'duration_minutes': round(time_minutes, 0),
-                        'base_duration_minutes': round(base_time_minutes, 0),  # Original Valhalla estimate
-                        'traffic_multiplier': round(traffic_multiplier, 2),
-                        'traffic_level': traffic_level,
-                        'fuel_cost': round(fuel_cost, 2),
-                        'fuel_litres': round(fuel_litres, 2),
-                        'toll_cost': round(toll_cost, 2),
-                        'caz_cost': round(caz_cost, 2),
-                        'caz_details': caz_details,
-                        'geometry': route_geometry,
-                        'geometry_precision': 6,
-                        'hazard_penalty_seconds': round(hazard_penalty, 0),
-                        'hazard_count': hazard_count,
-                        'hazards': hazards_list,
-                        'maneuvers': maneuvers,
-                        'source': 'Valhalla',
-                    })
+                    # Main route entry. Cost + hazard + maneuver assembly is shared with the
+                    # alternates via route_entries.build_valhalla_route_entry.
+                    routes.append(build_valhalla_route_entry(
+                        trip=route_data['trip'], name='Fastest', route_id=1,
+                        traffic_multiplier=traffic_multiplier, traffic_level=traffic_level,
+                        include_traffic_fields=True,
+                        hazards=hazards, cost_calculator=cost_calculator,
+                        vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                        fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                        electricity_price=electricity_price, include_tolls=include_tolls,
+                        include_caz=include_caz, caz_exempt=caz_exempt,
+                    ))
+                    logger.info(f"[VALHALLA] Extracted {len(routes[0].get('maneuvers') or [])} maneuvers from route")
+                    # Primary route geometry is reused below by the Optimised Discovery step.
+                    route_geometry = routes[0].get('geometry')
 
                     # Alternative routes (if available) - Valhalla uses 'alternates' not 'alternatives'
                     if 'alternates' in route_data:
+                        route_names = ['Alternate', 'Balanced', 'Alternative']
                         for idx, alt_route in enumerate(route_data['alternates'][:3]):
                             if 'trip' in alt_route and 'summary' in alt_route['trip']:
-                                alt_distance = alt_route['trip']['summary']['length']
-                                alt_duration_seconds = alt_route['trip']['summary']['time']
-                                # NOTE: Valhalla returns distance in kilometers, not meters!
-                                alt_distance_km = alt_distance  # Already in km, don't divide by 1000
-                                alt_base_time_minutes = alt_duration_seconds / 60
-                                # Apply same traffic multiplier to alternative routes
-                                alt_time_minutes = alt_base_time_minutes * traffic_multiplier
-
-                                # Extract geometry AND maneuvers from alternative routes
-                                alt_geometry = None
-                                alt_maneuvers = []
-                                if 'legs' in alt_route['trip']:
-                                    for leg in alt_route['trip']['legs']:
-                                        if 'shape' in leg and alt_geometry is None:
-                                            alt_geometry = leg['shape']
-                                        # Extract maneuvers for this alternative route
-                                        if 'maneuvers' in leg:
-                                            for m in leg['maneuvers']:
-                                                alt_maneuvers.append(valhalla_maneuver_dict(m, length_in_meters=False))
-                                logger.info(f"[VALHALLA] Alt route {idx+1}: Extracted {len(alt_maneuvers)} maneuvers")
-
-                                # ================================================================
-                                # PHASE 3 OPTIMIZATION: Use cost calculator with route coordinates
-                                # ================================================================
-                                # Decode alternative route geometry
-                                alt_route_coords = decode_route_geometry(alt_geometry, precision=6)
-
-                                alt_costs = cost_calculator.calculate_costs(
-                                    alt_distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                                    energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
-                                    route_coords=alt_route_coords
-                                )
-                                alt_fuel_cost = alt_costs['fuel_cost']
-                                alt_fuel_litres = alt_costs['fuel_litres']
-                                alt_toll_cost = alt_costs['toll_cost']
-                                alt_caz_cost = alt_costs['caz_cost']
-
-                                # Score alternative route by hazards (always score, regardless of avoidance setting)
-                                alt_hazard_penalty = 0
-                                alt_hazard_count = 0
-                                alt_hazards_list = []
-                                if hazards:
-                                    alt_hazard_penalty, alt_hazard_count = score_route_by_hazards(alt_geometry, hazards)
-                                    alt_hazards_list = get_hazards_on_route(alt_geometry, hazards)
-                                    logger.info(f"[HAZARDS] Valhalla alt route {idx+1}: penalty={alt_hazard_penalty:.0f}s, count={alt_hazard_count}, hazards_list={len(alt_hazards_list)}")
-
-                                route_names = ['Alternate', 'Balanced', 'Alternative']
-                                routes.append({
-                                    'id': idx + 2,
-                                    'name': route_names[idx] if idx < len(route_names) else f'Alternative {idx}',
-                                    'distance_km': round(alt_distance_km, 2),
-                                    'duration_minutes': round(alt_time_minutes, 0),
-                                    'fuel_cost': round(alt_fuel_cost, 2),
-                                    'fuel_litres': round(alt_fuel_litres, 2),
-                                    'toll_cost': round(alt_toll_cost, 2),
-                                    'caz_cost': round(alt_caz_cost, 2),
-                                    'caz_details': alt_costs.get('caz_details', {}),
-                                    'geometry': alt_geometry,
-                                    'geometry_precision': 6,
-                                    'hazard_penalty_seconds': round(alt_hazard_penalty, 0),
-                                    'hazard_count': alt_hazard_count,
-                                    'hazards': alt_hazards_list,
-                                    'maneuvers': alt_maneuvers,
-                                    'source': 'Valhalla',
-                                })
+                                alt_name = route_names[idx] if idx < len(route_names) else f'Alternative {idx}'
+                                routes.append(build_valhalla_route_entry(
+                                    trip=alt_route['trip'], name=alt_name, route_id=idx + 2,
+                                    traffic_multiplier=traffic_multiplier,
+                                    hazards=hazards, cost_calculator=cost_calculator,
+                                    vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                                    fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                                    electricity_price=electricity_price, include_tolls=include_tolls,
+                                    include_caz=include_caz, caz_exempt=caz_exempt,
+                                ))
 
                     # ================================================================
                     # REQUEST ADDITIONAL DISTINCT ROUTE TYPES (Shortest, Optimised)
