@@ -2435,7 +2435,7 @@ from voyagr.services.routing.costing import (
 from voyagr.services.routing.request_params import parse_route_request
 from voyagr.services.routing.enrichment import RouteEnrichmentContext, apply_valhalla_route_enrichment
 from voyagr.services.routing.hazard_prep import HazardPrefs, prepare_route_hazards
-from voyagr.services.routing.orchestrator import build_valhalla_route_payload
+from voyagr.services.routing.orchestrator import build_valhalla_route_payload, build_valhalla_retry_payload
 from voyagr.services.routing.osrm_fallback import OsrmRouteContext, build_osrm_routes
 # Hazard helpers: single source of truth is voyagr.services.hazards. These were
 # previously duplicated inline in this module; imported here so /api/route,
@@ -6652,35 +6652,21 @@ def calculate_route():
                             end_lon=end_lon
                         )
 
-                        # Build retry payload (use same costing as initial request)
-                        retry_payload = {
-                            "locations": [
-                                {"lat": start_lat, "lon": start_lon},
-                                {"lat": end_lat, "lon": end_lon}
-                            ],
-                            "costing": valhalla_costing,
-                            "alternates": 3 if valhalla_costing == 'auto' else 0,
-                            "exclude_locations": retry_locations,
-                            "units": "kilometers",
-                            "language": "en-GB",
-                            "directions_options": {"generalize": 0}
-                        }
-                        if valhalla_costing == 'pedestrian':
-                            retry_payload["costing_options"] = {"pedestrian": {"walking_speed": 5.1, "use_ferry": not avoid_ferries}}
-                        elif valhalla_costing == 'bicycle':
-                            retry_payload["costing_options"] = {"bicycle": {"cycling_speed": 18, "use_bike_lanes": True, "use_ferry": not avoid_ferries}}
-                        elif valhalla_costing in ('auto', 'auto_shorter'):
-                            auto_opts = _build_auto_costing_options(
-                                avoid_tolls=avoid_tolls,
-                                avoid_motorways=avoid_motorways,
-                                avoid_ferries=avoid_ferries,
-                                prefer_scenic=prefer_scenic,
-                                prefer_quiet=prefer_quiet,
-                                avoid_unpaved=avoid_unpaved,
-                                route_optimization=route_optimization,
-                            )
-                            if auto_opts:
-                                retry_payload["costing_options"] = {valhalla_costing: auto_opts}
+                        # Build retry payload (use same costing as initial request).
+                        # Extracted to orchestrator.build_valhalla_retry_payload.
+                        retry_payload = build_valhalla_retry_payload(
+                            start_lat=start_lat, start_lon=start_lon,
+                            end_lat=end_lat, end_lon=end_lon,
+                            valhalla_costing=valhalla_costing,
+                            exclude_locations=retry_locations,
+                            avoid_tolls=avoid_tolls,
+                            avoid_motorways=avoid_motorways,
+                            avoid_ferries=avoid_ferries,
+                            prefer_scenic=prefer_scenic,
+                            prefer_quiet=prefer_quiet,
+                            avoid_unpaved=avoid_unpaved,
+                            route_optimization=route_optimization,
+                        )
 
                         retry_response = requests.post(url, json=retry_payload, timeout=10, headers=headers)
 
