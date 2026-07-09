@@ -33,6 +33,7 @@ except ImportError:
 from voyagr.config import GRAPHHOPPER_CAMERA_AREAS_COUNT
 from voyagr.models import db_connection
 from voyagr.utils import get_distance_between_points
+from voyagr.utils.camera_buckets import normalize_camera_hazard_bucket
 
 logger = logging.getLogger('voyagr_web')
 
@@ -160,22 +161,6 @@ def build_graphhopper_combined_camera_model(
 def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, end_lon: float) -> Dict[str, List[Dict[str, Any]]]:
     """Fetch hazards within bounding box of route."""
     try:
-        def _norm_cam(t: Optional[str]) -> str:
-            if not t:
-                return 'camera_speed'
-            x = str(t).strip().lower()
-            if x in ('camera', 'speed', 'fixed', 'gatso', 'truvelo'):
-                return 'camera_speed'
-            if any(s in x for s in ('red_light', 'red-light', 'traffic_light', 'traffic light', 'rlc', 'tlc')):
-                return 'camera_red_light'
-            if any(s in x for s in ('spec', 'average', 'avg', 'vec')):
-                return 'camera_average_speed'
-            if 'bus' in x:
-                return 'camera_bus_lane'
-            if 'mobile' in x:
-                return 'camera_mobile'
-            return 'camera_other'
-
         with db_connection() as conn:
             cursor = conn.cursor()
 
@@ -194,7 +179,11 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
             if cached:
                 cached_data, timestamp = cached
                 if time.time() - timestamp < 600:  # 10-minute cache
-                    return json.loads(cached_data)
+                    parsed: Dict[str, Any] = json.loads(cached_data)
+                    # Migrate legacy single 'camera' bucket to camera_speed for older caches.
+                    if parsed.get('camera') and not any(k.startswith('camera_') for k in parsed):
+                        parsed['camera_speed'] = parsed.pop('camera', [])
+                    return parsed
 
             hazards: Dict[str, List[Dict[str, Any]]] = {
                 'camera_speed': [],
@@ -216,7 +205,7 @@ def fetch_hazards_for_route(start_lat: float, start_lon: float, end_lat: float, 
                 (south, north, west, east)
             )
             for lat, lon, camera_type, desc in cursor.fetchall():
-                bucket = _norm_cam(camera_type)
+                bucket = normalize_camera_hazard_bucket(camera_type)
                 if bucket not in hazards:
                     bucket = 'camera_other'
                 hazards[bucket].append({
@@ -507,6 +496,7 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
     """Build Valhalla exclude_locations to avoid hazards."""
     try:
         hazard_weights = {
+            'avoid_point': 60.0,       # Explicit client reroute avoid (congestion/closure) - top priority
             'camera': 50.0,
             'road_closed': 45.0, 'police': 40.0, 'accident': 35.0,
             'traffic_light': 38.0,
@@ -518,9 +508,7 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
 
         for hazard_type, hazard_list in hazards.items():
             weight = hazard_weights.get(hazard_type, 10.0)
-            if hazard_type == 'camera_red_light':
-                weight = 100.0
-            elif hazard_type.startswith('camera_'):
+            if hazard_type.startswith('camera_'):
                 weight = hazard_weights.get('camera', 50.0)
             for hazard in hazard_list:
                 if route_bbox:
@@ -558,7 +546,7 @@ def build_valhalla_exclude_locations(hazards: Dict[str, List[Dict[str, Any]]],
         all_hazards = all_hazards[:max_hazards]
 
         if not all_hazards:
-            logger.warning("[VALHALLA] No hazards found for exclude_locations")
+            logger.warning("[VALHALLA] No high-priority hazards found for exclude_locations")
             return []
 
         exclude_locations = [{"lat": h['lat'], "lon": h['lon']} for h in all_hazards]
@@ -623,6 +611,54 @@ def build_graphhopper_camera_avoidance_model(route_bbox: Optional[Dict[str, floa
         return {}
 
 
+def _hazard_marker_display_type(hazard_category: str, hazard: Dict[str, Any]) -> str:
+    """
+    Stable `type` strings for map markers. Camera rows must use camera_* keys so the PWA picks
+    the right icon; do not forward raw SCDB/TomTom description strings from `original_type`.
+    """
+    hc = (hazard_category or "").strip()
+    if hc == "camera":
+        return "camera_speed"
+    if hc.startswith("camera_"):
+        return hc
+    ot = hazard.get("original_type")
+    if ot is None:
+        return hc
+    s = str(ot).strip()
+    if s.isdigit():
+        return hc
+    return s
+
+
+def _default_hazard_proximity_preferences() -> Dict[str, Dict[str, Any]]:
+    return {
+        'camera_speed': {'threshold': 500},
+        'camera_red_light': {'threshold': 120},
+        'camera_average_speed': {'threshold': 500},
+        'camera_bus_lane': {'threshold': 500},
+        'camera_mobile': {'threshold': 500},
+        'camera_other': {'threshold': 500},
+        'camera': {'threshold': 500},
+        'traffic_light': {'threshold': 80},
+        'police': {'threshold': 1000},
+        'roadworks': {'threshold': 500},
+        'accident': {'threshold': 500},
+    }
+
+
+def _load_hazard_proximity_preferences(cursor: Any) -> Dict[str, Dict[str, Any]]:
+    try:
+        cursor.execute(
+            "SELECT hazard_type, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1"
+        )
+        preferences = {row[0]: {'threshold': row[1]} for row in cursor.fetchall()}
+        if preferences:
+            return preferences
+    except Exception as e:
+        logger.info("[HAZARDS] hazard_preferences lookup failed, using defaults: %s", e)
+    return _default_hazard_proximity_preferences()
+
+
 def get_hazards_on_route(route_points: List[Tuple[float, float]],
                          hazards: Dict[str, List[Dict[str, Any]]]) -> List[Dict[str, Any]]:
     """Get list of hazards that are on or near the route."""
@@ -631,8 +667,7 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]],
 
         with db_connection() as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT hazard_type, proximity_threshold_meters FROM hazard_preferences WHERE enabled = 1")
-            preferences = {row[0]: {'threshold': row[1]} for row in cursor.fetchall()}
+            preferences = _load_hazard_proximity_preferences(cursor)
 
         try:
             if isinstance(route_points, str):
@@ -645,7 +680,8 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]],
             logger.error(f"Error decoding polyline: {e}")
             return []
 
-        sample_interval = max(1, len(decoded_points) // 100)
+        # Sample route points — match score_route density so hazard lists align with counts.
+        sample_interval = max(1, len(decoded_points) // 500)
         sampled_points = decoded_points[::sample_interval]
 
         for hazard_type, hazard_list in hazards.items():
@@ -666,7 +702,7 @@ def get_hazards_on_route(route_points: List[Tuple[float, float]],
                         break
 
                 if min_distance <= threshold:
-                    display_type = hazard.get('type') or hazard_type
+                    display_type = _hazard_marker_display_type(hazard_type, hazard)
                     hazards_on_route.append({
                         'lat': hazard_lat, 'lon': hazard_lon,
                         'type': display_type,
@@ -702,6 +738,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
                         'camera_mobile': {'penalty': 800, 'threshold': 500},
                         'camera_other': {'penalty': 800, 'threshold': 500},
                         'camera': {'penalty': 800, 'threshold': 500},
+                        'traffic_light': {'penalty': 45, 'threshold': 80},
                         'police': {'penalty': 30, 'threshold': 1000},
                         'roadworks': {'penalty': 15, 'threshold': 500},
                         'accident': {'penalty': 30, 'threshold': 500}
@@ -715,6 +752,7 @@ def score_route_by_hazards(route_points: List[Tuple[float, float]],
                     'camera_mobile': {'penalty': 800, 'threshold': 500},
                     'camera_other': {'penalty': 800, 'threshold': 500},
                     'camera': {'penalty': 800, 'threshold': 500},
+                    'traffic_light': {'penalty': 45, 'threshold': 80},
                     'police': {'penalty': 30, 'threshold': 1000},
                     'roadworks': {'penalty': 15, 'threshold': 500},
                     'accident': {'penalty': 30, 'threshold': 500}
