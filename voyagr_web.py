@@ -191,6 +191,20 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 from voyagr.config.rate_limit_storage import rate_limit_storage_uri
 from voyagr.utils.rate_limiting import RateLimiter, rate_limit
+# Canonical validation + geometry helpers live in the voyagr package. Import them here
+# instead of redefining, so the monolith and API blueprints share one implementation.
+from voyagr.utils.validation import (
+    sanitize_string,
+    validate_coordinates,
+    validate_routing_mode,
+    normalize_vehicle_type,
+    validate_vehicle_type,
+)
+from voyagr.utils.geometry import (
+    point_in_polygon,
+    get_distance_between_points,
+    decode_route_geometry,
+)
 
 route_limiter = RateLimiter(max_requests=100, window_seconds=60, key_prefix='voyagr:rl:route')
 api_limiter = RateLimiter(max_requests=500, window_seconds=60, key_prefix='voyagr:rl:api')
@@ -224,84 +238,11 @@ else:
 # ============================================================================
 # PHASE 5: REQUEST VALIDATION HELPER FUNCTIONS
 # ============================================================================
-
-def sanitize_string(value: str, max_length: int = 500) -> Optional[str]:
-    """
-    Sanitize string input to prevent SQL injection and XSS.
-    Returns sanitized string or None if invalid.
-    """
-    if not value:
-        return None
-
-    # Limit length
-    value = value[:max_length]
-
-    # Remove potentially dangerous characters
-    # Allow alphanumeric, spaces, and common punctuation
-    import re
-    sanitized = re.sub(r'[^\w\s\-.,&\'()]', '', value)
-
-    return sanitized.strip() if sanitized else None
-
-def validate_coordinates(coord_str: str) -> Optional[Tuple[float, float]]:
-    """
-    Validate coordinate string in format 'lat,lon'.
-    Returns (lat, lon) tuple or None if invalid.
-    """
-    try:
-        parts: List[str] = coord_str.strip().split(',')
-        if len(parts) != 2:
-            return None
-        lat: float = float(parts[0].strip())
-        lon: float = float(parts[1].strip())
-        # Validate ranges
-        if lat < -90 or lat > 90 or lon < -180 or lon > 180:
-            return None
-        return (lat, lon)
-    except (ValueError, AttributeError):
-        return None
-
-def validate_routing_mode(mode: str) -> bool:
-    """Validate routing mode."""
-    valid_modes: List[str] = ['auto', 'pedestrian', 'bicycle']
-    return mode in valid_modes
-
-def normalize_vehicle_type(vehicle_type: Any) -> str:
-    """
-    Normalize vehicle type values coming from clients.
-
-    Canonical internal values:
-    - petrol_diesel
-    - electric
-    - hybrid
-    - pedestrian
-    - bicycle
-    """
-    if vehicle_type is None:
-        return 'petrol_diesel'
-
-    vt = str(vehicle_type).strip().lower()
-    aliases = {
-        # Common client values
-        'petrol': 'petrol_diesel',
-        'diesel': 'petrol_diesel',
-        'gas': 'petrol_diesel',
-        'gasoline': 'petrol_diesel',
-        'ice': 'petrol_diesel',
-        # Some UIs might send generic values
-        'car': 'petrol_diesel',
-    }
-    return aliases.get(vt, vt)
-
-def validate_vehicle_type(vehicle_type: str) -> bool:
-    """Validate vehicle type.
-
-    Note: 'pedestrian' and 'bicycle' are valid when routing_mode matches,
-    as they represent the travel mode rather than actual vehicle types.
-    """
-    vt = normalize_vehicle_type(vehicle_type)
-    valid_types: List[str] = ['petrol_diesel', 'electric', 'hybrid', 'pedestrian', 'bicycle']
-    return vt in valid_types
+# sanitize_string, validate_coordinates, validate_routing_mode,
+# normalize_vehicle_type, and validate_vehicle_type are imported from
+# voyagr.utils.validation (single source of truth, shared with the blueprints).
+# validate_route_request stays here because it also enforces monolith-specific
+# cost/waypoint rules via resolve_route_cost_params.
 
 def validate_route_request(data: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
     """
@@ -722,33 +663,6 @@ CAZ_PASS_TYPES = [
     {'id': 'pass_annual', 'name': 'Annual Pass', 'description': 'Valid annual pass for specific zones'},
     {'id': 'auto_pay', 'name': 'Auto Pay Registered', 'description': 'Registered for automatic payment (TfL Auto Pay, etc.)'}
 ]
-
-
-def point_in_polygon(lat: float, lon: float, polygon: List[Tuple[float, float]]) -> bool:
-    """
-    Check if a point (lat, lon) is inside a polygon using ray casting algorithm.
-
-    Args:
-        lat: Latitude of the point
-        lon: Longitude of the point
-        polygon: List of (lat, lon) tuples defining the polygon vertices
-
-    Returns:
-        True if point is inside polygon, False otherwise
-    """
-    n = len(polygon)
-    inside = False
-
-    j = n - 1
-    for i in range(n):
-        xi, yi = polygon[i]
-        xj, yj = polygon[j]
-
-        if ((yi > lon) != (yj > lon)) and (lat < (xj - xi) * (lon - yi) / (yj - yi) + xi):
-            inside = not inside
-        j = i
-
-    return inside
 
 
 def check_route_in_caz(route_coords: List[Tuple[float, float]], vehicle_caz_pass: str = 'none') -> Dict[str, Any]:
@@ -1407,33 +1321,7 @@ def invalidate_route_cache():
         return False
 
 # Cost calculation functions
-def decode_route_geometry(geometry: str, precision: int = 5) -> List[Tuple[float, float]]:
-    """Decode route geometry (polyline) to list of coordinates.
-
-    Args:
-        geometry: Encoded polyline string or list of coordinates
-        precision: Polyline precision (5 for OSRM/GraphHopper, 6 for Valhalla)
-
-    Returns:
-        List of (lat, lon) tuples
-    """
-    if not geometry:
-        return []
-
-    try:
-        # If it's already a list, return it
-        if isinstance(geometry, list):
-            return geometry
-
-        # If it's a string, try to decode as polyline
-        # OSRM and GraphHopper use precision 5, Valhalla uses precision 6
-        if isinstance(geometry, str) and polyline:
-            decoded = polyline.decode(geometry, precision)
-            return decoded
-    except Exception as e:
-        logger.warning(f"Error decoding geometry: {e}")
-
-    return []
+# decode_route_geometry is imported from voyagr.utils.geometry (single source of truth).
 
 
 def valhalla_maneuver_dict(maneuver: Dict[str, Any], length_in_meters: bool = False) -> Dict[str, Any]:
@@ -1603,17 +1491,7 @@ def calculate_caz_cost(_distance_km: float, vehicle_type: str = 'petrol_diesel',
 
 # Hazard avoidance functions
 
-def get_distance_between_points(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
-    """Calculate distance between two points in meters using Haversine formula."""
-    R = 6371000  # Earth radius in meters
-    phi1 = math.radians(lat1)
-    phi2 = math.radians(lat2)
-    delta_phi = math.radians(lat2 - lat1)
-    delta_lambda = math.radians(lon2 - lon1)
-
-    a = math.sin(delta_phi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda/2)**2
-    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
-    return R * c
+# get_distance_between_points is imported from voyagr.utils.geometry (single source of truth).
 
 
 def clear_camera_hazard_buckets(hazards: Dict[str, Any]) -> None:
