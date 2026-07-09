@@ -2394,6 +2394,7 @@ from voyagr.services.routing.orchestrator import (
     build_valhalla_route_payload,
     classify_valhalla_route_data,
     find_baseline_cameras_on_route,
+    post_valhalla_route,
 )
 from voyagr.services.routing.osrm_fallback import OsrmRouteContext, build_osrm_routes
 from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers, valhalla_maneuver_dict
@@ -6087,17 +6088,19 @@ def calculate_route():
             print(f"[Valhalla] Requesting route from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
             print(f"[Valhalla] URL: {url}")
             print(f"[Valhalla] Hazard avoidance: {enable_hazard_avoidance}, Locations: {len(exclude_locations) if exclude_locations else 0}")
-            try:
-                print(f"[Valhalla] Estimated distance: {straight_line_km:.0f} km, Timeout: {route_timeout}s")
-                response = requests.post(url, json=payload, timeout=route_timeout, headers=headers)
-                print(f"[Valhalla] Response status: {response.status_code}", flush=True)
-            except requests.exceptions.Timeout:
+            print(f"[Valhalla] Estimated distance: {straight_line_km:.0f} km, Timeout: {route_timeout}s")
+            # HTTP POST + transport-error classification extracted to
+            # orchestrator.post_valhalla_route (status handling/parsing stay here).
+            _post_outcome = post_valhalla_route(url, payload, headers, route_timeout)
+            if _post_outcome.timed_out:
                 print(f"[Valhalla] Request timed out after {route_timeout}s")
                 return jsonify({'error': 'Route calculation timed out. Try a shorter route or moving start/end points closer.'}), 408
-            except requests.exceptions.RequestException as e:
-                print(f"[Valhalla] Request failed: {e}")
-                valhalla_error = f"Routing service unreachable: {str(e)}"
-                response = None
+            response = _post_outcome.response
+            if _post_outcome.error:
+                print(f"[Valhalla] Request failed: {_post_outcome.error}")
+                valhalla_error = _post_outcome.error
+            if response is not None:
+                print(f"[Valhalla] Response status: {response.status_code}", flush=True)
             if response and response.status_code != 200:
                 _vb = response.text[:1200] if response.text else ''
                 print(f"[Valhalla] Response body: {_vb}", flush=True)

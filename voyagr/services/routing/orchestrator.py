@@ -10,12 +10,47 @@ return/jsonify-heavy and require live-engine verification to move safely).
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
+try:
+    import requests
+except ImportError:  # pragma: no cover - requests always present server-side
+    requests = None
 
 from voyagr.services.routing.costing import build_auto_costing_options
 
 logger = logging.getLogger('voyagr_web')
+
+
+@dataclass
+class ValhallaPostOutcome:
+    """Result of a Valhalla ``/route`` POST attempt (no Flask coupling)."""
+
+    response: Optional[Any]
+    error: Optional[str]
+    timed_out: bool
+
+
+def post_valhalla_route(url: str, payload: Dict[str, Any], headers: Dict[str, str], timeout: int) -> ValhallaPostOutcome:
+    """
+    POST a Valhalla ``/route`` request and classify transport-level failures.
+
+    Mirrors the previous inline try/except in ``calculate_route``:
+      - success/HTTP response  -> (response, None, False)
+      - request timeout        -> (None, None, True)   [caller returns HTTP 408]
+      - other request failure  -> (None, "Routing service unreachable: <e>", False)
+
+    HTTP status handling and JSON parsing stay in the caller.
+    """
+    try:
+        resp = requests.post(url, json=payload, timeout=timeout, headers=headers)
+        return ValhallaPostOutcome(resp, None, False)
+    except requests.exceptions.Timeout:
+        return ValhallaPostOutcome(None, None, True)
+    except requests.exceptions.RequestException as e:
+        return ValhallaPostOutcome(None, f"Routing service unreachable: {str(e)}", False)
 
 
 def build_valhalla_route_payload(

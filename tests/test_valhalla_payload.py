@@ -1,8 +1,11 @@
 """Tests for Valhalla /route payload builder."""
 
 import unittest
+from unittest.mock import patch
 
+from voyagr.services.routing import orchestrator as _orch
 from voyagr.services.routing.orchestrator import (
+    post_valhalla_route,
     build_valhalla_baseline_request_payload,
     build_valhalla_discovery_payload,
     build_valhalla_retry_payload,
@@ -134,6 +137,35 @@ class TestClassifyValhallaRouteData(unittest.TestCase):
 
     def test_usable_body_returns_none(self):
         self.assertIsNone(classify_valhalla_route_data({'trip': {'legs': []}}))
+
+
+class _FakeResp:
+    status_code = 200
+
+
+class TestPostValhallaRoute(unittest.TestCase):
+    def test_success_returns_response(self):
+        with patch.object(_orch.requests, 'post', return_value=_FakeResp()) as p:
+            out = post_valhalla_route('http://v/route', {'a': 1}, {'H': '1'}, 7)
+        self.assertIsNotNone(out.response)
+        self.assertIsNone(out.error)
+        self.assertFalse(out.timed_out)
+        p.assert_called_once()
+
+    def test_timeout_flagged(self):
+        with patch.object(_orch.requests, 'post', side_effect=_orch.requests.exceptions.Timeout()):
+            out = post_valhalla_route('http://v/route', {}, {}, 7)
+        self.assertTrue(out.timed_out)
+        self.assertIsNone(out.response)
+        self.assertIsNone(out.error)
+
+    def test_request_exception_maps_to_error(self):
+        with patch.object(_orch.requests, 'post',
+                          side_effect=_orch.requests.exceptions.ConnectionError('down')):
+            out = post_valhalla_route('http://v/route', {}, {}, 7)
+        self.assertFalse(out.timed_out)
+        self.assertIsNone(out.response)
+        self.assertTrue(out.error.startswith('Routing service unreachable:'))
 
 
 class TestDiscoveryHelpers(unittest.TestCase):
