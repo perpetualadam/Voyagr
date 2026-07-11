@@ -14,6 +14,7 @@
         toggleUI: 'VoyagrToggleUI',
         weatherLayer: 'VoyagrWeatherLayer',
         trafficChange: 'VoyagrTrafficChange',
+        routeTrafficFlow: 'VoyagrRouteTrafficFlow',
         laneGuidance: 'VoyagrLaneGuidance',
         speedGps: 'VoyagrSpeedGps',
         hazardAlerts: 'VoyagrHazardAlerts',

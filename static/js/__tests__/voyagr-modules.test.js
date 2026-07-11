@@ -13,6 +13,7 @@ describe('VoyagrModules registry', () => {
         global.VoyagrToggleUI = require('../modules/ui/toggle-ui');
         global.VoyagrWeatherLayer = require('../modules/map/weather-layer');
         global.VoyagrTrafficChange = require('../modules/navigation/traffic-change');
+        global.VoyagrRouteTrafficFlow = require('../modules/navigation/route-traffic-flow');
         global.VoyagrLaneGuidance = require('../modules/navigation/lane-guidance');
         global.VoyagrSpeedGps = require('../modules/navigation/speed-gps');
         global.VoyagrHazardAlerts = require('../modules/navigation/hazard-alerts');

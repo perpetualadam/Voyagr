@@ -5348,14 +5348,7 @@ let routeTrafficEnabled = localStorage.getItem('routeTrafficEnabled') !== 'false
 let routeTrafficUpdateInterval = null;
 const ROUTE_TRAFFIC_UPDATE_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
-// Traffic level colors (matching traffic light colors)
-// These overlay on top of the route to show real-time traffic conditions
-const TRAFFIC_COLORS = {
-    'green': '#22CC22',   // Free flow - bright green for visibility
-    'orange': '#FF8C00',  // Moderate congestion - orange
-    'red': '#FF0000',     // Heavy congestion - red
-    'black': '#333333'    // Blocked/severe - dark
-};
+// Traffic level colors moved to route-traffic-flow.js (TRAFFIC_COLORS).
 
 /**
  * Toggle route traffic edge display on/off
@@ -5432,27 +5425,6 @@ async function fetchAndDisplayRouteTraffic() {
 }
 
 /**
- * Find the index of the closest point in the route polyline to a given coordinate
- */
-function findClosestRoutePointIndex(targetPoint, startSearchIdx = 0) {
-    if (!routePolyline || routePolyline.length === 0) return -1;
-
-    let closestIdx = startSearchIdx;
-    let minDist = Infinity;
-
-    // Search from startSearchIdx onwards to maintain order
-    for (let i = startSearchIdx; i < routePolyline.length; i++) {
-        const point = routePolyline[i];
-        const dist = Math.pow(point[0] - targetPoint[0], 2) + Math.pow(point[1] - targetPoint[1], 2);
-        if (dist < minDist) {
-            minDist = dist;
-            closestIdx = i;
-        }
-    }
-    return closestIdx;
-}
-
-/**
  * Display traffic-colored edges along the route
  * Creates polylines that follow the actual route geometry (not straight lines)
  * Traffic edges are drawn ON TOP of the route with thick, visible lines
@@ -5466,50 +5438,16 @@ function displayRouteTrafficEdges(segments) {
         return;
     }
 
-    // Count traffic levels for debugging
-    const levelCounts = { green: 0, orange: 0, red: 0, black: 0 };
-    segments.forEach(s => levelCounts[s.traffic_level] = (levelCounts[s.traffic_level] || 0) + 1);
+    const RTF = VoyagrModules.routeTrafficFlow();
+    const levelCounts = RTF.countTrafficSegmentLevels(segments);
     console.log('[Route Traffic] Segment levels:', levelCounts);
 
-    let lastEndIdx = 0;  // Track position along route to ensure segments are in order
-
-    segments.forEach((segment, idx) => {
-        const level = segment.traffic_level || 'green';
-
-        // Find the indices in the route polyline that correspond to this segment
-        const startIdx = findClosestRoutePointIndex(segment.start, lastEndIdx);
-        const endIdx = findClosestRoutePointIndex(segment.end, startIdx);
-
-        // Skip invalid segments
-        if (startIdx < 0 || endIdx < 0 || endIdx <= startIdx) {
-            console.log(`[Route Traffic] Skipping invalid segment ${idx}: startIdx=${startIdx}, endIdx=${endIdx}`);
-            return;
-        }
-
-        // Advance the cursor for EVERY valid segment (including skipped green ones) so
-        // congested segments after a free-flow gap still map to the correct geometry.
-        lastEndIdx = endIdx;
-
-        // Skip free-flow: green overlays hid the active route line on top of green traffic tiles.
-        if (level === 'green') {
-            return;
-        }
-        const color = TRAFFIC_COLORS[level] || TRAFFIC_COLORS['orange'];
-
-        // Extract all route points between start and end to follow the curved road geometry
-        let segmentPoints = routePolyline.slice(startIdx, endIdx + 1);
-
-        if (segmentPoints.length < 2) {
-            // Fallback to direct line if not enough points
-            segmentPoints = [segment.start, segment.end];
-        }
-
-        // Create the traffic edge polyline following the route geometry with MapLibre
-        // Traffic edges are drawn ON TOP of the route line so they're visible
-        const trafficLine = MapLibreHelpers.addPolyline(map, segmentPoints, {
-            color: color,
-            weight: 6,            // Slightly thinner than route but still visible
-            opacity: 0.9          // High opacity to clearly show traffic
+    const drawPlans = RTF.buildTrafficEdgeDrawPlans(segments, routePolyline);
+    drawPlans.forEach((plan) => {
+        const trafficLine = MapLibreHelpers.addPolyline(map, plan.points, {
+            color: plan.color,
+            weight: 6,
+            opacity: 0.9,
         });
         routeTrafficLayers.push(trafficLine);
     });
@@ -5874,61 +5812,21 @@ async function fetchRouteTrafficFlowPayload(points, sampleInterval) {
 }
 
 async function sampleRouteTrafficAhead() {
+    const RTF = VoyagrModules.routeTrafficFlow();
     if (!routePolyline || routePolyline.length < 2) return null;
     const startIdx = Math.max(0, Math.min(lastSnappedRouteIndex || 0, routePolyline.length - 2));
-    const ahead = routePolyline.slice(startIdx);
-    if (ahead.length < 2) return null;
-
-    // Send [lat, lon] points; sample so we get roughly 8 segments along the road ahead.
-    const points = ahead.map(p => [p[0], p[1]]);
-    const sampleInterval = Math.max(1, Math.floor(points.length / 8));
+    const plan = RTF.buildTrafficFlowSamplePlan(routePolyline, startIdx, 8);
+    if (!plan) return null;
 
     let data;
     try {
-        data = await fetchRouteTrafficFlowPayload(points, sampleInterval);
+        data = await fetchRouteTrafficFlowPayload(plan.points, plan.sampleInterval);
     } catch (e) {
         console.debug('[Auto-Traffic] route-traffic-flow fetch failed:', e);
         return null;
     }
     if (!data) return null;
-    if (!data || !data.success || !Array.isArray(data.segments)) return null;
-
-    let delaySec = 0;
-    let congestedCount = 0;
-    let congestionSum = 0;
-    let severe = false;
-    const congestedPoints = [];
-    for (const seg of data.segments) {
-        const lvl = seg.traffic_level;
-        const cur = Number(seg.current_speed) || 0;
-        const free = Number(seg.free_flow_speed) || 0;
-        const s = seg.start, e = seg.end;
-        if (!Array.isArray(s) || !Array.isArray(e)) continue;
-        const segMeters = calculateDistanceMeters(s[0], s[1], e[0], e[1]);
-        if (cur > 0 && free > 0 && cur < free && segMeters > 0) {
-            const km = segMeters / 1000;
-            delaySec += (km / cur - km / free) * 3600; // extra seconds vs free-flow
-        }
-        congestionSum += Number(seg.congestion_percent) || 0;
-        if (lvl === 'orange' || lvl === 'red' || lvl === 'black') {
-            congestedCount++;
-            // Only red/black are worth routing around; orange is tolerable.
-            if (lvl === 'red' || lvl === 'black') {
-                congestedPoints.push({ lat: (s[0] + e[0]) / 2, lon: (s[1] + e[1]) / 2 });
-            }
-            if (lvl === 'black') severe = true;
-        }
-    }
-
-    return {
-        delayMin: delaySec / 60,
-        congestedCount,
-        avgCongestion: data.segments.length ? Math.round(congestionSum / data.segments.length) : 0,
-        severe,
-        congestedPoints,
-        // 'TomTom' = real data; 'simulated' = no API key (must NOT drive reroutes/ETA).
-        source: data.source || 'unknown'
-    };
+    return RTF.buildTrafficAheadSnapshot(data, calculateDistanceMeters);
 }
 
 async function getRouteTrafficAhead(forceFresh = false) {
