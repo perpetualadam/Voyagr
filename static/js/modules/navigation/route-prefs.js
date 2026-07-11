@@ -81,6 +81,22 @@
     }
 
     /**
+     * Apply plan for route avoidance toggle buttons in settings.
+     * @param {Storage} storage
+     * @returns {Array<{ pref: string, buttonId: string, enabled: boolean, usesDefault: boolean }>}
+     */
+    function buildRouteAvoidanceTogglesApplyPlan(storage) {
+        return ROUTE_AVOIDANCE_PREF_KEYS.map(function (pref) {
+            return {
+                pref: pref,
+                buttonId: resolveRouteAvoidanceButtonId(pref),
+                enabled: isRouteAvoidancePrefEnabled(pref, storage),
+                usesDefault: storage.getItem(getRouteAvoidancePrefStorageKey(pref)) === null,
+            };
+        });
+    }
+
+    /**
      * Storage key for legacy route-leg avoidance prefs (pref_avoid_tollRoads, etc.).
      * @param {string} pref
      * @returns {string}
@@ -185,6 +201,7 @@
         getRouteAvoidancePrefStorageKey: getRouteAvoidancePrefStorageKey,
         resolveRouteAvoidanceButtonId: resolveRouteAvoidanceButtonId,
         isRouteAvoidancePrefEnabled: isRouteAvoidancePrefEnabled,
+        buildRouteAvoidanceTogglesApplyPlan: buildRouteAvoidanceTogglesApplyPlan,
         getRouteLegAvoidancePrefStorageKey: getRouteLegAvoidancePrefStorageKey,
         resolveRouteLegAvoidanceButtonId: resolveRouteLegAvoidanceButtonId,
         isRouteLegAvoidancePrefEnabled: isRouteLegAvoidancePrefEnabled,

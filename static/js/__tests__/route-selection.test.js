@@ -565,6 +565,18 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(plan.speakMessage).toBeNull();
     });
 
+    test('buildCalculateRouteIdleUiApplyPlan assembles post-preview UI actions', () => {
+        const plan = RS.buildCalculateRouteIdleUiApplyPlan({
+            notification: { title: 'Route Ready', message: '12 km in 20 min', type: 'success' },
+            recentDestinations: [{ label: 'London', lat: 51.5, lon: -0.1, kind: 'route' }],
+        });
+        expect(plan.showStartNavButtons).toBe(true);
+        expect(plan.startNavButtonIds).toContain('startNavBtn');
+        expect(plan.delayedPreview.delayMs).toBe(300);
+        expect(plan.notification.title).toBe('Route Ready');
+        expect(plan.recentDestinations).toHaveLength(1);
+    });
+
     test('buildRoutePreviewPanelApplyPlan returns formatted preview values', () => {
         const plan = RS.buildRoutePreviewPanelApplyPlan({
             routeData: {

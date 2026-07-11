@@ -40,6 +40,38 @@
     }
 
     /**
+     * Merge runtime variables and form state into buildSettingsSnapshot input.
+     * @param {Object} runtime - app globals (units, vehicle, toggles)
+     * @param {Object} formState - DOM-collected form values from the app
+     * @returns {Object}
+     */
+    function buildSettingsSnapshotInputPlan(runtime, formState) {
+        runtime = runtime || {};
+        formState = formState || {};
+        return {
+            distanceUnit: runtime.distanceUnit,
+            currencyUnit: runtime.currencyUnit,
+            speedUnit: runtime.speedUnit,
+            temperatureUnit: runtime.temperatureUnit,
+            vehicleType: runtime.vehicleType,
+            routingMode: runtime.routingMode,
+            routePreferences: formState.routePreferences || {},
+            hazardPreferences: formState.hazardPreferences || {},
+            mapTheme: formState.mapTheme != null ? formState.mapTheme : 'standard',
+            smartZoomEnabled: runtime.smartZoomEnabled,
+            showCamerasEnabled: runtime.showCamerasEnabled,
+            showOsmTrafficLightsEnabled: runtime.showOsmTrafficLightsEnabled,
+            showOsmRailwayCrossingsEnabled: runtime.showOsmRailwayCrossingsEnabled,
+            showTrafficEnabled: runtime.showTrafficEnabled,
+            autoTrafficUpdateEnabled: runtime.autoTrafficUpdateEnabled,
+            autoRerouteOnDeviationEnabled: runtime.autoRerouteOnDeviationEnabled,
+            speedWidgetEnabled: runtime.speedWidgetEnabled,
+            parkingPreferences: formState.parkingPreferences || {},
+            multiDropPreferences: formState.multiDropPreferences || {},
+        };
+    }
+
+    /**
      * Build localStorage patches and runtime variable updates from a saved snapshot.
      * @param {Object|null|undefined} settings
      * @returns {{ found: boolean, localStorage?: Object, runtime?: Object }}
@@ -232,6 +264,7 @@
     var api = {
         SETTINGS_STORAGE_KEY: SETTINGS_STORAGE_KEY,
         buildSettingsSnapshot: buildSettingsSnapshot,
+        buildSettingsSnapshotInputPlan: buildSettingsSnapshotInputPlan,
         buildSettingsRestorePlan: buildSettingsRestorePlan,
         buildSettingsUiApplyPlan: buildSettingsUiApplyPlan,
     };

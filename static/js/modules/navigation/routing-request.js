@@ -624,6 +624,32 @@
         };
     }
 
+    /**
+     * Dispatch plan for calculateRoute API success/failure handling.
+     * @param {Object} apiPlan - from buildRouteApiResultPlan
+     * @param {boolean} routeInProgress
+     * @returns {{ branch: 'error'|'in_nav_reroute'|'idle_preview', hideRouteProgressBar: boolean, statusMessage?: string|null, statusType?: string, degradedStatusMessage?: string|null, degradedLogWarning?: Object|null, responseLogMeta?: Object }}
+     */
+    function buildCalculateRouteDispatchPlan(apiPlan, routeInProgress) {
+        apiPlan = apiPlan || {};
+        if (!apiPlan.success) {
+            return {
+                branch: 'error',
+                hideRouteProgressBar: true,
+                statusMessage: apiPlan.errorMessage,
+                statusType: 'error',
+                responseLogMeta: apiPlan.responseLogMeta,
+            };
+        }
+        return {
+            branch: routeInProgress ? 'in_nav_reroute' : 'idle_preview',
+            hideRouteProgressBar: true,
+            degradedStatusMessage: apiPlan.routingDegraded ? getDegradedRoutingStatusMessage() : null,
+            degradedLogWarning: apiPlan.degradedLogWarning,
+            responseLogMeta: apiPlan.responseLogMeta,
+        };
+    }
+
     var api = {
         buildSharedRouteOptions: buildSharedRouteOptions,
         isInitialRouteHazardAvoidanceEnabled: isInitialRouteHazardAvoidanceEnabled,
@@ -653,6 +679,7 @@
         isRouteApiJsonContentType: isRouteApiJsonContentType,
         getDegradedRoutingStatusMessage: getDegradedRoutingStatusMessage,
         buildRouteApiResultPlan: buildRouteApiResultPlan,
+        buildCalculateRouteDispatchPlan: buildCalculateRouteDispatchPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

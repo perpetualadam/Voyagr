@@ -418,6 +418,39 @@ describe('buildRouteApiResultPlan', () => {
     });
 });
 
+describe('buildCalculateRouteDispatchPlan', () => {
+    test('routes API errors to the error branch', () => {
+        const plan = RR.buildCalculateRouteDispatchPlan(
+            RR.buildRouteApiResultPlan({ success: false, error: 'bad coords' }),
+            false
+        );
+        expect(plan.branch).toBe('error');
+        expect(plan.hideRouteProgressBar).toBe(true);
+        expect(plan.statusMessage).toBe('Error: bad coords');
+        expect(plan.statusType).toBe('error');
+    });
+
+    test('routes successful in-nav responses to in_nav_reroute branch', () => {
+        const apiPlan = RR.buildRouteApiResultPlan({ success: true, source: 'valhalla' });
+        const plan = RR.buildCalculateRouteDispatchPlan(apiPlan, true);
+        expect(plan.branch).toBe('in_nav_reroute');
+        expect(plan.hideRouteProgressBar).toBe(true);
+        expect(plan.degradedStatusMessage).toBeNull();
+    });
+
+    test('routes successful idle responses to idle_preview with degraded warning', () => {
+        const apiPlan = RR.buildRouteApiResultPlan({
+            success: true,
+            routing_degraded: true,
+            routing_warning: 'fallback',
+        });
+        const plan = RR.buildCalculateRouteDispatchPlan(apiPlan, false);
+        expect(plan.branch).toBe('idle_preview');
+        expect(plan.degradedStatusMessage).toContain('Basic route only');
+        expect(plan.degradedLogWarning.warning).toBe('fallback');
+    });
+});
+
 describe('buildAutomaticRerouteRequestPlan', () => {
     test('assembles reroute body from storage and runtime prefs', () => {
         const storage = mockStorage({

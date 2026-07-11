@@ -1421,6 +1421,24 @@
     }
 
     /**
+     * Post-preview UI apply plan for idle (non-navigation) calculateRoute success.
+     * @param {Object} previewPlan - from buildRoutePreviewSuccessPlan
+     * @returns {Object}
+     */
+    function buildCalculateRouteIdleUiApplyPlan(previewPlan) {
+        previewPlan = previewPlan || {};
+        return {
+            showStartNavButtons: true,
+            startNavButtonIds: ['startNavBtn', 'startNavBtnSheet'],
+            updateRoadReportFabVisibility: true,
+            updateArButtonVisibility: true,
+            notification: previewPlan.notification || null,
+            recentDestinations: previewPlan.recentDestinations || [],
+            delayedPreview: { delayMs: 300 },
+        };
+    }
+
+    /**
      * Apply plan for the route preview bottom-sheet panel (values only; app writes DOM).
      * @param {Object} o
      * @returns {Object}
@@ -1663,6 +1681,7 @@
         formatPreviewRoutingModeLabel: formatPreviewRoutingModeLabel,
         parseRecentDestinationFromCoordString: parseRecentDestinationFromCoordString,
         buildInNavRerouteDispatchPlan: buildInNavRerouteDispatchPlan,
+        buildCalculateRouteIdleUiApplyPlan: buildCalculateRouteIdleUiApplyPlan,
         buildRoutePreviewPanelApplyPlan: buildRoutePreviewPanelApplyPlan,
         buildRoutePreviewPanelDomApplyPlan: buildRoutePreviewPanelDomApplyPlan,
         buildAlternativeRoutesPreviewMountPlans: buildAlternativeRoutesPreviewMountPlans,

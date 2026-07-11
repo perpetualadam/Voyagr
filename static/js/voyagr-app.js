@@ -1420,53 +1420,26 @@ window.redeemPromoCode = redeemPromoCode;
  */
 function saveAllSettings() {
     const SS = _settingsSnapshot();
-    const allSettings = SS.buildSettingsSnapshot({
-        distanceUnit,
-        currencyUnit,
-        speedUnit,
-        temperatureUnit,
-        vehicleType: currentVehicleType,
-        routingMode: currentRoutingMode,
-        routePreferences: {
-            avoidHighways: document.getElementById('avoidHighways')?.checked || false,
-            preferScenic: document.getElementById('preferScenic')?.checked || false,
-            avoidTolls: isAvoidTollsEnabled(),
-            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
-            preferQuiet: document.getElementById('preferQuiet')?.checked || false,
-            avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
-            routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
-            maxDetour: parseInt(document.getElementById('maxDetour')?.value || 20),
+    const snapshotInput = SS.buildSettingsSnapshotInputPlan(
+        {
+            distanceUnit,
+            currencyUnit,
+            speedUnit,
+            temperatureUnit,
+            vehicleType: currentVehicleType,
+            routingMode: currentRoutingMode,
+            smartZoomEnabled,
+            showCamerasEnabled,
+            showOsmTrafficLightsEnabled,
+            showOsmRailwayCrossingsEnabled,
+            showTrafficEnabled,
+            autoTrafficUpdateEnabled,
+            autoRerouteOnDeviationEnabled,
+            speedWidgetEnabled,
         },
-        hazardPreferences: {
-            avoidTolls: isAvoidTollsEnabled(),
-            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
-            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
-            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
-        },
-        mapTheme: localStorage.getItem('mapTheme') || 'standard',
-        smartZoomEnabled,
-        showCamerasEnabled,
-        showOsmTrafficLightsEnabled,
-        showOsmRailwayCrossingsEnabled,
-        showTrafficEnabled,
-        autoTrafficUpdateEnabled,
-        autoRerouteOnDeviationEnabled,
-        speedWidgetEnabled,
-        parkingPreferences: {
-            maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance')?.value || '10',
-            preferredType: document.getElementById('parkingPreferredType')?.value || 'any',
-            pricePreference: document.getElementById('parkingPricePreference')?.value || 'any',
-        },
-        multiDropPreferences: {
-            optimizeStopOrder: localStorage.getItem('pref_optimizeStopOrder') !== 'false',
-            roundTrip: localStorage.getItem('pref_roundTrip') === 'true',
-            trafficAwareRouting: localStorage.getItem('pref_trafficAwareRouting') !== 'false',
-            avoidRoadClosures: localStorage.getItem('pref_avoidRoadClosures') !== 'false',
-            avoidIncidents: localStorage.getItem('pref_avoidIncidents') !== 'false',
-            departureTime: localStorage.getItem('pref_departureTime') || '',
-        },
-    });
+        collectSettingsFormState()
+    );
+    const allSettings = SS.buildSettingsSnapshot(snapshotInput);
 
     localStorage.setItem(SS.SETTINGS_STORAGE_KEY, JSON.stringify(allSettings));
     console.log('[Settings] All settings saved to localStorage', allSettings);
@@ -3952,6 +3925,254 @@ function showStatus(message, type) {
     status.className = 'status ' + type;
 }
 
+/**
+ * Collect settings form control values from the DOM for snapshot persistence.
+ * @returns {Object}
+ */
+function collectSettingsFormState() {
+    return {
+        routePreferences: {
+            avoidHighways: document.getElementById('avoidHighways')?.checked || false,
+            preferScenic: document.getElementById('preferScenic')?.checked || false,
+            avoidTolls: isAvoidTollsEnabled(),
+            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
+            preferQuiet: document.getElementById('preferQuiet')?.checked || false,
+            avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
+            routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
+            maxDetour: parseInt(document.getElementById('maxDetour')?.value || 20),
+        },
+        hazardPreferences: {
+            avoidTolls: isAvoidTollsEnabled(),
+            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
+            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
+            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
+            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+        },
+        parkingPreferences: {
+            maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance')?.value || '10',
+            preferredType: document.getElementById('parkingPreferredType')?.value || 'any',
+            pricePreference: document.getElementById('parkingPricePreference')?.value || 'any',
+        },
+        multiDropPreferences: {
+            optimizeStopOrder: localStorage.getItem('pref_optimizeStopOrder') !== 'false',
+            roundTrip: localStorage.getItem('pref_roundTrip') === 'true',
+            trafficAwareRouting: localStorage.getItem('pref_trafficAwareRouting') !== 'false',
+            avoidRoadClosures: localStorage.getItem('pref_avoidRoadClosures') !== 'false',
+            avoidIncidents: localStorage.getItem('pref_avoidIncidents') !== 'false',
+            departureTime: localStorage.getItem('pref_departureTime') || '',
+        },
+        mapTheme: localStorage.getItem('mapTheme') || 'standard',
+    };
+}
+
+/**
+ * Apply in-navigation reroute outcome from a successful /api/route response.
+ * @param {Object} data
+ * @param {string} geocodedEnd
+ * @param {string} end
+ */
+function applyCalculateRouteInNavRerouteOutcome(data, geocodedEnd, end) {
+    hideRouteProgressBar();
+
+    const RS = _routeSelection();
+    const activeRoute = pickActiveRouteDuringNavigation(data.routes, data);
+    if (!activeRoute) {
+        showStatus(RS.buildInNavRerouteDispatchPlan({}, {}, '', '').noRouteErrorMessage, 'error');
+        return;
+    }
+    if (activeRoute.geometry) {
+        updateRouteOnMap(activeRoute);
+    }
+
+    const dispatch = RS.buildInNavRerouteDispatchPlan(
+        activeRoute,
+        data,
+        geocodedEnd,
+        end,
+        voiceAnnouncementsEnabled
+            ? { enabled: true, convertDistance, distUnit: getDistanceUnit() }
+            : { enabled: false }
+    );
+    window.lastCalculatedRoute = {
+        ...window.lastCalculatedRoute,
+        ...dispatch.lastCalculatedRoutePatch,
+    };
+
+    if (dispatch.speakMessage) {
+        speakMessage(dispatch.speakMessage, 'high');
+    }
+
+    showStatus(dispatch.statusMessage, dispatch.statusType);
+    if (dispatch.recentDestination) {
+        try {
+            recordRecentDestination(
+                dispatch.recentDestination.label,
+                dispatch.recentDestination.lat,
+                dispatch.recentDestination.lon,
+                dispatch.recentDestination.kind
+            );
+        } catch (_) { /* ignore */ }
+    }
+}
+
+/**
+ * Post-preview UI side-effects for idle calculateRoute success.
+ * @param {Object} idleUiPlan - from buildCalculateRouteIdleUiApplyPlan
+ * @param {Object} data - route API response
+ */
+function applyCalculateRouteIdleUiFromPlan(idleUiPlan, data) {
+    if (!idleUiPlan) return;
+
+    const delayMs = idleUiPlan.delayedPreview?.delayMs ?? 300;
+    setTimeout(() => {
+        showRoutePreview(data);
+        if (idleUiPlan.updateArButtonVisibility) {
+            updateARButtonVisibility();
+        }
+    }, delayMs);
+
+    hideRouteProgressBar();
+
+    if (idleUiPlan.showStartNavButtons) {
+        (idleUiPlan.startNavButtonIds || []).forEach((id) => {
+            const btn = document.getElementById(id);
+            if (btn) btn.style.display = 'block';
+        });
+    }
+    if (idleUiPlan.updateRoadReportFabVisibility) {
+        updateRoadReportFabVisibility();
+    }
+
+    const notification = idleUiPlan.notification;
+    if (notification) {
+        console.log('[Route] Route ready notification:', notification.message);
+        sendNotification(notification.title, notification.message, notification.type);
+    }
+
+    try {
+        (idleUiPlan.recentDestinations || []).forEach((dest) => {
+            recordRecentDestination(dest.label, dest.lat, dest.lon, dest.kind);
+        });
+    } catch (_) { /* ignore */ }
+}
+
+/**
+ * Apply idle (non-navigation) calculateRoute preview outcome.
+ * @param {Object} data
+ * @param {{ geocodedStart: string, geocodedEnd: string, start: string, end: string }} labels
+ */
+function applyCalculateRouteIdlePreviewOutcome(data, labels) {
+    try {
+        const GL = _geocodingLocations();
+        const RS = _routeSelection();
+        const distanceKm = parseFloat(data.distance_km || data.distance) || 0;
+        const previewPlan = RS.buildRoutePreviewSuccessPlan({
+            geocodedStart: labels.geocodedStart,
+            geocodedEnd: labels.geocodedEnd,
+            startLabel: labels.start,
+            endLabel: labels.end,
+            data,
+            parseLatLonPair: GL.parseLatLonPairString.bind(GL),
+            invalidFormatMessage: GL.getInvalidCoordinatesFormatStatusMessage(),
+            invalidCoordsMessage: GL.getInvalidCoordinatesStatusMessage(),
+            decodePolyline,
+            fmt: {
+                distanceText: convertDistance(distanceKm),
+                distUnit: getDistanceUnit(),
+                currencySymbol: getCurrencySymbol(),
+                notificationDistanceText: convertDistance(distanceKm),
+            },
+            parseDurationMinutes: _routeSharing().parseSharedRouteDurationMinutes,
+        });
+
+        if (!previewPlan.ok) {
+            showStatus(previewPlan.errorStatusMessage, 'error');
+            hideRouteProgressBar();
+            return;
+        }
+
+        const { startCoords, endCoords, pathPlan, routePath } = previewPlan;
+
+        if (startMarker && typeof startMarker.remove === 'function') startMarker.remove();
+        if (endMarker && typeof endMarker.remove === 'function') endMarker.remove();
+        if (routeLayer && typeof routeLayer.remove === 'function') routeLayer.remove();
+
+        const PM = _previewMarker();
+        const startMarkerOpts = PM.getRouteEndpointMarkerOptions('start');
+        const endMarkerOpts = PM.getRouteEndpointMarkerOptions('end');
+
+        startMarker = MapLibreHelpers.createCircleMarker(startCoords[0], startCoords[1], {
+            radius: startMarkerOpts.radius,
+            fillColor: startMarkerOpts.fillColor,
+            color: startMarkerOpts.color,
+            weight: startMarkerOpts.weight,
+            fillOpacity: startMarkerOpts.fillOpacity,
+        }).addTo(map);
+        startMarker.bindPopup(startMarkerOpts.popup);
+
+        endMarker = MapLibreHelpers.createCircleMarker(endCoords[0], endCoords[1], {
+            radius: endMarkerOpts.radius,
+            fillColor: endMarkerOpts.fillColor,
+            color: endMarkerOpts.color,
+            weight: endMarkerOpts.weight,
+            fillOpacity: endMarkerOpts.fillOpacity,
+        }).addTo(map);
+        endMarker.bindPopup(endMarkerOpts.popup);
+
+        if (pathPlan.usedFallback && data.geometry) {
+            if (!pathPlan.precision) {
+                console.error('[Route] Decoded polyline is empty, using straight line');
+            } else {
+                console.error('[Route] Invalid decoded coordinates, using straight line');
+            }
+        } else if (!pathPlan.usedFallback && pathPlan.precision != null) {
+            console.log(`Route path decoded: ${routePath.length} points with precision ${pathPlan.precision} (source: ${data.source})`);
+        }
+
+        if (!map) {
+            console.error('[Route] Map not initialized');
+            showStatus('Error: Map not initialized', 'error');
+            return;
+        }
+
+        MapLibreHelpers.fitMapBounds(map, routePath, { padding: 50 });
+        lastZoomLevel = map.getZoom();
+
+        if (data.total_stop_time && data.total_stop_time > 0) {
+            console.log(`[Route] Total time with ${data.stops_count} stops: ${previewPlan.displayTime}`);
+        }
+        updateTripInfo(data.distance, previewPlan.displayTime, data.fuel_cost || '-', data.toll_cost || '-');
+        showStatus(previewPlan.statusMessage, 'success');
+
+        if (previewPlan.showMultiDropLegs) {
+            displayMultiDropLegs(data);
+        }
+
+        window.lastRouteApiResponse = data;
+        window.lastCalculatedRoute = previewPlan.lastCalculatedRoutePatch;
+        console.log(`[Route] Stored route with duration_minutes: ${previewPlan.durationMinutes}`);
+
+        if (previewPlan.primaryHazards && previewPlan.primaryHazards.length > 0) {
+            displayHazardMarkers(previewPlan.primaryHazards);
+        }
+
+        if (previewPlan.routesCount > 0) {
+            console.log(`[Route API] Received ${previewPlan.routesCount} routes from ${previewPlan.routeSource}, default polyline precision ${previewPlan.defaultPrecision}`);
+            routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routePath);
+            console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}:`, routeOptions.map(r => r.name));
+        } else {
+            routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routePath);
+            console.log('[Route Comparison] Using single route (fallback)');
+        }
+
+        applyCalculateRouteIdleUiFromPlan(RS.buildCalculateRouteIdleUiApplyPlan(previewPlan), data);
+    } catch (e) {
+        showStatus('Error parsing coordinates: ' + e.message, 'error');
+        console.error('Coordinate parsing error:', e);
+        hideRouteProgressBar();
+    }
+}
+
 async function calculateRoute() {
     console.log('[calculateRoute] START - Function called');
 
@@ -4059,204 +4280,33 @@ async function calculateRoute() {
         .then(data => {
             const RR = _routingRequest();
             const apiPlan = RR.buildRouteApiResultPlan(data);
-            console.log('[Route API] Response received:', apiPlan.responseLogMeta);
+            const dispatch = RR.buildCalculateRouteDispatchPlan(apiPlan, routeInProgress);
+            console.log('[Route API] Response received:', dispatch.responseLogMeta);
 
-            if (apiPlan.routingDegraded && apiPlan.degradedLogWarning) {
+            if (dispatch.degradedLogWarning) {
                 console.warn(
                     '[Route API] Degraded routing — local engines failed:',
-                    apiPlan.degradedLogWarning.warning,
-                    apiPlan.degradedLogWarning.engines
+                    dispatch.degradedLogWarning.warning,
+                    dispatch.degradedLogWarning.engines
                 );
-                showStatus(RR.getDegradedRoutingStatusMessage(), 'warning');
+            }
+            if (dispatch.degradedStatusMessage) {
+                showStatus(dispatch.degradedStatusMessage, 'warning');
             }
 
-            if (!apiPlan.success) {
-                showStatus(apiPlan.errorMessage, 'error');
-                hideRouteProgressBar();
-                return;
-            }
-
-            // ===== FIX: If navigation is in progress, take a streamlined reroute path =====
-            // This avoids clearing markers, fitting bounds, or switching to the route preview tab.
-            if (routeInProgress) {
-                console.log('[calculateRoute] Navigation active — using in-nav reroute path');
-                hideRouteProgressBar();
-
-                const RS = _routeSelection();
-                const activeRoute = pickActiveRouteDuringNavigation(data.routes, data);
-                if (!activeRoute) {
-                    showStatus(RS.buildInNavRerouteDispatchPlan({}, {}, '', '').noRouteErrorMessage, 'error');
-                    return;
-                }
-                if (activeRoute.geometry) {
-                    updateRouteOnMap(activeRoute);
-                }
-
-                const dispatch = RS.buildInNavRerouteDispatchPlan(
-                    activeRoute,
-                    data,
-                    geocodedEnd,
-                    end,
-                    voiceAnnouncementsEnabled
-                        ? { enabled: true, convertDistance, distUnit: getDistanceUnit() }
-                        : { enabled: false }
-                );
-                window.lastCalculatedRoute = {
-                    ...window.lastCalculatedRoute,
-                    ...dispatch.lastCalculatedRoutePatch,
-                };
-
-                if (dispatch.speakMessage) {
-                    speakMessage(dispatch.speakMessage, 'high');
-                }
-
+            if (dispatch.branch === 'error') {
                 showStatus(dispatch.statusMessage, dispatch.statusType);
-                if (dispatch.recentDestination) {
-                    try {
-                        recordRecentDestination(
-                            dispatch.recentDestination.label,
-                            dispatch.recentDestination.lat,
-                            dispatch.recentDestination.lon,
-                            dispatch.recentDestination.kind
-                        );
-                    } catch (_) { /* ignore */ }
-                }
+                hideRouteProgressBar();
                 return;
             }
 
-            try {
-                const GL = _geocodingLocations();
-                const RS = _routeSelection();
-                const distanceKm = parseFloat(data.distance_km || data.distance) || 0;
-                const previewPlan = RS.buildRoutePreviewSuccessPlan({
-                    geocodedStart,
-                    geocodedEnd,
-                    startLabel: start,
-                    endLabel: end,
-                    data,
-                    parseLatLonPair: GL.parseLatLonPairString.bind(GL),
-                    invalidFormatMessage: GL.getInvalidCoordinatesFormatStatusMessage(),
-                    invalidCoordsMessage: GL.getInvalidCoordinatesStatusMessage(),
-                    decodePolyline,
-                    fmt: {
-                        distanceText: convertDistance(distanceKm),
-                        distUnit: getDistanceUnit(),
-                        currencySymbol: getCurrencySymbol(),
-                        notificationDistanceText: convertDistance(distanceKm),
-                    },
-                    parseDurationMinutes: _routeSharing().parseSharedRouteDurationMinutes,
-                });
-
-                if (!previewPlan.ok) {
-                    showStatus(previewPlan.errorStatusMessage, 'error');
-                    hideRouteProgressBar();
-                    return;
-                }
-
-                const { startCoords, endCoords, pathPlan, routePath } = previewPlan;
-
-                if (startMarker && typeof startMarker.remove === 'function') startMarker.remove();
-                if (endMarker && typeof endMarker.remove === 'function') endMarker.remove();
-                if (routeLayer && typeof routeLayer.remove === 'function') routeLayer.remove();
-
-                const PM = _previewMarker();
-                const startMarkerOpts = PM.getRouteEndpointMarkerOptions('start');
-                const endMarkerOpts = PM.getRouteEndpointMarkerOptions('end');
-
-                startMarker = MapLibreHelpers.createCircleMarker(startCoords[0], startCoords[1], {
-                    radius: startMarkerOpts.radius,
-                    fillColor: startMarkerOpts.fillColor,
-                    color: startMarkerOpts.color,
-                    weight: startMarkerOpts.weight,
-                    fillOpacity: startMarkerOpts.fillOpacity,
-                }).addTo(map);
-                startMarker.bindPopup(startMarkerOpts.popup);
-
-                endMarker = MapLibreHelpers.createCircleMarker(endCoords[0], endCoords[1], {
-                    radius: endMarkerOpts.radius,
-                    fillColor: endMarkerOpts.fillColor,
-                    color: endMarkerOpts.color,
-                    weight: endMarkerOpts.weight,
-                    fillOpacity: endMarkerOpts.fillOpacity,
-                }).addTo(map);
-                endMarker.bindPopup(endMarkerOpts.popup);
-
-                if (pathPlan.usedFallback && data.geometry) {
-                    if (!pathPlan.precision) {
-                        console.error('[Route] Decoded polyline is empty, using straight line');
-                    } else {
-                        console.error('[Route] Invalid decoded coordinates, using straight line');
-                    }
-                } else if (!pathPlan.usedFallback && pathPlan.precision != null) {
-                    console.log(`Route path decoded: ${routePath.length} points with precision ${pathPlan.precision} (source: ${data.source})`);
-                }
-
-                if (!map) {
-                    console.error('[Route] Map not initialized');
-                    showStatus('Error: Map not initialized', 'error');
-                    return;
-                }
-
-                MapLibreHelpers.fitMapBounds(map, routePath, { padding: 50 });
-                lastZoomLevel = map.getZoom();
-
-                if (data.total_stop_time && data.total_stop_time > 0) {
-                    console.log(`[Route] Total time with ${data.stops_count} stops: ${previewPlan.displayTime}`);
-                }
-                updateTripInfo(data.distance, previewPlan.displayTime, data.fuel_cost || '-', data.toll_cost || '-');
-                showStatus(previewPlan.statusMessage, 'success');
-
-                if (previewPlan.showMultiDropLegs) {
-                    displayMultiDropLegs(data);
-                }
-
-                window.lastRouteApiResponse = data;
-                window.lastCalculatedRoute = previewPlan.lastCalculatedRoutePatch;
-                console.log(`[Route] Stored route with duration_minutes: ${previewPlan.durationMinutes}`);
-
-                if (previewPlan.primaryHazards && previewPlan.primaryHazards.length > 0) {
-                    displayHazardMarkers(previewPlan.primaryHazards);
-                }
-
-                if (previewPlan.routesCount > 0) {
-                    console.log(`[Route API] Received ${previewPlan.routesCount} routes from ${previewPlan.routeSource}, default polyline precision ${previewPlan.defaultPrecision}`);
-                    routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routePath);
-                    console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}:`, routeOptions.map(r => r.name));
-                } else {
-                    routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routePath);
-                    console.log('[Route Comparison] Using single route (fallback)');
-                }
-
-                setTimeout(() => {
-                    showRoutePreview(data);
-                    updateARButtonVisibility();
-                }, 300);
-
-                hideRouteProgressBar();
-
-                const startNavBtn = document.getElementById('startNavBtn');
-                const startNavBtnSheet = document.getElementById('startNavBtnSheet');
-                if (startNavBtn) startNavBtn.style.display = 'block';
-                if (startNavBtnSheet) startNavBtnSheet.style.display = 'block';
-                updateRoadReportFabVisibility();
-
-                console.log('[Route] Route ready notification:', previewPlan.notification.message);
-                sendNotification(
-                    previewPlan.notification.title,
-                    previewPlan.notification.message,
-                    previewPlan.notification.type
-                );
-
-                try {
-                    previewPlan.recentDestinations.forEach((dest) => {
-                        recordRecentDestination(dest.label, dest.lat, dest.lon, dest.kind);
-                    });
-                } catch (_) { /* ignore */ }
-            } catch (e) {
-                showStatus('Error parsing coordinates: ' + e.message, 'error');
-                console.error('Coordinate parsing error:', e);
-                hideRouteProgressBar();
+            if (dispatch.branch === 'in_nav_reroute') {
+                console.log('[calculateRoute] Navigation active — using in-nav reroute path');
+                applyCalculateRouteInNavRerouteOutcome(data, geocodedEnd, end);
+                return;
             }
+
+            applyCalculateRouteIdlePreviewOutcome(data, { geocodedStart, geocodedEnd, start, end });
         })
         .catch(error => {
             showStatus('Error: ' + error.message, 'error');
@@ -15837,16 +15887,15 @@ function loadPreferences() {
     const RP = _routePrefs();
     const TU = _toggleUI();
 
-    RP.ROUTE_AVOIDANCE_PREF_KEYS.forEach((pref) => {
-        const button = document.getElementById(RP.resolveRouteAvoidanceButtonId(pref));
+    RP.buildRouteAvoidanceTogglesApplyPlan(localStorage).forEach((item) => {
+        const button = document.getElementById(item.buttonId);
 
         if (button) {
-            const isEnabled = RP.isRouteAvoidancePrefEnabled(pref, localStorage);
-            TU.applyLabeledToggleButton(button, isEnabled);
-            console.log('[Settings] Loaded preference:', pref, '=', isEnabled ? 'enabled' : 'disabled',
-                localStorage.getItem(RP.getRouteAvoidancePrefStorageKey(pref)) === null ? '(default)' : '');
+            TU.applyLabeledToggleButton(button, item.enabled);
+            console.log('[Settings] Loaded preference:', item.pref, '=', item.enabled ? 'enabled' : 'disabled',
+                item.usesDefault ? '(default)' : '');
         } else {
-            console.warn('[Settings] Button not found for preference:', pref, 'ID:', RP.resolveRouteAvoidanceButtonId(pref));
+            console.warn('[Settings] Button not found for preference:', item.pref, 'ID:', item.buttonId);
         }
     });
 

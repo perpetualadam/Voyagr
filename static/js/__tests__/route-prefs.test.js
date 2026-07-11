@@ -80,6 +80,19 @@ describe('route-prefs module', () => {
             localStorage.setItem('pref_cameras', 'false');
             expect(RoutePrefs.isRouteAvoidancePrefEnabled('cameras', localStorage)).toBe(false);
         });
+
+        test('buildRouteAvoidanceTogglesApplyPlan lists all avoidance toggles', () => {
+            const plan = RoutePrefs.buildRouteAvoidanceTogglesApplyPlan(localStorage);
+            expect(plan.length).toBe(RoutePrefs.ROUTE_AVOIDANCE_PREF_KEYS.length);
+            const cameras = plan.find((item) => item.pref === 'cameras');
+            expect(cameras.buttonId).toBe('avoidCameras');
+            expect(cameras.enabled).toBe(true);
+            expect(cameras.usesDefault).toBe(true);
+            localStorage.setItem('pref_cameras', 'false');
+            const updated = RoutePrefs.buildRouteAvoidanceTogglesApplyPlan(localStorage);
+            expect(updated.find((item) => item.pref === 'cameras').enabled).toBe(false);
+            expect(updated.find((item) => item.pref === 'cameras').usesDefault).toBe(false);
+        });
     });
 
     describe('route leg avoidance preference helpers', () => {

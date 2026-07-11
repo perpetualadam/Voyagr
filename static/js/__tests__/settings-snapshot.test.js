@@ -105,4 +105,37 @@ describe('settings-snapshot module', () => {
         expect(plan.labeledToggleButtons.mlPredictions).toBe(true);
         expect(plan.sideEffects.applySpeedWidgetToggleUi).toBe(true);
     });
+
+    test('buildSettingsSnapshotInputPlan merges runtime and form state', () => {
+        const input = SS.buildSettingsSnapshotInputPlan(
+            {
+                distanceUnit: 'km',
+                currencyUnit: 'GBP',
+                speedUnit: 'kmh',
+                temperatureUnit: 'c',
+                vehicleType: 'hybrid',
+                routingMode: 'fastest',
+                smartZoomEnabled: true,
+                showCamerasEnabled: false,
+                showOsmTrafficLightsEnabled: true,
+                showOsmRailwayCrossingsEnabled: false,
+                showTrafficEnabled: true,
+                autoTrafficUpdateEnabled: false,
+                autoRerouteOnDeviationEnabled: true,
+                speedWidgetEnabled: true,
+            },
+            {
+                routePreferences: { avoidHighways: true, maxDetour: 25 },
+                hazardPreferences: { avoidCameras: false },
+                parkingPreferences: { maxWalkingDistance: '8' },
+                multiDropPreferences: { roundTrip: true },
+                mapTheme: 'dark',
+            }
+        );
+        expect(input.distanceUnit).toBe('km');
+        expect(input.routePreferences.avoidHighways).toBe(true);
+        expect(input.hazardPreferences.avoidCameras).toBe(false);
+        expect(input.multiDropPreferences.roundTrip).toBe(true);
+        expect(input.mapTheme).toBe('dark');
+    });
 });
