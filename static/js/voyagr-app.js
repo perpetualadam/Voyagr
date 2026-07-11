@@ -12370,50 +12370,76 @@ function applyGpsTrackingSideEffectsFromPosition(pos) {
 }
 
 /**
+ * Coord sample, history, raw speed, and odometer for one GPS tick.
+ * @param {Object} sample - from normalizeGeolocationCoordsSample
+ * @returns {Object}
+ */
+function applyGpsCoordSampleTick(sample) {
+    const SG = _speedGps();
+    const tick = SG.buildGpsCoordSampleTickPlan({
+        sample,
+        trackingHistory,
+        pickRawSpeedState: {
+            lastGoodRawPickMph: _lastGoodRawPickMph,
+            consecutiveDisplacementMoves: _consecutiveDisplacementMoves,
+        },
+        routeInProgress,
+        odometerState: { lastGeo: _navOdometerLastGeo, traveledMeters: _navTraveledMeters },
+        nowMs: Date.now(),
+        calculateDistanceMeters,
+    });
+    const apply = SG.buildGpsCoordSampleStateApplyPlan(tick);
+    if (apply.action !== 'apply') {
+        return {
+            lat: sample.lat,
+            lon: sample.lon,
+            accuracy: sample.accuracy,
+            speed: sample.speedMs,
+            deviceHeading: sample.deviceHeading,
+            speedMph: 0,
+        };
+    }
+
+    currentLat = apply.lat;
+    currentLon = apply.lon;
+    updateRoadReportFabVisibility();
+
+    const patch = apply.statePatch;
+    if (patch.trackingHistory) {
+        trackingHistory = patch.trackingHistory;
+    }
+    if (patch.pickRawSpeedState) {
+        _lastGoodRawPickMph = patch.pickRawSpeedState.lastGoodRawPickMph;
+        _consecutiveDisplacementMoves = patch.pickRawSpeedState.consecutiveDisplacementMoves;
+    }
+    if (patch.odometer) {
+        _navOdometerLastGeo = patch.odometer.lastGeo;
+        _navTraveledMeters = patch.odometer.traveledMeters;
+    }
+
+    return {
+        lat: apply.lat,
+        lon: apply.lon,
+        accuracy: apply.accuracy,
+        speed: apply.speed,
+        deviceHeading: apply.deviceHeading,
+        speedMph: apply.speedMph,
+    };
+}
+
+/**
  * Position, odometer, speed-limit, and side-effects setup for one GPS tick.
  * @param {Object} sample - from normalizeGeolocationCoordsSample
  * @returns {Object}
  */
 function applyGpsPositionTick(sample) {
-    const lat = sample.lat;
-    const lon = sample.lon;
-    const accuracy = sample.accuracy;
-    const speed = sample.speedMs;
-    const deviceHeading = sample.deviceHeading;
-
-    currentLat = lat;
-    currentLon = lon;
-    updateRoadReportFabVisibility();
-
-    const SGsample = _speedGps();
-    const historyPlan = SGsample.buildTrackingHistoryAppendPlan(trackingHistory, {
-        lat: lat,
-        lon: lon,
-        timestamp: new Date(),
-        speed: speed,
-        accuracy: accuracy,
-    });
-    trackingHistory = historyPlan.history;
-
-    /** Single raw-speed sample / tick (clamped inside pickRawSpeedMph) for zoom + HUD. */
-    const speedMph = pickRawSpeedMph(sample.deviceSpeedMs, trackingHistory, accuracy);
-
-    // Whole-journey odometer: sum plausible movement between raw fixes.
-    if (routeInProgress) {
-        const odoNow = Date.now();
-        const SGodo = _speedGps();
-        if (SGodo) {
-            const odo = SGodo.accumulateNavOdometerSegment(
-                { lastGeo: _navOdometerLastGeo, traveledMeters: _navTraveledMeters },
-                lat,
-                lon,
-                odoNow,
-                calculateDistanceMeters
-            );
-            _navOdometerLastGeo = odo.lastGeo;
-            _navTraveledMeters = odo.traveledMeters;
-        }
-    }
+    const coord = applyGpsCoordSampleTick(sample);
+    const lat = coord.lat;
+    const lon = coord.lon;
+    const accuracy = coord.accuracy;
+    const speed = coord.speed;
+    const deviceHeading = coord.deviceHeading;
+    const speedMph = coord.speedMph;
 
     const SGhead = _speedGps();
     const SGpos = _speedGps();
@@ -15138,36 +15164,33 @@ let currentRoadDisplayName = '';
 
 function fetchRoadNameThrottled(lat, lon) {
     const RN = _roadNameDisplay();
-    const now = Date.now();
-    let distanceMoved = 999;
-    if (lastRoadNamePosition) {
-        distanceMoved = calculateDistanceMeters(lat, lon, lastRoadNamePosition.lat, lastRoadNamePosition.lon);
-    }
-
-    if (!RN.shouldFetchRoadName({
-        now: now,
+    const tick = RN.buildRoadNameFetchTickPlan({
+        lat,
+        lon,
+        now: Date.now(),
         lastFetch: lastRoadNameFetch,
         lastPosition: lastRoadNamePosition,
-        distanceMovedMeters: distanceMoved,
-    })) {
-        return;
-    }
+        calculateDistance: calculateDistanceMeters,
+    });
+    if (tick.action === 'skip') return;
 
-    lastRoadNameFetch = now;
-    lastRoadNamePosition = { lat, lon };
+    const apply = RN.buildRoadNameFetchStateApplyPlan(tick);
+    if (apply.action === 'skip') return;
 
-    fetch(RN.buildRoadInfoApiUrl(lat, lon))
+    lastRoadNameFetch = apply.statePatch.lastFetch;
+    lastRoadNamePosition = apply.statePatch.lastPosition;
+
+    fetch(apply.fetch.url)
         .then(r => r.json())
         .then(data => {
-            if (data.success && data.road_name) {
-                const plan = RN.getRoadNameBarShowPlan(data.road_name);
-                currentRoadDisplayName = plan.roadName;
-                const bar = document.getElementById('roadNameBar');
-                const label = document.getElementById('currentRoadName');
-                if (bar && label) {
-                    label.textContent = plan.roadName;
-                    bar.style.display = plan.barDisplay;
-                }
+            const domApply = RN.buildRoadNameApiResponseDomApplyPlan(data);
+            if (domApply.action !== 'apply') return;
+            currentRoadDisplayName = domApply.statePatch.currentRoadDisplayName;
+            const bar = document.getElementById('roadNameBar');
+            const label = document.getElementById('currentRoadName');
+            if (bar && label) {
+                label.textContent = domApply.roadName;
+                bar.style.display = domApply.barDisplay;
             }
         })
         .catch(err => {

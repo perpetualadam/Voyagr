@@ -439,6 +439,73 @@ describe('GPS sample normalization and tracking history', () => {
     });
 });
 
+describe('buildGpsCoordSampleTickPlan', () => {
+    const dist = (a, b, c, d) => Math.sqrt((c - a) ** 2 + (d - b) ** 2) * 111000;
+
+    test('appends history, picks raw speed, and accumulates odometer during navigation', () => {
+        const tick = SG.buildGpsCoordSampleTickPlan({
+            sample: {
+                lat: 51.5,
+                lon: -0.1,
+                accuracy: 10,
+                speedMs: 5,
+                deviceSpeedMs: 5,
+                deviceHeading: null,
+            },
+            trackingHistory: [{ lat: 51.499, lon: -0.1, timestamp: new Date(1000), speed: 4, accuracy: 10 }],
+            pickRawSpeedState: { lastGoodRawPickMph: 0, consecutiveDisplacementMoves: 0 },
+            routeInProgress: true,
+            odometerState: { lastGeo: { lat: 51.499, lon: -0.1, t: 1000 }, traveledMeters: 100 },
+            nowMs: 3000,
+            calculateDistanceMeters: dist,
+        });
+        expect(tick.lat).toBe(51.5);
+        expect(tick.speedMph).toBeGreaterThan(0);
+        expect(tick.statePatch.trackingHistory).toHaveLength(2);
+        expect(tick.statePatch.odometer.traveledMeters).toBeGreaterThan(100);
+        expect(tick.statePatch.pickRawSpeedState.lastGoodRawPickMph).toBe(tick.speedMph);
+    });
+
+    test('skips odometer when route is not in progress', () => {
+        const tick = SG.buildGpsCoordSampleTickPlan({
+            sample: { lat: 51.5, lon: -0.1, accuracy: 10, speedMs: 0, deviceSpeedMs: null, deviceHeading: null },
+            trackingHistory: [],
+            pickRawSpeedState: { lastGoodRawPickMph: 0, consecutiveDisplacementMoves: 0 },
+            routeInProgress: false,
+            nowMs: 2000,
+        });
+        expect(tick.statePatch.odometer).toBeNull();
+    });
+});
+
+describe('buildGpsCoordSampleStateApplyPlan', () => {
+    test('maps coord tick to apply outputs and state patch', () => {
+        const tick = {
+            lat: 51.5,
+            lon: -0.1,
+            accuracy: 8,
+            speed: 3,
+            deviceHeading: 45,
+            speedMph: 12,
+            statePatch: {
+                trackingHistory: [{ lat: 51.5, lon: -0.1 }],
+                pickRawSpeedState: { lastGoodRawPickMph: 12, consecutiveDisplacementMoves: 1 },
+                currentLat: 51.5,
+                currentLon: -0.1,
+                odometer: null,
+            },
+        };
+        const apply = SG.buildGpsCoordSampleStateApplyPlan(tick);
+        expect(apply.action).toBe('apply');
+        expect(apply.speedMph).toBe(12);
+        expect(apply.statePatch.trackingHistory).toHaveLength(1);
+    });
+
+    test('returns skip when tick is missing', () => {
+        expect(SG.buildGpsCoordSampleStateApplyPlan(null).action).toBe('skip');
+    });
+});
+
 describe('navigation vehicle marker position', () => {
     test('buildNavigationVehicleMarkerPositionPlan smooths snapped display coords', () => {
         const plan = SG.buildNavigationVehicleMarkerPositionPlan({

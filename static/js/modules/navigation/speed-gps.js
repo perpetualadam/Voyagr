@@ -897,6 +897,8 @@
         buildNavigationVehicleMarkerPositionPlan: buildNavigationVehicleMarkerPositionPlan,
         buildVehicleMarkerTickPlan: buildVehicleMarkerTickPlan,
         buildGpsTrackingPositionTickPlan: buildGpsTrackingPositionTickPlan,
+        buildGpsCoordSampleTickPlan: buildGpsCoordSampleTickPlan,
+        buildGpsCoordSampleStateApplyPlan: buildGpsCoordSampleStateApplyPlan,
         buildGpsPositionStateApplyPlan: buildGpsPositionStateApplyPlan,
         computeVehicleMarkerRotationDeg: computeVehicleMarkerRotationDeg,
         normalizeGeolocationCoordsSample: normalizeGeolocationCoordsSample,
@@ -1049,6 +1051,97 @@
             speedMs: speedMs,
             deviceSpeedMs: deviceSpeedMs,
             deviceHeading: deviceHeading,
+        };
+    }
+
+    /**
+     * Coord sample + history + raw speed + odometer plan for one GPS tick.
+     * @param {Object} opts
+     * @param {Object} opts.sample - from normalizeGeolocationCoordsSample
+     * @param {Array<Object>} [opts.trackingHistory]
+     * @param {Object} [opts.pickRawSpeedState] - { lastGoodRawPickMph, consecutiveDisplacementMoves }
+     * @param {boolean} [opts.routeInProgress]
+     * @param {Object|null} [opts.odometerState] - { lastGeo, traveledMeters }
+     * @param {number} [opts.nowMs]
+     * @param {Date} [opts.timestamp]
+     * @param {function(number,number,number,number): number} [opts.calculateDistanceMeters]
+     * @returns {Object}
+     */
+    function buildGpsCoordSampleTickPlan(opts) {
+        opts = opts || {};
+        var sample = opts.sample || {};
+        var lat = sample.lat;
+        var lon = sample.lon;
+        var accuracy = sample.accuracy;
+        var speed = sample.speedMs;
+
+        var historyPlan = buildTrackingHistoryAppendPlan(opts.trackingHistory, {
+            lat: lat,
+            lon: lon,
+            timestamp: opts.timestamp != null
+                ? opts.timestamp
+                : new Date(opts.nowMs != null ? opts.nowMs : Date.now()),
+            speed: speed,
+            accuracy: accuracy,
+        });
+
+        var pickResult = stepPickRawSpeedMph(
+            opts.pickRawSpeedState,
+            sample.deviceSpeedMs,
+            historyPlan.history,
+            accuracy
+        );
+
+        var odometerPatch = null;
+        if (opts.routeInProgress && typeof opts.calculateDistanceMeters === 'function') {
+            var odo = accumulateNavOdometerSegment(
+                opts.odometerState,
+                lat,
+                lon,
+                opts.nowMs != null ? opts.nowMs : Date.now(),
+                opts.calculateDistanceMeters
+            );
+            odometerPatch = {
+                lastGeo: odo.lastGeo,
+                traveledMeters: odo.traveledMeters,
+            };
+        }
+
+        return {
+            lat: lat,
+            lon: lon,
+            accuracy: accuracy,
+            speed: speed,
+            deviceHeading: sample.deviceHeading,
+            speedMph: pickResult.value,
+            statePatch: {
+                trackingHistory: historyPlan.history,
+                pickRawSpeedState: pickResult.state,
+                currentLat: lat,
+                currentLon: lon,
+                odometer: odometerPatch,
+            },
+        };
+    }
+
+    /**
+     * Apply plan for coord-sample tick state patches and tick outputs.
+     * @param {Object|null|undefined} tick - from buildGpsCoordSampleTickPlan
+     * @returns {Object}
+     */
+    function buildGpsCoordSampleStateApplyPlan(tick) {
+        if (!tick) {
+            return { action: 'skip' };
+        }
+        return {
+            action: 'apply',
+            lat: tick.lat,
+            lon: tick.lon,
+            accuracy: tick.accuracy,
+            speed: tick.speed,
+            deviceHeading: tick.deviceHeading,
+            speedMph: tick.speedMph,
+            statePatch: tick.statePatch || {},
         };
     }
 
