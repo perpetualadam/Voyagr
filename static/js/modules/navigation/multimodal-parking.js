@@ -213,6 +213,169 @@
         };
     }
 
+    var WALKING_DISTANCE_TO_RADIUS_METERS = 80;
+    var PARKING_SEARCH_MIN_RADIUS_METERS = 1200;
+
+    /**
+     * Parse "lat,lon" coordinate string.
+     * @param {*} value
+     * @returns {{ lat: number, lon: number }|null}
+     */
+    function parseLatLonCommaString(value) {
+        if (value == null || value === '') return null;
+        var parts = String(value).split(',');
+        if (parts.length < 2) return null;
+        var lat = parseFloat(parts[0]);
+        var lon = parseFloat(parts[1]);
+        if (isNaN(lat) || isNaN(lon)) return null;
+        return { lat: lat, lon: lon };
+    }
+
+    /**
+     * Last point from a polyline array ([lat,lon] pairs or {lat,lon} objects).
+     * @param {Array} polyline
+     * @returns {{ lat: number, lon: number }|null}
+     */
+    function lastPolylinePointCoords(polyline) {
+        if (!polyline || !polyline.length) return null;
+        var last = polyline[polyline.length - 1];
+        if (Array.isArray(last) && last.length >= 2) {
+            return { lat: last[0], lon: last[1] };
+        }
+        if (last && last.lat != null && last.lon != null) {
+            return { lat: last.lat, lon: last.lon };
+        }
+        return null;
+    }
+
+    /**
+     * Resolve parking destination coordinates from route/selection sources (no DOM, no network).
+     * @param {Object} sources
+     * @param {function(string, number): Array<[number,number]>} [decodePolyline]
+     * @returns {{ coords?: { lat: number, lon: number }, source?: string, needsGeocode?: boolean }}
+     */
+    function resolveParkingDestinationCoordsFromSources(sources, decodePolyline) {
+        sources = sources || {};
+        var lr = sources.lastRoute || {};
+
+        if (lr.end_lat != null && lr.end_lon != null) {
+            var endLat = Number(lr.end_lat);
+            var endLon = Number(lr.end_lon);
+            if (!isNaN(endLat) && !isNaN(endLon)) {
+                return { coords: { lat: endLat, lon: endLon }, source: 'end_lat' };
+            }
+        }
+
+        var destinationCoords = parseLatLonCommaString(lr.destination);
+        if (destinationCoords) {
+            return { coords: destinationCoords, source: 'destination' };
+        }
+
+        var route = sources.selectedRouteOption;
+        if (route) {
+            var fromPolyline = lastPolylinePointCoords(route.polyline);
+            if (fromPolyline) {
+                return { coords: fromPolyline, source: 'route_polyline' };
+            }
+            if (route.geometry && typeof decodePolyline === 'function') {
+                var routePrecision = Number.isFinite(route.geometry_precision) ? route.geometry_precision : 6;
+                var routePts = decodePolyline(route.geometry, routePrecision);
+                var fromRouteGeom = lastPolylinePointCoords(routePts);
+                if (fromRouteGeom) {
+                    return { coords: fromRouteGeom, source: 'route_geometry' };
+                }
+            }
+        }
+
+        if (lr.routes && lr.routes[0]) {
+            var firstRoute = lr.routes[0];
+            if (firstRoute.end_lat != null && firstRoute.end_lon != null) {
+                return {
+                    coords: { lat: Number(firstRoute.end_lat), lon: Number(firstRoute.end_lon) },
+                    source: 'routes_end_lat',
+                };
+            }
+            if (firstRoute.geometry && typeof decodePolyline === 'function') {
+                var firstPrecision = Number.isFinite(firstRoute.geometry_precision)
+                    ? firstRoute.geometry_precision
+                    : 6;
+                var firstPts = decodePolyline(firstRoute.geometry, firstPrecision);
+                var fromFirstGeom = lastPolylinePointCoords(firstPts);
+                if (fromFirstGeom) {
+                    return { coords: fromFirstGeom, source: 'routes_geometry' };
+                }
+            }
+        }
+
+        if (lr.geometry && typeof decodePolyline === 'function') {
+            var lrPrecision = Number.isFinite(lr.geometry_precision) ? lr.geometry_precision : 6;
+            var lrPts = decodePolyline(lr.geometry, lrPrecision);
+            var fromLrGeom = lastPolylinePointCoords(lrPts);
+            if (fromLrGeom) {
+                return { coords: fromLrGeom, source: 'geometry' };
+            }
+        }
+
+        if (sources.endElementCoords) {
+            return { coords: sources.endElementCoords, source: 'end_element' };
+        }
+
+        var geocodedCoords = parseLatLonCommaString(sources.geocodedEnd);
+        if (geocodedCoords) {
+            return { coords: geocodedCoords, source: 'geocoded_end' };
+        }
+
+        if (sources.endInput) {
+            return { needsGeocode: true };
+        }
+
+        return { coords: null };
+    }
+
+    /**
+     * Search dispatch plan for parking near destination.
+     * @param {Object} formState
+     * @param {number} formState.lat
+     * @param {number} formState.lon
+     * @param {number} [formState.maxWalkingDist]
+     * @param {string} [formState.parkingType]
+     * @param {string} [formState.pricePref]
+     * @returns {Object}
+     */
+    function buildParkingSearchDispatchPlan(formState) {
+        formState = formState || {};
+        var maxWalkingDist = parseInt(formState.maxWalkingDist, 10);
+        if (!Number.isFinite(maxWalkingDist) || isNaN(maxWalkingDist)) {
+            maxWalkingDist = 10;
+        }
+        var radiusMeters = maxWalkingDist * WALKING_DISTANCE_TO_RADIUS_METERS;
+        var parkingType = formState.parkingType || 'any';
+        var pricePref = formState.pricePref || 'any';
+        return {
+            initialSearch: {
+                lat: formState.lat,
+                lon: formState.lon,
+                radius: radiusMeters,
+                type: parkingType,
+                price: pricePref,
+            },
+            widenSearchWhenEmpty: {
+                enabled: parkingType !== 'any' || pricePref !== 'any' || radiusMeters < PARKING_SEARCH_MIN_RADIUS_METERS,
+                params: {
+                    lat: formState.lat,
+                    lon: formState.lon,
+                    radius: Math.max(radiusMeters, PARKING_SEARCH_MIN_RADIUS_METERS),
+                    type: 'any',
+                    price: 'any',
+                },
+                statusMessage: 'No parking with current filters — widening search…',
+            },
+            emptyStateMessage:
+                'No parking found near your destination. Try Settings → Parking Preferences to increase walking distance or relax price/type filters.',
+            noResultsStatusMessage: 'No parking found nearby. Adjust Parking Preferences in Settings.',
+        };
+    }
+
     /**
      * @returns {string}
      */
@@ -257,6 +420,12 @@
         getParkingOptionsDisplaySlice: getParkingOptionsDisplaySlice,
         buildParkingOptionItemMountPlan: buildParkingOptionItemMountPlan,
         resolveParkingStartCoordsFromRoute: resolveParkingStartCoordsFromRoute,
+        WALKING_DISTANCE_TO_RADIUS_METERS: WALKING_DISTANCE_TO_RADIUS_METERS,
+        PARKING_SEARCH_MIN_RADIUS_METERS: PARKING_SEARCH_MIN_RADIUS_METERS,
+        parseLatLonCommaString: parseLatLonCommaString,
+        lastPolylinePointCoords: lastPolylinePointCoords,
+        resolveParkingDestinationCoordsFromSources: resolveParkingDestinationCoordsFromSources,
+        buildParkingSearchDispatchPlan: buildParkingSearchDispatchPlan,
         getParkingSelectLoadingMessage: getParkingSelectLoadingMessage,
         getParkingSelectSuccessMessage: getParkingSelectSuccessMessage,
         getParkingSelectNoStartMessage: getParkingSelectNoStartMessage,

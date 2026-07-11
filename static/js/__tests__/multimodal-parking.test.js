@@ -110,4 +110,44 @@ describe('multimodal-parking module', () => {
         expect(MP.getParkingSelectLoadingMessage()).toContain('Calculating');
         expect(MP.getParkingSelectLegErrorMessage('driving')).toContain('driving');
     });
+
+    test('parseLatLonCommaString parses coordinate strings', () => {
+        expect(MP.parseLatLonCommaString('51.5,-0.12')).toEqual({ lat: 51.5, lon: -0.12 });
+        expect(MP.parseLatLonCommaString('bad')).toBeNull();
+    });
+
+    test('resolveParkingDestinationCoordsFromSources prefers end_lat then route polyline', () => {
+        const fromEnd = MP.resolveParkingDestinationCoordsFromSources({
+            lastRoute: { end_lat: 51.6, end_lon: -0.2 },
+        });
+        expect(fromEnd.coords).toEqual({ lat: 51.6, lon: -0.2 });
+        expect(fromEnd.source).toBe('end_lat');
+
+        const fromPoly = MP.resolveParkingDestinationCoordsFromSources({
+            lastRoute: {},
+            selectedRouteOption: { polyline: [[51.5, -0.1], [51.55, -0.15]] },
+        });
+        expect(fromPoly.coords).toEqual({ lat: 51.55, lon: -0.15 });
+        expect(fromPoly.source).toBe('route_polyline');
+    });
+
+    test('resolveParkingDestinationCoordsFromSources signals geocode when only endInput remains', () => {
+        expect(MP.resolveParkingDestinationCoordsFromSources({ endInput: 'Leeds' }))
+            .toEqual({ needsGeocode: true });
+    });
+
+    test('buildParkingSearchDispatchPlan maps walking distance to radius and widen fallback', () => {
+        const plan = MP.buildParkingSearchDispatchPlan({
+            lat: 51.5,
+            lon: -0.1,
+            maxWalkingDist: 10,
+            parkingType: 'street',
+            pricePref: 'cheap',
+        });
+        expect(plan.initialSearch.radius).toBe(10 * MP.WALKING_DISTANCE_TO_RADIUS_METERS);
+        expect(plan.initialSearch.type).toBe('street');
+        expect(plan.widenSearchWhenEmpty.enabled).toBe(true);
+        expect(plan.widenSearchWhenEmpty.params.radius).toBe(MP.PARKING_SEARCH_MIN_RADIUS_METERS);
+        expect(plan.widenSearchWhenEmpty.params.type).toBe('any');
+    });
 });

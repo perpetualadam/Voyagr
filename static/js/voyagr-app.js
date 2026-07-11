@@ -7308,90 +7308,38 @@ function toggleVoiceAnnouncements() {
 }
 
 async function resolveParkingDestinationCoords(lastRoute, endInput) {
-    const lr = lastRoute || {};
-
-    if (lr.end_lat != null && lr.end_lon != null) {
-        const lat = Number(lr.end_lat);
-        const lon = Number(lr.end_lon);
-        if (!isNaN(lat) && !isNaN(lon)) return { lat, lon };
-    }
-
-    if (lr.destination) {
-        const parts = String(lr.destination).split(',');
-        if (parts.length >= 2) {
-            const lat = parseFloat(parts[0]);
-            const lon = parseFloat(parts[1]);
-            if (!isNaN(lat) && !isNaN(lon)) return { lat, lon };
-        }
-    }
-
-    if (routeOptions && routeOptions.length > 0) {
-        const idx = Math.max(0, Math.min(Number(selectedRouteIndex) || 0, routeOptions.length - 1));
-        const route = routeOptions[idx];
-        const poly = route && route.polyline;
-        if (poly && poly.length > 0) {
-            const last = poly[poly.length - 1];
-            if (Array.isArray(last) && last.length >= 2) {
-                return { lat: last[0], lon: last[1] };
-            }
-            if (last && last.lat != null && last.lon != null) {
-                return { lat: last.lat, lon: last.lon };
-            }
-        }
-        if (route && route.geometry && typeof decodePolyline === 'function') {
-            const precision = Number.isFinite(route.geometry_precision) ? route.geometry_precision : 6;
-            const pts = decodePolyline(route.geometry, precision);
-            if (pts.length > 0) {
-                const last = pts[pts.length - 1];
-                return { lat: last[0], lon: last[1] };
-            }
-        }
-    }
-
-    if (lr.routes && lr.routes[0]) {
-        const route = lr.routes[0];
-        if (route.end_lat != null && route.end_lon != null) {
-            return { lat: Number(route.end_lat), lon: Number(route.end_lon) };
-        }
-        if (route.geometry && typeof decodePolyline === 'function') {
-            const precision = Number.isFinite(route.geometry_precision) ? route.geometry_precision : 6;
-            const pts = decodePolyline(route.geometry, precision);
-            if (pts.length > 0) {
-                const last = pts[pts.length - 1];
-                return { lat: last[0], lon: last[1] };
-            }
-        }
-    }
-
-    if (lr.geometry && typeof decodePolyline === 'function') {
-        const precision = Number.isFinite(lr.geometry_precision) ? lr.geometry_precision : 6;
-        const pts = decodePolyline(lr.geometry, precision);
-        if (pts.length > 0) {
-            const last = pts[pts.length - 1];
-            return { lat: last[0], lon: last[1] };
-        }
-    }
-
+    const MP = _multimodalParking();
+    const idx = routeOptions && routeOptions.length > 0
+        ? Math.max(0, Math.min(Number(selectedRouteIndex) || 0, routeOptions.length - 1))
+        : 0;
     const endEl = document.getElementById('end');
+    let endElementCoords = null;
     if (endEl && endEl.dataset.lat && endEl.dataset.lon) {
         const lat = parseFloat(endEl.dataset.lat);
         const lon = parseFloat(endEl.dataset.lon);
-        if (!isNaN(lat) && !isNaN(lon)) return { lat, lon };
-    }
-
-    if (endInput && typeof geocodeLocations === 'function') {
-        const geocoded = await geocodeLocations('', endInput);
-        if (geocoded && geocoded.end) {
-            const parts = geocoded.end.split(',');
-            if (parts.length >= 2) {
-                const lat = parseFloat(parts[0]);
-                const lon = parseFloat(parts[1]);
-                if (!isNaN(lat) && !isNaN(lon)) return { lat, lon };
-            }
+        if (!isNaN(lat) && !isNaN(lon)) {
+            endElementCoords = { lat, lon };
         }
     }
 
-    return null;
+    let resolved = MP.resolveParkingDestinationCoordsFromSources({
+        lastRoute: lastRoute || {},
+        selectedRouteOption: routeOptions && routeOptions[idx],
+        endElementCoords,
+        endInput,
+    }, decodePolyline);
+
+    if (resolved.needsGeocode && endInput && typeof geocodeLocations === 'function') {
+        const geocoded = await geocodeLocations('', endInput);
+        resolved = MP.resolveParkingDestinationCoordsFromSources({
+            lastRoute: lastRoute || {},
+            selectedRouteOption: routeOptions && routeOptions[idx],
+            endElementCoords,
+            geocodedEnd: geocoded && geocoded.end,
+        }, decodePolyline);
+    }
+
+    return resolved.coords || null;
 }
 
 async function fetchParkingSearch(params) {
@@ -7454,19 +7402,15 @@ async function findParkingNearDestination() {
         const maxWalkingEl = document.getElementById('parkingMaxWalkingDistance');
         const typeEl = document.getElementById('parkingPreferredType');
         const priceEl = document.getElementById('parkingPricePreference');
-        const maxWalkingDist = maxWalkingEl ? parseInt(maxWalkingEl.value, 10) : 10;
-        const radiusMeters = (isNaN(maxWalkingDist) ? 10 : maxWalkingDist) * 80;
-        const parkingType = typeEl ? typeEl.value : 'any';
-        const pricePref = priceEl ? priceEl.value : 'any';
-
-        let searchParams = {
+        const searchPlan = _multimodalParking().buildParkingSearchDispatchPlan({
             lat: endCoords.lat,
             lon: endCoords.lon,
-            radius: radiusMeters,
-            type: parkingType,
-            price: pricePref
-        };
+            maxWalkingDist: maxWalkingEl ? parseInt(maxWalkingEl.value, 10) : 10,
+            parkingType: typeEl ? typeEl.value : 'any',
+            pricePref: priceEl ? priceEl.value : 'any',
+        });
 
+        let searchParams = searchPlan.initialSearch;
         console.log('[Parking] Search parameters:', searchParams);
         let data = await fetchParkingSearch(searchParams);
         console.log('[Parking] Response data:', data);
@@ -7477,25 +7421,17 @@ async function findParkingNearDestination() {
         }
 
         if (!data.parking || data.parking.length === 0) {
-            const hasStrictFilters = parkingType !== 'any' || pricePref !== 'any' || radiusMeters < 1200;
-            if (hasStrictFilters) {
-                showStatus('No parking with current filters — widening search…', 'info');
-                searchParams = {
-                    lat: endCoords.lat,
-                    lon: endCoords.lon,
-                    radius: Math.max(radiusMeters, 1200),
-                    type: 'any',
-                    price: 'any'
-                };
+            const widen = searchPlan.widenSearchWhenEmpty;
+            if (widen.enabled) {
+                showStatus(widen.statusMessage, 'info');
+                searchParams = widen.params;
                 data = await fetchParkingSearch(searchParams);
             }
         }
 
         if (!data.parking || data.parking.length === 0) {
-            showParkingEmptyState(
-                'No parking found near your destination. Try Settings → Parking Preferences to increase walking distance or relax price/type filters.'
-            );
-            showStatus('No parking found nearby. Adjust Parking Preferences in Settings.', 'warning');
+            showParkingEmptyState(searchPlan.emptyStateMessage);
+            showStatus(searchPlan.noResultsStatusMessage, 'warning');
             return;
         }
 
@@ -7504,7 +7440,7 @@ async function findParkingNearDestination() {
         showStatus(`✅ Found ${data.parking.length} parking options — scroll down to choose`, 'success');
         scrollParkingResultsIntoView();
 
-        if (typeof fitMapToParkingResults === 'function') {
+        if (data.parking && data.parking.length > 0) {
             fitMapToParkingResults(data.parking, endCoords);
         }
 
