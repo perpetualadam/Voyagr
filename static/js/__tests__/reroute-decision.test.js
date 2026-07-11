@@ -359,4 +359,41 @@ describe('reroute retry and notification helpers', () => {
         expect(RD.shouldAnnounceRerouteVoice(70000, 0)).toBe(true);
         expect(RD.shouldAnnounceRerouteVoice(30000, 0)).toBe(false);
     });
+
+    test('buildAutomaticRerouteGuardPlan defers when offline', () => {
+        const plan = RD.buildAutomaticRerouteGuardPlan({ offline: true });
+        expect(plan.proceed).toBe(false);
+        expect(plan.action).toBe('schedule-retry');
+    });
+
+    test('buildAutomaticRerouteOutcomePlan returns success voice and notification', () => {
+        const plan = RD.buildAutomaticRerouteOutcomePlan({
+            success: true,
+            routes: [{ distance_km: 12, duration_minutes: 25, hazard_count: 1 }],
+        }, {
+            convertDistance: (km) => km.toFixed(1),
+            distUnit: 'km',
+            voiceEnabled: true,
+            lastRerouteAnnouncementTime: 0,
+            now: 70000,
+        });
+        expect(plan.ok).toBe(true);
+        expect(plan.hazardCount).toBe(1);
+        expect(plan.voice.shouldSpeak).toBe(true);
+        expect(plan.notification.title).toContain('Route Updated');
+    });
+
+    test('buildAutomaticRerouteOutcomePlan returns failure with first-attempt notification', () => {
+        const plan = RD.buildAutomaticRerouteOutcomePlan({ success: false, error: 'timeout' }, {
+            rerouteFailureRetryCount: 0,
+        });
+        expect(plan.ok).toBe(false);
+        expect(plan.scheduleRetry).toBe(true);
+        expect(plan.notification.title).toContain('Failed');
+    });
+
+    test('buildAutomaticRerouteErrorPlan notifies only on first failure', () => {
+        expect(RD.buildAutomaticRerouteErrorPlan({ rerouteFailureRetryCount: 0 }).notification).not.toBeNull();
+        expect(RD.buildAutomaticRerouteErrorPlan({ rerouteFailureRetryCount: 1 }).notification).toBeNull();
+    });
 });

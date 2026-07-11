@@ -12868,28 +12868,28 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
         return;
     }
     lastRerouteAttemptTime = now;
-    if (!navigator.onLine) {
-        console.log('[Rerouting] Offline — deferring automatic reroute');
-        scheduleAutomaticRerouteRetry();
+    const destination = resolveNavigationDestination();
+    const guard = RD.buildAutomaticRerouteGuardPlan({
+        offline: !navigator.onLine,
+        destination,
+        hasRouteContext: !!window.lastCalculatedRoute,
+        startLat: currentLat,
+        startLon: currentLon,
+    });
+    if (!guard.proceed) {
+        if (guard.logMessage) console.log(guard.logMessage);
+        if (guard.action === 'schedule-retry') {
+            scheduleAutomaticRerouteRetry();
+        }
+        if (guard.resetRerouteInProgress) {
+            rerouteInProgress = false;
+        }
         return;
     }
     rerouteInProgress = true;
     try {
-        const destination = resolveNavigationDestination();
-        if (!destination) {
-            console.log('[Rerouting] No destination stored, cannot reroute');
-            rerouteInProgress = false;
-            return;
-        }
+        console.log(guard.logMessage);
 
-        if (!window.lastCalculatedRoute) {
-            console.log('[Rerouting] No route context, cannot reroute');
-            rerouteInProgress = false;
-            return;
-        }
-        console.log(`[Rerouting] Starting automatic reroute from (${currentLat.toFixed(4)}, ${currentLon.toFixed(4)}) to ${destination}`);
-
-        // Build route request with hazard avoidance settings
         const routeRequest = buildRouteRequest(currentLat, currentLon, destination);
 
         const response = await fetch('/api/route', {
@@ -12899,68 +12899,59 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
         });
 
         const data = await response.json();
+        const outcome = RD.buildAutomaticRerouteOutcomePlan(data, {
+            convertDistance,
+            distUnit: getDistanceUnit(),
+            voiceEnabled: voiceAnnouncementsEnabled,
+            lastRerouteAnnouncementTime,
+            rerouteFailureRetryCount,
+            now: Date.now(),
+        });
 
-        if (data.success && data.routes && data.routes.length > 0) {
-            clearRerouteFailureRetries();
+        if (outcome.ok) {
+            if (outcome.clearFailureRetries) clearRerouteFailureRetries();
+            console.log(outcome.successLog);
 
-            const newRoute = data.routes[0];
-            console.log(`[Rerouting] New route calculated: ${newRoute.distance_km}km, ${newRoute.duration_minutes}min`);
-
-            // Check for unavoidable hazards
-            const hazardCount = newRoute.hazard_count || 0;
-            const hazardsList = newRoute.hazards || newRoute.hazards_on_route || [];
-
-            if (hazardCount > 0) {
-                handleUnavoidableHazards(newRoute, hazardsList, hazardCount);
+            if (outcome.showUnavoidableHazards) {
+                handleUnavoidableHazards(outcome.newRoute, outcome.hazardsList, outcome.hazardCount);
             }
 
-            // Next in-nav calculateRoute should not re-bind an old alt by name (e.g. "Balanced").
-            _preferPrimaryRouteOnNextNavUpdate = true;
+            if (outcome.preferPrimaryRouteOnNextNavUpdate) {
+                _preferPrimaryRouteOnNextNavUpdate = true;
+            }
 
-            // Update route on map
-            updateRouteOnMap(newRoute);
+            updateRouteOnMap(outcome.newRoute);
+            logReroutingEvent(currentLat, currentLon, destination, outcome.newRoute, outcome.hazardCount);
 
-            // Log rerouting event
-            logReroutingEvent(currentLat, currentLon, destination, newRoute, hazardCount);
-
-            // Announce reroute via voice (deduped so poor GPS cannot loop "new route")
-            if (voiceAnnouncementsEnabled) {
-                const distUnit = getDistanceUnit();
-                const displayDist = convertDistance(newRoute.distance_km);
-                const voiceMsg = RD.buildRerouteVoiceMessage(newRoute, hazardCount, displayDist, distUnit);
-                const announceNow = Date.now();
-                if (RD.shouldAnnounceRerouteVoice(announceNow, lastRerouteAnnouncementTime)) {
-                    lastRerouteAnnouncementTime = announceNow;
-                    speakMessage(voiceMsg, 'high');
+            if (outcome.voice && outcome.voice.enabled) {
+                if (outcome.voice.shouldSpeak) {
+                    lastRerouteAnnouncementTime = outcome.voice.announceAt;
+                    speakMessage(outcome.voice.message, 'high');
                 } else {
                     console.log('[Voice] Skipping duplicate reroute announcement');
                 }
             }
 
-            const successNotify = RD.buildRerouteSuccessNotificationPlan(
-                newRoute,
-                hazardCount,
-                convertDistance(newRoute.distance_km),
-                getDistanceUnit()
-            );
-            sendNotification(successNotify.title, successNotify.body, successNotify.type);
-
-            console.log('[Rerouting] Automatic reroute completed successfully');
-        } else {
-            console.log('[Rerouting] Failed to calculate new route:', data.error);
-            if (rerouteFailureRetryCount === 0) {
-                sendNotification('❌ Rerouting Failed', 'Could not calculate new route. Retrying automatically…', 'error');
+            if (outcome.notification) {
+                sendNotification(outcome.notification.title, outcome.notification.body, outcome.notification.type);
             }
-            scheduleAutomaticRerouteRetry();
-            rerouteInProgress = false;
+            console.log(outcome.completeLog);
+        } else {
+            if (outcome.errorLog) console.log(outcome.errorLog);
+            if (outcome.notification) {
+                sendNotification(outcome.notification.title, outcome.notification.body, outcome.notification.type);
+            }
+            if (outcome.scheduleRetry) scheduleAutomaticRerouteRetry();
+            if (outcome.resetRerouteInProgress) rerouteInProgress = false;
         }
     } catch (error) {
         console.error('[Rerouting] Error during automatic reroute:', error);
-        if (rerouteFailureRetryCount === 0) {
-            sendNotification('❌ Rerouting Error', 'Network or server error. Retrying automatically…', 'error');
+        const errPlan = RD.buildAutomaticRerouteErrorPlan({ rerouteFailureRetryCount });
+        if (errPlan.notification) {
+            sendNotification(errPlan.notification.title, errPlan.notification.body, errPlan.notification.type);
         }
-        scheduleAutomaticRerouteRetry();
-        rerouteInProgress = false;
+        if (errPlan.scheduleRetry) scheduleAutomaticRerouteRetry();
+        if (errPlan.resetRerouteInProgress) rerouteInProgress = false;
     }
 }
 
@@ -16046,32 +16037,29 @@ function buildTraveledJourneyRoute(route) {
  * @param {Object} routeData - The route data (from window.lastCalculatedRoute)
  */
 function showJourneySummary(routeData) {
-    if (!routeData) return;
-
     const modal = document.getElementById('journeySummaryModal');
     if (!modal) return;
 
-    // Populate data
-    const distanceKm = routeData.distance_km || 0;
-    const durationMin = routeData.duration_minutes || 0;
-    const cost = routeData.total_cost || 0;
+    const plan = _eta().buildJourneySummaryModalApplyPlan(routeData, {
+        traveledMeters: _navTraveledMeters,
+        navStartedAt: _navStartedAt,
+        convertDistance,
+        distUnit: getDistanceUnit(),
+        convertSpeed,
+        speedUnit: getSpeedUnit(),
+        currencySymbol: getCurrencySymbol(),
+        adjustCost: adjustCostForUnits,
+    });
 
-    let avgSpeed = _eta().buildTraveledJourneyRoutePatch(routeData, _navTraveledMeters, _navStartedAt).avgSpeedKmh;
+    if (!plan.visible) return;
 
-    const distUnit = getDistanceUnit();
-    const displayDist = convertDistance(distanceKm);
+    document.getElementById('summaryDistance').textContent = plan.distanceText;
+    document.getElementById('summaryTime').textContent = plan.timeText;
+    document.getElementById('summaryCost').textContent = plan.costText;
+    document.getElementById('summaryAvgSpeed').textContent = plan.avgSpeedText;
 
-    document.getElementById('summaryDistance').textContent = `${displayDist} ${distUnit}`;
-    document.getElementById('summaryTime').textContent = `${Math.round(durationMin)} min`;
-    document.getElementById('summaryCost').textContent = `${getCurrencySymbol()}${adjustCostForUnits(cost).toFixed(2)}`;
-    document.getElementById('summaryAvgSpeed').textContent = `${convertSpeed(avgSpeed)} ${getSpeedUnit()}`;
-
-    // Show modal
     modal.style.display = 'block';
-
-    // Expand bottom sheet to show the modal properly
     expandBottomSheet();
-
     console.log('[Journey Summary] Displayed summary');
 }
 

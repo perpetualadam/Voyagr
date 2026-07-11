@@ -391,6 +391,48 @@
         return { patch: null, avgSpeedKmh: avgSpeedKmh };
     }
 
+    /**
+     * Apply plan for the end-of-journey summary modal (values only; app writes DOM).
+     * @param {Object|null} routeData
+     * @param {Object} opts
+     * @returns {{ visible: boolean, distanceText?: string, timeText?: string, costText?: string, avgSpeedText?: string }}
+     */
+    function buildJourneySummaryModalApplyPlan(routeData, opts) {
+        opts = opts || {};
+        if (!routeData) {
+            return { visible: false };
+        }
+        var distanceKm = routeData.distance_km || 0;
+        var durationMin = routeData.duration_minutes || 0;
+        var cost = routeData.total_cost || 0;
+        var traveled = buildTraveledJourneyRoutePatch(
+            routeData,
+            opts.traveledMeters,
+            opts.navStartedAt,
+            opts.now
+        );
+        var avgSpeedKmh = traveled.avgSpeedKmh;
+        var displayDist = typeof opts.convertDistance === 'function'
+            ? opts.convertDistance(distanceKm)
+            : String(distanceKm);
+        var distUnit = opts.distUnit || 'km';
+        var adjustedCost = typeof opts.adjustCost === 'function'
+            ? opts.adjustCost(cost)
+            : cost;
+        var currencySymbol = opts.currencySymbol || '£';
+        var speedText = typeof opts.convertSpeed === 'function'
+            ? opts.convertSpeed(avgSpeedKmh)
+            : String(avgSpeedKmh);
+        var speedUnit = opts.speedUnit || 'km/h';
+        return {
+            visible: true,
+            distanceText: displayDist + ' ' + distUnit,
+            timeText: Math.round(durationMin) + ' min',
+            costText: currencySymbol + Number(adjustedCost).toFixed(2),
+            avgSpeedText: speedText + ' ' + speedUnit,
+        };
+    }
+
     var api = {
         formatRemainingTime: formatRemainingTime,
         buildETAVoiceMessage: buildETAVoiceMessage,
@@ -410,6 +452,7 @@
         createEmptyNavETASnapshot: createEmptyNavETASnapshot,
         buildJourneySummaryBarApplyPlan: buildJourneySummaryBarApplyPlan,
         buildTraveledJourneyRoutePatch: buildTraveledJourneyRoutePatch,
+        buildJourneySummaryModalApplyPlan: buildJourneySummaryModalApplyPlan,
         MAX_PLAUSIBLE_AVG_KMH: MAX_PLAUSIBLE_AVG_KMH,
         TRAFFIC_RATIO_MAX_AGE_MS: TRAFFIC_RATIO_MAX_AGE_MS,
     };

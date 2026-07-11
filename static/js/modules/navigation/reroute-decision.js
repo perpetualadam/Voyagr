@@ -387,6 +387,127 @@
         };
     }
 
+    /**
+     * Guard plan before starting an automatic reroute fetch.
+     * @param {Object} o
+     * @returns {Object}
+     */
+    function buildAutomaticRerouteGuardPlan(o) {
+        o = o || {};
+        if (o.offline) {
+            return {
+                proceed: false,
+                action: 'schedule-retry',
+                logMessage: '[Rerouting] Offline — deferring automatic reroute',
+            };
+        }
+        if (!o.destination) {
+            return {
+                proceed: false,
+                action: 'abort',
+                resetRerouteInProgress: true,
+                logMessage: '[Rerouting] No destination stored, cannot reroute',
+            };
+        }
+        if (!o.hasRouteContext) {
+            return {
+                proceed: false,
+                action: 'abort',
+                resetRerouteInProgress: true,
+                logMessage: '[Rerouting] No route context, cannot reroute',
+            };
+        }
+        return {
+            proceed: true,
+            logMessage: '[Rerouting] Starting automatic reroute from (' +
+                Number(o.startLat).toFixed(4) + ', ' + Number(o.startLon).toFixed(4) +
+                ') to ' + o.destination,
+        };
+    }
+
+    /**
+     * Outcome plan after `/api/route` returns for automatic deviation reroute.
+     * @param {Object|null|undefined} data
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildAutomaticRerouteOutcomePlan(data, opts) {
+        opts = opts || {};
+        data = data || {};
+        if (data.success && data.routes && data.routes.length > 0) {
+            var newRoute = data.routes[0];
+            var hazardCount = newRoute.hazard_count || 0;
+            var hazardsList = newRoute.hazards || newRoute.hazards_on_route || [];
+            var displayDist = typeof opts.convertDistance === 'function'
+                ? opts.convertDistance(newRoute.distance_km)
+                : (opts.displayDistance != null ? opts.displayDistance : String(newRoute.distance_km));
+            var distUnit = opts.distUnit || 'km';
+            var voiceMsg = buildRerouteVoiceMessage(newRoute, hazardCount, displayDist, distUnit);
+            var announceNow = opts.now != null ? opts.now : Date.now();
+            var voice = {
+                enabled: !!opts.voiceEnabled,
+                message: voiceMsg,
+                shouldSpeak: opts.voiceEnabled && shouldAnnounceRerouteVoice(
+                    announceNow,
+                    opts.lastRerouteAnnouncementTime
+                ),
+                announceAt: announceNow,
+            };
+            return {
+                ok: true,
+                newRoute: newRoute,
+                hazardCount: hazardCount,
+                hazardsList: hazardsList,
+                preferPrimaryRouteOnNextNavUpdate: true,
+                clearFailureRetries: true,
+                showUnavoidableHazards: hazardCount > 0,
+                voice: voice,
+                notification: buildRerouteSuccessNotificationPlan(
+                    newRoute,
+                    hazardCount,
+                    displayDist,
+                    distUnit
+                ),
+                successLog: '[Rerouting] New route calculated: ' + newRoute.distance_km +
+                    'km, ' + newRoute.duration_minutes + 'min',
+                completeLog: '[Rerouting] Automatic reroute completed successfully',
+            };
+        }
+
+        var isFirstFailure = !opts.rerouteFailureRetryCount;
+        return {
+            ok: false,
+            scheduleRetry: true,
+            resetRerouteInProgress: true,
+            errorLog: '[Rerouting] Failed to calculate new route: ' + (data.error || 'unknown'),
+            notification: isFirstFailure ? {
+                title: '❌ Rerouting Failed',
+                body: 'Could not calculate new route. Retrying automatically…',
+                type: 'error',
+            } : null,
+        };
+    }
+
+    /**
+     * Outcome plan when automatic reroute fetch throws.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildAutomaticRerouteErrorPlan(opts) {
+        opts = opts || {};
+        var isFirstFailure = !opts.rerouteFailureRetryCount;
+        return {
+            ok: false,
+            scheduleRetry: true,
+            resetRerouteInProgress: true,
+            notification: isFirstFailure ? {
+                title: '❌ Rerouting Error',
+                body: 'Network or server error. Retrying automatically…',
+                type: 'error',
+            } : null,
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         normalizeAccuracy: normalizeAccuracy,
@@ -404,6 +525,9 @@
         shouldAnnounceRerouteVoice: shouldAnnounceRerouteVoice,
         buildRerouteVoiceMessage: buildRerouteVoiceMessage,
         buildRerouteSuccessNotificationPlan: buildRerouteSuccessNotificationPlan,
+        buildAutomaticRerouteGuardPlan: buildAutomaticRerouteGuardPlan,
+        buildAutomaticRerouteOutcomePlan: buildAutomaticRerouteOutcomePlan,
+        buildAutomaticRerouteErrorPlan: buildAutomaticRerouteErrorPlan,
     };
 
     // CommonJS (Jest) export.

@@ -285,4 +285,29 @@ describe('journey summary helpers', () => {
         expect(result.patch).toBeNull();
         expect(result.avgSpeedKmh).toBeCloseTo(40, 0);
     });
+
+    test('buildJourneySummaryModalApplyPlan formats modal values', () => {
+        const plan = ETA.buildJourneySummaryModalApplyPlan(
+            { distance_km: 15, duration_minutes: 28, total_cost: 12.5 },
+            {
+                traveledMeters: 0,
+                navStartedAt: null,
+                convertDistance: (km) => (km * 0.62).toFixed(1),
+                distUnit: 'mi',
+                convertSpeed: (kmh) => Math.round(kmh * 0.62),
+                speedUnit: 'mph',
+                currencySymbol: '£',
+                adjustCost: (c) => c,
+            }
+        );
+        expect(plan.visible).toBe(true);
+        expect(plan.distanceText).toBe('9.3 mi');
+        expect(plan.timeText).toBe('28 min');
+        expect(plan.costText).toBe('£12.50');
+        expect(plan.avgSpeedText).toMatch(/mph$/);
+    });
+
+    test('buildJourneySummaryModalApplyPlan returns not visible without route data', () => {
+        expect(ETA.buildJourneySummaryModalApplyPlan(null, {})).toEqual({ visible: false });
+    });
 });
