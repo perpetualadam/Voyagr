@@ -41,4 +41,16 @@ describe('gesture-control module', () => {
         expect(GC.buildGestureActionExecutePlan({ action: 'report' }).statusMessage)
             .toContain('hazard');
     });
+
+    test('buildApplyGestureSettingsFromApiExecutePlan uses toggle button not checkbox', () => {
+        const execute = GC.buildApplyGestureSettingsFromApiExecutePlan({
+            gesture_enabled: true,
+            gesture_sensitivity: 'high',
+            gesture_action: 'clear',
+        }, { hasDeviceMotion: true });
+        expect(execute.toggle.id).toBe(GC.GESTURE_TOGGLE_ID);
+        expect(execute.toggle.enabled).toBe(true);
+        expect(execute.sensitivitySelect.value).toBe('high');
+        expect(execute.addDeviceMotionListener).toBe(true);
+    });
 });

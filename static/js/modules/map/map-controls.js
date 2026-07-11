@@ -32,6 +32,74 @@
     var MAP_CONTROLS_HINT_SKIP_IDS = ['mapControlsHintFab'];
     var MAP_CONTROLS_HINT_HIDDEN_SECTION_TITLE = 'Often hidden until you need them';
 
+    var MAP_HINT_TOAST_ID = 'mapHintToast';
+    var MAP_HINT_TOAST_VISIBLE_CLASS = 'is-visible';
+    var MAP_HINT_TOAST_TIMER_PROPERTY = '__voyagrMapHintToastT';
+    var MAP_HINT_AUTO_DISMISS_MS = 4200;
+    var MAP_ICON_HINT_LONG_PRESS_MS = 420;
+    var MAP_ICON_HINT_MOVE_PX2 = 100;
+    var MAP_ICON_HINT_ROOT_SELECTORS = ['.fab-container', '#navControlButtons', '.sheet-toolbar'];
+    var MAP_ICON_HINT_BUTTON_SELECTOR = 'button.fab, button.sheet-icon-btn';
+
+    /**
+     * @param {Object} [env]
+     * @returns {boolean}
+     */
+    function isTouchHintsEnvironment(env) {
+        env = env || {};
+        try {
+            var nav = env.navigator || (typeof navigator !== 'undefined' ? navigator : null);
+            var win = env.window || (typeof window !== 'undefined' ? window : null);
+            if (nav && nav.maxTouchPoints > 0) return true;
+            if (win && 'ontouchstart' in win) return true;
+            if (win && win.matchMedia) {
+                if (win.matchMedia('(hover: none)').matches) return true;
+                if (win.matchMedia('(pointer: coarse)').matches) return true;
+            }
+        } catch (_e) {
+            /* ignore */
+        }
+        return false;
+    }
+
+    /**
+     * @param {string} message
+     * @returns {Object}
+     */
+    function buildShowMapHintToastExecutePlan(message) {
+        if (!message) {
+            return { shouldShow: false };
+        }
+        return {
+            shouldShow: true,
+            message: message,
+            toastId: MAP_HINT_TOAST_ID,
+            visibleClass: MAP_HINT_TOAST_VISIBLE_CLASS,
+            timerProperty: MAP_HINT_TOAST_TIMER_PROPERTY,
+            autoDismissMs: MAP_HINT_AUTO_DISMISS_MS,
+            clearExistingTimer: true,
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildInitMobileMapIconHintsPlan(input) {
+        input = input || {};
+        var enabled = !!input.touchHintsEnabled;
+        return {
+            shouldInit: enabled,
+            skipLogMessage: '[Hints] Long-press map hints skipped (touch / coarse pointer not detected)',
+            enabledLogMessage: '[Hints] Long-press map hints enabled (\u2248' + MAP_ICON_HINT_LONG_PRESS_MS + 'ms, bottom banner)',
+            rootSelectors: MAP_ICON_HINT_ROOT_SELECTORS.slice(),
+            buttonSelector: MAP_ICON_HINT_BUTTON_SELECTOR,
+            longPressMs: MAP_ICON_HINT_LONG_PRESS_MS,
+            moveThresholdPx2: MAP_ICON_HINT_MOVE_PX2,
+            vibrateMs: 20,
+        };
+    }
+
     /**
      * Display values for the zoom-and-follow map FAB.
      * @param {boolean} enabled
@@ -543,6 +611,12 @@
         MAP_CONTROLS_HINT_EXTRAS: MAP_CONTROLS_HINT_EXTRAS,
         MAP_CONTROLS_HINT_SKIP_IDS: MAP_CONTROLS_HINT_SKIP_IDS,
         MAP_CONTROLS_HINT_HIDDEN_SECTION_TITLE: MAP_CONTROLS_HINT_HIDDEN_SECTION_TITLE,
+        MAP_HINT_TOAST_ID: MAP_HINT_TOAST_ID,
+        MAP_HINT_AUTO_DISMISS_MS: MAP_HINT_AUTO_DISMISS_MS,
+        MAP_ICON_HINT_LONG_PRESS_MS: MAP_ICON_HINT_LONG_PRESS_MS,
+        isTouchHintsEnvironment: isTouchHintsEnvironment,
+        buildShowMapHintToastExecutePlan: buildShowMapHintToastExecutePlan,
+        buildInitMobileMapIconHintsPlan: buildInitMobileMapIconHintsPlan,
         getZoomFollowButtonDisplay: getZoomFollowButtonDisplay,
         getJourneyOverviewButtonDisplay: getJourneyOverviewButtonDisplay,
         shouldSkipMapControlsHintElement: shouldSkipMapControlsHintElement,

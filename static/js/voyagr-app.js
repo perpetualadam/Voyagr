@@ -4661,24 +4661,21 @@ function hideRouteProgressBar() {
  * Uses the standard collapse mechanism instead of inline styles
  */
 function collapseBottomSheetForRoutePreview() {
-    const bottomSheet = document.getElementById('bottomSheet');
+    const DH = _domHelpers();
+    const execute = DH.buildCollapseBottomSheetForRoutePreviewExecutePlan();
+    if (!execute.shouldApply) return;
+
+    const bottomSheet = document.getElementById(DH.BOTTOM_SHEET_ID);
     if (!bottomSheet) return;
 
-    // Clear any inline styles that might interfere
-    bottomSheet.style.height = '';
-    bottomSheet.style.transition = '';
-    bottomSheet.style.transform = '';
+    (execute.clearInlineStyles || []).forEach((prop) => {
+        bottomSheet.style[prop] = '';
+    });
+    if (execute.collapse) collapseBottomSheet();
 
-    // Use the standard collapse function
-    collapseBottomSheet();
-
-    // Show a "swipe up for details" indicator
-    const handle = bottomSheet.querySelector('.bottom-sheet-handle');
-    if (handle) {
-        handle.title = 'Swipe up to see route details';
-    }
-
-    console.log('[Route Preview] Collapsed bottom sheet to show map');
+    const handle = bottomSheet.querySelector(execute.handleSelector);
+    if (handle && execute.handleTitle) handle.title = execute.handleTitle;
+    if (execute.logMessage) console.log(execute.logMessage);
 }
 
 /**
@@ -4833,11 +4830,10 @@ function initBottomSheetLogic() {
  * Toggle bottom sheet state
  */
 function toggleBottomSheet() {
-    if (bottomSheetIsExpanded) {
-        collapseBottomSheet();
-    } else {
-        expandBottomSheet();
-    }
+    const DH = _domHelpers();
+    const collected = DH.buildToggleBottomSheetCollectPlan({ isExpanded: bottomSheetIsExpanded });
+    if (collected.collapse) collapseBottomSheet();
+    else if (collected.expand) expandBottomSheet();
 }
 
 // ===== TOMTOM TRAFFIC FLOW LAYER =====
@@ -9556,6 +9552,31 @@ let gestureEnabled = true;
 let gestureSensitivity = 'medium';
 let gestureAction = 'recalculate';
 
+function applyGestureSettingsFromApiPlan(execute) {
+    if (!execute || !execute.shouldApply) return;
+    const TU = _toggleUI();
+    gestureEnabled = execute.enabled;
+    gestureSensitivity = execute.sensitivity;
+    gestureAction = execute.action;
+
+    const toggle = document.getElementById(execute.toggle.id);
+    if (toggle) TU.applyToggleButton(toggle, execute.toggle.enabled);
+
+    const sensitivityEl = document.getElementById(execute.sensitivitySelect.id);
+    if (sensitivityEl) sensitivityEl.value = execute.sensitivitySelect.value;
+
+    const actionEl = document.getElementById(execute.actionSelect.id);
+    if (actionEl) actionEl.value = execute.actionSelect.value;
+
+    const settingsPanel = document.getElementById(execute.settingsPanel.id);
+    if (settingsPanel) settingsPanel.style.display = execute.settingsPanel.display;
+
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    if (execute.addDeviceMotionListener) {
+        window.addEventListener('devicemotion', handleDeviceMotion);
+    }
+}
+
 /**
  * initPhase3Features function
  * @function initPhase3Features
@@ -9567,28 +9588,20 @@ function initPhase3Features() {
     }
     window.__voyagrPhase3Initialized = true;
 
-    // Load gesture settings
-    fetch('/api/app-settings')
-        .then(response => response.json())
-        .then(data => {
+    const GC = _gestureControl();
+    const fetchPlan = GC.buildLoadGestureSettingsFetchPlan();
+    fetch(fetchPlan.url)
+        .then((response) => response.json())
+        .then((data) => {
             if (data.success) {
-                gestureEnabled = data.settings.gesture_enabled;
-                gestureSensitivity = data.settings.gesture_sensitivity;
-                gestureAction = data.settings.gesture_action;
-
-                // Update UI
-                document.getElementById('gestureEnabled').checked = gestureEnabled;
-                document.getElementById('gestureSensitivity').value = gestureSensitivity;
-                document.getElementById('gestureAction').value = gestureAction;
-                document.getElementById('gestureSettings').style.display = gestureEnabled ? 'block' : 'none';
-
-                // Initialize gesture detection
-                if (gestureEnabled && 'DeviceMotionEvent' in window) {
-                    window.addEventListener('devicemotion', handleDeviceMotion);
-                }
+                applyGestureSettingsFromApiPlan(
+                    GC.buildApplyGestureSettingsFromApiExecutePlan(data.settings, {
+                        hasDeviceMotion: 'DeviceMotionEvent' in window,
+                    })
+                );
             }
         })
-        .catch(error => console.error('Error loading app settings:', error));
+        .catch((error) => console.error(fetchPlan.errorLogPrefix, error));
 
     // Initialize battery monitoring
     if ('getBattery' in navigator) {
@@ -10060,36 +10073,32 @@ function updateRoadReportFabVisibility() {
  * True for phones/tablets and other touch-first UIs (no reliable hover tooltips).
  */
 function voyagrTouchHintsEnabled() {
-    try {
-        if (typeof navigator !== 'undefined' && navigator.maxTouchPoints > 0) return true;
-        if ('ontouchstart' in window) return true;
-        if (window.matchMedia) {
-            if (window.matchMedia('(hover: none)').matches) return true;
-            if (window.matchMedia('(pointer: coarse)').matches) return true;
-        }
-    } catch (e) {
-        /* ignore */
-    }
-    return false;
+    return _mapControls().isTouchHintsEnvironment({
+        navigator: typeof navigator !== 'undefined' ? navigator : null,
+        window: typeof window !== 'undefined' ? window : null,
+    });
 }
 
 /**
  * Short banner at bottom of screen — easier to see on phones than top-right notifications.
  */
 function voyagrShowMapIconHint(message) {
-    if (!message) return;
-    const el = document.getElementById('mapHintToast');
+    const MC = _mapControls();
+    const execute = MC.buildShowMapHintToastExecutePlan(message);
+    if (!execute.shouldShow) return;
+
+    const el = document.getElementById(execute.toastId);
     if (!el) return;
-    el.textContent = message;
+    el.textContent = execute.message;
     el.removeAttribute('hidden');
-    el.classList.add('is-visible');
-    if (window.__voyagrMapHintToastT) {
-        clearTimeout(window.__voyagrMapHintToastT);
+    el.classList.add(execute.visibleClass);
+    if (execute.clearExistingTimer && window[execute.timerProperty]) {
+        clearTimeout(window[execute.timerProperty]);
     }
-    window.__voyagrMapHintToastT = setTimeout(() => {
-        el.classList.remove('is-visible');
+    window[execute.timerProperty] = setTimeout(() => {
+        el.classList.remove(execute.visibleClass);
         el.setAttribute('hidden', '');
-    }, 4200);
+    }, execute.autoDismissMs);
 }
 
 /**
@@ -10147,32 +10156,37 @@ function closeMapControlsHintModal() {
  * Long-press (touch / pen) shows title text like a desktop hover tooltip.
  */
 function initMobileMapIconHints() {
-    if (!voyagrTouchHintsEnabled()) {
-        console.log('[Hints] Long-press map hints skipped (touch / coarse pointer not detected)');
+    const MC = _mapControls();
+    const initPlan = MC.buildInitMobileMapIconHintsPlan({
+        touchHintsEnabled: voyagrTouchHintsEnabled(),
+    });
+    if (!initPlan.shouldInit) {
+        console.log(initPlan.skipLogMessage);
         return;
     }
-    console.log('[Hints] Long-press map hints enabled (\u2248' + 420 + 'ms, bottom banner)');
+    console.log(initPlan.enabledLogMessage);
 
-    const roots = ['.fab-container', '#navControlButtons', '.sheet-toolbar'];
-    for (let r = 0; r < roots.length; r++) {
-        const root = document.querySelector(roots[r]);
+    for (let r = 0; r < initPlan.rootSelectors.length; r++) {
+        const root = document.querySelector(initPlan.rootSelectors[r]);
         if (!root) continue;
-        const buttons = root.querySelectorAll('button.fab, button.sheet-icon-btn');
+        const buttons = root.querySelectorAll(initPlan.buttonSelector);
         for (let i = 0; i < buttons.length; i++) {
-            voyagrBindFabLongPressHint(buttons[i]);
+            voyagrBindFabLongPressHint(buttons[i], initPlan);
         }
     }
 }
 
-function voyagrBindFabLongPressHint(el) {
+function voyagrBindFabLongPressHint(el, initPlan) {
+    const MC = _mapControls();
+    initPlan = initPlan || MC.buildInitMobileMapIconHintsPlan({ touchHintsEnabled: true });
     if (!el || el.dataset.voyagrLongPressHint === '1') return;
     el.dataset.voyagrLongPressHint = '1';
 
     let timer = null;
     let startX = 0;
     let startY = 0;
-    const LONG_MS = 420;
-    const MOVE_PX2 = 100;
+    const LONG_MS = initPlan.longPressMs;
+    const MOVE_PX2 = initPlan.moveThresholdPx2;
 
     const getHint = () => {
         const t = el.getAttribute('title');
@@ -10199,7 +10213,7 @@ function voyagrBindFabLongPressHint(el) {
             el.dataset.voyagrSuppressClick = '1';
             voyagrShowMapIconHint(hint);
             try {
-                if (navigator.vibrate) navigator.vibrate(20);
+                if (navigator.vibrate) navigator.vibrate(initPlan.vibrateMs);
             } catch (_v) {
                 /* ignore */
             }
@@ -10640,44 +10654,48 @@ async function precacheRouteTiles(polyline) {
 }
 
 async function _tryResumeNavigation() {
+    const OFF = _offlineNavigation();
     try {
         const saved = await loadPersistedRoute();
-        if (!saved || !saved.polyline || !saved.steps) return;
-        console.log('[OfflineNav] Found persisted route, offering resume');
+        const preflight = OFF.buildTryResumeNavigationPreflightPlan(saved);
+        if (!preflight.shouldOffer) return;
 
-        const OFF = _offlineNavigation();
+        console.log(preflight.foundLogMessage);
+
         const resumeBanner = document.createElement('div');
-        resumeBanner.id = OFF.RESUME_NAV_BANNER_ID;
+        resumeBanner.id = preflight.bannerId;
         resumeBanner.style.cssText = OFF.getResumeNavigationBannerStyleCssText();
-        resumeBanner.innerHTML = OFF.buildResumeNavigationBannerHtml(saved.steps.length);
+        resumeBanner.innerHTML = OFF.buildResumeNavigationBannerHtml(preflight.stepCount);
         document.body.appendChild(resumeBanner);
 
-        document.getElementById('resumeNavYes').onclick = () => {
+        document.getElementById(preflight.resumeYesId).onclick = () => {
             resumeBanner.remove();
             const payload = buildRoutePayloadFromPersisted(saved);
             if (payload && payload.geometry) {
                 startTurnByTurnNavigation(payload, {
                     fromPersistedResume: true,
-                    resumeStepIndex: saved.stepIndex || 0,
+                    resumeStepIndex: preflight.resumeStepIndex,
                 });
-                console.log('[OfflineNav] Route resumed via full navigation bootstrap');
+                console.log(preflight.resumedFullLogMessage);
             } else {
                 routePolyline = saved.polyline;
                 currentRouteSteps = saved.steps;
-                currentStepIndex = saved.stepIndex || 0;
+                currentStepIndex = preflight.resumeStepIndex;
                 routeInProgress = true;
                 if (saved.routeData) window.lastCalculatedRoute = saved.routeData;
-                showStatus('🧭 Navigation resumed from saved route', 'success');
+                showStatus(preflight.legacyResumeStatusMessage, preflight.legacyResumeStatusType);
                 if (typeof startGPSTracking === 'function') startGPSTracking();
-                console.log('[OfflineNav] Route resumed (legacy path — missing encoded geometry)');
+                console.log(preflight.resumedLegacyLogMessage);
             }
         };
-        document.getElementById('resumeNavNo').onclick = () => {
+        document.getElementById(preflight.resumeNoId).onclick = () => {
             resumeBanner.remove();
             clearPersistedRoute();
         };
 
-        setTimeout(() => { if (document.getElementById(OFF.RESUME_NAV_BANNER_ID)) resumeBanner.remove(); }, 30000);
+        setTimeout(() => {
+            if (document.getElementById(preflight.bannerId)) resumeBanner.remove();
+        }, preflight.autoDismissMs);
     } catch (e) {
         console.warn('[OfflineNav] Resume check failed:', e);
     }
@@ -12108,27 +12126,47 @@ function initBottomSheet() {
     syncBottomSheetOverlapFabs();
 }
 
+function applyBottomSheetStateFromPlan(execute) {
+    const DH = _domHelpers();
+    if (!execute || !execute.shouldApply) return;
+
+    const bottomSheet = document.getElementById(execute.bottomSheetId || DH.BOTTOM_SHEET_ID);
+    if (!bottomSheet) return;
+
+    if (execute.expandLogMessage) console.log(execute.expandLogMessage);
+    if (execute.collapseLogMessage) console.log(execute.collapseLogMessage);
+
+    (execute.clearInlineStyles || []).forEach((prop) => {
+        bottomSheet.style[prop] = '';
+    });
+
+    if (execute.setExpandedState) {
+        bottomSheet.classList.add(execute.expandedClass || DH.BOTTOM_SHEET_EXPANDED_CLASS);
+        bottomSheet.setAttribute('aria-expanded', execute.ariaExpanded || 'true');
+        bottomSheetIsExpanded = true;
+        if (execute.expandedLogMessage) {
+            console.log(execute.expandedLogMessage, bottomSheet.className);
+        }
+    } else if (execute.setExpandedState === false) {
+        bottomSheet.classList.remove(execute.expandedClass || DH.BOTTOM_SHEET_EXPANDED_CLASS);
+        bottomSheet.setAttribute('aria-expanded', execute.ariaExpanded || 'false');
+        bottomSheetIsExpanded = false;
+        if (execute.resetContentScroll && execute.contentSelector) {
+            const content = bottomSheet.querySelector(execute.contentSelector);
+            if (content) content.scrollTop = 0;
+        }
+    }
+
+    if (execute.syncOverlapFabs) syncBottomSheetOverlapFabs();
+}
+
 /**
  * expandBottomSheet function
  * @function expandBottomSheet
  * @returns {*} Return value description
  */
 function expandBottomSheet() {
-    const bottomSheet = document.getElementById('bottomSheet');
-    if (!bottomSheet) return;
-
-    console.log('[BottomSheet] Expanding...');
-
-    // Clear any inline styles that might interfere with CSS-based expand
-    bottomSheet.style.height = '';
-    bottomSheet.style.transform = '';
-    bottomSheet.style.transition = '';
-
-    bottomSheet.classList.add('expanded');
-    bottomSheet.setAttribute('aria-expanded', 'true');
-    bottomSheetIsExpanded = true;
-    console.log('[BottomSheet] Expanded, classes:', bottomSheet.className);
-    syncBottomSheetOverlapFabs();
+    applyBottomSheetStateFromPlan(_domHelpers().buildExpandBottomSheetExecutePlan());
 }
 
 /**
@@ -12137,22 +12175,7 @@ function expandBottomSheet() {
  * @returns {*} Return value description
  */
 function collapseBottomSheet() {
-    const bottomSheet = document.getElementById('bottomSheet');
-    if (!bottomSheet) return;
-
-    console.log('[BottomSheet] Collapsing...');
-
-    // Clear any inline styles that might interfere with CSS-based collapse
-    bottomSheet.style.height = '';
-    bottomSheet.style.transform = '';
-    bottomSheet.style.transition = '';
-
-    bottomSheet.classList.remove('expanded');
-    bottomSheet.setAttribute('aria-expanded', 'false');
-    bottomSheetIsExpanded = false;
-    const content = bottomSheet.querySelector('.bottom-sheet-content');
-    if (content) content.scrollTop = 0;
-    syncBottomSheetOverlapFabs();
+    applyBottomSheetStateFromPlan(_domHelpers().buildCollapseBottomSheetExecutePlan());
 }
 
 // ===== GPS TRACKING FUNCTIONS =====

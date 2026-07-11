@@ -147,6 +147,56 @@
         };
     }
 
+    /**
+     * @returns {Object}
+     */
+    function buildLoadGestureSettingsFetchPlan() {
+        return {
+            shouldFetch: true,
+            url: '/api/app-settings',
+            errorLogPrefix: 'Error loading app settings:',
+        };
+    }
+
+    /**
+     * @param {Object} [settings] - API settings payload
+     * @param {Object} [input]
+     * @param {boolean} [input.hasDeviceMotion]
+     * @returns {Object}
+     */
+    function buildApplyGestureSettingsFromApiExecutePlan(settings, input) {
+        settings = settings || {};
+        input = input || {};
+        var enabled = !!settings.gesture_enabled;
+        var sensitivity = settings.gesture_sensitivity || 'medium';
+        var action = settings.gesture_action || 'recalculate';
+        return {
+            shouldApply: true,
+            enabled: enabled,
+            sensitivity: sensitivity,
+            action: action,
+            toggle: {
+                id: GESTURE_TOGGLE_ID,
+                enabled: enabled,
+            },
+            settingsPanel: {
+                id: GESTURE_SETTINGS_ID,
+                display: enabled ? 'block' : 'none',
+            },
+            sensitivitySelect: {
+                id: GESTURE_SENSITIVITY_ID,
+                value: sensitivity,
+            },
+            actionSelect: {
+                id: GESTURE_ACTION_ID,
+                value: action,
+            },
+            storageKey: GESTURE_ENABLED_STORAGE_KEY,
+            storageValue: enabled,
+            addDeviceMotionListener: enabled && !!input.hasDeviceMotion,
+        };
+    }
+
     var api = {
         GESTURE_ENABLED_STORAGE_KEY: GESTURE_ENABLED_STORAGE_KEY,
         GESTURE_TOGGLE_ID: GESTURE_TOGGLE_ID,
@@ -160,6 +210,8 @@
         buildGestureActionExecutePlan: buildGestureActionExecutePlan,
         buildUpdateGestureSensitivityExecutePlan: buildUpdateGestureSensitivityExecutePlan,
         buildUpdateGestureActionExecutePlan: buildUpdateGestureActionExecutePlan,
+        buildLoadGestureSettingsFetchPlan: buildLoadGestureSettingsFetchPlan,
+        buildApplyGestureSettingsFromApiExecutePlan: buildApplyGestureSettingsFromApiExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -141,4 +141,17 @@ describe('tile precache planning helpers', () => {
             templateCount: 0,
         }).shouldPrecache).toBe(false);
     });
+
+    test('buildTryResumeNavigationPreflightPlan requires polyline and steps', () => {
+        expect(OFF.buildTryResumeNavigationPreflightPlan(null).shouldOffer).toBe(false);
+        const offer = OFF.buildTryResumeNavigationPreflightPlan({
+            polyline: [[51.5, -0.1], [51.6, -0.2]],
+            steps: [{ type: 1 }, { type: 2 }],
+            stepIndex: 1,
+        });
+        expect(offer.shouldOffer).toBe(true);
+        expect(offer.stepCount).toBe(2);
+        expect(offer.resumeStepIndex).toBe(1);
+        expect(offer.resumeYesId).toBe(OFF.RESUME_NAV_YES_ID);
+    });
 });

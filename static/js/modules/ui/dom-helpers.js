@@ -46,6 +46,9 @@
         'mapControlsHintFab',
         'recenterVehicleFab',
     ];
+    var BOTTOM_SHEET_HANDLE_SELECTOR = '.bottom-sheet-handle';
+    var BOTTOM_SHEET_CONTENT_SELECTOR = '.bottom-sheet-content';
+    var ROUTE_PREVIEW_HANDLE_TITLE = 'Swipe up to see route details';
 
     /**
      * Orchestration plan for bottom sheet init element lookup.
@@ -145,6 +148,71 @@
         };
     }
 
+    /**
+     * Execute plan for expanding the bottom sheet.
+     * @returns {Object}
+     */
+    function buildExpandBottomSheetExecutePlan() {
+        return {
+            shouldApply: true,
+            bottomSheetId: BOTTOM_SHEET_ID,
+            expandedClass: BOTTOM_SHEET_EXPANDED_CLASS,
+            ariaExpanded: 'true',
+            setExpandedState: true,
+            clearInlineStyles: ['height', 'transform', 'transition'],
+            expandLogMessage: '[BottomSheet] Expanding...',
+            expandedLogMessage: '[BottomSheet] Expanded, classes:',
+            syncOverlapFabs: true,
+        };
+    }
+
+    /**
+     * Execute plan for collapsing the bottom sheet.
+     * @returns {Object}
+     */
+    function buildCollapseBottomSheetExecutePlan() {
+        return {
+            shouldApply: true,
+            bottomSheetId: BOTTOM_SHEET_ID,
+            expandedClass: BOTTOM_SHEET_EXPANDED_CLASS,
+            ariaExpanded: 'false',
+            setExpandedState: false,
+            clearInlineStyles: ['height', 'transform', 'transition'],
+            resetContentScroll: true,
+            contentSelector: BOTTOM_SHEET_CONTENT_SELECTOR,
+            collapseLogMessage: '[BottomSheet] Collapsing...',
+            syncOverlapFabs: true,
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildToggleBottomSheetCollectPlan(input) {
+        input = input || {};
+        return {
+            isExpanded: !!input.isExpanded,
+            expand: !input.isExpanded,
+            collapse: !!input.isExpanded,
+        };
+    }
+
+    /**
+     * Execute plan for collapsing the sheet before route preview.
+     * @returns {Object}
+     */
+    function buildCollapseBottomSheetForRoutePreviewExecutePlan() {
+        return {
+            shouldApply: true,
+            collapse: true,
+            clearInlineStyles: ['height', 'transition', 'transform'],
+            handleSelector: BOTTOM_SHEET_HANDLE_SELECTOR,
+            handleTitle: ROUTE_PREVIEW_HANDLE_TITLE,
+            logMessage: '[Route Preview] Collapsed bottom sheet to show map',
+        };
+    }
+
     var api = {
         eventTargetElement: eventTargetElement,
         closest: closest,
@@ -159,6 +227,10 @@
         buildBottomSheetDragStartAllowedPlan: buildBottomSheetDragStartAllowedPlan,
         buildBottomSheetDragSnapPlan: buildBottomSheetDragSnapPlan,
         buildBottomSheetOverlapFabDisplayPlan: buildBottomSheetOverlapFabDisplayPlan,
+        buildExpandBottomSheetExecutePlan: buildExpandBottomSheetExecutePlan,
+        buildCollapseBottomSheetExecutePlan: buildCollapseBottomSheetExecutePlan,
+        buildToggleBottomSheetCollectPlan: buildToggleBottomSheetCollectPlan,
+        buildCollapseBottomSheetForRoutePreviewExecutePlan: buildCollapseBottomSheetForRoutePreviewExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -7,6 +7,9 @@
 
     var OFFLINE_BANNER_ID = 'offlineBanner';
     var RESUME_NAV_BANNER_ID = 'resumeNavBanner';
+    var RESUME_NAV_YES_ID = 'resumeNavYes';
+    var RESUME_NAV_NO_ID = 'resumeNavNo';
+    var RESUME_NAV_AUTO_DISMISS_MS = 30000;
 
     var ROUTE_DB_NAME = 'voyagr-nav';
     var ROUTE_DB_VERSION = 2;
@@ -344,6 +347,33 @@
     }
 
     /**
+     * Preflight plan for offering navigation resume from persisted route data.
+     * @param {Object} [saved]
+     * @returns {Object}
+     */
+    function buildTryResumeNavigationPreflightPlan(saved) {
+        saved = saved || {};
+        if (!saved.polyline || !saved.steps) {
+            return { shouldOffer: false };
+        }
+        return {
+            shouldOffer: true,
+            stepCount: (saved.steps || []).length,
+            resumeStepIndex: saved.stepIndex || 0,
+            bannerId: RESUME_NAV_BANNER_ID,
+            resumeYesId: RESUME_NAV_YES_ID,
+            resumeNoId: RESUME_NAV_NO_ID,
+            autoDismissMs: RESUME_NAV_AUTO_DISMISS_MS,
+            foundLogMessage: '[OfflineNav] Found persisted route, offering resume',
+            resumedFullLogMessage: '[OfflineNav] Route resumed via full navigation bootstrap',
+            resumedLegacyLogMessage: '[OfflineNav] Route resumed (legacy path — missing encoded geometry)',
+            legacyResumeStatusMessage: '🧭 Navigation resumed from saved route',
+            legacyResumeStatusType: 'success',
+            errorLogPrefix: '[OfflineNav] Resume check failed:',
+        };
+    }
+
+    /**
      * Preflight for reading vector tile templates from the active map style.
      * @param {Object} [input]
      * @returns {Object}
@@ -392,6 +422,9 @@
     var api = {
         OFFLINE_BANNER_ID: OFFLINE_BANNER_ID,
         RESUME_NAV_BANNER_ID: RESUME_NAV_BANNER_ID,
+        RESUME_NAV_YES_ID: RESUME_NAV_YES_ID,
+        RESUME_NAV_NO_ID: RESUME_NAV_NO_ID,
+        RESUME_NAV_AUTO_DISMISS_MS: RESUME_NAV_AUTO_DISMISS_MS,
         ROUTE_DB_NAME: ROUTE_DB_NAME,
         ROUTE_DB_VERSION: ROUTE_DB_VERSION,
         ROUTE_STORE: ROUTE_STORE,
@@ -404,6 +437,7 @@
         buildOfflineBannerInnerHtml: buildOfflineBannerInnerHtml,
         getResumeNavigationBannerStyleCssText: getResumeNavigationBannerStyleCssText,
         buildResumeNavigationBannerHtml: buildResumeNavigationBannerHtml,
+        buildTryResumeNavigationPreflightPlan: buildTryResumeNavigationPreflightPlan,
         isPersistedRouteExpired: isPersistedRouteExpired,
         buildActiveRoutePersistRecord: buildActiveRoutePersistRecord,
         openRouteDB: openRouteDB,

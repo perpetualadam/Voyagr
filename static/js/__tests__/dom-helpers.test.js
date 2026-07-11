@@ -68,4 +68,18 @@ describe('dom-helpers', () => {
         expect(idle.alwaysHideWhenExpanded[0].action).toBe('clearDisplay');
         expect(idle.navFabDisplays.every((item) => item.display === 'none')).toBe(true);
     });
+
+    test('buildExpandBottomSheetExecutePlan and toggle collect plan', () => {
+        const expand = Dom.buildExpandBottomSheetExecutePlan();
+        expect(expand.setExpandedState).toBe(true);
+        expect(expand.syncOverlapFabs).toBe(true);
+
+        const collapse = Dom.buildCollapseBottomSheetExecutePlan();
+        expect(collapse.setExpandedState).toBe(false);
+        expect(collapse.resetContentScroll).toBe(true);
+
+        expect(Dom.buildToggleBottomSheetCollectPlan({ isExpanded: true }).collapse).toBe(true);
+        expect(Dom.buildCollapseBottomSheetForRoutePreviewExecutePlan().handleTitle)
+            .toContain('Swipe up');
+    });
 });

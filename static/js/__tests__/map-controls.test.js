@@ -178,6 +178,16 @@ describe('map-controls module', () => {
         expect(unsupported.unsupportedLog).toBe('unsupported');
     });
 
+    test('buildShowMapHintToastExecutePlan and touch hint environment detection', () => {
+        expect(MC.buildShowMapHintToastExecutePlan('').shouldShow).toBe(false);
+        const show = MC.buildShowMapHintToastExecutePlan('Recenter map');
+        expect(show.toastId).toBe(MC.MAP_HINT_TOAST_ID);
+        expect(show.autoDismissMs).toBe(MC.MAP_HINT_AUTO_DISMISS_MS);
+
+        expect(MC.isTouchHintsEnvironment({ navigator: { maxTouchPoints: 1 }, window: {} })).toBe(true);
+        expect(MC.buildInitMobileMapIconHintsPlan({ touchHintsEnabled: true }).shouldInit).toBe(true);
+    });
+
     test('buildNavStopPreflightPlan and lifecycle execute plans', () => {
         expect(MC.buildNavStopPreflightPlan(false, false).shouldStop).toBe(false);
         expect(MC.buildNavStopPreflightPlan(true, false).shouldStop).toBe(true);
