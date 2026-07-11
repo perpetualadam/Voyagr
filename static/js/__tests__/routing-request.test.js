@@ -201,3 +201,56 @@ describe('multimodal route bodies', () => {
         expect(body).not.toHaveProperty('include_tolls');
     });
 });
+
+describe('multi-drop and initial route helpers', () => {
+    test('mapViaPointsForApi adds type via', () => {
+        expect(RR.mapViaPointsForApi([{ lat: 1, lon: 2, name: 'A' }]))
+            .toEqual([{ lat: 1, lon: 2, name: 'A', type: 'via' }]);
+    });
+
+    test('mapStopsForApi defaults duration to 15', () => {
+        expect(RR.mapStopsForApi([{ lat: 1, lon: 2, name: 'Stop' }]))
+            .toEqual([{ lat: 1, lon: 2, name: 'Stop', type: 'stop', duration: 15 }]);
+    });
+
+    test('sumStopDurationsMinutes totals stop durations', () => {
+        expect(RR.sumStopDurationsMinutes([{ duration: 10 }, {}])).toBe(25);
+    });
+
+    test('resolveLiveGpsStartCoord uses live GPS when navigating', () => {
+        expect(RR.resolveLiveGpsStartCoord({
+            routeInProgress: true,
+            isTrackingActive: true,
+            trackingHistory: [{}],
+            currentLat: 51.5,
+            currentLon: -0.1,
+            geocodedStart: '51.0,-0.2',
+        })).toBe('51.5,-0.1');
+    });
+
+    test('resolveLiveGpsStartCoord falls back to geocoded start', () => {
+        expect(RR.resolveLiveGpsStartCoord({
+            routeInProgress: false,
+            geocodedStart: '51.0,-0.2',
+        })).toBe('51.0,-0.2');
+    });
+
+    test('buildInitialRouteRequestBody includes multi-drop fields', () => {
+        const body = RR.buildInitialRouteRequestBody({
+            start: '51.5,-0.1',
+            end: '51.6,-0.2',
+            viaPoints: [{ lat: 51.55, lon: -0.15 }],
+            stops: [{ lat: 51.56, lon: -0.16, duration: 20 }],
+            optimizeStopOrder: true,
+            roundTrip: false,
+            departureTime: '08:00',
+            sharedOptions: baseOpts(),
+        });
+        expect(body.start).toBe('51.5,-0.1');
+        expect(body.via_points).toHaveLength(1);
+        expect(body.stops[0].duration).toBe(20);
+        expect(body.optimize_stop_order).toBe(true);
+        expect(body.departure_time).toBe('08:00');
+        expect(body.routing_mode).toBe('auto');
+    });
+});

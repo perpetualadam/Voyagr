@@ -219,6 +219,109 @@
         };
     }
 
+    /**
+     * Map in-app via-points to the API via_points shape.
+     * @param {Array<{lat: number, lon: number, name?: string}>} viaPoints
+     * @returns {Array<{lat: number, lon: number, name?: string, type: string}>}
+     */
+    function mapViaPointsForApi(viaPoints) {
+        return (viaPoints || []).map(function (vp) {
+            return {
+                lat: vp.lat,
+                lon: vp.lon,
+                name: vp.name,
+                type: 'via',
+            };
+        });
+    }
+
+    /**
+     * Map in-app stops to the API stops shape.
+     * @param {Array<{lat: number, lon: number, name?: string, duration?: number}>} stops
+     * @returns {Array<{lat: number, lon: number, name?: string, type: string, duration: number}>}
+     */
+    function mapStopsForApi(stops) {
+        return (stops || []).map(function (s) {
+            return {
+                lat: s.lat,
+                lon: s.lon,
+                name: s.name,
+                type: 'stop',
+                duration: s.duration || 15,
+            };
+        });
+    }
+
+    /**
+     * Total planned stop time in minutes (default 15 min per stop).
+     * @param {Array<{duration?: number}>} stops
+     * @returns {number}
+     */
+    function sumStopDurationsMinutes(stops) {
+        return (stops || []).reduce(function (sum, s) {
+            return sum + (s.duration || 15);
+        }, 0);
+    }
+
+    /**
+     * Start coordinate for calculateRoute — live GPS when navigating, else geocoded start.
+     * @param {Object} o
+     * @param {boolean} o.routeInProgress
+     * @param {boolean} o.isTrackingActive
+     * @param {Array} o.trackingHistory
+     * @param {number|null} o.currentLat
+     * @param {number|null} o.currentLon
+     * @param {string} o.geocodedStart
+     * @returns {string}
+     */
+    function resolveLiveGpsStartCoord(o) {
+        o = o || {};
+        var liveGpsOk = o.routeInProgress &&
+            o.isTrackingActive &&
+            Array.isArray(o.trackingHistory) &&
+            o.trackingHistory.length > 0 &&
+            typeof o.currentLat === 'number' &&
+            Number.isFinite(o.currentLat) &&
+            typeof o.currentLon === 'number' &&
+            Number.isFinite(o.currentLon);
+        return liveGpsOk
+            ? formatCoordPair(o.currentLat, o.currentLon)
+            : o.geocodedStart;
+    }
+
+    /**
+     * Full `/api/route` body for the initial calculateRoute request (multi-drop included).
+     * @param {Object} o
+     * @param {string} o.start
+     * @param {string} o.end
+     * @param {Array} [o.viaPoints]
+     * @param {Array} [o.stops]
+     * @param {boolean} o.optimizeStopOrder
+     * @param {boolean} o.roundTrip
+     * @param {string|null} o.departureTime
+     * @param {Object} o.sharedOptions - args for buildSharedRouteOptions
+     * @returns {Object}
+     */
+    function buildInitialRouteRequestBody(o) {
+        o = o || {};
+        var body = {
+            start: o.start,
+            end: o.end,
+            via_points: mapViaPointsForApi(o.viaPoints),
+            stops: mapStopsForApi(o.stops),
+            optimize_stop_order: !!o.optimizeStopOrder,
+            round_trip: !!o.roundTrip,
+            departure_time: o.departureTime || null,
+        };
+        var shared = buildSharedRouteOptions(o.sharedOptions || {});
+        for (var key in shared) {
+            if (Object.prototype.hasOwnProperty.call(shared, key)) {
+                body[key] = shared[key];
+            }
+        }
+        return body;
+    }
+
     var api = {
         buildSharedRouteOptions: buildSharedRouteOptions,
         isInitialRouteHazardAvoidanceEnabled: isInitialRouteHazardAvoidanceEnabled,
@@ -229,6 +332,11 @@
         buildRerouteRequestBody: buildRerouteRequestBody,
         buildMultimodalDrivingLegBody: buildMultimodalDrivingLegBody,
         buildMultimodalWalkingLegBody: buildMultimodalWalkingLegBody,
+        mapViaPointsForApi: mapViaPointsForApi,
+        mapStopsForApi: mapStopsForApi,
+        sumStopDurationsMinutes: sumStopDurationsMinutes,
+        resolveLiveGpsStartCoord: resolveLiveGpsStartCoord,
+        buildInitialRouteRequestBody: buildInitialRouteRequestBody,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

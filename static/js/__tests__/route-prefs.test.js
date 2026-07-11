@@ -49,4 +49,23 @@ describe('route-prefs module', () => {
             expect(p.fuel_price).toBe(1.99);
         });
     });
+
+    describe('getRoutePreferences', () => {
+        test('returns defaults when storage unset', () => {
+            const prefs = RoutePrefs.getRoutePreferences(localStorage);
+            expect(prefs.routeOptimization).toBe('fastest');
+            expect(prefs.maxDetour).toBe(20);
+            expect(prefs.avoidTolls).toBe(true);
+        });
+
+        test('parses saved JSON from storage', () => {
+            localStorage.setItem('routePreferences', JSON.stringify({
+                preferScenic: true,
+                maxDetour: 35,
+            }));
+            const prefs = RoutePrefs.getRoutePreferences(localStorage);
+            expect(prefs.preferScenic).toBe(true);
+            expect(prefs.maxDetour).toBe(35);
+        });
+    });
 });
