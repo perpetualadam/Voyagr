@@ -142,6 +142,27 @@
         };
     }
 
+    var OPEN_VOLUME_HINT_SESSION_KEY = 'voyagr_volume_hint_on_open_shown';
+
+    /**
+     * Schedule plan for showing volume hint once per tab session on app open.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildOpenVolumeHintSchedulePlan(input) {
+        input = input || {};
+        var alreadyShown = !!input.alreadyShown;
+        return {
+            shouldSchedule: !alreadyShown,
+            sessionStorageKey: OPEN_VOLUME_HINT_SESSION_KEY,
+            sessionStorageValue: 'true',
+            delayMs: input.delayMs != null ? input.delayMs : 1800,
+            action: 'showVolumeHintForNavigation',
+            errorLogPrefix: '[EnvHint] open volume hint:',
+            scheduleErrorLogPrefix: '[EnvHint] open volume hint schedule:',
+        };
+    }
+
     var api = {
         VOLUME_HINT_BANNER_ID: VOLUME_HINT_BANNER_ID,
         ENV_HINT_MIN_MS: ENV_HINT_MIN_MS,
@@ -152,6 +173,8 @@
         buildVolumeHintBannerHtml: buildVolumeHintBannerHtml,
         buildShowVolumeHintExecutePlan: buildShowVolumeHintExecutePlan,
         buildNavStartVolumeHintSchedulePlan: buildNavStartVolumeHintSchedulePlan,
+        buildOpenVolumeHintSchedulePlan: buildOpenVolumeHintSchedulePlan,
+        OPEN_VOLUME_HINT_SESSION_KEY: OPEN_VOLUME_HINT_SESSION_KEY,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

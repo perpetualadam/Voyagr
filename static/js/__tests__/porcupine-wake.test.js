@@ -49,4 +49,42 @@ describe('porcupine-wake module', () => {
         expect(disable.stopPipeline).toBe(true);
         expect(disable.clearResumeAfterVoice).toBe(true);
     });
+
+    test('buildPorcupinePipelinePreflightPlan blocks non-HTTPS origins', () => {
+        const blocked = PW.buildPorcupinePipelinePreflightPlan({
+            configured: true,
+            storageEnabled: true,
+            pipelineRunning: false,
+            starting: false,
+            protocol: 'http:',
+            hostname: 'example.com',
+        });
+        expect(blocked.shouldStart).toBe(false);
+        expect(blocked.reason).toBe('needs_https');
+
+        const allowed = PW.buildPorcupinePipelinePreflightPlan({
+            configured: true,
+            storageEnabled: true,
+            pipelineRunning: false,
+            starting: false,
+            protocol: 'https:',
+            hostname: 'example.com',
+        });
+        expect(allowed.shouldStart).toBe(true);
+    });
+
+    test('buildWarmPicovoiceStaticCachePlan requires service worker controller', () => {
+        expect(PW.buildWarmPicovoiceStaticCachePlan({
+            hasServiceWorker: true,
+            online: true,
+            controllerPresent: false,
+        }).shouldWarm).toBe(false);
+        const warm = PW.buildWarmPicovoiceStaticCachePlan({
+            hasServiceWorker: true,
+            online: true,
+            controllerPresent: true,
+        });
+        expect(warm.shouldWarm).toBe(true);
+        expect(warm.warmUrls.length).toBeGreaterThan(2);
+    });
 });

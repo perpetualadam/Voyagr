@@ -47,4 +47,14 @@ describe('device-environment module', () => {
         expect(schedule.delayMs).toBe(2600);
         expect(schedule.action).toBe('showVolumeHintForNavigation');
     });
+
+    test('buildOpenVolumeHintSchedulePlan runs once per tab session', () => {
+        const first = DE.buildOpenVolumeHintSchedulePlan({ alreadyShown: false });
+        expect(first.shouldSchedule).toBe(true);
+        expect(first.sessionStorageKey).toBe(DE.OPEN_VOLUME_HINT_SESSION_KEY);
+        expect(first.delayMs).toBe(1800);
+
+        const again = DE.buildOpenVolumeHintSchedulePlan({ alreadyShown: true });
+        expect(again.shouldSchedule).toBe(false);
+    });
 });

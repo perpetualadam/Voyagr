@@ -7356,17 +7356,14 @@ function togglePorcupineWakeWord() {
 }
 
 function maybeResumePorcupineWakeAfterVoice() {
-    if (!porcupineWakeResumeAfterVoice) {
-        return;
-    }
-    porcupineWakeResumeAfterVoice = false;
-    if (localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) !== 'true') {
-        return;
-    }
-    if (!picovoiceClientConfigured()) {
-        return;
-    }
-    void startPorcupineWakePipeline();
+    const PW = _porcupineWake();
+    const resume = PW.buildPorcupineResumeAfterVoicePlan({
+        resumeFlag: porcupineWakeResumeAfterVoice,
+        storageEnabled: localStorage.getItem(PW.VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true',
+        configured: picovoiceClientConfigured(),
+    });
+    if (resume.clearResumeFlag) porcupineWakeResumeAfterVoice = false;
+    if (resume.shouldResume) void startPorcupineWakePipeline();
 }
 
 async function porcupineCustomKeywordAvailable() {
@@ -7412,36 +7409,38 @@ async function stopPorcupineWakePipeline() {
 }
 
 async function startPorcupineWakePipeline() {
-    if (!picovoiceClientConfigured() || localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) !== 'true') {
+    const PW = _porcupineWake();
+    const preflight = PW.buildPorcupinePipelinePreflightPlan({
+        configured: picovoiceClientConfigured(),
+        storageEnabled: localStorage.getItem(PW.VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true',
+        pipelineRunning: porcupineWakePipelineRunning,
+        starting: _porcupineWakeStarting,
+        protocol: typeof location !== 'undefined' ? location.protocol : '',
+        hostname: typeof location !== 'undefined' ? location.hostname : '',
+    });
+    if (!preflight.shouldStart) {
+        if (preflight.reason === 'needs_https') {
+            console.warn(preflight.warningLog);
+            showStatus(preflight.statusMessage, preflight.statusType);
+        }
         return;
     }
-    if (porcupineWakePipelineRunning || _porcupineWakeStarting) {
-        return;
-    }
-    if (typeof location !== 'undefined' && location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
-        console.warn('[Porcupine] Wake word needs HTTPS (or localhost) for microphone access.');
-        showStatus('Wake word requires HTTPS for the microphone', 'warning');
-        return;
-    }
+
     _porcupineWakeStarting = true;
     try {
-        await stopPorcupineWakePipeline();
-        const accessKey = window.PICOVOICE_ACCESS_KEY.trim();
+        if (preflight.stopExistingFirst) await stopPorcupineWakePipeline();
         const useCustom = await porcupineCustomKeywordAvailable();
-        const keywords = useCustom
-            ? [{
-                publicPath: window.VoyagrPicovoiceKeywordPath.trim(),
-                label: 'Hey SatNav',
-                sensitivity: 0.55
-            }]
-            : PorcupineWeb.BuiltInKeyword.Porcupine;
-        const model = { publicPath: '/static/vendor/picovoice/porcupine_params.pv' };
+        const startConfig = PW.buildPorcupineStartConfigPlan({
+            accessKey: window.PICOVOICE_ACCESS_KEY,
+            useCustomKeyword: useCustom,
+            keywordPath: window.VoyagrPicovoiceKeywordPath,
+        });
         const onDetection = (detection) => {
             if (!detection || typeof detection.label !== 'string') {
                 return;
             }
             const now = Date.now();
-            if (now - _porcupineWakeLastDetectionMs < 2200) {
+            if (now - _porcupineWakeLastDetectionMs < startConfig.detectionDebounceMs) {
                 return;
             }
             _porcupineWakeLastDetectionMs = now;
@@ -7451,11 +7450,14 @@ async function startPorcupineWakePipeline() {
             console.log('[Porcupine] Wake detected:', detection.label);
             void onPorcupineWakeHotword();
         };
+        const keywords = useCustom
+            ? [startConfig.customKeyword]
+            : PorcupineWeb.BuiltInKeyword.Porcupine;
         const worker = await PorcupineWeb.PorcupineWorker.create(
-            accessKey,
+            startConfig.accessKey,
             keywords,
             onDetection,
-            model,
+            startConfig.model,
             {
                 processErrorCallback: (err) => {
                     console.error('[Porcupine] process error:', err);
@@ -7478,11 +7480,12 @@ async function startPorcupineWakePipeline() {
         await WebVoiceProcessor.subscribe(bridge);
         porcupineWakePipelineRunning = true;
         if (!useCustom) {
-            console.info('[Porcupine] Using built-in keyword «Porcupine» until hey_satnav_wasm.ppn is available at', window.VoyagrPicovoiceKeywordPath);
+            console.info(startConfig.builtInFallbackLogPrefix, window.VoyagrPicovoiceKeywordPath);
         }
     } catch (e) {
-        console.error('[Porcupine] Failed to start wake pipeline:', e);
-        showStatus('Wake word could not start (check Picovoice key and assets)', 'error');
+        const fail = PW.buildPorcupineStartConfigPlan();
+        console.error(fail.failureLogPrefix, e);
+        showStatus(fail.failureStatusMessage, fail.failureStatusType);
         await stopPorcupineWakePipeline();
     } finally {
         _porcupineWakeStarting = false;
@@ -7490,18 +7493,20 @@ async function startPorcupineWakePipeline() {
 }
 
 async function onPorcupineWakeHotword() {
-    porcupineWakeResumeAfterVoice = true;
-    await stopPorcupineWakePipeline();
-    speakMessage('Say your command', 'high');
-    await new Promise((r) => setTimeout(r, 450));
+    const PW = _porcupineWake();
+    const execute = PW.buildPorcupineWakeHotwordExecutePlan();
+    if (execute.setResumeAfterVoice) porcupineWakeResumeAfterVoice = true;
+    if (execute.stopPipeline) await stopPorcupineWakePipeline();
+    if (execute.speakMessage) speakMessage(execute.speakMessage, execute.speakPriority);
+    await new Promise((r) => setTimeout(r, execute.voiceStartDelayMs));
     if (!voiceRecognition && !initVoiceRecognition()) {
         maybeResumePorcupineWakeAfterVoice();
         return;
     }
     if (!isListening) {
         const tr = document.getElementById('voiceTranscript');
-        if (tr) tr.textContent = '';
-        _voiceFinalTranscript = '';
+        if (tr && execute.clearTranscript) tr.textContent = '';
+        if (execute.resetFinalTranscript) _voiceFinalTranscript = '';
         voiceRecognition.start();
         isListening = true;
     }
@@ -8526,6 +8531,8 @@ function _deviceEnvironment() { return VoyagrModules.deviceEnvironment(); }
 /** Unit-tested route calculation progress bar HTML (modules/navigation/route-progress.js). */
 function _routeProgress() { return VoyagrModules.routeProgress(); }
 function _settingsSnapshot() { return VoyagrModules.settingsSnapshot(); }
+function _appState() { return VoyagrModules.appState(); }
+function _gestureControl() { return VoyagrModules.gestureControl(); }
 
 /** Unit-tested map preview marker HTML (modules/map/preview-marker.js). */
 function _previewMarker() { return VoyagrModules.previewMarker(); }
@@ -8547,6 +8554,7 @@ function _osmMapIcons() { return VoyagrModules.osmMapIcons(); }
 
 /** Unit-tested navigation map control icons (modules/map/map-controls.js). */
 function _mapControls() { return VoyagrModules.mapControls(); }
+function _mapTheme() { return VoyagrModules.mapTheme(); }
 
 /** Unit-tested route geometry helpers (modules/navigation/route-geometry.js). */
 function _routeGeometry() { return VoyagrModules.routeGeometry(); }
@@ -9597,33 +9605,22 @@ function initPhase3Features() {
 function handleDeviceMotion(event) {
     if (!gestureEnabled) return;
 
+    const GC = _gestureControl();
     const accel = event.acceleration;
     if (!accel) return;
 
-    // Calculate acceleration magnitude
     const magnitude = Math.sqrt(accel.x ** 2 + accel.y ** 2 + accel.z ** 2);
-
-    // Sensitivity thresholds
-    const thresholds = {
-        'low': 20,
-        'medium': 15,
-        'high': 10
-    };
-    const threshold = thresholds[gestureSensitivity] || 15;
-
-    // Detect shake
-    if (magnitude > threshold) {
-        const now = Date.now();
-        if (now - lastShakeTime < 1000) {
-            shakeCount++;
-            if (shakeCount >= 2) {
-                triggerGestureAction();
-                shakeCount = 0;
-            }
-        } else {
-            shakeCount = 1;
-        }
-        lastShakeTime = now;
+    const detection = GC.buildGestureShakeDetectionPlan({
+        magnitude,
+        sensitivity: gestureSensitivity,
+        lastShakeTime,
+        shakeCount,
+        now: Date.now(),
+    });
+    shakeCount = detection.shakeCount;
+    lastShakeTime = detection.lastShakeTime;
+    if (detection.shouldTrigger) {
+        triggerGestureAction();
     }
 }
 
@@ -9633,37 +9630,34 @@ function handleDeviceMotion(event) {
  * @returns {*} Return value description
  */
 function triggerGestureAction() {
-    // Show gesture indicator
-    const indicator = document.getElementById('gestureIndicator');
-    indicator.classList.add('show');
-    setTimeout(() => indicator.classList.remove('show'), 500);
+    const GC = _gestureControl();
+    const execute = GC.buildGestureActionExecutePlan({ action: gestureAction });
+    if (!execute.shouldApply) return;
 
-    // Trigger haptic feedback if available
-    if ('vibrate' in navigator) {
-        navigator.vibrate(100);
+    const indicator = document.getElementById(execute.indicator.id);
+    if (indicator) {
+        indicator.classList.add(execute.indicator.showClass);
+        setTimeout(() => indicator.classList.remove(execute.indicator.showClass), execute.indicator.hideAfterMs);
     }
 
-    // Log gesture event
+    if ('vibrate' in navigator) {
+        navigator.vibrate(execute.vibrateMs);
+    }
+
     fetch('/api/gesture-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gesture_type: 'shake', action: gestureAction })
-    }).catch(error => console.error('Error logging gesture:', error));
+        body: JSON.stringify(execute.logApiBody),
+    }).catch((error) => console.error('Error logging gesture:', error));
 
-    // Execute action
-    switch (gestureAction) {
-        case 'recalculate':
-            showStatus('🔄 Recalculating route...', 'info');
-            calculateRoute();
-            break;
-        case 'report':
-            showStatus('📍 Report hazard mode activated', 'info');
-            // Would open hazard reporting UI
-            break;
-        case 'clear':
-            showStatus('🗑️ Route cleared', 'info');
-            clearForm();
-            break;
+    if (execute.triggerRecalculate) {
+        showStatus(execute.statusMessage, execute.statusType);
+        calculateRoute();
+    } else if (execute.triggerClear) {
+        showStatus(execute.statusMessage, execute.statusType);
+        clearForm();
+    } else {
+        showStatus(execute.statusMessage, execute.statusType);
     }
 }
 
@@ -9673,30 +9667,36 @@ function triggerGestureAction() {
  * @returns {*} Return value description
  */
 function toggleGestureControl() {
-    gestureEnabled = !gestureEnabled;
+    const GC = _gestureControl();
+    const TU = _toggleUI();
+    const collected = GC.buildToggleGestureControlCollectPlan({ currentlyEnabled: gestureEnabled });
+    const execute = GC.buildToggleGestureControlExecutePlan({
+        enabled: collected.enabled,
+        hasDeviceMotion: 'DeviceMotionEvent' in window,
+    });
+    if (!execute.shouldApply) return;
 
-    // Update UI
-    const button = document.getElementById('gestureEnabled');
-    _toggleUI().applyToggleButton(button, gestureEnabled);
+    gestureEnabled = execute.enabled;
+    TU.applyToggleButton(document.getElementById(execute.toggle.id), execute.toggle.enabled);
 
-    document.getElementById('gestureSettings').style.display = gestureEnabled ? 'block' : 'none';
+    const settingsPanel = document.getElementById(execute.settingsPanel.id);
+    if (settingsPanel) settingsPanel.style.display = execute.settingsPanel.display;
 
-    // Save to localStorage
-    localStorage.setItem('gestureEnabled', gestureEnabled);
+    localStorage.setItem(execute.storageKey, execute.storageValue);
 
     fetch('/api/app-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gesture_enabled: gestureEnabled })
-    }).catch(error => console.error('Error updating gesture setting:', error));
+        body: JSON.stringify(execute.persistApiBody),
+    }).catch((error) => console.error('Error updating gesture setting:', error));
 
-    if (gestureEnabled && 'DeviceMotionEvent' in window) {
+    if (execute.addDeviceMotionListener) {
         window.addEventListener('devicemotion', handleDeviceMotion);
-        showStatus('✅ Gesture control enabled', 'success');
-    } else {
-        window.removeEventListener('devicemotion', handleDeviceMotion);
-        showStatus('❌ Gesture control disabled', 'info');
     }
+    if (execute.removeDeviceMotionListener) {
+        window.removeEventListener('devicemotion', handleDeviceMotion);
+    }
+    showStatus(execute.statusMessage, execute.statusType);
 }
 
 /**
@@ -9705,12 +9705,17 @@ function toggleGestureControl() {
  * @returns {*} Return value description
  */
 function updateGestureSensitivity() {
-    gestureSensitivity = document.getElementById('gestureSensitivity').value;
+    const GC = _gestureControl();
+    const execute = GC.buildUpdateGestureSensitivityExecutePlan({
+        value: document.getElementById(GC.GESTURE_SENSITIVITY_ID).value,
+    });
+    if (!execute.shouldApply) return;
+    gestureSensitivity = execute.sensitivity;
     fetch('/api/app-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gesture_sensitivity: gestureSensitivity })
-    }).catch(error => console.error('Error updating gesture sensitivity:', error));
+        body: JSON.stringify(execute.persistApiBody),
+    }).catch((error) => console.error(execute.errorLogPrefix, error));
 }
 
 /**
@@ -9719,12 +9724,17 @@ function updateGestureSensitivity() {
  * @returns {*} Return value description
  */
 function updateGestureAction() {
-    gestureAction = document.getElementById('gestureAction').value;
+    const GC = _gestureControl();
+    const execute = GC.buildUpdateGestureActionExecutePlan({
+        value: document.getElementById(GC.GESTURE_ACTION_ID).value,
+    });
+    if (!execute.shouldApply) return;
+    gestureAction = execute.action;
     fetch('/api/app-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gesture_action: gestureAction })
-    }).catch(error => console.error('Error updating gesture action:', error));
+        body: JSON.stringify(execute.persistApiBody),
+    }).catch((error) => console.error(execute.errorLogPrefix, error));
 }
 
 // ===== PHASE 3 FEATURES: BATTERY SAVING MODE =====
@@ -9822,103 +9832,80 @@ let currentMapTheme =
  * @returns {void}
  */
 function setMapTheme(themeOrEvent) {
-    // Handle both string theme and event object
-    let theme = typeof themeOrEvent === 'string' ? themeOrEvent : (themeOrEvent?.target?.dataset?.theme || 'standard');
+    const MT = _mapTheme();
+    const execute = MT.buildSetMapThemeExecutePlan({
+        themeOrEvent,
+        currentMapTheme,
+        hasMap: !!map,
+        buildings3DEnabled: typeof buildings3DEnabled !== 'undefined' && buildings3DEnabled,
+        toAbs: window.__voyagrToAbsoluteOriginUrl || ((u) => u),
+        preferredFallbackStyleUrl: window.__voyagrPreferredFallbackStyleUrl,
+    });
+    if (!execute.shouldApply) return;
 
-    localStorage.setItem('mapTheme', theme);
+    localStorage.setItem(execute.storageKey, execute.storageValue);
 
-    // Update UI (map theme row only — not UI light/dark/auto)
-    const mapThemeRow = document.getElementById('mapThemeSelector');
+    const mapThemeRow = document.getElementById(execute.selectorId);
     if (mapThemeRow) {
         mapThemeRow.querySelectorAll('.theme-option').forEach((btn) => {
             btn.classList.remove('active');
         });
     }
+    const activeBtn = document.querySelector(execute.activeButtonSelector);
+    if (activeBtn) activeBtn.classList.add('active');
 
-    // Highlight the active map theme button
-    const activeBtn = document.querySelector(`#mapThemeSelector [data-theme="${theme}"]`);
-    if (activeBtn) {
-        activeBtn.classList.add('active');
+    if (!execute.hasMap) {
+        console.warn(execute.mapNotReadyLog);
+        currentMapTheme = execute.theme;
+        return;
     }
-
-    if (!map) {
-        console.warn('[setMapTheme] Map not initialized yet, skipping style change');
-        currentMapTheme = theme;
+    if (execute.skipStyleReload) {
+        console.log(execute.alreadyActiveLog);
         return;
     }
 
-    // Skip the style reload if we're setting the same theme that's already active
-    // (e.g. during loadAllSettings on first load — the style was just initialized).
-    if (theme === currentMapTheme) {
-        console.log('[setMapTheme] Theme already active, skipping redundant style reload');
-        return;
-    }
-
-    currentMapTheme = theme;
-
-    // MapLibre style switching — vector themes via /map/; satellite via static raster (Esri imagery)
-    const toAbs = window.__voyagrToAbsoluteOriginUrl || ((u) => u);
-    const satelliteRasterUrl = toAbs('/static/map/styles/satellite/style.json');
-    const styleUrls = {
-        'standard': '/map/styles/liberty/style.json',
-        'satellite': satelliteRasterUrl,
-        'dark': '/map/styles/positron/style.json'
-    };
-
-    // If core detected missing glyphs/labels and applied OSM raster fallback, use it for vector themes.
-    // Keep satellite as aerial imagery (also raster, works in PWA workers with absolute URLs).
-    if (window.__voyagrPreferredFallbackStyleUrl) {
-        styleUrls['standard'] = window.__voyagrPreferredFallbackStyleUrl;
-        styleUrls['dark'] = window.__voyagrPreferredFallbackStyleUrl;
-        styleUrls['satellite'] = satelliteRasterUrl;
-    }
-
-    // *** PWA / Web Worker fix (same approach as voyagr-core.js initializeMap) ***
-    // Resolve all internal URLs to absolute so the worker never sees relative URLs.
+    currentMapTheme = execute.theme;
     const resolveUrls = window.__voyagrResolveStyleUrls || ((s) => s);
+    const toAbs = window.__voyagrToAbsoluteOriginUrl || ((u) => u);
+    const chosenUrl = execute.stylePlan.chosenUrl;
 
-    const chosenUrl = styleUrls[theme] || styleUrls['standard'];
-
-    // Try to fetch and resolve the style synchronously (small JSON, fast).
     let resolvedStyle = null;
-    try {
-        const xhr = new XMLHttpRequest();
-        xhr.open('GET', toAbs(chosenUrl), false); // synchronous
-        xhr.send();
-        if (xhr.status === 200) {
-            resolvedStyle = JSON.parse(xhr.responseText);
-            resolveUrls(resolvedStyle);
+    if (execute.syncFetchStyle) {
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', chosenUrl, false);
+            xhr.send();
+            if (xhr.status === 200) {
+                resolvedStyle = JSON.parse(xhr.responseText);
+                resolveUrls(resolvedStyle);
+            }
+        } catch (e) {
+            console.warn(execute.syncFetchErrorLogPrefix, e.message);
         }
-    } catch (e) {
-        console.warn('[setMapTheme] Sync style fetch failed, using URL with transformRequest:', e.message);
     }
 
-    // Change map style
-    map.setStyle(resolvedStyle || toAbs(chosenUrl));
+    map.setStyle(resolvedStyle || chosenUrl);
 
-    // Re-add 3D buildings and road labels after style change (style resets layers)
     map.once('style.load', () => {
-        if (typeof buildings3DEnabled !== 'undefined' && buildings3DEnabled) {
+        if (execute.postStyleLoad.add3DBuildings) {
             MapLibreHelpers.add3DBuildings(map, {
                 heightMultiplier: buildings3DHeightMultiplier,
                 opacity: buildings3DOpacity
             });
         }
-        // Re-initialize road labels after theme change
-        if (typeof initializeRoadLabels === 'function') {
+        if (execute.postStyleLoad.reinitRoadLabels && typeof initializeRoadLabels === 'function') {
             initializeRoadLabels();
         }
     });
 
-    showStatus(`🗺️ Map theme changed to ${theme}`, 'success');
-    saveAllSettings();
+    showStatus(execute.statusMessage, execute.statusType);
+    if (execute.saveAllSettings) saveAllSettings();
 
-    // Save preference
     fetch('/api/app-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ map_theme: theme })
-    }).catch(error => console.error('Error updating map theme:', error));
+        body: JSON.stringify(execute.persistApiBody),
+    }).catch((error) => console.error('Error updating map theme:', error));
 }
 
 // ===== PHASE 3 FEATURES: ML PREDICTIONS =====
@@ -9999,28 +9986,22 @@ function toggleMLPredictions() {
 function warmPicovoiceStaticCache() {
     void (async function warm() {
         try {
-            if (!('serviceWorker' in navigator)) return;
-            if (!navigator.onLine) return;
-            const ctrl = navigator.serviceWorker.controller;
-            if (!ctrl) return;
-            const probeUrls = [
-                '/static/vendor/picovoice/porcupine-web.iife.js',
-                '/static/vendor/picovoice/web-voice-processor.iife.js',
-            ];
-            for (const u of probeUrls) {
+            const PW = _porcupineWake();
+            const plan = PW.buildWarmPicovoiceStaticCachePlan({
+                hasServiceWorker: 'serviceWorker' in navigator,
+                online: navigator.onLine,
+                controllerPresent: !!(navigator.serviceWorker && navigator.serviceWorker.controller),
+            });
+            if (!plan.shouldWarm) return;
+            for (const u of plan.probeUrls) {
                 const r = await fetch(u, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
                 if (!r || !r.ok) {
                     return;
                 }
             }
-            ctrl.postMessage({
-                type: 'WARM_STATIC_URLS',
-                urls: [
-                    '/static/vendor/picovoice/porcupine-web.iife.js',
-                    '/static/vendor/picovoice/web-voice-processor.iife.js',
-                    '/static/vendor/picovoice/porcupine_params.pv',
-                    '/static/vendor/picovoice/hey_satnav_wasm.ppn',
-                ],
+            navigator.serviceWorker.controller.postMessage({
+                type: plan.warmMessageType,
+                urls: plan.warmUrls,
             });
         } catch (_e) {
             /* ignore */
@@ -10549,20 +10530,21 @@ window.addEventListener('load', () => {
     initDeviceEnvironmentNotifications();
     // Show a volume reminder on app open (once per tab session).
     try {
-        const openVolumeHintKey = 'voyagr_volume_hint_on_open_shown';
-        const alreadyShown = sessionStorage.getItem(openVolumeHintKey) === 'true';
-        if (!alreadyShown) {
-            sessionStorage.setItem(openVolumeHintKey, 'true');
+        const openHint = _deviceEnvironment().buildOpenVolumeHintSchedulePlan({
+            alreadyShown: sessionStorage.getItem(_deviceEnvironment().OPEN_VOLUME_HINT_SESSION_KEY) === 'true',
+        });
+        if (openHint.shouldSchedule) {
+            sessionStorage.setItem(openHint.sessionStorageKey, openHint.sessionStorageValue);
             setTimeout(() => {
                 try {
                     showVolumeHintForNavigation();
                 } catch (e) {
-                    console.warn('[EnvHint] open volume hint:', e);
+                    console.warn(openHint.errorLogPrefix, e);
                 }
-            }, 1800);
+            }, openHint.delayMs);
         }
     } catch (e) {
-        console.warn('[EnvHint] open volume hint schedule:', e);
+        console.warn(_deviceEnvironment().buildOpenVolumeHintSchedulePlan().scheduleErrorLogPrefix, e);
     }
 });
 
@@ -11908,10 +11890,12 @@ window.addEventListener('load', () => {
     loadPorcupineWakeUi();
 
     void (async () => {
-        if (
-            localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true' &&
-            picovoiceClientConfigured()
-        ) {
+        const PW = _porcupineWake();
+        const autoStart = PW.buildPorcupineInitAutoStartPlan({
+            storageEnabled: localStorage.getItem(PW.VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true',
+            configured: picovoiceClientConfigured(),
+        });
+        if (autoStart.shouldStart) {
             await startPorcupineWakePipeline();
         }
     })();
@@ -14139,8 +14123,9 @@ function restoreUiStateAfterReload() {
  * @returns {*} Return value description
  */
 function saveAppState() {
+    const AS = _appState();
     try {
-        const state = {
+        const savePlan = AS.buildSaveAppStatePlan({
             preferences: {
                 tolls: isAvoidTollsEnabled() ? 'true' : 'false',
                 caz: localStorage.getItem('pref_caz'),
@@ -14152,7 +14137,7 @@ function saveAppState() {
                 railwayCrossingsAvoid: localStorage.getItem('pref_railwayCrossingsAvoid'),
                 potholes: localStorage.getItem('pref_potholes'),
                 debris: localStorage.getItem('pref_debris'),
-                gestureControl: localStorage.getItem('pref_gestureControl'),
+                gestureControl: localStorage.getItem('gestureEnabled'),
                 batterySaving: localStorage.getItem('pref_batterySaving'),
                 mapTheme: localStorage.getItem('mapTheme'),
                 mlPredictions: localStorage.getItem('mlPredictionsEnabled'),
@@ -14160,18 +14145,18 @@ function saveAppState() {
                 roundTrip: localStorage.getItem('pref_roundTrip'),
                 trafficAwareRouting: localStorage.getItem('pref_trafficAwareRouting'),
                 avoidRoadClosures: localStorage.getItem('pref_avoidRoadClosures'),
-                avoidIncidents: localStorage.getItem('pref_avoidIncidents')
+                avoidIncidents: localStorage.getItem('pref_avoidIncidents'),
             },
             ui: {
                 activeTab: typeof getCurrentVisibleTab === 'function' ? getCurrentVisibleTab() : 'navigation',
-                bottomSheetExpanded: typeof bottomSheetIsExpanded !== 'undefined' ? bottomSheetIsExpanded : true
+                bottomSheetExpanded: typeof bottomSheetIsExpanded !== 'undefined' ? bottomSheetIsExpanded : true,
             },
-            timestamp: Date.now()
-        };
-        localStorage.setItem('appState', JSON.stringify(state));
-        console.log('[PWA] App state saved');
+        });
+        if (!savePlan.shouldSave) return;
+        localStorage.setItem(savePlan.storageKey, JSON.stringify(savePlan.state));
+        console.log(savePlan.logMessage);
     } catch (e) {
-        console.log('[PWA] State save error:', e);
+        console.log(AS.buildSaveAppStatePlan().errorLogPrefix, e);
     }
 }
 
@@ -14181,29 +14166,31 @@ function saveAppState() {
  * @returns {*} Return value description
  */
 function restoreAppState() {
-    if (window.__voyagrAppStateRestored) {
+    const AS = _appState();
+    const orch = AS.buildRestoreAppStateOrchestrationPlan();
+    if (window[orch.restoredFlagProperty]) {
         return;
     }
-    window.__voyagrAppStateRestored = true;
+    window[orch.restoredFlagProperty] = true;
 
     try {
-        const saved = localStorage.getItem('appState');
-        if (saved) {
-            const state = JSON.parse(saved);
-            // Restore preferences
-            Object.keys(state.preferences || {}).forEach(key => {
-                if (state.preferences[key]) {
-                    localStorage.setItem('pref_' + key, state.preferences[key]);
-                }
-            });
-            if (state.ui) {
-                window.__voyagrPendingUiRestore = state.ui;
-            }
-            localStorage.removeItem('appState');
-            console.log('[PWA] App state restored');
+        const saved = localStorage.getItem(orch.storageKey);
+        if (!saved) return;
+
+        const state = JSON.parse(saved);
+        const execute = AS.buildRestoreAppStateExecutePlan(state);
+        if (!execute.shouldRestore) return;
+
+        (execute.storagePatches || []).forEach(({ key, value }) => {
+            localStorage.setItem(key, value);
+        });
+        if (execute.pendingUiRestore) {
+            window[orch.pendingUiRestoreProperty] = execute.pendingUiRestore;
         }
+        localStorage.removeItem(execute.removeAppStateKey);
+        console.log(execute.restoredLogMessage);
     } catch (e) {
-        console.log('[PWA] State restore error:', e);
+        console.log(AS.buildRestoreAppStateExecutePlan().errorLogPrefix, e);
     }
 }
 
