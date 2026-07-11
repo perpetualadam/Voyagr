@@ -80,4 +80,29 @@ describe('geocoding-locations module', () => {
             cached: true,
         });
     });
+
+    test('buildNominatimSearchUrl encodes query and limit', () => {
+        expect(GL.buildNominatimSearchUrl('https://nominatim.example/search', 'Leeds UK', 5))
+            .toBe('https://nominatim.example/search?q=Leeds%20UK&limit=5');
+    });
+
+    test('parseNominatimFetchPayload handles api errors, empty, and success', () => {
+        expect(GL.parseNominatimFetchPayload({ success: false, error: 'rate limit' }))
+            .toEqual({ ok: false, reason: 'api_error', message: 'rate limit' });
+        expect(GL.parseNominatimFetchPayload([])).toEqual({ ok: false, reason: 'empty' });
+        expect(GL.parseNominatimFetchPayload([{ lat: '51', lon: '-1', display_name: 'X' }]))
+            .toEqual({ ok: true, geocoded: { lat: 51, lon: -1, display_name: 'X' } });
+    });
+
+    test('buildGeocodeEndpointPlan prefers stored dataset coords', () => {
+        const stored = { lat: 51.5, lon: -0.1, display_name: 'London', cached: true };
+        expect(GL.buildGeocodeEndpointPlan(stored, 'typed')).toEqual({
+            action: 'use_stored',
+            result: stored,
+        });
+        expect(GL.buildGeocodeEndpointPlan(null, 'Leeds')).toEqual({
+            action: 'fetch',
+            address: 'Leeds',
+        });
+    });
 });

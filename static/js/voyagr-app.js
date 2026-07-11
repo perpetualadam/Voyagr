@@ -2025,9 +2025,7 @@ async function persistCompletedTrip(route) {
     }
 }
 
-function mergeServerAndLocalTrips(serverTrips, rawLocal) {
-    return _tripHistory().mergeServerAndLocalTrips(serverTrips, rawLocal);
-}
+// mergeServerAndLocalTrips — call _tripHistory() at use sites.
 
 function removeLocalTripByLocalId(localId) {
     const raw = loadRawLocalTrips().filter((e) => e.localId !== localId);
@@ -2072,7 +2070,7 @@ async function loadTripHistory() {
         const { res, data } = await fetchJsonWithAuth('/api/trip-history');
 
         if (res.status === 401) {
-            allTrips = mergeServerAndLocalTrips([], loadRawLocalTrips());
+            allTrips = _tripHistory().mergeServerAndLocalTrips([], loadRawLocalTrips());
             displayTripHistory(allTrips);
             const list = document.getElementById('tripHistoryList');
             if (list && list.firstChild) {
@@ -2087,10 +2085,10 @@ async function loadTripHistory() {
         }
 
         if (data && data.success && Array.isArray(data.trips)) {
-            allTrips = mergeServerAndLocalTrips(data.trips, loadRawLocalTrips());
+            allTrips = _tripHistory().mergeServerAndLocalTrips(data.trips, loadRawLocalTrips());
             displayTripHistory(allTrips);
         } else {
-            allTrips = mergeServerAndLocalTrips([], loadRawLocalTrips());
+            allTrips = _tripHistory().mergeServerAndLocalTrips([], loadRawLocalTrips());
             displayTripHistory(allTrips);
         }
     } catch (error) {
@@ -14739,7 +14737,6 @@ async function geocodeAddress(address) {
         return coordResult;
     }
 
-    // Check if Plus Codes are enabled and input is a Plus Code
     const plusCodesEnabled = localStorage.getItem('googlePlusCodesEnabled') === 'true';
     if (plusCodesEnabled && typeof GooglePlusCodesService !== 'undefined') {
         try {
@@ -14752,7 +14749,6 @@ async function geocodeAddress(address) {
             }
         } catch (error) {
             console.log('[Geocoding] Plus Code decode error:', error.message);
-            // Fall through to normal geocoding
         }
     }
 
@@ -14764,7 +14760,8 @@ async function geocodeAddress(address) {
 
     try {
         console.log('[Geocoding] Fetching:', trimmedAddress);
-        const response = await fetch(`${NOMINATIM_API}?q=${encodeURIComponent(trimmedAddress)}&limit=8`, {
+        const url = GL.buildNominatimSearchUrl(NOMINATIM_API, trimmedAddress, 8);
+        const response = await fetch(url, {
             headers: {
                 'User-Agent': 'Voyagr-PWA/1.0'
             }
@@ -14774,26 +14771,20 @@ async function geocodeAddress(address) {
             throw new Error(`API error: ${response.status}`);
         }
 
-        const data = await response.json();
-
-        if (data && typeof data === 'object' && data.success === false && data.error) {
-            throw new Error(data.error);
-        }
-        if (!Array.isArray(data) || data.length === 0) {
+        const parsed = GL.parseNominatimFetchPayload(await response.json());
+        if (!parsed.ok) {
+            if (parsed.reason === 'api_error') {
+                throw new Error(parsed.message);
+            }
             console.log('[Geocoding] No results for:', trimmedAddress);
             return null;
         }
 
-        const geocoded = GL.parseNominatimResultRow(data[0]);
-        if (!geocoded) {
-            return null;
-        }
-
-        geocodingCache = GL.writeGeocodeCacheEntry(geocodingCache, trimmedAddress, geocoded);
+        geocodingCache = GL.writeGeocodeCacheEntry(geocodingCache, trimmedAddress, parsed.geocoded);
         saveGeocodeCache();
 
-        console.log('[Geocoding] Success:', trimmedAddress, '→', geocoded.lat, geocoded.lon);
-        return { ...geocoded, cached: false };
+        console.log('[Geocoding] Success:', trimmedAddress, '→', parsed.geocoded.lat, parsed.geocoded.lon);
+        return { ...parsed.geocoded, cached: false };
     } catch (error) {
         console.log('[Geocoding] Error:', error.message);
         return null;
@@ -14809,13 +14800,16 @@ async function geocodeLocations(startAddress, endAddress) {
         const startInput = document.getElementById('start');
         const endInput = document.getElementById('end');
 
-        let startResult, endResult;
-
-        startResult = GL.readStoredLocationFromDataset(startInput.dataset, startAddress);
-        if (startResult) {
+        const startPlan = GL.buildGeocodeEndpointPlan(
+            GL.readStoredLocationFromDataset(startInput.dataset, startAddress),
+            startAddress
+        );
+        let startResult;
+        if (startPlan.action === 'use_stored') {
+            startResult = startPlan.result;
             console.log('[Geocoding] Using stored coordinates for start:', startResult);
         } else {
-            startResult = await geocodeAddress(startAddress);
+            startResult = await geocodeAddress(startPlan.address);
             if (!startResult) {
                 showStatus(GL.buildGeocodeNotFoundStatusMessage('start', startAddress), 'error');
                 isGeocoding = false;
@@ -14823,11 +14817,16 @@ async function geocodeLocations(startAddress, endAddress) {
             }
         }
 
-        endResult = GL.readStoredLocationFromDataset(endInput.dataset, endAddress);
-        if (endResult) {
+        const endPlan = GL.buildGeocodeEndpointPlan(
+            GL.readStoredLocationFromDataset(endInput.dataset, endAddress),
+            endAddress
+        );
+        let endResult;
+        if (endPlan.action === 'use_stored') {
+            endResult = endPlan.result;
             console.log('[Geocoding] Using stored coordinates for end:', endResult);
         } else {
-            endResult = await geocodeAddress(endAddress);
+            endResult = await geocodeAddress(endPlan.address);
             if (!endResult) {
                 showStatus(GL.buildGeocodeNotFoundStatusMessage('end', endAddress), 'error');
                 isGeocoding = false;

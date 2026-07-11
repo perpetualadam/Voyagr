@@ -220,6 +220,52 @@
         return cache;
     }
 
+    /**
+     * Build a Nominatim search URL for a free-text query.
+     * @param {string} baseUrl
+     * @param {string} query
+     * @param {number} [limit=8]
+     * @returns {string}
+     */
+    function buildNominatimSearchUrl(baseUrl, query, limit) {
+        var q = encodeURIComponent(String(query || ''));
+        var lim = Math.max(1, parseInt(limit, 10) || 8);
+        var base = String(baseUrl || '').replace(/\/$/, '');
+        return base + '?q=' + q + '&limit=' + lim;
+    }
+
+    /**
+     * Parse a Nominatim JSON payload into a geocode result or failure reason.
+     * @param {*} data
+     * @returns {{ ok: true, geocoded: { lat: number, lon: number, display_name: string } }|{ ok: false, reason: string, message?: string }}
+     */
+    function parseNominatimFetchPayload(data) {
+        if (data && typeof data === 'object' && data.success === false && data.error) {
+            return { ok: false, reason: 'api_error', message: String(data.error) };
+        }
+        if (!Array.isArray(data) || data.length === 0) {
+            return { ok: false, reason: 'empty' };
+        }
+        var geocoded = parseNominatimResultRow(data[0]);
+        if (!geocoded) {
+            return { ok: false, reason: 'parse_fail' };
+        }
+        return { ok: true, geocoded: geocoded };
+    }
+
+    /**
+     * Decide whether to use stored dataset coords or fetch a free-text address.
+     * @param {{ lat: number, lon: number, display_name: string, cached?: boolean }|null} storedFromDataset
+     * @param {string} address
+     * @returns {{ action: 'use_stored', result: object }|{ action: 'fetch', address: string }}
+     */
+    function buildGeocodeEndpointPlan(storedFromDataset, address) {
+        if (storedFromDataset) {
+            return { action: 'use_stored', result: storedFromDataset };
+        }
+        return { action: 'fetch', address: String(address || '') };
+    }
+
     var api = {
         readStoredLocationFromDataset: readStoredLocationFromDataset,
         getGeocodeLoadingStatusMessage: getGeocodeLoadingStatusMessage,
@@ -237,6 +283,9 @@
         getInvalidCoordinatesStatusMessage: getInvalidCoordinatesStatusMessage,
         readGeocodeCacheHit: readGeocodeCacheHit,
         writeGeocodeCacheEntry: writeGeocodeCacheEntry,
+        buildNominatimSearchUrl: buildNominatimSearchUrl,
+        parseNominatimFetchPayload: parseNominatimFetchPayload,
+        buildGeocodeEndpointPlan: buildGeocodeEndpointPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
