@@ -880,6 +880,45 @@
         };
     }
 
+    /**
+     * Execute plan for updateRouteOnMap orchestration in voyagr-app.
+     * @param {Object} statePlan - from buildRouteMapUpdateStatePlan
+     * @returns {Object}
+     */
+    function buildUpdateRouteOnMapExecutePlan(statePlan) {
+        statePlan = statePlan || {};
+        return {
+            resetVoiceAnnouncementState: true,
+            removeExistingRouteLayer: true,
+            polylineDecodePrecision: statePlan.polylineDecodePrecision || 6,
+            mountActiveNavRoute: true,
+            bringNavRouteAboveTraffic: true,
+            applyRouteMapUpdateState: true,
+            polylineLogPrefix: '[Reroute] Route polyline decoded:',
+        };
+    }
+
+    /**
+     * Post-apply plan after route map state patches are applied.
+     * @param {Object} plan - from buildRouteMapUpdateStatePlan
+     * @param {Object} [input]
+     * @param {number|null} [input.currentLat]
+     * @param {number|null} [input.currentLon]
+     * @returns {Object}
+     */
+    function buildRouteMapUpdatePostApplyPlan(plan, input) {
+        plan = plan || {};
+        input = input || {};
+        var hasGps = input.currentLat != null && input.currentLon != null;
+        return {
+            refreshTurnWidget: hasGps,
+            fetchRoadName: hasGps,
+            updateTripInfo: true,
+            patchLastCalculatedRoute: true,
+            completeLog: plan.completeLog,
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         normalizeAccuracy: normalizeAccuracy,
@@ -912,6 +951,8 @@
         POST_REROUTE_GRACE_MS: POST_REROUTE_GRACE_MS,
         resolveRouteManeuversFromPayload: resolveRouteManeuversFromPayload,
         buildRouteMapUpdateStatePlan: buildRouteMapUpdateStatePlan,
+        buildUpdateRouteOnMapExecutePlan: buildUpdateRouteOnMapExecutePlan,
+        buildRouteMapUpdatePostApplyPlan: buildRouteMapUpdatePostApplyPlan,
     };
 
     // CommonJS (Jest) export.

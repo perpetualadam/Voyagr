@@ -419,6 +419,67 @@
         };
     }
 
+    var OFFLINE_BANNER_BODY_CLASS = 'voyagr-has-offline-banner';
+    var OFFLINE_BANNER_REMOVE_DELAY_MS = 350;
+
+    /**
+     * Execute plan for mounting the offline connectivity banner.
+     * @returns {Object}
+     */
+    function buildMountOfflineBannerExecutePlan() {
+        return {
+            shouldMount: true,
+            bannerId: OFFLINE_BANNER_ID,
+            skipIfExists: true,
+            prependToBody: true,
+            bodyClass: OFFLINE_BANNER_BODY_CLASS,
+            useOfflineBannerStyle: true,
+            useOfflineBannerInnerHtml: true,
+        };
+    }
+
+    /**
+     * Execute plan for removing the offline connectivity banner.
+     * @returns {Object}
+     */
+    function buildUnmountOfflineBannerExecutePlan() {
+        return {
+            shouldUnmount: true,
+            bannerId: OFFLINE_BANNER_ID,
+            hideTransform: 'translateY(-100%)',
+            removeDelayMs: OFFLINE_BANNER_REMOVE_DELAY_MS,
+            removeBodyClass: OFFLINE_BANNER_BODY_CLASS,
+        };
+    }
+
+    /**
+     * Plan for browser online/offline connectivity events.
+     * @param {boolean} isOffline
+     * @returns {Object}
+     */
+    function buildOfflineConnectivityEventPlan(isOffline) {
+        if (isOffline) {
+            return {
+                action: 'offline',
+                setOfflineFlag: true,
+                mountBanner: true,
+                logMessage: '[Offline] Network lost',
+                statusMessage: '📡 Offline mode — using cached data',
+                statusType: 'warning',
+            };
+        }
+        return {
+            action: 'online',
+            setOfflineFlag: false,
+            unmountBanner: true,
+            logMessage: '[Offline] Network restored',
+            statusMessage: '✅ Back online',
+            statusType: 'success',
+            recoverMap: true,
+            recoverMapReason: 'window online',
+        };
+    }
+
     var api = {
         OFFLINE_BANNER_ID: OFFLINE_BANNER_ID,
         RESUME_NAV_BANNER_ID: RESUME_NAV_BANNER_ID,
@@ -454,6 +515,10 @@
         buildRouteCorridorTileUrlPlan: buildRouteCorridorTileUrlPlan,
         buildCollectVectorTileTemplatesPreflightPlan: buildCollectVectorTileTemplatesPreflightPlan,
         buildPrecacheRouteTilesExecutePlan: buildPrecacheRouteTilesExecutePlan,
+        OFFLINE_BANNER_BODY_CLASS: OFFLINE_BANNER_BODY_CLASS,
+        buildMountOfflineBannerExecutePlan: buildMountOfflineBannerExecutePlan,
+        buildUnmountOfflineBannerExecutePlan: buildUnmountOfflineBannerExecutePlan,
+        buildOfflineConnectivityEventPlan: buildOfflineConnectivityEventPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

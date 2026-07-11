@@ -297,6 +297,29 @@
     }
 
     /**
+     * Runtime collect plan for voyagr-app buildRouteRequest wrapper.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildRouteRequestCollectPlan(input) {
+        input = input || {};
+        return {
+            storage: input.storage,
+            opts: {
+                startLat: input.startLat,
+                startLon: input.startLon,
+                destination: input.destination,
+                avoidPoints: input.avoidPoints,
+                routingMode: input.routingMode || 'auto',
+                vehicleType: input.vehicleType || 'petrol_diesel',
+                costParams: input.costParams,
+                isAvoidTollsEnabled: input.isAvoidTollsEnabled,
+                routePrefs: input.routePrefs || {},
+            },
+        };
+    }
+
+    /**
      * `/api/route` body for the driving leg of multimodal parking routing.
      * @param {Object} o
      * @returns {Object}
@@ -766,6 +789,7 @@
         formatCoordPair: formatCoordPair,
         buildRerouteRequestBody: buildRerouteRequestBody,
         buildAutomaticRerouteRequestPlan: buildAutomaticRerouteRequestPlan,
+        buildRouteRequestCollectPlan: buildRouteRequestCollectPlan,
         buildMultimodalDrivingLegBody: buildMultimodalDrivingLegBody,
         buildMultimodalWalkingLegBody: buildMultimodalWalkingLegBody,
         mapViaPointsForApi: mapViaPointsForApi,

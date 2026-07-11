@@ -25,6 +25,20 @@ describe('offline-navigation module', () => {
         expect(html).toContain('resumeNavYes');
         expect(html).toContain('resumeNavNo');
     });
+
+    test('offline banner mount/unmount and connectivity event plans', () => {
+        const mount = OFF.buildMountOfflineBannerExecutePlan();
+        expect(mount.bannerId).toBe(OFF.OFFLINE_BANNER_ID);
+        expect(mount.bodyClass).toBe(OFF.OFFLINE_BANNER_BODY_CLASS);
+
+        const offline = OFF.buildOfflineConnectivityEventPlan(true);
+        expect(offline.action).toBe('offline');
+        expect(offline.mountBanner).toBe(true);
+
+        const online = OFF.buildOfflineConnectivityEventPlan(false);
+        expect(online.action).toBe('online');
+        expect(online.recoverMap).toBe(true);
+    });
 });
 
 describe('offline route persistence helpers', () => {

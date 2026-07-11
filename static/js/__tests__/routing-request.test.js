@@ -587,3 +587,21 @@ describe('buildAutomaticRerouteRequestPlan', () => {
         expect(body.avoid_tolls).toBe(true);
     });
 });
+
+describe('buildRouteRequestCollectPlan', () => {
+    test('normalises wrapper inputs for buildAutomaticRerouteRequestPlan', () => {
+        const storage = mockStorage({});
+        const collect = RR.buildRouteRequestCollectPlan({
+            storage,
+            startLat: 51.5,
+            startLon: -0.1,
+            destination: '52,0',
+            avoidPoints: [{ lat: 51.6, lon: 0 }],
+            vehicleType: 'electric',
+        });
+        const body = RR.buildAutomaticRerouteRequestPlan(collect.storage, collect.opts);
+        expect(body.start).toBe('51.5,-0.1');
+        expect(body.end).toBe('52,0');
+        expect(collect.opts.vehicleType).toBe('electric');
+    });
+});

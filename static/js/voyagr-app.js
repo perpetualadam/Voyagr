@@ -4056,18 +4056,8 @@ function updateTrafficConditions() {
  * @param {*} data - Parameter description
  * @returns {*} Return value description
  */
-function displayTrafficUpdate(data) {
-    const TC = _trafficChange();
-    const timeStr = new Date().toLocaleTimeString();
-    const execute = TC.buildDisplayTrafficUpdateExecutePlan(
-        data,
-        window.lastCalculatedRoute,
-        {
-            convertDistance,
-            distUnit: getDistanceUnit(),
-        },
-        timeStr
-    );
+function applyDisplayTrafficUpdateFromPlan(execute) {
+    if (!execute) return;
 
     if (execute.shouldUpdateStatusElement) {
         const trafficStatus = document.getElementById(execute.trafficStatusElementId);
@@ -4076,14 +4066,40 @@ function displayTrafficUpdate(data) {
 
     if (execute.durationChanged) {
         showStatus(execute.durationChangedStatusMessage, execute.durationChangedStatusType);
-        window.lastCalculatedRoute = Object.assign({}, window.lastCalculatedRoute, execute.patchLastCalculatedRoute);
     } else {
         showStatus(execute.unchangedStatusMessage, execute.unchangedStatusType);
-        window.lastCalculatedRoute.traffic_level = execute.patchLastCalculatedRoute.traffic_level;
-        window.lastCalculatedRoute.updated_at = execute.patchLastCalculatedRoute.updated_at;
+    }
+
+    if (window.lastCalculatedRoute && execute.patchLastCalculatedRoute) {
+        if (execute.lastRoutePatchMode === 'merge') {
+            window.lastCalculatedRoute = Object.assign(
+                {},
+                window.lastCalculatedRoute,
+                execute.patchLastCalculatedRoute
+            );
+        } else if (execute.lastRoutePatchMode === 'mutate' && execute.mutateFieldKeys) {
+            execute.mutateFieldKeys.forEach((key) => {
+                if (execute.patchLastCalculatedRoute[key] !== undefined) {
+                    window.lastCalculatedRoute[key] = execute.patchLastCalculatedRoute[key];
+                }
+            });
+        }
     }
 
     console.log(execute.detailsLogPrefix, execute.detailsLogMessage);
+}
+
+function displayTrafficUpdate(data) {
+    const execute = _trafficChange().buildDisplayTrafficUpdateExecutePlan(
+        data,
+        window.lastCalculatedRoute,
+        {
+            convertDistance,
+            distUnit: getDistanceUnit(),
+        },
+        new Date().toLocaleTimeString()
+    );
+    applyDisplayTrafficUpdateFromPlan(execute);
 }
 
 // Auto-update traffic every 5 minutes during navigation
@@ -6064,8 +6080,9 @@ function resolveNavigationDestination() {
  * Build route request with current hazard avoidance settings
  */
 function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) {
-    const routePrefs = (typeof getRoutePreferences === 'function') ? getRoutePreferences() : {};
-    return _routingRequest().buildAutomaticRerouteRequestPlan(localStorage, {
+    const RR = _routingRequest();
+    const collect = RR.buildRouteRequestCollectPlan({
+        storage: localStorage,
         startLat,
         startLon,
         destination,
@@ -6074,8 +6091,9 @@ function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) 
         vehicleType: currentVehicleType || 'petrol_diesel',
         costParams: getRouteCostParams(currentVehicleType),
         isAvoidTollsEnabled,
-        routePrefs,
+        routePrefs: (typeof getRoutePreferences === 'function') ? getRoutePreferences() : {},
     });
+    return RR.buildAutomaticRerouteRequestPlan(collect.storage, collect.opts);
 }
 
 /**
@@ -6157,26 +6175,29 @@ function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
     rerouteInProgress = dev.rerouteInProgress;
     if (dev.clearFailureRetries) clearRerouteFailureRetries();
 
-    if (currentLat && currentLon) {
+    const post = _rerouteDecision().buildRouteMapUpdatePostApplyPlan(plan, {
+        currentLat,
+        currentLon,
+    });
+    if (post.refreshTurnWidget) {
         updateTurnWidgetFromPosition(currentLat, currentLon);
+    }
+    if (post.fetchRoadName) {
         fetchRoadNameThrottled(currentLat, currentLon);
     }
-
-    updateTripInfo(newRoute.distance_km, newRoute.duration_minutes, newRoute.fuel_cost, newRoute.toll_cost);
-    window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
-    console.log(plan.completeLog);
+    if (post.updateTripInfo) {
+        updateTripInfo(newRoute.distance_km, newRoute.duration_minutes, newRoute.fuel_cost, newRoute.toll_cost);
+    }
+    if (post.patchLastCalculatedRoute) {
+        window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
+    }
+    if (post.completeLog) console.log(post.completeLog);
 }
 
 /**
  * Update route on map with new route data
  */
 function updateRouteOnMap(newRoute) {
-    resetVoiceAnnouncementStateForNewRoute();
-
-    if (routeLayer && typeof routeLayer.remove === 'function') {
-        routeLayer.remove();
-    }
-
     const RD = _rerouteDecision();
     const plan = RD.buildRouteMapUpdateStatePlan(newRoute, window.lastCalculatedRoute, {
         now: Date.now(),
@@ -6184,18 +6205,33 @@ function updateRouteOnMap(newRoute) {
         convertDistance,
         distUnit: getDistanceUnit(),
     });
+    const execute = RD.buildUpdateRouteOnMapExecutePlan(plan);
 
-    routePolyline = decodePolyline(newRoute.geometry, plan.polylineDecodePrecision);
-    console.log(`[Reroute] Route polyline decoded: ${routePolyline.length} points`);
+    if (execute.resetVoiceAnnouncementState) {
+        resetVoiceAnnouncementStateForNewRoute();
+    }
 
-    const mount = _routeSelection().buildNavActiveRouteLayerMountPlan({
-        routePolyline,
-        navRouteColor: navActiveRouteColor(),
-    });
-    routeLayer = MapLibreHelpers.addPolyline(map, mount.polyline, mount.style);
-    bringNavRouteAboveTrafficEdges();
+    if (execute.removeExistingRouteLayer && routeLayer && typeof routeLayer.remove === 'function') {
+        routeLayer.remove();
+    }
 
-    applyRouteMapUpdateStateFromPlan(plan, newRoute);
+    routePolyline = decodePolyline(newRoute.geometry, execute.polylineDecodePrecision);
+    console.log(`${execute.polylineLogPrefix} ${routePolyline.length} points`);
+
+    if (execute.mountActiveNavRoute) {
+        const mount = _routeSelection().buildNavActiveRouteLayerMountPlan({
+            routePolyline,
+            navRouteColor: navActiveRouteColor(),
+        });
+        routeLayer = MapLibreHelpers.addPolyline(map, mount.polyline, mount.style);
+    }
+    if (execute.bringNavRouteAboveTraffic) {
+        bringNavRouteAboveTrafficEdges();
+    }
+
+    if (execute.applyRouteMapUpdateState) {
+        applyRouteMapUpdateStateFromPlan(plan, newRoute);
+    }
 }
 
 /**
@@ -10520,45 +10556,61 @@ let _voyagrIsOffline = !navigator.onLine;
 
 function _createOfflineBanner() {
     const OFF = _offlineNavigation();
-    if (document.getElementById(OFF.OFFLINE_BANNER_ID)) return;
+    const execute = OFF.buildMountOfflineBannerExecutePlan();
+    if (!execute.shouldMount) return;
+    if (execute.skipIfExists && document.getElementById(execute.bannerId)) return;
+
     const banner = document.createElement('div');
-    banner.id = OFF.OFFLINE_BANNER_ID;
-    banner.style.cssText = OFF.getOfflineBannerStyleCssText();
-    banner.innerHTML = OFF.buildOfflineBannerInnerHtml();
-    document.body.prepend(banner);
-    // Push the top-anchored nav widgets (turn card + Then row + lane guidance, and the
-    // speed widget) down so this full-width banner doesn't cover them (see CSS).
-    document.body.classList.add('voyagr-has-offline-banner');
+    banner.id = execute.bannerId;
+    if (execute.useOfflineBannerStyle) {
+        banner.style.cssText = OFF.getOfflineBannerStyleCssText();
+    }
+    if (execute.useOfflineBannerInnerHtml) {
+        banner.innerHTML = OFF.buildOfflineBannerInnerHtml();
+    }
+    if (execute.prependToBody) {
+        document.body.prepend(banner);
+    }
+    if (execute.bodyClass) {
+        document.body.classList.add(execute.bodyClass);
+    }
 }
 
 function _removeOfflineBanner() {
     const OFF = _offlineNavigation();
-    const banner = document.getElementById(OFF.OFFLINE_BANNER_ID);
+    const execute = OFF.buildUnmountOfflineBannerExecutePlan();
+    if (!execute.shouldUnmount) return;
+
+    const banner = document.getElementById(execute.bannerId);
     if (banner) {
-        banner.style.transform = 'translateY(-100%)';
-        setTimeout(() => banner.remove(), 350);
+        banner.style.transform = execute.hideTransform;
+        setTimeout(() => banner.remove(), execute.removeDelayMs);
     }
-    document.body.classList.remove('voyagr-has-offline-banner');
+    if (execute.removeBodyClass) {
+        document.body.classList.remove(execute.removeBodyClass);
+    }
 }
 
 function _handleOffline() {
-    _voyagrIsOffline = true;
-    console.log('[Offline] Network lost');
-    _createOfflineBanner();
-    if (typeof showStatus === 'function') {
-        showStatus('📡 Offline mode — using cached data', 'warning');
+    const event = _offlineNavigation().buildOfflineConnectivityEventPlan(true);
+    if (event.setOfflineFlag) _voyagrIsOffline = true;
+    console.log(event.logMessage);
+    if (event.mountBanner) _createOfflineBanner();
+    if (typeof showStatus === 'function' && event.statusMessage) {
+        showStatus(event.statusMessage, event.statusType);
     }
 }
 
 function _handleOnline() {
-    _voyagrIsOffline = false;
-    console.log('[Offline] Network restored');
-    _removeOfflineBanner();
-    if (typeof showStatus === 'function') {
-        showStatus('✅ Back online', 'success');
+    const event = _offlineNavigation().buildOfflineConnectivityEventPlan(false);
+    if (event.setOfflineFlag === false) _voyagrIsOffline = false;
+    console.log(event.logMessage);
+    if (event.unmountBanner) _removeOfflineBanner();
+    if (typeof showStatus === 'function' && event.statusMessage) {
+        showStatus(event.statusMessage, event.statusType);
     }
-    if (typeof window.__voyagrMapRecoverAfterNetworkEvent === 'function') {
-        window.__voyagrMapRecoverAfterNetworkEvent('window online');
+    if (event.recoverMap && typeof window.__voyagrMapRecoverAfterNetworkEvent === 'function') {
+        window.__voyagrMapRecoverAfterNetworkEvent(event.recoverMapReason);
     }
 }
 

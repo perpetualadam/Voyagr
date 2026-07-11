@@ -458,6 +458,21 @@ describe('reroute retry and notification helpers', () => {
         expect(plan.lastCalculatedRoutePatch.distance).toBe('10.0 km');
     });
 
+    test('buildUpdateRouteOnMapExecutePlan and post-apply plan', () => {
+        const state = RD.buildRouteMapUpdateStatePlan(
+            { geometry: 'abc', distance_km: 5, duration_minutes: 10 },
+            {},
+            { now: 1000 }
+        );
+        const execute = RD.buildUpdateRouteOnMapExecutePlan(state);
+        expect(execute.mountActiveNavRoute).toBe(true);
+        expect(execute.polylineDecodePrecision).toBe(6);
+
+        const post = RD.buildRouteMapUpdatePostApplyPlan(state, { currentLat: 51.5, currentLon: -0.1 });
+        expect(post.refreshTurnWidget).toBe(true);
+        expect(post.updateTripInfo).toBe(true);
+    });
+
     test('buildRerouteLogSettingsSnapshot uses route-prefs readers', () => {
         const storage = {
             getItem: (key) => {

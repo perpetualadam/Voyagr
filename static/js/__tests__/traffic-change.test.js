@@ -257,6 +257,9 @@ describe('auto traffic interval dispatch plans', () => {
             '12:00'
         );
         expect(same.durationChanged).toBe(false);
+        expect(same.lastRoutePatchMode).toBe('mutate');
+        expect(same.mutateFieldKeys).toEqual(['traffic_level', 'updated_at']);
+        expect(changed.lastRoutePatchMode).toBe('merge');
     });
 
     test('buildStartTrafficMonitoringExecutePlan clears existing interval and uses default cadence', () => {

@@ -404,6 +404,8 @@
                 updated_at: new Date().toISOString(),
                 distance_km: data.updated_distance_km || lastCalculatedRoute.distance_km,
             },
+            lastRoutePatchMode: durationChanged ? 'merge' : 'mutate',
+            mutateFieldKeys: durationChanged ? [] : ['traffic_level', 'updated_at'],
             detailsLogMessage: [
                 '🚦 Traffic Level: ' + (data.traffic_level || ''),
                 '📏 Distance: ' + distanceText + ' ' + (fmt.distUnit || ''),
