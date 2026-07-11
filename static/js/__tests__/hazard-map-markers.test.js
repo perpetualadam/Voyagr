@@ -77,4 +77,18 @@ describe('hazard-map-markers module', () => {
         expect(plan.logMessage).toContain('1 total');
         expect(HM.buildDisplayAllRouteHazardsPlan([{ hazards: [] }]).shouldDisplay).toBe(false);
     });
+
+    test('buildDisplayHazardMarkersPlan orchestrates marker mount specs', () => {
+        const plan = HM.buildDisplayHazardMarkersPlan([
+            { lat: 51.5, lon: -0.1, type: 'camera', description: 'Speed' },
+        ]);
+        expect(plan.shouldDisplay).toBe(true);
+        expect(plan.markerCount).toBe(1);
+        expect(plan.clearExisting).toBe(true);
+        expect(plan.successLogMessage).toContain('1');
+
+        const empty = HM.buildDisplayHazardMarkersPlan([]);
+        expect(empty.shouldDisplay).toBe(false);
+        expect(empty.emptyLogMessage).toContain('No hazards');
+    });
 });

@@ -128,6 +128,41 @@
     }
 
     /**
+     * Hazard preference values for settings snapshot from storage reads.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.avoidTolls]
+     * @param {function(string): string|null|undefined} [opts.getStorageItem]
+     * @returns {Object}
+     */
+    function buildSettingsHazardPreferencesPlan(opts) {
+        opts = opts || {};
+        var get = opts.getStorageItem || function () { return null; };
+        return {
+            avoidTolls: !!opts.avoidTolls,
+            avoidCAZ: get('pref_caz') !== 'false',
+            avoidCameras: get('pref_cameras') !== 'false',
+            avoidTrafficLights: get('pref_trafficLightsAvoid') !== 'false',
+            avoidRailwayCrossings: get('pref_railwayCrossingsAvoid') !== 'false',
+        };
+    }
+
+    /**
+     * Merge settings form fragments into snapshot input form state.
+     * @param {Object} fragments
+     * @returns {Object}
+     */
+    function buildSettingsFormStateInputPlan(fragments) {
+        fragments = fragments || {};
+        return {
+            routePreferences: fragments.routePreferences || {},
+            hazardPreferences: fragments.hazardPreferences || buildSettingsHazardPreferencesPlan({}),
+            parkingPreferences: fragments.parkingPreferences || {},
+            multiDropPreferences: fragments.multiDropPreferences || {},
+            mapTheme: fragments.mapTheme != null ? fragments.mapTheme : 'standard',
+        };
+    }
+
+    /**
      * Build localStorage patches and runtime variable updates from a saved snapshot.
      * @param {Object|null|undefined} settings
      * @returns {{ found: boolean, localStorage?: Object, runtime?: Object }}
@@ -695,6 +730,8 @@
         buildSettingsSnapshot: buildSettingsSnapshot,
         buildSettingsSnapshotInputPlan: buildSettingsSnapshotInputPlan,
         buildSettingsSavePlan: buildSettingsSavePlan,
+        buildSettingsHazardPreferencesPlan: buildSettingsHazardPreferencesPlan,
+        buildSettingsFormStateInputPlan: buildSettingsFormStateInputPlan,
         buildSettingsRestorePlan: buildSettingsRestorePlan,
         isRecognisedSettingsSnapshot: isRecognisedSettingsSnapshot,
         buildSettingsExportPlan: buildSettingsExportPlan,

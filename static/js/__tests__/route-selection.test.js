@@ -577,6 +577,34 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(plan.recentDestinations).toHaveLength(1);
     });
 
+    test('buildCalculateRouteIdleUiExecutePlan wraps apply plan with execute flags', () => {
+        const apply = RS.buildCalculateRouteIdleUiApplyPlan({
+            notification: { title: 'Ready', message: 'Go', type: 'success' },
+        });
+        const execute = RS.buildCalculateRouteIdleUiExecutePlan(apply);
+        expect(execute.shouldExecute).toBe(true);
+        expect(execute.hideRouteProgressBar).toBe(true);
+        expect(execute.updateArButtonVisibility).toBe(true);
+        expect(execute.notification.title).toBe('Ready');
+    });
+
+    test('buildInNavRerouteOutcomeExecutePlan gates on active route', () => {
+        const dispatch = RS.buildInNavRerouteDispatchPlan(
+            { name: 'Fastest', duration_minutes: 20 },
+            { routes: [{ name: 'Fastest' }] },
+            '51.5,-0.1',
+            'London'
+        );
+        const ok = RS.buildInNavRerouteOutcomeExecutePlan(dispatch, { name: 'Fastest', geometry: 'abc' });
+        expect(ok.shouldApply).toBe(true);
+        expect(ok.updateRouteOnMap).toBe(true);
+        expect(ok.statusMessage).toBeTruthy();
+
+        const fail = RS.buildInNavRerouteOutcomeExecutePlan(dispatch, null);
+        expect(fail.shouldApply).toBe(false);
+        expect(fail.noRouteErrorMessage).toContain('No route');
+    });
+
     test('buildRecalculateRouteWithPreferencesPlan guards missing route', () => {
         expect(RS.buildRecalculateRouteWithPreferencesPlan(null).ok).toBe(false);
         expect(RS.buildRecalculateRouteWithPreferencesPlan({}).ok).toBe(false);
@@ -910,6 +938,21 @@ describe('route overview and single-route display plans', () => {
         expect(execute.layerSteps[0].valid).toBe(true);
         expect(execute.layerSteps[0].startLogMessage).toContain('Fast');
         expect(execute.layerSteps[0].successLogMessage).toContain('route-layer-0');
+    });
+
+    test('buildRouteLayerMapLibreMountExecutePlan wraps valid apply plan', () => {
+        const mount = RS.buildRouteLayerMountPlan(
+            { name: 'Fast', polyline: [[51.5, -0.1], [51.6, -0.2]] },
+            0,
+            0
+        );
+        const apply = RS.buildRouteLayerMapLibreApplyPlan(mount, 'label-layer');
+        apply.routeIndex = 0;
+        const execute = RS.buildRouteLayerMapLibreMountExecutePlan(apply);
+        expect(execute.shouldMount).toBe(true);
+        expect(execute.layerId).toBe('route-layer-0');
+        expect(execute.registerLayerHandle).toBe(true);
+        expect(RS.buildRouteLayerMapLibreMountExecutePlan({ valid: false }).shouldMount).toBe(false);
     });
 
     test('buildEnsureLabelsOnTopDispatchPlan collects text symbol layer ids', () => {

@@ -273,6 +273,37 @@
         };
     }
 
+    /**
+     * Display orchestration plan for mounting hazard markers on the map.
+     * @param {Array<Object>} hazards
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildDisplayHazardMarkersPlan(hazards, opts) {
+        if (!hazards || !hazards.length) {
+            return {
+                shouldDisplay: false,
+                emptyLogMessage: '[Hazards] No hazards to display',
+            };
+        }
+        var mountPlan = buildHazardMarkersMountPlans(hazards, opts);
+        if (!mountPlan.markers.length) {
+            return {
+                shouldDisplay: false,
+                emptyLogMessage: '[Hazards] No hazards to display',
+            };
+        }
+        return {
+            shouldDisplay: true,
+            clearExisting: true,
+            markers: mountPlan.markers,
+            markerCount: mountPlan.markers.length,
+            successLogMessage: '[Hazards] Displayed ' + mountPlan.markers.length + ' hazard markers on map',
+            skippedInvalid: mountPlan.skippedInvalid,
+            skippedDuplicate: mountPlan.skippedDuplicate,
+        };
+    }
+
     var api = {
         HAZARD_MARKER_ICON_SIZE: HAZARD_MARKER_ICON_SIZE,
         DEFAULT_HAZARD_MARKER_CONFIG: DEFAULT_HAZARD_MARKER_CONFIG,
@@ -286,6 +317,7 @@
         buildHazardMarkerPopupHtml: buildHazardMarkerPopupHtml,
         buildAllRoutesHazardsList: buildAllRoutesHazardsList,
         buildDisplayAllRouteHazardsPlan: buildDisplayAllRouteHazardsPlan,
+        buildDisplayHazardMarkersPlan: buildDisplayHazardMarkersPlan,
         buildHazardMarkersMountPlans: buildHazardMarkersMountPlans,
     };
 

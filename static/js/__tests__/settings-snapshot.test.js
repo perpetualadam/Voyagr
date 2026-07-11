@@ -181,6 +181,26 @@ describe('settings-snapshot module', () => {
         expect(save.logMessage).toContain('saved');
     });
 
+    test('buildSettingsHazardPreferencesPlan reads storage defaults', () => {
+        const prefs = SS.buildSettingsHazardPreferencesPlan({
+            avoidTolls: true,
+            getStorageItem: (key) => (key === 'pref_caz' ? 'false' : null),
+        });
+        expect(prefs.avoidTolls).toBe(true);
+        expect(prefs.avoidCAZ).toBe(false);
+        expect(prefs.avoidCameras).toBe(true);
+    });
+
+    test('buildSettingsFormStateInputPlan merges form fragments', () => {
+        const form = SS.buildSettingsFormStateInputPlan({
+            routePreferences: { avoidHighways: true },
+            mapTheme: 'dark',
+        });
+        expect(form.routePreferences.avoidHighways).toBe(true);
+        expect(form.mapTheme).toBe('dark');
+        expect(form.hazardPreferences.avoidCameras).toBe(true);
+    });
+
     test('buildSettingsSnapshotInputPlan merges runtime and form state', () => {
         const input = SS.buildSettingsSnapshotInputPlan(
             {

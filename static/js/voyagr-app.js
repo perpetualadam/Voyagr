@@ -2492,45 +2492,48 @@ function displayAllRoutesOnMap() {
  * @returns {boolean}
  */
 function applyRouteLayerFromMapLibrePlan(applyPlan) {
-    if (!applyPlan || !applyPlan.valid) return false;
+    const mountPlan = _routeSelection().buildRouteLayerMapLibreMountExecutePlan(applyPlan);
+    if (!mountPlan.shouldMount) return false;
 
     try {
-        if (map.getLayer(applyPlan.layerId)) {
-            map.removeLayer(applyPlan.layerId);
+        if (map.getLayer(mountPlan.layerId)) {
+            map.removeLayer(mountPlan.layerId);
         }
-        if (map.getSource(applyPlan.sourceId)) {
-            map.removeSource(applyPlan.sourceId);
+        if (map.getSource(mountPlan.sourceId)) {
+            map.removeSource(mountPlan.sourceId);
         }
 
-        map.addSource(applyPlan.sourceId, {
+        map.addSource(mountPlan.sourceId, {
             type: 'geojson',
-            data: applyPlan.geoJsonFeature,
+            data: mountPlan.geoJsonFeature,
         });
 
         map.addLayer({
-            id: applyPlan.layerId,
+            id: mountPlan.layerId,
             type: 'line',
-            source: applyPlan.sourceId,
-            layout: applyPlan.layerLayout,
+            source: mountPlan.sourceId,
+            layout: mountPlan.layerLayout,
             paint: {
-                'line-color': applyPlan.paint.lineColor,
-                'line-width': MapLibreHelpers.buildZoomScaledLineWidth(applyPlan.paint.lineWeight),
-                'line-opacity': applyPlan.paint.lineOpacity,
+                'line-color': mountPlan.paint.lineColor,
+                'line-width': MapLibreHelpers.buildZoomScaledLineWidth(mountPlan.paint.lineWeight),
+                'line-opacity': mountPlan.paint.lineOpacity,
             },
-        }, applyPlan.beforeId);
+        }, mountPlan.beforeId);
 
-        const layerId = applyPlan.layerId;
-        const sourceId = applyPlan.sourceId;
-        allRouteLayers.unshift({
-            id: layerId,
-            remove: () => {
-                if (map.getLayer(layerId)) map.removeLayer(layerId);
-                if (map.getSource(sourceId)) map.removeSource(sourceId);
-            },
-        });
+        if (mountPlan.registerLayerHandle) {
+            const layerId = mountPlan.layerId;
+            const sourceId = mountPlan.sourceId;
+            allRouteLayers.unshift({
+                id: layerId,
+                remove: () => {
+                    if (map.getLayer(layerId)) map.removeLayer(layerId);
+                    if (map.getSource(sourceId)) map.removeSource(sourceId);
+                },
+            });
+        }
         return true;
     } catch (e) {
-        console.error(`[Routes] ✗ Error adding route ${applyPlan.routeIndex}:`, e);
+        console.error(mountPlan.errorLogMessage, e);
         return false;
     }
 }
@@ -4157,19 +4160,17 @@ function showStatus(message, type) {
  * @returns {Object}
  */
 function collectSettingsFormState() {
-    return {
+    const SS = _settingsSnapshot();
+    return SS.buildSettingsFormStateInputPlan({
         routePreferences: collectRoutePreferencesFormState(),
-        hazardPreferences: {
+        hazardPreferences: SS.buildSettingsHazardPreferencesPlan({
             avoidTolls: isAvoidTollsEnabled(),
-            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
-            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
-            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
-        },
+            getStorageItem: (key) => localStorage.getItem(key),
+        }),
         parkingPreferences: collectParkingPreferencesFormState(),
         multiDropPreferences: collectMultiDropFormState(),
         mapTheme: localStorage.getItem('mapTheme') || 'standard',
-    };
+    });
 }
 
 /**
@@ -4179,18 +4180,8 @@ function collectSettingsFormState() {
  * @param {string} end
  */
 function applyCalculateRouteInNavRerouteOutcome(data, geocodedEnd, end) {
-    hideRouteProgressBar();
-
     const RS = _routeSelection();
     const activeRoute = pickActiveRouteDuringNavigation(data.routes, data);
-    if (!activeRoute) {
-        showStatus(RS.buildInNavRerouteDispatchPlan({}, {}, '', '').noRouteErrorMessage, 'error');
-        return;
-    }
-    if (activeRoute.geometry) {
-        updateRouteOnMap(activeRoute);
-    }
-
     const dispatch = RS.buildInNavRerouteDispatchPlan(
         activeRoute,
         data,
@@ -4200,23 +4191,33 @@ function applyCalculateRouteInNavRerouteOutcome(data, geocodedEnd, end) {
             ? { enabled: true, convertDistance, distUnit: getDistanceUnit() }
             : { enabled: false }
     );
-    window.lastCalculatedRoute = {
-        ...window.lastCalculatedRoute,
-        ...dispatch.lastCalculatedRoutePatch,
-    };
+    const plan = RS.buildInNavRerouteOutcomeExecutePlan(dispatch, activeRoute);
 
-    if (dispatch.speakMessage) {
-        speakMessage(dispatch.speakMessage, 'high');
+    if (!plan.shouldApply) {
+        showStatus(plan.noRouteErrorMessage, 'error');
+        return;
     }
 
-    showStatus(dispatch.statusMessage, dispatch.statusType);
-    if (dispatch.recentDestination) {
+    if (plan.hideRouteProgressBar) hideRouteProgressBar();
+    if (plan.updateRouteOnMap) updateRouteOnMap(plan.activeRoute);
+
+    window.lastCalculatedRoute = {
+        ...window.lastCalculatedRoute,
+        ...plan.lastCalculatedRoutePatch,
+    };
+
+    if (plan.speakMessage) {
+        speakMessage(plan.speakMessage, 'high');
+    }
+
+    showStatus(plan.statusMessage, plan.statusType);
+    if (plan.recentDestination) {
         try {
             recordRecentDestination(
-                dispatch.recentDestination.label,
-                dispatch.recentDestination.lat,
-                dispatch.recentDestination.lon,
-                dispatch.recentDestination.kind
+                plan.recentDestination.label,
+                plan.recentDestination.lat,
+                plan.recentDestination.lon,
+                plan.recentDestination.kind
             );
         } catch (_) { /* ignore */ }
     }
@@ -4228,36 +4229,37 @@ function applyCalculateRouteInNavRerouteOutcome(data, geocodedEnd, end) {
  * @param {Object} data - route API response
  */
 function applyCalculateRouteIdleUiFromPlan(idleUiPlan, data) {
-    if (!idleUiPlan) return;
+    const plan = _routeSelection().buildCalculateRouteIdleUiExecutePlan(idleUiPlan);
+    if (!plan.shouldExecute) return;
 
-    const delayMs = idleUiPlan.delayedPreview?.delayMs ?? 300;
+    const delayMs = plan.delayedPreview?.delayMs ?? 300;
     setTimeout(() => {
         showRoutePreview(data);
-        if (idleUiPlan.updateArButtonVisibility) {
+        if (plan.updateArButtonVisibility) {
             updateARButtonVisibility();
         }
     }, delayMs);
 
-    hideRouteProgressBar();
+    if (plan.hideRouteProgressBar) hideRouteProgressBar();
 
-    if (idleUiPlan.showStartNavButtons) {
-        (idleUiPlan.startNavButtonIds || []).forEach((id) => {
+    if (plan.showStartNavButtons) {
+        (plan.startNavButtonIds || []).forEach((id) => {
             const btn = document.getElementById(id);
             if (btn) btn.style.display = 'block';
         });
     }
-    if (idleUiPlan.updateRoadReportFabVisibility) {
+    if (plan.updateRoadReportFabVisibility) {
         updateRoadReportFabVisibility();
     }
 
-    const notification = idleUiPlan.notification;
+    const notification = plan.notification;
     if (notification) {
-        console.log('[Route] Route ready notification:', notification.message);
+        console.log(plan.notificationLogPrefix, notification.message);
         sendNotification(notification.title, notification.message, notification.type);
     }
 
     try {
-        (idleUiPlan.recentDestinations || []).forEach((dest) => {
+        (plan.recentDestinations || []).forEach((dest) => {
             recordRecentDestination(dest.label, dest.lat, dest.lon, dest.kind);
         });
     } catch (_) { /* ignore */ }
@@ -4612,23 +4614,23 @@ function collapseBottomSheetForRoutePreview() {
  * @param {Array} hazards - Array of hazard objects with lat, lon, type, description
  */
 function displayHazardMarkers(hazards) {
-    if (!hazards || hazards.length === 0) {
-        console.log('[Hazards] No hazards to display');
-        return;
-    }
-
-    clearHazardMarkers();
-
     const HM = _hazardMapMarkers();
     const OSM = _osmMapIcons();
     const pillHtml = getOsmTrafficLightMarkerPillHTML();
-    const mountPlan = HM.buildHazardMarkersMountPlans(hazards, {
+    const plan = HM.buildDisplayHazardMarkersPlan(hazards, {
         osmTrafficLightPillHtml: pillHtml,
         osmTrafficLightIconSize: OSM.OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE,
         osmTrafficLightPopupIcon: OSM.buildOsmTrafficLightPopupIconWrapperHtml(pillHtml),
     });
 
-    mountPlan.markers.forEach((spec) => {
+    if (!plan.shouldDisplay) {
+        if (plan.emptyLogMessage) console.log(plan.emptyLogMessage);
+        return;
+    }
+
+    if (plan.clearExisting) clearHazardMarkers();
+
+    plan.markers.forEach((spec) => {
         const marker = MapLibreHelpers.createMarker(spec.lat, spec.lon, {
             className: spec.className,
             html: spec.markerHtml,
@@ -4640,7 +4642,7 @@ function displayHazardMarkers(hazards) {
         window.hazardMarkers.push(marker);
     });
 
-    console.log(`[Hazards] Displayed ${window.hazardMarkers.length} hazard markers on map`);
+    if (plan.successLogMessage) console.log(plan.successLogMessage);
 }
 
 /**

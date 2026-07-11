@@ -1439,6 +1439,54 @@
     }
 
     /**
+     * Execute plan for idle calculateRoute post-preview UI side effects.
+     * @param {Object} idleUiPlan - from buildCalculateRouteIdleUiApplyPlan
+     * @returns {Object}
+     */
+    function buildCalculateRouteIdleUiExecutePlan(idleUiPlan) {
+        idleUiPlan = idleUiPlan || {};
+        return {
+            shouldExecute: true,
+            hideRouteProgressBar: true,
+            delayedPreview: idleUiPlan.delayedPreview || { delayMs: 300 },
+            showStartNavButtons: !!idleUiPlan.showStartNavButtons,
+            startNavButtonIds: idleUiPlan.startNavButtonIds || [],
+            updateRoadReportFabVisibility: !!idleUiPlan.updateRoadReportFabVisibility,
+            updateArButtonVisibility: !!idleUiPlan.updateArButtonVisibility,
+            notification: idleUiPlan.notification || null,
+            recentDestinations: idleUiPlan.recentDestinations || [],
+            notificationLogPrefix: '[Route] Route ready notification:',
+        };
+    }
+
+    /**
+     * Execute plan for in-navigation reroute outcome side effects.
+     * @param {Object} dispatch - from buildInNavRerouteDispatchPlan
+     * @param {Object|null|undefined} activeRoute
+     * @returns {Object}
+     */
+    function buildInNavRerouteOutcomeExecutePlan(dispatch, activeRoute) {
+        dispatch = dispatch || {};
+        if (!activeRoute) {
+            return {
+                shouldApply: false,
+                noRouteErrorMessage: dispatch.noRouteErrorMessage || '❌ No route returned',
+            };
+        }
+        return {
+            shouldApply: true,
+            hideRouteProgressBar: true,
+            updateRouteOnMap: !!activeRoute.geometry,
+            activeRoute: activeRoute,
+            lastCalculatedRoutePatch: dispatch.lastCalculatedRoutePatch,
+            speakMessage: dispatch.speakMessage,
+            statusMessage: dispatch.statusMessage,
+            statusType: dispatch.statusType,
+            recentDestination: dispatch.recentDestination,
+        };
+    }
+
+    /**
      * Dispatch plan for recalculateRouteWithPreferences.
      * @param {Object|null|undefined} lastCalculatedRoute
      * @returns {Object}
@@ -2011,6 +2059,30 @@
     }
 
     /**
+     * Mount execute plan for applying one route line layer on MapLibre.
+     * @param {Object} applyPlan - from buildRouteLayerMapLibreApplyPlan
+     * @returns {Object}
+     */
+    function buildRouteLayerMapLibreMountExecutePlan(applyPlan) {
+        applyPlan = applyPlan || {};
+        if (!applyPlan.valid) {
+            return { shouldMount: false };
+        }
+        return {
+            shouldMount: true,
+            layerId: applyPlan.layerId,
+            sourceId: applyPlan.sourceId,
+            beforeId: applyPlan.beforeId,
+            geoJsonFeature: applyPlan.geoJsonFeature,
+            layerLayout: applyPlan.layerLayout,
+            paint: applyPlan.paint,
+            routeIndex: applyPlan.routeIndex,
+            errorLogMessage: '[Routes] ✗ Error adding route ' + applyPlan.routeIndex + ':',
+            registerLayerHandle: true,
+        };
+    }
+
+    /**
      * Batch apply plans for doAddRouteLayers (reverse index order).
      * @param {Array<Object>} routeOptions
      * @param {number} selectedRouteIndex
@@ -2283,7 +2355,9 @@
         formatPreviewRoutingModeLabel: formatPreviewRoutingModeLabel,
         parseRecentDestinationFromCoordString: parseRecentDestinationFromCoordString,
         buildInNavRerouteDispatchPlan: buildInNavRerouteDispatchPlan,
+        buildInNavRerouteOutcomeExecutePlan: buildInNavRerouteOutcomeExecutePlan,
         buildCalculateRouteIdleUiApplyPlan: buildCalculateRouteIdleUiApplyPlan,
+        buildCalculateRouteIdleUiExecutePlan: buildCalculateRouteIdleUiExecutePlan,
         buildRecalculateRouteWithPreferencesPlan: buildRecalculateRouteWithPreferencesPlan,
         buildRoutePreviewPanelApplyPlan: buildRoutePreviewPanelApplyPlan,
         buildRoutePreviewPanelDomApplyPlan: buildRoutePreviewPanelDomApplyPlan,
@@ -2304,6 +2378,7 @@
         buildBringRoutesToTopDispatchPlan: buildBringRoutesToTopDispatchPlan,
         buildBringRoutesToTopExecutePlan: buildBringRoutesToTopExecutePlan,
         buildRouteLayerMapLibreApplyPlan: buildRouteLayerMapLibreApplyPlan,
+        buildRouteLayerMapLibreMountExecutePlan: buildRouteLayerMapLibreMountExecutePlan,
         buildDoAddRouteLayersBatchPlan: buildDoAddRouteLayersBatchPlan,
         buildDoAddRouteLayersBatchExecutePlan: buildDoAddRouteLayersBatchExecutePlan,
         buildEnsureLabelsOnTopDispatchPlan: buildEnsureLabelsOnTopDispatchPlan,
