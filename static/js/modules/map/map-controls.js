@@ -40,6 +40,57 @@
     var MAP_ICON_HINT_MOVE_PX2 = 100;
     var MAP_ICON_HINT_ROOT_SELECTORS = ['.fab-container', '#navControlButtons', '.sheet-toolbar'];
     var MAP_ICON_HINT_BUTTON_SELECTOR = 'button.fab, button.sheet-icon-btn';
+    var MAP_CONTROLS_HINT_MODAL_ID = 'mapControlsHintModal';
+    var MAP_CONTROLS_HINT_LIST_ID = 'mapControlsHintList';
+    var FAB_LONG_PRESS_HINT_DATASET = 'voyagrLongPressHint';
+    var FAB_SUPPRESS_CLICK_DATASET = 'voyagrSuppressClick';
+
+    /**
+     * @returns {Object}
+     */
+    function buildOpenMapControlsHintModalExecutePlan() {
+        return {
+            shouldOpen: true,
+            modalId: MAP_CONTROLS_HINT_MODAL_ID,
+            listId: MAP_CONTROLS_HINT_LIST_ID,
+            sections: MAP_CONTROLS_HINT_SECTIONS.slice(),
+            extrasSectionTitle: MAP_CONTROLS_HINT_HIDDEN_SECTION_TITLE,
+            extras: MAP_CONTROLS_HINT_EXTRAS.slice(),
+            sectionTitleClass: 'map-hint-section-title',
+            itemClass: 'map-hint-item',
+            modalDisplay: 'block',
+        };
+    }
+
+    /**
+     * @returns {Object}
+     */
+    function buildCloseMapControlsHintModalExecutePlan() {
+        return {
+            shouldClose: true,
+            modalId: MAP_CONTROLS_HINT_MODAL_ID,
+            modalDisplay: 'none',
+        };
+    }
+
+    /**
+     * @param {Object} [initPlan]
+     * @returns {Object}
+     */
+    function buildFabLongPressHintBindPlan(initPlan) {
+        initPlan = initPlan || {};
+        return {
+            shouldBind: true,
+            datasetKey: FAB_LONG_PRESS_HINT_DATASET,
+            datasetValue: '1',
+            suppressClickDataset: FAB_SUPPRESS_CLICK_DATASET,
+            longPressMs: initPlan.longPressMs != null ? initPlan.longPressMs : MAP_ICON_HINT_LONG_PRESS_MS,
+            moveThresholdPx2: initPlan.moveThresholdPx2 != null ? initPlan.moveThresholdPx2 : MAP_ICON_HINT_MOVE_PX2,
+            vibrateMs: initPlan.vibrateMs != null ? initPlan.vibrateMs : 20,
+            skipMousePointers: true,
+            singleTouchOnly: true,
+        };
+    }
 
     /**
      * @param {Object} [env]
@@ -614,7 +665,12 @@
         MAP_HINT_TOAST_ID: MAP_HINT_TOAST_ID,
         MAP_HINT_AUTO_DISMISS_MS: MAP_HINT_AUTO_DISMISS_MS,
         MAP_ICON_HINT_LONG_PRESS_MS: MAP_ICON_HINT_LONG_PRESS_MS,
+        MAP_CONTROLS_HINT_MODAL_ID: MAP_CONTROLS_HINT_MODAL_ID,
+        MAP_CONTROLS_HINT_LIST_ID: MAP_CONTROLS_HINT_LIST_ID,
         isTouchHintsEnvironment: isTouchHintsEnvironment,
+        buildOpenMapControlsHintModalExecutePlan: buildOpenMapControlsHintModalExecutePlan,
+        buildCloseMapControlsHintModalExecutePlan: buildCloseMapControlsHintModalExecutePlan,
+        buildFabLongPressHintBindPlan: buildFabLongPressHintBindPlan,
         buildShowMapHintToastExecutePlan: buildShowMapHintToastExecutePlan,
         buildInitMobileMapIconHintsPlan: buildInitMobileMapIconHintsPlan,
         getZoomFollowButtonDisplay: getZoomFollowButtonDisplay,

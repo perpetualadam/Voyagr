@@ -38,6 +38,34 @@ describe('map-controls module', () => {
         expect(MC.MAP_CONTROLS_HINT_EXTRAS.length).toBeGreaterThan(0);
     });
 
+    test('map controls hint modal execute plans expose modal wiring', () => {
+        const open = MC.buildOpenMapControlsHintModalExecutePlan();
+        expect(open.shouldOpen).toBe(true);
+        expect(open.modalId).toBe(MC.MAP_CONTROLS_HINT_MODAL_ID);
+        expect(open.listId).toBe(MC.MAP_CONTROLS_HINT_LIST_ID);
+        expect(open.sections.length).toBeGreaterThan(0);
+        expect(open.extras).toEqual(MC.MAP_CONTROLS_HINT_EXTRAS);
+        expect(open.modalDisplay).toBe('block');
+
+        const close = MC.buildCloseMapControlsHintModalExecutePlan();
+        expect(close.shouldClose).toBe(true);
+        expect(close.modalId).toBe(MC.MAP_CONTROLS_HINT_MODAL_ID);
+        expect(close.modalDisplay).toBe('none');
+    });
+
+    test('buildFabLongPressHintBindPlan uses defaults and allows overrides', () => {
+        const defaults = MC.buildFabLongPressHintBindPlan();
+        expect(defaults.shouldBind).toBe(true);
+        expect(defaults.datasetKey).toBe('voyagrLongPressHint');
+        expect(defaults.longPressMs).toBe(MC.MAP_ICON_HINT_LONG_PRESS_MS);
+        expect(defaults.moveThresholdPx2).toBe(100);
+        expect(defaults.singleTouchOnly).toBe(true);
+
+        const custom = MC.buildFabLongPressHintBindPlan({ longPressMs: 500, moveThresholdPx2: 200 });
+        expect(custom.longPressMs).toBe(500);
+        expect(custom.moveThresholdPx2).toBe(200);
+    });
+
     test('AR preference and button display helpers', () => {
         const storage = { _d: {}, getItem(k) { return this._d[k] || null; }, setItem(k, v) { this._d[k] = v; } };
         expect(MC.isAREnabledInStorage(storage)).toBe(false);

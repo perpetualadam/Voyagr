@@ -207,7 +207,11 @@ let gpsWatchId = null;
 let currentUserMarker = null;
 let trackingHistory = [];
 let lastZoomLevel = 13;
-let smartZoomEnabled = localStorage.getItem('smartZoomEnabled') === '1' || true;
+let smartZoomEnabled = (typeof VoyagrSmartZoom !== 'undefined'
+    ? VoyagrSmartZoom.resolveSmartZoomEnabledFromStorage(localStorage.getItem('smartZoomEnabled'))
+    : (localStorage.getItem('smartZoomEnabled') === null
+        ? true
+        : localStorage.getItem('smartZoomEnabled') === '1'));
 // Navigation tracking state (global)
 // These are now initialized in voyagr-core.js to prevent redeclaration errors
 // let zoomAndFollowEnabled = ...;
@@ -8544,6 +8548,8 @@ function _settingsSnapshot() { return VoyagrModules.settingsSnapshot(); }
 function _appState() { return VoyagrModules.appState(); }
 function _gestureControl() { return VoyagrModules.gestureControl(); }
 function _legacyPrefsRestore() { return VoyagrModules.legacyPrefsRestore(); }
+function _smartZoom() { return VoyagrModules.smartZoom(); }
+function _phase3Features() { return VoyagrModules.phase3Features(); }
 
 /** Unit-tested map preview marker HTML (modules/map/preview-marker.js). */
 function _previewMarker() { return VoyagrModules.previewMarker(); }
@@ -9528,13 +9534,19 @@ function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban')
  * @returns {*} Return value description
  */
 function toggleSmartZoom() {
-    smartZoomEnabled = !smartZoomEnabled;
-    const btn = document.getElementById('smartZoomToggle');
-    _toggleUI().applyToggleButton(btn, smartZoomEnabled);
-    localStorage.setItem('smartZoomEnabled', smartZoomEnabled ? '1' : '0');
-    saveAllSettings();
-    showStatus(`🔍 Smart Zoom ${smartZoomEnabled ? 'enabled' : 'disabled'}`, 'info');
-    console.log('[SmartZoom] Toggled to:', smartZoomEnabled);
+    const SZ = _smartZoom();
+    const TU = _toggleUI();
+    const collected = SZ.buildToggleSmartZoomCollectPlan({ currentlyEnabled: smartZoomEnabled });
+    const execute = SZ.buildToggleSmartZoomExecutePlan({ enabled: collected.enabled });
+    if (!execute.shouldApply) return;
+
+    smartZoomEnabled = execute.enabled;
+    const btn = document.getElementById(execute.toggle.id);
+    if (btn) TU.applyToggleButton(btn, execute.toggle.enabled);
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    if (execute.saveAllSettings) saveAllSettings();
+    showStatus(execute.statusMessage, execute.statusType);
+    console.log(execute.logMessage, smartZoomEnabled);
 }
 
 // Initialize Phase 2 features on page load
@@ -9583,45 +9595,57 @@ function applyGestureSettingsFromApiPlan(execute) {
  * @returns {*} Return value description
  */
 function initPhase3Features() {
-    if (window.__voyagrPhase3Initialized) {
+    const P3 = _phase3Features();
+    const orch = P3.buildInitPhase3FeaturesOrchestrationPlan();
+    if (window[orch.initFlagProperty]) {
         return;
     }
-    window.__voyagrPhase3Initialized = true;
+    window[orch.initFlagProperty] = true;
 
-    const GC = _gestureControl();
-    const fetchPlan = GC.buildLoadGestureSettingsFetchPlan();
-    fetch(fetchPlan.url)
-        .then((response) => response.json())
-        .then((data) => {
-            if (data.success) {
-                applyGestureSettingsFromApiPlan(
-                    GC.buildApplyGestureSettingsFromApiExecutePlan(data.settings, {
-                        hasDeviceMotion: 'DeviceMotionEvent' in window,
-                    })
-                );
-            }
-        })
-        .catch((error) => console.error(fetchPlan.errorLogPrefix, error));
-
-    // Initialize battery monitoring
-    if ('getBattery' in navigator) {
-        navigator.getBattery().then(battery => {
-            updateBatteryStatus(battery);
-            battery.addEventListener('levelchange', () => updateBatteryStatus(battery));
-            battery.addEventListener('chargingchange', () => updateBatteryStatus(battery));
-        });
+    if (orch.loadGestureFromApi) {
+        const GC = _gestureControl();
+        const fetchPlan = GC.buildLoadGestureSettingsFetchPlan();
+        fetch(fetchPlan.url)
+            .then((response) => response.json())
+            .then((data) => {
+                if (data.success) {
+                    applyGestureSettingsFromApiPlan(
+                        GC.buildApplyGestureSettingsFromApiExecutePlan(data.settings, {
+                            hasDeviceMotion: 'DeviceMotionEvent' in window,
+                        })
+                    );
+                }
+            })
+            .catch((error) => console.error(fetchPlan.errorLogPrefix, error));
     }
 
-    // Load ML predictions
-    loadMLPredictions();
+    if (orch.initBatteryMonitoring) {
+        const batteryPlan = P3.buildInitBatteryMonitoringPlan({
+            hasGetBattery: 'getBattery' in navigator,
+        });
+        if (batteryPlan.shouldInit) {
+            navigator.getBattery().then((battery) => {
+                updateBatteryStatus(battery);
+                (batteryPlan.listeners || []).forEach((eventName) => {
+                    battery.addEventListener(eventName, () => updateBatteryStatus(battery));
+                });
+            });
+        }
+    }
 
-    // Load AR setting
-    const MC = _mapControls();
-    const TU = _toggleUI();
-    isAREnabled = MC.isAREnabledInStorage(localStorage);
-    const arToggleBtn = document.getElementById('arToggleBtn');
-    if (arToggleBtn) {
-        TU.applyToggleButton(arToggleBtn, isAREnabled, TU.TOGGLE_SWITCH_OPTS);
+    if (orch.loadMlPredictions) loadMLPredictions();
+
+    if (orch.loadArSetting) {
+        const arExecute = P3.buildLoadArSettingExecutePlan();
+        const MC = _mapControls();
+        const TU = _toggleUI();
+        if (arExecute.shouldApply) {
+            isAREnabled = MC.isAREnabledInStorage(localStorage);
+            const arToggleBtn = document.getElementById(arExecute.toggleId);
+            if (arToggleBtn) {
+                TU.applyToggleButton(arToggleBtn, isAREnabled, TU.TOGGLE_SWITCH_OPTS);
+            }
+        }
     }
 }
 /**
@@ -10106,15 +10130,17 @@ function voyagrShowMapIconHint(message) {
  */
 function openMapControlsHintModal() {
     const MC = _mapControls();
-    const m = document.getElementById('mapControlsHintModal');
-    const ul = document.getElementById('mapControlsHintList');
+    const execute = MC.buildOpenMapControlsHintModalExecutePlan();
+    if (!execute.shouldOpen) return;
+
+    const m = document.getElementById(execute.modalId);
+    const ul = document.getElementById(execute.listId);
     if (!m || !ul) return;
     ul.innerHTML = '';
-    const sections = MC.MAP_CONTROLS_HINT_SECTIONS;
-    for (let s = 0; s < sections.length; s++) {
-        const sec = sections[s];
+
+    (execute.sections || []).forEach((sec) => {
         const secTitle = document.createElement('li');
-        secTitle.className = 'map-hint-section-title';
+        secTitle.className = execute.sectionTitleClass;
         secTitle.textContent = sec.title;
         ul.appendChild(secTitle);
         const nodes = document.querySelectorAll(sec.selector);
@@ -10126,30 +10152,31 @@ function openMapControlsHintModal() {
             const st = window.getComputedStyle(el);
             if (!MC.isMapControlsHintElementVisible(st.display, st.visibility)) continue;
             const li = document.createElement('li');
-            li.className = 'map-hint-item';
+            li.className = execute.itemClass;
             li.textContent = MC.formatMapControlsHintItemLabel(el.textContent, hint);
             ul.appendChild(li);
         }
-    }
+    });
 
     const exTitle = document.createElement('li');
-    exTitle.className = 'map-hint-section-title';
-    exTitle.textContent = MC.MAP_CONTROLS_HINT_HIDDEN_SECTION_TITLE;
+    exTitle.className = execute.sectionTitleClass;
+    exTitle.textContent = execute.extrasSectionTitle;
     ul.appendChild(exTitle);
-    const extras = MC.MAP_CONTROLS_HINT_EXTRAS;
-    for (let e = 0; e < extras.length; e++) {
+    (execute.extras || []).forEach((extra) => {
         const li = document.createElement('li');
-        li.className = 'map-hint-item';
-        li.textContent = extras[e];
+        li.className = execute.itemClass;
+        li.textContent = extra;
         ul.appendChild(li);
-    }
+    });
 
-    m.style.display = 'block';
+    m.style.display = execute.modalDisplay;
 }
 
 function closeMapControlsHintModal() {
-    const modal = document.getElementById('mapControlsHintModal');
-    if (modal) modal.style.display = 'none';
+    const execute = _mapControls().buildCloseMapControlsHintModalExecutePlan();
+    if (!execute.shouldClose) return;
+    const modal = document.getElementById(execute.modalId);
+    if (modal) modal.style.display = execute.modalDisplay;
 }
 
 /**
@@ -10179,14 +10206,15 @@ function initMobileMapIconHints() {
 function voyagrBindFabLongPressHint(el, initPlan) {
     const MC = _mapControls();
     initPlan = initPlan || MC.buildInitMobileMapIconHintsPlan({ touchHintsEnabled: true });
-    if (!el || el.dataset.voyagrLongPressHint === '1') return;
-    el.dataset.voyagrLongPressHint = '1';
+    const bind = MC.buildFabLongPressHintBindPlan(initPlan);
+    if (!bind.shouldBind || !el || el.dataset[bind.datasetKey] === bind.datasetValue) return;
+    el.dataset[bind.datasetKey] = bind.datasetValue;
 
     let timer = null;
     let startX = 0;
     let startY = 0;
-    const LONG_MS = initPlan.longPressMs;
-    const MOVE_PX2 = initPlan.moveThresholdPx2;
+    const LONG_MS = bind.longPressMs;
+    const MOVE_PX2 = bind.moveThresholdPx2;
 
     const getHint = () => {
         const t = el.getAttribute('title');
@@ -10210,10 +10238,10 @@ function voyagrBindFabLongPressHint(el, initPlan) {
             timer = null;
             const hint = getHint();
             if (!hint) return;
-            el.dataset.voyagrSuppressClick = '1';
+            el.dataset[bind.suppressClickDataset] = '1';
             voyagrShowMapIconHint(hint);
             try {
-                if (navigator.vibrate) navigator.vibrate(initPlan.vibrateMs);
+                if (navigator.vibrate) navigator.vibrate(bind.vibrateMs);
             } catch (_v) {
                 /* ignore */
             }
@@ -10232,7 +10260,7 @@ function voyagrBindFabLongPressHint(el, initPlan) {
             'pointerdown',
             (e) => {
                 if (!e.isPrimary) return;
-                if (e.pointerType === 'mouse') return;
+                if (bind.skipMousePointers && e.pointerType === 'mouse') return;
                 scheduleHint(e.clientX, e.clientY);
             },
             { passive: true }
@@ -10251,7 +10279,7 @@ function voyagrBindFabLongPressHint(el, initPlan) {
         el.addEventListener(
             'touchstart',
             (e) => {
-                if (e.touches.length !== 1) return;
+                if (bind.singleTouchOnly && e.touches.length !== 1) return;
                 scheduleHint(e.touches[0].clientX, e.touches[0].clientY);
             },
             { passive: true }
@@ -10271,10 +10299,10 @@ function voyagrBindFabLongPressHint(el, initPlan) {
     el.addEventListener(
         'click',
         (e) => {
-            if (el.dataset.voyagrSuppressClick === '1') {
+            if (el.dataset[bind.suppressClickDataset] === '1') {
                 e.preventDefault();
                 e.stopPropagation();
-                delete el.dataset.voyagrSuppressClick;
+                delete el.dataset[bind.suppressClickDataset];
             }
         },
         true

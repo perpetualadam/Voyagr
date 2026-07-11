@@ -42,6 +42,8 @@
         mlPredictions: 'VoyagrMlPredictions',
         porcupineWake: 'VoyagrPorcupineWake',
         batterySaving: 'VoyagrBatterySaving',
+        smartZoom: 'VoyagrSmartZoom',
+        phase3Features: 'VoyagrPhase3Features',
         searchAutocomplete: 'VoyagrSearchAutocomplete',
         geocodingLocations: 'VoyagrGeocodingLocations',
         deviceEnvironment: 'VoyagrDeviceEnvironment',
