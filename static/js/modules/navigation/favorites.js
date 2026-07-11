@@ -108,6 +108,88 @@
         };
     }
 
+    /**
+     * @param {string|null|undefined} token
+     * @returns {Object}
+     */
+    function buildFavoriteAuthHeaders(token) {
+        var headers = { 'Content-Type': 'application/json' };
+        if (token) headers.Authorization = 'Bearer ' + token;
+        return headers;
+    }
+
+    /**
+     * @param {Object} fav
+     * @param {string} newName
+     * @param {string} newCategory
+     * @returns {string}
+     */
+    function buildFavoriteUpdateBody(fav, newName, newCategory) {
+        fav = fav || {};
+        return JSON.stringify({
+            id: fav.id,
+            name: newName,
+            address: fav.address,
+            category: newCategory || fav.category,
+        });
+    }
+
+    /**
+     * @param {Object} fav
+     * @returns {string}
+     */
+    function buildFavoriteDeleteBody(fav) {
+        fav = fav || {};
+        return JSON.stringify({ id: fav.id });
+    }
+
+    /**
+     * @param {Object} params
+     * @returns {string}
+     */
+    function buildFavoriteCreateBody(params) {
+        params = params || {};
+        return JSON.stringify({
+            name: params.name,
+            address: params.address,
+            lat: params.lat,
+            lon: params.lon,
+            category: params.category || 'location',
+        });
+    }
+
+    /**
+     * @param {string} name
+     * @returns {string}
+     */
+    function getFavoriteDeleteConfirmMessage(name) {
+        return 'Delete "' + name + '" from favorites?';
+    }
+
+    /**
+     * @param {string} name
+     * @returns {string}
+     */
+    function getFavoriteAddedStatusMessage(name) {
+        return 'Added ' + name + ' to favorites!';
+    }
+
+    /**
+     * @param {string} error
+     * @returns {string}
+     */
+    function getFavoriteApiErrorMessage(error) {
+        return '❌ Error: ' + (error || 'Unknown error');
+    }
+
+    /**
+     * @param {string} action
+     * @returns {string}
+     */
+    function getFavoriteActionFailedMessage(action) {
+        return '❌ Failed to ' + action + ' favorite';
+    }
+
     var api = {
         FAVORITE_ITEM_CONTAINER_STYLE: FAVORITE_ITEM_CONTAINER_STYLE,
         FAVORITE_BTN_STYLE: FAVORITE_BTN_STYLE,
@@ -121,6 +203,14 @@
         getFavoriteUpdatedStatusMessage: getFavoriteUpdatedStatusMessage,
         getFavoriteRemovedStatusMessage: getFavoriteRemovedStatusMessage,
         buildFavoriteGridItemSpec: buildFavoriteGridItemSpec,
+        buildFavoriteAuthHeaders: buildFavoriteAuthHeaders,
+        buildFavoriteUpdateBody: buildFavoriteUpdateBody,
+        buildFavoriteDeleteBody: buildFavoriteDeleteBody,
+        buildFavoriteCreateBody: buildFavoriteCreateBody,
+        getFavoriteDeleteConfirmMessage: getFavoriteDeleteConfirmMessage,
+        getFavoriteAddedStatusMessage: getFavoriteAddedStatusMessage,
+        getFavoriteApiErrorMessage: getFavoriteApiErrorMessage,
+        getFavoriteActionFailedMessage: getFavoriteActionFailedMessage,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

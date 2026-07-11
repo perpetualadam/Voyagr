@@ -50,4 +50,13 @@ describe('map-controls module', () => {
         expect(idle.active).toBe(false);
         expect(idle.innerHtml).toBe(MC.AR_INACTIVE_LABEL);
     });
+
+    test('applyARModeToggleButton delegates to toggle-ui', () => {
+        const TU = require('../modules/ui/toggle-ui.js');
+        const btn = document.createElement('button');
+        MC.applyARModeToggleButton(btn, true, TU);
+        expect(btn.classList.contains('active')).toBe(true);
+        MC.applyARModeToggleButton(btn, false, TU);
+        expect(btn.classList.contains('active')).toBe(false);
+    });
 });

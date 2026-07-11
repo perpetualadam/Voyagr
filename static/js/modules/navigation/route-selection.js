@@ -344,6 +344,33 @@
     }
 
     /**
+     * @param {number} routeCount
+     * @returns {boolean}
+     */
+    function shouldShowPreviewAlternativeRoutes(routeCount) {
+        return routeCount > 1;
+    }
+
+    /**
+     * Mount plan for one preview alternative-route card.
+     * @param {Object} route
+     * @param {number} index
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildPreviewAlternativeRouteCardMountPlan(route, index, opts) {
+        opts = opts || {};
+        var routeColor = resolveRouteColor(index, opts.routeColors);
+        return {
+            routeColor: routeColor,
+            containerStyle: getPreviewAlternativeRouteCardContainerStyleCssText(routeColor),
+            html: buildPreviewAlternativeRouteCardHtml(route, index, opts),
+            hoverStyle: getPreviewAlternativeRouteCardHoverStyle(routeColor),
+            restStyle: getPreviewAlternativeRouteCardRestStyle(),
+        };
+    }
+
+    /**
      * Pick which route option to use during navigation after a reroute response.
      * @param {Array<Object>|null|undefined} routeList
      * @param {Object|null|undefined} singleRoutePayload
@@ -668,6 +695,8 @@
         getPreviewAlternativeRouteCardHoverStyle: getPreviewAlternativeRouteCardHoverStyle,
         getPreviewAlternativeRouteCardRestStyle: getPreviewAlternativeRouteCardRestStyle,
         buildPreviewAlternativeRouteCardHtml: buildPreviewAlternativeRouteCardHtml,
+        shouldShowPreviewAlternativeRoutes: shouldShowPreviewAlternativeRoutes,
+        buildPreviewAlternativeRouteCardMountPlan: buildPreviewAlternativeRouteCardMountPlan,
         pickActiveRouteDuringNavigation: pickActiveRouteDuringNavigation,
         orderWaypointsGreedy: orderWaypointsGreedy,
         resolvePreviewRoute: resolvePreviewRoute,

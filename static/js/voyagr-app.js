@@ -7263,10 +7263,11 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
  * @returns {*} Return value description
  */
 function showAlternativeRoutesInPreview() {
+    const RS = VoyagrModules.routeSelection();
     const container = document.getElementById('previewAlternativeRoutesList');
     const parentContainer = document.getElementById('previewAlternativeRoutesContainer');
 
-    if (!routeOptions || routeOptions.length <= 1) {
+    if (!RS.shouldShowPreviewAlternativeRoutes(routeOptions ? routeOptions.length : 0)) {
         parentContainer.style.display = 'none';
         return;
     }
@@ -7275,28 +7276,27 @@ function showAlternativeRoutesInPreview() {
     const symbol = getCurrencySymbol();
     const distUnit = getDistanceUnit();
     const fuelUnit = currentVehicleType === 'electric' ? 'kWh' : 'L';
+    const cardOpts = {
+        routeColors: ROUTE_COLORS,
+        currencySymbol: symbol,
+        distUnit: distUnit,
+        fuelUnit: fuelUnit,
+    };
 
     routeOptions.forEach((route, index) => {
-        const routeColor = ROUTE_COLORS[index % ROUTE_COLORS.length];
-        const div = document.createElement('div');
-        div.style.cssText = VoyagrModules.routeSelection().getPreviewAlternativeRouteCardContainerStyleCssText(routeColor);
-        div.innerHTML = VoyagrModules.routeSelection().buildPreviewAlternativeRouteCardHtml(route, index, {
-            routeColors: ROUTE_COLORS,
-            currencySymbol: symbol,
-            distUnit: distUnit,
+        const plan = RS.buildPreviewAlternativeRouteCardMountPlan(route, index, Object.assign({}, cardOpts, {
             distanceText: convertDistance(route.distance_km),
-            fuelUnit: fuelUnit,
-        });
-        const RS = VoyagrModules.routeSelection();
+        }));
+        const div = document.createElement('div');
+        div.style.cssText = plan.containerStyle;
+        div.innerHTML = plan.html;
         div.onmouseover = () => {
-            const hover = RS.getPreviewAlternativeRouteCardHoverStyle(routeColor);
-            div.style.borderColor = hover.borderColor;
-            div.style.background = hover.background;
+            div.style.borderColor = plan.hoverStyle.borderColor;
+            div.style.background = plan.hoverStyle.background;
         };
         div.onmouseout = () => {
-            const rest = RS.getPreviewAlternativeRouteCardRestStyle();
-            div.style.borderColor = rest.borderColor;
-            div.style.background = rest.background;
+            div.style.borderColor = plan.restStyle.borderColor;
+            div.style.background = plan.restStyle.background;
         };
         div.onclick = () => {
             selectRoute(index);
@@ -8210,6 +8210,8 @@ function displayParkingRoutes(drivingData, walkingData, parking, destination) {
     console.log('[Parking] drivingData:', drivingData);
     console.log('[Parking] walkingData:', walkingData);
 
+    const parkingModule = VoyagrModules.multimodalParking();
+
     // Remove previous parking routes
     if (parkingDrivingRoute && typeof parkingDrivingRoute.remove === 'function') parkingDrivingRoute.remove();
     if (parkingWalkingRoute && typeof parkingWalkingRoute.remove === 'function') parkingWalkingRoute.remove();
@@ -8220,11 +8222,7 @@ function displayParkingRoutes(drivingData, walkingData, parking, destination) {
         // Use precision 5 for OSRM/GraphHopper
         const drivingCoords = decodePolyline(drivingData.geometry, 5);
         console.log('[Parking] Driving route has', drivingCoords.length, 'points');
-        parkingDrivingRoute = MapLibreHelpers.addPolyline(map, drivingCoords, {
-            color: '#2196F3',
-            weight: 5,
-            opacity: 0.8
-        });
+        parkingDrivingRoute = MapLibreHelpers.addPolyline(map, drivingCoords, parkingModule.PARKING_DRIVING_ROUTE_POLYLINE);
     }
 
     // Decode and display walking route (green) with MapLibre
@@ -8232,11 +8230,7 @@ function displayParkingRoutes(drivingData, walkingData, parking, destination) {
         console.log('[Parking] Decoding walking route geometry');
         const walkingCoords = decodePolyline(walkingData.geometry, 5);
         console.log('[Parking] Walking route has', walkingCoords.length, 'points');
-        parkingWalkingRoute = MapLibreHelpers.addPolyline(map, walkingCoords, {
-            color: '#4CAF50',
-            weight: 4,
-            opacity: 0.7
-        });
+        parkingWalkingRoute = MapLibreHelpers.addPolyline(map, walkingCoords, parkingModule.PARKING_WALKING_ROUTE_POLYLINE);
     }
 
     // Fit map to show both routes
@@ -8579,37 +8573,29 @@ function loadFavorites() {
  * Edit a favorite location
  */
 function editFavorite(fav) {
+    const FAV = _favorites();
     const newName = prompt('Edit name:', fav.name);
     if (!newName || newName === fav.name) return;
 
     const newCategory = prompt('Edit category:', fav.category);
 
-    getSupabaseAccessToken().then(token => {
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        return fetch('/api/favorites', {
-            method: 'PUT',
-            headers,
-            body: JSON.stringify({
-                id: fav.id,
-                name: newName,
-                address: fav.address,
-                category: newCategory || fav.category
-            })
-        });
-    })
+    getSupabaseAccessToken().then(token => fetch('/api/favorites', {
+        method: 'PUT',
+        headers: FAV.buildFavoriteAuthHeaders(token),
+        body: FAV.buildFavoriteUpdateBody(fav, newName, newCategory),
+    }))
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            showStatus(_favorites().getFavoriteUpdatedStatusMessage(newName), 'success');
+            showStatus(FAV.getFavoriteUpdatedStatusMessage(newName), 'success');
             loadFavorites();
         } else {
-            showStatus(`❌ Error: ${data.error}`, 'error');
+            showStatus(FAV.getFavoriteApiErrorMessage(data.error), 'error');
         }
     })
     .catch(err => {
         console.error('Error updating favorite:', err);
-        showStatus('❌ Failed to update favorite', 'error');
+        showStatus(FAV.getFavoriteActionFailedMessage('update'), 'error');
     });
 }
 
@@ -8617,29 +8603,26 @@ function editFavorite(fav) {
  * Delete a favorite location
  */
 function deleteFavorite(fav) {
-    if (!confirm(`Delete "${fav.name}" from favorites?`)) return;
+    const FAV = _favorites();
+    if (!confirm(FAV.getFavoriteDeleteConfirmMessage(fav.name))) return;
 
-    getSupabaseAccessToken().then(token => {
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        return fetch('/api/favorites', {
-            method: 'DELETE',
-            headers,
-            body: JSON.stringify({ id: fav.id })
-        });
-    })
+    getSupabaseAccessToken().then(token => fetch('/api/favorites', {
+        method: 'DELETE',
+        headers: FAV.buildFavoriteAuthHeaders(token),
+        body: FAV.buildFavoriteDeleteBody(fav),
+    }))
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            showStatus(_favorites().getFavoriteRemovedStatusMessage(fav.name), 'success');
+            showStatus(FAV.getFavoriteRemovedStatusMessage(fav.name), 'success');
             loadFavorites();
         } else {
-            showStatus(`❌ Error: ${data.error}`, 'error');
+            showStatus(FAV.getFavoriteApiErrorMessage(data.error), 'error');
         }
     })
     .catch(err => {
         console.error('Error deleting favorite:', err);
-        showStatus('❌ Failed to delete favorite', 'error');
+        showStatus(FAV.getFavoriteActionFailedMessage('delete'), 'error');
     });
 }
 
@@ -8650,30 +8633,27 @@ function deleteFavorite(fav) {
  * @returns {*} Return value description
  */
 function addCurrentToFavorites() {
+    const FAV = _favorites();
     const name = prompt('Enter name for this location (e.g., Home, Work):');
     if (!name) return;
 
     const category = prompt('Enter category (e.g., home, work, shopping):', 'location');
 
-    getSupabaseAccessToken().then(token => {
-        const headers = { 'Content-Type': 'application/json' };
-        if (token) headers['Authorization'] = `Bearer ${token}`;
-        return fetch('/api/favorites', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                name: name,
-                address: document.getElementById('end').value,
-                lat: currentLat,
-                lon: currentLon,
-                category: category || 'location'
-            })
-        });
-    })
+    getSupabaseAccessToken().then(token => fetch('/api/favorites', {
+        method: 'POST',
+        headers: FAV.buildFavoriteAuthHeaders(token),
+        body: FAV.buildFavoriteCreateBody({
+            name: name,
+            address: document.getElementById('end').value,
+            lat: currentLat,
+            lon: currentLon,
+            category: category || 'location',
+        }),
+    }))
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showStatus(`Added ${name} to favorites!`, 'success');
+                showStatus(FAV.getFavoriteAddedStatusMessage(name), 'success');
                 loadFavorites();
             } else {
                 showStatus('Error adding to favorites', 'error');
@@ -11653,8 +11633,13 @@ function updateARButtonVisibility() {
  * Uses WebXR if available, falls back to camera overlay
  */
 async function toggleARMode() {
+    const MC = _mapControls();
+    const TU = VoyagrModules.toggleUI();
+    const toggleBtn = document.getElementById('arModeBtn');
+
     if (arModeActive) {
         await stopARMode();
+        MC.applyARModeToggleButton(toggleBtn, false, TU);
         return;
     }
 
@@ -11680,6 +11665,7 @@ async function toggleARMode() {
 
         if (result.success) {
             arModeActive = true;
+            MC.applyARModeToggleButton(toggleBtn, true, TU);
             showStatus(`📷 AR mode active (${result.mode})`, 'success');
 
             // Sync current instruction to AR
@@ -11708,6 +11694,11 @@ async function stopARMode() {
         await arNavigator.stop();
     }
     arModeActive = false;
+    _mapControls().applyARModeToggleButton(
+        document.getElementById('arModeBtn'),
+        false,
+        VoyagrModules.toggleUI()
+    );
     showStatus('🗺️ Returned to map view', 'info');
 }
 
@@ -17625,32 +17616,6 @@ function closeJourneySummary() {
 
     // Reset view
     clearForm();
-}
-
-/**
- * Updated AR Mode Toggle
- * Handles both the new toggle switch and legacy calls
- */
-function toggleARMode() {
-    // If not defined globally, define it
-    if (typeof window.arModeActive === 'undefined') window.arModeActive = false;
-
-    window.arModeActive = !window.arModeActive;
-
-    // Update button state (both FAB if exists and Toggle Switch)
-    const toggleBtn = document.getElementById('arModeBtn');    // New Toggle
-
-    if (toggleBtn) {
-        VoyagrModules.toggleUI().applyToggleButton(toggleBtn, window.arModeActive);
-    }
-
-    if (window.arModeActive) {
-        if (typeof startARMode === 'function') startARMode();
-        showStatus('📷 AR Navigation Enabled', 'success');
-    } else {
-        if (typeof stopARMode === 'function') stopARMode();
-        showStatus('📷 AR Navigation Disabled', 'info');
-    }
 }
 
 // NOTE: toggleDriverPerspective is defined earlier in the file (around line 7711)

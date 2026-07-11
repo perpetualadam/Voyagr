@@ -209,6 +209,19 @@ describe('route comparison modal helpers', () => {
         });
     });
 
+    test('shouldShowPreviewAlternativeRoutes and mount plan', () => {
+        expect(RS.shouldShowPreviewAlternativeRoutes(2)).toBe(true);
+        expect(RS.shouldShowPreviewAlternativeRoutes(1)).toBe(false);
+        const plan = RS.buildPreviewAlternativeRouteCardMountPlan(
+            { name: 'Fast', distance_km: 10, duration_minutes: 20, fuel_litres: 1.2, hazard_count: 0 },
+            0,
+            { routeColors: RS.ROUTE_COLORS, currencySymbol: '£', distUnit: 'mi', distanceText: '6.2', fuelUnit: 'L' }
+        );
+        expect(plan.containerStyle).toContain(RS.ROUTE_COLORS[0]);
+        expect(plan.html).toContain('Fast');
+        expect(plan.hoverStyle.borderColor).toBe(RS.ROUTE_COLORS[0]);
+    });
+
     test('route comparison modal overlay exposes id and fullscreen style', () => {
         expect(RS.ROUTE_COMPARISON_MODAL_ID).toBe('routeComparisonModal');
         expect(RS.getRouteComparisonModalOverlayStyleCssText()).toContain('z-index: 10000');

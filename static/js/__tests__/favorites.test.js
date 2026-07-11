@@ -43,4 +43,15 @@ describe('favorites module', () => {
         expect(FAV.getFavoriteUpdatedStatusMessage('Work')).toContain('Updated');
         expect(FAV.getFavoriteRemovedStatusMessage('Work')).toContain('Removed');
     });
+
+    test('API payload and header helpers', () => {
+        expect(FAV.buildFavoriteAuthHeaders('tok').Authorization).toBe('Bearer tok');
+        expect(JSON.parse(FAV.buildFavoriteUpdateBody({ id: 1, address: 'A', category: 'home' }, 'New', 'work')))
+            .toEqual({ id: 1, name: 'New', address: 'A', category: 'work' });
+        expect(JSON.parse(FAV.buildFavoriteDeleteBody({ id: 5 }))).toEqual({ id: 5 });
+        expect(JSON.parse(FAV.buildFavoriteCreateBody({ name: 'Home', address: '1 St', lat: 1, lon: 2 })).name)
+            .toBe('Home');
+        expect(FAV.getFavoriteDeleteConfirmMessage('Home')).toContain('Home');
+        expect(FAV.getFavoriteAddedStatusMessage('Home')).toContain('Added');
+    });
 });
