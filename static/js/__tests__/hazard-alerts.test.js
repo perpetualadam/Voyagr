@@ -86,4 +86,11 @@ describe('hazard-alerts module', () => {
         const singular = HA.buildUnavoidableHazardsModalHtml('', 1);
         expect(singular).toContain('1 hazard on all routes');
     });
+
+    test('unavoidable hazards modal shell exposes ids and layout styles', () => {
+        expect(HA.UNAVOIDABLE_HAZARDS_MODAL_ID).toBe('unavoidableHazardsModal');
+        expect(HA.UNAVOIDABLE_HAZARDS_BACKDROP_ID).toBe('unavoidableHazardsBackdrop');
+        expect(HA.getUnavoidableHazardsModalStyleCssText()).toContain('z-index: 10001');
+        expect(HA.getUnavoidableHazardsBackdropStyleCssText()).toContain('rgba(0,0,0,0.5)');
+    });
 });

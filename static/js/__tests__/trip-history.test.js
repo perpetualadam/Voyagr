@@ -194,4 +194,10 @@ describe('analytics display helpers', () => {
     test('TRIP_HISTORY_ERROR_HTML shows load failure message', () => {
         expect(T.TRIP_HISTORY_ERROR_HTML).toContain('Error loading trips');
     });
+
+    test('sign-in banner helpers match 401 offline copy', () => {
+        expect(T.getTripHistorySignInBannerStyleCssText()).toContain('#E3F2FD');
+        expect(T.buildTripHistorySignInBannerText(true)).toContain('Showing trips saved on this device');
+        expect(T.buildTripHistorySignInBannerText(false)).toContain('No trips on this device yet');
+    });
 });

@@ -208,6 +208,25 @@
         '<div style="text-align: center; padding: 20px; color: #f44336;">Error loading trips</div>';
 
     /**
+     * Inline style for the 401 sign-in banner in trip history.
+     * @returns {string}
+     */
+    function getTripHistorySignInBannerStyleCssText() {
+        return 'padding:12px;background:#E3F2FD;border-radius:8px;margin-bottom:12px;font-size:13px;color:#1565C0;';
+    }
+
+    /**
+     * Copy for the 401 sign-in banner when server trips are unavailable.
+     * @param {boolean} hasTrips
+     * @returns {string}
+     */
+    function buildTripHistorySignInBannerText(hasTrips) {
+        return hasTrips
+            ? '📱 Showing trips saved on this device. Sign in to sync trips with your account.'
+            : '📱 No trips on this device yet. Finish navigation to save a trip here, then sign in to sync across devices.';
+    }
+
+    /**
      * Build one trip-history list row HTML string.
      * @param {object} trip
      * @param {object} display - pre-formatted/escaped display fields
@@ -320,6 +339,8 @@
         buildAnalyticsDisplayValues: buildAnalyticsDisplayValues,
         buildFrequentRouteRowHtml: buildFrequentRouteRowHtml,
         buildFrequentRoutesListHtml: buildFrequentRoutesListHtml,
+        getTripHistorySignInBannerStyleCssText: getTripHistorySignInBannerStyleCssText,
+        buildTripHistorySignInBannerText: buildTripHistorySignInBannerText,
         EMPTY_TRIP_LIST_HTML: EMPTY_TRIP_LIST_HTML,
         TRIP_HISTORY_ERROR_HTML: TRIP_HISTORY_ERROR_HTML,
     };

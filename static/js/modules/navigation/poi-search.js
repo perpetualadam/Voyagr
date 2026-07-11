@@ -15,12 +15,59 @@
         groceries: '🛒',
     };
 
+    /** Map marker icons (food uses burger emoji, not the modal plate icon). */
+    var POI_MAP_MARKER_ICONS = {
+        fuel: '⛽',
+        food: '🍔',
+        parking: '🅿️',
+        charging: '🔌',
+        pharmacy: '💊',
+        hospital: '🏥',
+        groceries: '🛒',
+    };
+
     /**
      * @param {string} type
      * @returns {string}
      */
     function getPoiTypeIcon(type) {
         return POI_TYPE_ICONS[type] || '📍';
+    }
+
+    /**
+     * @param {string} type
+     * @returns {string}
+     */
+    function getPoiMapMarkerIcon(type) {
+        return POI_MAP_MARKER_ICONS[type] || '📍';
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getPoiMapMarkerStyleCssText() {
+        return 'font-size: 24px; cursor: pointer; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));';
+    }
+
+    /**
+     * Popup HTML for a POI map marker.
+     * @param {Object} poi
+     * @returns {string}
+     */
+    function buildPoiMapMarkerPopupHtml(poi) {
+        poi = poi || {};
+        var distanceKm = (Number(poi.distance_m) || 0) / 1000;
+        var phoneHtml = poi.phone
+            ? '<br><a href="tel:' + poi.phone + '" style="font-size: 12px;">' + poi.phone + '</a>'
+            : '';
+        return (
+            '<div style="padding: 8px;">' +
+                '<strong>' + poi.name + '</strong><br>' +
+                '<span style="font-size: 12px; color: #666;">' + (poi.address || '') + '</span><br>' +
+                '<span style="font-size: 11px; color: #888;">' + distanceKm.toFixed(1) + ' km away</span>' +
+                phoneHtml +
+            '</div>'
+        );
     }
 
     /**
@@ -106,7 +153,11 @@
 
     var api = {
         POI_TYPE_ICONS: POI_TYPE_ICONS,
+        POI_MAP_MARKER_ICONS: POI_MAP_MARKER_ICONS,
         getPoiTypeIcon: getPoiTypeIcon,
+        getPoiMapMarkerIcon: getPoiMapMarkerIcon,
+        getPoiMapMarkerStyleCssText: getPoiMapMarkerStyleCssText,
+        buildPoiMapMarkerPopupHtml: buildPoiMapMarkerPopupHtml,
         formatPoiTypeTitle: formatPoiTypeTitle,
         buildPoiResultItemHtml: buildPoiResultItemHtml,
         buildPoiResultsModalHtml: buildPoiResultsModalHtml,

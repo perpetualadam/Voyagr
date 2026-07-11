@@ -173,4 +173,10 @@ describe('route comparison modal helpers', () => {
         expect(html).toContain('routeComparisonModal');
         expect(html).toContain('Close');
     });
+
+    test('getPreviewAlternativeRouteCardContainerStyleCssText includes route colour', () => {
+        const style = RS.getPreviewAlternativeRouteCardContainerStyleCssText('#2563EB');
+        expect(style).toContain('border-left: 4px solid #2563EB');
+        expect(style).toContain('cursor: pointer');
+    });
 });
