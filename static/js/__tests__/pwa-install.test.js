@@ -43,4 +43,25 @@ describe('pwa-install module', () => {
         expect(reload.action).toBe('reload');
         expect(reload.saveAppState).toBe(true);
     });
+
+    test('buildScheduleAppReloadPlan dedupes scheduled reloads', () => {
+        expect(PWA.buildScheduleAppReloadPlan({
+            alreadyScheduled: true,
+            reason: 'manual',
+        }).shouldSchedule).toBe(false);
+        const plan = PWA.buildScheduleAppReloadPlan({ reason: 'manual-refresh', delayMs: 500 });
+        expect(plan.shouldSchedule).toBe(true);
+        expect(plan.delayMs).toBe(500);
+    });
+
+    test('buildRestoreUiStateAfterReloadExecutePlan restores tab and sheet flags', () => {
+        expect(PWA.buildRestoreUiStateAfterReloadExecutePlan(null).shouldRestore).toBe(false);
+        const execute = PWA.buildRestoreUiStateAfterReloadExecutePlan({
+            activeTab: 'navigation',
+            bottomSheetExpanded: true,
+        });
+        expect(execute.shouldRestore).toBe(true);
+        expect(execute.activeTab).toBe('navigation');
+        expect(execute.scheduleMapRepaint).toBe(true);
+    });
 });

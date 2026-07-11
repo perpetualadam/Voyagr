@@ -13238,23 +13238,28 @@ async function refreshNavTrafficETAIfDue(baseRemainingMinutes, progressPercent, 
     }
 }
 
+function applyTurnInfoETAPanelFromPlan(render) {
+    if (!render || !render.shouldRender) return;
+    const turnInfo = document.getElementById(render.targetId);
+    if (turnInfo) turnInfo.innerHTML = render.panelHtml;
+}
+
 function renderTurnInfoETAPanel(baseMinutes, adjustedMinutes, progressPercent, trafficLevel, congestionPercent) {
-    const turnInfo = document.getElementById('turnInfo');
-    if (!turnInfo) return;
-    const now = Date.now();
+    const ETA = _eta();
     const displayMins = adjustedMinutes != null ? adjustedMinutes : baseMinutes;
-    const eta = new Date(now + displayMins * 60000);
-    const trafficLine = _eta().buildTrafficStatusLine(
-        _eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode),
-        trafficLevel,
-        congestionPercent
-    );
-    turnInfo.innerHTML = _eta().buildTurnInfoETAPanelHtml(
-        displayMins,
+    const render = ETA.buildTurnInfoETAPanelRenderPlan({
+        baseMinutes,
+        adjustedMinutes,
         progressPercent,
-        eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        trafficLine
-    );
+        trafficLevel,
+        congestionPercent,
+        showTraffic: ETA.shouldApplyTrafficAwareETA(localStorage, currentRoutingMode),
+        etaClockText: new Date(Date.now() + displayMins * 60000).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+        }),
+    });
+    applyTurnInfoETAPanelFromPlan(render);
 }
 
 
@@ -14120,34 +14125,39 @@ function refreshTrafficData() {
  * @returns {Promise<void>}
  */
 async function updateETACalculation() {
-    if (!routeInProgress || !window.lastCalculatedRoute || !routePolyline) return;
-
+    const ETA = _eta();
     const base = computeBaseNavigationETAMinutes();
-    if (!base) {
-        console.warn('[ETA] No valid route duration or progress');
+    const tick = ETA.buildUpdateETACalculationTickPlan({
+        routeInProgress,
+        hasRoute: !!window.lastCalculatedRoute,
+        hasPolyline: !!routePolyline,
+        baseRemainingMinutes: base ? base.timeRemainingMinutes : null,
+        progressPercent: base ? base.progressPercent : null,
+        applyTrafficAware: ETA.shouldApplyTrafficAwareETA(localStorage, currentRoutingMode),
+        trafficLevel: window.navETASnapshot.trafficLevel,
+        congestionPercent: window.navETASnapshot.congestionPercent,
+    });
+    if (tick.action !== 'update') {
+        if (tick.warnLog) console.warn(tick.warnLog);
         return;
     }
 
-    const { timeRemainingMinutes, progressPercent } = base;
-    let adjusted = applyTrafficRatioToBaseRemaining(timeRemainingMinutes);
-    renderTurnInfoETAPanel(
-        timeRemainingMinutes,
-        _eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode) ? adjusted : null,
-        progressPercent,
-        window.navETASnapshot.trafficLevel,
-        window.navETASnapshot.congestionPercent
-    );
+    const renderPanel = () => {
+        const adjusted = tick.applyTrafficAware
+            ? applyTrafficRatioToBaseRemaining(tick.timeRemainingMinutes)
+            : null;
+        renderTurnInfoETAPanel(
+            tick.timeRemainingMinutes,
+            adjusted,
+            tick.progressPercent,
+            tick.trafficLevel,
+            tick.congestionPercent
+        );
+    };
 
-    await refreshNavTrafficETAIfDue(timeRemainingMinutes, progressPercent, false);
-
-    adjusted = applyTrafficRatioToBaseRemaining(timeRemainingMinutes);
-    renderTurnInfoETAPanel(
-        timeRemainingMinutes,
-        _eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode) ? adjusted : null,
-        progressPercent,
-        window.navETASnapshot.trafficLevel,
-        window.navETASnapshot.congestionPercent
-    );
+    renderPanel();
+    await refreshNavTrafficETAIfDue(tick.timeRemainingMinutes, tick.progressPercent, false);
+    renderPanel();
 }
 
 /**
@@ -14284,49 +14294,57 @@ function refreshWeatherData() {
 
 /** Prevent duplicate reloads when Check Updates and Refresh App fire close together. */
 function scheduleAppReload(reason, delayMs) {
-    if (window.__voyagrReloadScheduled) {
-        console.log('[PWA] Reload already scheduled, skipping:', reason);
+    const plan = _pwaInstall().buildScheduleAppReloadPlan({
+        reason,
+        delayMs,
+        alreadyScheduled: !!window.__voyagrReloadScheduled,
+    });
+    if (!plan.shouldSchedule) {
+        console.log(plan.skipLogMessage, plan.reason);
         return false;
     }
     window.__voyagrReloadScheduled = true;
     setTimeout(() => {
         window.location.reload();
-    }, delayMs);
+    }, plan.delayMs);
     return true;
 }
 
 /** Repaint map after bottom-sheet/tab layout changes (common after PWA reload). */
 function scheduleMapRepaintAfterUiChange() {
+    const execute = _pwaInstall().buildScheduleMapRepaintAfterUiChangePlan();
+    if (!execute.shouldRepaint) return;
+
     const repaint = () => {
-        if (typeof window.__voyagrMapResizeAndRepaint === 'function') {
-            window.__voyagrMapResizeAndRepaint();
+        if (typeof window[execute.handlerName] === 'function') {
+            window[execute.handlerName]();
         }
     };
-    repaint();
-    requestAnimationFrame(repaint);
-    setTimeout(repaint, 300);
-    setTimeout(repaint, 1000);
+    if (execute.immediate) repaint();
+    if (execute.requestAnimationFrame) requestAnimationFrame(repaint);
+    (execute.delayedRepaintsMs || []).forEach((ms) => setTimeout(repaint, ms));
 }
 
 /** Restore active tab and bottom-sheet state saved before a reload/update. */
 function restoreUiStateAfterReload() {
     const pending = window.__voyagrPendingUiRestore;
-    if (!pending) return;
+    const execute = _pwaInstall().buildRestoreUiStateAfterReloadExecutePlan(pending);
+    if (!execute.shouldRestore) return;
     window.__voyagrPendingUiRestore = null;
 
     try {
-        if (pending.activeTab && typeof switchTab === 'function') {
-            switchTab(pending.activeTab);
+        if (execute.activeTab && typeof switchTab === 'function') {
+            switchTab(execute.activeTab);
         }
-        if (pending.bottomSheetExpanded === true && typeof expandBottomSheet === 'function') {
+        if (execute.bottomSheetExpanded === true && typeof expandBottomSheet === 'function') {
             expandBottomSheet();
-        } else if (pending.bottomSheetExpanded === false && typeof collapseBottomSheet === 'function') {
+        } else if (execute.bottomSheetExpanded === false && typeof collapseBottomSheet === 'function') {
             collapseBottomSheet();
         }
-        scheduleMapRepaintAfterUiChange();
-        console.log('[PWA] UI state restored after reload:', pending);
+        if (execute.scheduleMapRepaint) scheduleMapRepaintAfterUiChange();
+        console.log(execute.restoreLogPrefix, pending);
     } catch (e) {
-        console.warn('[PWA] UI restore error:', e);
+        console.warn(execute.errorLogPrefix, e);
     }
 }
 

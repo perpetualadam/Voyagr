@@ -160,6 +160,62 @@
         );
     }
 
+    /**
+     * Plan for scheduling a single app reload (deduped).
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildScheduleAppReloadPlan(input) {
+        input = input || {};
+        if (input.alreadyScheduled) {
+            return {
+                shouldSchedule: false,
+                skipLogMessage: '[PWA] Reload already scheduled, skipping:',
+                reason: input.reason,
+            };
+        }
+        return {
+            shouldSchedule: true,
+            reason: input.reason,
+            delayMs: input.delayMs != null ? input.delayMs : 500,
+            setReloadScheduledFlag: true,
+            action: 'locationReload',
+        };
+    }
+
+    /**
+     * Execute plan for repainting the map after layout/tab changes.
+     * @returns {Object}
+     */
+    function buildScheduleMapRepaintAfterUiChangePlan() {
+        return {
+            shouldRepaint: true,
+            immediate: true,
+            requestAnimationFrame: true,
+            delayedRepaintsMs: [300, 1000],
+            handlerName: '__voyagrMapResizeAndRepaint',
+        };
+    }
+
+    /**
+     * Execute plan for restoring UI state after a PWA reload.
+     * @param {Object|null|undefined} pending
+     * @returns {Object}
+     */
+    function buildRestoreUiStateAfterReloadExecutePlan(pending) {
+        if (!pending) {
+            return { shouldRestore: false };
+        }
+        return {
+            shouldRestore: true,
+            activeTab: pending.activeTab,
+            bottomSheetExpanded: pending.bottomSheetExpanded,
+            scheduleMapRepaint: true,
+            restoreLogPrefix: '[PWA] UI state restored after reload:',
+            errorLogPrefix: '[PWA] UI restore error:',
+        };
+    }
+
     var api = {
         PWA_BANNER_ID: PWA_BANNER_ID,
         SW_REGISTRATION_PATH: SW_REGISTRATION_PATH,
@@ -173,6 +229,9 @@
         getPwaDismissButtonStyleCssText: getPwaDismissButtonStyleCssText,
         getPwaPrimaryButtonStyleCssText: getPwaPrimaryButtonStyleCssText,
         buildPwaInstallMessageHtml: buildPwaInstallMessageHtml,
+        buildScheduleAppReloadPlan: buildScheduleAppReloadPlan,
+        buildScheduleMapRepaintAfterUiChangePlan: buildScheduleMapRepaintAfterUiChangePlan,
+        buildRestoreUiStateAfterReloadExecutePlan: buildRestoreUiStateAfterReloadExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

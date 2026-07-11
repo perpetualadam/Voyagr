@@ -580,6 +580,59 @@
         };
     }
 
+    /**
+     * Tick plan for periodic navigation ETA panel refresh.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildUpdateETACalculationTickPlan(input) {
+        input = input || {};
+        if (!input.routeInProgress || !input.hasRoute || !input.hasPolyline) {
+            return { action: 'skip', reason: 'inactive' };
+        }
+        if (input.baseRemainingMinutes == null) {
+            return {
+                action: 'skip',
+                reason: 'no-duration',
+                warnLog: '[ETA] No valid route duration or progress',
+            };
+        }
+        return {
+            action: 'update',
+            timeRemainingMinutes: input.baseRemainingMinutes,
+            progressPercent: input.progressPercent != null ? input.progressPercent : 0,
+            applyTrafficAware: !!input.applyTrafficAware,
+            trafficLevel: input.trafficLevel,
+            congestionPercent: input.congestionPercent,
+            refreshTrafficBetweenRenders: true,
+        };
+    }
+
+    /**
+     * Render plan for the turn-info ETA panel HTML.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildTurnInfoETAPanelRenderPlan(input) {
+        input = input || {};
+        var displayMins = input.adjustedMinutes != null ? input.adjustedMinutes : input.baseMinutes;
+        var trafficLine = buildTrafficStatusLine(
+            !!input.showTraffic,
+            input.trafficLevel,
+            input.congestionPercent
+        );
+        return {
+            shouldRender: true,
+            targetId: 'turnInfo',
+            panelHtml: buildTurnInfoETAPanelHtml(
+                displayMins,
+                input.progressPercent != null ? input.progressPercent : 0,
+                input.etaClockText || '',
+                trafficLine
+            ),
+        };
+    }
+
     var api = {
         formatRemainingTime: formatRemainingTime,
         buildETAVoiceMessage: buildETAVoiceMessage,
@@ -610,6 +663,8 @@
         buildInitialETAMovementDeferPlan: buildInitialETAMovementDeferPlan,
         buildInitialETAAnnouncementExecutePlan: buildInitialETAAnnouncementExecutePlan,
         buildScheduleInitialETAAnnouncementPlan: buildScheduleInitialETAAnnouncementPlan,
+        buildUpdateETACalculationTickPlan: buildUpdateETACalculationTickPlan,
+        buildTurnInfoETAPanelRenderPlan: buildTurnInfoETAPanelRenderPlan,
         MAX_PLAUSIBLE_AVG_KMH: MAX_PLAUSIBLE_AVG_KMH,
         TRAFFIC_RATIO_MAX_AGE_MS: TRAFFIC_RATIO_MAX_AGE_MS,
     };

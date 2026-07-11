@@ -374,4 +374,34 @@ describe('journey summary helpers', () => {
         expect(schedule.shouldSchedule).toBe(true);
         expect(schedule.delayMs).toBe(ETA.ETA_INITIAL_ANNOUNCE_DELAY_MS);
     });
+
+    test('buildUpdateETACalculationTickPlan gates inactive navigation', () => {
+        expect(ETA.buildUpdateETACalculationTickPlan({ routeInProgress: false }).action).toBe('skip');
+        const update = ETA.buildUpdateETACalculationTickPlan({
+            routeInProgress: true,
+            hasRoute: true,
+            hasPolyline: true,
+            baseRemainingMinutes: 18,
+            progressPercent: 40,
+            applyTrafficAware: true,
+        });
+        expect(update.action).toBe('update');
+        expect(update.refreshTrafficBetweenRenders).toBe(true);
+    });
+
+    test('buildTurnInfoETAPanelRenderPlan builds panel html', () => {
+        const render = ETA.buildTurnInfoETAPanelRenderPlan({
+            baseMinutes: 20,
+            adjustedMinutes: 24,
+            progressPercent: 35,
+            showTraffic: true,
+            trafficLevel: 'Moderate',
+            congestionPercent: 42,
+            etaClockText: '14:30',
+        });
+        expect(render.shouldRender).toBe(true);
+        expect(render.targetId).toBe('turnInfo');
+        expect(render.panelHtml).toContain('14:30');
+        expect(render.panelHtml).toContain('Moderate');
+    });
 });
