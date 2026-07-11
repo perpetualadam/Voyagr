@@ -5007,33 +5007,27 @@ function toggleTrafficLayer() {
  *     add path so the `style.load` listener cannot fire it in an unsafe state.
  */
 function addTrafficLayer() {
-    if (!map) {
-        console.log('[Traffic] Map not ready');
+    const MLT = _mapLayerToggles();
+    const orch = MLT.buildAddTrafficLayerOrchestrationPlan({
+        hasMap: !!map,
+        pendingGuardSet: !!window[MLT.TRAFFIC_PENDING_GUARD_PROPERTY],
+        isStyleLoaded: !!(map && map.isStyleLoaded && map.isStyleLoaded()),
+    });
+    if (!orch.shouldProceed) {
+        if (orch.mapNotReadyLog) console.log(orch.mapNotReadyLog);
         return;
     }
 
     try {
-        if (trafficLayer && !map.getLayer('traffic-layer')) {
+        if (trafficLayer && map && !map.getLayer(MLT.TRAFFIC_LAYER_ID)) {
             trafficLayer = null;
         }
     } catch (e) {
         /* ignore */
     }
 
-    // Reentry guard. addTrafficLayer() can be invoked from initTrafficLayer(),
-    // the /api/config fetch resolver, the theme switcher and the network-recover
-    // path; without this they pile up listeners and produce duplicate
-    // "added successfully" log lines.
-    if (window.__voyagrTrafficLayerPending) {
-        return;
-    }
-
-    // Remove existing traffic layer (idempotent — no-op if absent)
     removeTrafficLayer();
 
-    // TomTom Traffic Flow Tiles - relative speed coloring
-    // Green = free flow, Yellow = slow, Red = congested, Black = blocked
-    // Using 'relative0' style which shows all roads with traffic coloring
     const useProxy = window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true;
     const tomtomApiKey = window.TOMTOM_API_KEY || '';
 
@@ -5041,31 +5035,34 @@ function addTrafficLayer() {
         useServerProxy: useProxy,
         windowKey: typeof window.TOMTOM_API_KEY,
         keyLength: tomtomApiKey ? tomtomApiKey.length : 0,
-        hasKey: !!tomtomApiKey
+        hasKey: !!tomtomApiKey,
     });
 
-    // If key not available and we are not using the server tile proxy, try fetching from /api/config
-    if (!useProxy && !tomtomApiKey) {
-        console.log('[Traffic] Fetching config from server...');
-        fetch('/api/config')
-            .then(r => r.json())
-            .then(data => {
+    const credFetch = MLT.buildTrafficLayerCredentialsFetchPlan({
+        useProxy,
+        hasApiKey: !!tomtomApiKey,
+    });
+    if (credFetch.shouldFetch) {
+        console.log(credFetch.fetchLogMessage);
+        fetch(credFetch.url)
+            .then((r) => r.json())
+            .then((data) => {
                 applySupportLinksFromConfig(data);
-                if (data.tomtom_traffic_tile_proxy) {
+                if (data[credFetch.enableProxyFlag]) {
                     window.VOYAGR_TOMTOM_TRAFFIC_PROXY = true;
                     console.log('[Traffic] Server tile proxy enabled — key stays off the client');
                     addTrafficLayer();
                     return;
                 }
-                if (data.success && data.tomtom_api_key) {
-                    window.TOMTOM_API_KEY = data.tomtom_api_key;
+                if (data.success && data[credFetch.apiKeyField]) {
+                    window.TOMTOM_API_KEY = data[credFetch.apiKeyField];
                     console.log('[Traffic] API key loaded from server, reinitializing...');
                     addTrafficLayer();
                     return;
                 }
-                console.log('[Traffic] No API key from server - using route-level traffic only');
+                console.log(credFetch.noKeyLogMessage);
             })
-            .catch(err => console.log('[Traffic] Failed to fetch config:', err));
+            .catch((err) => console.log(credFetch.errorLogPrefix, err));
         return;
     }
 
@@ -5077,60 +5074,46 @@ function addTrafficLayer() {
     };
 
     const addTrafficLayerNow = () => {
-        // Safety: style may have unloaded between scheduling and execution (e.g.
-        // theme switch / soft style reload). Re-check; bail to the poller below.
         if (!map || typeof map.isStyleLoaded !== 'function' || !map.isStyleLoaded()) {
             return false;
         }
         try {
-            const useProxyNow = window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true;
-            const key = window.TOMTOM_API_KEY || '';
-            let tiles;
-            if (useProxyNow) {
-                tiles = [`${window.location.origin}/api/tomtom/traffic-tile/{z}/{x}/{y}.png`];
-            } else if (key) {
-                tiles = [`https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key=${key}&tileSize=256`];
-            } else {
-                console.log('[Traffic] No tile URL available');
+            const tilePlan = MLT.buildTrafficTileUrlsPlan({
+                useProxy: window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true,
+                origin: window.location.origin,
+                apiKey: window.TOMTOM_API_KEY || '',
+            });
+            if (!tilePlan.hasTiles) {
+                console.log(tilePlan.noCredentialsLogMessage);
                 return true;
             }
 
-            if (!map.getSource('traffic-source')) {
-                map.addSource('traffic-source', {
-                    type: 'raster',
-                    tiles,
-                    tileSize: 256,
-                    minzoom: 0,
-                    maxzoom: 16,
-                    bounds: [-180, -85.0511, 180, 85.0511]
-                });
+            if (!map.getSource(MLT.TRAFFIC_SOURCE_ID)) {
+                map.addSource(MLT.TRAFFIC_SOURCE_ID, MLT.buildTrafficRasterSourceSpec(tilePlan.tiles));
             }
 
-            if (!map.getLayer('traffic-layer')) {
-                // Find the first symbol layer (road labels) to insert traffic BELOW it
-                // This ensures: base map → traffic → routes → road labels
+            if (!map.getLayer(MLT.TRAFFIC_LAYER_ID)) {
                 const style = map.getStyle();
                 const trafficBeforeId = _routeSelection()
                     .findFirstTextSymbolLayerId(style && style.layers);
                 if (trafficBeforeId) {
                     console.log(`[Traffic] Inserting traffic layer before symbol layer: ${trafficBeforeId}`);
                 }
-
+                const layerSpec = MLT.buildTrafficRasterLayerSpec({ beforeLayerId: trafficBeforeId });
                 map.addLayer({
-                    id: 'traffic-layer',
-                    type: 'raster',
-                    source: 'traffic-source',
-                    minzoom: 0,
-                    maxzoom: 16,
-                    paint: { 'raster-opacity': 0.6 }
-                }, trafficBeforeId);
+                    id: layerSpec.id,
+                    type: layerSpec.type,
+                    source: layerSpec.source,
+                    minzoom: layerSpec.minzoom,
+                    maxzoom: layerSpec.maxzoom,
+                    paint: layerSpec.paint,
+                }, layerSpec.beforeLayerId);
             }
 
-            trafficLayer = { id: 'traffic-layer' };
-            console.log('[Traffic] TomTom traffic layer added successfully');
+            trafficLayer = { id: MLT.TRAFFIC_LAYER_ID };
+            console.log(orch.successLog);
 
-            // Ensure routes stay on top of traffic
-            bringRoutesToTop();
+            if (orch.bringRoutesToTop) bringRoutesToTop();
             return true;
         } catch (e) {
             console.error('[Traffic] Error adding traffic layer:', e);
@@ -5139,40 +5122,38 @@ function addTrafficLayer() {
     };
 
     const runOnce = () => scheduleOnce(() => {
-        try { addTrafficLayerNow(); } finally { window.__voyagrTrafficLayerPending = false; }
+        try { addTrafficLayerNow(); } finally { window[orch.pendingGuardProperty] = false; }
     });
 
-    window.__voyagrTrafficLayerPending = true;
+    window[orch.pendingGuardProperty] = true;
 
-    if (map.isStyleLoaded()) {
+    if (orch.isStyleLoaded) {
         runOnce();
         return;
     }
 
-    console.log('[Traffic] Waiting for style to load...');
-    // 1) Listen for the next style.load event.
+    console.log(orch.waitForStyleLog);
     map.once('style.load', runOnce);
-    // 2) Bounded poll as a belt-and-braces: if the style.load event was missed
-    //    (some MapLibre versions don't fire it on the initial async setStyle if
-    //    the bootstrap style was already "loaded"), we still recover.
     let attempts = 0;
-    const MAX_ATTEMPTS = 40; // ~10s at 250ms
     const poll = () => {
         if (scheduled) return;
-        if (!map) { window.__voyagrTrafficLayerPending = false; return; }
+        if (!map) {
+            window[orch.pendingGuardProperty] = false;
+            return;
+        }
         if (map.isStyleLoaded()) {
             runOnce();
             return;
         }
         attempts++;
-        if (attempts >= MAX_ATTEMPTS) {
-            console.warn('[Traffic] Style not loaded after polling — giving up');
-            window.__voyagrTrafficLayerPending = false;
+        if (attempts >= orch.stylePollMaxAttempts) {
+            console.warn(orch.stylePollGiveUpLog);
+            window[orch.pendingGuardProperty] = false;
             return;
         }
-        setTimeout(poll, 250);
+        setTimeout(poll, orch.stylePollIntervalMs);
     };
-    setTimeout(poll, 250);
+    setTimeout(poll, orch.stylePollIntervalMs);
 }
 
 /**
@@ -6372,14 +6353,21 @@ async function checkRouteCAZ(routeCoords, vehicleCazPass = 'none', vehicleType =
 // ===== ALWAYS-ON CAMERA LAYER =====
 // Separate layer for displaying cameras regardless of route
 window.cameraMarkers = [];
-let showCamerasEnabled = localStorage.getItem('showCamerasEnabled') !== 'false'; // Default: enabled
+const MOT = typeof VoyagrMapOverlayToggles !== 'undefined' ? VoyagrMapOverlayToggles : null;
+let showCamerasEnabled = MOT
+    ? MOT.resolveShowCamerasEnabledFromStorage(localStorage.getItem('showCamerasEnabled'))
+    : localStorage.getItem('showCamerasEnabled') !== 'false';
 let cameraFetchTimeout = null;
 
 window.osmTrafficLightMarkers = [];
-let showOsmTrafficLightsEnabled = localStorage.getItem('showOsmTrafficLightsOnMap') !== 'false';
+let showOsmTrafficLightsEnabled = MOT
+    ? MOT.resolveShowOsmTrafficLightsEnabledFromStorage(localStorage.getItem('showOsmTrafficLightsOnMap'))
+    : localStorage.getItem('showOsmTrafficLightsOnMap') !== 'false';
 
 window.osmRailwayCrossingMarkers = [];
-let showOsmRailwayCrossingsEnabled = localStorage.getItem('showOsmRailwayCrossingsOnMap') !== 'false';
+let showOsmRailwayCrossingsEnabled = MOT
+    ? MOT.resolveShowOsmRailwayCrossingsEnabledFromStorage(localStorage.getItem('showOsmRailwayCrossingsOnMap'))
+    : localStorage.getItem('showOsmRailwayCrossingsOnMap') !== 'false';
 
 /** Same vertical icon as route traffic lights (`traffic-lights.js`); fallback if module not loaded. */
 function getOsmTrafficLightMarkerInnerSVG() {
@@ -6398,19 +6386,24 @@ function getOsmTrafficLightMarkerPillHTML() {
  * Toggle show cameras on map
  */
 function toggleShowCameras() {
-    showCamerasEnabled = !showCamerasEnabled;
-    localStorage.setItem('showCamerasEnabled', showCamerasEnabled);
+    const OT = _mapOverlayToggles();
+    const TU = _toggleUI();
+    const collected = OT.buildToggleShowCamerasCollectPlan({ currentlyEnabled: showCamerasEnabled });
+    const execute = OT.buildToggleShowCamerasExecutePlan({ enabled: collected.enabled });
+    if (!execute.shouldApply) return;
 
-    const toggle = document.getElementById('showCamerasToggle');
-    _toggleUI().applyToggleButton(toggle, showCamerasEnabled);
+    showCamerasEnabled = execute.enabled;
+    TU.writeBoolPref(execute.storageKey, showCamerasEnabled);
+    TU.applyToggleButton(document.getElementById(execute.toggleId), showCamerasEnabled);
 
-    if (showCamerasEnabled) {
+    if (execute.mapAction === 'fetchCameras') {
         fetchAndDisplayCameras();
-        console.log('[Cameras] Camera display enabled');
+        console.log(execute.enabledLogMessage);
     } else {
         clearCameraMarkers();
-        console.log('[Cameras] Camera display disabled');
+        console.log(execute.disabledLogMessage);
     }
+    if (execute.saveAllSettings) saveAllSettings();
 }
 
 /**
@@ -6431,32 +6424,33 @@ function clearCameraMarkers() {
  * Fetch cameras in current map viewport and display them
  */
 function fetchAndDisplayCameras() {
-    if (!showCamerasEnabled || !map) return;
-
-    const bounds = map.getBounds();
-    const zoom = map.getZoom();
-
-    // Only show cameras at zoom level 10 or higher for better mobile visibility
-    if (zoom < 10) {
-        clearCameraMarkers();
-        console.log('[Cameras] Zoom level too low, hiding cameras');
+    const OT = _mapOverlayToggles();
+    const dispatch = OT.buildFetchCamerasDispatchPlan({
+        enabled: showCamerasEnabled,
+        hasMap: !!map,
+        zoom: map ? map.getZoom() : 0,
+    });
+    if (!dispatch.shouldFetch) {
+        if (dispatch.clearMarkers) clearCameraMarkers();
+        if (dispatch.lowZoomLogMessage) console.log(dispatch.lowZoomLogMessage);
         return;
     }
 
+    const bounds = map.getBounds();
     const north = bounds.getNorth();
     const south = bounds.getSouth();
     const east = bounds.getEast();
     const west = bounds.getWest();
 
-    fetch(`/api/cameras/area?north=${north}&south=${south}&east=${east}&west=${west}`)
-        .then(response => response.json())
-        .then(data => {
+    fetch(OT.buildAreaBoundsApiUrl(north, south, east, west, dispatch.apiPath))
+        .then((response) => response.json())
+        .then((data) => {
             if (data.success && data.cameras) {
                 displayCameraMarkers(data.cameras);
                 console.log(`[Cameras] Loaded ${data.cameras.length} cameras in viewport`);
             }
         })
-        .catch(error => {
+        .catch((error) => {
             console.error('[Cameras] Error fetching cameras:', error);
         });
 }
@@ -6507,29 +6501,45 @@ function displayCameraMarkers(cameras) {
 }
 
 function toggleShowOsmTrafficLights() {
-    showOsmTrafficLightsEnabled = !showOsmTrafficLightsEnabled;
-    localStorage.setItem('showOsmTrafficLightsOnMap', showOsmTrafficLightsEnabled ? 'true' : 'false');
-    const toggle = document.getElementById('showOsmTrafficLightsToggle');
-    _toggleUI().applyLabeledToggleButton(toggle, showOsmTrafficLightsEnabled);
-    if (showOsmTrafficLightsEnabled) {
+    const OT = _mapOverlayToggles();
+    const TU = _toggleUI();
+    const collected = OT.buildToggleOsmTrafficLightsCollectPlan({
+        currentlyEnabled: showOsmTrafficLightsEnabled,
+    });
+    const execute = OT.buildToggleOsmTrafficLightsExecutePlan({ enabled: collected.enabled });
+    if (!execute.shouldApply) return;
+
+    showOsmTrafficLightsEnabled = execute.enabled;
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    TU.applyLabeledToggleButton(document.getElementById(execute.toggleId), showOsmTrafficLightsEnabled);
+
+    if (execute.mapAction === 'fetchOsmTrafficLights') {
         fetchAndDisplayOsmTrafficLights();
     } else {
         clearOsmTrafficLightMarkers();
     }
-    if (typeof saveAllSettings === 'function') saveAllSettings();
+    if (execute.saveAllSettings) saveAllSettings();
 }
 
 function toggleShowOsmRailwayCrossings() {
-    showOsmRailwayCrossingsEnabled = !showOsmRailwayCrossingsEnabled;
-    localStorage.setItem('showOsmRailwayCrossingsOnMap', showOsmRailwayCrossingsEnabled ? 'true' : 'false');
-    const toggle = document.getElementById('showOsmRailwayCrossingsToggle');
-    _toggleUI().applyLabeledToggleButton(toggle, showOsmRailwayCrossingsEnabled);
-    if (showOsmRailwayCrossingsEnabled) {
+    const OT = _mapOverlayToggles();
+    const TU = _toggleUI();
+    const collected = OT.buildToggleOsmRailwayCrossingsCollectPlan({
+        currentlyEnabled: showOsmRailwayCrossingsEnabled,
+    });
+    const execute = OT.buildToggleOsmRailwayCrossingsExecutePlan({ enabled: collected.enabled });
+    if (!execute.shouldApply) return;
+
+    showOsmRailwayCrossingsEnabled = execute.enabled;
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    TU.applyLabeledToggleButton(document.getElementById(execute.toggleId), showOsmRailwayCrossingsEnabled);
+
+    if (execute.mapAction === 'fetchOsmRailwayCrossings') {
         fetchAndDisplayOsmRailwayCrossings();
     } else {
         clearOsmRailwayCrossingMarkers();
     }
-    if (typeof saveAllSettings === 'function') saveAllSettings();
+    if (execute.saveAllSettings) saveAllSettings();
 }
 
 function clearOsmTrafficLightMarkers() {
@@ -6550,11 +6560,10 @@ function clearOsmRailwayCrossingMarkers() {
     window.osmRailwayCrossingMarkers = [];
 }
 
-const OSM_OVERLAY_MAX_BBOX_DEG = 0.35;
+const OSM_OVERLAY_MAX_BBOX_DEG = MOT ? MOT.OSM_OVERLAY_MAX_BBOX_DEG : 0.35;
 
 function isOsmOverlayBboxTooLarge(north, south, east, west) {
-    return Math.abs(north - south) > OSM_OVERLAY_MAX_BBOX_DEG
-        || Math.abs(east - west) > OSM_OVERLAY_MAX_BBOX_DEG;
+    return _mapOverlayToggles().isOsmOverlayBboxTooLarge(north, south, east, west);
 }
 
 /**
@@ -6579,25 +6588,25 @@ function fetchOsmAreaOverlay(url, logLabel) {
 }
 
 function fetchAndDisplayOsmTrafficLights() {
-    if (!showOsmTrafficLightsEnabled || !map) return;
-    const zoom = map.getZoom();
-    if (zoom < 10) {
-        clearOsmTrafficLightMarkers();
-        return;
-    }
+    if (!map) return;
+    const OT = _mapOverlayToggles();
     const bounds = map.getBounds();
-    const north = bounds.getNorth();
-    const south = bounds.getSouth();
-    const east = bounds.getEast();
-    const west = bounds.getWest();
-    if (isOsmOverlayBboxTooLarge(north, south, east, west)) {
-        clearOsmTrafficLightMarkers();
+    const dispatch = OT.buildFetchOsmOverlayDispatchPlan({
+        enabled: showOsmTrafficLightsEnabled,
+        hasMap: true,
+        zoom: map.getZoom(),
+        north: bounds.getNorth(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        west: bounds.getWest(),
+        apiPath: OT.OSM_TRAFFIC_LIGHTS_AREA_API_PATH,
+        logLabel: 'OSM Traffic Lights',
+    });
+    if (!dispatch.shouldFetch) {
+        if (dispatch.clearMarkers) clearOsmTrafficLightMarkers();
         return;
     }
-    fetchOsmAreaOverlay(
-        `/api/traffic-lights/area?north=${north}&south=${south}&east=${east}&west=${west}`,
-        'OSM Traffic Lights'
-    ).then((data) => {
+    fetchOsmAreaOverlay(dispatch.url, dispatch.logLabel).then((data) => {
         if (data && data.success && data.traffic_lights) {
             displayOsmTrafficLightMarkers(data.traffic_lights);
         }
@@ -6605,25 +6614,25 @@ function fetchAndDisplayOsmTrafficLights() {
 }
 
 function fetchAndDisplayOsmRailwayCrossings() {
-    if (!showOsmRailwayCrossingsEnabled || !map) return;
-    const zoom = map.getZoom();
-    if (zoom < 10) {
-        clearOsmRailwayCrossingMarkers();
-        return;
-    }
+    if (!map) return;
+    const OT = _mapOverlayToggles();
     const bounds = map.getBounds();
-    const north = bounds.getNorth();
-    const south = bounds.getSouth();
-    const east = bounds.getEast();
-    const west = bounds.getWest();
-    if (isOsmOverlayBboxTooLarge(north, south, east, west)) {
-        clearOsmRailwayCrossingMarkers();
+    const dispatch = OT.buildFetchOsmOverlayDispatchPlan({
+        enabled: showOsmRailwayCrossingsEnabled,
+        hasMap: true,
+        zoom: map.getZoom(),
+        north: bounds.getNorth(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        west: bounds.getWest(),
+        apiPath: OT.OSM_RAILWAY_CROSSINGS_AREA_API_PATH,
+        logLabel: 'OSM Railway Crossings',
+    });
+    if (!dispatch.shouldFetch) {
+        if (dispatch.clearMarkers) clearOsmRailwayCrossingMarkers();
         return;
     }
-    fetchOsmAreaOverlay(
-        `/api/railway-crossings/area?north=${north}&south=${south}&east=${east}&west=${west}`,
-        'OSM Railway Crossings'
-    ).then((data) => {
+    fetchOsmAreaOverlay(dispatch.url, dispatch.logLabel).then((data) => {
         if (data && data.success && data.railway_crossings) {
             displayOsmRailwayCrossingMarkers(data.railway_crossings);
         }
@@ -8557,6 +8566,7 @@ function _osmMapIcons() { return VoyagrModules.osmMapIcons(); }
 /** Unit-tested navigation map control icons (modules/map/map-controls.js). */
 function _mapControls() { return VoyagrModules.mapControls(); }
 function _mapLayerToggles() { return VoyagrModules.mapLayerToggles(); }
+function _mapOverlayToggles() { return VoyagrModules.mapOverlayToggles(); }
 function _mapView3D() { return VoyagrModules.mapView3D(); }
 function _mapTheme() { return VoyagrModules.mapTheme(); }
 
@@ -10987,22 +10997,22 @@ let isAREnabled = false; // Global flag for preference
 function toggleARSetting() {
     const MC = _mapControls();
     const TU = _toggleUI();
-    const btn = document.getElementById('arToggleBtn');
-    if (btn) {
-        isAREnabled = TU.nextToggleState(isAREnabled);
-        TU.applyToggleButton(btn, isAREnabled, TU.TOGGLE_SWITCH_OPTS);
-        MC.writeAREnabledToStorage(localStorage, isAREnabled);
+    const collected = MC.buildToggleARSettingCollectPlan({ currentlyEnabled: isAREnabled });
+    const execute = MC.buildToggleARSettingExecutePlan({
+        enabled: collected.enabled,
+        arModeActive,
+    });
+    const btn = document.getElementById(execute.toggleId);
+    if (!btn) return;
 
-        updateARButtonVisibility();
+    isAREnabled = execute.enabled;
+    TU.applyToggleButton(btn, isAREnabled, TU.TOGGLE_SWITCH_OPTS);
+    MC.writeAREnabledToStorage(localStorage, isAREnabled);
 
-        if (isAREnabled) {
-            showStatus('AR Navigation enabled', 'success');
-        } else {
-            showStatus('AR Navigation disabled', 'info');
-            // If AR mode was active, stop it
-            if (arModeActive) stopARMode();
-        }
-    }
+    if (execute.updateFabVisibility) updateARButtonVisibility();
+
+    showStatus(execute.statusMessage, execute.statusType);
+    if (execute.stopArModeIfDisabling) stopARMode();
 }
 
 /**
@@ -11010,7 +11020,7 @@ function toggleARSetting() {
  */
 function updateARButtonVisibility() {
     const MC = _mapControls();
-    const arFab = document.getElementById('arModeBtn');
+    const arFab = document.getElementById(MC.AR_MODE_FAB_ID);
     if (!arFab) return;
 
     const hasRoute = window.lastCalculatedRoute !== null;
@@ -11029,17 +11039,17 @@ function updateARButtonVisibility() {
 async function toggleARMode() {
     const MC = _mapControls();
     const TU = _toggleUI();
-    const toggleBtn = document.getElementById('arModeBtn');
+    const entry = MC.buildToggleARModeEntryPlan({ arModeActive });
+    const toggleBtn = document.getElementById(entry.toggleId);
 
-    if (arModeActive) {
+    if (entry.shouldStop) {
         await stopARMode();
-        MC.applyARModeToggleButton(toggleBtn, false, TU);
+        if (entry.applyToggleOff) MC.applyARModeToggleButton(toggleBtn, false, TU);
         return;
     }
 
-    // Dynamically import AR module
     try {
-        const { ARNavigator } = await import('./modules/ar-navigation.js');
+        const { ARNavigator } = await import(entry.moduleImportPath);
 
         if (!arNavigator) {
             arNavigator = new ARNavigator({
@@ -11049,34 +11059,34 @@ async function toggleARMode() {
                 onStatusChange: (status) => {
                     console.log('[AR] Status:', status);
                     updateARButtonState(status);
-                }
+                },
             });
         }
 
-        showStatus('📸 Starting AR mode...', 'info');
+        showStatus(entry.startingStatusMessage, entry.startingStatusType);
 
         const result = await arNavigator.start();
+        const resultPlan = MC.buildToggleARModeStartResultPlan(result);
 
-        if (result.success) {
-            arModeActive = true;
-            MC.applyARModeToggleButton(toggleBtn, true, TU);
-            showStatus(`📷 AR mode active (${result.mode})`, 'success');
+        if (resultPlan.shouldApply) {
+            arModeActive = resultPlan.arModeActive;
+            if (resultPlan.applyToggleOn) MC.applyARModeToggleButton(toggleBtn, true, TU);
+            showStatus(resultPlan.statusMessage, resultPlan.statusType);
 
-            // Sync current instruction to AR
-            if (currentRouteSteps && currentStepIndex < currentRouteSteps.length) {
+            if (resultPlan.syncCurrentInstruction && currentRouteSteps && currentStepIndex < currentRouteSteps.length) {
                 const step = currentRouteSteps[currentStepIndex];
                 arNavigator.updateInstruction({
                     instruction: step.instruction,
                     direction: _turnInstructions().maneuverTypeToARDirectionKey(step.type),
-                    distance: nextManeuverDistance
+                    distance: nextManeuverDistance,
                 });
             }
         } else {
-            showStatus(`AR not available: ${result.error}`, 'error');
+            showStatus(resultPlan.statusMessage, resultPlan.statusType);
         }
     } catch (err) {
-        console.error('[AR] Failed to load module:', err);
-        showStatus('AR module failed to load', 'error');
+        console.error(entry.loadErrorLogPrefix, err);
+        showStatus(entry.loadErrorStatusMessage, 'error');
     }
 }
 
@@ -11087,13 +11097,14 @@ async function stopARMode() {
     if (arNavigator) {
         await arNavigator.stop();
     }
-    arModeActive = false;
+    const execute = _mapControls().buildStopARModeExecutePlan();
+    arModeActive = execute.arModeActive;
     _mapControls().applyARModeToggleButton(
-        document.getElementById('arModeBtn'),
+        document.getElementById(execute.toggleId),
         false,
         _toggleUI()
     );
-    showStatus('🗺️ Returned to map view', 'info');
+    if (execute.statusMessage) showStatus(execute.statusMessage, execute.statusType);
 }
 
 /**

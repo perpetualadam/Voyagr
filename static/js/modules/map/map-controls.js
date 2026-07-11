@@ -289,6 +289,109 @@
         btn.innerHTML = display.innerHtml;
     }
 
+    var AR_SETTINGS_TOGGLE_ID = 'arToggleBtn';
+    var AR_MODE_FAB_ID = 'arModeBtn';
+    var AR_MODULE_IMPORT_PATH = './modules/ar-navigation.js';
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.currentlyEnabled]
+     * @returns {Object}
+     */
+    function buildToggleARSettingCollectPlan(input) {
+        input = input || {};
+        return { enabled: !input.currentlyEnabled };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.enabled]
+     * @param {boolean} [input.arModeActive]
+     * @returns {Object}
+     */
+    function buildToggleARSettingExecutePlan(input) {
+        input = input || {};
+        var enabled = !!input.enabled;
+        return {
+            shouldApply: true,
+            enabled: enabled,
+            toggleId: AR_SETTINGS_TOGGLE_ID,
+            storageKey: AR_PREF_STORAGE_KEY,
+            useToggleSwitchOpts: true,
+            updateFabVisibility: true,
+            stopArModeIfDisabling: !enabled && !!input.arModeActive,
+            statusMessage: enabled ? 'AR Navigation enabled' : 'AR Navigation disabled',
+            statusType: enabled ? 'success' : 'info',
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.arModeActive]
+     * @returns {Object}
+     */
+    function buildToggleARModeEntryPlan(input) {
+        input = input || {};
+        if (input.arModeActive) {
+            return {
+                shouldStop: true,
+                toggleId: AR_MODE_FAB_ID,
+                applyToggleOff: true,
+            };
+        }
+        return {
+            shouldStop: false,
+            shouldStart: true,
+            toggleId: AR_MODE_FAB_ID,
+            moduleImportPath: AR_MODULE_IMPORT_PATH,
+            startingStatusMessage: '📸 Starting AR mode...',
+            startingStatusType: 'info',
+            loadErrorStatusMessage: 'AR module failed to load',
+            loadErrorLogPrefix: '[AR] Failed to load module:',
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.success]
+     * @param {string} [input.mode]
+     * @param {string} [input.error]
+     * @returns {Object}
+     */
+    function buildToggleARModeStartResultPlan(input) {
+        input = input || {};
+        if (input.success) {
+            return {
+                shouldApply: true,
+                arModeActive: true,
+                applyToggleOn: true,
+                toggleId: AR_MODE_FAB_ID,
+                statusMessage: '📷 AR mode active (' + (input.mode || 'unknown') + ')',
+                statusType: 'success',
+                syncCurrentInstruction: true,
+            };
+        }
+        return {
+            shouldApply: false,
+            statusMessage: 'AR not available: ' + (input.error || 'unknown'),
+            statusType: 'error',
+        };
+    }
+
+    /**
+     * @returns {Object}
+     */
+    function buildStopARModeExecutePlan() {
+        return {
+            shouldApply: true,
+            arModeActive: false,
+            toggleId: AR_MODE_FAB_ID,
+            applyToggleOff: true,
+            statusMessage: '🗺️ Returned to map view',
+            statusType: 'info',
+        };
+    }
+
     /**
      * End/start navigation FAB visibility during turn-by-turn.
      * @param {boolean} routeInProgress
@@ -658,6 +761,9 @@
         ZOOM_FOLLOW_INACTIVE_BACKGROUND: ZOOM_FOLLOW_INACTIVE_BACKGROUND,
         AR_PREF_STORAGE_KEY: AR_PREF_STORAGE_KEY,
         AR_FAB_VISIBLE_ICON: AR_FAB_VISIBLE_ICON,
+        AR_SETTINGS_TOGGLE_ID: AR_SETTINGS_TOGGLE_ID,
+        AR_MODE_FAB_ID: AR_MODE_FAB_ID,
+        AR_MODULE_IMPORT_PATH: AR_MODULE_IMPORT_PATH,
         MAP_CONTROLS_HINT_SECTIONS: MAP_CONTROLS_HINT_SECTIONS,
         MAP_CONTROLS_HINT_EXTRAS: MAP_CONTROLS_HINT_EXTRAS,
         MAP_CONTROLS_HINT_SKIP_IDS: MAP_CONTROLS_HINT_SKIP_IDS,
@@ -685,6 +791,11 @@
         applyARModeToggleButton: applyARModeToggleButton,
         getARFabVisibilityDisplay: getARFabVisibilityDisplay,
         applyARModeButtonState: applyARModeButtonState,
+        buildToggleARSettingCollectPlan: buildToggleARSettingCollectPlan,
+        buildToggleARSettingExecutePlan: buildToggleARSettingExecutePlan,
+        buildToggleARModeEntryPlan: buildToggleARModeEntryPlan,
+        buildToggleARModeStartResultPlan: buildToggleARModeStartResultPlan,
+        buildStopARModeExecutePlan: buildStopARModeExecutePlan,
         getNavigationFabVisibilityPlan: getNavigationFabVisibilityPlan,
         getNavStartExtraFabDisplay: getNavStartExtraFabDisplay,
         getNavStartFabDisplayPlan: getNavStartFabDisplayPlan,

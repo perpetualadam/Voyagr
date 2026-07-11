@@ -60,6 +60,7 @@
         osmMapIcons: 'VoyagrOsmMapIcons',
         mapControls: 'VoyagrMapControls',
         mapLayerToggles: 'VoyagrMapLayerToggles',
+        mapOverlayToggles: 'VoyagrMapOverlayToggles',
         mapView3D: 'VoyagrMapView3D',
         mapTheme: 'VoyagrMapTheme',
         cameraMapMarkers: 'VoyagrCameraMapMarkers',

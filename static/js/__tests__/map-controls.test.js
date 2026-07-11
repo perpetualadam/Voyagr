@@ -88,6 +88,22 @@ describe('map-controls module', () => {
         expect(btn.classList.contains('active')).toBe(false);
     });
 
+    test('AR toggle execute plans wire setting and mode entry', () => {
+        const setting = MC.buildToggleARSettingExecutePlan({ enabled: false, arModeActive: true });
+        expect(setting.stopArModeIfDisabling).toBe(true);
+        expect(setting.toggleId).toBe(MC.AR_SETTINGS_TOGGLE_ID);
+
+        const entry = MC.buildToggleARModeEntryPlan({ arModeActive: true });
+        expect(entry.shouldStop).toBe(true);
+
+        const start = MC.buildToggleARModeStartResultPlan({ success: true, mode: 'webxr' });
+        expect(start.arModeActive).toBe(true);
+        expect(start.statusMessage).toContain('webxr');
+
+        const stop = MC.buildStopARModeExecutePlan();
+        expect(stop.statusMessage).toContain('Returned');
+    });
+
     test('getARFabVisibilityDisplay and applyARModeButtonState', () => {
         const on = MC.getARFabVisibilityDisplay(true, true, false);
         expect(on.visible).toBe(true);

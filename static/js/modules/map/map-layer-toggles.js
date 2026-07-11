@@ -26,6 +26,14 @@
     var SHOW_TRAFFIC_STORAGE_KEY = 'showTrafficEnabled';
     var SHOW_TRAFFIC_TOGGLE_ID = 'showTrafficToggle';
     var SHOW_TRAFFIC_DEFAULT_ENABLED = true;
+    var TRAFFIC_SOURCE_ID = 'traffic-source';
+    var TRAFFIC_CONFIG_API_PATH = '/api/config';
+    var TRAFFIC_TILE_PROXY_PATH = '/api/tomtom/traffic-tile/{z}/{x}/{y}.png';
+    var TRAFFIC_TOMTOM_TILE_TEMPLATE = 'https://api.tomtom.com/traffic/map/4/tile/flow/relative0/{z}/{x}/{y}.png?key={key}&tileSize=256';
+    var TRAFFIC_PENDING_GUARD_PROPERTY = '__voyagrTrafficLayerPending';
+    var TRAFFIC_STYLE_POLL_MAX_ATTEMPTS = 40;
+    var TRAFFIC_STYLE_POLL_INTERVAL_MS = 250;
+    var TRAFFIC_RASTER_OPACITY = 0.6;
 
     /**
      * Resolve a boolean preference stored as 'true'/'false' strings (default on unless 'false').
@@ -248,6 +256,116 @@
     }
 
     /**
+     * @param {Object} [input]
+     * @param {boolean} [input.useProxy]
+     * @param {string} [input.origin]
+     * @param {string} [input.apiKey]
+     * @returns {Object}
+     */
+    function buildTrafficTileUrlsPlan(input) {
+        input = input || {};
+        if (input.useProxy && input.origin) {
+            return {
+                hasTiles: true,
+                tiles: [input.origin + TRAFFIC_TILE_PROXY_PATH],
+            };
+        }
+        if (input.apiKey) {
+            return {
+                hasTiles: true,
+                tiles: [TRAFFIC_TOMTOM_TILE_TEMPLATE.replace('{key}', input.apiKey)],
+            };
+        }
+        return { hasTiles: false, noCredentialsLogMessage: '[Traffic] No tile URL available' };
+    }
+
+    /**
+     * @param {string[]} tiles
+     * @returns {Object}
+     */
+    function buildTrafficRasterSourceSpec(tiles) {
+        return {
+            type: 'raster',
+            tiles: tiles,
+            tileSize: 256,
+            minzoom: 0,
+            maxzoom: 16,
+            bounds: [-180, -85.0511, 180, 85.0511],
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {string|null} [input.beforeLayerId]
+     * @returns {Object}
+     */
+    function buildTrafficRasterLayerSpec(input) {
+        input = input || {};
+        return {
+            id: TRAFFIC_LAYER_ID,
+            type: 'raster',
+            source: TRAFFIC_SOURCE_ID,
+            minzoom: 0,
+            maxzoom: 16,
+            paint: { 'raster-opacity': TRAFFIC_RASTER_OPACITY },
+            beforeLayerId: input.beforeLayerId || null,
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.useProxy]
+     * @param {boolean} [input.hasApiKey]
+     * @returns {Object}
+     */
+    function buildTrafficLayerCredentialsFetchPlan(input) {
+        input = input || {};
+        if (input.useProxy || input.hasApiKey) {
+            return { shouldFetch: false };
+        }
+        return {
+            shouldFetch: true,
+            url: TRAFFIC_CONFIG_API_PATH,
+            fetchLogMessage: '[Traffic] Fetching config from server...',
+            enableProxyFlag: 'tomtom_traffic_tile_proxy',
+            apiKeyField: 'tomtom_api_key',
+            noKeyLogMessage: '[Traffic] No API key from server - using route-level traffic only',
+            errorLogPrefix: '[Traffic] Failed to fetch config:',
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.hasMap]
+     * @param {boolean} [input.pendingGuardSet]
+     * @param {boolean} [input.isStyleLoaded]
+     * @returns {Object}
+     */
+    function buildAddTrafficLayerOrchestrationPlan(input) {
+        input = input || {};
+        if (!input.hasMap) {
+            return { shouldProceed: false, mapNotReadyLog: '[Traffic] Map not ready' };
+        }
+        if (input.pendingGuardSet) {
+            return { shouldProceed: false, skipDueToPendingGuard: true };
+        }
+        return {
+            shouldProceed: true,
+            pendingGuardProperty: TRAFFIC_PENDING_GUARD_PROPERTY,
+            removeExistingFirst: true,
+            sourceId: TRAFFIC_SOURCE_ID,
+            layerId: TRAFFIC_LAYER_ID,
+            isStyleLoaded: !!input.isStyleLoaded,
+            waitForStyleLog: '[Traffic] Waiting for style to load...',
+            stylePollMaxAttempts: TRAFFIC_STYLE_POLL_MAX_ATTEMPTS,
+            stylePollIntervalMs: TRAFFIC_STYLE_POLL_INTERVAL_MS,
+            stylePollGiveUpLog: '[Traffic] Style not loaded after polling — giving up',
+            successLog: '[Traffic] TomTom traffic layer added successfully',
+            bringRoutesToTop: true,
+        };
+    }
+
+    /**
      * Plan for voyagr-vector-style-ready handler (re-apply labels, reconcile overlays).
      * @param {Object} [input]
      * @param {boolean} [input.hasMap]
@@ -291,6 +409,9 @@
         SHOW_TRAFFIC_STORAGE_KEY: SHOW_TRAFFIC_STORAGE_KEY,
         SHOW_TRAFFIC_TOGGLE_ID: SHOW_TRAFFIC_TOGGLE_ID,
         SHOW_TRAFFIC_DEFAULT_ENABLED: SHOW_TRAFFIC_DEFAULT_ENABLED,
+        TRAFFIC_SOURCE_ID: TRAFFIC_SOURCE_ID,
+        TRAFFIC_LAYER_ID: TRAFFIC_LAYER_ID,
+        TRAFFIC_PENDING_GUARD_PROPERTY: TRAFFIC_PENDING_GUARD_PROPERTY,
         BUILDINGS_3D_DEFAULT_HEIGHT: BUILDINGS_3D_DEFAULT_HEIGHT,
         BUILDINGS_3D_DEFAULT_OPACITY: BUILDINGS_3D_DEFAULT_OPACITY,
         resolveDefaultOnBooleanFromStorage: resolveDefaultOnBooleanFromStorage,
@@ -308,6 +429,11 @@
         buildToggleTrafficLayerCollectPlan: buildToggleTrafficLayerCollectPlan,
         buildToggleTrafficLayerExecutePlan: buildToggleTrafficLayerExecutePlan,
         buildInitTrafficLayerExecutePlan: buildInitTrafficLayerExecutePlan,
+        buildTrafficTileUrlsPlan: buildTrafficTileUrlsPlan,
+        buildTrafficRasterSourceSpec: buildTrafficRasterSourceSpec,
+        buildTrafficRasterLayerSpec: buildTrafficRasterLayerSpec,
+        buildTrafficLayerCredentialsFetchPlan: buildTrafficLayerCredentialsFetchPlan,
+        buildAddTrafficLayerOrchestrationPlan: buildAddTrafficLayerOrchestrationPlan,
         buildVectorStyleReadyReconcilePlan: buildVectorStyleReadyReconcilePlan,
     };
 

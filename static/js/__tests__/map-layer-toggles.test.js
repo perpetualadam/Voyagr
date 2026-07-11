@@ -51,6 +51,20 @@ describe('map-layer-toggles module', () => {
         expect(MLT.resolveShowTrafficEnabledFromStorage('false')).toBe(false);
     });
 
+    test('buildTrafficTileUrlsPlan and raster specs', () => {
+        const proxy = MLT.buildTrafficTileUrlsPlan({ useProxy: true, origin: 'https://app.test' });
+        expect(proxy.hasTiles).toBe(true);
+        expect(proxy.tiles[0]).toContain('/api/tomtom/traffic-tile/');
+
+        const direct = MLT.buildTrafficTileUrlsPlan({ useProxy: false, apiKey: 'KEY' });
+        expect(direct.tiles[0]).toContain('KEY');
+
+        const source = MLT.buildTrafficRasterSourceSpec(direct.tiles);
+        expect(source.type).toBe('raster');
+        const layer = MLT.buildTrafficRasterLayerSpec({ beforeLayerId: 'labels' });
+        expect(layer.source).toBe(MLT.TRAFFIC_SOURCE_ID);
+    });
+
     test('buildVectorStyleReadyReconcilePlan re-applies labels and overlay resets', () => {
         const plan = MLT.buildVectorStyleReadyReconcilePlan({
             hasMap: true,
