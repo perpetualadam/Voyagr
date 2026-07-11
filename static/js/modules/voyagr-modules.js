@@ -37,6 +37,9 @@
         routeSharing: 'VoyagrRouteSharing',
         waypoints: 'VoyagrWaypoints',
         poiSearch: 'VoyagrPoiSearch',
+        offlineNavigation: 'VoyagrOfflineNavigation',
+        mlPredictions: 'VoyagrMlPredictions',
+        searchAutocomplete: 'VoyagrSearchAutocomplete',
     };
 
     var cache = {};
