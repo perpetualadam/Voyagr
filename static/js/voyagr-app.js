@@ -2697,10 +2697,11 @@ function enableRouteEditing() {
  * Add a draggable marker for route editing
  */
 function addRouteDragMarker(lat, lon, routeIndex) {
+    const WP = VoyagrModules.waypoints();
     const marker = MapLibreHelpers.createMarker(lat, lon, {
         className: 'route-drag-marker',
-        html: `<div style="background: #FF9800; border: 3px solid white; border-radius: 50%; width: 20px; height: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.4); cursor: grab;"></div>`,
-        iconSize: [20, 20],
+        html: WP.buildRouteDragMarkerHtml(),
+        iconSize: WP.ROUTE_DRAG_MARKER_ICON_SIZE,
         iconAnchor: [10, 10]
     }).addTo(map);
 
@@ -2732,18 +2733,14 @@ async function addDraggedViaPoint(lat, lon) {
     viaPoints.push(viaPoint);
 
     // Add visual marker with MapLibre
+    const WP = VoyagrModules.waypoints();
+    const viaIndex = viaPoints.length - 1;
     const marker = MapLibreHelpers.createMarker(lat, lon, {
         className: 'via-point-marker',
-        html: `<div style="background: #4CAF50; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">✓</div>`,
-        iconSize: [28, 28],
+        html: WP.buildViaPointDragAddedMarkerHtml(),
+        iconSize: WP.WAYPOINT_MARKER_ICON_SIZE,
         iconAnchor: [14, 14],
-        popup: `
-            <div style="text-align: center;">
-                <strong>Via Point</strong><br>
-                <small>Drag to adjust</small><br>
-                <button onclick="removeViaPoint(${viaPoints.length - 1})" style="background: #F44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; margin-top: 6px; cursor: pointer;">Remove</button>
-            </div>
-        `
+        popup: WP.buildViaPointDragPopupHtml('removeViaPoint(' + viaIndex + ')')
     }).addTo(map);
 
     viaPointMarkers.push(marker);
@@ -2954,13 +2951,14 @@ function addViaPoint(lat, lon, name = null) {
     const pointName = name || `Via-point ${viaPoints.length + 1}`;
     viaPoints.push({ lat, lon, name: pointName, type: 'via' });
 
-    // Add marker to map with MapLibre
+    const WP = VoyagrModules.waypoints();
+    const viaIndex = viaPoints.length - 1;
     const marker = MapLibreHelpers.createMarker(lat, lon, {
         className: 'via-point-marker',
-        html: `<div style="background: #FF9800; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${viaPoints.length}</div>`,
-        iconSize: [28, 28],
+        html: WP.buildViaPointMarkerHtml(viaPoints.length),
+        iconSize: WP.WAYPOINT_MARKER_ICON_SIZE,
         iconAnchor: [14, 14],
-        popup: `<b>${pointName}</b><br><button onclick="removeViaPoint(${viaPoints.length - 1})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>`
+        popup: WP.buildViaPointPopupHtml(pointName, 'removeViaPoint(' + viaIndex + ')')
     }).addTo(map);
 
     viaPointMarkers.push(marker);
@@ -2975,13 +2973,14 @@ function addStop(lat, lon, name = null, duration = 15) {
     const stopName = name || `Stop ${stops.length + 1}`;
     stops.push({ lat, lon, name: stopName, type: 'stop', duration });
 
-    // Add marker to map with MapLibre
+    const WP = VoyagrModules.waypoints();
+    const stopIndex = stops.length - 1;
     const marker = MapLibreHelpers.createMarker(lat, lon, {
         className: 'stop-marker',
-        html: `<div style="background: #E91E63; color: white; border-radius: 4px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>`,
-        iconSize: [28, 28],
+        html: WP.buildStopMarkerHtml(),
+        iconSize: WP.WAYPOINT_MARKER_ICON_SIZE,
         iconAnchor: [14, 14],
-        popup: `<b>${stopName}</b><br>Duration: ${duration} min<br><button onclick="removeStop(${stops.length - 1})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>`
+        popup: WP.buildStopPopupHtml(stopName, duration, 'removeStop(' + stopIndex + ')')
     }).addTo(map);
 
     stopMarkers.push(marker);
@@ -3032,12 +3031,13 @@ function refreshViaPointMarkers() {
     viaPointMarkers = [];
 
     viaPoints.forEach((point, idx) => {
+        const WP = VoyagrModules.waypoints();
         const marker = MapLibreHelpers.createMarker(point.lat, point.lon, {
             className: 'via-point-marker',
-            html: `<div style="background: #FF9800; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">${idx + 1}</div>`,
-            iconSize: [28, 28],
+            html: WP.buildViaPointMarkerHtml(idx + 1),
+            iconSize: WP.WAYPOINT_MARKER_ICON_SIZE,
             iconAnchor: [14, 14],
-            popup: `<b>${point.name}</b><br><button onclick="removeViaPoint(${idx})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>`
+            popup: WP.buildViaPointPopupHtml(point.name, 'removeViaPoint(' + idx + ')')
         }).addTo(map);
 
         viaPointMarkers.push(marker);
@@ -8314,10 +8314,10 @@ function displayParkingOptions(parkingList, destinationCoords) {
 
         try {
             const marker = MapLibreHelpers.createMarker(parking.lat, parking.lon, {
-                html: `<div style="background: #FF9800; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>`,
+                html: parkingModule.buildParkingMapMarkerHtml(),
                 iconSize: [32, 32],
                 className: 'parking-marker',
-                popup: `<strong>${parking.name}</strong><br>Distance: ${parkingDisplayDist} ${parkingDistUnit}`
+                popup: parkingModule.buildParkingMapMarkerPopupHtml(parking.name, parkingDisplayDist, parkingDistUnit)
             }).addTo(map);
 
             marker.parkingData = parking;

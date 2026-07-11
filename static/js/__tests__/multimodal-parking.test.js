@@ -61,4 +61,10 @@ describe('multimodal-parking module', () => {
         const html = MP.buildParkingPreviewRouteHtml('A → B', '<div>walk</div>');
         expect(html).toBe('A → B<div>walk</div>');
     });
+
+    test('buildParkingMapMarkerHtml and popup include parking icon and distance', () => {
+        expect(MP.buildParkingMapMarkerHtml()).toContain('🅿️');
+        expect(MP.buildParkingMapMarkerPopupHtml('City Park', '0.3', 'mi')).toContain('City Park');
+        expect(MP.buildParkingMapMarkerPopupHtml('City Park', '0.3', 'mi')).toContain('0.3 mi');
+    });
 });
