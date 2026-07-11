@@ -798,6 +798,76 @@
     }
 
     /**
+     * Vehicle marker redraw plan after map/style recovery (position + marker tick).
+     * @param {Object} opts
+     * @returns {{ markerTick: Object, reattachToMap: boolean }}
+     */
+    function buildNavigationVehicleMarkerRedrawPlan(opts) {
+        opts = opts || {};
+        var posPlan = buildNavigationVehicleMarkerPositionPlan({
+            lat: opts.lat,
+            lon: opts.lon,
+            accuracy: opts.accuracy,
+            routeInProgress: opts.routeInProgress,
+            routePolyline: opts.routePolyline,
+            snapped: opts.snapped,
+            gpsHeadingForBlend: opts.gpsHeadingForBlend,
+            lastSnappedRouteIndex: opts.lastSnappedRouteIndex,
+            prevSnapBlendWeightState: opts.prevSnapBlendWeightState,
+            smoothDisplayLat: opts.smoothDisplayLat,
+            smoothDisplayLon: opts.smoothDisplayLon,
+            useSmoothCoordsOnly: opts.useSmoothCoordsOnly,
+            speedMph: opts.speedMph,
+            calculateBearing: opts.calculateBearing,
+            blendHeadingsCircular: opts.blendHeadingsCircular,
+        });
+        var markerTick = buildVehicleMarkerTickPlan({
+            hasMarker: opts.hasMarker,
+            canSetLngLat: opts.canSetLngLat,
+            markerLat: posPlan.markerLat,
+            markerLon: posPlan.markerLon,
+            heading: posPlan.heading,
+            speed: opts.speed,
+            accuracy: opts.accuracy,
+            mapBearing: opts.mapBearing,
+        });
+        return {
+            markerTick: markerTick,
+            reattachToMap: !!(opts.hasMarker && opts.canSetLngLat && !opts.markerOnMap),
+        };
+    }
+
+    /**
+     * Apply plan for priming vehicle marker on a new route polyline.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildPrimeVehicleMarkerOnRouteApplyPlan(opts) {
+        opts = opts || {};
+        var posPlan = buildNavigationVehicleMarkerPositionPlan({
+            lat: opts.lat,
+            lon: opts.lon,
+            routeInProgress: true,
+            routePolyline: opts.routePolyline,
+            snapped: opts.snapped,
+            lastSnappedRouteIndex: opts.lastSnappedRouteIndex,
+            resetSmooth: true,
+            speedMph: 0,
+            calculateBearing: opts.calculateBearing,
+            blendHeadingsCircular: opts.blendHeadingsCircular,
+        });
+        return {
+            action: 'apply',
+            statePatch: {
+                smoothDisplayLat: posPlan.smoothDisplayLat,
+                smoothDisplayLon: posPlan.smoothDisplayLon,
+                snapBlendWeightState: 1,
+            },
+            markerLngLat: [posPlan.markerLon, posPlan.markerLat],
+        };
+    }
+
+    /**
      * Position/heading/smooth-state plan for one GPS tracking tick.
      * @param {Object} opts
      * @returns {Object}
@@ -981,6 +1051,8 @@
         buildNavigationVehicleMarkerPositionPlan: buildNavigationVehicleMarkerPositionPlan,
         buildVehicleDisplayCoordinatesPlan: buildVehicleDisplayCoordinatesPlan,
         buildVehicleMarkerTickPlan: buildVehicleMarkerTickPlan,
+        buildNavigationVehicleMarkerRedrawPlan: buildNavigationVehicleMarkerRedrawPlan,
+        buildPrimeVehicleMarkerOnRouteApplyPlan: buildPrimeVehicleMarkerOnRouteApplyPlan,
         buildGpsTrackingPositionTickPlan: buildGpsTrackingPositionTickPlan,
         buildGpsCoordSampleTickPlan: buildGpsCoordSampleTickPlan,
         buildGpsCoordSampleStateApplyPlan: buildGpsCoordSampleStateApplyPlan,

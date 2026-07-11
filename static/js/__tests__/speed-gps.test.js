@@ -712,3 +712,50 @@ describe('buildVehicleMarkerTickPlan', () => {
         expect(plan.lon).toBe(-0.1);
     });
 });
+
+describe('buildNavigationVehicleMarkerRedrawPlan', () => {
+    test('bundles marker tick and reattach flag after style recovery', () => {
+        const plan = SG.buildNavigationVehicleMarkerRedrawPlan({
+            lat: 51.5,
+            lon: -0.1,
+            accuracy: 12,
+            routeInProgress: true,
+            routePolyline: [[51.5, -0.1], [51.501, -0.101]],
+            snapped: { lat: 51.5005, lon: -0.1005, index: 0, distance: 30 },
+            gpsHeadingForBlend: 90,
+            lastSnappedRouteIndex: 0,
+            prevSnapBlendWeightState: 0.5,
+            smoothDisplayLat: 51.499,
+            smoothDisplayLon: -0.099,
+            useSmoothCoordsOnly: true,
+            speedMph: 20,
+            speed: 8,
+            hasMarker: true,
+            canSetLngLat: true,
+            markerOnMap: false,
+            mapBearing: 0,
+            calculateBearing: () => 90,
+            blendHeadingsCircular: (g, r, b) => g + (r - g) * b,
+        });
+        expect(plan.markerTick.action).toBe('update');
+        expect(plan.reattachToMap).toBe(true);
+    });
+});
+
+describe('buildPrimeVehicleMarkerOnRouteApplyPlan', () => {
+    test('seeds smooth display state and marker lngLat on new route', () => {
+        const apply = SG.buildPrimeVehicleMarkerOnRouteApplyPlan({
+            lat: 51.5,
+            lon: -0.1,
+            routePolyline: [[51.5, -0.1], [51.501, -0.101]],
+            snapped: { lat: 51.5005, lon: -0.1005, index: 0, distance: 30 },
+            lastSnappedRouteIndex: 0,
+            calculateBearing: () => 90,
+            blendHeadingsCircular: (g, r, b) => g + (r - g) * b,
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.statePatch.snapBlendWeightState).toBe(1);
+        expect(apply.markerLngLat[0]).toBeCloseTo(-0.1, 1);
+        expect(apply.markerLngLat[1]).toBeGreaterThan(51.4);
+    });
+});

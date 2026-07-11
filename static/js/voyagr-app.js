@@ -5894,14 +5894,13 @@ function redrawNavigationVehicleMarker(reason) {
             ? currentUserMarker.accuracy
             : null;
 
-        const snapped = resolveGpsRouteSnapForTick(lat, lon);
-        const posPlan = SG.buildNavigationVehicleMarkerPositionPlan({
+        const redraw = SG.buildNavigationVehicleMarkerRedrawPlan({
             lat,
             lon,
             accuracy: acc,
             routeInProgress,
             routePolyline,
-            snapped,
+            snapped: resolveGpsRouteSnapForTick(lat, lon),
             gpsHeadingForBlend: heading,
             lastSnappedRouteIndex,
             prevSnapBlendWeightState: _snapBlendWeightState,
@@ -5909,34 +5908,17 @@ function redrawNavigationVehicleMarker(reason) {
             smoothDisplayLon: _smoothDisplayLon,
             useSmoothCoordsOnly: _smoothDisplayLat != null && _smoothDisplayLon != null,
             speedMph: speed,
+            speed,
+            hasMarker: !!currentUserMarker,
+            canSetLngLat: !!(currentUserMarker && typeof currentUserMarker.setLngLat === 'function'),
+            markerOnMap: !!(currentUserMarker && currentUserMarker._map),
+            mapBearing: map && typeof map.getBearing === 'function' ? map.getBearing() : 0,
             calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
             blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
         });
 
-        if (currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
-            currentUserMarker.setLngLat([posPlan.markerLon, posPlan.markerLat]);
-            const markerEl = currentUserMarker.getElement ? currentUserMarker.getElement() : null;
-            if (markerEl) {
-                const inner = markerEl.querySelector('div');
-                if (inner) {
-                    const mapBr = map && typeof map.getBearing === 'function' ? map.getBearing() : 0;
-                    inner.style.transform = `rotate(${SG.computeVehicleMarkerRotationDeg(posPlan.heading, mapBr)}deg)`;
-                }
-            }
-            if (!currentUserMarker._map && typeof currentUserMarker.addTo === 'function') {
-                currentUserMarker.addTo(map);
-            }
-        } else {
-            if (currentUserMarker && typeof currentUserMarker.remove === 'function') {
-                currentUserMarker.remove();
-            }
-            currentUserMarker = createVehicleMarker(
-                posPlan.markerLat,
-                posPlan.markerLon,
-                speed,
-                acc,
-                posPlan.heading
-            );
+        applyVehicleMarkerFromTickPlan(redraw.markerTick);
+        if (redraw.reattachToMap && currentUserMarker && typeof currentUserMarker.addTo === 'function') {
             currentUserMarker.addTo(map);
         }
         if (reason) {
@@ -12000,27 +11982,11 @@ function applyGpsFollowCameraTick(markerLat, markerLon, followJumpM, speedMph, h
 }
 
 /**
- * Update or create the vehicle marker from a GPS tick plan.
- * @param {number} markerLat
- * @param {number} markerLon
- * @param {number} heading
- * @param {number} speed
- * @param {number} accuracy
+ * Apply a vehicle marker tick plan (update existing or create fresh).
+ * @param {Object} markerTick - from buildVehicleMarkerTickPlan
  */
-function applyGpsVehicleMarkerTick(markerLat, markerLon, heading, speed, accuracy) {
-    const SGpos = _speedGps();
-    const markerTick = SGpos
-        ? SGpos.buildVehicleMarkerTickPlan({
-            hasMarker: !!currentUserMarker,
-            canSetLngLat: !!(currentUserMarker && typeof currentUserMarker.setLngLat === 'function'),
-            markerLat,
-            markerLon,
-            heading,
-            speed,
-            accuracy,
-            mapBearing: map && typeof map.getBearing === 'function' ? map.getBearing() : 0,
-        })
-        : { action: 'create', lat: markerLat, lon: markerLon, speed, accuracy, heading };
+function applyVehicleMarkerFromTickPlan(markerTick) {
+    if (!markerTick) return;
 
     if (markerTick.action === 'update') {
         currentUserMarker.setLngLat(markerTick.lngLat);
@@ -12048,6 +12014,32 @@ function applyGpsVehicleMarkerTick(markerLat, markerLon, heading, speed, accurac
         markerTick.heading
     );
     currentUserMarker.addTo(map);
+}
+
+/**
+ * Update or create the vehicle marker from a GPS tick plan.
+ * @param {number} markerLat
+ * @param {number} markerLon
+ * @param {number} heading
+ * @param {number} speed
+ * @param {number} accuracy
+ */
+function applyGpsVehicleMarkerTick(markerLat, markerLon, heading, speed, accuracy) {
+    const SGpos = _speedGps();
+    const markerTick = SGpos
+        ? SGpos.buildVehicleMarkerTickPlan({
+            hasMarker: !!currentUserMarker,
+            canSetLngLat: !!(currentUserMarker && typeof currentUserMarker.setLngLat === 'function'),
+            markerLat,
+            markerLon,
+            heading,
+            speed,
+            accuracy,
+            mapBearing: map && typeof map.getBearing === 'function' ? map.getBearing() : 0,
+        })
+        : { action: 'create', lat: markerLat, lon: markerLon, speed, accuracy, heading };
+
+    applyVehicleMarkerFromTickPlan(markerTick);
 }
 
 /**
@@ -12862,6 +12854,27 @@ function resetVehicleMarkerDisplayState() {
 }
 
 /**
+ * Apply prime-vehicle-marker state and marker position from a pure apply plan.
+ * @param {Object} apply - from buildPrimeVehicleMarkerOnRouteApplyPlan
+ */
+function applyPrimeVehicleMarkerOnRouteFromPlan(apply) {
+    if (!apply || apply.action !== 'apply') return;
+    const patch = apply.statePatch || {};
+    if (patch.smoothDisplayLat != null) {
+        _smoothDisplayLat = patch.smoothDisplayLat;
+    }
+    if (patch.smoothDisplayLon != null) {
+        _smoothDisplayLon = patch.smoothDisplayLon;
+    }
+    if (patch.snapBlendWeightState != null) {
+        _snapBlendWeightState = patch.snapBlendWeightState;
+    }
+    if (apply.markerLngLat && currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
+        currentUserMarker.setLngLat(apply.markerLngLat);
+    }
+}
+
+/**
  * Seed route progress and place the vehicle icon on the new polyline immediately.
  * @param {number} lat
  * @param {number} lon
@@ -12870,26 +12883,17 @@ function primeVehicleMarkerOnRoute(lat, lon) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
     if (!routePolyline || routePolyline.length < 2) return;
     seedNavigationProgressOnNewRoute(lat, lon);
-    const snapped = resolveGpsRouteSnapForTick(lat, lon);
     const SG = _speedGps();
-    const posPlan = SG.buildNavigationVehicleMarkerPositionPlan({
+    const apply = SG.buildPrimeVehicleMarkerOnRouteApplyPlan({
         lat,
         lon,
-        routeInProgress: true,
         routePolyline,
-        snapped,
+        snapped: resolveGpsRouteSnapForTick(lat, lon),
         lastSnappedRouteIndex,
-        resetSmooth: true,
-        speedMph: 0,
         calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
         blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
     });
-    _smoothDisplayLat = posPlan.smoothDisplayLat;
-    _smoothDisplayLon = posPlan.smoothDisplayLon;
-    _snapBlendWeightState = 1;
-    if (currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
-        currentUserMarker.setLngLat([posPlan.markerLon, posPlan.markerLat]);
-    }
+    applyPrimeVehicleMarkerOnRouteFromPlan(apply);
 }
 
 /**
