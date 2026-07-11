@@ -204,6 +204,9 @@
     var EMPTY_TRIP_LIST_HTML =
         '<div style="text-align: center; padding: 20px; color: #999;">No trips found</div>';
 
+    var TRIP_HISTORY_ERROR_HTML =
+        '<div style="text-align: center; padding: 20px; color: #f44336;">Error loading trips</div>';
+
     /**
      * Build one trip-history list row HTML string.
      * @param {object} trip
@@ -318,6 +321,7 @@
         buildFrequentRouteRowHtml: buildFrequentRouteRowHtml,
         buildFrequentRoutesListHtml: buildFrequentRoutesListHtml,
         EMPTY_TRIP_LIST_HTML: EMPTY_TRIP_LIST_HTML,
+        TRIP_HISTORY_ERROR_HTML: TRIP_HISTORY_ERROR_HTML,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
