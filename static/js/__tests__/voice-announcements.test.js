@@ -359,6 +359,33 @@ describe('buildDestinationAnnouncementTickPlan', () => {
     });
 });
 
+describe('buildDestinationAnnouncementStateApplyPlan', () => {
+    test('skips when tick is missing or skipped', () => {
+        expect(VA.buildDestinationAnnouncementStateApplyPlan(null).action).toBe('skip');
+    });
+
+    test('maps announce tick to speak apply plan', () => {
+        const apply = VA.buildDestinationAnnouncementStateApplyPlan({
+            action: 'announce',
+            spokenMessage: '2 km to destination',
+            statePatch: { lastDestinationAnnouncementDistance: 1800 },
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.kind).toBe('announce');
+        expect(apply.speak).toBe(true);
+        expect(apply.statePatch.lastDestinationAnnouncementDistance).toBe(1800);
+    });
+
+    test('maps reset tick without speech', () => {
+        const apply = VA.buildDestinationAnnouncementStateApplyPlan({
+            action: 'reset',
+            statePatch: { lastDestinationAnnouncementDistance: Infinity },
+        });
+        expect(apply.kind).toBe('reset');
+        expect(apply.speak).toBe(false);
+    });
+});
+
 describe('buildTurnAnnouncementTickPlan', () => {
     const turnDistances = [500, 200, 100, 50];
     const exitDistances = [2000, 800, 200, 100];

@@ -200,6 +200,23 @@
     }
 
     /**
+     * Apply plan for navigation arrival state patches and end-navigation hint.
+     * @param {Object|null|undefined} tick - from buildNavigationArrivalTickPlan
+     * @returns {Object}
+     */
+    function buildNavigationArrivalStateApplyPlan(tick) {
+        if (!tick || tick.action === 'skip') {
+            return { action: 'skip', reason: tick && tick.reason };
+        }
+        return {
+            action: 'apply',
+            statePatch: tick.statePatch || {},
+            endNavigation: !!tick.endNavigation,
+            logMessage: tick.logMessage || null,
+        };
+    }
+
+    /**
      * Which GPS navigation sub-tasks run when route polyline is active.
      * @param {Object} opts
      * @returns {Object}
@@ -281,6 +298,7 @@
         NAV_ARRIVAL_DEFAULTS: NAV_ARRIVAL_DEFAULTS,
         buildNavigationArrivalPlan: buildNavigationArrivalPlan,
         buildNavigationArrivalTickPlan: buildNavigationArrivalTickPlan,
+        buildNavigationArrivalStateApplyPlan: buildNavigationArrivalStateApplyPlan,
         buildGpsNavigationActiveTickPlan: buildGpsNavigationActiveTickPlan,
         buildGpsTrackingSideEffectsPlan: buildGpsTrackingSideEffectsPlan,
         buildGpsNavigationSideEffectsTickPlan: buildGpsNavigationSideEffectsTickPlan,

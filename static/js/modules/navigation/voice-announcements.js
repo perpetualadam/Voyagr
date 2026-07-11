@@ -355,6 +355,24 @@
     }
 
     /**
+     * Apply plan for destination distance voice announcement state and speech.
+     * @param {Object|null|undefined} tick - from buildDestinationAnnouncementTickPlan
+     * @returns {Object}
+     */
+    function buildDestinationAnnouncementStateApplyPlan(tick) {
+        if (!tick || tick.action === 'skip') {
+            return { action: 'skip', reason: tick && tick.reason };
+        }
+        return {
+            action: 'apply',
+            kind: tick.action,
+            statePatch: tick.statePatch || {},
+            speak: tick.action === 'announce' && !!tick.spokenMessage,
+            spokenMessage: tick.spokenMessage || null,
+        };
+    }
+
+    /**
      * Turn voice announcement tick plan: threshold pick, message build, state patch hints.
      * @param {Object} opts
      * @returns {Object}
@@ -490,6 +508,7 @@
         DESTINATION_ANNOUNCEMENT_HYSTERESIS_M: DESTINATION_ANNOUNCEMENT_HYSTERESIS_M,
         DESTINATION_ANNOUNCEMENT_RESET_M: DESTINATION_ANNOUNCEMENT_RESET_M,
         buildDestinationAnnouncementTickPlan: buildDestinationAnnouncementTickPlan,
+        buildDestinationAnnouncementStateApplyPlan: buildDestinationAnnouncementStateApplyPlan,
         buildTurnAnnouncementTickPlan: buildTurnAnnouncementTickPlan,
         buildTurnAnnouncementStateApplyPlan: buildTurnAnnouncementStateApplyPlan,
         isExitDirection: isExitDirection,

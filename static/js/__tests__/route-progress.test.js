@@ -119,6 +119,29 @@ describe('navigation arrival tick plan', () => {
     });
 });
 
+describe('buildNavigationArrivalStateApplyPlan', () => {
+    test('skips when tick is missing or skipped', () => {
+        expect(RP.buildNavigationArrivalStateApplyPlan(null).action).toBe('skip');
+        expect(RP.buildNavigationArrivalStateApplyPlan({ action: 'skip', reason: 'triggered' }).reason)
+            .toBe('triggered');
+    });
+
+    test('maps end navigation tick to apply plan', () => {
+        const tick = RP.buildNavigationArrivalTickPlan({
+            routeInProgress: true,
+            arrivalTriggered: false,
+            remainingM: 30,
+            speedMs: 5,
+            arrivalZoneSince: 0,
+            now: 5000,
+        });
+        const apply = RP.buildNavigationArrivalStateApplyPlan(tick);
+        expect(apply.action).toBe('apply');
+        expect(apply.endNavigation).toBe(true);
+        expect(apply.logMessage).toContain('30m remaining');
+    });
+});
+
 describe('GPS navigation active tick plan', () => {
     test('buildGpsNavigationActiveTickPlan enables sub-tasks when route polyline exists', () => {
         const tick = RP.buildGpsNavigationActiveTickPlan({

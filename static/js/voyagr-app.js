@@ -12045,6 +12045,66 @@ function applyGpsTurnSideEffectsTick(lat, lon, turnPlan) {
 }
 
 /**
+ * Lane guidance and speed widget side-effects for one GPS tick.
+ * @param {Object} ctx
+ * @param {number} ctx.lat
+ * @param {number} ctx.lon
+ * @param {number} ctx.heading
+ * @param {Object} ctx.tickPlan - from buildGpsNavigationSideEffectsTickPlan
+ * @param {Object} ctx.speedLimitPlan
+ */
+function applyGpsLaneAndSpeedSideEffectsTick(ctx) {
+    const { lat, lon, heading, tickPlan, speedLimitPlan } = ctx;
+
+    if (tickPlan.updateLaneGuidance) {
+        const laneTick = _turnInstructions().buildLaneGuidanceTickPlan({
+            routeInProgress,
+            routeSteps: currentRouteSteps,
+            currentStepIndex,
+        });
+        if (laneTick.action === 'update') {
+            updateLaneGuidance(lat, lon, heading, laneTick.maneuverDir, laneTick.roundaboutExitCount);
+        }
+    }
+
+    if (tickPlan.showSpeedWidget) {
+        const SL = _speedLimitWidget();
+        const swPlan = SL
+            ? SL.buildSpeedWidgetApplyPlan({
+                showSpeedWidget: tickPlan.showSpeedWidget,
+                speedLimitPlan,
+                routeInProgress,
+                isTrackingActive,
+                lat,
+                lon,
+                heading,
+            })
+            : { action: 'skip' };
+        if (swPlan.action === 'apply') {
+            if (swPlan.resetFetchState) {
+                _lastActiveManeuverIdx = swPlan.newLastActiveManeuverIdx;
+                const state = _getSpeedLimitFetchState();
+                if (state) {
+                    state.lastFetchAt = 0;
+                    state.lastPosition = null;
+                }
+            }
+            updateSpeedWidget(swPlan.updateWidget.displaySpeedMph, swPlan.updateWidget.shownLimit);
+            if (swPlan.fetchHint) {
+                fetchSpeedLimitThrottled(
+                    swPlan.fetchHint.lat,
+                    swPlan.fetchHint.lon,
+                    swPlan.fetchHint.displaySpeedMph,
+                    swPlan.fetchHint.roadType,
+                    swPlan.fetchHint.valhallaSpeedLimitMph,
+                    swPlan.fetchHint.heading
+                );
+            }
+        }
+    }
+}
+
+/**
  * Navigation side-effects for one GPS tick (deviation, voice, zoom, lane, speed).
  * @param {Object} ctx
  * @returns {{ distanceToNextTurn: (number|null) }}
@@ -12119,51 +12179,14 @@ function applyGpsNavigationSideEffectsTick(ctx) {
         }
     }
 
-    if (tickPlan.updateLaneGuidance) {
-        const laneTick = _turnInstructions().buildLaneGuidanceTickPlan({
-            routeInProgress,
-            routeSteps: currentRouteSteps,
-            currentStepIndex,
+    if (tickPlan.updateLaneGuidance || tickPlan.showSpeedWidget) {
+        applyGpsLaneAndSpeedSideEffectsTick({
+            lat,
+            lon,
+            heading,
+            tickPlan,
+            speedLimitPlan,
         });
-        if (laneTick.action === 'update') {
-            updateLaneGuidance(lat, lon, heading, laneTick.maneuverDir, laneTick.roundaboutExitCount);
-        }
-    }
-
-    if (tickPlan.showSpeedWidget) {
-        const SL = _speedLimitWidget();
-        const swPlan = SL
-            ? SL.buildSpeedWidgetApplyPlan({
-                showSpeedWidget: tickPlan.showSpeedWidget,
-                speedLimitPlan,
-                routeInProgress,
-                isTrackingActive,
-                lat,
-                lon,
-                heading,
-            })
-            : { action: 'skip' };
-        if (swPlan.action === 'apply') {
-            if (swPlan.resetFetchState) {
-                _lastActiveManeuverIdx = swPlan.newLastActiveManeuverIdx;
-                const state = _getSpeedLimitFetchState();
-                if (state) {
-                    state.lastFetchAt = 0;
-                    state.lastPosition = null;
-                }
-            }
-            updateSpeedWidget(swPlan.updateWidget.displaySpeedMph, swPlan.updateWidget.shownLimit);
-            if (swPlan.fetchHint) {
-                fetchSpeedLimitThrottled(
-                    swPlan.fetchHint.lat,
-                    swPlan.fetchHint.lon,
-                    swPlan.fetchHint.displaySpeedMph,
-                    swPlan.fetchHint.roadType,
-                    swPlan.fetchHint.valhallaSpeedLimitMph,
-                    swPlan.fetchHint.heading
-                );
-            }
-        }
     }
 
     if (tickPlan.fetchRoadName) {
@@ -12595,7 +12618,8 @@ function resetNavigationArrivalState() {
  */
 function checkNavigationArrival(lat, lon, speedMs) {
     const remainingM = getNavigationRemainingDistanceMeters(lat, lon);
-    const tick = _routeProgress().buildNavigationArrivalTickPlan({
+    const RP = _routeProgress();
+    const tick = RP.buildNavigationArrivalTickPlan({
         routeInProgress,
         arrivalTriggered: _navigationArrivalTriggered,
         remainingM,
@@ -12605,10 +12629,15 @@ function checkNavigationArrival(lat, lon, speedMs) {
     });
     if (tick.action === 'skip') return;
 
-    _navigationArrivalZoneSince = tick.statePatch.arrivalZoneSince;
+    const apply = RP.buildNavigationArrivalStateApplyPlan(tick);
+    if (apply.action === 'skip') return;
 
-    if (tick.endNavigation) {
-        if (tick.logMessage) console.log(tick.logMessage);
+    if (apply.statePatch.arrivalZoneSince != null) {
+        _navigationArrivalZoneSince = apply.statePatch.arrivalZoneSince;
+    }
+
+    if (apply.endNavigation) {
+        if (apply.logMessage) console.log(apply.logMessage);
         sendArrivalNotification();
     }
 }
@@ -12703,14 +12732,17 @@ function announceDistanceToDestination(currentLat, currentLon) {
 
     if (tick.action === 'skip') return;
 
-    if (tick.statePatch && tick.statePatch.lastDestinationAnnouncementDistance != null) {
-        lastDestinationAnnouncementDistance = tick.statePatch.lastDestinationAnnouncementDistance;
+    const apply = VA.buildDestinationAnnouncementStateApplyPlan(tick);
+    if (apply.action === 'skip') return;
+
+    if (apply.statePatch.lastDestinationAnnouncementDistance != null) {
+        lastDestinationAnnouncementDistance = apply.statePatch.lastDestinationAnnouncementDistance;
     }
 
-    if (tick.action === 'announce' && tick.spokenMessage) {
+    if (apply.speak && apply.spokenMessage) {
         const displayRemaining = convertDistance(remainingDistance / 1000);
-        console.log(`[Voice] Distance announcement: ${tick.spokenMessage} (remaining: ${displayRemaining} ${getDistanceUnit()})`);
-        speakMessage(tick.spokenMessage);
+        console.log(`[Voice] Distance announcement: ${apply.spokenMessage} (remaining: ${displayRemaining} ${getDistanceUnit()})`);
+        speakMessage(apply.spokenMessage);
     }
 }
 /**
