@@ -67,6 +67,7 @@
         cameraMapMarkers: 'VoyagrCameraMapMarkers',
         hazardMapMarkers: 'VoyagrHazardMapMarkers',
         pwaInstall: 'VoyagrPwaInstall',
+        voiceControl: 'VoyagrVoiceControl',
         bestTimeLeave: 'VoyagrBestTimeLeave',
         roadNameDisplay: 'VoyagrRoadNameDisplay',
         roadReport: 'VoyagrRoadReport',

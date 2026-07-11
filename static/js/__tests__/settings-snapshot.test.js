@@ -450,6 +450,9 @@ describe('settings-snapshot module', () => {
         expect(execute.shouldExport).toBe(true);
         expect(execute.downloadFilename).toContain('voyagr-settings');
         expect(SS.buildImportSettingsFilePickerOrchestrationPlan().accept).toBe('.json');
+        expect(SS.buildImportSettingsFileSelectedOrchestrationPlan(null).shouldReadFile).toBe(false);
+        expect(SS.buildImportSettingsFileSelectedOrchestrationPlan({}).shouldReadFile).toBe(true);
+        expect(SS.buildImportSettingsFileSelectedOrchestrationPlan({}).readMethod).toBe('readAsText');
         expect(SS.buildLoadAllSettingsOrchestrationPlan().storageKey).toBe(SS.SETTINGS_STORAGE_KEY);
     });
 

@@ -292,6 +292,11 @@ describe('analytics display helpers', () => {
         expect(execute.shouldRecalculate).toBe(true);
         expect(execute.startValue).toBe('Home');
         expect(execute.switchTab).toBe('navigation');
+
+        const dom = T.buildRecalculateTripDomApplyPlan(execute);
+        expect(dom.shouldApply).toBe(true);
+        expect(dom.inputPatches).toHaveLength(2);
+        expect(dom.scheduleCalculateRoute).toBe(true);
     });
 
     test('buildDeleteTripHistory plans distinguish local and server deletes', () => {
@@ -301,8 +306,21 @@ describe('analytics display helpers', () => {
         expect(local.shouldDeleteLocal).toBe(true);
         expect(local.nextTrips).toHaveLength(1);
 
+        const localDom = T.buildDeleteTripHistoryLocalDomApplyPlan(local);
+        expect(localDom.refreshTripList).toBe(true);
+        expect(localDom.statusMessage).toContain('device');
+
         expect(T.buildDeleteTripHistoryResponseExecutePlan({ success: true }).shouldRemove).toBe(true);
         expect(T.buildDeleteTripHistoryResponseExecutePlan({ success: false }).shouldRemove).toBe(false);
+
+        const successDom = T.buildDeleteTripHistoryResponseDomApplyPlan(
+            T.buildDeleteTripHistoryResponseExecutePlan({ success: true })
+        );
+        expect(successDom.refreshTripList).toBe(true);
+        const errorDom = T.buildDeleteTripHistoryResponseDomApplyPlan(
+            T.buildDeleteTripHistoryResponseExecutePlan({ success: false })
+        );
+        expect(errorDom.refreshTripList).toBe(false);
     });
 
     test('buildBindTripHistorySearchExecutePlan and search filter plan', () => {

@@ -471,6 +471,86 @@
     }
 
     /**
+     * DOM apply plan for recalculating a trip from history.
+     * @param {Object} execute - from buildRecalculateTripExecutePlan
+     * @returns {Object}
+     */
+    function buildRecalculateTripDomApplyPlan(execute) {
+        execute = execute || {};
+        if (!execute.shouldRecalculate) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            inputPatches: [
+                { id: execute.startInputId, property: 'value', value: execute.startValue },
+                { id: execute.endInputId, property: 'value', value: execute.endValue },
+            ],
+            switchTab: execute.switchTab,
+            scheduleCalculateRoute: true,
+            calculateDelayMs: execute.calculateDelayMs,
+            statusMessage: execute.successStatusMessage,
+            statusType: execute.successStatusType,
+        };
+    }
+
+    /**
+     * DOM apply plan after a trip-history delete outcome.
+     * @param {Object} input
+     * @param {boolean} [input.refreshTripList]
+     * @param {string} [input.statusMessage]
+     * @param {string} [input.statusType]
+     * @returns {Object}
+     */
+    function buildDeleteTripHistoryOutcomeDomApplyPlan(input) {
+        input = input || {};
+        return {
+            shouldApply: true,
+            refreshTripList: !!input.refreshTripList,
+            statusMessage: input.statusMessage,
+            statusType: input.statusType,
+        };
+    }
+
+    /**
+     * DOM apply plan for deleting a device-local trip row.
+     * @param {Object} localExecute - from buildDeleteTripHistoryLocalExecutePlan
+     * @returns {Object}
+     */
+    function buildDeleteTripHistoryLocalDomApplyPlan(localExecute) {
+        localExecute = localExecute || {};
+        if (!localExecute.shouldDeleteLocal) {
+            return { shouldApply: false };
+        }
+        return buildDeleteTripHistoryOutcomeDomApplyPlan({
+            refreshTripList: true,
+            statusMessage: localExecute.successStatusMessage,
+            statusType: localExecute.successStatusType,
+        });
+    }
+
+    /**
+     * DOM apply plan for a trip-history delete API response.
+     * @param {Object} execute - from buildDeleteTripHistoryResponseExecutePlan
+     * @returns {Object}
+     */
+    function buildDeleteTripHistoryResponseDomApplyPlan(execute) {
+        execute = execute || {};
+        if (execute.shouldRemove) {
+            return buildDeleteTripHistoryOutcomeDomApplyPlan({
+                refreshTripList: true,
+                statusMessage: execute.successStatusMessage,
+                statusType: execute.successStatusType,
+            });
+        }
+        return buildDeleteTripHistoryOutcomeDomApplyPlan({
+            refreshTripList: false,
+            statusMessage: execute.errorStatusMessage,
+            statusType: execute.errorStatusType,
+        });
+    }
+
+    /**
      * Execute plan for binding trip-history search input filtering.
      * @returns {Object}
      */
@@ -728,6 +808,10 @@
         buildDeleteTripHistoryOrchestrationPlan: buildDeleteTripHistoryOrchestrationPlan,
         buildDeleteTripHistoryLocalExecutePlan: buildDeleteTripHistoryLocalExecutePlan,
         buildDeleteTripHistoryResponseExecutePlan: buildDeleteTripHistoryResponseExecutePlan,
+        buildRecalculateTripDomApplyPlan: buildRecalculateTripDomApplyPlan,
+        buildDeleteTripHistoryOutcomeDomApplyPlan: buildDeleteTripHistoryOutcomeDomApplyPlan,
+        buildDeleteTripHistoryLocalDomApplyPlan: buildDeleteTripHistoryLocalDomApplyPlan,
+        buildDeleteTripHistoryResponseDomApplyPlan: buildDeleteTripHistoryResponseDomApplyPlan,
         buildBindTripHistorySearchExecutePlan: buildBindTripHistorySearchExecutePlan,
         buildTripHistorySearchFilterPlan: buildTripHistorySearchFilterPlan,
         buildLoadRouteAnalyticsOrchestrationPlan: buildLoadRouteAnalyticsOrchestrationPlan,

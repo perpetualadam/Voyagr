@@ -66,6 +66,7 @@ describe('VoyagrModules registry', () => {
         global.VoyagrCameraMapMarkers = require('../modules/map/camera-map-markers');
         global.VoyagrHazardMapMarkers = require('../modules/map/hazard-map-markers');
         global.VoyagrPwaInstall = require('../modules/ui/pwa-install');
+        global.VoyagrVoiceControl = require('../modules/ui/voice-control');
         global.VoyagrBestTimeLeave = require('../modules/navigation/best-time-leave');
         global.VoyagrRoadNameDisplay = require('../modules/navigation/road-name-display');
         global.VoyagrRoadReport = require('../modules/navigation/road-report');

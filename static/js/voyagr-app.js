@@ -1850,8 +1850,16 @@ function exportSettings() {
             new Date().toISOString().split('T')[0]
         )
     );
-    if (!execute.shouldExport) {
-        showStatus(execute.statusMessage, execute.statusType);
+    applyExportSettingsDownloadFromPlan(execute);
+}
+
+/**
+ * Trigger a settings JSON download from an export execute plan.
+ * @param {Object} execute - from buildExportSettingsDomExecutePlan
+ */
+function applyExportSettingsDownloadFromPlan(execute) {
+    if (!execute || !execute.shouldExport) {
+        if (execute) showStatus(execute.statusMessage, execute.statusType);
         return;
     }
     const dataBlob = new Blob([execute.blobContent], { type: execute.mimeType });
@@ -1860,6 +1868,7 @@ function exportSettings() {
     link.href = url;
     link.download = execute.downloadFilename;
     link.click();
+    URL.revokeObjectURL(url);
     showStatus(execute.statusMessage, execute.statusType);
 }
 
@@ -1887,25 +1896,31 @@ function applySettingsImportFromOrchestrationPlan(plan) {
  */
 function importSettings() {
     const SS = _settingsSnapshot();
-    const orch = SS.buildImportSettingsFilePickerOrchestrationPlan();
+    const picker = SS.buildImportSettingsFilePickerOrchestrationPlan();
     const input = document.createElement('input');
-    input.type = orch.inputType;
-    input.accept = orch.accept;
+    input.type = picker.inputType;
+    input.accept = picker.accept;
     input.onchange = (e) => {
-        const file = e.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                const parsePlan = SS.buildSettingsImportParsePlan(event.target.result);
-                const importOrch = SS.buildSettingsImportOrchestrationPlan(parsePlan, { routeInProgress });
-                if (!applySettingsImportFromOrchestrationPlan(importOrch)) {
-                    showStatus(parsePlan.statusMessage, parsePlan.statusType);
-                }
-            };
-            reader.readAsText(file);
-        }
+        const fileOrch = SS.buildImportSettingsFileSelectedOrchestrationPlan(e.target.files[0]);
+        if (!fileOrch.shouldReadFile) return;
+        const reader = new FileReader();
+        reader.onload = (event) => applySettingsImportFileContent(event.target.result);
+        reader[fileOrch.readMethod](e.target.files[0]);
     };
     input.click();
+}
+
+/**
+ * Parse and apply settings JSON from an imported file.
+ * @param {string} rawText
+ */
+function applySettingsImportFileContent(rawText) {
+    const SS = _settingsSnapshot();
+    const parsePlan = SS.buildSettingsImportParsePlan(rawText);
+    const importOrch = SS.buildSettingsImportOrchestrationPlan(parsePlan, { routeInProgress });
+    if (!applySettingsImportFromOrchestrationPlan(importOrch)) {
+        showStatus(parsePlan.statusMessage, parsePlan.statusType);
+    }
 }
 
 // Update all distance displays
@@ -2238,22 +2253,32 @@ function displayTripHistory(trips) {
     if (execute.bindSearch) bindTripHistorySearch();
 }
 
+function applyRecalculateTripDomFromPlan(dom) {
+    if (!dom || !dom.shouldApply) return;
+    (dom.inputPatches || []).forEach(({ id, property, value }) => {
+        const el = document.getElementById(id);
+        if (el) el[property] = value;
+    });
+    if (dom.switchTab) switchTab(dom.switchTab);
+    if (dom.scheduleCalculateRoute) {
+        setTimeout(() => calculateRoute(), dom.calculateDelayMs);
+    }
+    showStatus(dom.statusMessage, dom.statusType);
+}
+
+function applyDeleteTripHistoryOutcomeFromPlan(dom, nextTrips) {
+    if (!dom || !dom.shouldApply) return;
+    if (dom.refreshTripList && nextTrips) {
+        allTrips = nextTrips;
+        displayTripHistory(allTrips);
+    }
+    showStatus(dom.statusMessage, dom.statusType);
+}
+
 async function recalculateTrip(tripId) {
-    const execute = _tripHistory().buildRecalculateTripExecutePlan(tripId, allTrips);
-    if (!execute.shouldRecalculate) return;
-
-    const startEl = document.getElementById(execute.startInputId);
-    const endEl = document.getElementById(execute.endInputId);
-    if (startEl) startEl.value = execute.startValue;
-    if (endEl) endEl.value = execute.endValue;
-
-    if (execute.switchTab) switchTab(execute.switchTab);
-
-    setTimeout(() => {
-        calculateRoute();
-    }, execute.calculateDelayMs);
-
-    showStatus(execute.successStatusMessage, execute.successStatusType);
+    const TH = _tripHistory();
+    const execute = TH.buildRecalculateTripExecutePlan(tripId, allTrips);
+    applyRecalculateTripDomFromPlan(TH.buildRecalculateTripDomApplyPlan(execute));
 }
 
 async function deleteTripHistory(tripId) {
@@ -2264,9 +2289,10 @@ async function deleteTripHistory(tripId) {
     const localExecute = TH.buildDeleteTripHistoryLocalExecutePlan(orch, allTrips);
     if (localExecute.shouldDeleteLocal) {
         removeLocalTripByLocalId(localExecute.localId);
-        allTrips = localExecute.nextTrips;
-        displayTripHistory(allTrips);
-        showStatus(localExecute.successStatusMessage, localExecute.successStatusType);
+        applyDeleteTripHistoryOutcomeFromPlan(
+            TH.buildDeleteTripHistoryLocalDomApplyPlan(localExecute),
+            localExecute.nextTrips
+        );
         return;
     }
 
@@ -2283,11 +2309,15 @@ async function deleteTripHistory(tripId) {
 
         if (execute.shouldRemove) {
             removeLocalTripByServerId(tripId);
-            allTrips = allTrips.filter(t => t.id !== tripId);
-            displayTripHistory(allTrips);
-            showStatus(execute.successStatusMessage, execute.successStatusType);
+            applyDeleteTripHistoryOutcomeFromPlan(
+                TH.buildDeleteTripHistoryResponseDomApplyPlan(execute),
+                allTrips.filter(t => t.id !== tripId)
+            );
         } else {
-            showStatus(execute.errorStatusMessage, execute.errorStatusType);
+            applyDeleteTripHistoryOutcomeFromPlan(
+                TH.buildDeleteTripHistoryResponseDomApplyPlan(execute),
+                null
+            );
         }
     } catch (error) {
         console.error('Error deleting trip:', error);
@@ -11711,25 +11741,43 @@ let isListening = false;
 /** Latest finalized speech-to-text (interim lines are shown separately in the UI). */
 let _voiceFinalTranscript = '';
 
+function _voiceControl() { return VoyagrModules.voiceControl(); }
+
+function applyVoiceStatusFromPlan(plan) {
+    if (!plan || !plan.shouldUpdate) return;
+    const el = document.getElementById(plan.elementId);
+    if (el) el.textContent = plan.text;
+}
+
+function applyVoiceListeningUiFromPlan(plan) {
+    if (!plan || !plan.shouldUpdate) return;
+    const btnText = document.getElementById(plan.elementIds.btnText);
+    const btn = document.getElementById(plan.elementIds.btn);
+    const fab = document.getElementById(plan.elementIds.fab);
+    if (btnText) btnText.textContent = plan.btnText;
+    if (btn) {
+        btn.classList.toggle('active', !!plan.btnActive);
+        btn.setAttribute('aria-pressed', plan.btnAriaPressed);
+    }
+    if (fab) {
+        fab.classList.toggle('fab--listening', !!plan.fabListeningClass);
+        fab.setAttribute('aria-pressed', plan.fabAriaPressed);
+        fab.title = plan.fabTitle;
+    }
+}
+
+function applyVoiceTranscriptFromPlan(plan) {
+    if (!plan || !plan.shouldUpdate) return;
+    const el = document.getElementById(plan.elementId);
+    if (el) el.textContent = plan.text;
+}
+
 function voyagrVoiceSetStatus(message) {
-    const el = document.getElementById('voiceStatus');
-    if (el) el.textContent = message || '';
+    applyVoiceStatusFromPlan(_voiceControl().buildVoiceSetStatusExecutePlan(message));
 }
 
 function voyagrVoiceSetListeningUi(listening) {
-    const btn = document.getElementById('voiceBtn');
-    const btnText = document.getElementById('voiceBtnText');
-    const fab = document.getElementById('voiceFab');
-    if (btnText) btnText.textContent = listening ? 'Stop' : 'Listen';
-    if (btn) {
-        btn.classList.toggle('active', !!listening);
-        btn.setAttribute('aria-pressed', listening ? 'true' : 'false');
-    }
-    if (fab) {
-        fab.classList.toggle('fab--listening', !!listening);
-        fab.setAttribute('aria-pressed', listening ? 'true' : 'false');
-        fab.title = listening ? 'Stop voice input' : 'Voice control';
-    }
+    applyVoiceListeningUiFromPlan(_voiceControl().buildVoiceSetListeningUiExecutePlan(listening));
 }
 let currentLat = 51.5074;
 let currentLon = -0.1278;
@@ -11793,65 +11841,66 @@ let isGeocoding = false;
  * @returns {*} Return value description
  */
 function initVoiceRecognition() {
-    // Avoid re-initializing the Web Speech API multiple times (app.js + onload init).
-    if (window.__voyagrVoiceInitialized && voiceRecognition) {
+    const VC = _voiceControl();
+    const preflight = VC.buildVoiceRecognitionInitPreflightPlan({
+        alreadyInitialized: !!window.__voyagrVoiceInitialized,
+        hasRecognitionInstance: !!voiceRecognition,
+        hasSpeechRecognition: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
+    });
+    if (preflight.action === 'ready') {
         return true;
     }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-        console.log('[Voice] Web Speech API not supported');
-        voyagrVoiceSetStatus('Voice not supported in this browser (try Chrome or Edge).');
-        voyagrVoiceSetListeningUi(false);
+    if (preflight.action === 'unsupported') {
+        console.log(preflight.logMessage);
+        voyagrVoiceSetStatus(preflight.statusMessage);
+        voyagrVoiceSetListeningUi(preflight.setListeningUi);
         return false;
     }
 
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     voiceRecognition = new SpeechRecognition();
-    window.__voyagrVoiceInitialized = true;
-    voiceRecognition.continuous = false;
-    voiceRecognition.interimResults = true;
-    voiceRecognition.lang = 'en-US';
+    if (preflight.markInitialized) {
+        window.__voyagrVoiceInitialized = true;
+    }
+    const cfg = preflight.recognitionConfig;
+    voiceRecognition.continuous = cfg.continuous;
+    voiceRecognition.interimResults = cfg.interimResults;
+    voiceRecognition.lang = cfg.lang;
 
     voiceRecognition.onstart = () => {
-        console.log('[Voice] Listening started');
-        _voiceFinalTranscript = '';
-        voyagrVoiceSetStatus('Listening… speak now.');
-        voyagrVoiceSetListeningUi(true);
+        const startPlan = VC.buildVoiceOnStartExecutePlan();
+        console.log(startPlan.logMessage);
+        if (startPlan.clearFinalTranscript) {
+            _voiceFinalTranscript = '';
+        }
+        voyagrVoiceSetStatus(startPlan.statusMessage);
+        voyagrVoiceSetListeningUi(startPlan.setListeningUi);
     };
 
     voiceRecognition.onresult = (event) => {
-        let interim = '';
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            const chunk = event.results[i][0].transcript;
-            if (event.results[i].isFinal) {
-                _voiceFinalTranscript += chunk;
-            } else {
-                interim += chunk;
-            }
-        }
-        const shown = (_voiceFinalTranscript + interim).trim();
-        const tr = document.getElementById('voiceTranscript');
-        if (tr) tr.textContent = shown;
-        console.log('[Voice] Transcript:', shown);
+        const resultPlan = VC.buildVoiceTranscriptCollectPlan(event, _voiceFinalTranscript);
+        _voiceFinalTranscript = resultPlan.nextFinalTranscript;
+        applyVoiceTranscriptFromPlan(VC.buildVoiceTranscriptUpdateExecutePlan(resultPlan.shown));
+        console.log(resultPlan.logMessage, resultPlan.shown);
     };
 
     voiceRecognition.onerror = (event) => {
-        console.log('[Voice] Error:', event.error);
-        const msg =
-            event.error === 'not-allowed'
-                ? 'Microphone blocked — allow access in the browser bar.'
-                : `Could not use the microphone (${event.error}).`;
-        voyagrVoiceSetStatus(msg);
-        voyagrVoiceSetListeningUi(false);
-        isListening = false;
-        maybeResumePorcupineWakeAfterVoice();
+        const errPlan = VC.buildVoiceOnErrorExecutePlan(event.error);
+        console.log(errPlan.logMessage);
+        voyagrVoiceSetStatus(errPlan.statusMessage);
+        voyagrVoiceSetListeningUi(errPlan.setListeningUi);
+        isListening = errPlan.isListening;
+        if (errPlan.resumePorcupineWake) {
+            maybeResumePorcupineWakeAfterVoice();
+        }
     };
 
     voiceRecognition.onend = () => {
-        console.log('[Voice] Listening ended');
-        voyagrVoiceSetStatus('Processing…');
-        voyagrVoiceSetListeningUi(false);
-        isListening = false;
+        const endPlan = VC.buildVoiceOnEndExecutePlan();
+        console.log(endPlan.logMessage);
+        voyagrVoiceSetStatus(endPlan.statusMessage);
+        voyagrVoiceSetListeningUi(endPlan.setListeningUi);
+        isListening = endPlan.isListening;
     };
 
     return true;
@@ -11863,26 +11912,36 @@ function initVoiceRecognition() {
  * @returns {*} Return value description
  */
 async function toggleVoiceInput() {
+    const VC = _voiceControl();
     if (!voiceRecognition) {
         if (!initVoiceRecognition()) {
             return;
         }
     }
 
-    if (isListening) {
+    const orch = VC.buildToggleVoiceInputOrchestrationPlan({
+        isListening,
+        porcupineWakePipelineRunning,
+    });
+
+    if (orch.action === 'stop') {
         voiceRecognition.stop();
-        isListening = false;
-    } else {
-        if (porcupineWakePipelineRunning) {
-            porcupineWakeResumeAfterVoice = true;
-            await stopPorcupineWakePipeline();
-        }
-        const tr = document.getElementById('voiceTranscript');
-        if (tr) tr.textContent = '';
-        _voiceFinalTranscript = '';
-        voiceRecognition.start();
-        isListening = true;
+        isListening = orch.isListening;
+        return;
     }
+
+    if (orch.pausePorcupineWake) {
+        porcupineWakeResumeAfterVoice = true;
+        await stopPorcupineWakePipeline();
+    }
+    if (orch.clearTranscript) {
+        applyVoiceTranscriptFromPlan(VC.buildVoiceTranscriptUpdateExecutePlan(''));
+    }
+    if (orch.clearFinalTranscript) {
+        _voiceFinalTranscript = '';
+    }
+    voiceRecognition.start();
+    isListening = orch.isListening;
 }
 /**
  * speakText function
@@ -11891,32 +11950,38 @@ async function toggleVoiceInput() {
  * @returns {*} Return value description
  */
 function speakText(text) {
-    if (!('speechSynthesis' in window)) {
-        console.log('[Voice] Speech Synthesis not supported');
+    const VC = _voiceControl();
+    const preflight = VC.buildSpeakTextPreflightPlan({
+        hasSpeechSynthesis: 'speechSynthesis' in window,
+        text,
+    });
+    if (!preflight.shouldSpeak) {
+        console.log(preflight.logMessage);
         return;
     }
 
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
+    if (preflight.cancelExisting) {
+        window.speechSynthesis.cancel();
+    }
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
-    utterance.volume = 1.0;
+    const utterance = new SpeechSynthesisUtterance(preflight.utterance.text);
+    utterance.rate = preflight.utterance.rate;
+    utterance.pitch = preflight.utterance.pitch;
+    utterance.volume = preflight.utterance.volume;
 
     utterance.onstart = () => {
-        console.log('[Voice] Speaking:', text);
-        voyagrVoiceSetStatus('Speaking…');
+        console.log(preflight.logStartPrefix, text);
+        voyagrVoiceSetStatus(preflight.onStartStatus);
     };
 
     utterance.onend = () => {
-        console.log('[Voice] Speech ended');
-        voyagrVoiceSetStatus('Ready');
+        console.log(preflight.logEndMessage);
+        voyagrVoiceSetStatus(preflight.onEndStatus);
     };
 
     utterance.onerror = (event) => {
-        console.log('[Voice] Speech error:', event.error);
-        voyagrVoiceSetStatus('Speech playback error: ' + event.error);
+        console.log(preflight.logErrorPrefix, event.error);
+        voyagrVoiceSetStatus(preflight.onErrorStatusPrefix + event.error);
     };
 
     window.speechSynthesis.speak(utterance);
@@ -11931,21 +11996,24 @@ function speakText(text) {
 function setupVoiceCommandProcessing() {
     if (!voiceRecognition) return;
 
+    const VC = _voiceControl();
     const originalOnEnd = voiceRecognition.onend;
     voiceRecognition.onend = function () {
         originalOnEnd.call(this);
 
-        let transcript = (_voiceFinalTranscript || '').trim();
-        if (!transcript) {
-            const tr = document.getElementById('voiceTranscript');
-            transcript = (tr && tr.textContent) ? String(tr.textContent).trim() : '';
+        const tr = document.getElementById(VC.VOICE_TRANSCRIPT_ELEMENT_ID);
+        const endPlan = VC.buildVoiceCommandEndProcessingPlan({
+            finalTranscript: _voiceFinalTranscript,
+            fallbackTranscript: tr && tr.textContent ? tr.textContent : '',
+        });
+        if (!endPlan.shouldProcess) {
+            voyagrVoiceSetStatus(endPlan.statusMessage);
+            if (endPlan.resumePorcupineWake) {
+                maybeResumePorcupineWakeAfterVoice();
+            }
+            return;
         }
-        if (transcript) {
-            processVoiceCommand(transcript);
-        } else {
-            voyagrVoiceSetStatus('Ready');
-            maybeResumePorcupineWakeAfterVoice();
-        }
+        processVoiceCommand(endPlan.transcript);
     };
 }
 /**
@@ -11955,21 +12023,25 @@ function setupVoiceCommandProcessing() {
  * @returns {*} Return value description
  */
 function processVoiceCommand(command) {
-    if (!command) {
-        maybeResumePorcupineWakeAfterVoice();
+    const VC = _voiceControl();
+    const orch = VC.buildVoiceCommandProcessOrchestrationPlan(command);
+    if (!orch.shouldProcess) {
+        if (orch.resumePorcupineWake) {
+            maybeResumePorcupineWakeAfterVoice();
+        }
         return;
     }
 
-    console.log('[Voice] Processing command:', command);
-    voyagrVoiceSetStatus('Working on: ' + command);
+    console.log(orch.logMessage, orch.transcript);
+    voyagrVoiceSetStatus(orch.statusMessage);
 
-    fetch('/api/voice/command', {
-        method: 'POST',
+    fetch(orch.apiPath, {
+        method: orch.method,
         headers: {
             'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-            command: command,
+            command: orch.transcript,
             lat: currentLat,
             lon: currentLon
         })
@@ -11977,19 +12049,21 @@ function processVoiceCommand(command) {
         .then(response => response.json())
         .then(data => {
             console.log('[Voice] Command result:', data);
+            const execute = VC.buildVoiceCommandResultExecutePlan(data);
 
-            if (data.success) {
-                handleVoiceAction(data);
-                speakText(data.message);
+            if (execute.shouldHandleAction) {
+                handleVoiceAction(execute.payload);
+                speakText(execute.speakMessage);
             } else {
-                speakText(data.message || 'Command not recognized');
-                voyagrVoiceSetStatus(data.message || 'Command failed');
+                speakText(execute.speakMessage);
+                voyagrVoiceSetStatus(execute.statusMessage);
             }
         })
         .catch(error => {
-            console.log('[Voice] Error:', error);
-            speakText('Error processing command');
-            voyagrVoiceSetStatus('Error: ' + error.message);
+            const errExecute = VC.buildVoiceCommandErrorExecutePlan(error);
+            console.log(errExecute.logMessage, error);
+            speakText(errExecute.speakMessage);
+            voyagrVoiceSetStatus(errExecute.statusMessage);
         })
         .finally(() => {
             maybeResumePorcupineWakeAfterVoice();

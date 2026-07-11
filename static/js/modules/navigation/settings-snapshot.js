@@ -390,6 +390,18 @@
     }
 
     /**
+     * Orchestration plan when the user selects a settings import file.
+     * @param {File|null|undefined} file
+     * @returns {Object}
+     */
+    function buildImportSettingsFileSelectedOrchestrationPlan(file) {
+        return {
+            shouldReadFile: !!file,
+            readMethod: 'readAsText',
+        };
+    }
+
+    /**
      * Apply plan for importing a parsed settings snapshot.
      * @param {Object|null|undefined} settings
      * @returns {Object}
@@ -1085,6 +1097,7 @@
         buildSettingsExportPlan: buildSettingsExportPlan,
         buildExportSettingsDomExecutePlan: buildExportSettingsDomExecutePlan,
         buildImportSettingsFilePickerOrchestrationPlan: buildImportSettingsFilePickerOrchestrationPlan,
+        buildImportSettingsFileSelectedOrchestrationPlan: buildImportSettingsFileSelectedOrchestrationPlan,
         buildSettingsImportApplyPlan: buildSettingsImportApplyPlan,
         buildSettingsImportParsePlan: buildSettingsImportParsePlan,
         buildSettingsImportOrchestrationPlan: buildSettingsImportOrchestrationPlan,
