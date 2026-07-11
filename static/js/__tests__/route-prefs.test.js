@@ -140,5 +140,13 @@ describe('route-prefs module', () => {
             expect(RoutePrefs.buildRouteLegAvoidanceToggleStoragePlan('motorways', true))
                 .toEqual({ storageKey: 'pref_avoid_motorways', value: 'true' });
         });
+
+        test('buildRouteLegAvoidanceToggleDispatchPlan flips active state', () => {
+            const dispatch = RoutePrefs.buildRouteLegAvoidanceToggleDispatchPlan('ferries', true);
+            expect(dispatch.buttonId).toBe('avoidFerries');
+            expect(dispatch.nextEnabled).toBe(false);
+            expect(dispatch.storage.value).toBe('false');
+            expect(dispatch.logLine).toBe('ferries = false');
+        });
     });
 });

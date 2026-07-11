@@ -170,4 +170,37 @@ describe('geocoding-locations module', () => {
         expect(success.result.cached).toBe(false);
         expect(success.cacheKey).toBe('Leeds');
     });
+
+    test('buildGeocodeNominatimFetchRequestPlan includes user agent header', () => {
+        const plan = GL.buildGeocodeNominatimFetchRequestPlan({
+            url: 'https://nominatim.example/search?q=Leeds',
+            trimmed: 'Leeds',
+        });
+        expect(plan.url).toContain('Leeds');
+        expect(plan.headers['User-Agent']).toBe('Voyagr-PWA/1.0');
+        expect(plan.trimmed).toBe('Leeds');
+    });
+
+    test('buildGeocodeNominatimResponsePlan handles api errors and success', () => {
+        const fail = GL.buildGeocodeNominatimResponsePlan(
+            { ok: false, reason: 'api_error', message: 'rate limit' },
+            'Leeds'
+        );
+        expect(fail.branch).toBe('api_error');
+        expect(fail.errorMessage).toBe('rate limit');
+
+        const empty = GL.buildGeocodeNominatimResponsePlan({ ok: false, reason: 'empty' }, 'Leeds');
+        expect(empty.branch).toBe('empty_results');
+
+        const ok = GL.buildGeocodeNominatimResponsePlan(
+            { ok: true, geocoded: { lat: 53.8, lon: -1.5, display_name: 'Leeds' } },
+            'Leeds'
+        );
+        expect(ok.ok).toBe(true);
+        expect(ok.success.result.display_name).toBe('Leeds');
+    });
+
+    test('buildGeocodeHttpErrorPlan formats status code', () => {
+        expect(GL.buildGeocodeHttpErrorPlan(429).errorMessage).toBe('API error: 429');
+    });
 });

@@ -377,6 +377,61 @@
         };
     }
 
+    /**
+     * Fetch request plan for a Nominatim geocode lookup.
+     * @param {Object} lookup - from buildGeocodeAddressLookupPlan (nominatim_fetch)
+     * @returns {Object}
+     */
+    function buildGeocodeNominatimFetchRequestPlan(lookup) {
+        lookup = lookup || {};
+        return {
+            url: lookup.url,
+            headers: { 'User-Agent': 'Voyagr-PWA/1.0' },
+            trimmed: lookup.trimmed,
+        };
+    }
+
+    /**
+     * Outcome plan for a Nominatim HTTP response body.
+     * @param {Object} parsed - from parseNominatimFetchPayload
+     * @param {string} trimmed
+     * @returns {Object}
+     */
+    function buildGeocodeNominatimResponsePlan(parsed, trimmed) {
+        parsed = parsed || {};
+        if (!parsed.ok) {
+            if (parsed.reason === 'api_error') {
+                return {
+                    ok: false,
+                    branch: 'api_error',
+                    errorMessage: parsed.message,
+                };
+            }
+            return {
+                ok: false,
+                branch: 'empty_results',
+                trimmed: trimmed,
+            };
+        }
+        return {
+            ok: true,
+            success: buildGeocodeAddressFetchSuccessPlan(parsed.geocoded, trimmed),
+        };
+    }
+
+    /**
+     * Error plan for a non-OK Nominatim HTTP status.
+     * @param {number} status
+     * @returns {Object}
+     */
+    function buildGeocodeHttpErrorPlan(status) {
+        return {
+            ok: false,
+            branch: 'http_error',
+            errorMessage: 'API error: ' + status,
+        };
+    }
+
     var api = {
         readStoredLocationFromDataset: readStoredLocationFromDataset,
         getGeocodeLoadingStatusMessage: getGeocodeLoadingStatusMessage,
@@ -403,6 +458,9 @@
         buildGeocodePairErrorOutcomePlan: buildGeocodePairErrorOutcomePlan,
         buildGeocodeAddressLookupPlan: buildGeocodeAddressLookupPlan,
         buildGeocodeAddressFetchSuccessPlan: buildGeocodeAddressFetchSuccessPlan,
+        buildGeocodeNominatimFetchRequestPlan: buildGeocodeNominatimFetchRequestPlan,
+        buildGeocodeNominatimResponsePlan: buildGeocodeNominatimResponsePlan,
+        buildGeocodeHttpErrorPlan: buildGeocodeHttpErrorPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

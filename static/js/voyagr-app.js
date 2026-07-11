@@ -1499,76 +1499,83 @@ function loadAllSettings() {
 }
 
 /**
+ * Apply select element values from a DOM apply patch list.
+ * @param {Array<{ id: string, value: * }>} selects
+ */
+function applyDomSelectsFromPlan(selects) {
+    (selects || []).forEach(({ id, value }) => {
+        const el = document.getElementById(id);
+        if (el && value != null) el.value = value;
+    });
+}
+
+/**
+ * Apply checkbox states from a DOM apply patch list.
+ * @param {Array<{ id: string, checked: boolean }>} checks
+ */
+function applyDomChecksFromPlan(checks) {
+    (checks || []).forEach(({ id, checked }) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = !!checked;
+    });
+}
+
+/**
+ * Apply standard toggle buttons from a DOM apply patch list.
+ * @param {Array<{ id: string, enabled: boolean }>} toggles
+ * @param {Object} TU - toggle UI module
+ */
+function applyStandardTogglesFromPlan(toggles, TU) {
+    (toggles || []).forEach(({ id, enabled }) => {
+        const el = document.getElementById(id);
+        if (el) TU.applyToggleButton(el, enabled);
+    });
+}
+
+/**
+ * Apply labeled toggle buttons from a DOM apply patch list.
+ * @param {Array<{ id: string, enabled: boolean }>} toggles
+ * @param {Object} TU - toggle UI module
+ */
+function applyLabeledTogglesFromPlan(toggles, TU) {
+    (toggles || []).forEach(({ id, enabled }) => {
+        const el = document.getElementById(id);
+        if (el) TU.applyLabeledToggleButton(el, enabled);
+    });
+}
+
+/**
  * Apply settings form controls from a pure UI apply plan.
  * @param {Object} plan - from buildSettingsUiApplyPlan
  */
 function applySettingsUiFromPlan(plan) {
     if (!plan) return;
 
-    const selects = plan.selects || {};
-    const setSelect = (id, value) => {
-        const el = document.getElementById(id);
-        if (el && value != null) el.value = value;
-    };
-    setSelect('distanceUnit', selects.distanceUnit);
-    setSelect('currencyUnit', selects.currencyUnit);
-    setSelect('speedUnit', selects.speedUnit);
-    setSelect('temperatureUnit', selects.temperatureUnit);
-    setSelect('vehicleType', selects.vehicleType);
+    const domPlan = _settingsSnapshot().buildSettingsUiDomApplyPlan(plan);
+    applyDomSelectsFromPlan(domPlan.unitSelects);
 
-    if (plan.routingMode) {
-        setRoutingMode(plan.routingMode);
+    if (domPlan.routingMode) {
+        setRoutingMode(domPlan.routingMode);
     }
 
-    const routeChecks = plan.routePreferenceChecks || {};
-    const setChecked = (id, value) => {
-        const el = document.getElementById(id);
-        if (el) el.checked = !!value;
-    };
-    setChecked('avoidHighways', routeChecks.avoidHighways);
-    setChecked('preferScenic', routeChecks.preferScenic);
-    setChecked('preferQuiet', routeChecks.preferQuiet);
-    setChecked('avoidUnpaved', routeChecks.avoidUnpaved);
-    setSelect('routeOptimization', routeChecks.routeOptimization);
-    const maxDetourEl = document.getElementById('maxDetour');
-    if (maxDetourEl && routeChecks.maxDetour != null) {
-        maxDetourEl.value = routeChecks.maxDetour;
-    }
+    applyDomChecksFromPlan(domPlan.routeChecks);
+    applyDomSelectsFromPlan(domPlan.routeSelects);
+    applyDomSelectsFromPlan(domPlan.parkingSelects);
 
-    const parking = plan.parkingSelects || {};
-    setSelect('parkingMaxWalkingDistance', parking.maxWalkingDistance);
-    setSelect('parkingPreferredType', parking.preferredType);
-    setSelect('parkingPricePreference', parking.pricePreference);
-
-    const side = plan.sideEffects || {};
+    const side = domPlan.sideEffects || {};
     if (side.loadPreferences) loadPreferences();
 
     if (side.setMapTheme) {
-        setMapTheme(plan.mapTheme || 'standard');
+        setMapTheme(domPlan.mapTheme || 'standard');
     }
 
     const TU = _toggleUI();
-    const toggles = plan.toggleButtons || {};
-    const smartZoomToggle = document.getElementById('smartZoomToggle');
-    if (smartZoomToggle) TU.applyToggleButton(smartZoomToggle, toggles.smartZoom);
-    const autoTrafficToggle = document.getElementById('autoTrafficUpdateToggle');
-    if (autoTrafficToggle) TU.applyToggleButton(autoTrafficToggle, toggles.autoTrafficUpdate);
-    const autoRerouteToggle = document.getElementById('autoRerouteDeviationToggle');
-    if (autoRerouteToggle) TU.applyToggleButton(autoRerouteToggle, toggles.autoRerouteOnDeviation);
-
-    const labeled = plan.labeledToggleButtons || {};
-    const mlToggle = document.getElementById('mlPredictionsEnabled');
-    if (mlToggle) TU.applyLabeledToggleButton(mlToggle, labeled.mlPredictions);
-    const voiceToggle = document.getElementById('voiceAnnouncementsEnabled');
-    if (voiceToggle) TU.applyLabeledToggleButton(voiceToggle, labeled.voiceAnnouncements);
-    const batteryToggle = document.getElementById('batterySavingMode');
-    if (batteryToggle) TU.applyLabeledToggleButton(batteryToggle, labeled.batterySaving);
-    const gestureToggle = document.getElementById('gestureEnabled');
-    if (gestureToggle) TU.applyLabeledToggleButton(gestureToggle, labeled.gestureControl);
+    applyStandardTogglesFromPlan(domPlan.standardToggles, TU);
+    applyLabeledTogglesFromPlan(domPlan.labeledToggles, TU);
 
     if (side.initializeDarkMode) initializeDarkMode();
     if (side.updateThemeButtons) updateThemeButtons();
-    if (plan.detourLabel) applyDetourLabelFromPlan(plan.detourLabel);
+    if (domPlan.detourLabel) applyDetourLabelFromPlan(domPlan.detourLabel);
     if (side.applySpeedWidgetToggleUi) applySpeedWidgetToggleUi();
 }
 
@@ -14734,31 +14741,34 @@ async function geocodeAddress(address) {
     }
 
     try {
-        console.log('[Geocoding] Fetching:', trimmedAddress);
-        const response = await fetch(lookup.url, {
-            headers: {
-                'User-Agent': 'Voyagr-PWA/1.0'
-            }
+        const fetchPlan = GL.buildGeocodeNominatimFetchRequestPlan(lookup);
+        console.log('[Geocoding] Fetching:', fetchPlan.trimmed);
+        const response = await fetch(fetchPlan.url, {
+            headers: fetchPlan.headers,
         });
 
         if (!response.ok) {
-            throw new Error(`API error: ${response.status}`);
+            const httpErr = GL.buildGeocodeHttpErrorPlan(response.status);
+            throw new Error(httpErr.errorMessage);
         }
 
-        const parsed = GL.parseNominatimFetchPayload(await response.json());
-        if (!parsed.ok) {
-            if (parsed.reason === 'api_error') {
-                throw new Error(parsed.message);
+        const outcome = GL.buildGeocodeNominatimResponsePlan(
+            GL.parseNominatimFetchPayload(await response.json()),
+            fetchPlan.trimmed
+        );
+        if (!outcome.ok) {
+            if (outcome.branch === 'api_error') {
+                throw new Error(outcome.errorMessage);
             }
-            console.log('[Geocoding] No results for:', trimmedAddress);
+            console.log('[Geocoding] No results for:', outcome.trimmed);
             return null;
         }
 
-        const success = GL.buildGeocodeAddressFetchSuccessPlan(parsed.geocoded, lookup.trimmed);
+        const success = outcome.success;
         geocodingCache = GL.writeGeocodeCacheEntry(geocodingCache, success.cacheKey, success.cacheEntry);
         saveGeocodeCache();
 
-        console.log('[Geocoding] Success:', trimmedAddress, '→', success.result.lat, success.result.lon);
+        console.log('[Geocoding] Success:', fetchPlan.trimmed, '→', success.result.lat, success.result.lon);
         return success.result;
     } catch (error) {
         console.log('[Geocoding] Error:', error.message);
@@ -15324,11 +15334,10 @@ function toggleAvoidancePreference(pref) {
     const TU = _toggleUI();
     const btn = document.getElementById(RP.resolveRouteLegAvoidanceButtonId(pref));
     if (!btn) return;
-    const isActive = TU.nextToggleState(btn.classList.contains('active'));
-    TU.applyToggleButton(btn, isActive, TU.TOGGLE_SWITCH_OPTS);
-    const patch = RP.buildRouteLegAvoidanceToggleStoragePlan(pref, isActive);
-    localStorage.setItem(patch.storageKey, patch.value);
-    console.log(`[Avoidance] ${pref} = ${isActive}`);
+    const dispatch = RP.buildRouteLegAvoidanceToggleDispatchPlan(pref, btn.classList.contains('active'));
+    TU.applyToggleButton(btn, dispatch.nextEnabled, TU.TOGGLE_SWITCH_OPTS);
+    localStorage.setItem(dispatch.storage.storageKey, dispatch.storage.value);
+    console.log(`[Avoidance] ${dispatch.logLine}`);
 }
 
 function loadAvoidancePreferences() {

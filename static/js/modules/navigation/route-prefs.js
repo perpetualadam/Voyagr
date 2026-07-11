@@ -213,6 +213,22 @@
     }
 
     /**
+     * Dispatch plan for toggling a route-leg avoidance preference button.
+     * @param {string} pref
+     * @param {boolean} currentlyActive
+     * @returns {Object}
+     */
+    function buildRouteLegAvoidanceToggleDispatchPlan(pref, currentlyActive) {
+        var nextEnabled = !currentlyActive;
+        return {
+            buttonId: resolveRouteLegAvoidanceButtonId(pref),
+            nextEnabled: nextEnabled,
+            storage: buildRouteLegAvoidanceToggleStoragePlan(pref, nextEnabled),
+            logLine: pref + ' = ' + nextEnabled,
+        };
+    }
+
+    /**
      * One-time migration: pref_avoid_tollRoads ← pref_tolls when canonical key unset.
      * @param {Storage} storage
      */
@@ -285,6 +301,7 @@
         buildDetourLabelApplyPlan: buildDetourLabelApplyPlan,
         buildRouteLegAvoidanceTogglesApplyPlan: buildRouteLegAvoidanceTogglesApplyPlan,
         buildRouteLegAvoidanceToggleStoragePlan: buildRouteLegAvoidanceToggleStoragePlan,
+        buildRouteLegAvoidanceToggleDispatchPlan: buildRouteLegAvoidanceToggleDispatchPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

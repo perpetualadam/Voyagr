@@ -108,6 +108,23 @@ describe('settings-snapshot module', () => {
         expect(plan.sideEffects.updateDetourLabel).toBeUndefined();
     });
 
+    test('buildSettingsUiDomApplyPlan maps semantic plan to element ids', () => {
+        const uiPlan = SS.buildSettingsUiApplyPlan({
+            distanceUnit: 'mi',
+            vehicleType: 'electric',
+            routingMode: 'shortest',
+            routePreferences: { avoidHighways: true, maxDetour: 15 },
+            smartZoomEnabled: true,
+            mlPredictionsEnabled: true,
+        });
+        const dom = SS.buildSettingsUiDomApplyPlan(uiPlan);
+        expect(dom.unitSelects.find((item) => item.id === 'distanceUnit').value).toBe('mi');
+        expect(dom.routeChecks.find((item) => item.id === 'avoidHighways').checked).toBe(true);
+        expect(dom.standardToggles.find((item) => item.id === 'smartZoomToggle').enabled).toBe(true);
+        expect(dom.labeledToggles.find((item) => item.id === 'mlPredictionsEnabled').enabled).toBe(true);
+        expect(dom.detourLabel.text).toBe('15%');
+    });
+
     test('buildSettingsSnapshotInputPlan merges runtime and form state', () => {
         const input = SS.buildSettingsSnapshotInputPlan(
             {

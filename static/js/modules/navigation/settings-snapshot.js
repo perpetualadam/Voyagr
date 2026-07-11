@@ -332,6 +332,59 @@
         };
     }
 
+    /**
+     * DOM apply plan with explicit element ids for settings UI orchestration.
+     * @param {Object} uiPlan - from buildSettingsUiApplyPlan
+     * @returns {Object}
+     */
+    function buildSettingsUiDomApplyPlan(uiPlan) {
+        uiPlan = uiPlan || {};
+        var selects = uiPlan.selects || {};
+        var route = uiPlan.routePreferenceChecks || {};
+        var parking = uiPlan.parkingSelects || {};
+        var toggles = uiPlan.toggleButtons || {};
+        var labeled = uiPlan.labeledToggleButtons || {};
+        return {
+            unitSelects: [
+                { id: 'distanceUnit', value: selects.distanceUnit },
+                { id: 'currencyUnit', value: selects.currencyUnit },
+                { id: 'speedUnit', value: selects.speedUnit },
+                { id: 'temperatureUnit', value: selects.temperatureUnit },
+                { id: 'vehicleType', value: selects.vehicleType },
+            ],
+            routeChecks: [
+                { id: 'avoidHighways', checked: route.avoidHighways },
+                { id: 'preferScenic', checked: route.preferScenic },
+                { id: 'preferQuiet', checked: route.preferQuiet },
+                { id: 'avoidUnpaved', checked: route.avoidUnpaved },
+            ],
+            routeSelects: [
+                { id: 'routeOptimization', value: route.routeOptimization },
+                { id: 'maxDetour', value: route.maxDetour },
+            ],
+            parkingSelects: [
+                { id: 'parkingMaxWalkingDistance', value: parking.maxWalkingDistance },
+                { id: 'parkingPreferredType', value: parking.preferredType },
+                { id: 'parkingPricePreference', value: parking.pricePreference },
+            ],
+            standardToggles: [
+                { id: 'smartZoomToggle', enabled: toggles.smartZoom },
+                { id: 'autoTrafficUpdateToggle', enabled: toggles.autoTrafficUpdate },
+                { id: 'autoRerouteDeviationToggle', enabled: toggles.autoRerouteOnDeviation },
+            ],
+            labeledToggles: [
+                { id: 'mlPredictionsEnabled', enabled: labeled.mlPredictions },
+                { id: 'voiceAnnouncementsEnabled', enabled: labeled.voiceAnnouncements },
+                { id: 'batterySavingMode', enabled: labeled.batterySaving },
+                { id: 'gestureEnabled', enabled: labeled.gestureControl },
+            ],
+            detourLabel: uiPlan.detourLabel,
+            routingMode: uiPlan.routingMode,
+            mapTheme: uiPlan.mapTheme,
+            sideEffects: uiPlan.sideEffects || {},
+        };
+    }
+
     var api = {
         SETTINGS_STORAGE_KEY: SETTINGS_STORAGE_KEY,
         buildSettingsSnapshot: buildSettingsSnapshot,
@@ -341,6 +394,7 @@
         buildMultiDropPreferencesUiApplyPlan: buildMultiDropPreferencesUiApplyPlan,
         buildClearDepartureTimeApplyPlan: buildClearDepartureTimeApplyPlan,
         buildSettingsUiApplyPlan: buildSettingsUiApplyPlan,
+        buildSettingsUiDomApplyPlan: buildSettingsUiDomApplyPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
