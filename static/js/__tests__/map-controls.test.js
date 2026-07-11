@@ -81,4 +81,12 @@ describe('map-controls module', () => {
         expect(idle.endBtnDisplay).toBe('none');
         expect(MC.getNavStartExtraFabDisplay().arModeBtnDisplay).toBe('flex');
     });
+
+    test('nav stop FAB hide plan and status messages', () => {
+        const plan = MC.getNavStopFabHidePlan();
+        expect(plan.zoomFollowDisplay).toBe('none');
+        expect(plan.arModeBtnDisplay).toBe('none');
+        expect(MC.getNavStopStatusMessage()).toBe('Navigation stopped');
+        expect(MC.getNavStopNotification().title).toBe('Navigation Ended');
+    });
 });

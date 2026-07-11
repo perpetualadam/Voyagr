@@ -124,6 +124,72 @@
     }
 
     /**
+     * Common avoidance flags read from storage for initial route and reroute requests.
+     * @param {Storage} storage
+     * @param {boolean} avoidTolls
+     * @returns {Object}
+     */
+    function readCommonRouteAvoidanceFlags(storage, avoidTolls) {
+        return {
+            avoidCameras: storage.getItem('pref_cameras') !== 'false',
+            avoidCaz: storage.getItem('pref_caz') !== 'false',
+            avoidTrafficLights: storage.getItem('pref_trafficLightsAvoid') !== 'false',
+            avoidRailwayCrossings: storage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+            avoidTolls: !!avoidTolls,
+            avoidMotorways: storage.getItem('pref_avoid_motorways') === 'true',
+            avoidFerries: storage.getItem('pref_avoid_ferries') === 'true',
+        };
+    }
+
+    /**
+     * sharedOptions block for buildInitialRouteRequestBody.
+     * @param {Storage} storage
+     * @param {Object} o
+     * @returns {Object}
+     */
+    function buildInitialRouteSharedOptions(storage, o) {
+        o = o || {};
+        return Object.assign({
+            routingMode: o.routingMode,
+            vehicleType: o.vehicleType,
+            costParams: o.costParams,
+            enableHazardAvoidance: isInitialRouteHazardAvoidanceEnabled(storage),
+            routePrefs: o.routePrefs || {},
+        }, readCommonRouteAvoidanceFlags(storage, o.avoidTolls));
+    }
+
+    /**
+     * sharedOptions block for buildRerouteRequestBody.
+     * @param {Storage} storage
+     * @param {Object} o
+     * @param {function(): boolean} o.isAvoidTollsEnabled
+     * @returns {Object}
+     */
+    function buildRerouteSharedOptions(storage, o) {
+        o = o || {};
+        var avoidTollsFn = o.isAvoidTollsEnabled || function () { return false; };
+        return Object.assign({
+            routingMode: o.routingMode,
+            vehicleType: o.vehicleType,
+            costParams: o.costParams,
+            enableHazardAvoidance: isRerouteHazardAvoidanceEnabled(storage, avoidTollsFn),
+            routePrefs: o.routePrefs || {},
+        }, readCommonRouteAvoidanceFlags(storage, avoidTollsFn()));
+    }
+
+    /**
+     * Reroute-only include flags from storage.
+     * @param {Storage} storage
+     * @returns {{ includeTolls: boolean, includeCaz: boolean }}
+     */
+    function readRerouteIncludeFlags(storage) {
+        return {
+            includeTolls: storage.getItem('includeTolls') !== 'false',
+            includeCaz: storage.getItem('includeCAZ') !== 'false',
+        };
+    }
+
+    /**
      * Master hazard-avoidance flag for automatic reroute (buildRouteRequest).
      * @param {Storage} storage
      * @param {function(): boolean} isAvoidTollsEnabled
@@ -356,6 +422,10 @@
         isMultimodalLegHazardAvoidanceEnabled: isMultimodalLegHazardAvoidanceEnabled,
         readMultimodalLegAvoidancePrefs: readMultimodalLegAvoidancePrefs,
         readMultimodalDrivingLegStoragePrefs: readMultimodalDrivingLegStoragePrefs,
+        readCommonRouteAvoidanceFlags: readCommonRouteAvoidanceFlags,
+        buildInitialRouteSharedOptions: buildInitialRouteSharedOptions,
+        buildRerouteSharedOptions: buildRerouteSharedOptions,
+        readRerouteIncludeFlags: readRerouteIncludeFlags,
         isRerouteHazardAvoidanceEnabled: isRerouteHazardAvoidanceEnabled,
         normalizeAvoidPoints: normalizeAvoidPoints,
         formatCoordPair: formatCoordPair,

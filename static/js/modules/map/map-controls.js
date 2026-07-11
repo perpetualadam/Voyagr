@@ -190,6 +190,34 @@
         return { arModeBtnDisplay: 'flex', driverPerspectiveBtnDisplay: 'flex' };
     }
 
+    /**
+     * Map FABs hidden when navigation stops.
+     * @returns {{ zoomFollowDisplay: string, recenterDisplay: string, journeyOverviewDisplay: string, arModeBtnDisplay: string, driverPerspectiveDisplay: string }}
+     */
+    function getNavStopFabHidePlan() {
+        return {
+            zoomFollowDisplay: 'none',
+            recenterDisplay: 'none',
+            journeyOverviewDisplay: 'none',
+            arModeBtnDisplay: 'none',
+            driverPerspectiveDisplay: 'none',
+        };
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getNavStopStatusMessage() {
+        return 'Navigation stopped';
+    }
+
+    /**
+     * @returns {{ title: string, body: string }}
+     */
+    function getNavStopNotification() {
+        return { title: 'Navigation Ended', body: 'Route guidance ended' };
+    }
+
     var api = {
         ZOOM_FOLLOW_ENABLED_ICON: ZOOM_FOLLOW_ENABLED_ICON,
         ZOOM_FOLLOW_DISABLED_ICON: ZOOM_FOLLOW_DISABLED_ICON,
@@ -221,6 +249,9 @@
         applyARModeButtonState: applyARModeButtonState,
         getNavigationFabVisibilityPlan: getNavigationFabVisibilityPlan,
         getNavStartExtraFabDisplay: getNavStartExtraFabDisplay,
+        getNavStopFabHidePlan: getNavStopFabHidePlan,
+        getNavStopStatusMessage: getNavStopStatusMessage,
+        getNavStopNotification: getNavStopNotification,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

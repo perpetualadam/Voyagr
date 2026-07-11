@@ -4200,9 +4200,6 @@ async function calculateRoute() {
     // Show route calculation progress bar
     showRouteProgressBar();
 
-    // Check if hazard avoidance is enabled (any hazard type selected)
-    const enableHazardAvoidance = VoyagrRoutingRequest.isInitialRouteHazardAvoidanceEnabled(localStorage);
-
     const viaPointsData = VoyagrRoutingRequest.mapViaPointsForApi(viaPoints);
     const stopsData = VoyagrRoutingRequest.mapStopsForApi(stops);
     const totalStopTime = VoyagrRoutingRequest.sumStopDurationsMinutes(stops);
@@ -4213,8 +4210,6 @@ async function calculateRoute() {
     const departureTime = localStorage.getItem('pref_departureTime') || null;
 
     const avoidTollRoads = isAvoidTollsEnabled();
-    const avoidMotorways = localStorage.getItem('pref_avoid_motorways') === 'true';
-    const avoidFerries = localStorage.getItem('pref_avoid_ferries') === 'true';
 
     const routeStartCoordStr = VoyagrRoutingRequest.resolveLiveGpsStartCoord({
         routeInProgress: routeInProgress,
@@ -4233,20 +4228,13 @@ async function calculateRoute() {
         optimizeStopOrder: optimizeOrder,
         roundTrip: roundTrip,
         departureTime: departureTime,
-        sharedOptions: {
+        sharedOptions: VoyagrRoutingRequest.buildInitialRouteSharedOptions(localStorage, {
             routingMode: currentRoutingMode,
             vehicleType: currentVehicleType,
             costParams: getRouteCostParams(currentVehicleType),
-            enableHazardAvoidance: enableHazardAvoidance,
-            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
-            avoidCaz: localStorage.getItem('pref_caz') !== 'false',
-            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
             avoidTolls: avoidTollRoads,
-            avoidMotorways: avoidMotorways,
-            avoidFerries: avoidFerries,
             routePrefs: routePrefs,
-        },
+        }),
     });
 
     console.log('[calculateRoute] Making API request to /api/route with:', requestBody);
@@ -6237,31 +6225,23 @@ function resolveNavigationDestination() {
  */
 function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) {
     const routePrefs = (typeof getRoutePreferences === 'function') ? getRoutePreferences() : {};
+    const RR = VoyagrRoutingRequest;
+    const includeFlags = RR.readRerouteIncludeFlags(localStorage);
 
-    return VoyagrRoutingRequest.buildRerouteRequestBody({
+    return RR.buildRerouteRequestBody({
         startLat: startLat,
         startLon: startLon,
         destination: destination,
-        avoidPoints: VoyagrRoutingRequest.normalizeAvoidPoints(avoidPoints),
-        includeTolls: localStorage.getItem('includeTolls') !== 'false',
-        includeCaz: localStorage.getItem('includeCAZ') !== 'false',
-        sharedOptions: {
+        avoidPoints: RR.normalizeAvoidPoints(avoidPoints),
+        includeTolls: includeFlags.includeTolls,
+        includeCaz: includeFlags.includeCaz,
+        sharedOptions: RR.buildRerouteSharedOptions(localStorage, {
             routingMode: currentRoutingMode || 'auto',
             vehicleType: currentVehicleType || 'petrol_diesel',
             costParams: getRouteCostParams(currentVehicleType),
-            enableHazardAvoidance: VoyagrRoutingRequest.isRerouteHazardAvoidanceEnabled(
-                localStorage,
-                isAvoidTollsEnabled
-            ),
-            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
-            avoidCaz: localStorage.getItem('pref_caz') !== 'false',
-            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
-            avoidTolls: isAvoidTollsEnabled(),
-            avoidMotorways: localStorage.getItem('pref_avoid_motorways') === 'true',
-            avoidFerries: localStorage.getItem('pref_avoid_ferries') === 'true',
+            isAvoidTollsEnabled: isAvoidTollsEnabled,
             routePrefs: routePrefs,
-        },
+        }),
     });
 }
 
@@ -8805,27 +8785,20 @@ function renderLaneGuidanceUI(data) {
     if (!display || !visual || !text) return;
 
     const LG = VoyagrModules.laneGuidance();
-
-    // Don't show lane guidance for single-lane roads or when no maneuver is approaching
-    const show = LG.shouldShow(data);
-    if (!show) {
+    const plan = LG.buildLaneGuidanceUiApplyPlan(data);
+    if (!plan.visible) {
         display.classList.remove('show');
         return;
     }
 
-    // Mark non-OSM (estimated / fallback) guidance so the driver knows it's approximate.
     const badgeEl = document.getElementById('laneGuidanceBadge');
     if (badgeEl) {
-        const badge = LG.badge(data);
-        badgeEl.textContent = badge.text;
-        badgeEl.style.display = badge.visible ? 'inline-block' : 'none';
+        badgeEl.textContent = plan.badge.text;
+        badgeEl.style.display = plan.badge.visible ? 'inline-block' : 'none';
     }
 
-    // Build lane visual with direction arrows
     visual.innerHTML = '';
-    const indicators = LG.laneIndicators(data);
-
-    for (const ind of indicators) {
+    for (const ind of plan.indicators) {
         const lane = document.createElement('div');
         lane.className = 'lane-indicator';
         if (ind.recommended) lane.classList.add('recommended');
@@ -8834,51 +8807,15 @@ function renderLaneGuidanceUI(data) {
         visual.appendChild(lane);
     }
 
-    // Set urgency styling
-    display.className = 'lane-guidance-display show';
-    const urgencyCls = LG.urgencyClass(data.urgency);
-    if (urgencyCls) display.classList.add(urgencyCls);
+    display.className = plan.displayClassName;
+    if (plan.urgencyClass) display.classList.add(plan.urgencyClass);
+    text.textContent = plan.guidanceText;
 
-    // Build guidance text with distance context
-    const guidanceText = LG.displayText(data);
-    text.textContent = guidanceText;
-
-    // Voice announcement for lane guidance at junctions, roundabouts, and urgent lane changes
-    if (voiceAnnouncementsEnabled && data.recommended_lane && data.total_lanes > 1) {
-        const announceKey = `lane_${data.next_maneuver}_${data.recommended_lane}_${data.urgency}`;
-        const alreadyAnnounced = announceKey === _lastLaneVoiceKey;
-
-        if (!alreadyAnnounced) {
-            let laneMsg = '';
-            const lanePos = data.recommended_lane === 1 ? 'left'
-                : data.recommended_lane === data.total_lanes ? 'right'
-                : data.total_lanes === 3 && data.recommended_lane === 2 ? 'middle'
-                : `lane ${data.recommended_lane}`;
-
-            const exitInfo = (data.roundabout_exit_count > 0)
-                ? `, take the ${_ordinal(data.roundabout_exit_count)} exit` : '';
-
-            if (data.urgency === 'now') {
-                if (data.next_maneuver === 'roundabout') {
-                    laneMsg = `At the roundabout, use the ${lanePos} lane${exitInfo}`;
-                } else {
-                    laneMsg = data.urgency_text || `Get in the ${lanePos} lane now`;
-                }
-                speakMessage(laneMsg, 'high');
-                _lastLaneVoiceKey = announceKey;
-            } else if (data.urgency === 'soon') {
-                if (data.next_maneuver === 'roundabout') {
-                    laneMsg = `At the roundabout ahead, use the ${lanePos} lane${exitInfo}`;
-                } else {
-                    laneMsg = data.urgency_text || `Move to the ${lanePos} lane`;
-                }
-                speakMessage(laneMsg, 'normal');
-                _lastLaneVoiceKey = announceKey;
-            } else if (data.urgency === 'ahead' && data.lane_change_needed) {
-                laneMsg = `Ahead, you'll need the ${lanePos} lane`;
-                speakMessage(laneMsg, 'normal');
-                _lastLaneVoiceKey = announceKey;
-            }
+    if (voiceAnnouncementsEnabled) {
+        const voicePlan = LG.buildLaneVoiceAnnouncementPlan(data, _lastLaneVoiceKey);
+        if (voicePlan) {
+            speakMessage(voicePlan.message, voicePlan.priority);
+            _lastLaneVoiceKey = voicePlan.announceKey;
         }
     }
 }
@@ -16086,20 +16023,21 @@ function stopTurnByTurnNavigation() {
 
     // ===== HIDE ZOOM AND FOLLOW BUTTON =====
     mapFollowingActive = false;
+    const navStopFabPlan = _mapControls().getNavStopFabHidePlan();
     const zoomFollowBtn = document.getElementById('zoomFollowToggle');
     if (zoomFollowBtn) {
-        zoomFollowBtn.style.display = 'none';
+        zoomFollowBtn.style.display = navStopFabPlan.zoomFollowDisplay;
     }
 
     const recenterBtn = document.getElementById('recenterVehicleFab');
     if (recenterBtn) {
-        recenterBtn.style.display = 'none';
+        recenterBtn.style.display = navStopFabPlan.recenterDisplay;
     }
 
     // ===== HIDE JOURNEY OVERVIEW BUTTON =====
     const journeyOverviewBtn = document.getElementById('journeyOverviewBtn');
     if (journeyOverviewBtn) {
-        journeyOverviewBtn.style.display = 'none';
+        journeyOverviewBtn.style.display = navStopFabPlan.journeyOverviewDisplay;
     }
     journeyOverviewActive = false;
 
@@ -16118,11 +16056,11 @@ function stopTurnByTurnNavigation() {
     // ===== HIDE AR AND 3D VIEW BUTTONS =====
     const arModeBtn = document.getElementById('arModeBtn');
     if (arModeBtn) {
-        arModeBtn.style.display = 'none';
+        arModeBtn.style.display = navStopFabPlan.arModeBtnDisplay;
     }
     const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
     if (driverPerspectiveBtn) {
-        driverPerspectiveBtn.style.display = 'none';
+        driverPerspectiveBtn.style.display = navStopFabPlan.driverPerspectiveDisplay;
     }
     // Stop AR mode if active
     if (arModeActive) {
@@ -16149,8 +16087,10 @@ function stopTurnByTurnNavigation() {
         return;
     }
 
-    showStatus('Navigation stopped', 'info');
-    sendNotification('Navigation Ended', 'Route guidance ended', 'info');
+    const MC = _mapControls();
+    showStatus(MC.getNavStopStatusMessage(), 'info');
+    const navStopNote = MC.getNavStopNotification();
+    sendNotification(navStopNote.title, navStopNote.body, 'info');
 }
 /**
  * updateTurnGuidance function
@@ -16281,19 +16221,25 @@ function quickSearch(type) {
  * @param {number} userLon - User's longitude
  */
 function displayPOIResults(results, type, userLat, userLon) {
+    const POI = VoyagrModules.poiSearch();
     closePOIModal();
-    document.body.insertAdjacentHTML('beforeend', VoyagrModules.poiSearch().buildPoiResultsModalHtml(results, type, {
-        userLat: userLat,
-        userLon: userLon,
-        distanceTexts: results.map((poi) => VoyagrModules.units().formatPoiDistanceMeters(poi.distance_m, distanceUnit)),
-    }));
+    document.body.insertAdjacentHTML('beforeend', POI.buildPoiResultsModalHtml(results, type,
+        POI.buildPoiResultsModalDisplayOpts(
+            results,
+            type,
+            userLat,
+            userLon,
+            (distanceM) => VoyagrModules.units().formatPoiDistanceMeters(distanceM, distanceUnit)
+        )
+    ));
 }
 
 /**
  * Close the POI results modal
  */
 function closePOIModal() {
-    const modal = document.getElementById('poiModal');
+    const POI = VoyagrModules.poiSearch();
+    const modal = document.getElementById(POI.POI_MODAL_ID);
     if (modal) {
         modal.remove();
     }
@@ -16316,7 +16262,7 @@ function selectPOI(poiLat, poiLon, poiName, userLat, userLon) {
     // Set end to POI location
     document.getElementById('end').value = `${poiLat},${poiLon}`;
 
-    showStatus(`📍 Destination set: ${poiName}`, 'success');
+    showStatus(VoyagrModules.poiSearch().getPoiSelectDestinationStatusMessage(poiName), 'success');
 
     // Automatically calculate route
     calculateRoute();
