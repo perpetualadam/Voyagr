@@ -12,6 +12,8 @@
     var TRAFFIC_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
     var AUTO_TRAFFIC_UPDATE_STORAGE_KEY = 'autoTrafficUpdate';
     var AUTO_TRAFFIC_UPDATE_TOGGLE_ID = 'autoTrafficUpdateToggle';
+    var AUTO_REROUTE_DEVIATION_STORAGE_KEY = 'autoRerouteOnDeviation';
+    var AUTO_REROUTE_DEVIATION_TOGGLE_ID = 'autoRerouteDeviationToggle';
 
     /**
      * Decide whether a traffic snapshot represents a significant change that
@@ -296,10 +298,32 @@
         };
     }
 
+    /**
+     * Toggle plan for enabling/disabling automatic reroute on GPS deviation.
+     * @param {boolean} currentEnabled
+     * @returns {Object}
+     */
+    function buildAutoRerouteOnDeviationTogglePlan(currentEnabled) {
+        var next = !currentEnabled;
+        return {
+            nextEnabled: next,
+            storageKey: AUTO_REROUTE_DEVIATION_STORAGE_KEY,
+            storageValue: next ? 'true' : 'false',
+            toggleElementId: AUTO_REROUTE_DEVIATION_TOGGLE_ID,
+            saveAllSettings: true,
+            statusMessage: next
+                ? '🔄 Auto-reroute on deviation enabled'
+                : '🔄 Auto-reroute on deviation disabled',
+            statusType: next ? 'success' : 'info',
+        };
+    }
+
     var api = {
         TRAFFIC_UPDATE_INTERVAL_MS: TRAFFIC_UPDATE_INTERVAL_MS,
         AUTO_TRAFFIC_UPDATE_STORAGE_KEY: AUTO_TRAFFIC_UPDATE_STORAGE_KEY,
         AUTO_TRAFFIC_UPDATE_TOGGLE_ID: AUTO_TRAFFIC_UPDATE_TOGGLE_ID,
+        AUTO_REROUTE_DEVIATION_STORAGE_KEY: AUTO_REROUTE_DEVIATION_STORAGE_KEY,
+        AUTO_REROUTE_DEVIATION_TOGGLE_ID: AUTO_REROUTE_DEVIATION_TOGGLE_ID,
         detectSignificantTrafficChange: detectSignificantTrafficChange,
         computeEffectiveRouteMinutes: computeEffectiveRouteMinutes,
         computeTrafficRerouteTimeSaved: computeTrafficRerouteTimeSaved,
@@ -315,6 +339,7 @@
         buildStopAutoTrafficUpdatesDispatchPlan: buildStopAutoTrafficUpdatesDispatchPlan,
         buildManualTrafficUpdateStatusPlan: buildManualTrafficUpdateStatusPlan,
         buildAutoTrafficUpdateTogglePlan: buildAutoTrafficUpdateTogglePlan,
+        buildAutoRerouteOnDeviationTogglePlan: buildAutoRerouteOnDeviationTogglePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -2927,13 +2927,16 @@ function moveWaypoint(type, index, direction) {
  * Display multi-drop route leg breakdown in the waypoints area
  */
 function displayMultiDropLegs(data) {
-    const container = document.getElementById('waypointsList');
-    const plan = _waypoints().buildMultiDropItineraryMountPlan(data, {
+    const WP = _waypoints();
+    const plan = WP.buildMultiDropLegsDisplayDomApplyPlan(data, {
         distUnit: getDistanceUnit(),
         convertDistance,
         formatEtaClock: (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
-    if (!container || !plan) return;
+    if (!plan.shouldDisplay) return;
+
+    const container = document.getElementById(plan.containerId);
+    if (!container) return;
 
     container.innerHTML += plan.appendHtml;
 
@@ -5236,18 +5239,20 @@ let routeTrafficUpdateInterval = null;
  * Toggle route traffic edge display on/off
  */
 function toggleRouteTraffic() {
-    routeTrafficEnabled = !routeTrafficEnabled;
-    const toggle = document.getElementById('routeTrafficToggle');
-    _toggleUI().writeBoolPref('routeTrafficEnabled', routeTrafficEnabled);
+    const RTF = _routeTrafficFlow();
+    const plan = RTF.buildRouteTrafficTogglePlan(routeTrafficEnabled);
+    routeTrafficEnabled = plan.nextEnabled;
+
+    const toggle = document.getElementById(plan.toggleElementId);
+    if (plan.useWriteBoolPref) {
+        _toggleUI().writeBoolPref(plan.storageKey, routeTrafficEnabled);
+    }
     _toggleUI().applyToggleButton(toggle, routeTrafficEnabled);
 
-    if (routeTrafficEnabled) {
-        showStatus('🚦 Route traffic display enabled', 'success');
-        if (routeInProgress && routePolyline) {
-            fetchAndDisplayRouteTraffic();
-        }
-    } else {
-        showStatus('🚦 Route traffic display disabled', 'info');
+    showStatus(plan.statusMessage, plan.statusType);
+    if (plan.fetchIfRouteInProgress && routeInProgress && routePolyline) {
+        fetchAndDisplayRouteTraffic();
+    } else if (plan.clearLayersOnDisable) {
         clearRouteTrafficLayers();
     }
 }
@@ -5256,22 +5261,26 @@ function toggleRouteTraffic() {
  * Clear all route traffic edge layers from the map
  */
 function clearRouteTrafficLayers() {
-    routeTrafficLayers.forEach(layer => {
-        if (layer) {
-            // MapLibre layers have a remove() method
-            if (typeof layer.remove === 'function') {
-                layer.remove();
-            } else if (map && layer.id && map.getLayer(layer.id)) {
-                // Fallback: remove by layer ID
-                map.removeLayer(layer.id);
-                if (map.getSource(layer.id)) {
-                    map.removeSource(layer.id);
-                }
+    const RTF = _routeTrafficFlow();
+    const plan = RTF.buildClearRouteTrafficLayersApplyPlan(routeTrafficLayers);
+
+    plan.layers.forEach((spec) => {
+        const layer = routeTrafficLayers[spec.index];
+        if (!layer) return;
+        if (spec.hasRemove) {
+            layer.remove();
+        } else if (map && spec.layerId && map.getLayer(spec.layerId)) {
+            map.removeLayer(spec.layerId);
+            if (map.getSource(spec.layerId)) {
+                map.removeSource(spec.layerId);
             }
         }
     });
-    routeTrafficLayers = [];
-    console.log('[Route Traffic] Cleared traffic edge layers');
+
+    if (plan.resetLayersArray) routeTrafficLayers = [];
+    if (plan.shouldClear || plan.resetLayersArray) {
+        console.log(plan.logMessage);
+    }
 }
 
 /**
@@ -5279,29 +5288,25 @@ function clearRouteTrafficLayers() {
  */
 async function fetchAndDisplayRouteTraffic() {
     const RTF = _routeTrafficFlow();
-    const dispatch = RTF.buildFetchRouteTrafficDispatchPlan({
+    const orchestration = RTF.buildFetchAndDisplayRouteTrafficOrchestrationPlan({
         routeTrafficEnabled,
         routePolyline,
     });
-    if (!dispatch.shouldFetch) {
-        console.log('[Route Traffic] Not enabled or no route available');
+    if (!orchestration.shouldFetch) {
+        console.log(orchestration.logMessage);
         return;
     }
 
-    console.log('[Route Traffic] Fetching traffic data for route...');
+    console.log(orchestration.fetchLogMessage);
 
     try {
-        const data = await fetchRouteTrafficFlowPayload(routePolyline, dispatch.sampleInterval);
-        if (!data) {
-            console.debug('[Route Traffic] No traffic data (backoff or upstream unavailable)');
-            return;
-        }
-
-        if (data.success && data.segments && data.segments.length > 0) {
-            displayRouteTrafficEdges(data.segments);
-            console.log(`[Route Traffic] Displayed ${data.segments.length} traffic segments (source: ${data.source})`);
+        const data = await fetchRouteTrafficFlowPayload(routePolyline, orchestration.sampleInterval);
+        const response = RTF.buildFetchAndDisplayRouteTrafficResponsePlan(data);
+        if (response.action === 'display') {
+            displayRouteTrafficEdges(response.segments);
+            console.log(response.logMessage);
         } else {
-            console.debug('[Route Traffic] No traffic segments returned');
+            console.debug(response.debugMessage);
         }
     } catch (error) {
         console.debug('[Route Traffic] Error fetching traffic:', error);
@@ -5563,19 +5568,16 @@ function toggleAutoTrafficUpdate() {
  * Toggle auto-reroute on deviation on/off
  */
 function toggleAutoRerouteOnDeviation() {
-    autoRerouteOnDeviationEnabled = !autoRerouteOnDeviationEnabled;
-    localStorage.setItem('autoRerouteOnDeviation', autoRerouteOnDeviationEnabled ? 'true' : 'false');
+    const TC = _trafficChange();
+    const plan = TC.buildAutoRerouteOnDeviationTogglePlan(autoRerouteOnDeviationEnabled);
+    autoRerouteOnDeviationEnabled = plan.nextEnabled;
+    localStorage.setItem(plan.storageKey, plan.storageValue);
 
-    const toggle = document.getElementById('autoRerouteDeviationToggle');
-    _toggleUI().applyToggleButton(toggle, autoRerouteOnDeviationEnabled);
+    _toggleUI().applyToggleButton(document.getElementById(plan.toggleElementId), autoRerouteOnDeviationEnabled);
 
-    if (autoRerouteOnDeviationEnabled) {
-        showStatus('🔄 Auto-reroute on deviation enabled', 'success');
-    } else {
-        showStatus('🔄 Auto-reroute on deviation disabled', 'info');
-    }
+    showStatus(plan.statusMessage, plan.statusType);
 
-    saveAllSettings();
+    if (plan.saveAllSettings) saveAllSettings();
 }
 
 /**

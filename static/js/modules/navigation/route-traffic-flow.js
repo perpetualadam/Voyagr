@@ -197,6 +197,8 @@
     var ROUTE_TRAFFIC_POLYLINE_SAMPLE_DIVISOR = 20;
     var ROUTE_TRAFFIC_UPDATE_INTERVAL_MS = 2 * 60 * 1000;
     var ROUTE_TRAFFIC_FIRST_UPDATE_DELAY_MS = 500;
+    var ROUTE_TRAFFIC_ENABLED_STORAGE_KEY = 'routeTrafficEnabled';
+    var ROUTE_TRAFFIC_TOGGLE_ID = 'routeTrafficToggle';
 
     /**
      * Dispatch plan for fetching along-route traffic flow data.
@@ -454,6 +456,101 @@
         };
     }
 
+    /**
+     * Toggle plan for enabling/disabling route-traffic edge display.
+     * @param {boolean} currentEnabled
+     * @returns {Object}
+     */
+    function buildRouteTrafficTogglePlan(currentEnabled) {
+        var next = !currentEnabled;
+        return {
+            nextEnabled: next,
+            storageKey: ROUTE_TRAFFIC_ENABLED_STORAGE_KEY,
+            useWriteBoolPref: true,
+            toggleElementId: ROUTE_TRAFFIC_TOGGLE_ID,
+            fetchIfRouteInProgress: next,
+            clearLayersOnDisable: !next,
+            statusMessage: next
+                ? '🚦 Route traffic display enabled'
+                : '🚦 Route traffic display disabled',
+            statusType: next ? 'success' : 'info',
+        };
+    }
+
+    /**
+     * Apply plan for clearing route-traffic edge layers from the map.
+     * @param {Array<Object>} layers
+     * @returns {Object}
+     */
+    function buildClearRouteTrafficLayersApplyPlan(layers) {
+        layers = layers || [];
+        return {
+            shouldClear: layers.length > 0,
+            layers: layers.map(function (layer, idx) {
+                return {
+                    index: idx,
+                    hasRemove: !!(layer && typeof layer.remove === 'function'),
+                    layerId: layer && layer.id ? layer.id : null,
+                };
+            }),
+            resetLayersArray: true,
+            logMessage: '[Route Traffic] Cleared traffic edge layers',
+        };
+    }
+
+    /**
+     * Orchestration plan before fetching route-traffic edge data.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.routeTrafficEnabled]
+     * @param {Array<[number,number]>} [opts.routePolyline]
+     * @returns {Object}
+     */
+    function buildFetchAndDisplayRouteTrafficOrchestrationPlan(opts) {
+        opts = opts || {};
+        var dispatch = buildFetchRouteTrafficDispatchPlan(opts);
+        if (!dispatch.shouldFetch) {
+            return {
+                shouldFetch: false,
+                logMessage: '[Route Traffic] Not enabled or no route available',
+            };
+        }
+        return {
+            shouldFetch: true,
+            sampleInterval: dispatch.sampleInterval,
+            fetchLogMessage: '[Route Traffic] Fetching traffic data for route...',
+        };
+    }
+
+    /**
+     * Response plan after route-traffic edge fetch completes.
+     * @param {Object|null} data
+     * @returns {Object}
+     */
+    function buildFetchAndDisplayRouteTrafficResponsePlan(data) {
+        if (!data) {
+            return {
+                action: 'none',
+                reason: 'no_data',
+                debugMessage: '[Route Traffic] No traffic data (backoff or upstream unavailable)',
+            };
+        }
+        if (data.success && data.segments && data.segments.length > 0) {
+            return {
+                action: 'display',
+                segments: data.segments,
+                segmentCount: data.segments.length,
+                source: data.source,
+                logMessage: '[Route Traffic] Displayed ' + data.segments.length +
+                    ' traffic segments (source: ' + data.source + ')',
+            };
+        }
+        return {
+            action: 'none',
+            reason: 'empty_segments',
+            debugMessage: '[Route Traffic] No traffic segments returned',
+        };
+    }
+
     var api = {
         TRAFFIC_COLORS: TRAFFIC_COLORS,
         findForwardPolylineIndex: findForwardPolylineIndex,
@@ -473,6 +570,12 @@
         buildStartRouteTrafficUpdatesDispatchPlan: buildStartRouteTrafficUpdatesDispatchPlan,
         buildRouteTrafficIntervalTickPlan: buildRouteTrafficIntervalTickPlan,
         buildStopRouteTrafficUpdatesDispatchPlan: buildStopRouteTrafficUpdatesDispatchPlan,
+        buildRouteTrafficTogglePlan: buildRouteTrafficTogglePlan,
+        buildClearRouteTrafficLayersApplyPlan: buildClearRouteTrafficLayersApplyPlan,
+        buildFetchAndDisplayRouteTrafficOrchestrationPlan: buildFetchAndDisplayRouteTrafficOrchestrationPlan,
+        buildFetchAndDisplayRouteTrafficResponsePlan: buildFetchAndDisplayRouteTrafficResponsePlan,
+        ROUTE_TRAFFIC_ENABLED_STORAGE_KEY: ROUTE_TRAFFIC_ENABLED_STORAGE_KEY,
+        ROUTE_TRAFFIC_TOGGLE_ID: ROUTE_TRAFFIC_TOGGLE_ID,
         ROUTE_TRAFFIC_UPDATE_INTERVAL_MS: ROUTE_TRAFFIC_UPDATE_INTERVAL_MS,
         ROUTE_TRAFFIC_FIRST_UPDATE_DELAY_MS: ROUTE_TRAFFIC_FIRST_UPDATE_DELAY_MS,
         ROUTE_TRAFFIC_SAMPLE_TTL_MS: ROUTE_TRAFFIC_SAMPLE_TTL_MS,

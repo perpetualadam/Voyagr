@@ -188,6 +188,25 @@
         };
     }
 
+    /**
+     * DOM apply plan for appending multi-drop itinerary to the waypoints list.
+     * @param {Object} data
+     * @param {Object} fmt
+     * @returns {Object}
+     */
+    function buildMultiDropLegsDisplayDomApplyPlan(data, fmt) {
+        var mountPlan = buildMultiDropItineraryMountPlan(data, fmt);
+        if (!mountPlan) {
+            return { shouldDisplay: false };
+        }
+        return {
+            shouldDisplay: true,
+            containerId: WAYPOINTS_LIST_CONTAINER_ID,
+            appendHtml: mountPlan.appendHtml,
+            shouldDrawLegs: mountPlan.shouldDrawLegs,
+        };
+    }
+
     var ROUTE_DRAG_MARKER_ICON_SIZE = [20, 20];
     var WAYPOINT_MARKER_ICON_SIZE = [28, 28];
 
@@ -856,6 +875,7 @@
         buildMultiDropItineraryHtml: buildMultiDropItineraryHtml,
         buildMultiDropLegLayerDescriptor: buildMultiDropLegLayerDescriptor,
         buildMultiDropItineraryMountPlan: buildMultiDropItineraryMountPlan,
+        buildMultiDropLegsDisplayDomApplyPlan: buildMultiDropLegsDisplayDomApplyPlan,
         ROUTE_DRAG_MARKER_ICON_SIZE: ROUTE_DRAG_MARKER_ICON_SIZE,
         WAYPOINT_MARKER_ICON_SIZE: WAYPOINT_MARKER_ICON_SIZE,
         buildRouteDragMarkerHtml: buildRouteDragMarkerHtml,

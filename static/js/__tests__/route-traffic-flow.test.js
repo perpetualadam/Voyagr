@@ -244,4 +244,44 @@ describe('route traffic ahead sampling and cache plans', () => {
         expect(stopped.clearTrafficLayers).toBe(true);
         expect(RTF.buildStopRouteTrafficUpdatesDispatchPlan({}).shouldStopInterval).toBe(true);
     });
+
+    test('buildRouteTrafficTogglePlan flips enabled state and side effects', () => {
+        const disable = RTF.buildRouteTrafficTogglePlan(true);
+        expect(disable.nextEnabled).toBe(false);
+        expect(disable.clearLayersOnDisable).toBe(true);
+        expect(disable.toggleElementId).toBe(RTF.ROUTE_TRAFFIC_TOGGLE_ID);
+
+        const enable = RTF.buildRouteTrafficTogglePlan(false);
+        expect(enable.fetchIfRouteInProgress).toBe(true);
+        expect(enable.storageKey).toBe(RTF.ROUTE_TRAFFIC_ENABLED_STORAGE_KEY);
+    });
+
+    test('buildClearRouteTrafficLayersApplyPlan maps layer removal strategies', () => {
+        const plan = RTF.buildClearRouteTrafficLayersApplyPlan([
+            { remove: function () {} },
+            { id: 'traffic-edge-1' },
+        ]);
+        expect(plan.layers[0].hasRemove).toBe(true);
+        expect(plan.layers[1].layerId).toBe('traffic-edge-1');
+        expect(plan.resetLayersArray).toBe(true);
+    });
+
+    test('buildFetchAndDisplayRouteTraffic orchestration and response plans', () => {
+        const orch = RTF.buildFetchAndDisplayRouteTrafficOrchestrationPlan({
+            routeTrafficEnabled: true,
+            routePolyline: [[51.5, -0.1], [51.6, -0.2]],
+        });
+        expect(orch.shouldFetch).toBe(true);
+        expect(orch.sampleInterval).toBeGreaterThanOrEqual(1);
+
+        const display = RTF.buildFetchAndDisplayRouteTrafficResponsePlan({
+            success: true,
+            segments: [{ traffic_level: 'red' }],
+            source: 'TomTom',
+        });
+        expect(display.action).toBe('display');
+        expect(display.logMessage).toContain('TomTom');
+
+        expect(RTF.buildFetchAndDisplayRouteTrafficResponsePlan(null).reason).toBe('no_data');
+    });
 });

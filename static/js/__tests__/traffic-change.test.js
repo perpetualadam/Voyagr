@@ -205,4 +205,17 @@ describe('auto traffic interval dispatch plans', () => {
         expect(enable.startUpdatesIfRouteInProgress).toBe(true);
         expect(enable.statusType).toBe('success');
     });
+
+    test('buildAutoRerouteOnDeviationTogglePlan flips state and maps storage/toggle ids', () => {
+        const plan = TC.buildAutoRerouteOnDeviationTogglePlan(true);
+        expect(plan.nextEnabled).toBe(false);
+        expect(plan.storageKey).toBe(TC.AUTO_REROUTE_DEVIATION_STORAGE_KEY);
+        expect(plan.toggleElementId).toBe(TC.AUTO_REROUTE_DEVIATION_TOGGLE_ID);
+        expect(plan.statusMessage).toContain('disabled');
+
+        const enable = TC.buildAutoRerouteOnDeviationTogglePlan(false);
+        expect(enable.nextEnabled).toBe(true);
+        expect(enable.saveAllSettings).toBe(true);
+        expect(enable.statusType).toBe('success');
+    });
 });

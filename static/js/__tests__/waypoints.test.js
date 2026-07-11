@@ -231,4 +231,20 @@ describe('waypoints module', () => {
         expect(plan.layerSpecs).toHaveLength(3);
         expect(plan.layerSpecs[2].sourceId).toBe('multidrop-leg-source-2');
     });
+
+    test('buildMultiDropLegsDisplayDomApplyPlan appends itinerary to waypoints list', () => {
+        const plan = W.buildMultiDropLegsDisplayDomApplyPlan({
+            legs: [{ distance_km: 4, duration_minutes: 10 }],
+            total_distance_km: 4,
+            all_geometry: ['geom1'],
+        }, {
+            distUnit: 'mi',
+            convertDistance: (km) => (km * 0.621371).toFixed(2),
+        });
+        expect(plan.shouldDisplay).toBe(true);
+        expect(plan.containerId).toBe(W.WAYPOINTS_LIST_CONTAINER_ID);
+        expect(plan.appendHtml).toContain('Leg 1');
+        expect(plan.shouldDrawLegs).toBe(true);
+        expect(W.buildMultiDropLegsDisplayDomApplyPlan(null, {}).shouldDisplay).toBe(false);
+    });
 });
