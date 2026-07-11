@@ -239,4 +239,28 @@ describe('navigation hazard tick helpers', () => {
         expect(plan.action).toBe('skip');
         expect(plan.reason).toBe('debounced');
     });
+
+    test('buildHazardAnnouncementExecutePlan maps announce plan to side effects', () => {
+        const announce = HA.buildHazardAnnouncementPlan(
+            { type: 'roadworks', lat: 1, lon: 2 },
+            200,
+            { now: 60_000, lastAnnounceAt: 0, voiceAnnouncementsEnabled: true }
+        );
+        const execute = HA.buildHazardAnnouncementExecutePlan(announce);
+        expect(execute.shouldExecute).toBe(true);
+        expect(execute.speak).toBe(true);
+        expect(execute.notification.title).toBe('Hazard Alert');
+
+        expect(HA.buildHazardAnnouncementExecutePlan({ action: 'skip' }).shouldExecute).toBe(false);
+    });
+
+    test('buildNavigationHazardAlertsNearbyFetchPlan gates on tick flags', () => {
+        expect(HA.buildNavigationHazardAlertsNearbyFetchPlan({ fetchNearby: false }).shouldFetch).toBe(false);
+        const fetch = HA.buildNavigationHazardAlertsNearbyFetchPlan({
+            fetchNearby: true,
+            nearbyUrl: '/api/hazards/nearby?lat=1&lon=2&radius_km=2',
+        });
+        expect(fetch.shouldFetch).toBe(true);
+        expect(fetch.url).toContain('nearby');
+    });
 });

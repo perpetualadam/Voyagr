@@ -633,12 +633,51 @@
         return plan;
     }
 
+    /**
+     * Execute plan for applying a hazard announcement decision.
+     * @param {Object} plan - from buildHazardAnnouncementPlan
+     * @returns {Object}
+     */
+    function buildHazardAnnouncementExecutePlan(plan) {
+        plan = plan || {};
+        if (plan.action !== 'announce') {
+            return { shouldExecute: false };
+        }
+        return {
+            shouldExecute: true,
+            debounceKey: plan.debounceKey,
+            nextAnnounceAt: plan.nextAnnounceAt,
+            notification: plan.notification,
+            speak: !!plan.speak,
+            spokenMessage: plan.spokenMessage,
+            speakPriority: plan.speakPriority,
+            playChime: !!plan.playChime,
+        };
+    }
+
+    /**
+     * Fetch execute plan for nearby hazard API augmentation.
+     * @param {Object} tick - from buildNavigationHazardAlertsTickPlan
+     * @returns {Object}
+     */
+    function buildNavigationHazardAlertsNearbyFetchPlan(tick) {
+        tick = tick || {};
+        return {
+            shouldFetch: !!tick.fetchNearby && !!tick.nearbyUrl,
+            url: tick.nearbyUrl,
+            method: 'GET',
+            errorLogPrefix: 'Hazard check error:',
+        };
+    }
+
     var api = {
         HAZARD_ANNOUNCEMENT_DEBOUNCE_MS: HAZARD_ANNOUNCEMENT_DEBOUNCE_MS,
         NEARBY_HAZARDS_RADIUS_KM: NEARBY_HAZARDS_RADIUS_KM,
         buildHazardEvaluationParams: buildHazardEvaluationParams,
         buildNavigationHazardAlertsTickPlan: buildNavigationHazardAlertsTickPlan,
         buildHazardAnnouncementPlan: buildHazardAnnouncementPlan,
+        buildHazardAnnouncementExecutePlan: buildHazardAnnouncementExecutePlan,
+        buildNavigationHazardAlertsNearbyFetchPlan: buildNavigationHazardAlertsNearbyFetchPlan,
         CAMERA_HAZARD_TYPES: CAMERA_HAZARD_TYPES,
         isCameraHazardType: isCameraHazardType,
         flattenNearbyHazardsPayload: flattenNearbyHazardsPayload,

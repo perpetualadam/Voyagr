@@ -29,4 +29,24 @@ describe('camera-map-markers module', () => {
         expect(html).toContain('Speed camera');
         expect(html).toContain('A40 westbound');
     });
+
+    test('buildCameraMarkersMountSpecs resolves style and builds marker specs', () => {
+        const styleMap = {
+            camera_speed: config,
+        };
+        const specs = CAM.buildCameraMarkersMountSpecs([
+            { lat: 51.5, lon: -0.1, bucket: 'camera_speed', description: 'M1' },
+        ], styleMap, {
+            normalizeBucket: (b) => b,
+            markerClassName: 'camera-marker',
+            markerSvgSize: 20,
+            popupSvgSize: 24,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+        });
+        expect(specs).toHaveLength(1);
+        expect(specs[0].lat).toBe(51.5);
+        expect(specs[0].html).toContain('32px');
+        expect(specs[0].popup).toContain('M1');
+    });
 });

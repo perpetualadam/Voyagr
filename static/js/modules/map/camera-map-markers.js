@@ -61,10 +61,54 @@
         );
     }
 
+    /**
+     * Build marker mount specs for camera overlay markers (app applies MapLibre createMarker).
+     * @param {Array<Object>} items
+     * @param {Object} styleMap
+     * @param {Object} [opts]
+     * @param {function(string): string} [opts.normalizeBucket]
+     * @param {string} [opts.markerClassName]
+     * @param {number} [opts.markerSvgSize]
+     * @param {number} [opts.popupSvgSize]
+     * @param {Array<number>} [opts.iconSize]
+     * @param {Array<number>} [opts.iconAnchor]
+     * @returns {Array<Object>}
+     */
+    function buildCameraMarkersMountSpecs(items, styleMap, opts) {
+        opts = opts || {};
+        styleMap = styleMap || {};
+        var normalize = typeof opts.normalizeBucket === 'function'
+            ? opts.normalizeBucket
+            : function (bucket) { return bucket; };
+        var markerSvgSize = opts.markerSvgSize != null ? opts.markerSvgSize : 20;
+        var popupSvgSize = opts.popupSvgSize != null ? opts.popupSvgSize : 24;
+        var fallback = styleMap.camera_speed || {};
+
+        return (items || []).map(function (camera) {
+            var bucket = normalize(camera.bucket);
+            var config = styleMap[bucket] || fallback;
+            if (!config || !config.svg) {
+                config = fallback;
+            }
+            var svgForMarker = scaleHazardMarkerSvg(config.svg, markerSvgSize, markerSvgSize);
+            var svgForPopup = scaleHazardMarkerSvg(config.svg, popupSvgSize, popupSvgSize);
+            return {
+                lat: camera.lat,
+                lon: camera.lon,
+                className: opts.markerClassName,
+                html: buildCameraMarkerHtml(config, svgForMarker),
+                iconSize: opts.iconSize,
+                iconAnchor: opts.iconAnchor,
+                popup: buildCameraMarkerPopupHtml(config, svgForPopup, camera.description),
+            };
+        });
+    }
+
     var api = {
         scaleHazardMarkerSvg: scaleHazardMarkerSvg,
         buildCameraMarkerHtml: buildCameraMarkerHtml,
         buildCameraMarkerPopupHtml: buildCameraMarkerPopupHtml,
+        buildCameraMarkersMountSpecs: buildCameraMarkersMountSpecs,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

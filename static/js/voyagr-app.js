@@ -6603,22 +6603,22 @@ function displayCameraMarkers(cameras) {
     const HM = _hazardMapMarkers();
     const styleMap = HM.getHazardMarkerStyleMap();
     const CAM = _cameraMapMarkers();
+    const specs = CAM.buildCameraMarkersMountSpecs(collect.items, styleMap, {
+        normalizeBucket: (bucket) => HM.normalizeCameraHazardTypeForMarker(bucket),
+        markerClassName: collect.markerClassName,
+        markerSvgSize: collect.markerSvgSize,
+        popupSvgSize: collect.popupSvgSize,
+        iconSize: collect.iconSize,
+        iconAnchor: collect.iconAnchor,
+    });
 
-    collect.items.forEach((camera) => {
-        const bucket = HM.normalizeCameraHazardTypeForMarker(camera.bucket);
-        let config = styleMap[bucket] || styleMap.camera_speed;
-        if (!config || !config.svg) {
-            config = styleMap.camera_speed;
-        }
-        const svgForMarker = CAM.scaleHazardMarkerSvg(config.svg, collect.markerSvgSize, collect.markerSvgSize);
-        const svgForPopup = CAM.scaleHazardMarkerSvg(config.svg, collect.popupSvgSize, collect.popupSvgSize);
-
-        const marker = MapLibreHelpers.createMarker(camera.lat, camera.lon, {
-            className: collect.markerClassName,
-            html: CAM.buildCameraMarkerHtml(config, svgForMarker),
-            iconSize: collect.iconSize,
-            iconAnchor: collect.iconAnchor,
-            popup: CAM.buildCameraMarkerPopupHtml(config, svgForPopup, camera.description),
+    specs.forEach((spec) => {
+        const marker = MapLibreHelpers.createMarker(spec.lat, spec.lon, {
+            className: spec.className,
+            html: spec.html,
+            iconSize: spec.iconSize,
+            iconAnchor: spec.iconAnchor,
+            popup: spec.popup,
         }).addTo(map);
 
         window.cameraMarkers.push(marker);
@@ -13987,24 +13987,26 @@ function formatHazardDistanceForUserMeters(distanceM) {
 function announceCameraOrHazard(hazard, distanceM, opts = {}) {
     const { unavoidableRouteCamera = false } = opts;
     const HA = _hazardAlerts();
-    const debounceKey = `${hazard.type}_${hazard.lat}_${hazard.lon}_${unavoidableRouteCamera ? 'route' : 'near'}`;
     const plan = HA.buildHazardAnnouncementPlan(hazard, distanceM, {
         unavoidableRouteCamera,
         cameraAlertType,
         voiceAnnouncementsEnabled,
         distanceUnit,
         debounceMs: HA.HAZARD_ANNOUNCEMENT_DEBOUNCE_MS,
-        lastAnnounceAt: hazardAnnouncementDebounce[debounceKey] || 0,
+        lastAnnounceAt: hazardAnnouncementDebounce[
+            `${hazard.type}_${hazard.lat}_${hazard.lon}_${unavoidableRouteCamera ? 'route' : 'near'}`
+        ] || 0,
         now: Date.now(),
     });
-    if (plan.action !== 'announce') return;
+    const execute = HA.buildHazardAnnouncementExecutePlan(plan);
+    if (!execute.shouldExecute) return;
 
-    hazardAnnouncementDebounce[plan.debounceKey] = plan.nextAnnounceAt;
-    sendNotification(plan.notification.title, plan.notification.message, plan.notification.type);
-    if (plan.speak) {
-        speakMessage(plan.spokenMessage, plan.speakPriority || undefined);
+    hazardAnnouncementDebounce[execute.debounceKey] = execute.nextAnnounceAt;
+    sendNotification(execute.notification.title, execute.notification.message, execute.notification.type);
+    if (execute.speak) {
+        speakMessage(execute.spokenMessage, execute.speakPriority || undefined);
     }
-    if (plan.playChime) {
+    if (execute.playChime) {
         playCameraChime();
     }
 }
@@ -14052,15 +14054,16 @@ function processNavigationHazardAlerts(lat, lon) {
         evaluateAndAnnounceHazards(lat, lon, null, false);
     }
 
-    if (!tick.fetchNearby || !tick.nearbyUrl) return;
+    const fetchPlan = HA.buildNavigationHazardAlertsNearbyFetchPlan(tick);
+    if (!fetchPlan.shouldFetch) return;
 
-    fetch(tick.nearbyUrl)
+    fetch(fetchPlan.url)
         .then((response) => response.json())
         .then((data) => {
             if (!data.success || !data.hazards) return;
             evaluateAndAnnounceHazards(lat, lon, data.hazards, true);
         })
-        .catch((error) => console.log('Hazard check error:', error));
+        .catch((error) => console.log(fetchPlan.errorLogPrefix, error));
 }
 
 /** @deprecated Use processNavigationHazardAlerts — kept for live refresh interval. */
