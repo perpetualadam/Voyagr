@@ -2187,7 +2187,7 @@ async function loadTripHistory() {
         allTrips = [];
         const list = document.getElementById('tripHistoryList');
         if (list) {
-            list.innerHTML = '<div style="text-align: center; padding: 20px; color: #f44336;">Error loading trips</div>';
+            list.innerHTML = VoyagrModules.tripHistory().TRIP_HISTORY_ERROR_HTML;
         }
         bindTripHistorySearch();
     }
@@ -6823,20 +6823,17 @@ let showOsmTrafficLightsEnabled = localStorage.getItem('showOsmTrafficLightsOnMa
 window.osmRailwayCrossingMarkers = [];
 let showOsmRailwayCrossingsEnabled = localStorage.getItem('showOsmRailwayCrossingsOnMap') !== 'false';
 
-/** SVG icon: level crossing (rails + warning cross), matches hazard railway_crossing colours */
-const RAILWAY_CROSSING_MAP_ICON_SVG = `<svg viewBox="0 0 24 24" width="22" height="22" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><rect x="1" y="1" width="22" height="22" rx="4" fill="#efebe9" stroke="#795548" stroke-width="2"/><path stroke="#424242" stroke-width="1.8" stroke-linecap="round" d="M5 9h14M5 15h14"/><path stroke="#c62828" stroke-width="2.2" stroke-linecap="round" d="M8 7l8 10M16 7l-8 10"/></svg>`;
-
 /** Same vertical icon as route traffic lights (`traffic-lights.js`); fallback if module not loaded. */
 function getOsmTrafficLightMarkerInnerSVG() {
     if (typeof TrafficLights !== 'undefined' && TrafficLights.createIconSVG) {
         return TrafficLights.createIconSVG('none', 14, 32);
     }
-    return `<svg viewBox="0 0 16 36" width="14" height="32" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" style="display:block;flex-shrink:0;width:14px;height:32px"><rect x="1.5" y="0.5" width="13" height="35" rx="2" fill="#111827" stroke="#2e7d32" stroke-width="1.2"/><circle cx="8" cy="8.5" r="4.2" fill="#ef4444"/><circle cx="8" cy="18" r="4.2" fill="#f59e0b"/><circle cx="8" cy="27.5" r="4.2" fill="#22c55e"/></svg>`;
+    return _osmMapIcons().buildOsmTrafficLightFallbackSvg();
 }
 
 /** Green pill + vertical SVG (OSM layer, route hazard markers — not the horizontal 🚥 emoji). */
 function getOsmTrafficLightMarkerPillHTML() {
-    return `<div class="osm-traffic-light-pill" style="box-sizing:border-box;width:100%;height:100%;background:#e8f5e9;border:2px solid #2e7d32;border-radius:10px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(0,0,0,0.25);">${getOsmTrafficLightMarkerInnerSVG()}</div>`;
+    return _osmMapIcons().buildOsmTrafficLightMarkerPillHtml(getOsmTrafficLightMarkerInnerSVG());
 }
 
 /**
@@ -7128,13 +7125,12 @@ function displayOsmTrafficLightMarkers(lights) {
         if (seen.has(key)) return;
         seen.add(key);
         const pill = getOsmTrafficLightMarkerPillHTML();
-        const popupPill = `<div style="width:26px;height:38px;margin:0 auto 6px;">${pill}</div>`;
         const marker = MapLibreHelpers.createMarker(light.lat, light.lon, {
             className: 'osm-traffic-light-marker',
             html: pill,
             iconSize: [26, 38],
             iconAnchor: [13, 19],
-            popup: `<div style="text-align:center;font-size:12px;max-width:200px;">${popupPill}<strong>Traffic light</strong></div>`
+            popup: _osmMapIcons().buildOsmTrafficLightPopupHtml(pill)
         }).addTo(map);
         window.osmTrafficLightMarkers.push(marker);
     });
@@ -7146,19 +7142,17 @@ function displayOsmRailwayCrossingMarkers(crossings) {
         return;
     }
     clearOsmRailwayCrossingMarkers();
+    const OSM = _osmMapIcons();
+    const crossingIcon = OSM.buildRailwayCrossingIconSvg();
+    const popupHtml = OSM.buildRailwayCrossingPopupHtml(crossingIcon);
     const seen = new Set();
-    const popupHtml = `
-        <div style="text-align:center;font-size:12px;max-width:220px;">
-            <div style="margin-bottom:6px;display:flex;justify-content:center;">${RAILWAY_CROSSING_MAP_ICON_SVG}</div>
-            <strong>Level crossing</strong>
-        </div>`;
     crossings.forEach(cx => {
         const key = `${Number(cx.lat).toFixed(5)},${Number(cx.lon).toFixed(5)}`;
         if (seen.has(key)) return;
         seen.add(key);
         const marker = MapLibreHelpers.createMarker(cx.lat, cx.lon, {
             className: 'osm-railway-crossing-marker',
-            html: `<div style="background:#efebe9;border:2px solid #795548;border-radius:6px;width:32px;height:32px;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.35);">${RAILWAY_CROSSING_MAP_ICON_SVG}</div>`,
+            html: OSM.buildRailwayCrossingMarkerHtml(crossingIcon),
             iconSize: [32, 32],
             iconAnchor: [16, 16],
             popup: popupHtml
@@ -9262,6 +9256,15 @@ function _favorites() { return VoyagrModules.favorites(); }
 /** Unit-tested CAZ zones settings panel HTML (modules/navigation/caz-info.js). */
 function _cazInfo() { return VoyagrModules.cazInfo(); }
 
+/** Unit-tested vehicle marker SVG/popup HTML (modules/map/vehicle-marker.js). */
+function _vehicleMarker() { return VoyagrModules.vehicleMarker(); }
+
+/** Unit-tested OSM map layer marker HTML (modules/map/osm-map-icons.js). */
+function _osmMapIcons() { return VoyagrModules.osmMapIcons(); }
+
+/** Unit-tested navigation map control icons (modules/map/map-controls.js). */
+function _mapControls() { return VoyagrModules.mapControls(); }
+
 /** Unit-tested speed-limit widget helpers (modules/navigation/speed-limit-widget.js). */
 function _speedLimitWidget() { return VoyagrModules.speedLimitWidget(); }
 
@@ -9620,15 +9623,15 @@ function toggleSpeedWidget() {
 function toggleZoomAndFollow() {
     zoomAndFollowEnabled = !zoomAndFollowEnabled;
     const btn = document.getElementById('zoomFollowToggle');
+    const MC = _mapControls();
     if (btn) {
         btn.classList.toggle('active', zoomAndFollowEnabled);
-        // Update visual feedback - change color and icon based on state
         if (zoomAndFollowEnabled) {
-            btn.style.background = '#FF9800';  // Orange when enabled
-            btn.innerHTML = '📍';
+            btn.style.background = '#FF9800';
+            btn.innerHTML = MC.ZOOM_FOLLOW_ENABLED_ICON;
         } else {
-            btn.style.background = '#9E9E9E';  // Gray when disabled
-            btn.innerHTML = '🔓';  // Unlocked icon when free panning
+            btn.style.background = '#9E9E9E';
+            btn.innerHTML = MC.ZOOM_FOLLOW_DISABLED_ICON;
         }
     }
     localStorage.setItem('zoomAndFollowEnabled', zoomAndFollowEnabled ? 'true' : 'false');
@@ -9707,9 +9710,10 @@ function recenterOnVehicle() {
     if (journeyOverviewActive) {
         journeyOverviewActive = false;
         const journeyBtn = document.getElementById('journeyOverviewBtn');
+        const MC = _mapControls();
         if (journeyBtn) {
             journeyBtn.style.background = '#9C27B0';
-            journeyBtn.innerHTML = '🗺️';
+            journeyBtn.innerHTML = MC.JOURNEY_OVERVIEW_ICON;
             journeyBtn.title = 'Journey Overview';
         }
         savedMapState = null;
@@ -9770,6 +9774,7 @@ function toggleJourneyOverview() {
     }
 
     const btn = document.getElementById('journeyOverviewBtn');
+    const MC = _mapControls();
 
     if (!journeyOverviewActive) {
         // Save current map state
@@ -9794,7 +9799,7 @@ function toggleJourneyOverview() {
         journeyOverviewActive = true;
         if (btn) {
             btn.style.background = '#4CAF50';
-            btn.innerHTML = '📍';
+            btn.innerHTML = MC.JOURNEY_RETURN_ICON;
             btn.title = 'Return to Navigation View';
         }
         showStatus('🗺️ Journey Overview - Tap again to return', 'info');
@@ -9823,7 +9828,7 @@ function toggleJourneyOverview() {
 
         if (btn) {
             btn.style.background = '#9C27B0';
-            btn.innerHTML = '🗺️';
+            btn.innerHTML = MC.JOURNEY_OVERVIEW_ICON;
             btn.title = 'Journey Overview';
         }
         showStatus('📍 Returned to navigation view', 'success');
@@ -10219,29 +10224,6 @@ function updateUserMarkerIcon() {
 }
 
 /**
- * Build the inline SVG used for the vehicle position marker.
- *
- * A Starfleet-delta-style arrowhead drawn pointing straight "up" (heading 0° / north). The
- * caller rotates the containing element by the GPS heading so the arrow points in the
- * direction of travel. Deliberately contains no text, digits, or sign-like glyphs so it can
- * never be confused with a regulatory road sign, and is fully self-contained (no external
- * asset request that could fail and leave the marker blank).
- *
- * @returns {string} SVG markup sized to fill its 60×60 container.
- */
-function buildVehicleArrowSvg() {
-    return `
-        <svg viewBox="0 0 100 100" width="100%" height="100%"
-             xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false"
-             style="display:block;width:100%;height:100%;overflow:visible;">
-            <path d="M50 5 C 55 28 68 62 89 95 C 70 83 58 79 50 79 C 42 79 30 83 11 95 C 32 62 45 28 50 5 Z"
-                  fill="#1E88E5" stroke="#FFFFFF" stroke-width="6"
-                  stroke-linejoin="round" stroke-linecap="round"></path>
-        </svg>
-    `;
-}
-
-/**
  * createVehicleMarker function
  * @function createVehicleMarker
  * @param {*} lat - Parameter description
@@ -10283,33 +10265,27 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
     // It is a self-contained SVG (no external file fetch that can fail / 404, which is why the
     // old <img>-based icon could vanish) and carries NO text/numbers/symbols, so it can never
     // be mistaken for a regulatory road sign.
-    markerDiv.innerHTML = buildVehicleArrowSvg();
+    markerDiv.innerHTML = _vehicleMarker().buildVehicleArrowSvg();
 
     // Create custom marker with MapLibre
     const speedKmh = Number.isFinite(speed) ? (speed * 3.6).toFixed(1) : '0.0';
     const speedUnit = getSpeedUnit();
     const displaySpeed = convertSpeed(speedKmh);
 
-    // 3D AERIAL VIEW: Use 'map' for pitchAlignment so the icon tilts with the map
-    // This creates a realistic 3D effect where the aerial view icon appears to lay flat on the map
-    // The icon will tilt when the map is pitched, giving a true top-down perspective
     const marker = MapLibreHelpers.createMarker(lat, lon, {
         html: markerDiv.outerHTML,
-        iconSize: [60, 60],              // Larger size for better visibility in 3D
-        iconAnchor: [30, 30],            // Center anchor point
-        className: 'vehicle-marker-icon', // Use the class for CSS transitions
-        rotationAlignment: 'map',        // Align with map rotation (keeps heading correct)
-        pitchAlignment: 'map',           // 3D: Align with map pitch for realistic aerial perspective
-        popup: `
-            <div style="font-family: Arial, sans-serif; font-size: 13px; min-width: 180px;">
-                <strong style="font-size: 14px;">${iconEmoji} Current Position</strong><br>
-                <div style="margin-top: 8px; border-top: 1px solid #eee; padding-top: 8px;">
-                    <div>Speed: <strong>${displaySpeed} ${speedUnit}</strong></div>
-                    <div>Heading: <strong>${Math.round(safeHeading)}°</strong></div>
-                    <div>Accuracy: <strong>${accuracyLabel}</strong></div>
-                </div>
-            </div>
-        `
+        iconSize: [60, 60],
+        iconAnchor: [30, 30],
+        className: 'vehicle-marker-icon',
+        rotationAlignment: 'map',
+        pitchAlignment: 'map',
+        popup: _vehicleMarker().buildVehicleMarkerPopupHtml({
+            iconEmoji,
+            displaySpeed,
+            speedUnit,
+            headingDegrees: Math.round(safeHeading),
+            accuracyLabel,
+        })
     });
 
     // Store heading and speed for later updates

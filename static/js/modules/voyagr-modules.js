@@ -45,6 +45,9 @@
         previewMarker: 'VoyagrPreviewMarker',
         favorites: 'VoyagrFavorites',
         cazInfo: 'VoyagrCazInfo',
+        vehicleMarker: 'VoyagrVehicleMarker',
+        osmMapIcons: 'VoyagrOsmMapIcons',
+        mapControls: 'VoyagrMapControls',
     };
 
     var cache = {};

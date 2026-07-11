@@ -190,4 +190,8 @@ describe('analytics display helpers', () => {
         expect(html).toContain('A → B');
         expect(html).toContain('3 trips');
     });
+
+    test('TRIP_HISTORY_ERROR_HTML shows load failure message', () => {
+        expect(T.TRIP_HISTORY_ERROR_HTML).toContain('Error loading trips');
+    });
 });
