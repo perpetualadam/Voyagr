@@ -10853,24 +10853,14 @@ async function _tryResumeNavigation() {
             const yesAction = OFF.buildTryResumeNavigationYesActionPlan({
                 saved,
                 preflight,
-                hasEncodableGeometry: !!(payload && payload.geometry),
+                payload,
             });
-            if (yesAction.action === 'fullBootstrap') {
-                startTurnByTurnNavigation(payload, {
-                    fromPersistedResume: true,
-                    resumeStepIndex: yesAction.resumeStepIndex,
-                });
+            if (yesAction.action === 'fullBootstrap' || yesAction.action === 'polylineResume') {
+                startTurnByTurnNavigation(yesAction.payload, yesAction.navStartOpts);
                 console.log(yesAction.logMessage);
             } else {
-                const patch = yesAction.legacyPatch || {};
-                routePolyline = patch.polyline;
-                currentRouteSteps = patch.steps;
-                currentStepIndex = yesAction.resumeStepIndex;
-                routeInProgress = true;
-                if (patch.routeData) window.lastCalculatedRoute = patch.routeData;
                 showStatus(yesAction.statusMessage, yesAction.statusType);
-                if (typeof startGPSTracking === 'function') startGPSTracking();
-                console.log(yesAction.logMessage);
+                console.warn(yesAction.logMessage);
             }
         };
         document.getElementById(mount.resumeNoId).onclick = () => {
@@ -13959,44 +13949,17 @@ function loadCameraAlertPreferences() {
     if (typeEl) typeEl.value = cameraAlertType;
     if (distEl) distEl.value = cameraAlertDistance.toString();
 }
-/**
- * checkNearbyHazards function
- * @function checkNearbyHazards
- * @param {*} lat - Parameter description
- * @param {*} lon - Parameter description
- * @returns {*} Return value description
- */
-/**
- * Spoken/notification string for a straight-line distance to a hazard, respecting
- * distanceUnit (miles+feet vs km+meters) like the rest of the app.
- * @param {number} distanceM
- * @returns {string}
- */
-function formatHazardDistanceForUserMeters(distanceM) {
-    const HA = _hazardAlerts();
-    if (HA) return HA.formatHazardDistanceForUserMeters(distanceM, distanceUnit);
-    const m = Math.max(0, Number(distanceM) || 0);
-    if (distanceUnit === 'mi') {
-        if (m < 402) return `${Math.round(m * 3.28084)} feet`;
-        const miles = m / 1609.34;
-        return miles < 10 ? `${miles.toFixed(1)} miles` : `${Math.round(miles)} miles`;
-    }
-    if (m < 1000) return `${Math.round(m)} meters`;
-    return `${(m / 1000).toFixed(1)} kilometers`;
-}
-
 function announceCameraOrHazard(hazard, distanceM, opts = {}) {
     const { unavoidableRouteCamera = false } = opts;
     const HA = _hazardAlerts();
+    const debounceKey = HA.buildHazardAnnouncementDebounceKey(hazard, unavoidableRouteCamera);
     const plan = HA.buildHazardAnnouncementPlan(hazard, distanceM, {
         unavoidableRouteCamera,
         cameraAlertType,
         voiceAnnouncementsEnabled,
         distanceUnit,
         debounceMs: HA.HAZARD_ANNOUNCEMENT_DEBOUNCE_MS,
-        lastAnnounceAt: hazardAnnouncementDebounce[
-            `${hazard.type}_${hazard.lat}_${hazard.lon}_${unavoidableRouteCamera ? 'route' : 'near'}`
-        ] || 0,
+        lastAnnounceAt: hazardAnnouncementDebounce[debounceKey] || 0,
         now: Date.now(),
     });
     const execute = HA.buildHazardAnnouncementExecutePlan(plan);
@@ -14074,7 +14037,7 @@ function checkNearbyHazards(lat, lon) {
 
 /** @deprecated Merged into processNavigationHazardAlerts. */
 function checkRouteHazardCamerasAhead(lat, lon) {
-    /* no-op: route cameras handled in processNavigationHazardAlerts */
+    processNavigationHazardAlerts(lat, lon);
 }
 
 // ===== PHASE 1: LIVE DATA REFRESH FUNCTIONS =====
@@ -15249,7 +15212,7 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     const mergedRoute = _routeSelection().mergeNavigationRouteFromSelected(
         routeData, routeOptions, selectedRouteIndex
     );
-    const preflight = MC.buildNavStartPreflightPlan(mergedRoute);
+    const preflight = MC.buildNavStartPreflightPlan(mergedRoute, navStartOpts);
     if (!preflight.ok) {
         showStatus(preflight.errorStatusMessage, 'error');
         return;
@@ -15280,8 +15243,17 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     window.navETASnapshot = _eta().createEmptyNavETASnapshot();
 
     try {
-        routePolyline = decodePolyline(stateInit.geometry, stateInit.navPrecision);
-        console.log(stateInit.polylineDecodeLogPrefix, routePolyline.length, 'points', `(precision ${stateInit.navPrecision})`);
+        if (stateInit.usePersistedPolyline && stateInit.persistedPolyline) {
+            routePolyline = stateInit.persistedPolyline;
+            console.log(
+                stateInit.polylineDecodeLogPrefix,
+                routePolyline.length,
+                'points (persisted polyline)'
+            );
+        } else {
+            routePolyline = decodePolyline(stateInit.geometry, stateInit.navPrecision);
+            console.log(stateInit.polylineDecodeLogPrefix, routePolyline.length, 'points', `(precision ${stateInit.navPrecision})`);
+        }
         console.log(stateInit.maneuversLogPrefix, currentRouteSteps.length, 'steps');
 
         if (stateInit.persistActiveRoute) persistActiveRoute();

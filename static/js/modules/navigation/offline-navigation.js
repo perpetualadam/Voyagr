@@ -499,24 +499,45 @@
     function buildTryResumeNavigationYesActionPlan(input) {
         input = input || {};
         var preflight = input.preflight || {};
-        if (input.hasEncodableGeometry) {
+        var saved = input.saved || {};
+        var payload = input.payload;
+        var resumeStepIndex = preflight.resumeStepIndex;
+        var navStartOpts = {
+            fromPersistedResume: true,
+            resumeStepIndex: resumeStepIndex,
+        };
+
+        if (payload && payload.geometry) {
             return {
                 action: 'fullBootstrap',
-                resumeStepIndex: preflight.resumeStepIndex,
+                payload: payload,
+                navStartOpts: navStartOpts,
+                resumeStepIndex: resumeStepIndex,
                 logMessage: preflight.resumedFullLogMessage,
             };
         }
+
+        if (Array.isArray(saved.polyline) && saved.polyline.length >= 2 && Array.isArray(saved.steps)) {
+            var routeData = saved.routeData && typeof saved.routeData === 'object'
+                ? Object.assign({}, saved.routeData)
+                : {};
+            routeData.maneuvers = saved.steps;
+            return {
+                action: 'polylineResume',
+                payload: routeData,
+                navStartOpts: Object.assign({}, navStartOpts, {
+                    persistedPolyline: saved.polyline,
+                }),
+                resumeStepIndex: resumeStepIndex,
+                logMessage: preflight.resumedLegacyLogMessage,
+            };
+        }
+
         return {
-            action: 'legacyBootstrap',
-            resumeStepIndex: preflight.resumeStepIndex,
-            logMessage: preflight.resumedLegacyLogMessage,
-            statusMessage: preflight.legacyResumeStatusMessage,
-            statusType: preflight.legacyResumeStatusType,
-            legacyPatch: {
-                polyline: (input.saved || {}).polyline,
-                steps: (input.saved || {}).steps,
-                routeData: (input.saved || {}).routeData,
-            },
+            action: 'unrecoverable',
+            logMessage: '[OfflineNav] Could not resume — persisted route data incomplete',
+            statusMessage: 'Could not resume saved navigation',
+            statusType: 'error',
         };
     }
 

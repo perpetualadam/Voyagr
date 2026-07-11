@@ -590,14 +590,32 @@
      * @param {Object|null|undefined} mergedRouteData
      * @returns {Object}
      */
-    function buildNavStartPreflightPlan(mergedRouteData) {
-        if (!mergedRouteData || !mergedRouteData.geometry) {
+    function buildNavStartPreflightPlan(mergedRouteData, navStartOpts) {
+        navStartOpts = navStartOpts || null;
+        var persistedPolyline = navStartOpts && navStartOpts.persistedPolyline;
+        var hasPersistedPolyline = Array.isArray(persistedPolyline) && persistedPolyline.length >= 2;
+
+        if (!mergedRouteData) {
             return {
                 ok: false,
                 errorStatusMessage: getNavStartNoGeometryStatusMessage(),
             };
         }
-        return { ok: true, routeData: mergedRouteData };
+        if (mergedRouteData.geometry) {
+            return { ok: true, routeData: mergedRouteData };
+        }
+        if (hasPersistedPolyline) {
+            return {
+                ok: true,
+                routeData: mergedRouteData,
+                usePersistedPolyline: true,
+                persistedPolyline: persistedPolyline,
+            };
+        }
+        return {
+            ok: false,
+            errorStatusMessage: getNavStartNoGeometryStatusMessage(),
+        };
     }
 
     /**
@@ -617,6 +635,8 @@
         var navPrecision = Number.isFinite(routeData.geometry_precision)
             ? routeData.geometry_precision
             : 6;
+        var usePersistedPolyline = !!(navStartOpts && Array.isArray(navStartOpts.persistedPolyline)
+            && navStartOpts.persistedPolyline.length >= 2);
         return {
             routeInProgress: true,
             currentStepIndex: resumeStepIdx,
@@ -625,6 +645,8 @@
             isQuietResume: isQuietResume,
             navPrecision: navPrecision,
             geometry: routeData.geometry,
+            usePersistedPolyline: usePersistedPolyline,
+            persistedPolyline: usePersistedPolyline ? navStartOpts.persistedPolyline : null,
             persistActiveRoute: true,
             precacheTiles: true,
             driverViewDelayMs: 1500,

@@ -164,6 +164,13 @@ describe('map-controls module', () => {
         const preflight = MC.buildNavStartPreflightPlan({ geometry: 'abc', maneuvers: [] });
         expect(preflight.ok).toBe(true);
 
+        const polylinePreflight = MC.buildNavStartPreflightPlan(
+            { maneuvers: [{ type: 1 }] },
+            { persistedPolyline: [[51.5, -0.1], [51.6, -0.2]] }
+        );
+        expect(polylinePreflight.ok).toBe(true);
+        expect(polylinePreflight.usePersistedPolyline).toBe(true);
+
         const state = MC.buildNavStartStateInitPlan(
             { geometry: 'abc', geometry_precision: 5, maneuvers: [{ type: 1 }] },
             { resumeStepIndex: 2, fromPersistedResume: true }
@@ -171,6 +178,13 @@ describe('map-controls module', () => {
         expect(state.currentStepIndex).toBe(2);
         expect(state.resetVoiceOnStart).toBe(false);
         expect(state.navPrecision).toBe(5);
+
+        const polylineState = MC.buildNavStartStateInitPlan(
+            { maneuvers: [{ type: 1 }] },
+            { fromPersistedResume: true, persistedPolyline: [[1, 2], [3, 4]] }
+        );
+        expect(polylineState.usePersistedPolyline).toBe(true);
+        expect(polylineState.persistedPolyline).toHaveLength(2);
 
         const lifecycle = MC.buildNavStartLifecycleExecutePlan({
             isTrackingActive: false,

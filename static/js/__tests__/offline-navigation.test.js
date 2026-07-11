@@ -196,18 +196,27 @@ describe('tile precache planning helpers', () => {
         expect(mount.bannerId).toBe(OFF.RESUME_NAV_BANNER_ID);
 
         const full = OFF.buildTryResumeNavigationYesActionPlan({
+            saved: { polyline: [[51.5, -0.1], [51.6, -0.2]], steps: [{ type: 1 }] },
             preflight,
-            hasEncodableGeometry: true,
+            payload: { geometry: 'encoded', maneuvers: [{ type: 1 }] },
         });
         expect(full.action).toBe('fullBootstrap');
+        expect(full.navStartOpts.fromPersistedResume).toBe(true);
 
-        const legacy = OFF.buildTryResumeNavigationYesActionPlan({
-            saved: { polyline: [[1, 2]], steps: [{ type: 1 }], routeData: { distance_km: 1 } },
+        const polylineResume = OFF.buildTryResumeNavigationYesActionPlan({
+            saved: { polyline: [[1, 2], [3, 4]], steps: [{ type: 1 }], routeData: { distance_km: 1 } },
             preflight,
-            hasEncodableGeometry: false,
+            payload: null,
         });
-        expect(legacy.action).toBe('legacyBootstrap');
-        expect(legacy.legacyPatch.polyline).toHaveLength(1);
+        expect(polylineResume.action).toBe('polylineResume');
+        expect(polylineResume.navStartOpts.persistedPolyline).toHaveLength(2);
+
+        const unrecoverable = OFF.buildTryResumeNavigationYesActionPlan({
+            saved: {},
+            preflight,
+            payload: null,
+        });
+        expect(unrecoverable.action).toBe('unrecoverable');
 
         expect(OFF.buildTryResumeNavigationNoActionPlan().clearPersistedRoute).toBe(true);
     });

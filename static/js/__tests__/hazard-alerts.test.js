@@ -209,6 +209,12 @@ describe('navigation hazard tick helpers', () => {
         expect(params.generalHazardDistanceM).toBe(400);
     });
 
+    test('buildHazardAnnouncementDebounceKey is stable for route vs nearby', () => {
+        const hazard = { type: 'camera', lat: 1.1, lon: 2.2 };
+        expect(HA.buildHazardAnnouncementDebounceKey(hazard, false)).toBe('camera_1.1_2.2_near');
+        expect(HA.buildHazardAnnouncementDebounceKey(hazard, true)).toBe('camera_1.1_2.2_route');
+    });
+
     test('buildHazardAnnouncementPlan skips camera alerts when preference is off', () => {
         const plan = HA.buildHazardAnnouncementPlan(
             { type: 'camera_speed', lat: 1, lon: 2 },

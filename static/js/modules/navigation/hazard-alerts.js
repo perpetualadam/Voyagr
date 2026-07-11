@@ -180,6 +180,18 @@
     }
 
     /**
+     * Stable debounce key for hazard/camera announcements.
+     * @param {Object} hazard
+     * @param {boolean} [unavoidableRouteCamera]
+     * @returns {string}
+     */
+    function buildHazardAnnouncementDebounceKey(hazard, unavoidableRouteCamera) {
+        hazard = hazard || {};
+        return hazard.type + '_' + hazard.lat + '_' + hazard.lon + '_' +
+            (unavoidableRouteCamera ? 'route' : 'near');
+    }
+
+    /**
      * Pick alert threshold (m) for a hazard.
      * @param {object} hazard
      * @param {number} cameraAlertDistanceM
@@ -589,8 +601,7 @@
 
         var friendlyType = String(hazard.type || 'hazard').replace(/_/g, ' ');
         var distStr = formatHazardDistanceForUserMeters(distanceM, opts.distanceUnit || 'mi');
-        var debounceKey = hazard.type + '_' + hazard.lat + '_' + hazard.lon + '_' +
-            (unavoidableRouteCamera ? 'route' : 'near');
+        var debounceKey = buildHazardAnnouncementDebounceKey(hazard, unavoidableRouteCamera);
         var lastTime = opts.lastAnnounceAt != null ? opts.lastAnnounceAt : 0;
 
         if (now - lastTime <= debounceMs) {
@@ -687,6 +698,7 @@
         haversineMeters: haversineMeters,
         distanceToHazardAlongRouteMeters: distanceToHazardAlongRouteMeters,
         formatHazardDistanceForUserMeters: formatHazardDistanceForUserMeters,
+        buildHazardAnnouncementDebounceKey: buildHazardAnnouncementDebounceKey,
         alertDistanceForHazard: alertDistanceForHazard,
         resolveHazardDistanceMeters: resolveHazardDistanceMeters,
         collectHazardsToAnnounce: collectHazardsToAnnounce,
