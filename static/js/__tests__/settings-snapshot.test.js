@@ -256,8 +256,34 @@ describe('settings-snapshot module', () => {
         const plan = SS.buildSettingsResetPlan();
         expect(plan.localStorageKeys).toContain(SS.SETTINGS_STORAGE_KEY);
         expect(plan.localStorageKeys).toContain('routePreferences');
+        expect(plan.localStorageKeys).toContain('autoTrafficUpdate');
+        expect(plan.localStorageKeys).toContain('autoRerouteOnDeviation');
+        expect(plan.localStorageKeys).toContain('routeTrafficEnabled');
         expect(plan.runtimeDefaults.distanceUnit).toBe('km');
+        expect(plan.runtimeDefaults.autoTrafficUpdateEnabled).toBe(true);
+        expect(plan.runtimeDefaults.routeTrafficEnabled).toBe(true);
         expect(plan.reloadAfterReset).toBe(true);
+    });
+
+    test('buildSettingsRestorePostApplyPlan stops traffic services when disabled', () => {
+        const disabled = SS.buildSettingsRestorePostApplyPlan(
+            { routeTrafficEnabled: false, autoTrafficUpdateEnabled: false },
+            { routeInProgress: true }
+        );
+        expect(disabled.hasEffects).toBe(true);
+        expect(disabled.effects).toEqual(['stopRouteTrafficUpdates', 'stopAutoTrafficUpdates']);
+
+        const enabledNav = SS.buildSettingsRestorePostApplyPlan(
+            { routeTrafficEnabled: true, autoTrafficUpdateEnabled: true },
+            { routeInProgress: true }
+        );
+        expect(enabledNav.effects).toEqual(['startRouteTrafficUpdates', 'startAutoTrafficUpdates']);
+
+        const enabledIdle = SS.buildSettingsRestorePostApplyPlan(
+            { routeTrafficEnabled: true, autoTrafficUpdateEnabled: true },
+            { routeInProgress: false }
+        );
+        expect(enabledIdle.hasEffects).toBe(false);
     });
 
     test('buildClearDepartureTimeApplyPlan clears departure time control', () => {

@@ -301,6 +301,26 @@
         };
     }
 
+    /**
+     * Post-display plan consolidating z-order side effects after mounting edges.
+     * @param {Object} displayPlan - from buildRouteTrafficEdgesDisplayPlan
+     * @param {Object} [mountCompletePlan] - from buildRouteTrafficEdgesMountCompletePlan
+     * @returns {Object}
+     */
+    function buildRouteTrafficEdgesPostDisplayPlan(displayPlan, mountCompletePlan) {
+        displayPlan = displayPlan || {};
+        if (!displayPlan.shouldDisplay) {
+            return { shouldPostProcess: false };
+        }
+        mountCompletePlan = mountCompletePlan || {};
+        return {
+            shouldPostProcess: true,
+            logMessage: mountCompletePlan.logMessage || '',
+            bringTrafficEdgesToTop: !!displayPlan.bringTrafficEdgesToTop,
+            bringNavRouteAboveTrafficEdges: !!displayPlan.bringNavRouteAboveTrafficEdges,
+        };
+    }
+
     var ROUTE_TRAFFIC_SAMPLE_TTL_MS = 60 * 1000;
     var ROUTE_TRAFFIC_AHEAD_SAMPLE_SEGMENT_COUNT = 8;
 
@@ -612,6 +632,7 @@
         buildDisplayRouteTrafficEdgesApplyPlan: buildDisplayRouteTrafficEdgesApplyPlan,
         buildRouteTrafficEdgesDisplayPlan: buildRouteTrafficEdgesDisplayPlan,
         buildRouteTrafficEdgesMountCompletePlan: buildRouteTrafficEdgesMountCompletePlan,
+        buildRouteTrafficEdgesPostDisplayPlan: buildRouteTrafficEdgesPostDisplayPlan,
         buildRouteTrafficFlowPreflightPlan: buildRouteTrafficFlowPreflightPlan,
         buildRouteTrafficFlowFetchRequestPlan: buildRouteTrafficFlowFetchRequestPlan,
         buildRouteTrafficFlowResponsePlan: buildRouteTrafficFlowResponsePlan,

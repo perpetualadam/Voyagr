@@ -807,6 +807,20 @@ describe('route overview and single-route display plans', () => {
         expect(plan.maxRetries).toBe(5);
     });
 
+    test('buildBringRoutesToTopExecutePlan wraps dispatch with retry metadata', () => {
+        const plan = RS.buildBringRoutesToTopExecutePlan(
+            [{ id: 'route-layer-0' }],
+            [{ type: 'symbol', layout: { 'text-field': 'x' }, id: 'label' }]
+        );
+        expect(plan.shouldExecute).toBe(true);
+        expect(plan.layerIds).toEqual(['route-layer-0']);
+        expect(plan.beforeId).toBe('label');
+        expect(plan.maxRetries).toBe(5);
+        expect(plan.ensureLabelsOnTopAfterSuccess).toBe(true);
+        expect(plan.successLogMessage).toContain('successfully positioned');
+        expect(RS.buildBringRoutesToTopExecutePlan([], []).shouldExecute).toBe(false);
+    });
+
     test('buildRouteLayerMapLibreApplyPlan maps mount plan to MapLibre layer spec', () => {
         const mount = RS.buildRouteLayerMountPlan(
             { name: 'Fastest', polyline: [[51.5, -0.1], [51.6, -0.2]] },

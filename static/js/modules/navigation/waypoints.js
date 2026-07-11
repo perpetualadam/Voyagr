@@ -781,6 +781,22 @@
     }
 
     /**
+     * Extract drag context from a waypoint list item event target.
+     * @param {Object|null|undefined} target - DOM event target with dataset
+     * @returns {Object}
+     */
+    function buildWaypointDragEventContextPlan(target) {
+        var dataset = target && target.dataset ? target.dataset : {};
+        var type = dataset.type || null;
+        var index = dataset.index != null ? parseInt(dataset.index, 10) : NaN;
+        return {
+            type: type,
+            index: index,
+            dragStartPlan: buildWaypointDragStartPlan(type, index),
+        };
+    }
+
+    /**
      * Reset plan for waypoint item opacity after drag ends.
      * @returns {Object}
      */
@@ -959,6 +975,7 @@
         MULTIDROP_LEG_CLEAR_MAX: MULTIDROP_LEG_CLEAR_MAX,
         buildWaypointsListDomApplyPlan: buildWaypointsListDomApplyPlan,
         buildWaypointDragStartPlan: buildWaypointDragStartPlan,
+        buildWaypointDragEventContextPlan: buildWaypointDragEventContextPlan,
         buildWaypointDragOverPlan: buildWaypointDragOverPlan,
         buildWaypointDropDispatchPlan: buildWaypointDropDispatchPlan,
         buildWaypointDragOpacityResetPlan: buildWaypointDragOpacityResetPlan,

@@ -427,6 +427,7 @@
         'pref_tolls', 'pref_caz', 'pref_cameras',
         'mapTheme', 'smartZoomEnabled',
         'parkingPreferences',
+        'autoTrafficUpdate', 'autoRerouteOnDeviation', 'routeTrafficEnabled',
     ];
 
     /**
@@ -445,8 +446,41 @@
                 currentVehicleType: 'petrol_diesel',
                 currentRoutingMode: 'auto',
                 smartZoomEnabled: true,
+                autoTrafficUpdateEnabled: true,
+                autoRerouteOnDeviationEnabled: true,
+                routeTrafficEnabled: true,
             },
             reloadAfterReset: true,
+        };
+    }
+
+    /**
+     * Post-restore side-effect plan for traffic services after settings hydrate.
+     * @param {Object} [runtime] - restored runtime fields from buildSettingsRestorePlan
+     * @param {Object} [opts]
+     * @param {boolean} [opts.routeInProgress]
+     * @returns {Object}
+     */
+    function buildSettingsRestorePostApplyPlan(runtime, opts) {
+        runtime = runtime || {};
+        opts = opts || {};
+        var effects = [];
+
+        if (runtime.routeTrafficEnabled === false) {
+            effects.push('stopRouteTrafficUpdates');
+        } else if (runtime.routeTrafficEnabled === true && opts.routeInProgress) {
+            effects.push('startRouteTrafficUpdates');
+        }
+
+        if (runtime.autoTrafficUpdateEnabled === false) {
+            effects.push('stopAutoTrafficUpdates');
+        } else if (runtime.autoTrafficUpdateEnabled === true && opts.routeInProgress) {
+            effects.push('startAutoTrafficUpdates');
+        }
+
+        return {
+            effects: effects,
+            hasEffects: effects.length > 0,
         };
     }
 
@@ -620,6 +654,7 @@
         buildMultiDropPreferencesDomApplyPlan: buildMultiDropPreferencesDomApplyPlan,
         buildClearDepartureTimeApplyPlan: buildClearDepartureTimeApplyPlan,
         buildSettingsResetPlan: buildSettingsResetPlan,
+        buildSettingsRestorePostApplyPlan: buildSettingsRestorePostApplyPlan,
         buildSettingsUiApplyPlan: buildSettingsUiApplyPlan,
         buildSettingsUiInputPlan: buildSettingsUiInputPlan,
         buildSettingsUiDomApplyPlan: buildSettingsUiDomApplyPlan,

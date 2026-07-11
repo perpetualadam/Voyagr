@@ -215,6 +215,19 @@ describe('waypoints module', () => {
         expect(W.buildWaypointDragStartPlan('', NaN).shouldDrag).toBe(false);
     });
 
+    test('buildWaypointDragEventContextPlan reads dataset from event target', () => {
+        const ctx = W.buildWaypointDragEventContextPlan({
+            dataset: { type: 'stop', index: '2' },
+        });
+        expect(ctx.type).toBe('stop');
+        expect(ctx.index).toBe(2);
+        expect(ctx.dragStartPlan.shouldDrag).toBe(true);
+        expect(ctx.dragStartPlan.dragState).toEqual({ type: 'stop', index: 2 });
+
+        const invalid = W.buildWaypointDragEventContextPlan({ dataset: {} });
+        expect(invalid.dragStartPlan.shouldDrag).toBe(false);
+    });
+
     test('buildWaypointDragOverPlan sets move drop effect', () => {
         const plan = W.buildWaypointDragOverPlan();
         expect(plan.preventDefault).toBe(true);

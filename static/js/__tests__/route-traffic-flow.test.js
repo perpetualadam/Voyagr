@@ -309,4 +309,20 @@ describe('route traffic ahead sampling and cache plans', () => {
         expect(plan.totalLayerCount).toBe(3);
         expect(plan.logMessage).toContain('3');
     });
+
+    test('buildRouteTrafficEdgesPostDisplayPlan consolidates z-order side effects', () => {
+        const display = RTF.buildRouteTrafficEdgesDisplayPlan(
+            [{ traffic_level: 'orange', start: [51.51, -0.11], end: [51.53, -0.13] }],
+            polyline,
+            { hasMap: true }
+        );
+        const mount = RTF.buildRouteTrafficEdgesMountCompletePlan(0, display.polylineMountCount);
+        const post = RTF.buildRouteTrafficEdgesPostDisplayPlan(display, mount);
+        expect(post.shouldPostProcess).toBe(true);
+        expect(post.bringTrafficEdgesToTop).toBe(true);
+        expect(post.logMessage).toContain('traffic edge layers');
+
+        expect(RTF.buildRouteTrafficEdgesPostDisplayPlan({ shouldDisplay: false }).shouldPostProcess)
+            .toBe(false);
+    });
 });

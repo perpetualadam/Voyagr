@@ -1816,6 +1816,33 @@
     }
 
     /**
+     * Execute plan for bringRoutesToTop retry loop and label anchoring.
+     * @param {Array<{ id?: string }>} layerDescriptors
+     * @param {Array<Object>} [styleLayers]
+     * @returns {Object}
+     */
+    function buildBringRoutesToTopExecutePlan(layerDescriptors, styleLayers) {
+        var dispatch = buildBringRoutesToTopDispatchPlan(layerDescriptors, styleLayers);
+        if (!dispatch.shouldRun) {
+            return { shouldExecute: false };
+        }
+        return {
+            shouldExecute: true,
+            layerIds: dispatch.layerIds,
+            beforeId: dispatch.beforeId,
+            initialDelayMs: dispatch.initialDelayMs,
+            retryDelayMs: dispatch.retryDelayMs,
+            maxRetries: dispatch.maxRetries,
+            waitForIdleIfStyleNotLoaded: dispatch.waitForIdleIfStyleNotLoaded,
+            ensureLabelsOnTopAfterSuccess: dispatch.ensureLabelsOnTopAfterSuccess,
+            successLogMessage: '[Routes] All route layers successfully positioned',
+            partialFailureLogMessage: '[Routes] Some layers not found after retries',
+            errorLogPrefix: '[Routes] Error bringing routes to top:',
+            waitForIdleLogMessage: '[Routes] Waiting for map idle...',
+        };
+    }
+
+    /**
      * MapLibre apply spec for one route line layer.
      * @param {Object} mountPlan - from buildRouteLayerMountPlan
      * @param {string|undefined} beforeId
@@ -2103,6 +2130,7 @@
         buildAllRoutesMapSideEffectsPlan: buildAllRoutesMapSideEffectsPlan,
         buildDisplayAllRoutesMapDispatchPlan: buildDisplayAllRoutesMapDispatchPlan,
         buildBringRoutesToTopDispatchPlan: buildBringRoutesToTopDispatchPlan,
+        buildBringRoutesToTopExecutePlan: buildBringRoutesToTopExecutePlan,
         buildRouteLayerMapLibreApplyPlan: buildRouteLayerMapLibreApplyPlan,
         buildDoAddRouteLayersBatchPlan: buildDoAddRouteLayersBatchPlan,
         buildEnsureLabelsOnTopDispatchPlan: buildEnsureLabelsOnTopDispatchPlan,

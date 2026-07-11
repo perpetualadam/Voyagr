@@ -1497,9 +1497,13 @@ function loadAllSettings() {
 
         const settings = JSON.parse(saved);
         console.log('[Settings] Loaded settings from localStorage', settings);
-        if (!applySettingsRestoreFromPlan(SS.buildSettingsRestorePlan(settings))) {
+        const restorePlan = SS.buildSettingsRestorePlan(settings);
+        if (!applySettingsRestoreFromPlan(restorePlan)) {
             return false;
         }
+        applySettingsRestorePostEffectsFromPlan(
+            SS.buildSettingsRestorePostApplyPlan(restorePlan.runtime || {}, { routeInProgress })
+        );
 
         console.log('[Settings] All settings restored successfully');
         return true;
@@ -1507,6 +1511,20 @@ function loadAllSettings() {
         console.error('[Settings] Error loading settings:', error);
         return false;
     }
+}
+
+/**
+ * Apply post-restore traffic service side effects from a pure plan.
+ * @param {Object} plan - from buildSettingsRestorePostApplyPlan
+ */
+function applySettingsRestorePostEffectsFromPlan(plan) {
+    if (!plan || !plan.hasEffects) return;
+    (plan.effects || []).forEach((effect) => {
+        if (effect === 'stopRouteTrafficUpdates') stopRouteTrafficUpdates();
+        else if (effect === 'startRouteTrafficUpdates') startRouteTrafficUpdates();
+        else if (effect === 'stopAutoTrafficUpdates') stopAutoTrafficUpdates();
+        else if (effect === 'startAutoTrafficUpdates') startAutoTrafficUpdates();
+    });
 }
 
 /**
@@ -1580,6 +1598,54 @@ function applyMapLayerReorderFromPlan(plan) {
         }
         return false;
     }
+}
+
+/**
+ * Apply bringRoutesToTop retry loop from a pure execute plan.
+ * @param {Object} plan - from buildBringRoutesToTopExecutePlan
+ */
+function applyBringRoutesToTopFromPlan(plan) {
+    if (!plan || !plan.shouldExecute || !map) return;
+
+    const moveLayersToTop = (retryCount = 0) => {
+        let allFound = true;
+        console.log(`[Routes] moveLayersToTop attempt ${retryCount}, layers:`, plan.layerIds);
+
+        try {
+            plan.layerIds.forEach((layerId) => {
+                if (map.getLayer(layerId)) {
+                    map.moveLayer(layerId, plan.beforeId);
+                    console.log(`[Routes] Moved layer ${layerId}${plan.beforeId ? ` before ${plan.beforeId}` : ' to top'}`);
+                } else {
+                    allFound = false;
+                    console.log(`[Routes] Layer ${layerId} not found in map yet`);
+                }
+            });
+
+            if (!allFound && retryCount < plan.maxRetries) {
+                setTimeout(() => moveLayersToTop(retryCount + 1), plan.retryDelayMs);
+            } else if (allFound) {
+                if (plan.successLogMessage) console.log(plan.successLogMessage);
+                if (plan.ensureLabelsOnTopAfterSuccess) {
+                    ensureLabelsOnTop();
+                }
+            } else if (plan.partialFailureLogMessage) {
+                console.warn(plan.partialFailureLogMessage);
+            }
+        } catch (e) {
+            const prefix = plan.errorLogPrefix || '[Routes] Error bringing routes to top:';
+            console.warn(prefix, e);
+        }
+    };
+
+    setTimeout(() => {
+        if (map.isStyleLoaded()) {
+            moveLayersToTop(0);
+        } else if (plan.waitForIdleIfStyleNotLoaded) {
+            if (plan.waitForIdleLogMessage) console.log(plan.waitForIdleLogMessage);
+            map.once('idle', () => moveLayersToTop(0));
+        }
+    }, plan.initialDelayMs);
 }
 
 /**
@@ -1696,6 +1762,11 @@ function applySettingsResetFromPlan(plan) {
     if (defaults.currentVehicleType) currentVehicleType = defaults.currentVehicleType;
     if (defaults.currentRoutingMode) currentRoutingMode = defaults.currentRoutingMode;
     if (defaults.smartZoomEnabled !== undefined) smartZoomEnabled = defaults.smartZoomEnabled;
+    if (defaults.autoTrafficUpdateEnabled !== undefined) autoTrafficUpdateEnabled = defaults.autoTrafficUpdateEnabled;
+    if (defaults.autoRerouteOnDeviationEnabled !== undefined) {
+        autoRerouteOnDeviationEnabled = defaults.autoRerouteOnDeviationEnabled;
+    }
+    if (defaults.routeTrafficEnabled !== undefined) routeTrafficEnabled = defaults.routeTrafficEnabled;
 
     if (plan.reloadAfterReset) {
         location.reload();
@@ -2405,7 +2476,7 @@ function doAddRouteLayers() {
  */
 function bringRoutesToTop() {
     const RS = _routeSelection();
-    const plan = RS.buildBringRoutesToTopDispatchPlan(
+    const plan = RS.buildBringRoutesToTopExecutePlan(
         allRouteLayers,
         map && map.getStyle ? map.getStyle().layers : null
     );
@@ -2416,48 +2487,7 @@ function bringRoutesToTop() {
         console.warn('[Routes] bringRoutesToTop: map not available');
         return;
     }
-    if (!plan.shouldRun) {
-        return;
-    }
-
-    const moveLayersToTop = (retryCount = 0) => {
-        let allFound = true;
-        console.log(`[Routes] moveLayersToTop attempt ${retryCount}, layers:`, plan.layerIds);
-
-        try {
-            plan.layerIds.forEach((layerId) => {
-                if (map.getLayer(layerId)) {
-                    map.moveLayer(layerId, plan.beforeId);
-                    console.log(`[Routes] Moved layer ${layerId}${plan.beforeId ? ` before ${plan.beforeId}` : ' to top'}`);
-                } else {
-                    allFound = false;
-                    console.log(`[Routes] Layer ${layerId} not found in map yet`);
-                }
-            });
-
-            if (!allFound && retryCount < plan.maxRetries) {
-                setTimeout(() => moveLayersToTop(retryCount + 1), plan.retryDelayMs);
-            } else if (allFound) {
-                console.log('[Routes] All route layers successfully positioned');
-                if (plan.ensureLabelsOnTopAfterSuccess) {
-                    ensureLabelsOnTop();
-                }
-            } else {
-                console.warn('[Routes] Some layers not found after retries');
-            }
-        } catch (e) {
-            console.warn('[Routes] Error bringing routes to top:', e);
-        }
-    };
-
-    setTimeout(() => {
-        if (map.isStyleLoaded()) {
-            moveLayersToTop(0);
-        } else if (plan.waitForIdleIfStyleNotLoaded) {
-            console.log('[Routes] Waiting for map idle...');
-            map.once('idle', () => moveLayersToTop(0));
-        }
-    }, plan.initialDelayMs);
+    applyBringRoutesToTopFromPlan(plan);
 }
 
 // ===== DRAGGABLE ROUTE EDITING =====
@@ -2898,7 +2928,8 @@ let _draggedWaypoint = null;
 
 function onWaypointDragStart(e) {
     const WP = _waypoints();
-    const plan = WP.buildWaypointDragStartPlan(e.target.dataset.type, parseInt(e.target.dataset.index));
+    const ctx = WP.buildWaypointDragEventContextPlan(e.target);
+    const plan = ctx.dragStartPlan;
     if (!plan.shouldDrag) return;
     _draggedWaypoint = plan.dragState;
     e.target.style.opacity = plan.itemOpacity;
@@ -5378,12 +5409,13 @@ function displayRouteTrafficEdges(segments) {
         layersBeforeMount,
         displayPlan.polylineMountCount
     );
-    console.log(mountComplete.logMessage);
+    const postDisplay = RTF.buildRouteTrafficEdgesPostDisplayPlan(displayPlan, mountComplete);
+    if (postDisplay.logMessage) console.log(postDisplay.logMessage);
 
-    if (displayPlan.bringTrafficEdgesToTop) {
+    if (postDisplay.bringTrafficEdgesToTop) {
         bringTrafficEdgesToTop();
     }
-    if (displayPlan.bringNavRouteAboveTrafficEdges) {
+    if (postDisplay.bringNavRouteAboveTrafficEdges) {
         bringNavRouteAboveTrafficEdges();
     }
 }
