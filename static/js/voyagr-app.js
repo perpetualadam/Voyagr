@@ -3672,33 +3672,16 @@ function saveMultiDropPreferences() {
  * @returns {Object}
  */
 function collectMultiDropFormState() {
-    const optimizeEl = document.getElementById('optimizeStopOrder');
-    const roundTripEl = document.getElementById('roundTrip');
-    const trafficEl = document.getElementById('trafficAwareRouting');
-    const closuresEl = document.getElementById('avoidRoadClosures');
-    const incidentsEl = document.getElementById('avoidIncidents');
-    const departureEl = document.getElementById('departureTime');
-
-    return {
-        optimizeStopOrder: optimizeEl
-            ? optimizeEl.checked
-            : localStorage.getItem('pref_optimizeStopOrder') !== 'false',
-        roundTrip: roundTripEl
-            ? roundTripEl.checked
-            : localStorage.getItem('pref_roundTrip') === 'true',
-        trafficAwareRouting: trafficEl
-            ? trafficEl.checked
-            : localStorage.getItem('pref_trafficAwareRouting') !== 'false',
-        avoidRoadClosures: closuresEl
-            ? closuresEl.checked
-            : localStorage.getItem('pref_avoidRoadClosures') !== 'false',
-        avoidIncidents: incidentsEl
-            ? incidentsEl.checked
-            : localStorage.getItem('pref_avoidIncidents') !== 'false',
-        departureTime: departureEl
-            ? (departureEl.value || '')
-            : (localStorage.getItem('pref_departureTime') || ''),
-    };
+    const SS = _settingsSnapshot();
+    return SS.buildMultiDropFormStatePlan({
+        optimizeStopOrder: document.getElementById('optimizeStopOrder')?.checked,
+        roundTrip: document.getElementById('roundTrip')?.checked,
+        trafficAwareRouting: document.getElementById('trafficAwareRouting')?.checked,
+        avoidRoadClosures: document.getElementById('avoidRoadClosures')?.checked,
+        avoidIncidents: document.getElementById('avoidIncidents')?.checked,
+        departureTime: document.getElementById('departureTime')?.value,
+        getStorageItem: (key) => localStorage.getItem(key),
+    });
 }
 
 /**
@@ -4350,55 +4333,57 @@ function applyCalculateRouteIdlePreviewOutcome(data, labels) {
             },
             parseDurationMinutes: _routeSharing().parseSharedRouteDurationMinutes,
         });
+        const plan = RS.buildCalculateRouteIdlePreviewExecutePlan(previewPlan, data);
 
-        if (!previewPlan.ok) {
-            showStatus(previewPlan.errorStatusMessage, 'error');
-            hideRouteProgressBar();
+        if (!plan.shouldExecute) {
+            showStatus(plan.errorStatusMessage, 'error');
+            if (plan.hideRouteProgressBarOnError) hideRouteProgressBar();
             return;
         }
 
-        const { startCoords, endCoords, pathPlan, routePath } = previewPlan;
-
         const mapApplied = applyRoutePreviewMapFromPlan(
             _previewMarker().buildRoutePreviewMapApplyPlan({
-                startCoords,
-                endCoords,
-                routePath,
-                pathPlan,
-                hasGeometry: !!data.geometry,
-                geometrySource: data.source,
+                startCoords: plan.startCoords,
+                endCoords: plan.endCoords,
+                routePath: plan.routePath,
+                pathPlan: plan.pathPlan,
+                hasGeometry: plan.hasGeometry,
+                geometrySource: plan.geometrySource,
             })
         );
         if (!mapApplied) return;
 
-        if (data.total_stop_time && data.total_stop_time > 0) {
-            console.log(`[Route] Total time with ${data.stops_count} stops: ${previewPlan.displayTime}`);
-        }
-        updateTripInfo(data.distance, previewPlan.displayTime, data.fuel_cost || '-', data.toll_cost || '-');
-        showStatus(previewPlan.statusMessage, 'success');
+        if (plan.multiDropStopLogMessage) console.log(plan.multiDropStopLogMessage);
+        updateTripInfo(
+            plan.tripInfo.distance,
+            plan.tripInfo.displayTime,
+            plan.tripInfo.fuelCost,
+            plan.tripInfo.tollCost
+        );
+        showStatus(plan.statusMessage, 'success');
 
-        if (previewPlan.showMultiDropLegs) {
+        if (plan.showMultiDropLegs) {
             displayMultiDropLegs(data);
         }
 
-        window.lastRouteApiResponse = data;
-        window.lastCalculatedRoute = previewPlan.lastCalculatedRoutePatch;
-        console.log(`[Route] Stored route with duration_minutes: ${previewPlan.durationMinutes}`);
+        if (plan.storeLastRouteApiResponse) window.lastRouteApiResponse = data;
+        window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
+        if (plan.durationLogMessage) console.log(plan.durationLogMessage);
 
-        if (previewPlan.primaryHazards && previewPlan.primaryHazards.length > 0) {
-            displayHazardMarkers(previewPlan.primaryHazards);
+        if (plan.displayPrimaryHazards) {
+            displayHazardMarkers(plan.primaryHazards);
         }
 
-        if (previewPlan.routesCount > 0) {
-            console.log(`[Route API] Received ${previewPlan.routesCount} routes from ${previewPlan.routeSource}, default polyline precision ${previewPlan.defaultPrecision}`);
-            routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routePath);
-            console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}:`, routeOptions.map(r => r.name));
+        if (plan.multiRouteLogMessage) {
+            console.log(plan.multiRouteLogMessage);
+            routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, plan.routePath);
+            console.log(plan.loadedRoutesLogPrefix + routeOptions.length + ' real routes from ' + data.source + ':', routeOptions.map(r => r.name));
         } else {
-            routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routePath);
-            console.log('[Route Comparison] Using single route (fallback)');
+            routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, plan.routePath);
+            if (plan.fallbackRouteLogMessage) console.log(plan.fallbackRouteLogMessage);
         }
 
-        applyCalculateRouteIdleUiFromPlan(RS.buildCalculateRouteIdleUiApplyPlan(previewPlan), data);
+        applyCalculateRouteIdleUiFromPlan(RS.buildCalculateRouteIdleUiApplyPlan(plan.idleUiApplyInput), data);
     } catch (e) {
         showStatus('Error parsing coordinates: ' + e.message, 'error');
         console.error('Coordinate parsing error:', e);
@@ -6802,18 +6787,20 @@ function applyRouteComparisonModalFromPlan(domPlan) {
  * @param {Object} domPlan - from buildAlternativeRoutesPreviewDomApplyPlan
  */
 function applyAlternativeRoutesPreviewDomFromPlan(domPlan) {
-    if (!domPlan) return;
-    const container = document.getElementById('previewAlternativeRoutesList');
-    const parentContainer = document.getElementById('previewAlternativeRoutesContainer');
+    const executePlan = _routeSelection().buildAlternativeRoutesPreviewDomExecutePlan(domPlan);
+    if (!executePlan.shouldExecute) return;
+
+    const container = document.getElementById(executePlan.listContainerId);
+    const parentContainer = document.getElementById(executePlan.parentContainerId);
     if (!parentContainer || !container) return;
 
-    if (!domPlan.showContainer) {
-        parentContainer.style.display = domPlan.containerDisplay;
+    if (!executePlan.showContainer) {
+        parentContainer.style.display = executePlan.containerDisplay;
         return;
     }
 
     container.innerHTML = '';
-    domPlan.cardPlans.forEach((plan, index) => {
+    executePlan.cardPlans.forEach((plan, index) => {
         const div = document.createElement('div');
         div.style.cssText = plan.containerStyle;
         div.innerHTML = plan.html;
@@ -6832,7 +6819,7 @@ function applyAlternativeRoutesPreviewDomFromPlan(domPlan) {
         container.appendChild(div);
     });
 
-    parentContainer.style.display = domPlan.containerDisplay;
+    parentContainer.style.display = executePlan.containerDisplay;
 }
 
 /**
@@ -6936,6 +6923,9 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
  */
 function showAlternativeRoutesInPreview() {
     const RS = _routeSelection();
+    const routeCount = routeOptions ? routeOptions.length : 0;
+    if (!RS.buildShowAlternativeRoutesPreviewOrchestrationPlan(routeCount).shouldShow) return;
+
     const mount = RS.buildAlternativeRoutesPreviewMountPlans(routeOptions, {
         routeColors: routeColors(),
         currencySymbol: getCurrencySymbol(),
@@ -12629,50 +12619,54 @@ function buildGpsPositionTickInputs(coord) {
  * @param {Object} domPlan - from buildRoutePreviewPanelDomApplyPlan
  */
 function applyRoutePreviewPanelDomFromPlan(domPlan) {
-    if (!domPlan) return;
+    const executePlan = _routeSelection().buildRoutePreviewPanelDomExecutePlan(domPlan);
+    if (!executePlan.shouldExecute) return;
 
-    const previewDistanceEl = document.getElementById('previewDistance');
-    if (previewDistanceEl && domPlan.previewDistance) {
-        previewDistanceEl.dataset.km = domPlan.previewDistance.datasetKm;
-        previewDistanceEl.textContent = domPlan.previewDistance.textContent;
+    const ids = executePlan.elementIds;
+    const patches = executePlan.patches;
+
+    const previewDistanceEl = document.getElementById(ids.previewDistance);
+    if (previewDistanceEl && patches.previewDistance) {
+        previewDistanceEl.dataset.km = patches.previewDistance.datasetKm;
+        previewDistanceEl.textContent = patches.previewDistance.textContent;
     }
 
     const setText = (id, text) => {
         const el = document.getElementById(id);
         if (el && text != null) el.textContent = text;
     };
-    setText('previewDuration', domPlan.previewDuration && domPlan.previewDuration.textContent);
-    setText('previewRoute', domPlan.previewRoute && domPlan.previewRoute.textContent);
-    setText('previewFuelCost', domPlan.previewFuelCost && domPlan.previewFuelCost.textContent);
-    setText('previewTollCost', domPlan.previewTollCost && domPlan.previewTollCost.textContent);
-    setText('previewCAZCost', domPlan.previewCAZCost && domPlan.previewCAZCost.textContent);
-    setText('previewTotalCost', domPlan.previewTotalCost && domPlan.previewTotalCost.textContent);
-    setText('previewRoutingMode', domPlan.previewRoutingMode && domPlan.previewRoutingMode.textContent);
-    setText('previewVehicleType', domPlan.previewVehicleType && domPlan.previewVehicleType.textContent);
+    setText(ids.previewDuration, patches.previewDuration && patches.previewDuration.textContent);
+    setText(ids.previewRoute, patches.previewRoute && patches.previewRoute.textContent);
+    setText(ids.previewFuelCost, patches.previewFuelCost && patches.previewFuelCost.textContent);
+    setText(ids.previewTollCost, patches.previewTollCost && patches.previewTollCost.textContent);
+    setText(ids.previewCAZCost, patches.previewCAZCost && patches.previewCAZCost.textContent);
+    setText(ids.previewTotalCost, patches.previewTotalCost && patches.previewTotalCost.textContent);
+    setText(ids.previewRoutingMode, patches.previewRoutingMode && patches.previewRoutingMode.textContent);
+    setText(ids.previewVehicleType, patches.previewVehicleType && patches.previewVehicleType.textContent);
 
-    const fuelLitresEl = document.getElementById('previewFuelLitres');
-    if (fuelLitresEl && domPlan.previewFuelLitres) {
-        if (domPlan.previewFuelLitres.visible) {
-            fuelLitresEl.textContent = domPlan.previewFuelLitres.textContent;
-            fuelLitresEl.style.display = domPlan.previewFuelLitres.display;
+    const fuelLitresEl = document.getElementById(ids.previewFuelLitres);
+    if (fuelLitresEl && patches.previewFuelLitres) {
+        if (patches.previewFuelLitres.visible) {
+            fuelLitresEl.textContent = patches.previewFuelLitres.textContent;
+            fuelLitresEl.style.display = patches.previewFuelLitres.display;
         } else {
-            fuelLitresEl.style.display = domPlan.previewFuelLitres.display;
+            fuelLitresEl.style.display = patches.previewFuelLitres.display;
         }
     }
 
-    const cazStatusContainer = document.getElementById('cazStatusContainer');
-    if (cazStatusContainer && domPlan.cazStatusContainer) {
-        if (domPlan.cazStatusContainer.visible) {
-            cazStatusContainer.innerHTML = domPlan.cazStatusContainer.innerHtml;
-            cazStatusContainer.style.display = domPlan.cazStatusContainer.display;
+    const cazStatusContainer = document.getElementById(ids.cazStatusContainer);
+    if (cazStatusContainer && patches.cazStatusContainer) {
+        if (patches.cazStatusContainer.visible) {
+            cazStatusContainer.innerHTML = patches.cazStatusContainer.innerHtml;
+            cazStatusContainer.style.display = patches.cazStatusContainer.display;
         } else {
-            cazStatusContainer.style.display = domPlan.cazStatusContainer.display;
+            cazStatusContainer.style.display = patches.cazStatusContainer.display;
         }
     }
 
-    const hazardContainer = document.getElementById('hazardInfoContainer');
-    if (hazardContainer && domPlan.hazardInfoContainer) {
-        const plan = domPlan.hazardInfoContainer;
+    const hazardContainer = document.getElementById(ids.hazardInfoContainer);
+    if (hazardContainer && patches.hazardInfoContainer) {
+        const plan = patches.hazardInfoContainer;
         const hazardTitleEl = hazardContainer.querySelector('h4');
         const hazardCountLabel = hazardContainer.querySelector('[data-hazard-count-label]');
         const penaltyRow = hazardContainer.querySelector('#previewHazardPenalty')?.closest('div');
@@ -12694,10 +12688,10 @@ function applyRoutePreviewPanelDomFromPlan(domPlan) {
         }
     }
 
-    const altContainer = document.getElementById('previewAlternativeRoutesContainer');
-    if (altContainer && domPlan.previewAlternativeRoutesContainer
-        && domPlan.previewAlternativeRoutesContainer.display != null) {
-        altContainer.style.display = domPlan.previewAlternativeRoutesContainer.display;
+    const altContainer = document.getElementById(ids.previewAlternativeRoutesContainer);
+    if (altContainer && patches.previewAlternativeRoutesContainer
+        && patches.previewAlternativeRoutesContainer.display != null) {
+        altContainer.style.display = patches.previewAlternativeRoutesContainer.display;
     }
 }
 

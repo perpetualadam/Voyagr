@@ -435,6 +435,37 @@
     }
 
     /**
+     * Form-state plan for multi-drop preference controls.
+     * @param {Object} [opts]
+     * @param {function(string): string|null|undefined} [opts.getStorageItem]
+     * @returns {Object}
+     */
+    function buildMultiDropFormStatePlan(opts) {
+        opts = opts || {};
+        var get = opts.getStorageItem || function () { return null; };
+        return {
+            optimizeStopOrder: opts.optimizeStopOrder !== undefined
+                ? !!opts.optimizeStopOrder
+                : get('pref_optimizeStopOrder') !== 'false',
+            roundTrip: opts.roundTrip !== undefined
+                ? !!opts.roundTrip
+                : get('pref_roundTrip') === 'true',
+            trafficAwareRouting: opts.trafficAwareRouting !== undefined
+                ? !!opts.trafficAwareRouting
+                : get('pref_trafficAwareRouting') !== 'false',
+            avoidRoadClosures: opts.avoidRoadClosures !== undefined
+                ? !!opts.avoidRoadClosures
+                : get('pref_avoidRoadClosures') !== 'false',
+            avoidIncidents: opts.avoidIncidents !== undefined
+                ? !!opts.avoidIncidents
+                : get('pref_avoidIncidents') !== 'false',
+            departureTime: opts.departureTime !== undefined
+                ? (opts.departureTime || '')
+                : (get('pref_departureTime') || ''),
+        };
+    }
+
+    /**
      * DOM apply plan for multi-drop preference form controls.
      * @param {Storage} storage
      * @returns {Object}
@@ -739,6 +770,7 @@
         buildSettingsImportParsePlan: buildSettingsImportParsePlan,
         buildSettingsImportOrchestrationPlan: buildSettingsImportOrchestrationPlan,
         buildMultiDropPreferencesStoragePlan: buildMultiDropPreferencesStoragePlan,
+        buildMultiDropFormStatePlan: buildMultiDropFormStatePlan,
         buildMultiDropPreferencesUiApplyPlan: buildMultiDropPreferencesUiApplyPlan,
         buildMultiDropPreferencesDomApplyPlan: buildMultiDropPreferencesDomApplyPlan,
         buildClearDepartureTimeApplyPlan: buildClearDepartureTimeApplyPlan,

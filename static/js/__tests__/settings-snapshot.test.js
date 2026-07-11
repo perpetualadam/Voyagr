@@ -245,6 +245,23 @@ describe('settings-snapshot module', () => {
         expect(patches.pref_departureTime).toBe('09:15');
     });
 
+    test('buildMultiDropFormStatePlan reads DOM values with storage fallbacks', () => {
+        const fromDom = SS.buildMultiDropFormStatePlan({
+            optimizeStopOrder: false,
+            roundTrip: true,
+            departureTime: '10:30',
+        });
+        expect(fromDom.optimizeStopOrder).toBe(false);
+        expect(fromDom.roundTrip).toBe(true);
+        expect(fromDom.departureTime).toBe('10:30');
+
+        const fromStorage = SS.buildMultiDropFormStatePlan({
+            getStorageItem: (key) => (key === 'pref_roundTrip' ? 'true' : null),
+        });
+        expect(fromStorage.roundTrip).toBe(true);
+        expect(fromStorage.optimizeStopOrder).toBe(true);
+    });
+
     test('buildMultiDropPreferencesUiApplyPlan reads storage into form patches', () => {
         const storage = {
             getItem(key) {

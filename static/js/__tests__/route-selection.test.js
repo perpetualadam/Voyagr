@@ -457,6 +457,22 @@ describe('route comparison modal helpers', () => {
         expect(dom.containerDisplay).toBe('none');
     });
 
+    test('buildAlternativeRoutesPreviewDomExecutePlan lists container ids', () => {
+        const execute = RS.buildAlternativeRoutesPreviewDomExecutePlan({
+            showContainer: true,
+            containerDisplay: 'block',
+            cardPlans: [{ html: '<div/>' }],
+        });
+        expect(execute.shouldExecute).toBe(true);
+        expect(execute.listContainerId).toBe('previewAlternativeRoutesList');
+        expect(execute.cardPlans).toHaveLength(1);
+    });
+
+    test('buildShowAlternativeRoutesPreviewOrchestrationPlan gates on route count', () => {
+        expect(RS.buildShowAlternativeRoutesPreviewOrchestrationPlan(0).shouldShow).toBe(false);
+        expect(RS.buildShowAlternativeRoutesPreviewOrchestrationPlan(2).shouldShow).toBe(true);
+    });
+
     test('buildRouteComparisonListDomApplyPlan maps routes to list container HTML', () => {
         const dom = RS.buildRouteComparisonListDomApplyPlan({
             routes: [{ name: 'Fast', distance_km: 10, duration_minutes: 20, fuel_cost: 4, toll_cost: 0, caz_cost: 0 }],
@@ -709,6 +725,54 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(dom.previewFuelCost.textContent).toBe('£4.00');
         expect(dom.previewAlternativeRoutesContainer.showAlternativeRoutes).toBe(false);
         expect(dom.showMapRoutes).toBe(true);
+    });
+
+    test('buildRoutePreviewPanelDomExecutePlan wraps panel patches with element ids', () => {
+        const dom = RS.buildRoutePreviewPanelDomApplyPlan({
+            distanceKm: 10,
+            distanceText: '6 mi',
+            durationText: '20 min',
+            routeLabel: 'A → B',
+            fuelCostText: '£4',
+            tollCostText: '£0',
+            cazCostText: '£0',
+            totalCostText: '£4',
+            routingModeText: 'Auto',
+            vehicleTypeText: 'Petrol',
+            hazardPlan: { visible: false, containerDisplay: 'none' },
+            showAlternativeRoutes: false,
+            showMapRoutes: true,
+            statusMessage: 'ok',
+            costLog: {},
+        });
+        const execute = RS.buildRoutePreviewPanelDomExecutePlan(dom);
+        expect(execute.shouldExecute).toBe(true);
+        expect(execute.elementIds.previewDistance).toBe('previewDistance');
+        expect(execute.patches.previewDistance.textContent).toBe('6 mi');
+    });
+
+    test('buildCalculateRouteIdlePreviewExecutePlan lists preview side effects', () => {
+        const preview = {
+            ok: true,
+            startCoords: [51.5, -0.1],
+            endCoords: [51.6, -0.2],
+            pathPlan: { routePath: [[51.5, -0.1], [51.6, -0.2]] },
+            routePath: [[51.5, -0.1], [51.6, -0.2]],
+            displayTime: '20 min',
+            statusMessage: 'Route calculated',
+            lastCalculatedRoutePatch: { destination: 'London' },
+            durationMinutes: 20,
+            primaryHazards: [{ lat: 1, lon: 2 }],
+            routesCount: 2,
+            routeSource: 'valhalla',
+            defaultPrecision: 6,
+        };
+        const execute = RS.buildCalculateRouteIdlePreviewExecutePlan(preview, { geometry: 'abc', distance: '10 km' });
+        expect(execute.shouldExecute).toBe(true);
+        expect(execute.displayPrimaryHazards).toBe(true);
+        expect(execute.multiRouteLogMessage).toContain('2 routes');
+        expect(RS.buildCalculateRouteIdlePreviewExecutePlan({ ok: false, errorStatusMessage: 'bad' }).shouldExecute)
+            .toBe(false);
     });
 
     test('buildAlternativeRoutesPreviewMountPlans builds card plans with converted distance', () => {

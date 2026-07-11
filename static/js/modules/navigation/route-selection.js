@@ -592,6 +592,36 @@
     }
 
     /**
+     * Execute plan for alternative-route preview card DOM apply.
+     * @param {Object} domPlan - from buildAlternativeRoutesPreviewDomApplyPlan
+     * @returns {Object}
+     */
+    function buildAlternativeRoutesPreviewDomExecutePlan(domPlan) {
+        domPlan = domPlan || {};
+        return {
+            shouldExecute: !!domPlan,
+            listContainerId: 'previewAlternativeRoutesList',
+            parentContainerId: 'previewAlternativeRoutesContainer',
+            showContainer: !!domPlan.showContainer,
+            containerDisplay: domPlan.containerDisplay || 'none',
+            cardPlans: domPlan.cardPlans || [],
+        };
+    }
+
+    /**
+     * Orchestration plan for showAlternativeRoutesInPreview.
+     * @param {number} [routeCount]
+     * @returns {Object}
+     */
+    function buildShowAlternativeRoutesPreviewOrchestrationPlan(routeCount) {
+        var count = routeCount || 0;
+        return {
+            shouldShow: count > 0,
+            routeCount: count,
+        };
+    }
+
+    /**
      * @returns {string}
      */
     function getRouteComparisonNoRoutesMessage() {
@@ -1166,6 +1196,60 @@
     }
 
     /**
+     * Execute plan for idle calculateRoute preview outcome side effects.
+     * @param {Object} previewPlan - from buildRoutePreviewSuccessPlan
+     * @param {Object} [data] - route API response
+     * @returns {Object}
+     */
+    function buildCalculateRouteIdlePreviewExecutePlan(previewPlan, data) {
+        previewPlan = previewPlan || {};
+        data = data || {};
+        if (!previewPlan.ok) {
+            return {
+                shouldExecute: false,
+                errorStatusMessage: previewPlan.errorStatusMessage,
+                hideRouteProgressBarOnError: true,
+            };
+        }
+        var routesCount = previewPlan.routesCount || 0;
+        return {
+            shouldExecute: true,
+            startCoords: previewPlan.startCoords,
+            endCoords: previewPlan.endCoords,
+            pathPlan: previewPlan.pathPlan,
+            routePath: previewPlan.routePath,
+            hasGeometry: !!data.geometry,
+            geometrySource: data.source,
+            multiDropStopLogMessage: data.total_stop_time && data.total_stop_time > 0
+                ? '[Route] Total time with ' + data.stops_count + ' stops: ' + previewPlan.displayTime
+                : null,
+            tripInfo: {
+                distance: data.distance,
+                displayTime: previewPlan.displayTime,
+                fuelCost: data.fuel_cost || '-',
+                tollCost: data.toll_cost || '-',
+            },
+            statusMessage: previewPlan.statusMessage,
+            showMultiDropLegs: !!previewPlan.showMultiDropLegs,
+            storeLastRouteApiResponse: true,
+            lastCalculatedRoutePatch: previewPlan.lastCalculatedRoutePatch,
+            durationLogMessage: '[Route] Stored route with duration_minutes: ' + previewPlan.durationMinutes,
+            displayPrimaryHazards: !!(previewPlan.primaryHazards && previewPlan.primaryHazards.length),
+            primaryHazards: previewPlan.primaryHazards,
+            routesCount: routesCount,
+            routeSource: previewPlan.routeSource,
+            defaultPrecision: previewPlan.defaultPrecision,
+            multiRouteLogMessage: routesCount > 0
+                ? '[Route API] Received ' + routesCount + ' routes from ' + previewPlan.routeSource +
+                    ', default polyline precision ' + previewPlan.defaultPrecision
+                : null,
+            fallbackRouteLogMessage: '[Route Comparison] Using single route (fallback)',
+            loadedRoutesLogPrefix: '[Route Comparison] Loaded ',
+            idleUiApplyInput: previewPlan,
+        };
+    }
+
+    /**
      * Greedy nearest-neighbour ordering of via-points and stops between start and end.
      * @param {number} startLat
      * @param {number} startLon
@@ -1684,6 +1768,37 @@
             showMapRoutes: !!panelPlan.showMapRoutes,
             statusMessage: panelPlan.statusMessage,
             costLog: panelPlan.costLog,
+        };
+    }
+
+    /** Element ids for route preview panel DOM patches. */
+    var ROUTE_PREVIEW_PANEL_ELEMENT_IDS = {
+        previewDistance: 'previewDistance',
+        previewDuration: 'previewDuration',
+        previewRoute: 'previewRoute',
+        previewFuelCost: 'previewFuelCost',
+        previewFuelLitres: 'previewFuelLitres',
+        previewTollCost: 'previewTollCost',
+        previewCAZCost: 'previewCAZCost',
+        previewTotalCost: 'previewTotalCost',
+        previewRoutingMode: 'previewRoutingMode',
+        previewVehicleType: 'previewVehicleType',
+        cazStatusContainer: 'cazStatusContainer',
+        hazardInfoContainer: 'hazardInfoContainer',
+        previewAlternativeRoutesContainer: 'previewAlternativeRoutesContainer',
+    };
+
+    /**
+     * Execute plan for applying route preview panel DOM patches.
+     * @param {Object} domPlan - from buildRoutePreviewPanelDomApplyPlan
+     * @returns {Object}
+     */
+    function buildRoutePreviewPanelDomExecutePlan(domPlan) {
+        domPlan = domPlan || {};
+        return {
+            shouldExecute: !!domPlan,
+            elementIds: ROUTE_PREVIEW_PANEL_ELEMENT_IDS,
+            patches: domPlan,
         };
     }
 
@@ -2393,6 +2508,8 @@
         buildRoutePreviewAfterDisplayExecutePlan: buildRoutePreviewAfterDisplayExecutePlan,
         buildShowRoutePreviewOrchestrationPlan: buildShowRoutePreviewOrchestrationPlan,
         buildAlternativeRoutesPreviewDomApplyPlan: buildAlternativeRoutesPreviewDomApplyPlan,
+        buildAlternativeRoutesPreviewDomExecutePlan: buildAlternativeRoutesPreviewDomExecutePlan,
+        buildShowAlternativeRoutesPreviewOrchestrationPlan: buildShowAlternativeRoutesPreviewOrchestrationPlan,
         getRouteComparisonNoRoutesMessage: getRouteComparisonNoRoutesMessage,
         getRouteComparisonSingleRouteMessage: getRouteComparisonSingleRouteMessage,
         getRouteComparisonSuccessMessage: getRouteComparisonSuccessMessage,
@@ -2419,6 +2536,7 @@
         buildLastCalculatedRoutePatch: buildLastCalculatedRoutePatch,
         buildPreviewRouteCoordsPlan: buildPreviewRouteCoordsPlan,
         buildRoutePreviewSuccessPlan: buildRoutePreviewSuccessPlan,
+        buildCalculateRouteIdlePreviewExecutePlan: buildCalculateRouteIdlePreviewExecutePlan,
         isCurrentLocationPlaceholder: isCurrentLocationPlaceholder,
         orderWaypointsGreedy: orderWaypointsGreedy,
         resolvePreviewRoute: resolvePreviewRoute,
@@ -2437,6 +2555,8 @@
         buildRecalculateRouteWithPreferencesPlan: buildRecalculateRouteWithPreferencesPlan,
         buildRoutePreviewPanelApplyPlan: buildRoutePreviewPanelApplyPlan,
         buildRoutePreviewPanelDomApplyPlan: buildRoutePreviewPanelDomApplyPlan,
+        buildRoutePreviewPanelDomExecutePlan: buildRoutePreviewPanelDomExecutePlan,
+        ROUTE_PREVIEW_PANEL_ELEMENT_IDS: ROUTE_PREVIEW_PANEL_ELEMENT_IDS,
         buildAlternativeRoutesPreviewMountPlans: buildAlternativeRoutesPreviewMountPlans,
         buildNavActiveRoutePolylineStyle: buildNavActiveRoutePolylineStyle,
         buildNavRouteLayerRedrawGuardPlan: buildNavRouteLayerRedrawGuardPlan,
