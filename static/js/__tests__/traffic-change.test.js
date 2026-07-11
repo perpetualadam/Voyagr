@@ -66,3 +66,23 @@ describe('detectSignificantTrafficChange', () => {
         expect(fn(snapshot({ delayMin: 1 }), snapshot({ delayMin: 2 }))).toBe(false);
     });
 });
+
+describe('traffic reroute acceptance helpers', () => {
+    test('computeTrafficRerouteTimeSaved includes measured delay', () => {
+        expect(TC.computeTrafficRerouteTimeSaved(20, 5, 18)).toBe(7);
+    });
+
+    test('shouldAcceptTrafficReroute accepts severe regardless of savings', () => {
+        expect(TC.shouldAcceptTrafficReroute(true, 0)).toBe(true);
+    });
+
+    test('shouldAcceptTrafficReroute requires 2+ minute savings otherwise', () => {
+        expect(TC.shouldAcceptTrafficReroute(false, 1.9)).toBe(false);
+        expect(TC.shouldAcceptTrafficReroute(false, 2)).toBe(true);
+    });
+
+    test('formatTrafficRerouteSaveMessage rounds positive savings', () => {
+        expect(TC.formatTrafficRerouteSaveMessage(3.2)).toBe('Saves about 3 minutes.');
+        expect(TC.formatTrafficRerouteSaveMessage(0)).toBe('');
+    });
+});

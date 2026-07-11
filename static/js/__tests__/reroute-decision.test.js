@@ -199,3 +199,35 @@ describe('decideRouteDeviation — custom constants', () => {
         expect(d.action).toBe('reroute');
     });
 });
+
+describe('reroute log helpers', () => {
+    test('buildRerouteLogEvent shapes analytics payload', () => {
+        const event = RD.buildRerouteLogEvent({
+            timestampIso: '2026-07-11T12:00:00.000Z',
+            startLat: 51.5,
+            startLon: -0.1,
+            destination: '51.6,-0.2',
+            route: { distance_km: 12, duration_minutes: 25 },
+            hazardCount: 2,
+            settings: { avoidCameras: true, avoidTolls: false, avoidCaz: true },
+        });
+        expect(event.type).toBe('automatic_reroute');
+        expect(event.route.hazard_count).toBe(2);
+        expect(event.settings.avoid_tolls).toBe(false);
+    });
+
+    test('appendRerouteLogEntry keeps only the most recent entries', () => {
+        const map = { rerouteLog: '[]' };
+        const storage = {
+            getItem: (k) => map[k] || null,
+            setItem: (k, v) => { map[k] = v; },
+        };
+        RD.appendRerouteLogEntry(storage, { id: 1 }, 2);
+        RD.appendRerouteLogEntry(storage, { id: 2 }, 2);
+        RD.appendRerouteLogEntry(storage, { id: 3 }, 2);
+        const log = JSON.parse(map.rerouteLog);
+        expect(log).toHaveLength(2);
+        expect(log[0].id).toBe(2);
+        expect(log[1].id).toBe(3);
+    });
+});

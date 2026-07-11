@@ -9,7 +9,8 @@ describe('route-geometry module surface', () => {
     test('exposes all expected functions', () => {
         const fns = ['haversineDistanceMeters', 'bearing', 'blendHeadingsCircular',
             'projectToSegment', 'snapToRoutePolyline', 'distanceAlongRouteToVertexMeters',
-            'totalPolylineLengthMeters', 'computeRemainingDistanceAlongRoute'];
+            'totalPolylineLengthMeters', 'computeRemainingDistanceAlongRoute',
+            'findNearestPolylineVertexIndex'];
         fns.forEach(fn => expect(typeof RG[fn]).toBe('function'));
     });
 });
@@ -115,6 +116,19 @@ describe('totalPolylineLengthMeters', () => {
         const d = RG.totalPolylineLengthMeters([[51.5, -0.1], [51.51, -0.1]]);
         expect(d).toBeGreaterThan(0);
         expect(d).toBeLessThan(5000);
+    });
+});
+
+describe('findNearestPolylineVertexIndex', () => {
+    const polyline = [[51.50, -0.12], [51.51, -0.11], [51.52, -0.10]];
+
+    test('returns 0 for empty polyline', () => {
+        expect(RG.findNearestPolylineVertexIndex(51.5, -0.12, [])).toBe(0);
+    });
+
+    test('picks the closest vertex index', () => {
+        expect(RG.findNearestPolylineVertexIndex(51.515, -0.11, polyline)).toBe(1);
+        expect(RG.findNearestPolylineVertexIndex(51.52, -0.10, polyline)).toBe(2);
     });
 });
 

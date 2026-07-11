@@ -122,12 +122,113 @@
             .map(function (p) { return { lat: p.lat, lon: p.lon }; });
     }
 
+    /**
+     * Format lat/lon as the API "lat,lon" coordinate string.
+     * @param {number} lat
+     * @param {number} lon
+     * @returns {string}
+     */
+    function formatCoordPair(lat, lon) {
+        return lat + ',' + lon;
+    }
+
+    /**
+     * Spread cost params onto a request body object.
+     * @param {Object} body
+     * @param {Object} [costParams]
+     */
+    function spreadCostParams(body, costParams) {
+        var cost = costParams || {};
+        for (var k in cost) {
+            if (Object.prototype.hasOwnProperty.call(cost, k)) {
+                body[k] = cost[k];
+            }
+        }
+    }
+
+    /**
+     * Full `/api/route` body for automatic reroute (buildRouteRequest).
+     * @param {Object} o
+     * @param {number} o.startLat
+     * @param {number} o.startLon
+     * @param {string} o.destination - "lat,lon" end coordinate string
+     * @param {Array<{lat: number, lon: number}>} [o.avoidPoints]
+     * @param {boolean} o.includeTolls
+     * @param {boolean} o.includeCaz
+     * @param {Object} o.sharedOptions - args for buildSharedRouteOptions
+     * @returns {Object}
+     */
+    function buildRerouteRequestBody(o) {
+        o = o || {};
+        var body = {
+            start: formatCoordPair(o.startLat, o.startLon),
+            end: o.destination,
+            avoid_points: o.avoidPoints || [],
+            include_tolls: !!o.includeTolls,
+            include_caz: !!o.includeCaz,
+        };
+        var shared = buildSharedRouteOptions(o.sharedOptions || {});
+        for (var key in shared) {
+            if (Object.prototype.hasOwnProperty.call(shared, key)) {
+                body[key] = shared[key];
+            }
+        }
+        return body;
+    }
+
+    /**
+     * `/api/route` body for the driving leg of multimodal parking routing.
+     * @param {Object} o
+     * @returns {Object}
+     */
+    function buildMultimodalDrivingLegBody(o) {
+        o = o || {};
+        var body = {
+            start: formatCoordPair(o.startLat, o.startLon),
+            end: formatCoordPair(o.endLat, o.endLon),
+            routing_mode: 'auto',
+            vehicle_type: o.vehicleType,
+            include_tolls: !!o.includeTolls,
+            avoid_tolls: !!o.avoidTolls,
+            avoid_caz: !!o.avoidCaz,
+            enable_hazard_avoidance: !!o.enableHazardAvoidance,
+            avoid_cameras: !!o.avoidCameras,
+            avoid_traffic_lights: !!o.avoidTrafficLights,
+            avoid_railway_crossings: !!o.avoidRailwayCrossings,
+        };
+        spreadCostParams(body, o.costParams);
+        return body;
+    }
+
+    /**
+     * `/api/route` body for the walking leg of multimodal parking routing.
+     * @param {Object} o
+     * @returns {Object}
+     */
+    function buildMultimodalWalkingLegBody(o) {
+        o = o || {};
+        return {
+            start: formatCoordPair(o.startLat, o.startLon),
+            end: formatCoordPair(o.endLat, o.endLon),
+            routing_mode: 'pedestrian',
+            vehicle_type: 'pedestrian',
+            enable_hazard_avoidance: !!o.enableHazardAvoidance,
+            avoid_cameras: !!o.avoidCameras,
+            avoid_traffic_lights: !!o.avoidTrafficLights,
+            avoid_railway_crossings: !!o.avoidRailwayCrossings,
+        };
+    }
+
     var api = {
         buildSharedRouteOptions: buildSharedRouteOptions,
         isInitialRouteHazardAvoidanceEnabled: isInitialRouteHazardAvoidanceEnabled,
         isMultimodalLegHazardAvoidanceEnabled: isMultimodalLegHazardAvoidanceEnabled,
         isRerouteHazardAvoidanceEnabled: isRerouteHazardAvoidanceEnabled,
         normalizeAvoidPoints: normalizeAvoidPoints,
+        formatCoordPair: formatCoordPair,
+        buildRerouteRequestBody: buildRerouteRequestBody,
+        buildMultimodalDrivingLegBody: buildMultimodalDrivingLegBody,
+        buildMultimodalWalkingLegBody: buildMultimodalWalkingLegBody,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

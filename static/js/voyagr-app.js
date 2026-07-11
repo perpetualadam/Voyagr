@@ -6601,19 +6601,18 @@ async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measured
         if (data.success && data.routes && data.routes.length > 0) {
             const newRoute = data.routes[0];
             const oldBase = window.lastCalculatedRoute.duration_minutes || 0;
-            // Compare the alternative against our CURRENT *delayed* time, not the
-            // optimistic free-flow base — otherwise a jam never looks worth avoiding.
-            const oldEffective = oldBase + (measuredDelayMin || 0);
-            const timeSaved = oldEffective - newRoute.duration_minutes;
+            const timeSaved = VoyagrModules.trafficChange().computeTrafficRerouteTimeSaved(
+                oldBase,
+                measuredDelayMin,
+                newRoute.duration_minutes
+            );
 
-            if (isSevere || timeSaved >= 2) {
+            if (VoyagrModules.trafficChange().shouldAcceptTrafficReroute(isSevere, timeSaved)) {
                 updateRouteOnMap(newRoute);
-                // The new route avoids the flagged segments; drop the stale sample so the
-                // next check re-evaluates the fresh geometry.
                 _routeTrafficSampleCache = null;
                 lastTrafficData = null;
                 const reason = isSevere ? 'severe congestion' : 'traffic';
-                const saveMsg = timeSaved > 0 ? `Saves about ${timeSaved.toFixed(0)} minutes.` : '';
+                const saveMsg = VoyagrModules.trafficChange().formatTrafficRerouteSaveMessage(timeSaved);
                 sendNotification('✅ Route Updated',
                     `New route found due to ${reason}. ${saveMsg}`, 'success');
                 if (voiceAnnouncementsEnabled) {
@@ -6661,29 +6660,23 @@ function resolveNavigationDestination() {
  * Build route request with current hazard avoidance settings
  */
 function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) {
-    const enableHazardAvoidance = VoyagrRoutingRequest.isRerouteHazardAvoidanceEnabled(
-        localStorage,
-        isAvoidTollsEnabled
-    );
-
     const routePrefs = (typeof getRoutePreferences === 'function') ? getRoutePreferences() : {};
 
-    const cleanAvoidPoints = VoyagrRoutingRequest.normalizeAvoidPoints(avoidPoints);
-
-    // Shared hazard/avoidance/cost/preference fields come from the pure
-    // VoyagrRoutingRequest module (shared with calculateRoute); this path adds
-    // start/end, explicit avoid_points, and the include_tolls/include_caz flags.
-    return {
-        start: `${startLat},${startLon}`,
-        end: destination,
-        avoid_points: cleanAvoidPoints,
-        include_tolls: localStorage.getItem('includeTolls') !== 'false',
-        include_caz: localStorage.getItem('includeCAZ') !== 'false',
-        ...VoyagrRoutingRequest.buildSharedRouteOptions({
+    return VoyagrRoutingRequest.buildRerouteRequestBody({
+        startLat: startLat,
+        startLon: startLon,
+        destination: destination,
+        avoidPoints: VoyagrRoutingRequest.normalizeAvoidPoints(avoidPoints),
+        includeTolls: localStorage.getItem('includeTolls') !== 'false',
+        includeCaz: localStorage.getItem('includeCAZ') !== 'false',
+        sharedOptions: {
             routingMode: currentRoutingMode || 'auto',
             vehicleType: currentVehicleType || 'petrol_diesel',
             costParams: getRouteCostParams(currentVehicleType),
-            enableHazardAvoidance: enableHazardAvoidance,
+            enableHazardAvoidance: VoyagrRoutingRequest.isRerouteHazardAvoidanceEnabled(
+                localStorage,
+                isAvoidTollsEnabled
+            ),
             avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
             avoidCaz: localStorage.getItem('pref_caz') !== 'false',
             avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
@@ -6692,8 +6685,8 @@ function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) 
             avoidMotorways: localStorage.getItem('pref_avoid_motorways') === 'true',
             avoidFerries: localStorage.getItem('pref_avoid_ferries') === 'true',
             routePrefs: routePrefs,
-        }),
-    };
+        },
+    });
 }
 
 /**
@@ -8829,24 +8822,26 @@ async function selectParking(parking, destinationCoords) {
 
         // Calculate driving route to parking
         const enableHazardAvoidanceParking = VoyagrRoutingRequest.isMultimodalLegHazardAvoidanceEnabled(localStorage);
+        const drivingBody = VoyagrRoutingRequest.buildMultimodalDrivingLegBody({
+            startLat: startCoords.lat,
+            startLon: startCoords.lon,
+            endLat: parking.lat,
+            endLon: parking.lon,
+            vehicleType: currentVehicleType,
+            costParams: getRouteCostParams(currentVehicleType),
+            includeTolls: localStorage.getItem('includeTolls') !== 'false',
+            avoidTolls: isAvoidTollsEnabled(),
+            avoidCaz: localStorage.getItem('pref_caz') !== 'false',
+            enableHazardAvoidance: enableHazardAvoidanceParking,
+            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
+            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
+            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+        });
 
         const drivingResponse = await fetch('/api/route', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                start: `${startCoords.lat},${startCoords.lon}`,
-                end: `${parking.lat},${parking.lon}`,
-                routing_mode: 'auto',
-                vehicle_type: currentVehicleType,
-                ...getRouteCostParams(currentVehicleType),
-                include_tolls: localStorage.getItem('includeTolls') !== 'false',  // Default: true (separate from avoidance)
-                avoid_tolls: isAvoidTollsEnabled(),
-                avoid_caz: localStorage.getItem('pref_caz') !== 'false',        // Default: true
-                enable_hazard_avoidance: enableHazardAvoidanceParking,
-                avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
-                avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-                avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false'
-            })
+            body: JSON.stringify(drivingBody)
         });
 
         const drivingData = await drivingResponse.json();
@@ -8857,20 +8852,21 @@ async function selectParking(parking, destinationCoords) {
 
         // Calculate walking route from parking to destination
         const enableHazardAvoidanceWalking = VoyagrRoutingRequest.isMultimodalLegHazardAvoidanceEnabled(localStorage);
+        const walkingBody = VoyagrRoutingRequest.buildMultimodalWalkingLegBody({
+            startLat: parking.lat,
+            startLon: parking.lon,
+            endLat: destinationCoords.lat,
+            endLon: destinationCoords.lon,
+            enableHazardAvoidance: enableHazardAvoidanceWalking,
+            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
+            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
+            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+        });
 
         const walkingResponse = await fetch('/api/route', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                start: `${parking.lat},${parking.lon}`,
-                end: `${destinationCoords.lat},${destinationCoords.lon}`,
-                routing_mode: 'pedestrian',
-                vehicle_type: 'pedestrian',
-                enable_hazard_avoidance: enableHazardAvoidanceWalking,
-                avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
-                avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-                avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false'
-            })
+            body: JSON.stringify(walkingBody)
         });
 
         const walkingData = await walkingResponse.json();
@@ -14427,21 +14423,7 @@ const VOICE_FREQUENCY_THROTTLES = {
  * @returns {number} Index of nearest point on route, or 0 if not found
  */
 function findNearestRouteIndex(lat, lon, polyline) {
-    if (!polyline || polyline.length === 0) return 0;
-
-    let minDistance = Infinity;
-    let nearestIndex = 0;
-
-    for (let i = 0; i < polyline.length; i++) {
-        const routePoint = polyline[i];
-        const distance = calculateDistance(lat, lon, routePoint[0], routePoint[1]);
-        if (distance < minDistance) {
-            minDistance = distance;
-            nearestIndex = i;
-        }
-    }
-
-    return nearestIndex;
+    return VoyagrModules.routeGeometry().findNearestPolylineVertexIndex(lat, lon, polyline);
 }
 
 /**
@@ -15150,22 +15132,9 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
 function handleUnavoidableHazards(route, hazardsList, hazardCount) {
     console.log(`[Rerouting] Route has ${hazardCount} unavoidable hazards`);
 
-    // Group hazards by type
-    const hazardTypes = {};
-    hazardsList.forEach(hazard => {
-        const type = hazard.type || 'unknown';
-        hazardTypes[type] = (hazardTypes[type] || 0) + 1;
-    });
+    const hazardTypes = VoyagrModules.hazardAlerts().groupHazardsByType(hazardsList);
+    const hazardSummary = VoyagrModules.hazardAlerts().formatHazardTypeSummary(hazardTypes);
 
-    // Build hazard summary
-    const hazardSummary = Object.entries(hazardTypes)
-        .map(([type, count]) => `${count}x ${type.replace(/_/g, ' ')}`)
-        .join(', ') || 'See map for hazard markers along this route.';
-
-    // Show detailed notification
-    const message = `⚠️ ${hazardCount} hazard${hazardCount > 1 ? 's' : ''} cannot be avoided on any route to destination:\n${hazardSummary}`;
-
-    // Display in UI (use a modal or prominent notification)
     showUnavoidableHazardsModal(hazardTypes, hazardCount);
 
     console.log(`[Rerouting] Unavoidable hazards: ${hazardSummary}`);
@@ -15198,16 +15167,7 @@ function showUnavoidableHazardsModal(hazardTypes, totalCount) {
     }
 
     // Build hazard list HTML
-    const hazardListHtml = Object.entries(hazardTypes)
-        .map(([type, count]) => {
-            const icon = getHazardIcon(type);
-            return `<div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #fff3e0; border-radius: 8px; margin: 5px 0;">
-                <span style="font-size: 20px;">${icon}</span>
-                <span style="flex: 1; text-align: left;">${type.replace(/_/g, ' ')}</span>
-                <span style="font-weight: bold; color: #e65100;">${count}</span>
-            </div>`;
-        })
-        .join('');
+    const hazardListHtml = VoyagrModules.hazardAlerts().buildUnavoidableHazardsListHtml(hazardTypes);
 
     modal.innerHTML = `
         <div style="font-size: 40px; margin-bottom: 10px;">⚠️</div>
@@ -15275,45 +15235,28 @@ function openHazardSettings() {
  * Get emoji icon for hazard type
  */
 function getHazardIcon(type) {
-    const icons = {
-        'camera': '📷',
-        'traffic_light': '🚦',
-        'police': '👮',
-        'accident': '🚗💥',
-        'roadworks': '🚧',
-        'traffic_jam': '🚗',
-        'hazard': '⚠️',
-        'toll': '💰',
-        'caz': '🏙️'
-    };
-    return icons[type] || '⚠️';
+    return VoyagrModules.hazardAlerts().getHazardIcon(type);
 }
 
 /**
  * Log rerouting event for debugging and analytics
  */
 function logReroutingEvent(startLat, startLon, destination, route, hazardCount) {
-    const event = {
-        timestamp: new Date().toISOString(),
-        type: 'automatic_reroute',
-        start: { lat: startLat, lon: startLon },
+    const event = VoyagrModules.rerouteDecision().buildRerouteLogEvent({
+        timestampIso: new Date().toISOString(),
+        startLat: startLat,
+        startLon: startLon,
         destination: destination,
-        route: {
-            distance_km: route.distance_km,
-            duration_minutes: route.duration_minutes,
-            hazard_count: hazardCount
-        },
+        route: route,
+        hazardCount: hazardCount,
         settings: {
-            avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',  // Default: true
-            avoid_tolls: isAvoidTollsEnabled(),
-            avoid_caz: localStorage.getItem('pref_caz') !== 'false'           // Default: true
-        }
-    };
+            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
+            avoidTolls: isAvoidTollsEnabled(),
+            avoidCaz: localStorage.getItem('pref_caz') !== 'false',
+        },
+    });
 
-    // Store in sessionStorage for debugging
-    const rerouteLog = JSON.parse(sessionStorage.getItem('rerouteLog') || '[]');
-    rerouteLog.push(event);
-    sessionStorage.setItem('rerouteLog', JSON.stringify(rerouteLog.slice(-20))); // Keep last 20 events
+    VoyagrModules.rerouteDecision().appendRerouteLogEntry(sessionStorage, event, 20);
 
     console.log('[Rerouting] Event logged:', event);
 }
