@@ -65,3 +65,27 @@ describe('navigation progress seed helpers', () => {
         expect(plan.routeJoinConfirmedForDeviation).toBe(false);
     });
 });
+
+describe('navigation arrival helpers', () => {
+    test('buildNavigationArrivalPlan ends immediately when very close', () => {
+        const plan = RP.buildNavigationArrivalPlan(30, 5, 0, 1000);
+        expect(plan.action).toBe('end');
+    });
+
+    test('buildNavigationArrivalPlan starts dwell when slow in arrival zone', () => {
+        const plan = RP.buildNavigationArrivalPlan(50, 0.5, 0, 5000);
+        expect(plan.action).toBe('dwell-start');
+        expect(plan.nextArrivalZoneSince).toBe(5000);
+    });
+
+    test('buildNavigationArrivalPlan ends after dwell time elapsed', () => {
+        const plan = RP.buildNavigationArrivalPlan(50, 0.5, 1000, 5000);
+        expect(plan.action).toBe('end');
+    });
+
+    test('buildNavigationArrivalPlan resets dwell when leaving zone', () => {
+        const plan = RP.buildNavigationArrivalPlan(200, 5, 1000, 5000);
+        expect(plan.action).toBe('none');
+        expect(plan.nextArrivalZoneSince).toBe(0);
+    });
+});

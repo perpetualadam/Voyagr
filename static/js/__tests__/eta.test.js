@@ -243,3 +243,46 @@ describe('journey and traffic panel helpers', () => {
         });
     });
 });
+
+describe('journey summary helpers', () => {
+    test('buildJourneySummaryBarApplyPlan formats distance time and ETA', () => {
+        const plan = ETA.buildJourneySummaryBarApplyPlan({
+            remainingDistanceMeters: 5000,
+            distanceUnit: 'km',
+            formatRemainingDistance: (m) => (m / 1000).toFixed(1) + ' km',
+            lastCalculatedRoute: { distance_km: 10, duration_minutes: 20 },
+            routeDurationMin: 20,
+            userHasStartedMoving: true,
+            polylineTotalM: 10000,
+            applyTrafficRatio: (m) => m,
+            use24HourFormat: true,
+            now: Date.parse('2026-07-11T10:00:00.000Z'),
+        });
+        expect(plan.distanceText).toBe('5.0 km');
+        expect(plan.timeText).toMatch(/min/);
+        expect(plan.etaText).toBeTruthy();
+        expect(plan.remainingTimeMinutes).toBe(10);
+    });
+
+    test('buildTraveledJourneyRoutePatch substitutes distance and time together', () => {
+        const result = ETA.buildTraveledJourneyRoutePatch(
+            { distance_km: 20, duration_minutes: 30 },
+            8000,
+            Date.now() - 15 * 60000
+        );
+        expect(result.patch).not.toBeNull();
+        expect(result.patch.distance_km).toBe(8);
+        expect(result.patch.duration_minutes).toBeGreaterThan(0);
+        expect(result.avgSpeedKmh).toBeGreaterThan(0);
+    });
+
+    test('buildTraveledJourneyRoutePatch keeps planned values without real driven distance', () => {
+        const result = ETA.buildTraveledJourneyRoutePatch(
+            { distance_km: 20, duration_minutes: 30 },
+            0,
+            Date.now() - 5 * 60000
+        );
+        expect(result.patch).toBeNull();
+        expect(result.avgSpeedKmh).toBeCloseTo(40, 0);
+    });
+});

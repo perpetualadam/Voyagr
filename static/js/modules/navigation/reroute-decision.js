@@ -241,6 +241,152 @@
         return trimmed;
     }
 
+    var REROUTE_FAILURE_RETRY_DELAYS_MS = [4000, 6500, 10000, 14000];
+    var REROUTE_ANNOUNCE_MIN_INTERVAL_MS = 60000;
+
+    /**
+     * Plan for scheduling automatic reroute failure retries.
+     * @param {Object} state
+     * @returns {Object}
+     */
+    function buildRerouteFailureRetryPlan(state) {
+        state = state || {};
+        var max = REROUTE_FAILURE_RETRY_DELAYS_MS.length;
+        var autoReroute = state.autoRerouteOnDeviationEnabled != null
+            ? state.autoRerouteOnDeviationEnabled
+            : state.autoRerouteEnabled;
+        if (!state.routeInProgress || !autoReroute) {
+            return { action: 'clear', schedule: false };
+        }
+        if (state.now < state.postRerouteGraceUntil) {
+            return { action: 'skip', schedule: false, reason: 'grace' };
+        }
+        if (state.rerouteInProgress) {
+            return { action: 'skip', schedule: false, reason: 'in-progress' };
+        }
+        if (state.rerouteFailureRetryCount >= max) {
+            return {
+                action: 'exhausted',
+                schedule: false,
+                notification: {
+                    title: '❌ Rerouting failed',
+                    body: 'Could not get a new route after several tries. Pull over safely and use Recalculate if needed.',
+                    type: 'error',
+                },
+            };
+        }
+        var delay = REROUTE_FAILURE_RETRY_DELAYS_MS[state.rerouteFailureRetryCount];
+        var attemptLabel = state.rerouteFailureRetryCount + 1;
+        return {
+            action: 'schedule',
+            schedule: true,
+            delayMs: delay,
+            attemptLabel: attemptLabel,
+            maxAttempts: max,
+            statusMessage: '🔄 Reroute retry ' + attemptLabel + '/' + max + '...',
+            nextRetryCount: state.rerouteFailureRetryCount + 1,
+            logMessage: '[Rerouting] Scheduling failure retry ' + attemptLabel + '/' + max + ' in ' + delay + 'ms',
+        };
+    }
+
+    /**
+     * Pre-trigger guards before starting an automatic reroute.
+     * @param {number} now
+     * @param {Object} state
+     * @returns {{ skip: boolean, reason?: string }}
+     */
+    function shouldSkipRerouteTrigger(now, state) {
+        state = state || {};
+        if (state.rerouteInProgress) {
+            return { skip: true, reason: 'in-progress' };
+        }
+        var debounceMs = state.debounceMs != null ? state.debounceMs : DEFAULTS.REROUTE_DEBOUNCE_MS;
+        if (now - (state.lastRerouteAttemptTime || 0) < debounceMs) {
+            return { skip: true, reason: 'debounced' };
+        }
+        if (now < (state.postRerouteGraceUntil || 0)) {
+            return { skip: true, reason: 'grace' };
+        }
+        return { skip: false };
+    }
+
+    /**
+     * @param {number} minDistanceMeters
+     * @param {string} distanceUnit
+     * @returns {string}
+     */
+    function formatDeviationDistanceDisplay(minDistanceMeters, distanceUnit) {
+        if (distanceUnit === 'mi') {
+            return Math.round(minDistanceMeters * 3.28084) + ' ft';
+        }
+        return minDistanceMeters.toFixed(0) + ' m';
+    }
+
+    /**
+     * @param {number} minDistanceMeters
+     * @param {string} distanceUnit
+     * @param {number} deviationDurationMs
+     * @returns {{ title: string, body: string, type: string }}
+     */
+    function buildDeviationRerouteNotification(minDistanceMeters, distanceUnit, deviationDurationMs) {
+        var display = formatDeviationDistanceDisplay(minDistanceMeters, distanceUnit);
+        var secs = (deviationDurationMs / 1000).toFixed(0);
+        return {
+            title: '🔄 Route Deviation',
+            body: 'You are ' + display + ' off route for ' + secs + 's. Recalculating...',
+            type: 'warning',
+        };
+    }
+
+    /**
+     * @param {number} now
+     * @param {number} lastAnnounceTime
+     * @param {number} [minIntervalMs]
+     * @returns {boolean}
+     */
+    function shouldAnnounceRerouteVoice(now, lastAnnounceTime, minIntervalMs) {
+        minIntervalMs = minIntervalMs != null ? minIntervalMs : REROUTE_ANNOUNCE_MIN_INTERVAL_MS;
+        return (now - (lastAnnounceTime || 0)) >= minIntervalMs;
+    }
+
+    /**
+     * @param {{ duration_minutes: number }} route
+     * @param {number} hazardCount
+     * @param {string} displayDistance
+     * @param {string} distUnit
+     * @returns {string}
+     */
+    function buildRerouteVoiceMessage(route, hazardCount, displayDistance, distUnit) {
+        var msg = 'Route recalculated. New distance: ' + displayDistance + ' ' + distUnit +
+            ', time: ' + route.duration_minutes + ' minutes';
+        if (hazardCount > 0) {
+            msg += '. Warning: ' + hazardCount + ' hazard' + (hazardCount > 1 ? 's' : '') + ' on route.';
+        }
+        return msg;
+    }
+
+    /**
+     * @param {{ duration_minutes: number }} route
+     * @param {number} hazardCount
+     * @param {string} displayDistance
+     * @param {string} distUnit
+     * @returns {{ title: string, body: string, type: string }}
+     */
+    function buildRerouteSuccessNotificationPlan(route, hazardCount, displayDistance, distUnit) {
+        if (hazardCount > 0) {
+            return {
+                title: '⚠️ Route Updated',
+                body: 'New route with ' + hazardCount + ' unavoidable hazard' + (hazardCount > 1 ? 's' : ''),
+                type: 'warning',
+            };
+        }
+        return {
+            title: '✅ Route Updated',
+            body: 'New route: ' + displayDistance + ' ' + distUnit + ', ' + route.duration_minutes + ' min',
+            type: 'success',
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         normalizeAccuracy: normalizeAccuracy,
@@ -249,6 +395,15 @@
         decideRouteDeviation: decideRouteDeviation,
         buildRerouteLogEvent: buildRerouteLogEvent,
         appendRerouteLogEntry: appendRerouteLogEntry,
+        REROUTE_FAILURE_RETRY_DELAYS_MS: REROUTE_FAILURE_RETRY_DELAYS_MS,
+        REROUTE_ANNOUNCE_MIN_INTERVAL_MS: REROUTE_ANNOUNCE_MIN_INTERVAL_MS,
+        buildRerouteFailureRetryPlan: buildRerouteFailureRetryPlan,
+        shouldSkipRerouteTrigger: shouldSkipRerouteTrigger,
+        formatDeviationDistanceDisplay: formatDeviationDistanceDisplay,
+        buildDeviationRerouteNotification: buildDeviationRerouteNotification,
+        shouldAnnounceRerouteVoice: shouldAnnounceRerouteVoice,
+        buildRerouteVoiceMessage: buildRerouteVoiceMessage,
+        buildRerouteSuccessNotificationPlan: buildRerouteSuccessNotificationPlan,
     };
 
     // CommonJS (Jest) export.

@@ -128,6 +128,43 @@
         };
     }
 
+    var NAV_ARRIVAL_DEFAULTS = {
+        END_REMAINING_M: 40,
+        DWELL_REMAINING_M: 55,
+        DWELL_MS: 3500,
+        MAX_SPEED_MS: 1.2,
+    };
+
+    /**
+     * Arrival decision plan for auto-ending navigation near destination.
+     * @param {number} remainingM
+     * @param {number} speedMs
+     * @param {number} arrivalZoneSince - ms timestamp when dwell zone entered (0 if none)
+     * @param {number} now
+     * @param {Object} [constants]
+     * @returns {{ action: string, nextArrivalZoneSince: number }}
+     */
+    function buildNavigationArrivalPlan(remainingM, speedMs, arrivalZoneSince, now, constants) {
+        constants = constants || NAV_ARRIVAL_DEFAULTS;
+        var speed = Number.isFinite(speedMs) && speedMs >= 0 ? speedMs : 0;
+
+        if (remainingM <= constants.END_REMAINING_M) {
+            return { action: 'end', nextArrivalZoneSince: 0 };
+        }
+
+        if (remainingM <= constants.DWELL_REMAINING_M && speed <= constants.MAX_SPEED_MS) {
+            if (!arrivalZoneSince) {
+                return { action: 'dwell-start', nextArrivalZoneSince: now };
+            }
+            if (now - arrivalZoneSince >= constants.DWELL_MS) {
+                return { action: 'end', nextArrivalZoneSince: 0 };
+            }
+            return { action: 'dwell-wait', nextArrivalZoneSince: arrivalZoneSince };
+        }
+
+        return { action: 'none', nextArrivalZoneSince: 0 };
+    }
+
     var api = {
         ROUTE_PROGRESS_CONTAINER_ID: ROUTE_PROGRESS_CONTAINER_ID,
         ROUTE_PROGRESS_BAR_ID: ROUTE_PROGRESS_BAR_ID,
@@ -140,6 +177,8 @@
         buildRouteProgressMountPlan: buildRouteProgressMountPlan,
         resolveStepIndexFromSnapIndex: resolveStepIndexFromSnapIndex,
         buildNavigationProgressSeedPlan: buildNavigationProgressSeedPlan,
+        NAV_ARRIVAL_DEFAULTS: NAV_ARRIVAL_DEFAULTS,
+        buildNavigationArrivalPlan: buildNavigationArrivalPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

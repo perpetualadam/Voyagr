@@ -11209,8 +11209,6 @@ function updateJourneySummaryBar() {
     if (!distanceEl || !timeEl || !etaEl) return;
 
     const userHasStartedMoving = hasUserStartedMoving();
-
-    // Remaining distance along the decoded polyline (not currentStepIndex — that is a maneuver index)
     let remainingDistanceMeters = 0;
     if (routePolyline.length >= 2) {
         if (userHasStartedMoving && currentLat != null && currentLon != null) {
@@ -11222,44 +11220,30 @@ function updateJourneySummaryBar() {
         }
     }
 
-    // Format remaining distance in user's preferred units
-    const distanceText = _units().formatRemainingDistanceText(
+    const ETA = _eta();
+    const polylineTotalM = _routeGeometry().totalPolylineLengthMeters(routePolyline);
+    const plan = ETA.buildJourneySummaryBarApplyPlan({
         remainingDistanceMeters,
-        distanceUnit
-    );
-    distanceEl.textContent = distanceText;
-
-    // Calculate remaining time based on route data
-    let remainingTimeMinutes = 0;
-
-    const routeDurationMin = _eta().normalizeRouteDurationMinutes(window.lastCalculatedRoute);
-    const journeyMinutes = _eta().computeJourneyRemainingTimeMinutes({
+        distanceUnit,
+        formatRemainingDistance: (m, unit) => _units().formatRemainingDistanceText(m, unit),
         lastCalculatedRoute: window.lastCalculatedRoute,
-        routeDurationMin: routeDurationMin,
-        userHasStartedMoving: userHasStartedMoving,
-        remainingDistanceMeters: remainingDistanceMeters,
-        polylineTotalM: _routeGeometry().totalPolylineLengthMeters(routePolyline),
+        routeDurationMin: ETA.normalizeRouteDurationMinutes(window.lastCalculatedRoute),
+        userHasStartedMoving,
+        polylineTotalM,
+        applyTrafficRatio: applyTrafficRatioToBaseRemaining,
+        use24HourFormat: localStorage.getItem('use24HourFormat') !== 'false',
     });
-    if (journeyMinutes != null) {
-        if (userHasStartedMoving) {
-            console.log(`[ETA] Progress-based: ${(1 - remainingDistanceMeters / _routeGeometry().totalPolylineLengthMeters(routePolyline)).toFixed(2)} complete, ${journeyMinutes.toFixed(1)} min remaining`);
-        } else {
-            console.log(`[ETA] Pre-movement: Using original duration ${journeyMinutes.toFixed(1)} min`);
-        }
-        remainingTimeMinutes = applyTrafficRatioToBaseRemaining(journeyMinutes);
-    } else {
-        remainingTimeMinutes = _eta().estimateRemainingTimeFromDistance(remainingDistanceMeters);
+
+    distanceEl.textContent = plan.distanceText;
+    timeEl.textContent = plan.timeText;
+    etaEl.textContent = plan.etaText;
+
+    if (userHasStartedMoving && polylineTotalM > 0) {
+        console.log(`[ETA] Progress-based: ${(1 - remainingDistanceMeters / polylineTotalM).toFixed(2)} complete, ${plan.remainingTimeMinutes.toFixed(1)} min remaining`);
+    } else if (!userHasStartedMoving) {
+        console.log(`[ETA] Pre-movement: Using original duration ${plan.remainingTimeMinutes.toFixed(1)} min`);
     }
-
-    // Format remaining time
-    timeEl.textContent = _eta().formatRemainingTime(remainingTimeMinutes);
-
-    // Calculate ETA
-    const now = new Date();
-    const eta = new Date(now.getTime() + remainingTimeMinutes * 60000);
-    etaEl.textContent = _eta().formatETATime(eta, localStorage.getItem('use24HourFormat') !== 'false');
-
-    console.log(`[Journey Summary] Distance: ${distanceText}, Time: ${_eta().formatRemainingTime(remainingTimeMinutes)}, ETA: ${_eta().formatETATime(eta, localStorage.getItem('use24HourFormat') !== 'false')}`);
+    console.log(`[Journey Summary] Distance: ${plan.distanceText}, Time: ${plan.timeText}, ETA: ${plan.etaText}`);
 }
 
 // ===== NOTIFICATIONS SYSTEM =====
@@ -12353,12 +12337,6 @@ let _voiceAnnouncedCategory = null;
 let lastDestinationAnnouncementDistance = Infinity;
 const DESTINATION_ANNOUNCEMENT_DISTANCES = [10000, 5000, 2000, 1000, 500, 100]; // meters (10km, 5km, 2km, 1km, 500m, 100m)
 
-/** Along-route remaining distance (m) at or below which navigation auto-ends. */
-const NAV_ARRIVAL_END_REMAINING_M = 40;
-/** Wider zone: slow/stopped dwell also ends navigation (car parks, last leg). */
-const NAV_ARRIVAL_DWELL_REMAINING_M = 55;
-const NAV_ARRIVAL_DWELL_MS = 3500;
-const NAV_ARRIVAL_MAX_SPEED_MS = 1.2;
 /** Suppress deviation reroute near destination (Waze-style parking-lot loops). */
 const NAV_ARRIVAL_SUPPRESS_REROUTE_METERS = 100;
 let _navigationArrivalTriggered = false;
@@ -12527,26 +12505,19 @@ function checkNavigationArrival(lat, lon, speedMs) {
     if (!routeInProgress || _navigationArrivalTriggered) return;
 
     const remainingM = getNavigationRemainingDistanceMeters(lat, lon);
-    const speed = Number.isFinite(speedMs) && speedMs >= 0 ? speedMs : 0;
+    const now = Date.now();
+    const plan = _routeProgress().buildNavigationArrivalPlan(
+        remainingM,
+        speedMs,
+        _navigationArrivalZoneSince,
+        now
+    );
+    _navigationArrivalZoneSince = plan.nextArrivalZoneSince;
 
-    if (remainingM <= NAV_ARRIVAL_END_REMAINING_M) {
+    if (plan.action === 'end') {
         console.log(`[Navigation] Arrival (${remainingM.toFixed(0)}m remaining) — ending trip`);
         sendArrivalNotification();
-        return;
     }
-
-    if (remainingM <= NAV_ARRIVAL_DWELL_REMAINING_M && speed <= NAV_ARRIVAL_MAX_SPEED_MS) {
-        const now = Date.now();
-        if (!_navigationArrivalZoneSince) {
-            _navigationArrivalZoneSince = now;
-        } else if (now - _navigationArrivalZoneSince >= NAV_ARRIVAL_DWELL_MS) {
-            console.log(`[Navigation] Arrival dwell (${remainingM.toFixed(0)}m, slow) — ending trip`);
-            sendArrivalNotification();
-        }
-        return;
-    }
-
-    _navigationArrivalZoneSince = 0;
 }
 
 /** Show/hide map FABs that depend on active turn-by-turn navigation. */
@@ -12749,12 +12720,10 @@ let rerouteInProgress = false;
 let postRerouteGraceUntil = 0;
 const POST_REROUTE_GRACE_MS = 90000;
 let lastRerouteAnnouncementTime = 0;
-const REROUTE_ANNOUNCE_MIN_INTERVAL_MS = 60000;
 
 /** After a failed deviation reroute API call, retry with backoff (does not replace GPS deviation timing). */
 let rerouteFailureRetryTimer = null;
 let rerouteFailureRetryCount = 0;
-const REROUTE_FAILURE_RETRY_DELAYS_MS = [4000, 6500, 10000, 14000];
 
 function clearRerouteFailureRetries() {
     if (rerouteFailureRetryTimer) {
@@ -12765,37 +12734,40 @@ function clearRerouteFailureRetries() {
 }
 
 function scheduleAutomaticRerouteRetry() {
-    if (!routeInProgress || !autoRerouteOnDeviationEnabled) {
+    const RD = _rerouteDecision();
+    const plan = RD.buildRerouteFailureRetryPlan({
+        routeInProgress,
+        autoRerouteOnDeviationEnabled,
+        postRerouteGraceUntil,
+        rerouteInProgress,
+        rerouteFailureRetryCount,
+        now: Date.now(),
+    });
+
+    if (plan.action === 'clear') {
         clearRerouteFailureRetries();
         return;
     }
-    if (Date.now() < postRerouteGraceUntil) {
+    if (!plan.schedule) {
+        if (plan.action === 'exhausted' && plan.notification) {
+            sendNotification(plan.notification.title, plan.notification.body, plan.notification.type);
+            clearRerouteFailureRetries();
+        }
         return;
     }
-    if (rerouteInProgress) {
-        return;
-    }
-    if (rerouteFailureRetryCount >= REROUTE_FAILURE_RETRY_DELAYS_MS.length) {
-        sendNotification('❌ Rerouting failed',
-            'Could not get a new route after several tries. Pull over safely and use Recalculate if needed.',
-            'error');
-        clearRerouteFailureRetries();
-        return;
-    }
-    const delay = REROUTE_FAILURE_RETRY_DELAYS_MS[rerouteFailureRetryCount];
-    const attemptLabel = rerouteFailureRetryCount + 1;
-    rerouteFailureRetryCount++;
+
+    rerouteFailureRetryCount = plan.nextRetryCount;
     if (rerouteFailureRetryTimer) clearTimeout(rerouteFailureRetryTimer);
-    console.log(`[Rerouting] Scheduling failure retry ${attemptLabel}/${REROUTE_FAILURE_RETRY_DELAYS_MS.length} in ${delay}ms`);
+    console.log(plan.logMessage);
     rerouteFailureRetryTimer = setTimeout(() => {
         rerouteFailureRetryTimer = null;
         if (!routeInProgress || !autoRerouteOnDeviationEnabled) {
             clearRerouteFailureRetries();
             return;
         }
-        showStatus(`🔄 Reroute retry ${attemptLabel}/${REROUTE_FAILURE_RETRY_DELAYS_MS.length}...`, 'warning');
+        showStatus(plan.statusMessage, 'warning');
         void triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon);
-    }, delay);
+    }, plan.delayMs);
 }
 
 /**
@@ -12864,14 +12836,12 @@ function checkRouteDeviation(lat, lon, accuracy) {
         rerouteAttemptCount++;
         console.log(`[Rerouting] Deviation confirmed: ${minDistance.toFixed(0)}m for ${(decision.deviationDuration / 1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
 
-        let deviationDisplay;
-        if (distanceUnit === 'mi') {
-            const deviationFeet = Math.round(minDistance * 3.28084);
-            deviationDisplay = `${deviationFeet} ft`;
-        } else {
-            deviationDisplay = `${minDistance.toFixed(0)} m`;
-        }
-        sendNotification('🔄 Route Deviation', `You are ${deviationDisplay} off route for ${(decision.deviationDuration / 1000).toFixed(0)}s. Recalculating...`, 'warning');
+        const notify = VRD.buildDeviationRerouteNotification(
+            minDistance,
+            distanceUnit,
+            decision.deviationDuration
+        );
+        sendNotification(notify.title, notify.body, notify.type);
         triggerAutomaticRerouteWithHazardHandling(lat, lon);
     } else if (decision.action === 'debounced' || decision.action === 'waiting') {
         lastRerouteDeviation = minDistance;
@@ -12884,16 +12854,17 @@ function checkRouteDeviation(lat, lon, accuracy) {
  */
 async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon) {
     const now = Date.now();
-    if (rerouteInProgress) {
-        console.log('[Rerouting] Already in progress — skipping duplicate trigger');
-        return;
-    }
-    if (now - lastRerouteAttemptTime < REROUTE_DEBOUNCE_MS) {
-        console.log('[Rerouting] Attempt debounced — too soon after last try');
-        return;
-    }
-    if (now < postRerouteGraceUntil) {
-        console.log('[Rerouting] Post-reroute grace active — skipping');
+    const RD = _rerouteDecision();
+    const skip = RD.shouldSkipRerouteTrigger(now, {
+        rerouteInProgress,
+        lastRerouteAttemptTime,
+        postRerouteGraceUntil,
+        debounceMs: REROUTE_DEBOUNCE_MS,
+    });
+    if (skip.skip) {
+        console.log('[Rerouting] ' + (skip.reason === 'in-progress' ? 'Already in progress — skipping duplicate trigger'
+            : skip.reason === 'debounced' ? 'Attempt debounced — too soon after last try'
+            : 'Post-reroute grace active — skipping'));
         return;
     }
     lastRerouteAttemptTime = now;
@@ -12956,12 +12927,9 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
             if (voiceAnnouncementsEnabled) {
                 const distUnit = getDistanceUnit();
                 const displayDist = convertDistance(newRoute.distance_km);
-                let voiceMsg = `Route recalculated. New distance: ${displayDist} ${distUnit}, time: ${newRoute.duration_minutes} minutes`;
-                if (hazardCount > 0) {
-                    voiceMsg += `. Warning: ${hazardCount} hazard${hazardCount > 1 ? 's' : ''} on route.`;
-                }
+                const voiceMsg = RD.buildRerouteVoiceMessage(newRoute, hazardCount, displayDist, distUnit);
                 const announceNow = Date.now();
-                if (announceNow - lastRerouteAnnouncementTime >= REROUTE_ANNOUNCE_MIN_INTERVAL_MS) {
+                if (RD.shouldAnnounceRerouteVoice(announceNow, lastRerouteAnnouncementTime)) {
                     lastRerouteAnnouncementTime = announceNow;
                     speakMessage(voiceMsg, 'high');
                 } else {
@@ -12969,13 +12937,13 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
                 }
             }
 
-            if (hazardCount > 0) {
-                sendNotification('⚠️ Route Updated', `New route with ${hazardCount} unavoidable hazard${hazardCount > 1 ? 's' : ''}`, 'warning');
-            } else {
-                const displayDist = convertDistance(newRoute.distance_km);
-                const distUnit = getDistanceUnit();
-                sendNotification('✅ Route Updated', `New route: ${displayDist} ${distUnit}, ${newRoute.duration_minutes} min`, 'success');
-            }
+            const successNotify = RD.buildRerouteSuccessNotificationPlan(
+                newRoute,
+                hazardCount,
+                convertDistance(newRoute.distance_km),
+                getDistanceUnit()
+            );
+            sendNotification(successNotify.title, successNotify.body, successNotify.type);
 
             console.log('[Rerouting] Automatic reroute completed successfully');
         } else {
@@ -13106,40 +13074,8 @@ let HAZARD_WARNING_DISTANCE = 500;
 let cameraAlertType = localStorage.getItem('pref_cameraAlertType') || 'voice';
 let cameraAlertDistance = parseInt(localStorage.getItem('pref_cameraAlertDistance') || '500');
 
-const CAMERA_HAZARD_TYPES = [
-    'camera',
-    'traffic_light',
-    'speed_camera',
-    'camera_speed',
-    'camera_red_light',
-    'traffic_light_camera',
-    'camera_average_speed',
-    'camera_bus_lane',
-    'camera_mobile',
-    'camera_other'
-];
-
-/**
- * Normalize /api/hazards/nearby payload to a flat list of {lat, lon, type, ...}.
- * Backend returns { cameras: [], reports: [] }; older code expected a single array.
- */
-function flattenNearbyHazardsPayload(hazardsPayload) {
-    const HA = _hazardAlerts();
-    if (HA) return HA.flattenNearbyHazardsPayload(hazardsPayload);
-    if (!hazardsPayload) return [];
-    if (Array.isArray(hazardsPayload)) return hazardsPayload;
-    const out = [];
-    if (Array.isArray(hazardsPayload.cameras)) out.push(...hazardsPayload.cameras);
-    if (Array.isArray(hazardsPayload.reports)) out.push(...hazardsPayload.reports);
-    return out;
-}
-
 function isCameraHazardType(typeStr) {
-    const HA = _hazardAlerts();
-    if (HA) return HA.isCameraHazardType(typeStr);
-    if (typeStr == null || typeStr === '') return false;
-    const t = String(typeStr).toLowerCase();
-    return t.includes('camera');
+    return _hazardAlerts().isCameraHazardType(typeStr);
 }
 
 /**
@@ -15477,7 +15413,9 @@ function togglePreference(pref) {
     saveAllSettings();
 }
 
-const HAZARD_CAMERA_SUBTYPES = _hazardAlerts().HAZARD_CAMERA_PREF_SUBTYPES;
+function hazardCameraPrefSubtypes() {
+    return _hazardAlerts().HAZARD_CAMERA_PREF_SUBTYPES;
+}
 
 function applyHazardToggleStyles(button, enabled) {
     _toggleUI().applyLabeledToggleButton(button, enabled);
@@ -15488,7 +15426,7 @@ async function loadHazardCameraTogglesFromApi() {
         const res = await fetch('/api/hazard-preferences');
         const data = await res.json();
         const prefsList = data.success && data.preferences ? data.preferences : [];
-        for (const ht of HAZARD_CAMERA_SUBTYPES) {
+        for (const ht of hazardCameraPrefSubtypes()) {
             const pref = prefsList.find(p => p.hazard_type === ht);
             const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${ht}"]`);
             if (!btn) continue;
@@ -15496,7 +15434,7 @@ async function loadHazardCameraTogglesFromApi() {
         }
     } catch (e) {
         console.warn('[HAZARDS] Could not load camera hazard preferences:', e);
-        for (const ht of HAZARD_CAMERA_SUBTYPES) {
+        for (const ht of hazardCameraPrefSubtypes()) {
             const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${ht}"]`);
             if (btn) applyHazardToggleStyles(btn, true);
         }
@@ -16088,37 +16026,17 @@ window.debugScrollIssue = function() {
  * @returns {Object} Route with corrected distance_km / duration_minutes when available
  */
 function buildTraveledJourneyRoute(route) {
-    if (!route) return route;
-    const traveledKm = _navTraveledMeters / 1000;
-    const out = { ...route };
-
-    const haveRealDistance = traveledKm > 0.05;
-
-    let elapsedMin = null;
-    if (Number.isFinite(_navStartedAt) && _navStartedAt > 0) {
-        const mins = (Date.now() - _navStartedAt) / 60000;
-        if (mins > 0.1) elapsedMin = mins;
-    }
-
-    // Substitute the actually-driven distance and the actual elapsed time *together* only.
-    // Overriding just one of them produced absurd average speeds in the summary (e.g. 520 mph):
-    // when the GPS odometer captured no distance (short test, stationary, or no fixes), the
-    // planned full-route distance was paired with the short real elapsed time. If we don't have
-    // a real driven distance we keep BOTH planned values so distance ÷ duration stays sane.
-    if (haveRealDistance && elapsedMin != null) {
-        out.distance_km = Number(traveledKm.toFixed(2));
-        // Keep any string display field consistent with the corrected distance.
-        if ('distance' in out) {
-            try {
-                out.distance = `${convertDistance(out.distance_km)} ${getDistanceUnit()}`;
-            } catch (_e) {
-                delete out.distance;
-            }
+    const result = _eta().buildTraveledJourneyRoutePatch(route, _navTraveledMeters, _navStartedAt);
+    if (!result.patch) return route;
+    const out = { ...result.patch };
+    if ('distance' in out) {
+        try {
+            out.distance = `${convertDistance(out.distance_km)} ${getDistanceUnit()}`;
+        } catch (_e) {
+            delete out.distance;
         }
-        out.duration_minutes = Math.round(elapsedMin);
-        if ('time' in out) out.time = `${out.duration_minutes} minutes`;
     }
-
+    if ('time' in out) out.time = `${out.duration_minutes} minutes`;
     return out;
 }
 
@@ -16138,18 +16056,7 @@ function showJourneySummary(routeData) {
     const durationMin = routeData.duration_minutes || 0;
     const cost = routeData.total_cost || 0;
 
-    // Calculate average speed (km/h). Guard against implausible values from any residual
-    // distance/duration mismatch so the summary can never show nonsense like 520 mph.
-    let avgSpeed = 0;
-    if (durationMin > 0 && distanceKm > 0) {
-        avgSpeed = distanceKm / (durationMin / 60);
-        const MAX_PLAUSIBLE_AVG_KMH = 300; // ~186 mph — above any real road-journey average
-        if (!Number.isFinite(avgSpeed) || avgSpeed > MAX_PLAUSIBLE_AVG_KMH) {
-            console.warn(`[Journey Summary] Implausible average speed ${avgSpeed} km/h ` +
-                `(dist ${distanceKm} km, dur ${durationMin} min) — clamping`);
-            avgSpeed = Math.min(Math.max(avgSpeed, 0), MAX_PLAUSIBLE_AVG_KMH);
-        }
-    }
+    let avgSpeed = _eta().buildTraveledJourneyRoutePatch(routeData, _navTraveledMeters, _navStartedAt).avgSpeedKmh;
 
     const distUnit = getDistanceUnit();
     const displayDist = convertDistance(distanceKm);

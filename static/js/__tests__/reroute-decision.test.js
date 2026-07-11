@@ -301,3 +301,62 @@ describe('reroute log helpers', () => {
         expect(log[19].id).toBe(21);
     });
 });
+
+describe('reroute retry and notification helpers', () => {
+    test('buildRerouteFailureRetryPlan schedules with backoff delays', () => {
+        const plan = RD.buildRerouteFailureRetryPlan({
+            routeInProgress: true,
+            autoRerouteOnDeviationEnabled: true,
+            postRerouteGraceUntil: 0,
+            rerouteInProgress: false,
+            rerouteFailureRetryCount: 0,
+            now: 1000,
+        });
+        expect(plan.action).toBe('schedule');
+        expect(plan.delayMs).toBe(4000);
+        expect(plan.attemptLabel).toBe(1);
+    });
+
+    test('buildRerouteFailureRetryPlan exhausts after max attempts', () => {
+        const plan = RD.buildRerouteFailureRetryPlan({
+            routeInProgress: true,
+            autoRerouteOnDeviationEnabled: true,
+            postRerouteGraceUntil: 0,
+            rerouteInProgress: false,
+            rerouteFailureRetryCount: RD.REROUTE_FAILURE_RETRY_DELAYS_MS.length,
+            now: 1000,
+        });
+        expect(plan.action).toBe('exhausted');
+        expect(plan.notification.title).toContain('failed');
+    });
+
+    test('formatDeviationDistanceDisplay uses feet in imperial mode', () => {
+        expect(RD.formatDeviationDistanceDisplay(30, 'mi')).toMatch(/ft$/);
+        expect(RD.formatDeviationDistanceDisplay(30, 'km')).toBe('30 m');
+    });
+
+    test('shouldSkipRerouteTrigger respects debounce and grace', () => {
+        expect(RD.shouldSkipRerouteTrigger(10000, {
+            rerouteInProgress: false,
+            lastRerouteAttemptTime: 9000,
+            postRerouteGraceUntil: 0,
+            debounceMs: 30000,
+        }).skip).toBe(true);
+        expect(RD.shouldSkipRerouteTrigger(100000, {
+            rerouteInProgress: false,
+            lastRerouteAttemptTime: 0,
+            postRerouteGraceUntil: 200000,
+        }).reason).toBe('grace');
+    });
+
+    test('buildRerouteVoiceMessage includes hazard warning when needed', () => {
+        const msg = RD.buildRerouteVoiceMessage({ duration_minutes: 20 }, 2, '5.0', 'mi');
+        expect(msg).toContain('Route recalculated');
+        expect(msg).toContain('2 hazards');
+    });
+
+    test('shouldAnnounceRerouteVoice enforces minimum interval', () => {
+        expect(RD.shouldAnnounceRerouteVoice(70000, 0)).toBe(true);
+        expect(RD.shouldAnnounceRerouteVoice(30000, 0)).toBe(false);
+    });
+});

@@ -308,6 +308,89 @@
         };
     }
 
+    /**
+     * Apply plan for the journey summary bar (values only; app writes DOM).
+     * @param {Object} o
+     * @returns {{ distanceText: string, timeText: string, etaText: string, remainingTimeMinutes: number }}
+     */
+    function buildJourneySummaryBarApplyPlan(o) {
+        o = o || {};
+        var distanceText = typeof o.formatRemainingDistance === 'function'
+            ? o.formatRemainingDistance(o.remainingDistanceMeters || 0, o.distanceUnit)
+            : '';
+
+        var remainingTimeMinutes = 0;
+        var journeyMinutes = computeJourneyRemainingTimeMinutes({
+            lastCalculatedRoute: o.lastCalculatedRoute,
+            routeDurationMin: o.routeDurationMin,
+            userHasStartedMoving: o.userHasStartedMoving,
+            remainingDistanceMeters: o.remainingDistanceMeters,
+            polylineTotalM: o.polylineTotalM,
+        });
+
+        if (journeyMinutes != null) {
+            remainingTimeMinutes = typeof o.applyTrafficRatio === 'function'
+                ? o.applyTrafficRatio(journeyMinutes)
+                : journeyMinutes;
+        } else {
+            remainingTimeMinutes = estimateRemainingTimeFromDistance(o.remainingDistanceMeters || 0);
+        }
+
+        var now = o.now != null ? o.now : Date.now();
+        var eta = new Date(now + remainingTimeMinutes * 60000);
+        return {
+            distanceText: distanceText,
+            timeText: formatRemainingTime(remainingTimeMinutes),
+            etaText: formatETATime(eta, o.use24HourFormat !== false),
+            remainingTimeMinutes: remainingTimeMinutes,
+        };
+    }
+
+    var MAX_PLAUSIBLE_AVG_KMH = 300;
+
+    /**
+     * Patch plan for traveled journey summary (distance/time substitution rules).
+     * @param {Object|null} route
+     * @param {number} traveledMeters
+     * @param {number|null} navStartedAt
+     * @param {number} [now]
+     * @returns {{ patch: Object|null, avgSpeedKmh: number }}
+     */
+    function buildTraveledJourneyRoutePatch(route, traveledMeters, navStartedAt, now) {
+        if (!route) return { patch: null, avgSpeedKmh: 0 };
+        now = now != null ? now : Date.now();
+        var traveledKm = (traveledMeters || 0) / 1000;
+        var haveRealDistance = traveledKm > 0.05;
+        var elapsedMin = null;
+        if (Number.isFinite(navStartedAt) && navStartedAt > 0) {
+            var mins = (now - navStartedAt) / 60000;
+            if (mins > 0.1) elapsedMin = mins;
+        }
+
+        var out = Object.assign({}, route);
+        var avgSpeedKmh = 0;
+        if (haveRealDistance && elapsedMin != null) {
+            out.distance_km = Number(traveledKm.toFixed(2));
+            out.duration_minutes = Math.round(elapsedMin);
+            if (out.duration_minutes > 0 && out.distance_km > 0) {
+                avgSpeedKmh = out.distance_km / (out.duration_minutes / 60);
+                if (!Number.isFinite(avgSpeedKmh) || avgSpeedKmh > MAX_PLAUSIBLE_AVG_KMH) {
+                    avgSpeedKmh = Math.min(Math.max(avgSpeedKmh, 0), MAX_PLAUSIBLE_AVG_KMH);
+                }
+            }
+            return { patch: out, avgSpeedKmh: avgSpeedKmh };
+        }
+        var distanceKm = route.distance_km || 0;
+        var durationMin = route.duration_minutes || 0;
+        if (durationMin > 0 && distanceKm > 0) {
+            avgSpeedKmh = distanceKm / (durationMin / 60);
+            if (!Number.isFinite(avgSpeedKmh) || avgSpeedKmh > MAX_PLAUSIBLE_AVG_KMH) {
+                avgSpeedKmh = Math.min(Math.max(avgSpeedKmh, 0), MAX_PLAUSIBLE_AVG_KMH);
+            }
+        }
+        return { patch: null, avgSpeedKmh: avgSpeedKmh };
+    }
+
     var api = {
         formatRemainingTime: formatRemainingTime,
         buildETAVoiceMessage: buildETAVoiceMessage,
@@ -325,6 +408,9 @@
         buildTurnInfoETAPanelHtml: buildTurnInfoETAPanelHtml,
         buildDestinationProgressPanelHtml: buildDestinationProgressPanelHtml,
         createEmptyNavETASnapshot: createEmptyNavETASnapshot,
+        buildJourneySummaryBarApplyPlan: buildJourneySummaryBarApplyPlan,
+        buildTraveledJourneyRoutePatch: buildTraveledJourneyRoutePatch,
+        MAX_PLAUSIBLE_AVG_KMH: MAX_PLAUSIBLE_AVG_KMH,
         TRAFFIC_RATIO_MAX_AGE_MS: TRAFFIC_RATIO_MAX_AGE_MS,
     };
 
