@@ -93,7 +93,7 @@ def merge_graphhopper_optimised_route(
     Insert GraphHopper ⚡ Optimised when the custom model qualifies, replacing any
     weaker Valhalla Optimised duplicate.
     """
-    import voyagr_web as vw
+    from voyagr.services.routing.route_entries import build_graphhopper_optimised_route_entry
 
     gh = ctx.graphhopper_route
     if not (gh and gh.get('success') and ctx.enable_hazard_avoidance):
@@ -108,7 +108,7 @@ def merge_graphhopper_optimised_route(
         return routes
 
     try:
-        gh_route_entry = vw.build_graphhopper_optimised_route_entry(
+        gh_route_entry = build_graphhopper_optimised_route_entry(
             gh,
             ctx.hazards,
             ctx.cost_calculator,

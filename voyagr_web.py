@@ -1499,122 +1499,9 @@ def count_scdb_cameras(hazards: Dict[str, Any]) -> int:
 # truth; the full camera/OSM-hazard/CAZ/avoid-point model). Imported at module scope below.
 
 
-def build_graphhopper_optimised_route_entry(
-    graphhopper_route: Dict[str, Any],
-    hazards: Dict[str, List[Dict[str, Any]]],
-    cost_calculator: Any,
-    *,
-    vehicle_type: str,
-    fuel_efficiency: float,
-    fuel_price: float,
-    energy_efficiency: float,
-    electricity_price: float,
-    include_tolls: bool,
-    include_caz: bool,
-    caz_exempt: bool,
-    traffic_multiplier: float = 1.0,
-) -> Optional[Dict[str, Any]]:
-    """
-    Turn a successful route_with_graphhopper() result into the same route dict shape
-    used in /api/route (⚡ Optimised, maneuvers, costs, hazards along geometry).
-    """
-    if not graphhopper_route or not graphhopper_route.get('success') or not polyline:
-        return None
-    try:
-        gh_distance_km = graphhopper_route.get('distance_km', 0)
-        gh_duration_min = graphhopper_route.get('duration_seconds', 0) / 60
-        gh_geometry = graphhopper_route.get('geometry', '')
-        if not gh_geometry:
-            return None
-
-        gh_coords = polyline.decode(gh_geometry, precision=5)
-        gh_geometry_p6 = polyline.encode(gh_coords, precision=6)
-        gh_coords_p6 = polyline.decode(gh_geometry_p6, precision=6)
-
-        gh_costs = cost_calculator.calculate_costs(
-            gh_distance_km, vehicle_type, fuel_efficiency, fuel_price,
-            energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
-            route_coords=gh_coords,
-        )
-
-        gh_hazard_penalty, gh_hazard_count = score_route_by_hazards(gh_coords, hazards)
-        gh_hazards_list = get_hazards_on_route(gh_coords, hazards)
-        gh_duration_min = gh_duration_min * traffic_multiplier
-
-        # GraphHopper sign -> Valhalla maneuver type. Valhalla numbering:
-        # 12=U-turn R, 13=U-turn L, 14=Sharp L, 15=Left, 16=Slight L, 23=Stay R, 24=Stay L.
-        # (Left turns were previously off-by-one, surfacing "keep left"/straight-arrow bugs.)
-        gh_sign_to_valhalla = GH_SIGN_TO_VALHALLA
-
-        # GraphHopper `details.max_speed` = [[from_idx, to_idx, value_kmh|null], ...] keyed by
-        # geometry point index. Build a lookup so each maneuver can carry the posted limit of
-        # the edge it begins on (km/h, matching Valhalla's maneuver.speed_limit convention).
-        gh_max_speed_segments = []
-        try:
-            details = graphhopper_route.get('details') or {}
-            for seg in (details.get('max_speed') or []):
-                if isinstance(seg, list) and len(seg) >= 3:
-                    frm, to, val = seg[0], seg[1], seg[2]
-                    if isinstance(val, (int, float)) and val > 0:
-                        gh_max_speed_segments.append((int(frm), int(to), float(val)))
-        except Exception:
-            gh_max_speed_segments = []
-
-        def _gh_speed_limit_kmh_at(point_idx: int):
-            for frm, to, val in gh_max_speed_segments:
-                if frm <= point_idx < to:
-                    return round(val)
-            return None
-
-        gh_maneuvers = []
-        for instr in graphhopper_route.get('instructions', []):
-            sign = instr.get('sign', 0)
-            valhalla_type = gh_sign_to_valhalla.get(sign, 8)
-            interval = instr.get('interval') or [0, 0]
-            begin_src = interval[0] if interval else 0
-            end_src = interval[1] if len(interval) > 1 else begin_src
-            begin_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, begin_src)
-            end_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, end_src)
-            instr_text = instr.get('text', '')
-            maneuver = {
-                'instruction': instr_text,
-                'verbal_pre_transition_instruction': instr_text,
-                'distance': instr.get('distance', 0) / 1000.0,
-                'time': instr.get('time', 0) / 1000.0,
-                'type': valhalla_type,
-                'street_names': [instr.get('street_name', '')] if instr.get('street_name') else [],
-                'begin_shape_index': begin_idx,
-                'end_shape_index': end_idx,
-            }
-            sl_kmh = _gh_speed_limit_kmh_at(begin_src)
-            if sl_kmh is not None:
-                maneuver['speed_limit'] = sl_kmh
-            street_label = instr.get('street_name', '') or ''
-            gh_rc = infer_road_class_from_names(street_label, maneuver.get('street_names'))
-            if gh_rc:
-                maneuver['road_class'] = gh_rc
-            gh_maneuvers.append(maneuver)
-
-        return {
-            'id': 0,
-            'name': '⚡ Optimised',
-            'distance_km': round(gh_distance_km, 2),
-            'duration_minutes': round(gh_duration_min, 0),
-            'fuel_cost': round(gh_costs['fuel_cost'], 2),
-            'fuel_litres': round(gh_costs['fuel_litres'], 2),
-            'toll_cost': round(gh_costs['toll_cost'], 2),
-            'caz_cost': round(gh_costs['caz_cost'], 2),
-            'geometry': gh_geometry_p6,
-            'geometry_precision': 6,
-            'hazard_penalty_seconds': round(gh_hazard_penalty, 0),
-            'hazard_count': gh_hazard_count,
-            'hazards': gh_hazards_list,
-            'maneuvers': gh_maneuvers,
-            'source': 'GraphHopper',
-        }
-    except Exception as e:
-        logger.warning(f"[GRAPHHOPPER] build_graphhopper_optimised_route_entry failed: {e}")
-        return None
+# build_graphhopper_optimised_route_entry moved to
+# voyagr.services.routing.route_entries (imported above).
+# This breaks the circular enrichment.py → voyagr_web dependency.
 
 
 def valhalla_route_json_to_standard_routes(
@@ -2212,7 +2099,10 @@ from voyagr.services.routing.orchestrator import (
 )
 from voyagr.services.routing.osrm_fallback import OsrmRouteContext, build_osrm_routes
 from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers, valhalla_maneuver_dict
-from voyagr.services.routing.route_entries import build_valhalla_route_entry
+from voyagr.services.routing.route_entries import (
+    build_graphhopper_optimised_route_entry,
+    build_valhalla_route_entry,
+)
 # FallbackChainOptimizer / get_traffic_duration_multiplier live in
 # voyagr.services.routing.engines (single source of truth). ParallelRoutingEngine
 # there is used by the routing debug blueprint.
