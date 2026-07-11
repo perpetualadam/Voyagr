@@ -965,6 +965,7 @@ from voyagr.services.routing.route_entries import (
 # there is used by the routing debug blueprint.
 from voyagr.services.routing.engines import (
     FallbackChainOptimizer,
+    attempt_graphhopper_camera_route,
     get_traffic_duration_multiplier,
     route_with_graphhopper,
 )
@@ -1162,8 +1163,6 @@ def calculate_route():
         # 2. Valhalla (PRIMARY fallback)
         # 3. OSRM (SECONDARY fallback)
         # ====================================================================
-        graphhopper_route = None
-        graphhopper_error = None
         valhalla_error = None
 
         logger.debug(f"\n[ROUTING] Starting route calculation from ({start_lat},{start_lon}) to ({end_lat},{end_lon})")
@@ -1177,40 +1176,22 @@ def calculate_route():
         }
 
         # ====================================================================
-        # TRY GRAPHHOPPER FIRST (if camera avoidance enabled)
-        # Uses bbox filtering to only include relevant camera areas for performance
+        # TRY GRAPHHOPPER FIRST (car-only; camera avoidance). Extracted to
+        # voyagr.services.routing.engines.attempt_graphhopper_camera_route.
         # ====================================================================
-        straight_line_km = ((end_lat - start_lat)**2 + (end_lon - start_lon)**2)**0.5 * 111
-
-        # GraphHopper is car-only; skip for pedestrian/bicycle
-        if enable_hazard_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE and routing_mode == 'auto':
-            logger.info(f"[ROUTING] Trying GraphHopper with camera avoidance (route: {straight_line_km:.0f}km)...")
-            try:
-                _tl_gh = hazards.get('traffic_light', []) if avoid_traffic_lights else []
-                _rx_gh = hazards.get('railway_crossing', []) if avoid_railway_crossings else []
-                _cam_gh = {
-                    k: hazards.get(k, [])
-                    for k in CAMERA_HAZARD_BUCKETS
-                    if hazards.get(k)
-                } if avoid_cameras else None
-                graphhopper_route = route_with_graphhopper(
-                    start_lat, start_lon, end_lat, end_lon,
-                    enable_camera_avoidance=avoid_cameras,
-                    route_bbox=route_bbox,
-                    traffic_light_hazards=_tl_gh if _tl_gh else None,
-                    railway_crossing_hazards=_rx_gh if _rx_gh else None,
-                    avoid_caz_zones=apply_caz_routing_avoidance,
-                    avoid_points=avoid_points if avoid_points else None,
-                    camera_hazards=_cam_gh if _cam_gh and any(_cam_gh.values()) else None,
-                )
-                if graphhopper_route and graphhopper_route.get('success'):
-                    logger.info("[GRAPHHOPPER] ✅ Route found with camera avoidance")
-                else:
-                    graphhopper_error = "No route found"
-                    logger.warning("[GRAPHHOPPER] No route found, falling back to Valhalla")
-            except Exception as e:
-                graphhopper_error = str(e)
-                logger.warning(f"[GRAPHHOPPER] Error: {e}, falling back to Valhalla")
+        graphhopper_route, graphhopper_error = attempt_graphhopper_camera_route(
+            hazards=hazards,
+            route_bbox=route_bbox,
+            start_lat=start_lat, start_lon=start_lon,
+            end_lat=end_lat, end_lon=end_lon,
+            routing_mode=routing_mode,
+            enable_hazard_avoidance=enable_hazard_avoidance,
+            avoid_cameras=avoid_cameras,
+            avoid_traffic_lights=avoid_traffic_lights,
+            avoid_railway_crossings=avoid_railway_crossings,
+            apply_caz_routing_avoidance=apply_caz_routing_avoidance,
+            avoid_points=avoid_points if avoid_points else None,
+        )
 
         logger.debug(f"[ROUTING] Valhalla URL: {VALHALLA_URL}")
 

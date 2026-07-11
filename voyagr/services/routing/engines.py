@@ -13,13 +13,14 @@ import os
 import threading
 import time
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 
 from voyagr.config import (
     VALHALLA_URL, GRAPHHOPPER_URL, OSRM_URL,
-    USE_GRAPHHOPPER_CAMERA_AVOIDANCE, GRAPHHOPPER_TIMEOUT
+    USE_GRAPHHOPPER_CAMERA_AVOIDANCE, GRAPHHOPPER_TIMEOUT,
+    CAMERA_HAZARD_BUCKETS,
 )
 from voyagr.services.hazards import build_graphhopper_camera_avoidance_model
 
@@ -389,6 +390,67 @@ def route_with_graphhopper(
     except Exception as e:
         logger.error(f"[GRAPHHOPPER] Error: {e}")
         return None
+
+
+def attempt_graphhopper_camera_route(
+    *,
+    hazards: Dict[str, List[Dict[str, Any]]],
+    route_bbox: Dict[str, float],
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    routing_mode: str,
+    enable_hazard_avoidance: bool,
+    avoid_cameras: bool,
+    avoid_traffic_lights: bool,
+    avoid_railway_crossings: bool,
+    apply_caz_routing_avoidance: bool,
+    avoid_points: Optional[List[Dict[str, Any]]],
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Try GraphHopper first (car-only) when camera avoidance is enabled.
+
+    Returns ``(graphhopper_route, graphhopper_error)``. When the GraphHopper path
+    is not attempted (avoidance off, disabled, or non-auto mode) both are ``None``.
+    Extracted verbatim from voyagr_web.calculate_route.
+    """
+    graphhopper_route: Optional[Dict[str, Any]] = None
+    graphhopper_error: Optional[str] = None
+
+    if not (enable_hazard_avoidance and USE_GRAPHHOPPER_CAMERA_AVOIDANCE and routing_mode == 'auto'):
+        return graphhopper_route, graphhopper_error
+
+    straight_line_km = ((end_lat - start_lat) ** 2 + (end_lon - start_lon) ** 2) ** 0.5 * 111
+    logger.info(f"[ROUTING] Trying GraphHopper with camera avoidance (route: {straight_line_km:.0f}km)...")
+    try:
+        _tl_gh = hazards.get('traffic_light', []) if avoid_traffic_lights else []
+        _rx_gh = hazards.get('railway_crossing', []) if avoid_railway_crossings else []
+        _cam_gh = {
+            k: hazards.get(k, [])
+            for k in CAMERA_HAZARD_BUCKETS
+            if hazards.get(k)
+        } if avoid_cameras else None
+        graphhopper_route = route_with_graphhopper(
+            start_lat, start_lon, end_lat, end_lon,
+            enable_camera_avoidance=avoid_cameras,
+            route_bbox=route_bbox,
+            traffic_light_hazards=_tl_gh if _tl_gh else None,
+            railway_crossing_hazards=_rx_gh if _rx_gh else None,
+            avoid_caz_zones=apply_caz_routing_avoidance,
+            avoid_points=avoid_points if avoid_points else None,
+            camera_hazards=_cam_gh if _cam_gh and any(_cam_gh.values()) else None,
+        )
+        if graphhopper_route and graphhopper_route.get('success'):
+            logger.info("[GRAPHHOPPER] ✅ Route found with camera avoidance")
+        else:
+            graphhopper_error = "No route found"
+            logger.warning("[GRAPHHOPPER] No route found, falling back to Valhalla")
+    except Exception as e:
+        graphhopper_error = str(e)
+        logger.warning(f"[GRAPHHOPPER] Error: {e}, falling back to Valhalla")
+
+    return graphhopper_route, graphhopper_error
 
 
 def get_traffic_duration_multiplier(lat: float, lon: float) -> tuple:
