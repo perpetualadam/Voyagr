@@ -92,6 +92,8 @@
     }
 
     var PARKING_OPTION_ITEM_HOVER_BACKGROUND = '#FFF3E0';
+    var PARKING_DRIVING_ROUTE_POLYLINE = { color: '#2196F3', weight: 5, opacity: 0.8 };
+    var PARKING_WALKING_ROUTE_POLYLINE = { color: '#4CAF50', weight: 4, opacity: 0.7 };
 
     /**
      * HTML for one parking option row in the parking search list.
@@ -168,6 +170,8 @@
         computeWalkingMinutesFromMeters: computeWalkingMinutesFromMeters,
         getParkingOptionItemContainerStyleCssText: getParkingOptionItemContainerStyleCssText,
         PARKING_OPTION_ITEM_HOVER_BACKGROUND: PARKING_OPTION_ITEM_HOVER_BACKGROUND,
+        PARKING_DRIVING_ROUTE_POLYLINE: PARKING_DRIVING_ROUTE_POLYLINE,
+        PARKING_WALKING_ROUTE_POLYLINE: PARKING_WALKING_ROUTE_POLYLINE,
         buildParkingOptionItemHtml: buildParkingOptionItemHtml,
         buildParkingEmptyStateHtml: buildParkingEmptyStateHtml,
         buildParkingPreviewRouteHtml: buildParkingPreviewRouteHtml,

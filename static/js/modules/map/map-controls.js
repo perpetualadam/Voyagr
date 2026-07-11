@@ -128,6 +128,17 @@
         storage.setItem(AR_PREF_STORAGE_KEY, enabled ? 'true' : 'false');
     }
 
+    /**
+     * Apply settings toggle-switch styling for AR mode on/off.
+     * @param {HTMLElement|null} btn
+     * @param {boolean} active
+     * @param {Object} toggleUi - VoyagrToggleUI module
+     */
+    function applyARModeToggleButton(btn, active, toggleUi) {
+        if (!btn || !toggleUi) return;
+        toggleUi.applyToggleButton(btn, active, toggleUi.TOGGLE_SWITCH_OPTS);
+    }
+
     var api = {
         ZOOM_FOLLOW_ENABLED_ICON: ZOOM_FOLLOW_ENABLED_ICON,
         ZOOM_FOLLOW_DISABLED_ICON: ZOOM_FOLLOW_DISABLED_ICON,
@@ -153,6 +164,7 @@
         getARModeButtonDisplay: getARModeButtonDisplay,
         isAREnabledInStorage: isAREnabledInStorage,
         writeAREnabledToStorage: writeAREnabledToStorage,
+        applyARModeToggleButton: applyARModeToggleButton,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

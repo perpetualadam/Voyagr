@@ -73,4 +73,10 @@ describe('multimodal-parking module', () => {
         expect(MP.getParkingOptionItemContainerStyleCssText()).toContain('cursor: pointer');
         expect(MP.PARKING_OPTION_ITEM_HOVER_BACKGROUND).toBe('#FFF3E0');
     });
+
+    test('parking route polyline style presets', () => {
+        expect(MP.PARKING_DRIVING_ROUTE_POLYLINE.color).toBe('#2196F3');
+        expect(MP.PARKING_WALKING_ROUTE_POLYLINE.color).toBe('#4CAF50');
+        expect(MP.PARKING_WALKING_ROUTE_POLYLINE.weight).toBe(4);
+    });
 });
