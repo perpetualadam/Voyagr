@@ -10,6 +10,7 @@ from datetime import date, datetime
 from typing import Any, Iterator, List, Optional
 
 from voyagr.config import DB_FILE
+from voyagr.config import CAMERA_HAZARD_BUCKETS
 
 logger = logging.getLogger('voyagr_web')
 
@@ -157,10 +158,43 @@ def db_connection() -> Iterator[Any]:
         return_db_connection(conn)
 
 
-def init_db() -> None:
+def migrate_legacy_camera_hazard_preferences(cursor: sqlite3.Cursor) -> None:
+    """If DB only has legacy 'camera', copy settings into camera_* rows once."""
+    cursor.execute(
+        "SELECT COUNT(*) FROM hazard_preferences WHERE hazard_type LIKE 'camera_%'"
+    )
+    if cursor.fetchone()[0] > 0:
+        return
+    cursor.execute(
+        "SELECT penalty_seconds, proximity_threshold_meters, enabled FROM hazard_preferences WHERE hazard_type='camera'"
+    )
+    cam = cursor.fetchone()
+    penalty, threshold, enabled = (800, 100, 1) if not cam else (cam[0], cam[1], cam[2])
+    for st in CAMERA_HAZARD_BUCKETS:
+        cursor.execute(
+            '''
+            INSERT OR IGNORE INTO hazard_preferences
+            (hazard_type, penalty_seconds, enabled, proximity_threshold_meters)
+            VALUES (?, ?, ?, ?)
+            ''',
+            (st, penalty, int(enabled), threshold),
+        )
+
+
+def apply_camera_hazard_penalty_defaults(cursor: sqlite3.Cursor) -> None:
+    """Keep SCDB camera penalty_seconds aligned: red-light 1200s, all other camera_* buckets 800s."""
+    cursor.execute(
+        "UPDATE hazard_preferences SET penalty_seconds = 1200 WHERE hazard_type = 'camera_red_light'"
+    )
+    cursor.execute(
+        """UPDATE hazard_preferences SET penalty_seconds = 800 WHERE hazard_type IN (
+            'camera_speed', 'camera_average_speed', 'camera_bus_lane', 'camera_mobile', 'camera_other'
+        )"""
+    )
+
+
+def init_db():
     """Initialize database with all tables."""
-    global db_pool
-    
     conn = sqlite3.connect(DB_FILE)
     cursor = conn.cursor()
 
@@ -323,6 +357,20 @@ def init_db() -> None:
         )
     ''')
 
+    # Anonymous speed-limit display feedback (confirmed vs wrong) for detector analytics
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS speed_limit_feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            outcome TEXT NOT NULL,
+            lat REAL NOT NULL,
+            lon REAL NOT NULL,
+            displayed_mph INTEGER,
+            source TEXT,
+            client_ts INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+
     # Lane guidance cache table (Phase 2 feature)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS lane_guidance_cache (
@@ -336,7 +384,9 @@ def init_db() -> None:
         )
     ''')
 
-    # Settings table for Phase 3 features
+    # ===== PHASE 3 FEATURES =====
+
+    # Settings table for Phase 3 features (gesture, battery, themes, ML, units)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS app_settings (
             id INTEGER PRIMARY KEY,
@@ -425,18 +475,79 @@ def init_db() -> None:
         )
     ''')
 
+    # Promo coupons (trial / person-bound lifetime) + per-user entitlements
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS promo_coupons (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT UNIQUE NOT NULL COLLATE NOCASE,
+            coupon_kind TEXT NOT NULL,
+            trial_days INTEGER,
+            bound_user_id TEXT,
+            bound_email TEXT,
+            max_redemptions INTEGER NOT NULL DEFAULT 1,
+            redemption_count INTEGER NOT NULL DEFAULT 0,
+            expires_at INTEGER,
+            active INTEGER NOT NULL DEFAULT 1,
+            notes TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS promo_redemptions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            coupon_id INTEGER NOT NULL,
+            user_id TEXT NOT NULL,
+            redeemed_at INTEGER NOT NULL,
+            UNIQUE(coupon_id, user_id)
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS user_entitlements (
+            user_id TEXT PRIMARY KEY,
+            lifetime INTEGER NOT NULL DEFAULT 0,
+            trial_expires_at INTEGER,
+            updated_at INTEGER NOT NULL
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_promo_coupons_code ON promo_coupons(code)')
+
+    # Multi-drop and route avoidance settings columns (added dynamically for existing databases)
+    multidrop_columns = [
+        ('optimize_stop_order', 'INTEGER DEFAULT 1'),
+        ('round_trip', 'INTEGER DEFAULT 0'),
+        ('traffic_aware_routing', 'INTEGER DEFAULT 1'),
+        ('avoid_road_closures', 'INTEGER DEFAULT 1'),
+        ('avoid_incidents', 'INTEGER DEFAULT 1'),
+        ('avoid_toll_roads', 'INTEGER DEFAULT 0'),
+        ('avoid_motorways', 'INTEGER DEFAULT 0'),
+        ('avoid_ferries', 'INTEGER DEFAULT 0'),
+    ]
+    for col_name, col_def in multidrop_columns:
+        try:
+            cursor.execute(f'ALTER TABLE app_settings ADD COLUMN {col_name} {col_def}')
+        except Exception:
+            pass  # Column already exists
+
     # Initialize app settings if not exists
     cursor.execute('SELECT COUNT(*) FROM app_settings')
     if cursor.fetchone()[0] == 0:
         cursor.execute('''
             INSERT INTO app_settings
-            (gesture_enabled, gesture_sensitivity, gesture_action, battery_saving_mode, map_theme, ml_predictions_enabled, haptic_feedback_enabled)
-            VALUES (1, 'medium', 'recalculate', 0, 'standard', 1, 1)
+            (gesture_enabled, gesture_sensitivity, gesture_action, battery_saving_mode, map_theme, ml_predictions_enabled, haptic_feedback_enabled,
+             optimize_stop_order, round_trip, traffic_aware_routing, avoid_road_closures, avoid_incidents)
+            VALUES (1, 'medium', 'recalculate', 0, 'standard', 1, 1,
+                    1, 0, 1, 1, 1)
         ''')
 
     # Insert default hazard preferences if not exists
     hazard_preferences = [
-        ('camera', 800, 1, 100),
+        ('camera_speed', 800, 1, 100),
+        ('camera_red_light', 1200, 1, 100),
+        ('camera_average_speed', 800, 1, 100),
+        ('camera_bus_lane', 800, 1, 100),
+        ('camera_mobile', 800, 1, 150),
+        ('camera_other', 800, 1, 100),
+        ('camera', 800, 0, 100),                  # legacy bucket; replaced by camera_* rows
         ('traffic_light', 400, 1, 80),
         ('police', 180, 1, 200),
         ('roadworks', 300, 1, 500),
@@ -453,13 +564,9 @@ def init_db() -> None:
             VALUES (?, ?, ?, ?)
         ''', (hazard_type, penalty, enabled, threshold))
 
+    migrate_legacy_camera_hazard_preferences(cursor)
+    apply_camera_hazard_penalty_defaults(cursor)
+
     conn.commit()
     conn.close()
-
-    # Initialize connection pool (close any pool created earlier via lazy init).
-    with _pool_init_lock:
-        if db_pool is not None:
-            db_pool.close_all()
-        db_pool = DatabasePool(DB_FILE)
-    logger.info(f"[DB POOL] Initialized with {db_pool.pool_size} connections")
 
