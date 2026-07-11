@@ -307,3 +307,20 @@ describe('preview route path and status helpers', () => {
         expect(msg).toContain('optimized');
     });
 });
+
+describe('route result patch helpers', () => {
+    test('resolveRouteDisplayTime prefers total_time_with_stops when stops present', () => {
+        expect(RS.resolveRouteDisplayTime({ time: 30, total_stop_time: 10, total_time_with_stops: 40 })).toBe(40);
+        expect(RS.resolveRouteDisplayTime({ time: 30 })).toBe(30);
+    });
+
+    test('resolveInitialRouteDurationMinutes and buildLastCalculatedRoutePatch', () => {
+        const data = { routes: [{ duration_minutes: 22 }], time: '25', distance: 10 };
+        expect(RS.resolveInitialRouteDurationMinutes(data)).toBe(22);
+        const patch = RS.buildLastCalculatedRoutePatch(data, '52,-1', 'Leeds');
+        expect(patch.duration_minutes).toBe(22);
+        expect(patch.destination).toBe('52,-1');
+        expect(patch.destinationName).toBe('Leeds');
+        expect(patch.distance).toBe(10);
+    });
+});

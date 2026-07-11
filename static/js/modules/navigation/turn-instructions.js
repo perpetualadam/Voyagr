@@ -530,6 +530,81 @@
         return null;
     }
 
+    /**
+     * Geometry-only turn detection when a route has no Valhalla maneuvers.
+     * Scans polyline bearing changes ahead of the snapped position.
+     * @param {Array<[number,number]>} polyline
+     * @param {{ index: number, t?: number }} turnSnap
+     * @param {number} closestIndex
+     * @param {Object} [opts]
+     * @param {function(number,number,number,number): number} [opts.bearing]
+     * @param {function(number,number): string} [opts.calculateTurnDirection]
+     * @param {function(Array, Object, number): number} [opts.distanceAlongRouteToVertexMeters]
+     * @returns {Object|null}
+     */
+    function findGeometryFallbackTurn(polyline, turnSnap, closestIndex, opts) {
+        opts = opts || {};
+        if (!polyline || polyline.length < 2) return null;
+        var bearing = opts.bearing;
+        var calcTurnDir = opts.calculateTurnDirection;
+        var distAlong = opts.distanceAlongRouteToVertexMeters;
+
+        var nextTurnIndex = null;
+        var maxBearingChange = 0;
+        var currentBearing = null;
+        if (closestIndex < polyline.length - 1 && bearing) {
+            var currPoint = polyline[closestIndex];
+            var nextPoint = polyline[closestIndex + 1];
+            currentBearing = bearing(currPoint[0], currPoint[1], nextPoint[0], nextPoint[1]);
+        }
+
+        var scanDistance = Math.min(50, polyline.length - closestIndex - 1);
+        for (var i = closestIndex + 2; i < closestIndex + scanDistance; i++) {
+            if (i >= polyline.length) break;
+            var prevPoint = polyline[i - 1];
+            var currPt = polyline[i];
+            if (!bearing) continue;
+            var segBearing = bearing(prevPoint[0], prevPoint[1], currPt[0], currPt[1]);
+            if (currentBearing !== null) {
+                var bearingChange = segBearing - currentBearing;
+                if (bearingChange > 180) bearingChange -= 360;
+                if (bearingChange < -180) bearingChange += 360;
+                if (Math.abs(bearingChange) > 10 && Math.abs(bearingChange) > maxBearingChange) {
+                    maxBearingChange = Math.abs(bearingChange);
+                    nextTurnIndex = i;
+                }
+            }
+        }
+
+        if (nextTurnIndex === null) {
+            nextTurnIndex = Math.min(closestIndex + 5, polyline.length - 1);
+        }
+        if (nextTurnIndex === closestIndex || nextTurnIndex === closestIndex + 1) {
+            return null;
+        }
+
+        var nextTurnPoint = polyline[nextTurnIndex];
+        var distanceToTurn = distAlong ? distAlong(polyline, turnSnap, nextTurnIndex) : 0;
+        var turnDirection = 'straight';
+        if (closestIndex > 0 && nextTurnIndex < polyline.length - 1 && bearing && calcTurnDir) {
+            var prevPt = polyline[Math.max(0, closestIndex - 1)];
+            var currPt2 = polyline[closestIndex];
+            var nextPt = polyline[nextTurnIndex];
+            var bearing1 = bearing(prevPt[0], prevPt[1], currPt2[0], currPt2[1]);
+            var bearing2 = bearing(currPt2[0], currPt2[1], nextPt[0], nextPt[1]);
+            turnDirection = calcTurnDir(bearing1, bearing2);
+        }
+
+        return {
+            distance: distanceToTurn,
+            lat: nextTurnPoint[0],
+            lon: nextTurnPoint[1],
+            index: nextTurnIndex,
+            direction: turnDirection,
+            streetName: '',
+        };
+    }
+
     var api = {
         calculateTurnDirection: calculateTurnDirection,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,
@@ -552,6 +627,7 @@
         getTurnDetectionMaxDistanceMeters: getTurnDetectionMaxDistanceMeters,
         advanceMonotonicTurnDetectIndex: advanceMonotonicTurnDetectIndex,
         findUpcomingManeuverTurn: findUpcomingManeuverTurn,
+        findGeometryFallbackTurn: findGeometryFallbackTurn,
         TURN_ICON_MAP: TURN_ICON_MAP,
         DIRECTION_TEXT_MAP: DIRECTION_TEXT_MAP
     };
