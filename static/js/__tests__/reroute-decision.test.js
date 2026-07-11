@@ -593,6 +593,32 @@ describe('buildRouteDeviationTickPlan', () => {
     });
 });
 
+describe('buildRouteDeviationTickInputsPlan', () => {
+    test('skips when polyline is empty', () => {
+        expect(RD.buildRouteDeviationTickInputsPlan({
+            lat: 51.5,
+            lon: -0.1,
+            routePolyline: [],
+            snapFn: () => ({ distance: 10 }),
+            remainingFn: () => 1000,
+        }).action).toBe('skip');
+    });
+
+    test('resolves snap distance and remaining destination distance', () => {
+        const inputs = RD.buildRouteDeviationTickInputsPlan({
+            lat: 51.5,
+            lon: -0.1,
+            routePolyline: [[51.5, -0.1], [51.6, -0.2]],
+            lastSnappedRouteIndex: 0,
+            snapFn: () => ({ distance: 42, index: 0 }),
+            remainingFn: () => 2500,
+        });
+        expect(inputs.action).toBe('ready');
+        expect(inputs.minDistance).toBe(42);
+        expect(inputs.remainingToDest).toBe(2500);
+    });
+});
+
 describe('buildRouteDeviationApplyPlan', () => {
     const now = 1_700_000_000_000;
 

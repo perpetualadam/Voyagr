@@ -239,6 +239,33 @@
         };
     }
 
+    /**
+     * Ordered navigation side-effect phases for one GPS tick after position/speed plans.
+     * @param {Object} opts
+     * @param {Object} opts.sideEffects - from buildGpsTrackingSideEffectsPlan
+     * @returns {Object}
+     */
+    function buildGpsNavigationSideEffectsTickPlan(opts) {
+        opts = opts || {};
+        var side = opts.sideEffects || {};
+        var nav = side.navActive || {};
+        return {
+            checkDeviation: !!side.checkDeviation,
+            processHazards: !!side.processHazards,
+            turn: {
+                detect: !!nav.active,
+                announce: !!nav.detectTurn,
+                updateWidget: !!nav.updateTurnWidget,
+            },
+            announceDestination: !!nav.announceDestination,
+            checkArrival: !!nav.checkArrival,
+            applyZoom: true,
+            updateLaneGuidance: !!side.updateLaneGuidance,
+            showSpeedWidget: !!side.showSpeedWidget,
+            fetchRoadName: !!side.fetchRoadName,
+        };
+    }
+
     var api = {
         ROUTE_PROGRESS_CONTAINER_ID: ROUTE_PROGRESS_CONTAINER_ID,
         ROUTE_PROGRESS_BAR_ID: ROUTE_PROGRESS_BAR_ID,
@@ -256,6 +283,7 @@
         buildNavigationArrivalTickPlan: buildNavigationArrivalTickPlan,
         buildGpsNavigationActiveTickPlan: buildGpsNavigationActiveTickPlan,
         buildGpsTrackingSideEffectsPlan: buildGpsTrackingSideEffectsPlan,
+        buildGpsNavigationSideEffectsTickPlan: buildGpsNavigationSideEffectsTickPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

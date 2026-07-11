@@ -189,6 +189,39 @@
     }
 
     /**
+     * Resolve snap distance and remaining-to-destination inputs for a deviation tick.
+     * @param {Object} opts
+     * @param {number} opts.lat
+     * @param {number} opts.lon
+     * @param {Array<[number,number]>} [opts.routePolyline]
+     * @param {number} [opts.lastSnappedRouteIndex]
+     * @param {function(number, number, Array, number): {distance: number}} [opts.snapFn]
+     * @param {function(number, number): number} [opts.remainingFn]
+     * @returns {Object}
+     */
+    function buildRouteDeviationTickInputsPlan(opts) {
+        opts = opts || {};
+        if (!opts.routePolyline || opts.routePolyline.length === 0) {
+            return { action: 'skip', reason: 'no-polyline' };
+        }
+        if (typeof opts.snapFn !== 'function' || typeof opts.remainingFn !== 'function') {
+            return { action: 'skip', reason: 'no-helpers' };
+        }
+        var snap = opts.snapFn(
+            opts.lat,
+            opts.lon,
+            opts.routePolyline,
+            opts.lastSnappedRouteIndex != null ? opts.lastSnappedRouteIndex : 0
+        );
+        return {
+            action: 'ready',
+            remainingToDest: opts.remainingFn(opts.lat, opts.lon),
+            minDistance: snap && snap.distance != null ? snap.distance : Infinity,
+            snap: snap,
+        };
+    }
+
+    /**
      * Full deviation tick plan: pre-checks, decideRouteDeviation, state patch, reroute apply hints.
      * @param {Object} opts
      * @returns {Object}
@@ -831,6 +864,7 @@
         isTrustworthyAccuracy: isTrustworthyAccuracy,
         effectiveDeviationThreshold: effectiveDeviationThreshold,
         decideRouteDeviation: decideRouteDeviation,
+        buildRouteDeviationTickInputsPlan: buildRouteDeviationTickInputsPlan,
         buildRouteDeviationTickPlan: buildRouteDeviationTickPlan,
         buildRouteDeviationApplyPlan: buildRouteDeviationApplyPlan,
         buildRerouteLogEvent: buildRerouteLogEvent,

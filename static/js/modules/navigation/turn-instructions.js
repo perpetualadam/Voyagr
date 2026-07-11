@@ -917,6 +917,24 @@
     }
 
     /**
+     * Apply plan for turn-detection tick state patches and outputs.
+     * @param {Object|null|undefined} tick - from buildDetectUpcomingTurnTickPlan
+     * @returns {Object}
+     */
+    function buildDetectUpcomingTurnStateApplyPlan(tick) {
+        if (!tick || tick.action === 'skip') {
+            return { action: 'skip', reason: tick && tick.reason };
+        }
+        return {
+            action: 'apply',
+            turnInfo: tick.turnInfo || null,
+            statePatch: tick.statePatch || {},
+            persistRoute: !!tick.persistRoute,
+            logLine: tick.logLine || null,
+        };
+    }
+
+    /**
      * Turn widget tick plan: show detected turn, between-turn continue, or clear.
      * @param {Object} opts
      * @returns {Object}
@@ -1023,6 +1041,7 @@
         BETWEEN_TURN_MIN_DISTANCE_M: BETWEEN_TURN_MIN_DISTANCE_M,
         buildTurnWidgetDisplayPayloadFromTurnInfo: buildTurnWidgetDisplayPayloadFromTurnInfo,
         buildDetectUpcomingTurnTickPlan: buildDetectUpcomingTurnTickPlan,
+        buildDetectUpcomingTurnStateApplyPlan: buildDetectUpcomingTurnStateApplyPlan,
         buildTurnWidgetTickPlan: buildTurnWidgetTickPlan,
         buildLaneGuidanceTickPlan: buildLaneGuidanceTickPlan,
         calculateTurnDirection: calculateTurnDirection,

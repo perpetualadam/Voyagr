@@ -167,3 +167,34 @@ describe('GPS tracking side effects plan', () => {
         expect(plan.checkDeviation).toBe(false);
     });
 });
+
+describe('GPS navigation side effects tick plan', () => {
+    test('buildGpsNavigationSideEffectsTickPlan orders nav phases from side effects', () => {
+        const sideEffects = RP.buildGpsTrackingSideEffectsPlan({
+            routeInProgress: true,
+            routePolyline: [[1, 2], [3, 4]],
+            routeSteps: [{ type: 8 }],
+            isTrackingActive: true,
+            speedLimitShowWidget: true,
+        });
+        const tick = RP.buildGpsNavigationSideEffectsTickPlan({ sideEffects });
+        expect(tick.checkDeviation).toBe(true);
+        expect(tick.turn.detect).toBe(true);
+        expect(tick.turn.announce).toBe(true);
+        expect(tick.applyZoom).toBe(true);
+        expect(tick.updateLaneGuidance).toBe(true);
+        expect(tick.showSpeedWidget).toBe(true);
+        expect(tick.fetchRoadName).toBe(true);
+    });
+
+    test('buildGpsNavigationSideEffectsTickPlan disables turn flow without polyline', () => {
+        const sideEffects = RP.buildGpsTrackingSideEffectsPlan({
+            routeInProgress: false,
+            isTrackingActive: true,
+            speedLimitShowWidget: false,
+        });
+        const tick = RP.buildGpsNavigationSideEffectsTickPlan({ sideEffects });
+        expect(tick.turn.detect).toBe(false);
+        expect(tick.processHazards).toBe(true);
+    });
+});

@@ -566,6 +566,28 @@ describe('buildDetectUpcomingTurnTickPlan', () => {
     });
 });
 
+describe('buildDetectUpcomingTurnStateApplyPlan', () => {
+    test('skips when tick is missing or skipped', () => {
+        expect(TI.buildDetectUpcomingTurnStateApplyPlan(null).action).toBe('skip');
+        expect(TI.buildDetectUpcomingTurnStateApplyPlan({ action: 'skip' }).action).toBe('skip');
+    });
+
+    test('maps detected tick to state apply plan', () => {
+        const apply = TI.buildDetectUpcomingTurnStateApplyPlan({
+            action: 'detected',
+            turnInfo: { distance: 120, direction: 'right' },
+            statePatch: { lastTurnDetectRouteVertexIndex: 3, currentStepIndex: 1 },
+            persistRoute: true,
+            logLine: '[Turn] Detected',
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.turnInfo.distance).toBe(120);
+        expect(apply.statePatch.currentStepIndex).toBe(1);
+        expect(apply.persistRoute).toBe(true);
+        expect(apply.logLine).toContain('Detected');
+    });
+});
+
 describe('buildTurnWidgetTickPlan', () => {
     const steps = [
         { type: 8, begin_shape_index: 0, street_names: ['Main Rd'] },

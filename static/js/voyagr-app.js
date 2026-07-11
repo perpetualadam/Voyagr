@@ -9018,16 +9018,19 @@ function detectUpcomingTurn(userLat, userLon) {
     });
     if (tick.action === 'skip') return null;
 
-    if (tick.statePatch.lastTurnDetectRouteVertexIndex != null) {
-        lastTurnDetectRouteVertexIndex = tick.statePatch.lastTurnDetectRouteVertexIndex;
-    }
-    if (tick.statePatch.currentStepIndex != null) {
-        currentStepIndex = tick.statePatch.currentStepIndex;
-    }
-    if (tick.persistRoute) schedulePersistRoute();
-    if (tick.logLine) console.log(tick.logLine);
+    const apply = TI.buildDetectUpcomingTurnStateApplyPlan(tick);
+    if (apply.action === 'skip') return null;
 
-    return tick.turnInfo;
+    if (apply.statePatch.lastTurnDetectRouteVertexIndex != null) {
+        lastTurnDetectRouteVertexIndex = apply.statePatch.lastTurnDetectRouteVertexIndex;
+    }
+    if (apply.statePatch.currentStepIndex != null) {
+        currentStepIndex = apply.statePatch.currentStepIndex;
+    }
+    if (apply.persistRoute) schedulePersistRoute();
+    if (apply.logLine) console.log(apply.logLine);
+
+    return apply.turnInfo;
 }
 
 // ===== VEHICLE TYPE & ROUTING MODE MANAGEMENT =====
@@ -12033,59 +12036,62 @@ function applyGpsNavigationSideEffectsTick(ctx) {
         navigationFollowZoom,
     } = ctx;
 
-    if (sideEffects.checkDeviation) {
+    const tickPlan = _routeProgress().buildGpsNavigationSideEffectsTickPlan({ sideEffects });
+
+    if (tickPlan.checkDeviation) {
         checkRouteDeviation(lat, lon, accuracy);
     }
 
-    if (sideEffects.processHazards) {
+    if (tickPlan.processHazards) {
         processNavigationHazardAlerts(lat, lon);
     }
 
-    const navActiveTick = sideEffects.navActive;
     let distanceToNextTurn = null;
     let turnInfoThisTick = null;
 
-    if (navActiveTick.active) {
+    if (tickPlan.turn.detect) {
         turnInfoThisTick = detectUpcomingTurn(lat, lon);
     }
 
-    if (navActiveTick.detectTurn && turnInfoThisTick) {
+    if (tickPlan.turn.announce && turnInfoThisTick) {
         distanceToNextTurn = turnInfoThisTick.distance;
         announceUpcomingTurn(turnInfoThisTick);
     }
 
-    if (navActiveTick.updateTurnWidget) {
+    if (tickPlan.turn.updateWidget) {
         updateTurnWidgetFromPosition(lat, lon, turnInfoThisTick);
     }
 
-    if (navActiveTick.announceDestination) {
+    if (tickPlan.announceDestination) {
         announceDistanceToDestination(lat, lon);
     }
 
-    if (navActiveTick.checkArrival) {
+    if (tickPlan.checkArrival) {
         checkNavigationArrival(lat, lon, speed);
     }
 
-    const zoomTick = _cameraPitch().buildNavigationZoomTickPlan({
-        smartZoomEnabled,
-        routeInProgress,
-        navigationFollowEaseApplied,
-        followZoom: navigationFollowZoom,
-    });
-    if (zoomTick.syncLastZoomLevel != null) {
-        lastZoomLevel = zoomTick.syncLastZoomLevel;
-    }
-    if (zoomTick.applySmartZoom) {
-        applySmartZoomWithAnimation(
-            speedMph,
-            distanceToNextTurn,
-            speedLimitPlan.roadType || 'unknown',
-            lat,
-            lon
-        );
+    if (tickPlan.applyZoom) {
+        const zoomTick = _cameraPitch().buildNavigationZoomTickPlan({
+            smartZoomEnabled,
+            routeInProgress,
+            navigationFollowEaseApplied,
+            followZoom: navigationFollowZoom,
+        });
+        if (zoomTick.syncLastZoomLevel != null) {
+            lastZoomLevel = zoomTick.syncLastZoomLevel;
+        }
+        if (zoomTick.applySmartZoom) {
+            applySmartZoomWithAnimation(
+                speedMph,
+                distanceToNextTurn,
+                speedLimitPlan.roadType || 'unknown',
+                lat,
+                lon
+            );
+        }
     }
 
-    if (sideEffects.updateLaneGuidance) {
+    if (tickPlan.updateLaneGuidance) {
         const laneTick = _turnInstructions().buildLaneGuidanceTickPlan({
             routeInProgress,
             routeSteps: currentRouteSteps,
@@ -12096,11 +12102,11 @@ function applyGpsNavigationSideEffectsTick(ctx) {
         }
     }
 
-    if (sideEffects.showSpeedWidget) {
+    if (tickPlan.showSpeedWidget) {
         const SL = _speedLimitWidget();
         const swPlan = SL
             ? SL.buildSpeedWidgetApplyPlan({
-                showSpeedWidget: sideEffects.showSpeedWidget,
+                showSpeedWidget: tickPlan.showSpeedWidget,
                 speedLimitPlan,
                 routeInProgress,
                 isTrackingActive,
@@ -12132,7 +12138,7 @@ function applyGpsNavigationSideEffectsTick(ctx) {
         }
     }
 
-    if (sideEffects.fetchRoadName) {
+    if (tickPlan.fetchRoadName) {
         fetchRoadNameThrottled(lat, lon);
     }
 
@@ -12820,18 +12826,24 @@ function scheduleAutomaticRerouteRetry() {
  * Respects auto-reroute toggle setting
  */
 function checkRouteDeviation(lat, lon, accuracy) {
-    if (!routePolyline || routePolyline.length === 0) return;
+    const VRD = _rerouteDecision();
+    const inputs = VRD.buildRouteDeviationTickInputsPlan({
+        lat,
+        lon,
+        routePolyline,
+        lastSnappedRouteIndex,
+        snapFn: (a, b, c, d) => _routeGeometry().snapToRoutePolyline(a, b, c, d),
+        remainingFn: getNavigationRemainingDistanceMeters,
+    });
+    if (inputs.action !== 'ready') return;
 
     const now = Date.now();
-    const remainingToDest = getNavigationRemainingDistanceMeters(lat, lon);
-    const snap = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
-    const VRD = _rerouteDecision();
     const tick = VRD.buildRouteDeviationTickPlan({
         autoRerouteEnabled: autoRerouteOnDeviationEnabled,
         hasRoute: true,
-        remainingToDest,
+        remainingToDest: inputs.remainingToDest,
         accuracy,
-        minDistance: snap.distance,
+        minDistance: inputs.minDistance,
         routeJoinConfirmed: routeJoinConfirmedForDeviation,
         deviationStartTime: deviationStartTimeCheck,
         lastRerouteTime,
