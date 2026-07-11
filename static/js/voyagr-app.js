@@ -8756,15 +8756,12 @@ function clearForm() {
 async function renderEndDestinationSuggestions(dropdown, fieldId = 'end') {
     if (!dropdown) return;
 
+    const SA = _searchAutocomplete();
     const recent = loadRecentDestinations();
     dropdown.innerHTML = '';
 
     const appendSectionTitle = (text) => {
-        const title = document.createElement('div');
-        title.className = 'autocomplete-section-title';
-        title.textContent = text;
-        title.style.cssText = 'padding:10px 14px 6px;font-size:12px;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:0.04em;';
-        dropdown.appendChild(title);
+        dropdown.insertAdjacentHTML('beforeend', SA.buildAutocompleteSectionTitleHtml(text));
     };
 
     if (recent.length) {
@@ -8772,9 +8769,7 @@ async function renderEndDestinationSuggestions(dropdown, fieldId = 'end') {
         recent.forEach((item) => {
             const div = document.createElement('div');
             div.className = 'autocomplete-item';
-            const kindLabel = item.kind === 'route' ? 'Used in a route' : 'Recent search';
-            const labelEsc = escapeHtml(item.label);
-            div.innerHTML = `<div class="autocomplete-item-icon">🕐</div><div class="autocomplete-item-text"><div class="autocomplete-item-name">${labelEsc}</div><div class="autocomplete-item-address">${kindLabel}</div></div>`;
+            div.innerHTML = SA.buildRecentDestinationItemHtml(item, { escapeHtml });
             div.onclick = () => selectAutocompleteResult(fieldId, item.lat, item.lon, item.label);
             dropdown.appendChild(div);
         });
@@ -8786,17 +8781,13 @@ async function renderEndDestinationSuggestions(dropdown, fieldId = 'end') {
         if (res.status !== 401 && data.success && data.history && data.history.length > 0) {
             appendSectionTitle('Saved searches');
             data.history.forEach((item) => {
-                const lat = item.lat != null ? parseFloat(item.lat) : NaN;
-                const lon = item.lon != null ? parseFloat(item.lon) : NaN;
+                const built = SA.buildServerSearchHistoryItemHtml(item, { escapeHtml });
                 const div = document.createElement('div');
                 div.className = 'autocomplete-item';
-                const primary = escapeHtml(item.query || '');
-                const meta = escapeHtml(item.result_name || '');
-                if (Number.isFinite(lat) && Number.isFinite(lon)) {
-                    div.innerHTML = `<div class="autocomplete-item-icon">🔎</div><div class="autocomplete-item-text"><div class="autocomplete-item-name">${primary}</div>${meta ? `<div class="autocomplete-item-address">${meta}</div>` : ''}</div>`;
-                    div.onclick = () => selectAutocompleteResult(fieldId, lat, lon, item.result_name || item.query);
+                div.innerHTML = built.html;
+                if (built.hasCoords) {
+                    div.onclick = () => selectAutocompleteResult(fieldId, built.lat, built.lon, item.result_name || item.query);
                 } else {
-                    div.innerHTML = `<div class="autocomplete-item-icon">🔎</div><div class="autocomplete-item-text"><div class="autocomplete-item-name">${primary}</div></div>`;
                     div.onclick = () => {
                         const fieldInput = document.getElementById(fieldId);
                         if (fieldInput) fieldInput.value = item.query || '';
@@ -8812,7 +8803,7 @@ async function renderEndDestinationSuggestions(dropdown, fieldId = 'end') {
     }
 
     if (!recent.length && serverCount === 0) {
-        dropdown.innerHTML = '<div class="autocomplete-no-results">Type at least 2 letters to search. Recent locations appear here after you select places or calculate a route.</div>';
+        dropdown.innerHTML = SA.buildAutocompleteNoResultsHtml();
     }
     dropdown.classList.add('show');
 }
@@ -9312,6 +9303,15 @@ function _speedGps() { return VoyagrModules.speedGps(); }
 
 /** Unit-tested hazard alert helpers (modules/navigation/hazard-alerts.js). */
 function _hazardAlerts() { return VoyagrModules.hazardAlerts(); }
+
+/** Unit-tested offline/resume navigation banner helpers (modules/navigation/offline-navigation.js). */
+function _offlineNavigation() { return VoyagrModules.offlineNavigation(); }
+
+/** Unit-tested ML prediction list HTML (modules/navigation/ml-predictions.js). */
+function _mlPredictions() { return VoyagrModules.mlPredictions(); }
+
+/** Unit-tested search autocomplete row HTML (modules/navigation/search-autocomplete.js). */
+function _searchAutocomplete() { return VoyagrModules.searchAutocomplete(); }
 
 /** Unit-tested speed-limit widget helpers (modules/navigation/speed-limit-widget.js). */
 function _speedLimitWidget() { return VoyagrModules.speedLimitWidget(); }
@@ -10942,10 +10942,7 @@ function loadMLPredictions() {
                 data.predictions.forEach(pred => {
                     const item = document.createElement('div');
                     item.className = 'ml-prediction-item';
-                    item.innerHTML = `
-                        <span class="ml-prediction-label">${pred.label}</span>
-                        <span class="ml-prediction-details">${pred.details}</span>
-                    `;
+                    item.innerHTML = _mlPredictions().buildMlPredictionItemHtml(pred);
                     item.onclick = () => {
                         document.getElementById('start').value = pred.start_address;
                         document.getElementById('end').value = pred.end_address;
@@ -11434,18 +11431,12 @@ if (navigator.storage && navigator.storage.persist) {
 let _voyagrIsOffline = !navigator.onLine;
 
 function _createOfflineBanner() {
-    if (document.getElementById('offlineBanner')) return;
+    const OFF = _offlineNavigation();
+    if (document.getElementById(OFF.OFFLINE_BANNER_ID)) return;
     const banner = document.createElement('div');
-    banner.id = 'offlineBanner';
-    banner.style.cssText = `
-        position:fixed;top:0;left:0;right:0;z-index:99999;
-        background:linear-gradient(135deg,#ff6b6b,#ee5a24);color:#fff;
-        padding:10px 16px;text-align:center;font-size:14px;font-weight:600;
-        font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-        box-shadow:0 2px 8px rgba(0,0,0,0.3);display:flex;align-items:center;
-        justify-content:center;gap:8px;transition:transform 0.3s ease;
-    `;
-    banner.innerHTML = `<span>📡</span><span>You're offline — GPS & cached map tiles still work</span>`;
+    banner.id = OFF.OFFLINE_BANNER_ID;
+    banner.style.cssText = OFF.getOfflineBannerStyleCssText();
+    banner.innerHTML = OFF.buildOfflineBannerInnerHtml();
     document.body.prepend(banner);
     // Push the top-anchored nav widgets (turn card + Then row + lane guidance, and the
     // speed widget) down so this full-width banner doesn't cover them (see CSS).
@@ -11453,7 +11444,8 @@ function _createOfflineBanner() {
 }
 
 function _removeOfflineBanner() {
-    const banner = document.getElementById('offlineBanner');
+    const OFF = _offlineNavigation();
+    const banner = document.getElementById(OFF.OFFLINE_BANNER_ID);
     if (banner) {
         banner.style.transform = 'translateY(-100%)';
         setTimeout(() => banner.remove(), 350);
@@ -11752,26 +11744,11 @@ async function _tryResumeNavigation() {
         if (!saved || !saved.polyline || !saved.steps) return;
         console.log('[OfflineNav] Found persisted route, offering resume');
 
+        const OFF = _offlineNavigation();
         const resumeBanner = document.createElement('div');
-        resumeBanner.id = 'resumeNavBanner';
-        resumeBanner.style.cssText = `
-            position:fixed;bottom:80px;left:50%;transform:translateX(-50%);z-index:99998;
-            background:#fff;border-radius:16px;padding:16px 20px;
-            box-shadow:0 4px 20px rgba(0,0,0,0.25);max-width:340px;width:90%;
-            font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-            display:flex;flex-direction:column;gap:10px;
-        `;
-        resumeBanner.innerHTML = `
-            <div style="font-weight:600;font-size:15px">Resume navigation?</div>
-            <div style="font-size:13px;color:#666">A previous route was found (${saved.steps.length} steps).</div>
-            <div style="display:flex;gap:8px">
-                <button id="resumeNavYes" style="flex:1;padding:10px;border:none;border-radius:10px;
-                    background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-weight:600;
-                    font-size:14px;cursor:pointer">Resume</button>
-                <button id="resumeNavNo" style="flex:1;padding:10px;border:1px solid #ddd;border-radius:10px;
-                    background:#fff;color:#333;font-weight:600;font-size:14px;cursor:pointer">Dismiss</button>
-            </div>
-        `;
+        resumeBanner.id = OFF.RESUME_NAV_BANNER_ID;
+        resumeBanner.style.cssText = OFF.getResumeNavigationBannerStyleCssText();
+        resumeBanner.innerHTML = OFF.buildResumeNavigationBannerHtml(saved.steps.length);
         document.body.appendChild(resumeBanner);
 
         document.getElementById('resumeNavYes').onclick = () => {
@@ -11799,7 +11776,7 @@ async function _tryResumeNavigation() {
             clearPersistedRoute();
         };
 
-        setTimeout(() => { if (document.getElementById('resumeNavBanner')) resumeBanner.remove(); }, 30000);
+        setTimeout(() => { if (document.getElementById(OFF.RESUME_NAV_BANNER_ID)) resumeBanner.remove(); }, 30000);
     } catch (e) {
         console.warn('[OfflineNav] Resume check failed:', e);
     }
@@ -16039,18 +16016,19 @@ async function showAutocomplete(fieldId) {
  * @returns {*} Return value description
  */
 function displayAutocompleteResults(fieldId, results) {
+    const SA = _searchAutocomplete();
     const dropdown = getAutocompleteDropdown(fieldId);
     if (!dropdown) return;
 
     if (!results || results.length === 0) {
-        dropdown.innerHTML = '<div class="autocomplete-no-results">No results found</div>';
+        dropdown.innerHTML = SA.buildAutocompleteNoResultsHtml('No results found');
         return;
     }
 
     dropdown.innerHTML = '';
 
     results.forEach((result) => {
-        const icon = getLocationIcon(result);
+        const icon = SA.getLocationIcon(result);
         let name = result.name || result.address?.road || result.address?.city || result.display_name || 'Location';
         const houseNum = result.address?.house_number;
         if (houseNum && !name.startsWith(houseNum)) {
@@ -16065,61 +16043,11 @@ function displayAutocompleteResults(fieldId, results) {
 
         const item = document.createElement('div');
         item.className = 'autocomplete-item';
-
-        const iconEl = document.createElement('div');
-        iconEl.className = 'autocomplete-item-icon';
-        iconEl.textContent = icon;
-
-        const textEl = document.createElement('div');
-        textEl.className = 'autocomplete-item-text';
-
-        const nameEl = document.createElement('div');
-        nameEl.className = 'autocomplete-item-name';
-        nameEl.textContent = name;
-
-        const addrEl = document.createElement('div');
-        addrEl.className = 'autocomplete-item-address';
-        addrEl.textContent = shortAddress;
-
-        textEl.appendChild(nameEl);
-        textEl.appendChild(addrEl);
-        item.appendChild(iconEl);
-        item.appendChild(textEl);
-
+        item.innerHTML = SA.buildGeocodeAutocompleteItemHtml(icon, name, shortAddress);
         item.onclick = () => selectAutocompleteResult(fieldId, lat, lon, name);
 
         dropdown.appendChild(item);
     });
-}
-/**
- * getLocationIcon function
- * @function getLocationIcon
- * @param {*} result - Parameter description
- * @returns {*} Return value description
- */
-function getLocationIcon(result) {
-    const type = result.type || '';
-    const category = result.category || '';
-
-    if (type === 'house' || category === 'building') return '🏠';
-    if (type === 'street' || category === 'highway') return '🛣️';
-    if (type === 'city' || type === 'town' || category === 'place') return '🏙️';
-    if (type === 'restaurant' || category === 'amenity') return '🍽️';
-    if (type === 'parking' || category === 'parking') return '🅿️';
-    if (type === 'fuel' || category === 'fuel') return '⛽';
-    if (type === 'hospital' || category === 'hospital') return '🏥';
-    if (type === 'school' || category === 'school') return '🏫';
-    if (type === 'shop' || category === 'shop') return '🛍️';
-    if (type === 'airport' || category === 'airport') return '✈️';
-    if (type === 'railway' || category === 'railway') return '🚂';
-    if (type === 'bus_stop' || category === 'bus') return '🚌';
-    if (type === 'hotel' || category === 'hotel') return '🏨';
-    if (type === 'museum' || category === 'museum') return '🏛️';
-    if (type === 'park' || category === 'park') return '🌳';
-    if (type === 'beach' || category === 'beach') return '🏖️';
-    if (type === 'mountain' || category === 'mountain') return '⛰️';
-    if (type === 'lake' || category === 'water') return '🌊';
-    return '📍';
 }
 /**
  * selectAutocompleteResult function

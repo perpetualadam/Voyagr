@@ -36,6 +36,9 @@ describe('VoyagrModules registry', () => {
         global.VoyagrRouteSharing = require('../modules/navigation/route-sharing');
         global.VoyagrWaypoints = require('../modules/navigation/waypoints');
         global.VoyagrPoiSearch = require('../modules/navigation/poi-search');
+        global.VoyagrOfflineNavigation = require('../modules/navigation/offline-navigation');
+        global.VoyagrMlPredictions = require('../modules/navigation/ml-predictions');
+        global.VoyagrSearchAutocomplete = require('../modules/navigation/search-autocomplete');
         jest.resetModules();
     });
 
