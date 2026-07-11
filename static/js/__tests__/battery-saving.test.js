@@ -44,4 +44,13 @@ describe('battery-saving module', () => {
         expect(disable.persistApiBody).toEqual({ battery_saving_mode: 0 });
         expect(disable.restoreBodyAnimation).toBe(true);
     });
+
+    test('buildRestoreBatterySavingUiPlan restores visuals without API/status', () => {
+        expect(BS.buildRestoreBatterySavingUiPlan({ savedValue: 'false' }).shouldApply).toBe(false);
+        const restore = BS.buildRestoreBatterySavingUiPlan({ savedValue: 'true' });
+        expect(restore.shouldApply).toBe(true);
+        expect(restore.disableBodyAnimation).toBe(true);
+        expect(restore.statusMessage).toBeUndefined();
+        expect(restore.persistApiBody).toBeUndefined();
+    });
 });

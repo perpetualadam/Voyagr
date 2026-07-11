@@ -87,4 +87,14 @@ describe('porcupine-wake module', () => {
         expect(warm.shouldWarm).toBe(true);
         expect(warm.warmUrls.length).toBeGreaterThan(2);
     });
+
+    test('buildStopPorcupineWakePipelineExecutePlan describes teardown steps', () => {
+        const execute = PW.buildStopPorcupineWakePipelineExecutePlan({
+            hasBridgeEngine: true,
+            hasWorker: true,
+        });
+        expect(execute.shouldStop).toBe(true);
+        expect(execute.unsubscribeBridge).toBe(true);
+        expect(execute.terminateWorker).toBe(true);
+    });
 });

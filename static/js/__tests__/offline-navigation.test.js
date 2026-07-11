@@ -119,4 +119,26 @@ describe('tile precache planning helpers', () => {
         expect(OFF.normalizePrefetchTileUrl('/tiles/13/4096/2720.pbf', 'https://app.test'))
             .toBe('https://app.test/tiles/13/4096/2720.pbf');
     });
+
+    test('buildPrecacheRouteTilesExecutePlan gates on polyline and templates', () => {
+        expect(OFF.buildCollectVectorTileTemplatesPreflightPlan({
+            hasOfflineModule: false,
+            hasMap: true,
+        }).canCollect).toBe(false);
+
+        const execute = OFF.buildPrecacheRouteTilesExecutePlan({
+            polylineLength: 10,
+            hasCaches: true,
+            urls: ['https://tiles/1/1/1.pbf'],
+            templateCount: 1,
+        });
+        expect(execute.shouldPrecache).toBe(true);
+        expect(execute.batchSize).toBe(OFF.TILE_PRECACHE_BATCH_SIZE);
+        expect(OFF.buildPrecacheRouteTilesExecutePlan({
+            polylineLength: 1,
+            hasCaches: true,
+            urls: [],
+            templateCount: 0,
+        }).shouldPrecache).toBe(false);
+    });
 });

@@ -43,6 +43,7 @@ describe('VoyagrModules registry', () => {
         global.VoyagrBatterySaving = require('../modules/navigation/battery-saving');
         global.VoyagrAppState = require('../modules/navigation/app-state');
         global.VoyagrGestureControl = require('../modules/navigation/gesture-control');
+        global.VoyagrLegacyPrefsRestore = require('../modules/navigation/legacy-prefs-restore');
         global.VoyagrSearchAutocomplete = require('../modules/navigation/search-autocomplete');
         global.VoyagrGeocodingLocations = require('../modules/navigation/geocoding-locations');
         global.VoyagrDeviceEnvironment = require('../modules/ui/device-environment');

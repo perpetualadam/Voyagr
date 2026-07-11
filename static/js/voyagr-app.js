@@ -7384,28 +7384,41 @@ async function porcupineCustomKeywordAvailable() {
 }
 
 async function stopPorcupineWakePipeline() {
-    if (_porcupineWakeBridgeEngine && typeof WebVoiceProcessor !== 'undefined') {
+    const PW = _porcupineWake();
+    const execute = PW.buildStopPorcupineWakePipelineExecutePlan({
+        hasBridgeEngine: !!_porcupineWakeBridgeEngine,
+        hasWorker: !!_porcupineWakeWorker,
+    });
+    if (!execute.shouldStop) {
+        porcupineWakePipelineRunning = false;
+        return;
+    }
+    if (execute.unsubscribeBridge && typeof WebVoiceProcessor !== 'undefined') {
         try {
             await WebVoiceProcessor.unsubscribe(_porcupineWakeBridgeEngine);
         } catch (e) {
-            console.warn('[Porcupine] unsubscribe:', e);
+            console.warn(execute.logPrefixes.unsubscribe, e);
         }
     }
-    _porcupineWakeBridgeEngine = null;
+    if (execute.clearBridgeEngine) _porcupineWakeBridgeEngine = null;
     if (_porcupineWakeWorker) {
-        try {
-            await _porcupineWakeWorker.release();
-        } catch (e) {
-            console.warn('[Porcupine] release:', e);
+        if (execute.releaseWorker) {
+            try {
+                await _porcupineWakeWorker.release();
+            } catch (e) {
+                console.warn(execute.logPrefixes.release, e);
+            }
         }
-        try {
-            _porcupineWakeWorker.terminate();
-        } catch (e) {
-            console.warn('[Porcupine] terminate:', e);
+        if (execute.terminateWorker) {
+            try {
+                _porcupineWakeWorker.terminate();
+            } catch (e) {
+                console.warn(execute.logPrefixes.terminate, e);
+            }
         }
-        _porcupineWakeWorker = null;
+        if (execute.clearWorker) _porcupineWakeWorker = null;
     }
-    porcupineWakePipelineRunning = false;
+    if (execute.setPipelineRunning === false) porcupineWakePipelineRunning = false;
 }
 
 async function startPorcupineWakePipeline() {
@@ -7518,22 +7531,23 @@ async function onPorcupineWakeHotword() {
  * @returns {*} Return value description
  */
 function toggleVoiceAnnouncements() {
-    const button = document.getElementById('voiceAnnouncementsEnabled');
+    const VA = _voiceAnnouncements();
+    const TU = _toggleUI();
+    const button = document.getElementById(VA.VOICE_PREFS_ELEMENT_IDS.announcementsEnabled);
+    if (!button) return;
 
-    // Toggle the active class (like other toggle switches)
-    button.classList.toggle('active');
-    const enabled = button.classList.contains('active');
+    const collected = VA.buildToggleVoiceAnnouncementsCollectPlan({
+        currentEnabled: button.classList.contains('active'),
+    });
+    const execute = VA.buildToggleVoiceAnnouncementsExecutePlan({ enabled: collected.enabled });
+    if (!execute.shouldApply) return;
 
-    _toggleUI().applyLabeledToggleButton(button, enabled);
-
-    // Save to localStorage
-    localStorage.setItem('voiceAnnouncementsEnabled', enabled ? 'true' : 'false');
-
-    // FIXED: Update the new boolean flag instead of voiceRecognition object
-    voiceAnnouncementsEnabled = enabled;
-    saveVoicePreferences();
-    showStatus(enabled ? '🔊 Voice announcements enabled' : '🔇 Voice announcements disabled', 'success');
-    saveAllSettings();
+    TU.applyLabeledToggleButton(button, execute.toggle.enabled);
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    if (execute.updateRuntimeFlag) voiceAnnouncementsEnabled = execute.enabled;
+    if (execute.saveVoicePreferences) saveVoicePreferences();
+    showStatus(execute.statusMessage, execute.statusType);
+    if (execute.saveAllSettings) saveAllSettings();
 }
 
 async function resolveParkingDestinationCoords(lastRoute, endInput) {
@@ -8533,6 +8547,7 @@ function _routeProgress() { return VoyagrModules.routeProgress(); }
 function _settingsSnapshot() { return VoyagrModules.settingsSnapshot(); }
 function _appState() { return VoyagrModules.appState(); }
 function _gestureControl() { return VoyagrModules.gestureControl(); }
+function _legacyPrefsRestore() { return VoyagrModules.legacyPrefsRestore(); }
 
 /** Unit-tested map preview marker HTML (modules/map/preview-marker.js). */
 function _previewMarker() { return VoyagrModules.previewMarker(); }
@@ -9806,6 +9821,7 @@ function applyBatterySavingModeFromPlan(execute) {
         }).catch((error) => console.error('Error updating battery mode:', error));
     }
     if (execute.statusMessage) showStatus(execute.statusMessage, execute.statusType);
+    if (execute.restoreLogMessage) console.log(execute.restoreLogMessage);
 }
 
 function enableBatterySavingMode() {
@@ -10011,38 +10027,28 @@ function warmPicovoiceStaticCache() {
 
 /** Hide map-stack FABs while the bottom sheet is fully expanded (peek mode keeps them visible). */
 function syncBottomSheetOverlapFabs() {
-    const bottomSheet = document.getElementById('bottomSheet');
-    const sheetExpanded = !!(bottomSheet && bottomSheet.classList.contains('expanded'));
+    const DH = _domHelpers();
+    const bottomSheet = document.getElementById(DH.BOTTOM_SHEET_ID);
+    const execute = DH.buildBottomSheetOverlapFabDisplayPlan({
+        sheetExpanded: !!(bottomSheet && bottomSheet.classList.contains(DH.BOTTOM_SHEET_EXPANDED_CLASS)),
+        routeInProgress,
+    });
+    if (!execute.shouldApply) return;
 
-    const alwaysHideWhenExpandedIds = ['roadReportFab', 'startTrackingBtn', 'voiceFab', 'currentLocationFab', 'mapControlsHintFab', 'recenterVehicleFab'];
-    for (let i = 0; i < alwaysHideWhenExpandedIds.length; i++) {
-        const el = document.getElementById(alwaysHideWhenExpandedIds[i]);
-        if (!el) continue;
-        if (sheetExpanded) {
+    (execute.alwaysHideWhenExpanded || []).forEach(({ id, action }) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (action === 'hide') {
             el.style.display = 'none';
         } else {
             el.style.removeProperty('display');
         }
-    }
+    });
 
-    const zoomBtn = document.getElementById('zoomFollowToggle');
-    const journeyBtn = document.getElementById('journeyOverviewBtn');
-    const endNavBtn = document.getElementById('endNavigationBtn');
-    if (sheetExpanded && routeInProgress) {
-        if (zoomBtn) zoomBtn.style.display = 'none';
-        if (journeyBtn) journeyBtn.style.display = 'none';
-        // Keep End navigation visible even when the sheet is expanded — it is the
-        // primary way to stop guidance and must stay reachable on mobile.
-        if (endNavBtn) endNavBtn.style.display = 'block';
-    } else if (routeInProgress) {
-        if (zoomBtn) zoomBtn.style.display = 'block';
-        if (journeyBtn) journeyBtn.style.display = 'block';
-        if (endNavBtn) endNavBtn.style.display = 'block';
-    } else {
-        if (zoomBtn) zoomBtn.style.display = 'none';
-        if (journeyBtn) journeyBtn.style.display = 'none';
-        if (endNavBtn) endNavBtn.style.display = 'none';
-    }
+    (execute.navFabDisplays || []).forEach(({ id, display }) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = display;
+    });
 }
 
 /** Road-report FAB: always available unless the bottom sheet is covering map controls. */
@@ -10554,12 +10560,18 @@ window.addEventListener('load', () => {
  */
 function collectVectorTileTemplatesFromMap() {
     const OFF = _offlineNavigation();
-    if (!OFF || typeof map === 'undefined' || map === null) return [];
-    if (typeof map.isStyleLoaded === 'function' && !map.isStyleLoaded()) return [];
+    const preflight = OFF.buildCollectVectorTileTemplatesPreflightPlan({
+        hasOfflineModule: !!OFF,
+        hasMap: typeof map !== 'undefined' && map !== null,
+        styleLoaded: typeof map !== 'undefined' && map !== null && typeof map.isStyleLoaded === 'function'
+            ? map.isStyleLoaded()
+            : true,
+    });
+    if (!preflight.canCollect) return [];
     try {
         return OFF.parseVectorTileSourcesFromStyle(map.getStyle());
     } catch (e) {
-        console.warn('[TilePreCache] Could not read map style:', e);
+        console.warn(preflight.errorLogPrefix, e);
         return [];
     }
 }
@@ -10570,31 +10582,43 @@ async function precacheRouteTiles(polyline) {
     if (!('caches' in window)) return;
 
     const templates = collectVectorTileTemplatesFromMap();
-    if (templates.length === 0) {
-        console.log('[TilePreCache] Style has no vector tile templates yet — skipping corridor precache');
-        return;
-    }
+    const urlPlan = templates.length > 0
+        ? OFF.buildRouteCorridorTileUrlPlan(polyline, templates, {
+            origin: window.location.origin,
+            maxUrls: OFF.TILE_PRECACHE_MAX_URLS,
+            zoomLevels: OFF.TILE_PRECACHE_ZOOM_LEVELS,
+        })
+        : { urls: [], originalCount: 0, capped: false };
 
-    const plan = OFF.buildRouteCorridorTileUrlPlan(polyline, templates, {
-        origin: window.location.origin,
-        maxUrls: OFF.TILE_PRECACHE_MAX_URLS,
-        zoomLevels: OFF.TILE_PRECACHE_ZOOM_LEVELS,
+    const execute = OFF.buildPrecacheRouteTilesExecutePlan({
+        polylineLength: polyline.length,
+        hasCaches: true,
+        urls: urlPlan.urls,
+        capped: urlPlan.capped,
+        originalCount: urlPlan.originalCount,
+        templateCount: templates.length,
     });
 
-    if (plan.capped) {
-        console.log(`[TilePreCache] Capping prefetch ${plan.originalCount} → ${plan.urls.length} URLs`);
+    if (!execute.hasTemplates) {
+        console.log(execute.skipNoTemplatesLog);
+        return;
+    }
+    if (!execute.shouldPrecache) return;
+
+    if (execute.capped) {
+        console.log(`${execute.cappedLogPrefix} ${execute.originalCount} → ${execute.urlCount} URLs`);
     }
 
-    console.log(`[TilePreCache] Pre-caching ${plan.urls.length} tiles (${templates.length} source template(s)) along route corridor`);
+    console.log(`${execute.startLogPrefix} ${execute.urlCount} tiles (${execute.templateCount} source template(s)) along route corridor`);
 
     try {
         const cacheNames = await caches.keys();
-        const tileCacheName = cacheNames.find(n => n.startsWith('voyagr-tiles-')) || 'voyagr-tiles-v15';
+        const tileCacheName = cacheNames.find((n) => n.startsWith(execute.tileCacheNamePrefix))
+            || execute.defaultTileCacheName;
         const cache = await caches.open(tileCacheName);
         let cached = 0;
-        const batchSize = OFF.TILE_PRECACHE_BATCH_SIZE;
-        for (let i = 0; i < plan.urls.length; i += batchSize) {
-            const batch = plan.urls.slice(i, i + batchSize);
+        for (let i = 0; i < execute.urls.length; i += execute.batchSize) {
+            const batch = execute.urls.slice(i, i + execute.batchSize);
             await Promise.allSettled(
                 batch.map(async (url) => {
                     const existing = await cache.match(url);
@@ -10609,9 +10633,9 @@ async function precacheRouteTiles(polyline) {
                 })
             );
         }
-        console.log(`[TilePreCache] Cached ${cached} new tiles`);
+        console.log(`${execute.completeLogPrefix} ${cached} new tiles`);
     } catch (e) {
-        console.warn('[TilePreCache] Error:', e);
+        console.warn(execute.errorLogPrefix, e);
     }
 }
 
@@ -16121,59 +16145,63 @@ window.loadHazardCameraTogglesFromApi = loadHazardCameraTogglesFromApi;
 function loadPreferences() {
     const RP = _routePrefs();
     const TU = _toggleUI();
+    const GC = _gestureControl();
+    const LPR = _legacyPrefsRestore();
+    const BS = _batterySaving();
+    const orch = LPR.buildLoadLegacyPreferencesOrchestrationPlan();
 
-    RP.buildRouteAvoidanceTogglesApplyPlan(localStorage).forEach((item) => {
-        const button = document.getElementById(item.buttonId);
+    if (orch.applyRouteAvoidanceToggles) {
+        RP.buildRouteAvoidanceTogglesApplyPlan(localStorage).forEach((item) => {
+            const button = document.getElementById(item.buttonId);
 
-        if (button) {
-            TU.applyLabeledToggleButton(button, item.enabled);
-            console.log('[Settings] Loaded preference:', item.pref, '=', item.enabled ? 'enabled' : 'disabled',
-                item.usesDefault ? '(default)' : '');
-        } else {
-            console.warn('[Settings] Button not found for preference:', item.pref, 'ID:', item.buttonId);
-        }
-    });
-
-    loadHazardCameraTogglesFromApi();
-
-    // ===== LOAD GESTURE CONTROL PREFERENCE =====
-    const gestureSaved = localStorage.getItem('gestureEnabled');
-    if (gestureSaved === 'true') {
-        const button = document.getElementById('gestureEnabled');
-        if (button) {
-            TU.applyToggleButton(button, true);
-            gestureEnabled = true;
-            document.getElementById('gestureSettings').style.display = 'block';
-            if ('DeviceMotionEvent' in window) {
-                window.addEventListener('devicemotion', handleDeviceMotion);
+            if (button) {
+                TU.applyLabeledToggleButton(button, item.enabled);
+                console.log('[Settings] Loaded preference:', item.pref, '=', item.enabled ? 'enabled' : 'disabled',
+                    item.usesDefault ? '(default)' : '');
+            } else {
+                console.warn('[Settings] Button not found for preference:', item.pref, 'ID:', item.buttonId);
             }
+        });
+    }
+
+    if (orch.loadHazardCameraTogglesFromApi) loadHazardCameraTogglesFromApi();
+
+    const gestureRestore = LPR.buildRestoreGesturePreferencePlan({
+        savedValue: localStorage.getItem(GC.GESTURE_ENABLED_STORAGE_KEY),
+        hasDeviceMotion: 'DeviceMotionEvent' in window,
+    });
+    if (gestureRestore.shouldRestore) {
+        gestureEnabled = gestureRestore.gestureEnabled;
+        const gestureButton = document.getElementById(gestureRestore.toggle.id);
+        if (gestureButton) TU.applyToggleButton(gestureButton, gestureRestore.toggle.enabled);
+        const gestureSettings = document.getElementById(gestureRestore.settingsPanel.id);
+        if (gestureSettings) gestureSettings.style.display = gestureRestore.settingsPanel.display;
+        if (gestureRestore.addDeviceMotionListener) {
+            window.addEventListener('devicemotion', handleDeviceMotion);
         }
     }
 
-    // ===== LOAD AUTO GPS PREFERENCE =====
-    const autoGpsSaved = localStorage.getItem('autoGpsEnabled');
-    if (autoGpsSaved === 'true') {
-        const toggle = document.getElementById('autoGpsToggle');
-        if (toggle) {
-            toggle.checked = true;
-            autoGpsEnabled = true;
-            startAutoGpsLocation();
-            console.log('[Auto GPS] Preference restored from localStorage');
+    const autoGpsRestore = LPR.buildRestoreAutoGpsPreferencePlan({
+        savedValue: localStorage.getItem(LPR.AUTO_GPS_STORAGE_KEY),
+    });
+    if (autoGpsRestore.shouldRestore) {
+        const autoGpsToggle = document.getElementById(autoGpsRestore.toggle.id);
+        if (autoGpsToggle) {
+            autoGpsToggle.checked = autoGpsRestore.toggle.checked;
+            autoGpsEnabled = autoGpsRestore.autoGpsEnabled;
+            if (autoGpsRestore.startAutoGpsLocation) startAutoGpsLocation();
+            console.log(autoGpsRestore.restoreLogMessage);
         }
     }
 
-    // ===== LOAD BATTERY SAVING MODE PREFERENCE =====
-    const batterySavingSaved = localStorage.getItem('pref_batterySaving');
-    if (batterySavingSaved === 'true') {
-        const button = document.getElementById('batterySavingMode');
-        if (button) {
-            TU.applyToggleButton(button, true);
-            batterySavingMode = true;
-            console.log('[Battery] Battery saving mode restored from localStorage');
-        }
+    const batteryRestore = BS.buildRestoreBatterySavingUiPlan({
+        savedValue: localStorage.getItem(BS.BATTERY_SAVING_STORAGE_KEY),
+    });
+    if (batteryRestore.shouldApply) {
+        applyBatterySavingModeFromPlan(batteryRestore);
     }
 
-    applySpeedWidgetToggleUi();
+    if (orch.applySpeedWidgetToggleUi) applySpeedWidgetToggleUi();
 }
 
 // Update trip info display

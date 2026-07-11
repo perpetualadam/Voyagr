@@ -223,6 +223,28 @@
      * @param {Object} [input]
      * @returns {Object}
      */
+    function buildStopPorcupineWakePipelineExecutePlan(input) {
+        input = input || {};
+        return {
+            shouldStop: !!(input.hasBridgeEngine || input.hasWorker),
+            unsubscribeBridge: !!input.hasBridgeEngine,
+            releaseWorker: !!input.hasWorker,
+            terminateWorker: !!input.hasWorker,
+            clearBridgeEngine: true,
+            clearWorker: true,
+            setPipelineRunning: false,
+            logPrefixes: {
+                unsubscribe: '[Porcupine] unsubscribe:',
+                release: '[Porcupine] release:',
+                terminate: '[Porcupine] terminate:',
+            },
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @returns {Object}
+     */
     function buildPorcupineInitAutoStartPlan(input) {
         input = input || {};
         return {
@@ -243,6 +265,7 @@
         buildPorcupineWakeHotwordExecutePlan: buildPorcupineWakeHotwordExecutePlan,
         buildPorcupineStartConfigPlan: buildPorcupineStartConfigPlan,
         buildWarmPicovoiceStaticCachePlan: buildWarmPicovoiceStaticCachePlan,
+        buildStopPorcupineWakePipelineExecutePlan: buildStopPorcupineWakePipelineExecutePlan,
         buildPorcupineInitAutoStartPlan: buildPorcupineInitAutoStartPlan,
     };
 

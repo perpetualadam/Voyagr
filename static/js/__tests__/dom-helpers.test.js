@@ -51,4 +51,21 @@ describe('dom-helpers', () => {
         expect(Dom.buildBottomSheetDragSnapPlan(5, true).action).toBe('expand');
         expect(Dom.buildBottomSheetDragStartAllowedPlan(true, false).allowDrag).toBe(true);
     });
+
+    test('buildBottomSheetOverlapFabDisplayPlan hides nav FABs when sheet expanded', () => {
+        const expandedNav = Dom.buildBottomSheetOverlapFabDisplayPlan({
+            sheetExpanded: true,
+            routeInProgress: true,
+        });
+        expect(expandedNav.navFabDisplays.find((item) => item.id === 'zoomFollowToggle').display).toBe('none');
+        expect(expandedNav.navFabDisplays.find((item) => item.id === 'endNavigationBtn').display).toBe('block');
+        expect(expandedNav.alwaysHideWhenExpanded[0].action).toBe('hide');
+
+        const idle = Dom.buildBottomSheetOverlapFabDisplayPlan({
+            sheetExpanded: false,
+            routeInProgress: false,
+        });
+        expect(idle.alwaysHideWhenExpanded[0].action).toBe('clearDisplay');
+        expect(idle.navFabDisplays.every((item) => item.display === 'none')).toBe(true);
+    });
 });

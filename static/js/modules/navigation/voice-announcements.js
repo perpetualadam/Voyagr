@@ -506,6 +506,7 @@
 
     var VOICE_PREFS_STORAGE_KEY = 'voicePreferences';
     var VOICE_FREQUENCY_MODE_STORAGE_KEY = 'voiceFrequencyMode';
+    var VOICE_ANNOUNCEMENTS_ENABLED_STORAGE_KEY = 'voiceAnnouncementsEnabled';
     var VOICE_PREFS_DEFAULTS = {
         turnDistance1: 500,
         turnDistance2: 200,
@@ -670,6 +671,47 @@
         };
     }
 
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.currentEnabled]
+     * @returns {Object}
+     */
+    function buildToggleVoiceAnnouncementsCollectPlan(input) {
+        input = input || {};
+        var enabled = !input.currentEnabled;
+        return {
+            enabled: enabled,
+            storageValue: enabled ? 'true' : 'false',
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.enabled]
+     * @returns {Object}
+     */
+    function buildToggleVoiceAnnouncementsExecutePlan(input) {
+        input = input || {};
+        var enabled = !!input.enabled;
+        return {
+            shouldApply: true,
+            enabled: enabled,
+            toggle: {
+                id: VOICE_PREFS_ELEMENT_IDS.announcementsEnabled,
+                enabled: enabled,
+            },
+            storageKey: VOICE_ANNOUNCEMENTS_ENABLED_STORAGE_KEY,
+            storageValue: enabled ? 'true' : 'false',
+            updateRuntimeFlag: true,
+            saveVoicePreferences: true,
+            saveAllSettings: true,
+            statusMessage: enabled
+                ? '🔊 Voice announcements enabled'
+                : '🔇 Voice announcements disabled',
+            statusType: 'success',
+        };
+    }
+
     var api = {
         DESTINATION_ANNOUNCEMENT_HYSTERESIS_M: DESTINATION_ANNOUNCEMENT_HYSTERESIS_M,
         DESTINATION_ANNOUNCEMENT_RESET_M: DESTINATION_ANNOUNCEMENT_RESET_M,
@@ -689,6 +731,8 @@
         voiceAnnouncementStateResetValues: voiceAnnouncementStateResetValues,
         VOICE_PREFS_STORAGE_KEY: VOICE_PREFS_STORAGE_KEY,
         VOICE_FREQUENCY_MODE_STORAGE_KEY: VOICE_FREQUENCY_MODE_STORAGE_KEY,
+        VOICE_ANNOUNCEMENTS_ENABLED_STORAGE_KEY: VOICE_ANNOUNCEMENTS_ENABLED_STORAGE_KEY,
+        VOICE_PREFS_ELEMENT_IDS: VOICE_PREFS_ELEMENT_IDS,
         VOICE_PREFS_DEFAULTS: VOICE_PREFS_DEFAULTS,
         VOICE_FREQUENCY_THROTTLES: VOICE_FREQUENCY_THROTTLES,
         buildVoicePreferencesCollectPlan: buildVoicePreferencesCollectPlan,
@@ -701,6 +745,8 @@
         buildLoadVoicePreferencesOrchestrationPlan: buildLoadVoicePreferencesOrchestrationPlan,
         buildLoadVoicePreferencesExecutePlan: buildLoadVoicePreferencesExecutePlan,
         buildLoadVoicePreferencesDefaultsExecutePlan: buildLoadVoicePreferencesDefaultsExecutePlan,
+        buildToggleVoiceAnnouncementsCollectPlan: buildToggleVoiceAnnouncementsCollectPlan,
+        buildToggleVoiceAnnouncementsExecutePlan: buildToggleVoiceAnnouncementsExecutePlan,
     };
 
     // CommonJS (Jest) export.

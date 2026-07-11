@@ -90,6 +90,31 @@
         };
     }
 
+    /**
+     * Restore battery-saving UI/runtime visuals on page load (no status toast or API).
+     * @param {Object} [input]
+     * @param {string} [input.savedValue]
+     * @returns {Object}
+     */
+    function buildRestoreBatterySavingUiPlan(input) {
+        input = input || {};
+        if (input.savedValue !== 'true') {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            setBatterySavingMode: true,
+            batterySavingMode: true,
+            toggle: {
+                id: BATTERY_SAVING_TOGGLE_ID,
+                enabled: true,
+            },
+            disableBodyAnimation: true,
+            disableElementAnimations: true,
+            restoreLogMessage: '[Battery] Battery saving mode restored from localStorage',
+        };
+    }
+
     var api = {
         BATTERY_SAVING_STORAGE_KEY: BATTERY_SAVING_STORAGE_KEY,
         BATTERY_SAVING_TOGGLE_ID: BATTERY_SAVING_TOGGLE_ID,
@@ -98,6 +123,7 @@
         buildToggleBatterySavingCollectPlan: buildToggleBatterySavingCollectPlan,
         buildEnableBatterySavingExecutePlan: buildEnableBatterySavingExecutePlan,
         buildDisableBatterySavingExecutePlan: buildDisableBatterySavingExecutePlan,
+        buildRestoreBatterySavingUiPlan: buildRestoreBatterySavingUiPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -343,6 +343,52 @@
         };
     }
 
+    /**
+     * Preflight for reading vector tile templates from the active map style.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildCollectVectorTileTemplatesPreflightPlan(input) {
+        input = input || {};
+        if (!input.hasOfflineModule || !input.hasMap) {
+            return { canCollect: false, templates: [] };
+        }
+        if (input.styleLoaded === false) {
+            return { canCollect: false, templates: [] };
+        }
+        return {
+            canCollect: true,
+            errorLogPrefix: '[TilePreCache] Could not read map style:',
+        };
+    }
+
+    /**
+     * Execute plan for corridor tile precache after URL plan is built.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildPrecacheRouteTilesExecutePlan(input) {
+        input = input || {};
+        var urlCount = (input.urls || []).length;
+        return {
+            shouldPrecache: (input.polylineLength || 0) >= 2 && !!input.hasCaches && urlCount > 0,
+            hasTemplates: (input.templateCount || 0) > 0,
+            skipNoTemplatesLog: '[TilePreCache] Style has no vector tile templates yet — skipping corridor precache',
+            capped: !!input.capped,
+            originalCount: input.originalCount || 0,
+            urlCount: urlCount,
+            templateCount: input.templateCount || 0,
+            cappedLogPrefix: '[TilePreCache] Capping prefetch',
+            startLogPrefix: '[TilePreCache] Pre-caching',
+            completeLogPrefix: '[TilePreCache] Cached',
+            errorLogPrefix: '[TilePreCache] Error:',
+            tileCacheNamePrefix: 'voyagr-tiles-',
+            defaultTileCacheName: 'voyagr-tiles-v15',
+            batchSize: TILE_PRECACHE_BATCH_SIZE,
+            urls: input.urls || [],
+        };
+    }
+
     var api = {
         OFFLINE_BANNER_ID: OFFLINE_BANNER_ID,
         RESUME_NAV_BANNER_ID: RESUME_NAV_BANNER_ID,
@@ -372,6 +418,8 @@
         clampTileFetchZoom: clampTileFetchZoom,
         normalizePrefetchTileUrl: normalizePrefetchTileUrl,
         buildRouteCorridorTileUrlPlan: buildRouteCorridorTileUrlPlan,
+        buildCollectVectorTileTemplatesPreflightPlan: buildCollectVectorTileTemplatesPreflightPlan,
+        buildPrecacheRouteTilesExecutePlan: buildPrecacheRouteTilesExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

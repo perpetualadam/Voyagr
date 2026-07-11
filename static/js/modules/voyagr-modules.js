@@ -49,6 +49,7 @@
         settingsSnapshot: 'VoyagrSettingsSnapshot',
         appState: 'VoyagrAppState',
         gestureControl: 'VoyagrGestureControl',
+        legacyPrefsRestore: 'VoyagrLegacyPrefsRestore',
         previewMarker: 'VoyagrPreviewMarker',
         favorites: 'VoyagrFavorites',
         cazInfo: 'VoyagrCazInfo',

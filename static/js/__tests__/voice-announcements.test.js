@@ -541,4 +541,13 @@ describe('voice preferences plans', () => {
         expect(load.domPlan.selects.find((item) => item.id === 'voiceTurnDistance1').value).toBe('400');
         expect(VA.buildLoadVoicePreferencesDefaultsExecutePlan().useDefaults).toBe(true);
     });
+
+    test('buildToggleVoiceAnnouncementsExecutePlan persists enabled state', () => {
+        const collected = VA.buildToggleVoiceAnnouncementsCollectPlan({ currentEnabled: false });
+        expect(collected.enabled).toBe(true);
+        const execute = VA.buildToggleVoiceAnnouncementsExecutePlan({ enabled: true });
+        expect(execute.storageKey).toBe(VA.VOICE_ANNOUNCEMENTS_ENABLED_STORAGE_KEY);
+        expect(execute.saveVoicePreferences).toBe(true);
+        expect(execute.statusMessage).toContain('enabled');
+    });
 });
