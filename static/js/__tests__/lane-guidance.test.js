@@ -279,3 +279,32 @@ describe('lane guidance fetch throttle helpers', () => {
         expect(LG.isLaneGuidanceCacheEntryFresh({ ts: 5000, fallback: true }, now)).toBe(true);
     });
 });
+
+describe('lane guidance UI and voice apply plans', () => {
+    test('buildLaneGuidanceUiApplyPlan hides single-lane guidance', () => {
+        expect(LG.buildLaneGuidanceUiApplyPlan({ total_lanes: 1, urgency: 'none' }).visible).toBe(false);
+    });
+
+    test('buildLaneGuidanceUiApplyPlan includes indicators for multi-lane roads', () => {
+        const data = LG.buildDeterministicLaneGuidance('left', 120, 0, 'primary');
+        const plan = LG.buildLaneGuidanceUiApplyPlan(data);
+        expect(plan.visible).toBe(true);
+        expect(plan.indicators.length).toBeGreaterThan(1);
+        expect(plan.guidanceText).toBeTruthy();
+    });
+
+    test('buildLaneVoiceAnnouncementPlan returns message for urgent lane change', () => {
+        const data = LG.buildDeterministicLaneGuidance('left', 80, 0, 'primary');
+        const plan = LG.buildLaneVoiceAnnouncementPlan(data, '');
+        expect(plan).not.toBeNull();
+        expect(plan.message).toContain('lane');
+        expect(plan.priority).toBe('high');
+        expect(LG.buildLaneVoiceAnnouncementPlan(data, plan.announceKey)).toBeNull();
+    });
+
+    test('resolveLanePositionLabel', () => {
+        expect(LG.resolveLanePositionLabel(1, 3)).toBe('left');
+        expect(LG.resolveLanePositionLabel(2, 3)).toBe('middle');
+        expect(LG.resolveLanePositionLabel(3, 3)).toBe('right');
+    });
+});

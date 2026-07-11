@@ -271,4 +271,33 @@ describe('multi-drop and initial route helpers', () => {
         expect(driving.avoidTolls).toBe(true);
         expect(driving.avoidCaz).toBe(true);
     });
+
+    test('buildInitialRouteSharedOptions and buildRerouteSharedOptions read common flags', () => {
+        const storage = mockStorage({
+            pref_cameras: 'false',
+            pref_avoid_motorways: 'true',
+            pref_avoid_ferries: 'true',
+            includeTolls: 'true',
+            includeCAZ: 'false',
+        });
+        const initial = RR.buildInitialRouteSharedOptions(storage, {
+            routingMode: 'auto',
+            vehicleType: 'petrol_diesel',
+            costParams: { fuel_price: 1.5 },
+            avoidTolls: true,
+            routePrefs: { preferScenic: true },
+        });
+        expect(initial.avoidCameras).toBe(false);
+        expect(initial.avoidMotorways).toBe(true);
+        expect(initial.enableHazardAvoidance).toBe(true);
+        const reroute = RR.buildRerouteSharedOptions(storage, {
+            routingMode: 'auto',
+            vehicleType: 'petrol_diesel',
+            costParams: {},
+            isAvoidTollsEnabled: function () { return false; },
+            routePrefs: {},
+        });
+        expect(reroute.avoidFerries).toBe(true);
+        expect(RR.readRerouteIncludeFlags(storage).includeCaz).toBe(false);
+    });
 });

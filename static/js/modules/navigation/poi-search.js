@@ -153,6 +153,7 @@
 
     var ALONG_ROUTE_SEARCH_RADIUS_M = 1000;
     var ALONG_ROUTE_MIN_ROUTE_POINTS = 2;
+    var POI_MODAL_ID = 'poiModal';
 
     /**
      * @param {number} routePointCount
@@ -223,6 +224,34 @@
         return 'Search failed';
     }
 
+    /**
+     * @param {Array<Object>} results
+     * @param {string} type
+     * @param {number} userLat
+     * @param {number} userLon
+     * @param {function(number): string} formatDistanceFn
+     * @returns {Object}
+     */
+    function buildPoiResultsModalDisplayOpts(results, type, userLat, userLon, formatDistanceFn) {
+        results = results || [];
+        var format = formatDistanceFn || function () { return ''; };
+        return {
+            userLat: userLat,
+            userLon: userLon,
+            distanceTexts: results.map(function (poi) {
+                return format(poi.distance_m);
+            }),
+        };
+    }
+
+    /**
+     * @param {string} name
+     * @returns {string}
+     */
+    function getPoiSelectDestinationStatusMessage(name) {
+        return '📍 Destination set: ' + name;
+    }
+
     var api = {
         POI_TYPE_ICONS: POI_TYPE_ICONS,
         POI_MAP_MARKER_ICONS: POI_MAP_MARKER_ICONS,
@@ -243,6 +272,9 @@
         getAlongRouteResultsMessage: getAlongRouteResultsMessage,
         getAlongRouteNoResultsMessage: getAlongRouteNoResultsMessage,
         getAlongRouteSearchFailedMessage: getAlongRouteSearchFailedMessage,
+        POI_MODAL_ID: POI_MODAL_ID,
+        buildPoiResultsModalDisplayOpts: buildPoiResultsModalDisplayOpts,
+        getPoiSelectDestinationStatusMessage: getPoiSelectDestinationStatusMessage,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

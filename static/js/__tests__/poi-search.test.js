@@ -54,4 +54,18 @@ describe('poi-search module', () => {
         expect(POI.getAlongRouteNoRouteMessage()).toContain('Calculate');
         expect(POI.getAlongRouteResultsMessage('fuel', 3)).toContain('3');
     });
+
+    test('POI modal display opts and select destination message', () => {
+        expect(POI.POI_MODAL_ID).toBe('poiModal');
+        const opts = POI.buildPoiResultsModalDisplayOpts(
+            [{ distance_m: 1000 }],
+            'fuel',
+            51.5,
+            -0.1,
+            (m) => String(m)
+        );
+        expect(opts.userLat).toBe(51.5);
+        expect(opts.distanceTexts).toEqual(['1000']);
+        expect(POI.getPoiSelectDestinationStatusMessage('Cafe')).toContain('Cafe');
+    });
 });

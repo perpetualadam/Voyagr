@@ -255,6 +255,78 @@
         return (now - entry.ts) < getLaneGuidanceCacheTtlMs(!!entry.fallback);
     }
 
+    /**
+     * DOM apply plan for the lane guidance overlay.
+     * @param {Object} data
+     * @returns {Object}
+     */
+    function buildLaneGuidanceUiApplyPlan(data) {
+        if (!shouldShow(data)) {
+            return { visible: false };
+        }
+        return {
+            visible: true,
+            displayClassName: 'lane-guidance-display show',
+            urgencyClass: urgencyClass(data.urgency),
+            badge: badge(data),
+            indicators: laneIndicators(data),
+            guidanceText: displayText(data),
+        };
+    }
+
+    /**
+     * @param {number} recommendedLane
+     * @param {number} totalLanes
+     * @returns {string}
+     */
+    function resolveLanePositionLabel(recommendedLane, totalLanes) {
+        if (recommendedLane === 1) return 'left';
+        if (recommendedLane === totalLanes) return 'right';
+        if (totalLanes === 3 && recommendedLane === 2) return 'middle';
+        return 'lane ' + recommendedLane;
+    }
+
+    /**
+     * Voice announcement plan for lane guidance (no speech side effects).
+     * @param {Object} data
+     * @param {string} lastAnnounceKey
+     * @returns {{ announceKey: string, message: string, priority: string }|null}
+     */
+    function buildLaneVoiceAnnouncementPlan(data, lastAnnounceKey) {
+        data = data || {};
+        if (!data.recommended_lane || data.total_lanes <= 1) return null;
+        var announceKey = 'lane_' + data.next_maneuver + '_' + data.recommended_lane + '_' + data.urgency;
+        if (announceKey === lastAnnounceKey) return null;
+
+        var lanePos = resolveLanePositionLabel(data.recommended_lane, data.total_lanes);
+        var exitInfo = data.roundabout_exit_count > 0
+            ? ', take the ' + ordinal(data.roundabout_exit_count) + ' exit'
+            : '';
+        var laneMsg = '';
+        var priority = 'normal';
+
+        if (data.urgency === 'now') {
+            priority = 'high';
+            if (data.next_maneuver === 'roundabout') {
+                laneMsg = 'At the roundabout, use the ' + lanePos + ' lane' + exitInfo;
+            } else {
+                laneMsg = data.urgency_text || ('Get in the ' + lanePos + ' lane now');
+            }
+        } else if (data.urgency === 'soon') {
+            if (data.next_maneuver === 'roundabout') {
+                laneMsg = 'At the roundabout ahead, use the ' + lanePos + ' lane' + exitInfo;
+            } else {
+                laneMsg = data.urgency_text || ('Move to the ' + lanePos + ' lane');
+            }
+        } else if (data.urgency === 'ahead' && data.lane_change_needed) {
+            laneMsg = 'Ahead, you\'ll need the ' + lanePos + ' lane';
+        } else {
+            return null;
+        }
+
+        return { announceKey: announceKey, message: laneMsg, priority: priority };
+    }
+
     var api = {
         ARROW: ARROW,
         LANE_DEFAULTS: LANE_DEFAULTS,
@@ -279,6 +351,9 @@
         buildLaneGuidanceApiUrl: buildLaneGuidanceApiUrl,
         getLaneGuidanceCacheTtlMs: getLaneGuidanceCacheTtlMs,
         isLaneGuidanceCacheEntryFresh: isLaneGuidanceCacheEntryFresh,
+        buildLaneGuidanceUiApplyPlan: buildLaneGuidanceUiApplyPlan,
+        resolveLanePositionLabel: resolveLanePositionLabel,
+        buildLaneVoiceAnnouncementPlan: buildLaneVoiceAnnouncementPlan,
     };
 
     // CommonJS (Jest) export.
