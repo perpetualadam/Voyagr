@@ -10992,86 +10992,39 @@ function updateTurnInstructionDisplay(turnInfo) {
 
     if (!distanceEl || !instructionEl) return;
 
-    if (turnInfo) {
-        // "Continue"/straight keeps you on the current road (prefix "on"); real turns join
-        // a new road (prefix "onto"). Show the running countdown "In <dist>" whenever we
-        // have a meaningful distance (in the user's units), and only fall back to a bare
-        // "On" when essentially at/using the current road (< 15 m or no distance).
-        const isContinue = turnInfo.direction === 'straight';
-        const hasCountdown = turnInfo.distance != null && turnInfo.distance >= 15;
-        const formattedDistance = _turnInstructions().formatTurnDistance(turnInfo.distance || 0, distanceUnit);
-        distanceEl.textContent = hasCountdown ? `In ${formattedDistance}` : 'On';
+    const TI = _turnInstructions();
+    const plan = TI.buildTurnWidgetRowDisplayPlan(turnInfo, distanceUnit, {
+        roundaboutExitCount: turnInfo && turnInfo.maneuverIndex != null
+            ? effectiveRoundaboutExitCount(turnInfo.maneuverIndex)
+            : 0,
+    });
 
-        instructionEl.textContent = buildTurnDisplayInstruction(turnInfo);
+    distanceEl.textContent = plan.distanceText;
+    instructionEl.textContent = plan.instructionText;
 
-        if (streetEl) {
-            if (turnInfo.streetName) {
-                const prefix = isContinue ? 'on' : 'onto';
-                streetEl.textContent = `${prefix} ${turnInfo.streetName}`;
-                streetEl.style.display = 'block';
-            } else {
-                streetEl.style.display = 'none';
-            }
+    if (streetEl) {
+        if (plan.streetVisible) {
+            streetEl.textContent = plan.streetText;
+            streetEl.style.display = 'block';
+        } else {
+            streetEl.style.display = 'none';
         }
+    }
 
-        const directionToType = {
-            'left': 15,
-            'right': 10,
-            'slight-left': 16,
-            'slight_left': 16,
-            'slight-right': 9,
-            'slight_right': 9,
-            'sharp-left': 14,
-            'sharp_left': 14,
-            'sharp-right': 11,
-            'sharp_right': 11,
-            'u-turn': 12,
-            'uturn': 12,
-            'straight': 8,
-            'exit': 20,
-            'exit-right': 20,
-            'exit_right': 20,
-            'exit-left': 21,
-            'exit_left': 21,
-            'merge': 25,
-            'roundabout': 26,
-            'destination': 4
-        };
-        const vt = turnInfo.valhallaType;
-        const iconType = typeof vt === 'number' ? vt : (directionToType[turnInfo.direction] || 8);
-        if (iconEl) iconEl.textContent = _turnInstructions().getTurnIcon(iconType);
+    if (iconEl) iconEl.textContent = TI.getTurnIcon(plan.iconType);
 
-        if (hintEl) {
-            if (turnInfo.maneuver && turnInfo.maneuverIndex != null) {
-                const TI = _turnInstructions();
-                const exitCt = effectiveRoundaboutExitCount(turnInfo.maneuverIndex);
-                const hintHtml = TI.buildTurnLaneHintHtml(turnInfo.maneuver, exitCt, turnInfo.distance);
-                if (hintHtml) {
-                    hintEl.innerHTML = hintHtml;
-                    hintEl.style.display = 'block';
-                } else {
-                    hintEl.innerHTML = '';
-                    hintEl.style.display = 'none';
-                }
-            } else {
-                hintEl.innerHTML = '';
-                hintEl.style.display = 'none';
-            }
-        }
-
-    } else {
-        distanceEl.textContent = 'Follow Route';
-        instructionEl.textContent = 'Continue on current road';
-        if (streetEl) streetEl.style.display = 'none';
-        if (iconEl) iconEl.textContent = '↑';
-        if (hintEl) {
+    if (hintEl) {
+        if (plan.hintVisible) {
+            hintEl.innerHTML = plan.hintHtml;
+            hintEl.style.display = 'block';
+        } else {
             hintEl.innerHTML = '';
             hintEl.style.display = 'none';
         }
     }
 
     // Advance "Then …" row: surface the maneuver that follows the next turn.
-    updateThenRow(turnInfo ? turnInfo.maneuverIndex : null, turnInfo ? turnInfo.distance : null);
+    updateThenRow(plan.maneuverIndex, plan.distance);
 
     if (instructionsPanelExpanded) {
         populateInstructionsList();
@@ -11093,27 +11046,20 @@ function updateThenRow(maneuverIndex, currentDistance) {
     const iconEl = document.getElementById('nextTurnThenIcon');
     const textEl = document.getElementById('nextTurnThenText');
     const TI = _turnInstructions();
+    const follow = getFollowingManeuver(maneuverIndex);
+    const plan = TI.buildThenRowDisplayPlan(
+        maneuverIndex,
+        currentDistance,
+        follow,
+        distanceUnit,
+        follow && follow.direction === 'roundabout' ? effectiveRoundaboutExitCount(follow.index) : 0
+    );
 
-    let show = false;
-    if (maneuverIndex != null && typeof currentDistance === 'number' && currentDistance <= 700) {
-        const follow = getFollowingManeuver(maneuverIndex);
-        if (follow && follow.gapMeters <= 900) {
-            let label = _turnInstructions().getTurnDirectionText(follow.direction);
-            label = label.charAt(0).toUpperCase() + label.slice(1);
-            if (follow.direction === 'roundabout') {
-                const exitCt = effectiveRoundaboutExitCount(follow.index);
-                if (exitCt > 0) label = `Roundabout, ${TI.ordinalEnglishExit(exitCt)} exit`;
-            }
-            const onto = follow.streetName ? ` onto ${follow.streetName}` : '';
-            // Distance to the following maneuver, formatted in the user's selected units
-            // via the same helper as the main turn row (respects the mph/km UI choice).
-            const thenDistance = _turnInstructions().formatTurnDistance(follow.gapMeters, distanceUnit);
-            if (iconEl) iconEl.textContent = _turnInstructions().getTurnIcon(follow.valhallaType);
-            if (textEl) textEl.textContent = `In ${thenDistance} · ${label}${onto}`;
-            show = true;
-        }
+    if (plan.visible) {
+        if (iconEl) iconEl.textContent = plan.icon;
+        if (textEl) textEl.textContent = plan.text;
     }
-    thenEl.style.display = show ? 'flex' : 'none';
+    thenEl.style.display = plan.visible ? 'flex' : 'none';
 }
 
 /**

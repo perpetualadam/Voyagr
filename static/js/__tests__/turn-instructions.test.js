@@ -511,3 +511,80 @@ describe('findGeometryFallbackTurn', () => {
         expect(TI.findGeometryFallbackTurn([[51.5, -0.1]], { index: 0 }, 0, {})).toBeNull();
     });
 });
+
+describe('turn widget display plans', () => {
+    test('resolveTurnIconValhallaType prefers explicit type then direction map', () => {
+        expect(TI.resolveTurnIconValhallaType('left', 10)).toBe(10);
+        expect(TI.resolveTurnIconValhallaType('left', undefined)).toBe(15);
+        expect(TI.resolveTurnIconValhallaType('slight_right', undefined)).toBe(9);
+        expect(TI.resolveTurnIconValhallaType('unknown', undefined)).toBe(8);
+    });
+
+    test('buildTurnWidgetRowDisplayPlan formats countdown and street prefix', () => {
+        const plan = TI.buildTurnWidgetRowDisplayPlan({
+            direction: 'left',
+            distance: 120,
+            instruction: 'Turn left onto High St',
+            streetName: 'High St',
+            valhallaType: 15,
+            maneuverIndex: 2,
+            maneuver: { type: 15, lanes: null },
+        }, 'km', { roundaboutExitCount: 0 });
+        expect(plan.hasTurn).toBe(true);
+        expect(plan.distanceText).toMatch(/^In /);
+        expect(plan.instructionText).toContain('Turn left');
+        expect(plan.streetText).toBe('onto High St');
+        expect(plan.iconType).toBe(15);
+    });
+
+    test('buildTurnWidgetRowDisplayPlan uses On for short distances and straight prefix', () => {
+        const plan = TI.buildTurnWidgetRowDisplayPlan({
+            direction: 'straight',
+            distance: 10,
+            instruction: 'Continue',
+            streetName: 'A40',
+            valhallaType: 8,
+        }, 'km');
+        expect(plan.distanceText).toBe('On');
+        expect(plan.streetText).toBe('on A40');
+    });
+
+    test('buildTurnWidgetRowDisplayPlan returns follow-route fallback when turnInfo is null', () => {
+        const plan = TI.buildTurnWidgetRowDisplayPlan(null, 'km');
+        expect(plan.hasTurn).toBe(false);
+        expect(plan.distanceText).toBe('Follow Route');
+        expect(plan.instructionText).toBe('Continue on current road');
+    });
+
+    test('buildThenRowDisplayPlan shows following maneuver within thresholds', () => {
+        const plan = TI.buildThenRowDisplayPlan(1, 500, {
+            direction: 'right',
+            valhallaType: 10,
+            streetName: 'Park Lane',
+            gapMeters: 300,
+            index: 2,
+        }, 'km', 0);
+        expect(plan.visible).toBe(true);
+        expect(plan.text).toContain('Park Lane');
+        expect(plan.text).toMatch(/^In /);
+        expect(plan.icon).toBe('→');
+    });
+
+    test('buildThenRowDisplayPlan hides when current distance exceeds 700 m', () => {
+        const plan = TI.buildThenRowDisplayPlan(1, 800, {
+            direction: 'right',
+            valhallaType: 10,
+            gapMeters: 200,
+        }, 'km', 0);
+        expect(plan.visible).toBe(false);
+    });
+
+    test('buildThenRowDisplayPlan hides when follow gap exceeds 900 m', () => {
+        const plan = TI.buildThenRowDisplayPlan(1, 500, {
+            direction: 'right',
+            valhallaType: 10,
+            gapMeters: 950,
+        }, 'km', 0);
+        expect(plan.visible).toBe(false);
+    });
+});

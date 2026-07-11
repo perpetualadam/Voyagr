@@ -523,6 +523,136 @@
         return null;
     }
 
+    /** Map direction keys (hyphen or underscore) to Valhalla maneuver types for icon lookup. */
+    var DIRECTION_KEY_TO_VALHALLA_TYPE = {
+        'left': 15,
+        'right': 10,
+        'slight-left': 16,
+        'slight_left': 16,
+        'slight-right': 9,
+        'slight_right': 9,
+        'sharp-left': 14,
+        'sharp_left': 14,
+        'sharp-right': 11,
+        'sharp_right': 11,
+        'u-turn': 12,
+        'uturn': 12,
+        'straight': 8,
+        'exit': 20,
+        'exit-right': 20,
+        'exit_right': 20,
+        'exit-left': 21,
+        'exit_left': 21,
+        'merge': 25,
+        'roundabout': 26,
+        'destination': 4,
+    };
+
+    var THEN_ROW_CURRENT_DISTANCE_MAX_M = 700;
+    var THEN_ROW_FOLLOW_GAP_MAX_M = 900;
+    var TURN_WIDGET_COUNTDOWN_MIN_M = 15;
+
+    /**
+     * Resolve Valhalla maneuver type for turn widget icon display.
+     * @param {string} direction
+     * @param {number|undefined} valhallaType
+     * @returns {number}
+     */
+    function resolveTurnIconValhallaType(direction, valhallaType) {
+        if (typeof valhallaType === 'number') return valhallaType;
+        return DIRECTION_KEY_TO_VALHALLA_TYPE[direction] || 8;
+    }
+
+    /**
+     * Display plan for the main next-turn widget row (values only; app writes DOM).
+     * @param {Object|null} turnInfo
+     * @param {string} distanceUnit
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildTurnWidgetRowDisplayPlan(turnInfo, distanceUnit, opts) {
+        opts = opts || {};
+        if (!turnInfo) {
+            return {
+                hasTurn: false,
+                distanceText: 'Follow Route',
+                instructionText: 'Continue on current road',
+                streetVisible: false,
+                streetText: '',
+                iconType: 8,
+                hintHtml: '',
+                hintVisible: false,
+                maneuverIndex: null,
+                distance: null,
+            };
+        }
+
+        var isContinue = turnInfo.direction === 'straight';
+        var hasCountdown = turnInfo.distance != null && turnInfo.distance >= TURN_WIDGET_COUNTDOWN_MIN_M;
+        var formattedDistance = formatTurnDistance(turnInfo.distance || 0, distanceUnit);
+        var streetVisible = !!turnInfo.streetName;
+        var streetText = streetVisible
+            ? (isContinue ? 'on ' : 'onto ') + turnInfo.streetName
+            : '';
+        var hintHtml = '';
+        var hintVisible = false;
+        if (turnInfo.maneuver && turnInfo.maneuverIndex != null) {
+            var exitCt = opts.roundaboutExitCount != null ? opts.roundaboutExitCount : 0;
+            hintHtml = buildTurnLaneHintHtml(turnInfo.maneuver, exitCt, turnInfo.distance);
+            hintVisible = !!hintHtml;
+        }
+
+        return {
+            hasTurn: true,
+            distanceText: hasCountdown ? 'In ' + formattedDistance : 'On',
+            instructionText: buildTurnDisplayInstruction(
+                turnInfo.direction,
+                turnInfo.instruction,
+                turnInfo.valhallaType,
+                turnInfo.roundabout_exit_count
+            ),
+            streetVisible: streetVisible,
+            streetText: streetText,
+            iconType: resolveTurnIconValhallaType(turnInfo.direction, turnInfo.valhallaType),
+            hintHtml: hintHtml,
+            hintVisible: hintVisible,
+            maneuverIndex: turnInfo.maneuverIndex,
+            distance: turnInfo.distance,
+        };
+    }
+
+    /**
+     * Display plan for the advance "Then …" row beneath the main turn widget.
+     * @param {number|null} maneuverIndex
+     * @param {number|null} currentDistance
+     * @param {Object|null} follow
+     * @param {string} distanceUnit
+     * @param {number} [roundaboutExitCount]
+     * @returns {{ visible: boolean, icon?: string, text?: string }}
+     */
+    function buildThenRowDisplayPlan(maneuverIndex, currentDistance, follow, distanceUnit, roundaboutExitCount) {
+        if (maneuverIndex == null || typeof currentDistance !== 'number'
+            || currentDistance > THEN_ROW_CURRENT_DISTANCE_MAX_M) {
+            return { visible: false };
+        }
+        if (!follow || follow.gapMeters > THEN_ROW_FOLLOW_GAP_MAX_M) {
+            return { visible: false };
+        }
+
+        var label = getTurnDirectionText(follow.direction);
+        label = label.charAt(0).toUpperCase() + label.slice(1);
+        if (follow.direction === 'roundabout' && roundaboutExitCount > 0) {
+            label = 'Roundabout, ' + ordinalEnglishExit(roundaboutExitCount) + ' exit';
+        }
+        var onto = follow.streetName ? ' onto ' + follow.streetName : '';
+        var thenDistance = formatTurnDistance(follow.gapMeters, distanceUnit);
+        return {
+            visible: true,
+            icon: getTurnIcon(follow.valhallaType),
+            text: 'In ' + thenDistance + ' · ' + label + onto,
+        };
+    }
+
     /**
      * Max along-route distance (m) to surface an upcoming maneuver by direction type.
      * @param {string} direction
@@ -711,6 +841,13 @@
         buildNavStartTurnInstructionInit: buildNavStartTurnInstructionInit,
         buildInstructionsListHtml: buildInstructionsListHtml,
         findFollowingManeuver: findFollowingManeuver,
+        DIRECTION_KEY_TO_VALHALLA_TYPE: DIRECTION_KEY_TO_VALHALLA_TYPE,
+        THEN_ROW_CURRENT_DISTANCE_MAX_M: THEN_ROW_CURRENT_DISTANCE_MAX_M,
+        THEN_ROW_FOLLOW_GAP_MAX_M: THEN_ROW_FOLLOW_GAP_MAX_M,
+        TURN_WIDGET_COUNTDOWN_MIN_M: TURN_WIDGET_COUNTDOWN_MIN_M,
+        resolveTurnIconValhallaType: resolveTurnIconValhallaType,
+        buildTurnWidgetRowDisplayPlan: buildTurnWidgetRowDisplayPlan,
+        buildThenRowDisplayPlan: buildThenRowDisplayPlan,
         getTurnDetectionMaxDistanceMeters: getTurnDetectionMaxDistanceMeters,
         advanceMonotonicTurnDetectIndex: advanceMonotonicTurnDetectIndex,
         findUpcomingManeuverTurn: findUpcomingManeuverTurn,
