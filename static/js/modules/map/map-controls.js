@@ -1021,6 +1021,122 @@
         };
     }
 
+    /**
+     * Preflight for toggling journey overview during navigation.
+     * @param {Object} [input]
+     * @param {boolean} [input.routeInProgress]
+     * @param {number} [input.routePolylineLength]
+     * @param {boolean} [input.journeyOverviewActive]
+     * @returns {Object}
+     */
+    function buildToggleJourneyOverviewPreflightPlan(input) {
+        input = input || {};
+        if (!input.routeInProgress || !input.routePolylineLength) {
+            return {
+                shouldToggle: false,
+                statusMessage: 'No active navigation to show overview',
+                statusType: 'error',
+            };
+        }
+        return {
+            shouldToggle: true,
+            journeyBtnId: JOURNEY_OVERVIEW_BTN_ID,
+            currentlyActive: !!input.journeyOverviewActive,
+        };
+    }
+
+    /**
+     * Fit-bounds plan for journey overview activation.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildToggleJourneyOverviewFitBoundsPlan(input) {
+        input = input || {};
+        if (input.useMultiRouteCoords && input.allRouteCoords && input.allRouteCoords.length > 0) {
+            return { shouldFit: true, coords: input.allRouteCoords, padding: 50 };
+        }
+        if (input.routePolylineLength > 0 && input.routePolyline) {
+            return { shouldFit: true, coords: input.routePolyline, padding: 50 };
+        }
+        return { shouldFit: false };
+    }
+
+    /**
+     * Execute plan for activating journey overview mode.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildToggleJourneyOverviewActivatePlan(input) {
+        input = input || {};
+        var fit = buildToggleJourneyOverviewFitBoundsPlan(input);
+        return {
+            action: 'activate',
+            saveMapState: {
+                center: input.mapCenter,
+                zoom: input.mapZoom,
+            },
+            mapFollowingActive: false,
+            journeyOverviewActive: true,
+            fitBounds: fit.shouldFit ? { coords: fit.coords, padding: fit.padding } : null,
+            overviewButtonActive: true,
+            statusMessage: '🗺️ Journey Overview - Tap again to return',
+            statusType: 'info',
+            logMessage: '[Navigation] Journey overview activated',
+            updateRecenterVisibility: true,
+        };
+    }
+
+    /**
+     * Execute plan for deactivating journey overview mode.
+     * @param {Object} [input]
+     * @param {boolean} [input.zoomAndFollowEnabled]
+     * @param {Object|null} [input.savedMapState]
+     * @returns {Object}
+     */
+    function buildToggleJourneyOverviewDeactivatePlan(input) {
+        input = input || {};
+        var flyTo = null;
+        if (input.savedMapState && input.savedMapState.center) {
+            flyTo = {
+                center: [
+                    input.savedMapState.center.lng,
+                    input.savedMapState.center.lat,
+                ],
+                zoom: input.savedMapState.zoom,
+                pitch: 55,
+                duration: 1000,
+                essential: true,
+            };
+        }
+        return {
+            action: 'deactivate',
+            journeyOverviewActive: false,
+            restoreMapFollowing: !!input.zoomAndFollowEnabled,
+            flyTo: flyTo,
+            clearSavedMapState: !!input.savedMapState,
+            overviewButtonActive: false,
+            statusMessage: '📍 Returned to navigation view',
+            statusType: 'success',
+            logMessage: '[Navigation] Journey overview deactivated',
+            updateRecenterVisibility: true,
+        };
+    }
+
+    /**
+     * DOM execute plan for journey overview button styling.
+     * @param {boolean} overviewActive
+     * @returns {Object}
+     */
+    function buildJourneyOverviewButtonUiExecutePlan(overviewActive) {
+        var display = getJourneyOverviewButtonDisplay(overviewActive);
+        return {
+            shouldApply: true,
+            background: display.background,
+            innerHtml: display.innerHtml,
+            title: display.title,
+        };
+    }
+
     var api = {
         ZOOM_FOLLOW_ENABLED_ICON: ZOOM_FOLLOW_ENABLED_ICON,
         ZOOM_FOLLOW_DISABLED_ICON: ZOOM_FOLLOW_DISABLED_ICON,
@@ -1063,6 +1179,11 @@
         buildRecenterNavigationFollowInputPlan: buildRecenterNavigationFollowInputPlan,
         buildRecenterNavigationCompletePlan: buildRecenterNavigationCompletePlan,
         buildRecenterTrackingEasePlan: buildRecenterTrackingEasePlan,
+        buildToggleJourneyOverviewPreflightPlan: buildToggleJourneyOverviewPreflightPlan,
+        buildToggleJourneyOverviewFitBoundsPlan: buildToggleJourneyOverviewFitBoundsPlan,
+        buildToggleJourneyOverviewActivatePlan: buildToggleJourneyOverviewActivatePlan,
+        buildToggleJourneyOverviewDeactivatePlan: buildToggleJourneyOverviewDeactivatePlan,
+        buildJourneyOverviewButtonUiExecutePlan: buildJourneyOverviewButtonUiExecutePlan,
         buildOpenMapControlsHintModalExecutePlan: buildOpenMapControlsHintModalExecutePlan,
         buildCloseMapControlsHintModalExecutePlan: buildCloseMapControlsHintModalExecutePlan,
         buildFabLongPressHintBindPlan: buildFabLongPressHintBindPlan,

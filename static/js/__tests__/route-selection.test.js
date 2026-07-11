@@ -1048,6 +1048,16 @@ describe('route overview and single-route display plans', () => {
         expect(RS.buildDisplayAllRoutesMapExecutePlan({ valid: false }).shouldExecute).toBe(false);
     });
 
+    test('buildDisplayAllRoutesMapMountApplyPlan bundles mount sequence fields', () => {
+        const dispatch = RS.buildDisplayAllRoutesMapDispatchPlan([{ polyline: [[1, 2]] }]);
+        const execute = RS.buildDisplayAllRoutesMapExecutePlan(dispatch, { isStyleLoaded: true });
+        const orch = RS.buildDisplayAllRoutesMapOrchestrationPlan(1);
+        const mount = RS.buildDisplayAllRoutesMapMountApplyPlan(execute, orch);
+        expect(mount.shouldMount).toBe(true);
+        expect(mount.preMount.hydratePolylines).toBe(true);
+        expect(mount.mapMissingLogMessage).toContain('Map not available');
+    });
+
     test('buildRecalculateRouteWithPreferencesExecutePlan schedules delayed recalc', () => {
         const execute = RS.buildRecalculateRouteWithPreferencesExecutePlan({
             ok: true,

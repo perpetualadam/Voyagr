@@ -2476,6 +2476,28 @@
     }
 
     /**
+     * Mount apply plan for displayAllRoutesOnMap pre-mount and style scheduling.
+     * @param {Object} execute - from buildDisplayAllRoutesMapExecutePlan
+     * @param {Object} [orch] - from buildDisplayAllRoutesMapOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildDisplayAllRoutesMapMountApplyPlan(execute, orch) {
+        execute = execute || {};
+        orch = orch || {};
+        if (!execute.shouldExecute) {
+            return { shouldMount: false };
+        }
+        return {
+            shouldMount: true,
+            preMount: execute.preMount,
+            stylePlan: execute.stylePlan,
+            addLayersLogMessage: execute.addLayersLogMessage,
+            requireMap: !!execute.requireMap,
+            mapMissingLogMessage: orch.mapMissingLogMessage,
+        };
+    }
+
+    /**
      * Execute plan for recalculateRouteWithPreferences side effects.
      * @param {Object} plan - from buildRecalculateRouteWithPreferencesPlan
      * @returns {Object}
@@ -2951,6 +2973,7 @@
         buildDisplayAllRoutesMapDispatchPlan: buildDisplayAllRoutesMapDispatchPlan,
         buildDisplayAllRoutesMapOrchestrationPlan: buildDisplayAllRoutesMapOrchestrationPlan,
         buildDisplayAllRoutesMapExecutePlan: buildDisplayAllRoutesMapExecutePlan,
+        buildDisplayAllRoutesMapMountApplyPlan: buildDisplayAllRoutesMapMountApplyPlan,
         buildBringRoutesToTopDispatchPlan: buildBringRoutesToTopDispatchPlan,
         buildBringRoutesToTopExecutePlan: buildBringRoutesToTopExecutePlan,
         buildRouteLayerMapLibreApplyPlan: buildRouteLayerMapLibreApplyPlan,

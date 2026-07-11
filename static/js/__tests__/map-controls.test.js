@@ -301,4 +301,30 @@ describe('map-controls module', () => {
         expect(MC.buildRecenterOnVehiclePreflightPlan({ hasMap: false }).shouldRecenter).toBe(false);
         expect(MC.buildRecenterTrackingEasePlan({ lat: 1, lon: 2, currentZoom: 15 }).easeTo.zoom).toBe(16);
     });
+
+    test('journey overview toggle and button UI plans', () => {
+        expect(MC.buildToggleJourneyOverviewPreflightPlan({ routeInProgress: false }).shouldToggle)
+            .toBe(false);
+        const preflight = MC.buildToggleJourneyOverviewPreflightPlan({
+            routeInProgress: true,
+            routePolylineLength: 10,
+            journeyOverviewActive: false,
+        });
+        expect(preflight.shouldToggle).toBe(true);
+        const activate = MC.buildToggleJourneyOverviewActivatePlan({
+            mapCenter: { lat: 1, lng: 2 },
+            mapZoom: 14,
+            routePolylineLength: 2,
+            routePolyline: [[1, 2], [3, 4]],
+        });
+        expect(activate.journeyOverviewActive).toBe(true);
+        expect(activate.fitBounds.padding).toBe(50);
+        const deactivate = MC.buildToggleJourneyOverviewDeactivatePlan({
+            zoomAndFollowEnabled: true,
+            savedMapState: { center: { lat: 1, lng: 2 }, zoom: 15 },
+        });
+        expect(deactivate.restoreMapFollowing).toBe(true);
+        expect(deactivate.flyTo.pitch).toBe(55);
+        expect(MC.buildJourneyOverviewButtonUiExecutePlan(true).innerHtml).toBe(MC.JOURNEY_RETURN_ICON);
+    });
 });

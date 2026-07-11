@@ -2547,25 +2547,31 @@ function displayAllRoutesOnMap() {
     const execute = RS.buildDisplayAllRoutesMapExecutePlan(dispatch, {
         isStyleLoaded: map?.isStyleLoaded(),
     });
-    clearRouteLayerHandlesFromPlan(execute.preMount);
-    if (execute.preMount.clearMapRouteLayers) {
-        clearAllRouteLayersFromMap();
-    }
-    if (execute.preMount.hydratePolylines) {
-        RS.hydrateRouteOptionPolylines(routeOptions, decodePolyline);
-    }
+    const mount = RS.buildDisplayAllRoutesMapMountApplyPlan(execute, orch);
+    if (!mount.shouldMount) return;
 
-    const addRouteLayers = () => {
-        console.log(execute.addLayersLogMessage);
-        doAddRouteLayers();
-    };
+    applyDisplayAllRoutesPreMountFromPlan(mount.preMount);
 
-    if (execute.requireMap && !map) {
-        console.error(orch.mapMissingLogMessage);
+    if (mount.requireMap && !map) {
+        console.error(mount.mapMissingLogMessage);
         return;
     }
 
-    scheduleDisplayAllRoutesLayerMountFromPlan(execute.stylePlan, addRouteLayers);
+    scheduleDisplayAllRoutesLayerMountFromPlan(mount.stylePlan, () => {
+        console.log(mount.addLayersLogMessage);
+        doAddRouteLayers();
+    });
+}
+
+function applyDisplayAllRoutesPreMountFromPlan(preMount) {
+    if (!preMount) return;
+    clearRouteLayerHandlesFromPlan(preMount);
+    if (preMount.clearMapRouteLayers) {
+        clearAllRouteLayersFromMap();
+    }
+    if (preMount.hydratePolylines) {
+        _routeSelection().hydrateRouteOptionPolylines(routeOptions, decodePolyline);
+    }
 }
 
 /**
@@ -8833,11 +8839,11 @@ function applyZoomFollowButtonUi(btn, enabled) {
 }
 
 function applyJourneyOverviewButtonUi(btn, overviewActive) {
-    if (!btn) return;
-    const display = _mapControls().getJourneyOverviewButtonDisplay(overviewActive);
-    btn.style.background = display.background;
-    btn.innerHTML = display.innerHtml;
-    btn.title = display.title;
+    const plan = _mapControls().buildJourneyOverviewButtonUiExecutePlan(overviewActive);
+    if (!btn || !plan.shouldApply) return;
+    btn.style.background = plan.background;
+    btn.innerHTML = plan.innerHtml;
+    btn.title = plan.title;
 }
 
 /** Unit-tested camera map marker HTML (modules/map/camera-map-markers.js). */
@@ -9179,6 +9185,50 @@ function toggleZoomAndFollow() {
     updateRecenterButtonVisibility();
 }
 
+/**
+ * Snap GPS position to the active route polyline when navigation is in progress.
+ * @param {number} lat
+ * @param {number} lon
+ * @returns {Object|null}
+ */
+function resolveGpsRouteSnapForTick(lat, lon) {
+    const RG = _routeGeometry();
+    const plan = RG.buildGpsRouteSnapTickPlan({
+        lat,
+        lon,
+        routeInProgress,
+        routePolyline,
+        lastSnappedRouteIndex,
+    });
+    return plan.snapped;
+}
+
+/** Lat/lon for the vehicle icon (snapped to route during navigation). */
+function getVehicleDisplayCoordinates() {
+    const SG = _speedGps();
+    return SG.buildVehicleDisplayCoordinatesPlan({
+        lat: currentLat,
+        lon: currentLon,
+        routeInProgress,
+        routePolyline,
+        snapped: resolveGpsRouteSnapForTick(currentLat, currentLon),
+        lastSnappedRouteIndex,
+        prevSnapBlendWeightState: _snapBlendWeightState,
+        smoothDisplayLat: _smoothDisplayLat,
+        smoothDisplayLon: _smoothDisplayLon,
+        useSmoothCoordsOnly: _smoothDisplayLat != null && _smoothDisplayLon != null,
+        calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
+        blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
+    });
+}
+
+function metersMapCenterFromVehicle() {
+    if (!map || currentLat == null || currentLon == null) return 0;
+    const center = map.getCenter();
+    const vehicle = getVehicleDisplayCoordinates();
+    return calculateDistanceMeters(vehicle.lat, vehicle.lon, center.lat, center.lng);
+}
+
 function shouldShowRecenterVehicleButton() {
     const MC = _mapControls();
     const plan = MC.buildShouldShowRecenterVehicleButtonPlan({
@@ -9285,50 +9335,6 @@ function recenterOnVehicle() {
     updateRecenterButtonVisibility();
 }
 
-/**
- * Snap GPS position to the active route polyline when navigation is in progress.
- * @param {number} lat
- * @param {number} lon
- * @returns {Object|null}
- */
-function resolveGpsRouteSnapForTick(lat, lon) {
-    const RG = _routeGeometry();
-    const plan = RG.buildGpsRouteSnapTickPlan({
-        lat,
-        lon,
-        routeInProgress,
-        routePolyline,
-        lastSnappedRouteIndex,
-    });
-    return plan.snapped;
-}
-
-/** Lat/lon for the vehicle icon (snapped to route during navigation). */
-function getVehicleDisplayCoordinates() {
-    const SG = _speedGps();
-    return SG.buildVehicleDisplayCoordinatesPlan({
-        lat: currentLat,
-        lon: currentLon,
-        routeInProgress,
-        routePolyline,
-        snapped: resolveGpsRouteSnapForTick(currentLat, currentLon),
-        lastSnappedRouteIndex,
-        prevSnapBlendWeightState: _snapBlendWeightState,
-        smoothDisplayLat: _smoothDisplayLat,
-        smoothDisplayLon: _smoothDisplayLon,
-        useSmoothCoordsOnly: _smoothDisplayLat != null && _smoothDisplayLon != null,
-        calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
-        blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
-    });
-}
-
-function metersMapCenterFromVehicle() {
-    if (!map || currentLat == null || currentLon == null) return 0;
-    const center = map.getCenter();
-    const vehicle = getVehicleDisplayCoordinates();
-    return calculateDistanceMeters(vehicle.lat, vehicle.lon, center.lat, center.lng);
-}
-
 // Journey Overview state
 let journeyOverviewActive = false;
 let savedMapState = null;
@@ -9338,64 +9344,67 @@ let savedMapState = null;
  * Shows entire route zoomed out, then returns to following view
  */
 function toggleJourneyOverview() {
-    if (!routeInProgress || !routePolyline || routePolyline.length === 0) {
-        showStatus('No active navigation to show overview', 'error');
+    const MC = _mapControls();
+    const preflight = MC.buildToggleJourneyOverviewPreflightPlan({
+        routeInProgress,
+        routePolylineLength: routePolyline ? routePolyline.length : 0,
+        journeyOverviewActive,
+    });
+    if (!preflight.shouldToggle) {
+        showStatus(preflight.statusMessage, preflight.statusType);
         return;
     }
 
-    const btn = document.getElementById('journeyOverviewBtn');
+    const btn = document.getElementById(preflight.journeyBtnId);
 
-    if (!journeyOverviewActive) {
-        // Save current map state
-        savedMapState = {
-            center: map.getCenter(),
-            zoom: map.getZoom()
-        };
+    if (!preflight.currentlyActive) {
+        const activate = MC.buildToggleJourneyOverviewActivatePlan({
+            mapCenter: map.getCenter(),
+            mapZoom: map.getZoom(),
+            useMultiRouteCoords: allRouteLayers.length > 0
+                && routeOptions
+                && routeOptions[0]
+                && routeOptions[0].polyline,
+            allRouteCoords: (routeOptions || []).flatMap((r) => r.polyline || []),
+            routePolylineLength: routePolyline.length,
+            routePolyline,
+        });
 
-        // Temporarily disable zoom and follow
-        mapFollowingActive = false;
-
-        // Fit map to show entire route using MapLibre helpers
-        if (allRouteLayers.length > 0 && routeOptions && routeOptions[0] && routeOptions[0].polyline) {
-            const allCoords = routeOptions.flatMap(r => r.polyline || []);
-            if (allCoords.length > 0) {
-                MapLibreHelpers.fitMapBounds(map, allCoords, { padding: 50 });
-            }
-        } else if (routePolyline.length > 0) {
-            MapLibreHelpers.fitMapBounds(map, routePolyline, { padding: 50 });
+        savedMapState = activate.saveMapState;
+        mapFollowingActive = activate.mapFollowingActive;
+        if (activate.fitBounds) {
+            MapLibreHelpers.fitMapBounds(
+                map,
+                activate.fitBounds.coords,
+                { padding: activate.fitBounds.padding }
+            );
         }
-
-        journeyOverviewActive = true;
-        applyJourneyOverviewButtonUi(btn, true);
-        showStatus('🗺️ Journey Overview - Tap again to return', 'info');
-        console.log('[Navigation] Journey overview activated');
-        updateRecenterButtonVisibility();
-    } else {
-        // Return to navigation view
-        journeyOverviewActive = false;
-
-        // Re-enable zoom and follow if it was enabled
-        if (zoomAndFollowEnabled) {
-            mapFollowingActive = true;
-        }
-
-        // Return to navigation view
-        if (savedMapState) {
-            map.flyTo({
-                center: [savedMapState.center.lng, savedMapState.center.lat],
-                zoom: savedMapState.zoom,
-                pitch: 55, // Restore 3D view
-                duration: 1000,
-                essential: true
-            });
-            savedMapState = null;
-        }
-
-        applyJourneyOverviewButtonUi(btn, false);
-        showStatus('📍 Returned to navigation view', 'success');
-        console.log('[Navigation] Journey overview deactivated');
-        updateRecenterButtonVisibility();
+        journeyOverviewActive = activate.journeyOverviewActive;
+        applyJourneyOverviewButtonUi(btn, activate.overviewButtonActive);
+        showStatus(activate.statusMessage, activate.statusType);
+        console.log(activate.logMessage);
+        if (activate.updateRecenterVisibility) updateRecenterButtonVisibility();
+        return;
     }
+
+    const deactivate = MC.buildToggleJourneyOverviewDeactivatePlan({
+        zoomAndFollowEnabled,
+        savedMapState,
+    });
+    journeyOverviewActive = deactivate.journeyOverviewActive;
+    if (deactivate.restoreMapFollowing) {
+        mapFollowingActive = true;
+    }
+    if (deactivate.flyTo) {
+        map.flyTo(deactivate.flyTo);
+    }
+    if (deactivate.clearSavedMapState) {
+        savedMapState = null;
+    }
+    applyJourneyOverviewButtonUi(btn, deactivate.overviewButtonActive);
+    showStatus(deactivate.statusMessage, deactivate.statusType);
+    console.log(deactivate.logMessage);
+    if (deactivate.updateRecenterVisibility) updateRecenterButtonVisibility();
 }
 
 // ===== DISTANCE CALCULATION & TURN DETECTION =====
