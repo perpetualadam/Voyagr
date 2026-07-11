@@ -6747,7 +6747,7 @@ async function showCAZInfo() {
     }
 
     container.style.display = 'block';
-    container.innerHTML = '<p style="text-align: center; color: #666;">Loading CAZ zones...</p>';
+    container.innerHTML = _cazInfo().buildCazLoadingHtml();
 
     try {
         // Fetch CAZ zones if not cached
@@ -6761,36 +6761,10 @@ async function showCAZInfo() {
             }
         }
 
-        // Build HTML for CAZ zones
-        let html = '';
-        for (const zone of cazZonesData) {
-            const passesHtml = zone.passes ? Object.entries(zone.passes).map(([type, price]) =>
-                `<span style="display: inline-block; background: #e3f2fd; padding: 2px 6px; border-radius: 4px; margin: 2px; font-size: 11px;">${type}: £${price}</span>`
-            ).join('') : '';
-
-            const exemptionsHtml = zone.exemptions && zone.exemptions.length > 0 ?
-                `<div style="margin-top: 5px; font-size: 11px; color: #4caf50;">✅ Exempt: ${zone.exemptions.join(', ')}</div>` : '';
-
-            html += `
-                <div style="border: 1px solid #ddd; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: white;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <strong style="font-size: 14px;">${zone.name}</strong>
-                        <span style="background: #ff5722; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600;">£${zone.daily_charge}/day</span>
-                    </div>
-                    <div style="font-size: 12px; color: #666; margin-top: 5px;">
-                        📍 ${zone.city} | ⏰ ${zone.operating_hours} | 📅 ${zone.operating_days}
-                    </div>
-                    ${passesHtml ? `<div style="margin-top: 8px;"><strong style="font-size: 11px;">Passes:</strong><br>${passesHtml}</div>` : ''}
-                    ${exemptionsHtml}
-                    ${zone.purchase_url ? `<a href="${zone.purchase_url}" target="_blank" style="display: inline-block; margin-top: 8px; font-size: 12px; color: #1976d2; text-decoration: none;">🔗 Buy Pass</a>` : ''}
-                </div>
-            `;
-        }
-
-        container.innerHTML = html || '<p style="text-align: center; color: #666;">No CAZ zones found</p>';
+        container.innerHTML = _cazInfo().buildCazZonesListHtml(cazZonesData);
     } catch (error) {
         console.error('[CAZ] Error loading zones:', error);
-        container.innerHTML = `<p style="text-align: center; color: #f44336;">Error: ${error.message}</p>`;
+        container.innerHTML = _cazInfo().buildCazErrorHtml(error.message);
     }
 }
 
@@ -8830,21 +8804,16 @@ function loadFavorites() {
             }
 
             if (data.success && data.favorites.length > 0) {
+                const FAV = _favorites();
                 data.favorites.forEach(fav => {
                     const container = document.createElement('div');
                     container.className = 'favorite-item';
-                    container.style.cssText = 'display: flex; align-items: center; gap: 8px; margin-bottom: 8px;';
+                    container.style.cssText = FAV.FAVORITE_ITEM_CONTAINER_STYLE;
 
-                    // Main button to use favorite as destination
                     const btn = document.createElement('button');
                     btn.className = 'favorite-btn';
-                    btn.style.cssText = 'flex: 1; text-align: left;';
-                    const favNameEsc = escapeHtml(fav.name);
-                    const favCatEsc = escapeHtml(fav.category);
-                    btn.innerHTML = `
-                        <span class="favorite-btn-name">${favNameEsc}</span>
-                        <span class="favorite-btn-category">${favCatEsc}</span>
-                    `;
+                    btn.style.cssText = FAV.FAVORITE_BTN_STYLE;
+                    btn.innerHTML = FAV.buildFavoriteMainButtonHtml(fav, { escapeHtml });
                     btn.onclick = () => {
                         document.getElementById('end').value = fav.name;
                         document.getElementById('end').dataset.lat = fav.lat;
@@ -8855,21 +8824,19 @@ function loadFavorites() {
                         showStatus(`📍 Destination set to ${fav.name}`, 'success');
                     };
 
-                    // Edit button
                     const editBtn = document.createElement('button');
-                    editBtn.innerHTML = '✏️';
+                    editBtn.innerHTML = FAV.buildFavoriteEditButtonHtml();
                     editBtn.title = 'Edit';
-                    editBtn.style.cssText = 'width: 36px; height: 36px; border: none; border-radius: 50%; background: #667eea; color: white; cursor: pointer; font-size: 16px;';
+                    editBtn.style.cssText = FAV.FAVORITE_EDIT_BTN_STYLE;
                     editBtn.onclick = (e) => {
                         e.stopPropagation();
                         editFavorite(fav);
                     };
 
-                    // Delete button
                     const delBtn = document.createElement('button');
-                    delBtn.innerHTML = '🗑️';
+                    delBtn.innerHTML = FAV.buildFavoriteDeleteButtonHtml();
                     delBtn.title = 'Delete';
-                    delBtn.style.cssText = 'width: 36px; height: 36px; border: none; border-radius: 50%; background: #F44336; color: white; cursor: pointer; font-size: 16px;';
+                    delBtn.style.cssText = FAV.FAVORITE_DELETE_BTN_STYLE;
                     delBtn.onclick = (e) => {
                         e.stopPropagation();
                         deleteFavorite(fav);
@@ -9168,7 +9135,7 @@ function renderLaneGuidanceUI(data) {
         const lane = document.createElement('div');
         lane.className = 'lane-indicator';
         if (ind.recommended) lane.classList.add('recommended');
-        lane.innerHTML = `<span class="lane-arrow">${ind.arrow}</span>`;
+        lane.innerHTML = LG.buildLaneIndicatorHtml(ind.arrow);
         if (ind.hasDirection) lane.classList.add('has-direction');
         visual.appendChild(lane);
     }
@@ -9285,6 +9252,15 @@ function _deviceEnvironment() { return VoyagrModules.deviceEnvironment(); }
 
 /** Unit-tested route calculation progress bar HTML (modules/navigation/route-progress.js). */
 function _routeProgress() { return VoyagrModules.routeProgress(); }
+
+/** Unit-tested map preview marker HTML (modules/map/preview-marker.js). */
+function _previewMarker() { return VoyagrModules.previewMarker(); }
+
+/** Unit-tested favorites list HTML (modules/navigation/favorites.js). */
+function _favorites() { return VoyagrModules.favorites(); }
+
+/** Unit-tested CAZ zones settings panel HTML (modules/navigation/caz-info.js). */
+function _cazInfo() { return VoyagrModules.cazInfo(); }
 
 /** Unit-tested speed-limit widget helpers (modules/navigation/speed-limit-widget.js). */
 function _speedLimitWidget() { return VoyagrModules.speedLimitWidget(); }
@@ -12466,23 +12442,15 @@ let previewMarker = null;
  * Show a temporary preview marker on the map
  */
 function showPreviewMarker(lat, lon, label) {
-    hidePreviewMarker();  // Remove existing
+    hidePreviewMarker();
 
     if (!map) return;
 
-    // Create preview marker element
+    const PM = _previewMarker();
     const el = document.createElement('div');
-    el.className = 'preview-marker';
-    el.innerHTML = `
-        <div class="preview-marker-icon">📍</div>
-        <div class="preview-marker-label">${label}</div>
-    `;
-    el.style.cssText = `
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        transform: translateY(-50%);
-    `;
+    el.className = PM.PREVIEW_MARKER_CLASS;
+    el.innerHTML = PM.buildPreviewMarkerInnerHtml(label);
+    el.style.cssText = PM.getPreviewMarkerStyleCssText();
 
     // Create MapLibre marker
     previewMarker = new maplibregl.Marker({ element: el })

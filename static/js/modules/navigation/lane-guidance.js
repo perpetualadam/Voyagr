@@ -185,6 +185,14 @@
         return out;
     }
 
+    /**
+     * @param {string} arrow
+     * @returns {string}
+     */
+    function buildLaneIndicatorHtml(arrow) {
+        return '<span class="lane-arrow">' + (arrow || '↑') + '</span>';
+    }
+
     var api = {
         ARROW: ARROW,
         LANE_DEFAULTS: LANE_DEFAULTS,
@@ -196,7 +204,8 @@
         badge: badge,
         urgencyClass: urgencyClass,
         displayText: displayText,
-        laneIndicators: laneIndicators
+        laneIndicators: laneIndicators,
+        buildLaneIndicatorHtml: buildLaneIndicatorHtml
     };
 
     // CommonJS (Jest) export.
