@@ -2199,16 +2199,22 @@ function clearAllRouteLayersFromMap() {
  * @returns {void}
  */
 function displayAllRoutesOnMap() {
+    const RS = _routeSelection();
+    const dispatch = RS.buildDisplayAllRoutesMapDispatchPlan(routeOptions);
+
     console.log('[Routes] ===== displayAllRoutesOnMap called =====');
     console.log('[Routes] routeOptions:', routeOptions ? routeOptions.length : 0, 'routes');
 
-    // Clear the main routeLayer if it exists
+    if (!dispatch.valid) {
+        console.warn('[Routes] No routeOptions available!');
+        return;
+    }
+
     if (routeLayer && typeof routeLayer.remove === 'function') {
         routeLayer.remove();
         routeLayer = null;
     }
 
-    // Clear previous route layers
     allRouteLayers.forEach(layer => {
         if (layer && typeof layer.remove === 'function') {
             layer.remove();
@@ -2216,40 +2222,36 @@ function displayAllRoutesOnMap() {
     });
     allRouteLayers = [];
 
-    // CRITICAL: Clear any orphaned route layers from the map
-    clearAllRouteLayersFromMap();
-
-    if (!routeOptions || routeOptions.length === 0) {
-        console.warn('[Routes] No routeOptions available!');
-        return;
+    if (dispatch.clearAllRouteLayers) {
+        clearAllRouteLayersFromMap();
     }
 
-    // Ensure all routes have valid polylines
-    _routeSelection().hydrateRouteOptionPolylines(routeOptions, decodePolyline);
+    if (dispatch.hydratePolylines) {
+        RS.hydrateRouteOptionPolylines(routeOptions, decodePolyline);
+    }
 
-    // Wait for style to load before adding layers
     const addRouteLayers = () => {
         console.log(`[Routes] Adding route layers (isStyleLoaded: ${map?.isStyleLoaded()})`);
         doAddRouteLayers();
     };
 
-    if (!map) {
+    if (dispatch.requireMap && !map) {
         console.error('[Routes] Map not available');
         return;
     }
 
-    if (map.isStyleLoaded()) {
+    const styleLoad = dispatch.styleLoad || {};
+    if (!styleLoad.waitIfNeeded || map.isStyleLoaded()) {
         addRouteLayers();
     } else {
         console.log('[Routes] Waiting for style to load...');
         map.once('style.load', addRouteLayers);
-        // Also add a fallback timeout
         setTimeout(() => {
-            if (allRouteLayers.length === 0) {
+            if (styleLoad.skipFallbackIfLayersPresent && allRouteLayers.length === 0) {
                 console.log('[Routes] Fallback: adding layers after timeout');
                 addRouteLayers();
             }
-        }, 1000);
+        }, styleLoad.fallbackTimeoutMs);
     }
 }
 
@@ -2371,50 +2373,44 @@ function doAddRouteLayers() {
  * so this function primarily ensures routes are above traffic/weather layers
  */
 function bringRoutesToTop() {
+    const RS = _routeSelection();
+    const plan = RS.buildBringRoutesToTopDispatchPlan(
+        allRouteLayers,
+        map && map.getStyle ? map.getStyle().layers : null
+    );
+
     console.log('[Routes] bringRoutesToTop called, allRouteLayers:', allRouteLayers?.length || 0);
 
     if (!map) {
         console.warn('[Routes] bringRoutesToTop: map not available');
         return;
     }
-    // Normal on startup: traffic/weather call this before any route is drawn (allRouteLayers empty).
-    if (!allRouteLayers || allRouteLayers.length === 0) {
+    if (!plan.shouldRun) {
         return;
     }
 
-    // Function to actually move the layers with retry logic
     const moveLayersToTop = (retryCount = 0) => {
-        const maxRetries = 5;
         let allFound = true;
-        const layerIds = allRouteLayers.map(l => l ? l.id : 'null');
-        console.log(`[Routes] moveLayersToTop attempt ${retryCount}, layers:`, layerIds);
+        console.log(`[Routes] moveLayersToTop attempt ${retryCount}, layers:`, plan.layerIds);
 
         try {
-            // Find the first symbol layer with text (road labels) once for all routes
-            const style = map.getStyle();
-            const beforeId = _routeSelection().findFirstTextSymbolLayerId(style && style.layers);
-
-            allRouteLayers.forEach((layer, idx) => {
-                if (layer && layer.id) {
-                    const exists = map.getLayer(layer.id);
-                    if (exists) {
-                        // Move layer to just before symbol layers (above traffic, below labels)
-                        map.moveLayer(layer.id, beforeId);
-                        console.log(`[Routes] Moved layer ${layer.id}${beforeId ? ` before ${beforeId}` : ' to top'}`);
-                    } else {
-                        allFound = false;
-                        console.log(`[Routes] Layer ${layer.id} not found in map yet`);
-                    }
+            plan.layerIds.forEach((layerId) => {
+                if (map.getLayer(layerId)) {
+                    map.moveLayer(layerId, plan.beforeId);
+                    console.log(`[Routes] Moved layer ${layerId}${plan.beforeId ? ` before ${plan.beforeId}` : ' to top'}`);
+                } else {
+                    allFound = false;
+                    console.log(`[Routes] Layer ${layerId} not found in map yet`);
                 }
             });
 
-            // If not all layers were found and we haven't exceeded retries, try again
-            if (!allFound && retryCount < maxRetries) {
-                setTimeout(() => moveLayersToTop(retryCount + 1), 100);
+            if (!allFound && retryCount < plan.maxRetries) {
+                setTimeout(() => moveLayersToTop(retryCount + 1), plan.retryDelayMs);
             } else if (allFound) {
                 console.log('[Routes] All route layers successfully positioned');
-                // Ensure labels stay on top as a safety measure
-                ensureLabelsOnTop();
+                if (plan.ensureLabelsOnTopAfterSuccess) {
+                    ensureLabelsOnTop();
+                }
             } else {
                 console.warn('[Routes] Some layers not found after retries');
             }
@@ -2423,15 +2419,14 @@ function bringRoutesToTop() {
         }
     };
 
-    // Use a small delay to let MapLibre process the layers, then move them
     setTimeout(() => {
         if (map.isStyleLoaded()) {
             moveLayersToTop(0);
-        } else {
+        } else if (plan.waitForIdleIfStyleNotLoaded) {
             console.log('[Routes] Waiting for map idle...');
             map.once('idle', () => moveLayersToTop(0));
         }
-    }, 100);
+    }, plan.initialDelayMs);
 }
 
 // ===== DRAGGABLE ROUTE EDITING =====
@@ -4013,11 +4008,7 @@ function collectSettingsFormState() {
             avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
             avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
         },
-        parkingPreferences: {
-            maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance')?.value || '10',
-            preferredType: document.getElementById('parkingPreferredType')?.value || 'any',
-            pricePreference: document.getElementById('parkingPricePreference')?.value || 'any',
-        },
+        parkingPreferences: collectParkingPreferencesFormState(),
         multiDropPreferences: collectMultiDropFormState(),
         mapTheme: localStorage.getItem('mapTheme') || 'standard',
     };
@@ -6918,17 +6909,27 @@ let parkingWalkingRoute = null;
 let parkingDrivingRoute = null;
 
 /**
+ * Collect parking preference values from settings form controls.
+ * @returns {Object}
+ */
+function collectParkingPreferencesFormState() {
+    return _multimodalParking().buildParkingPreferencesCollectPlan({
+        maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance')?.value,
+        preferredType: document.getElementById('parkingPreferredType')?.value,
+        pricePreference: document.getElementById('parkingPricePreference')?.value,
+    });
+}
+
+/**
  * saveParkingPreferences function
  * @function saveParkingPreferences
  * @returns {*} Return value description
  */
 function saveParkingPreferences() {
-    const prefs = {
-        maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance').value,
-        preferredType: document.getElementById('parkingPreferredType').value,
-        pricePreference: document.getElementById('parkingPricePreference').value
-    };
-    localStorage.setItem('parkingPreferences', JSON.stringify(prefs));
+    const MP = _multimodalParking();
+    const prefs = collectParkingPreferencesFormState();
+    const storage = MP.buildParkingPreferencesStoragePlan(prefs);
+    localStorage.setItem(storage.storageKey, storage.storageValue);
     saveAllSettings();
     console.log('[Parking] Preferences saved:', prefs);
 }
@@ -6940,14 +6941,16 @@ function saveParkingPreferences() {
  */
 function loadParkingPreferences() {
     try {
-        const saved = localStorage.getItem('parkingPreferences');
-        if (saved) {
-            const prefs = JSON.parse(saved);
-            document.getElementById('parkingMaxWalkingDistance').value = prefs.maxWalkingDistance || '10';
-            document.getElementById('parkingPreferredType').value = prefs.preferredType || 'any';
-            document.getElementById('parkingPricePreference').value = prefs.pricePreference || 'any';
-            console.log('[Parking] Preferences loaded:', prefs);
-        }
+        const MP = _multimodalParking();
+        const saved = localStorage.getItem(MP.PARKING_PREFS_STORAGE_KEY);
+        if (!saved) return;
+
+        const prefs = JSON.parse(saved);
+        const domPlan = MP.buildParkingPreferencesDomApplyPlan(
+            MP.buildParkingPreferencesUiApplyPlan(prefs)
+        );
+        applyDomSelectsFromPlan(domPlan.selects);
+        console.log('[Parking] Preferences loaded:', prefs);
     } catch (e) {
         console.log('[Parking] Error loading preferences:', e);
     }
@@ -7361,15 +7364,13 @@ async function findParkingNearDestination() {
             return;
         }
 
-        const maxWalkingEl = document.getElementById('parkingMaxWalkingDistance');
-        const typeEl = document.getElementById('parkingPreferredType');
-        const priceEl = document.getElementById('parkingPricePreference');
+        const parkingPrefs = collectParkingPreferencesFormState();
         const searchPlan = _multimodalParking().buildParkingSearchDispatchPlan({
             lat: endCoords.lat,
             lon: endCoords.lon,
-            maxWalkingDist: maxWalkingEl ? parseInt(maxWalkingEl.value, 10) : 10,
-            parkingType: typeEl ? typeEl.value : 'any',
-            pricePref: priceEl ? priceEl.value : 'any',
+            maxWalkingDist: parseInt(parkingPrefs.maxWalkingDistance, 10),
+            parkingType: parkingPrefs.preferredType,
+            pricePref: parkingPrefs.pricePreference,
         });
 
         let searchParams = searchPlan.initialSearch;

@@ -150,4 +150,31 @@ describe('multimodal-parking module', () => {
         expect(plan.widenSearchWhenEmpty.params.radius).toBe(MP.PARKING_SEARCH_MIN_RADIUS_METERS);
         expect(plan.widenSearchWhenEmpty.params.type).toBe('any');
     });
+
+    test('buildParkingPreferencesCollectPlan applies defaults for missing values', () => {
+        const prefs = MP.buildParkingPreferencesCollectPlan({ preferredType: 'garage' });
+        expect(prefs.maxWalkingDistance).toBe(MP.PARKING_PREFS_DEFAULTS.maxWalkingDistance);
+        expect(prefs.preferredType).toBe('garage');
+        expect(prefs.pricePreference).toBe('any');
+    });
+
+    test('buildParkingPreferencesDomApplyPlan maps values to select element ids', () => {
+        const dom = MP.buildParkingPreferencesDomApplyPlan({
+            maxWalkingDistance: '15',
+            preferredType: 'street',
+            pricePreference: 'cheap',
+        });
+        expect(dom.selects.find((item) => item.id === 'parkingMaxWalkingDistance').value).toBe('15');
+        expect(dom.selects.find((item) => item.id === 'parkingPreferredType').value).toBe('street');
+    });
+
+    test('buildParkingPreferencesStoragePlan writes canonical storage key', () => {
+        const storage = MP.buildParkingPreferencesStoragePlan({
+            maxWalkingDistance: '8',
+            preferredType: 'any',
+            pricePreference: 'any',
+        });
+        expect(storage.storageKey).toBe(MP.PARKING_PREFS_STORAGE_KEY);
+        expect(JSON.parse(storage.storageValue).maxWalkingDistance).toBe('8');
+    });
 });

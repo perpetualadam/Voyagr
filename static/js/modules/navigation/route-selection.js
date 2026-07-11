@@ -1759,6 +1759,62 @@
         };
     }
 
+    var DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS = 1000;
+    var BRING_ROUTES_TO_TOP_INITIAL_DELAY_MS = 100;
+    var BRING_ROUTES_TO_TOP_RETRY_DELAY_MS = 100;
+    var BRING_ROUTES_TO_TOP_MAX_RETRIES = 5;
+
+    /**
+     * Dispatch plan for displaying all route comparison layers on the map.
+     * @param {Array<Object>} routeOptions
+     * @returns {Object}
+     */
+    function buildDisplayAllRoutesMapDispatchPlan(routeOptions) {
+        var routes = routeOptions || [];
+        if (routes.length === 0) {
+            return { valid: false, reason: 'no_routes' };
+        }
+        return {
+            valid: true,
+            clearAllRouteLayers: true,
+            hydratePolylines: true,
+            requireMap: true,
+            styleLoad: {
+                waitIfNeeded: true,
+                fallbackTimeoutMs: DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS,
+                skipFallbackIfLayersPresent: true,
+            },
+            routeCount: routes.length,
+        };
+    }
+
+    /**
+     * Layer reorder plan to keep route lines above traffic overlays.
+     * @param {Array<{ id?: string }>} layerDescriptors
+     * @param {Array<Object>} [styleLayers]
+     * @returns {Object}
+     */
+    function buildBringRoutesToTopDispatchPlan(layerDescriptors, styleLayers) {
+        var layers = layerDescriptors || [];
+        var layerIds = [];
+        layers.forEach(function (layer) {
+            if (layer && layer.id) layerIds.push(layer.id);
+        });
+        if (layerIds.length === 0) {
+            return { shouldRun: false };
+        }
+        return {
+            shouldRun: true,
+            layerIds: layerIds,
+            beforeId: findFirstTextSymbolLayerId(styleLayers),
+            initialDelayMs: BRING_ROUTES_TO_TOP_INITIAL_DELAY_MS,
+            retryDelayMs: BRING_ROUTES_TO_TOP_RETRY_DELAY_MS,
+            maxRetries: BRING_ROUTES_TO_TOP_MAX_RETRIES,
+            waitForIdleIfStyleNotLoaded: true,
+            ensureLabelsOnTopAfterSuccess: true,
+        };
+    }
+
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
@@ -1839,6 +1895,9 @@
         buildRouteOverviewDispatchPlan: buildRouteOverviewDispatchPlan,
         buildSingleRouteMapDisplayPlan: buildSingleRouteMapDisplayPlan,
         buildAllRoutesMapSideEffectsPlan: buildAllRoutesMapSideEffectsPlan,
+        buildDisplayAllRoutesMapDispatchPlan: buildDisplayAllRoutesMapDispatchPlan,
+        buildBringRoutesToTopDispatchPlan: buildBringRoutesToTopDispatchPlan,
+        DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS: DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,
         mergeLastCalculatedRouteFromSelection: mergeLastCalculatedRouteFromSelection,
         buildRoutePayloadFromPersisted: buildRoutePayloadFromPersisted,

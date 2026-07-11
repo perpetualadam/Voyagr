@@ -376,6 +376,80 @@
         };
     }
 
+    var PARKING_PREFS_STORAGE_KEY = 'parkingPreferences';
+    var PARKING_PREFS_DEFAULTS = {
+        maxWalkingDistance: '10',
+        preferredType: 'any',
+        pricePreference: 'any',
+    };
+    var PARKING_PREFS_ELEMENT_IDS = {
+        maxWalkingDistance: 'parkingMaxWalkingDistance',
+        preferredType: 'parkingPreferredType',
+        pricePreference: 'parkingPricePreference',
+    };
+
+    /**
+     * Normalise parking preference values from form/runtime input.
+     * @param {Object} [formState]
+     * @returns {Object}
+     */
+    function buildParkingPreferencesCollectPlan(formState) {
+        formState = formState || {};
+        return {
+            maxWalkingDistance: formState.maxWalkingDistance != null && formState.maxWalkingDistance !== ''
+                ? formState.maxWalkingDistance
+                : PARKING_PREFS_DEFAULTS.maxWalkingDistance,
+            preferredType: formState.preferredType != null && formState.preferredType !== ''
+                ? formState.preferredType
+                : PARKING_PREFS_DEFAULTS.preferredType,
+            pricePreference: formState.pricePreference != null && formState.pricePreference !== ''
+                ? formState.pricePreference
+                : PARKING_PREFS_DEFAULTS.pricePreference,
+        };
+    }
+
+    /**
+     * localStorage write plan for parking preferences.
+     * @param {Object} prefs
+     * @returns {{ storageKey: string, storageValue: string }}
+     */
+    function buildParkingPreferencesStoragePlan(prefs) {
+        return {
+            storageKey: PARKING_PREFS_STORAGE_KEY,
+            storageValue: JSON.stringify(prefs || {}),
+        };
+    }
+
+    /**
+     * UI apply plan for parking preference selects.
+     * @param {Object|null|undefined} stored
+     * @returns {Object}
+     */
+    function buildParkingPreferencesUiApplyPlan(stored) {
+        stored = stored || {};
+        return {
+            maxWalkingDistance: stored.maxWalkingDistance || PARKING_PREFS_DEFAULTS.maxWalkingDistance,
+            preferredType: stored.preferredType || PARKING_PREFS_DEFAULTS.preferredType,
+            pricePreference: stored.pricePreference || PARKING_PREFS_DEFAULTS.pricePreference,
+        };
+    }
+
+    /**
+     * DOM apply patches for parking preference selects.
+     * @param {Object} uiPlan
+     * @returns {{ selects: Array<{ id: string, value: string }> }}
+     */
+    function buildParkingPreferencesDomApplyPlan(uiPlan) {
+        uiPlan = uiPlan || {};
+        return {
+            selects: [
+                { id: PARKING_PREFS_ELEMENT_IDS.maxWalkingDistance, value: uiPlan.maxWalkingDistance },
+                { id: PARKING_PREFS_ELEMENT_IDS.preferredType, value: uiPlan.preferredType },
+                { id: PARKING_PREFS_ELEMENT_IDS.pricePreference, value: uiPlan.pricePreference },
+            ],
+        };
+    }
+
     /**
      * @returns {string}
      */
@@ -426,6 +500,12 @@
         lastPolylinePointCoords: lastPolylinePointCoords,
         resolveParkingDestinationCoordsFromSources: resolveParkingDestinationCoordsFromSources,
         buildParkingSearchDispatchPlan: buildParkingSearchDispatchPlan,
+        PARKING_PREFS_STORAGE_KEY: PARKING_PREFS_STORAGE_KEY,
+        PARKING_PREFS_DEFAULTS: PARKING_PREFS_DEFAULTS,
+        buildParkingPreferencesCollectPlan: buildParkingPreferencesCollectPlan,
+        buildParkingPreferencesStoragePlan: buildParkingPreferencesStoragePlan,
+        buildParkingPreferencesUiApplyPlan: buildParkingPreferencesUiApplyPlan,
+        buildParkingPreferencesDomApplyPlan: buildParkingPreferencesDomApplyPlan,
         getParkingSelectLoadingMessage: getParkingSelectLoadingMessage,
         getParkingSelectSuccessMessage: getParkingSelectSuccessMessage,
         getParkingSelectNoStartMessage: getParkingSelectNoStartMessage,

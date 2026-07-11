@@ -786,4 +786,24 @@ describe('route overview and single-route display plans', () => {
         expect(plan.ensureTomTomTrafficLayer).toBe(true);
         expect(plan.bringRoutesToTop).toBe(true);
     });
+
+    test('buildDisplayAllRoutesMapDispatchPlan requires routes and schedules style fallback', () => {
+        expect(RS.buildDisplayAllRoutesMapDispatchPlan([]).valid).toBe(false);
+        const plan = RS.buildDisplayAllRoutesMapDispatchPlan([{ polyline: [[1, 2]] }]);
+        expect(plan.valid).toBe(true);
+        expect(plan.hydratePolylines).toBe(true);
+        expect(plan.styleLoad.fallbackTimeoutMs).toBe(RS.DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS);
+    });
+
+    test('buildBringRoutesToTopDispatchPlan lists layer ids and label anchor', () => {
+        const layers = [{ id: 'a' }, { type: 'symbol', layout: { 'text-field': 'x' }, id: 'label' }];
+        const plan = RS.buildBringRoutesToTopDispatchPlan(
+            [{ id: 'route-layer-0' }, { id: 'route-layer-1' }],
+            layers
+        );
+        expect(plan.shouldRun).toBe(true);
+        expect(plan.layerIds).toEqual(['route-layer-0', 'route-layer-1']);
+        expect(plan.beforeId).toBe('label');
+        expect(plan.maxRetries).toBe(5);
+    });
 });
