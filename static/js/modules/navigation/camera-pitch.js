@@ -54,9 +54,55 @@
         };
     }
 
+    /**
+     * Whether and how the follow camera should ease on this GPS tick.
+     * @param {Object} opts
+     * @param {number} [opts.nowMs]
+     * @param {number} [opts.lastFollowEaseAt]
+     * @param {number} [opts.followJumpM]
+     * @param {boolean} [opts.zoomAndFollowEnabled]
+     * @param {boolean} [opts.mapFollowingActive]
+     * @param {boolean} [opts.mapUserPanned]
+     * @param {boolean} [opts.routeInProgress]
+     * @param {number} [opts.followEaseMinMs]
+     * @returns {Object}
+     */
+    function buildNavigationFollowEasePlan(opts) {
+        opts = opts || {};
+        var followEaseMinMs = opts.followEaseMinMs != null ? opts.followEaseMinMs : 400;
+        var nowMs = opts.nowMs != null ? opts.nowMs : Date.now();
+        var lastFollowEaseAt = opts.lastFollowEaseAt || 0;
+        var followJumpM = Number.isFinite(opts.followJumpM) ? opts.followJumpM : Infinity;
+
+        var followDue = nowMs - lastFollowEaseAt >= followEaseMinMs;
+        var followUrgent = followJumpM > 40;
+        var shouldEase = followDue || followUrgent;
+
+        var plan = {
+            nowMs: nowMs,
+            followDue: followDue,
+            followUrgent: followUrgent,
+            shouldEase: shouldEase,
+            durationMs: followJumpM > 95 ? 780 : Math.min(680, followEaseMinMs + 240),
+            browsingDurationMs: followJumpM > 95 ? 650 : 420,
+            mode: 'none',
+        };
+
+        if (opts.zoomAndFollowEnabled && opts.mapFollowingActive) {
+            plan.mode = 'navigation';
+        } else if (!opts.zoomAndFollowEnabled && !opts.mapUserPanned) {
+            plan.mode = 'browsing';
+            plan.zoom = 16;
+            plan.includePadding = !!opts.routeInProgress;
+        }
+
+        return plan;
+    }
+
     const api = {
         decideDrivingCamera: decideDrivingCamera,
         computeFollowPadding: computeFollowPadding,
+        buildNavigationFollowEasePlan: buildNavigationFollowEasePlan,
     };
 
     // CommonJS (Jest) export.

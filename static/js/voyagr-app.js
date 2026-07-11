@@ -4023,25 +4023,14 @@ function decodePolyline(encoded, precision = 6) {
 }
 
 /**
- * Encode [lat,lon] vertex pairs to an encoded polyline string.
- * Delegates to VoyagrPolylineCodec. Used offline when only decoded points survived persistence.
- * @param {Array<[number, number]>} points
- * @param {number} [precision=6]
- * @returns {string}
- */
-function encodePolyline(points, precision = 6) {
-    if (!Array.isArray(points) || points.length === 0) return '';
-    return VoyagrModules.polylineCodec().encodePolyline(points, precision);
-}
-
-/**
- * Before navigation decode, attach `routeOptions[selectedRouteIndex]` geometry / maneuvers so the driven line matches the UI.
+ * Recover `routeData` from persisted OfflineNav blob for a normal navigation bootstrap.
  *
- * @param {Object|null|undefined} routeData
+ * @param {*} saved
  */
-function mergeNavigationRouteFromSelected(routeData) {
-    return VoyagrModules.routeSelection().mergeNavigationRouteFromSelected(
-        routeData, routeOptions, selectedRouteIndex
+function buildRoutePayloadFromPersisted(saved) {
+    return VoyagrModules.routeSelection().buildRoutePayloadFromPersisted(
+        saved,
+        (points, precision) => VoyagrModules.polylineCodec().encodePolyline(points, precision)
     );
 }
 
@@ -4056,14 +4045,6 @@ function syncLastCalculatedRouteFromSelection(index) {
     );
 }
 
-/**
- * Recover `routeData` from persisted OfflineNav blob for a normal navigation bootstrap.
- *
- * @param {*} saved
- */
-function buildRoutePayloadFromPersisted(saved) {
-    return VoyagrModules.routeSelection().buildRoutePayloadFromPersisted(saved, encodePolyline);
-}
 /**
  * showStatus function
  * @function showStatus
@@ -8324,7 +8305,7 @@ function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
 
     let distanceMovedMeters = 999;
     if (lastLaneGuidancePosition) {
-        distanceMovedMeters = calculateDistance(lat, lon, lastLaneGuidancePosition.lat, lastLaneGuidancePosition.lon);
+        distanceMovedMeters = calculateDistanceMeters(lat, lon, lastLaneGuidancePosition.lat, lastLaneGuidancePosition.lon);
     }
 
     if (LG.shouldSkipLaneGuidanceFetch({
@@ -8344,7 +8325,7 @@ function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
         if (nextStep && routePolyline) {
             const shapeIdx = nextStep.begin_shape_index || 0;
             if (shapeIdx < routePolyline.length) {
-                distToManeuver = calculateDistance(lat, lon, routePolyline[shapeIdx][0], routePolyline[shapeIdx][1]);
+                distToManeuver = calculateDistanceMeters(lat, lon, routePolyline[shapeIdx][0], routePolyline[shapeIdx][1]);
             }
         }
     }
@@ -8684,21 +8665,6 @@ function updateSpeedWidgetVisibility() {
         _lastSpeedWidgetVisible = shouldShow;
         console.log('[Speed Widget]', shouldShow ? 'Visible' : 'Hidden', '(tracking:', isTrackingActive, 'route:', routeInProgress, ')');
     }
-}
-
-/**
- * Calculate distance between two coordinates in meters (Haversine formula)
- * @param {number} lat1 - Latitude of first point
- * @param {number} lon1 - Longitude of first point
- * @param {number} lat2 - Latitude of second point
- * @param {number} lon2 - Longitude of second point
- * @returns {number} Distance in meters
- */
-// calculateDistanceMeters / calculateHaversineDistance / calculateDistance moved to
-// modules/navigation/route-geometry.js (VoyagrRouteGeometry.haversineDistanceMeters).
-// Thin stubs below keep all existing callers working.
-function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
-    return VoyagrModules.routeGeometry().haversineDistanceMeters(lat1, lon1, lat2, lon2);
 }
 
 /**
@@ -9099,17 +9065,12 @@ function toggleJourneyOverview() {
 
 // ===== DISTANCE CALCULATION & TURN DETECTION =====
 /**
- * calculateHaversineDistance function
- * @function calculateHaversineDistance
- * @param {*} lat1 - Parameter description
- * @param {*} lon1 - Parameter description
- * @param {*} lat2 - Parameter description
- * @param {*} lon2 - Parameter description
- * @returns {*} Return value description
+ * Calculate distance between two coordinates in meters (Haversine formula).
  */
-function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
+function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
     return VoyagrModules.routeGeometry().haversineDistanceMeters(lat1, lon1, lat2, lon2);
 }
+
 /**
  * calculateBearing function
  * @function calculateBearing
@@ -12546,47 +12507,51 @@ function startGPSTracking() {
             }
 
             // ===== ZOOM AND FOLLOW: Center map on user with smart zoom =====
-            const FOLLOW_EASE_MIN_MS = 400;
-            const nowCam = Date.now();
-            const followDue = nowCam - (window.__voyagrLastFollowEaseAt || 0) >= FOLLOW_EASE_MIN_MS;
-            const followUrgent = followJumpM > 40;
+            const CP = VoyagrModules.cameraPitch();
+            const followPlan = CP.buildNavigationFollowEasePlan({
+                nowMs: Date.now(),
+                lastFollowEaseAt: window.__voyagrLastFollowEaseAt || 0,
+                followJumpM,
+                zoomAndFollowEnabled,
+                mapFollowingActive,
+                mapUserPanned: !!(map && map._userPanned),
+                routeInProgress,
+            });
 
-            if (zoomAndFollowEnabled && mapFollowingActive && map) {
+            if (followPlan.mode === 'navigation' && map) {
                 const smartZoom = calculateSmartZoom(speedMph, null, 'motorway');
-
-                // Heading-up follow during active nav (or driver-view browsing). Tilt to 60° unless
-                // the user picked the flat 2D map view, in which case stay heading-up but flat.
                 const pitch = shouldTiltDrivingCamera() ? 60 : 0;
-                const padding = VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
+                const padding = CP.computeFollowPadding(window.innerHeight, window.innerWidth);
                 const bearing = shouldUsePitchedDrivingCamera() ? (heading || map.getBearing()) : 0;
 
-                if (followDue || followUrgent) {
-                    window.__voyagrLastFollowEaseAt = nowCam;
+                if (followPlan.shouldEase) {
+                    window.__voyagrLastFollowEaseAt = followPlan.nowMs;
                     window.__voyagrLastFollowCenterGeo = { lat: markerLat, lon: markerLon };
 
-                    const dur = followJumpM > 95 ? 780 : Math.min(680, FOLLOW_EASE_MIN_MS + 240);
                     map.easeTo({
-                        center: [markerLon, markerLat], // MapLibre uses [lon, lat]
+                        center: [markerLon, markerLat],
                         zoom: smartZoom,
                         bearing: bearing,
                         pitch: pitch,
                         padding: padding,
-                        duration: dur,
+                        duration: followPlan.durationMs,
                         essential: true
                     });
                 }
 
                 console.log(`[Navigation] View: pitch ${pitch}°, bearing ${Math.round(bearing)}°, zoom ${smartZoom.toFixed(1)}, pitchedNav: ${isActiveNavigationFollow()}, pref: ${driverPerspectiveEnabled}`);
                 updateRecenterButtonVisibility();
-            } else if (map && !zoomAndFollowEnabled && !map._userPanned) {
-                if (followDue || followUrgent) {
-                    window.__voyagrLastFollowEaseAt = nowCam;
+            } else if (followPlan.mode === 'browsing' && map) {
+                if (followPlan.shouldEase) {
+                    window.__voyagrLastFollowEaseAt = followPlan.nowMs;
                     window.__voyagrLastFollowCenterGeo = { lat: markerLat, lon: markerLon };
                     map.easeTo({
                         center: [markerLon, markerLat],
-                        zoom: 16,
-                        padding: routeInProgress ? VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth) : undefined,
-                        duration: followJumpM > 95 ? 650 : 420
+                        zoom: followPlan.zoom,
+                        padding: followPlan.includePadding
+                            ? CP.computeFollowPadding(window.innerHeight, window.innerWidth)
+                            : undefined,
+                        duration: followPlan.browsingDurationMs
                     });
                 }
             }
@@ -13135,7 +13100,7 @@ function announceETAUpdate(currentLat, currentLon) {
     // Find closest point on route
     for (let i = 0; i < routePolyline.length; i++) {
         const point = routePolyline[i];
-        const distance = calculateHaversineDistance(currentLat, currentLon, point[0], point[1]);
+        const distance = calculateDistanceMeters(currentLat, currentLon, point[0], point[1]);
         if (distance < closestDistance) {
             closestDistance = distance;
             closestIndex = i;
@@ -13144,7 +13109,7 @@ function announceETAUpdate(currentLat, currentLon) {
 
     // Calculate remaining distance from closest point to destination
     for (let i = closestIndex; i < routePolyline.length - 1; i++) {
-        remainingDistance += calculateDistance(
+        remainingDistance += calculateDistanceMeters(
             routePolyline[i][0], routePolyline[i][1],
             routePolyline[i + 1][0], routePolyline[i + 1][1]
         );
@@ -13683,20 +13648,6 @@ function logReroutingEvent(startLat, startLon, destination, route, hazardCount) 
 async function triggerAutomaticReroute(currentLat, currentLon) {
     return triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon);
 }
-/**
- * calculateDistance function
- * @function calculateDistance
- * @param {*} lat1 - Parameter description
- * @param {*} lon1 - Parameter description
- * @param {*} lat2 - Parameter description
- * @param {*} lon2 - Parameter description
- * @returns {*} Return value description
- */
-// calculateDistance moved to route-geometry (unified with calculateHaversineDistance).
-function calculateDistance(lat1, lon1, lat2, lon2) {
-    return VoyagrModules.routeGeometry().haversineDistanceMeters(lat1, lon1, lat2, lon2);
-}
-
 // Hazard announcement debouncing
 const hazardAnnouncementDebounce = {};
 const HAZARD_ANNOUNCEMENT_DEBOUNCE_MS = 30000;
@@ -14659,7 +14610,7 @@ function updateAutoGpsLocation() {
 
             // Show subtle notification only on first update or significant change
             if (!window.lastAutoGpsLat ||
-                calculateDistance(window.lastAutoGpsLat, window.lastAutoGpsLon, lat, lon) > 0.05) {
+                calculateDistanceMeters(window.lastAutoGpsLat, window.lastAutoGpsLon, lat, lon) > 0.05) {
                 // Only show notification if moved more than 50 meters
                 showStatus(`📍 Location updated: ${lat.toFixed(4)}, ${lon.toFixed(4)}`, 'info');
                 window.lastAutoGpsLat = lat;
@@ -15030,7 +14981,9 @@ async function geocodeLocations(startAddress, endAddress) {
  */
 function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     const MC = _mapControls();
-    routeData = mergeNavigationRouteFromSelected(routeData);
+    routeData = VoyagrModules.routeSelection().mergeNavigationRouteFromSelected(
+        routeData, routeOptions, selectedRouteIndex
+    );
     if (!routeData || !routeData.geometry) {
         showStatus(MC.getNavStartNoGeometryStatusMessage(), 'error');
         return;

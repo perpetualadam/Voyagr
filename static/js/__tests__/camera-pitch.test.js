@@ -97,3 +97,46 @@ describe('computeFollowPadding', () => {
         expect(computeFollowPadding(2000, 300).bottom).toBe(200);
     });
 });
+
+describe('buildNavigationFollowEasePlan', () => {
+    const { buildNavigationFollowEasePlan } = require('../modules/navigation/camera-pitch.js');
+
+    test('navigation mode eases when due or urgent', () => {
+        const plan = buildNavigationFollowEasePlan({
+            nowMs: 5000,
+            lastFollowEaseAt: 0,
+            followJumpM: 50,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+        });
+        expect(plan.mode).toBe('navigation');
+        expect(plan.shouldEase).toBe(true);
+        expect(plan.durationMs).toBe(640);
+    });
+
+    test('browsing mode uses fixed zoom and optional padding flag', () => {
+        const plan = buildNavigationFollowEasePlan({
+            nowMs: 1000,
+            lastFollowEaseAt: 0,
+            followJumpM: 10,
+            zoomAndFollowEnabled: false,
+            mapUserPanned: false,
+            routeInProgress: true,
+        });
+        expect(plan.mode).toBe('browsing');
+        expect(plan.zoom).toBe(16);
+        expect(plan.includePadding).toBe(true);
+        expect(plan.browsingDurationMs).toBe(420);
+    });
+
+    test('no ease when not due and jump is small', () => {
+        const plan = buildNavigationFollowEasePlan({
+            nowMs: 1000,
+            lastFollowEaseAt: 900,
+            followJumpM: 5,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+        });
+        expect(plan.shouldEase).toBe(false);
+    });
+});
