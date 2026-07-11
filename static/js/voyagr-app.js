@@ -3054,15 +3054,26 @@ function updateTripInfoFromRouteOption(route) {
  * @param {number} index - Route index to display
  */
 function displaySingleRoute(index) {
+    const RS = _routeSelection();
+    const plan = RS.buildSingleRouteMapDisplayPlan(routeOptions && routeOptions[index], index, {
+        routeColors: routeColors(),
+        showTrafficEnabled,
+        routeTrafficEnabled,
+        hasTrafficLayer: !!trafficLayer,
+        trafficLightsEnabled: window.TrafficLights && typeof window.TrafficLights.isEnabled === 'function' && window.TrafficLights.isEnabled(),
+        trafficLightsPlotAvailable: (window.TrafficLights && typeof window.TrafficLights.plotTrafficLightsOnRoute === 'function')
+            || typeof plotTrafficLightsOnRoute === 'function',
+    });
+
     console.log(`[Routes] displaySingleRoute(${index}) - clearing all existing routes`);
 
-    // Clear the main routeLayer if it exists (MapLibre compatible)
+    if (!plan.valid) return;
+
     if (routeLayer) {
         if (typeof routeLayer.remove === 'function') routeLayer.remove();
         routeLayer = null;
     }
 
-    // Clear all tracked route layers
     allRouteLayers.forEach(layer => {
         if (layer && typeof layer.remove === 'function') {
             layer.remove();
@@ -3070,50 +3081,39 @@ function displaySingleRoute(index) {
     });
     allRouteLayers = [];
 
-    // CRITICAL: Also remove any route layers directly from MapLibre
-    // This catches any layers that weren't properly tracked
-    clearAllRouteLayersFromMap();
+    if (plan.clearAllRouteLayers) {
+        clearAllRouteLayersFromMap();
+    }
 
-    if (!routeOptions || !routeOptions[index]) return;
-
-    const route = routeOptions[index];
-    const polylinePoints = route.polyline || [];
-
+    const polylinePoints = plan.polyline.points || [];
     if (polylinePoints.length > 0) {
-        const color = routeColors()[index % routeColors().length];
         const layer = MapLibreHelpers.addPolyline(map, polylinePoints, {
-            color: color,
-            weight: 8,
-            opacity: 1.0
+            color: plan.polyline.color,
+            weight: plan.polyline.weight,
+            opacity: plan.polyline.opacity,
         });
 
         allRouteLayers.push(layer);
-
-        // Fit map to the selected route
-        MapLibreHelpers.fitMapBounds(map, polylinePoints, { padding: 50 });
+        MapLibreHelpers.fitMapBounds(map, polylinePoints, { padding: plan.polyline.fitBoundsPadding });
     }
 
-    // Display hazards for the selected route only
-    if (route.hazards && route.hazards.length > 0) {
-        displayHazardMarkers(route.hazards);
+    if (plan.hazards.action === 'show') {
+        displayHazardMarkers(plan.hazards.list);
     } else {
         clearHazardMarkers();
     }
 
-    // Ensure TomTom traffic layer stays visible if enabled (surrounding area traffic)
-    if (showTrafficEnabled && !trafficLayer) {
+    if (plan.ensureTomTomTrafficLayer) {
         addTrafficLayer();
     }
 
-    // Display route-specific traffic edges if enabled
-    if (routeTrafficEnabled && polylinePoints.length > 0) {
-        routePolyline = polylinePoints;
+    if (plan.routeTraffic.enabled) {
+        routePolyline = plan.routeTraffic.polylinePoints;
         fetchAndDisplayRouteTraffic();
     }
 
-    // Traffic lights: when route hazards already include OSM signals, use hazard markers only
-    // (same OSM data as /api/traffic-lights — avoids two marker styles stacked on the map).
-    if (polylinePoints.length > 0) {
+    const tl = plan.trafficLights;
+    if (tl.polylinePoints.length > 0) {
         const plotRouteTrafficLights =
             (typeof window !== 'undefined' &&
              window.TrafficLights &&
@@ -3121,31 +3121,23 @@ function displaySingleRoute(index) {
                 ? window.TrafficLights.plotTrafficLightsOnRoute
                 : (typeof plotTrafficLightsOnRoute === 'function' ? plotTrafficLightsOnRoute : null);
 
-        const hasOsmTlsInHazards = !!(route.hazards && route.hazards.some(h => {
-            if (!h || !h.type) return false;
-            const t = String(h.type);
-            return t === 'traffic_light' || t === 'traffic_signals' || t === 'traffic_signal';
-        }));
-
-        const tlEnabled = window.TrafficLights && typeof window.TrafficLights.isEnabled === 'function' && window.TrafficLights.isEnabled();
-
         if (window.TrafficLights && typeof window.TrafficLights.clearAllTrafficLights === 'function') {
-            if (hasOsmTlsInHazards || !tlEnabled) {
+            if (tl.action === 'clear') {
                 window.TrafficLights.clearAllTrafficLights();
             }
         }
 
-        if (plotRouteTrafficLights && tlEnabled && !hasOsmTlsInHazards) {
+        if (tl.action === 'plot' && plotRouteTrafficLights) {
             console.log('[Routes] Plotting traffic lights on selected route (OSM via /api/traffic-lights)');
-            plotRouteTrafficLights(polylinePoints);
-        } else if (hasOsmTlsInHazards) {
+            plotRouteTrafficLights(tl.polylinePoints);
+        } else if (tl.hasOsmTlsInHazards) {
             console.log('[Routes] Traffic lights on route from hazard markers (OSM); skipping duplicate plot');
         } else if (!plotRouteTrafficLights) {
             console.warn('[Routes] Traffic lights module not available for route plotting');
         }
     }
 
-    console.log(`[Routes] Showing only route ${index + 1}: ${route.name}`);
+    console.log(`[Routes] ${plan.logLine}`);
 }
 
 /**
@@ -6912,48 +6904,18 @@ async function showRouteComparison() {
  * @returns {*} Return value description
  */
 function overviewRoute() {
-    // Check if we have a calculated route
-    if (!window.lastCalculatedRoute || !window.lastCalculatedRoute.geometry) {
-        showStatus('No route to overview', 'error');
+    const RS = _routeSelection();
+    const plan = RS.buildRouteOverviewDispatchPlan(window.lastCalculatedRoute, decodePolyline);
+    if (!plan.ok) {
+        showStatus(plan.statusMessage, plan.statusType);
         console.error('[Route] No route available for overview');
         return;
     }
 
     try {
-        // Decode the route geometry to get the path
-        const sourceLower = (window.lastCalculatedRoute.source || '').toLowerCase();
-        const precision =
-            Number.isFinite(window.lastCalculatedRoute.geometry_precision)
-                ? window.lastCalculatedRoute.geometry_precision
-                : (sourceLower.includes('osrm') ? 5 : 6);
-        const routePath = decodePolyline(window.lastCalculatedRoute.geometry, precision);
-
-        if (!routePath || routePath.length === 0) {
-            showStatus('No route path available', 'error');
-            return;
-        }
-
-        // Calculate bounds from route polyline
-        let minLat = routePath[0][0];
-        let maxLat = routePath[0][0];
-        let minLon = routePath[0][1];
-        let maxLon = routePath[0][1];
-
-        routePath.forEach(point => {
-            minLat = Math.min(minLat, point[0]);
-            maxLat = Math.max(maxLat, point[0]);
-            minLon = Math.min(minLon, point[1]);
-            maxLon = Math.max(maxLon, point[1]);
-        });
-
-        // Create bounds object for Leaflet
-        const bounds = [[minLat, minLon], [maxLat, maxLon]];
-
-        // Fit map to bounds with padding
-        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16 });
-
-        showStatus('📍 Route overview - pan and zoom to inspect', 'success');
-        console.log('[Route] Overview fitted bounds:', bounds);
+        MapLibreHelpers.fitMapBounds(map, plan.routePath, plan.fitBounds);
+        showStatus(plan.statusMessage, plan.statusType);
+        console.log('[Route] Overview fitted bounds for', plan.routePath.length, 'points');
     } catch (error) {
         showStatus('Error displaying route overview: ' + error.message, 'error');
         console.error('[Route] Overview error:', error);

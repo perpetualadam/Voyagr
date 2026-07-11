@@ -1633,6 +1633,108 @@
         };
     }
 
+    /**
+     * True when route hazards already include OSM traffic-light signals.
+     * @param {Array<Object>} hazards
+     * @returns {boolean}
+     */
+    function routeHazardsIncludeOsmTrafficLights(hazards) {
+        if (!hazards || !hazards.length) return false;
+        return hazards.some(function (h) {
+            if (!h || !h.type) return false;
+            var t = String(h.type);
+            return t === 'traffic_light' || t === 'traffic_signals' || t === 'traffic_signal';
+        });
+    }
+
+    /**
+     * Dispatch plan for fitting the map to the active calculated route overview.
+     * @param {Object|null|undefined} lastCalculatedRoute
+     * @param {function(string, number): Array<[number,number]>} decodePolyline
+     * @returns {Object}
+     */
+    function buildRouteOverviewDispatchPlan(lastCalculatedRoute, decodePolyline) {
+        if (!lastCalculatedRoute || !lastCalculatedRoute.geometry) {
+            return {
+                ok: false,
+                statusMessage: 'No route to overview',
+                statusType: 'error',
+            };
+        }
+        var precision = resolveRouteGeometryPrecision(lastCalculatedRoute);
+        var routePath = typeof decodePolyline === 'function'
+            ? decodePolyline(lastCalculatedRoute.geometry, precision)
+            : [];
+        if (!routePath || routePath.length === 0) {
+            return {
+                ok: false,
+                statusMessage: 'No route path available',
+                statusType: 'error',
+            };
+        }
+        return {
+            ok: true,
+            routePath: routePath,
+            fitBounds: { padding: 50, maxZoom: 16 },
+            statusMessage: '📍 Route overview - pan and zoom to inspect',
+            statusType: 'success',
+        };
+    }
+
+    /**
+     * Map display plan for showing a single selected route (comparison / preview).
+     * @param {Object|null|undefined} route
+     * @param {number} index
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildSingleRouteMapDisplayPlan(route, index, opts) {
+        opts = opts || {};
+        if (!route) {
+            return { valid: false };
+        }
+        var polylinePoints = route.polyline || [];
+        var color = resolveRouteColor(index, opts.routeColors);
+        var hazards = route.hazards || [];
+        var hasOsmTlsInHazards = routeHazardsIncludeOsmTrafficLights(hazards);
+        var tlEnabled = !!opts.trafficLightsEnabled;
+        var trafficLightsAction = 'skip';
+        if (polylinePoints.length > 0) {
+            if (tlEnabled && !hasOsmTlsInHazards) {
+                trafficLightsAction = 'plot';
+            } else if (hasOsmTlsInHazards || !tlEnabled) {
+                trafficLightsAction = 'clear';
+            }
+        }
+        return {
+            valid: true,
+            clearAllRouteLayers: true,
+            polyline: {
+                points: polylinePoints,
+                color: color,
+                weight: 8,
+                opacity: 1.0,
+                fitBoundsPadding: 50,
+            },
+            hazards: {
+                action: hazards.length > 0 ? 'show' : 'clear',
+                list: hazards,
+            },
+            ensureTomTomTrafficLayer: !!opts.showTrafficEnabled && !opts.hasTrafficLayer,
+            routeTraffic: {
+                enabled: !!opts.routeTrafficEnabled && polylinePoints.length > 0,
+                polylinePoints: polylinePoints,
+            },
+            trafficLights: {
+                action: trafficLightsAction,
+                polylinePoints: polylinePoints,
+                hasOsmTlsInHazards: hasOsmTlsInHazards,
+                plotAvailable: !!opts.trafficLightsPlotAvailable,
+            },
+            logLine: 'Showing only route ' + (index + 1) + ': ' + (route.name || ''),
+        };
+    }
+
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
@@ -1709,6 +1811,9 @@
         buildNavActiveRoutePolylineStyle: buildNavActiveRoutePolylineStyle,
         buildNavRouteLayerRedrawGuardPlan: buildNavRouteLayerRedrawGuardPlan,
         buildNavActiveRouteLayerMountPlan: buildNavActiveRouteLayerMountPlan,
+        routeHazardsIncludeOsmTrafficLights: routeHazardsIncludeOsmTrafficLights,
+        buildRouteOverviewDispatchPlan: buildRouteOverviewDispatchPlan,
+        buildSingleRouteMapDisplayPlan: buildSingleRouteMapDisplayPlan,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,
         mergeLastCalculatedRouteFromSelection: mergeLastCalculatedRouteFromSelection,
         buildRoutePayloadFromPersisted: buildRoutePayloadFromPersisted,

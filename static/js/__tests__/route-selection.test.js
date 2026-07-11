@@ -704,3 +704,71 @@ describe('navigation route polyline style', () => {
         }).shouldRedraw).toBe(false);
     });
 });
+
+describe('route overview and single-route display plans', () => {
+    const decode = jest.fn(() => [[51.5, -0.1], [51.55, -0.15], [51.6, -0.2]]);
+
+    test('buildRouteOverviewDispatchPlan decodes geometry and requests MapLibre fitBounds', () => {
+        const plan = RS.buildRouteOverviewDispatchPlan(
+            { geometry: 'abc', source: 'valhalla' },
+            decode
+        );
+        expect(plan.ok).toBe(true);
+        expect(plan.routePath).toHaveLength(3);
+        expect(plan.fitBounds).toEqual({ padding: 50, maxZoom: 16 });
+        expect(plan.statusType).toBe('success');
+    });
+
+    test('buildRouteOverviewDispatchPlan rejects missing geometry', () => {
+        expect(RS.buildRouteOverviewDispatchPlan(null, decode).ok).toBe(false);
+        expect(RS.buildRouteOverviewDispatchPlan({ geometry: 'x' }, () => []).ok).toBe(false);
+    });
+
+    test('routeHazardsIncludeOsmTrafficLights detects OSM signal types', () => {
+        expect(RS.routeHazardsIncludeOsmTrafficLights([{ type: 'camera' }])).toBe(false);
+        expect(RS.routeHazardsIncludeOsmTrafficLights([{ type: 'traffic_signals' }])).toBe(true);
+    });
+
+    test('buildSingleRouteMapDisplayPlan skips duplicate traffic-light plot when hazards include OSM signals', () => {
+        const plan = RS.buildSingleRouteMapDisplayPlan(
+            {
+                name: 'Fastest',
+                polyline: [[51.5, -0.1], [51.6, -0.2]],
+                hazards: [{ type: 'traffic_light', lat: 51.55, lon: -0.15 }],
+            },
+            0,
+            {
+                routeColors: ['#f00', '#0f0'],
+                showTrafficEnabled: true,
+                routeTrafficEnabled: true,
+                hasTrafficLayer: false,
+                trafficLightsEnabled: true,
+                trafficLightsPlotAvailable: true,
+            }
+        );
+        expect(plan.valid).toBe(true);
+        expect(plan.polyline.color).toBe('#f00');
+        expect(plan.hazards.action).toBe('show');
+        expect(plan.ensureTomTomTrafficLayer).toBe(true);
+        expect(plan.routeTraffic.enabled).toBe(true);
+        expect(plan.trafficLights.action).toBe('clear');
+        expect(plan.trafficLights.hasOsmTlsInHazards).toBe(true);
+    });
+
+    test('buildSingleRouteMapDisplayPlan plots traffic lights when hazards omit OSM signals', () => {
+        const plan = RS.buildSingleRouteMapDisplayPlan(
+            {
+                name: 'Shortest',
+                polyline: [[51.5, -0.1], [51.6, -0.2]],
+                hazards: [{ type: 'camera', lat: 51.55, lon: -0.15 }],
+            },
+            1,
+            {
+                trafficLightsEnabled: true,
+                trafficLightsPlotAvailable: true,
+            }
+        );
+        expect(plan.trafficLights.action).toBe('plot');
+        expect(plan.hazards.action).toBe('show');
+    });
+});
