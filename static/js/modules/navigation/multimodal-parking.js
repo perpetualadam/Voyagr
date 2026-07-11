@@ -73,10 +73,53 @@
         );
     }
 
+    /**
+     * Estimate walking time in minutes from distance in metres (1.4 m/s).
+     * @param {number} distanceM
+     * @returns {number}
+     */
+    function computeWalkingMinutesFromMeters(distanceM) {
+        var walkingTime = Math.round((distanceM || 0) / 1.4);
+        return Math.max(1, Math.round(walkingTime / 60));
+    }
+
+    /**
+     * HTML for one parking option row in the parking search list.
+     * @param {Object} parking
+     * @param {number} index
+     * @param {Object} opts
+     * @returns {string}
+     */
+    function buildParkingOptionItemHtml(parking, index, opts) {
+        parking = parking || {};
+        opts = opts || {};
+        var walkingMinutes = computeWalkingMinutesFromMeters(parking.distance_m);
+        return (
+            '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">' +
+                '<strong style="font-size: 13px;">' + parking.name + '</strong>' +
+                '<span style="background: #FF9800; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold;">' + (index + 1) + '</span>' +
+            '</div>' +
+            '<div style="font-size: 12px; color: #666;">' +
+                '📍 ' + opts.distanceText + ' ' + opts.distUnit + ' away<br>' +
+                '🚶 ' + walkingMinutes + ' min walk' +
+            '</div>' +
+            '<div style="display: flex; gap: 6px; margin-top: 8px;">' +
+                '<button type="button" class="parking-show-route-btn" style="flex: 1; background: #2196F3; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer;">' +
+                    '🗺️ Show Route' +
+                '</button>' +
+                '<button type="button" class="parking-set-dest-btn" style="flex: 1; background: #4CAF50; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer;">' +
+                    '📍 Set as Destination' +
+                '</button>' +
+            '</div>'
+        );
+    }
+
     var api = {
         computeMultimodalLegTotals: computeMultimodalLegTotals,
         buildParkingRouteLabel: buildParkingRouteLabel,
         buildParkingBreakdownHtml: buildParkingBreakdownHtml,
+        computeWalkingMinutesFromMeters: computeWalkingMinutesFromMeters,
+        buildParkingOptionItemHtml: buildParkingOptionItemHtml,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
