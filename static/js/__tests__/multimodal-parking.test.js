@@ -67,4 +67,9 @@ describe('multimodal-parking module', () => {
         expect(MP.buildParkingMapMarkerPopupHtml('City Park', '0.3', 'mi')).toContain('City Park');
         expect(MP.buildParkingMapMarkerPopupHtml('City Park', '0.3', 'mi')).toContain('0.3 mi');
     });
+
+    test('getParkingOptionItemContainerStyleCssText styles list row container', () => {
+        expect(MP.getParkingOptionItemContainerStyleCssText()).toContain('border-radius: 6px');
+        expect(MP.getParkingOptionItemContainerStyleCssText()).toContain('cursor: pointer');
+    });
 });

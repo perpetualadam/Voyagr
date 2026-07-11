@@ -27,4 +27,10 @@ describe('osm-map-icons module', () => {
         expect(html).toContain('Traffic light');
         expect(html).toContain('<pill/>');
     });
+
+    test('buildOsmTrafficLightPopupIconWrapperHtml centers pill for hazard popups', () => {
+        const html = OSM.buildOsmTrafficLightPopupIconWrapperHtml('<pill/>');
+        expect(html).toContain('width:26px;height:38px;margin:0 auto');
+        expect(html).toContain('<pill/>');
+    });
 });

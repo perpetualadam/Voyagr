@@ -84,6 +84,14 @@
     }
 
     /**
+     * Container style for a parking option list row.
+     * @returns {string}
+     */
+    function getParkingOptionItemContainerStyleCssText() {
+        return 'background: white; padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; transition: all 0.2s;';
+    }
+
+    /**
      * HTML for one parking option row in the parking search list.
      * @param {Object} parking
      * @param {number} index
@@ -156,6 +164,7 @@
         buildParkingRouteLabel: buildParkingRouteLabel,
         buildParkingBreakdownHtml: buildParkingBreakdownHtml,
         computeWalkingMinutesFromMeters: computeWalkingMinutesFromMeters,
+        getParkingOptionItemContainerStyleCssText: getParkingOptionItemContainerStyleCssText,
         buildParkingOptionItemHtml: buildParkingOptionItemHtml,
         buildParkingEmptyStateHtml: buildParkingEmptyStateHtml,
         buildParkingPreviewRouteHtml: buildParkingPreviewRouteHtml,

@@ -78,6 +78,15 @@
     }
 
     /**
+     * Centered pill wrapper for hazard marker popups (traffic lights on route).
+     * @param {string} pillHtml
+     * @returns {string}
+     */
+    function buildOsmTrafficLightPopupIconWrapperHtml(pillHtml) {
+        return '<div style="width:26px;height:38px;margin:0 auto;">' + (pillHtml || '') + '</div>';
+    }
+
+    /**
      * @param {string} pillHtml
      * @returns {string}
      */
@@ -95,6 +104,7 @@
         buildRailwayCrossingIconSvg: buildRailwayCrossingIconSvg,
         buildOsmTrafficLightFallbackSvg: buildOsmTrafficLightFallbackSvg,
         buildOsmTrafficLightMarkerPillHtml: buildOsmTrafficLightMarkerPillHtml,
+        buildOsmTrafficLightPopupIconWrapperHtml: buildOsmTrafficLightPopupIconWrapperHtml,
         buildRailwayCrossingMarkerHtml: buildRailwayCrossingMarkerHtml,
         buildRailwayCrossingPopupHtml: buildRailwayCrossingPopupHtml,
         buildOsmTrafficLightPopupHtml: buildOsmTrafficLightPopupHtml,
