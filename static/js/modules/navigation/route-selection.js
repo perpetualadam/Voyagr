@@ -563,6 +563,84 @@
     }
 
     /**
+     * Fetch plan for route-comparison API request.
+     * @param {Array<Object>} routesForComparison
+     * @returns {Object}
+     */
+    function buildShowRouteComparisonFetchPlan(routesForComparison) {
+        var routes = routesForComparison || [];
+        return {
+            shouldFetch: routes.length > 0,
+            apiPath: '/api/route-comparison',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: { routes: routes },
+        };
+    }
+
+    /**
+     * Execute plan when route-comparison fetch fails.
+     * @param {Error|Object} error
+     * @returns {Object}
+     */
+    function buildShowRouteComparisonErrorExecutePlan(error) {
+        error = error || {};
+        return {
+            statusMessage: 'Error: ' + (error.message || 'unknown'),
+            errorLogPrefix: '[Comparison] Error:',
+            logArgs: [error],
+        };
+    }
+
+    /**
+     * Dispatch plan for selecting an alternative route.
+     * @param {number} index
+     * @param {Array<Object>} routeOptions
+     * @returns {Object}
+     */
+    function buildSelectRouteDispatchPlan(index, routeOptions) {
+        var routes = routeOptions || [];
+        var route = routes[index];
+        if (!route) {
+            return { shouldSelect: false, selectedRouteIndex: index };
+        }
+        return {
+            shouldSelect: true,
+            selectedRouteIndex: index,
+            displaySingleRoute: true,
+            displayRouteComparison: true,
+            syncLastCalculatedRoute: true,
+            updateTripInfo: true,
+            showRoutePreview: true,
+            routeName: route.name || '',
+            maneuverCount: Array.isArray(route.maneuvers) ? route.maneuvers.length : 0,
+            logPrefix: '[Routes] Selected route',
+        };
+    }
+
+    /**
+     * Preview payload plan for a selected route option.
+     * @param {Array<Object>} routeOptions
+     * @param {number} index
+     * @param {Object|null|undefined} lastRouteApiResponse
+     * @returns {Object}
+     */
+    function buildSelectRoutePreviewPayloadPlan(routeOptions, index, lastRouteApiResponse) {
+        var routes = routeOptions || [];
+        var selectedRoute = routes[index];
+        if (!selectedRoute) {
+            return { shouldPreview: false };
+        }
+        return {
+            shouldPreview: true,
+            selectedRoute: selectedRoute,
+            previewPayload: lastRouteApiResponse
+                ? Object.assign({}, lastRouteApiResponse, { routes: routes })
+                : selectedRoute,
+        };
+    }
+
+    /**
      * Post-panel UI plan after route preview values are written to the DOM.
      * @param {Object} opts
      * @returns {Object}
@@ -2795,6 +2873,10 @@
         buildRouteComparisonModalExecutePlan: buildRouteComparisonModalExecutePlan,
         buildShowRouteComparisonOrchestrationPlan: buildShowRouteComparisonOrchestrationPlan,
         buildShowRouteComparisonSuccessExecutePlan: buildShowRouteComparisonSuccessExecutePlan,
+        buildShowRouteComparisonFetchPlan: buildShowRouteComparisonFetchPlan,
+        buildShowRouteComparisonErrorExecutePlan: buildShowRouteComparisonErrorExecutePlan,
+        buildSelectRouteDispatchPlan: buildSelectRouteDispatchPlan,
+        buildSelectRoutePreviewPayloadPlan: buildSelectRoutePreviewPayloadPlan,
         buildRoutePreviewAfterDisplayPlan: buildRoutePreviewAfterDisplayPlan,
         buildRoutePreviewAfterDisplayExecutePlan: buildRoutePreviewAfterDisplayExecutePlan,
         buildShowRoutePreviewOrchestrationPlan: buildShowRoutePreviewOrchestrationPlan,

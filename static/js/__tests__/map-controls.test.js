@@ -260,4 +260,31 @@ describe('map-controls module', () => {
         expect(lifecycle.stopAutoTraffic).toBe(true);
         expect(MC.buildNavStopStateResetPlan().routeInProgress).toBe(false);
     });
+
+    test('map explore handler plans gate binding and follow pause', () => {
+        expect(MC.buildMapMoveHandlerSetupPlan({ hasMap: false }).shouldBind).toBe(false);
+        expect(MC.buildMapMoveHandlerSetupPlan({ hasMap: true }).eventName).toBe('move');
+
+        const sync = MC.buildMapCenterSyncExecutePlan({
+            routeInProgress: false,
+            isTrackingActive: false,
+            center: { lat: 51.5, lng: -0.1 },
+        });
+        expect(sync.shouldSync).toBe(true);
+        expect(MC.buildMapCenterSyncExecutePlan({ routeInProgress: true }).shouldSync).toBe(false);
+
+        expect(MC.buildMapExploreHandlersSetupPlan({ hasMap: true, alreadyInitialized: true }).shouldBind)
+            .toBe(false);
+        const explore = MC.buildMapExploreHandlersSetupPlan({ hasMap: true });
+        expect(explore.gestureEvents).toContain('dragstart');
+
+        const gesture = MC.buildMapExploreGestureExecutePlan({
+            hasOriginalEvent: true,
+            routeInProgress: true,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+        });
+        expect(gesture.pauseMapFollowing).toBe(true);
+        expect(MC.buildMapExploreMoveEndExecutePlan().updateRecenterVisibility).toBe(true);
+    });
 });

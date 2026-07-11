@@ -770,6 +770,118 @@
         };
     }
 
+    var MAP_EXPLORE_HANDLERS_FLAG = '__voyagrMapExploreHandlersInitialized';
+
+    /**
+     * Setup plan for syncing voice/hazard position from map center while browsing.
+     * @param {Object} [input]
+     * @param {boolean} [input.hasMap]
+     * @returns {Object}
+     */
+    function buildMapMoveHandlerSetupPlan(input) {
+        input = input || {};
+        if (!input.hasMap) {
+            return {
+                shouldBind: false,
+                deferLogMessage: '[Map] Map not initialized yet, deferring move handler setup',
+            };
+        }
+        return {
+            shouldBind: true,
+            eventName: 'move',
+        };
+    }
+
+    /**
+     * Execute plan for syncing currentLat/currentLon from map center.
+     * @param {Object} [input]
+     * @param {boolean} [input.routeInProgress]
+     * @param {boolean} [input.isTrackingActive]
+     * @param {{ lat?: number, lng?: number }} [input.center]
+     * @returns {Object}
+     */
+    function buildMapCenterSyncExecutePlan(input) {
+        input = input || {};
+        if (input.routeInProgress || input.isTrackingActive) {
+            return { shouldSync: false };
+        }
+        var center = input.center || {};
+        return {
+            shouldSync: Number.isFinite(center.lat) && Number.isFinite(center.lng),
+            lat: center.lat,
+            lon: center.lng,
+        };
+    }
+
+    /**
+     * Setup plan for pausing follow when the user explores the map.
+     * @param {Object} [input]
+     * @param {boolean} [input.hasMap]
+     * @param {boolean} [input.alreadyInitialized]
+     * @returns {Object}
+     */
+    function buildMapExploreHandlersSetupPlan(input) {
+        input = input || {};
+        if (!input.hasMap) {
+            return {
+                shouldBind: false,
+                deferLogMessage: '[Map] Map not initialized yet, deferring explore handler setup',
+            };
+        }
+        if (input.alreadyInitialized) {
+            return { shouldBind: false, alreadyInitialized: true };
+        }
+        return {
+            shouldBind: true,
+            markInitialized: true,
+            initializedFlagProperty: MAP_EXPLORE_HANDLERS_FLAG,
+            gestureEvents: ['dragstart', 'zoomstart', 'rotatestart', 'pitchstart'],
+            moveEndEvent: 'moveend',
+        };
+    }
+
+    /**
+     * Execute plan when the user starts a map gesture during navigation/tracking.
+     * @param {Object} [input]
+     * @param {boolean} [input.hasOriginalEvent]
+     * @param {boolean} [input.routeInProgress]
+     * @param {boolean} [input.isTrackingActive]
+     * @param {boolean} [input.zoomAndFollowEnabled]
+     * @param {boolean} [input.mapFollowingActive]
+     * @returns {Object}
+     */
+    function buildMapExploreGestureExecutePlan(input) {
+        input = input || {};
+        if (!input.hasOriginalEvent) {
+            return { shouldReact: false };
+        }
+        if (!input.routeInProgress && !input.isTrackingActive) {
+            return { shouldReact: false };
+        }
+        var pauseFollow = !!(
+            input.routeInProgress &&
+            input.zoomAndFollowEnabled &&
+            input.mapFollowingActive
+        );
+        return {
+            shouldReact: true,
+            pauseMapFollowing: pauseFollow,
+            updateRecenterVisibility: true,
+            pauseFollowLogMessage: '[Nav] User explored map — follow paused',
+        };
+    }
+
+    /**
+     * Execute plan after map movement ends.
+     * @returns {Object}
+     */
+    function buildMapExploreMoveEndExecutePlan() {
+        return {
+            shouldReact: true,
+            updateRecenterVisibility: true,
+        };
+    }
+
     var api = {
         ZOOM_FOLLOW_ENABLED_ICON: ZOOM_FOLLOW_ENABLED_ICON,
         ZOOM_FOLLOW_DISABLED_ICON: ZOOM_FOLLOW_DISABLED_ICON,
@@ -795,7 +907,13 @@
         MAP_ICON_HINT_LONG_PRESS_MS: MAP_ICON_HINT_LONG_PRESS_MS,
         MAP_CONTROLS_HINT_MODAL_ID: MAP_CONTROLS_HINT_MODAL_ID,
         MAP_CONTROLS_HINT_LIST_ID: MAP_CONTROLS_HINT_LIST_ID,
+        MAP_EXPLORE_HANDLERS_FLAG: MAP_EXPLORE_HANDLERS_FLAG,
         isTouchHintsEnvironment: isTouchHintsEnvironment,
+        buildMapMoveHandlerSetupPlan: buildMapMoveHandlerSetupPlan,
+        buildMapCenterSyncExecutePlan: buildMapCenterSyncExecutePlan,
+        buildMapExploreHandlersSetupPlan: buildMapExploreHandlersSetupPlan,
+        buildMapExploreGestureExecutePlan: buildMapExploreGestureExecutePlan,
+        buildMapExploreMoveEndExecutePlan: buildMapExploreMoveEndExecutePlan,
         buildOpenMapControlsHintModalExecutePlan: buildOpenMapControlsHintModalExecutePlan,
         buildCloseMapControlsHintModalExecutePlan: buildCloseMapControlsHintModalExecutePlan,
         buildFabLongPressHintBindPlan: buildFabLongPressHintBindPlan,

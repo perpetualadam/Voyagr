@@ -3312,27 +3312,30 @@ function getOrderedWaypoints(startLat, startLon, endLat, endLon) {
  * @param {number} index - Route index to select
  */
 function selectRoute(index) {
-    selectedRouteIndex = index;
+    const RS = _routeSelection();
+    const dispatch = RS.buildSelectRouteDispatchPlan(index, routeOptions);
+    if (!dispatch.shouldSelect) return;
 
-    // Hide all route layers except the selected one
-    displaySingleRoute(index);
+    selectedRouteIndex = dispatch.selectedRouteIndex;
 
-    // Update the route list display
-    displayRouteComparison();
+    if (dispatch.displaySingleRoute) displaySingleRoute(index);
+    if (dispatch.displayRouteComparison) displayRouteComparison();
 
-    if (routeOptions && routeOptions[index]) {
-        syncLastCalculatedRouteFromSelection(index);
-        const selectedRoute = routeOptions[index];
-        console.log(`[Routes] Selected route "${selectedRoute.name}" with ${(selectedRoute.maneuvers || []).length} maneuvers`);
+    syncLastCalculatedRouteFromSelection(index);
+    const selectedRoute = routeOptions[index];
+    console.log(
+        `${dispatch.logPrefix} "${dispatch.routeName}" with ${dispatch.maneuverCount} maneuvers`
+    );
 
-        // Keep navigation tab trip summary aligned with the chosen alternative
-        updateTripInfoFromRouteOption(selectedRoute);
+    updateTripInfoFromRouteOption(selectedRoute);
 
-        // Full API payload when available so preview hazard/cost fields stay coherent
-        const previewPayload = window.lastRouteApiResponse
-            ? { ...window.lastRouteApiResponse, routes: routeOptions }
-            : selectedRoute;
-        showRoutePreview(previewPayload, true);
+    const preview = RS.buildSelectRoutePreviewPayloadPlan(
+        routeOptions,
+        index,
+        window.lastRouteApiResponse
+    );
+    if (preview.shouldPreview) {
+        showRoutePreview(preview.previewPayload, true);
     }
 }
 
@@ -7196,10 +7199,11 @@ async function showRouteComparison() {
 
         console.log(orch.routesLogPrefix, routesForComparison);
 
-        const response = await fetch('/api/route-comparison', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ routes: routesForComparison })
+        const fetchPlan = selection.buildShowRouteComparisonFetchPlan(routesForComparison);
+        const response = await fetch(fetchPlan.apiPath, {
+            method: fetchPlan.method,
+            headers: fetchPlan.headers,
+            body: JSON.stringify(fetchPlan.body),
         });
 
         const data = await response.json();
@@ -7223,8 +7227,9 @@ async function showRouteComparison() {
         applyRouteComparisonModalFromPlan(successPlan.domApplyPlan);
         showStatus(successPlan.successStatusMessage, 'success');
     } catch (error) {
-        showStatus('Error: ' + error.message, 'error');
-        console.error('[Comparison] Error:', error);
+        const errExecute = selection.buildShowRouteComparisonErrorExecutePlan(error);
+        showStatus(errExecute.statusMessage, 'error');
+        console.error(errExecute.errorLogPrefix, ...(errExecute.logArgs || []));
     }
 }
 
@@ -12142,50 +12147,64 @@ function handleVoiceAction(data) {
  * @returns {void}
  */
 function setupMapMoveHandler() {
-    if (!map) {
-        console.log('[Map] Map not initialized yet, deferring move handler setup');
+    const MC = _mapControls();
+    const setup = MC.buildMapMoveHandlerSetupPlan({ hasMap: !!map });
+    if (!setup.shouldBind) {
+        if (setup.deferLogMessage) console.log(setup.deferLogMessage);
         return;
     }
 
-    // Keep "current" position in sync with map center for voice/hazards while browsing.
-    // During GPS tracking or turn-by-turn navigation, currentLat/currentLon are owned by
-    // watchPosition — map pans/zooms (including follow-camera) must NOT overwrite them or
-    // reroutes recalculate from the wrong place.
-    map.on('move', () => {
-        if (routeInProgress || isTrackingActive) return;
-        const center = map.getCenter();
-        currentLat = center.lat;
-        currentLon = center.lng;
+    map.on(setup.eventName, () => {
+        const sync = MC.buildMapCenterSyncExecutePlan({
+            routeInProgress,
+            isTrackingActive,
+            center: map.getCenter(),
+        });
+        if (sync.shouldSync) {
+            currentLat = sync.lat;
+            currentLon = sync.lng;
+        }
     });
 }
 
-/**
- * Pause follow when the user explores the map (Waze-style) and show the recenter button.
- */
 function setupMapExploreHandlers() {
-    if (!map) {
-        console.log('[Map] Map not initialized yet, deferring explore handler setup');
+    const MC = _mapControls();
+    const setup = MC.buildMapExploreHandlersSetupPlan({
+        hasMap: !!map,
+        alreadyInitialized: !!window[MC.MAP_EXPLORE_HANDLERS_FLAG],
+    });
+    if (!setup.shouldBind) {
+        if (setup.deferLogMessage) console.log(setup.deferLogMessage);
         return;
     }
-    if (window.__voyagrMapExploreHandlersInitialized) return;
-    window.__voyagrMapExploreHandlersInitialized = true;
+    if (setup.markInitialized) {
+        window[setup.initializedFlagProperty] = true;
+    }
 
     const onUserMapGesture = (e) => {
-        if (!e || !e.originalEvent) return;
-        if (!routeInProgress && !isTrackingActive) return;
-        if (routeInProgress && zoomAndFollowEnabled && mapFollowingActive) {
+        const gesture = MC.buildMapExploreGestureExecutePlan({
+            hasOriginalEvent: !!(e && e.originalEvent),
+            routeInProgress,
+            isTrackingActive,
+            zoomAndFollowEnabled,
+            mapFollowingActive,
+        });
+        if (!gesture.shouldReact) return;
+        if (gesture.pauseMapFollowing) {
             mapFollowingActive = false;
-            console.log('[Nav] User explored map — follow paused');
+            console.log(gesture.pauseFollowLogMessage);
         }
-        updateRecenterButtonVisibility();
+        if (gesture.updateRecenterVisibility) {
+            updateRecenterButtonVisibility();
+        }
     };
 
-    map.on('dragstart', onUserMapGesture);
-    map.on('zoomstart', onUserMapGesture);
-    map.on('rotatestart', onUserMapGesture);
-    map.on('pitchstart', onUserMapGesture);
-    map.on('moveend', () => {
-        updateRecenterButtonVisibility();
+    setup.gestureEvents.forEach((eventName) => map.on(eventName, onUserMapGesture));
+    map.on(setup.moveEndEvent, () => {
+        const moveEnd = MC.buildMapExploreMoveEndExecutePlan();
+        if (moveEnd.updateRecenterVisibility) {
+            updateRecenterButtonVisibility();
+        }
     });
 }
 
@@ -15113,6 +15132,37 @@ function selectAutocompleteResult(fieldId, lat, lon, name) {
     console.log(`[Autocomplete] Selected ${fieldId}: ${name} (${lat}, ${lon})`);
 }
 
+function collectGeocodePlusCodeDecodeState(trimmed) {
+    const GL = _geocodingLocations();
+    const runtime = GL.buildGeocodePlusCodeRuntimePlan({
+        plusCodesEnabledStorage: localStorage.getItem('googlePlusCodesEnabled'),
+        hasPlusCodeService: typeof GooglePlusCodesService !== 'undefined',
+    });
+    const state = {
+        plusCodesEnabled: runtime.plusCodesEnabled,
+        hasPlusCodeService: runtime.hasPlusCodeService,
+        trimmed,
+        isValidCode: false,
+        decoded: null,
+        errorMessage: null,
+    };
+
+    if (runtime.plusCodesEnabled && runtime.hasPlusCodeService) {
+        try {
+            const service = new GooglePlusCodesService();
+            if (service.isValidCode(trimmed)) {
+                state.isValidCode = true;
+                state.decoded = service.decode(trimmed);
+            }
+        } catch (error) {
+            state.errorMessage = error.message;
+            console.log('[Geocoding] Plus Code decode error:', error.message);
+        }
+    }
+
+    return GL.buildGeocodePlusCodeDecodeStatePlan(state);
+}
+
 async function geocodeAddress(address) {
     const GL = _geocodingLocations();
     let lookup = GL.buildGeocodeAddressLookupPlan({
@@ -15134,30 +15184,9 @@ async function geocodeAddress(address) {
     }
 
     const trimmedAddress = orch.trimmed;
-    const plusCodesEnabled = localStorage.getItem('googlePlusCodesEnabled') === 'true';
-    const hasPlusCodeService = typeof GooglePlusCodesService !== 'undefined';
-    let plusCodeState = { isValidCode: false, decoded: null, errorMessage: null };
-    if (plusCodesEnabled && hasPlusCodeService) {
-        try {
-            const service = new GooglePlusCodesService();
-            if (service.isValidCode(trimmedAddress)) {
-                plusCodeState.isValidCode = true;
-                plusCodeState.decoded = service.decode(trimmedAddress);
-            }
-        } catch (error) {
-            plusCodeState.errorMessage = error.message;
-            console.log('[Geocoding] Plus Code decode error:', error.message);
-        }
-    }
-
-    const plusPlan = GL.buildGeocodePlusCodeLookupPlan({
-        plusCodesEnabled,
-        hasPlusCodeService,
-        trimmed: trimmedAddress,
-        isValidCode: plusCodeState.isValidCode,
-        decoded: plusCodeState.decoded,
-        errorMessage: plusCodeState.errorMessage,
-    });
+    const plusPlan = GL.buildGeocodePlusCodeLookupPlan(
+        collectGeocodePlusCodeDecodeState(trimmedAddress)
+    );
     if (plusPlan.action === 'resolve') {
         const plusLog = GL.buildGeocodePlusCodeResolveLogPlan(trimmedAddress);
         console.log(plusLog.detectLogMessage, trimmedAddress);

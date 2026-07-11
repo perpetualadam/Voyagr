@@ -633,6 +633,38 @@
     }
 
     /**
+     * Runtime flags for Plus Code geocoding.
+     * @param {Object} [input]
+     * @param {string|null|undefined} [input.plusCodesEnabledStorage]
+     * @param {boolean} [input.hasPlusCodeService]
+     * @returns {Object}
+     */
+    function buildGeocodePlusCodeRuntimePlan(input) {
+        input = input || {};
+        return {
+            plusCodesEnabled: input.plusCodesEnabledStorage === 'true',
+            hasPlusCodeService: !!input.hasPlusCodeService,
+        };
+    }
+
+    /**
+     * Normalise Plus Code decode state before lookup.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildGeocodePlusCodeDecodeStatePlan(input) {
+        input = input || {};
+        return {
+            plusCodesEnabled: !!input.plusCodesEnabled,
+            hasPlusCodeService: !!input.hasPlusCodeService,
+            trimmed: input.trimmed,
+            isValidCode: !!input.isValidCode,
+            decoded: input.decoded || null,
+            errorMessage: input.errorMessage || null,
+        };
+    }
+
+    /**
      * Execute plan for entering map location-pick mode.
      * @param {'start'|'end'} field
      * @returns {Object}
@@ -743,6 +775,8 @@
         buildGeocodeAddressOrchestrationPlan: buildGeocodeAddressOrchestrationPlan,
         buildGeocodeAddressResolveExecutePlan: buildGeocodeAddressResolveExecutePlan,
         buildGeocodePlusCodeResolveLogPlan: buildGeocodePlusCodeResolveLogPlan,
+        buildGeocodePlusCodeRuntimePlan: buildGeocodePlusCodeRuntimePlan,
+        buildGeocodePlusCodeDecodeStatePlan: buildGeocodePlusCodeDecodeStatePlan,
         buildGeocodeNominatimSuccessExecutePlan: buildGeocodeNominatimSuccessExecutePlan,
         buildGeocodeNominatimEmptyExecutePlan: buildGeocodeNominatimEmptyExecutePlan,
         buildGeocodeAddressFetchErrorExecutePlan: buildGeocodeAddressFetchErrorExecutePlan,

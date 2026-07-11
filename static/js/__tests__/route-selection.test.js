@@ -853,6 +853,30 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(fail.errorStatusMessage).toContain('bad');
     });
 
+    test('buildShowRouteComparisonFetchPlan and select-route dispatch plans', () => {
+        const fetchPlan = RS.buildShowRouteComparisonFetchPlan([{ name: 'A' }]);
+        expect(fetchPlan.shouldFetch).toBe(true);
+        expect(fetchPlan.apiPath).toBe('/api/route-comparison');
+
+        const err = RS.buildShowRouteComparisonErrorExecutePlan(new Error('network'));
+        expect(err.statusMessage).toContain('network');
+
+        const dispatch = RS.buildSelectRouteDispatchPlan(0, [
+            { name: 'Scenic', maneuvers: [1, 2] },
+        ]);
+        expect(dispatch.shouldSelect).toBe(true);
+        expect(dispatch.maneuverCount).toBe(2);
+
+        const preview = RS.buildSelectRoutePreviewPayloadPlan(
+            [{ name: 'A' }, { name: 'B' }],
+            1,
+            { success: true, source: 'valhalla' }
+        );
+        expect(preview.shouldPreview).toBe(true);
+        expect(preview.previewPayload.routes).toHaveLength(2);
+        expect(RS.buildSelectRouteDispatchPlan(9, [{ name: 'A' }]).shouldSelect).toBe(false);
+    });
+
     test('buildRouteComparisonModalExecutePlan wraps DOM mount fields', () => {
         const execute = RS.buildRouteComparisonModalExecutePlan({
             action: 'mount',

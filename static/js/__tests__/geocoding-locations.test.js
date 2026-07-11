@@ -298,6 +298,22 @@ describe('geocoding-locations module', () => {
         }).action).toBe('skip');
     });
 
+    test('buildGeocodePlusCodeRuntimePlan and decode state normalisation', () => {
+        expect(GL.buildGeocodePlusCodeRuntimePlan({
+            plusCodesEnabledStorage: 'true',
+            hasPlusCodeService: true,
+        }).plusCodesEnabled).toBe(true);
+
+        const state = GL.buildGeocodePlusCodeDecodeStatePlan({
+            plusCodesEnabled: true,
+            hasPlusCodeService: true,
+            trimmed: 'CODE',
+            isValidCode: true,
+            decoded: { lat: 1, lon: 2 },
+        });
+        expect(GL.buildGeocodePlusCodeLookupPlan(state).action).toBe('resolve');
+    });
+
     test('buildPickLocationFromMapExecutePlan enters picker mode with status copy', () => {
         const start = GL.buildPickLocationFromMapExecutePlan('start');
         expect(start.shouldPick).toBe(true);
