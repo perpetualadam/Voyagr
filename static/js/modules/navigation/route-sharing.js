@@ -51,6 +51,81 @@
     }
 
     /**
+     * Decode a base64 route payload from a share URL.
+     * @param {string} encoded
+     * @returns {Object|null}
+     */
+    function decodeRoutePayload(encoded) {
+        if (!encoded || typeof encoded !== 'string') return null;
+        try {
+            var json;
+            if (typeof atob !== 'undefined') {
+                json = atob(encoded);
+            } else {
+                json = Buffer.from(encoded, 'base64').toString('utf8');
+            }
+            var payload = JSON.parse(json);
+            return payload && typeof payload === 'object' ? payload : null;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Read the `route` query param from a URL search string.
+     * @param {string} search
+     * @returns {string|null}
+     */
+    function extractRouteParamFromSearch(search) {
+        try {
+            return new URLSearchParams(search || '').get('route');
+        } catch (e) {
+            return null;
+        }
+    }
+
+    /**
+     * Remove the `route` query param from a full URL.
+     * @param {string} href
+     * @returns {string}
+     */
+    function stripRouteParamFromUrl(href) {
+        var url = new URL(href);
+        url.searchParams.delete('route');
+        return url.pathname + url.search + url.hash;
+    }
+
+    /**
+     * Parse duration minutes from shared payload time strings.
+     * @param {string|number} time
+     * @returns {number}
+     */
+    function parseSharedRouteDurationMinutes(time) {
+        if (typeof time === 'number' && Number.isFinite(time)) return time;
+        var parsed = parseInt(String(time || '').replace(/\D/g, ''), 10);
+        return Number.isFinite(parsed) ? parsed : 0;
+    }
+
+    /**
+     * Map a decoded share payload to lastCalculatedRoute fields.
+     * @param {Object} payload
+     * @returns {Object}
+     */
+    function buildLastCalculatedRouteFromSharedPayload(payload) {
+        payload = payload || {};
+        var distanceKm = payload.distance != null ? payload.distance : (payload.distance_km || 0);
+        return {
+            distance_km: distanceKm,
+            time: payload.time,
+            duration_minutes: parseSharedRouteDurationMinutes(payload.time),
+            fuel_cost: payload.fuel_cost || 0,
+            toll_cost: payload.toll_cost || 0,
+            caz_cost: payload.caz_cost || 0,
+            geometry: payload.geometry || null,
+        };
+    }
+
+    /**
      * Display values for the route sharing summary panel.
      * @param {Object} route
      * @param {Object} fmt
@@ -134,6 +209,11 @@
     var api = {
         buildShareableRoutePayload: buildShareableRoutePayload,
         encodeRoutePayload: encodeRoutePayload,
+        decodeRoutePayload: decodeRoutePayload,
+        extractRouteParamFromSearch: extractRouteParamFromSearch,
+        stripRouteParamFromUrl: stripRouteParamFromUrl,
+        parseSharedRouteDurationMinutes: parseSharedRouteDurationMinutes,
+        buildLastCalculatedRouteFromSharedPayload: buildLastCalculatedRouteFromSharedPayload,
         buildShareUrl: buildShareUrl,
         buildRouteShareSummaryValues: buildRouteShareSummaryValues,
         buildShareWhatsAppMessage: buildShareWhatsAppMessage,

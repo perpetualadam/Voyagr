@@ -3234,16 +3234,10 @@ function selectRoute(index) {
 }
 
 /**
- * Update navigation tab distance/time/cost from a route option object.
- * @param {Object} route
+ * Apply formatted trip info values to the navigation panel DOM.
+ * @param {Object} display
  */
-function updateTripInfoFromRouteOption(route) {
-    if (!route) return;
-    const display = VoyagrModules.routeSelection().buildTripInfoDisplayValues(route, {
-        distanceText: convertDistance(route.distance_km),
-        distUnit: getDistanceUnit(),
-        currencySymbol: getCurrencySymbol(),
-    });
+function applyTripInfoDisplayValues(display) {
     if (!display) return;
 
     const distanceEl = document.getElementById('distance');
@@ -3263,6 +3257,22 @@ function updateTripInfoFromRouteOption(route) {
         tollEl.textContent = display.tollCostText;
         tollEl.dataset.value = display.tollCost;
     }
+}
+
+/**
+ * Update navigation tab distance/time/cost from a route option object.
+ * @param {Object} route
+ */
+function updateTripInfoFromRouteOption(route) {
+    if (!route) return;
+    const display = VoyagrModules.routeSelection().buildTripInfoDisplayValues(route, {
+        distanceText: convertDistance(route.distance_km),
+        distUnit: getDistanceUnit(),
+        currencySymbol: getCurrencySymbol(),
+    });
+    if (!display) return;
+
+    applyTripInfoDisplayValues(display);
     console.log('[Cost] Route selected with costs:', {
         fuelCost: display.fuelCost.toFixed(2),
         tollCost: display.tollCost.toFixed(2),
@@ -3419,6 +3429,44 @@ function buildEncodedShareLink(includeGeometry) {
         shareLink: sharing.buildShareUrl(window.location.origin, encodedRoute),
         encodedRoute: encodedRoute,
     };
+}
+
+/**
+ * Load a shared route from the `?route=` URL query param when present.
+ * @returns {boolean} true when a shared route was applied
+ */
+function loadSharedRouteFromUrl() {
+    const sharing = VoyagrModules.routeSharing();
+    const encoded = sharing.extractRouteParamFromSearch(window.location.search);
+    if (!encoded) return false;
+
+    const payload = sharing.decodeRoutePayload(encoded);
+    if (!payload || !payload.start || !payload.end) {
+        console.warn('[RouteSharing] Invalid shared route payload in URL');
+        return false;
+    }
+
+    const startEl = document.getElementById('start');
+    const endEl = document.getElementById('end');
+    if (startEl) startEl.value = payload.start;
+    if (endEl) endEl.value = payload.end;
+
+    window.lastCalculatedRoute = sharing.buildLastCalculatedRouteFromSharedPayload(payload);
+    updateTripInfoFromRouteOption(window.lastCalculatedRoute);
+
+    try {
+        const cleanUrl = sharing.stripRouteParamFromUrl(window.location.href);
+        window.history.replaceState({}, '', cleanUrl);
+    } catch (e) {
+        console.warn('[RouteSharing] URL cleanup failed:', e);
+    }
+
+    if (window.lastCalculatedRoute.geometry) {
+        showRoutePreview(window.lastCalculatedRoute, false);
+    } else {
+        showStatus('Shared route loaded', 'success');
+    }
+    return true;
 }
 
 /**
@@ -8251,7 +8299,7 @@ function showParkingEmptyState(message) {
     const parkingSection = document.getElementById('parkingSection');
     const parkingListDiv = document.getElementById('parkingList');
     if (!parkingSection || !parkingListDiv) return;
-    parkingListDiv.innerHTML = `<div style="font-size:13px;color:#666;line-height:1.5;padding:4px 0;">${message}</div>`;
+    parkingListDiv.innerHTML = VoyagrModules.multimodalParking().buildParkingEmptyStateHtml(message);
     parkingSection.style.display = 'block';
     scrollParkingResultsIntoView();
 }
@@ -17768,27 +17816,37 @@ function loadPreferences() {
  */
 function updateTripInfo(distance, time, fuelCost, tollCost) {
     const tripInfo = document.getElementById('tripInfo');
-    if (distance && time) {
-        // Extract km value from distance (handle both "8.64 km" string and numeric formats)
-        let distanceKm = 0;
-        if (typeof distance === 'string') {
-            distanceKm = parseFloat(distance) || 0;
-        } else {
-            distanceKm = parseFloat(distance) || 0;
+    if (!distance || !time) return;
+
+    const distanceKm = parseFloat(distance) || 0;
+    const durationMinutes = VoyagrModules.routeSharing().parseSharedRouteDurationMinutes(time);
+    const display = VoyagrModules.routeSelection().buildTripInfoDisplayValues(
+        {
+            distance_km: distanceKm,
+            duration_minutes: durationMinutes,
+            fuel_cost: fuelCost === '-' ? 0 : fuelCost,
+            toll_cost: tollCost === '-' ? 0 : tollCost,
+        },
+        {
+            distanceText: convertDistance(distanceKm),
+            distUnit: getDistanceUnit(),
+            currencySymbol: getCurrencySymbol(),
         }
+    );
+    if (!display) return;
 
-        // Store km value in data attribute for unit conversion
-        const distanceEl = document.getElementById('distance');
-        distanceEl.dataset.km = distanceKm;
-        distanceEl.textContent = convertDistance(distanceKm) + ' ' + getDistanceUnit();
-
-        document.getElementById('time').textContent = time;
-        document.getElementById('fuelCost').textContent = fuelCost || '-';
-        document.getElementById('tollCost').textContent = tollCost || '-';
-        tripInfo.classList.add('show');
-        const alongRouteBtn = document.getElementById('alongRouteSearch');
-        if (alongRouteBtn) alongRouteBtn.style.display = 'block';
+    applyTripInfoDisplayValues(display);
+    if (fuelCost === '-') {
+        const fuelEl = document.getElementById('fuelCost');
+        if (fuelEl) fuelEl.textContent = '-';
     }
+    if (tollCost === '-') {
+        const tollEl = document.getElementById('tollCost');
+        if (tollEl) tollEl.textContent = '-';
+    }
+    tripInfo.classList.add('show');
+    const alongRouteBtn = document.getElementById('alongRouteSearch');
+    if (alongRouteBtn) alongRouteBtn.style.display = 'block';
 }
 
 // Update clearForm to also hide trip info

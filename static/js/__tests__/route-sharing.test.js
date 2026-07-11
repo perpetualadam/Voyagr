@@ -63,4 +63,34 @@ describe('route-sharing module', () => {
         expect(RS.buildShareEmailSubject('A', 'B')).toBe('Route: A to B');
         expect(RS.buildShareEmailBody(route, fmt)).toContain('Estimated Cost: £6.50');
     });
+
+    test('decodeRoutePayload round-trips encoded payloads', () => {
+        const payload = { start: 'A', end: 'B', distance: 10, time: '20 min' };
+        const encoded = RS.encodeRoutePayload(payload);
+        expect(RS.decodeRoutePayload(encoded)).toEqual(payload);
+        expect(RS.decodeRoutePayload('not-valid')).toBeNull();
+    });
+
+    test('extractRouteParamFromSearch and stripRouteParamFromUrl handle share links', () => {
+        const encoded = RS.encodeRoutePayload({ start: 'A', end: 'B' });
+        const search = '?route=' + encoded + '&foo=1';
+        expect(RS.extractRouteParamFromSearch(search)).toBe(encoded);
+        expect(RS.stripRouteParamFromUrl('https://voyagr.test/path' + search + '#x'))
+            .toBe('/path?foo=1#x');
+    });
+
+    test('buildLastCalculatedRouteFromSharedPayload maps share fields', () => {
+        const route = RS.buildLastCalculatedRouteFromSharedPayload({
+            start: 'A',
+            end: 'B',
+            distance: 12,
+            time: '25 min',
+            fuel_cost: 5,
+            geometry: 'abc',
+        });
+        expect(route.distance_km).toBe(12);
+        expect(route.duration_minutes).toBe(25);
+        expect(route.geometry).toBe('abc');
+        expect(RS.parseSharedRouteDurationMinutes('18 min')).toBe(18);
+    });
 });
