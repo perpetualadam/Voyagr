@@ -7794,16 +7794,7 @@ function toggleVoiceAnnouncements() {
     button.classList.toggle('active');
     const enabled = button.classList.contains('active');
 
-    // Update visual state
-    if (enabled) {
-        button.style.background = '#4CAF50';
-        button.style.borderColor = '#4CAF50';
-        button.style.color = 'white';
-    } else {
-        button.style.background = '#ddd';
-        button.style.borderColor = '#999';
-        button.style.color = '#333';
-    }
+    VoyagrModules.toggleUI().applyLabeledToggleButton(button, enabled);
 
     // Save to localStorage
     localStorage.setItem('voiceAnnouncementsEnabled', enabled ? 'true' : 'false');
@@ -9508,7 +9499,7 @@ function toggleJourneyOverview() {
 
         journeyOverviewActive = true;
         if (btn) {
-            btn.style.background = '#4CAF50';
+            btn.style.background = MC.JOURNEY_OVERVIEW_ACTIVE_BACKGROUND;
             btn.innerHTML = MC.JOURNEY_RETURN_ICON;
             btn.title = 'Return to Navigation View';
         }
@@ -9537,7 +9528,7 @@ function toggleJourneyOverview() {
         }
 
         if (btn) {
-            btn.style.background = '#9C27B0';
+            btn.style.background = MC.JOURNEY_OVERVIEW_INACTIVE_BACKGROUND;
             btn.innerHTML = MC.JOURNEY_OVERVIEW_ICON;
             btn.title = 'Journey Overview';
         }
@@ -10120,9 +10111,7 @@ function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban')
 function toggleSmartZoom() {
     smartZoomEnabled = !smartZoomEnabled;
     const btn = document.getElementById('smartZoomToggle');
-    if (btn) {
-        btn.classList.toggle('active', smartZoomEnabled);
-    }
+    VoyagrModules.toggleUI().applyToggleButton(btn, smartZoomEnabled);
     localStorage.setItem('smartZoomEnabled', smartZoomEnabled ? '1' : '0');
     saveAllSettings();
     showStatus(`🔍 Smart Zoom ${smartZoomEnabled ? 'enabled' : 'disabled'}`, 'info');
@@ -10287,16 +10276,7 @@ function toggleGestureControl() {
 
     // Update UI
     const button = document.getElementById('gestureEnabled');
-    if (button) {
-        button.classList.toggle('active');
-        if (gestureEnabled) {
-            button.style.background = '#4CAF50';
-            button.style.borderColor = '#4CAF50';
-        } else {
-            button.style.background = '#ddd';
-            button.style.borderColor = '#999';
-        }
-    }
+    VoyagrModules.toggleUI().applyToggleButton(button, gestureEnabled);
 
     document.getElementById('gestureSettings').style.display = gestureEnabled ? 'block' : 'none';
 
@@ -10389,12 +10369,7 @@ function toggleBatterySavingMode() {
  */
 function enableBatterySavingMode() {
     batterySavingMode = true;
-    const button = document.getElementById('batterySavingMode');
-    if (button) {
-        button.classList.add('active');
-        button.style.background = '#4CAF50';
-        button.style.borderColor = '#4CAF50';
-    }
+    VoyagrModules.toggleUI().applyToggleButton(document.getElementById('batterySavingMode'), true);
 
     // NOTE: We intentionally do NOT re-create the GPS watcher here. The previous code cleared
     // the active navigation watcher (gpsWatchId) and replaced it with an EMPTY callback, which
@@ -10425,12 +10400,7 @@ function enableBatterySavingMode() {
  */
 function disableBatterySavingMode() {
     batterySavingMode = false;
-    const button = document.getElementById('batterySavingMode');
-    if (button) {
-        button.classList.remove('active');
-        button.style.background = '#ddd';
-        button.style.borderColor = '#999';
-    }
+    VoyagrModules.toggleUI().applyToggleButton(document.getElementById('batterySavingMode'), false);
 
     // NOTE: As in enableBatterySavingMode, we no longer tear down and re-create the navigation
     // GPS watcher here. The old empty-callback replacement broke live tracking; the active
@@ -11501,16 +11471,7 @@ function toggleDriverPerspective() {
 
     const btn = document.getElementById('driverPerspectiveToggle');
     const pitched = shouldUsePitchedDrivingCamera();
-    if (btn) {
-        btn.classList.toggle('active', pitched);
-        if (pitched) {
-            btn.style.background = '#4CAF50';
-            btn.style.borderColor = '#4CAF50';
-        } else {
-            btn.style.background = '#ddd';
-            btn.style.borderColor = '#999';
-        }
-    }
+    VoyagrModules.toggleUI().applyToggleButton(btn, pitched);
 
     if (map) {
         applyDriverPerspective();
@@ -16062,11 +16023,7 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
     if (driverPerspectiveBtn) {
         driverPerspectiveBtn.style.display = 'flex';
-        driverPerspectiveBtn.classList.toggle('active', shouldUsePitchedDrivingCamera());
-        if (shouldUsePitchedDrivingCamera()) {
-            driverPerspectiveBtn.style.background = '#4CAF50';
-            driverPerspectiveBtn.style.borderColor = '#4CAF50';
-        }
+        VoyagrModules.toggleUI().applyToggleButton(driverPerspectiveBtn, shouldUsePitchedDrivingCamera());
     }
 
     sendNotification(
@@ -16931,17 +16888,8 @@ function togglePreference(pref) {
         return;
     }
 
-    // Map preference names to button IDs. Note: 'tolls' was removed — the canonical
-    // toll avoidance toggle now lives in Route Preferences (id "avoidTollRoads") and
-    // is handled by toggleAvoidancePreference('tollRoads').
-    const buttonIdMap = {
-        'caz': 'avoidCAZ',
-        'cameras': 'avoidCameras',
-        'trafficLightsAvoid': 'avoidTrafficLights',
-        'railwayCrossingsAvoid': 'avoidRailwayCrossings'
-    };
-
-    const buttonId = buttonIdMap[pref] || ('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1));
+    const RP = VoyagrModules.routePrefs();
+    const buttonId = RP.resolveRouteAvoidanceButtonId(pref);
     const button = document.getElementById(buttonId);
 
     if (!button) {
@@ -16951,18 +16899,9 @@ function togglePreference(pref) {
 
     button.classList.toggle('active');
     const isActive = button.classList.contains('active');
-    localStorage.setItem('pref_' + pref, isActive ? 'true' : 'false');
+    localStorage.setItem(RP.getRouteAvoidancePrefStorageKey(pref), isActive ? 'true' : 'false');
 
-    // Update visual state with proper styling
-    if (isActive) {
-        button.style.background = '#4CAF50';
-        button.style.borderColor = '#4CAF50';
-        button.style.color = 'white';
-    } else {
-        button.style.background = '#ddd';
-        button.style.borderColor = '#999';
-        button.style.color = '#333';
-    }
+    VoyagrModules.toggleUI().applyLabeledToggleButton(button, isActive);
 
     // Handle specific preference behaviors
     if (pref === 'caz') {
@@ -16983,33 +16922,14 @@ function togglePreference(pref) {
     saveAllSettings();
 }
 
-const HAZARD_CAMERA_SUBTYPES = [
-    'camera_speed',
-    'camera_red_light',
-    'camera_average_speed',
-    'camera_bus_lane',
-    'camera_mobile',
-    'camera_other'
-];
+const HAZARD_CAMERA_SUBTYPES = VoyagrModules.hazardAlerts().HAZARD_CAMERA_PREF_SUBTYPES;
 
 function hazardPrefEnabled(pref) {
-    if (!pref) return true;
-    return pref.enabled === true || pref.enabled === 1;
+    return VoyagrModules.hazardAlerts().isHazardPreferenceEnabled(pref);
 }
 
 function applyHazardToggleStyles(button, enabled) {
-    if (!button) return;
-    if (enabled) {
-        button.classList.add('active');
-        button.style.background = '#4CAF50';
-        button.style.borderColor = '#4CAF50';
-        button.style.color = 'white';
-    } else {
-        button.classList.remove('active');
-        button.style.background = '#ddd';
-        button.style.borderColor = '#999';
-        button.style.color = '#333';
-    }
+    VoyagrModules.toggleUI().applyLabeledToggleButton(button, enabled);
 }
 
 async function loadHazardCameraTogglesFromApi() {
@@ -17081,44 +17001,19 @@ window.loadHazardCameraTogglesFromApi = loadHazardCameraTogglesFromApi;
  * @returns {*} Return value description
  */
 function loadPreferences() {
-    // 'tolls' removed from this map: the "Avoid Toll Roads" toggle now lives in
-    // Route Preferences and is hydrated by loadRoutePreferences() / Route Prefs init.
-    const buttonIdMap = {
-        'caz': 'avoidCAZ',
-        'cameras': 'avoidCameras',
-        'trafficLightsAvoid': 'avoidTrafficLights',
-        'railwayCrossingsAvoid': 'avoidRailwayCrossings'
-    };
+    const RP = VoyagrModules.routePrefs();
+    const TU = VoyagrModules.toggleUI();
 
-    // Preferences that default to TRUE (enabled) when not set
-    const defaultEnabledPrefs = ['caz', 'cameras', 'trafficLightsAvoid', 'railwayCrossingsAvoid'];
-
-    const prefs = ['caz', 'cameras', 'trafficLightsAvoid', 'railwayCrossingsAvoid'];
-    prefs.forEach(pref => {
-        const saved = localStorage.getItem('pref_' + pref);
-        const buttonId = buttonIdMap[pref];
-        const button = document.getElementById(buttonId);
+    RP.ROUTE_AVOIDANCE_PREF_KEYS.forEach((pref) => {
+        const button = document.getElementById(RP.resolveRouteAvoidanceButtonId(pref));
 
         if (button) {
-            // Tolls, CAZ, cameras, traffic lights, railway: default enabled if not set
-            const isDefaultEnabled = defaultEnabledPrefs.includes(pref);
-            const isEnabled = saved === null ? isDefaultEnabled : saved === 'true';
-
-            if (isEnabled) {
-                button.classList.add('active');
-                button.style.background = '#4CAF50';
-                button.style.borderColor = '#4CAF50';
-                button.style.color = 'white';
-                console.log('[Settings] Loaded preference:', pref, '= enabled', saved === null ? '(default)' : '');
-            } else {
-                button.classList.remove('active');
-                button.style.background = '#ddd';
-                button.style.borderColor = '#999';
-                button.style.color = '#333';
-                console.log('[Settings] Loaded preference:', pref, '= disabled');
-            }
+            const isEnabled = RP.isRouteAvoidancePrefEnabled(pref, localStorage);
+            TU.applyLabeledToggleButton(button, isEnabled);
+            console.log('[Settings] Loaded preference:', pref, '=', isEnabled ? 'enabled' : 'disabled',
+                localStorage.getItem(RP.getRouteAvoidancePrefStorageKey(pref)) === null ? '(default)' : '');
         } else {
-            console.warn('[Settings] Button not found for preference:', pref, 'ID:', buttonId);
+            console.warn('[Settings] Button not found for preference:', pref, 'ID:', RP.resolveRouteAvoidanceButtonId(pref));
         }
     });
 
@@ -17129,9 +17024,7 @@ function loadPreferences() {
     if (gestureSaved === 'true') {
         const button = document.getElementById('gestureEnabled');
         if (button) {
-            button.classList.add('active');
-            button.style.background = '#4CAF50';
-            button.style.borderColor = '#4CAF50';
+            TU.applyToggleButton(button, true);
             gestureEnabled = true;
             document.getElementById('gestureSettings').style.display = 'block';
             if ('DeviceMotionEvent' in window) {
@@ -17157,9 +17050,7 @@ function loadPreferences() {
     if (batterySavingSaved === 'true') {
         const button = document.getElementById('batterySavingMode');
         if (button) {
-            button.classList.add('active');
-            button.style.background = '#4CAF50';
-            button.style.borderColor = '#4CAF50';
+            TU.applyToggleButton(button, true);
             batterySavingMode = true;
             console.log('[Battery] Battery saving mode restored from localStorage');
         }
@@ -17759,15 +17650,7 @@ function toggleARMode() {
     const toggleBtn = document.getElementById('arModeBtn');    // New Toggle
 
     if (toggleBtn) {
-        toggleBtn.classList.toggle('active', window.arModeActive);
-        // Correct styling for toggle switch
-        if (window.arModeActive) {
-            toggleBtn.style.background = '#4CAF50';
-            toggleBtn.style.borderColor = '#4CAF50';
-        } else {
-            toggleBtn.style.background = '#ddd';
-            toggleBtn.style.borderColor = '#999';
-        }
+        VoyagrModules.toggleUI().applyToggleButton(toggleBtn, window.arModeActive);
     }
 
     if (window.arModeActive) {

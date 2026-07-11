@@ -93,4 +93,10 @@ describe('hazard-alerts module', () => {
         expect(HA.getUnavoidableHazardsModalStyleCssText()).toContain('z-index: 10001');
         expect(HA.getUnavoidableHazardsBackdropStyleCssText()).toContain('rgba(0,0,0,0.5)');
     });
+
+    test('isHazardPreferenceEnabled treats missing pref as enabled', () => {
+        expect(HA.isHazardPreferenceEnabled(null)).toBe(true);
+        expect(HA.isHazardPreferenceEnabled({ enabled: 0 })).toBe(false);
+        expect(HA.HAZARD_CAMERA_PREF_SUBTYPES).toContain('camera_speed');
+    });
 });
