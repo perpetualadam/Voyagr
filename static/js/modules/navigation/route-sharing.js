@@ -78,11 +78,67 @@
         };
     }
 
+    /**
+     * WhatsApp share message body.
+     * @param {Object} route
+     * @param {Object} fmt
+     * @returns {string}
+     */
+    function buildShareWhatsAppMessage(route, fmt) {
+        route = route || {};
+        fmt = fmt || {};
+        var totalCost = parseFloat(route.fuel_cost || 0) +
+            parseFloat(route.toll_cost || 0) +
+            parseFloat(route.caz_cost || 0);
+        return (
+            '📍 Route from ' + fmt.startLabel + ' to ' + fmt.endLabel + '\n' +
+            '📏 Distance: ' + fmt.distanceText + ' ' + fmt.distUnit + '\n' +
+            '⏱️ Duration: ' + (route.time || 'N/A') + '\n' +
+            '💰 Cost: ' + fmt.currencySymbol + totalCost.toFixed(2) + '\n\n' +
+            'Shared via Voyagr Navigation'
+        );
+    }
+
+    /**
+     * @param {string} startLabel
+     * @param {string} endLabel
+     * @returns {string}
+     */
+    function buildShareEmailSubject(startLabel, endLabel) {
+        return 'Route: ' + startLabel + ' to ' + endLabel;
+    }
+
+    /**
+     * Email share body.
+     * @param {Object} route
+     * @param {Object} fmt
+     * @returns {string}
+     */
+    function buildShareEmailBody(route, fmt) {
+        route = route || {};
+        fmt = fmt || {};
+        var totalCost = parseFloat(route.fuel_cost || 0) +
+            parseFloat(route.toll_cost || 0) +
+            parseFloat(route.caz_cost || 0);
+        return (
+            "I'm sharing a route with you:\n\n" +
+            'From: ' + fmt.startLabel + '\n' +
+            'To: ' + fmt.endLabel + '\n' +
+            'Distance: ' + fmt.distanceText + ' ' + fmt.distUnit + '\n' +
+            'Duration: ' + (route.time || 'N/A') + '\n' +
+            'Estimated Cost: ' + fmt.currencySymbol + totalCost.toFixed(2) + '\n\n' +
+            'Shared via Voyagr Navigation'
+        );
+    }
+
     var api = {
         buildShareableRoutePayload: buildShareableRoutePayload,
         encodeRoutePayload: encodeRoutePayload,
         buildShareUrl: buildShareUrl,
         buildRouteShareSummaryValues: buildRouteShareSummaryValues,
+        buildShareWhatsAppMessage: buildShareWhatsAppMessage,
+        buildShareEmailSubject: buildShareEmailSubject,
+        buildShareEmailBody: buildShareEmailBody,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

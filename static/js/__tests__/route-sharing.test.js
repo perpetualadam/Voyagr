@@ -49,4 +49,18 @@ describe('route-sharing module', () => {
         expect(summary.totalCostText).toBe('£13.00');
         expect(summary.totalCost).toBe(13);
     });
+
+    test('buildShareWhatsAppMessage and email helpers format social share text', () => {
+        const route = { time: '20 min', fuel_cost: 5, toll_cost: 1, caz_cost: 0.5, distance_km: 10 };
+        const fmt = {
+            startLabel: 'A',
+            endLabel: 'B',
+            distanceText: '6.2',
+            distUnit: 'mi',
+            currencySymbol: '£',
+        };
+        expect(RS.buildShareWhatsAppMessage(route, fmt)).toContain('Route from A to B');
+        expect(RS.buildShareEmailSubject('A', 'B')).toBe('Route: A to B');
+        expect(RS.buildShareEmailBody(route, fmt)).toContain('Estimated Cost: £6.50');
+    });
 });
