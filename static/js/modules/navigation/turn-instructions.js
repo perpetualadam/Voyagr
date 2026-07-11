@@ -819,7 +819,38 @@
         };
     }
 
+    /**
+     * Lane-guidance inputs for one GPS tick (maneuver direction + roundabout exits).
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildLaneGuidanceTickPlan(opts) {
+        opts = opts || {};
+        if (!opts.routeInProgress || !opts.routeSteps || opts.routeSteps.length === 0) {
+            return { action: 'skip', reason: 'no-route' };
+        }
+
+        var stepIndex = opts.currentStepIndex != null ? opts.currentStepIndex : 0;
+        var nextStep = opts.routeSteps[stepIndex];
+        if (!nextStep) {
+            return { action: 'skip', reason: 'no-step' };
+        }
+
+        var maneuverDir = maneuverTypeToLaneDirectionKey(nextStep.type || 0);
+        var exitCount = 0;
+        if (maneuverDir === 'roundabout') {
+            exitCount = effectiveRoundaboutExitCountFromSteps(opts.routeSteps, stepIndex);
+        }
+
+        return {
+            action: 'update',
+            maneuverDir: maneuverDir,
+            roundaboutExitCount: exitCount,
+        };
+    }
+
     var api = {
+        buildLaneGuidanceTickPlan: buildLaneGuidanceTickPlan,
         calculateTurnDirection: calculateTurnDirection,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,
         maneuverTypeToLaneDirectionKey: maneuverTypeToLaneDirectionKey,

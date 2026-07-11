@@ -165,6 +165,57 @@
         return { action: 'none', nextArrivalZoneSince: 0 };
     }
 
+    /**
+     * Full arrival tick plan: guards, dwell state patch, end-navigation hint.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildNavigationArrivalTickPlan(opts) {
+        opts = opts || {};
+        if (!opts.routeInProgress) {
+            return { action: 'skip', reason: 'inactive' };
+        }
+        if (opts.arrivalTriggered) {
+            return { action: 'skip', reason: 'triggered' };
+        }
+
+        var arrivalPlan = buildNavigationArrivalPlan(
+            opts.remainingM,
+            opts.speedMs,
+            opts.arrivalZoneSince,
+            opts.now != null ? opts.now : Date.now(),
+            opts.constants
+        );
+
+        var endNavigation = arrivalPlan.action === 'end';
+        return {
+            action: arrivalPlan.action,
+            arrivalPlan: arrivalPlan,
+            statePatch: { arrivalZoneSince: arrivalPlan.nextArrivalZoneSince },
+            endNavigation: endNavigation,
+            logMessage: endNavigation
+                ? '[Navigation] Arrival (' + Math.round(opts.remainingM) + 'm remaining) — ending trip'
+                : null,
+        };
+    }
+
+    /**
+     * Which GPS navigation sub-tasks run when route polyline is active.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildGpsNavigationActiveTickPlan(opts) {
+        opts = opts || {};
+        var active = !!(opts.routeInProgress && opts.routePolyline && opts.routePolyline.length > 0);
+        return {
+            active: active,
+            detectTurn: active,
+            updateTurnWidget: active,
+            announceDestination: active,
+            checkArrival: active,
+        };
+    }
+
     var api = {
         ROUTE_PROGRESS_CONTAINER_ID: ROUTE_PROGRESS_CONTAINER_ID,
         ROUTE_PROGRESS_BAR_ID: ROUTE_PROGRESS_BAR_ID,
@@ -179,6 +230,8 @@
         buildNavigationProgressSeedPlan: buildNavigationProgressSeedPlan,
         NAV_ARRIVAL_DEFAULTS: NAV_ARRIVAL_DEFAULTS,
         buildNavigationArrivalPlan: buildNavigationArrivalPlan,
+        buildNavigationArrivalTickPlan: buildNavigationArrivalTickPlan,
+        buildGpsNavigationActiveTickPlan: buildGpsNavigationActiveTickPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -453,7 +453,134 @@
         };
     }
 
+    var HAZARD_ANNOUNCEMENT_DEBOUNCE_MS = 30000;
+    var NEARBY_HAZARDS_RADIUS_KM = 0.8;
+
+    /**
+     * Params object for collectHazardsToAnnounce (app supplies live route/polyline state).
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildHazardEvaluationParams(opts) {
+        opts = opts || {};
+        return {
+            lat: opts.lat,
+            lon: opts.lon,
+            route: opts.route,
+            includeNearby: !!opts.includeNearby,
+            nearbyPayload: opts.nearbyPayload,
+            routePolyline: opts.routePolyline,
+            snappedRouteIndex: opts.snappedRouteIndex,
+            cameraAlertDistanceM: opts.cameraAlertDistanceM,
+            generalHazardDistanceM: opts.generalHazardDistanceM,
+            preferAlongRouteForRouteHazards: true,
+            calculateDistance: opts.calculateDistance,
+        };
+    }
+
+    /**
+     * GPS-tick plan for route-embedded vs nearby hazard evaluation.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildNavigationHazardAlertsTickPlan(opts) {
+        opts = opts || {};
+        if (!opts.routeInProgress && !opts.isTrackingActive) {
+            return { action: 'skip', reason: 'inactive' };
+        }
+
+        var plan = {
+            action: 'evaluate-embedded',
+            evaluateEmbedded: true,
+            evaluateNearby: false,
+            fetchNearby: false,
+        };
+
+        if (opts.isOffline || opts.navigatorOnLine === false) {
+            return plan;
+        }
+
+        var radiusKm = opts.nearbyRadiusKm != null ? opts.nearbyRadiusKm : NEARBY_HAZARDS_RADIUS_KM;
+        plan.action = 'evaluate-both';
+        plan.evaluateNearby = true;
+        plan.fetchNearby = true;
+        plan.nearbyUrl = '/api/hazards/nearby?lat=' + opts.lat + '&lon=' + opts.lon +
+            '&radius_km=' + radiusKm;
+        return plan;
+    }
+
+    /**
+     * Announcement decision plan for one hazard alert (app applies notification/voice/chime).
+     * @param {Object} hazard
+     * @param {number} distanceM
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildHazardAnnouncementPlan(hazard, distanceM, opts) {
+        opts = opts || {};
+        hazard = hazard || {};
+        var now = opts.now != null ? opts.now : Date.now();
+        var debounceMs = opts.debounceMs != null ? opts.debounceMs : HAZARD_ANNOUNCEMENT_DEBOUNCE_MS;
+        var unavoidableRouteCamera = !!opts.unavoidableRouteCamera;
+        var cameraAlertType = opts.cameraAlertType || 'voice';
+        var isCamera = isCameraHazardType(hazard.type);
+
+        if (cameraAlertType === 'off' && isCamera) {
+            return { action: 'skip', reason: 'camera-alerts-off' };
+        }
+
+        var friendlyType = String(hazard.type || 'hazard').replace(/_/g, ' ');
+        var distStr = formatHazardDistanceForUserMeters(distanceM, opts.distanceUnit || 'mi');
+        var debounceKey = hazard.type + '_' + hazard.lat + '_' + hazard.lon + '_' +
+            (unavoidableRouteCamera ? 'route' : 'near');
+        var lastTime = opts.lastAnnounceAt != null ? opts.lastAnnounceAt : 0;
+
+        if (now - lastTime <= debounceMs) {
+            return { action: 'skip', reason: 'debounced', debounceKey: debounceKey };
+        }
+
+        var message = unavoidableRouteCamera
+            ? friendlyType + ' on your route, ' + distStr + ' ahead — may be unavoidable on this path'
+            : friendlyType + ' ' + distStr + ' ahead';
+
+        var plan = {
+            action: 'announce',
+            debounceKey: debounceKey,
+            nextAnnounceAt: now,
+            notification: {
+                title: unavoidableRouteCamera ? 'Route hazard' : 'Hazard Alert',
+                message: message,
+                type: 'warning',
+            },
+            speak: false,
+            playChime: false,
+        };
+
+        if (isCamera) {
+            if (cameraAlertType === 'voice' || cameraAlertType === 'both') {
+                plan.speak = true;
+                plan.speakPriority = 'high';
+                plan.spokenMessage = unavoidableRouteCamera
+                    ? 'Camera on route in ' + distStr + '. This path may still pass the camera.'
+                    : friendlyType + ', ' + distStr + ' ahead';
+            }
+            if (cameraAlertType === 'chime' || cameraAlertType === 'both') {
+                plan.playChime = true;
+            }
+        } else if (opts.voiceAnnouncementsEnabled) {
+            plan.speak = true;
+            plan.spokenMessage = friendlyType + ', ' + distStr + ' ahead';
+        }
+
+        return plan;
+    }
+
     var api = {
+        HAZARD_ANNOUNCEMENT_DEBOUNCE_MS: HAZARD_ANNOUNCEMENT_DEBOUNCE_MS,
+        NEARBY_HAZARDS_RADIUS_KM: NEARBY_HAZARDS_RADIUS_KM,
+        buildHazardEvaluationParams: buildHazardEvaluationParams,
+        buildNavigationHazardAlertsTickPlan: buildNavigationHazardAlertsTickPlan,
+        buildHazardAnnouncementPlan: buildHazardAnnouncementPlan,
         CAMERA_HAZARD_TYPES: CAMERA_HAZARD_TYPES,
         isCameraHazardType: isCameraHazardType,
         flattenNearbyHazardsPayload: flattenNearbyHazardsPayload,

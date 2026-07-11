@@ -122,3 +122,87 @@ describe('hazard-alerts module', () => {
         expect(plan.summaryLogLine).toContain('Unavoidable hazards');
     });
 });
+
+describe('navigation hazard tick helpers', () => {
+    test('buildNavigationHazardAlertsTickPlan skips when not navigating or tracking', () => {
+        expect(HA.buildNavigationHazardAlertsTickPlan({ routeInProgress: false, isTrackingActive: false }).action)
+            .toBe('skip');
+    });
+
+    test('buildNavigationHazardAlertsTickPlan evaluates embedded hazards offline', () => {
+        const plan = HA.buildNavigationHazardAlertsTickPlan({
+            routeInProgress: true,
+            isTrackingActive: false,
+            isOffline: true,
+            navigatorOnLine: false,
+            lat: 51.5,
+            lon: -0.1,
+        });
+        expect(plan.action).toBe('evaluate-embedded');
+        expect(plan.evaluateEmbedded).toBe(true);
+        expect(plan.fetchNearby).toBe(false);
+    });
+
+    test('buildNavigationHazardAlertsTickPlan fetches nearby hazards when online', () => {
+        const plan = HA.buildNavigationHazardAlertsTickPlan({
+            routeInProgress: true,
+            isTrackingActive: false,
+            isOffline: false,
+            navigatorOnLine: true,
+            lat: 51.5,
+            lon: -0.12,
+        });
+        expect(plan.action).toBe('evaluate-both');
+        expect(plan.fetchNearby).toBe(true);
+        expect(plan.nearbyUrl).toContain('lat=51.5');
+        expect(plan.nearbyUrl).toContain('radius_km=0.8');
+    });
+
+    test('buildHazardEvaluationParams prefers along-route for route hazards', () => {
+        const params = HA.buildHazardEvaluationParams({
+            lat: 1,
+            lon: 2,
+            route: { hazards: [] },
+            includeNearby: true,
+            nearbyPayload: [],
+            routePolyline: [[1, 2]],
+            snappedRouteIndex: 0,
+            cameraAlertDistanceM: 500,
+            generalHazardDistanceM: 400,
+            calculateDistance: HA.haversineMeters,
+        });
+        expect(params.preferAlongRouteForRouteHazards).toBe(true);
+        expect(params.generalHazardDistanceM).toBe(400);
+    });
+
+    test('buildHazardAnnouncementPlan skips camera alerts when preference is off', () => {
+        const plan = HA.buildHazardAnnouncementPlan(
+            { type: 'camera_speed', lat: 1, lon: 2 },
+            100,
+            { cameraAlertType: 'off' }
+        );
+        expect(plan.action).toBe('skip');
+        expect(plan.reason).toBe('camera-alerts-off');
+    });
+
+    test('buildHazardAnnouncementPlan announces voice for general hazards', () => {
+        const plan = HA.buildHazardAnnouncementPlan(
+            { type: 'roadworks', lat: 1, lon: 2 },
+            200,
+            { voiceAnnouncementsEnabled: true, distanceUnit: 'km', now: 40_000, lastAnnounceAt: 0 }
+        );
+        expect(plan.action).toBe('announce');
+        expect(plan.speak).toBe(true);
+        expect(plan.notification.message).toContain('roadworks');
+    });
+
+    test('buildHazardAnnouncementPlan debounces repeat announcements', () => {
+        const plan = HA.buildHazardAnnouncementPlan(
+            { type: 'camera', lat: 1, lon: 2 },
+            50,
+            { now: 20_000, lastAnnounceAt: 5_000, cameraAlertType: 'voice' }
+        );
+        expect(plan.action).toBe('skip');
+        expect(plan.reason).toBe('debounced');
+    });
+});

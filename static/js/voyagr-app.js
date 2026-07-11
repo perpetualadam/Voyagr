@@ -12193,31 +12193,32 @@ function startGPSTracking() {
             // Hazards: route-embedded alerts work offline; nearby API when online
             processNavigationHazardAlerts(lat, lon);
 
+            const navActiveTick = _routeProgress().buildGpsNavigationActiveTickPlan({
+                routeInProgress,
+                routePolyline,
+            });
+
             // Apply smart zoom with turn detection
             let distanceToNextTurn = null;
 
-            // Detect upcoming turns if navigation is active
-            if (routeInProgress && routePolyline && routePolyline.length > 0) {
+            if (navActiveTick.detectTurn) {
                 const turnInfo = detectUpcomingTurn(lat, lon);
                 if (turnInfo) {
                     distanceToNextTurn = turnInfo.distance;
-
-                    // Voice announcements (only at specific distance thresholds)
                     announceUpcomingTurn(turnInfo);
                 }
+            }
 
-                // Visual turn display (updates independently on every GPS update)
-                // This provides continuous visual feedback regardless of voice announcement timing
+            if (navActiveTick.updateTurnWidget) {
                 updateTurnWidgetFromPosition(lat, lon);
+            }
 
-                // NEW: Announce distance to destination
+            if (navActiveTick.announceDestination) {
                 announceDistanceToDestination(lat, lon);
+            }
 
+            if (navActiveTick.checkArrival) {
                 checkNavigationArrival(lat, lon, speed);
-
-                // FIXED: Removed announceETAUpdate() from GPS callback
-                // ETA is now announced only via interval timer (every 10 minutes)
-                // This prevents ETA from being announced every 1-5 seconds
             }
 
             const zoomTick = CP.buildNavigationZoomTickPlan({
@@ -12240,15 +12241,13 @@ function startGPSTracking() {
             }
 
             // Update lane guidance if navigating
-            if (routeInProgress && currentRouteSteps.length > 0) {
-                const nextStep = currentRouteSteps[currentStepIndex];
-                const maneuverDir = nextStep
-                    ? _turnInstructions().maneuverTypeToLaneDirectionKey(nextStep.type || 0)
-                    : 'straight';
-                const exitCount = (maneuverDir === 'roundabout')
-                    ? effectiveRoundaboutExitCount(currentStepIndex)
-                    : 0;
-                updateLaneGuidance(lat, lon, heading, maneuverDir, exitCount);
+            const laneTick = _turnInstructions().buildLaneGuidanceTickPlan({
+                routeInProgress,
+                routeSteps: currentRouteSteps,
+                currentStepIndex,
+            });
+            if (laneTick.action === 'update') {
+                updateLaneGuidance(lat, lon, heading, laneTick.maneuverDir, laneTick.roundaboutExitCount);
             }
 
             if (speedLimitPlan.showWidget) {
@@ -12493,20 +12492,21 @@ function resetNavigationArrivalState() {
  * @param {number} speedMs - GPS speed in m/s
  */
 function checkNavigationArrival(lat, lon, speedMs) {
-    if (!routeInProgress || _navigationArrivalTriggered) return;
-
     const remainingM = getNavigationRemainingDistanceMeters(lat, lon);
-    const now = Date.now();
-    const plan = _routeProgress().buildNavigationArrivalPlan(
+    const tick = _routeProgress().buildNavigationArrivalTickPlan({
+        routeInProgress,
+        arrivalTriggered: _navigationArrivalTriggered,
         remainingM,
         speedMs,
-        _navigationArrivalZoneSince,
-        now
-    );
-    _navigationArrivalZoneSince = plan.nextArrivalZoneSince;
+        arrivalZoneSince: _navigationArrivalZoneSince,
+        now: Date.now(),
+    });
+    if (tick.action === 'skip') return;
 
-    if (plan.action === 'end') {
-        console.log(`[Navigation] Arrival (${remainingM.toFixed(0)}m remaining) — ending trip`);
+    _navigationArrivalZoneSince = tick.statePatch.arrivalZoneSince;
+
+    if (tick.endNavigation) {
+        if (tick.logMessage) console.log(tick.logMessage);
         sendArrivalNotification();
     }
 }
@@ -12527,10 +12527,6 @@ function updateNavigationFabVisibility() {
 let lastSnappedRouteIndex = 0;
 /** For turn detection only: monotonic polyline vertex index (never goes backwards). */
 let lastTurnDetectRouteVertexIndex = 0;
-// Near route: snap fully; degraded GPS widens corridor and blends snapped↔raw to reduce jitter.
-const SNAP_TO_ROUTE_BASE_METERS = 50;
-const SNAP_ROUTE_ACC_SCALE = 0.72;
-const SNAP_ROUTE_ACC_EXTRA_CAP_METERS = 48;
 
 // Active-navigation snap lock constants live in speed-gps.js (DEFAULTS).
 let _smoothDisplayLat = null;
@@ -12581,8 +12577,6 @@ function primeVehicleMarkerOnRoute(lat, lon) {
     }
 }
 
-/** Alias for readability in routing math that predates corridor blending. */
-const SNAP_TO_ROUTE_MAX_DISTANCE = SNAP_TO_ROUTE_BASE_METERS;
 /**
  * announceDistanceToDestination function
  * @function announceDistanceToDestination
@@ -13012,7 +13006,6 @@ async function triggerAutomaticReroute(currentLat, currentLon) {
 }
 // Hazard announcement debouncing
 const hazardAnnouncementDebounce = {};
-const HAZARD_ANNOUNCEMENT_DEBOUNCE_MS = 30000;
 let HAZARD_WARNING_DISTANCE = 500;
 
 // Camera alert types: 'off', 'voice', 'chime', 'both'
@@ -13120,33 +13113,26 @@ function formatHazardDistanceForUserMeters(distanceM) {
 
 function announceCameraOrHazard(hazard, distanceM, opts = {}) {
     const { unavoidableRouteCamera = false } = opts;
-    const friendlyType = String(hazard.type || 'hazard').replace(/_/g, ' ');
-    const distStr = formatHazardDistanceForUserMeters(distanceM);
-    const message = unavoidableRouteCamera
-        ? `${friendlyType} on your route, ${distStr} ahead — may be unavoidable on this path`
-        : `${friendlyType} ${distStr} ahead`;
-    sendNotification(unavoidableRouteCamera ? 'Route hazard' : 'Hazard Alert', message, 'warning');
-
-    const now = Date.now();
+    const HA = _hazardAlerts();
     const debounceKey = `${hazard.type}_${hazard.lat}_${hazard.lon}_${unavoidableRouteCamera ? 'route' : 'near'}`;
-    const lastTime = hazardAnnouncementDebounce[debounceKey] || 0;
+    const plan = HA.buildHazardAnnouncementPlan(hazard, distanceM, {
+        unavoidableRouteCamera,
+        cameraAlertType,
+        voiceAnnouncementsEnabled,
+        distanceUnit,
+        debounceMs: HA.HAZARD_ANNOUNCEMENT_DEBOUNCE_MS,
+        lastAnnounceAt: hazardAnnouncementDebounce[debounceKey] || 0,
+        now: Date.now(),
+    });
+    if (plan.action !== 'announce') return;
 
-    if (now - lastTime <= HAZARD_ANNOUNCEMENT_DEBOUNCE_MS) return;
-    hazardAnnouncementDebounce[debounceKey] = now;
-
-    const isCamera = isCameraHazardType(hazard.type);
-    if (isCamera) {
-        if (cameraAlertType === 'voice' || cameraAlertType === 'both') {
-            const spoken = unavoidableRouteCamera
-                ? `Camera on route in ${distStr}. This path may still pass the camera.`
-                : `${friendlyType}, ${distStr} ahead`;
-            speakMessage(spoken, 'high');
-        }
-        if (cameraAlertType === 'chime' || cameraAlertType === 'both') {
-            playCameraChime();
-        }
-    } else if (voiceAnnouncementsEnabled) {
-        speakMessage(`${friendlyType}, ${distStr} ahead`);
+    hazardAnnouncementDebounce[plan.debounceKey] = plan.nextAnnounceAt;
+    sendNotification(plan.notification.title, plan.notification.message, plan.notification.type);
+    if (plan.speak) {
+        speakMessage(plan.spokenMessage, plan.speakPriority || undefined);
+    }
+    if (plan.playChime) {
+        playCameraChime();
     }
 }
 
@@ -13154,7 +13140,7 @@ function evaluateAndAnnounceHazards(lat, lon, nearbyPayload, includeNearby) {
     const HA = _hazardAlerts();
     if (!HA) return;
 
-    const alerts = HA.collectHazardsToAnnounce({
+    const params = HA.buildHazardEvaluationParams({
         lat,
         lon,
         route: window.lastCalculatedRoute,
@@ -13164,12 +13150,11 @@ function evaluateAndAnnounceHazards(lat, lon, nearbyPayload, includeNearby) {
         snappedRouteIndex: lastSnappedRouteIndex,
         cameraAlertDistanceM: cameraAlertDistance,
         generalHazardDistanceM: HAZARD_WARNING_DISTANCE,
-        preferAlongRouteForRouteHazards: true,
-        calculateDistance: calculateDistanceMeters
+        calculateDistance: calculateDistanceMeters,
     });
+    const alerts = HA.collectHazardsToAnnounce(params);
 
     alerts.forEach(({ hazard, distanceM, unavoidableRouteCamera }) => {
-        if (cameraAlertType === 'off' && isCameraHazardType(hazard.type)) return;
         announceCameraOrHazard(hazard, distanceM, { unavoidableRouteCamera });
     });
 }
@@ -13178,13 +13163,25 @@ function evaluateAndAnnounceHazards(lat, lon, nearbyPayload, includeNearby) {
  * Route-embedded hazards work offline; nearby API augments when online.
  */
 function processNavigationHazardAlerts(lat, lon) {
-    if (!routeInProgress && !isTrackingActive) return;
+    const HA = _hazardAlerts();
+    const tick = HA.buildNavigationHazardAlertsTickPlan({
+        routeInProgress,
+        isTrackingActive,
+        isOffline: _voyagrIsOffline,
+        navigatorOnLine: navigator.onLine,
+        lat,
+        lon,
+        nearbyRadiusKm: HA.NEARBY_HAZARDS_RADIUS_KM,
+    });
+    if (tick.action === 'skip') return;
 
-    evaluateAndAnnounceHazards(lat, lon, null, false);
+    if (tick.evaluateEmbedded) {
+        evaluateAndAnnounceHazards(lat, lon, null, false);
+    }
 
-    if (_voyagrIsOffline || !navigator.onLine) return;
+    if (!tick.fetchNearby || !tick.nearbyUrl) return;
 
-    fetch(`/api/hazards/nearby?lat=${lat}&lon=${lon}&radius_km=0.8`)
+    fetch(tick.nearbyUrl)
         .then((response) => response.json())
         .then((data) => {
             if (!data.success || !data.hazards) return;

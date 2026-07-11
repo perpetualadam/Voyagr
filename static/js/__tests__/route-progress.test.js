@@ -89,3 +89,52 @@ describe('navigation arrival helpers', () => {
         expect(plan.nextArrivalZoneSince).toBe(0);
     });
 });
+
+describe('navigation arrival tick plan', () => {
+    test('buildNavigationArrivalTickPlan skips when arrival already triggered', () => {
+        const tick = RP.buildNavigationArrivalTickPlan({
+            routeInProgress: true,
+            arrivalTriggered: true,
+            remainingM: 30,
+            speedMs: 0,
+            arrivalZoneSince: 0,
+            now: 5000,
+        });
+        expect(tick.action).toBe('skip');
+        expect(tick.reason).toBe('triggered');
+    });
+
+    test('buildNavigationArrivalTickPlan ends navigation when very close', () => {
+        const tick = RP.buildNavigationArrivalTickPlan({
+            routeInProgress: true,
+            arrivalTriggered: false,
+            remainingM: 30,
+            speedMs: 5,
+            arrivalZoneSince: 0,
+            now: 5000,
+        });
+        expect(tick.endNavigation).toBe(true);
+        expect(tick.statePatch.arrivalZoneSince).toBe(0);
+        expect(tick.logMessage).toContain('30m remaining');
+    });
+});
+
+describe('GPS navigation active tick plan', () => {
+    test('buildGpsNavigationActiveTickPlan enables sub-tasks when route polyline exists', () => {
+        const tick = RP.buildGpsNavigationActiveTickPlan({
+            routeInProgress: true,
+            routePolyline: [[1, 2], [3, 4]],
+        });
+        expect(tick.active).toBe(true);
+        expect(tick.detectTurn).toBe(true);
+        expect(tick.checkArrival).toBe(true);
+    });
+
+    test('buildGpsNavigationActiveTickPlan is inactive without polyline', () => {
+        const tick = RP.buildGpsNavigationActiveTickPlan({
+            routeInProgress: true,
+            routePolyline: [],
+        });
+        expect(tick.active).toBe(false);
+    });
+});

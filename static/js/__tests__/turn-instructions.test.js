@@ -397,6 +397,38 @@ describe('effectiveRoundaboutExitCountFromSteps', () => {
     });
 });
 
+describe('buildLaneGuidanceTickPlan', () => {
+    test('skips when route is not active', () => {
+        expect(TI.buildLaneGuidanceTickPlan({ routeInProgress: false, routeSteps: [] }).action)
+            .toBe('skip');
+    });
+
+    test('resolves maneuver direction and roundabout exit count', () => {
+        const steps = [
+            { type: 26, roundabout_exit_count: 0 },
+            { type: 27, roundabout_exit_count: 3 },
+        ];
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: steps,
+            currentStepIndex: 0,
+        });
+        expect(plan.action).toBe('update');
+        expect(plan.maneuverDir).toBe('roundabout');
+        expect(plan.roundaboutExitCount).toBe(3);
+    });
+
+    test('uses straight for continue maneuvers', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [{ type: 8 }],
+            currentStepIndex: 0,
+        });
+        expect(plan.maneuverDir).toBe('straight');
+        expect(plan.roundaboutExitCount).toBe(0);
+    });
+});
+
 describe('buildNavStartTurnInstructionInit', () => {
     const polyline = [[51.5, -0.12], [51.51, -0.11], [51.52, -0.10]];
 
