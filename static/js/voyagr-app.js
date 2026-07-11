@@ -228,15 +228,7 @@ let navigationActive = false;
  * (more road ahead visible). Top inset pushes the focal point down; bottom inset clears the bottom sheet / chrome.
  */
 function getNavigationFollowPadding() {
-    const h = window.innerHeight;
-    const w = window.innerWidth;
-    const bottomUiReserve = Math.min(200, Math.max(96, h * 0.15));
-    return {
-        top: Math.round(h * 0.55),
-        bottom: Math.round(bottomUiReserve),
-        left: Math.round(Math.min(22, w * 0.03)),
-        right: Math.round(Math.min(22, w * 0.03))
-    };
+    return VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
 }
 
 window.addEventListener('resize', () => {
@@ -492,7 +484,7 @@ function updateDistanceUnit() {
     saveUnitSettingsToBackend();
     updateAllDistanceDisplays();
     saveAllSettings();
-    showStatus(`Distance unit changed to ${newUnit === 'mi' ? 'miles' : 'kilometers'}`, 'success');
+    showStatus(`Distance unit changed to ${VoyagrModules.units().distanceUnitStatusLabel(newUnit)}`, 'success');
 }
 
 // Update currency unit
@@ -524,7 +516,7 @@ function updateSpeedUnit() {
     saveUnitSettingsToBackend();
     updateAllSpeedDisplays();
     saveAllSettings();
-    showStatus(`Speed unit changed to ${newUnit === 'mph' ? 'mph' : 'km/h'}`, 'success');
+    showStatus(`Speed unit changed to ${VoyagrModules.units().speedUnitStatusLabel(newUnit)}`, 'success');
 }
 
 // Update temperature unit
@@ -540,7 +532,7 @@ function updateTemperatureUnit() {
     saveUnitSettingsToBackend();
     updateAllTemperatureDisplays();
     saveAllSettings();
-    showStatus(`Temperature unit changed to ${newUnit === 'fahrenheit' ? 'Fahrenheit' : 'Celsius'}`, 'success');
+    showStatus(`Temperature unit changed to ${VoyagrModules.units().temperatureUnitStatusLabel(newUnit)}`, 'success');
 }
 
 // Save unit settings to backend
@@ -4379,30 +4371,9 @@ function encodePolyline(points, precision = 6) {
  * @param {Object|null|undefined} routeData
  */
 function mergeNavigationRouteFromSelected(routeData) {
-    if (!routeData || typeof routeData !== 'object') return routeData;
-    try {
-        if (!routeOptions || routeOptions.length === 0) return routeData;
-        const idx = Math.max(0, Math.min(Number(selectedRouteIndex) || 0, routeOptions.length - 1));
-        const sel = routeOptions[idx];
-        if (!sel) return routeData;
-        const prec = Number.isFinite(sel.geometry_precision) ? sel.geometry_precision : 6;
-        return Object.assign({}, routeData, {
-            geometry: sel.geometry || routeData.geometry,
-            geometry_precision: prec,
-            maneuvers: (sel.maneuvers && sel.maneuvers.length > 0) ? sel.maneuvers : (routeData.maneuvers || []),
-            name: sel.name || routeData.name,
-            distance_km: sel.distance_km ?? routeData.distance_km,
-            duration_minutes: sel.duration_minutes ?? routeData.duration_minutes,
-            fuel_cost: sel.fuel_cost ?? routeData.fuel_cost,
-            fuel_litres: sel.fuel_litres ?? routeData.fuel_litres,
-            toll_cost: sel.toll_cost ?? routeData.toll_cost,
-            caz_cost: sel.caz_cost ?? routeData.caz_cost,
-            source: sel.source || routeData.source,
-            hazards: sel.hazards || routeData.hazards || [],
-        });
-    } catch (_e) {
-        return routeData;
-    }
+    return VoyagrModules.routeSelection().mergeNavigationRouteFromSelected(
+        routeData, routeOptions, selectedRouteIndex
+    );
 }
 
 /**
@@ -4410,19 +4381,10 @@ function mergeNavigationRouteFromSelected(routeData) {
  */
 function syncLastCalculatedRouteFromSelection(index) {
     if (!routeOptions || !routeOptions[index]) return;
-    const route = routeOptions[index];
-    const prev = window.lastCalculatedRoute || {};
-    window.lastCalculatedRoute = {
-        ...prev,
-        ...route,
-        geometry: route.geometry || prev.geometry,
-        geometry_precision: Number.isFinite(route.geometry_precision) ? route.geometry_precision : (prev.geometry_precision || 6),
-        maneuvers: route.maneuvers || prev.maneuvers || [],
-        destination: prev.destination || route.destination,
-        destinationName: prev.destinationName || route.destinationName,
-        end_lat: prev.end_lat != null ? prev.end_lat : route.end_lat,
-        end_lon: prev.end_lon != null ? prev.end_lon : route.end_lon,
-    };
+    window.lastCalculatedRoute = VoyagrModules.routeSelection().mergeLastCalculatedRouteFromSelection(
+        window.lastCalculatedRoute,
+        routeOptions[index]
+    );
 }
 
 /**
@@ -4431,14 +4393,7 @@ function syncLastCalculatedRouteFromSelection(index) {
  * @param {*} saved
  */
 function buildRoutePayloadFromPersisted(saved) {
-    if (!saved || !Array.isArray(saved.polyline) || saved.polyline.length < 2) return null;
-    const base = saved.routeData && typeof saved.routeData === 'object' ? { ...saved.routeData } : {};
-    base.maneuvers = saved.steps || base.maneuvers || [];
-    if (!base.geometry || typeof base.geometry !== 'string') {
-        base.geometry = encodePolyline(saved.polyline, 6);
-        if (!base.geometry) return null;
-    }
-    return base;
+    return VoyagrModules.routeSelection().buildRoutePayloadFromPersisted(saved, encodePolyline);
 }
 /**
  * showStatus function

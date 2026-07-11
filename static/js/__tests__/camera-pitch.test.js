@@ -79,3 +79,21 @@ describe('decideDrivingCamera', () => {
         });
     });
 });
+
+describe('computeFollowPadding', () => {
+    const { computeFollowPadding } = require('../modules/navigation/camera-pitch.js');
+
+    test('scales with viewport height and width', () => {
+        expect(computeFollowPadding(800, 400)).toEqual({
+            top: 440,
+            bottom: 120,
+            left: 12,
+            right: 12,
+        });
+    });
+
+    test('caps bottom reserve between 96 and 200', () => {
+        expect(computeFollowPadding(400, 300).bottom).toBe(96);
+        expect(computeFollowPadding(2000, 300).bottom).toBe(200);
+    });
+});

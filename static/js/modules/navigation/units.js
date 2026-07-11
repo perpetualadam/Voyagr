@@ -96,6 +96,21 @@
         return cost;
     }
 
+    /** User-facing label when distance unit changes. */
+    function distanceUnitStatusLabel(distanceUnit) {
+        return distanceUnit === 'mi' ? 'miles' : 'kilometers';
+    }
+
+    /** User-facing label when speed unit changes. */
+    function speedUnitStatusLabel(speedUnit) {
+        return speedUnit === 'mph' ? 'mph' : 'km/h';
+    }
+
+    /** User-facing label when temperature unit changes. */
+    function temperatureUnitStatusLabel(temperatureUnit) {
+        return temperatureUnit === 'fahrenheit' ? 'Fahrenheit' : 'Celsius';
+    }
+
     var api = {
         convertDistance: convertDistance,
         getDistanceUnit: getDistanceUnit,
@@ -105,6 +120,9 @@
         getFuelEfficiencyLabel: getFuelEfficiencyLabel,
         getCurrencySymbol: getCurrencySymbol,
         adjustCostForUnits: adjustCostForUnits,
+        distanceUnitStatusLabel: distanceUnitStatusLabel,
+        speedUnitStatusLabel: speedUnitStatusLabel,
+        temperatureUnitStatusLabel: temperatureUnitStatusLabel,
         CURRENCY_SYMBOLS: CURRENCY_SYMBOLS,
     };
 
