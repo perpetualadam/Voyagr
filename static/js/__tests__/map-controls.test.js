@@ -108,4 +108,10 @@ describe('map-controls module', () => {
         expect(plan.journeyOverviewDisplay).toBe('block');
         expect(plan.mapFollowingActive).toBe(true);
     });
+
+    test('nav start geometry error status messages', () => {
+        expect(MC.getNavStartNoGeometryStatusMessage()).toContain('geometry');
+        expect(MC.getNavStartInvalidGeometryStatusMessage()).toContain('Invalid');
+        expect(MC.getNavStartDecodeGeometryErrorStatusMessage()).toContain('decode');
+    });
 });

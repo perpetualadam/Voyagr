@@ -262,6 +262,27 @@
         };
     }
 
+    /**
+     * @returns {string}
+     */
+    function getNavStartNoGeometryStatusMessage() {
+        return 'No route geometry available';
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getNavStartInvalidGeometryStatusMessage() {
+        return 'Error: Invalid route geometry';
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getNavStartDecodeGeometryErrorStatusMessage() {
+        return 'Error: Could not decode route geometry';
+    }
+
     var api = {
         ZOOM_FOLLOW_ENABLED_ICON: ZOOM_FOLLOW_ENABLED_ICON,
         ZOOM_FOLLOW_DISABLED_ICON: ZOOM_FOLLOW_DISABLED_ICON,
@@ -299,6 +320,9 @@
         getNavStopNotification: getNavStopNotification,
         getWakeLockAcquiredStatusMessage: getWakeLockAcquiredStatusMessage,
         buildNavStartUserFeedbackPlan: buildNavStartUserFeedbackPlan,
+        getNavStartNoGeometryStatusMessage: getNavStartNoGeometryStatusMessage,
+        getNavStartInvalidGeometryStatusMessage: getNavStartInvalidGeometryStatusMessage,
+        getNavStartDecodeGeometryErrorStatusMessage: getNavStartDecodeGeometryErrorStatusMessage,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

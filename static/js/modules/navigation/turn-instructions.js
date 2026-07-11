@@ -398,6 +398,47 @@
         };
     }
 
+    /**
+     * First announceable maneuver after the current step, with along-route gap (m).
+     * @param {Array<Object>} steps
+     * @param {number} currentIndex
+     * @param {Array<[number,number]>} polyline
+     * @param {Object} [opts]
+     * @param {function(Array, number, number): number} [opts.cumulativeDistanceBetweenVertices]
+     * @param {function(Object, boolean): string} [opts.getManeuverStreetLabel]
+     * @param {function(Object): (string|null)} [opts.resolveRoadClass]
+     * @returns {Object|null}
+     */
+    function findFollowingManeuver(steps, currentIndex, polyline, opts) {
+        opts = opts || {};
+        if (!steps || currentIndex == null || currentIndex < 0) return null;
+        var current = steps[currentIndex];
+        if (!current) return null;
+        var cumDist = opts.cumulativeDistanceBetweenVertices;
+        var getStreetLabel = opts.getManeuverStreetLabel || function () { return ''; };
+        var resolveRoadClass = opts.resolveRoadClass || function (s) { return s.road_class || null; };
+        var currentShapeIdx = current.begin_shape_index || 0;
+        for (var j = currentIndex + 1; j < steps.length; j++) {
+            var m = steps[j];
+            var type = m.type || 0;
+            var baseDir = maneuverTypeToDirectionKey(type);
+            if (!baseDir) continue;
+            var dir = refineManeuverDirection(type, baseDir, resolveRoadClass(m));
+            var targetIdx = m.begin_shape_index || 0;
+            var gapMeters = cumDist ? cumDist(polyline, currentShapeIdx, targetIdx) : 0;
+            if (!Number.isFinite(gapMeters)) gapMeters = 0;
+            return {
+                direction: dir,
+                valhallaType: type,
+                streetName: getStreetLabel(m, false),
+                gapMeters: gapMeters,
+                index: j,
+                maneuver: m,
+            };
+        }
+        return null;
+    }
+
     var api = {
         calculateTurnDirection: calculateTurnDirection,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,
@@ -416,6 +457,7 @@
         buildInstructionListItemHtml: buildInstructionListItemHtml,
         effectiveRoundaboutExitCountFromSteps: effectiveRoundaboutExitCountFromSteps,
         buildNavStartTurnInstructionInit: buildNavStartTurnInstructionInit,
+        findFollowingManeuver: findFollowingManeuver,
         TURN_ICON_MAP: TURN_ICON_MAP,
         DIRECTION_TEXT_MAP: DIRECTION_TEXT_MAP
     };

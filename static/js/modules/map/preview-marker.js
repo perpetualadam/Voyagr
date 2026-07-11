@@ -30,10 +30,37 @@
         );
     }
 
+    /**
+     * Circle-marker options for route preview start/end pins (MapLibre createCircleMarker).
+     * @param {'start'|'end'} which
+     * @returns {{ radius: number, fillColor: string, color: string, weight: number, fillOpacity: number, popup: string }}
+     */
+    function getRouteEndpointMarkerOptions(which) {
+        if (which === 'start') {
+            return {
+                radius: 8,
+                fillColor: '#00ff00',
+                color: '#000',
+                weight: 2,
+                fillOpacity: 0.8,
+                popup: 'Start Location',
+            };
+        }
+        return {
+            radius: 8,
+            fillColor: '#ff0000',
+            color: '#000',
+            weight: 2,
+            fillOpacity: 0.8,
+            popup: 'End Location',
+        };
+    }
+
     var api = {
         PREVIEW_MARKER_CLASS: PREVIEW_MARKER_CLASS,
         getPreviewMarkerStyleCssText: getPreviewMarkerStyleCssText,
         buildPreviewMarkerInnerHtml: buildPreviewMarkerInnerHtml,
+        getRouteEndpointMarkerOptions: getRouteEndpointMarkerOptions,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
