@@ -179,4 +179,10 @@ describe('route comparison modal helpers', () => {
         expect(style).toContain('border-left: 4px solid #2563EB');
         expect(style).toContain('cursor: pointer');
     });
+
+    test('route comparison modal overlay exposes id and fullscreen style', () => {
+        expect(RS.ROUTE_COMPARISON_MODAL_ID).toBe('routeComparisonModal');
+        expect(RS.getRouteComparisonModalOverlayStyleCssText()).toContain('z-index: 10000');
+        expect(RS.getRouteComparisonModalOverlayStyleCssText()).toContain('rgba(0,0,0,0.5)');
+    });
 });

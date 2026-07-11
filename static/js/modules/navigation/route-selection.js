@@ -17,6 +17,16 @@
     /** Active navigation / reroute line — matches ROUTE_COLORS[0]. */
     var NAV_ACTIVE_ROUTE_COLOR = '#2563EB';
 
+    var ROUTE_COMPARISON_MODAL_ID = 'routeComparisonModal';
+
+    /**
+     * Full-screen overlay style for the route comparison modal.
+     * @returns {string}
+     */
+    function getRouteComparisonModalOverlayStyleCssText() {
+        return 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+    }
+
     /**
      * @param {number} hazardCount
      * @returns {string} CSS colour
@@ -600,6 +610,8 @@
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
+        ROUTE_COMPARISON_MODAL_ID: ROUTE_COMPARISON_MODAL_ID,
+        getRouteComparisonModalOverlayStyleCssText: getRouteComparisonModalOverlayStyleCssText,
         hazardBadgeColor: hazardBadgeColor,
         computeRouteTotalCost: computeRouteTotalCost,
         resolveRouteColor: resolveRouteColor,

@@ -4842,9 +4842,11 @@ function displayHazardMarkers(hazards) {
         const HM = _hazardMapMarkers();
 
         if (config.useOsmTrafficLightPill) {
-            markerHtml = getOsmTrafficLightMarkerPillHTML();
+            const OSM = _osmMapIcons();
+            const pillHtml = getOsmTrafficLightMarkerPillHTML();
+            markerHtml = pillHtml;
             markerIconSize = [26, 38];
-            popupIcon = `<div style="width:26px;height:38px;margin:0 auto;">${getOsmTrafficLightMarkerPillHTML()}</div>`;
+            popupIcon = OSM.buildOsmTrafficLightPopupIconWrapperHtml(pillHtml);
         } else if (config.svg) {
             markerHtml = HM.buildHazardSvgMarkerHtml(config, config.svg);
             markerIconSize = HM.HAZARD_MARKER_ICON_SIZE;
@@ -7560,8 +7562,8 @@ async function showRouteComparison() {
         });
 
         const modal = document.createElement('div');
-        modal.id = 'routeComparisonModal';
-        modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+        modal.id = selection.ROUTE_COMPARISON_MODAL_ID;
+        modal.style.cssText = selection.getRouteComparisonModalOverlayStyleCssText();
         modal.innerHTML = selection.buildRouteComparisonModalHtml(comparisonHTML);
 
         // Close modal when clicking outside the white box
@@ -8324,7 +8326,7 @@ function displayParkingOptions(parkingList, destinationCoords) {
         }
 
         const item = document.createElement('div');
-        item.style.cssText = 'background: white; padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; transition: all 0.2s;';
+        item.style.cssText = parkingModule.getParkingOptionItemContainerStyleCssText();
         item.innerHTML = parkingModule.buildParkingOptionItemHtml(parking, index, {
             distanceText: parkingDisplayDist,
             distUnit: parkingDistUnit,
