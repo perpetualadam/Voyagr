@@ -16,6 +16,7 @@
     var ZOOM_FOLLOW_ACTIVE_BACKGROUND = '#FF9800';
     var ZOOM_FOLLOW_INACTIVE_BACKGROUND = '#9E9E9E';
     var AR_PREF_STORAGE_KEY = 'voyagr_ar_enabled';
+    var AR_FAB_VISIBLE_ICON = '👓';
 
     var MAP_CONTROLS_HINT_SECTIONS = [
         { title: 'Map (round buttons)', selector: '.fab-container .fab, #navControlButtons .fab' },
@@ -139,6 +140,36 @@
         toggleUi.applyToggleButton(btn, active, toggleUi.TOGGLE_SWITCH_OPTS);
     }
 
+    /**
+     * FAB visibility for AR mode button when used as a map overlay.
+     * @param {boolean} isAREnabled
+     * @param {boolean} hasRoute
+     * @param {boolean} routeInProgress
+     * @returns {{ visible: boolean, display: string, textContent: string|null }}
+     */
+    function getARFabVisibilityDisplay(isAREnabled, hasRoute, routeInProgress) {
+        if (isAREnabled && (hasRoute || routeInProgress)) {
+            return { visible: true, display: 'flex', textContent: AR_FAB_VISIBLE_ICON };
+        }
+        return { visible: false, display: 'none', textContent: null };
+    }
+
+    /**
+     * Apply AR mode button label/active state from navigator status.
+     * @param {HTMLElement|null} btn
+     * @param {string} status
+     */
+    function applyARModeButtonState(btn, status) {
+        if (!btn) return;
+        var display = getARModeButtonDisplay(status);
+        if (display.active) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+        btn.innerHTML = display.innerHtml;
+    }
+
     var api = {
         ZOOM_FOLLOW_ENABLED_ICON: ZOOM_FOLLOW_ENABLED_ICON,
         ZOOM_FOLLOW_DISABLED_ICON: ZOOM_FOLLOW_DISABLED_ICON,
@@ -151,6 +182,7 @@
         ZOOM_FOLLOW_ACTIVE_BACKGROUND: ZOOM_FOLLOW_ACTIVE_BACKGROUND,
         ZOOM_FOLLOW_INACTIVE_BACKGROUND: ZOOM_FOLLOW_INACTIVE_BACKGROUND,
         AR_PREF_STORAGE_KEY: AR_PREF_STORAGE_KEY,
+        AR_FAB_VISIBLE_ICON: AR_FAB_VISIBLE_ICON,
         MAP_CONTROLS_HINT_SECTIONS: MAP_CONTROLS_HINT_SECTIONS,
         MAP_CONTROLS_HINT_EXTRAS: MAP_CONTROLS_HINT_EXTRAS,
         MAP_CONTROLS_HINT_SKIP_IDS: MAP_CONTROLS_HINT_SKIP_IDS,
@@ -165,6 +197,8 @@
         isAREnabledInStorage: isAREnabledInStorage,
         writeAREnabledToStorage: writeAREnabledToStorage,
         applyARModeToggleButton: applyARModeToggleButton,
+        getARFabVisibilityDisplay: getARFabVisibilityDisplay,
+        applyARModeButtonState: applyARModeButtonState,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
