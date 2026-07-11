@@ -138,3 +138,32 @@ describe('GPS navigation active tick plan', () => {
         expect(tick.active).toBe(false);
     });
 });
+
+describe('GPS tracking side effects plan', () => {
+    test('buildGpsTrackingSideEffectsPlan enables nav phases when route is active', () => {
+        const plan = RP.buildGpsTrackingSideEffectsPlan({
+            routeInProgress: true,
+            routePolyline: [[1, 2], [3, 4]],
+            routeSteps: [{ type: 8 }],
+            isTrackingActive: true,
+            speedLimitShowWidget: true,
+        });
+        expect(plan.checkDeviation).toBe(true);
+        expect(plan.processHazards).toBe(true);
+        expect(plan.navActive.active).toBe(true);
+        expect(plan.updateLaneGuidance).toBe(true);
+        expect(plan.showSpeedWidget).toBe(true);
+        expect(plan.fetchRoadName).toBe(true);
+    });
+
+    test('buildGpsTrackingSideEffectsPlan still processes hazards when only tracking', () => {
+        const plan = RP.buildGpsTrackingSideEffectsPlan({
+            routeInProgress: false,
+            isTrackingActive: true,
+            speedLimitShowWidget: false,
+        });
+        expect(plan.processHazards).toBe(true);
+        expect(plan.navActive.active).toBe(false);
+        expect(plan.checkDeviation).toBe(false);
+    });
+});

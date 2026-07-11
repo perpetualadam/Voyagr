@@ -280,6 +280,83 @@ describe('lane guidance fetch throttle helpers', () => {
     });
 });
 
+describe('lane guidance fetch tick plan', () => {
+    const steps = [{ begin_shape_index: 2, type: 10 }];
+    const polyline = [[51.5, -0.1], [51.51, -0.09], [51.52, -0.08]];
+
+    test('computeDistanceToManeuverMeters measures to next step shape index', () => {
+        const d = LG.computeDistanceToManeuverMeters(
+            51.5,
+            -0.1,
+            steps,
+            0,
+            polyline,
+            (a, b, c, d2) => Math.abs(a - c) * 100000 + Math.abs(b - d2) * 100000
+        );
+        expect(d).toBeGreaterThan(0);
+        expect(d).toBeLessThan(9999);
+    });
+
+    test('buildLaneGuidanceFetchTickPlan skips throttled fetches', () => {
+        const tick = LG.buildLaneGuidanceFetchTickPlan({
+            lat: 51.5,
+            lon: -0.1,
+            heading: 90,
+            maneuver: 'left',
+            now: 5000,
+            lastFetch: 4900,
+            lastPosition: { lat: 51.5, lon: -0.1 },
+            lastManeuver: 'left',
+            calculateDistance: () => 10,
+        });
+        expect(tick.action).toBe('skip');
+    });
+
+    test('buildLaneGuidanceFetchTickPlan returns fetch plan when cache is stale', () => {
+        const tick = LG.buildLaneGuidanceFetchTickPlan({
+            lat: 51.5,
+            lon: -0.1,
+            heading: 90,
+            maneuver: 'left',
+            now: 10_000,
+            lastFetch: 0,
+            lastPosition: null,
+            lastManeuver: '',
+            routeSteps: steps,
+            currentStepIndex: 0,
+            routePolyline: polyline,
+            roadType: 'primary',
+            calculateDistance: () => 120,
+            cacheLookup: () => null,
+        });
+        expect(tick.action).toBe('fetch');
+        expect(tick.url).toContain('/api/lane-guidance');
+        expect(tick.statePatch.lastManeuver).toBe('left');
+    });
+
+    test('buildLaneGuidanceFetchTickPlan renders fresh cache without fetch', () => {
+        const data = LG.buildDeterministicLaneGuidance('left', 80, 0, 'primary');
+        const tick = LG.buildLaneGuidanceFetchTickPlan({
+            lat: 51.5,
+            lon: -0.1,
+            heading: 90,
+            maneuver: 'left',
+            now: 10_000,
+            lastFetch: 0,
+            lastPosition: null,
+            lastManeuver: '',
+            routeSteps: steps,
+            currentStepIndex: 0,
+            routePolyline: polyline,
+            roadType: 'primary',
+            calculateDistance: () => 80,
+            cacheLookup: () => ({ data, ts: 9900, fallback: false }),
+        });
+        expect(tick.action).toBe('render-cached');
+        expect(tick.renderPayload.total_lanes).toBe(data.total_lanes);
+    });
+});
+
 describe('lane guidance UI and voice apply plans', () => {
     test('buildLaneGuidanceUiApplyPlan hides single-lane guidance', () => {
         expect(LG.buildLaneGuidanceUiApplyPlan({ total_lanes: 1, urgency: 'none' }).visible).toBe(false);

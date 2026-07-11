@@ -216,6 +216,29 @@
         };
     }
 
+    /**
+     * Which GPS-tick side-effect phases run after position/speed-limit plans.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildGpsTrackingSideEffectsPlan(opts) {
+        opts = opts || {};
+        var navActive = buildGpsNavigationActiveTickPlan({
+            routeInProgress: opts.routeInProgress,
+            routePolyline: opts.routePolyline,
+        });
+        var hasPolyline = !!(opts.routePolyline && opts.routePolyline.length > 0);
+        return {
+            accumulateOdometer: !!opts.routeInProgress,
+            checkDeviation: !!(opts.routeInProgress && hasPolyline),
+            processHazards: !!(opts.routeInProgress || opts.isTrackingActive),
+            navActive: navActive,
+            updateLaneGuidance: navActive.active && !!(opts.routeSteps && opts.routeSteps.length > 0),
+            showSpeedWidget: !!opts.speedLimitShowWidget,
+            fetchRoadName: !!opts.routeInProgress,
+        };
+    }
+
     var api = {
         ROUTE_PROGRESS_CONTAINER_ID: ROUTE_PROGRESS_CONTAINER_ID,
         ROUTE_PROGRESS_BAR_ID: ROUTE_PROGRESS_BAR_ID,
@@ -232,6 +255,7 @@
         buildNavigationArrivalPlan: buildNavigationArrivalPlan,
         buildNavigationArrivalTickPlan: buildNavigationArrivalTickPlan,
         buildGpsNavigationActiveTickPlan: buildGpsNavigationActiveTickPlan,
+        buildGpsTrackingSideEffectsPlan: buildGpsTrackingSideEffectsPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

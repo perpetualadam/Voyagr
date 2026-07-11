@@ -8100,86 +8100,65 @@ function _pruneLaneGuidanceCache() {
 function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
     const LG = _laneGuidance();
     roundaboutExitCount = roundaboutExitCount || 0;
-    const now = Date.now();
 
-    let distanceMovedMeters = 999;
-    if (lastLaneGuidancePosition) {
-        distanceMovedMeters = calculateDistanceMeters(lat, lon, lastLaneGuidancePosition.lat, lastLaneGuidancePosition.lon);
-    }
-
-    if (LG.shouldSkipLaneGuidanceFetch({
-        now: now,
+    const tick = LG.buildLaneGuidanceFetchTickPlan({
+        lat,
+        lon,
+        heading,
+        maneuver,
+        roundaboutExitCount,
+        now: Date.now(),
         lastFetch: lastLaneGuidanceFetch,
         lastPosition: lastLaneGuidancePosition,
-        distanceMovedMeters: distanceMovedMeters,
-        maneuver: maneuver,
         lastManeuver: lastLaneGuidanceManeuver,
-    })) {
-        return;
-    }
-
-    let distToManeuver = 9999;
-    if (routeInProgress && currentRouteSteps && currentRouteSteps.length > currentStepIndex) {
-        const nextStep = currentRouteSteps[currentStepIndex];
-        if (nextStep && routePolyline) {
-            const shapeIdx = nextStep.begin_shape_index || 0;
-            if (shapeIdx < routePolyline.length) {
-                distToManeuver = calculateDistanceMeters(lat, lon, routePolyline[shapeIdx][0], routePolyline[shapeIdx][1]);
-            }
-        }
-    }
-
-    const roadType = getCurrentRoadType() || 'unknown';
-
-    lastLaneGuidanceFetch = now;
-    lastLaneGuidanceManeuver = maneuver;
-    lastLaneGuidancePosition = { lat, lon };
-
-    const cacheKey = LG.buildLaneGuidanceCacheKey(maneuver, roundaboutExitCount, roadType, lat, lon);
-    const cached = _laneGuidanceCache.get(cacheKey);
-    if (LG.isLaneGuidanceCacheEntryFresh(cached, now)) {
-        const lanePos = LG.laneNameFor(cached.data.recommended_lane, cached.data.total_lanes);
-        renderLaneGuidanceUI({
-            ...cached.data,
-            ...LG.laneUrgencyFields(distToManeuver, lanePos, maneuver, roundaboutExitCount),
-        });
-        return;
-    }
-
-    const url = LG.buildLaneGuidanceApiUrl({
-        lat: lat,
-        lon: lon,
-        heading: heading,
-        maneuver: maneuver,
-        distance: distToManeuver,
-        roadType: roadType,
-        roundaboutExitCount: roundaboutExitCount,
+        routeSteps: currentRouteSteps,
+        currentStepIndex,
+        routePolyline,
+        roadType: getCurrentRoadType() || 'unknown',
+        calculateDistance: calculateDistanceMeters,
+        cacheLookup: (key) => _laneGuidanceCache.get(key),
     });
 
+    if (tick.action === 'skip') return;
+
+    lastLaneGuidanceFetch = tick.statePatch.lastFetch;
+    lastLaneGuidanceManeuver = tick.statePatch.lastManeuver;
+    lastLaneGuidancePosition = tick.statePatch.lastPosition;
+
+    if (tick.action === 'render-cached') {
+        renderLaneGuidanceUI(tick.renderPayload);
+        return;
+    }
+
     const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    const timeoutId = controller ? setTimeout(() => controller.abort(), LG.LANE_GUIDANCE_FETCH_TIMEOUT_MS) : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), tick.timeoutMs) : null;
 
     const useFallback = (reason) => {
-        const fb = LG.buildDeterministicLaneGuidance(maneuver, distToManeuver, roundaboutExitCount, roadType);
-        _laneGuidanceCache.set(cacheKey, { data: fb, ts: Date.now(), fallback: true });
+        const fb = LG.buildDeterministicLaneGuidance(
+            tick.maneuver,
+            tick.distToManeuver,
+            tick.roundaboutExitCount,
+            tick.roadType
+        );
+        _laneGuidanceCache.set(tick.cacheKey, { data: fb, ts: Date.now(), fallback: true });
         _pruneLaneGuidanceCache();
         console.warn('[Lane Guidance] using deterministic fallback:', reason);
         renderLaneGuidanceUI(fb);
     };
 
-    fetch(url, controller ? { signal: controller.signal } : undefined)
-        .then(response => response.json())
-        .then(data => {
+    fetch(tick.url, controller ? { signal: controller.signal } : undefined)
+        .then((response) => response.json())
+        .then((data) => {
             if (timeoutId) clearTimeout(timeoutId);
             if (data && data.success) {
-                _laneGuidanceCache.set(cacheKey, { data, ts: Date.now(), fallback: false });
+                _laneGuidanceCache.set(tick.cacheKey, { data, ts: Date.now(), fallback: false });
                 _pruneLaneGuidanceCache();
                 renderLaneGuidanceUI(data);
             } else {
                 useFallback('no data');
             }
         })
-        .catch(error => {
+        .catch((error) => {
             if (timeoutId) clearTimeout(timeoutId);
             useFallback((error && error.name === 'AbortError') ? 'timeout' : (error && error.message) || 'error');
         });
@@ -11907,6 +11886,307 @@ function collapseBottomSheet() {
 
 // ===== GPS TRACKING FUNCTIONS =====
 /**
+ * Apply one GPS watchPosition fix: position, follow camera, navigation side-effects.
+ * @param {GeolocationPosition} position
+ */
+function applyGpsTrackingTick(position) {
+    const SGsample = _speedGps();
+    const sample = SGsample.normalizeGeolocationCoordsSample(position.coords);
+    const lat = sample.lat;
+    const lon = sample.lon;
+    const accuracy = sample.accuracy;
+    const speed = sample.speedMs;
+    const deviceHeading = sample.deviceHeading;
+
+    currentLat = lat;
+    currentLon = lon;
+    updateRoadReportFabVisibility();
+
+    const historyPlan = SGsample.buildTrackingHistoryAppendPlan(trackingHistory, {
+        lat: lat,
+        lon: lon,
+        timestamp: new Date(),
+        speed: speed,
+        accuracy: accuracy,
+    });
+    trackingHistory = historyPlan.history;
+
+    /** Single raw-speed sample / tick (clamped inside pickRawSpeedMph) for zoom + HUD. */
+    const speedMph = pickRawSpeedMph(sample.deviceSpeedMs, trackingHistory, accuracy);
+
+    // Whole-journey odometer: sum plausible movement between raw fixes.
+    if (routeInProgress) {
+        const odoNow = Date.now();
+        const SGodo = _speedGps();
+        if (SGodo) {
+            const odo = SGodo.accumulateNavOdometerSegment(
+                { lastGeo: _navOdometerLastGeo, traveledMeters: _navTraveledMeters },
+                lat,
+                lon,
+                odoNow,
+                calculateDistanceMeters
+            );
+            _navOdometerLastGeo = odo.lastGeo;
+            _navTraveledMeters = odo.traveledMeters;
+        }
+    }
+
+    const SGhead = _speedGps();
+    const SGpos = _speedGps();
+    const snapped = (routeInProgress && routePolyline && routePolyline.length >= 2)
+        ? _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex)
+        : null;
+    const posTick = SGpos
+        ? SGpos.buildGpsTrackingPositionTickPlan({
+            lat,
+            lon,
+            accuracy,
+            routeInProgress,
+            routePolyline,
+            snapped,
+            lastSnappedRouteIndex,
+            prevSnapBlendWeightState: _snapBlendWeightState,
+            speedMph,
+            smoothDisplayLat: _smoothDisplayLat,
+            smoothDisplayLon: _smoothDisplayLon,
+            lastFollowCenterGeo: window.__voyagrLastFollowCenterGeo,
+            calculateDistanceMeters,
+            calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
+            blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
+            resolveGpsHeading: () => (SGhead
+                ? SGhead.resolveGpsHeadingDegrees({
+                    deviceHeading,
+                    speed,
+                    trackingHistory,
+                    calculateDistanceMeters,
+                })
+                : 0),
+        })
+        : null;
+    let heading = posTick ? posTick.heading : 0;
+    if (posTick) {
+        _snapBlendWeightState = posTick.statePatch.snapBlendWeightState;
+        lastSnappedRouteIndex = posTick.statePatch.lastSnappedRouteIndex;
+        _smoothDisplayLat = posTick.statePatch.smoothDisplayLat;
+        _smoothDisplayLon = posTick.statePatch.smoothDisplayLon;
+    } else if (_smoothDisplayLat == null || _smoothDisplayLon == null) {
+        _smoothDisplayLat = lat;
+        _smoothDisplayLon = lon;
+    }
+    const markerLat = _smoothDisplayLat;
+    const markerLon = _smoothDisplayLon;
+    const followJumpM = posTick ? posTick.followJumpM : Number.POSITIVE_INFINITY;
+
+    const displaySpeedMph = smoothGpsSpeedMph(speedMph);
+    const SL = _speedLimitWidget();
+    const speedLimitPlan = SGpos
+        ? SGpos.buildNavSpeedLimitTickPlan({
+            routeInProgress,
+            isTrackingActive,
+            routePolyline,
+            currentRouteSteps,
+            lastSnappedRouteIndex,
+            displaySpeedMph,
+            currentSpeedLimitMph,
+            lastSpeedLimitRegion,
+            lastActiveManeuverIdx: _lastActiveManeuverIdx,
+            resolveRoadType: (idx, spd) => _routeGeometry().resolveCurrentRoadType({
+                maneuverIdxOverride: idx,
+                gpsSpeedMph: spd,
+                currentRouteSteps,
+                currentStepIndex,
+                lastDetectedRoadType,
+            }),
+            pickDisplaySpeedLimitMph: SL
+                ? (api, val, rt, region) => SL.pickDisplaySpeedLimitMph(api, val, rt, region)
+                : null,
+        })
+        : { roadType: 'unknown', shownLimit: null, resetFetchState: false, showWidget: false };
+
+    const sideEffects = _routeProgress().buildGpsTrackingSideEffectsPlan({
+        routeInProgress,
+        routePolyline,
+        routeSteps: currentRouteSteps,
+        isTrackingActive,
+        speedLimitShowWidget: speedLimitPlan.showWidget,
+    });
+
+    // Update user marker on map with vehicle icon and heading
+    if (currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
+        currentUserMarker.setLngLat([markerLon, markerLat]);
+
+        const markerEl = currentUserMarker.getElement ? currentUserMarker.getElement() : null;
+        if (markerEl) {
+            const inner = markerEl.querySelector('div');
+            if (inner) {
+                const mapBr = map && typeof map.getBearing === 'function' ? map.getBearing() : 0;
+                const rot = SGpos
+                    ? SGpos.computeVehicleMarkerRotationDeg(heading, mapBr)
+                    : (((heading - mapBr) % 360 + 360) % 360);
+                inner.style.transform = `rotate(${rot}deg)`;
+            }
+        }
+        currentUserMarker.heading = heading;
+        currentUserMarker.speed = speed;
+        currentUserMarker.accuracy = accuracy;
+    } else {
+        if (currentUserMarker && typeof currentUserMarker.remove === 'function') {
+            currentUserMarker.remove();
+        }
+        currentUserMarker = createVehicleMarker(markerLat, markerLon, speed, accuracy, heading);
+        currentUserMarker.addTo(map);
+    }
+
+    const CP = _cameraPitch();
+    const followPlan = CP.buildNavigationFollowEasePlan({
+        nowMs: Date.now(),
+        lastFollowEaseAt: window.__voyagrLastFollowEaseAt || 0,
+        followJumpM,
+        zoomAndFollowEnabled,
+        mapFollowingActive,
+        mapUserPanned: !!(map && map._userPanned),
+        routeInProgress,
+    });
+
+    let navigationFollowEaseApplied = false;
+    let navigationFollowZoom = null;
+
+    if (followPlan.mode === 'navigation' && map) {
+        const followCamera = CP.buildNavigationFollowCameraPlan({
+            speedMph,
+            roadType: speedLimitPlan.roadType || 'unknown',
+            heading: heading || map.getBearing(),
+            mapBearing: map.getBearing(),
+            markerLat,
+            markerLon,
+            shouldEase: followPlan.shouldEase,
+            durationMs: followPlan.durationMs,
+            shouldTilt: shouldTiltDrivingCamera(),
+            usePitchedDrivingCamera: shouldUsePitchedDrivingCamera(),
+            viewportHeight: window.innerHeight,
+            viewportWidth: window.innerWidth,
+            computeSmartZoom: (spd, dist, rt) => _routeGeometry().calculateSmartZoom(
+                spd, dist, rt, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
+            ),
+        });
+
+        if (followCamera.easeTo) {
+            window.__voyagrLastFollowEaseAt = followPlan.nowMs;
+            window.__voyagrLastFollowCenterGeo = { lat: markerLat, lon: markerLon };
+            map.easeTo(followCamera.easeTo);
+            navigationFollowEaseApplied = true;
+            navigationFollowZoom = followCamera.zoom;
+        }
+
+        console.log(`[Navigation] View: pitch ${followCamera.pitch}°, bearing ${Math.round(followCamera.bearing)}°, zoom ${followCamera.zoom.toFixed(1)}, pitchedNav: ${isActiveNavigationFollow()}, pref: ${driverPerspectiveEnabled}`);
+        updateRecenterButtonVisibility();
+    } else if (followPlan.mode === 'browsing' && map) {
+        if (followPlan.shouldEase) {
+            window.__voyagrLastFollowEaseAt = followPlan.nowMs;
+            window.__voyagrLastFollowCenterGeo = { lat: markerLat, lon: markerLon };
+            map.easeTo({
+                center: [markerLon, markerLat],
+                zoom: followPlan.zoom,
+                padding: followPlan.includePadding
+                    ? CP.computeFollowPadding(window.innerHeight, window.innerWidth)
+                    : undefined,
+                duration: followPlan.browsingDurationMs
+            });
+        }
+    }
+
+    if (sideEffects.checkDeviation) {
+        checkRouteDeviation(lat, lon, accuracy);
+    }
+
+    if (sideEffects.processHazards) {
+        processNavigationHazardAlerts(lat, lon);
+    }
+
+    const navActiveTick = sideEffects.navActive;
+
+    let distanceToNextTurn = null;
+    let turnInfoThisTick = null;
+
+    if (navActiveTick.active) {
+        turnInfoThisTick = detectUpcomingTurn(lat, lon);
+    }
+
+    if (navActiveTick.detectTurn && turnInfoThisTick) {
+        distanceToNextTurn = turnInfoThisTick.distance;
+        announceUpcomingTurn(turnInfoThisTick);
+    }
+
+    if (navActiveTick.updateTurnWidget) {
+        updateTurnWidgetFromPosition(lat, lon, turnInfoThisTick);
+    }
+
+    if (navActiveTick.announceDestination) {
+        announceDistanceToDestination(lat, lon);
+    }
+
+    if (navActiveTick.checkArrival) {
+        checkNavigationArrival(lat, lon, speed);
+    }
+
+    const zoomTick = CP.buildNavigationZoomTickPlan({
+        smartZoomEnabled,
+        routeInProgress,
+        navigationFollowEaseApplied,
+        followZoom: navigationFollowZoom,
+    });
+    if (zoomTick.syncLastZoomLevel != null) {
+        lastZoomLevel = zoomTick.syncLastZoomLevel;
+    }
+    if (zoomTick.applySmartZoom) {
+        applySmartZoomWithAnimation(
+            speedMph,
+            distanceToNextTurn,
+            speedLimitPlan.roadType || 'unknown',
+            lat,
+            lon
+        );
+    }
+
+    if (sideEffects.updateLaneGuidance) {
+        const laneTick = _turnInstructions().buildLaneGuidanceTickPlan({
+            routeInProgress,
+            routeSteps: currentRouteSteps,
+            currentStepIndex,
+        });
+        if (laneTick.action === 'update') {
+            updateLaneGuidance(lat, lon, heading, laneTick.maneuverDir, laneTick.roundaboutExitCount);
+        }
+    }
+
+    if (sideEffects.showSpeedWidget) {
+        if (speedLimitPlan.resetFetchState) {
+            _lastActiveManeuverIdx = speedLimitPlan.newLastActiveManeuverIdx;
+            const state = _getSpeedLimitFetchState();
+            if (state) {
+                state.lastFetchAt = 0;
+                state.lastPosition = null;
+            }
+        }
+        updateSpeedWidget(speedLimitPlan.displaySpeedMph, speedLimitPlan.shownLimit);
+        if (routeInProgress || isTrackingActive) {
+            fetchSpeedLimitThrottled(
+                lat,
+                lon,
+                speedLimitPlan.displaySpeedMph,
+                speedLimitPlan.roadType,
+                speedLimitPlan.valhallaSpeedLimitMph,
+                heading
+            );
+        }
+    }
+
+    if (sideEffects.fetchRoadName) {
+        fetchRoadNameThrottled(lat, lon);
+    }
+}
+
+/**
  * startGPSTracking function
  * @function startGPSTracking
  * @returns {*} Return value description
@@ -11935,304 +12215,7 @@ function startGPSTracking() {
 
     // Watch position with high accuracy
     gpsWatchId = navigator.geolocation.watchPosition(
-        (position) => {
-            const SGsample = _speedGps();
-            const sample = SGsample.normalizeGeolocationCoordsSample(position.coords);
-            const lat = sample.lat;
-            const lon = sample.lon;
-            const accuracy = sample.accuracy;
-            const speed = sample.speedMs;
-            const deviceHeading = sample.deviceHeading;
-
-            currentLat = lat;
-            currentLon = lon;
-            updateRoadReportFabVisibility();
-
-            const historyPlan = SGsample.buildTrackingHistoryAppendPlan(trackingHistory, {
-                lat: lat,
-                lon: lon,
-                timestamp: new Date(),
-                speed: speed,
-                accuracy: accuracy,
-            });
-            trackingHistory = historyPlan.history;
-
-            /** Single raw-speed sample / tick (clamped inside pickRawSpeedMph) for zoom + HUD. */
-            const speedMph = pickRawSpeedMph(sample.deviceSpeedMs, trackingHistory, accuracy);
-
-            // Whole-journey odometer: sum plausible movement between raw fixes.
-            if (routeInProgress) {
-                const odoNow = Date.now();
-                const SGodo = _speedGps();
-                if (SGodo) {
-                    const odo = SGodo.accumulateNavOdometerSegment(
-                        { lastGeo: _navOdometerLastGeo, traveledMeters: _navTraveledMeters },
-                        lat,
-                        lon,
-                        odoNow,
-                        calculateDistanceMeters
-                    );
-                    _navOdometerLastGeo = odo.lastGeo;
-                    _navTraveledMeters = odo.traveledMeters;
-                }
-            }
-
-            const SGhead = _speedGps();
-            const SGpos = _speedGps();
-            const snapped = (routeInProgress && routePolyline && routePolyline.length >= 2)
-                ? _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex)
-                : null;
-            const posTick = SGpos
-                ? SGpos.buildGpsTrackingPositionTickPlan({
-                    lat,
-                    lon,
-                    accuracy,
-                    routeInProgress,
-                    routePolyline,
-                    snapped,
-                    lastSnappedRouteIndex,
-                    prevSnapBlendWeightState: _snapBlendWeightState,
-                    speedMph,
-                    smoothDisplayLat: _smoothDisplayLat,
-                    smoothDisplayLon: _smoothDisplayLon,
-                    lastFollowCenterGeo: window.__voyagrLastFollowCenterGeo,
-                    calculateDistanceMeters,
-                    calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
-                    blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
-                    resolveGpsHeading: () => (SGhead
-                        ? SGhead.resolveGpsHeadingDegrees({
-                            deviceHeading,
-                            speed,
-                            trackingHistory,
-                            calculateDistanceMeters,
-                        })
-                        : 0),
-                })
-                : null;
-            let heading = posTick ? posTick.heading : 0;
-            if (posTick) {
-                _snapBlendWeightState = posTick.statePatch.snapBlendWeightState;
-                lastSnappedRouteIndex = posTick.statePatch.lastSnappedRouteIndex;
-                _smoothDisplayLat = posTick.statePatch.smoothDisplayLat;
-                _smoothDisplayLon = posTick.statePatch.smoothDisplayLon;
-            } else if (_smoothDisplayLat == null || _smoothDisplayLon == null) {
-                _smoothDisplayLat = lat;
-                _smoothDisplayLon = lon;
-            }
-            const markerLat = _smoothDisplayLat;
-            const markerLon = _smoothDisplayLon;
-            const followJumpM = posTick ? posTick.followJumpM : Number.POSITIVE_INFINITY;
-
-            const displaySpeedMph = smoothGpsSpeedMph(speedMph);
-            const SL = _speedLimitWidget();
-            const speedLimitPlan = SGpos
-                ? SGpos.buildNavSpeedLimitTickPlan({
-                    routeInProgress,
-                    isTrackingActive,
-                    routePolyline,
-                    currentRouteSteps,
-                    lastSnappedRouteIndex,
-                    displaySpeedMph,
-                    currentSpeedLimitMph,
-                    lastSpeedLimitRegion,
-                    lastActiveManeuverIdx: _lastActiveManeuverIdx,
-                    resolveRoadType: (idx, spd) => _routeGeometry().resolveCurrentRoadType({
-                        maneuverIdxOverride: idx,
-                        gpsSpeedMph: spd,
-                        currentRouteSteps,
-                        currentStepIndex,
-                        lastDetectedRoadType,
-                    }),
-                    pickDisplaySpeedLimitMph: SL
-                        ? (api, val, rt, region) => SL.pickDisplaySpeedLimitMph(api, val, rt, region)
-                        : null,
-                })
-                : { roadType: 'unknown', shownLimit: null, resetFetchState: false };
-
-            // Update user marker on map with vehicle icon and heading
-            // FIX: Reuse the existing marker and call setLngLat for smooth movement
-            // instead of removing and recreating every tick (which kills CSS transitions)
-            if (currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
-                // Move existing marker smoothly
-                currentUserMarker.setLngLat([markerLon, markerLat]);
-
-                // Update heading rotation on the inner element
-                const markerEl = currentUserMarker.getElement ? currentUserMarker.getElement() : null;
-                if (markerEl) {
-                    const inner = markerEl.querySelector('div');
-                    if (inner) {
-                        const mapBr = map && typeof map.getBearing === 'function' ? map.getBearing() : 0;
-                        const rot = SGpos
-                            ? SGpos.computeVehicleMarkerRotationDeg(heading, mapBr)
-                            : (((heading - mapBr) % 360 + 360) % 360);
-                        inner.style.transform = `rotate(${rot}deg)`;
-                    }
-                }
-                // Store updated values
-                currentUserMarker.heading = heading;
-                currentUserMarker.speed = speed;
-                currentUserMarker.accuracy = accuracy;
-            } else {
-                // First time or marker was cleared — create fresh
-                if (currentUserMarker && typeof currentUserMarker.remove === 'function') {
-                    currentUserMarker.remove();
-                }
-                currentUserMarker = createVehicleMarker(markerLat, markerLon, speed, accuracy, heading);
-                currentUserMarker.addTo(map);
-            }
-
-            // ===== ZOOM AND FOLLOW: Center map on user with smart zoom =====
-            const CP = _cameraPitch();
-            const followPlan = CP.buildNavigationFollowEasePlan({
-                nowMs: Date.now(),
-                lastFollowEaseAt: window.__voyagrLastFollowEaseAt || 0,
-                followJumpM,
-                zoomAndFollowEnabled,
-                mapFollowingActive,
-                mapUserPanned: !!(map && map._userPanned),
-                routeInProgress,
-            });
-
-            let navigationFollowEaseApplied = false;
-            let navigationFollowZoom = null;
-
-            if (followPlan.mode === 'navigation' && map) {
-                const followCamera = CP.buildNavigationFollowCameraPlan({
-                    speedMph,
-                    roadType: speedLimitPlan.roadType || 'unknown',
-                    heading: heading || map.getBearing(),
-                    mapBearing: map.getBearing(),
-                    markerLat,
-                    markerLon,
-                    shouldEase: followPlan.shouldEase,
-                    durationMs: followPlan.durationMs,
-                    shouldTilt: shouldTiltDrivingCamera(),
-                    usePitchedDrivingCamera: shouldUsePitchedDrivingCamera(),
-                    viewportHeight: window.innerHeight,
-                    viewportWidth: window.innerWidth,
-                    computeSmartZoom: (spd, dist, rt) => _routeGeometry().calculateSmartZoom(
-                        spd, dist, rt, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
-                    ),
-                });
-
-                if (followCamera.easeTo) {
-                    window.__voyagrLastFollowEaseAt = followPlan.nowMs;
-                    window.__voyagrLastFollowCenterGeo = { lat: markerLat, lon: markerLon };
-                    map.easeTo(followCamera.easeTo);
-                    navigationFollowEaseApplied = true;
-                    navigationFollowZoom = followCamera.zoom;
-                }
-
-                console.log(`[Navigation] View: pitch ${followCamera.pitch}°, bearing ${Math.round(followCamera.bearing)}°, zoom ${followCamera.zoom.toFixed(1)}, pitchedNav: ${isActiveNavigationFollow()}, pref: ${driverPerspectiveEnabled}`);
-                updateRecenterButtonVisibility();
-            } else if (followPlan.mode === 'browsing' && map) {
-                if (followPlan.shouldEase) {
-                    window.__voyagrLastFollowEaseAt = followPlan.nowMs;
-                    window.__voyagrLastFollowCenterGeo = { lat: markerLat, lon: markerLon };
-                    map.easeTo({
-                        center: [markerLon, markerLat],
-                        zoom: followPlan.zoom,
-                        padding: followPlan.includePadding
-                            ? CP.computeFollowPadding(window.innerHeight, window.innerWidth)
-                            : undefined,
-                        duration: followPlan.browsingDurationMs
-                    });
-                }
-            }
-
-            // Check for route deviation
-            if (routeInProgress && routePolyline) {
-                checkRouteDeviation(lat, lon, accuracy);
-            }
-
-            // Hazards: route-embedded alerts work offline; nearby API when online
-            processNavigationHazardAlerts(lat, lon);
-
-            const navActiveTick = _routeProgress().buildGpsNavigationActiveTickPlan({
-                routeInProgress,
-                routePolyline,
-            });
-
-            // Apply smart zoom with turn detection
-            let distanceToNextTurn = null;
-            let turnInfoThisTick = null;
-
-            if (navActiveTick.active) {
-                turnInfoThisTick = detectUpcomingTurn(lat, lon);
-            }
-
-            if (navActiveTick.detectTurn && turnInfoThisTick) {
-                distanceToNextTurn = turnInfoThisTick.distance;
-                announceUpcomingTurn(turnInfoThisTick);
-            }
-
-            if (navActiveTick.updateTurnWidget) {
-                updateTurnWidgetFromPosition(lat, lon, turnInfoThisTick);
-            }
-
-            if (navActiveTick.announceDestination) {
-                announceDistanceToDestination(lat, lon);
-            }
-
-            if (navActiveTick.checkArrival) {
-                checkNavigationArrival(lat, lon, speed);
-            }
-
-            const zoomTick = CP.buildNavigationZoomTickPlan({
-                smartZoomEnabled,
-                routeInProgress,
-                navigationFollowEaseApplied,
-                followZoom: navigationFollowZoom,
-            });
-            if (zoomTick.syncLastZoomLevel != null) {
-                lastZoomLevel = zoomTick.syncLastZoomLevel;
-            }
-            if (zoomTick.applySmartZoom) {
-                applySmartZoomWithAnimation(
-                    speedMph,
-                    distanceToNextTurn,
-                    speedLimitPlan.roadType || 'unknown',
-                    lat,
-                    lon
-                );
-            }
-
-            // Update lane guidance if navigating
-            const laneTick = _turnInstructions().buildLaneGuidanceTickPlan({
-                routeInProgress,
-                routeSteps: currentRouteSteps,
-                currentStepIndex,
-            });
-            if (laneTick.action === 'update') {
-                updateLaneGuidance(lat, lon, heading, laneTick.maneuverDir, laneTick.roundaboutExitCount);
-            }
-
-            if (speedLimitPlan.showWidget) {
-                if (speedLimitPlan.resetFetchState) {
-                    _lastActiveManeuverIdx = speedLimitPlan.newLastActiveManeuverIdx;
-                    const state = _getSpeedLimitFetchState();
-                    if (state) {
-                        state.lastFetchAt = 0;
-                        state.lastPosition = null;
-                    }
-                }
-                updateSpeedWidget(speedLimitPlan.displaySpeedMph, speedLimitPlan.shownLimit);
-                if (routeInProgress || isTrackingActive) {
-                    fetchSpeedLimitThrottled(
-                        lat,
-                        lon,
-                        speedLimitPlan.displaySpeedMph,
-                        speedLimitPlan.roadType,
-                        speedLimitPlan.valhallaSpeedLimitMph,
-                        heading
-                    );
-                }
-            }
-
-            if (routeInProgress) {
-                fetchRoadNameThrottled(lat, lon);
-            }
-        },
+        (position) => applyGpsTrackingTick(position),
         (error) => {
             showStatus('GPS Error: ' + error.message, 'error');
             isTrackingActive = false;

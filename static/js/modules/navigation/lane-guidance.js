@@ -213,6 +213,125 @@
     }
 
     /**
+     * Crow-flies distance (m) from current position to the next maneuver shape index.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {Array<Object>|null|undefined} routeSteps
+     * @param {number} currentStepIndex
+     * @param {Array<[number,number]>|null|undefined} routePolyline
+     * @param {function(number,number,number,number): number} calculateDistance
+     * @returns {number}
+     */
+    function computeDistanceToManeuverMeters(lat, lon, routeSteps, currentStepIndex, routePolyline, calculateDistance) {
+        if (!routeSteps || !routePolyline || routeSteps.length === 0) return 9999;
+        if (currentStepIndex >= routeSteps.length) return 9999;
+        var nextStep = routeSteps[currentStepIndex];
+        if (!nextStep) return 9999;
+        var shapeIdx = nextStep.begin_shape_index || 0;
+        if (shapeIdx >= routePolyline.length) return 9999;
+        var pt = routePolyline[shapeIdx];
+        if (!pt || pt.length < 2) return 9999;
+        if (typeof calculateDistance !== 'function') return 9999;
+        return calculateDistance(lat, lon, pt[0], pt[1]);
+    }
+
+    /**
+     * Lane-guidance fetch tick plan: throttle, cache hit, or API fetch.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildLaneGuidanceFetchTickPlan(opts) {
+        opts = opts || {};
+        var now = opts.now != null ? opts.now : Date.now();
+        var roundaboutExitCount = opts.roundaboutExitCount || 0;
+
+        var distanceMovedMeters = 999;
+        if (opts.lastPosition && typeof opts.calculateDistance === 'function') {
+            distanceMovedMeters = opts.calculateDistance(
+                opts.lat,
+                opts.lon,
+                opts.lastPosition.lat,
+                opts.lastPosition.lon
+            );
+        }
+
+        if (shouldSkipLaneGuidanceFetch({
+            now: now,
+            lastFetch: opts.lastFetch,
+            lastPosition: opts.lastPosition,
+            distanceMovedMeters: distanceMovedMeters,
+            maneuver: opts.maneuver,
+            lastManeuver: opts.lastManeuver,
+        })) {
+            return { action: 'skip', reason: 'throttle' };
+        }
+
+        var distToManeuver = computeDistanceToManeuverMeters(
+            opts.lat,
+            opts.lon,
+            opts.routeSteps,
+            opts.currentStepIndex,
+            opts.routePolyline,
+            opts.calculateDistance
+        );
+        var roadType = opts.roadType || 'unknown';
+
+        var statePatch = {
+            lastFetch: now,
+            lastManeuver: opts.maneuver,
+            lastPosition: { lat: opts.lat, lon: opts.lon },
+        };
+
+        var cacheKey = buildLaneGuidanceCacheKey(
+            opts.maneuver,
+            roundaboutExitCount,
+            roadType,
+            opts.lat,
+            opts.lon
+        );
+        var cacheEntry = typeof opts.cacheLookup === 'function'
+            ? opts.cacheLookup(cacheKey)
+            : opts.cacheEntry;
+
+        if (isLaneGuidanceCacheEntryFresh(cacheEntry, now)) {
+            var lanePos = laneNameFor(
+                cacheEntry.data.recommended_lane,
+                cacheEntry.data.total_lanes
+            );
+            return {
+                action: 'render-cached',
+                cacheKey: cacheKey,
+                statePatch: statePatch,
+                renderPayload: Object.assign(
+                    {},
+                    cacheEntry.data,
+                    laneUrgencyFields(distToManeuver, lanePos, opts.maneuver, roundaboutExitCount)
+                ),
+            };
+        }
+
+        return {
+            action: 'fetch',
+            cacheKey: cacheKey,
+            statePatch: statePatch,
+            url: buildLaneGuidanceApiUrl({
+                lat: opts.lat,
+                lon: opts.lon,
+                heading: opts.heading,
+                maneuver: opts.maneuver,
+                distance: distToManeuver,
+                roadType: roadType,
+                roundaboutExitCount: roundaboutExitCount,
+            }),
+            timeoutMs: LANE_GUIDANCE_FETCH_TIMEOUT_MS,
+            distToManeuver: distToManeuver,
+            roadType: roadType,
+            roundaboutExitCount: roundaboutExitCount,
+            maneuver: opts.maneuver,
+        };
+    }
+
+    /**
      * @param {string} maneuver
      * @param {number} roundaboutExitCount
      * @param {string} roadType
@@ -347,6 +466,8 @@
         LANE_GUIDANCE_CACHE_MAX_ENTRIES: LANE_GUIDANCE_CACHE_MAX_ENTRIES,
         LANE_GUIDANCE_POSITION_THRESHOLD_M: LANE_GUIDANCE_POSITION_THRESHOLD_M,
         shouldSkipLaneGuidanceFetch: shouldSkipLaneGuidanceFetch,
+        computeDistanceToManeuverMeters: computeDistanceToManeuverMeters,
+        buildLaneGuidanceFetchTickPlan: buildLaneGuidanceFetchTickPlan,
         buildLaneGuidanceCacheKey: buildLaneGuidanceCacheKey,
         buildLaneGuidanceApiUrl: buildLaneGuidanceApiUrl,
         getLaneGuidanceCacheTtlMs: getLaneGuidanceCacheTtlMs,
