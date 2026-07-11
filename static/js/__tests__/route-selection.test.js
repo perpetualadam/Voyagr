@@ -577,4 +577,27 @@ describe('navigation route polyline style', () => {
         expect(style.outline).toBe(true);
         expect(style.weight).toBe(8);
     });
+
+    test('buildNavActiveRouteLayerMountPlan returns polyline and style', () => {
+        const mount = RS.buildNavActiveRouteLayerMountPlan({
+            routePolyline: [[51.5, -0.1], [51.6, -0.2]],
+            navRouteColor: '#f00',
+        });
+        expect(mount.valid).toBe(true);
+        expect(mount.polyline).toHaveLength(2);
+        expect(mount.style.color).toBe('#f00');
+    });
+
+    test('buildNavRouteLayerRedrawGuardPlan requires nav context', () => {
+        expect(RS.buildNavRouteLayerRedrawGuardPlan({
+            routeInProgress: true,
+            map: {},
+            routePolyline: [[1, 2], [3, 4]],
+        }).shouldRedraw).toBe(true);
+        expect(RS.buildNavRouteLayerRedrawGuardPlan({
+            routeInProgress: false,
+            map: {},
+            routePolyline: [[1, 2], [3, 4]],
+        }).shouldRedraw).toBe(false);
+    });
 });

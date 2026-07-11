@@ -5778,11 +5778,11 @@ function updateRouteOnMap(newRoute) {
     routePolyline = decodePolyline(newRoute.geometry, plan.polylineDecodePrecision);
     console.log(`[Reroute] Route polyline decoded: ${routePolyline.length} points`);
 
-    routeLayer = MapLibreHelpers.addPolyline(
-        map,
+    const mount = _routeSelection().buildNavActiveRouteLayerMountPlan({
         routePolyline,
-        _routeSelection().buildNavActiveRoutePolylineStyle(navActiveRouteColor())
-    );
+        navRouteColor: navActiveRouteColor(),
+    });
+    routeLayer = MapLibreHelpers.addPolyline(map, mount.polyline, mount.style);
     bringNavRouteAboveTrafficEdges();
 
     if (plan.maneuvers.steps) {
@@ -5855,12 +5855,18 @@ function getNavActiveRoutePolylineOptions() {
  * @param {string} [reason] - Log context
  */
 function redrawNavigationRouteLayer(reason) {
-    if (!routeInProgress || !map || !routePolyline || routePolyline.length < 2) return;
+    const RS = _routeSelection();
+    const guard = RS.buildNavRouteLayerRedrawGuardPlan({ routeInProgress, map, routePolyline });
+    if (!guard.shouldRedraw) return;
     try {
         if (routeLayer && typeof routeLayer.remove === 'function') {
             routeLayer.remove();
         }
-        routeLayer = MapLibreHelpers.addPolyline(map, routePolyline, getNavActiveRoutePolylineOptions());
+        const mount = RS.buildNavActiveRouteLayerMountPlan({
+            routePolyline,
+            navRouteColor: navActiveRouteColor(),
+        });
+        routeLayer = MapLibreHelpers.addPolyline(map, mount.polyline, mount.style);
         bringNavRouteAboveTrafficEdges();
         if (reason) {
             console.log('[Nav] Route layer redrawn:', reason);
@@ -5880,13 +5886,7 @@ function redrawNavigationVehicleMarker(reason) {
     const lon = currentLon;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
     try {
-        let displayLat = lat;
-        let displayLon = lon;
-        if (routePolyline && routePolyline.length >= 2) {
-            const snapped = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
-            displayLat = snapped.lat;
-            displayLon = snapped.lon;
-        }
+        const SG = _speedGps();
         const heading = currentUserMarker && Number.isFinite(currentUserMarker.heading)
             ? currentUserMarker.heading
             : 0;
@@ -5897,8 +5897,37 @@ function redrawNavigationVehicleMarker(reason) {
             ? currentUserMarker.accuracy
             : null;
 
+        const snapped = (routePolyline && routePolyline.length >= 2)
+            ? _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex)
+            : null;
+        const posPlan = SG.buildNavigationVehicleMarkerPositionPlan({
+            lat,
+            lon,
+            accuracy: acc,
+            routeInProgress,
+            routePolyline,
+            snapped,
+            gpsHeadingForBlend: heading,
+            lastSnappedRouteIndex,
+            prevSnapBlendWeightState: _snapBlendWeightState,
+            smoothDisplayLat: _smoothDisplayLat,
+            smoothDisplayLon: _smoothDisplayLon,
+            useSmoothCoordsOnly: _smoothDisplayLat != null && _smoothDisplayLon != null,
+            speedMph: speed,
+            calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
+            blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
+        });
+
         if (currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
-            currentUserMarker.setLngLat([displayLon, displayLat]);
+            currentUserMarker.setLngLat([posPlan.markerLon, posPlan.markerLat]);
+            const markerEl = currentUserMarker.getElement ? currentUserMarker.getElement() : null;
+            if (markerEl) {
+                const inner = markerEl.querySelector('div');
+                if (inner) {
+                    const mapBr = map && typeof map.getBearing === 'function' ? map.getBearing() : 0;
+                    inner.style.transform = `rotate(${SG.computeVehicleMarkerRotationDeg(posPlan.heading, mapBr)}deg)`;
+                }
+            }
             if (!currentUserMarker._map && typeof currentUserMarker.addTo === 'function') {
                 currentUserMarker.addTo(map);
             }
@@ -5906,7 +5935,13 @@ function redrawNavigationVehicleMarker(reason) {
             if (currentUserMarker && typeof currentUserMarker.remove === 'function') {
                 currentUserMarker.remove();
             }
-            currentUserMarker = createVehicleMarker(displayLat, displayLon, speed, acc, heading);
+            currentUserMarker = createVehicleMarker(
+                posPlan.markerLat,
+                posPlan.markerLon,
+                speed,
+                acc,
+                posPlan.heading
+            );
             currentUserMarker.addTo(map);
         }
         if (reason) {
@@ -8757,20 +8792,30 @@ const RECENTER_MIN_DISTANCE_M = 70;
 
 /** Lat/lon for the vehicle icon (snapped to route during navigation). */
 function getVehicleDisplayCoordinates() {
-    let lat = currentLat;
-    let lon = currentLon;
-    if (
-        routeInProgress &&
-        routePolyline &&
-        routePolyline.length >= 2 &&
-        Number.isFinite(lat) &&
-        Number.isFinite(lon)
-    ) {
-        const snapped = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
-        lat = snapped.lat;
-        lon = snapped.lon;
+    const lat = currentLat;
+    const lon = currentLon;
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+        return { lat, lon };
     }
-    return { lat, lon };
+    const SG = _speedGps();
+    const snapped = (routeInProgress && routePolyline && routePolyline.length >= 2)
+        ? _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex)
+        : null;
+    const posPlan = SG.buildNavigationVehicleMarkerPositionPlan({
+        lat,
+        lon,
+        routeInProgress,
+        routePolyline,
+        snapped,
+        lastSnappedRouteIndex,
+        prevSnapBlendWeightState: _snapBlendWeightState,
+        smoothDisplayLat: _smoothDisplayLat,
+        smoothDisplayLon: _smoothDisplayLon,
+        useSmoothCoordsOnly: _smoothDisplayLat != null && _smoothDisplayLon != null,
+        calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
+        blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
+    });
+    return { lat: posPlan.markerLat, lon: posPlan.markerLon };
 }
 
 function metersMapCenterFromVehicle() {
@@ -12017,58 +12062,51 @@ function startGPSTracking() {
             let heading = gpsHeadingForBlend;
 
             /** Single raw-speed sample / tick (clamped inside pickRawSpeedMph) for zoom + HUD. */
-            const speedMph = pickRawSpeedMph(rawCoordsSpeed, trackingHistory, accuracy);
+            const speedMph = pickRawSpeedMph(sample.deviceSpeedMs, trackingHistory, accuracy);
 
-            // SNAP TO ROUTE: blend snapped↔raw with accuracy‑widened corridor (reduces 50 m hysteresis jitter).
-            let displayLat = lat;
-            let displayLon = lon;
-
-            if (routeInProgress && routePolyline && routePolyline.length >= 2) {
-                const snapped = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
-                const SGsnap = _speedGps();
-                if (SGsnap) {
-                    const snapPlan = SGsnap.buildSnappedVehicleDisplayPlan({
-                        lat,
-                        lon,
-                        accuracy,
-                        snapped,
-                        routePolyline,
-                        gpsHeadingForBlend,
-                        lastSnappedRouteIndex,
-                        speedMph,
-                        prevSnapBlendWeightState: _snapBlendWeightState,
-                        bearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
-                        blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
-                    });
-                    displayLat = snapPlan.displayLat;
-                    displayLon = snapPlan.displayLon;
-                    heading = snapPlan.heading;
-                    _snapBlendWeightState = snapPlan.snapBlendWeightState;
-                    lastSnappedRouteIndex = snapPlan.lastSnappedRouteIndex;
-                }
-            }
-
-            // Smooth the displayed position so raw↔snap blend changes don't jerk the icon.
+            // SNAP TO ROUTE + smooth display position for vehicle marker
             const SGpos = _speedGps();
+            const snapped = (routeInProgress && routePolyline && routePolyline.length >= 2)
+                ? _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex)
+                : null;
             const followJumpM = SGpos
                 ? SGpos.computeFollowJumpMeters({
-                    displayLat,
-                    displayLon,
+                    displayLat: lat,
+                    displayLon: lon,
                     smoothDisplayLat: _smoothDisplayLat,
                     smoothDisplayLon: _smoothDisplayLon,
                     lastFollowCenterGeo: window.__voyagrLastFollowCenterGeo,
                     calculateDistanceMeters,
                 })
                 : Number.POSITIVE_INFINITY;
-            if (_smoothDisplayLat == null || _smoothDisplayLon == null) {
-                _smoothDisplayLat = displayLat;
-                _smoothDisplayLon = displayLon;
-            } else if (SGpos) {
-                _smoothDisplayLat = SGpos.smoothDisplayCoordinate(_smoothDisplayLat, displayLat, followJumpM);
-                _smoothDisplayLon = SGpos.smoothDisplayCoordinate(_smoothDisplayLon, displayLon, followJumpM);
-            } else {
-                _smoothDisplayLat = displayLat;
-                _smoothDisplayLon = displayLon;
+            const posPlan = SGpos
+                ? SGpos.buildNavigationVehicleMarkerPositionPlan({
+                    lat,
+                    lon,
+                    accuracy,
+                    routeInProgress,
+                    routePolyline,
+                    snapped,
+                    gpsHeadingForBlend,
+                    lastSnappedRouteIndex,
+                    prevSnapBlendWeightState: _snapBlendWeightState,
+                    speedMph,
+                    smoothDisplayLat: _smoothDisplayLat,
+                    smoothDisplayLon: _smoothDisplayLon,
+                    followJumpM,
+                    calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
+                    blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
+                })
+                : null;
+            if (posPlan) {
+                heading = posPlan.heading;
+                _snapBlendWeightState = posPlan.snapBlendWeightState;
+                lastSnappedRouteIndex = posPlan.lastSnappedRouteIndex;
+                _smoothDisplayLat = posPlan.smoothDisplayLat;
+                _smoothDisplayLon = posPlan.smoothDisplayLon;
+            } else if (_smoothDisplayLat == null || _smoothDisplayLon == null) {
+                _smoothDisplayLat = lat;
+                _smoothDisplayLon = lon;
             }
             const markerLat = _smoothDisplayLat;
             const markerLon = _smoothDisplayLon;
@@ -12086,7 +12124,9 @@ function startGPSTracking() {
                     const inner = markerEl.querySelector('div');
                     if (inner) {
                         const mapBr = map && typeof map.getBearing === 'function' ? map.getBearing() : 0;
-                        const rot = ((heading - mapBr) % 360 + 360) % 360;
+                        const rot = SGpos
+                            ? SGpos.computeVehicleMarkerRotationDeg(heading, mapBr)
+                            : (((heading - mapBr) % 360 + 360) % 360);
                         inner.style.transform = `rotate(${rot}deg)`;
                     }
                 }
@@ -12546,11 +12586,24 @@ function primeVehicleMarkerOnRoute(lat, lon) {
     if (!routePolyline || routePolyline.length < 2) return;
     seedNavigationProgressOnNewRoute(lat, lon);
     const snapped = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
-    _smoothDisplayLat = snapped.lat;
-    _smoothDisplayLon = snapped.lon;
+    const SG = _speedGps();
+    const posPlan = SG.buildNavigationVehicleMarkerPositionPlan({
+        lat,
+        lon,
+        routeInProgress: true,
+        routePolyline,
+        snapped,
+        lastSnappedRouteIndex,
+        resetSmooth: true,
+        speedMph: 0,
+        calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
+        blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
+    });
+    _smoothDisplayLat = posPlan.smoothDisplayLat;
+    _smoothDisplayLon = posPlan.smoothDisplayLon;
     _snapBlendWeightState = 1;
     if (currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
-        currentUserMarker.setLngLat([snapped.lon, snapped.lat]);
+        currentUserMarker.setLngLat([posPlan.markerLon, posPlan.markerLat]);
     }
 }
 
@@ -12997,30 +13050,18 @@ function openHazardSettings() {
 }
 
 /**
- * Get emoji icon for hazard type
- */
-
-/**
  * Log rerouting event for debugging and analytics
  */
 function logReroutingEvent(startLat, startLon, destination, route, hazardCount) {
-    const event = _rerouteDecision().buildRerouteLogEvent({
-        timestampIso: new Date().toISOString(),
-        startLat: startLat,
-        startLon: startLon,
-        destination: destination,
-        route: route,
-        hazardCount: hazardCount,
-        settings: {
-            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
-            avoidTolls: isAvoidTollsEnabled(),
-            avoidCaz: localStorage.getItem('pref_caz') !== 'false',
-        },
+    const result = _rerouteDecision().recordAutomaticRerouteLog(sessionStorage, {
+        startLat,
+        startLon,
+        destination,
+        route,
+        hazardCount,
+        routePrefs: _routePrefs(),
     });
-
-    _rerouteDecision().appendRerouteLogEntry(sessionStorage, event, 20);
-
-    console.log('[Rerouting] Event logged:', event);
+    console.log('[Rerouting] Event logged:', result.event);
 }
 
 // Keep old function for backwards compatibility

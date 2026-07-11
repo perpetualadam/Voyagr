@@ -1450,6 +1450,34 @@
         };
     }
 
+    /**
+     * Guard for re-drawing the active navigation route layer.
+     * @param {Object} opts
+     * @returns {{ shouldRedraw: boolean }}
+     */
+    function buildNavRouteLayerRedrawGuardPlan(opts) {
+        opts = opts || {};
+        var polyline = opts.routePolyline || [];
+        return {
+            shouldRedraw: !!(opts.routeInProgress && opts.map && polyline.length >= 2),
+        };
+    }
+
+    /**
+     * Mount plan for the single active navigation route polyline layer.
+     * @param {Object} opts
+     * @returns {{ valid: boolean, polyline: Array, style: Object }}
+     */
+    function buildNavActiveRouteLayerMountPlan(opts) {
+        opts = opts || {};
+        var polyline = opts.routePolyline || [];
+        return {
+            valid: polyline.length >= 2,
+            polyline: polyline,
+            style: buildNavActiveRoutePolylineStyle(opts.navRouteColor),
+        };
+    }
+
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
@@ -1517,6 +1545,8 @@
         buildRoutePreviewPanelApplyPlan: buildRoutePreviewPanelApplyPlan,
         buildAlternativeRoutesPreviewMountPlans: buildAlternativeRoutesPreviewMountPlans,
         buildNavActiveRoutePolylineStyle: buildNavActiveRoutePolylineStyle,
+        buildNavRouteLayerRedrawGuardPlan: buildNavRouteLayerRedrawGuardPlan,
+        buildNavActiveRouteLayerMountPlan: buildNavActiveRouteLayerMountPlan,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,
         mergeLastCalculatedRouteFromSelection: mergeLastCalculatedRouteFromSelection,
         buildRoutePayloadFromPersisted: buildRoutePayloadFromPersisted,

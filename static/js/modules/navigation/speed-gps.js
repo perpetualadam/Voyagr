@@ -634,6 +634,108 @@
         };
     }
 
+    /**
+     * Compute vehicle marker lat/lon after route snap blend and position smoothing.
+     * @param {Object} opts
+     * @returns {{ displayLat: number, displayLon: number, markerLat: number, markerLon: number, smoothDisplayLat: number, smoothDisplayLon: number, heading: number, snapBlendWeightState: number, lastSnappedRouteIndex: number }}
+     */
+    function buildNavigationVehicleMarkerPositionPlan(opts) {
+        opts = opts || {};
+        var lat = opts.lat;
+        var lon = opts.lon;
+        var displayLat = lat;
+        var displayLon = lon;
+        var heading = opts.gpsHeadingForBlend || 0;
+        var snapBlendWeightState = Number.isFinite(opts.prevSnapBlendWeightState)
+            ? opts.prevSnapBlendWeightState
+            : 0;
+        var lastSnappedRouteIndex = opts.lastSnappedRouteIndex || 0;
+
+        if (opts.snapPlan) {
+            displayLat = opts.snapPlan.displayLat;
+            displayLon = opts.snapPlan.displayLon;
+            heading = opts.snapPlan.heading;
+            snapBlendWeightState = opts.snapPlan.snapBlendWeightState;
+            lastSnappedRouteIndex = opts.snapPlan.lastSnappedRouteIndex;
+        } else if (opts.routeInProgress && opts.routePolyline && opts.routePolyline.length >= 2 && opts.snapped) {
+            var innerSnap = buildSnappedVehicleDisplayPlan({
+                lat: lat,
+                lon: lon,
+                accuracy: opts.accuracy,
+                snapped: opts.snapped,
+                routePolyline: opts.routePolyline,
+                gpsHeadingForBlend: heading,
+                lastSnappedRouteIndex: lastSnappedRouteIndex,
+                speedMph: opts.speedMph || 0,
+                prevSnapBlendWeightState: snapBlendWeightState,
+                calculateBearing: opts.calculateBearing,
+                blendHeadingsCircular: opts.blendHeadingsCircular,
+            });
+            displayLat = innerSnap.displayLat;
+            displayLon = innerSnap.displayLon;
+            heading = innerSnap.heading;
+            snapBlendWeightState = innerSnap.snapBlendWeightState;
+            lastSnappedRouteIndex = innerSnap.lastSnappedRouteIndex;
+        }
+
+        var smoothLat = opts.smoothDisplayLat;
+        var smoothLon = opts.smoothDisplayLon;
+        var markerLat;
+        var markerLon;
+
+        if (opts.useSmoothCoordsOnly && smoothLat != null && smoothLon != null) {
+            markerLat = smoothLat;
+            markerLon = smoothLon;
+        } else {
+            var followJumpM = Number.isFinite(opts.followJumpM)
+                ? opts.followJumpM
+                : (typeof opts.calculateDistanceMeters === 'function'
+                    ? computeFollowJumpMeters({
+                        displayLat: displayLat,
+                        displayLon: displayLon,
+                        smoothDisplayLat: smoothLat,
+                        smoothDisplayLon: smoothLon,
+                        lastFollowCenterGeo: opts.lastFollowCenterGeo,
+                        calculateDistanceMeters: opts.calculateDistanceMeters,
+                    })
+                    : Number.POSITIVE_INFINITY);
+
+            if (smoothLat == null || smoothLon == null || opts.resetSmooth) {
+                smoothLat = displayLat;
+                smoothLon = displayLon;
+            } else {
+                smoothLat = smoothDisplayCoordinate(smoothLat, displayLat, followJumpM);
+                smoothLon = smoothDisplayCoordinate(smoothLon, displayLon, followJumpM);
+            }
+            markerLat = smoothLat;
+            markerLon = smoothLon;
+        }
+
+        return {
+            displayLat: displayLat,
+            displayLon: displayLon,
+            markerLat: markerLat,
+            markerLon: markerLon,
+            smoothDisplayLat: smoothLat,
+            smoothDisplayLon: smoothLon,
+            heading: heading,
+            snapBlendWeightState: snapBlendWeightState,
+            lastSnappedRouteIndex: lastSnappedRouteIndex,
+        };
+    }
+
+    /**
+     * CSS rotation for vehicle marker icon (degrees), compensating for map bearing.
+     * @param {number} heading
+     * @param {number} mapBearing
+     * @returns {number}
+     */
+    function computeVehicleMarkerRotationDeg(heading, mapBearing) {
+        var h = Number.isFinite(heading) ? heading : 0;
+        var mb = Number.isFinite(mapBearing) ? mapBearing : 0;
+        return ((h - mb) % 360 + 360) % 360;
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         KMH_TO_MPH: KMH_TO_MPH,
@@ -663,6 +765,8 @@
         resolveGpsHeadingDegrees: resolveGpsHeadingDegrees,
         computeFollowJumpMeters: computeFollowJumpMeters,
         buildSnappedVehicleDisplayPlan: buildSnappedVehicleDisplayPlan,
+        buildNavigationVehicleMarkerPositionPlan: buildNavigationVehicleMarkerPositionPlan,
+        computeVehicleMarkerRotationDeg: computeVehicleMarkerRotationDeg,
         normalizeGeolocationCoordsSample: normalizeGeolocationCoordsSample,
         buildTrackingHistoryAppendPlan: buildTrackingHistoryAppendPlan,
     };
@@ -800,7 +904,8 @@
     function normalizeGeolocationCoordsSample(coords) {
         coords = coords || {};
         var rawCoordsSpeed = coords.speed;
-        var speedMs = (Number.isFinite(rawCoordsSpeed) && rawCoordsSpeed >= 0) ? rawCoordsSpeed : 0;
+        var deviceSpeedMs = (Number.isFinite(rawCoordsSpeed) && rawCoordsSpeed >= 0) ? rawCoordsSpeed : null;
+        var speedMs = deviceSpeedMs != null ? deviceSpeedMs : 0;
         var deviceHeading = typeof coords.heading === 'number' && !Number.isNaN(coords.heading)
             ? coords.heading
             : null;
@@ -809,6 +914,7 @@
             lon: coords.longitude,
             accuracy: coords.accuracy,
             speedMs: speedMs,
+            deviceSpeedMs: deviceSpeedMs,
             deviceHeading: deviceHeading,
         };
     }

@@ -241,6 +241,46 @@
         return trimmed;
     }
 
+    /**
+     * Read reroute analytics settings snapshot from storage via route-prefs readers.
+     * @param {Storage} storage
+     * @param {Object} [routePrefs] - VoyagrRoutePrefs API subset
+     * @returns {{ avoidCameras: boolean, avoidTolls: boolean, avoidCaz: boolean }}
+     */
+    function buildRerouteLogSettingsSnapshot(storage, routePrefs) {
+        storage = storage || { getItem: function () { return null; } };
+        routePrefs = routePrefs || {};
+        var isRouteAvoidancePrefEnabled = routePrefs.isRouteAvoidancePrefEnabled || function () { return true; };
+        var isAvoidTollsEnabled = routePrefs.isAvoidTollsEnabled || function () { return false; };
+        return {
+            avoidCameras: isRouteAvoidancePrefEnabled('cameras', storage),
+            avoidTolls: isAvoidTollsEnabled(storage),
+            avoidCaz: isRouteAvoidancePrefEnabled('caz', storage),
+        };
+    }
+
+    /**
+     * Build and persist an automatic reroute log entry.
+     * @param {Storage} storage
+     * @param {Object} opts
+     * @returns {{ event: Object, log: Object[] }}
+     */
+    function recordAutomaticRerouteLog(storage, opts) {
+        opts = opts || {};
+        var settings = buildRerouteLogSettingsSnapshot(storage, opts.routePrefs);
+        var event = buildRerouteLogEvent({
+            timestampIso: opts.timestampIso || new Date().toISOString(),
+            startLat: opts.startLat,
+            startLon: opts.startLon,
+            destination: opts.destination,
+            route: opts.route,
+            hazardCount: opts.hazardCount,
+            settings: settings,
+        });
+        var log = appendRerouteLogEntry(storage, event, opts.maxEntries);
+        return { event: event, log: log };
+    }
+
     var REROUTE_FAILURE_RETRY_DELAYS_MS = [4000, 6500, 10000, 14000];
     var REROUTE_ANNOUNCE_MIN_INTERVAL_MS = 60000;
 
@@ -596,6 +636,8 @@
         decideRouteDeviation: decideRouteDeviation,
         buildRerouteLogEvent: buildRerouteLogEvent,
         appendRerouteLogEntry: appendRerouteLogEntry,
+        buildRerouteLogSettingsSnapshot: buildRerouteLogSettingsSnapshot,
+        recordAutomaticRerouteLog: recordAutomaticRerouteLog,
         REROUTE_FAILURE_RETRY_DELAYS_MS: REROUTE_FAILURE_RETRY_DELAYS_MS,
         REROUTE_ANNOUNCE_MIN_INTERVAL_MS: REROUTE_ANNOUNCE_MIN_INTERVAL_MS,
         buildRerouteFailureRetryPlan: buildRerouteFailureRetryPlan,

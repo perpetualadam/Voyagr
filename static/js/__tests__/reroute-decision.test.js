@@ -417,4 +417,44 @@ describe('reroute retry and notification helpers', () => {
         expect(plan.lastCalculatedRoutePatch.destination).toBe('51,0');
         expect(plan.lastCalculatedRoutePatch.distance).toBe('10.0 km');
     });
+
+    test('buildRerouteLogSettingsSnapshot uses route-prefs readers', () => {
+        const storage = {
+            getItem: (key) => {
+                if (key === 'pref_cameras') return 'false';
+                if (key === 'pref_caz') return 'true';
+                if (key === 'pref_avoid_tollRoads') return 'true';
+                return null;
+            },
+        };
+        const snapshot = RD.buildRerouteLogSettingsSnapshot(storage, {
+            isRouteAvoidancePrefEnabled: (pref, s) => s.getItem('pref_' + pref) !== 'false',
+            isAvoidTollsEnabled: (s) => s.getItem('pref_avoid_tollRoads') === 'true',
+        });
+        expect(snapshot.avoidCameras).toBe(false);
+        expect(snapshot.avoidTolls).toBe(true);
+        expect(snapshot.avoidCaz).toBe(true);
+    });
+
+    test('recordAutomaticRerouteLog persists event to storage', () => {
+        const items = {};
+        const storage = {
+            getItem: (k) => items[k] || null,
+            setItem: (k, v) => { items[k] = v; },
+        };
+        const result = RD.recordAutomaticRerouteLog(storage, {
+            startLat: 51.5,
+            startLon: -0.1,
+            destination: 'Home',
+            route: { distance_km: 10, duration_minutes: 20 },
+            hazardCount: 2,
+            routePrefs: {
+                isRouteAvoidancePrefEnabled: () => true,
+                isAvoidTollsEnabled: () => true,
+            },
+        });
+        expect(result.event.type).toBe('automatic_reroute');
+        expect(result.log).toHaveLength(1);
+        expect(JSON.parse(items.rerouteLog)).toHaveLength(1);
+    });
 });

@@ -416,6 +416,7 @@ describe('GPS sample normalization and tracking history', () => {
         expect(sample.lat).toBe(51.5);
         expect(sample.lon).toBe(-0.1);
         expect(sample.speedMs).toBe(5.5);
+        expect(sample.deviceSpeedMs).toBe(5.5);
         expect(sample.deviceHeading).toBe(180);
 
         const invalid = SG.normalizeGeolocationCoordsSample({
@@ -425,6 +426,7 @@ describe('GPS sample normalization and tracking history', () => {
             heading: NaN,
         });
         expect(invalid.speedMs).toBe(0);
+        expect(invalid.deviceSpeedMs).toBeNull();
         expect(invalid.deviceHeading).toBeNull();
     });
 
@@ -434,5 +436,32 @@ describe('GPS sample normalization and tracking history', () => {
         expect(plan.history).toHaveLength(40);
         expect(plan.history[39]).toEqual({ lat: 99, lon: 99 });
         expect(plan.history[0].lat).toBe(1);
+    });
+});
+
+describe('navigation vehicle marker position', () => {
+    test('buildNavigationVehicleMarkerPositionPlan smooths snapped display coords', () => {
+        const plan = SG.buildNavigationVehicleMarkerPositionPlan({
+            lat: 51.5,
+            lon: -0.1,
+            routeInProgress: true,
+            routePolyline: [[51.5, -0.1], [51.501, -0.101]],
+            snapped: { lat: 51.5005, lon: -0.1005, index: 0, distance: 30 },
+            gpsHeadingForBlend: 90,
+            speedMph: 20,
+            smoothDisplayLat: 51.499,
+            smoothDisplayLon: -0.099,
+            followJumpM: 50,
+            calculateBearing: () => 90,
+            blendHeadingsCircular: (g, r, b) => g + (r - g) * b,
+        });
+        expect(plan.markerLat).toBeGreaterThan(51.499);
+        expect(plan.markerLon).toBeLessThan(-0.099);
+        expect(plan.heading).toBeGreaterThanOrEqual(0);
+    });
+
+    test('computeVehicleMarkerRotationDeg compensates for map bearing', () => {
+        expect(SG.computeVehicleMarkerRotationDeg(90, 45)).toBe(45);
+        expect(SG.computeVehicleMarkerRotationDeg(10, 0)).toBe(10);
     });
 });
