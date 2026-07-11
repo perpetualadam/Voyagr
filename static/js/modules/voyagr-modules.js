@@ -25,6 +25,8 @@
         rerouteDecision: 'VoyagrRerouteDecision',
         routingRequest: 'VoyagrRoutingRequest',
         cameraPitch: 'VoyagrCameraPitch',
+        html: 'VoyagrHtml',
+        recentDestinations: 'VoyagrRecentDestinations',
     };
 
     var cache = {};

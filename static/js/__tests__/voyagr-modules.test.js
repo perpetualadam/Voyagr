@@ -24,13 +24,15 @@ describe('VoyagrModules registry', () => {
         global.VoyagrRerouteDecision = require('../modules/navigation/reroute-decision');
         global.VoyagrRoutingRequest = require('../modules/navigation/routing-request');
         global.VoyagrCameraPitch = require('../modules/navigation/camera-pitch');
+        global.VoyagrHtml = require('../modules/util/html');
+        global.VoyagrRecentDestinations = require('../modules/navigation/recent-destinations');
         jest.resetModules();
     });
 
     test('registers all declared module keys when globals are present', () => {
         const VoyagrModules = require('../modules/voyagr-modules');
         expect(VoyagrModules.init()).toBe(true);
-        expect(VoyagrModules.keys().length).toBeGreaterThanOrEqual(16);
+        expect(VoyagrModules.keys().length).toBeGreaterThanOrEqual(18);
         expect(VoyagrModules.units()).toBe(VoyagrUnits);
         expect(VoyagrModules.tripHistory()).toBe(VoyagrTripHistory);
     });
