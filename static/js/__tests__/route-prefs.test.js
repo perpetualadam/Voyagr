@@ -81,4 +81,18 @@ describe('route-prefs module', () => {
             expect(RoutePrefs.isRouteAvoidancePrefEnabled('cameras', localStorage)).toBe(false);
         });
     });
+
+    describe('route leg avoidance preference helpers', () => {
+        test('resolveRouteLegAvoidanceButtonId maps toll roads, motorways, ferries', () => {
+            expect(RoutePrefs.resolveRouteLegAvoidanceButtonId('tollRoads')).toBe('avoidTollRoads');
+            expect(RoutePrefs.resolveRouteLegAvoidanceButtonId('motorways')).toBe('avoidMotorways');
+            expect(RoutePrefs.resolveRouteLegAvoidanceButtonId('ferries')).toBe('avoidFerries');
+        });
+
+        test('isRouteLegAvoidancePrefEnabled defaults to false when unset', () => {
+            expect(RoutePrefs.isRouteLegAvoidancePrefEnabled('tollRoads', localStorage)).toBe(false);
+            localStorage.setItem('pref_avoid_motorways', 'true');
+            expect(RoutePrefs.isRouteLegAvoidancePrefEnabled('motorways', localStorage)).toBe(true);
+        });
+    });
 });

@@ -28,4 +28,26 @@ describe('map-controls module', () => {
         expect(overview.innerHtml).toBe(MC.JOURNEY_RETURN_ICON);
         expect(overview.title).toContain('Return');
     });
+
+    test('map controls hint helpers format labels and filter elements', () => {
+        expect(MC.shouldSkipMapControlsHintElement('mapControlsHintFab')).toBe(true);
+        expect(MC.shouldSkipMapControlsHintElement('voiceFab')).toBe(false);
+        expect(MC.isMapControlsHintElementVisible('flex', 'visible')).toBe(true);
+        expect(MC.isMapControlsHintElementVisible('none', 'visible')).toBe(false);
+        expect(MC.formatMapControlsHintItemLabel('  🎤  mic ', 'Voice commands')).toContain('Voice commands');
+        expect(MC.MAP_CONTROLS_HINT_EXTRAS.length).toBeGreaterThan(0);
+    });
+
+    test('AR preference and button display helpers', () => {
+        const storage = { _d: {}, getItem(k) { return this._d[k] || null; }, setItem(k, v) { this._d[k] = v; } };
+        expect(MC.isAREnabledInStorage(storage)).toBe(false);
+        MC.writeAREnabledToStorage(storage, true);
+        expect(MC.isAREnabledInStorage(storage)).toBe(true);
+        const active = MC.getARModeButtonDisplay('active');
+        expect(active.active).toBe(true);
+        expect(active.innerHtml).toBe(MC.AR_ACTIVE_LABEL);
+        const idle = MC.getARModeButtonDisplay('idle');
+        expect(idle.active).toBe(false);
+        expect(idle.innerHtml).toBe(MC.AR_INACTIVE_LABEL);
+    });
 });

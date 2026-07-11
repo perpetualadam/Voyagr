@@ -126,6 +126,13 @@ describe('toggle-ui (real module)', () => {
             expect(T.LABELED_TOGGLE_OPTS).toEqual({ activeColor: 'white', inactiveColor: '#333' });
         });
 
+        test('exports toggle-switch inactive colour preset', () => {
+            expect(T.TOGGLE_SWITCH_OPTS).toEqual({
+                inactiveBackground: '#ccc',
+                inactiveBorder: '#ccc',
+            });
+        });
+
         test('applies white label colour when enabled', () => {
             const el = document.createElement('button');
             T.applyLabeledToggleButton(el, true);

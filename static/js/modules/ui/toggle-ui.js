@@ -19,6 +19,9 @@
     /** Default text colours for settings toggles that show white/grey labels. */
     const LABELED_TOGGLE_OPTS = { activeColor: 'white', inactiveColor: '#333' };
 
+    /** Grey inactive colours used by `.toggle-switch` pill buttons in settings. */
+    const TOGGLE_SWITCH_OPTS = { inactiveBackground: '#ccc', inactiveBorder: '#ccc' };
+
     /**
      * Compute the pill-button style for a given enabled state.
      * @param {boolean} enabled
@@ -121,6 +124,7 @@
         INACTIVE_BACKGROUND,
         INACTIVE_BORDER,
         LABELED_TOGGLE_OPTS,
+        TOGGLE_SWITCH_OPTS,
         toggleButtonStyle,
         applyToggleButton,
         applyLabeledToggleButton,
