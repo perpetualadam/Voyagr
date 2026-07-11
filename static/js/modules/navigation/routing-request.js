@@ -66,8 +66,68 @@
         return body;
     }
 
+    /**
+     * Master hazard-avoidance flag for the initial calculateRoute request.
+     * @param {Storage} storage
+     * @returns {boolean}
+     */
+    function isInitialRouteHazardAvoidanceEnabled(storage) {
+        return storage.getItem('pref_cameras') !== 'false' ||
+            storage.getItem('pref_caz') !== 'false' ||
+            storage.getItem('pref_trafficLightsAvoid') !== 'false' ||
+            storage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
+            storage.getItem('pref_police') === 'true' ||
+            storage.getItem('pref_roadworks') === 'true' ||
+            storage.getItem('pref_accidents') === 'true';
+    }
+
+    /**
+     * Master hazard-avoidance flag for parking/walking multimodal legs (no CAZ in OR chain).
+     * @param {Storage} storage
+     * @returns {boolean}
+     */
+    function isMultimodalLegHazardAvoidanceEnabled(storage) {
+        return storage.getItem('pref_cameras') !== 'false' ||
+            storage.getItem('pref_trafficLightsAvoid') !== 'false' ||
+            storage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
+            storage.getItem('pref_police') === 'true' ||
+            storage.getItem('pref_roadworks') === 'true' ||
+            storage.getItem('pref_accidents') === 'true';
+    }
+
+    /**
+     * Master hazard-avoidance flag for automatic reroute (buildRouteRequest).
+     * @param {Storage} storage
+     * @param {function(): boolean} isAvoidTollsEnabled
+     * @returns {boolean}
+     */
+    function isRerouteHazardAvoidanceEnabled(storage, isAvoidTollsEnabled) {
+        return storage.getItem('pref_cameras') !== 'false' ||
+            storage.getItem('pref_trafficLightsAvoid') !== 'false' ||
+            storage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
+            isAvoidTollsEnabled() ||
+            storage.getItem('pref_caz') !== 'false';
+    }
+
+    /**
+     * Sanitize explicit avoid_points for reroute (max 10 finite lat/lon pairs).
+     * @param {Array<{lat: number, lon: number}>|null|undefined} avoidPoints
+     * @returns {Array<{lat: number, lon: number}>}
+     */
+    function normalizeAvoidPoints(avoidPoints) {
+        if (!Array.isArray(avoidPoints)) return [];
+        return avoidPoints
+            .filter(function (p) { return p && Number.isFinite(p.lat) && Number.isFinite(p.lon); })
+            .slice(0, 10)
+            .map(function (p) { return { lat: p.lat, lon: p.lon }; });
+    }
+
     var api = {
-        buildSharedRouteOptions: buildSharedRouteOptions
+        buildSharedRouteOptions: buildSharedRouteOptions,
+        isInitialRouteHazardAvoidanceEnabled: isInitialRouteHazardAvoidanceEnabled,
+        isMultimodalLegHazardAvoidanceEnabled: isMultimodalLegHazardAvoidanceEnabled,
+        isRerouteHazardAvoidanceEnabled: isRerouteHazardAvoidanceEnabled,
+        normalizeAvoidPoints: normalizeAvoidPoints,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

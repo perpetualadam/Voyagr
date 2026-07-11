@@ -4462,14 +4462,7 @@ async function calculateRoute() {
     showRouteProgressBar();
 
     // Check if hazard avoidance is enabled (any hazard type selected)
-    const enableHazardAvoidance =
-        localStorage.getItem('pref_cameras') !== 'false' ||  // Default: true
-        localStorage.getItem('pref_caz') !== 'false' ||
-        localStorage.getItem('pref_trafficLightsAvoid') !== 'false' ||
-        localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
-        localStorage.getItem('pref_police') === 'true' ||
-        localStorage.getItem('pref_roadworks') === 'true' ||
-        localStorage.getItem('pref_accidents') === 'true';
+    const enableHazardAvoidance = VoyagrRoutingRequest.isInitialRouteHazardAvoidanceEnabled(localStorage);
 
     // Build via-points array for multi-stop routing
     const viaPointsData = viaPoints.map(vp => ({
@@ -6649,49 +6642,33 @@ async function manualTrafficUpdate() {
  */
 function resolveNavigationDestination() {
     const lr = window.lastCalculatedRoute;
-    if (lr && typeof lr.destination === 'string') {
-        const d = lr.destination.trim();
-        if (d.includes(',')) return d;
-    }
     const endEl = document.getElementById('end');
-    if (endEl && endEl.dataset && endEl.dataset.lat != null && endEl.dataset.lon != null) {
-        const lat = parseFloat(endEl.dataset.lat);
-        const lon = parseFloat(endEl.dataset.lon);
-        if (Number.isFinite(lat) && Number.isFinite(lon)) {
-            return `${lat},${lon}`;
-        }
-    }
+    let polylineEnd = null;
     if (typeof routePolyline !== 'undefined' && routePolyline && routePolyline.length > 0) {
         const last = routePolyline[routePolyline.length - 1];
-        const lat = last[0];
-        const lon = last[1];
-        if (Number.isFinite(lat) && Number.isFinite(lon)) {
-            return `${lat},${lon}`;
-        }
+        polylineEnd = { lat: last[0], lon: last[1] };
     }
-    return null;
+    return VoyagrModules.navigationDestination().resolveDestinationLatLon({
+        lastRouteDestination: lr && typeof lr.destination === 'string' ? lr.destination : null,
+        endCoords: endEl && endEl.dataset && endEl.dataset.lat != null && endEl.dataset.lon != null
+            ? { lat: parseFloat(endEl.dataset.lat), lon: parseFloat(endEl.dataset.lon) }
+            : null,
+        polylineEnd: polylineEnd,
+    });
 }
 
 /**
  * Build route request with current hazard avoidance settings
  */
 function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) {
-    const enableHazardAvoidance =
-        localStorage.getItem('pref_cameras') !== 'false' ||
-        localStorage.getItem('pref_trafficLightsAvoid') !== 'false' ||
-        localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
-        isAvoidTollsEnabled() ||
-        localStorage.getItem('pref_caz') !== 'false';
+    const enableHazardAvoidance = VoyagrRoutingRequest.isRerouteHazardAvoidanceEnabled(
+        localStorage,
+        isAvoidTollsEnabled
+    );
 
     const routePrefs = (typeof getRoutePreferences === 'function') ? getRoutePreferences() : {};
 
-    // Explicit avoid points (congested/closed segments) for traffic-based reroute (Lever A).
-    const cleanAvoidPoints = Array.isArray(avoidPoints)
-        ? avoidPoints
-            .filter(p => p && Number.isFinite(p.lat) && Number.isFinite(p.lon))
-            .slice(0, 10)
-            .map(p => ({ lat: p.lat, lon: p.lon }))
-        : [];
+    const cleanAvoidPoints = VoyagrRoutingRequest.normalizeAvoidPoints(avoidPoints);
 
     // Shared hazard/avoidance/cost/preference fields come from the pure
     // VoyagrRoutingRequest module (shared with calculateRoute); this path adds
@@ -8851,13 +8828,7 @@ async function selectParking(parking, destinationCoords) {
         }
 
         // Calculate driving route to parking
-        const enableHazardAvoidanceParking =
-            localStorage.getItem('pref_cameras') !== 'false' ||
-            localStorage.getItem('pref_trafficLightsAvoid') !== 'false' ||
-            localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
-            localStorage.getItem('pref_police') === 'true' ||
-            localStorage.getItem('pref_roadworks') === 'true' ||
-            localStorage.getItem('pref_accidents') === 'true';
+        const enableHazardAvoidanceParking = VoyagrRoutingRequest.isMultimodalLegHazardAvoidanceEnabled(localStorage);
 
         const drivingResponse = await fetch('/api/route', {
             method: 'POST',
@@ -8885,13 +8856,7 @@ async function selectParking(parking, destinationCoords) {
         }
 
         // Calculate walking route from parking to destination
-        const enableHazardAvoidanceWalking =
-            localStorage.getItem('pref_cameras') !== 'false' ||
-            localStorage.getItem('pref_trafficLightsAvoid') !== 'false' ||
-            localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false' ||
-            localStorage.getItem('pref_police') === 'true' ||
-            localStorage.getItem('pref_roadworks') === 'true' ||
-            localStorage.getItem('pref_accidents') === 'true';
+        const enableHazardAvoidanceWalking = VoyagrRoutingRequest.isMultimodalLegHazardAvoidanceEnabled(localStorage);
 
         const walkingResponse = await fetch('/api/route', {
             method: 'POST',
@@ -13066,50 +13031,11 @@ function formatRemainingTime(minutes) {
  * @returns {boolean} True if user has started moving, false otherwise
  */
 function hasUserStartedMoving() {
-    // Need at least 3 tracking points to detect movement
-    if (trackingHistory.length < 3) {
-        return false;
-    }
-
-    // Check recent tracking history (last 30 seconds)
-    const now = Date.now();
-    const recentHistory = trackingHistory.filter(point => {
-        const age = now - point.timestamp.getTime();
-        return age <= 30000; // Last 30 seconds
+    return VoyagrModules.movementDetection().hasUserStartedMoving({
+        trackingHistory: trackingHistory,
+        haversineDistanceMeters: VoyagrModules.routeGeometry().haversineDistanceMeters,
+        log: console.log.bind(console),
     });
-
-    if (recentHistory.length < 2) {
-        return false;
-    }
-
-    // Method 1: Check if speed is consistently above threshold (2 km/h = 0.56 m/s)
-    const SPEED_THRESHOLD_MS = 0.56; // 2 km/h in m/s
-    const speedReadings = recentHistory
-        .map(point => point.speed || 0)
-        .filter(speed => speed > SPEED_THRESHOLD_MS);
-
-    if (speedReadings.length >= 2) {
-        console.log('[Movement Detection] User is moving (speed detected)');
-        return true;
-    }
-
-    // Method 2: Check if position has changed significantly (moved > 50 meters)
-    const DISTANCE_THRESHOLD_M = 50; // 50 meters
-    const firstPoint = recentHistory[0];
-    const lastPoint = recentHistory[recentHistory.length - 1];
-
-    const distanceMoved = calculateDistance(
-        firstPoint.lat, firstPoint.lon,
-        lastPoint.lat, lastPoint.lon
-    );
-
-    if (distanceMoved > DISTANCE_THRESHOLD_M) {
-        console.log(`[Movement Detection] User is moving (moved ${distanceMoved.toFixed(0)}m)`);
-        return true;
-    }
-
-    console.log('[Movement Detection] User has not started moving yet');
-    return false;
 }
 
 /**
@@ -14393,23 +14319,15 @@ window.navETASnapshot = {
 
 /** First-time default: traffic-aware ETA on; only explicit 'false' disables. */
 function ensureDefaultTrafficAwareRouting() {
-    if (localStorage.getItem('pref_trafficAwareRouting') === null) {
-        localStorage.setItem('pref_trafficAwareRouting', 'true');
-    }
+    VoyagrModules.eta().ensureDefaultTrafficAwareRouting(localStorage);
 }
 
 function shouldApplyTrafficAwareETA() {
-    ensureDefaultTrafficAwareRouting();
-    if (localStorage.getItem('pref_trafficAwareRouting') === 'false') return false;
-    return (currentRoutingMode || 'auto') === 'auto';
+    return VoyagrModules.eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode);
 }
 
 function getRouteOriginalDurationMinutes() {
-    if (!window.lastCalculatedRoute) return 0;
-    let m = window.lastCalculatedRoute.duration_minutes ||
-        (window.lastCalculatedRoute.time ? parseInt(window.lastCalculatedRoute.time, 10) : 0);
-    if (m > 1440) m = Math.round(m / 60);
-    return m;
+    return VoyagrModules.eta().normalizeRouteDurationMinutes(window.lastCalculatedRoute);
 }
 
 /**
@@ -14441,14 +14359,12 @@ function computeBaseNavigationETAMinutes() {
 }
 
 function applyTrafficRatioToBaseRemaining(baseRemainingMinutes) {
-    if (!shouldApplyTrafficAwareETA()) return baseRemainingMinutes;
-    const snap = window.navETASnapshot;
-    if (snap.trafficAdjustedMinutes == null || snap.baseAtTrafficFetch <= 0 || !snap.trafficFetchAt) {
-        return baseRemainingMinutes;
-    }
-    if (Date.now() - snap.trafficFetchAt > 90000) return baseRemainingMinutes;
-    const ratio = snap.trafficAdjustedMinutes / snap.baseAtTrafficFetch;
-    return Math.max(1, Math.round(baseRemainingMinutes * ratio));
+    return VoyagrModules.eta().applyTrafficRatioToBaseRemaining(
+        baseRemainingMinutes,
+        window.navETASnapshot,
+        Date.now(),
+        shouldApplyTrafficAwareETA()
+    );
 }
 
 async function refreshNavTrafficETAIfDue(baseRemainingMinutes, progressPercent, forceFetch = false) {

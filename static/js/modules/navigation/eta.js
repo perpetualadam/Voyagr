@@ -59,10 +59,71 @@
         return hour12 + ':' + String(minutes).padStart(2, '0') + ' ' + period;
     }
 
+    var TRAFFIC_RATIO_MAX_AGE_MS = 90000;
+
+    /**
+     * One-time default: traffic-aware ETA on; only explicit 'false' disables.
+     * @param {Storage} storage
+     */
+    function ensureDefaultTrafficAwareRouting(storage) {
+        if (storage.getItem('pref_trafficAwareRouting') === null) {
+            storage.setItem('pref_trafficAwareRouting', 'true');
+        }
+    }
+
+    /**
+     * Whether live traffic should adjust the navigation ETA.
+     * @param {Storage} storage
+     * @param {string} [routingMode]
+     * @returns {boolean}
+     */
+    function shouldApplyTrafficAwareETA(storage, routingMode) {
+        ensureDefaultTrafficAwareRouting(storage);
+        if (storage.getItem('pref_trafficAwareRouting') === 'false') return false;
+        return (routingMode || 'auto') === 'auto';
+    }
+
+    /**
+     * Normalize route duration from lastCalculatedRoute fields to whole minutes.
+     * @param {{ duration_minutes?: number, time?: string|number }|null|undefined} route
+     * @returns {number}
+     */
+    function normalizeRouteDurationMinutes(route) {
+        if (!route) return 0;
+        var m = route.duration_minutes ||
+            (route.time ? parseInt(route.time, 10) : 0);
+        if (m > 1440) m = Math.round(m / 60);
+        return m;
+    }
+
+    /**
+     * Apply cached traffic ratio to a base remaining-time estimate.
+     * @param {number} baseRemainingMinutes
+     * @param {{ trafficAdjustedMinutes?: number|null, baseAtTrafficFetch?: number, trafficFetchAt?: number }} snap
+     * @param {number} nowMs
+     * @param {boolean} applyTraffic
+     * @returns {number}
+     */
+    function applyTrafficRatioToBaseRemaining(baseRemainingMinutes, snap, nowMs, applyTraffic) {
+        if (!applyTraffic) return baseRemainingMinutes;
+        snap = snap || {};
+        if (snap.trafficAdjustedMinutes == null || snap.baseAtTrafficFetch <= 0 || !snap.trafficFetchAt) {
+            return baseRemainingMinutes;
+        }
+        if (nowMs - snap.trafficFetchAt > TRAFFIC_RATIO_MAX_AGE_MS) return baseRemainingMinutes;
+        var ratio = snap.trafficAdjustedMinutes / snap.baseAtTrafficFetch;
+        return Math.max(1, Math.round(baseRemainingMinutes * ratio));
+    }
+
     var api = {
         formatRemainingTime: formatRemainingTime,
         buildETAVoiceMessage: buildETAVoiceMessage,
         formatETATime: formatETATime,
+        ensureDefaultTrafficAwareRouting: ensureDefaultTrafficAwareRouting,
+        shouldApplyTrafficAwareETA: shouldApplyTrafficAwareETA,
+        normalizeRouteDurationMinutes: normalizeRouteDurationMinutes,
+        applyTrafficRatioToBaseRemaining: applyTrafficRatioToBaseRemaining,
+        TRAFFIC_RATIO_MAX_AGE_MS: TRAFFIC_RATIO_MAX_AGE_MS,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
