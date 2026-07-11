@@ -769,6 +769,7 @@
         computeVehicleMarkerRotationDeg: computeVehicleMarkerRotationDeg,
         normalizeGeolocationCoordsSample: normalizeGeolocationCoordsSample,
         buildTrackingHistoryAppendPlan: buildTrackingHistoryAppendPlan,
+        buildNavSpeedLimitTickPlan: buildNavSpeedLimitTickPlan,
     };
 
     // ======================================================================
@@ -934,6 +935,85 @@
             next = next.slice(next.length - maxLen);
         }
         return { history: next };
+    }
+
+    /**
+     * Resolve active maneuver, road type, and Valhalla speed-limit hint for a GPS tick.
+     * @param {Object} opts
+     * @param {boolean} opts.routeInProgress
+     * @param {boolean} opts.isTrackingActive
+     * @param {Array<[number,number]>} [opts.routePolyline]
+     * @param {Array<Object>} [opts.currentRouteSteps]
+     * @param {number} [opts.lastSnappedRouteIndex]
+     * @param {number} opts.displaySpeedMph
+     * @param {number|null} [opts.currentSpeedLimitMph]
+     * @param {string|null} [opts.lastSpeedLimitRegion]
+     * @param {number} [opts.lastActiveManeuverIdx]
+     * @param {function(number, number): string} [opts.resolveRoadType]
+     * @param {function(number|null, number|null, string, string|null): number|null} [opts.pickDisplaySpeedLimitMph]
+     * @returns {Object}
+     */
+    function buildNavSpeedLimitTickPlan(opts) {
+        opts = opts || {};
+        var displaySpeedMph = opts.displaySpeedMph;
+        var routeInProgress = !!opts.routeInProgress;
+        var isTrackingActive = !!opts.isTrackingActive;
+
+        if (!routeInProgress && !isTrackingActive) {
+            return {
+                showWidget: true,
+                displaySpeedMph: displaySpeedMph,
+                shownLimit: null,
+                roadType: 'unknown',
+            };
+        }
+
+        var activeManeuverIdx = -1;
+        if (routeInProgress && opts.routePolyline && opts.routePolyline.length >= 2) {
+            activeManeuverIdx = getActiveRouteManeuverIndex(opts.currentRouteSteps, opts.lastSnappedRouteIndex);
+        }
+        var activeManeuver = (activeManeuverIdx >= 0 && opts.currentRouteSteps && activeManeuverIdx < opts.currentRouteSteps.length)
+            ? opts.currentRouteSteps[activeManeuverIdx]
+            : null;
+
+        var roadType = typeof opts.resolveRoadType === 'function'
+            ? opts.resolveRoadType(activeManeuverIdx, displaySpeedMph)
+            : 'unknown';
+
+        var valhallaSpeedLimitMph = null;
+        if (activeManeuver) {
+            var rawSl = activeManeuver.speed_limit != null ? Number(activeManeuver.speed_limit) : NaN;
+            if (Number.isFinite(rawSl) && rawSl > 0) {
+                valhallaSpeedLimitMph = normalizeManeuverSpeedLimitMph(
+                    rawSl,
+                    activeManeuver.road_class || roadType,
+                    displaySpeedMph
+                );
+            }
+        }
+        if (valhallaSpeedLimitMph != null
+            && !isPlausibleEdgeSpeedLimitMph(valhallaSpeedLimitMph, roadType, displaySpeedMph)) {
+            valhallaSpeedLimitMph = null;
+        }
+
+        var resetFetchState = activeManeuverIdx >= 0 && activeManeuverIdx !== opts.lastActiveManeuverIdx;
+        var pickFn = opts.pickDisplaySpeedLimitMph;
+        var shownLimit = typeof pickFn === 'function'
+            ? pickFn(opts.currentSpeedLimitMph, valhallaSpeedLimitMph, roadType, opts.lastSpeedLimitRegion)
+            : (opts.currentSpeedLimitMph && opts.currentSpeedLimitMph > 0
+                ? opts.currentSpeedLimitMph
+                : valhallaSpeedLimitMph);
+
+        return {
+            showWidget: true,
+            displaySpeedMph: displaySpeedMph,
+            activeManeuverIdx: activeManeuverIdx,
+            roadType: roadType,
+            valhallaSpeedLimitMph: valhallaSpeedLimitMph,
+            shownLimit: shownLimit,
+            resetFetchState: resetFetchState,
+            newLastActiveManeuverIdx: resetFetchState ? activeManeuverIdx : opts.lastActiveManeuverIdx,
+        };
     }
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -8863,23 +8863,32 @@ function recenterOnVehicle() {
             ? currentUserMarker.speed
             : 0;
         const speedMph = speedMps * 2.23694;
-        const smartZoom = _routeGeometry().calculateSmartZoom(speedMph, null, 'motorway', ZOOM_LEVELS, TURN_ZOOM_THRESHOLD);
-        const pitch = shouldTiltDrivingCamera() ? 60 : 0;
-        const bearing = shouldUsePitchedDrivingCamera()
-            ? ((currentUserMarker && Number.isFinite(currentUserMarker.heading)) ? currentUserMarker.heading : map.getBearing())
-            : 0;
+        const recenterRoadType = getCurrentRoadType(undefined, speedMph);
+        const followCamera = _cameraPitch().buildNavigationFollowCameraPlan({
+            speedMph,
+            roadType: recenterRoadType,
+            heading: (currentUserMarker && Number.isFinite(currentUserMarker.heading))
+                ? currentUserMarker.heading
+                : map.getBearing(),
+            mapBearing: map.getBearing(),
+            markerLat: lat,
+            markerLon: lon,
+            shouldEase: true,
+            durationMs: 600,
+            shouldTilt: shouldTiltDrivingCamera(),
+            usePitchedDrivingCamera: shouldUsePitchedDrivingCamera(),
+            viewportHeight: window.innerHeight,
+            viewportWidth: window.innerWidth,
+            computeSmartZoom: (spd, dist, rt) => _routeGeometry().calculateSmartZoom(
+                spd, dist, rt, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
+            ),
+        });
 
         window.__voyagrLastFollowCenterGeo = { lat, lon };
         window.__voyagrLastFollowEaseAt = Date.now();
-        map.easeTo({
-            center: [lon, lat],
-            zoom: smartZoom,
-            bearing,
-            pitch,
-            padding: _cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth),
-            duration: 600,
-            essential: true,
-        });
+        if (followCamera.easeTo) {
+            map.easeTo(followCamera.easeTo);
+        }
         showStatus('📍 Recentered on vehicle', 'success');
     } else {
         mapFollowingActive = true;
@@ -9248,55 +9257,51 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
  * @returns {*} Return value description
  */
 function applySmartZoomWithAnimation(speedMph, distanceToNextTurn = null, roadType = 'urban', userLat = null, userLon = null) {
-    if (!smartZoomEnabled || !routeInProgress) return;
+    const CP = _cameraPitch();
+    const plan = CP.buildSmartZoomEasePlan({
+        smartZoomEnabled,
+        routeInProgress,
+        speedMph,
+        distanceToNextTurn,
+        roadType,
+        lastZoomLevel,
+        userLat,
+        userLon,
+        hasMap: !!map,
+        zoomAndFollowEnabled,
+        mapFollowingActive,
+        viewportHeight: window.innerHeight,
+        viewportWidth: window.innerWidth,
+        currentPitch: map && typeof map.getPitch === 'function' ? map.getPitch() : 0,
+        currentBearing: map && typeof map.getBearing === 'function' ? map.getBearing() : 0,
+        vehicleHeading: currentUserMarker && typeof currentUserMarker.heading === 'number'
+            ? currentUserMarker.heading
+            : null,
+        usePitchedDrivingCamera: shouldUsePitchedDrivingCamera(),
+        shouldTilt: shouldTiltDrivingCamera(),
+        zoomAnimationDurationMs: ZOOM_ANIMATION_DURATION * 1000,
+        turnZoomThreshold: TURN_ZOOM_THRESHOLD,
+        computeSmartZoom: (spd, dist, rt) => _routeGeometry().calculateSmartZoom(
+            spd, dist, rt, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
+        ),
+    });
 
-    const newZoomLevel = _routeGeometry().calculateSmartZoom(speedMph, distanceToNextTurn, roadType, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD);
+    if (!plan.shouldApply) return;
 
-    // Only update if zoom level changed significantly
-    if (Math.abs(newZoomLevel - lastZoomLevel) >= 1) {
-        // Use easeTo (not flyTo) and preserve pitch/bearing/padding — flyTo omitted pitch and reset
-        // the camera to a top-down view, overriding driver's perspective during navigation.
-        if (userLat !== null && userLon !== null && map) {
-            const navFollow = zoomAndFollowEnabled && mapFollowingActive;
-            let pitch = map.getPitch();
-            let bearing = map.getBearing();
-            let padding = undefined;
-            if (navFollow) {
-                padding = _cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
-                if (shouldUsePitchedDrivingCamera()) {
-                    // Heading-up; flat (0°) when the user picked 2D map view, else tilted (60°).
-                    pitch = shouldTiltDrivingCamera() ? 60 : 0;
-                    bearing = (currentUserMarker && typeof currentUserMarker.heading === 'number')
-                        ? currentUserMarker.heading
-                        : map.getBearing();
-                } else {
-                    pitch = 0;
-                    bearing = 0;
-                }
-            }
-            map.easeTo({
-                center: [userLon, userLat],
-                zoom: newZoomLevel,
-                pitch,
-                bearing,
-                ...(padding ? { padding } : {}),
-                duration: ZOOM_ANIMATION_DURATION * 1000,
-                essential: true
-            });
-        } else if (map) {
-            map.setZoom(newZoomLevel);
-        }
+    if (plan.easeTo && map) {
+        map.easeTo(plan.easeTo);
+    } else if (plan.setZoomOnly && map) {
+        map.setZoom(plan.newZoomLevel);
+    }
 
-        lastZoomLevel = newZoomLevel;
+    lastZoomLevel = plan.newZoomLevel;
 
-        // Log zoom reason
-        if (distanceToNextTurn !== null && distanceToNextTurn < TURN_ZOOM_THRESHOLD) {
-            console.log('[SmartZoom] Turn-based zoom to level', newZoomLevel, '- Turn in', distanceToNextTurn.toFixed(0), 'm');
-            lastTurnZoomApplied = true;
-        } else {
-            console.log('[SmartZoom] Speed-based zoom to level', newZoomLevel, 'for speed', speedMph.toFixed(1), 'mph');
-            lastTurnZoomApplied = false;
-        }
+    if (plan.logTurn) {
+        console.log('[SmartZoom] Turn-based zoom to level', plan.newZoomLevel, '- Turn in', plan.logDistanceToTurn.toFixed(0), 'm');
+        lastTurnZoomApplied = true;
+    } else {
+        console.log('[SmartZoom] Speed-based zoom to level', plan.newZoomLevel, 'for speed', plan.logSpeedMph.toFixed(1), 'mph');
+        lastTurnZoomApplied = false;
     }
 }
 
@@ -12111,6 +12116,26 @@ function startGPSTracking() {
             const markerLat = _smoothDisplayLat;
             const markerLon = _smoothDisplayLon;
 
+            const displaySpeedMph = smoothGpsSpeedMph(speedMph);
+            const SL = _speedLimitWidget();
+            const speedLimitPlan = SGpos
+                ? SGpos.buildNavSpeedLimitTickPlan({
+                    routeInProgress,
+                    isTrackingActive,
+                    routePolyline,
+                    currentRouteSteps,
+                    lastSnappedRouteIndex,
+                    displaySpeedMph,
+                    currentSpeedLimitMph,
+                    lastSpeedLimitRegion,
+                    lastActiveManeuverIdx: _lastActiveManeuverIdx,
+                    resolveRoadType: getCurrentRoadType,
+                    pickDisplaySpeedLimitMph: SL
+                        ? (api, val, rt, region) => SL.pickDisplaySpeedLimitMph(api, val, rt, region)
+                        : null,
+                })
+                : { roadType: 'unknown', shownLimit: null, resetFetchState: false };
+
             // Update user marker on map with vehicle icon and heading
             // FIX: Reuse the existing marker and call setLngLat for smooth movement
             // instead of removing and recreating every tick (which kills CSS transitions)
@@ -12156,27 +12181,31 @@ function startGPSTracking() {
             });
 
             if (followPlan.mode === 'navigation' && map) {
-                const smartZoom = _routeGeometry().calculateSmartZoom(speedMph, null, 'motorway', ZOOM_LEVELS, TURN_ZOOM_THRESHOLD);
-                const pitch = shouldTiltDrivingCamera() ? 60 : 0;
-                const padding = CP.computeFollowPadding(window.innerHeight, window.innerWidth);
-                const bearing = shouldUsePitchedDrivingCamera() ? (heading || map.getBearing()) : 0;
+                const followCamera = CP.buildNavigationFollowCameraPlan({
+                    speedMph,
+                    roadType: speedLimitPlan.roadType || 'unknown',
+                    heading: heading || map.getBearing(),
+                    mapBearing: map.getBearing(),
+                    markerLat,
+                    markerLon,
+                    shouldEase: followPlan.shouldEase,
+                    durationMs: followPlan.durationMs,
+                    shouldTilt: shouldTiltDrivingCamera(),
+                    usePitchedDrivingCamera: shouldUsePitchedDrivingCamera(),
+                    viewportHeight: window.innerHeight,
+                    viewportWidth: window.innerWidth,
+                    computeSmartZoom: (spd, dist, rt) => _routeGeometry().calculateSmartZoom(
+                        spd, dist, rt, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
+                    ),
+                });
 
-                if (followPlan.shouldEase) {
+                if (followCamera.easeTo) {
                     window.__voyagrLastFollowEaseAt = followPlan.nowMs;
                     window.__voyagrLastFollowCenterGeo = { lat: markerLat, lon: markerLon };
-
-                    map.easeTo({
-                        center: [markerLon, markerLat],
-                        zoom: smartZoom,
-                        bearing: bearing,
-                        pitch: pitch,
-                        padding: padding,
-                        duration: followPlan.durationMs,
-                        essential: true
-                    });
+                    map.easeTo(followCamera.easeTo);
                 }
 
-                console.log(`[Navigation] View: pitch ${pitch}°, bearing ${Math.round(bearing)}°, zoom ${smartZoom.toFixed(1)}, pitchedNav: ${isActiveNavigationFollow()}, pref: ${driverPerspectiveEnabled}`);
+                console.log(`[Navigation] View: pitch ${followCamera.pitch}°, bearing ${Math.round(followCamera.bearing)}°, zoom ${followCamera.zoom.toFixed(1)}, pitchedNav: ${isActiveNavigationFollow()}, pref: ${driverPerspectiveEnabled}`);
                 updateRecenterButtonVisibility();
             } else if (followPlan.mode === 'browsing' && map) {
                 if (followPlan.shouldEase) {
@@ -12228,7 +12257,7 @@ function startGPSTracking() {
                 // This prevents ETA from being announced every 1-5 seconds
             }
 
-            applySmartZoomWithAnimation(speedMph, distanceToNextTurn, 'motorway', lat, lon);
+            applySmartZoomWithAnimation(speedMph, distanceToNextTurn, speedLimitPlan.roadType || 'unknown', lat, lon);
 
             // Update lane guidance if navigating
             if (routeInProgress && currentRouteSteps.length > 0) {
@@ -12242,63 +12271,26 @@ function startGPSTracking() {
                 updateLaneGuidance(lat, lon, heading, maneuverDir, exitCount);
             }
 
-            const displaySpeedMph = smoothGpsSpeedMph(speedMph);
-
-            if (routeInProgress || isTrackingActive) {
-                const activeManeuverIdx = (routeInProgress && routePolyline && routePolyline.length >= 2)
-                    ? _speedGps().getActiveRouteManeuverIndex(currentRouteSteps, lastSnappedRouteIndex)
-                    : -1;
-                const activeManeuver = (activeManeuverIdx >= 0 && currentRouteSteps && activeManeuverIdx < currentRouteSteps.length)
-                    ? currentRouteSteps[activeManeuverIdx]
-                    : null;
-                const roadType = activeManeuverIdx >= 0
-                    ? getCurrentRoadType(activeManeuverIdx, displaySpeedMph)
-                    : getCurrentRoadType(undefined, displaySpeedMph);
-
-                let valhallaSpeedLimitMph = null;
-                if (activeManeuver) {
-                    const rawSl = activeManeuver.speed_limit != null ? Number(activeManeuver.speed_limit) : NaN;
-                    if (Number.isFinite(rawSl) && rawSl > 0) {
-                        valhallaSpeedLimitMph = normalizeManeuverSpeedLimitMph(
-                            rawSl, activeManeuver.road_class || roadType, displaySpeedMph
-                        );
-                    }
-                }
-                // The hint above is validated against the maneuver's own road_class, which can
-                // outlast the road you're actually on (e.g. a 70 mph motorway edge lingering
-                // after you turn onto a 30 mph street). This is the display fallback used when
-                // the speed-limit API has no data, so re-check it against the CURRENT road type
-                // and drop it if implausible — mirrors the API-side road-type sanitisation.
-                if (valhallaSpeedLimitMph != null) {
-                    const _sgLimit = _speedGps();
-                    if (_sgLimit && typeof _sgLimit.isPlausibleEdgeSpeedLimitMph === 'function'
-                        && !_sgLimit.isPlausibleEdgeSpeedLimitMph(valhallaSpeedLimitMph, roadType, displaySpeedMph)) {
-                        valhallaSpeedLimitMph = null;
-                    }
-                }
-
-                if (activeManeuverIdx >= 0 && activeManeuverIdx !== _lastActiveManeuverIdx) {
-                    _lastActiveManeuverIdx = activeManeuverIdx;
+            if (speedLimitPlan.showWidget) {
+                if (speedLimitPlan.resetFetchState) {
+                    _lastActiveManeuverIdx = speedLimitPlan.newLastActiveManeuverIdx;
                     const state = _getSpeedLimitFetchState();
                     if (state) {
                         state.lastFetchAt = 0;
                         state.lastPosition = null;
                     }
                 }
-
-                const SL = _speedLimitWidget();
-                const shownLimit = SL
-                    ? SL.pickDisplaySpeedLimitMph(
-                        currentSpeedLimitMph,
-                        valhallaSpeedLimitMph,
-                        roadType,
-                        lastSpeedLimitRegion
-                    )
-                    : (currentSpeedLimitMph && currentSpeedLimitMph > 0 ? currentSpeedLimitMph : valhallaSpeedLimitMph);
-                updateSpeedWidget(displaySpeedMph, shownLimit);
-                fetchSpeedLimitThrottled(lat, lon, displaySpeedMph, roadType, valhallaSpeedLimitMph, heading);
-            } else {
-                updateSpeedWidget(displaySpeedMph, null);
+                updateSpeedWidget(speedLimitPlan.displaySpeedMph, speedLimitPlan.shownLimit);
+                if (routeInProgress || isTrackingActive) {
+                    fetchSpeedLimitThrottled(
+                        lat,
+                        lon,
+                        speedLimitPlan.displaySpeedMph,
+                        speedLimitPlan.roadType,
+                        speedLimitPlan.valhallaSpeedLimitMph,
+                        heading
+                    );
+                }
             }
 
             if (routeInProgress) {

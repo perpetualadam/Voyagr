@@ -465,3 +465,43 @@ describe('navigation vehicle marker position', () => {
         expect(SG.computeVehicleMarkerRotationDeg(10, 0)).toBe(10);
     });
 });
+
+describe('buildNavSpeedLimitTickPlan', () => {
+    test('resolves road type and shown limit from maneuver hint', () => {
+        const plan = SG.buildNavSpeedLimitTickPlan({
+            routeInProgress: true,
+            isTrackingActive: true,
+            routePolyline: [[51.5, -0.1], [51.6, -0.2]],
+            currentRouteSteps: [{
+                speed_limit: 30,
+                road_class: 'residential',
+            }],
+            lastSnappedRouteIndex: 0,
+            displaySpeedMph: 25,
+            currentSpeedLimitMph: null,
+            lastSpeedLimitRegion: null,
+            lastActiveManeuverIdx: -1,
+            resolveRoadType: () => 'residential',
+            pickDisplaySpeedLimitMph: (_api, val) => val,
+        });
+        expect(plan.roadType).toBe('residential');
+        expect(plan.valhallaSpeedLimitMph).toBe(30);
+        expect(plan.shownLimit).toBe(30);
+        expect(plan.resetFetchState).toBe(true);
+    });
+
+    test('drops implausible Valhalla limit for current road type', () => {
+        const plan = SG.buildNavSpeedLimitTickPlan({
+            routeInProgress: true,
+            isTrackingActive: true,
+            routePolyline: [[51.5, -0.1], [51.6, -0.2]],
+            currentRouteSteps: [{ speed_limit: 70, road_class: 'motorway' }],
+            lastSnappedRouteIndex: 0,
+            displaySpeedMph: 20,
+            lastActiveManeuverIdx: 0,
+            resolveRoadType: () => 'residential',
+            pickDisplaySpeedLimitMph: (_api, val) => val,
+        });
+        expect(plan.valhallaSpeedLimitMph).toBeNull();
+    });
+});

@@ -140,3 +140,78 @@ describe('buildNavigationFollowEasePlan', () => {
         expect(plan.shouldEase).toBe(false);
     });
 });
+
+describe('buildNavigationFollowCameraPlan', () => {
+    const { buildNavigationFollowCameraPlan } = require('../modules/navigation/camera-pitch.js');
+
+    test('uses road type for follow zoom and builds easeTo when shouldEase', () => {
+        const plan = buildNavigationFollowCameraPlan({
+            speedMph: 70,
+            roadType: 'motorway',
+            heading: 90,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            shouldEase: true,
+            durationMs: 600,
+            shouldTilt: true,
+            usePitchedDrivingCamera: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            computeSmartZoom: () => 15,
+        });
+        expect(plan.zoom).toBe(15);
+        expect(plan.pitch).toBe(60);
+        expect(plan.easeTo.center).toEqual([-0.1, 51.5]);
+    });
+});
+
+describe('buildSmartZoomEasePlan', () => {
+    const { buildSmartZoomEasePlan } = require('../modules/navigation/camera-pitch.js');
+
+    test('skips when smart zoom disabled', () => {
+        expect(buildSmartZoomEasePlan({ smartZoomEnabled: false, routeInProgress: true }).shouldApply)
+            .toBe(false);
+    });
+
+    test('returns easeTo when zoom changes significantly', () => {
+        const plan = buildSmartZoomEasePlan({
+            smartZoomEnabled: true,
+            routeInProgress: true,
+            speedMph: 60,
+            distanceToNextTurn: null,
+            roadType: 'primary',
+            lastZoomLevel: 13,
+            userLat: 51.5,
+            userLon: -0.1,
+            hasMap: true,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            usePitchedDrivingCamera: false,
+            computeSmartZoom: () => 15,
+        });
+        expect(plan.shouldApply).toBe(true);
+        expect(plan.newZoomLevel).toBe(15);
+        expect(plan.easeTo.zoom).toBe(15);
+        expect(plan.logTurn).toBe(false);
+    });
+
+    test('flags turn-based zoom in log metadata', () => {
+        const plan = buildSmartZoomEasePlan({
+            smartZoomEnabled: true,
+            routeInProgress: true,
+            speedMph: 20,
+            distanceToNextTurn: 200,
+            roadType: 'residential',
+            lastZoomLevel: 13,
+            userLat: 51.5,
+            userLon: -0.1,
+            hasMap: true,
+            turnZoomThreshold: 500,
+            computeSmartZoom: () => 17,
+        });
+        expect(plan.logTurn).toBe(true);
+        expect(plan.lastTurnZoomApplied).toBe(true);
+    });
+});

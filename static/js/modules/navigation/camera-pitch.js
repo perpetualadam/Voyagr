@@ -99,10 +99,119 @@
         return plan;
     }
 
+    /**
+     * Camera parameters for navigation follow ease on a GPS tick.
+     * @param {Object} opts
+     * @returns {{ zoom: number, pitch: number, bearing: number, padding: Object, easeTo: (Object|null) }}
+     */
+    function buildNavigationFollowCameraPlan(opts) {
+        opts = opts || {};
+        var computeZoom = typeof opts.computeSmartZoom === 'function'
+            ? opts.computeSmartZoom
+            : function () { return 16; };
+        var roadType = opts.roadType || 'unknown';
+        var smartZoom = computeZoom(opts.speedMph, null, roadType);
+        var pitch = opts.shouldTilt ? 60 : 0;
+        var padding = computeFollowPadding(opts.viewportHeight || 0, opts.viewportWidth || 0);
+        var bearing = opts.usePitchedDrivingCamera
+            ? (opts.heading != null ? opts.heading : (opts.mapBearing || 0))
+            : 0;
+        var easeTo = null;
+        if (opts.shouldEase) {
+            easeTo = {
+                center: [opts.markerLon, opts.markerLat],
+                zoom: smartZoom,
+                bearing: bearing,
+                pitch: pitch,
+                padding: padding,
+                duration: opts.durationMs != null ? opts.durationMs : 640,
+                essential: true,
+            };
+        }
+        return {
+            zoom: smartZoom,
+            pitch: pitch,
+            bearing: bearing,
+            padding: padding,
+            easeTo: easeTo,
+        };
+    }
+
+    /**
+     * Plan for speed/turn-based smart zoom animation during navigation.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildSmartZoomEasePlan(opts) {
+        opts = opts || {};
+        if (!opts.smartZoomEnabled || !opts.routeInProgress) {
+            return { shouldApply: false };
+        }
+        var computeZoom = typeof opts.computeSmartZoom === 'function'
+            ? opts.computeSmartZoom
+            : function () { return opts.lastZoomLevel || 13; };
+        var newZoomLevel = computeZoom(opts.speedMph, opts.distanceToNextTurn, opts.roadType || 'urban');
+        var lastZoom = Number.isFinite(opts.lastZoomLevel) ? opts.lastZoomLevel : 13;
+        if (Math.abs(newZoomLevel - lastZoom) < 1) {
+            return { shouldApply: false };
+        }
+
+        var turnThreshold = opts.turnZoomThreshold != null ? opts.turnZoomThreshold : 500;
+        var navFollow = !!(opts.zoomAndFollowEnabled && opts.mapFollowingActive);
+        var hasUserCoords = opts.userLat != null && opts.userLon != null && opts.hasMap;
+        var easeTo = null;
+        var setZoomOnly = false;
+
+        if (hasUserCoords) {
+            var pitch = opts.currentPitch != null ? opts.currentPitch : 0;
+            var bearing = opts.currentBearing != null ? opts.currentBearing : 0;
+            var padding;
+            if (navFollow) {
+                padding = computeFollowPadding(opts.viewportHeight || 0, opts.viewportWidth || 0);
+                if (opts.usePitchedDrivingCamera) {
+                    pitch = opts.shouldTilt ? 60 : 0;
+                    bearing = (typeof opts.vehicleHeading === 'number')
+                        ? opts.vehicleHeading
+                        : bearing;
+                } else {
+                    pitch = 0;
+                    bearing = 0;
+                }
+            }
+            easeTo = {
+                center: [opts.userLon, opts.userLat],
+                zoom: newZoomLevel,
+                pitch: pitch,
+                bearing: bearing,
+                duration: opts.zoomAnimationDurationMs != null ? opts.zoomAnimationDurationMs : 500,
+                essential: true,
+            };
+            if (padding) easeTo.padding = padding;
+        } else if (opts.hasMap) {
+            setZoomOnly = true;
+        } else {
+            return { shouldApply: false };
+        }
+
+        var isTurnZoom = opts.distanceToNextTurn != null && opts.distanceToNextTurn < turnThreshold;
+        return {
+            shouldApply: true,
+            newZoomLevel: newZoomLevel,
+            easeTo: easeTo,
+            setZoomOnly: setZoomOnly,
+            logTurn: isTurnZoom,
+            logDistanceToTurn: opts.distanceToNextTurn,
+            logSpeedMph: opts.speedMph,
+            lastTurnZoomApplied: isTurnZoom,
+        };
+    }
+
     const api = {
         decideDrivingCamera: decideDrivingCamera,
         computeFollowPadding: computeFollowPadding,
         buildNavigationFollowEasePlan: buildNavigationFollowEasePlan,
+        buildNavigationFollowCameraPlan: buildNavigationFollowCameraPlan,
+        buildSmartZoomEasePlan: buildSmartZoomEasePlan,
     };
 
     // CommonJS (Jest) export.
