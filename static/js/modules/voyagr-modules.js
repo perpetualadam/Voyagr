@@ -48,6 +48,7 @@
         vehicleMarker: 'VoyagrVehicleMarker',
         osmMapIcons: 'VoyagrOsmMapIcons',
         mapControls: 'VoyagrMapControls',
+        cameraMapMarkers: 'VoyagrCameraMapMarkers',
     };
 
     var cache = {};

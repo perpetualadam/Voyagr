@@ -46,6 +46,19 @@
         return '<div class="autocomplete-no-results">' + (message || DEFAULT_NO_RESULTS_MESSAGE) + '</div>';
     }
 
+    var AUTOCOMPLETE_LOADING_RECENT_TEXT = 'Loading…';
+    var AUTOCOMPLETE_SEARCHING_TEXT = '🔍 Searching...';
+    var AUTOCOMPLETE_RECENT_LOAD_ERROR_MESSAGE = 'Could not load recent locations.';
+    var AUTOCOMPLETE_SEARCH_FAILED_MESSAGE = '❌ Search failed. Try again.';
+
+    /**
+     * @param {string} message
+     * @returns {string}
+     */
+    function buildAutocompleteLoadingHtml(message) {
+        return '<div class="autocomplete-loading">' + (message || '') + '</div>';
+    }
+
     /**
      * @param {string} text
      * @returns {string}
@@ -123,6 +136,11 @@
         buildRecentDestinationItemHtml: buildRecentDestinationItemHtml,
         buildServerSearchHistoryItemHtml: buildServerSearchHistoryItemHtml,
         buildGeocodeAutocompleteItemHtml: buildGeocodeAutocompleteItemHtml,
+        AUTOCOMPLETE_LOADING_RECENT_TEXT: AUTOCOMPLETE_LOADING_RECENT_TEXT,
+        AUTOCOMPLETE_SEARCHING_TEXT: AUTOCOMPLETE_SEARCHING_TEXT,
+        AUTOCOMPLETE_RECENT_LOAD_ERROR_MESSAGE: AUTOCOMPLETE_RECENT_LOAD_ERROR_MESSAGE,
+        AUTOCOMPLETE_SEARCH_FAILED_MESSAGE: AUTOCOMPLETE_SEARCH_FAILED_MESSAGE,
+        buildAutocompleteLoadingHtml: buildAutocompleteLoadingHtml,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

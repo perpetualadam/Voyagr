@@ -9,5 +9,7 @@ describe('map-controls module', () => {
         expect(MC.ZOOM_FOLLOW_DISABLED_ICON).toBe('🔓');
         expect(MC.JOURNEY_OVERVIEW_ICON).toBe('🗺️');
         expect(MC.JOURNEY_RETURN_ICON).toBe('📍');
+        expect(MC.AR_ACTIVE_LABEL).toContain('Exit AR');
+        expect(MC.AR_INACTIVE_LABEL).toContain('AR View');
     });
 });

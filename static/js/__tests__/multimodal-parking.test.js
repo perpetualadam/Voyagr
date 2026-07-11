@@ -56,4 +56,9 @@ describe('multimodal-parking module', () => {
         expect(html).toContain('No parking found nearby.');
         expect(html).toContain('font-size:13px');
     });
+
+    test('buildParkingPreviewRouteHtml concatenates label and breakdown', () => {
+        const html = MP.buildParkingPreviewRouteHtml('A → B', '<div>walk</div>');
+        expect(html).toBe('A → B<div>walk</div>');
+    });
 });

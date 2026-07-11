@@ -303,6 +303,42 @@
         return chips.join(' ');
     }
 
+    var INSTRUCTIONS_EMPTY_HTML =
+        '<div class="instruction-item"><div class="instruction-item-content"><div class="instruction-item-text">No instructions available</div></div></div>';
+
+    /**
+     * @param {boolean} isPassed
+     * @param {boolean} isCurrent
+     * @returns {string}
+     */
+    function buildInstructionStatusHtml(isPassed, isCurrent) {
+        if (isPassed) return '<div class="instruction-item-status">✓ Passed</div>';
+        if (isCurrent) return '<div class="instruction-item-status current-status">→ Next</div>';
+        return '';
+    }
+
+    /**
+     * @param {Object} opts
+     * @returns {string}
+     */
+    function buildInstructionListItemHtml(opts) {
+        opts = opts || {};
+        var streetHtml = opts.streetName
+            ? '<div class="instruction-item-street">' + opts.streetName + '</div>'
+            : '';
+        return (
+            '<div class="' + (opts.itemClass || 'instruction-item') + '" data-step-index="' + opts.stepIndex + '" data-shape-index="' + opts.shapeIndex + '" onclick="previewInstructionOnMap(' + opts.stepIndex + ', ' + opts.shapeIndex + ')">' +
+                '<div class="instruction-item-icon">' + (opts.icon || '') + '</div>' +
+                '<div class="instruction-item-content">' +
+                    '<div class="instruction-item-text">' + (opts.instruction || '') + (opts.exitBadge || '') + '</div>' +
+                    streetHtml +
+                    (opts.statusHtml || '') +
+                '</div>' +
+                '<div class="instruction-item-preview" title="Click to preview on map">👁️</div>' +
+            '</div>'
+        );
+    }
+
     var api = {
         calculateTurnDirection: calculateTurnDirection,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,
@@ -316,6 +352,9 @@
         ordinalEnglishExit: ordinalEnglishExit,
         laneOrdinalEnglish: laneOrdinalEnglish,
         buildTurnLaneHintHtml: buildTurnLaneHintHtml,
+        INSTRUCTIONS_EMPTY_HTML: INSTRUCTIONS_EMPTY_HTML,
+        buildInstructionStatusHtml: buildInstructionStatusHtml,
+        buildInstructionListItemHtml: buildInstructionListItemHtml,
         TURN_ICON_MAP: TURN_ICON_MAP,
         DIRECTION_TEXT_MAP: DIRECTION_TEXT_MAP
     };

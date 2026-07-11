@@ -6931,34 +6931,16 @@ function displayCameraMarkers(cameras) {
         if (!config || !config.svg) {
             config = styleMap.camera_speed;
         }
-        const svgForMarker = config.svg.replace('width="20"', 'width="24"').replace('height="20"', 'height="24"');
-        const svgForPopup = config.svg.replace('width="20"', 'width="32"').replace('height="20"', 'height="32"');
+        const CAM = _cameraMapMarkers();
+        const svgForMarker = CAM.scaleHazardMarkerSvg(config.svg, 24, 24);
+        const svgForPopup = CAM.scaleHazardMarkerSvg(config.svg, 32, 32);
 
-        // Create custom HTML marker with MapLibre
         const marker = MapLibreHelpers.createMarker(camera.lat, camera.lon, {
             className: 'camera-marker',
-            html: `<div style="
-                background: ${config.bgColor};
-                border: 2px solid ${config.color};
-                border-radius: 4px;
-                width: 32px;
-                height: 32px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-                cursor: pointer;
-                transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            ">${svgForMarker}</div>`,
+            html: CAM.buildCameraMarkerHtml(config, svgForMarker),
             iconSize: [32, 32],
             iconAnchor: [16, 16],
-            popup: `
-                <div style="text-align: center; min-width: 140px;">
-                    <div style="margin-bottom: 8px; display: flex; justify-content: center;">${svgForPopup}</div>
-                    <div style="font-weight: bold; color: ${config.color}; margin-bottom: 5px;">${config.label}</div>
-                    ${camera.description ? `<div style="font-size: 11px; color: #666;">${camera.description}</div>` : ''}
-                </div>
-            `
+            popup: CAM.buildCameraMarkerPopupHtml(config, svgForPopup, camera.description)
         }).addTo(map);
 
         window.cameraMarkers.push(marker);
@@ -8572,8 +8554,7 @@ function updateParkingPreview(drivingData, walkingData, parking) {
 
     document.getElementById('previewDistance').textContent = convertedDist + ' ' + distUnit;
     document.getElementById('previewDuration').textContent = Math.round(totals.totalTimeMin) + ' min';
-    document.getElementById('previewRoute').textContent = routeLabel;
-    document.getElementById('previewRoute').innerHTML = routeLabel + breakdown;
+    document.getElementById('previewRoute').innerHTML = VoyagrModules.multimodalParking().buildParkingPreviewRouteHtml(routeLabel, breakdown);
 }
 
 /**
@@ -9264,6 +9245,9 @@ function _osmMapIcons() { return VoyagrModules.osmMapIcons(); }
 
 /** Unit-tested navigation map control icons (modules/map/map-controls.js). */
 function _mapControls() { return VoyagrModules.mapControls(); }
+
+/** Unit-tested camera map marker HTML (modules/map/camera-map-markers.js). */
+function _cameraMapMarkers() { return VoyagrModules.cameraMapMarkers(); }
 
 /** Unit-tested speed-limit widget helpers (modules/navigation/speed-limit-widget.js). */
 function _speedLimitWidget() { return VoyagrModules.speedLimitWidget(); }
@@ -12050,10 +12034,10 @@ function updateARButtonState(status) {
 
     if (status === 'active' || status === 'active-fallback') {
         btn.classList.add('active');
-        btn.innerHTML = '🎯 Exit AR';
+        btn.innerHTML = _mapControls().AR_ACTIVE_LABEL;
     } else {
         btn.classList.remove('active');
-        btn.innerHTML = '📷 AR View';
+        btn.innerHTML = _mapControls().AR_INACTIVE_LABEL;
     }
 }
 
@@ -12311,7 +12295,7 @@ function populateInstructionsList() {
     const countEl = document.getElementById('instructionsCount');
 
     if (!listEl || !currentRouteSteps || currentRouteSteps.length === 0) {
-        if (listEl) listEl.innerHTML = '<div class="instruction-item"><div class="instruction-item-content"><div class="instruction-item-text">No instructions available</div></div></div>';
+        if (listEl) listEl.innerHTML = VoyagrModules.turnInstructions().INSTRUCTIONS_EMPTY_HTML;
         if (countEl) countEl.textContent = '0 steps';
         return;
     }
@@ -12321,6 +12305,7 @@ function populateInstructionsList() {
     if (countEl) countEl.textContent = `${remainingSteps} of ${currentRouteSteps.length} steps remaining`;
 
     let html = '';
+    const TI = VoyagrModules.turnInstructions();
 
     for (let i = 0; i < currentRouteSteps.length; i++) {
         const step = currentRouteSteps[i];
@@ -12342,18 +12327,16 @@ function populateInstructionsList() {
             ? ` <span class="lane-hint-chip" style="font-size:11px;vertical-align:middle;">${ordinalEnglishExit(exitCt)} exit</span>`
             : '';
 
-        // Add data attributes for click-to-preview
-        html += `
-            <div class="${itemClass}" data-step-index="${i}" data-shape-index="${shapeIndex}" onclick="previewInstructionOnMap(${i}, ${shapeIndex})">
-                <div class="instruction-item-icon">${icon}</div>
-                <div class="instruction-item-content">
-                    <div class="instruction-item-text">${instruction}${exitBadge}</div>
-                    ${streetName ? `<div class="instruction-item-street">${streetName}</div>` : ''}
-                    ${isPassed ? '<div class="instruction-item-status">✓ Passed</div>' : (isCurrent ? '<div class="instruction-item-status current-status">→ Next</div>' : '')}
-                </div>
-                <div class="instruction-item-preview" title="Click to preview on map">👁️</div>
-            </div>
-        `;
+        html += TI.buildInstructionListItemHtml({
+            itemClass,
+            stepIndex: i,
+            shapeIndex,
+            icon,
+            instruction,
+            exitBadge,
+            streetName,
+            statusHtml: TI.buildInstructionStatusHtml(isPassed, isCurrent),
+        });
     }
 
     listEl.innerHTML = html;
@@ -15846,6 +15829,7 @@ function getAutocompleteDropdown(fieldId) {
 }
 
 async function showAutocomplete(fieldId) {
+    const SA = _searchAutocomplete();
     const input = document.getElementById(fieldId);
     const dropdown = getAutocompleteDropdown(fieldId);
     if (!input || !dropdown) return;
@@ -15879,11 +15863,11 @@ async function showAutocomplete(fieldId) {
                 histEl.classList.remove('show');
                 histEl.innerHTML = '';
             }
-            dropdown.innerHTML = '<div class="autocomplete-loading">Loading…</div>';
+            dropdown.innerHTML = SA.buildAutocompleteLoadingHtml(SA.AUTOCOMPLETE_LOADING_RECENT_TEXT);
             dropdown.classList.add('show');
             renderEndDestinationSuggestions(dropdown, fieldId).catch((err) => {
                 console.error('[Recent locations]', err);
-                dropdown.innerHTML = '<div class="autocomplete-no-results">Could not load recent locations.</div>';
+                dropdown.innerHTML = SA.buildAutocompleteNoResultsHtml(SA.AUTOCOMPLETE_RECENT_LOAD_ERROR_MESSAGE);
             });
             return;
         }
@@ -15891,7 +15875,7 @@ async function showAutocomplete(fieldId) {
         return;
     }
 
-    dropdown.innerHTML = '<div class="autocomplete-loading">🔍 Searching...</div>';
+    dropdown.innerHTML = SA.buildAutocompleteLoadingHtml(SA.AUTOCOMPLETE_SEARCHING_TEXT);
     dropdown.classList.add('show');
 
     autocompleteTimeout = setTimeout(async () => {
@@ -15921,7 +15905,7 @@ async function showAutocomplete(fieldId) {
             displayAutocompleteResults(fieldId, results);
         } catch (error) {
             console.error('[Autocomplete] Error:', error);
-            dropdown.innerHTML = '<div class="autocomplete-no-results">❌ Search failed. Try again.</div>';
+            dropdown.innerHTML = SA.buildAutocompleteNoResultsHtml(SA.AUTOCOMPLETE_SEARCH_FAILED_MESSAGE);
         }
     }, 300); // 300ms debounce
 }
@@ -16312,16 +16296,16 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     // ===== SHOW ZOOM AND FOLLOW BUTTON =====
     mapFollowingActive = true;
     const zoomFollowBtn = document.getElementById('zoomFollowToggle');
+    const MC = _mapControls();
     if (zoomFollowBtn) {
         zoomFollowBtn.style.display = 'block';
         zoomFollowBtn.classList.toggle('active', zoomAndFollowEnabled);
-        // Set initial visual state based on current setting
         if (zoomAndFollowEnabled) {
-            zoomFollowBtn.style.background = '#FF9800';  // Orange when enabled
-            zoomFollowBtn.innerHTML = '📍';
+            zoomFollowBtn.style.background = '#FF9800';
+            zoomFollowBtn.innerHTML = MC.ZOOM_FOLLOW_ENABLED_ICON;
         } else {
-            zoomFollowBtn.style.background = '#9E9E9E';  // Gray when disabled
-            zoomFollowBtn.innerHTML = '🔓';
+            zoomFollowBtn.style.background = '#9E9E9E';
+            zoomFollowBtn.innerHTML = MC.ZOOM_FOLLOW_DISABLED_ICON;
         }
     }
 
