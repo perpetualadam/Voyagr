@@ -75,6 +75,17 @@ describe('effectiveDeviationThreshold', () => {
 });
 
 describe('decideRouteDeviation — gating', () => {
+    test('handles missing params object', () => {
+        const d = RD.decideRouteDeviation();
+        expect(d.action).toBe('disabled');
+    });
+
+    test('defaults non-finite offRouteStreak to zero', () => {
+        const d = RD.decideRouteDeviation(tick({ offRouteStreak: NaN, minDistance: 5 }));
+        expect(d.offRouteStreak).toBe(0);
+        expect(d.action).toBe('on-route');
+    });
+
     test('disabled when auto-reroute is off', () => {
         expect(RD.decideRouteDeviation(tick({ autoRerouteEnabled: false })).action).toBe('disabled');
     });
@@ -173,6 +184,21 @@ describe('decideRouteDeviation — deviation timing', () => {
         expect(d.deviationStartTime).toBe(start);
     });
 
+    test('debounced when last reroute completion was too recent', () => {
+        const start = 1000000;
+        const now = start + 10000;
+        const d = RD.decideRouteDeviation(tick({
+            minDistance: 120,
+            deviationStartTime: start,
+            offRouteStreak: 3,
+            now: now,
+            lastRerouteTime: now - 1000,
+            lastRerouteAttemptTime: 0,
+        }));
+        expect(d.action).toBe('debounced');
+        expect(d.shouldReroute).toBe(false);
+    });
+
     test('the accuracy-widened threshold keeps a noisy-but-on-road fix on route', () => {
         // 60 m off with a 40 m fix -> effective threshold 70 m, so not a deviation.
         const d = RD.decideRouteDeviation(tick({ minDistance: 60, accuracy: 40 }));
@@ -201,6 +227,25 @@ describe('decideRouteDeviation — custom constants', () => {
 });
 
 describe('reroute log helpers', () => {
+    test('buildRerouteLogEvent handles missing settings and falsey flags', () => {
+        const partial = RD.buildRerouteLogEvent({
+            timestampIso: '2026-07-11T12:00:00.000Z',
+            route: { distance_km: 1, duration_minutes: 2 },
+            settings: {},
+        });
+        expect(partial.type).toBe('automatic_reroute');
+        expect(partial.settings.avoid_cameras).toBe(false);
+        expect(partial.settings.avoid_tolls).toBe(false);
+        expect(partial.settings.avoid_caz).toBe(false);
+
+        const withFlags = RD.buildRerouteLogEvent({
+            route: { distance_km: 1, duration_minutes: 2 },
+            settings: { avoidCameras: true },
+        });
+        expect(withFlags.settings.avoid_cameras).toBe(true);
+        expect(withFlags.settings.avoid_tolls).toBe(false);
+    });
+
     test('buildRerouteLogEvent shapes analytics payload', () => {
         const event = RD.buildRerouteLogEvent({
             timestampIso: '2026-07-11T12:00:00.000Z',
@@ -229,5 +274,30 @@ describe('reroute log helpers', () => {
         expect(log).toHaveLength(2);
         expect(log[0].id).toBe(2);
         expect(log[1].id).toBe(3);
+    });
+
+    test('appendRerouteLogEntry recovers from invalid stored JSON', () => {
+        const map = { rerouteLog: 'not-json' };
+        const storage = {
+            getItem: (k) => map[k] || null,
+            setItem: (k, v) => { map[k] = v; },
+        };
+        const log = RD.appendRerouteLogEntry(storage, { id: 1 }, 5);
+        expect(log).toEqual([{ id: 1 }]);
+    });
+
+    test('appendRerouteLogEntry uses default max entries when omitted', () => {
+        const map = { rerouteLog: '[]' };
+        const storage = {
+            getItem: (k) => map[k] || null,
+            setItem: (k, v) => { map[k] = v; },
+        };
+        for (let i = 1; i <= 21; i++) {
+            RD.appendRerouteLogEntry(storage, { id: i });
+        }
+        const log = JSON.parse(map.rerouteLog);
+        expect(log).toHaveLength(20);
+        expect(log[0].id).toBe(2);
+        expect(log[19].id).toBe(21);
     });
 });

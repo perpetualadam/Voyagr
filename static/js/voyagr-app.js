@@ -3554,16 +3554,15 @@ function shareViaWhatsApp() {
     }
 
     const route = window.lastCalculatedRoute;
-    const startInput = document.getElementById('start').value;
-    const endInput = document.getElementById('end').value;
-    const symbol = getCurrencySymbol();
-    const distUnit = getDistanceUnit();
+    const message = VoyagrModules.routeSharing().buildShareWhatsAppMessage(route, {
+        startLabel: document.getElementById('start').value,
+        endLabel: document.getElementById('end').value,
+        distanceText: convertDistance(route.distance_km),
+        distUnit: getDistanceUnit(),
+        currencySymbol: getCurrencySymbol(),
+    });
 
-    const message = `📍 Route from ${startInput} to ${endInput}\n📏 Distance: ${convertDistance(route.distance_km)} ${distUnit}\n⏱️ Duration: ${route.time}\n💰 Cost: ${symbol}${(parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2)}\n\nShared via Voyagr Navigation`;
-
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank');
-
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
     showStatus('Opening WhatsApp...', 'success');
 }
 
@@ -3581,15 +3580,17 @@ function shareViaEmail() {
     const route = window.lastCalculatedRoute;
     const startInput = document.getElementById('start').value;
     const endInput = document.getElementById('end').value;
-    const symbol = getCurrencySymbol();
-    const distUnit = getDistanceUnit();
-
-    const subject = `Route: ${startInput} to ${endInput}`;
-    const body = `I'm sharing a route with you:\n\nFrom: ${startInput}\nTo: ${endInput}\nDistance: ${convertDistance(route.distance_km)} ${distUnit}\nDuration: ${route.time}\nEstimated Cost: ${symbol}${(parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2)}\n\nShared via Voyagr Navigation`;
-
-    const mailtoUrl = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.location.href = mailtoUrl;
-
+    const sharing = VoyagrModules.routeSharing();
+    const fmt = {
+        startLabel: startInput,
+        endLabel: endInput,
+        distanceText: convertDistance(route.distance_km),
+        distUnit: getDistanceUnit(),
+        currencySymbol: getCurrencySymbol(),
+    };
+    const subject = sharing.buildShareEmailSubject(startInput, endInput);
+    const body = sharing.buildShareEmailBody(route, fmt);
+    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     showStatus('Opening email client...', 'success');
 }
 
