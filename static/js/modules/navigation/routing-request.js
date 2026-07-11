@@ -416,6 +416,95 @@
         return body;
     }
 
+    /**
+     * User-facing message for a failed `/api/route` HTTP status when the body is not JSON
+     * or does not contain a structured `error` field.
+     * @param {number} status
+     * @param {string} [responseText]
+     * @returns {string}
+     */
+    function buildRouteApiHttpErrorMessage(status, responseText) {
+        var code = Number(status) || 0;
+        var text = String(responseText || '');
+        if (code === 408) {
+            return 'Route calculation timed out. Try a shorter route, move start and end closer, or try again in a moment.';
+        }
+        if (code === 504) {
+            return 'Gateway Timeout (504): The route is too complex or the server is busy. Try a shorter route.';
+        }
+        if (code === 502) {
+            return 'Bad Gateway (502): Server communication error. Please try again.';
+        }
+        if (code === 500) {
+            return 'Internal Server Error (500). Please check server logs.';
+        }
+        if (text.indexOf('timeout') >= 0 || text.indexOf('Timeout') >= 0) {
+            return 'Request timed out. The route may be too long. Try a shorter route.';
+        }
+        if (code > 0) {
+            return 'Server error (' + code + '). Please try again.';
+        }
+        return 'Server error. Please try again.';
+    }
+
+    /**
+     * Error message when `/api/route` returns a non-JSON body (HTML error page, gateway text, etc.).
+     * @param {number} status
+     * @param {string} [responseText]
+     * @returns {string}
+     */
+    function buildNonJsonRouteApiErrorMessage(status, responseText) {
+        var code = Number(status) || 0;
+        var text = String(responseText || '');
+        var msg = 'Server error (HTTP ' + code + ')';
+        if (code === 504) {
+            msg = 'Gateway Timeout (504): The route is too complex or the server is busy. Try a shorter route.';
+        } else if (code === 502) {
+            msg = 'Bad Gateway (502): Server communication error. Please try again.';
+        } else if (code === 500) {
+            msg = 'Internal Server Error (500). Please check server logs.';
+        } else if (text.indexOf('timeout') >= 0 || text.indexOf('Timeout') >= 0) {
+            msg = 'Request timed out. The route may be too long. Try a shorter route.';
+        }
+        return msg;
+    }
+
+    /**
+     * Parse a failed `/api/route` response body into a user-facing error message.
+     * @param {number} status - HTTP status code
+     * @param {string} responseText - Raw response body
+     * @returns {string}
+     */
+    function parseRouteApiErrorMessage(status, responseText) {
+        var text = String(responseText || '');
+        try {
+            var parsed = JSON.parse(text);
+            if (parsed && typeof parsed.error === 'string' && parsed.error.trim()) {
+                return parsed.error.trim();
+            }
+        } catch (_e) {
+            /* ignore */
+        }
+        return buildRouteApiHttpErrorMessage(status, text);
+    }
+
+    /**
+     * Whether the response Content-Type indicates JSON.
+     * @param {string|null|undefined} contentType
+     * @returns {boolean}
+     */
+    function isRouteApiJsonContentType(contentType) {
+        return !!(contentType && String(contentType).indexOf('application/json') >= 0);
+    }
+
+    /**
+     * Status banner when routing fell back to a degraded engine (Valhalla/GraphHopper offline).
+     * @returns {string}
+     */
+    function getDegradedRoutingStatusMessage() {
+        return '⚠️ Basic route only (Valhalla/GraphHopper offline). No camera avoidance.';
+    }
+
     var api = {
         buildSharedRouteOptions: buildSharedRouteOptions,
         isInitialRouteHazardAvoidanceEnabled: isInitialRouteHazardAvoidanceEnabled,
@@ -437,6 +526,11 @@
         sumStopDurationsMinutes: sumStopDurationsMinutes,
         resolveLiveGpsStartCoord: resolveLiveGpsStartCoord,
         buildInitialRouteRequestBody: buildInitialRouteRequestBody,
+        buildRouteApiHttpErrorMessage: buildRouteApiHttpErrorMessage,
+        buildNonJsonRouteApiErrorMessage: buildNonJsonRouteApiErrorMessage,
+        parseRouteApiErrorMessage: parseRouteApiErrorMessage,
+        isRouteApiJsonContentType: isRouteApiJsonContentType,
+        getDegradedRoutingStatusMessage: getDegradedRoutingStatusMessage,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

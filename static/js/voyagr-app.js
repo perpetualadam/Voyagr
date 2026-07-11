@@ -4251,58 +4251,18 @@ async function calculateRoute() {
         .then(response => {
             console.log('[calculateRoute] API response status:', response.status);
 
-            // Check content-type to detect HTML error pages
             const contentType = response.headers.get('content-type');
-            if (!contentType || !contentType.includes('application/json')) {
+            if (!VoyagrRoutingRequest.isRouteApiJsonContentType(contentType)) {
                 console.error('[calculateRoute] Non-JSON response received:', contentType);
-                // Read as text first to get the error message
                 return response.text().then(text => {
                     console.error('[calculateRoute] Response text:', text.substring(0, 200));
-
-                    // Detect specific error types
-                    let errorMsg = `Server error (HTTP ${response.status})`;
-                    if (response.status === 504) {
-                        errorMsg = 'Gateway Timeout (504): The route is too complex or the server is busy. Try a shorter route.';
-                    } else if (response.status === 502) {
-                        errorMsg = 'Bad Gateway (502): Server communication error. Please try again.';
-                    } else if (response.status === 500) {
-                        errorMsg = 'Internal Server Error (500). Please check server logs.';
-                    } else if (text.includes('timeout') || text.includes('Timeout')) {
-                        errorMsg = 'Request timed out. The route may be too long. Try a shorter route.';
-                    }
-
-                    throw new Error(errorMsg);
+                    throw new Error(VoyagrRoutingRequest.buildNonJsonRouteApiErrorMessage(response.status, text));
                 });
             }
 
-            // Check error status codes — parse body safely (408 etc. may be JSON or edge non-JSON)
             if (!response.ok) {
                 return response.text().then(text => {
-                    let msg = null;
-                    try {
-                        const parsed = JSON.parse(text);
-                        if (parsed && typeof parsed.error === 'string' && parsed.error.trim()) {
-                            msg = parsed.error.trim();
-                        }
-                    } catch {
-                        /* ignore */
-                    }
-                    if (!msg) {
-                        if (response.status === 408) {
-                            msg =
-                                'Route calculation timed out. Try a shorter route, move start and end closer, or try again in a moment.';
-                        } else if (response.status === 504) {
-                            msg =
-                                'Gateway Timeout (504): The route is too complex or the server is busy. Try a shorter route.';
-                        } else if (response.status === 502) {
-                            msg = 'Bad Gateway (502): Server communication error. Please try again.';
-                        } else if (response.status === 500) {
-                            msg = 'Internal Server Error (500). Please check server logs.';
-                        } else {
-                            msg = `Server error (${response.status}). Please try again.`;
-                        }
-                    }
-                    throw new Error(msg);
+                    throw new Error(VoyagrRoutingRequest.parseRouteApiErrorMessage(response.status, text));
                 });
             }
 
@@ -4325,10 +4285,7 @@ async function calculateRoute() {
                     data.routing_warning || data.source,
                     data.engines_failed || {}
                 );
-                showStatus(
-                    '⚠️ Basic route only (Valhalla/GraphHopper offline). No camera avoidance.',
-                    'warning'
-                );
+                showStatus(VoyagrRoutingRequest.getDegradedRoutingStatusMessage(), 'warning');
             }
 
             if (data.success) {
@@ -8704,10 +8661,10 @@ function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
     const cacheKey = LG.buildLaneGuidanceCacheKey(maneuver, roundaboutExitCount, roadType, lat, lon);
     const cached = _laneGuidanceCache.get(cacheKey);
     if (LG.isLaneGuidanceCacheEntryFresh(cached, now)) {
-        const lanePos = _laneNameFor(cached.data.recommended_lane, cached.data.total_lanes);
+        const lanePos = LG.laneNameFor(cached.data.recommended_lane, cached.data.total_lanes);
         renderLaneGuidanceUI({
             ...cached.data,
-            ..._laneUrgencyFields(distToManeuver, lanePos, maneuver, roundaboutExitCount),
+            ...LG.laneUrgencyFields(distToManeuver, lanePos, maneuver, roundaboutExitCount),
         });
         return;
     }
@@ -8726,7 +8683,7 @@ function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
     const timeoutId = controller ? setTimeout(() => controller.abort(), LG.LANE_GUIDANCE_FETCH_TIMEOUT_MS) : null;
 
     const useFallback = (reason) => {
-        const fb = _buildDeterministicLaneGuidance(maneuver, distToManeuver, roundaboutExitCount, roadType);
+        const fb = LG.buildDeterministicLaneGuidance(maneuver, distToManeuver, roundaboutExitCount, roadType);
         _laneGuidanceCache.set(cacheKey, { data: fb, ts: Date.now(), fallback: true });
         _pruneLaneGuidanceCache();
         console.warn('[Lane Guidance] using deterministic fallback:', reason);
@@ -8749,32 +8706,6 @@ function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
             if (timeoutId) clearTimeout(timeoutId);
             useFallback((error && error.name === 'AbortError') ? 'timeout' : (error && error.message) || 'error');
         });
-}
-
-/**
- * Deterministic, network-free lane guidance used when Overpass is slow/unavailable.
- * Lane count comes from the road class; the recommended lane mirrors the backend UK
- * heuristic. Single-lane roads return total_lanes=1 so the overlay stays hidden.
- */
-function _buildDeterministicLaneGuidance(maneuver, distance, exitCount, roadType) {
-    return VoyagrModules.laneGuidance().buildDeterministicLaneGuidance(maneuver, distance, exitCount, roadType);
-}
-
-function _ordinal(n) {
-    return VoyagrModules.laneGuidance().ordinal(n);
-}
-
-/** Human-friendly name for a 1-based lane (mirrors backend _descriptive_lane_name). */
-function _laneNameFor(lane, total) {
-    return VoyagrModules.laneGuidance().laneNameFor(lane, total);
-}
-
-/**
- * Distance-derived urgency fields (mirrors the backend thresholds). Recomputed from the
- * live distance so a cached lane structure never shows stale urgency as you approach.
- */
-function _laneUrgencyFields(distance, lanePos, maneuver, exitCount) {
-    return VoyagrModules.laneGuidance().laneUrgencyFields(distance, lanePos, maneuver, exitCount);
 }
 
 function renderLaneGuidanceUI(data) {
@@ -15824,7 +15755,7 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
             .then(wakeLock => {
                 window.screenWakeLock = wakeLock;
                 console.log('[Screen Wake Lock] Screen lock acquired - screen will stay on');
-                showStatus('🔒 Screen lock enabled - screen will stay on', 'success');
+                showStatus(_mapControls().getWakeLockAcquiredStatusMessage(), 'success');
 
                 // Handle wake lock release
                 wakeLock.addEventListener('release', () => {
@@ -15941,15 +15872,16 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
         VoyagrModules.toggleUI().applyToggleButton(driverPerspectiveBtn, shouldUsePitchedDrivingCamera());
     }
 
+    const navStartFeedback = _mapControls().buildNavStartUserFeedbackPlan(isQuietResume);
     sendNotification(
-        isQuietResume ? 'Navigation resumed' : 'Navigation Started',
-        isQuietResume ? 'Continuing your saved route.' : 'Turn-by-turn guidance activated',
+        navStartFeedback.notificationTitle,
+        navStartFeedback.notificationBody,
         'success'
     );
-    if (!isQuietResume) {
-        speakMessage('Navigation started. Follow the route.');
+    if (navStartFeedback.speakMessage) {
+        speakMessage(navStartFeedback.speakMessage);
     }
-    showStatus(isQuietResume ? '🧭 Navigation resumed — following saved route' : '🧭 Turn-by-turn navigation active', 'success');
+    showStatus(navStartFeedback.statusMessage, navStartFeedback.statusType);
     try {
         // After wake-lock + other status messages (they overwrite #status).
         setTimeout(() => {
@@ -16102,36 +16034,15 @@ function stopTurnByTurnNavigation() {
 function updateTurnGuidance(userLat, userLon) {
     if (!routeInProgress || !routePolyline || routePolyline.length === 0) return;
 
-    // Find closest point on route
-    let closestIndex = 0;
-    let minDistance = Infinity;
+    const progress = VoyagrModules.routeGeometry().buildVertexDestinationProgress(userLat, userLon, routePolyline);
 
-    for (let i = 0; i < routePolyline.length; i++) {
-        const distance = calculateDistance(userLat, userLon, routePolyline[i][0], routePolyline[i][1]);
-        if (distance < minDistance) {
-            minDistance = distance;
-            closestIndex = i;
-        }
-    }
-
-    // Calculate distance to end of route
-    let distanceToEnd = 0;
-    for (let i = closestIndex; i < routePolyline.length - 1; i++) {
-        distanceToEnd += calculateDistance(
-            routePolyline[i][0], routePolyline[i][1],
-            routePolyline[i + 1][0], routePolyline[i + 1][1]
-        );
-    }
-
-    // Update turn guidance display with proper unit conversion
     const turnInfo = document.getElementById('turnInfo');
     if (turnInfo) {
-        const distanceKm = distanceToEnd / 1000;
-        const progressPercent = (closestIndex / routePolyline.length) * 100;
+        const distanceKm = progress.distanceToEndMeters / 1000;
         turnInfo.innerHTML = VoyagrModules.eta().buildDestinationProgressPanelHtml(
             convertDistance(distanceKm),
             getDistanceUnit(),
-            progressPercent
+            progress.progressPercent
         );
     }
 

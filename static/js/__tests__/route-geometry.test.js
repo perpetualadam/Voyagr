@@ -10,7 +10,7 @@ describe('route-geometry module surface', () => {
         const fns = ['haversineDistanceMeters', 'bearing', 'blendHeadingsCircular',
             'projectToSegment', 'snapToRoutePolyline', 'distanceAlongRouteToVertexMeters',
             'totalPolylineLengthMeters', 'computeRemainingDistanceAlongRoute',
-            'findNearestPolylineVertexIndex'];
+            'findNearestPolylineVertexIndex', 'buildVertexDestinationProgress'];
         fns.forEach(fn => expect(typeof RG[fn]).toBe('function'));
     });
 });
@@ -252,5 +252,34 @@ describe('computeRemainingDistanceAlongRoute', () => {
     test('at end returns ~0', () => {
         const rem = RG.computeRemainingDistanceAlongRoute(51.52, -0.10, polyline, 0);
         expect(rem).toBeLessThan(200);
+    });
+});
+
+describe('buildVertexDestinationProgress', () => {
+    const polyline = [
+        [51.50, -0.12],
+        [51.51, -0.11],
+        [51.52, -0.10],
+    ];
+
+    test('at route start reports full remaining distance', () => {
+        const p = RG.buildVertexDestinationProgress(51.50, -0.12, polyline);
+        expect(p.closestIndex).toBe(0);
+        expect(p.progressPercent).toBe(0);
+        const total = RG.totalPolylineLengthMeters(polyline);
+        expect(p.distanceToEndMeters).toBeGreaterThan(0);
+        expect(p.distanceToEndMeters).toBeLessThanOrEqual(total + 5);
+    });
+
+    test('at route end reports zero remaining distance', () => {
+        const p = RG.buildVertexDestinationProgress(51.52, -0.10, polyline);
+        expect(p.closestIndex).toBe(2);
+        expect(p.distanceToEndMeters).toBe(0);
+        expect(p.progressPercent).toBeCloseTo(66.67, 0);
+    });
+
+    test('empty polyline returns zeroed snapshot', () => {
+        const p = RG.buildVertexDestinationProgress(51.5, -0.1, []);
+        expect(p).toEqual({ closestIndex: 0, distanceToEndMeters: 0, progressPercent: 0 });
     });
 });

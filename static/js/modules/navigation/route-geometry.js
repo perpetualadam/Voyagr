@@ -206,6 +206,30 @@
         return nearestIndex;
     }
 
+    /**
+     * Destination progress snapshot using nearest-vertex snap (matches legacy turnInfo panel).
+     * @param {number} lat
+     * @param {number} lon
+     * @param {Array<[number,number]>} polyline
+     * @returns {{ closestIndex: number, distanceToEndMeters: number, progressPercent: number }}
+     */
+    function buildVertexDestinationProgress(lat, lon, polyline) {
+        if (!polyline || polyline.length === 0) {
+            return { closestIndex: 0, distanceToEndMeters: 0, progressPercent: 0 };
+        }
+        var closestIndex = findNearestPolylineVertexIndex(lat, lon, polyline);
+        var distanceToEndMeters = cumulativeDistanceBetweenVertices(polyline, closestIndex, polyline.length - 1);
+        if (!Number.isFinite(distanceToEndMeters)) {
+            distanceToEndMeters = 0;
+        }
+        var progressPercent = (closestIndex / polyline.length) * 100;
+        return {
+            closestIndex: closestIndex,
+            distanceToEndMeters: distanceToEndMeters,
+            progressPercent: progressPercent,
+        };
+    }
+
     var api = {
         haversineDistanceMeters: haversineDistanceMeters,
         bearing: bearing,
@@ -216,6 +240,7 @@
         totalPolylineLengthMeters: totalPolylineLengthMeters,
         computeRemainingDistanceAlongRoute: computeRemainingDistanceAlongRoute,
         findNearestPolylineVertexIndex: findNearestPolylineVertexIndex,
+        buildVertexDestinationProgress: buildVertexDestinationProgress,
         cumulativeDistanceBetweenVertices: cumulativeDistanceBetweenVertices,
         inferRoadClassFromManeuver: inferRoadClassFromManeuver,
         inferRoadClassFromStreetNames: inferRoadClassFromStreetNames,

@@ -218,6 +218,38 @@
         return { title: 'Navigation Ended', body: 'Route guidance ended' };
     }
 
+    /**
+     * Status message shown when screen wake lock is acquired at nav start.
+     * @returns {string}
+     */
+    function getWakeLockAcquiredStatusMessage() {
+        return '🔒 Screen lock enabled - screen will stay on';
+    }
+
+    /**
+     * Notification, status banner, and optional TTS copy when navigation starts or resumes.
+     * @param {boolean} isQuietResume - True when resuming a persisted route without full restart fanfare.
+     * @returns {{ notificationTitle: string, notificationBody: string, speakMessage: string|null, statusMessage: string, statusType: string }}
+     */
+    function buildNavStartUserFeedbackPlan(isQuietResume) {
+        if (isQuietResume) {
+            return {
+                notificationTitle: 'Navigation resumed',
+                notificationBody: 'Continuing your saved route.',
+                speakMessage: null,
+                statusMessage: '🧭 Navigation resumed — following saved route',
+                statusType: 'success',
+            };
+        }
+        return {
+            notificationTitle: 'Navigation Started',
+            notificationBody: 'Turn-by-turn guidance activated',
+            speakMessage: 'Navigation started. Follow the route.',
+            statusMessage: '🧭 Turn-by-turn navigation active',
+            statusType: 'success',
+        };
+    }
+
     var api = {
         ZOOM_FOLLOW_ENABLED_ICON: ZOOM_FOLLOW_ENABLED_ICON,
         ZOOM_FOLLOW_DISABLED_ICON: ZOOM_FOLLOW_DISABLED_ICON,
@@ -252,6 +284,8 @@
         getNavStopFabHidePlan: getNavStopFabHidePlan,
         getNavStopStatusMessage: getNavStopStatusMessage,
         getNavStopNotification: getNavStopNotification,
+        getWakeLockAcquiredStatusMessage: getWakeLockAcquiredStatusMessage,
+        buildNavStartUserFeedbackPlan: buildNavStartUserFeedbackPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
