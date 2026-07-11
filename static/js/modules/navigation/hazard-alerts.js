@@ -362,6 +362,37 @@
     }
 
     /**
+     * Apply plan for camera hazard preference toggle buttons.
+     * @param {Array<Object>|null|undefined} prefsList - from /api/hazard-preferences
+     * @param {Array<string>} [subtypes] - defaults to HAZARD_CAMERA_PREF_SUBTYPES
+     * @returns {Array<{ hazardType: string, enabled: boolean }>}
+     */
+    function buildHazardCameraTogglesApplyPlan(prefsList, subtypes) {
+        subtypes = subtypes || HAZARD_CAMERA_PREF_SUBTYPES;
+        return subtypes.map(function (ht) {
+            var pref = (prefsList || []).find(function (p) {
+                return p.hazard_type === ht;
+            });
+            return {
+                hazardType: ht,
+                enabled: isHazardPreferenceEnabled(pref),
+            };
+        });
+    }
+
+    /**
+     * Fallback apply plan when hazard preferences API is unavailable.
+     * @param {Array<string>} [subtypes]
+     * @returns {Array<{ hazardType: string, enabled: boolean }>}
+     */
+    function buildHazardCameraTogglesFallbackApplyPlan(subtypes) {
+        subtypes = subtypes || HAZARD_CAMERA_PREF_SUBTYPES;
+        return subtypes.map(function (ht) {
+            return { hazardType: ht, enabled: true };
+        });
+    }
+
+    /**
      * @returns {string}
      */
     function getUnavoidableHazardsModalStyleCssText() {
@@ -604,6 +635,8 @@
         UNAVOIDABLE_HAZARDS_BACKDROP_ID: UNAVOIDABLE_HAZARDS_BACKDROP_ID,
         HAZARD_CAMERA_PREF_SUBTYPES: HAZARD_CAMERA_PREF_SUBTYPES,
         isHazardPreferenceEnabled: isHazardPreferenceEnabled,
+        buildHazardCameraTogglesApplyPlan: buildHazardCameraTogglesApplyPlan,
+        buildHazardCameraTogglesFallbackApplyPlan: buildHazardCameraTogglesFallbackApplyPlan,
         getUnavoidableHazardsModalStyleCssText: getUnavoidableHazardsModalStyleCssText,
         getUnavoidableHazardsBackdropStyleCssText: getUnavoidableHazardsBackdropStyleCssText,
     };

@@ -100,6 +100,22 @@ describe('hazard-alerts module', () => {
         expect(HA.HAZARD_CAMERA_PREF_SUBTYPES).toContain('camera_speed');
     });
 
+    test('buildHazardCameraTogglesApplyPlan maps API prefs to toggle states', () => {
+        const plan = HA.buildHazardCameraTogglesApplyPlan([
+            { hazard_type: 'camera_speed', enabled: false },
+            { hazard_type: 'camera_red_light', enabled: true },
+        ]);
+        expect(plan.find((item) => item.hazardType === 'camera_speed').enabled).toBe(false);
+        expect(plan.find((item) => item.hazardType === 'camera_red_light').enabled).toBe(true);
+        expect(plan.find((item) => item.hazardType === 'camera_mobile').enabled).toBe(true);
+    });
+
+    test('buildHazardCameraTogglesFallbackApplyPlan defaults all toggles to enabled', () => {
+        const plan = HA.buildHazardCameraTogglesFallbackApplyPlan();
+        expect(plan.length).toBe(HA.HAZARD_CAMERA_PREF_SUBTYPES.length);
+        expect(plan.every((item) => item.enabled === true)).toBe(true);
+    });
+
     test('buildUnavoidableHazardsModalMountPlan returns mount shell and inner html', () => {
         const mount = HA.buildUnavoidableHazardsModalMountPlan({ camera: 2 }, 2);
         expect(mount.modalId).toBe(HA.UNAVOIDABLE_HAZARDS_MODAL_ID);

@@ -3451,16 +3451,7 @@ function displayAnalytics(data) {
  * @returns {*} Return value description
  */
 function saveRoutePreferences() {
-    const preferences = {
-        avoidHighways: document.getElementById('avoidHighways')?.checked || false,
-        preferScenic: document.getElementById('preferScenic')?.checked || false,
-        avoidTolls: isAvoidTollsEnabled(),
-        avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
-        preferQuiet: document.getElementById('preferQuiet')?.checked || false,
-        avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
-        routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
-        maxDetour: parseInt(document.getElementById('maxDetour')?.value || 20)
-    };
+    const preferences = collectSettingsFormState().routePreferences;
 
     localStorage.setItem('routePreferences', JSON.stringify(preferences));
     saveAllSettings();
@@ -3567,25 +3558,19 @@ function getRoutePreferences() {
  * @returns {*} Return value description
  */
 function recalculateRouteWithPreferences() {
-    // Check if there's an active route to recalculate
-    if (!window.lastCalculatedRoute || !window.lastCalculatedRoute.destination) {
-        showStatus('No active route to recalculate. Please calculate a route first.', 'error');
+    const plan = _routeSelection().buildRecalculateRouteWithPreferencesPlan(window.lastCalculatedRoute);
+    if (!plan.ok) {
+        showStatus(plan.errorStatusMessage, 'error');
         return;
     }
 
-    // Save current preferences
     saveRoutePreferences();
+    showStatus(plan.loadingStatusMessage, 'loading');
+    switchTab(plan.switchTab);
 
-    // Show loading status
-    showStatus('🔄 Recalculating route with new preferences...', 'loading');
-
-    // Switch back to navigation tab to show results
-    switchTab('navigation');
-
-    // Trigger route calculation with current start/end locations
     setTimeout(() => {
         calculateRoute();
-    }, 300);
+    }, plan.recalculateDelayMs);
 }
 
 // ===== ROUTE SAVING FUNCTIONS =====
@@ -4057,6 +4042,62 @@ function applyCalculateRouteIdleUiFromPlan(idleUiPlan, data) {
 }
 
 /**
+ * Apply route preview map markers and bounds from a pure map apply plan.
+ * @param {Object} plan - from buildRoutePreviewMapApplyPlan
+ * @returns {boolean} false when map is not initialised
+ */
+function applyRoutePreviewMapFromPlan(plan) {
+    if (!plan) return false;
+
+    if (plan.removeExistingMarkers) {
+        if (startMarker && typeof startMarker.remove === 'function') startMarker.remove();
+        if (endMarker && typeof endMarker.remove === 'function') endMarker.remove();
+        if (routeLayer && typeof routeLayer.remove === 'function') routeLayer.remove();
+    }
+
+    const createEndpointMarker = (markerPlan) => {
+        const opts = markerPlan.options;
+        const marker = MapLibreHelpers.createCircleMarker(markerPlan.lat, markerPlan.lon, {
+            radius: opts.radius,
+            fillColor: opts.fillColor,
+            color: opts.color,
+            weight: opts.weight,
+            fillOpacity: opts.fillOpacity,
+        }).addTo(map);
+        marker.bindPopup(opts.popup);
+        return marker;
+    };
+
+    if (plan.startMarker) {
+        startMarker = createEndpointMarker(plan.startMarker);
+    }
+    if (plan.endMarker) {
+        endMarker = createEndpointMarker(plan.endMarker);
+    }
+
+    if (plan.pathLog) {
+        if (plan.pathLog.level === 'error') {
+            console.error(plan.pathLog.message);
+        } else {
+            console.log(plan.pathLog.message);
+        }
+    }
+
+    if (plan.requiresMap && !map) {
+        console.error('[Route] Map not initialized');
+        showStatus('Error: Map not initialized', 'error');
+        return false;
+    }
+
+    if (plan.fitBounds && map) {
+        MapLibreHelpers.fitMapBounds(map, plan.fitBounds.routePath, { padding: plan.fitBounds.padding });
+        lastZoomLevel = map.getZoom();
+    }
+
+    return true;
+}
+
+/**
  * Apply idle (non-navigation) calculateRoute preview outcome.
  * @param {Object} data
  * @param {{ geocodedStart: string, geocodedEnd: string, start: string, end: string }} labels
@@ -4093,50 +4134,17 @@ function applyCalculateRouteIdlePreviewOutcome(data, labels) {
 
         const { startCoords, endCoords, pathPlan, routePath } = previewPlan;
 
-        if (startMarker && typeof startMarker.remove === 'function') startMarker.remove();
-        if (endMarker && typeof endMarker.remove === 'function') endMarker.remove();
-        if (routeLayer && typeof routeLayer.remove === 'function') routeLayer.remove();
-
-        const PM = _previewMarker();
-        const startMarkerOpts = PM.getRouteEndpointMarkerOptions('start');
-        const endMarkerOpts = PM.getRouteEndpointMarkerOptions('end');
-
-        startMarker = MapLibreHelpers.createCircleMarker(startCoords[0], startCoords[1], {
-            radius: startMarkerOpts.radius,
-            fillColor: startMarkerOpts.fillColor,
-            color: startMarkerOpts.color,
-            weight: startMarkerOpts.weight,
-            fillOpacity: startMarkerOpts.fillOpacity,
-        }).addTo(map);
-        startMarker.bindPopup(startMarkerOpts.popup);
-
-        endMarker = MapLibreHelpers.createCircleMarker(endCoords[0], endCoords[1], {
-            radius: endMarkerOpts.radius,
-            fillColor: endMarkerOpts.fillColor,
-            color: endMarkerOpts.color,
-            weight: endMarkerOpts.weight,
-            fillOpacity: endMarkerOpts.fillOpacity,
-        }).addTo(map);
-        endMarker.bindPopup(endMarkerOpts.popup);
-
-        if (pathPlan.usedFallback && data.geometry) {
-            if (!pathPlan.precision) {
-                console.error('[Route] Decoded polyline is empty, using straight line');
-            } else {
-                console.error('[Route] Invalid decoded coordinates, using straight line');
-            }
-        } else if (!pathPlan.usedFallback && pathPlan.precision != null) {
-            console.log(`Route path decoded: ${routePath.length} points with precision ${pathPlan.precision} (source: ${data.source})`);
-        }
-
-        if (!map) {
-            console.error('[Route] Map not initialized');
-            showStatus('Error: Map not initialized', 'error');
-            return;
-        }
-
-        MapLibreHelpers.fitMapBounds(map, routePath, { padding: 50 });
-        lastZoomLevel = map.getZoom();
+        const mapApplied = applyRoutePreviewMapFromPlan(
+            _previewMarker().buildRoutePreviewMapApplyPlan({
+                startCoords,
+                endCoords,
+                routePath,
+                pathPlan,
+                hasGeometry: !!data.geometry,
+                geometrySource: data.source,
+            })
+        );
+        if (!mapApplied) return;
 
         if (data.total_stop_time && data.total_stop_time > 0) {
             console.log(`[Route] Total time with ${data.stops_count} stops: ${previewPlan.displayTime}`);
@@ -15807,31 +15815,27 @@ function togglePreference(pref) {
     saveAllSettings();
 }
 
-function hazardCameraPrefSubtypes() {
-    return _hazardAlerts().HAZARD_CAMERA_PREF_SUBTYPES;
-}
-
 function applyHazardToggleStyles(button, enabled) {
     _toggleUI().applyLabeledToggleButton(button, enabled);
 }
 
 async function loadHazardCameraTogglesFromApi() {
+    const HA = _hazardAlerts();
+    const applyTogglePlan = (items) => {
+        items.forEach((item) => {
+            const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${item.hazardType}"]`);
+            if (btn) applyHazardToggleStyles(btn, item.enabled);
+        });
+    };
+
     try {
         const res = await fetch('/api/hazard-preferences');
         const data = await res.json();
         const prefsList = data.success && data.preferences ? data.preferences : [];
-        for (const ht of hazardCameraPrefSubtypes()) {
-            const pref = prefsList.find(p => p.hazard_type === ht);
-            const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${ht}"]`);
-            if (!btn) continue;
-            applyHazardToggleStyles(btn, _hazardAlerts().isHazardPreferenceEnabled(pref));
-        }
+        applyTogglePlan(HA.buildHazardCameraTogglesApplyPlan(prefsList));
     } catch (e) {
         console.warn('[HAZARDS] Could not load camera hazard preferences:', e);
-        for (const ht of hazardCameraPrefSubtypes()) {
-            const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${ht}"]`);
-            if (btn) applyHazardToggleStyles(btn, true);
-        }
+        applyTogglePlan(HA.buildHazardCameraTogglesFallbackApplyPlan());
     }
 }
 

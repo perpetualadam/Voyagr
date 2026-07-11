@@ -1439,6 +1439,26 @@
     }
 
     /**
+     * Dispatch plan for recalculateRouteWithPreferences.
+     * @param {Object|null|undefined} lastCalculatedRoute
+     * @returns {Object}
+     */
+    function buildRecalculateRouteWithPreferencesPlan(lastCalculatedRoute) {
+        if (!lastCalculatedRoute || !lastCalculatedRoute.destination) {
+            return {
+                ok: false,
+                errorStatusMessage: 'No active route to recalculate. Please calculate a route first.',
+            };
+        }
+        return {
+            ok: true,
+            loadingStatusMessage: '🔄 Recalculating route with new preferences...',
+            switchTab: 'navigation',
+            recalculateDelayMs: 300,
+        };
+    }
+
+    /**
      * Apply plan for the route preview bottom-sheet panel (values only; app writes DOM).
      * @param {Object} o
      * @returns {Object}
@@ -1682,6 +1702,7 @@
         parseRecentDestinationFromCoordString: parseRecentDestinationFromCoordString,
         buildInNavRerouteDispatchPlan: buildInNavRerouteDispatchPlan,
         buildCalculateRouteIdleUiApplyPlan: buildCalculateRouteIdleUiApplyPlan,
+        buildRecalculateRouteWithPreferencesPlan: buildRecalculateRouteWithPreferencesPlan,
         buildRoutePreviewPanelApplyPlan: buildRoutePreviewPanelApplyPlan,
         buildRoutePreviewPanelDomApplyPlan: buildRoutePreviewPanelDomApplyPlan,
         buildAlternativeRoutesPreviewMountPlans: buildAlternativeRoutesPreviewMountPlans,

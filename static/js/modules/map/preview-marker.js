@@ -56,11 +56,70 @@
         };
     }
 
+    /**
+     * Map/marker apply plan for idle route preview after calculateRoute.
+     * @param {Object} o
+     * @param {[number, number]} o.startCoords
+     * @param {[number, number]} o.endCoords
+     * @param {Array<[number,number]>} o.routePath
+     * @param {Object} [o.pathPlan]
+     * @param {boolean} [o.hasGeometry]
+     * @param {string} [o.geometrySource]
+     * @returns {Object}
+     */
+    function buildRoutePreviewMapApplyPlan(o) {
+        o = o || {};
+        var startCoords = o.startCoords || [];
+        var endCoords = o.endCoords || [];
+        var routePath = o.routePath || [];
+        var pathPlan = o.pathPlan || {};
+        var startOpts = getRouteEndpointMarkerOptions('start');
+        var endOpts = getRouteEndpointMarkerOptions('end');
+        var pathLog = null;
+
+        if (pathPlan.usedFallback && o.hasGeometry) {
+            pathLog = {
+                level: 'error',
+                message: !pathPlan.precision
+                    ? '[Route] Decoded polyline is empty, using straight line'
+                    : '[Route] Invalid decoded coordinates, using straight line',
+            };
+        } else if (!pathPlan.usedFallback && pathPlan.precision != null) {
+            pathLog = {
+                level: 'log',
+                message: 'Route path decoded: ' + routePath.length
+                    + ' points with precision ' + pathPlan.precision
+                    + ' (source: ' + (o.geometrySource || '') + ')',
+            };
+        }
+
+        return {
+            removeExistingMarkers: true,
+            startMarker: {
+                lat: startCoords[0],
+                lon: startCoords[1],
+                options: startOpts,
+            },
+            endMarker: {
+                lat: endCoords[0],
+                lon: endCoords[1],
+                options: endOpts,
+            },
+            fitBounds: {
+                routePath: routePath,
+                padding: 50,
+            },
+            pathLog: pathLog,
+            requiresMap: true,
+        };
+    }
+
     var api = {
         PREVIEW_MARKER_CLASS: PREVIEW_MARKER_CLASS,
         getPreviewMarkerStyleCssText: getPreviewMarkerStyleCssText,
         buildPreviewMarkerInnerHtml: buildPreviewMarkerInnerHtml,
         getRouteEndpointMarkerOptions: getRouteEndpointMarkerOptions,
+        buildRoutePreviewMapApplyPlan: buildRoutePreviewMapApplyPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

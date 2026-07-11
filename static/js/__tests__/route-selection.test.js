@@ -577,6 +577,15 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(plan.recentDestinations).toHaveLength(1);
     });
 
+    test('buildRecalculateRouteWithPreferencesPlan guards missing route', () => {
+        expect(RS.buildRecalculateRouteWithPreferencesPlan(null).ok).toBe(false);
+        expect(RS.buildRecalculateRouteWithPreferencesPlan({}).ok).toBe(false);
+        const plan = RS.buildRecalculateRouteWithPreferencesPlan({ destination: 'London' });
+        expect(plan.ok).toBe(true);
+        expect(plan.switchTab).toBe('navigation');
+        expect(plan.recalculateDelayMs).toBe(300);
+    });
+
     test('buildRoutePreviewPanelApplyPlan returns formatted preview values', () => {
         const plan = RS.buildRoutePreviewPanelApplyPlan({
             routeData: {

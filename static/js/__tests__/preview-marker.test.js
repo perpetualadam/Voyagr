@@ -24,4 +24,33 @@ describe('preview-marker module', () => {
         expect(end.fillColor).toBe('#ff0000');
         expect(end.popup).toBe('End Location');
     });
+
+    test('buildRoutePreviewMapApplyPlan assembles marker and bounds apply metadata', () => {
+        const plan = PM.buildRoutePreviewMapApplyPlan({
+            startCoords: [51.5, -0.1],
+            endCoords: [51.6, -0.2],
+            routePath: [[51.5, -0.1], [51.55, -0.15], [51.6, -0.2]],
+            pathPlan: { usedFallback: false, precision: 6 },
+            hasGeometry: true,
+            geometrySource: 'valhalla',
+        });
+        expect(plan.removeExistingMarkers).toBe(true);
+        expect(plan.startMarker.lat).toBe(51.5);
+        expect(plan.endMarker.options.fillColor).toBe('#ff0000');
+        expect(plan.fitBounds.padding).toBe(50);
+        expect(plan.pathLog.level).toBe('log');
+        expect(plan.pathLog.message).toContain('precision 6');
+    });
+
+    test('buildRoutePreviewMapApplyPlan logs fallback when decode fails', () => {
+        const plan = PM.buildRoutePreviewMapApplyPlan({
+            startCoords: [51.5, -0.1],
+            endCoords: [51.6, -0.2],
+            routePath: [[51.5, -0.1], [51.6, -0.2]],
+            pathPlan: { usedFallback: true, precision: null },
+            hasGeometry: true,
+        });
+        expect(plan.pathLog.level).toBe('error');
+        expect(plan.pathLog.message).toContain('empty');
+    });
 });
