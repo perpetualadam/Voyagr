@@ -221,6 +221,21 @@ describe('waypoints module', () => {
         expect(plan.dropEffect).toBe('move');
     });
 
+    test('buildWaypointDropDispatchPlan reorders matching waypoint types', () => {
+        const reorder = W.buildWaypointDropDispatchPlan(
+            { type: 'via', index: 0 },
+            'via',
+            1,
+            2,
+            0
+        );
+        expect(reorder.action).toBe('reorder');
+        expect(reorder.reorderPlan.refreshViaMarkers).toBe(true);
+
+        expect(W.buildWaypointDropDispatchPlan({ type: 'via', index: 0 }, 'stop', 0, 2, 1).action)
+            .toBe('none');
+    });
+
     test('buildMultiDropLegsMapApplyPlan builds layer specs from geometry', () => {
         const decode = jest.fn(() => [[51.5, -0.1], [51.6, -0.2]]);
         const plan = W.buildMultiDropLegsMapApplyPlan({

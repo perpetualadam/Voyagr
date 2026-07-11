@@ -884,4 +884,14 @@ describe('route overview and single-route display plans', () => {
         expect(plan.useWarnOnError).toBe(true);
         expect(plan.successLogMessage).toContain('nav-route');
     });
+
+    test('buildEnsureLabelsOnTopExecutePlan debounces label layer moves', () => {
+        const plan = RS.buildEnsureLabelsOnTopExecutePlan([
+            { id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } },
+        ]);
+        expect(plan.shouldExecute).toBe(true);
+        expect(plan.debounceMs).toBeGreaterThan(0);
+        expect(plan.movedLogMessage).toContain('label layers');
+        expect(RS.buildEnsureLabelsOnTopExecutePlan([]).shouldExecute).toBe(false);
+    });
 });

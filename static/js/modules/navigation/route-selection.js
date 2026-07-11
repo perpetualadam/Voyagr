@@ -1894,6 +1894,29 @@
     }
 
     /**
+     * Execute plan for debounced label layer reordering above route overlays.
+     * @param {Array<Object>} [styleLayers]
+     * @returns {Object}
+     */
+    function buildEnsureLabelsOnTopExecutePlan(styleLayers) {
+        var dispatch = buildEnsureLabelsOnTopDispatchPlan(styleLayers);
+        if (!dispatch.shouldRun) {
+            return {
+                shouldExecute: false,
+                noLabelsLogMessage: '[Labels] No label layers found',
+            };
+        }
+        return {
+            shouldExecute: true,
+            labelLayerIds: dispatch.labelLayerIds,
+            debounceMs: dispatch.debounceMs,
+            movedLogMessage: '[Labels] Moved ' + dispatch.labelLayerIds.length + ' label layers to top',
+            errorLogPrefix: '[Labels] Error ensuring labels on top:',
+            skipMoveErrors: true,
+        };
+    }
+
+    /**
      * Layer reorder plan for route-traffic edge overlays.
      * @param {Array<{ id?: string }>} trafficLayers
      * @param {Array<Object>} [styleLayers]
@@ -2083,6 +2106,7 @@
         buildRouteLayerMapLibreApplyPlan: buildRouteLayerMapLibreApplyPlan,
         buildDoAddRouteLayersBatchPlan: buildDoAddRouteLayersBatchPlan,
         buildEnsureLabelsOnTopDispatchPlan: buildEnsureLabelsOnTopDispatchPlan,
+        buildEnsureLabelsOnTopExecutePlan: buildEnsureLabelsOnTopExecutePlan,
         buildBringTrafficEdgesToTopDispatchPlan: buildBringTrafficEdgesToTopDispatchPlan,
         buildBringNavRouteAboveTrafficEdgesDispatchPlan: buildBringNavRouteAboveTrafficEdgesDispatchPlan,
         buildBringTrafficEdgesToTopExecutePlan: buildBringTrafficEdgesToTopExecutePlan,

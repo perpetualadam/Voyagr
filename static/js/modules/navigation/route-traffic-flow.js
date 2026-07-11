@@ -285,6 +285,22 @@
         };
     }
 
+    /**
+     * Post-mount plan after route-traffic edge polylines are added to the map.
+     * @param {number} [existingLayerCount]
+     * @param {number} [newPolylineCount]
+     * @returns {Object}
+     */
+    function buildRouteTrafficEdgesMountCompletePlan(existingLayerCount, newPolylineCount) {
+        var added = newPolylineCount || 0;
+        var total = (existingLayerCount || 0) + added;
+        return {
+            addedLayerCount: added,
+            totalLayerCount: total,
+            logMessage: '[Route Traffic] Added ' + total + ' congested traffic edge layers',
+        };
+    }
+
     var ROUTE_TRAFFIC_SAMPLE_TTL_MS = 60 * 1000;
     var ROUTE_TRAFFIC_AHEAD_SAMPLE_SEGMENT_COUNT = 8;
 
@@ -595,6 +611,7 @@
         buildFetchRouteTrafficDispatchPlan: buildFetchRouteTrafficDispatchPlan,
         buildDisplayRouteTrafficEdgesApplyPlan: buildDisplayRouteTrafficEdgesApplyPlan,
         buildRouteTrafficEdgesDisplayPlan: buildRouteTrafficEdgesDisplayPlan,
+        buildRouteTrafficEdgesMountCompletePlan: buildRouteTrafficEdgesMountCompletePlan,
         buildRouteTrafficFlowPreflightPlan: buildRouteTrafficFlowPreflightPlan,
         buildRouteTrafficFlowFetchRequestPlan: buildRouteTrafficFlowFetchRequestPlan,
         buildRouteTrafficFlowResponsePlan: buildRouteTrafficFlowResponsePlan,

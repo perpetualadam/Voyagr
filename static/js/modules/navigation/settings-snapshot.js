@@ -24,6 +24,7 @@
         'showTrafficEnabled',
         'autoTrafficUpdateEnabled',
         'autoRerouteOnDeviationEnabled',
+        'routeTrafficEnabled',
         'speedWidgetEnabled',
         'parkingPreferences',
         'multiDropPreferences',
@@ -69,6 +70,7 @@
             showTrafficEnabled: input.showTrafficEnabled,
             autoTrafficUpdateEnabled: input.autoTrafficUpdateEnabled,
             autoRerouteOnDeviationEnabled: input.autoRerouteOnDeviationEnabled,
+            routeTrafficEnabled: input.routeTrafficEnabled,
             speedWidgetEnabled: input.speedWidgetEnabled,
             parkingPreferences: input.parkingPreferences || {},
             multiDropPreferences: input.multiDropPreferences || {},
@@ -102,6 +104,7 @@
             showTrafficEnabled: runtime.showTrafficEnabled,
             autoTrafficUpdateEnabled: runtime.autoTrafficUpdateEnabled,
             autoRerouteOnDeviationEnabled: runtime.autoRerouteOnDeviationEnabled,
+            routeTrafficEnabled: runtime.routeTrafficEnabled,
             speedWidgetEnabled: runtime.speedWidgetEnabled,
             parkingPreferences: formState.parkingPreferences || {},
             multiDropPreferences: formState.multiDropPreferences || {},
@@ -193,6 +196,10 @@
         if (settings.autoRerouteOnDeviationEnabled !== undefined) {
             runtime.autoRerouteOnDeviationEnabled = settings.autoRerouteOnDeviationEnabled;
             localStoragePatches.autoRerouteOnDeviation = settings.autoRerouteOnDeviationEnabled ? 'true' : 'false';
+        }
+        if (settings.routeTrafficEnabled !== undefined) {
+            runtime.routeTrafficEnabled = settings.routeTrafficEnabled;
+            localStoragePatches.routeTrafficEnabled = settings.routeTrafficEnabled ? 'true' : 'false';
         }
         if (settings.speedWidgetEnabled !== undefined) {
             runtime.speedWidgetEnabled = !!settings.speedWidgetEnabled;
@@ -493,6 +500,7 @@
                 smartZoom: !!input.smartZoomEnabled,
                 autoTrafficUpdate: !!input.autoTrafficUpdateEnabled,
                 autoRerouteOnDeviation: !!input.autoRerouteOnDeviationEnabled,
+                routeTraffic: !!input.routeTrafficEnabled,
             },
             labeledToggleButtons: {
                 mlPredictions: !!input.mlPredictionsEnabled,
@@ -536,6 +544,7 @@
             smartZoomEnabled: runtime.smartZoomEnabled,
             autoTrafficUpdateEnabled: runtime.autoTrafficUpdateEnabled,
             autoRerouteOnDeviationEnabled: runtime.autoRerouteOnDeviationEnabled,
+            routeTrafficEnabled: runtime.routeTrafficEnabled,
             mlPredictionsEnabled: runtime.mlPredictionsEnabled,
             voiceAnnouncementsEnabled: runtime.voiceAnnouncementsEnabled,
             batterySavingEnabled: runtime.batterySavingEnabled,
@@ -582,6 +591,7 @@
                 { id: 'smartZoomToggle', enabled: toggles.smartZoom },
                 { id: 'autoTrafficUpdateToggle', enabled: toggles.autoTrafficUpdate },
                 { id: 'autoRerouteDeviationToggle', enabled: toggles.autoRerouteOnDeviation },
+                { id: 'routeTrafficToggle', enabled: toggles.routeTraffic },
             ],
             labeledToggles: [
                 { id: 'mlPredictionsEnabled', enabled: labeled.mlPredictions },

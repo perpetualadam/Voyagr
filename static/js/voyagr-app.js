@@ -1433,6 +1433,7 @@ function collectSettingsSnapshotRuntimeState() {
         showTrafficEnabled,
         autoTrafficUpdateEnabled,
         autoRerouteOnDeviationEnabled,
+        routeTrafficEnabled,
         speedWidgetEnabled,
     };
 }
@@ -1479,6 +1480,7 @@ function applySettingsRestoreFromPlan(plan) {
     if (rt.showTrafficEnabled !== undefined) showTrafficEnabled = rt.showTrafficEnabled;
     if (rt.autoTrafficUpdateEnabled !== undefined) autoTrafficUpdateEnabled = rt.autoTrafficUpdateEnabled;
     if (rt.autoRerouteOnDeviationEnabled !== undefined) autoRerouteOnDeviationEnabled = rt.autoRerouteOnDeviationEnabled;
+    if (rt.routeTrafficEnabled !== undefined) routeTrafficEnabled = rt.routeTrafficEnabled;
     if (rt.speedWidgetEnabled !== undefined) speedWidgetEnabled = rt.speedWidgetEnabled;
 
     return true;
@@ -2912,29 +2914,32 @@ function onWaypointDragOver(e) {
 function onWaypointDrop(e) {
     e.preventDefault();
     const target = _domHelpers().closest(e.target, '.waypoint-item');
-    if (!target || !_draggedWaypoint) return;
+    const WP = _waypoints();
+    const dispatch = WP.buildWaypointDropDispatchPlan(
+        _draggedWaypoint,
+        target ? target.dataset.type : null,
+        target ? parseInt(target.dataset.index) : NaN,
+        viaPoints.length,
+        stops.length
+    );
 
-    const targetType = target.dataset.type;
-    const targetIdx = parseInt(target.dataset.index);
-
-    if (_draggedWaypoint.type === targetType) {
-        const WP = _waypoints();
-        const count = targetType === 'via' ? viaPoints.length : stops.length;
-        const plan = WP.buildWaypointReorderPlan(_draggedWaypoint.type, _draggedWaypoint.index, targetIdx, count);
-        if (plan.shouldReorder) {
-            const arr = targetType === 'via' ? viaPoints : stops;
-            const markerArr = targetType === 'via' ? viaPointMarkers : stopMarkers;
-            const item = arr.splice(plan.fromIndex, 1)[0];
-            const marker = markerArr.splice(plan.fromIndex, 1)[0];
-            arr.splice(plan.toIndex, 0, item);
-            markerArr.splice(plan.toIndex, 0, marker);
-            if (plan.updateWaypointsList) updateWaypointsList();
-            if (plan.refreshViaMarkers) refreshViaPointMarkers();
-        }
+    if (dispatch.action === 'reorder') {
+        const plan = dispatch.reorderPlan;
+        const arr = plan.type === 'via' ? viaPoints : stops;
+        const markerArr = plan.type === 'via' ? viaPointMarkers : stopMarkers;
+        const item = arr.splice(plan.fromIndex, 1)[0];
+        const marker = markerArr.splice(plan.fromIndex, 1)[0];
+        arr.splice(plan.toIndex, 0, item);
+        markerArr.splice(plan.toIndex, 0, marker);
+        if (plan.updateWaypointsList) updateWaypointsList();
+        if (plan.refreshViaMarkers) refreshViaPointMarkers();
     }
-    _draggedWaypoint = null;
-    const resetPlan = _waypoints().buildWaypointDragOpacityResetPlan();
-    document.querySelectorAll(resetPlan.selector).forEach(el => el.style.opacity = resetPlan.opacity);
+
+    if (dispatch.clearDragState) _draggedWaypoint = null;
+    if (dispatch.resetOpacity) {
+        const resetPlan = WP.buildWaypointDragOpacityResetPlan();
+        document.querySelectorAll(resetPlan.selector).forEach(el => el.style.opacity = resetPlan.opacity);
+    }
 }
 
 function moveWaypoint(type, index, direction) {
@@ -5359,6 +5364,7 @@ function displayRouteTrafficEdges(segments) {
 
     console.log('[Route Traffic] Segment levels:', displayPlan.levelCounts);
 
+    const layersBeforeMount = routeTrafficLayers.length;
     displayPlan.polylines.forEach((polylinePlan) => {
         const trafficLine = MapLibreHelpers.addPolyline(map, polylinePlan.points, {
             color: polylinePlan.color,
@@ -5368,7 +5374,11 @@ function displayRouteTrafficEdges(segments) {
         routeTrafficLayers.push(trafficLine);
     });
 
-    console.log(`[Route Traffic] Added ${routeTrafficLayers.length} congested traffic edge layers`);
+    const mountComplete = RTF.buildRouteTrafficEdgesMountCompletePlan(
+        layersBeforeMount,
+        displayPlan.polylineMountCount
+    );
+    console.log(mountComplete.logMessage);
 
     if (displayPlan.bringTrafficEdgesToTop) {
         bringTrafficEdgesToTop();
@@ -5412,22 +5422,8 @@ function bringNavRouteAboveTrafficEdges() {
 // Debounce timer for ensureLabelsOnTop to prevent excessive calls
 let ensureLabelsTimeout = null;
 
-/**
- * Ensure road labels are always rendered above route and traffic layers
- * This function moves all symbol layers with text-field to the top of the layer stack
- * Debounced to prevent excessive calls during rapid layer additions
- */
-function ensureLabelsOnTop() {
-    if (!map) return;
-
-    const plan = _routeSelection().buildEnsureLabelsOnTopDispatchPlan(
-        map.getStyle() && map.getStyle().layers
-    );
-    if (!plan.shouldRun) {
-        console.log('[Labels] No label layers found');
-        return;
-    }
-
+function applyEnsureLabelsOnTopFromPlan(plan) {
+    if (!plan || !plan.shouldExecute || !map) return false;
     clearTimeout(ensureLabelsTimeout);
     ensureLabelsTimeout = setTimeout(() => {
         try {
@@ -5436,16 +5432,35 @@ function ensureLabelsOnTop() {
                     if (map.getLayer(layerId)) {
                         map.moveLayer(layerId);
                     }
-                } catch (e) {
+                } catch (_e) {
                     // Silently skip layers that can't be moved
                 }
             });
-
-            console.log(`[Labels] Moved ${plan.labelLayerIds.length} label layers to top`);
+            if (plan.movedLogMessage) console.log(plan.movedLogMessage);
         } catch (e) {
-            console.log('[Labels] Error ensuring labels on top:', e.message);
+            console.log(plan.errorLogPrefix, e.message);
         }
     }, plan.debounceMs);
+    return true;
+}
+
+/**
+ * Ensure road labels are always rendered above route and traffic layers
+ * This function moves all symbol layers with text-field to the top of the layer stack
+ * Debounced to prevent excessive calls during rapid layer additions
+ */
+function ensureLabelsOnTop() {
+    if (!map) return;
+
+    const plan = _routeSelection().buildEnsureLabelsOnTopExecutePlan(
+        map.getStyle() && map.getStyle().layers
+    );
+    if (!plan.shouldExecute) {
+        if (plan.noLabelsLogMessage) console.log(plan.noLabelsLogMessage);
+        return;
+    }
+
+    applyEnsureLabelsOnTopFromPlan(plan);
 }
 
 /**

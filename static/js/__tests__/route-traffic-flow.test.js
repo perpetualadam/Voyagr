@@ -303,4 +303,10 @@ describe('route traffic ahead sampling and cache plans', () => {
         expect(blocked.shouldDisplay).toBe(false);
         expect(blocked.cannotDisplayLog.map).toBe(false);
     });
+
+    test('buildRouteTrafficEdgesMountCompletePlan reports total layer count', () => {
+        const plan = RTF.buildRouteTrafficEdgesMountCompletePlan(0, 3);
+        expect(plan.totalLayerCount).toBe(3);
+        expect(plan.logMessage).toContain('3');
+    });
 });

@@ -803,6 +803,40 @@
     }
 
     /**
+     * Drop dispatch plan for waypoint list drag-and-drop reordering.
+     * @param {Object|null} draggedWaypoint
+     * @param {string|null} targetType
+     * @param {number} targetIndex
+     * @param {number} [viaCount]
+     * @param {number} [stopsCount]
+     * @returns {Object}
+     */
+    function buildWaypointDropDispatchPlan(draggedWaypoint, targetType, targetIndex, viaCount, stopsCount) {
+        if (!draggedWaypoint || !targetType || isNaN(targetIndex)) {
+            return { action: 'none', clearDragState: true, resetOpacity: true };
+        }
+        if (draggedWaypoint.type !== targetType) {
+            return { action: 'none', clearDragState: true, resetOpacity: true };
+        }
+        var count = targetType === 'via' ? (viaCount || 0) : (stopsCount || 0);
+        var reorderPlan = buildWaypointReorderPlan(
+            targetType,
+            draggedWaypoint.index,
+            targetIndex,
+            count
+        );
+        if (!reorderPlan.shouldReorder) {
+            return { action: 'none', clearDragState: true, resetOpacity: true };
+        }
+        return {
+            action: 'reorder',
+            reorderPlan: reorderPlan,
+            clearDragState: true,
+            resetOpacity: true,
+        };
+    }
+
+    /**
      * Map apply plan for drawing all multi-drop leg geometries.
      * @param {Object} data
      * @param {function(string, number): Array<[number,number]>} decodePolyline
@@ -926,6 +960,7 @@
         buildWaypointsListDomApplyPlan: buildWaypointsListDomApplyPlan,
         buildWaypointDragStartPlan: buildWaypointDragStartPlan,
         buildWaypointDragOverPlan: buildWaypointDragOverPlan,
+        buildWaypointDropDispatchPlan: buildWaypointDropDispatchPlan,
         buildWaypointDragOpacityResetPlan: buildWaypointDragOpacityResetPlan,
         buildMultiDropLegsMapApplyPlan: buildMultiDropLegsMapApplyPlan,
         buildClearMultiDropLayersPlan: buildClearMultiDropLayersPlan,

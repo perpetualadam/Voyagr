@@ -37,6 +37,21 @@ describe('settings-snapshot module', () => {
         expect(snapshot.lastSaved).toBe('2026-07-11T12:00:00.000Z');
     });
 
+    test('buildSettingsSnapshot includes routeTrafficEnabled', () => {
+        const snapshot = SS.buildSettingsSnapshot({
+            distanceUnit: 'km',
+            routeTrafficEnabled: false,
+            now: Date.parse('2026-07-11T12:00:00.000Z'),
+        });
+        expect(snapshot.routeTrafficEnabled).toBe(false);
+    });
+
+    test('buildSettingsRestorePlan restores routeTrafficEnabled pref', () => {
+        const plan = SS.buildSettingsRestorePlan({ routeTrafficEnabled: false });
+        expect(plan.runtime.routeTrafficEnabled).toBe(false);
+        expect(plan.localStorage.routeTrafficEnabled).toBe('false');
+    });
+
     test('buildSettingsRestorePlan maps hazard prefs to canonical localStorage keys', () => {
         const plan = SS.buildSettingsRestorePlan({
             unit_distance: 'km',
@@ -123,6 +138,13 @@ describe('settings-snapshot module', () => {
         expect(dom.standardToggles.find((item) => item.id === 'smartZoomToggle').enabled).toBe(true);
         expect(dom.labeledToggles.find((item) => item.id === 'mlPredictionsEnabled').enabled).toBe(true);
         expect(dom.detourLabel.text).toBe('15%');
+    });
+
+    test('buildSettingsUiDomApplyPlan includes routeTrafficToggle', () => {
+        const dom = SS.buildSettingsUiDomApplyPlan(
+            SS.buildSettingsUiApplyPlan({ routeTrafficEnabled: false, smartZoomEnabled: true })
+        );
+        expect(dom.standardToggles.find((item) => item.id === 'routeTrafficToggle').enabled).toBe(false);
     });
 
     test('buildSettingsUiInputPlan merges runtime and stored state', () => {
