@@ -215,3 +215,28 @@ describe('buildSmartZoomEasePlan', () => {
         expect(plan.lastTurnZoomApplied).toBe(true);
     });
 });
+
+describe('buildNavigationZoomTickPlan', () => {
+    const { buildNavigationZoomTickPlan } = require('../modules/navigation/camera-pitch.js');
+
+    test('skips smart zoom when navigation follow already eased', () => {
+        const plan = buildNavigationZoomTickPlan({
+            smartZoomEnabled: true,
+            routeInProgress: true,
+            navigationFollowEaseApplied: true,
+            followZoom: 15,
+        });
+        expect(plan.applySmartZoom).toBe(false);
+        expect(plan.syncLastZoomLevel).toBe(15);
+    });
+
+    test('allows smart zoom when follow did not ease', () => {
+        const plan = buildNavigationZoomTickPlan({
+            smartZoomEnabled: true,
+            routeInProgress: true,
+            navigationFollowEaseApplied: false,
+        });
+        expect(plan.applySmartZoom).toBe(true);
+        expect(plan.syncLastZoomLevel).toBeNull();
+    });
+});

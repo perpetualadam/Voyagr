@@ -736,6 +736,62 @@
         return ((h - mb) % 360 + 360) % 360;
     }
 
+    /**
+     * Position/heading/smooth-state plan for one GPS tracking tick.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildGpsTrackingPositionTickPlan(opts) {
+        opts = opts || {};
+        var lat = opts.lat;
+        var lon = opts.lon;
+        var gpsHeadingForBlend = typeof opts.resolveGpsHeading === 'function'
+            ? opts.resolveGpsHeading()
+            : (opts.gpsHeadingForBlend || 0);
+
+        var followJumpM = Number.isFinite(opts.followJumpM)
+            ? opts.followJumpM
+            : computeFollowJumpMeters({
+                displayLat: lat,
+                displayLon: lon,
+                smoothDisplayLat: opts.smoothDisplayLat,
+                smoothDisplayLon: opts.smoothDisplayLon,
+                lastFollowCenterGeo: opts.lastFollowCenterGeo,
+                calculateDistanceMeters: opts.calculateDistanceMeters,
+            });
+
+        var posPlan = buildNavigationVehicleMarkerPositionPlan({
+            lat: lat,
+            lon: lon,
+            accuracy: opts.accuracy,
+            routeInProgress: opts.routeInProgress,
+            routePolyline: opts.routePolyline,
+            snapped: opts.snapped,
+            gpsHeadingForBlend: gpsHeadingForBlend,
+            lastSnappedRouteIndex: opts.lastSnappedRouteIndex,
+            prevSnapBlendWeightState: opts.prevSnapBlendWeightState,
+            speedMph: opts.speedMph,
+            smoothDisplayLat: opts.smoothDisplayLat,
+            smoothDisplayLon: opts.smoothDisplayLon,
+            followJumpM: followJumpM,
+            calculateBearing: opts.calculateBearing,
+            blendHeadingsCircular: opts.blendHeadingsCircular,
+        });
+
+        return {
+            heading: posPlan.heading,
+            markerLat: posPlan.markerLat,
+            markerLon: posPlan.markerLon,
+            followJumpM: followJumpM,
+            statePatch: {
+                snapBlendWeightState: posPlan.snapBlendWeightState,
+                lastSnappedRouteIndex: posPlan.lastSnappedRouteIndex,
+                smoothDisplayLat: posPlan.smoothDisplayLat,
+                smoothDisplayLon: posPlan.smoothDisplayLon,
+            },
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         KMH_TO_MPH: KMH_TO_MPH,
@@ -766,6 +822,7 @@
         computeFollowJumpMeters: computeFollowJumpMeters,
         buildSnappedVehicleDisplayPlan: buildSnappedVehicleDisplayPlan,
         buildNavigationVehicleMarkerPositionPlan: buildNavigationVehicleMarkerPositionPlan,
+        buildGpsTrackingPositionTickPlan: buildGpsTrackingPositionTickPlan,
         computeVehicleMarkerRotationDeg: computeVehicleMarkerRotationDeg,
         normalizeGeolocationCoordsSample: normalizeGeolocationCoordsSample,
         buildTrackingHistoryAppendPlan: buildTrackingHistoryAppendPlan,

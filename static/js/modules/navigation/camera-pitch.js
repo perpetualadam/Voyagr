@@ -206,12 +206,28 @@
         };
     }
 
+    /**
+     * Decide whether turn/smart zoom should run after navigation follow eased this tick.
+     * @param {Object} opts
+     * @returns {{ applySmartZoom: boolean, syncLastZoomLevel: (number|null) }}
+     */
+    function buildNavigationZoomTickPlan(opts) {
+        opts = opts || {};
+        var followEaseApplied = !!(opts.navigationFollowEaseApplied);
+        var syncZoom = followEaseApplied && Number.isFinite(opts.followZoom) ? opts.followZoom : null;
+        return {
+            applySmartZoom: !!(opts.smartZoomEnabled && opts.routeInProgress && !followEaseApplied),
+            syncLastZoomLevel: syncZoom,
+        };
+    }
+
     const api = {
         decideDrivingCamera: decideDrivingCamera,
         computeFollowPadding: computeFollowPadding,
         buildNavigationFollowEasePlan: buildNavigationFollowEasePlan,
         buildNavigationFollowCameraPlan: buildNavigationFollowCameraPlan,
         buildSmartZoomEasePlan: buildSmartZoomEasePlan,
+        buildNavigationZoomTickPlan: buildNavigationZoomTickPlan,
     };
 
     // CommonJS (Jest) export.

@@ -417,3 +417,26 @@ describe('buildRouteApiResultPlan', () => {
         expect(fail.errorMessage).toBe('Error: bad coords');
     });
 });
+
+describe('buildAutomaticRerouteRequestPlan', () => {
+    test('assembles reroute body from storage and runtime prefs', () => {
+        const storage = mockStorage({
+            pref_avoid_tollRoads: 'true',
+            pref_caz: 'true',
+        });
+        const body = RR.buildAutomaticRerouteRequestPlan(storage, {
+            startLat: 51.5,
+            startLon: -0.1,
+            destination: '52,0',
+            routingMode: 'fastest',
+            vehicleType: 'petrol_diesel',
+            costParams: { fuel_efficiency: 6.5, fuel_price: 1.6, energy_efficiency: 18, electricity_price: 0.3 },
+            isAvoidTollsEnabled: () => true,
+            routePrefs: { avoidTolls: true },
+        });
+        expect(body.start).toBe('51.5,-0.1');
+        expect(body.end).toBe('52,0');
+        expect(body.routing_mode).toBe('fastest');
+        expect(body.avoid_tolls).toBe(true);
+    });
+});

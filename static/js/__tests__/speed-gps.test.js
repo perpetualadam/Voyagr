@@ -505,3 +505,22 @@ describe('buildNavSpeedLimitTickPlan', () => {
         expect(plan.valhallaSpeedLimitMph).toBeNull();
     });
 });
+
+describe('buildGpsTrackingPositionTickPlan', () => {
+    test('returns marker position and state patch from snapped route', () => {
+        const tick = SG.buildGpsTrackingPositionTickPlan({
+            lat: 51.5,
+            lon: -0.1,
+            routeInProgress: true,
+            routePolyline: [[51.5, -0.1], [51.501, -0.101]],
+            snapped: { lat: 51.5005, lon: -0.1005, index: 0, distance: 30 },
+            speedMph: 25,
+            resolveGpsHeading: () => 90,
+            calculateBearing: () => 90,
+            blendHeadingsCircular: (g, r, b) => g + (r - g) * b,
+        });
+        expect(tick.markerLat).toBeGreaterThan(51.5);
+        expect(tick.heading).toBeGreaterThanOrEqual(0);
+        expect(tick.statePatch.lastSnappedRouteIndex).toBeGreaterThanOrEqual(0);
+    });
+});

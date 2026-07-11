@@ -5706,23 +5706,16 @@ function resolveNavigationDestination() {
  */
 function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) {
     const routePrefs = (typeof getRoutePreferences === 'function') ? getRoutePreferences() : {};
-    const RR = _routingRequest();
-    const includeFlags = RR.readRerouteIncludeFlags(localStorage);
-
-    return RR.buildRerouteRequestBody({
-        startLat: startLat,
-        startLon: startLon,
-        destination: destination,
-        avoidPoints: RR.normalizeAvoidPoints(avoidPoints),
-        includeTolls: includeFlags.includeTolls,
-        includeCaz: includeFlags.includeCaz,
-        sharedOptions: RR.buildRerouteSharedOptions(localStorage, {
-            routingMode: currentRoutingMode || 'auto',
-            vehicleType: currentVehicleType || 'petrol_diesel',
-            costParams: getRouteCostParams(currentVehicleType),
-            isAvoidTollsEnabled: isAvoidTollsEnabled,
-            routePrefs: routePrefs,
-        }),
+    return _routingRequest().buildAutomaticRerouteRequestPlan(localStorage, {
+        startLat,
+        startLon,
+        destination,
+        avoidPoints,
+        routingMode: currentRoutingMode || 'auto',
+        vehicleType: currentVehicleType || 'petrol_diesel',
+        costParams: getRouteCostParams(currentVehicleType),
+        isAvoidTollsEnabled,
+        routePrefs,
     });
 }
 
@@ -12009,6 +12002,9 @@ function startGPSTracking() {
             });
             trackingHistory = historyPlan.history;
 
+            /** Single raw-speed sample / tick (clamped inside pickRawSpeedMph) for zoom + HUD. */
+            const speedMph = pickRawSpeedMph(sample.deviceSpeedMs, trackingHistory, accuracy);
+
             // Whole-journey odometer: sum plausible movement between raw fixes.
             if (routeInProgress) {
                 const odoNow = Date.now();
@@ -12027,65 +12023,50 @@ function startGPSTracking() {
             }
 
             const SGhead = _speedGps();
-            let gpsHeadingForBlend = SGhead
-                ? SGhead.resolveGpsHeadingDegrees({
-                    deviceHeading,
-                    speed,
-                    trackingHistory,
-                    calculateDistanceMeters,
-                })
-                : 0;
-            let heading = gpsHeadingForBlend;
-
-            /** Single raw-speed sample / tick (clamped inside pickRawSpeedMph) for zoom + HUD. */
-            const speedMph = pickRawSpeedMph(sample.deviceSpeedMs, trackingHistory, accuracy);
-
-            // SNAP TO ROUTE + smooth display position for vehicle marker
             const SGpos = _speedGps();
             const snapped = (routeInProgress && routePolyline && routePolyline.length >= 2)
                 ? _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex)
                 : null;
-            const followJumpM = SGpos
-                ? SGpos.computeFollowJumpMeters({
-                    displayLat: lat,
-                    displayLon: lon,
-                    smoothDisplayLat: _smoothDisplayLat,
-                    smoothDisplayLon: _smoothDisplayLon,
-                    lastFollowCenterGeo: window.__voyagrLastFollowCenterGeo,
-                    calculateDistanceMeters,
-                })
-                : Number.POSITIVE_INFINITY;
-            const posPlan = SGpos
-                ? SGpos.buildNavigationVehicleMarkerPositionPlan({
+            const posTick = SGpos
+                ? SGpos.buildGpsTrackingPositionTickPlan({
                     lat,
                     lon,
                     accuracy,
                     routeInProgress,
                     routePolyline,
                     snapped,
-                    gpsHeadingForBlend,
                     lastSnappedRouteIndex,
                     prevSnapBlendWeightState: _snapBlendWeightState,
                     speedMph,
                     smoothDisplayLat: _smoothDisplayLat,
                     smoothDisplayLon: _smoothDisplayLon,
-                    followJumpM,
+                    lastFollowCenterGeo: window.__voyagrLastFollowCenterGeo,
+                    calculateDistanceMeters,
                     calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
                     blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
+                    resolveGpsHeading: () => (SGhead
+                        ? SGhead.resolveGpsHeadingDegrees({
+                            deviceHeading,
+                            speed,
+                            trackingHistory,
+                            calculateDistanceMeters,
+                        })
+                        : 0),
                 })
                 : null;
-            if (posPlan) {
-                heading = posPlan.heading;
-                _snapBlendWeightState = posPlan.snapBlendWeightState;
-                lastSnappedRouteIndex = posPlan.lastSnappedRouteIndex;
-                _smoothDisplayLat = posPlan.smoothDisplayLat;
-                _smoothDisplayLon = posPlan.smoothDisplayLon;
+            let heading = posTick ? posTick.heading : 0;
+            if (posTick) {
+                _snapBlendWeightState = posTick.statePatch.snapBlendWeightState;
+                lastSnappedRouteIndex = posTick.statePatch.lastSnappedRouteIndex;
+                _smoothDisplayLat = posTick.statePatch.smoothDisplayLat;
+                _smoothDisplayLon = posTick.statePatch.smoothDisplayLon;
             } else if (_smoothDisplayLat == null || _smoothDisplayLon == null) {
                 _smoothDisplayLat = lat;
                 _smoothDisplayLon = lon;
             }
             const markerLat = _smoothDisplayLat;
             const markerLon = _smoothDisplayLon;
+            const followJumpM = posTick ? posTick.followJumpM : Number.POSITIVE_INFINITY;
 
             const displaySpeedMph = smoothGpsSpeedMph(speedMph);
             const SL = _speedLimitWidget();
@@ -12157,6 +12138,9 @@ function startGPSTracking() {
                 routeInProgress,
             });
 
+            let navigationFollowEaseApplied = false;
+            let navigationFollowZoom = null;
+
             if (followPlan.mode === 'navigation' && map) {
                 const followCamera = CP.buildNavigationFollowCameraPlan({
                     speedMph,
@@ -12180,6 +12164,8 @@ function startGPSTracking() {
                     window.__voyagrLastFollowEaseAt = followPlan.nowMs;
                     window.__voyagrLastFollowCenterGeo = { lat: markerLat, lon: markerLon };
                     map.easeTo(followCamera.easeTo);
+                    navigationFollowEaseApplied = true;
+                    navigationFollowZoom = followCamera.zoom;
                 }
 
                 console.log(`[Navigation] View: pitch ${followCamera.pitch}°, bearing ${Math.round(followCamera.bearing)}°, zoom ${followCamera.zoom.toFixed(1)}, pitchedNav: ${isActiveNavigationFollow()}, pref: ${driverPerspectiveEnabled}`);
@@ -12234,7 +12220,24 @@ function startGPSTracking() {
                 // This prevents ETA from being announced every 1-5 seconds
             }
 
-            applySmartZoomWithAnimation(speedMph, distanceToNextTurn, speedLimitPlan.roadType || 'unknown', lat, lon);
+            const zoomTick = CP.buildNavigationZoomTickPlan({
+                smartZoomEnabled,
+                routeInProgress,
+                navigationFollowEaseApplied,
+                followZoom: navigationFollowZoom,
+            });
+            if (zoomTick.syncLastZoomLevel != null) {
+                lastZoomLevel = zoomTick.syncLastZoomLevel;
+            }
+            if (zoomTick.applySmartZoom) {
+                applySmartZoomWithAnimation(
+                    speedMph,
+                    distanceToNextTurn,
+                    speedLimitPlan.roadType || 'unknown',
+                    lat,
+                    lon
+                );
+            }
 
             // Update lane guidance if navigating
             if (routeInProgress && currentRouteSteps.length > 0) {
@@ -12469,9 +12472,13 @@ const VOICE_FREQUENCY_THROTTLES = {
  * @returns {number}
  */
 function getNavigationRemainingDistanceMeters(lat, lon) {
-    if (!routePolyline || routePolyline.length < 2) return Infinity;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return Infinity;
-    return _routeGeometry().computeRemainingDistanceAlongRoute(lat, lon, routePolyline, lastSnappedRouteIndex);
+    const plan = _routeGeometry().buildNavigationRemainingDistancePlan({
+        lat,
+        lon,
+        routePolyline,
+        lastSnappedRouteIndex,
+    });
+    return plan.remainingMeters;
 }
 
 function resetNavigationArrivalState() {

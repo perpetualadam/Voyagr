@@ -400,6 +400,30 @@
         return [lat, lon];
     }
 
+    /**
+     * Remaining along-route distance for navigation/arrival/deviation checks.
+     * @param {Object} opts
+     * @returns {{ valid: boolean, remainingMeters: number }}
+     */
+    function buildNavigationRemainingDistancePlan(opts) {
+        opts = opts || {};
+        var polyline = opts.routePolyline || [];
+        var lat = opts.lat;
+        var lon = opts.lon;
+        if (polyline.length < 2 || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+            return { valid: false, remainingMeters: Infinity };
+        }
+        return {
+            valid: true,
+            remainingMeters: computeRemainingDistanceAlongRoute(
+                lat,
+                lon,
+                polyline,
+                opts.lastSnappedRouteIndex || 0
+            ),
+        };
+    }
+
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api;
     }
@@ -410,4 +434,5 @@
     api.calculateSmartZoom = calculateSmartZoom;
     api.calculateDriverViewCenter = calculateDriverViewCenter;
     api.resolveCurrentRoadType = resolveCurrentRoadType;
+    api.buildNavigationRemainingDistancePlan = buildNavigationRemainingDistancePlan;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

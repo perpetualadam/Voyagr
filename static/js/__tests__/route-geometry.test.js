@@ -219,6 +219,35 @@ describe('resolveCurrentRoadType', () => {
     });
 });
 
+describe('buildNavigationRemainingDistancePlan', () => {
+    const polyline = [
+        [51.50, -0.12],
+        [51.51, -0.11],
+        [51.52, -0.10],
+    ];
+
+    test('returns remaining meters along route', () => {
+        const plan = RG.buildNavigationRemainingDistancePlan({
+            lat: 51.50,
+            lon: -0.12,
+            routePolyline: polyline,
+            lastSnappedRouteIndex: 0,
+        });
+        expect(plan.valid).toBe(true);
+        expect(plan.remainingMeters).toBeGreaterThan(0);
+    });
+
+    test('returns Infinity when polyline invalid', () => {
+        const plan = RG.buildNavigationRemainingDistancePlan({
+            lat: 51.5,
+            lon: -0.1,
+            routePolyline: [],
+        });
+        expect(plan.valid).toBe(false);
+        expect(plan.remainingMeters).toBe(Infinity);
+    });
+});
+
 describe('calculateSmartZoom', () => {
     const ZL = { motorway_high_speed: 14, main_road_medium_speed: 15, urban_low_speed: 16, parking_very_low_speed: 17, turn_ahead: 18 };
     const T = 500;

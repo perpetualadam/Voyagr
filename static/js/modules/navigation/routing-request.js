@@ -271,6 +271,32 @@
     }
 
     /**
+     * Assemble full automatic reroute `/api/route` body from storage and runtime prefs.
+     * @param {Storage} storage
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildAutomaticRerouteRequestPlan(storage, opts) {
+        opts = opts || {};
+        var includeFlags = readRerouteIncludeFlags(storage);
+        return buildRerouteRequestBody({
+            startLat: opts.startLat,
+            startLon: opts.startLon,
+            destination: opts.destination,
+            avoidPoints: normalizeAvoidPoints(opts.avoidPoints),
+            includeTolls: includeFlags.includeTolls,
+            includeCaz: includeFlags.includeCaz,
+            sharedOptions: buildRerouteSharedOptions(storage, {
+                routingMode: opts.routingMode,
+                vehicleType: opts.vehicleType,
+                costParams: opts.costParams,
+                isAvoidTollsEnabled: opts.isAvoidTollsEnabled,
+                routePrefs: opts.routePrefs,
+            }),
+        });
+    }
+
+    /**
      * `/api/route` body for the driving leg of multimodal parking routing.
      * @param {Object} o
      * @returns {Object}
@@ -612,6 +638,7 @@
         normalizeAvoidPoints: normalizeAvoidPoints,
         formatCoordPair: formatCoordPair,
         buildRerouteRequestBody: buildRerouteRequestBody,
+        buildAutomaticRerouteRequestPlan: buildAutomaticRerouteRequestPlan,
         buildMultimodalDrivingLegBody: buildMultimodalDrivingLegBody,
         buildMultimodalWalkingLegBody: buildMultimodalWalkingLegBody,
         mapViaPointsForApi: mapViaPointsForApi,
