@@ -230,3 +230,14 @@ describe('buildDestinationAnnouncement', () => {
         expect(VA.buildDestinationAnnouncement(750, 'km')).toBe('');
     });
 });
+
+describe('voiceAnnouncementStateResetValues', () => {
+    test('returns scalar reset fields for new route geometry', () => {
+        const patch = VA.voiceAnnouncementStateResetValues(12345);
+        expect(patch.lastETAAnnouncementTime).toBe(12345);
+        expect(patch.lastAnnouncedETA).toBeNull();
+        expect(patch.lastDestinationAnnouncementDistance).toBe(Infinity);
+        expect(patch.voiceAnnouncedForManeuverIndex).toBeNull();
+        expect(patch.lastLaneVoiceKey).toBe('');
+    });
+});

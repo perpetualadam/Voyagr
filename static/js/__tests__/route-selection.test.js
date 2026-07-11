@@ -36,3 +36,56 @@ describe('route-selection module', () => {
         expect(out.maneuvers).toHaveLength(1);
     });
 });
+
+describe('route comparison and selection helpers', () => {
+    test('hazardBadgeColor thresholds', () => {
+        expect(RS.hazardBadgeColor(0)).toBe('#4CAF50');
+        expect(RS.hazardBadgeColor(2)).toBe('#FF9800');
+        expect(RS.hazardBadgeColor(5)).toBe('#F44336');
+    });
+
+    test('computeRouteTotalCost sums fuel toll and caz', () => {
+        expect(RS.computeRouteTotalCost({ fuel_cost: 10, toll_cost: 2, caz_cost: 1.5 })).toBe(13.5);
+    });
+
+    test('buildTripInfoDisplayValues formats cost strings', () => {
+        const d = RS.buildTripInfoDisplayValues(
+            { distance_km: 12, duration_minutes: 25, fuel_cost: 5, toll_cost: 2, caz_cost: 0 },
+            { distanceText: '7.46', distUnit: 'mi', currencySymbol: '£' }
+        );
+        expect(d.fuelCostText).toBe('£5.00');
+        expect(d.durationMinutes).toBe(25);
+    });
+
+    test('buildRouteComparisonListHtml includes show-all button and route card', () => {
+        const html = RS.buildRouteComparisonListHtml(
+            [{ name: 'Fast', distance_km: 10, duration_minutes: 20, hazard_count: 1, fuel_cost: 5, toll_cost: 0 }],
+            { selectedIndex: 0, currencySymbol: '£', distUnit: 'mi', distanceTexts: ['6.21'] }
+        );
+        expect(html).toContain('Show All 1 Routes');
+        expect(html).toContain('Fast');
+        expect(html).toContain('Use This Route');
+    });
+
+    test('pickActiveRouteDuringNavigation prefers primary when flagged', () => {
+        const routes = [{ name: 'A' }, { name: 'B' }];
+        expect(RS.pickActiveRouteDuringNavigation(routes, null, { preferPrimary: true }).name).toBe('A');
+    });
+
+    test('pickActiveRouteDuringNavigation matches previous route name', () => {
+        const routes = [{ name: 'Balanced' }, { name: 'Fastest' }];
+        expect(RS.pickActiveRouteDuringNavigation(routes, null, { previousRouteName: 'Fastest' }).name)
+            .toBe('Fastest');
+    });
+
+    test('orderWaypointsGreedy visits nearest intermediate points', () => {
+        const ordered = RS.orderWaypointsGreedy(0, 0, 10, 10, [
+            { lat: 1, lon: 1, type: 'via' },
+            { lat: 5, lon: 5, type: 'via' },
+        ], []);
+        expect(ordered).toHaveLength(4);
+        expect(ordered[0].type).toBe('start');
+        expect(ordered[3].type).toBe('end');
+        expect(ordered[1].lat).toBe(1);
+    });
+});

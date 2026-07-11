@@ -2307,19 +2307,10 @@ let routeOptions = [];
 let selectedRouteIndex = 0;
 let allRouteLayers = []; // Store all route polylines for multi-route display
 
-// Route colors for multi-route display
-// AVOID traffic colors (green, orange/amber, red) to prevent confusion
-// Use blues, purples, pinks, and cyans that contrast with traffic overlay
-const ROUTE_COLORS = [
-    '#2563EB',  // Bright blue - main route (Camera-Safe)
-    '#7C3AED',  // Purple - Shortest
-    '#EC4899',  // Pink/Magenta - Fastest
-    '#06B6D4',  // Cyan/Teal - Balanced
-    '#8B5CF6'   // Violet - additional routes
-];
-
+// Route colors for multi-route display (from VoyagrRouteSelection module)
+const ROUTE_COLORS = VoyagrRouteSelection.ROUTE_COLORS;
 /** Active navigation / reroute line — matches ROUTE_COLORS[0], contrasts with green traffic tiles. */
-const NAV_ACTIVE_ROUTE_COLOR = '#2563EB';
+const NAV_ACTIVE_ROUTE_COLOR = VoyagrRouteSelection.NAV_ACTIVE_ROUTE_COLOR;
 
 /**
  * Clear ALL route layers from the map (including any orphaned layers)
@@ -2804,66 +2795,19 @@ function toggleRouteEditing() {
  * @returns {void}
  */
 function displayRouteComparison() {
+    const listContainer = document.getElementById('routeComparisonList');
     if (!routeOptions || routeOptions.length === 0) {
-        document.getElementById('routeComparisonList').innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">Calculate a route to see options</div>';
+        listContainer.innerHTML = VoyagrModules.routeSelection().buildRouteComparisonListHtml([], {});
         return;
     }
 
-    // DON'T call displayAllRoutesOnMap() here - it's controlled by selectRoute/showAllRoutes
-
-    const listContainer = document.getElementById('routeComparisonList');
-    const symbol = getCurrencySymbol();
-
-    // Add "Show All Routes" button at the top
-    let html = `
-        <button onclick="showAllRoutes(); event.stopPropagation();" style="width: 100%; background: #667eea; color: white; border: none; border-radius: 8px; padding: 12px; font-size: 14px; cursor: pointer; font-weight: 600; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 8px;">
-            🗺️ Show All ${routeOptions.length} Routes
-        </button>
-    `;
-
-    html += routeOptions.map((route, index) => {
-        const distance = convertDistance(route.distance_km);
-        const distUnit = getDistanceUnit();
-        const routeName = route.name || `Route ${index + 1}`;
-        const hazardCount = route.hazard_count || 0;
-        const routeColor = ROUTE_COLORS[index % ROUTE_COLORS.length];
-
-        const fuelCost = parseFloat(route.fuel_cost || 0);
-        const tollCost = parseFloat(route.toll_cost || 0);
-        const cazCost = parseFloat(route.caz_cost || 0);
-        const totalCost = (fuelCost + tollCost + cazCost).toFixed(2);
-
-        const isSelected = index === selectedRouteIndex;
-        const borderColor = isSelected ? routeColor : '#ddd';
-        const bgColor = isSelected ? '#E8F5E9' : '#f8f9fa';
-
-        // Hazard badge color based on count
-        const hazardColor = hazardCount === 0 ? '#4CAF50' : (hazardCount <= 2 ? '#FF9800' : '#F44336');
-
-        return `
-            <div style="background: ${bgColor}; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid ${routeColor}; cursor: pointer;" onclick="selectRoute(${index})">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                    <div style="font-size: 14px; font-weight: 600; color: #333;">
-                        <span style="display: inline-block; width: 12px; height: 12px; background: ${routeColor}; border-radius: 50%; margin-right: 6px;"></span>
-                        ${routeName}
-                    </div>
-                    <div style="font-size: 11px; padding: 2px 8px; border-radius: 10px; background: ${hazardColor}; color: white;">📷 ${hazardCount} cameras</div>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px; color: #333; margin-bottom: 8px;">
-                    <div><strong>⏱️ ${route.duration_minutes} min</strong></div>
-                    <div><strong>📏 ${distance} ${distUnit}</strong></div>
-                    <div>⛽ ${symbol}${fuelCost.toFixed(2)}</div>
-                    <div>🛣️ ${symbol}${tollCost.toFixed(2)}</div>
-                </div>
-                <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
-                    Total: <strong>${symbol}${totalCost}</strong>
-                </div>
-                <button onclick="useRoute(${index}); event.stopPropagation();" style="width: 100%; background: ${routeColor}; color: white; border: none; border-radius: 4px; padding: 8px; font-size: 12px; cursor: pointer; font-weight: 500;">Use This Route</button>
-            </div>
-        `;
-    }).join('');
-
-    listContainer.innerHTML = html;
+    listContainer.innerHTML = VoyagrModules.routeSelection().buildRouteComparisonListHtml(routeOptions, {
+        selectedIndex: selectedRouteIndex,
+        routeColors: ROUTE_COLORS,
+        currencySymbol: getCurrencySymbol(),
+        distUnit: getDistanceUnit(),
+        distanceTexts: routeOptions.map((route) => convertDistance(route.distance_km)),
+    });
 }
 
 // ===== VIA-POINTS AND STOPS FUNCTIONALITY =====
@@ -3351,44 +3295,9 @@ function clearMultiDropLayers() {
  * Get all waypoints for route calculation (start + viaPoints + stops + end)
  */
 function getOrderedWaypoints(startLat, startLon, endLat, endLon) {
-    const waypoints = [];
-
-    // Start
-    waypoints.push({ lat: startLat, lon: startLon, type: 'start' });
-
-    // Combine via-points and stops, sort by distance from start for optimization
-    const intermediate = [...viaPoints, ...stops];
-
-    if (intermediate.length > 0) {
-        // Simple greedy optimization: visit closest point next
-        const remaining = [...intermediate];
-        let current = { lat: startLat, lon: startLon };
-
-        while (remaining.length > 0) {
-            let closestIdx = 0;
-            let closestDist = Infinity;
-
-            for (let i = 0; i < remaining.length; i++) {
-                const dist = Math.sqrt(
-                    Math.pow(remaining[i].lat - current.lat, 2) +
-                    Math.pow(remaining[i].lon - current.lon, 2)
-                );
-                if (dist < closestDist) {
-                    closestDist = dist;
-                    closestIdx = i;
-                }
-            }
-
-            waypoints.push(remaining[closestIdx]);
-            current = remaining[closestIdx];
-            remaining.splice(closestIdx, 1);
-        }
-    }
-
-    // End
-    waypoints.push({ lat: endLat, lon: endLon, type: 'end' });
-
-    return waypoints;
+    return VoyagrModules.routeSelection().orderWaypointsGreedy(
+        startLat, startLon, endLat, endLon, viaPoints, stops
+    );
 }
 
 /**
@@ -3427,34 +3336,34 @@ function selectRoute(index) {
  */
 function updateTripInfoFromRouteOption(route) {
     if (!route) return;
-    const distance = convertDistance(route.distance_km);
-    const distUnit = getDistanceUnit();
-    const symbol = getCurrencySymbol();
-    const fuelCost = parseFloat(route.fuel_cost || 0);
-    const tollCost = parseFloat(route.toll_cost || 0);
-    const cazCost = parseFloat(route.caz_cost || 0);
+    const display = VoyagrModules.routeSelection().buildTripInfoDisplayValues(route, {
+        distanceText: convertDistance(route.distance_km),
+        distUnit: getDistanceUnit(),
+        currencySymbol: getCurrencySymbol(),
+    });
+    if (!display) return;
 
     const distanceEl = document.getElementById('distance');
     const timeEl = document.getElementById('time');
     const fuelEl = document.getElementById('fuelCost');
     const tollEl = document.getElementById('tollCost');
     if (distanceEl) {
-        distanceEl.textContent = distance + ' ' + distUnit;
-        distanceEl.dataset.km = route.distance_km;
+        distanceEl.textContent = display.distanceText + ' ' + display.distUnit;
+        distanceEl.dataset.km = display.distanceKm;
     }
-    if (timeEl) timeEl.textContent = route.duration_minutes + ' min';
+    if (timeEl) timeEl.textContent = display.durationMinutes + ' min';
     if (fuelEl) {
-        fuelEl.textContent = symbol + fuelCost.toFixed(2);
-        fuelEl.dataset.value = fuelCost;
+        fuelEl.textContent = display.fuelCostText;
+        fuelEl.dataset.value = display.fuelCost;
     }
     if (tollEl) {
-        tollEl.textContent = symbol + tollCost.toFixed(2);
-        tollEl.dataset.value = tollCost;
+        tollEl.textContent = display.tollCostText;
+        tollEl.dataset.value = display.tollCost;
     }
     console.log('[Cost] Route selected with costs:', {
-        fuelCost: fuelCost.toFixed(2),
-        tollCost: tollCost.toFixed(2),
-        cazCost: cazCost.toFixed(2),
+        fuelCost: display.fuelCost.toFixed(2),
+        tollCost: display.tollCost.toFixed(2),
+        cazCost: display.cazCost.toFixed(2),
     });
 }
 
@@ -6253,24 +6162,21 @@ let _preferPrimaryRouteOnNextNavUpdate = false;
  * @returns {Object|null}
  */
 function pickActiveRouteDuringNavigation(routeList, singleRoutePayload) {
-    if (!routeList || routeList.length === 0) {
-        return singleRoutePayload || null;
-    }
-    if (_preferPrimaryRouteOnNextNavUpdate) {
+    const preferPrimary = _preferPrimaryRouteOnNextNavUpdate;
+    if (preferPrimary) {
         _preferPrimaryRouteOnNextNavUpdate = false;
         console.log('[Reroute] Using primary route (post-deviation; skipping name match)');
-        return routeList[0];
     }
-    let activeRoute = routeList[0];
-    if (routeList.length > 1 && window.lastCalculatedRoute) {
-        const prevName = (window.lastCalculatedRoute.name || '').toLowerCase();
-        if (prevName) {
-            const match = routeList.find(r => (r.name || '').toLowerCase() === prevName);
-            if (match) {
-                activeRoute = match;
-                console.log(`[Reroute] Matched previous route "${match.name}"`);
-            }
+    const activeRoute = VoyagrModules.routeSelection().pickActiveRouteDuringNavigation(
+        routeList,
+        singleRoutePayload,
+        {
+            preferPrimary: preferPrimary,
+            previousRouteName: window.lastCalculatedRoute ? window.lastCalculatedRoute.name : '',
         }
+    );
+    if (!preferPrimary && routeList && routeList.length > 1 && window.lastCalculatedRoute && activeRoute !== routeList[0]) {
+        console.log(`[Reroute] Matched previous route "${activeRoute.name}"`);
     }
     return activeRoute;
 }
@@ -6659,19 +6565,19 @@ function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) 
  * Prevents repeating the same milestones and back-to-back ETA after "route recalculated".
  */
 function resetVoiceAnnouncementStateForNewRoute() {
-    lastETAAnnouncementTime = Date.now();
-    lastAnnouncedETA = null;
-    lastDestinationAnnouncementDistance = Infinity;
+    const patch = VoyagrModules.voiceAnnouncements().voiceAnnouncementStateResetValues(Date.now());
+    lastETAAnnouncementTime = patch.lastETAAnnouncementTime;
+    lastAnnouncedETA = patch.lastAnnouncedETA;
+    lastDestinationAnnouncementDistance = patch.lastDestinationAnnouncementDistance;
+    lastTurnDetectRouteVertexIndex = patch.lastTurnDetectRouteVertexIndex;
+    initialETAMovementRetries = patch.initialETAMovementRetries;
+    _voiceAnnouncedForManeuverIndex = patch.voiceAnnouncedForManeuverIndex;
+    _voiceAnnouncedCategory = patch.voiceAnnouncedCategory;
+    _lastLaneVoiceKey = patch.lastLaneVoiceKey;
     announcedTurnThresholds.clear();
     announcedExitThresholds.clear();
     announcedKeepThresholds.clear();
-    _voiceAnnouncedForManeuverIndex = null;
-    _voiceAnnouncedCategory = null;
-    lastTurnDetectRouteVertexIndex = 0;
     clearInitialETAAnnouncement();
-    initialETAMovementRetries = 0;
-    // Drop any stale lane voice key so the new geometry re-announces lane guidance.
-    _lastLaneVoiceKey = '';
 }
 
 /**
@@ -7824,30 +7730,19 @@ function showAlternativeRoutesInPreview() {
     container.innerHTML = '';
     const symbol = getCurrencySymbol();
     const distUnit = getDistanceUnit();
+    const fuelUnit = currentVehicleType === 'electric' ? 'kWh' : 'L';
 
     routeOptions.forEach((route, index) => {
-        const fuelCost = parseFloat(route.fuel_cost || 0);
-        const tollCost = parseFloat(route.toll_cost || 0);
-        const cazCost = parseFloat(route.caz_cost || 0);
-        const totalCost = (fuelCost + tollCost + cazCost).toFixed(2);
         const routeColor = ROUTE_COLORS[index % ROUTE_COLORS.length];
-        const routeName = route.name || `Route ${index + 1}`;
-        const hazardCount = route.cameras_near_route ?? route.hazard_count ?? 0;
-        const hazardColor = hazardCount === 0 ? '#4CAF50' : (hazardCount <= 2 ? '#FF9800' : '#F44336');
         const div = document.createElement('div');
         div.style.cssText = `background: white; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid ${routeColor}; border: 2px solid #ddd; cursor: pointer; transition: all 0.3s ease; overflow: hidden;`;
-        div.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; gap: 8px; min-width: 0;">
-                <div style="display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;">
-                    <span style="display: inline-block; width: 12px; height: 12px; background: ${routeColor}; border-radius: 50%; flex-shrink: 0;"></span>
-                    <strong style="color: #333; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${routeName}</strong>
-                </div>
-                <span style="background: ${hazardColor}; color: white; padding: 2px 6px; border-radius: 4px; font-size: 11px; flex-shrink: 0;">Score ${hazardCount}</span>
-            </div>
-            <div style="font-size: 12px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                ⏱️ ${route.duration_minutes} min | 📏 ${convertDistance(route.distance_km)} ${distUnit} | ⛽ ${parseFloat(route.fuel_litres || 0).toFixed(1)} ${currentVehicleType === 'electric' ? 'kWh' : 'L'} | 💰 ${symbol}${totalCost}
-            </div>
-        `;
+        div.innerHTML = VoyagrModules.routeSelection().buildPreviewAlternativeRouteCardHtml(route, index, {
+            routeColors: ROUTE_COLORS,
+            currencySymbol: symbol,
+            distUnit: distUnit,
+            distanceText: convertDistance(route.distance_km),
+            fuelUnit: fuelUnit,
+        });
         div.onmouseover = () => { div.style.borderColor = routeColor; div.style.background = '#f0f4ff'; };
         div.onmouseout = () => { div.style.borderColor = '#ddd'; div.style.background = 'white'; };
         div.onclick = () => {

@@ -200,11 +200,30 @@
         return '';
     }
 
+    /**
+     * Scalar fields to reset when route geometry changes (Sets cleared separately in app).
+     * @param {number} nowMs
+     * @returns {Object}
+     */
+    function voiceAnnouncementStateResetValues(nowMs) {
+        return {
+            lastETAAnnouncementTime: nowMs,
+            lastAnnouncedETA: null,
+            lastDestinationAnnouncementDistance: Infinity,
+            lastTurnDetectRouteVertexIndex: 0,
+            initialETAMovementRetries: 0,
+            voiceAnnouncedForManeuverIndex: null,
+            voiceAnnouncedCategory: null,
+            lastLaneVoiceKey: '',
+        };
+    }
+
     var api = {
         isExitDirection: isExitDirection,
         isKeepDirection: isKeepDirection,
         buildTurnAnnouncement: buildTurnAnnouncement,
-        buildDestinationAnnouncement: buildDestinationAnnouncement
+        buildDestinationAnnouncement: buildDestinationAnnouncement,
+        voiceAnnouncementStateResetValues: voiceAnnouncementStateResetValues,
     };
 
     // CommonJS (Jest) export.
