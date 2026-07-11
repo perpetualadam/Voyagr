@@ -266,6 +266,68 @@
         return { action: 'fetch', address: String(address || '') };
     }
 
+    /**
+     * Pair of start/end geocode endpoint plans for geocodeLocations.
+     * @param {Object} o
+     * @param {Object|null} o.startStored
+     * @param {string} o.startAddress
+     * @param {Object|null} o.endStored
+     * @param {string} o.endAddress
+     * @returns {Object}
+     */
+    function buildGeocodePairPlans(o) {
+        o = o || {};
+        return {
+            startPlan: buildGeocodeEndpointPlan(o.startStored, o.startAddress),
+            endPlan: buildGeocodeEndpointPlan(o.endStored, o.endAddress),
+            loadingStatusMessage: getGeocodeLoadingStatusMessage(),
+        };
+    }
+
+    /**
+     * Failure outcome when a single endpoint geocode fetch fails.
+     * @param {'start'|'end'} which
+     * @param {string} address
+     * @returns {Object}
+     */
+    function buildGeocodeEndpointFailurePlan(which, address) {
+        return {
+            statusMessage: buildGeocodeNotFoundStatusMessage(which, address),
+            statusType: 'error',
+            clearGeocodingFlag: true,
+        };
+    }
+
+    /**
+     * Success outcome after both endpoints resolve.
+     * @param {Object} startResult
+     * @param {Object} endResult
+     * @returns {Object}
+     */
+    function buildGeocodePairSuccessOutcomePlan(startResult, endResult) {
+        return {
+            ok: true,
+            statusMessage: buildGeocodeResolvedStatusMessage(startResult, endResult),
+            statusType: 'success',
+            coords: formatGeocodeApiCoords(startResult, endResult),
+            clearGeocodingFlag: true,
+        };
+    }
+
+    /**
+     * Error outcome when geocodeLocations throws.
+     * @param {string} message
+     * @returns {Object}
+     */
+    function buildGeocodePairErrorOutcomePlan(message) {
+        return {
+            ok: false,
+            statusMessage: buildGeocodeErrorStatusMessage(message),
+            statusType: 'error',
+            clearGeocodingFlag: true,
+        };
+    }
+
     var api = {
         readStoredLocationFromDataset: readStoredLocationFromDataset,
         getGeocodeLoadingStatusMessage: getGeocodeLoadingStatusMessage,
@@ -286,6 +348,10 @@
         buildNominatimSearchUrl: buildNominatimSearchUrl,
         parseNominatimFetchPayload: parseNominatimFetchPayload,
         buildGeocodeEndpointPlan: buildGeocodeEndpointPlan,
+        buildGeocodePairPlans: buildGeocodePairPlans,
+        buildGeocodeEndpointFailurePlan: buildGeocodeEndpointFailurePlan,
+        buildGeocodePairSuccessOutcomePlan: buildGeocodePairSuccessOutcomePlan,
+        buildGeocodePairErrorOutcomePlan: buildGeocodePairErrorOutcomePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

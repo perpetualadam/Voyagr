@@ -170,4 +170,12 @@ describe('settings-snapshot module', () => {
         expect(plan.departureTime).toBe('08:00');
         expect(plan.elementIds.optimizeStopOrder).toBe('optimizeStopOrder');
     });
+
+    test('buildClearDepartureTimeApplyPlan clears departure time control', () => {
+        const plan = SS.buildClearDepartureTimeApplyPlan();
+        expect(plan.elementId).toBe('departureTime');
+        expect(plan.removeStorageKey).toBe('pref_departureTime');
+        expect(plan.statusMessage).toContain('cleared');
+        expect(plan.statusType).toBe('info');
+    });
 });

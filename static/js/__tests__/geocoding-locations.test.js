@@ -105,4 +105,38 @@ describe('geocoding-locations module', () => {
             address: 'Leeds',
         });
     });
+
+    test('buildGeocodePairPlans assembles start/end endpoint plans', () => {
+        const stored = { lat: 51.5, lon: -0.1, display_name: 'London', cached: true };
+        const plans = GL.buildGeocodePairPlans({
+            startStored: stored,
+            startAddress: 'London',
+            endStored: null,
+            endAddress: 'Leeds',
+        });
+        expect(plans.startPlan.action).toBe('use_stored');
+        expect(plans.endPlan.action).toBe('fetch');
+        expect(plans.endPlan.address).toBe('Leeds');
+        expect(plans.loadingStatusMessage).toContain('Geocoding');
+    });
+
+    test('buildGeocodePairSuccessOutcomePlan formats coords and status', () => {
+        const outcome = GL.buildGeocodePairSuccessOutcomePlan(
+            { lat: 51.5, lon: -0.1, display_name: 'Start' },
+            { lat: 52, lon: -1, display_name: 'End' }
+        );
+        expect(outcome.ok).toBe(true);
+        expect(outcome.coords.start).toBe('51.5,-0.1');
+        expect(outcome.statusMessage).toContain('Start → End');
+        expect(outcome.clearGeocodingFlag).toBe(true);
+    });
+
+    test('buildGeocodeEndpointFailurePlan and error outcome include status metadata', () => {
+        const fail = GL.buildGeocodeEndpointFailurePlan('end', 'Nowhere');
+        expect(fail.statusMessage).toContain('end location: Nowhere');
+        expect(fail.statusType).toBe('error');
+        const err = GL.buildGeocodePairErrorOutcomePlan('timeout');
+        expect(err.ok).toBe(false);
+        expect(err.statusMessage).toContain('timeout');
+    });
 });

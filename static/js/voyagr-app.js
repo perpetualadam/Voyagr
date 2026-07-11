@@ -3531,10 +3531,21 @@ function loadMultiDropPreferences() {
 }
 
 function clearDepartureTime() {
-    const el = document.getElementById('departureTime');
+    applyClearDepartureTimeFromPlan(_settingsSnapshot().buildClearDepartureTimeApplyPlan());
+}
+
+/**
+ * Clear departure time input and storage from a pure apply plan.
+ * @param {Object} plan - from buildClearDepartureTimeApplyPlan
+ */
+function applyClearDepartureTimeFromPlan(plan) {
+    if (!plan) return;
+    const el = document.getElementById(plan.elementId);
     if (el) el.value = '';
-    localStorage.removeItem('pref_departureTime');
-    showStatus('Departure time cleared - using current time', 'info');
+    if (plan.removeStorageKey) {
+        localStorage.removeItem(plan.removeStorageKey);
+    }
+    showStatus(plan.statusMessage, plan.statusType);
 }
 
 /**
@@ -3543,28 +3554,33 @@ function clearDepartureTime() {
  * @returns {*} Return value description
  */
 function loadRoutePreferences() {
-    const saved = localStorage.getItem('routePreferences');
-    if (saved) {
-        const preferences = JSON.parse(saved);
-        const setChecked = (id, val) => {
-            const el = document.getElementById(id);
-            if (el) el.checked = !!val;
-        };
-        const setValue = (id, val) => {
-            const el = document.getElementById(id);
-            if (el) el.value = val;
-        };
-        // avoidHighways is retained in the persisted schema for backwards compatibility,
-        // but the checkbox was retired in favour of the functional "Avoid Motorways" toggle.
-        setChecked('avoidHighways', preferences.avoidHighways);
-        setChecked('preferScenic', preferences.preferScenic);
-        // Note: avoidTolls is now sourced from Route Preferences → pref_avoid_tollRoads (via isAvoidTollsEnabled()).
-        // avoidCAZ is still managed by togglePreference('caz') → pref_caz.
-        setChecked('preferQuiet', preferences.preferQuiet);
-        setChecked('avoidUnpaved', preferences.avoidUnpaved);
-        setValue('routeOptimization', preferences.routeOptimization || 'fastest');
-        setValue('maxDetour', preferences.maxDetour || 20);
-        if (document.getElementById('maxDetour')) updateDetourLabel();
+    applyRoutePreferencesUiFromPlan(
+        _routePrefs().buildRoutePreferencesUiApplyPlan(localStorage)
+    );
+}
+
+/**
+ * Apply route preference form controls from a pure UI apply plan.
+ * @param {Object} plan - from buildRoutePreferencesUiApplyPlan
+ */
+function applyRoutePreferencesUiFromPlan(plan) {
+    if (!plan) return;
+
+    const ids = plan.elementIds || {};
+    const checks = plan.checks || {};
+    Object.entries(checks).forEach(([key, value]) => {
+        const el = document.getElementById(ids[key]);
+        if (el) el.checked = !!value;
+    });
+
+    const selects = plan.selects || {};
+    Object.entries(selects).forEach(([key, value]) => {
+        const el = document.getElementById(ids[key]);
+        if (el) el.value = value;
+    });
+
+    if (plan.updateDetourLabel && document.getElementById(ids.maxDetour)) {
+        updateDetourLabel();
     }
 }
 
@@ -14726,56 +14742,59 @@ async function geocodeAddress(address) {
     }
 }
 
+async function resolveGeocodeEndpoint(GL, endpointPlan, which, fallbackAddress) {
+    if (endpointPlan.action === 'use_stored') {
+        console.log(`[Geocoding] Using stored coordinates for ${which}:`, endpointPlan.result);
+        return { ok: true, result: endpointPlan.result };
+    }
+
+    const result = await geocodeAddress(endpointPlan.address);
+    if (!result) {
+        return {
+            ok: false,
+            failure: GL.buildGeocodeEndpointFailurePlan(which, fallbackAddress),
+        };
+    }
+    return { ok: true, result };
+}
+
 async function geocodeLocations(startAddress, endAddress) {
     const GL = _geocodingLocations();
     isGeocoding = true;
-    showStatus(GL.getGeocodeLoadingStatusMessage(), 'loading');
+
+    const startInput = document.getElementById('start');
+    const endInput = document.getElementById('end');
+    const pairPlans = GL.buildGeocodePairPlans({
+        startStored: GL.readStoredLocationFromDataset(startInput?.dataset, startAddress),
+        startAddress,
+        endStored: GL.readStoredLocationFromDataset(endInput?.dataset, endAddress),
+        endAddress,
+    });
+    showStatus(pairPlans.loadingStatusMessage, 'loading');
 
     try {
-        const startInput = document.getElementById('start');
-        const endInput = document.getElementById('end');
-
-        const startPlan = GL.buildGeocodeEndpointPlan(
-            GL.readStoredLocationFromDataset(startInput.dataset, startAddress),
-            startAddress
-        );
-        let startResult;
-        if (startPlan.action === 'use_stored') {
-            startResult = startPlan.result;
-            console.log('[Geocoding] Using stored coordinates for start:', startResult);
-        } else {
-            startResult = await geocodeAddress(startPlan.address);
-            if (!startResult) {
-                showStatus(GL.buildGeocodeNotFoundStatusMessage('start', startAddress), 'error');
-                isGeocoding = false;
-                return null;
-            }
+        const startResolved = await resolveGeocodeEndpoint(GL, pairPlans.startPlan, 'start', startAddress);
+        if (!startResolved.ok) {
+            showStatus(startResolved.failure.statusMessage, startResolved.failure.statusType);
+            isGeocoding = false;
+            return null;
         }
 
-        const endPlan = GL.buildGeocodeEndpointPlan(
-            GL.readStoredLocationFromDataset(endInput.dataset, endAddress),
-            endAddress
-        );
-        let endResult;
-        if (endPlan.action === 'use_stored') {
-            endResult = endPlan.result;
-            console.log('[Geocoding] Using stored coordinates for end:', endResult);
-        } else {
-            endResult = await geocodeAddress(endPlan.address);
-            if (!endResult) {
-                showStatus(GL.buildGeocodeNotFoundStatusMessage('end', endAddress), 'error');
-                isGeocoding = false;
-                return null;
-            }
+        const endResolved = await resolveGeocodeEndpoint(GL, pairPlans.endPlan, 'end', endAddress);
+        if (!endResolved.ok) {
+            showStatus(endResolved.failure.statusMessage, endResolved.failure.statusType);
+            isGeocoding = false;
+            return null;
         }
 
-        showStatus(GL.buildGeocodeResolvedStatusMessage(startResult, endResult), 'success');
-
+        const outcome = GL.buildGeocodePairSuccessOutcomePlan(startResolved.result, endResolved.result);
+        showStatus(outcome.statusMessage, outcome.statusType);
         isGeocoding = false;
-        return GL.formatGeocodeApiCoords(startResult, endResult);
+        return outcome.coords;
     } catch (error) {
         console.log('[Geocoding] Error:', error);
-        showStatus(GL.buildGeocodeErrorStatusMessage(error.message), 'error');
+        const outcome = GL.buildGeocodePairErrorOutcomePlan(error.message);
+        showStatus(outcome.statusMessage, outcome.statusType);
         isGeocoding = false;
         return null;
     }

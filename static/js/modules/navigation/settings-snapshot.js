@@ -249,6 +249,19 @@
     }
 
     /**
+     * Apply plan for clearing the multi-drop departure time control.
+     * @returns {Object}
+     */
+    function buildClearDepartureTimeApplyPlan() {
+        return {
+            elementId: 'departureTime',
+            removeStorageKey: 'pref_departureTime',
+            statusMessage: 'Departure time cleared - using current time',
+            statusType: 'info',
+        };
+    }
+
+    /**
      * DOM apply plan for settings form controls (values only; app writes DOM).
      * @param {Object} input
      * @returns {Object}
@@ -323,6 +336,7 @@
         buildSettingsRestorePlan: buildSettingsRestorePlan,
         buildMultiDropPreferencesStoragePlan: buildMultiDropPreferencesStoragePlan,
         buildMultiDropPreferencesUiApplyPlan: buildMultiDropPreferencesUiApplyPlan,
+        buildClearDepartureTimeApplyPlan: buildClearDepartureTimeApplyPlan,
         buildSettingsUiApplyPlan: buildSettingsUiApplyPlan,
     };
 

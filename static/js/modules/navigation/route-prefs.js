@@ -141,6 +141,36 @@
     }
 
     /**
+     * DOM apply plan for route preference form controls.
+     * @param {Storage} storage
+     * @returns {Object}
+     */
+    function buildRoutePreferencesUiApplyPlan(storage) {
+        var prefs = getRoutePreferences(storage);
+        return {
+            checks: {
+                avoidHighways: !!prefs.avoidHighways,
+                preferScenic: !!prefs.preferScenic,
+                preferQuiet: !!prefs.preferQuiet,
+                avoidUnpaved: !!prefs.avoidUnpaved,
+            },
+            selects: {
+                routeOptimization: prefs.routeOptimization || 'fastest',
+                maxDetour: prefs.maxDetour != null ? prefs.maxDetour : 20,
+            },
+            elementIds: {
+                avoidHighways: 'avoidHighways',
+                preferScenic: 'preferScenic',
+                preferQuiet: 'preferQuiet',
+                avoidUnpaved: 'avoidUnpaved',
+                routeOptimization: 'routeOptimization',
+                maxDetour: 'maxDetour',
+            },
+            updateDetourLabel: true,
+        };
+    }
+
+    /**
      * One-time migration: pref_avoid_tollRoads ← pref_tolls when canonical key unset.
      * @param {Storage} storage
      */
@@ -209,6 +239,7 @@
         isAvoidTollsEnabled: isAvoidTollsEnabled,
         getRouteCostParams: getRouteCostParams,
         getRoutePreferences: getRoutePreferences,
+        buildRoutePreferencesUiApplyPlan: buildRoutePreferencesUiApplyPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

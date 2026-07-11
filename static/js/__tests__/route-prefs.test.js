@@ -93,6 +93,20 @@ describe('route-prefs module', () => {
             expect(updated.find((item) => item.pref === 'cameras').enabled).toBe(false);
             expect(updated.find((item) => item.pref === 'cameras').usesDefault).toBe(false);
         });
+
+        test('buildRoutePreferencesUiApplyPlan maps storage to form patches', () => {
+            localStorage.setItem('routePreferences', JSON.stringify({
+                preferScenic: true,
+                routeOptimization: 'shortest',
+                maxDetour: 30,
+            }));
+            const plan = RoutePrefs.buildRoutePreferencesUiApplyPlan(localStorage);
+            expect(plan.checks.preferScenic).toBe(true);
+            expect(plan.selects.routeOptimization).toBe('shortest');
+            expect(plan.selects.maxDetour).toBe(30);
+            expect(plan.elementIds.maxDetour).toBe('maxDetour');
+            expect(plan.updateDetourLabel).toBe(true);
+        });
     });
 
     describe('route leg avoidance preference helpers', () => {
