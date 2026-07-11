@@ -419,6 +419,28 @@ describe('settings-snapshot module', () => {
         expect(SS.buildLoadMultiDropPreferencesExecutePlan().ensureDefaultTrafficAwareRouting).toBe(true);
     });
 
+    test('buildSaveAllSettingsExecutePlan wraps settings save plan', () => {
+        const savePlan = SS.buildSettingsSavePlan(
+            SS.buildSettingsSnapshotInputPlan(
+                { distanceUnit: 'km' },
+                { mapTheme: 'standard' }
+            )
+        );
+        const execute = SS.buildSaveAllSettingsExecutePlan(savePlan);
+        expect(execute.shouldSave).toBe(true);
+        expect(execute.storageKey).toBe(SS.SETTINGS_STORAGE_KEY);
+        expect(execute.persistActiveProfile).toBe(true);
+    });
+
+    test('buildExportSettingsDomExecutePlan and import file picker orchestration', () => {
+        const exportPlan = SS.buildSettingsExportPlan('{"unit_distance":"km"}', '2026-07-11');
+        const execute = SS.buildExportSettingsDomExecutePlan(exportPlan);
+        expect(execute.shouldExport).toBe(true);
+        expect(execute.downloadFilename).toContain('voyagr-settings');
+        expect(SS.buildImportSettingsFilePickerOrchestrationPlan().accept).toBe('.json');
+        expect(SS.buildLoadAllSettingsOrchestrationPlan().storageKey).toBe(SS.SETTINGS_STORAGE_KEY);
+    });
+
     test('buildCollectMultiDropInputPlan passes through DOM reads', () => {
         const input = SS.buildCollectMultiDropInputPlan({
             optimizeStopOrder: true,

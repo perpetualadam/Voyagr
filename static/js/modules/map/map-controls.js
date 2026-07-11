@@ -444,6 +444,33 @@
         };
     }
 
+    /**
+     * DOM execute plan for map FABs shown when navigation starts.
+     * @param {Object} [o]
+     * @param {boolean} [o.driverPerspectiveActive]
+     * @returns {Object}
+     */
+    function buildNavStartFabDomExecutePlan(o) {
+        o = o || {};
+        var fabPlan = getNavStartFabDisplayPlan();
+        var extraFab = getNavStartExtraFabDisplay();
+        return {
+            shouldApply: true,
+            mapFollowingActive: fabPlan.mapFollowingActive,
+            elementDisplays: [
+                { id: 'zoomFollowToggle', display: fabPlan.zoomFollowDisplay },
+                { id: 'journeyOverviewBtn', display: fabPlan.journeyOverviewDisplay },
+                { id: 'arModeBtn', display: extraFab.arModeBtnDisplay },
+                { id: 'driverPerspectiveToggle', display: extraFab.driverPerspectiveBtnDisplay },
+            ],
+            applyZoomFollowButton: true,
+            applyDriverPerspectiveToggle: o.driverPerspectiveActive,
+            updateRoadReportFab: true,
+            updateRecenterButton: true,
+            updateSpeedWidget: true,
+        };
+    }
+
     var api = {
         ZOOM_FOLLOW_ENABLED_ICON: ZOOM_FOLLOW_ENABLED_ICON,
         ZOOM_FOLLOW_DISABLED_ICON: ZOOM_FOLLOW_DISABLED_ICON,
@@ -490,6 +517,7 @@
         buildNavStartPreflightPlan: buildNavStartPreflightPlan,
         buildNavStartStateInitPlan: buildNavStartStateInitPlan,
         buildNavStartLifecycleExecutePlan: buildNavStartLifecycleExecutePlan,
+        buildNavStartFabDomExecutePlan: buildNavStartFabDomExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

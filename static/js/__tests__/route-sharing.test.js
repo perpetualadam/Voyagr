@@ -257,4 +257,18 @@ describe('route-sharing module', () => {
         expect(execute.qrImageUrl).toContain('api.qrserver.com');
         expect(execute.imageAlt).toBe('Route QR Code');
     });
+
+    test('buildGenerateShareLinkDomExecutePlan toggles link and QR containers', () => {
+        const link = RS.buildEncodedShareLinkPlan({
+            route: { distance_km: 10, time: '20 min' },
+            startLabel: 'A',
+            endLabel: 'B',
+            origin: 'https://voyagr.test',
+        });
+        const execute = RS.buildGenerateShareLinkDomExecutePlan(link);
+        expect(execute.shouldGenerate).toBe(true);
+        expect(execute.showContainerDisplay).toBe('block');
+        expect(execute.hideContainerDisplay).toBe('none');
+        expect(execute.shareLinkInputId).toBe('shareLink');
+    });
 });

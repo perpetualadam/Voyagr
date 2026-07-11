@@ -128,6 +128,37 @@
     }
 
     /**
+     * Execute plan for persisting settings snapshot to localStorage.
+     * @param {Object} savePlan - from buildSettingsSavePlan
+     * @returns {Object}
+     */
+    function buildSaveAllSettingsExecutePlan(savePlan) {
+        savePlan = savePlan || {};
+        return {
+            shouldSave: true,
+            storageKey: savePlan.storageKey || SETTINGS_STORAGE_KEY,
+            storageValue: savePlan.storageValue,
+            snapshot: savePlan.snapshot,
+            logMessage: savePlan.logMessage,
+            persistActiveProfile: !!savePlan.persistActiveProfile,
+        };
+    }
+
+    /**
+     * Orchestration plan for loading settings from localStorage.
+     * @returns {Object}
+     */
+    function buildLoadAllSettingsOrchestrationPlan() {
+        return {
+            storageKey: SETTINGS_STORAGE_KEY,
+            noSavedLog: '[Settings] No saved settings found, using defaults',
+            loadedLogPrefix: '[Settings] Loaded settings from localStorage',
+            successLog: '[Settings] All settings restored successfully',
+            errorLogPrefix: '[Settings] Error loading settings:',
+        };
+    }
+
+    /**
      * Hazard preference values for settings snapshot from storage reads.
      * @param {Object} [opts]
      * @param {boolean} [opts.avoidTolls]
@@ -320,6 +351,41 @@
             prettyJson: JSON.stringify(parsed, null, 2),
             statusMessage: '✅ Settings exported',
             statusType: 'success',
+        };
+    }
+
+    /**
+     * DOM execute plan for exporting settings as a downloadable JSON file.
+     * @param {Object} exportPlan - from buildSettingsExportPlan
+     * @returns {Object}
+     */
+    function buildExportSettingsDomExecutePlan(exportPlan) {
+        exportPlan = exportPlan || {};
+        if (!exportPlan.ok) {
+            return {
+                shouldExport: false,
+                statusMessage: exportPlan.statusMessage,
+                statusType: exportPlan.statusType,
+            };
+        }
+        return {
+            shouldExport: true,
+            blobContent: exportPlan.prettyJson,
+            mimeType: exportPlan.mimeType,
+            downloadFilename: exportPlan.downloadFilename,
+            statusMessage: exportPlan.statusMessage,
+            statusType: exportPlan.statusType,
+        };
+    }
+
+    /**
+     * Orchestration plan for the settings import file picker.
+     * @returns {Object}
+     */
+    function buildImportSettingsFilePickerOrchestrationPlan() {
+        return {
+            inputType: 'file',
+            accept: '.json',
         };
     }
 
@@ -805,11 +871,15 @@
         buildSettingsSnapshot: buildSettingsSnapshot,
         buildSettingsSnapshotInputPlan: buildSettingsSnapshotInputPlan,
         buildSettingsSavePlan: buildSettingsSavePlan,
+        buildSaveAllSettingsExecutePlan: buildSaveAllSettingsExecutePlan,
+        buildLoadAllSettingsOrchestrationPlan: buildLoadAllSettingsOrchestrationPlan,
         buildSettingsHazardPreferencesPlan: buildSettingsHazardPreferencesPlan,
         buildSettingsFormStateInputPlan: buildSettingsFormStateInputPlan,
         buildSettingsRestorePlan: buildSettingsRestorePlan,
         isRecognisedSettingsSnapshot: isRecognisedSettingsSnapshot,
         buildSettingsExportPlan: buildSettingsExportPlan,
+        buildExportSettingsDomExecutePlan: buildExportSettingsDomExecutePlan,
+        buildImportSettingsFilePickerOrchestrationPlan: buildImportSettingsFilePickerOrchestrationPlan,
         buildSettingsImportApplyPlan: buildSettingsImportApplyPlan,
         buildSettingsImportParsePlan: buildSettingsImportParsePlan,
         buildSettingsImportOrchestrationPlan: buildSettingsImportOrchestrationPlan,

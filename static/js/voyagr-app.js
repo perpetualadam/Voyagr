@@ -1446,11 +1446,13 @@ function saveAllSettings() {
             collectSettingsFormState()
         )
     );
+    const execute = SS.buildSaveAllSettingsExecutePlan(savePlan);
+    if (!execute.shouldSave) return;
 
-    localStorage.setItem(savePlan.storageKey, savePlan.storageValue);
-    console.log(savePlan.logMessage, savePlan.snapshot);
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    console.log(execute.logMessage, execute.snapshot);
 
-    if (savePlan.persistActiveProfile) persistActiveProfile();
+    if (execute.persistActiveProfile) persistActiveProfile();
 }
 
 /**
@@ -1489,15 +1491,16 @@ function applySettingsRestoreFromPlan(plan) {
 
 function loadAllSettings() {
     const SS = _settingsSnapshot();
+    const orch = SS.buildLoadAllSettingsOrchestrationPlan();
     try {
-        const saved = localStorage.getItem(SS.SETTINGS_STORAGE_KEY);
+        const saved = localStorage.getItem(orch.storageKey);
         if (!saved) {
-            console.log('[Settings] No saved settings found, using defaults');
+            console.log(orch.noSavedLog);
             return false;
         }
 
         const settings = JSON.parse(saved);
-        console.log('[Settings] Loaded settings from localStorage', settings);
+        console.log(orch.loadedLogPrefix, settings);
         const restorePlan = SS.buildSettingsRestorePlan(settings);
         if (!applySettingsRestoreFromPlan(restorePlan)) {
             return false;
@@ -1506,10 +1509,10 @@ function loadAllSettings() {
             SS.buildSettingsRestorePostApplyPlan(restorePlan.runtime || {}, { routeInProgress })
         );
 
-        console.log('[Settings] All settings restored successfully');
+        console.log(orch.successLog);
         return true;
     } catch (error) {
-        console.error('[Settings] Error loading settings:', error);
+        console.error(orch.errorLogPrefix, error);
         return false;
     }
 }
@@ -1800,21 +1803,23 @@ function resetAllSettings() {
  */
 function exportSettings() {
     const SS = _settingsSnapshot();
-    const plan = SS.buildSettingsExportPlan(
-        localStorage.getItem(SS.SETTINGS_STORAGE_KEY),
-        new Date().toISOString().split('T')[0]
+    const execute = SS.buildExportSettingsDomExecutePlan(
+        SS.buildSettingsExportPlan(
+            localStorage.getItem(SS.SETTINGS_STORAGE_KEY),
+            new Date().toISOString().split('T')[0]
+        )
     );
-    if (!plan.ok) {
-        showStatus(plan.statusMessage, plan.statusType);
+    if (!execute.shouldExport) {
+        showStatus(execute.statusMessage, execute.statusType);
         return;
     }
-    const dataBlob = new Blob([plan.prettyJson], { type: plan.mimeType });
+    const dataBlob = new Blob([execute.blobContent], { type: execute.mimeType });
     const url = URL.createObjectURL(dataBlob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = plan.downloadFilename;
+    link.download = execute.downloadFilename;
     link.click();
-    showStatus(plan.statusMessage, plan.statusType);
+    showStatus(execute.statusMessage, execute.statusType);
 }
 
 /**
@@ -1840,18 +1845,19 @@ function applySettingsImportFromOrchestrationPlan(plan) {
  * @returns {*} Return value description
  */
 function importSettings() {
+    const SS = _settingsSnapshot();
+    const orch = SS.buildImportSettingsFilePickerOrchestrationPlan();
     const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.json';
+    input.type = orch.inputType;
+    input.accept = orch.accept;
     input.onchange = (e) => {
         const file = e.target.files[0];
         if (file) {
             const reader = new FileReader();
             reader.onload = (event) => {
-                const SS = _settingsSnapshot();
                 const parsePlan = SS.buildSettingsImportParsePlan(event.target.result);
-                const orch = SS.buildSettingsImportOrchestrationPlan(parsePlan, { routeInProgress });
-                if (!applySettingsImportFromOrchestrationPlan(orch)) {
+                const importOrch = SS.buildSettingsImportOrchestrationPlan(parsePlan, { routeInProgress });
+                if (!applySettingsImportFromOrchestrationPlan(importOrch)) {
                     showStatus(parsePlan.statusMessage, parsePlan.statusType);
                 }
             };
@@ -3431,14 +3437,11 @@ function loadSharedRouteFromUrl() {
  */
 function prepareRouteSharing() {
     const RS = _routeSharing();
+    const fmt = buildRouteShareFormatInput();
     const execute = RS.buildPrepareRouteSharingExecutePlan(
         RS.buildPrepareRouteSharingInputPlan({
             route: window.lastCalculatedRoute,
-            startLabel: document.getElementById('start')?.value,
-            endLabel: document.getElementById('end')?.value,
-            distanceText: convertDistance(window.lastCalculatedRoute?.distance_km || 0),
-            distUnit: getDistanceUnit(),
-            currencySymbol: getCurrencySymbol(),
+            ...fmt,
         })
     );
     if (!execute.shouldPrepare) {
@@ -3464,7 +3467,7 @@ function prepareRouteSharing() {
  */
 function generateShareLink() {
     const RS = _routeSharing();
-    const execute = RS.buildShareLinkGenerateExecutePlan(buildEncodedShareLinkPlan(true));
+    const execute = RS.buildGenerateShareLinkDomExecutePlan(buildEncodedShareLinkPlan(true));
     if (!execute.shouldGenerate) {
         showStatus(execute.errorStatusMessage, 'error');
         return;
@@ -3473,11 +3476,11 @@ function generateShareLink() {
     const shareLinkInput = document.getElementById(execute.shareLinkInputId);
     if (shareLinkInput) shareLinkInput.value = execute.shareLink;
     const linkContainer = document.getElementById(execute.showContainerId);
-    if (linkContainer) linkContainer.style.display = 'block';
+    if (linkContainer) linkContainer.style.display = execute.showContainerDisplay;
     const qrContainer = document.getElementById(execute.hideContainerId);
-    if (qrContainer) qrContainer.style.display = 'none';
+    if (qrContainer) qrContainer.style.display = execute.hideContainerDisplay;
 
-    showStatus(execute.successStatusMessage, 'success');
+    showStatus(execute.successStatusMessage, execute.successStatusType);
 }
 
 /**
@@ -15050,24 +15053,27 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     }
 
     // ===== SHOW ZOOM AND FOLLOW BUTTON =====
-    const navStartFabPlan = _mapControls().getNavStartFabDisplayPlan();
-    mapFollowingActive = navStartFabPlan.mapFollowingActive;
-    const zoomFollowBtn = document.getElementById('zoomFollowToggle');
-    if (zoomFollowBtn) {
-        zoomFollowBtn.style.display = navStartFabPlan.zoomFollowDisplay;
-        applyZoomFollowButtonUi(zoomFollowBtn, zoomAndFollowEnabled);
+    const fabExecute = MC.buildNavStartFabDomExecutePlan({
+        driverPerspectiveActive: shouldUsePitchedDrivingCamera(),
+    });
+    if (fabExecute.shouldApply) {
+        mapFollowingActive = fabExecute.mapFollowingActive;
+        (fabExecute.elementDisplays || []).forEach(({ id, display }) => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = display;
+        });
+        const zoomFollowBtn = document.getElementById('zoomFollowToggle');
+        if (zoomFollowBtn && fabExecute.applyZoomFollowButton) {
+            applyZoomFollowButtonUi(zoomFollowBtn, zoomAndFollowEnabled);
+        }
+        const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
+        if (driverPerspectiveBtn && fabExecute.applyDriverPerspectiveToggle) {
+            _toggleUI().applyToggleButton(driverPerspectiveBtn, fabExecute.applyDriverPerspectiveToggle);
+        }
+        if (fabExecute.updateRoadReportFab) updateRoadReportFabVisibility();
+        if (fabExecute.updateRecenterButton) updateRecenterButtonVisibility();
+        if (fabExecute.updateSpeedWidget) updateSpeedWidgetVisibility();
     }
-
-    const journeyOverviewBtn = document.getElementById('journeyOverviewBtn');
-    if (journeyOverviewBtn) {
-        journeyOverviewBtn.style.display = navStartFabPlan.journeyOverviewDisplay;
-    }
-    updateRoadReportFabVisibility();
-    updateRecenterButtonVisibility();
-
-    // ===== SHOW SPEED WIDGET during navigation =====
-    // Speed widget shows current GPS speed and road speed limit for safety (use consolidated function)
-    updateSpeedWidgetVisibility();
 
     if (lifecycle.showTurnWidget) {
         showTurnInstructionWidget();
@@ -15102,18 +15108,6 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
         voyagrShowMapIconHint(lifecycle.showMapIconHint);
     } catch (_hintErr) {
         /* ignore */
-    }
-
-    // ===== SHOW AR AND 3D VIEW BUTTONS during navigation =====
-    const navFabDisplay = _mapControls().getNavStartExtraFabDisplay();
-    const arModeBtn = document.getElementById('arModeBtn');
-    if (arModeBtn) {
-        arModeBtn.style.display = navFabDisplay.arModeBtnDisplay;
-    }
-    const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
-    if (driverPerspectiveBtn) {
-        driverPerspectiveBtn.style.display = navFabDisplay.driverPerspectiveBtnDisplay;
-        _toggleUI().applyToggleButton(driverPerspectiveBtn, shouldUsePitchedDrivingCamera());
     }
 
     const navStartFeedback = MC.buildNavStartUserFeedbackPlan(stateInit.isQuietResume);

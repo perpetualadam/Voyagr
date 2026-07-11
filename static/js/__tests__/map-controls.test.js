@@ -138,6 +138,16 @@ describe('map-controls module', () => {
         expect(lifecycle.startRouteTraffic).toBe(false);
     });
 
+    test('buildNavStartFabDomExecutePlan lists nav start FAB element displays', () => {
+        const execute = MC.buildNavStartFabDomExecutePlan({ driverPerspectiveActive: true });
+        expect(execute.shouldApply).toBe(true);
+        expect(execute.mapFollowingActive).toBe(true);
+        expect(execute.elementDisplays.find((item) => item.id === 'zoomFollowToggle').display).toBe('block');
+        expect(execute.elementDisplays.find((item) => item.id === 'arModeBtn').display).toBe('flex');
+        expect(execute.applyDriverPerspectiveToggle).toBe(true);
+        expect(execute.updateSpeedWidget).toBe(true);
+    });
+
     test('buildNavStopPreflightPlan and lifecycle execute plans', () => {
         expect(MC.buildNavStopPreflightPlan(false, false).shouldStop).toBe(false);
         expect(MC.buildNavStopPreflightPlan(true, false).shouldStop).toBe(true);

@@ -587,6 +587,29 @@
     }
 
     /**
+     * DOM execute plan for showing a generated share link in the UI.
+     * @param {Object} linkPlan - from buildEncodedShareLinkPlan
+     * @returns {Object}
+     */
+    function buildGenerateShareLinkDomExecutePlan(linkPlan) {
+        var execute = buildShareLinkGenerateExecutePlan(linkPlan);
+        if (!execute.shouldGenerate) {
+            return execute;
+        }
+        return {
+            shouldGenerate: true,
+            shareLink: execute.shareLink,
+            shareLinkInputId: execute.shareLinkInputId,
+            showContainerId: execute.showContainerId,
+            showContainerDisplay: 'block',
+            hideContainerId: execute.hideContainerId,
+            hideContainerDisplay: 'none',
+            successStatusMessage: execute.successStatusMessage,
+            successStatusType: 'success',
+        };
+    }
+
+    /**
      * Execute plan for generating and mounting a route QR code.
      * @param {Object} linkPlan - from buildEncodedShareLinkPlan
      * @returns {Object}
@@ -856,6 +879,7 @@
         buildEncodedShareLinkInputPlan: buildEncodedShareLinkInputPlan,
         buildEncodedShareLinkPlan: buildEncodedShareLinkPlan,
         buildShareLinkGenerateExecutePlan: buildShareLinkGenerateExecutePlan,
+        buildGenerateShareLinkDomExecutePlan: buildGenerateShareLinkDomExecutePlan,
         buildQrCodeGenerateExecutePlan: buildQrCodeGenerateExecutePlan,
         buildGenerateQrCodeDomExecutePlan: buildGenerateQrCodeDomExecutePlan,
         buildRouteShareFormatInputPlan: buildRouteShareFormatInputPlan,
