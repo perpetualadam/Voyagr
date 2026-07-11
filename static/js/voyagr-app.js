@@ -24,13 +24,13 @@ if (typeof window !== 'undefined' && window.ethereum) {
 // Toll pref migration runs in modules/navigation/route-prefs.js on module load.
 
 function isAvoidTollsEnabled() {
-    return VoyagrModules.routePrefs().isAvoidTollsEnabled(localStorage);
+    return _routePrefs().isAvoidTollsEnabled(localStorage);
 }
 window.isAvoidTollsEnabled = isAvoidTollsEnabled;
 
 function getRouteCostParams(vehicleType) {
     const vt = vehicleType || (typeof currentVehicleType !== 'undefined' ? currentVehicleType : null);
-    return VoyagrModules.routePrefs().getRouteCostParams(vt, localStorage);
+    return _routePrefs().getRouteCostParams(vt, localStorage);
 }
 window.getRouteCostParams = getRouteCostParams;
 
@@ -42,11 +42,11 @@ let bottomSheetIsExpanded = false; // Tracks logical state (expanded or collapse
 
 // ===== RECENT DESTINATIONS (local history; works without auth) =====
 function loadRecentDestinations() {
-    return VoyagrModules.recentDestinations().loadRecentDestinations();
+    return _recentDestinations().loadRecentDestinations();
 }
 
 function recordRecentDestination(label, lat, lon, kind) {
-    return VoyagrModules.recentDestinations().recordRecentDestination(label, lat, lon, kind);
+    return _recentDestinations().recordRecentDestination(label, lat, lon, kind);
 }
 
 // ===== DEBUG SCROLL FUNCTION =====
@@ -108,7 +108,7 @@ window.debugScrollIssue = function() {
 // getFuelEfficiencyInUnits / getFuelEfficiencyLabel moved to modules/navigation/units.js
 // (VoyagrUnits). App wrappers pass the global setting as an explicit arg.
 function convertDistance(km) {
-    return VoyagrModules.units().convertDistance(km, distanceUnit);
+    return _units().convertDistance(km, distanceUnit);
 }
 
 /**
@@ -117,7 +117,7 @@ function convertDistance(km) {
  * @returns {*} Return value description
  */
 function getDistanceUnit() {
-    return VoyagrModules.units().getDistanceUnit(distanceUnit);
+    return _units().getDistanceUnit(distanceUnit);
 }
 
 /**
@@ -127,7 +127,7 @@ function getDistanceUnit() {
  * @returns {*} Return value description
  */
 function convertSpeed(kmh) {
-    const SG = VoyagrModules.speedGps();
+    const SG = _speedGps();
     const n = Number(kmh);
     if (!Number.isFinite(n)) return '0.0';
     const mph = SG.kmhToMph(n);
@@ -141,7 +141,7 @@ function convertSpeed(kmh) {
  * @returns {*} Return value description
  */
 function getSpeedUnit() {
-    return VoyagrModules.speedGps().speedUnitLabel(speedUnit);
+    return _speedGps().speedUnitLabel(speedUnit);
 }
 
 /**
@@ -151,7 +151,7 @@ function getSpeedUnit() {
  * @returns {*} Return value description
  */
 function convertTemperature(celsius) {
-    return VoyagrModules.units().convertTemperature(celsius, temperatureUnit);
+    return _units().convertTemperature(celsius, temperatureUnit);
 }
 
 /**
@@ -160,7 +160,7 @@ function convertTemperature(celsius) {
  * @returns {*} Return value description
  */
 function getTemperatureUnit() {
-    return VoyagrModules.units().getTemperatureUnit(temperatureUnit);
+    return _units().getTemperatureUnit(temperatureUnit);
 }
 
 /**
@@ -170,7 +170,7 @@ function getTemperatureUnit() {
  */
 // getCurrencySymbol / adjustCostForUnits moved to modules/navigation/units.js (VoyagrUnits).
 function getCurrencySymbol() {
-    return VoyagrModules.units().getCurrencySymbol(currencyUnit);
+    return _units().getCurrencySymbol(currencyUnit);
 }
 /**
  * adjustCostForUnits function
@@ -180,7 +180,7 @@ function getCurrencySymbol() {
  * @returns {*} Return value description
  */
 function adjustCostForUnits(cost, costType = 'fuel') {
-    return VoyagrModules.units().adjustCostForUnits(cost);
+    return _units().adjustCostForUnits(cost);
 }
 /**
  * getFuelEfficiencyInUnits function
@@ -189,7 +189,7 @@ function adjustCostForUnits(cost, costType = 'fuel') {
  * @returns {*} Return value description
  */
 function getFuelEfficiencyInUnits(liters_per_100km) {
-    return VoyagrModules.units().getFuelEfficiencyInUnits(liters_per_100km, distanceUnit);
+    return _units().getFuelEfficiencyInUnits(liters_per_100km, distanceUnit);
 }
 
 /**
@@ -198,7 +198,7 @@ function getFuelEfficiencyInUnits(liters_per_100km) {
  * @returns {*} Return value description
  */
 function getFuelEfficiencyLabel() {
-    return VoyagrModules.units().getFuelEfficiencyLabel(distanceUnit);
+    return _units().getFuelEfficiencyLabel(distanceUnit);
 }
 
 // ===== NAVIGATION VARIABLES =====
@@ -246,7 +246,7 @@ function initializeDarkMode() {
 function applyTheme(theme) {
     const body = document.body;
     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const useDark = VoyagrModules.theme().shouldUseDarkMode(theme, prefersDark);
+    const useDark = _theme().shouldUseDarkMode(theme, prefersDark);
 
     if (useDark) {
         body.classList.add('dark-mode');
@@ -266,7 +266,7 @@ function applyTheme(theme) {
  * @returns {*} Return value description
  */
 function toggleDarkMode() {
-    const newTheme = VoyagrModules.theme().toggleBetweenLightAndDark(currentTheme);
+    const newTheme = _theme().toggleBetweenLightAndDark(currentTheme);
     applyTheme(newTheme);
     showStatus(`🌙 Theme changed to ${newTheme} mode`, 'success');
 }
@@ -306,7 +306,7 @@ function updateThemeButtons() {
     if (darkBtn) darkBtn.classList.remove('active');
     if (autoBtn) autoBtn.classList.remove('active');
 
-    const activeId = VoyagrModules.theme().activeThemeButtonId(currentTheme);
+    const activeId = _theme().activeThemeButtonId(currentTheme);
     const activeBtn = activeId ? document.getElementById(activeId) : null;
     if (activeBtn) activeBtn.classList.add('active');
 
@@ -467,7 +467,7 @@ function updateDistanceUnit() {
     saveUnitSettingsToBackend();
     updateAllDistanceDisplays();
     saveAllSettings();
-    showStatus(`Distance unit changed to ${VoyagrModules.units().distanceUnitStatusLabel(newUnit)}`, 'success');
+    showStatus(`Distance unit changed to ${_units().distanceUnitStatusLabel(newUnit)}`, 'success');
 }
 
 // Update currency unit
@@ -499,7 +499,7 @@ function updateSpeedUnit() {
     saveUnitSettingsToBackend();
     updateAllSpeedDisplays();
     saveAllSettings();
-    showStatus(`Speed unit changed to ${VoyagrModules.units().speedUnitStatusLabel(newUnit)}`, 'success');
+    showStatus(`Speed unit changed to ${_units().speedUnitStatusLabel(newUnit)}`, 'success');
 }
 
 // Update temperature unit
@@ -515,7 +515,7 @@ function updateTemperatureUnit() {
     saveUnitSettingsToBackend();
     updateAllTemperatureDisplays();
     saveAllSettings();
-    showStatus(`Temperature unit changed to ${VoyagrModules.units().temperatureUnitStatusLabel(newUnit)}`, 'success');
+    showStatus(`Temperature unit changed to ${_units().temperatureUnitStatusLabel(newUnit)}`, 'success');
 }
 
 // Save unit settings to backend
@@ -1688,35 +1688,35 @@ function applySettingsToUI() {
 
         const smartZoomToggle = document.getElementById('smartZoomToggle');
         if (smartZoomToggle) {
-            VoyagrModules.toggleUI().applyToggleButton(smartZoomToggle, smartZoomEnabled);
+            _toggleUI().applyToggleButton(smartZoomToggle, smartZoomEnabled);
         }
 
         // Apply ML predictions toggle state
         const mlPredictionsEnabled = localStorage.getItem('mlPredictionsEnabled') === 'true';
         const mlToggle = document.getElementById('mlPredictionsEnabled');
         if (mlToggle) {
-            VoyagrModules.toggleUI().applyLabeledToggleButton(mlToggle, mlPredictionsEnabled);
+            _toggleUI().applyLabeledToggleButton(mlToggle, mlPredictionsEnabled);
         }
 
         // Apply voice announcements toggle state
         const voiceAnnouncementsEnabled = localStorage.getItem('voiceAnnouncementsEnabled') === 'true';
         const voiceToggle = document.getElementById('voiceAnnouncementsEnabled');
         if (voiceToggle) {
-            VoyagrModules.toggleUI().applyLabeledToggleButton(voiceToggle, voiceAnnouncementsEnabled);
+            _toggleUI().applyLabeledToggleButton(voiceToggle, voiceAnnouncementsEnabled);
         }
 
         // Apply battery saving mode toggle state
         const batterySavingEnabled = localStorage.getItem('pref_batterySaving') === 'true';
         const batteryToggle = document.getElementById('batterySavingMode');
         if (batteryToggle) {
-            VoyagrModules.toggleUI().applyLabeledToggleButton(batteryToggle, batterySavingEnabled);
+            _toggleUI().applyLabeledToggleButton(batteryToggle, batterySavingEnabled);
         }
 
         // Apply gesture control toggle state
         const gestureControlEnabled = localStorage.getItem('gestureEnabled') === 'true';
         const gestureToggle = document.getElementById('gestureEnabled');
         if (gestureToggle) {
-            VoyagrModules.toggleUI().applyLabeledToggleButton(gestureToggle, gestureControlEnabled);
+            _toggleUI().applyLabeledToggleButton(gestureToggle, gestureControlEnabled);
         }
 
         // Apply UI theme preference
@@ -1726,13 +1726,13 @@ function applySettingsToUI() {
         // Apply auto-traffic update toggle state
         const autoTrafficToggle = document.getElementById('autoTrafficUpdateToggle');
         if (autoTrafficToggle) {
-            VoyagrModules.toggleUI().applyToggleButton(autoTrafficToggle, autoTrafficUpdateEnabled);
+            _toggleUI().applyToggleButton(autoTrafficToggle, autoTrafficUpdateEnabled);
         }
 
         // Apply auto-reroute on deviation toggle state
         const autoRerouteToggle = document.getElementById('autoRerouteDeviationToggle');
         if (autoRerouteToggle) {
-            VoyagrModules.toggleUI().applyToggleButton(autoRerouteToggle, autoRerouteOnDeviationEnabled);
+            _toggleUI().applyToggleButton(autoRerouteToggle, autoRerouteOnDeviationEnabled);
         }
 
         applySpeedWidgetToggleUi();
@@ -1938,12 +1938,6 @@ function saveRawLocalTrips(entries) {
     }
 }
 
-// parseLatLonString / mergeServerAndLocalTrips moved to
-// modules/navigation/trip-history.js (VoyagrTripHistory).
-function parseLatLonString(str) {
-    return VoyagrModules.tripHistory().parseLatLonString(str);
-}
-
 /**
  * Build a completed-trip payload from the active route + form fields.
  * @returns {object|null}
@@ -1951,7 +1945,7 @@ function parseLatLonString(str) {
 function buildCompletedTripRecord(route) {
     const startEl = document.getElementById('start');
     const endEl = document.getElementById('end');
-    return VoyagrModules.tripHistory().buildCompletedTripRecord({
+    return _tripHistory().buildCompletedTripRecord({
         route,
         startEl: startEl ? {
             value: startEl.value,
@@ -2032,7 +2026,7 @@ async function persistCompletedTrip(route) {
 }
 
 function mergeServerAndLocalTrips(serverTrips, rawLocal) {
-    return VoyagrModules.tripHistory().mergeServerAndLocalTrips(serverTrips, rawLocal);
+    return _tripHistory().mergeServerAndLocalTrips(serverTrips, rawLocal);
 }
 
 function removeLocalTripByLocalId(localId) {
@@ -2045,9 +2039,6 @@ function removeLocalTripByServerId(serverId) {
     saveRawLocalTrips(raw);
 }
 
-function escapeHtml(value) {
-    return VoyagrModules.html().escapeHtml(value);
-}
 
 async function getSupabaseAccessToken() {
     try {
@@ -2086,7 +2077,7 @@ async function loadTripHistory() {
             const list = document.getElementById('tripHistoryList');
             if (list && list.firstChild) {
                 const banner = document.createElement('div');
-                const TH = VoyagrModules.tripHistory();
+                const TH = _tripHistory();
                 banner.style.cssText = TH.getTripHistorySignInBannerStyleCssText();
                 banner.textContent = TH.buildTripHistorySignInBannerText(allTrips.length > 0);
                 list.insertBefore(banner, list.firstChild);
@@ -2107,7 +2098,7 @@ async function loadTripHistory() {
         allTrips = [];
         const list = document.getElementById('tripHistoryList');
         if (list) {
-            list.innerHTML = VoyagrModules.tripHistory().TRIP_HISTORY_ERROR_HTML;
+            list.innerHTML = _tripHistory().TRIP_HISTORY_ERROR_HTML;
         }
         bindTripHistorySearch();
     }
@@ -2131,7 +2122,7 @@ function bindTripHistorySearch() {
             displayTripHistory(allTrips);
             return;
         }
-        displayTripHistory(VoyagrModules.tripHistory().filterTripsBySearch(allTrips, searchTerm));
+        displayTripHistory(_tripHistory().filterTripsBySearch(allTrips, searchTerm));
     };
 }
 
@@ -2139,7 +2130,7 @@ function displayTripHistory(trips) {
     const listContainer = document.getElementById('tripHistoryList');
     if (!listContainer) return;
 
-    const TH = VoyagrModules.tripHistory();
+    const TH = _tripHistory();
 
     if (!trips || trips.length === 0) {
         listContainer.innerHTML = TH.EMPTY_TRIP_LIST_HTML;
@@ -2154,8 +2145,8 @@ function displayTripHistory(trips) {
             parseFloat(trip.caz_cost || 0)
         ).toFixed(2);
         return TH.buildTripHistoryRowHtml(trip, {
-            startAddr: escapeHtml(trip.start_address || 'Start'),
-            endAddr: escapeHtml(trip.end_address || 'End'),
+            startAddr: _html().escapeHtml(trip.start_address || 'Start'),
+            endAddr: _html().escapeHtml(trip.end_address || 'End'),
             dateStr: TH.formatTripListTimestamp(trip.timestamp),
             distance: convertDistance(trip.distance_km),
             distUnit: getDistanceUnit(),
@@ -2562,7 +2553,7 @@ function enableRouteEditing() {
  * Add a draggable marker for route editing
  */
 function addRouteDragMarker(lat, lon, routeIndex) {
-    const WP = VoyagrModules.waypoints();
+    const WP = _waypoints();
     const marker = MapLibreHelpers.createMarker(lat, lon, {
         className: 'route-drag-marker',
         html: WP.buildRouteDragMarkerHtml(),
@@ -2598,7 +2589,7 @@ async function addDraggedViaPoint(lat, lon) {
     viaPoints.push(viaPoint);
 
     // Add visual marker with MapLibre
-    const WP = VoyagrModules.waypoints();
+    const WP = _waypoints();
     const viaIndex = viaPoints.length - 1;
     const marker = MapLibreHelpers.createMarker(lat, lon, {
         className: 'via-point-marker',
@@ -2816,7 +2807,7 @@ function addViaPoint(lat, lon, name = null) {
     const pointName = name || `Via-point ${viaPoints.length + 1}`;
     viaPoints.push({ lat, lon, name: pointName, type: 'via' });
 
-    const WP = VoyagrModules.waypoints();
+    const WP = _waypoints();
     const viaIndex = viaPoints.length - 1;
     const marker = MapLibreHelpers.createMarker(lat, lon, {
         className: 'via-point-marker',
@@ -2838,7 +2829,7 @@ function addStop(lat, lon, name = null, duration = 15) {
     const stopName = name || `Stop ${stops.length + 1}`;
     stops.push({ lat, lon, name: stopName, type: 'stop', duration });
 
-    const WP = VoyagrModules.waypoints();
+    const WP = _waypoints();
     const stopIndex = stops.length - 1;
     const marker = MapLibreHelpers.createMarker(lat, lon, {
         className: 'stop-marker',
@@ -2896,7 +2887,7 @@ function refreshViaPointMarkers() {
     viaPointMarkers = [];
 
     viaPoints.forEach((point, idx) => {
-        const WP = VoyagrModules.waypoints();
+        const WP = _waypoints();
         const marker = MapLibreHelpers.createMarker(point.lat, point.lon, {
             className: 'via-point-marker',
             html: WP.buildViaPointMarkerHtml(idx + 1),
@@ -2930,7 +2921,7 @@ function clearAllWaypoints() {
 function updateWaypointsList() {
     const container = document.getElementById('waypointsList');
     if (!container) return;
-    container.innerHTML = VoyagrModules.waypoints().buildWaypointsListHtml(viaPoints, stops);
+    container.innerHTML = _waypoints().buildWaypointsListHtml(viaPoints, stops);
 }
 
 let _draggedWaypoint = null;
@@ -2983,7 +2974,7 @@ function moveWaypoint(type, index, direction) {
  */
 function displayMultiDropLegs(data) {
     const container = document.getElementById('waypointsList');
-    const plan = VoyagrModules.waypoints().buildMultiDropItineraryMountPlan(data, {
+    const plan = _waypoints().buildMultiDropItineraryMountPlan(data, {
         distUnit: getDistanceUnit(),
         convertDistance,
         formatEtaClock: (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -3003,7 +2994,7 @@ function displayMultiDropLegs(data) {
 function drawMultiDropLegsOnMap(data) {
     if (!map || !data.all_geometry) return;
 
-    const WP = VoyagrModules.waypoints();
+    const WP = _waypoints();
     data.all_geometry.forEach((geom, idx) => {
         const leg = data.legs && data.legs[idx];
         const descriptor = WP.buildMultiDropLegLayerDescriptor(geom, idx, leg, decodePolyline);
@@ -3533,7 +3524,7 @@ function loadRouteAnalytics() {
 function displayAnalytics(data) {
     const symbol = getCurrencySymbol();
     const distUnit = getDistanceUnit();
-    const display = VoyagrModules.tripHistory().buildAnalyticsDisplayValues(data, {
+    const display = _tripHistory().buildAnalyticsDisplayValues(data, {
         currencySymbol: symbol,
         totalDistanceText: convertDistance(data.total_distance_km || 0),
         speedUnit: speedUnit,
@@ -3551,7 +3542,7 @@ function displayAnalytics(data) {
     document.getElementById('avgSpeed').textContent = display.avgSpeedText;
 
     const frequentRoutesList = document.getElementById('frequentRoutesList');
-    frequentRoutesList.innerHTML = VoyagrModules.tripHistory().buildFrequentRoutesListHtml(
+    frequentRoutesList.innerHTML = _tripHistory().buildFrequentRoutesListHtml(
         data.frequent_routes || [],
         {
             escapeHtml: escapeHtml,
@@ -3676,7 +3667,7 @@ function updateDetourLabel() {
  * @returns {*} Return value description
  */
 function getRoutePreferences() {
-    return VoyagrModules.routePrefs().getRoutePreferences(localStorage);
+    return _routePrefs().getRoutePreferences(localStorage);
 }
 
 /**
@@ -4004,7 +3995,7 @@ function decodePolyline(encoded, precision = 6) {
         console.warn('[decodePolyline] Invalid input:', encoded);
         return [];
     }
-    const decoded = VoyagrModules.polylineCodec().decodePolyline(encoded, precision);
+    const decoded = _polylineCodec().decodePolyline(encoded, precision);
     console.log(`[decodePolyline] Decoded ${decoded.length} points with precision ${precision}`);
     if (decoded.length > 0) {
         console.log(`[decodePolyline] First point: [${decoded[0][0]}, ${decoded[0][1]}]`);
@@ -4021,7 +4012,7 @@ function decodePolyline(encoded, precision = 6) {
 function buildRoutePayloadFromPersisted(saved) {
     return _routeSelection().buildRoutePayloadFromPersisted(
         saved,
-        (points, precision) => VoyagrModules.polylineCodec().encodePolyline(points, precision)
+        (points, precision) => _polylineCodec().encodePolyline(points, precision)
     );
 }
 
@@ -4688,7 +4679,7 @@ function toggle3DBuildings() {
     localStorage.setItem('buildings3DEnabled', buildings3DEnabled ? 'true' : 'false');
 
     const toggle = document.getElementById('buildings3DToggle');
-    VoyagrModules.toggleUI().applyToggleButton(toggle, buildings3DEnabled);
+    _toggleUI().applyToggleButton(toggle, buildings3DEnabled);
 
     if (buildings3DEnabled) {
         MapLibreHelpers.add3DBuildings(map, {
@@ -4754,7 +4745,7 @@ function toggleRoadLabels() {
     localStorage.setItem('roadLabelsEnabled', roadLabelsEnabled ? 'true' : 'false');
 
     const toggle = document.getElementById('roadLabelsToggle');
-    VoyagrModules.toggleUI().applyToggleButton(toggle, roadLabelsEnabled, {
+    _toggleUI().applyToggleButton(toggle, roadLabelsEnabled, {
         inactiveBackground: '#ccc',
         inactiveBorder: '#ccc',
     });
@@ -4781,7 +4772,7 @@ function toggleGooglePlusCodes() {
     localStorage.setItem('googlePlusCodesEnabled', googlePlusCodesEnabled ? 'true' : 'false');
 
     const toggle = document.getElementById('googlePlusCodesToggle');
-    VoyagrModules.toggleUI().applyToggleButton(toggle, googlePlusCodesEnabled, {
+    _toggleUI().applyToggleButton(toggle, googlePlusCodesEnabled, {
         inactiveBackground: '#ccc',
         inactiveBorder: '#ccc',
     });
@@ -5099,8 +5090,8 @@ let weatherLayerType = localStorage.getItem('weatherLayerType') || 'precipitatio
 function toggleWeatherLayer() {
     showWeatherEnabled = !showWeatherEnabled;
     const toggle = document.getElementById('showWeatherToggle');
-    VoyagrModules.toggleUI().writeBoolPref('showWeatherEnabled', showWeatherEnabled);
-    VoyagrModules.toggleUI().applyToggleButton(toggle, showWeatherEnabled);
+    _toggleUI().writeBoolPref('showWeatherEnabled', showWeatherEnabled);
+    _toggleUI().applyToggleButton(toggle, showWeatherEnabled);
 
     if (showWeatherEnabled) {
         addWeatherLayer();
@@ -5234,7 +5225,7 @@ function removeWeatherLayer() {
  */
 function initWeatherLayer() {
     const toggle = document.getElementById('showWeatherToggle');
-    VoyagrModules.toggleUI().applyToggleButton(toggle, showWeatherEnabled);
+    _toggleUI().applyToggleButton(toggle, showWeatherEnabled);
 
     if (showWeatherEnabled && map) {
         try {
@@ -5268,8 +5259,8 @@ const ROUTE_TRAFFIC_UPDATE_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 function toggleRouteTraffic() {
     routeTrafficEnabled = !routeTrafficEnabled;
     const toggle = document.getElementById('routeTrafficToggle');
-    VoyagrModules.toggleUI().writeBoolPref('routeTrafficEnabled', routeTrafficEnabled);
-    VoyagrModules.toggleUI().applyToggleButton(toggle, routeTrafficEnabled);
+    _toggleUI().writeBoolPref('routeTrafficEnabled', routeTrafficEnabled);
+    _toggleUI().applyToggleButton(toggle, routeTrafficEnabled);
 
     if (routeTrafficEnabled) {
         showStatus('🚦 Route traffic display enabled', 'success');
@@ -5584,7 +5575,7 @@ function toggleAutoTrafficUpdate() {
     localStorage.setItem('autoTrafficUpdate', autoTrafficUpdateEnabled ? 'true' : 'false');
 
     const toggle = document.getElementById('autoTrafficUpdateToggle');
-    VoyagrModules.toggleUI().applyToggleButton(toggle, autoTrafficUpdateEnabled);
+    _toggleUI().applyToggleButton(toggle, autoTrafficUpdateEnabled);
 
     if (autoTrafficUpdateEnabled) {
         showStatus('🚦 Auto-traffic updates enabled', 'success');
@@ -5607,7 +5598,7 @@ function toggleAutoRerouteOnDeviation() {
     localStorage.setItem('autoRerouteOnDeviation', autoRerouteOnDeviationEnabled ? 'true' : 'false');
 
     const toggle = document.getElementById('autoRerouteDeviationToggle');
-    VoyagrModules.toggleUI().applyToggleButton(toggle, autoRerouteOnDeviationEnabled);
+    _toggleUI().applyToggleButton(toggle, autoRerouteOnDeviationEnabled);
 
     if (autoRerouteOnDeviationEnabled) {
         showStatus('🔄 Auto-reroute on deviation enabled', 'success');
@@ -6141,7 +6132,7 @@ function seedNavigationProgressOnNewRoute(lat, lon) {
  * Initialize auto-traffic and auto-reroute toggles
  */
 function initAutoTrafficRerouteToggles() {
-    const TU = VoyagrModules.toggleUI();
+    const TU = _toggleUI();
     // Auto-traffic update toggle
     TU.applyToggleButton(document.getElementById('autoTrafficUpdateToggle'), autoTrafficUpdateEnabled);
 
@@ -6267,7 +6258,7 @@ function toggleShowCameras() {
     localStorage.setItem('showCamerasEnabled', showCamerasEnabled);
 
     const toggle = document.getElementById('showCamerasToggle');
-    VoyagrModules.toggleUI().applyToggleButton(toggle, showCamerasEnabled);
+    _toggleUI().applyToggleButton(toggle, showCamerasEnabled);
 
     if (showCamerasEnabled) {
         fetchAndDisplayCameras();
@@ -6375,7 +6366,7 @@ function toggleShowOsmTrafficLights() {
     showOsmTrafficLightsEnabled = !showOsmTrafficLightsEnabled;
     localStorage.setItem('showOsmTrafficLightsOnMap', showOsmTrafficLightsEnabled ? 'true' : 'false');
     const toggle = document.getElementById('showOsmTrafficLightsToggle');
-    VoyagrModules.toggleUI().applyLabeledToggleButton(toggle, showOsmTrafficLightsEnabled);
+    _toggleUI().applyLabeledToggleButton(toggle, showOsmTrafficLightsEnabled);
     if (showOsmTrafficLightsEnabled) {
         fetchAndDisplayOsmTrafficLights();
     } else {
@@ -6388,7 +6379,7 @@ function toggleShowOsmRailwayCrossings() {
     showOsmRailwayCrossingsEnabled = !showOsmRailwayCrossingsEnabled;
     localStorage.setItem('showOsmRailwayCrossingsOnMap', showOsmRailwayCrossingsEnabled ? 'true' : 'false');
     const toggle = document.getElementById('showOsmRailwayCrossingsToggle');
-    VoyagrModules.toggleUI().applyLabeledToggleButton(toggle, showOsmRailwayCrossingsEnabled);
+    _toggleUI().applyLabeledToggleButton(toggle, showOsmRailwayCrossingsEnabled);
     if (showOsmRailwayCrossingsEnabled) {
         fetchAndDisplayOsmRailwayCrossings();
     } else {
@@ -6560,7 +6551,7 @@ function initializeCameraLayer() {
     window.__voyagrCameraLayerInitialized = true;
 
     // Set toggle state based on saved preference
-    const TU = VoyagrModules.toggleUI();
+    const TU = _toggleUI();
     TU.applyToggleButton(document.getElementById('showCamerasToggle'), showCamerasEnabled);
     TU.applyLabeledToggleButton(document.getElementById('showOsmTrafficLightsToggle'), showOsmTrafficLightsEnabled);
     TU.applyLabeledToggleButton(document.getElementById('showOsmRailwayCrossingsToggle'), showOsmRailwayCrossingsEnabled);
@@ -6615,7 +6606,7 @@ function initializeRoadLabels() {
 
     // Set toggle state based on saved preference
     const toggle = document.getElementById('roadLabelsToggle');
-    VoyagrModules.toggleUI().applyToggleButton(toggle, roadLabelsEnabled, {
+    _toggleUI().applyToggleButton(toggle, roadLabelsEnabled, {
         inactiveBackground: '#ccc',
         inactiveBorder: '#ccc',
     });
@@ -7163,7 +7154,7 @@ function loadVoicePreferences() {
             const toggleButton = document.getElementById('voiceAnnouncementsEnabled');
             const announcementsEnabled = prefs.announcementsEnabled !== false;
 
-            VoyagrModules.toggleUI().applyLabeledToggleButton(toggleButton, announcementsEnabled);
+            _toggleUI().applyLabeledToggleButton(toggleButton, announcementsEnabled);
 
             TURN_ANNOUNCEMENT_DISTANCES.length = 0;
             TURN_ANNOUNCEMENT_DISTANCES.push(prefs.turnDistance1, prefs.turnDistance2, prefs.turnDistance3, 50);
@@ -7175,7 +7166,7 @@ function loadVoicePreferences() {
             // Initialize with defaults if no saved preferences
             const toggleButton = document.getElementById('voiceAnnouncementsEnabled');
             if (toggleButton) {
-                VoyagrModules.toggleUI().applyLabeledToggleButton(toggleButton, true);
+                _toggleUI().applyLabeledToggleButton(toggleButton, true);
                 voiceAnnouncementsEnabled = true;
             }
             console.log('[Voice] No saved preferences, using defaults');
@@ -7220,7 +7211,7 @@ function loadPorcupineWakeUi() {
     row.style.display = '';
     if (help) help.style.display = '';
     const enabled = localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true';
-    VoyagrModules.toggleUI().applyLabeledToggleButton(toggle, enabled);
+    _toggleUI().applyLabeledToggleButton(toggle, enabled);
 }
 
 function togglePorcupineWakeWord() {
@@ -7230,7 +7221,7 @@ function togglePorcupineWakeWord() {
     }
     button.classList.toggle('active');
     const enabled = button.classList.contains('active');
-    VoyagrModules.toggleUI().applyLabeledToggleButton(button, enabled);
+    _toggleUI().applyLabeledToggleButton(button, enabled);
     localStorage.setItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY, enabled ? 'true' : 'false');
     if (enabled) {
         void startPorcupineWakePipeline();
@@ -7407,7 +7398,7 @@ function toggleVoiceAnnouncements() {
     button.classList.toggle('active');
     const enabled = button.classList.contains('active');
 
-    VoyagrModules.toggleUI().applyLabeledToggleButton(button, enabled);
+    _toggleUI().applyLabeledToggleButton(button, enabled);
 
     // Save to localStorage
     localStorage.setItem('voiceAnnouncementsEnabled', enabled ? 'true' : 'false');
@@ -8535,6 +8526,48 @@ function _domHelpers() { return VoyagrModules.domHelpers(); }
 /** Unit-tested geocoding / location parse helpers (modules/navigation/geocoding-locations.js). */
 function _geocodingLocations() { return VoyagrModules.geocodingLocations(); }
 
+/** Unit-tested units / currency / temperature helpers (modules/navigation/units.js). */
+function _units() { return VoyagrModules.units(); }
+
+/** Unit-tested route preference helpers (modules/navigation/route-prefs.js). */
+function _routePrefs() { return VoyagrModules.routePrefs(); }
+
+/** Unit-tested trip history helpers (modules/navigation/trip-history.js). */
+function _tripHistory() { return VoyagrModules.tripHistory(); }
+
+/** Unit-tested toggle button UI helpers (modules/ui/toggle-ui.js). */
+function _toggleUI() { return VoyagrModules.toggleUI(); }
+
+/** Unit-tested theme helpers (modules/ui/theme.js). */
+function _theme() { return VoyagrModules.theme(); }
+
+/** Unit-tested HTML escape helper (modules/html.js). */
+function _html() { return VoyagrModules.html(); }
+
+/** Unit-tested polyline encode/decode (modules/navigation/polyline-codec.js). */
+function _polylineCodec() { return VoyagrModules.polylineCodec(); }
+
+/** Unit-tested waypoints / multidrop helpers (modules/navigation/waypoints.js). */
+function _waypoints() { return VoyagrModules.waypoints(); }
+
+/** Unit-tested recent-destinations storage (modules/navigation/recent-destinations.js). */
+function _recentDestinations() { return VoyagrModules.recentDestinations(); }
+
+/** Unit-tested route traffic flow sampling (modules/navigation/route-traffic-flow.js). */
+function _routeTrafficFlow() { return VoyagrModules.routeTrafficFlow(); }
+
+/** Unit-tested traffic-change reroute helpers (modules/navigation/traffic-change.js). */
+function _trafficChange() { return VoyagrModules.trafficChange(); }
+
+/** Unit-tested route sharing helpers (modules/navigation/route-sharing.js). */
+function _routeSharing() { return VoyagrModules.routeSharing(); }
+
+/** Unit-tested weather map layer helpers (modules/map/weather-layer.js). */
+function _weatherLayer() { return VoyagrModules.weatherLayer(); }
+
+/** Unit-tested navigation destination resolution (modules/navigation/navigation-destination.js). */
+function _navigationDestination() { return VoyagrModules.navigationDestination(); }
+
 function applyZoomFollowButtonUi(btn, enabled) {
     if (!btn) return;
     const display = _mapControls().getZoomFollowButtonDisplay(enabled);
@@ -8575,7 +8608,7 @@ function _speedLimitWidget() { return VoyagrModules.speedLimitWidget(); }
  * @returns {number} Smoothed mph value to show in the widget.
  */
 function smoothGpsSpeedMph(rawMph) {
-    const SG = VoyagrModules.speedGps();
+    const SG = _speedGps();
     const r = SG.stepSmoothGpsSpeedMph(
         { smoothedMph: _smoothedSpeedMph, initAt: _smoothedSpeedInitAt },
         rawMph,
@@ -8608,7 +8641,7 @@ function smoothGpsSpeedMph(rawMph) {
 // stepPickRawSpeedMph step function. This orchestration wrapper holds the mutable
 // state and calls it, matching the pattern of smoothGpsSpeedMph / stepSmoothGpsSpeedMph.
 function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
-    const SG = VoyagrModules.speedGps();
+    const SG = _speedGps();
     const r = SG.stepPickRawSpeedMph(
         { lastGoodRawPickMph: _lastGoodRawPickMph, consecutiveDisplacementMoves: _consecutiveDisplacementMoves },
         coordsSpeed, history, coordAccuracy
@@ -8631,7 +8664,7 @@ function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
     currentGpsSpeedMph = currentSpeedInMph;
     currentGpsSpeedKmh = currentSpeedInMph * 1.609344;
 
-    const SG = VoyagrModules.speedGps();
+    const SG = _speedGps();
     const SL = VoyagrModules.speedLimitWidget();
     const displaySpeedUnit = getSpeedUnit();
     const gpsDisplay = SL.formatSpeedForWidget(currentSpeedInMph, speedUnit, SG);
@@ -8856,7 +8889,7 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
  */
 function applySpeedWidgetToggleUi() {
     const toggle = document.getElementById('speedWidgetToggle');
-    VoyagrModules.toggleUI().applyLabeledToggleButton(toggle, speedWidgetEnabled);
+    _toggleUI().applyLabeledToggleButton(toggle, speedWidgetEnabled);
     _lastSpeedWidgetVisible = null;
     updateSpeedWidgetVisibility();
 }
@@ -9427,7 +9460,7 @@ function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban')
 function toggleSmartZoom() {
     smartZoomEnabled = !smartZoomEnabled;
     const btn = document.getElementById('smartZoomToggle');
-    VoyagrModules.toggleUI().applyToggleButton(btn, smartZoomEnabled);
+    _toggleUI().applyToggleButton(btn, smartZoomEnabled);
     localStorage.setItem('smartZoomEnabled', smartZoomEnabled ? '1' : '0');
     saveAllSettings();
     showStatus(`🔍 Smart Zoom ${smartZoomEnabled ? 'enabled' : 'disabled'}`, 'info');
@@ -9498,7 +9531,7 @@ function initPhase3Features() {
 
     // Load AR setting
     const MC = _mapControls();
-    const TU = VoyagrModules.toggleUI();
+    const TU = _toggleUI();
     isAREnabled = MC.isAREnabledInStorage(localStorage);
     const arToggleBtn = document.getElementById('arToggleBtn');
     if (arToggleBtn) {
@@ -9594,7 +9627,7 @@ function toggleGestureControl() {
 
     // Update UI
     const button = document.getElementById('gestureEnabled');
-    VoyagrModules.toggleUI().applyToggleButton(button, gestureEnabled);
+    _toggleUI().applyToggleButton(button, gestureEnabled);
 
     document.getElementById('gestureSettings').style.display = gestureEnabled ? 'block' : 'none';
 
@@ -9687,7 +9720,7 @@ function toggleBatterySavingMode() {
  */
 function enableBatterySavingMode() {
     batterySavingMode = true;
-    VoyagrModules.toggleUI().applyToggleButton(document.getElementById('batterySavingMode'), true);
+    _toggleUI().applyToggleButton(document.getElementById('batterySavingMode'), true);
 
     // NOTE: We intentionally do NOT re-create the GPS watcher here. The previous code cleared
     // the active navigation watcher (gpsWatchId) and replaced it with an EMPTY callback, which
@@ -9718,7 +9751,7 @@ function enableBatterySavingMode() {
  */
 function disableBatterySavingMode() {
     batterySavingMode = false;
-    VoyagrModules.toggleUI().applyToggleButton(document.getElementById('batterySavingMode'), false);
+    _toggleUI().applyToggleButton(document.getElementById('batterySavingMode'), false);
 
     // NOTE: As in enableBatterySavingMode, we no longer tear down and re-create the navigation
     // GPS watcher here. The old empty-callback replacement broke live tracking; the active
@@ -9889,7 +9922,7 @@ function loadMLPredictions() {
  */
 function toggleMLPredictions() {
     const ML = _mlPredictions();
-    const TU = VoyagrModules.toggleUI();
+    const TU = _toggleUI();
     const button = document.getElementById('mlPredictionsEnabled');
 
     const enabled = TU.nextToggleState(button.classList.contains('active'));
@@ -10780,7 +10813,7 @@ function toggleDriverPerspective() {
 
     const btn = document.getElementById('driverPerspectiveToggle');
     const pitched = shouldUsePitchedDrivingCamera();
-    VoyagrModules.toggleUI().applyToggleButton(btn, pitched);
+    _toggleUI().applyToggleButton(btn, pitched);
 
     if (map) {
         applyDriverPerspective();
@@ -10843,7 +10876,7 @@ let mapView3DEnabled = (localStorage.getItem('mapView3DEnabled') !== null)
 
 /** Reflect the current 2D/3D state on the master toggle and the two granular toggles. */
 function syncMapView3DToggleUI() {
-    const TU = VoyagrModules.toggleUI();
+    const TU = _toggleUI();
     const master = document.getElementById('mapView3DToggle');
     if (master) {
         TU.applyToggleButton(master, mapView3DEnabled);
@@ -10910,7 +10943,7 @@ let isAREnabled = false; // Global flag for preference
  */
 function toggleARSetting() {
     const MC = _mapControls();
-    const TU = VoyagrModules.toggleUI();
+    const TU = _toggleUI();
     const btn = document.getElementById('arToggleBtn');
     if (btn) {
         isAREnabled = TU.nextToggleState(isAREnabled);
@@ -10952,7 +10985,7 @@ function updateARButtonVisibility() {
  */
 async function toggleARMode() {
     const MC = _mapControls();
-    const TU = VoyagrModules.toggleUI();
+    const TU = _toggleUI();
     const toggleBtn = document.getElementById('arModeBtn');
 
     if (arModeActive) {
@@ -11015,7 +11048,7 @@ async function stopARMode() {
     _mapControls().applyARModeToggleButton(
         document.getElementById('arModeBtn'),
         false,
-        VoyagrModules.toggleUI()
+        _toggleUI()
     );
     showStatus('🗺️ Returned to map view', 'info');
 }
@@ -11500,7 +11533,7 @@ function updateJourneySummaryBar() {
     }
 
     // Format remaining distance in user's preferred units
-    const distanceText = VoyagrModules.units().formatRemainingDistanceText(
+    const distanceText = _units().formatRemainingDistanceText(
         remainingDistanceMeters,
         distanceUnit
     );
@@ -14985,7 +15018,7 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
     if (driverPerspectiveBtn) {
         driverPerspectiveBtn.style.display = navFabDisplay.driverPerspectiveBtnDisplay;
-        VoyagrModules.toggleUI().applyToggleButton(driverPerspectiveBtn, shouldUsePitchedDrivingCamera());
+        _toggleUI().applyToggleButton(driverPerspectiveBtn, shouldUsePitchedDrivingCamera());
     }
 
     const navStartFeedback = _mapControls().buildNavStartUserFeedbackPlan(isQuietResume);
@@ -15256,7 +15289,7 @@ function displayPOIResults(results, type, userLat, userLon) {
             type,
             userLat,
             userLon,
-            (distanceM) => VoyagrModules.units().formatPoiDistanceMeters(distanceM, distanceUnit)
+            (distanceM) => _units().formatPoiDistanceMeters(distanceM, distanceUnit)
         )
     ));
 }
@@ -15298,8 +15331,8 @@ function selectPOI(poiLat, poiLon, poiName, userLat, userLon) {
 // ===== ROUTE AVOIDANCE PREFERENCES =====
 
 function toggleAvoidancePreference(pref) {
-    const RP = VoyagrModules.routePrefs();
-    const TU = VoyagrModules.toggleUI();
+    const RP = _routePrefs();
+    const TU = _toggleUI();
     const btn = document.getElementById(RP.resolveRouteLegAvoidanceButtonId(pref));
     if (!btn) return;
     const isActive = TU.nextToggleState(btn.classList.contains('active'));
@@ -15309,8 +15342,8 @@ function toggleAvoidancePreference(pref) {
 }
 
 function loadAvoidancePreferences() {
-    const RP = VoyagrModules.routePrefs();
-    const TU = VoyagrModules.toggleUI();
+    const RP = _routePrefs();
+    const TU = _toggleUI();
     RP.ROUTE_LEG_AVOIDANCE_PREF_KEYS.forEach(pref => {
         const isActive = RP.isRouteLegAvoidancePrefEnabled(pref, localStorage);
         const btn = document.getElementById(RP.resolveRouteLegAvoidanceButtonId(pref));
@@ -15832,7 +15865,7 @@ function togglePreference(pref) {
         return;
     }
 
-    const RP = VoyagrModules.routePrefs();
+    const RP = _routePrefs();
     const buttonId = RP.resolveRouteAvoidanceButtonId(pref);
     const button = document.getElementById(buttonId);
 
@@ -15845,7 +15878,7 @@ function togglePreference(pref) {
     const isActive = button.classList.contains('active');
     localStorage.setItem(RP.getRouteAvoidancePrefStorageKey(pref), isActive ? 'true' : 'false');
 
-    VoyagrModules.toggleUI().applyLabeledToggleButton(button, isActive);
+    _toggleUI().applyLabeledToggleButton(button, isActive);
 
     // Handle specific preference behaviors
     if (pref === 'caz') {
@@ -15869,7 +15902,7 @@ function togglePreference(pref) {
 const HAZARD_CAMERA_SUBTYPES = _hazardAlerts().HAZARD_CAMERA_PREF_SUBTYPES;
 
 function applyHazardToggleStyles(button, enabled) {
-    VoyagrModules.toggleUI().applyLabeledToggleButton(button, enabled);
+    _toggleUI().applyLabeledToggleButton(button, enabled);
 }
 
 async function loadHazardCameraTogglesFromApi() {
@@ -15941,8 +15974,8 @@ window.loadHazardCameraTogglesFromApi = loadHazardCameraTogglesFromApi;
  * @returns {*} Return value description
  */
 function loadPreferences() {
-    const RP = VoyagrModules.routePrefs();
-    const TU = VoyagrModules.toggleUI();
+    const RP = _routePrefs();
+    const TU = _toggleUI();
 
     RP.ROUTE_AVOIDANCE_PREF_KEYS.forEach((pref) => {
         const button = document.getElementById(RP.resolveRouteAvoidanceButtonId(pref));
