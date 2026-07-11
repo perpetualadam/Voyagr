@@ -189,6 +189,76 @@
     }
 
     /**
+     * Full deviation tick plan: pre-checks, decideRouteDeviation, state patch, reroute apply hints.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildRouteDeviationTickPlan(opts) {
+        opts = opts || {};
+        var now = opts.now != null ? opts.now : Date.now();
+
+        if (!opts.autoRerouteEnabled) {
+            return { action: 'skip', reason: 'disabled' };
+        }
+        if (!opts.hasRoute) {
+            return { action: 'skip', reason: 'no-route' };
+        }
+        if ((opts.postRerouteGraceUntil || 0) > now) {
+            return { action: 'skip', reason: 'grace' };
+        }
+        if (opts.rerouteInProgress) {
+            return { action: 'skip', reason: 'in-progress' };
+        }
+
+        var decision = decideRouteDeviation({
+            autoRerouteEnabled: opts.autoRerouteEnabled,
+            hasRoute: opts.hasRoute,
+            remainingToDest: opts.remainingToDest,
+            accuracy: opts.accuracy,
+            minDistance: opts.minDistance,
+            routeJoinConfirmed: opts.routeJoinConfirmed,
+            deviationStartTime: opts.deviationStartTime,
+            lastRerouteTime: opts.lastRerouteTime,
+            lastRerouteAttemptTime: opts.lastRerouteAttemptTime,
+            offRouteStreak: opts.offRouteStreak,
+            now: now,
+            constants: opts.constants,
+        });
+
+        var wasJoined = !!opts.routeJoinConfirmed;
+        var plan = {
+            action: decision.action,
+            decision: decision,
+            statePatch: {
+                routeJoinConfirmedForDeviation: decision.routeJoinConfirmed,
+                deviationStartTimeCheck: decision.deviationStartTime,
+                deviationOffRouteStreak: decision.offRouteStreak != null ? decision.offRouteStreak : 0,
+            },
+            logJoinDetected: !wasJoined && decision.routeJoinConfirmed,
+            lastRerouteDeviation: opts.minDistance,
+        };
+
+        if (decision.action === 'reroute') {
+            plan.statePatch.lastRerouteAttemptTime = decision.lastRerouteAttemptTime || now;
+            plan.rerouteAttemptIncrement = true;
+            plan.notification = buildDeviationRerouteNotification(
+                opts.minDistance,
+                opts.distanceUnit,
+                decision.deviationDuration
+            );
+            plan.logDeviation = {
+                minDistance: opts.minDistance,
+                deviationDuration: decision.deviationDuration,
+            };
+            plan.triggerReroute = true;
+        } else if (decision.action === 'debounced' || decision.action === 'waiting') {
+            plan.trackDeviation = true;
+        }
+
+        return plan;
+    }
+
+    /**
      * Build a reroute analytics/debug event object.
      * @param {Object} o
      * @param {string} o.timestampIso
@@ -686,6 +756,7 @@
         isTrustworthyAccuracy: isTrustworthyAccuracy,
         effectiveDeviationThreshold: effectiveDeviationThreshold,
         decideRouteDeviation: decideRouteDeviation,
+        buildRouteDeviationTickPlan: buildRouteDeviationTickPlan,
         buildRerouteLogEvent: buildRerouteLogEvent,
         appendRerouteLogEntry: appendRerouteLogEntry,
         buildRerouteLogSettingsSnapshot: buildRerouteLogSettingsSnapshot,

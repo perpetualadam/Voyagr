@@ -498,3 +498,57 @@ describe('reroute retry and notification helpers', () => {
         expect(plan.guard.proceed).toBe(true);
     });
 });
+
+describe('buildRouteDeviationTickPlan', () => {
+    const now = 1_700_000_000_000;
+
+    test('skips during post-reroute grace', () => {
+        const plan = RD.buildRouteDeviationTickPlan({
+            autoRerouteEnabled: true,
+            hasRoute: true,
+            now,
+            postRerouteGraceUntil: now + 5000,
+        });
+        expect(plan.action).toBe('skip');
+        expect(plan.reason).toBe('grace');
+    });
+
+    test('applies reroute notification and state patch when deviation confirmed', () => {
+        const plan = RD.buildRouteDeviationTickPlan({
+            autoRerouteEnabled: true,
+            hasRoute: true,
+            remainingToDest: 5000,
+            accuracy: 10,
+            minDistance: 120,
+            routeJoinConfirmed: true,
+            deviationStartTime: now - 12_000,
+            lastRerouteTime: 0,
+            lastRerouteAttemptTime: 0,
+            offRouteStreak: 5,
+            now,
+            distanceUnit: 'km',
+        });
+        expect(plan.action).toBe('reroute');
+        expect(plan.triggerReroute).toBe(true);
+        expect(plan.notification.title).toContain('Deviation');
+        expect(plan.statePatch.deviationStartTimeCheck).toBeNull();
+    });
+
+    test('tracks deviation distance while waiting', () => {
+        const plan = RD.buildRouteDeviationTickPlan({
+            autoRerouteEnabled: true,
+            hasRoute: true,
+            remainingToDest: 5000,
+            accuracy: 10,
+            minDistance: 80,
+            routeJoinConfirmed: true,
+            deviationStartTime: now - 2000,
+            offRouteStreak: 4,
+            now,
+            distanceUnit: 'km',
+        });
+        expect(plan.action).toBe('waiting');
+        expect(plan.trackDeviation).toBe(true);
+        expect(plan.lastRerouteDeviation).toBe(80);
+    });
+});

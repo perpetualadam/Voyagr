@@ -41,8 +41,34 @@
         return null;
     }
 
+    /**
+     * Normalise DOM/route inputs for destination resolution.
+     * @param {Object} opts
+     * @param {string|null} [opts.lastRouteDestination]
+     * @param {{ dataset?: { lat?: string, lon?: string } }|null} [opts.endElement]
+     * @param {{ lat: number, lon: number }|null} [opts.polylineEnd]
+     * @returns {NavigationDestinationInput}
+     */
+    function readNavigationDestinationSources(opts) {
+        opts = opts || {};
+        var endCoords = null;
+        var endEl = opts.endElement;
+        if (endEl && endEl.dataset && endEl.dataset.lat != null && endEl.dataset.lon != null) {
+            endCoords = {
+                lat: parseFloat(endEl.dataset.lat),
+                lon: parseFloat(endEl.dataset.lon),
+            };
+        }
+        return {
+            lastRouteDestination: opts.lastRouteDestination,
+            endCoords: endCoords,
+            polylineEnd: opts.polylineEnd,
+        };
+    }
+
     var api = {
         resolveDestinationLatLon: resolveDestinationLatLon,
+        readNavigationDestinationSources: readNavigationDestinationSources,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

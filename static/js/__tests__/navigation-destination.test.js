@@ -41,3 +41,23 @@ describe('resolveDestinationLatLon', () => {
         })).toBeNull();
     });
 });
+
+describe('readNavigationDestinationSources', () => {
+    test('reads end element dataset and polyline end', () => {
+        const sources = NavDest.readNavigationDestinationSources({
+            lastRouteDestination: '51.5,-0.1',
+            endElement: { dataset: { lat: '51.501', lon: '-0.141' } },
+            polylineEnd: { lat: 52, lon: 0 },
+        });
+        expect(sources.lastRouteDestination).toBe('51.5,-0.1');
+        expect(sources.endCoords).toEqual({ lat: 51.501, lon: -0.141 });
+        expect(sources.polylineEnd).toEqual({ lat: 52, lon: 0 });
+    });
+
+    test('returns null endCoords when dataset missing', () => {
+        const sources = NavDest.readNavigationDestinationSources({
+            endElement: { dataset: {} },
+        });
+        expect(sources.endCoords).toBeNull();
+    });
+});

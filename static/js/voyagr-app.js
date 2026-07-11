@@ -5391,16 +5391,6 @@ let lastTrafficData = null;
 let lastTrafficUpdateTime = 0;
 
 // Deviation tracking for time-based detection
-let isCurrentlyDeviated = false;
-const DEVIATION_THRESHOLD_METERS = 50;
-const DEVIATION_TIME_THRESHOLD_MS = 10000; // 10 seconds
-// Ignore fixes worse than this (metres) for deviation — too unreliable to act on.
-const DEVIATION_MAX_TRUST_ACCURACY_M = 65;
-// Cap on how much GPS error can widen the deviation threshold.
-const DEVIATION_ACC_EXTRA_CAP_M = 40;
-/** Until GPS is this close to the route line, skip deviation alerts/reroute (e.g. start point ≠ current location). */
-/** Require GPS to be this close to the polyline before deviation reroutes fire (lower = sooner real-world reroutes). */
-const ROUTE_JOIN_GATE_METERS = 85;
 let routeJoinConfirmedForDeviation = false;
 /** After GPS deviation reroute, next in-nav route pick uses primary only (no name-based alt). */
 let _preferPrimaryRouteOnNextNavUpdate = false;
@@ -5697,19 +5687,18 @@ async function manualTrafficUpdate() {
  */
 function resolveNavigationDestination() {
     const lr = window.lastCalculatedRoute;
-    const endEl = document.getElementById('end');
     let polylineEnd = null;
     if (typeof routePolyline !== 'undefined' && routePolyline && routePolyline.length > 0) {
         const last = routePolyline[routePolyline.length - 1];
         polylineEnd = { lat: last[0], lon: last[1] };
     }
-    return _navigationDestination().resolveDestinationLatLon({
+    const ND = _navigationDestination();
+    const sources = ND.readNavigationDestinationSources({
         lastRouteDestination: lr && typeof lr.destination === 'string' ? lr.destination : null,
-        endCoords: endEl && endEl.dataset && endEl.dataset.lat != null && endEl.dataset.lon != null
-            ? { lat: parseFloat(endEl.dataset.lat), lon: parseFloat(endEl.dataset.lon) }
-            : null,
-        polylineEnd: polylineEnd,
+        endElement: document.getElementById('end'),
+        polylineEnd,
     });
+    return ND.resolveDestinationLatLon(sources);
 }
 
 /**
@@ -5984,7 +5973,7 @@ function seedNavigationProgressOnNewRoute(lat, lon) {
         idx,
         snap.distance,
         currentRouteSteps,
-        ROUTE_JOIN_GATE_METERS
+        _rerouteDecision().DEFAULTS.ROUTE_JOIN_GATE_METERS
     );
 
     lastSnappedRouteIndex = plan.lastSnappedRouteIndex;
@@ -12334,8 +12323,6 @@ let _voiceAnnouncedCategory = null;
 let lastDestinationAnnouncementDistance = Infinity;
 const DESTINATION_ANNOUNCEMENT_DISTANCES = [10000, 5000, 2000, 1000, 500, 100]; // meters (10km, 5km, 2km, 1km, 500m, 100m)
 
-/** Suppress deviation reroute near destination (Waze-style parking-lot loops). */
-const NAV_ARRIVAL_SUPPRESS_REROUTE_METERS = 100;
 let _navigationArrivalTriggered = false;
 let _navigationArrivalZoneSince = 0;
 
@@ -12785,75 +12772,51 @@ function scheduleAutomaticRerouteRetry() {
  * Respects auto-reroute toggle setting
  */
 function checkRouteDeviation(lat, lon, accuracy) {
-    // Check if auto-reroute is enabled
-    if (!autoRerouteOnDeviationEnabled) {
-        return;
-    }
-
     if (!routePolyline || routePolyline.length === 0) return;
 
     const now = Date.now();
-    if (postRerouteGraceUntil > now) {
-        return;
-    }
-    if (rerouteInProgress) {
-        return;
-    }
-
     const remainingToDest = getNavigationRemainingDistanceMeters(lat, lon);
-    if (remainingToDest <= NAV_ARRIVAL_SUPPRESS_REROUTE_METERS) {
-        return;
-    }
-
-    // A very inaccurate fix can read tens of metres off a road we're actually on.
-    // Don't let it start or sustain a deviation — just wait for a trustworthy fix.
-    const acc = Number.isFinite(accuracy) && accuracy > 0 ? accuracy : 0;
-    if (acc > DEVIATION_MAX_TRUST_ACCURACY_M) {
-        return;
-    }
-
     const snap = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
-    const minDistance = snap.distance;
-
     const VRD = _rerouteDecision();
-    const wasJoined = routeJoinConfirmedForDeviation;
-    const decision = VRD.decideRouteDeviation({
+    const tick = VRD.buildRouteDeviationTickPlan({
         autoRerouteEnabled: autoRerouteOnDeviationEnabled,
         hasRoute: true,
-        remainingToDest: remainingToDest,
-        accuracy: accuracy,
-        minDistance: minDistance,
+        remainingToDest,
+        accuracy,
+        minDistance: snap.distance,
         routeJoinConfirmed: routeJoinConfirmedForDeviation,
         deviationStartTime: deviationStartTimeCheck,
-        lastRerouteTime: lastRerouteTime,
-        lastRerouteAttemptTime: lastRerouteAttemptTime,
+        lastRerouteTime,
+        lastRerouteAttemptTime,
         offRouteStreak: deviationOffRouteStreak,
-        now: now
+        now,
+        postRerouteGraceUntil,
+        rerouteInProgress,
+        distanceUnit,
     });
 
-    routeJoinConfirmedForDeviation = decision.routeJoinConfirmed;
-    deviationStartTimeCheck = decision.deviationStartTime;
-    deviationOffRouteStreak = decision.offRouteStreak != null ? decision.offRouteStreak : 0;
+    if (tick.action === 'skip') return;
 
-    if (!wasJoined && decision.routeJoinConfirmed) {
+    routeJoinConfirmedForDeviation = tick.statePatch.routeJoinConfirmedForDeviation;
+    deviationStartTimeCheck = tick.statePatch.deviationStartTimeCheck;
+    deviationOffRouteStreak = tick.statePatch.deviationOffRouteStreak;
+    if (tick.statePatch.lastRerouteAttemptTime != null) {
+        lastRerouteAttemptTime = tick.statePatch.lastRerouteAttemptTime;
+    }
+
+    if (tick.logJoinDetected) {
         console.log('[Rerouting] Route join detected — deviation monitoring active');
     }
 
-    if (decision.action === 'reroute') {
-        lastRerouteAttemptTime = decision.lastRerouteAttemptTime || now;
-        lastRerouteDeviation = minDistance;
+    if (tick.triggerReroute) {
         rerouteAttemptCount++;
-        console.log(`[Rerouting] Deviation confirmed: ${minDistance.toFixed(0)}m for ${(decision.deviationDuration / 1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
-
-        const notify = VRD.buildDeviationRerouteNotification(
-            minDistance,
-            distanceUnit,
-            decision.deviationDuration
-        );
-        sendNotification(notify.title, notify.body, notify.type);
+        console.log(`[Rerouting] Deviation confirmed: ${tick.logDeviation.minDistance.toFixed(0)}m for ${(tick.logDeviation.deviationDuration / 1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
+        sendNotification(tick.notification.title, tick.notification.body, tick.notification.type);
         triggerAutomaticRerouteWithHazardHandling(lat, lon);
-    } else if (decision.action === 'debounced' || decision.action === 'waiting') {
-        lastRerouteDeviation = minDistance;
+    }
+
+    if (tick.trackDeviation || tick.triggerReroute) {
+        lastRerouteDeviation = tick.lastRerouteDeviation;
     }
 }
 
