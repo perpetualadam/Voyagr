@@ -147,6 +147,7 @@
      */
     function buildRoutePreferencesUiApplyPlan(storage) {
         var prefs = getRoutePreferences(storage);
+        var maxDetour = prefs.maxDetour != null ? prefs.maxDetour : 20;
         return {
             checks: {
                 avoidHighways: !!prefs.avoidHighways,
@@ -156,7 +157,7 @@
             },
             selects: {
                 routeOptimization: prefs.routeOptimization || 'fastest',
-                maxDetour: prefs.maxDetour != null ? prefs.maxDetour : 20,
+                maxDetour: maxDetour,
             },
             elementIds: {
                 avoidHighways: 'avoidHighways',
@@ -166,7 +167,48 @@
                 routeOptimization: 'routeOptimization',
                 maxDetour: 'maxDetour',
             },
-            updateDetourLabel: true,
+            detourLabel: buildDetourLabelApplyPlan(maxDetour),
+        };
+    }
+
+    /**
+     * DOM apply plan for the max-detour percentage label (display only).
+     * @param {number|string} maxDetour
+     * @returns {{ labelElementId: string, text: string }}
+     */
+    function buildDetourLabelApplyPlan(maxDetour) {
+        var value = maxDetour != null ? maxDetour : 20;
+        return {
+            labelElementId: 'detourLabel',
+            text: String(value) + '%',
+        };
+    }
+
+    /**
+     * Apply plan for route-leg avoidance toggle buttons in settings.
+     * @param {Storage} storage
+     * @returns {Array<{ pref: string, buttonId: string, enabled: boolean }>}
+     */
+    function buildRouteLegAvoidanceTogglesApplyPlan(storage) {
+        return ROUTE_LEG_AVOIDANCE_PREF_KEYS.map(function (pref) {
+            return {
+                pref: pref,
+                buttonId: resolveRouteLegAvoidanceButtonId(pref),
+                enabled: isRouteLegAvoidancePrefEnabled(pref, storage),
+            };
+        });
+    }
+
+    /**
+     * localStorage patch for toggling a single route-leg avoidance pref.
+     * @param {string} pref
+     * @param {boolean} enabled
+     * @returns {{ storageKey: string, value: string }}
+     */
+    function buildRouteLegAvoidanceToggleStoragePlan(pref, enabled) {
+        return {
+            storageKey: getRouteLegAvoidancePrefStorageKey(pref),
+            value: enabled ? 'true' : 'false',
         };
     }
 
@@ -240,6 +282,9 @@
         getRouteCostParams: getRouteCostParams,
         getRoutePreferences: getRoutePreferences,
         buildRoutePreferencesUiApplyPlan: buildRoutePreferencesUiApplyPlan,
+        buildDetourLabelApplyPlan: buildDetourLabelApplyPlan,
+        buildRouteLegAvoidanceTogglesApplyPlan: buildRouteLegAvoidanceTogglesApplyPlan,
+        buildRouteLegAvoidanceToggleStoragePlan: buildRouteLegAvoidanceToggleStoragePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

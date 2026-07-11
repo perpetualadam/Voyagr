@@ -318,13 +318,16 @@
                 batterySaving: !!input.batterySavingEnabled,
                 gestureControl: !!input.gestureControlEnabled,
             },
+            detourLabel: {
+                labelElementId: 'detourLabel',
+                text: String(routePrefs.maxDetour != null ? routePrefs.maxDetour : 20) + '%',
+            },
             sideEffects: {
                 loadPreferences: true,
                 setMapTheme: true,
                 initializeDarkMode: true,
                 updateThemeButtons: true,
                 applySpeedWidgetToggleUi: true,
-                updateDetourLabel: true,
             },
         };
     }

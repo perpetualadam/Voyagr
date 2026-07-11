@@ -105,7 +105,14 @@ describe('route-prefs module', () => {
             expect(plan.selects.routeOptimization).toBe('shortest');
             expect(plan.selects.maxDetour).toBe(30);
             expect(plan.elementIds.maxDetour).toBe('maxDetour');
-            expect(plan.updateDetourLabel).toBe(true);
+            expect(plan.detourLabel.text).toBe('30%');
+        });
+
+        test('buildDetourLabelApplyPlan formats percentage label', () => {
+            expect(RoutePrefs.buildDetourLabelApplyPlan(25)).toEqual({
+                labelElementId: 'detourLabel',
+                text: '25%',
+            });
         });
     });
 
@@ -120,6 +127,18 @@ describe('route-prefs module', () => {
             expect(RoutePrefs.isRouteLegAvoidancePrefEnabled('tollRoads', localStorage)).toBe(false);
             localStorage.setItem('pref_avoid_motorways', 'true');
             expect(RoutePrefs.isRouteLegAvoidancePrefEnabled('motorways', localStorage)).toBe(true);
+        });
+
+        test('buildRouteLegAvoidanceTogglesApplyPlan lists leg avoidance toggles', () => {
+            localStorage.setItem('pref_avoid_ferries', 'true');
+            const plan = RoutePrefs.buildRouteLegAvoidanceTogglesApplyPlan(localStorage);
+            expect(plan.find((item) => item.pref === 'ferries').enabled).toBe(true);
+            expect(plan.find((item) => item.pref === 'tollRoads').enabled).toBe(false);
+        });
+
+        test('buildRouteLegAvoidanceToggleStoragePlan maps enabled state', () => {
+            expect(RoutePrefs.buildRouteLegAvoidanceToggleStoragePlan('motorways', true))
+                .toEqual({ storageKey: 'pref_avoid_motorways', value: 'true' });
         });
     });
 });

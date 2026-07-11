@@ -139,4 +139,35 @@ describe('geocoding-locations module', () => {
         expect(err.ok).toBe(false);
         expect(err.statusMessage).toContain('timeout');
     });
+
+    test('buildGeocodeAddressLookupPlan resolves coordinates and cache hits', () => {
+        const coords = GL.buildGeocodeAddressLookupPlan({ address: '51.5,-0.1' });
+        expect(coords.action).toBe('resolve');
+        expect(coords.source).toBe('coordinates');
+
+        const cache = {};
+        GL.writeGeocodeCacheEntry(cache, 'Leeds', { lat: 53.8, lon: -1.5, display_name: 'Leeds' });
+        const cached = GL.buildGeocodeAddressLookupPlan({ address: 'Leeds', cache });
+        expect(cached.action).toBe('resolve');
+        expect(cached.source).toBe('cache');
+    });
+
+    test('buildGeocodeAddressLookupPlan falls through to nominatim fetch', () => {
+        const plan = GL.buildGeocodeAddressLookupPlan({
+            address: 'Leeds UK',
+            nominatimBaseUrl: 'https://nominatim.example/search',
+        });
+        expect(plan.action).toBe('nominatim_fetch');
+        expect(plan.url).toContain('Leeds');
+    });
+
+    test('buildGeocodeAddressFetchSuccessPlan wraps geocoded result for cache write', () => {
+        const success = GL.buildGeocodeAddressFetchSuccessPlan(
+            { lat: 53.8, lon: -1.5, display_name: 'Leeds' },
+            'Leeds'
+        );
+        expect(success.ok).toBe(true);
+        expect(success.result.cached).toBe(false);
+        expect(success.cacheKey).toBe('Leeds');
+    });
 });

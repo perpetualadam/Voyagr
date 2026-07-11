@@ -103,7 +103,9 @@ describe('settings-snapshot module', () => {
         expect(plan.parkingSelects.maxWalkingDistance).toBe('5');
         expect(plan.toggleButtons.smartZoom).toBe(true);
         expect(plan.labeledToggleButtons.mlPredictions).toBe(true);
+        expect(plan.detourLabel.text).toBe('15%');
         expect(plan.sideEffects.applySpeedWidgetToggleUi).toBe(true);
+        expect(plan.sideEffects.updateDetourLabel).toBeUndefined();
     });
 
     test('buildSettingsSnapshotInputPlan merges runtime and form state', () => {

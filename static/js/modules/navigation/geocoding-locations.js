@@ -328,6 +328,55 @@
         };
     }
 
+    /**
+     * Lookup plan for geocodeAddress before network fetch (coords, cache, or Nominatim).
+     * @param {Object} input
+     * @param {string} input.address
+     * @param {Object} [input.cache]
+     * @param {string} [input.nominatimBaseUrl]
+     * @param {number} [input.limit]
+     * @returns {Object}
+     */
+    function buildGeocodeAddressLookupPlan(input) {
+        input = input || {};
+        var trimmed = normalizeGeocodeQuery(input.address);
+        if (!trimmed) {
+            return { action: 'empty' };
+        }
+
+        var coordResult = parseCoordinateGeocodeResult(trimmed);
+        if (coordResult) {
+            return { action: 'resolve', trimmed: trimmed, result: coordResult, source: 'coordinates' };
+        }
+
+        var cached = readGeocodeCacheHit(input.cache, trimmed);
+        if (cached) {
+            return { action: 'resolve', trimmed: trimmed, result: cached, source: 'cache' };
+        }
+
+        return {
+            action: 'nominatim_fetch',
+            trimmed: trimmed,
+            url: buildNominatimSearchUrl(input.nominatimBaseUrl, trimmed, input.limit),
+            source: 'nominatim',
+        };
+    }
+
+    /**
+     * Success plan after a Nominatim fetch resolves an address.
+     * @param {Object} geocoded
+     * @param {string} cacheKey
+     * @returns {Object}
+     */
+    function buildGeocodeAddressFetchSuccessPlan(geocoded, cacheKey) {
+        return {
+            ok: true,
+            result: Object.assign({}, geocoded, { cached: false }),
+            cacheKey: cacheKey,
+            cacheEntry: geocoded,
+        };
+    }
+
     var api = {
         readStoredLocationFromDataset: readStoredLocationFromDataset,
         getGeocodeLoadingStatusMessage: getGeocodeLoadingStatusMessage,
@@ -352,6 +401,8 @@
         buildGeocodeEndpointFailurePlan: buildGeocodeEndpointFailurePlan,
         buildGeocodePairSuccessOutcomePlan: buildGeocodePairSuccessOutcomePlan,
         buildGeocodePairErrorOutcomePlan: buildGeocodePairErrorOutcomePlan,
+        buildGeocodeAddressLookupPlan: buildGeocodeAddressLookupPlan,
+        buildGeocodeAddressFetchSuccessPlan: buildGeocodeAddressFetchSuccessPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -1568,7 +1568,7 @@ function applySettingsUiFromPlan(plan) {
 
     if (side.initializeDarkMode) initializeDarkMode();
     if (side.updateThemeButtons) updateThemeButtons();
-    if (side.updateDetourLabel) updateDetourLabel();
+    if (plan.detourLabel) applyDetourLabelFromPlan(plan.detourLabel);
     if (side.applySpeedWidgetToggleUi) applySpeedWidgetToggleUi();
 }
 
@@ -3579,8 +3579,20 @@ function applyRoutePreferencesUiFromPlan(plan) {
         if (el) el.value = value;
     });
 
-    if (plan.updateDetourLabel && document.getElementById(ids.maxDetour)) {
-        updateDetourLabel();
+    if (plan.detourLabel) {
+        applyDetourLabelFromPlan(plan.detourLabel);
+    }
+}
+
+/**
+ * Apply max-detour label text from a pure apply plan (no save).
+ * @param {Object} plan - from buildDetourLabelApplyPlan
+ */
+function applyDetourLabelFromPlan(plan) {
+    if (!plan) return;
+    const labelEl = document.getElementById(plan.labelElementId || 'detourLabel');
+    if (labelEl && plan.text != null) {
+        labelEl.textContent = plan.text;
     }
 }
 
@@ -3590,8 +3602,9 @@ function applyRoutePreferencesUiFromPlan(plan) {
  * @returns {*} Return value description
  */
 function updateDetourLabel() {
-    const value = document.getElementById('maxDetour').value;
-    document.getElementById('detourLabel').textContent = value + '%';
+    const maxDetourEl = document.getElementById('maxDetour');
+    if (!maxDetourEl) return;
+    applyDetourLabelFromPlan(_routePrefs().buildDetourLabelApplyPlan(maxDetourEl.value));
     saveRoutePreferences();
 }
 
@@ -14677,17 +14690,23 @@ function selectAutocompleteResult(fieldId, lat, lon, name) {
 
 async function geocodeAddress(address) {
     const GL = _geocodingLocations();
-    const trimmedAddress = GL.normalizeGeocodeQuery(address);
-    if (!trimmedAddress) {
+    let lookup = GL.buildGeocodeAddressLookupPlan({
+        address,
+        cache: geocodingCache,
+        nominatimBaseUrl: NOMINATIM_API,
+        limit: 8,
+    });
+
+    if (lookup.action === 'empty') {
         return null;
     }
 
-    const coordResult = GL.parseCoordinateGeocodeResult(trimmedAddress);
-    if (coordResult) {
-        console.log('[Geocoding] Input is already coordinates:', coordResult.lat, coordResult.lon);
-        return coordResult;
+    if (lookup.action === 'resolve') {
+        console.log(`[Geocoding] Resolved via ${lookup.source}:`, lookup.trimmed);
+        return lookup.result;
     }
 
+    const trimmedAddress = lookup.trimmed;
     const plusCodesEnabled = localStorage.getItem('googlePlusCodesEnabled') === 'true';
     if (plusCodesEnabled && typeof GooglePlusCodesService !== 'undefined') {
         try {
@@ -14703,16 +14722,20 @@ async function geocodeAddress(address) {
         }
     }
 
-    const cachedHit = GL.readGeocodeCacheHit(geocodingCache, trimmedAddress);
-    if (cachedHit) {
+    lookup = GL.buildGeocodeAddressLookupPlan({
+        address: trimmedAddress,
+        cache: geocodingCache,
+        nominatimBaseUrl: NOMINATIM_API,
+        limit: 8,
+    });
+    if (lookup.action === 'resolve') {
         console.log('[Geocoding] Cache hit for:', trimmedAddress);
-        return cachedHit;
+        return lookup.result;
     }
 
     try {
         console.log('[Geocoding] Fetching:', trimmedAddress);
-        const url = GL.buildNominatimSearchUrl(NOMINATIM_API, trimmedAddress, 8);
-        const response = await fetch(url, {
+        const response = await fetch(lookup.url, {
             headers: {
                 'User-Agent': 'Voyagr-PWA/1.0'
             }
@@ -14731,11 +14754,12 @@ async function geocodeAddress(address) {
             return null;
         }
 
-        geocodingCache = GL.writeGeocodeCacheEntry(geocodingCache, trimmedAddress, parsed.geocoded);
+        const success = GL.buildGeocodeAddressFetchSuccessPlan(parsed.geocoded, lookup.trimmed);
+        geocodingCache = GL.writeGeocodeCacheEntry(geocodingCache, success.cacheKey, success.cacheEntry);
         saveGeocodeCache();
 
-        console.log('[Geocoding] Success:', trimmedAddress, '→', parsed.geocoded.lat, parsed.geocoded.lon);
-        return { ...parsed.geocoded, cached: false };
+        console.log('[Geocoding] Success:', trimmedAddress, '→', success.result.lat, success.result.lon);
+        return success.result;
     } catch (error) {
         console.log('[Geocoding] Error:', error.message);
         return null;
@@ -15302,18 +15326,18 @@ function toggleAvoidancePreference(pref) {
     if (!btn) return;
     const isActive = TU.nextToggleState(btn.classList.contains('active'));
     TU.applyToggleButton(btn, isActive, TU.TOGGLE_SWITCH_OPTS);
-    localStorage.setItem(RP.getRouteLegAvoidancePrefStorageKey(pref), isActive ? 'true' : 'false');
+    const patch = RP.buildRouteLegAvoidanceToggleStoragePlan(pref, isActive);
+    localStorage.setItem(patch.storageKey, patch.value);
     console.log(`[Avoidance] ${pref} = ${isActive}`);
 }
 
 function loadAvoidancePreferences() {
     const RP = _routePrefs();
     const TU = _toggleUI();
-    RP.ROUTE_LEG_AVOIDANCE_PREF_KEYS.forEach(pref => {
-        const isActive = RP.isRouteLegAvoidancePrefEnabled(pref, localStorage);
-        const btn = document.getElementById(RP.resolveRouteLegAvoidanceButtonId(pref));
+    RP.buildRouteLegAvoidanceTogglesApplyPlan(localStorage).forEach((item) => {
+        const btn = document.getElementById(item.buttonId);
         if (btn) {
-            TU.applyToggleButton(btn, isActive, TU.TOGGLE_SWITCH_OPTS);
+            TU.applyToggleButton(btn, item.enabled, TU.TOGGLE_SWITCH_OPTS);
         }
     });
 }
