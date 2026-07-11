@@ -93,12 +93,133 @@
             : '';
     }
 
+    /**
+     * Preflight plan for automatic traffic sampling during navigation.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.routeInProgress]
+     * @param {number} [opts.currentLat]
+     * @param {number} [opts.currentLon]
+     * @returns {Object}
+     */
+    function buildCheckTrafficAndReroutePreflightPlan(opts) {
+        opts = opts || {};
+        if (!opts.routeInProgress || !opts.currentLat || !opts.currentLon) {
+            return { shouldCheck: false, reason: 'no_active_route' };
+        }
+        return { shouldCheck: true, forceFresh: true };
+    }
+
+    /**
+     * Dispatch plan after fetching a traffic snapshot for reroute evaluation.
+     * @param {Object|null} flow
+     * @returns {Object}
+     */
+    function buildTrafficSampleResponseDispatchPlan(flow) {
+        if (!flow) {
+            return { action: 'none', reason: 'no_data' };
+        }
+        if (flow.source !== 'TomTom') {
+            return { action: 'update_last_traffic_only', flow: flow, reason: 'simulated' };
+        }
+        return { action: 'evaluate_change', flow: flow };
+    }
+
+    /**
+     * Notification and reroute dispatch when a significant traffic change is detected.
+     * @param {string|false} changeType
+     * @param {Object} flow
+     * @returns {Object}
+     */
+    function buildTrafficChangeNotificationPlan(changeType, flow) {
+        flow = flow || {};
+        if (!changeType) {
+            return { shouldNotify: false, shouldReroute: false };
+        }
+        var isSevere = changeType === 'severe';
+        return {
+            shouldNotify: true,
+            shouldReroute: true,
+            changeType: changeType,
+            avoidPoints: flow.congestedPoints || [],
+            measuredDelayMin: flow.delayMin || 0,
+            notificationTitle: '🚦 Traffic Update',
+            notificationMessage: isSevere
+                ? 'Severe congestion ahead. Checking for a faster route...'
+                : 'Heavier traffic ahead. Checking for a better route...',
+            notificationType: 'warning',
+        };
+    }
+
+    /**
+     * Preflight plan before requesting a traffic-based reroute alternative.
+     * @param {Object} [opts]
+     * @param {string|null} [opts.destination]
+     * @param {Object|null} [opts.lastCalculatedRoute]
+     * @param {string} [opts.changeType]
+     * @returns {Object}
+     */
+    function buildTrafficReroutePreflightPlan(opts) {
+        opts = opts || {};
+        if (!opts.destination) {
+            return { shouldReroute: false, reason: 'no_destination' };
+        }
+        if (!opts.lastCalculatedRoute) {
+            return { shouldReroute: false, reason: 'no_route_context' };
+        }
+        return {
+            shouldReroute: true,
+            isSevere: opts.changeType === 'severe',
+        };
+    }
+
+    /**
+     * Acceptance plan after a traffic reroute API returns a candidate route.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.isSevere]
+     * @param {number} [opts.oldBaseMinutes]
+     * @param {number} [opts.measuredDelayMin]
+     * @param {number} [opts.newRouteMinutes]
+     * @returns {Object}
+     */
+    function buildTrafficRerouteAcceptancePlan(opts) {
+        opts = opts || {};
+        var timeSaved = computeTrafficRerouteTimeSaved(
+            opts.oldBaseMinutes || 0,
+            opts.measuredDelayMin,
+            opts.newRouteMinutes || 0
+        );
+        var accept = shouldAcceptTrafficReroute(!!opts.isSevere, timeSaved);
+        var reason = opts.isSevere ? 'severe congestion' : 'traffic';
+        var saveMsg = formatTrafficRerouteSaveMessage(timeSaved);
+        return {
+            accept: accept,
+            timeSavedMinutes: timeSaved,
+            reason: reason,
+            saveMessage: saveMsg,
+            clearTrafficCache: accept,
+            clearLastTrafficData: accept,
+            notificationTitle: accept ? '✅ Route Updated' : null,
+            notificationMessage: accept
+                ? 'New route found due to ' + reason + '. ' + saveMsg
+                : null,
+            notificationType: accept ? 'success' : null,
+            voiceMessage: accept
+                ? 'Route updated due to ' + reason + '. ' + saveMsg
+                : null,
+        };
+    }
+
     var api = {
         detectSignificantTrafficChange: detectSignificantTrafficChange,
         computeEffectiveRouteMinutes: computeEffectiveRouteMinutes,
         computeTrafficRerouteTimeSaved: computeTrafficRerouteTimeSaved,
         shouldAcceptTrafficReroute: shouldAcceptTrafficReroute,
         formatTrafficRerouteSaveMessage: formatTrafficRerouteSaveMessage,
+        buildCheckTrafficAndReroutePreflightPlan: buildCheckTrafficAndReroutePreflightPlan,
+        buildTrafficSampleResponseDispatchPlan: buildTrafficSampleResponseDispatchPlan,
+        buildTrafficChangeNotificationPlan: buildTrafficChangeNotificationPlan,
+        buildTrafficReroutePreflightPlan: buildTrafficReroutePreflightPlan,
+        buildTrafficRerouteAcceptancePlan: buildTrafficRerouteAcceptancePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -119,4 +119,39 @@ describe('waypoints module', () => {
         expect(dom.active).toBe(true);
         expect(dom.text).toContain('Editing');
     });
+
+    test('buildViaPointAddPlan prepares marker label and status', () => {
+        const plan = W.buildViaPointAddPlan(51.5, -0.1, null, 1);
+        expect(plan.viaPoint.name).toBe('Via-point 2');
+        expect(plan.marker.label).toBe(2);
+        expect(plan.marker.removeOnclick).toBe('removeViaPoint(1)');
+        expect(plan.statusType).toBe('success');
+    });
+
+    test('buildViaPointRemovePlan rejects invalid index and refreshes markers', () => {
+        expect(W.buildViaPointRemovePlan(-1, 2).shouldRemove).toBe(false);
+        const plan = W.buildViaPointRemovePlan(0, 2);
+        expect(plan.shouldRemove).toBe(true);
+        expect(plan.refreshMarkers).toBe(true);
+    });
+
+    test('buildViaPointMarkersRefreshPlan renumbers markers after removal', () => {
+        const plan = W.buildViaPointMarkersRefreshPlan([
+            { lat: 51.5, lon: -0.1, name: 'Via A' },
+            { lat: 51.6, lon: -0.2, name: 'Via B' },
+        ]);
+        expect(plan.markers).toHaveLength(2);
+        expect(plan.markers[1].label).toBe(2);
+        expect(plan.markers[1].removeOnclick).toBe('removeViaPoint(1)');
+    });
+
+    test('buildStopAddPlan and buildStopRemovePlan mirror via-point patterns', () => {
+        const add = W.buildStopAddPlan(51.5, -0.1, 'Coffee', 20, 0);
+        expect(add.stop.duration).toBe(20);
+        expect(add.marker.removeOnclick).toBe('removeStop(0)');
+        expect(add.statusMessage).toContain('Coffee');
+
+        expect(W.buildStopRemovePlan(3, 2).shouldRemove).toBe(false);
+        expect(W.buildStopRemovePlan(1, 2).shouldRemove).toBe(true);
+    });
 });

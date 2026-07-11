@@ -86,3 +86,69 @@ describe('traffic reroute acceptance helpers', () => {
         expect(TC.formatTrafficRerouteSaveMessage(0)).toBe('');
     });
 });
+
+describe('traffic reroute dispatch plans', () => {
+    test('buildCheckTrafficAndReroutePreflightPlan requires active navigation', () => {
+        expect(TC.buildCheckTrafficAndReroutePreflightPlan({ routeInProgress: false, currentLat: 1, currentLon: 2 }).shouldCheck)
+            .toBe(false);
+        expect(TC.buildCheckTrafficAndReroutePreflightPlan({ routeInProgress: true, currentLat: 1, currentLon: 2 }).shouldCheck)
+            .toBe(true);
+        expect(TC.buildCheckTrafficAndReroutePreflightPlan({ routeInProgress: true, currentLat: 1, currentLon: 2 }).forceFresh)
+            .toBe(true);
+    });
+
+    test('buildTrafficSampleResponseDispatchPlan skips simulated traffic', () => {
+        expect(TC.buildTrafficSampleResponseDispatchPlan(null).action).toBe('none');
+        expect(TC.buildTrafficSampleResponseDispatchPlan({ source: 'simulated' }).action)
+            .toBe('update_last_traffic_only');
+        expect(TC.buildTrafficSampleResponseDispatchPlan({ source: 'TomTom' }).action)
+            .toBe('evaluate_change');
+    });
+
+    test('buildTrafficChangeNotificationPlan maps severe vs congestion messages', () => {
+        const severe = TC.buildTrafficChangeNotificationPlan('severe', {
+            congestedPoints: [{ lat: 1, lon: 2 }],
+            delayMin: 6,
+        });
+        expect(severe.shouldReroute).toBe(true);
+        expect(severe.notificationMessage).toContain('Severe congestion');
+
+        const none = TC.buildTrafficChangeNotificationPlan(false, {});
+        expect(none.shouldReroute).toBe(false);
+    });
+
+    test('buildTrafficReroutePreflightPlan requires destination and route context', () => {
+        expect(TC.buildTrafficReroutePreflightPlan({ destination: null, lastCalculatedRoute: {} }).shouldReroute)
+            .toBe(false);
+        expect(TC.buildTrafficReroutePreflightPlan({ destination: '51,0', lastCalculatedRoute: null }).shouldReroute)
+            .toBe(false);
+        const ok = TC.buildTrafficReroutePreflightPlan({
+            destination: '51,0',
+            lastCalculatedRoute: {},
+            changeType: 'severe',
+        });
+        expect(ok.shouldReroute).toBe(true);
+        expect(ok.isSevere).toBe(true);
+    });
+
+    test('buildTrafficRerouteAcceptancePlan accepts severe or 2+ minute savings', () => {
+        const severe = TC.buildTrafficRerouteAcceptancePlan({
+            isSevere: true,
+            oldBaseMinutes: 20,
+            measuredDelayMin: 5,
+            newRouteMinutes: 30,
+        });
+        expect(severe.accept).toBe(true);
+        expect(severe.clearTrafficCache).toBe(true);
+        expect(severe.voiceMessage).toContain('severe congestion');
+
+        const marginal = TC.buildTrafficRerouteAcceptancePlan({
+            isSevere: false,
+            oldBaseMinutes: 20,
+            measuredDelayMin: 0,
+            newRouteMinutes: 19,
+        });
+        expect(marginal.accept).toBe(false);
+        expect(marginal.notificationTitle).toBeNull();
+    });
+});

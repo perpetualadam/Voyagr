@@ -159,3 +159,50 @@ describe('route traffic flow fetch plans', () => {
         expect(RTF.buildRouteTrafficFlowParseFailurePlan().logMessage).toContain('JSON');
     });
 });
+
+describe('route traffic ahead sampling and cache plans', () => {
+    test('buildSampleRouteTrafficAheadDispatchPlan samples ahead of snapped index', () => {
+        const dispatch = RTF.buildSampleRouteTrafficAheadDispatchPlan(polyline, 2);
+        expect(dispatch.shouldSample).toBe(true);
+        expect(dispatch.startIdx).toBe(2);
+        expect(dispatch.points.length).toBe(polyline.length - 2);
+        expect(dispatch.sampleInterval).toBeGreaterThanOrEqual(1);
+    });
+
+    test('buildSampleRouteTrafficAheadDispatchPlan rejects short polylines', () => {
+        expect(RTF.buildSampleRouteTrafficAheadDispatchPlan([polyline[0]], 0).shouldSample).toBe(false);
+        expect(RTF.buildSampleRouteTrafficAheadDispatchPlan([], 0).shouldSample).toBe(false);
+    });
+
+    test('buildRouteTrafficAheadCachePlan returns cached result within TTL', () => {
+        const now = 1_000_000;
+        const cached = { delayMin: 3, source: 'TomTom' };
+        const plan = RTF.buildRouteTrafficAheadCachePlan(
+            false,
+            { at: now - 30_000, result: cached },
+            now,
+            RTF.ROUTE_TRAFFIC_SAMPLE_TTL_MS
+        );
+        expect(plan.useCache).toBe(true);
+        expect(plan.cachedResult).toBe(cached);
+    });
+
+    test('buildRouteTrafficAheadCachePlan fetches when stale or forced', () => {
+        const now = 1_000_000;
+        const stale = RTF.buildRouteTrafficAheadCachePlan(
+            false,
+            { at: now - RTF.ROUTE_TRAFFIC_SAMPLE_TTL_MS, result: {} },
+            now
+        );
+        expect(stale.useCache).toBe(false);
+        expect(stale.shouldFetch).toBe(true);
+
+        const forced = RTF.buildRouteTrafficAheadCachePlan(
+            true,
+            { at: now - 1_000, result: {} },
+            now
+        );
+        expect(forced.useCache).toBe(false);
+        expect(forced.shouldFetch).toBe(true);
+    });
+});

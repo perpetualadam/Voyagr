@@ -249,6 +249,54 @@
         };
     }
 
+    var ROUTE_TRAFFIC_SAMPLE_TTL_MS = 60 * 1000;
+    var ROUTE_TRAFFIC_AHEAD_SAMPLE_SEGMENT_COUNT = 8;
+
+    /**
+     * Dispatch plan for sampling live traffic ahead of the driver on the active route.
+     * @param {Array<[number,number]>} routePolyline
+     * @param {number} [lastSnappedRouteIndex]
+     * @returns {Object}
+     */
+    function buildSampleRouteTrafficAheadDispatchPlan(routePolyline, lastSnappedRouteIndex) {
+        routePolyline = routePolyline || [];
+        if (routePolyline.length < 2) {
+            return { shouldSample: false };
+        }
+        var startIdx = Math.max(0, Math.min(lastSnappedRouteIndex || 0, routePolyline.length - 2));
+        var samplePlan = buildTrafficFlowSamplePlan(
+            routePolyline,
+            startIdx,
+            ROUTE_TRAFFIC_AHEAD_SAMPLE_SEGMENT_COUNT
+        );
+        if (!samplePlan) {
+            return { shouldSample: false };
+        }
+        return {
+            shouldSample: true,
+            startIdx: startIdx,
+            points: samplePlan.points,
+            sampleInterval: samplePlan.sampleInterval,
+        };
+    }
+
+    /**
+     * Cache plan for along-route traffic snapshots shared by ETA refresh and reroute monitor.
+     * @param {boolean} forceFresh
+     * @param {{ at: number, result: Object }|null} cacheEntry
+     * @param {number} [now]
+     * @param {number} [ttlMs]
+     * @returns {Object}
+     */
+    function buildRouteTrafficAheadCachePlan(forceFresh, cacheEntry, now, ttlMs) {
+        var stamp = now != null ? now : Date.now();
+        var ttl = ttlMs != null ? ttlMs : ROUTE_TRAFFIC_SAMPLE_TTL_MS;
+        if (!forceFresh && cacheEntry && (stamp - cacheEntry.at) < ttl) {
+            return { useCache: true, cachedResult: cacheEntry.result };
+        }
+        return { useCache: false, shouldFetch: true };
+    }
+
     var ROUTE_TRAFFIC_FLOW_API_PATH = '/api/route-traffic-flow';
     var ROUTE_TRAFFIC_BACKOFF_NETWORK_MS = 60000;
     var ROUTE_TRAFFIC_BACKOFF_NON_JSON_MS = 60000;
@@ -349,6 +397,10 @@
         buildRouteTrafficFlowFetchRequestPlan: buildRouteTrafficFlowFetchRequestPlan,
         buildRouteTrafficFlowResponsePlan: buildRouteTrafficFlowResponsePlan,
         buildRouteTrafficFlowParseFailurePlan: buildRouteTrafficFlowParseFailurePlan,
+        ROUTE_TRAFFIC_SAMPLE_TTL_MS: ROUTE_TRAFFIC_SAMPLE_TTL_MS,
+        ROUTE_TRAFFIC_AHEAD_SAMPLE_SEGMENT_COUNT: ROUTE_TRAFFIC_AHEAD_SAMPLE_SEGMENT_COUNT,
+        buildSampleRouteTrafficAheadDispatchPlan: buildSampleRouteTrafficAheadDispatchPlan,
+        buildRouteTrafficAheadCachePlan: buildRouteTrafficAheadCachePlan,
         ROUTE_TRAFFIC_FLOW_API_PATH: ROUTE_TRAFFIC_FLOW_API_PATH,
         ROUTE_TRAFFIC_BACKOFF_SERVER_ERROR_MS: ROUTE_TRAFFIC_BACKOFF_SERVER_ERROR_MS,
         ROUTE_TRAFFIC_POLYLINE_SAMPLE_DIVISOR: ROUTE_TRAFFIC_POLYLINE_SAMPLE_DIVISOR,

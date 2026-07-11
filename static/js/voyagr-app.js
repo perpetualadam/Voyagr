@@ -2716,96 +2716,100 @@ async function addStopFromAddress() {
  * Add a via-point at given coordinates
  */
 function addViaPoint(lat, lon, name = null) {
-    const pointName = name || `Via-point ${viaPoints.length + 1}`;
-    viaPoints.push({ lat, lon, name: pointName, type: 'via' });
-
     const WP = _waypoints();
-    const viaIndex = viaPoints.length - 1;
+    const plan = WP.buildViaPointAddPlan(lat, lon, name, viaPoints.length);
+    viaPoints.push(plan.viaPoint);
+
     const marker = MapLibreHelpers.createMarker(lat, lon, {
-        className: 'via-point-marker',
-        html: WP.buildViaPointMarkerHtml(viaPoints.length),
-        iconSize: WP.WAYPOINT_MARKER_ICON_SIZE,
-        iconAnchor: [14, 14],
-        popup: WP.buildViaPointPopupHtml(pointName, 'removeViaPoint(' + viaIndex + ')')
+        className: plan.marker.className,
+        html: WP.buildViaPointMarkerHtml(plan.marker.label),
+        iconSize: plan.marker.iconSize,
+        iconAnchor: plan.marker.iconAnchor,
+        popup: WP.buildViaPointPopupHtml(plan.viaPoint.name, plan.marker.removeOnclick)
     }).addTo(map);
 
     viaPointMarkers.push(marker);
-    updateWaypointsList();
-    showStatus(`Added via-point: ${pointName}`, 'success');
+    if (plan.updateWaypointsList) updateWaypointsList();
+    showStatus(plan.statusMessage, plan.statusType);
 }
 
 /**
  * Add a stop at given coordinates
  */
 function addStop(lat, lon, name = null, duration = 15) {
-    const stopName = name || `Stop ${stops.length + 1}`;
-    stops.push({ lat, lon, name: stopName, type: 'stop', duration });
-
     const WP = _waypoints();
-    const stopIndex = stops.length - 1;
+    const plan = WP.buildStopAddPlan(lat, lon, name, duration, stops.length);
+    stops.push(plan.stop);
+
     const marker = MapLibreHelpers.createMarker(lat, lon, {
-        className: 'stop-marker',
+        className: plan.marker.className,
         html: WP.buildStopMarkerHtml(),
-        iconSize: WP.WAYPOINT_MARKER_ICON_SIZE,
-        iconAnchor: [14, 14],
-        popup: WP.buildStopPopupHtml(stopName, duration, 'removeStop(' + stopIndex + ')')
+        iconSize: plan.marker.iconSize,
+        iconAnchor: plan.marker.iconAnchor,
+        popup: WP.buildStopPopupHtml(plan.stop.name, plan.stop.duration, plan.marker.removeOnclick)
     }).addTo(map);
 
     stopMarkers.push(marker);
-    updateWaypointsList();
-    showStatus(`Added stop: ${stopName} (${duration} min)`, 'success');
+    if (plan.updateWaypointsList) updateWaypointsList();
+    showStatus(plan.statusMessage, plan.statusType);
 }
 
 /**
  * Remove a via-point
  */
 function removeViaPoint(index) {
-    if (index >= 0 && index < viaPoints.length) {
-        viaPoints.splice(index, 1);
-        if (viaPointMarkers[index] && typeof viaPointMarkers[index].remove === 'function') {
-            viaPointMarkers[index].remove();
-        }
-        viaPointMarkers.splice(index, 1);
-        updateWaypointsList();
-        refreshViaPointMarkers();
-        showStatus('Via-point removed', 'info');
+    const WP = _waypoints();
+    const plan = WP.buildViaPointRemovePlan(index, viaPoints.length);
+    if (!plan.shouldRemove) return;
+
+    viaPoints.splice(plan.index, 1);
+    if (viaPointMarkers[plan.removeMarkerAtIndex] && typeof viaPointMarkers[plan.removeMarkerAtIndex].remove === 'function') {
+        viaPointMarkers[plan.removeMarkerAtIndex].remove();
     }
+    viaPointMarkers.splice(plan.removeMarkerAtIndex, 1);
+    if (plan.updateWaypointsList) updateWaypointsList();
+    if (plan.refreshMarkers) refreshViaPointMarkers();
+    showStatus(plan.statusMessage, plan.statusType);
 }
 
 /**
  * Remove a stop
  */
 function removeStop(index) {
-    if (index >= 0 && index < stops.length) {
-        stops.splice(index, 1);
-        if (stopMarkers[index] && typeof stopMarkers[index].remove === 'function') {
-            stopMarkers[index].remove();
-        }
-        stopMarkers.splice(index, 1);
-        updateWaypointsList();
-        showStatus('Stop removed', 'info');
+    const WP = _waypoints();
+    const plan = WP.buildStopRemovePlan(index, stops.length);
+    if (!plan.shouldRemove) return;
+
+    stops.splice(plan.index, 1);
+    if (stopMarkers[plan.removeMarkerAtIndex] && typeof stopMarkers[plan.removeMarkerAtIndex].remove === 'function') {
+        stopMarkers[plan.removeMarkerAtIndex].remove();
     }
+    stopMarkers.splice(plan.removeMarkerAtIndex, 1);
+    if (plan.updateWaypointsList) updateWaypointsList();
+    showStatus(plan.statusMessage, plan.statusType);
 }
 
 /**
  * Refresh via-point markers (update numbers after removal)
  */
 function refreshViaPointMarkers() {
-    viaPointMarkers.forEach((marker, idx) => {
+    const WP = _waypoints();
+    const plan = WP.buildViaPointMarkersRefreshPlan(viaPoints);
+
+    viaPointMarkers.forEach((marker) => {
         if (marker && typeof marker.remove === 'function') {
             marker.remove();
         }
     });
     viaPointMarkers = [];
 
-    viaPoints.forEach((point, idx) => {
-        const WP = _waypoints();
-        const marker = MapLibreHelpers.createMarker(point.lat, point.lon, {
-            className: 'via-point-marker',
-            html: WP.buildViaPointMarkerHtml(idx + 1),
-            iconSize: WP.WAYPOINT_MARKER_ICON_SIZE,
-            iconAnchor: [14, 14],
-            popup: WP.buildViaPointPopupHtml(point.name, 'removeViaPoint(' + idx + ')')
+    plan.markers.forEach((spec) => {
+        const marker = MapLibreHelpers.createMarker(spec.lat, spec.lon, {
+            className: spec.className,
+            html: WP.buildViaPointMarkerHtml(spec.label),
+            iconSize: spec.iconSize,
+            iconAnchor: spec.iconAnchor,
+            popup: WP.buildViaPointPopupHtml(spec.popupName, spec.removeOnclick)
         }).addTo(map);
 
         viaPointMarkers.push(marker);
@@ -5564,7 +5568,6 @@ function stopAutoTrafficUpdates() {
 // avoid points plus a realistic extra-delay estimate. Cached briefly so the ETA refresh
 // and the reroute monitor don't each hit the API.
 let _routeTrafficSampleCache = null; // { at: ms, result }
-const ROUTE_TRAFFIC_SAMPLE_TTL_MS = 60 * 1000;
 let _routeTrafficFlowBackoffUntil = 0;
 
 async function fetchRouteTrafficFlowPayload(points, sampleInterval) {
@@ -5612,14 +5615,12 @@ async function fetchRouteTrafficFlowPayload(points, sampleInterval) {
 
 async function sampleRouteTrafficAhead() {
     const RTF = _routeTrafficFlow();
-    if (!routePolyline || routePolyline.length < 2) return null;
-    const startIdx = Math.max(0, Math.min(lastSnappedRouteIndex || 0, routePolyline.length - 2));
-    const plan = RTF.buildTrafficFlowSamplePlan(routePolyline, startIdx, 8);
-    if (!plan) return null;
+    const dispatch = RTF.buildSampleRouteTrafficAheadDispatchPlan(routePolyline, lastSnappedRouteIndex);
+    if (!dispatch.shouldSample) return null;
 
     let data;
     try {
-        data = await fetchRouteTrafficFlowPayload(plan.points, plan.sampleInterval);
+        data = await fetchRouteTrafficFlowPayload(dispatch.points, dispatch.sampleInterval);
     } catch (e) {
         console.debug('[Auto-Traffic] route-traffic-flow fetch failed:', e);
         return null;
@@ -5629,9 +5630,16 @@ async function sampleRouteTrafficAhead() {
 }
 
 async function getRouteTrafficAhead(forceFresh = false) {
+    const RTF = _routeTrafficFlow();
     const now = Date.now();
-    if (!forceFresh && _routeTrafficSampleCache && (now - _routeTrafficSampleCache.at) < ROUTE_TRAFFIC_SAMPLE_TTL_MS) {
-        return _routeTrafficSampleCache.result;
+    const cachePlan = RTF.buildRouteTrafficAheadCachePlan(
+        forceFresh,
+        _routeTrafficSampleCache,
+        now,
+        RTF.ROUTE_TRAFFIC_SAMPLE_TTL_MS
+    );
+    if (cachePlan.useCache) {
+        return cachePlan.cachedResult;
     }
     const result = await sampleRouteTrafficAhead();
     if (result) _routeTrafficSampleCache = { at: now, result };
@@ -5642,37 +5650,39 @@ async function getRouteTrafficAhead(forceFresh = false) {
  * Check live traffic along the route and reroute around real congestion/closures.
  */
 async function checkTrafficAndReroute() {
-    if (!routeInProgress || !currentLat || !currentLon) return;
+    const TC = _trafficChange();
+    const preflight = TC.buildCheckTrafficAndReroutePreflightPlan({
+        routeInProgress,
+        currentLat,
+        currentLon,
+    });
+    if (!preflight.shouldCheck) return;
 
     console.log('[Auto-Traffic] Sampling live traffic along route...');
 
     try {
-        const flow = await getRouteTrafficAhead(true);
+        const flow = await getRouteTrafficAhead(preflight.forceFresh);
         lastTrafficUpdateTime = Date.now();
 
-        if (!flow) {
+        const dispatch = TC.buildTrafficSampleResponseDispatchPlan(flow);
+        if (dispatch.action === 'none') {
             console.log('[Auto-Traffic] No usable traffic data');
             return;
         }
-        // Never act on simulated data (no TomTom key) — it is random and would cause
-        // spurious reroutes.
-        if (flow.source !== 'TomTom') {
+        if (dispatch.action === 'update_last_traffic_only') {
             console.log('[Auto-Traffic] Traffic data is simulated; skipping reroute decision');
-            lastTrafficData = flow;
+            lastTrafficData = dispatch.flow;
             return;
         }
 
-        const changeType = _trafficChange().detectSignificantTrafficChange(lastTrafficData, flow);
-        lastTrafficData = flow;
+        const changeType = TC.detectSignificantTrafficChange(lastTrafficData, dispatch.flow);
+        lastTrafficData = dispatch.flow;
 
-        if (changeType) {
-            console.log(`[Auto-Traffic] Significant change: ${changeType} (delay ~${flow.delayMin.toFixed(1)} min, ${flow.congestedPoints.length} avoid pts)`);
-            const notifMsg = flow.severe
-                ? 'Severe congestion ahead. Checking for a faster route...'
-                : 'Heavier traffic ahead. Checking for a better route...';
-            sendNotification('🚦 Traffic Update', notifMsg, 'warning');
-
-            await triggerTrafficBasedReroute(changeType, flow.congestedPoints, flow.delayMin);
+        const notifPlan = TC.buildTrafficChangeNotificationPlan(changeType, dispatch.flow);
+        if (notifPlan.shouldReroute) {
+            console.log(`[Auto-Traffic] Significant change: ${changeType} (delay ~${dispatch.flow.delayMin.toFixed(1)} min, ${dispatch.flow.congestedPoints.length} avoid pts)`);
+            sendNotification(notifPlan.notificationTitle, notifPlan.notificationMessage, notifPlan.notificationType);
+            await triggerTrafficBasedReroute(notifPlan.changeType, notifPlan.avoidPoints, notifPlan.measuredDelayMin);
         } else {
             console.log('[Auto-Traffic] No significant traffic change');
         }
@@ -5688,17 +5698,21 @@ async function checkTrafficAndReroute() {
  * @param {number} measuredDelayMin - realistic extra delay on the current route (Lever B)
  */
 async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measuredDelayMin = 0) {
+    const TC = _trafficChange();
     const destination = resolveNavigationDestination();
-    if (!destination) {
-        console.log('[Auto-Traffic] No destination stored, cannot reroute');
+    const preflight = TC.buildTrafficReroutePreflightPlan({
+        destination,
+        lastCalculatedRoute: window.lastCalculatedRoute,
+        changeType,
+    });
+    if (!preflight.shouldReroute) {
+        console.log('[Auto-Traffic] ' + (preflight.reason === 'no_destination'
+            ? 'No destination stored, cannot reroute'
+            : 'No route context, cannot reroute'));
         return;
     }
 
-    if (!window.lastCalculatedRoute) {
-        console.log('[Auto-Traffic] No route context, cannot reroute');
-        return;
-    }
-    const isSevere = changeType === 'severe';
+    const isSevere = preflight.isSevere;
     console.log(`[Auto-Traffic] Calculating new route (reason: ${changeType}, avoid pts: ${avoidPoints.length})...`);
 
     try {
@@ -5713,23 +5727,20 @@ async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measured
 
         if (data.success && data.routes && data.routes.length > 0) {
             const newRoute = data.routes[0];
-            const oldBase = window.lastCalculatedRoute.duration_minutes || 0;
-            const timeSaved = _trafficChange().computeTrafficRerouteTimeSaved(
-                oldBase,
+            const acceptPlan = TC.buildTrafficRerouteAcceptancePlan({
+                isSevere,
+                oldBaseMinutes: window.lastCalculatedRoute.duration_minutes || 0,
                 measuredDelayMin,
-                newRoute.duration_minutes
-            );
+                newRouteMinutes: newRoute.duration_minutes,
+            });
 
-            if (_trafficChange().shouldAcceptTrafficReroute(isSevere, timeSaved)) {
+            if (acceptPlan.accept) {
                 updateRouteOnMap(newRoute);
-                _routeTrafficSampleCache = null;
-                lastTrafficData = null;
-                const reason = isSevere ? 'severe congestion' : 'traffic';
-                const saveMsg = _trafficChange().formatTrafficRerouteSaveMessage(timeSaved);
-                sendNotification('✅ Route Updated',
-                    `New route found due to ${reason}. ${saveMsg}`, 'success');
-                if (voiceAnnouncementsEnabled) {
-                    speakMessage(`Route updated due to ${reason}. ${saveMsg}`, 'high');
+                if (acceptPlan.clearTrafficCache) _routeTrafficSampleCache = null;
+                if (acceptPlan.clearLastTrafficData) lastTrafficData = null;
+                sendNotification(acceptPlan.notificationTitle, acceptPlan.notificationMessage, acceptPlan.notificationType);
+                if (voiceAnnouncementsEnabled && acceptPlan.voiceMessage) {
+                    speakMessage(acceptPlan.voiceMessage, 'high');
                 }
             } else {
                 console.log('[Auto-Traffic] Alternative not significantly faster, keeping current route');

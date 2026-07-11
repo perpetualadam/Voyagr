@@ -387,6 +387,129 @@
     }
 
     /**
+     * Add plan for a via-point at map coordinates.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {string|null} [name]
+     * @param {number} [viaPointsCount]
+     * @returns {Object}
+     */
+    function buildViaPointAddPlan(lat, lon, name, viaPointsCount) {
+        var count = viaPointsCount || 0;
+        var pointName = name || ('Via-point ' + (count + 1));
+        var viaIndex = count;
+        return {
+            viaPoint: { lat: lat, lon: lon, name: pointName, type: 'via' },
+            viaIndex: viaIndex,
+            marker: {
+                className: 'via-point-marker',
+                label: count + 1,
+                iconSize: WAYPOINT_MARKER_ICON_SIZE,
+                iconAnchor: [14, 14],
+                removeOnclick: 'removeViaPoint(' + viaIndex + ')',
+            },
+            updateWaypointsList: true,
+            statusMessage: 'Added via-point: ' + pointName,
+            statusType: 'success',
+        };
+    }
+
+    /**
+     * Remove plan for a via-point by index.
+     * @param {number} index
+     * @param {number} [viaPointsCount]
+     * @returns {Object}
+     */
+    function buildViaPointRemovePlan(index, viaPointsCount) {
+        var count = viaPointsCount || 0;
+        if (index < 0 || index >= count) {
+            return { shouldRemove: false };
+        }
+        return {
+            shouldRemove: true,
+            index: index,
+            removeMarkerAtIndex: index,
+            updateWaypointsList: true,
+            refreshMarkers: true,
+            statusMessage: 'Via-point removed',
+            statusType: 'info',
+        };
+    }
+
+    /**
+     * Rebuild plan for all via-point markers after list mutation.
+     * @param {Array<Object>} viaPoints
+     * @returns {Object}
+     */
+    function buildViaPointMarkersRefreshPlan(viaPoints) {
+        viaPoints = viaPoints || [];
+        return {
+            markers: viaPoints.map(function (point, idx) {
+                return {
+                    lat: point.lat,
+                    lon: point.lon,
+                    className: 'via-point-marker',
+                    label: idx + 1,
+                    iconSize: WAYPOINT_MARKER_ICON_SIZE,
+                    iconAnchor: [14, 14],
+                    removeOnclick: 'removeViaPoint(' + idx + ')',
+                    popupName: point.name,
+                };
+            }),
+        };
+    }
+
+    /**
+     * Add plan for a stop at map coordinates.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {string|null} [name]
+     * @param {number} [duration]
+     * @param {number} [stopsCount]
+     * @returns {Object}
+     */
+    function buildStopAddPlan(lat, lon, name, duration, stopsCount) {
+        var count = stopsCount || 0;
+        var stopDuration = duration != null ? duration : 15;
+        var stopName = name || ('Stop ' + (count + 1));
+        var stopIndex = count;
+        return {
+            stop: { lat: lat, lon: lon, name: stopName, type: 'stop', duration: stopDuration },
+            stopIndex: stopIndex,
+            marker: {
+                className: 'stop-marker',
+                iconSize: WAYPOINT_MARKER_ICON_SIZE,
+                iconAnchor: [14, 14],
+                removeOnclick: 'removeStop(' + stopIndex + ')',
+            },
+            updateWaypointsList: true,
+            statusMessage: 'Added stop: ' + stopName + ' (' + stopDuration + ' min)',
+            statusType: 'success',
+        };
+    }
+
+    /**
+     * Remove plan for a stop by index.
+     * @param {number} index
+     * @param {number} [stopsCount]
+     * @returns {Object}
+     */
+    function buildStopRemovePlan(index, stopsCount) {
+        var count = stopsCount || 0;
+        if (index < 0 || index >= count) {
+            return { shouldRemove: false };
+        }
+        return {
+            shouldRemove: true,
+            index: index,
+            removeMarkerAtIndex: index,
+            updateWaypointsList: true,
+            statusMessage: 'Stop removed',
+            statusType: 'info',
+        };
+    }
+
+    /**
      * MapLibre layer descriptor for one multi-drop leg geometry string.
      * @param {string} geom - Encoded polyline
      * @param {number} idx - Leg index
@@ -437,6 +560,11 @@
         buildViaPointPopupHtml: buildViaPointPopupHtml,
         buildViaPointDragPopupHtml: buildViaPointDragPopupHtml,
         buildStopPopupHtml: buildStopPopupHtml,
+        buildViaPointAddPlan: buildViaPointAddPlan,
+        buildViaPointRemovePlan: buildViaPointRemovePlan,
+        buildViaPointMarkersRefreshPlan: buildViaPointMarkersRefreshPlan,
+        buildStopAddPlan: buildStopAddPlan,
+        buildStopRemovePlan: buildStopRemovePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
