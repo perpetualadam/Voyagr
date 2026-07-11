@@ -819,6 +819,176 @@
         };
     }
 
+    var BETWEEN_TURN_MIN_DISTANCE_M = 15;
+
+    /**
+     * Display payload for the turn widget from a detected turn.
+     * @param {Object|null} turnInfo
+     * @returns {Object|null}
+     */
+    function buildTurnWidgetDisplayPayloadFromTurnInfo(turnInfo) {
+        if (!turnInfo) return null;
+        return {
+            distance: turnInfo.distance,
+            direction: turnInfo.direction,
+            instruction: turnInfo.instruction || '',
+            streetName: turnInfo.streetName || '',
+            maneuver: turnInfo.maneuver,
+            maneuverIndex: turnInfo.maneuverIndex,
+            valhallaType: turnInfo.valhallaType,
+        };
+    }
+
+    /**
+     * Full turn-detection tick plan: snap, monotonic index, maneuver or geometry fallback.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildDetectUpcomingTurnTickPlan(opts) {
+        opts = opts || {};
+        if (!opts.routeInProgress || !opts.routePolyline || !opts.routePolyline.length) {
+            return { action: 'skip', reason: 'no-route' };
+        }
+        if (typeof opts.snapToRoutePolyline !== 'function') {
+            return { action: 'skip', reason: 'no-snap' };
+        }
+
+        var turnSnap = opts.snapToRoutePolyline(
+            opts.userLat,
+            opts.userLon,
+            opts.routePolyline,
+            opts.lastTurnDetectRouteVertexIndex
+        );
+        var indexPlan = advanceMonotonicTurnDetectIndex(
+            turnSnap.index,
+            opts.lastTurnDetectRouteVertexIndex
+        );
+
+        var steps = opts.routeSteps;
+        var detected = null;
+
+        if (steps && steps.length > 0) {
+            detected = findUpcomingManeuverTurn(
+                steps,
+                indexPlan.userRouteIndex,
+                opts.routePolyline,
+                turnSnap,
+                {
+                    distanceAlongRouteToVertexMeters: opts.distanceAlongRouteToVertexMeters,
+                    getManeuverStreetLabel: opts.getManeuverStreetLabel,
+                    resolveRoadClass: opts.resolveRoadClass,
+                    effectiveRoundaboutExitCountFromSteps: opts.effectiveRoundaboutExitCountFromSteps,
+                }
+            );
+        } else {
+            detected = findGeometryFallbackTurn(
+                opts.routePolyline,
+                turnSnap,
+                indexPlan.lastTurnDetectRouteVertexIndex,
+                {
+                    bearing: opts.bearing,
+                    calculateTurnDirection: calculateTurnDirection,
+                    distanceAlongRouteToVertexMeters: opts.distanceAlongRouteToVertexMeters,
+                }
+            );
+        }
+
+        var plan = {
+            action: detected ? 'detected' : 'none',
+            turnInfo: detected,
+            statePatch: {
+                lastTurnDetectRouteVertexIndex: indexPlan.lastTurnDetectRouteVertexIndex,
+            },
+            persistRoute: !!detected,
+            logLine: null,
+        };
+
+        if (detected) {
+            if (detected.stepIndex != null) {
+                plan.statePatch.currentStepIndex = detected.stepIndex;
+            }
+            var shapeIdx = (detected.maneuver && detected.maneuver.begin_shape_index) || 0;
+            plan.logLine = '[Turn] Detected: ' + detected.direction + ' in ' +
+                detected.distance.toFixed(0) + 'm (type=' + detected.valhallaType +
+                ', step=' + detected.stepIndex + ', shapeIdx=' + shapeIdx + ')';
+        }
+
+        return plan;
+    }
+
+    /**
+     * Turn widget tick plan: show detected turn, between-turn continue, or clear.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildTurnWidgetTickPlan(opts) {
+        opts = opts || {};
+        if (!opts.routeInProgress || !opts.routeSteps || !opts.routeSteps.length) {
+            return { action: 'skip', reason: 'no-route' };
+        }
+        if (!opts.routePolyline || opts.routePolyline.length < 2) {
+            return { action: 'skip', reason: 'no-polyline' };
+        }
+
+        if (opts.turnInfo) {
+            return {
+                action: 'show-turn',
+                displayPayload: buildTurnWidgetDisplayPayloadFromTurnInfo(opts.turnInfo),
+            };
+        }
+
+        var getActiveIdx = opts.getActiveRouteManeuverIndex;
+        if (typeof getActiveIdx !== 'function') {
+            return { action: 'clear' };
+        }
+
+        var activeIdx = getActiveIdx(opts.routeSteps, opts.lastSnappedRouteIndex);
+        var activeM = (activeIdx >= 0 && activeIdx < opts.routeSteps.length)
+            ? opts.routeSteps[activeIdx]
+            : null;
+
+        var buildBetween = opts.buildBetweenTurnDisplay;
+        var betweenTurn = (typeof buildBetween === 'function')
+            ? buildBetween(activeM, activeIdx, opts.currentRoadDisplayName)
+            : null;
+
+        if (!betweenTurn) {
+            return { action: 'clear' };
+        }
+
+        var nextManeuver = (activeIdx >= 0 && activeIdx + 1 < opts.routeSteps.length)
+            ? opts.routeSteps[activeIdx + 1]
+            : null;
+
+        if (nextManeuver &&
+            typeof opts.snapToRoutePolyline === 'function' &&
+            typeof opts.distanceAlongRouteToVertexMeters === 'function') {
+            var snap = opts.snapToRoutePolyline(
+                opts.lat,
+                opts.lon,
+                opts.routePolyline,
+                opts.lastSnappedRouteIndex
+            );
+            var targetIdx = Math.min(
+                nextManeuver.begin_shape_index || 0,
+                opts.routePolyline.length - 1
+            );
+            var distToNext = opts.distanceAlongRouteToVertexMeters(
+                opts.routePolyline,
+                snap,
+                targetIdx
+            );
+            if (Number.isFinite(distToNext) && distToNext >= BETWEEN_TURN_MIN_DISTANCE_M) {
+                betweenTurn = Object.assign({}, betweenTurn, { distance: distToNext });
+            }
+        }
+
+        return {
+            action: 'show-between',
+            displayPayload: betweenTurn,
+        };
+    }
+
     /**
      * Lane-guidance inputs for one GPS tick (maneuver direction + roundabout exits).
      * @param {Object} opts
@@ -850,6 +1020,10 @@
     }
 
     var api = {
+        BETWEEN_TURN_MIN_DISTANCE_M: BETWEEN_TURN_MIN_DISTANCE_M,
+        buildTurnWidgetDisplayPayloadFromTurnInfo: buildTurnWidgetDisplayPayloadFromTurnInfo,
+        buildDetectUpcomingTurnTickPlan: buildDetectUpcomingTurnTickPlan,
+        buildTurnWidgetTickPlan: buildTurnWidgetTickPlan,
         buildLaneGuidanceTickPlan: buildLaneGuidanceTickPlan,
         calculateTurnDirection: calculateTurnDirection,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,

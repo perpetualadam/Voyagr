@@ -516,6 +516,130 @@ describe('turn detection helpers', () => {
     });
 });
 
+describe('buildDetectUpcomingTurnTickPlan', () => {
+    const steps = [
+        { type: 8, begin_shape_index: 0 },
+        { type: 10, begin_shape_index: 1, instruction: 'Turn right', street_names: ['High St'] },
+    ];
+    const polyline = [[51.5, -0.1], [51.51, -0.09]];
+
+    test('skips when route is not active', () => {
+        expect(TI.buildDetectUpcomingTurnTickPlan({ routeInProgress: false }).action).toBe('skip');
+    });
+
+    test('detects in-range maneuver and patches state', () => {
+        const tick = TI.buildDetectUpcomingTurnTickPlan({
+            routeInProgress: true,
+            routePolyline: polyline,
+            routeSteps: steps,
+            userLat: 51.5,
+            userLon: -0.1,
+            lastTurnDetectRouteVertexIndex: 0,
+            snapToRoutePolyline: () => ({ index: 0, t: 0 }),
+            distanceAlongRouteToVertexMeters: () => 200,
+            getManeuverStreetLabel: (m) => (m.street_names || [])[0] || '',
+            resolveRoadClass: () => 'primary',
+        });
+        expect(tick.action).toBe('detected');
+        expect(tick.turnInfo.direction).toBe('right');
+        expect(tick.statePatch.currentStepIndex).toBe(1);
+        expect(tick.persistRoute).toBe(true);
+        expect(tick.logLine).toContain('[Turn] Detected');
+    });
+
+    test('returns none when next maneuver is beyond detection range', () => {
+        const tick = TI.buildDetectUpcomingTurnTickPlan({
+            routeInProgress: true,
+            routePolyline: polyline,
+            routeSteps: steps,
+            userLat: 51.5,
+            userLon: -0.1,
+            lastTurnDetectRouteVertexIndex: 0,
+            snapToRoutePolyline: () => ({ index: 0, t: 0 }),
+            distanceAlongRouteToVertexMeters: () => 9000,
+            getManeuverStreetLabel: () => '',
+            resolveRoadClass: () => 'motorway',
+        });
+        expect(tick.action).toBe('none');
+        expect(tick.turnInfo).toBeNull();
+        expect(tick.persistRoute).toBe(false);
+    });
+});
+
+describe('buildTurnWidgetTickPlan', () => {
+    const steps = [
+        { type: 8, begin_shape_index: 0, street_names: ['Main Rd'] },
+        { type: 10, begin_shape_index: 2, instruction: 'Turn right' },
+    ];
+    const polyline = [[51.5, -0.1], [51.51, -0.09], [51.52, -0.08]];
+
+    test('shows detected turn payload', () => {
+        const tick = TI.buildTurnWidgetTickPlan({
+            routeInProgress: true,
+            routeSteps: steps,
+            routePolyline: polyline,
+            lat: 51.5,
+            lon: -0.1,
+            lastSnappedRouteIndex: 0,
+            turnInfo: {
+                distance: 120,
+                direction: 'right',
+                instruction: 'Turn right',
+                streetName: 'High St',
+                maneuver: steps[1],
+                maneuverIndex: 1,
+                valhallaType: 10,
+            },
+        });
+        expect(tick.action).toBe('show-turn');
+        expect(tick.displayPayload.direction).toBe('right');
+        expect(tick.displayPayload.maneuverIndex).toBe(1);
+    });
+
+    test('shows between-turn continue with distance to next maneuver', () => {
+        const tick = TI.buildTurnWidgetTickPlan({
+            routeInProgress: true,
+            routeSteps: steps,
+            routePolyline: polyline,
+            lat: 51.5,
+            lon: -0.1,
+            lastSnappedRouteIndex: 0,
+            currentRoadDisplayName: 'Main Rd',
+            turnInfo: null,
+            getActiveRouteManeuverIndex: () => 0,
+            buildBetweenTurnDisplay: (m, idx, road) => ({
+                distance: 0,
+                direction: 'straight',
+                instruction: 'Continue',
+                streetName: road,
+                maneuver: m,
+                maneuverIndex: idx,
+                valhallaType: 8,
+            }),
+            snapToRoutePolyline: () => ({ index: 0, t: 0 }),
+            distanceAlongRouteToVertexMeters: () => 2500,
+        });
+        expect(tick.action).toBe('show-between');
+        expect(tick.displayPayload.distance).toBe(2500);
+        expect(tick.displayPayload.instruction).toBe('Continue');
+    });
+
+    test('clears widget when no between-turn display available', () => {
+        const tick = TI.buildTurnWidgetTickPlan({
+            routeInProgress: true,
+            routeSteps: steps,
+            routePolyline: polyline,
+            lat: 51.5,
+            lon: -0.1,
+            lastSnappedRouteIndex: 0,
+            turnInfo: null,
+            getActiveRouteManeuverIndex: () => 0,
+            buildBetweenTurnDisplay: () => null,
+        });
+        expect(tick.action).toBe('clear');
+    });
+});
+
 describe('findGeometryFallbackTurn', () => {
     const polyline = [
         [51.5, -0.12],

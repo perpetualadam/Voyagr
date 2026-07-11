@@ -9008,58 +9008,34 @@ function effectiveRoundaboutExitCount(stepIndex) {
  * @returns {*} Return value description
  */
 function detectUpcomingTurn(userLat, userLon) {
-    if (!routeInProgress || !routePolyline || routePolyline.length === 0) {
-        return null;
-    }
-
     const TI = _turnInstructions();
     const RG = _routeGeometry();
+    const tick = TI.buildDetectUpcomingTurnTickPlan({
+        routeInProgress,
+        routePolyline,
+        routeSteps: currentRouteSteps,
+        userLat,
+        userLon,
+        lastTurnDetectRouteVertexIndex,
+        snapToRoutePolyline: (lat, lon, poly, idx) => RG.snapToRoutePolyline(lat, lon, poly, idx),
+        distanceAlongRouteToVertexMeters: RG.distanceAlongRouteToVertexMeters.bind(RG),
+        bearing: RG.bearing.bind(RG),
+        getManeuverStreetLabel,
+        resolveRoadClass: (step) => step.road_class || RG.inferRoadClassFromManeuver(step),
+        effectiveRoundaboutExitCountFromSteps: TI.effectiveRoundaboutExitCountFromSteps,
+    });
+    if (tick.action === 'skip') return null;
 
-    const turnSnap = _routeGeometry().snapToRoutePolyline(
-        userLat, userLon, routePolyline, lastTurnDetectRouteVertexIndex
-    );
-    const indexPlan = TI.advanceMonotonicTurnDetectIndex(turnSnap.index, lastTurnDetectRouteVertexIndex);
-    const userRouteIndex = indexPlan.userRouteIndex;
-    lastTurnDetectRouteVertexIndex = indexPlan.lastTurnDetectRouteVertexIndex;
-
-    if (currentRouteSteps && currentRouteSteps.length > 0) {
-        const detected = TI.findUpcomingManeuverTurn(
-            currentRouteSteps,
-            userRouteIndex,
-            routePolyline,
-            turnSnap,
-            {
-                distanceAlongRouteToVertexMeters: RG.distanceAlongRouteToVertexMeters,
-                getManeuverStreetLabel,
-                resolveRoadClass: (step) => step.road_class || _routeGeometry().inferRoadClassFromManeuver(step),
-                effectiveRoundaboutExitCountFromSteps: TI.effectiveRoundaboutExitCountFromSteps,
-            }
-        );
-        if (detected) {
-            currentStepIndex = detected.stepIndex;
-            schedulePersistRoute();
-            console.log(`[Turn] Detected: ${detected.direction} in ${detected.distance.toFixed(0)}m (type=${detected.valhallaType}, step=${detected.stepIndex}, shapeIdx=${detected.maneuver.begin_shape_index || 0})`);
-            return detected;
-        }
+    if (tick.statePatch.lastTurnDetectRouteVertexIndex != null) {
+        lastTurnDetectRouteVertexIndex = tick.statePatch.lastTurnDetectRouteVertexIndex;
     }
-
-    // Geometry fallback only when the route has no maneuvers. If maneuvers exist but the
-    // next one is far away (e.g. motorway exit in 19 mi), show "Continue" — not a false
-    // "turn left" from polyline bearing noise.
-    if (!currentRouteSteps || currentRouteSteps.length === 0) {
-        return TI.findGeometryFallbackTurn(
-            routePolyline,
-            turnSnap,
-            lastTurnDetectRouteVertexIndex,
-            {
-                bearing: RG.bearing,
-                calculateTurnDirection: TI.calculateTurnDirection,
-                distanceAlongRouteToVertexMeters: RG.distanceAlongRouteToVertexMeters,
-            }
-        );
+    if (tick.statePatch.currentStepIndex != null) {
+        currentStepIndex = tick.statePatch.currentStepIndex;
     }
+    if (tick.persistRoute) schedulePersistRoute();
+    if (tick.logLine) console.log(tick.logLine);
 
-    return null;
+    return tick.turnInfo;
 }
 
 // ===== VEHICLE TYPE & ROUTING MODE MANAGEMENT =====
@@ -11073,57 +11049,36 @@ function hidePreviewMarker() {
  * @param {number} lat - Current latitude
  * @param {number} lon - Current longitude
  */
-function updateTurnWidgetFromPosition(lat, lon) {
-    if (!routeInProgress || !currentRouteSteps || currentRouteSteps.length === 0) {
-        return;
-    }
-    if (!routePolyline || routePolyline.length < 2) {
-        return;
-    }
+function updateTurnWidgetFromPosition(lat, lon, turnInfo) {
+    const TI = _turnInstructions();
+    const RG = _routeGeometry();
+    const SG = _speedGps();
 
-    const turnInfo = detectUpcomingTurn(lat, lon);
-    if (turnInfo) {
-        updateTurnInstructionDisplay({
-            distance: turnInfo.distance,
-            direction: turnInfo.direction,
-            instruction: turnInfo.instruction || '',
-            streetName: turnInfo.streetName || '',
-            maneuver: turnInfo.maneuver,
-            maneuverIndex: turnInfo.maneuverIndex,
-            valhallaType: turnInfo.valhallaType,
-        });
-        return;
-    }
+    const resolvedTurnInfo = turnInfo !== undefined
+        ? turnInfo
+        : detectUpcomingTurn(lat, lon);
 
-    // No turn in detection range — show the road currently being driven.
-    const activeIdx = _speedGps().getActiveRouteManeuverIndex(currentRouteSteps, lastSnappedRouteIndex);
-    const activeM = (activeIdx >= 0 && activeIdx < currentRouteSteps.length)
-        ? currentRouteSteps[activeIdx]
-        : null;
-    const SGtw = _speedGps();
-    const betweenTurn = SGtw
-        ? SGtw.buildBetweenTurnDisplay(activeM, activeIdx, currentRoadDisplayName)
-        : null;
+    const tick = TI.buildTurnWidgetTickPlan({
+        routeInProgress,
+        routeSteps: currentRouteSteps,
+        routePolyline,
+        lat,
+        lon,
+        lastSnappedRouteIndex,
+        currentRoadDisplayName,
+        turnInfo: resolvedTurnInfo,
+        getActiveRouteManeuverIndex: SG ? SG.getActiveRouteManeuverIndex.bind(SG) : null,
+        buildBetweenTurnDisplay: SG ? SG.buildBetweenTurnDisplay.bind(SG) : null,
+        snapToRoutePolyline: (a, b, c, d) => RG.snapToRoutePolyline(a, b, c, d),
+        distanceAlongRouteToVertexMeters: RG.distanceAlongRouteToVertexMeters.bind(RG),
+    });
 
-    if (betweenTurn) {
-        // The next actionable maneuver is beyond the turn-detection range, so show how
-        // far until it (in the user's units) instead of a bare "On". Reuse the same snap +
-        // along-route helpers detectUpcomingTurn uses (no duplicated distance logic).
-        const nextManeuver = (activeIdx >= 0 && activeIdx + 1 < currentRouteSteps.length)
-            ? currentRouteSteps[activeIdx + 1]
-            : null;
-        if (nextManeuver) {
-            const snap = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
-            const targetIdx = Math.min(nextManeuver.begin_shape_index || 0, routePolyline.length - 1);
-            const distToNext = _routeGeometry().distanceAlongRouteToVertexMeters(routePolyline, snap, targetIdx);
-            if (Number.isFinite(distToNext) && distToNext >= 15) {
-                betweenTurn.distance = distToNext;
-            }
-        }
-        updateTurnInstructionDisplay(betweenTurn);
-    } else {
+    if (tick.action === 'skip') return;
+    if (tick.action === 'clear') {
         updateTurnInstructionDisplay(null);
+        return;
     }
+    updateTurnInstructionDisplay(tick.displayPayload);
 }
 
 // ===== JOURNEY SUMMARY BAR =====
@@ -12200,17 +12155,19 @@ function startGPSTracking() {
 
             // Apply smart zoom with turn detection
             let distanceToNextTurn = null;
+            let turnInfoThisTick = null;
 
-            if (navActiveTick.detectTurn) {
-                const turnInfo = detectUpcomingTurn(lat, lon);
-                if (turnInfo) {
-                    distanceToNextTurn = turnInfo.distance;
-                    announceUpcomingTurn(turnInfo);
-                }
+            if (navActiveTick.active) {
+                turnInfoThisTick = detectUpcomingTurn(lat, lon);
+            }
+
+            if (navActiveTick.detectTurn && turnInfoThisTick) {
+                distanceToNextTurn = turnInfoThisTick.distance;
+                announceUpcomingTurn(turnInfoThisTick);
             }
 
             if (navActiveTick.updateTurnWidget) {
-                updateTurnWidgetFromPosition(lat, lon);
+                updateTurnWidgetFromPosition(lat, lon, turnInfoThisTick);
             }
 
             if (navActiveTick.announceDestination) {
