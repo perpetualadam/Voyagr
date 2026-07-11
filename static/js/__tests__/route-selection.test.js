@@ -134,3 +134,43 @@ describe('route preview helpers', () => {
         expect(state.background).toBe('#E8F5E9');
     });
 });
+
+describe('route comparison modal helpers', () => {
+    test('buildRouteComparisonRequestRoutes normalizes route option fields', () => {
+        const out = RS.buildRouteComparisonRequestRoutes([
+            { distance_km: 12, duration_minutes: 25, fuel_cost: 5, toll_cost: 1, caz_cost: 0.5 },
+        ]);
+        expect(out).toEqual([{
+            distance_km: 12,
+            duration_minutes: 25,
+            fuel_cost: 5,
+            toll_cost: 1,
+            caz_cost: 0.5,
+        }]);
+    });
+
+    test('buildRouteComparisonReportHtml includes table and recommendations', () => {
+        const html = RS.buildRouteComparisonReportHtml({
+            routes: [
+                { route_id: 1, distance_km: 10, duration_minutes: 20, total_cost: 8, cost_per_km: 0.8 },
+            ],
+            recommendations: {
+                cheapest: { route_id: 1, reason: 'Lowest fuel' },
+                fastest: { route_id: 2, reason: 'Shortest time' },
+                shortest: { route_id: 3, reason: 'Fewest km' },
+            },
+        }, { currencySymbol: '£', distUnit: 'mi', distanceTexts: ['6.21'] });
+        expect(html).toContain('Route 1');
+        expect(html).toContain('Cheapest');
+        expect(html).toContain('Fastest');
+        expect(html).toContain('Shortest');
+    });
+
+    test('buildRouteComparisonModalHtml wraps report with close controls', () => {
+        const html = RS.buildRouteComparisonModalHtml('<p>report</p>');
+        expect(html).toContain('Route Comparison');
+        expect(html).toContain('report');
+        expect(html).toContain('routeComparisonModal');
+        expect(html).toContain('Close');
+    });
+});

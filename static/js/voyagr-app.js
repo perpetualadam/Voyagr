@@ -7616,18 +7616,11 @@ async function showRouteComparison() {
     }
 
     try {
-        // Prepare routes data for comparison
-        const routesForComparison = routeOptions.map(route => ({
-            distance_km: route.distance_km || 0,
-            duration_minutes: route.duration_minutes || 0,
-            fuel_cost: route.fuel_cost || 0,
-            toll_cost: route.toll_cost || 0,
-            caz_cost: route.caz_cost || 0
-        }));
+        const selection = VoyagrModules.routeSelection();
+        const routesForComparison = selection.buildRouteComparisonRequestRoutes(routeOptions);
 
         console.log('[RouteComparison] Sending routes to API:', routesForComparison);
 
-        // Call comparison API
         const response = await fetch('/api/route-comparison', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -7646,58 +7639,16 @@ async function showRouteComparison() {
         const comparison = data.comparison;
         const symbol = getCurrencySymbol();
         const distUnit = getDistanceUnit();
-
-        // Create comparison table
-        let comparisonHTML = '<div style="overflow-x: auto; margin: 10px 0;">';
-        comparisonHTML += '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
-        comparisonHTML += '<thead><tr style="background: #667eea; color: white;">';
-        comparisonHTML += '<th style="padding: 8px; text-align: left;">Route</th>';
-        comparisonHTML += '<th style="padding: 8px; text-align: center;">Distance</th>';
-        comparisonHTML += '<th style="padding: 8px; text-align: center;">Time</th>';
-        comparisonHTML += '<th style="padding: 8px; text-align: center;">Cost</th>';
-        comparisonHTML += '<th style="padding: 8px; text-align: center;">Cost/km</th>';
-        comparisonHTML += '</tr></thead><tbody>';
-
-        comparison.routes.forEach((route, idx) => {
-            const bgColor = idx % 2 === 0 ? '#f9f9f9' : '#fff';
-            comparisonHTML += `<tr style="background: ${bgColor}; border-bottom: 1px solid #ddd;">`;
-            comparisonHTML += `<td style="padding: 8px;"><strong>Route ${route.route_id}</strong></td>`;
-            comparisonHTML += `<td style="padding: 8px; text-align: center;">${convertDistance(route.distance_km)} ${distUnit}</td>`;
-            comparisonHTML += `<td style="padding: 8px; text-align: center;">${Math.round(route.duration_minutes)} min</td>`;
-            comparisonHTML += `<td style="padding: 8px; text-align: center;"><strong>${symbol}${route.total_cost.toFixed(2)}</strong></td>`;
-            comparisonHTML += `<td style="padding: 8px; text-align: center;">${symbol}${route.cost_per_km.toFixed(2)}</td>`;
-            comparisonHTML += '</tr>';
+        const comparisonHTML = selection.buildRouteComparisonReportHtml(comparison, {
+            currencySymbol: symbol,
+            distUnit: distUnit,
+            distanceTexts: comparison.routes.map((route) => convertDistance(route.distance_km)),
         });
 
-        comparisonHTML += '</tbody></table></div>';
-
-        // Add recommendations
-        comparisonHTML += '<div style="margin-top: 15px; padding: 10px; background: #f0f4ff; border-radius: 6px;">';
-        comparisonHTML += '<strong style="color: #667eea;">💡 Recommendations:</strong><br>';
-
-        const rec = comparison.recommendations;
-        comparisonHTML += `<div style="margin-top: 8px; font-size: 12px;">`;
-        comparisonHTML += `<div style="margin-bottom: 6px;">💰 <strong>Cheapest:</strong> Route ${rec.cheapest.route_id} - ${rec.cheapest.reason}</div>`;
-        comparisonHTML += `<div style="margin-bottom: 6px;">⚡ <strong>Fastest:</strong> Route ${rec.fastest.route_id} - ${rec.fastest.reason}</div>`;
-        comparisonHTML += `<div>📍 <strong>Shortest:</strong> Route ${rec.shortest.route_id} - ${rec.shortest.reason}</div>`;
-        comparisonHTML += '</div></div>';
-
-        // Display in a modal or alert
         const modal = document.createElement('div');
         modal.id = 'routeComparisonModal';
         modal.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;';
-        modal.innerHTML = `
-            <div style="background: white; padding: 20px; border-radius: 12px; max-width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                    <h3 style="margin: 0; color: #333;">Route Comparison</h3>
-                    <button onclick="document.getElementById('routeComparisonModal').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">×</button>
-                </div>
-                ${comparisonHTML}
-                <div style="margin-top: 15px; display: flex; gap: 10px;">
-                    <button onclick="document.getElementById('routeComparisonModal').remove()" style="flex: 1; padding: 10px; background: #ddd; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Close</button>
-                </div>
-            </div>
-        `;
+        modal.innerHTML = selection.buildRouteComparisonModalHtml(comparisonHTML);
 
         // Close modal when clicking outside the white box
         modal.addEventListener('click', (e) => {
