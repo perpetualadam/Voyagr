@@ -592,6 +592,39 @@ describe('buildGpsTrackingPositionTickPlan', () => {
     });
 });
 
+describe('buildGpsPositionTickPlan', () => {
+    test('assembles position apply and speed-limit plans', () => {
+        const plans = SG.buildGpsPositionTickPlan({
+            lat: 51.5,
+            lon: -0.1,
+            accuracy: 10,
+            routeInProgress: true,
+            routePolyline: [[51.5, -0.1], [51.501, -0.101]],
+            snapped: { lat: 51.5005, lon: -0.1005, index: 0, distance: 30 },
+            lastSnappedRouteIndex: 0,
+            prevSnapBlendWeightState: 0,
+            speedMph: 25,
+            smoothDisplayLat: 51.499,
+            smoothDisplayLon: -0.099,
+            resolveGpsHeading: () => 90,
+            calculateBearing: () => 90,
+            blendHeadingsCircular: (g, r, b) => g + (r - g) * b,
+            isTrackingActive: true,
+            currentRouteSteps: [{ begin_shape_index: 0, road_class: 'primary' }],
+            displaySpeedMph: 24,
+            currentSpeedLimitMph: 30,
+            lastSpeedLimitRegion: 'gb',
+            lastActiveManeuverIdx: 0,
+            resolveRoadType: () => 'primary',
+            pickDisplaySpeedLimitMph: (api, val) => val || api,
+        });
+        expect(plans.posApply.action).toBe('apply');
+        expect(plans.posApply.markerLat).toBeGreaterThan(51.4);
+        expect(plans.speedLimitPlan.showWidget).toBe(true);
+        expect(plans.speedLimitPlan.roadType).toBe('primary');
+    });
+});
+
 describe('buildGpsPositionStateApplyPlan', () => {
     test('maps position tick to marker outputs and state patch', () => {
         const posTick = SG.buildGpsTrackingPositionTickPlan({

@@ -865,6 +865,61 @@
         };
     }
 
+    /**
+     * Position tick, apply, and speed-limit plans for one GPS position tick.
+     * Caller supplies coord outputs and a precomputed snap result.
+     * @param {Object} opts
+     * @returns {{ posTick: (Object|null), posApply: Object, speedLimitPlan: Object }}
+     */
+    function buildGpsPositionTickPlan(opts) {
+        opts = opts || {};
+        var posTick = buildGpsTrackingPositionTickPlan({
+            lat: opts.lat,
+            lon: opts.lon,
+            accuracy: opts.accuracy,
+            routeInProgress: opts.routeInProgress,
+            routePolyline: opts.routePolyline,
+            snapped: opts.snapped,
+            lastSnappedRouteIndex: opts.lastSnappedRouteIndex,
+            prevSnapBlendWeightState: opts.prevSnapBlendWeightState,
+            speedMph: opts.speedMph,
+            smoothDisplayLat: opts.smoothDisplayLat,
+            smoothDisplayLon: opts.smoothDisplayLon,
+            lastFollowCenterGeo: opts.lastFollowCenterGeo,
+            calculateDistanceMeters: opts.calculateDistanceMeters,
+            calculateBearing: opts.calculateBearing,
+            blendHeadingsCircular: opts.blendHeadingsCircular,
+            resolveGpsHeading: opts.resolveGpsHeading,
+        });
+
+        var posApply = buildGpsPositionStateApplyPlan(posTick, {
+            lat: opts.lat,
+            lon: opts.lon,
+            smoothDisplayLat: opts.smoothDisplayLat,
+            smoothDisplayLon: opts.smoothDisplayLon,
+        });
+
+        var speedLimitPlan = buildNavSpeedLimitTickPlan({
+            routeInProgress: opts.routeInProgress,
+            isTrackingActive: opts.isTrackingActive,
+            routePolyline: opts.routePolyline,
+            currentRouteSteps: opts.currentRouteSteps,
+            lastSnappedRouteIndex: opts.lastSnappedRouteIndex,
+            displaySpeedMph: opts.displaySpeedMph,
+            currentSpeedLimitMph: opts.currentSpeedLimitMph,
+            lastSpeedLimitRegion: opts.lastSpeedLimitRegion,
+            lastActiveManeuverIdx: opts.lastActiveManeuverIdx,
+            resolveRoadType: opts.resolveRoadType,
+            pickDisplaySpeedLimitMph: opts.pickDisplaySpeedLimitMph,
+        });
+
+        return {
+            posTick: posTick,
+            posApply: posApply,
+            speedLimitPlan: speedLimitPlan,
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         KMH_TO_MPH: KMH_TO_MPH,
@@ -899,6 +954,7 @@
         buildGpsTrackingPositionTickPlan: buildGpsTrackingPositionTickPlan,
         buildGpsCoordSampleTickPlan: buildGpsCoordSampleTickPlan,
         buildGpsCoordSampleStateApplyPlan: buildGpsCoordSampleStateApplyPlan,
+        buildGpsPositionTickPlan: buildGpsPositionTickPlan,
         buildGpsPositionStateApplyPlan: buildGpsPositionStateApplyPlan,
         computeVehicleMarkerRotationDeg: computeVehicleMarkerRotationDeg,
         normalizeGeolocationCoordsSample: normalizeGeolocationCoordsSample,

@@ -12446,8 +12446,9 @@ function applyGpsPositionTick(sample) {
     const snapped = (routeInProgress && routePolyline && routePolyline.length >= 2)
         ? _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex)
         : null;
-    const posTick = SGpos
-        ? SGpos.buildGpsTrackingPositionTickPlan({
+    const SL = _speedLimitWidget();
+    const plans = SGpos
+        ? SGpos.buildGpsPositionTickPlan({
             lat,
             lon,
             accuracy,
@@ -12471,39 +12472,9 @@ function applyGpsPositionTick(sample) {
                     calculateDistanceMeters,
                 })
                 : 0),
-        })
-        : null;
-    const posApply = SGpos
-        ? SGpos.buildGpsPositionStateApplyPlan(posTick, {
-            lat,
-            lon,
-            smoothDisplayLat: _smoothDisplayLat,
-            smoothDisplayLon: _smoothDisplayLon,
-        })
-        : {
-            action: 'apply',
-            heading: 0,
-            markerLat: lat,
-            markerLon: lon,
-            followJumpM: Number.POSITIVE_INFINITY,
-            statePatch: { smoothDisplayLat: lat, smoothDisplayLon: lon },
-        };
-    applyGpsPositionStateFromPlan(posApply);
-    const heading = posApply.heading;
-    const markerLat = posApply.markerLat;
-    const markerLon = posApply.markerLon;
-    const followJumpM = posApply.followJumpM;
-
-    const displaySpeedMph = smoothGpsSpeedMph(speedMph);
-    const SL = _speedLimitWidget();
-    const speedLimitPlan = SGpos
-        ? SGpos.buildNavSpeedLimitTickPlan({
-            routeInProgress,
             isTrackingActive,
-            routePolyline,
             currentRouteSteps,
-            lastSnappedRouteIndex,
-            displaySpeedMph,
+            displaySpeedMph: smoothGpsSpeedMph(speedMph),
             currentSpeedLimitMph,
             lastSpeedLimitRegion,
             lastActiveManeuverIdx: _lastActiveManeuverIdx,
@@ -12518,7 +12489,23 @@ function applyGpsPositionTick(sample) {
                 ? (api, val, rt, region) => SL.pickDisplaySpeedLimitMph(api, val, rt, region)
                 : null,
         })
-        : { roadType: 'unknown', shownLimit: null, resetFetchState: false, showWidget: false };
+        : {
+            posApply: {
+                action: 'apply',
+                heading: 0,
+                markerLat: lat,
+                markerLon: lon,
+                followJumpM: Number.POSITIVE_INFINITY,
+                statePatch: { smoothDisplayLat: lat, smoothDisplayLon: lon },
+            },
+            speedLimitPlan: { roadType: 'unknown', shownLimit: null, resetFetchState: false, showWidget: false },
+        };
+    applyGpsPositionStateFromPlan(plans.posApply);
+    const heading = plans.posApply.heading;
+    const markerLat = plans.posApply.markerLat;
+    const markerLon = plans.posApply.markerLon;
+    const followJumpM = plans.posApply.followJumpM;
+    const speedLimitPlan = plans.speedLimitPlan;
 
     const sideEffects = _routeProgress().buildGpsTrackingSideEffectsPlan({
         routeInProgress,
