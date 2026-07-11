@@ -482,6 +482,74 @@
         };
     }
 
+    var TRAFFIC_REROUTE_API_PATH = '/api/route';
+
+    /**
+     * Log plan when a traffic reroute cannot proceed.
+     * @param {string} reason
+     * @returns {Object}
+     */
+    function buildTrafficRerouteBlockedLogPlan(reason) {
+        if (reason === 'no_destination') {
+            return { logMessage: '[Auto-Traffic] No destination stored, cannot reroute' };
+        }
+        return { logMessage: '[Auto-Traffic] No route context, cannot reroute' };
+    }
+
+    /**
+     * Orchestration plan before requesting a traffic-based reroute alternative.
+     * @param {Object} [input]
+     * @param {string} [input.changeType]
+     * @param {number} [input.avoidPointCount]
+     * @returns {Object}
+     */
+    function buildTrafficRerouteFetchOrchestrationPlan(input) {
+        input = input || {};
+        return {
+            shouldFetch: true,
+            apiPath: TRAFFIC_REROUTE_API_PATH,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            logMessage: '[Auto-Traffic] Calculating new route (reason: ' + (input.changeType || 'traffic')
+                + ', avoid pts: ' + (input.avoidPointCount || 0) + ')...',
+        };
+    }
+
+    /**
+     * Dispatch plan after /api/route returns during traffic-based reroute.
+     * @param {Object} [input]
+     * @param {Object} [input.data]
+     * @param {boolean} [input.isSevere]
+     * @param {number} [input.oldBaseMinutes]
+     * @param {number} [input.measuredDelayMin]
+     * @returns {Object}
+     */
+    function buildTrafficRerouteApiResponseDispatchPlan(input) {
+        input = input || {};
+        var data = input.data || {};
+        if (!data.success || !data.routes || !data.routes.length) {
+            return { action: 'no_route' };
+        }
+        var newRoute = data.routes[0];
+        var acceptPlan = buildTrafficRerouteAcceptancePlan({
+            isSevere: !!input.isSevere,
+            oldBaseMinutes: input.oldBaseMinutes || 0,
+            measuredDelayMin: input.measuredDelayMin,
+            newRouteMinutes: newRoute.duration_minutes,
+        });
+        if (acceptPlan.accept) {
+            return {
+                action: 'accept',
+                newRoute: newRoute,
+                acceptPlan: acceptPlan,
+            };
+        }
+        return {
+            action: 'reject',
+            logMessage: '[Auto-Traffic] Alternative not significantly faster, keeping current route',
+        };
+    }
+
     /**
      * Orchestration plan after sampling traffic ahead during navigation.
      * @param {Object} [input]
@@ -542,6 +610,9 @@
         buildTrafficSampleResponseDispatchPlan: buildTrafficSampleResponseDispatchPlan,
         buildTrafficChangeNotificationPlan: buildTrafficChangeNotificationPlan,
         buildTrafficReroutePreflightPlan: buildTrafficReroutePreflightPlan,
+        buildTrafficRerouteBlockedLogPlan: buildTrafficRerouteBlockedLogPlan,
+        buildTrafficRerouteFetchOrchestrationPlan: buildTrafficRerouteFetchOrchestrationPlan,
+        buildTrafficRerouteApiResponseDispatchPlan: buildTrafficRerouteApiResponseDispatchPlan,
         buildTrafficRerouteAcceptancePlan: buildTrafficRerouteAcceptancePlan,
         buildStartAutoTrafficUpdatesDispatchPlan: buildStartAutoTrafficUpdatesDispatchPlan,
         buildAutoTrafficIntervalTickPlan: buildAutoTrafficIntervalTickPlan,

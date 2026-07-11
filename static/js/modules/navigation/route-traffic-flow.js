@@ -470,6 +470,38 @@
     }
 
     /**
+     * Apply plan for a failed route-traffic-flow fetch (network, HTTP, or parse).
+     * @param {Object} failOutcome
+     * @param {number} [now]
+     * @returns {Object}
+     */
+    function buildRouteTrafficFlowFailedFetchApplyPlan(failOutcome, now) {
+        var backoff = buildRouteTrafficFlowBackoffUpdatePlan(failOutcome, now);
+        return {
+            result: null,
+            backoffUntil: backoff.backoffUntil,
+            logMessage: backoff.logMessage,
+            logPrefix: '[Route Traffic]',
+        };
+    }
+
+    /**
+     * Cache update plan after sampling traffic ahead on the active route.
+     * @param {Object|null} result
+     * @param {number} [now]
+     * @returns {Object}
+     */
+    function buildRouteTrafficAheadCacheUpdatePlan(result, now) {
+        if (!result) {
+            return { shouldUpdateCache: false };
+        }
+        return {
+            shouldUpdateCache: true,
+            cacheEntry: { at: now != null ? now : Date.now(), result: result },
+        };
+    }
+
+    /**
      * Dispatch plan for starting periodic route-traffic edge updates during navigation.
      * @param {Object} [opts]
      * @param {*} [opts.routeTrafficUpdateInterval]
@@ -538,6 +570,7 @@
             toggleElementId: ROUTE_TRAFFIC_TOGGLE_ID,
             fetchIfRouteInProgress: next,
             clearLayersOnDisable: !next,
+            saveAllSettings: true,
             statusMessage: next
                 ? '🚦 Route traffic display enabled'
                 : '🚦 Route traffic display disabled',
@@ -638,6 +671,8 @@
         buildRouteTrafficFlowResponsePlan: buildRouteTrafficFlowResponsePlan,
         buildRouteTrafficFlowParseFailurePlan: buildRouteTrafficFlowParseFailurePlan,
         buildRouteTrafficFlowBackoffUpdatePlan: buildRouteTrafficFlowBackoffUpdatePlan,
+        buildRouteTrafficFlowFailedFetchApplyPlan: buildRouteTrafficFlowFailedFetchApplyPlan,
+        buildRouteTrafficAheadCacheUpdatePlan: buildRouteTrafficAheadCacheUpdatePlan,
         buildStartRouteTrafficUpdatesDispatchPlan: buildStartRouteTrafficUpdatesDispatchPlan,
         buildRouteTrafficIntervalTickPlan: buildRouteTrafficIntervalTickPlan,
         buildStopRouteTrafficUpdatesDispatchPlan: buildStopRouteTrafficUpdatesDispatchPlan,

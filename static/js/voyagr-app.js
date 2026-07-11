@@ -5475,6 +5475,7 @@ function toggleRouteTraffic() {
     } else if (plan.clearLayersOnDisable) {
         clearRouteTrafficLayers();
     }
+    if (plan.saveAllSettings) saveAllSettings();
 }
 
 /**
@@ -5846,11 +5847,12 @@ async function fetchRouteTrafficFlowPayload(points, sampleInterval) {
             body: requestPlan.body,
         });
     } catch (e) {
-        const fail = RTF.buildRouteTrafficFlowResponsePlan({ errorKind: 'network' });
-        const backoff = RTF.buildRouteTrafficFlowBackoffUpdatePlan(fail);
-        _routeTrafficFlowBackoffUntil = backoff.backoffUntil;
-        console.debug('[Route Traffic]', backoff.logMessage + ':', e && e.message);
-        return null;
+        const apply = RTF.buildRouteTrafficFlowFailedFetchApplyPlan(
+            RTF.buildRouteTrafficFlowResponsePlan({ errorKind: 'network' })
+        );
+        _routeTrafficFlowBackoffUntil = apply.backoffUntil;
+        console.debug(apply.logPrefix, apply.logMessage + ':', e && e.message);
+        return apply.result;
     }
 
     const outcome = RTF.buildRouteTrafficFlowResponsePlan({
@@ -5859,20 +5861,21 @@ async function fetchRouteTrafficFlowPayload(points, sampleInterval) {
         contentType: response.headers.get('content-type') || '',
     });
     if (!outcome.ok) {
-        const backoff = RTF.buildRouteTrafficFlowBackoffUpdatePlan(outcome);
-        _routeTrafficFlowBackoffUntil = backoff.backoffUntil;
-        console.debug('[Route Traffic]', backoff.logMessage);
-        return null;
+        const apply = RTF.buildRouteTrafficFlowFailedFetchApplyPlan(outcome);
+        _routeTrafficFlowBackoffUntil = apply.backoffUntil;
+        console.debug(apply.logPrefix, apply.logMessage);
+        return apply.result;
     }
 
     try {
         return await response.json();
     } catch (e) {
-        const fail = RTF.buildRouteTrafficFlowParseFailurePlan();
-        const backoff = RTF.buildRouteTrafficFlowBackoffUpdatePlan(fail);
-        _routeTrafficFlowBackoffUntil = backoff.backoffUntil;
-        console.debug('[Route Traffic]', backoff.logMessage + ':', e && e.message);
-        return null;
+        const apply = RTF.buildRouteTrafficFlowFailedFetchApplyPlan(
+            RTF.buildRouteTrafficFlowParseFailurePlan()
+        );
+        _routeTrafficFlowBackoffUntil = apply.backoffUntil;
+        console.debug(apply.logPrefix, apply.logMessage + ':', e && e.message);
+        return apply.result;
     }
 }
 
@@ -5905,7 +5908,10 @@ async function getRouteTrafficAhead(forceFresh = false) {
         return cachePlan.cachedResult;
     }
     const result = await sampleRouteTrafficAhead();
-    if (result) _routeTrafficSampleCache = { at: now, result };
+    const cacheUpdate = RTF.buildRouteTrafficAheadCacheUpdatePlan(result, now);
+    if (cacheUpdate.shouldUpdateCache) {
+        _routeTrafficSampleCache = cacheUpdate.cacheEntry;
+    }
     return result;
 }
 
@@ -5965,45 +5971,43 @@ async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measured
         changeType,
     });
     if (!preflight.shouldReroute) {
-        console.log('[Auto-Traffic] ' + (preflight.reason === 'no_destination'
-            ? 'No destination stored, cannot reroute'
-            : 'No route context, cannot reroute'));
+        console.log(TC.buildTrafficRerouteBlockedLogPlan(preflight.reason).logMessage);
         return;
     }
 
-    const isSevere = preflight.isSevere;
-    console.log(`[Auto-Traffic] Calculating new route (reason: ${changeType}, avoid pts: ${avoidPoints.length})...`);
+    const fetchOrch = TC.buildTrafficRerouteFetchOrchestrationPlan({
+        changeType,
+        avoidPointCount: avoidPoints.length,
+    });
+    console.log(fetchOrch.logMessage);
 
     try {
         const routeRequest = buildRouteRequest(currentLat, currentLon, destination, avoidPoints);
-        const response = await fetch('/api/route', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(routeRequest)
+        const response = await fetch(fetchOrch.apiPath, {
+            method: fetchOrch.method,
+            headers: fetchOrch.headers,
+            body: JSON.stringify(routeRequest),
         });
 
         const data = await response.json();
+        const dispatch = TC.buildTrafficRerouteApiResponseDispatchPlan({
+            data,
+            isSevere: preflight.isSevere,
+            oldBaseMinutes: window.lastCalculatedRoute.duration_minutes || 0,
+            measuredDelayMin,
+        });
 
-        if (data.success && data.routes && data.routes.length > 0) {
-            const newRoute = data.routes[0];
-            const acceptPlan = TC.buildTrafficRerouteAcceptancePlan({
-                isSevere,
-                oldBaseMinutes: window.lastCalculatedRoute.duration_minutes || 0,
-                measuredDelayMin,
-                newRouteMinutes: newRoute.duration_minutes,
-            });
-
-            if (acceptPlan.accept) {
-                updateRouteOnMap(newRoute);
-                if (acceptPlan.clearTrafficCache) _routeTrafficSampleCache = null;
-                if (acceptPlan.clearLastTrafficData) lastTrafficData = null;
-                sendNotification(acceptPlan.notificationTitle, acceptPlan.notificationMessage, acceptPlan.notificationType);
-                if (voiceAnnouncementsEnabled && acceptPlan.voiceMessage) {
-                    speakMessage(acceptPlan.voiceMessage, 'high');
-                }
-            } else {
-                console.log('[Auto-Traffic] Alternative not significantly faster, keeping current route');
+        if (dispatch.action === 'accept') {
+            const acceptPlan = dispatch.acceptPlan;
+            updateRouteOnMap(dispatch.newRoute);
+            if (acceptPlan.clearTrafficCache) _routeTrafficSampleCache = null;
+            if (acceptPlan.clearLastTrafficData) lastTrafficData = null;
+            sendNotification(acceptPlan.notificationTitle, acceptPlan.notificationMessage, acceptPlan.notificationType);
+            if (voiceAnnouncementsEnabled && acceptPlan.voiceMessage) {
+                speakMessage(acceptPlan.voiceMessage, 'high');
             }
+        } else if (dispatch.action === 'reject' && dispatch.logMessage) {
+            console.log(dispatch.logMessage);
         }
     } catch (error) {
         console.error('[Auto-Traffic] Error during traffic-based reroute:', error);
@@ -6799,32 +6803,23 @@ function initializeCameraLayer() {
  * Initialize road labels - called after map is ready
  */
 function initializeRoadLabels() {
-    if (!map) {
-        console.log('[Road Labels] Map not ready, deferring road labels init');
-        return;
-    }
-
-    // This can be called from multiple init paths; keep it idempotent.
-    if (window.__voyagrRoadLabelsInitialized) {
-        return;
-    }
-    window.__voyagrRoadLabelsInitialized = true;
-
-    // Set toggle state based on saved preference
-    const toggle = document.getElementById('roadLabelsToggle');
-    _toggleUI().applyToggleButton(toggle, roadLabelsEnabled, {
-        inactiveBackground: '#ccc',
-        inactiveBorder: '#ccc',
+    const MLT = _mapLayerToggles();
+    const execute = MLT.buildInitializeRoadLabelsExecutePlan({
+        hasMap: !!map,
+        alreadyInitialized: !!window[MLT.ROAD_LABELS_INIT_FLAG],
+        roadLabelsEnabled,
     });
-
-    // Apply initial road labels visibility
-    if (roadLabelsEnabled) {
-        MapLibreHelpers.toggleRoadLabels(map, true);
-    } else {
-        MapLibreHelpers.toggleRoadLabels(map, false);
+    if (!execute.shouldInit) {
+        if (execute.mapNotReadyLog) console.log(execute.mapNotReadyLog);
+        return;
     }
+    window[execute.initFlagProperty] = true;
 
-    console.log('[Road Labels] Road labels initialized');
+    const toggle = document.getElementById(execute.toggleId);
+    _toggleUI().applyToggleButton(toggle, execute.roadLabelsEnabled, execute.toggleInactiveStyles);
+    MapLibreHelpers.toggleRoadLabels(map, execute.roadLabelsEnabled);
+
+    console.log(execute.initLogMessage);
 }
 
 /**

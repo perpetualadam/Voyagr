@@ -130,4 +130,22 @@ describe('map-layer-toggles module', () => {
         });
         expect(poll.action).toBe('giveUp');
     });
+
+    test('buildInitializeRoadLabelsExecutePlan wires toggle and map action', () => {
+        const init = MLT.buildInitializeRoadLabelsExecutePlan({
+            hasMap: true,
+            alreadyInitialized: false,
+            roadLabelsEnabled: true,
+        });
+        expect(init.shouldInit).toBe(true);
+        expect(init.initFlagProperty).toBe(MLT.ROAD_LABELS_INIT_FLAG);
+        expect(init.mapAction).toBe('showRoadLabels');
+
+        const skip = MLT.buildInitializeRoadLabelsExecutePlan({
+            hasMap: true,
+            alreadyInitialized: true,
+            roadLabelsEnabled: false,
+        });
+        expect(skip.shouldInit).toBe(false);
+    });
 });

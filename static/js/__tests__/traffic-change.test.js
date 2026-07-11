@@ -307,4 +307,29 @@ describe('auto traffic interval dispatch plans', () => {
         expect(reroute.action).toBe('reroute');
         expect(reroute.notifPlan.shouldReroute).toBe(true);
     });
+
+    test('buildTrafficRerouteFetchOrchestrationPlan and API response dispatch', () => {
+        const fetchOrch = TC.buildTrafficRerouteFetchOrchestrationPlan({
+            changeType: 'severe',
+            avoidPointCount: 2,
+        });
+        expect(fetchOrch.apiPath).toBe('/api/route');
+        expect(fetchOrch.logMessage).toContain('avoid pts: 2');
+
+        const accept = TC.buildTrafficRerouteApiResponseDispatchPlan({
+            data: { success: true, routes: [{ duration_minutes: 10 }] },
+            isSevere: true,
+            oldBaseMinutes: 25,
+            measuredDelayMin: 5,
+        });
+        expect(accept.action).toBe('accept');
+
+        const reject = TC.buildTrafficRerouteApiResponseDispatchPlan({
+            data: { success: true, routes: [{ duration_minutes: 30 }] },
+            isSevere: false,
+            oldBaseMinutes: 20,
+            measuredDelayMin: 2,
+        });
+        expect(reject.action).toBe('reject');
+    });
 });

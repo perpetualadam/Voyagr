@@ -11,6 +11,7 @@
     var BUILDINGS_3D_TOGGLE_ID = 'buildings3DToggle';
     var ROAD_LABELS_STORAGE_KEY = 'roadLabelsEnabled';
     var ROAD_LABELS_TOGGLE_ID = 'roadLabelsToggle';
+    var ROAD_LABELS_INIT_FLAG = '__voyagrRoadLabelsInitialized';
 
     var BUILDINGS_3D_DEFAULT_ENABLED = true;
     var ROAD_LABELS_DEFAULT_ENABLED = true;
@@ -571,6 +572,40 @@
         };
     }
 
+    /**
+     * Execute plan for one-time road labels init after the map is ready.
+     * @param {Object} [input]
+     * @param {boolean} [input.hasMap]
+     * @param {boolean} [input.alreadyInitialized]
+     * @param {boolean} [input.roadLabelsEnabled]
+     * @returns {Object}
+     */
+    function buildInitializeRoadLabelsExecutePlan(input) {
+        input = input || {};
+        if (!input.hasMap) {
+            return {
+                shouldInit: false,
+                mapNotReadyLog: '[Road Labels] Map not ready, deferring road labels init',
+            };
+        }
+        if (input.alreadyInitialized) {
+            return { shouldInit: false, skipDuplicateInit: true };
+        }
+        var enabled = !!input.roadLabelsEnabled;
+        return {
+            shouldInit: true,
+            initFlagProperty: ROAD_LABELS_INIT_FLAG,
+            toggleId: ROAD_LABELS_TOGGLE_ID,
+            roadLabelsEnabled: enabled,
+            toggleInactiveStyles: {
+                inactiveBackground: '#ccc',
+                inactiveBorder: '#ccc',
+            },
+            mapAction: enabled ? 'showRoadLabels' : 'hideRoadLabels',
+            initLogMessage: '[Road Labels] Road labels initialized',
+        };
+    }
+
     var api = {
         BUILDINGS_3D_STORAGE_KEY: BUILDINGS_3D_STORAGE_KEY,
         BUILDINGS_3D_HEIGHT_STORAGE_KEY: BUILDINGS_3D_HEIGHT_STORAGE_KEY,
@@ -578,6 +613,7 @@
         BUILDINGS_3D_TOGGLE_ID: BUILDINGS_3D_TOGGLE_ID,
         ROAD_LABELS_STORAGE_KEY: ROAD_LABELS_STORAGE_KEY,
         ROAD_LABELS_TOGGLE_ID: ROAD_LABELS_TOGGLE_ID,
+        ROAD_LABELS_INIT_FLAG: ROAD_LABELS_INIT_FLAG,
         SHOW_TRAFFIC_STORAGE_KEY: SHOW_TRAFFIC_STORAGE_KEY,
         SHOW_TRAFFIC_TOGGLE_ID: SHOW_TRAFFIC_TOGGLE_ID,
         SHOW_TRAFFIC_DEFAULT_ENABLED: SHOW_TRAFFIC_DEFAULT_ENABLED,
@@ -595,6 +631,7 @@
         buildToggle3DBuildingsExecutePlan: buildToggle3DBuildingsExecutePlan,
         buildToggleRoadLabelsCollectPlan: buildToggleRoadLabelsCollectPlan,
         buildToggleRoadLabelsExecutePlan: buildToggleRoadLabelsExecutePlan,
+        buildInitializeRoadLabelsExecutePlan: buildInitializeRoadLabelsExecutePlan,
         buildSet3DBuildingHeightExecutePlan: buildSet3DBuildingHeightExecutePlan,
         buildSet3DBuildingOpacityExecutePlan: buildSet3DBuildingOpacityExecutePlan,
         resolveShowTrafficEnabledFromStorage: resolveShowTrafficEnabledFromStorage,

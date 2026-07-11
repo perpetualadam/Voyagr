@@ -254,6 +254,7 @@ describe('route traffic ahead sampling and cache plans', () => {
         const enable = RTF.buildRouteTrafficTogglePlan(false);
         expect(enable.fetchIfRouteInProgress).toBe(true);
         expect(enable.storageKey).toBe(RTF.ROUTE_TRAFFIC_ENABLED_STORAGE_KEY);
+        expect(enable.saveAllSettings).toBe(true);
     });
 
     test('buildClearRouteTrafficLayersApplyPlan maps layer removal strategies', () => {
@@ -324,5 +325,19 @@ describe('route traffic ahead sampling and cache plans', () => {
 
         expect(RTF.buildRouteTrafficEdgesPostDisplayPlan({ shouldDisplay: false }).shouldPostProcess)
             .toBe(false);
+    });
+
+    test('buildRouteTrafficFlowFailedFetchApplyPlan and cache update plans', () => {
+        const fail = RTF.buildRouteTrafficFlowFailedFetchApplyPlan(
+            RTF.buildRouteTrafficFlowResponsePlan({ errorKind: 'network' }),
+            1000
+        );
+        expect(fail.result).toBeNull();
+        expect(fail.backoffUntil).toBeGreaterThan(1000);
+
+        const cache = RTF.buildRouteTrafficAheadCacheUpdatePlan({ source: 'TomTom' }, 2000);
+        expect(cache.shouldUpdateCache).toBe(true);
+        expect(cache.cacheEntry.at).toBe(2000);
+        expect(RTF.buildRouteTrafficAheadCacheUpdatePlan(null).shouldUpdateCache).toBe(false);
     });
 });
