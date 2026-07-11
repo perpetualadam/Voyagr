@@ -40,15 +40,6 @@ let bottomSheetStartY = 0;
 let bottomSheetCurrentY = 0;
 let bottomSheetIsExpanded = false; // Tracks logical state (expanded or collapsed)
 
-/** Event target as Element — Text nodes have no .closest (fixes mobile taps on emoji/labels). */
-function voyagrEventTargetElement(raw) {
-    return VoyagrModules.domHelpers().eventTargetElement(raw);
-}
-
-function voyagrClosest(raw, selector) {
-    return VoyagrModules.domHelpers().closest(raw, selector);
-}
-
 // ===== RECENT DESTINATIONS (local history; works without auth) =====
 function loadRecentDestinations() {
     return VoyagrModules.recentDestinations().loadRecentDestinations();
@@ -2334,7 +2325,7 @@ function displayAllRoutesOnMap() {
     }
 
     // Ensure all routes have valid polylines
-    VoyagrModules.routeSelection().hydrateRouteOptionPolylines(routeOptions, decodePolyline);
+    _routeSelection().hydrateRouteOptionPolylines(routeOptions, decodePolyline);
 
     // Wait for style to load before adding layers
     const addRouteLayers = () => {
@@ -2366,7 +2357,7 @@ function displayAllRoutesOnMap() {
  * Actually add route layers to the map (called after style is loaded)
  */
 function doAddRouteLayers() {
-    const RS = VoyagrModules.routeSelection();
+    const RS = _routeSelection();
     const style = map.getStyle();
     const beforeId = RS.findFirstTextSymbolLayerId(style && style.layers);
 
@@ -2497,7 +2488,7 @@ function bringRoutesToTop() {
         try {
             // Find the first symbol layer with text (road labels) once for all routes
             const style = map.getStyle();
-            const beforeId = VoyagrModules.routeSelection().findFirstTextSymbolLayerId(style && style.layers);
+            const beforeId = _routeSelection().findFirstTextSymbolLayerId(style && style.layers);
 
             allRouteLayers.forEach((layer, idx) => {
                 if (layer && layer.id) {
@@ -2668,11 +2659,11 @@ function toggleRouteEditing() {
 function displayRouteComparison() {
     const listContainer = document.getElementById('routeComparisonList');
     if (!routeOptions || routeOptions.length === 0) {
-        listContainer.innerHTML = VoyagrModules.routeSelection().buildRouteComparisonListHtml([], {});
+        listContainer.innerHTML = _routeSelection().buildRouteComparisonListHtml([], {});
         return;
     }
 
-    listContainer.innerHTML = VoyagrModules.routeSelection().buildRouteComparisonListHtml(routeOptions, {
+    listContainer.innerHTML = _routeSelection().buildRouteComparisonListHtml(routeOptions, {
         selectedIndex: selectedRouteIndex,
         routeColors: ROUTE_COLORS,
         currencySymbol: getCurrencySymbol(),
@@ -2957,7 +2948,7 @@ function onWaypointDragOver(e) {
 
 function onWaypointDrop(e) {
     e.preventDefault();
-    const target = voyagrClosest(e.target, '.waypoint-item');
+    const target = _domHelpers().closest(e.target, '.waypoint-item');
     if (!target || !_draggedWaypoint) return;
 
     const targetType = target.dataset.type;
@@ -3065,7 +3056,7 @@ function clearMultiDropLayers() {
  * Get all waypoints for route calculation (start + viaPoints + stops + end)
  */
 function getOrderedWaypoints(startLat, startLon, endLat, endLon) {
-    return VoyagrModules.routeSelection().orderWaypointsGreedy(
+    return _routeSelection().orderWaypointsGreedy(
         startLat, startLon, endLat, endLon, viaPoints, stops
     );
 }
@@ -3132,7 +3123,7 @@ function applyTripInfoDisplayValues(display) {
  */
 function updateTripInfoFromRouteOption(route) {
     if (!route) return;
-    const display = VoyagrModules.routeSelection().buildTripInfoDisplayValues(route, {
+    const display = _routeSelection().buildTripInfoDisplayValues(route, {
         distanceText: convertDistance(route.distance_km),
         distUnit: getDistanceUnit(),
         currencySymbol: getCurrencySymbol(),
@@ -4028,7 +4019,7 @@ function decodePolyline(encoded, precision = 6) {
  * @param {*} saved
  */
 function buildRoutePayloadFromPersisted(saved) {
-    return VoyagrModules.routeSelection().buildRoutePayloadFromPersisted(
+    return _routeSelection().buildRoutePayloadFromPersisted(
         saved,
         (points, precision) => VoyagrModules.polylineCodec().encodePolyline(points, precision)
     );
@@ -4039,7 +4030,7 @@ function buildRoutePayloadFromPersisted(saved) {
  */
 function syncLastCalculatedRouteFromSelection(index) {
     if (!routeOptions || !routeOptions[index]) return;
-    window.lastCalculatedRoute = VoyagrModules.routeSelection().mergeLastCalculatedRouteFromSelection(
+    window.lastCalculatedRoute = _routeSelection().mergeLastCalculatedRouteFromSelection(
         window.lastCalculatedRoute,
         routeOptions[index]
     );
@@ -4208,14 +4199,14 @@ async function calculateRoute() {
 
                     const activeRoute = pickActiveRouteDuringNavigation(data.routes, data);
                     if (!activeRoute) {
-                        showStatus(VoyagrModules.routeSelection().buildInNavRerouteSuccessPlan({}, {}, '', '').noRouteErrorMessage, 'error');
+                        showStatus(_routeSelection().buildInNavRerouteSuccessPlan({}, {}, '', '').noRouteErrorMessage, 'error');
                         return;
                     }
                     if (activeRoute.geometry) {
                         updateRouteOnMap(activeRoute);
                     }
 
-                    const reroutePlan = VoyagrModules.routeSelection().buildInNavRerouteSuccessPlan(
+                    const reroutePlan = _routeSelection().buildInNavRerouteSuccessPlan(
                         activeRoute,
                         data,
                         geocodedEnd,
@@ -4293,7 +4284,7 @@ async function calculateRoute() {
                     }).addTo(map);
                     endMarker.bindPopup(endMarkerOpts.popup);
 
-                    const RS = VoyagrModules.routeSelection();
+                    const RS = _routeSelection();
                     const pathPlan = RS.resolvePreviewRoutePath(startCoords, endCoords, data, decodePolyline);
                     let routePath = pathPlan.routePath;
                     if (pathPlan.usedFallback && data.geometry) {
@@ -4605,7 +4596,7 @@ function initBottomSheetLogic() {
 
     const onDragStart = (e) => {
         // Only allow dragging from handle or header (unless content is scrolled to top)
-        if (!voyagrClosest(e.target, '.bottom-sheet-handle') && !voyagrClosest(e.target, '.bottom-sheet-header')) {
+        if (!_domHelpers().closest(e.target, '.bottom-sheet-handle') && !_domHelpers().closest(e.target, '.bottom-sheet-header')) {
             return;
         }
 
@@ -4970,7 +4961,7 @@ function addTrafficLayer() {
                 // Find the first symbol layer (road labels) to insert traffic BELOW it
                 // This ensures: base map → traffic → routes → road labels
                 const style = map.getStyle();
-                const trafficBeforeId = VoyagrModules.routeSelection()
+                const trafficBeforeId = _routeSelection()
                     .findFirstTextSymbolLayerId(style && style.layers);
                 if (trafficBeforeId) {
                     console.log(`[Traffic] Inserting traffic layer before symbol layer: ${trafficBeforeId}`);
@@ -5390,7 +5381,7 @@ function bringTrafficEdgesToTop() {
         // Find the first symbol/label layer to insert traffic edges BEFORE
         // This keeps traffic edges above routes but below road labels
         const style = map.getStyle();
-        const beforeId = VoyagrModules.routeSelection().findFirstTextSymbolLayerId(style && style.layers);
+        const beforeId = _routeSelection().findFirstTextSymbolLayerId(style && style.layers);
 
         routeTrafficLayers.forEach(layer => {
             if (layer && layer.id && map.getLayer(layer.id)) {
@@ -5416,7 +5407,7 @@ function bringNavRouteAboveTrafficEdges() {
 
     try {
         const style = map.getStyle();
-        const beforeId = VoyagrModules.routeSelection().findFirstTextSymbolLayerId(style && style.layers);
+        const beforeId = _routeSelection().findFirstTextSymbolLayerId(style && style.layers);
 
         const routeLineIds = [];
         if (routeLayer && routeLayer.id) {
@@ -5465,7 +5456,7 @@ function ensureLabelsOnTop() {
             const style = map.getStyle();
             if (!style || !style.layers) return;
 
-            const labelLayerIds = VoyagrModules.routeSelection().collectTextSymbolLayerIds(style.layers);
+            const labelLayerIds = _routeSelection().collectTextSymbolLayerIds(style.layers);
             if (labelLayerIds.length === 0) {
                 console.log('[Labels] No label layers found');
                 return;
@@ -5571,7 +5562,7 @@ function pickActiveRouteDuringNavigation(routeList, singleRoutePayload) {
         _preferPrimaryRouteOnNextNavUpdate = false;
         console.log('[Reroute] Using primary route (post-deviation; skipping name match)');
     }
-    const activeRoute = VoyagrModules.routeSelection().pickActiveRouteDuringNavigation(
+    const activeRoute = _routeSelection().pickActiveRouteDuringNavigation(
         routeList,
         singleRoutePayload,
         {
@@ -5894,7 +5885,7 @@ function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) 
  * Prevents repeating the same milestones and back-to-back ETA after "route recalculated".
  */
 function resetVoiceAnnouncementStateForNewRoute() {
-    const patch = VoyagrModules.voiceAnnouncements().voiceAnnouncementStateResetValues(Date.now());
+    const patch = _voiceAnnouncements().voiceAnnouncementStateResetValues(Date.now());
     lastETAAnnouncementTime = patch.lastETAAnnouncementTime;
     lastAnnouncedETA = patch.lastAnnouncedETA;
     lastDestinationAnnouncementDistance = patch.lastDestinationAnnouncementDistance;
@@ -6723,7 +6714,7 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     const symbol = getCurrencySymbol();
     const distUnit = getDistanceUnit();
     const speedUnit = getSpeedUnit();
-    const selection = VoyagrModules.routeSelection();
+    const selection = _routeSelection();
 
     console.log('[Route Preview] Currency:', symbol, 'Distance Unit:', distUnit);
 
@@ -6878,7 +6869,7 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
  * @returns {*} Return value description
  */
 function showAlternativeRoutesInPreview() {
-    const RS = VoyagrModules.routeSelection();
+    const RS = _routeSelection();
     const container = document.getElementById('previewAlternativeRoutesList');
     const parentContainer = document.getElementById('previewAlternativeRoutesContainer');
 
@@ -6928,7 +6919,7 @@ async function showRouteComparison() {
     console.log('[RouteComparison] routeOptions:', routeOptions);
     console.log('[RouteComparison] routeOptions length:', routeOptions ? routeOptions.length : 0);
 
-    const selection = VoyagrModules.routeSelection();
+    const selection = _routeSelection();
     const routeCount = routeOptions ? routeOptions.length : 0;
     if (!selection.hasRoutesForComparison(routeCount)) {
         console.error('[RouteComparison] No routes available:', routeCount);
@@ -8523,6 +8514,27 @@ function _eta() { return VoyagrModules.eta(); }
 /** Unit-tested turn-by-turn instruction helpers (modules/navigation/turn-instructions.js). */
 function _turnInstructions() { return VoyagrModules.turnInstructions(); }
 
+/** Unit-tested voice announcement helpers (modules/navigation/voice-announcements.js). */
+function _voiceAnnouncements() { return VoyagrModules.voiceAnnouncements(); }
+
+/** Unit-tested route selection and comparison helpers (modules/navigation/route-selection.js). */
+function _routeSelection() { return VoyagrModules.routeSelection(); }
+
+/** Unit-tested camera pitch / follow-padding helpers (modules/navigation/camera-pitch.js). */
+function _cameraPitch() { return VoyagrModules.cameraPitch(); }
+
+/** Unit-tested reroute decision helpers (modules/navigation/reroute-decision.js). */
+function _rerouteDecision() { return VoyagrModules.rerouteDecision(); }
+
+/** Unit-tested movement-detection helpers (modules/navigation/movement-detection.js). */
+function _movementDetection() { return VoyagrModules.movementDetection(); }
+
+/** Unit-tested DOM event helpers (modules/ui/dom-helpers.js). */
+function _domHelpers() { return VoyagrModules.domHelpers(); }
+
+/** Unit-tested geocoding / location parse helpers (modules/navigation/geocoding-locations.js). */
+function _geocodingLocations() { return VoyagrModules.geocodingLocations(); }
+
 function applyZoomFollowButtonUi(btn, enabled) {
     if (!btn) return;
     const display = _mapControls().getZoomFollowButtonDisplay(enabled);
@@ -8591,9 +8603,6 @@ function smoothGpsSpeedMph(rawMph) {
  * @param {number} prevPick - Last accepted raw mph
  * @returns {number}
  */
-function rejectGpsSpeedSpikeMph(mph, prevPick) {
-    return VoyagrModules.speedGps().rejectGpsSpeedSpikeMph(mph, prevPick);
-}
 
 // pickRawSpeedMph body moved to modules/navigation/speed-gps.js as the pure
 // stepPickRawSpeedMph step function. This orchestration wrapper holds the mutable
@@ -8688,9 +8697,6 @@ function updateSpeedWidgetVisibility() {
  * @param {number} snappedIndex - Index into `routePolyline` of the snapped GPS position.
  * @returns {number} Index into `currentRouteSteps`, or -1 if not available.
  */
-function getActiveRouteManeuverIndex(snappedIndex) {
-    return VoyagrModules.speedGps().getActiveRouteManeuverIndex(currentRouteSteps, snappedIndex);
-}
 
 /**
  * Get the road class for a specific maneuver, falling back to instruction-text inference.
@@ -8976,7 +8982,7 @@ function recenterOnVehicle() {
             zoom: smartZoom,
             bearing,
             pitch,
-            padding: VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth),
+            padding: _cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth),
             duration: 600,
             essential: true,
         });
@@ -9362,7 +9368,7 @@ function applySmartZoomWithAnimation(speedMph, distanceToNextTurn = null, roadTy
             let bearing = map.getBearing();
             let padding = undefined;
             if (navFollow) {
-                padding = VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
+                padding = _cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
                 if (shouldUsePitchedDrivingCamera()) {
                     // Heading-up; flat (0°) when the user picked 2D map view, else tilted (60°).
                     pitch = shouldTiltDrivingCamera() ? 60 : 0;
@@ -10759,7 +10765,7 @@ function applyLiveNavigationCamera() {
         pitch: shouldTiltDrivingCamera() ? 60 : 0,
         bearing: heading,
         center: [currentLon, currentLat],
-        padding: VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth),
+        padding: _cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth),
     });
     console.log(`[Driver View] ${shouldTiltDrivingCamera() ? '60°' : 'flat 2D'} navigation camera (follow padding)`);
 }
@@ -10808,7 +10814,7 @@ function applyDriverPerspective() {
     if (shouldUsePitchedDrivingCamera()) {
         easeOptions.pitch = shouldTiltDrivingCamera() ? 60 : 0;
         easeOptions.bearing = heading;
-        easeOptions.padding = VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
+        easeOptions.padding = _cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
         if (currentLat != null && currentLon != null) {
             easeOptions.center = [currentLon, currentLat];
         }
@@ -11368,7 +11374,7 @@ function updateTurnWidgetFromPosition(lat, lon) {
     }
 
     // No turn in detection range — show the road currently being driven.
-    const activeIdx = getActiveRouteManeuverIndex(lastSnappedRouteIndex);
+    const activeIdx = _speedGps().getActiveRouteManeuverIndex(currentRouteSteps, lastSnappedRouteIndex);
     const activeM = (activeIdx >= 0 && activeIdx < currentRouteSteps.length)
         ? currentRouteSteps[activeIdx]
         : null;
@@ -11457,7 +11463,7 @@ function startJourneySummaryUpdates() {
  * @returns {boolean} True if user has started moving, false otherwise
  */
 function hasUserStartedMoving() {
-    return VoyagrModules.movementDetection().hasUserStartedMoving({
+    return _movementDetection().hasUserStartedMoving({
         trackingHistory: trackingHistory,
         haversineDistanceMeters: _routeGeometry().haversineDistanceMeters,
         log: console.log.bind(console),
@@ -12074,7 +12080,7 @@ function initBottomSheet() {
     if (header) {
         header.addEventListener('click', (e) => {
             // Don't expand if clicking on the icon buttons
-            if (voyagrClosest(e.target, 'button')) return;
+            if (_domHelpers().closest(e.target, 'button')) return;
             e.stopPropagation();
             if (bottomSheetIsExpanded) {
                 collapseBottomSheet();
@@ -12088,7 +12094,7 @@ function initBottomSheet() {
     // But only if clicking on handle/header, not on content (to allow scrolling)
     bottomSheet.addEventListener('click', (e) => {
         // Don't expand if clicking inside the content area (allows interaction with buttons, scroll, etc.)
-        if (voyagrClosest(e.target, '.bottom-sheet-content')) {
+        if (_domHelpers().closest(e.target, '.bottom-sheet-content')) {
             return;
         }
         if (!bottomSheetIsExpanded) {
@@ -12414,7 +12420,7 @@ function startGPSTracking() {
             }
 
             // ===== ZOOM AND FOLLOW: Center map on user with smart zoom =====
-            const CP = VoyagrModules.cameraPitch();
+            const CP = _cameraPitch();
             const followPlan = CP.buildNavigationFollowEasePlan({
                 nowMs: Date.now(),
                 lastFollowEaseAt: window.__voyagrLastFollowEaseAt || 0,
@@ -12516,7 +12522,7 @@ function startGPSTracking() {
 
             if (routeInProgress || isTrackingActive) {
                 const activeManeuverIdx = (routeInProgress && routePolyline && routePolyline.length >= 2)
-                    ? getActiveRouteManeuverIndex(lastSnappedRouteIndex)
+                    ? _speedGps().getActiveRouteManeuverIndex(currentRouteSteps, lastSnappedRouteIndex)
                     : -1;
                 const activeManeuver = (activeManeuverIdx >= 0 && currentRouteSteps && activeManeuverIdx < currentRouteSteps.length)
                     ? currentRouteSteps[activeManeuverIdx]
@@ -12897,7 +12903,7 @@ function announceDistanceToDestination(currentLat, currentLon) {
         // Announce when within range (with hysteresis to avoid repeated announcements)
         if (remainingDistance <= announcementDistance && lastDestinationAnnouncementDistance > announcementDistance + 100) {
             const distUnit = getDistanceUnit();
-            const message = VoyagrModules.voiceAnnouncements().buildDestinationAnnouncement(
+            const message = _voiceAnnouncements().buildDestinationAnnouncement(
                 announcementDistance, distUnit
             );
 
@@ -13051,7 +13057,7 @@ function announceUpcomingTurn(turnInfo) {
             turnInfo.roundabout_exit_count
         );
     }
-    const VA = VoyagrModules.voiceAnnouncements();
+    const VA = _voiceAnnouncements();
     const announcementDistances = VA.resolveAnnouncementDistancesForDirection(
         direction,
         TURN_ANNOUNCEMENT_DISTANCES,
@@ -13218,7 +13224,7 @@ function checkRouteDeviation(lat, lon, accuracy) {
     const snap = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
     const minDistance = snap.distance;
 
-    const VRD = VoyagrModules.rerouteDecision();
+    const VRD = _rerouteDecision();
     const wasJoined = routeJoinConfirmedForDeviation;
     const decision = VRD.decideRouteDeviation({
         autoRerouteEnabled: autoRerouteOnDeviationEnabled,
@@ -13387,8 +13393,8 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
 function handleUnavoidableHazards(route, hazardsList, hazardCount) {
     console.log(`[Rerouting] Route has ${hazardCount} unavoidable hazards`);
 
-    const hazardTypes = VoyagrModules.hazardAlerts().groupHazardsByType(hazardsList);
-    const hazardSummary = VoyagrModules.hazardAlerts().formatHazardTypeSummary(hazardTypes);
+    const hazardTypes = _hazardAlerts().groupHazardsByType(hazardsList);
+    const hazardSummary = _hazardAlerts().formatHazardTypeSummary(hazardTypes);
 
     showUnavoidableHazardsModal(hazardTypes, hazardCount);
 
@@ -13399,7 +13405,7 @@ function handleUnavoidableHazards(route, hazardsList, hazardCount) {
  * Show modal for unavoidable hazards
  */
 function showUnavoidableHazardsModal(hazardTypes, totalCount) {
-    const hazardAlerts = VoyagrModules.hazardAlerts();
+    const hazardAlerts = _hazardAlerts();
     // Check if modal already exists
     let modal = document.getElementById(hazardAlerts.UNAVOIDABLE_HAZARDS_MODAL_ID);
     if (!modal) {
@@ -13435,7 +13441,7 @@ function showUnavoidableHazardsModal(hazardTypes, totalCount) {
  * Close unavoidable hazards modal
  */
 function closeUnavoidableHazardsModal() {
-    const hazardAlerts = VoyagrModules.hazardAlerts();
+    const hazardAlerts = _hazardAlerts();
     const modal = document.getElementById(hazardAlerts.UNAVOIDABLE_HAZARDS_MODAL_ID);
     const backdrop = document.getElementById(hazardAlerts.UNAVOIDABLE_HAZARDS_BACKDROP_ID);
     if (modal) modal.style.display = 'none';
@@ -13453,15 +13459,12 @@ function openHazardSettings() {
 /**
  * Get emoji icon for hazard type
  */
-function getHazardIcon(type) {
-    return VoyagrModules.hazardAlerts().getHazardIcon(type);
-}
 
 /**
  * Log rerouting event for debugging and analytics
  */
 function logReroutingEvent(startLat, startLon, destination, route, hazardCount) {
-    const event = VoyagrModules.rerouteDecision().buildRerouteLogEvent({
+    const event = _rerouteDecision().buildRerouteLogEvent({
         timestampIso: new Date().toISOString(),
         startLat: startLat,
         startLon: startLon,
@@ -13475,7 +13478,7 @@ function logReroutingEvent(startLat, startLon, destination, route, hazardCount) 
         },
     });
 
-    VoyagrModules.rerouteDecision().appendRerouteLogEntry(sessionStorage, event, 20);
+    _rerouteDecision().appendRerouteLogEntry(sessionStorage, event, 20);
 
     console.log('[Rerouting] Event logged:', event);
 }
@@ -14326,7 +14329,7 @@ function swapStartAndDestination() {
     // Visual feedback on the button
     const swapBtn = document.getElementById('swapLocationsBtn');
     if (swapBtn) {
-        const DH = VoyagrModules.domHelpers();
+        const DH = _domHelpers();
         swapBtn.style.background = DH.SWAP_LOCATIONS_FLASH_STYLE.background;
         swapBtn.style.borderColor = DH.SWAP_LOCATIONS_FLASH_STYLE.borderColor;
         setTimeout(() => {
@@ -14677,15 +14680,6 @@ function selectAutocompleteResult(fieldId, lat, lon, name) {
 
     console.log(`[Autocomplete] Selected ${fieldId}: ${name} (${lat}, ${lon})`);
 }
-/**
- * isCoordinateFormat function
- * @function isCoordinateFormat
- * @param {*} input - Parameter description
- * @returns {*} Return value description
- */
-function isCoordinateFormat(input) {
-    return VoyagrModules.geocodingLocations().isCoordinateFormat(input);
-}
 
 async function geocodeAddress(address) {
     const GL = VoyagrModules.geocodingLocations();
@@ -14817,7 +14811,7 @@ async function geocodeLocations(startAddress, endAddress) {
  */
 function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     const MC = _mapControls();
-    routeData = VoyagrModules.routeSelection().mergeNavigationRouteFromSelected(
+    routeData = _routeSelection().mergeNavigationRouteFromSelected(
         routeData, routeOptions, selectedRouteIndex
     );
     if (!routeData || !routeData.geometry) {
@@ -15872,11 +15866,7 @@ function togglePreference(pref) {
     saveAllSettings();
 }
 
-const HAZARD_CAMERA_SUBTYPES = VoyagrModules.hazardAlerts().HAZARD_CAMERA_PREF_SUBTYPES;
-
-function hazardPrefEnabled(pref) {
-    return VoyagrModules.hazardAlerts().isHazardPreferenceEnabled(pref);
-}
+const HAZARD_CAMERA_SUBTYPES = _hazardAlerts().HAZARD_CAMERA_PREF_SUBTYPES;
 
 function applyHazardToggleStyles(button, enabled) {
     VoyagrModules.toggleUI().applyLabeledToggleButton(button, enabled);
@@ -15891,7 +15881,7 @@ async function loadHazardCameraTogglesFromApi() {
             const pref = prefsList.find(p => p.hazard_type === ht);
             const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${ht}"]`);
             if (!btn) continue;
-            applyHazardToggleStyles(btn, hazardPrefEnabled(pref));
+            applyHazardToggleStyles(btn, _hazardAlerts().isHazardPreferenceEnabled(pref));
         }
     } catch (e) {
         console.warn('[HAZARDS] Could not load camera hazard preferences:', e);
@@ -15912,7 +15902,7 @@ async function toggleHazardPreferenceApi(hazardType, ev) {
             return;
         }
         const pref = data.preferences.find(p => p.hazard_type === hazardType);
-        const currentlyOn = hazardPrefEnabled(pref);
+        const currentlyOn = _hazardAlerts().isHazardPreferenceEnabled(pref);
         const newEnabled = !currentlyOn;
 
         const payload = { hazard_type: hazardType, enabled: newEnabled };
@@ -16021,7 +16011,7 @@ function loadPreferences() {
  */
 function updateTripInfo(distance, time, fuelCost, tollCost) {
     const tripInfo = document.getElementById('tripInfo');
-    const plan = VoyagrModules.routeSelection().buildTripInfoApplyPlan(
+    const plan = _routeSelection().buildTripInfoApplyPlan(
         distance,
         time,
         fuelCost,
@@ -16273,7 +16263,7 @@ function initMobileEnhancements() {
 
     // Prevent pull-to-refresh on mobile browsers
     document.body.addEventListener('touchmove', (e) => {
-        if (voyagrClosest(e.target, '.bottom-sheet-content')) {
+        if (_domHelpers().closest(e.target, '.bottom-sheet-content')) {
             // Allow scrolling in bottom sheet
             return;
         }
