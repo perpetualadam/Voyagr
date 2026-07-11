@@ -194,6 +194,61 @@
     }
 
     /**
+     * localStorage patches for multi-drop preference values.
+     * @param {Object} prefs
+     * @returns {Object<string, string>}
+     */
+    function buildMultiDropPreferencesStoragePlan(prefs) {
+        prefs = prefs || {};
+        var patches = {};
+        if (prefs.optimizeStopOrder !== undefined) {
+            patches.pref_optimizeStopOrder = prefs.optimizeStopOrder ? 'true' : 'false';
+        }
+        if (prefs.roundTrip !== undefined) {
+            patches.pref_roundTrip = prefs.roundTrip ? 'true' : 'false';
+        }
+        if (prefs.trafficAwareRouting !== undefined) {
+            patches.pref_trafficAwareRouting = prefs.trafficAwareRouting ? 'true' : 'false';
+        }
+        if (prefs.avoidRoadClosures !== undefined) {
+            patches.pref_avoidRoadClosures = prefs.avoidRoadClosures ? 'true' : 'false';
+        }
+        if (prefs.avoidIncidents !== undefined) {
+            patches.pref_avoidIncidents = prefs.avoidIncidents ? 'true' : 'false';
+        }
+        if (prefs.departureTime !== undefined) {
+            patches.pref_departureTime = prefs.departureTime || '';
+        }
+        return patches;
+    }
+
+    /**
+     * DOM apply plan for multi-drop preference form controls.
+     * @param {Storage} storage
+     * @returns {Object}
+     */
+    function buildMultiDropPreferencesUiApplyPlan(storage) {
+        return {
+            checks: {
+                optimizeStopOrder: storage.getItem('pref_optimizeStopOrder') !== 'false',
+                roundTrip: storage.getItem('pref_roundTrip') === 'true',
+                trafficAwareRouting: storage.getItem('pref_trafficAwareRouting') !== 'false',
+                avoidRoadClosures: storage.getItem('pref_avoidRoadClosures') !== 'false',
+                avoidIncidents: storage.getItem('pref_avoidIncidents') !== 'false',
+            },
+            departureTime: storage.getItem('pref_departureTime') || '',
+            elementIds: {
+                optimizeStopOrder: 'optimizeStopOrder',
+                roundTrip: 'roundTrip',
+                trafficAwareRouting: 'trafficAwareRouting',
+                avoidRoadClosures: 'avoidRoadClosures',
+                avoidIncidents: 'avoidIncidents',
+                departureTime: 'departureTime',
+            },
+        };
+    }
+
+    /**
      * DOM apply plan for settings form controls (values only; app writes DOM).
      * @param {Object} input
      * @returns {Object}
@@ -266,6 +321,8 @@
         buildSettingsSnapshot: buildSettingsSnapshot,
         buildSettingsSnapshotInputPlan: buildSettingsSnapshotInputPlan,
         buildSettingsRestorePlan: buildSettingsRestorePlan,
+        buildMultiDropPreferencesStoragePlan: buildMultiDropPreferencesStoragePlan,
+        buildMultiDropPreferencesUiApplyPlan: buildMultiDropPreferencesUiApplyPlan,
         buildSettingsUiApplyPlan: buildSettingsUiApplyPlan,
     };
 

@@ -650,6 +650,45 @@
         };
     }
 
+    /**
+     * Preflight plan for calculateRoute before geocoding/API fetch.
+     * @param {Object} o
+     * @param {boolean} o.hasStartInput
+     * @param {boolean} o.hasEndInput
+     * @param {string} o.start
+     * @param {string} o.end
+     * @param {boolean} o.isGeocoding
+     * @returns {Object}
+     */
+    function buildCalculateRoutePreflightPlan(o) {
+        o = o || {};
+        if (!o.hasStartInput || !o.hasEndInput) {
+            return {
+                ok: false,
+                branch: 'missing_inputs',
+                statusMessage: 'Error: Input fields not found',
+                statusType: 'error',
+            };
+        }
+        if (!o.start || !o.end) {
+            return {
+                ok: false,
+                branch: 'empty_locations',
+                statusMessage: 'Please enter both start and end locations',
+                statusType: 'error',
+            };
+        }
+        if (o.isGeocoding) {
+            return {
+                ok: false,
+                branch: 'geocoding_busy',
+                statusMessage: '⏳ Geocoding in progress...',
+                statusType: 'loading',
+            };
+        }
+        return { ok: true, branch: 'proceed' };
+    }
+
     var api = {
         buildSharedRouteOptions: buildSharedRouteOptions,
         isInitialRouteHazardAvoidanceEnabled: isInitialRouteHazardAvoidanceEnabled,
@@ -680,6 +719,7 @@
         getDegradedRoutingStatusMessage: getDegradedRoutingStatusMessage,
         buildRouteApiResultPlan: buildRouteApiResultPlan,
         buildCalculateRouteDispatchPlan: buildCalculateRouteDispatchPlan,
+        buildCalculateRoutePreflightPlan: buildCalculateRoutePreflightPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

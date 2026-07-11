@@ -3459,26 +3459,21 @@ function saveRoutePreferences() {
 }
 
 function saveMultiDropPreferences() {
-    const optimizeEl = document.getElementById('optimizeStopOrder');
-    const roundTripEl = document.getElementById('roundTrip');
-    const trafficEl = document.getElementById('trafficAwareRouting');
-    const closuresEl = document.getElementById('avoidRoadClosures');
-    const incidentsEl = document.getElementById('avoidIncidents');
-    const departureEl = document.getElementById('departureTime');
-
-    if (optimizeEl) localStorage.setItem('pref_optimizeStopOrder', optimizeEl.checked ? 'true' : 'false');
-    if (roundTripEl) localStorage.setItem('pref_roundTrip', roundTripEl.checked ? 'true' : 'false');
-    if (trafficEl) localStorage.setItem('pref_trafficAwareRouting', trafficEl.checked ? 'true' : 'false');
-    if (closuresEl) localStorage.setItem('pref_avoidRoadClosures', closuresEl.checked ? 'true' : 'false');
-    if (incidentsEl) localStorage.setItem('pref_avoidIncidents', incidentsEl.checked ? 'true' : 'false');
-    if (departureEl) localStorage.setItem('pref_departureTime', departureEl.value || '');
+    const SS = _settingsSnapshot();
+    const patches = SS.buildMultiDropPreferencesStoragePlan(collectMultiDropFormState());
+    Object.entries(patches).forEach(([key, value]) => {
+        localStorage.setItem(key, value);
+    });
 
     saveAllSettings();
     showStatus('Multi-drop preferences saved!', 'success');
 }
 
-function loadMultiDropPreferences() {
-    ensureDefaultTrafficAwareRouting();
+/**
+ * Read multi-drop preference controls from the DOM (source of truth for save).
+ * @returns {Object}
+ */
+function collectMultiDropFormState() {
     const optimizeEl = document.getElementById('optimizeStopOrder');
     const roundTripEl = document.getElementById('roundTrip');
     const trafficEl = document.getElementById('trafficAwareRouting');
@@ -3486,12 +3481,53 @@ function loadMultiDropPreferences() {
     const incidentsEl = document.getElementById('avoidIncidents');
     const departureEl = document.getElementById('departureTime');
 
-    if (optimizeEl) optimizeEl.checked = localStorage.getItem('pref_optimizeStopOrder') !== 'false';
-    if (roundTripEl) roundTripEl.checked = localStorage.getItem('pref_roundTrip') === 'true';
-    if (trafficEl) trafficEl.checked = localStorage.getItem('pref_trafficAwareRouting') !== 'false';
-    if (closuresEl) closuresEl.checked = localStorage.getItem('pref_avoidRoadClosures') !== 'false';
-    if (incidentsEl) incidentsEl.checked = localStorage.getItem('pref_avoidIncidents') !== 'false';
-    if (departureEl) departureEl.value = localStorage.getItem('pref_departureTime') || '';
+    return {
+        optimizeStopOrder: optimizeEl
+            ? optimizeEl.checked
+            : localStorage.getItem('pref_optimizeStopOrder') !== 'false',
+        roundTrip: roundTripEl
+            ? roundTripEl.checked
+            : localStorage.getItem('pref_roundTrip') === 'true',
+        trafficAwareRouting: trafficEl
+            ? trafficEl.checked
+            : localStorage.getItem('pref_trafficAwareRouting') !== 'false',
+        avoidRoadClosures: closuresEl
+            ? closuresEl.checked
+            : localStorage.getItem('pref_avoidRoadClosures') !== 'false',
+        avoidIncidents: incidentsEl
+            ? incidentsEl.checked
+            : localStorage.getItem('pref_avoidIncidents') !== 'false',
+        departureTime: departureEl
+            ? (departureEl.value || '')
+            : (localStorage.getItem('pref_departureTime') || ''),
+    };
+}
+
+/**
+ * Apply multi-drop preference form controls from a pure UI apply plan.
+ * @param {Object} plan - from buildMultiDropPreferencesUiApplyPlan
+ */
+function applyMultiDropPreferencesUiFromPlan(plan) {
+    if (!plan) return;
+
+    const ids = plan.elementIds || {};
+    const checks = plan.checks || {};
+    Object.entries(checks).forEach(([key, value]) => {
+        const el = document.getElementById(ids[key]);
+        if (el) el.checked = !!value;
+    });
+
+    const departureEl = document.getElementById(ids.departureTime);
+    if (departureEl && plan.departureTime !== undefined) {
+        departureEl.value = plan.departureTime;
+    }
+}
+
+function loadMultiDropPreferences() {
+    ensureDefaultTrafficAwareRouting();
+    applyMultiDropPreferencesUiFromPlan(
+        _settingsSnapshot().buildMultiDropPreferencesUiApplyPlan(localStorage)
+    );
 }
 
 function clearDepartureTime() {
@@ -3938,14 +3974,7 @@ function collectSettingsFormState() {
             preferredType: document.getElementById('parkingPreferredType')?.value || 'any',
             pricePreference: document.getElementById('parkingPricePreference')?.value || 'any',
         },
-        multiDropPreferences: {
-            optimizeStopOrder: localStorage.getItem('pref_optimizeStopOrder') !== 'false',
-            roundTrip: localStorage.getItem('pref_roundTrip') === 'true',
-            trafficAwareRouting: localStorage.getItem('pref_trafficAwareRouting') !== 'false',
-            avoidRoadClosures: localStorage.getItem('pref_avoidRoadClosures') !== 'false',
-            avoidIncidents: localStorage.getItem('pref_avoidIncidents') !== 'false',
-            departureTime: localStorage.getItem('pref_departureTime') || '',
-        },
+        multiDropPreferences: collectMultiDropFormState(),
         mapTheme: localStorage.getItem('mapTheme') || 'standard',
     };
 }
@@ -4186,31 +4215,29 @@ async function calculateRoute() {
 
     const startInput = document.getElementById('start');
     const endInput = document.getElementById('end');
+    const start = startInput?.value ? startInput.value.trim() : '';
+    const end = endInput?.value ? endInput.value.trim() : '';
 
-    if (!startInput || !endInput) {
-        showStatus('Error: Input fields not found', 'error');
-        console.error('[calculateRoute] ERROR: Input fields not found');
-        return;
-    }
-
-    const start = startInput.value ? startInput.value.trim() : '';
-    const end = endInput.value ? endInput.value.trim() : '';
+    const preflight = _routingRequest().buildCalculateRoutePreflightPlan({
+        hasStartInput: !!startInput,
+        hasEndInput: !!endInput,
+        start,
+        end,
+        isGeocoding,
+    });
 
     console.log('[calculateRoute] Start:', start);
     console.log('[calculateRoute] End:', end);
-    console.log('[calculateRoute] Start dataset:', startInput.dataset);
-    console.log('[calculateRoute] End dataset:', endInput.dataset);
+    console.log('[calculateRoute] Start dataset:', startInput?.dataset);
+    console.log('[calculateRoute] End dataset:', endInput?.dataset);
 
-    if (!start || !end) {
-        showStatus('Please enter both start and end locations', 'error');
-        console.error('[calculateRoute] ERROR: Empty start or end');
-        return;
-    }
-
-    // Prevent multiple simultaneous geocoding requests
-    if (isGeocoding) {
-        showStatus('⏳ Geocoding in progress...', 'loading');
-        console.warn('[calculateRoute] WARNING: Geocoding already in progress');
+    if (!preflight.ok) {
+        showStatus(preflight.statusMessage, preflight.statusType);
+        if (preflight.branch === 'missing_inputs' || preflight.branch === 'empty_locations') {
+            console.error('[calculateRoute] ERROR:', preflight.statusMessage);
+        } else if (preflight.branch === 'geocoding_busy') {
+            console.warn('[calculateRoute] WARNING: Geocoding already in progress');
+        }
         return;
     }
 
@@ -15841,6 +15868,7 @@ async function loadHazardCameraTogglesFromApi() {
 
 async function toggleHazardPreferenceApi(hazardType, ev) {
     if (ev) ev.preventDefault();
+    const HA = _hazardAlerts();
     try {
         const res = await fetch('/api/hazard-preferences');
         const data = await res.json();
@@ -15849,14 +15877,8 @@ async function toggleHazardPreferenceApi(hazardType, ev) {
             return;
         }
         const pref = data.preferences.find(p => p.hazard_type === hazardType);
-        const currentlyOn = _hazardAlerts().isHazardPreferenceEnabled(pref);
-        const newEnabled = !currentlyOn;
-
-        const payload = { hazard_type: hazardType, enabled: newEnabled };
-        if (pref) {
-            payload.penalty_seconds = pref.penalty_seconds;
-            payload.proximity_threshold_meters = pref.proximity_threshold_meters;
-        }
+        const newEnabled = !HA.isHazardPreferenceEnabled(pref);
+        const payload = HA.buildHazardPreferenceTogglePayload(hazardType, pref, newEnabled);
 
         const upd = await fetch('/api/hazard-preferences', {
             method: 'POST',
@@ -15870,8 +15892,7 @@ async function toggleHazardPreferenceApi(hazardType, ev) {
         }
         const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${hazardType}"]`);
         applyHazardToggleStyles(btn, newEnabled);
-        const label = hazardType.replace(/^camera_/, '').replace(/_/g, ' ');
-        showStatus(`Camera (${label}) avoidance ${newEnabled ? 'enabled' : 'disabled'}`, 'info');
+        showStatus(HA.buildHazardPreferenceToggleStatusMessage(hazardType, newEnabled), 'info');
         saveAllSettings();
     } catch (e) {
         console.error('[HAZARDS] toggle:', e);

@@ -116,6 +116,24 @@ describe('hazard-alerts module', () => {
         expect(plan.every((item) => item.enabled === true)).toBe(true);
     });
 
+    test('buildHazardPreferenceTogglePayload preserves penalty fields', () => {
+        const payload = HA.buildHazardPreferenceTogglePayload('camera_speed', {
+            penalty_seconds: 30,
+            proximity_threshold_meters: 100,
+        }, false);
+        expect(payload).toEqual({
+            hazard_type: 'camera_speed',
+            enabled: false,
+            penalty_seconds: 30,
+            proximity_threshold_meters: 100,
+        });
+    });
+
+    test('buildHazardPreferenceToggleStatusMessage formats camera label', () => {
+        expect(HA.buildHazardPreferenceToggleStatusMessage('camera_red_light', true))
+            .toBe('Camera (red light) avoidance enabled');
+    });
+
     test('buildUnavoidableHazardsModalMountPlan returns mount shell and inner html', () => {
         const mount = HA.buildUnavoidableHazardsModalMountPlan({ camera: 2 }, 2);
         expect(mount.modalId).toBe(HA.UNAVOIDABLE_HAZARDS_MODAL_ID);

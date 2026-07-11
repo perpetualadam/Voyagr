@@ -451,6 +451,50 @@ describe('buildCalculateRouteDispatchPlan', () => {
     });
 });
 
+describe('buildCalculateRoutePreflightPlan', () => {
+    test('blocks missing inputs and empty locations', () => {
+        expect(RR.buildCalculateRoutePreflightPlan({
+            hasStartInput: false,
+            hasEndInput: true,
+            start: 'A',
+            end: 'B',
+            isGeocoding: false,
+        }).branch).toBe('missing_inputs');
+
+        const empty = RR.buildCalculateRoutePreflightPlan({
+            hasStartInput: true,
+            hasEndInput: true,
+            start: '',
+            end: 'B',
+            isGeocoding: false,
+        });
+        expect(empty.branch).toBe('empty_locations');
+        expect(empty.statusMessage).toContain('both start and end');
+    });
+
+    test('blocks concurrent geocoding and allows proceed', () => {
+        const busy = RR.buildCalculateRoutePreflightPlan({
+            hasStartInput: true,
+            hasEndInput: true,
+            start: 'A',
+            end: 'B',
+            isGeocoding: true,
+        });
+        expect(busy.branch).toBe('geocoding_busy');
+        expect(busy.statusType).toBe('loading');
+
+        const ok = RR.buildCalculateRoutePreflightPlan({
+            hasStartInput: true,
+            hasEndInput: true,
+            start: 'A',
+            end: 'B',
+            isGeocoding: false,
+        });
+        expect(ok.ok).toBe(true);
+        expect(ok.branch).toBe('proceed');
+    });
+});
+
 describe('buildAutomaticRerouteRequestPlan', () => {
     test('assembles reroute body from storage and runtime prefs', () => {
         const storage = mockStorage({

@@ -138,4 +138,36 @@ describe('settings-snapshot module', () => {
         expect(input.multiDropPreferences.roundTrip).toBe(true);
         expect(input.mapTheme).toBe('dark');
     });
+
+    test('buildMultiDropPreferencesStoragePlan maps booleans to localStorage keys', () => {
+        const patches = SS.buildMultiDropPreferencesStoragePlan({
+            optimizeStopOrder: false,
+            roundTrip: true,
+            departureTime: '09:15',
+        });
+        expect(patches.pref_optimizeStopOrder).toBe('false');
+        expect(patches.pref_roundTrip).toBe('true');
+        expect(patches.pref_departureTime).toBe('09:15');
+    });
+
+    test('buildMultiDropPreferencesUiApplyPlan reads storage into form patches', () => {
+        const storage = {
+            getItem(key) {
+                const values = {
+                    pref_optimizeStopOrder: 'false',
+                    pref_roundTrip: 'true',
+                    pref_trafficAwareRouting: 'true',
+                    pref_avoidRoadClosures: 'false',
+                    pref_avoidIncidents: 'true',
+                    pref_departureTime: '08:00',
+                };
+                return values[key] != null ? values[key] : null;
+            },
+        };
+        const plan = SS.buildMultiDropPreferencesUiApplyPlan(storage);
+        expect(plan.checks.optimizeStopOrder).toBe(false);
+        expect(plan.checks.roundTrip).toBe(true);
+        expect(plan.departureTime).toBe('08:00');
+        expect(plan.elementIds.optimizeStopOrder).toBe('optimizeStopOrder');
+    });
 });

@@ -393,6 +393,33 @@
     }
 
     /**
+     * POST payload for toggling a single hazard preference.
+     * @param {string} hazardType
+     * @param {Object|null|undefined} pref - existing preference row from API
+     * @param {boolean} newEnabled
+     * @returns {Object}
+     */
+    function buildHazardPreferenceTogglePayload(hazardType, pref, newEnabled) {
+        var payload = { hazard_type: hazardType, enabled: !!newEnabled };
+        if (pref) {
+            payload.penalty_seconds = pref.penalty_seconds;
+            payload.proximity_threshold_meters = pref.proximity_threshold_meters;
+        }
+        return payload;
+    }
+
+    /**
+     * Status message after toggling a camera hazard preference.
+     * @param {string} hazardType
+     * @param {boolean} enabled
+     * @returns {string}
+     */
+    function buildHazardPreferenceToggleStatusMessage(hazardType, enabled) {
+        var label = String(hazardType || '').replace(/^camera_/, '').replace(/_/g, ' ');
+        return 'Camera (' + label + ') avoidance ' + (enabled ? 'enabled' : 'disabled');
+    }
+
+    /**
      * @returns {string}
      */
     function getUnavoidableHazardsModalStyleCssText() {
@@ -637,6 +664,8 @@
         isHazardPreferenceEnabled: isHazardPreferenceEnabled,
         buildHazardCameraTogglesApplyPlan: buildHazardCameraTogglesApplyPlan,
         buildHazardCameraTogglesFallbackApplyPlan: buildHazardCameraTogglesFallbackApplyPlan,
+        buildHazardPreferenceTogglePayload: buildHazardPreferenceTogglePayload,
+        buildHazardPreferenceToggleStatusMessage: buildHazardPreferenceToggleStatusMessage,
         getUnavoidableHazardsModalStyleCssText: getUnavoidableHazardsModalStyleCssText,
         getUnavoidableHazardsBackdropStyleCssText: getUnavoidableHazardsBackdropStyleCssText,
     };
