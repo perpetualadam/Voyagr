@@ -2216,10 +2216,14 @@ let routeOptions = [];
 let selectedRouteIndex = 0;
 let allRouteLayers = []; // Store all route polylines for multi-route display
 
-// Route colors for multi-route display (from VoyagrRouteSelection module)
-const ROUTE_COLORS = VoyagrRouteSelection.ROUTE_COLORS;
-/** Active navigation / reroute line — matches ROUTE_COLORS[0], contrasts with green traffic tiles. */
-const NAV_ACTIVE_ROUTE_COLOR = VoyagrRouteSelection.NAV_ACTIVE_ROUTE_COLOR;
+// Route colors for multi-route display (via route-selection accessor)
+function routeColors() {
+    return _routeSelection().ROUTE_COLORS;
+}
+/** Active navigation / reroute line — matches primary route color. */
+function navActiveRouteColor() {
+    return _routeSelection().NAV_ACTIVE_ROUTE_COLOR;
+}
 
 /**
  * Clear ALL route layers from the map (including any orphaned layers)
@@ -2654,7 +2658,7 @@ function displayRouteComparison() {
 
     listContainer.innerHTML = _routeSelection().buildRouteComparisonListHtml(routeOptions, {
         selectedIndex: selectedRouteIndex,
-        routeColors: ROUTE_COLORS,
+        routeColors: routeColors(),
         currencySymbol: getCurrencySymbol(),
         distUnit: getDistanceUnit(),
         distanceTexts: routeOptions.map((route) => convertDistance(route.distance_km)),
@@ -3158,7 +3162,7 @@ function displaySingleRoute(index) {
     const polylinePoints = route.polyline || [];
 
     if (polylinePoints.length > 0) {
-        const color = ROUTE_COLORS[index % ROUTE_COLORS.length];
+        const color = routeColors()[index % routeColors().length];
         const layer = MapLibreHelpers.addPolyline(map, polylinePoints, {
             color: color,
             weight: 8,
@@ -5472,7 +5476,6 @@ let lastTrafficData = null;
 let lastTrafficUpdateTime = 0;
 
 // Deviation tracking for time-based detection
-let deviationStartTime = null;
 let isCurrentlyDeviated = false;
 const DEVIATION_THRESHOLD_METERS = 50;
 const DEVIATION_TIME_THRESHOLD_MS = 10000; // 10 seconds
@@ -5937,7 +5940,7 @@ function updateRouteOnMap(newRoute) {
  */
 function getNavActiveRoutePolylineOptions() {
     return {
-        color: NAV_ACTIVE_ROUTE_COLOR,
+        color: navActiveRouteColor(),
         weight: 8,
         opacity: 0.95,
         outline: true,
@@ -6784,7 +6787,7 @@ function showAlternativeRoutesInPreview() {
     const parentContainer = document.getElementById('previewAlternativeRoutesContainer');
 
     const mount = RS.buildAlternativeRoutesPreviewMountPlans(routeOptions, {
-        routeColors: ROUTE_COLORS,
+        routeColors: routeColors(),
         currencySymbol: getCurrencySymbol(),
         distUnit: getDistanceUnit(),
         fuelUnit: currentVehicleType === 'electric' ? 'kWh' : 'L',
@@ -8457,6 +8460,9 @@ function _theme() { return VoyagrModules.theme(); }
 
 /** Unit-tested HTML escape helper (modules/html.js). */
 function _html() { return VoyagrModules.html(); }
+function escapeHtml(s) {
+    return _html().escapeHtml(s);
+}
 
 /** Unit-tested polyline encode/decode (modules/navigation/polyline-codec.js). */
 function _polylineCodec() { return VoyagrModules.polylineCodec(); }
@@ -10345,96 +10351,51 @@ if (!navigator.onLine) {
 }
 
 // ===== OFFLINE ROUTE PERSISTENCE (IndexedDB) =====
-const ROUTE_DB_NAME = 'voyagr-nav';
-const ROUTE_DB_VERSION = 2;
-const ROUTE_STORE = 'active_route';
-const SPEED_CACHE_STORE = 'speed_limits';
-
-function _openRouteDB() {
-    return new Promise((resolve, reject) => {
-        const req = indexedDB.open(ROUTE_DB_NAME, ROUTE_DB_VERSION);
-        req.onupgradeneeded = (e) => {
-            const db = e.target.result;
-            if (!db.objectStoreNames.contains(ROUTE_STORE)) {
-                db.createObjectStore(ROUTE_STORE, { keyPath: 'id' });
-            }
-            if (!db.objectStoreNames.contains(SPEED_CACHE_STORE)) {
-                db.createObjectStore(SPEED_CACHE_STORE, { keyPath: 'key' });
-            }
-        };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => reject(req.error);
-    });
-}
-
 async function cacheSpeedLimit(lat, lon, speedLimit, source) {
     const SL = _speedLimitWidget();
-    if (!SL) return;
+    const OFF = _offlineNavigation();
+    if (!SL || !OFF) return;
     try {
         const key = SL.speedLimitCacheKey(lat, lon);
-        const db = await _openRouteDB();
-        const tx = db.transaction(SPEED_CACHE_STORE, 'readwrite');
-        tx.objectStore(SPEED_CACHE_STORE).put({
-            key, speedLimit, source, cachedAt: Date.now()
-        });
-        await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
-        db.close();
+        await OFF.putSpeedLimitCacheEntry(indexedDB, key, speedLimit, source);
     } catch (e) { /* ignore */ }
 }
 
 async function getCachedSpeedLimit(lat, lon) {
     const SL = _speedLimitWidget();
-    if (!SL) return null;
+    const OFF = _offlineNavigation();
+    if (!SL || !OFF) return null;
     try {
         const key = SL.speedLimitCacheKey(lat, lon);
-        const db = await _openRouteDB();
-        const tx = db.transaction(SPEED_CACHE_STORE, 'readonly');
-        const req = tx.objectStore(SPEED_CACHE_STORE).get(key);
-        const result = await new Promise((res, rej) => {
-            req.onsuccess = () => res(req.result);
-            req.onerror = () => rej(req.error);
-        });
-        db.close();
-        return result || null;
+        return await OFF.getSpeedLimitCacheEntry(indexedDB, key);
     } catch (e) {
         return null;
     }
 }
 
 async function persistActiveRoute() {
-    if (!routeInProgress || !routePolyline) return;
+    const OFF = _offlineNavigation();
+    if (!OFF || !routeInProgress || !routePolyline) return;
     try {
-        const db = await _openRouteDB();
-        const tx = db.transaction(ROUTE_STORE, 'readwrite');
-        tx.objectStore(ROUTE_STORE).put({
-            id: 'current',
+        await OFF.persistActiveRouteRecord(indexedDB, OFF.buildActiveRoutePersistRecord({
             polyline: routePolyline,
             steps: currentRouteSteps,
             stepIndex: currentStepIndex,
             destination: window.lastCalculatedRoute?.destination || null,
             routeData: window.lastCalculatedRoute || null,
-            savedAt: Date.now()
-        });
-        await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
-        db.close();
+        }));
     } catch (e) {
         console.warn('[OfflineNav] Failed to persist route:', e);
     }
 }
 
 async function loadPersistedRoute() {
+    const OFF = _offlineNavigation();
+    if (!OFF) return null;
     try {
-        const db = await _openRouteDB();
-        const tx = db.transaction(ROUTE_STORE, 'readonly');
-        const getReq = tx.objectStore(ROUTE_STORE).get('current');
-        const result = await new Promise((res, rej) => {
-            getReq.onsuccess = () => res(getReq.result);
-            getReq.onerror = () => rej(getReq.error);
-        });
-        db.close();
+        const result = await OFF.loadActiveRouteRecord(indexedDB);
         if (!result) return null;
-        const age = Date.now() - (result.savedAt || 0);
-        if (age > 4 * 60 * 60 * 1000) {
+        if (OFF.isPersistedRouteExpired(result.savedAt)) {
             await clearPersistedRoute();
             return null;
         }
@@ -10446,12 +10407,10 @@ async function loadPersistedRoute() {
 }
 
 async function clearPersistedRoute() {
+    const OFF = _offlineNavigation();
+    if (!OFF) return;
     try {
-        const db = await _openRouteDB();
-        const tx = db.transaction(ROUTE_STORE, 'readwrite');
-        tx.objectStore(ROUTE_STORE).delete('current');
-        await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
-        db.close();
+        await OFF.clearActiveRouteRecord(indexedDB);
     } catch (e) {
         console.warn('[OfflineNav] Failed to clear persisted route:', e);
     }
@@ -10494,46 +10453,22 @@ window.addEventListener('load', () => {
 // ===== TILE PRE-CACHING FOR ROUTE CORRIDORS =====
 /**
  * Read vector tile URL templates plus each source minzoom/maxzoom from the active MapLibre style.
- * Prefetch clamps desired zoom to maxzoom so we do not request tiles the renderer never loads (overzoom).
- */
-/**
- * @returns {Array<{ template: string, minzoom: number, maxzoom: number }>}
  */
 function collectVectorTileTemplatesFromMap() {
-    if (typeof map === 'undefined' || map === null) return [];
+    const OFF = _offlineNavigation();
+    if (!OFF || typeof map === 'undefined' || map === null) return [];
     if (typeof map.isStyleLoaded === 'function' && !map.isStyleLoaded()) return [];
     try {
-        const style = map.getStyle();
-        const entries = [];
-        const sources = style && style.sources ? style.sources : {};
-        for (const key of Object.keys(sources)) {
-            const src = sources[key];
-            if (!src || src.type !== 'vector' || !Array.isArray(src.tiles)) continue;
-            const minzoom = typeof src.minzoom === 'number' ? src.minzoom : 0;
-            const maxzoom = typeof src.maxzoom === 'number' ? src.maxzoom : 22;
-            for (const t of src.tiles) {
-                if (typeof t !== 'string') continue;
-                if (/\{z\}/i.test(t) && /\{x\}/i.test(t) && /\{y\}/i.test(t)) {
-                    entries.push({ template: t, minzoom, maxzoom });
-                }
-            }
-        }
-        return entries;
+        return OFF.parseVectorTileSourcesFromStyle(map.getStyle());
     } catch (e) {
         console.warn('[TilePreCache] Could not read map style:', e);
         return [];
     }
 }
 
-function expandTileTemplate(template, z, x, y) {
-    return template
-        .replace(/\{z\}/gi, String(z))
-        .replace(/\{x\}/gi, String(x))
-        .replace(/\{y\}/gi, String(y));
-}
-
 async function precacheRouteTiles(polyline) {
-    if (!polyline || polyline.length < 2) return;
+    const OFF = _offlineNavigation();
+    if (!OFF || !polyline || polyline.length < 2) return;
     if (!('caches' in window)) return;
 
     const templates = collectVectorTileTemplatesFromMap();
@@ -10542,46 +10477,26 @@ async function precacheRouteTiles(polyline) {
         return;
     }
 
-    const zoomLevels = [13, 14, 15];
-    const tileUrls = new Set();
-    const sampleInterval = Math.max(1, Math.floor(polyline.length / 80));
+    const plan = OFF.buildRouteCorridorTileUrlPlan(polyline, templates, {
+        origin: window.location.origin,
+        maxUrls: OFF.TILE_PRECACHE_MAX_URLS,
+        zoomLevels: OFF.TILE_PRECACHE_ZOOM_LEVELS,
+    });
 
-    for (let i = 0; i < polyline.length; i += sampleInterval) {
-        const [lat, lon] = polyline[i];
-        for (const z of zoomLevels) {
-            for (const { template: tpl, minzoom: srcMin, maxzoom: srcMax } of templates) {
-                // Match MapLibre: above source maxzoom it loads parent tiles (overzoom), never requests z+1 from server.
-                const zFetch = Math.min(Math.max(z, srcMin), srcMax);
-                const x = Math.floor((lon + 180) / 360 * Math.pow(2, zFetch));
-                const latRad = lat * Math.PI / 180;
-                const y = Math.floor((1 - Math.log(Math.tan(latRad) + 1 / Math.cos(latRad)) / Math.PI) / 2 * Math.pow(2, zFetch));
-                tileUrls.add(expandTileTemplate(tpl, zFetch, x, y));
-            }
-        }
+    if (plan.capped) {
+        console.log(`[TilePreCache] Capping prefetch ${plan.originalCount} → ${plan.urls.length} URLs`);
     }
 
-    const urls = [...tileUrls].map((u) =>
-        (u.startsWith('http://') || u.startsWith('https://'))
-            ? u
-            : new URL(u, window.location.origin).href
-    );
-
-    const maxPrefetch = 180;
-    const capped = urls.length > maxPrefetch ? urls.slice(0, maxPrefetch) : urls;
-    if (urls.length > maxPrefetch) {
-        console.log(`[TilePreCache] Capping prefetch ${urls.length} → ${maxPrefetch} URLs`);
-    }
-
-    console.log(`[TilePreCache] Pre-caching ${capped.length} tiles (${templates.length} source template(s)) along route corridor`);
+    console.log(`[TilePreCache] Pre-caching ${plan.urls.length} tiles (${templates.length} source template(s)) along route corridor`);
 
     try {
         const cacheNames = await caches.keys();
         const tileCacheName = cacheNames.find(n => n.startsWith('voyagr-tiles-')) || 'voyagr-tiles-v15';
         const cache = await caches.open(tileCacheName);
         let cached = 0;
-        const batchSize = 6;
-        for (let i = 0; i < capped.length; i += batchSize) {
-            const batch = capped.slice(i, i + batchSize);
+        const batchSize = OFF.TILE_PRECACHE_BATCH_SIZE;
+        for (let i = 0; i < plan.urls.length; i += batchSize) {
+            const batch = plan.urls.slice(i, i + batchSize);
             await Promise.allSettled(
                 batch.map(async (url) => {
                     const existing = await cache.match(url);
@@ -10692,6 +10607,10 @@ function decideDrivingCameraState() {
         driverPerspectiveEnabled: driverPerspectiveEnabled,
         prefersFlat2D: userPrefersFlat2D(),
     };
+    const CP = _cameraPitch();
+    if (CP && typeof CP.decideDrivingCamera === 'function') {
+        return CP.decideDrivingCamera(state);
+    }
     if (typeof decideDrivingCamera === 'function') {
         return decideDrivingCamera(state);
     }
@@ -13633,7 +13552,7 @@ function evaluateAndAnnounceHazards(lat, lon, nearbyPayload, includeNearby) {
         cameraAlertDistanceM: cameraAlertDistance,
         generalHazardDistanceM: HAZARD_WARNING_DISTANCE,
         preferAlongRouteForRouteHazards: true,
-        calculateDistance: calculateDistance
+        calculateDistance: calculateDistanceMeters
     });
 
     alerts.forEach(({ hazard, distanceM, unavoidableRouteCamera }) => {
