@@ -7,7 +7,8 @@ const U = require('../modules/navigation/units.js');
 describe('units module surface', () => {
     const fns = ['convertDistance', 'getDistanceUnit', 'convertTemperature',
         'getTemperatureUnit', 'getFuelEfficiencyInUnits', 'getFuelEfficiencyLabel',
-        'distanceUnitStatusLabel', 'speedUnitStatusLabel', 'temperatureUnitStatusLabel'];
+        'distanceUnitStatusLabel', 'speedUnitStatusLabel', 'temperatureUnitStatusLabel',
+        'formatRemainingDistanceText'];
     test('exposes all expected functions', () => {
         fns.forEach(fn => expect(typeof U[fn]).toBe('function'));
     });
@@ -90,5 +91,23 @@ describe('unit status labels', () => {
     test('temperatureUnitStatusLabel', () => {
         expect(U.temperatureUnitStatusLabel('fahrenheit')).toBe('Fahrenheit');
         expect(U.temperatureUnitStatusLabel('celsius')).toBe('Celsius');
+    });
+});
+
+describe('formatRemainingDistanceText', () => {
+    test('metric long distance shows km', () => {
+        expect(U.formatRemainingDistanceText(2500, 'km')).toBe('2.5 km');
+    });
+
+    test('metric short distance shows metres', () => {
+        expect(U.formatRemainingDistanceText(80, 'km')).toBe('80 m');
+    });
+
+    test('imperial long distance shows miles', () => {
+        expect(U.formatRemainingDistanceText(3218.68, 'mi')).toBe('2.0 mi');
+    });
+
+    test('imperial short distance shows feet', () => {
+        expect(U.formatRemainingDistanceText(50, 'mi')).toBe('164 ft');
     });
 });
