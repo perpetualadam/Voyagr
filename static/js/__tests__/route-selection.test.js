@@ -390,6 +390,42 @@ describe('route comparison modal helpers', () => {
         expect(RS.getRouteComparisonNoRoutesMessage()).toContain('Calculate a route');
         expect(RS.getRouteComparisonSuccessMessage()).toContain('comparison');
     });
+
+    test('buildRouteComparisonModalDomApplyPlan maps mount plan to DOM apply', () => {
+        const mount = RS.buildRouteComparisonModalMountPlan(
+            { routes: [{ route_id: 1, distance_km: 10, duration_minutes: 20, total_cost: 8, cost_per_km: 0.8 }] },
+            { currencySymbol: '£', distUnit: 'mi', distanceTexts: ['6.2'] }
+        );
+        const dom = RS.buildRouteComparisonModalDomApplyPlan(mount);
+        expect(dom.action).toBe('mount');
+        expect(dom.modalId).toBe('routeComparisonModal');
+        expect(dom.dismissOnOverlayClick).toBe(true);
+        expect(RS.buildRouteComparisonModalDomApplyPlan(null).action).toBe('skip');
+    });
+
+    test('buildRoutePreviewAfterDisplayPlan enables traffic preview when configured', () => {
+        const plan = RS.buildRoutePreviewAfterDisplayPlan({
+            routeOptions: [{ polyline: [[51.5, -0.1], [51.6, -0.2]] }],
+            selectedRouteIndex: 0,
+            showTrafficEnabled: true,
+            hasTrafficLayer: false,
+            routeTrafficEnabled: true,
+        });
+        expect(plan.switchToPreviewTab).toBe(true);
+        expect(plan.addTrafficLayer).toBe(true);
+        expect(plan.previewTraffic).toBe(true);
+        expect(plan.previewPolylineRouteIndex).toBe(0);
+    });
+
+    test('buildAlternativeRoutesPreviewDomApplyPlan maps mount to DOM apply', () => {
+        const mount = RS.buildAlternativeRoutesPreviewMountPlans(
+            [{ distance_km: 10, duration_minutes: 20, fuel_cost: 4, toll_cost: 0, caz_cost: 0, name: 'A' }],
+            { routeColors: ['#f00'], currencySymbol: '£', distUnit: 'mi', convertDistance: (km) => String(km) }
+        );
+        const dom = RS.buildAlternativeRoutesPreviewDomApplyPlan(mount);
+        expect(dom.showContainer).toBe(false);
+        expect(dom.containerDisplay).toBe('none');
+    });
 });
 
 describe('buildInNavRerouteSuccessPlan', () => {

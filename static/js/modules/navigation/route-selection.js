@@ -445,6 +445,63 @@
     }
 
     /**
+     * DOM apply plan for mounting the route comparison modal overlay.
+     * @param {Object|null|undefined} mountPlan - from buildRouteComparisonModalMountPlan
+     * @returns {Object}
+     */
+    function buildRouteComparisonModalDomApplyPlan(mountPlan) {
+        if (!mountPlan) {
+            return { action: 'skip' };
+        }
+        return {
+            action: 'mount',
+            modalId: mountPlan.modalId,
+            overlayStyle: mountPlan.overlayStyle,
+            innerHtml: mountPlan.innerHtml,
+            dismissOnOverlayClick: true,
+            removeExisting: true,
+        };
+    }
+
+    /**
+     * Post-panel UI plan after route preview values are written to the DOM.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildRoutePreviewAfterDisplayPlan(opts) {
+        opts = opts || {};
+        var routes = opts.routeOptions || [];
+        var selectedIdx = opts.selectedRouteIndex != null ? opts.selectedRouteIndex : 0;
+        var previewPolyline = routes[selectedIdx] && routes[selectedIdx].polyline;
+        return {
+            switchToPreviewTab: true,
+            expandBottomSheet: true,
+            addTrafficLayer: !!opts.showTrafficEnabled && !opts.hasTrafficLayer,
+            previewTraffic: !!(
+                opts.routeTrafficEnabled &&
+                routes.length > 0 &&
+                previewPolyline &&
+                previewPolyline.length > 0
+            ),
+            previewPolylineRouteIndex: selectedIdx,
+        };
+    }
+
+    /**
+     * DOM apply plan for alternative-route cards in the preview panel.
+     * @param {Object|null|undefined} mount - from buildAlternativeRoutesPreviewMountPlans
+     * @returns {Object}
+     */
+    function buildAlternativeRoutesPreviewDomApplyPlan(mount) {
+        mount = mount || {};
+        return {
+            showContainer: !!mount.showContainer,
+            containerDisplay: mount.showContainer ? 'block' : 'none',
+            cardPlans: mount.cardPlans || [],
+        };
+    }
+
+    /**
      * @returns {string}
      */
     function getRouteComparisonNoRoutesMessage() {
@@ -1548,6 +1605,9 @@
         buildRouteComparisonModalHtml: buildRouteComparisonModalHtml,
         hasRoutesForComparison: hasRoutesForComparison,
         buildRouteComparisonModalMountPlan: buildRouteComparisonModalMountPlan,
+        buildRouteComparisonModalDomApplyPlan: buildRouteComparisonModalDomApplyPlan,
+        buildRoutePreviewAfterDisplayPlan: buildRoutePreviewAfterDisplayPlan,
+        buildAlternativeRoutesPreviewDomApplyPlan: buildAlternativeRoutesPreviewDomApplyPlan,
         getRouteComparisonNoRoutesMessage: getRouteComparisonNoRoutesMessage,
         getRouteComparisonSingleRouteMessage: getRouteComparisonSingleRouteMessage,
         getRouteComparisonSuccessMessage: getRouteComparisonSuccessMessage,

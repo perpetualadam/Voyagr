@@ -6537,6 +6537,93 @@ function applyRouteUpdateDuringNavigation(routeData) {
 }
 
 /**
+ * Mount the route comparison modal from a pure DOM apply plan.
+ * @param {Object} domPlan - from buildRouteComparisonModalDomApplyPlan
+ * @returns {HTMLElement|null}
+ */
+function applyRouteComparisonModalFromPlan(domPlan) {
+    if (!domPlan || domPlan.action !== 'mount') return null;
+    if (domPlan.removeExisting) {
+        const existing = document.getElementById(domPlan.modalId);
+        if (existing) existing.remove();
+    }
+    const modal = document.createElement('div');
+    modal.id = domPlan.modalId;
+    modal.style.cssText = domPlan.overlayStyle;
+    modal.innerHTML = domPlan.innerHtml;
+    if (domPlan.dismissOnOverlayClick) {
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.remove();
+        });
+    }
+    document.body.appendChild(modal);
+    return modal;
+}
+
+/**
+ * Apply alternative-route preview cards from a pure DOM apply plan.
+ * @param {Object} domPlan - from buildAlternativeRoutesPreviewDomApplyPlan
+ */
+function applyAlternativeRoutesPreviewDomFromPlan(domPlan) {
+    if (!domPlan) return;
+    const container = document.getElementById('previewAlternativeRoutesList');
+    const parentContainer = document.getElementById('previewAlternativeRoutesContainer');
+    if (!parentContainer || !container) return;
+
+    if (!domPlan.showContainer) {
+        parentContainer.style.display = domPlan.containerDisplay;
+        return;
+    }
+
+    container.innerHTML = '';
+    domPlan.cardPlans.forEach((plan, index) => {
+        const div = document.createElement('div');
+        div.style.cssText = plan.containerStyle;
+        div.innerHTML = plan.html;
+        div.onmouseover = () => {
+            div.style.borderColor = plan.hoverStyle.borderColor;
+            div.style.background = plan.hoverStyle.background;
+        };
+        div.onmouseout = () => {
+            div.style.borderColor = plan.restStyle.borderColor;
+            div.style.background = plan.restStyle.background;
+        };
+        div.onclick = () => {
+            selectRoute(index);
+            useRoute(index);
+        };
+        container.appendChild(div);
+    });
+
+    parentContainer.style.display = domPlan.containerDisplay;
+}
+
+/**
+ * Run post-preview UI actions (tab, sheet, traffic) from a pure plan.
+ * @param {Object} afterPlan - from buildRoutePreviewAfterDisplayPlan
+ */
+function applyRoutePreviewAfterDisplayFromPlan(afterPlan) {
+    if (!afterPlan) return;
+    if (afterPlan.switchToPreviewTab) {
+        switchTab('routePreview');
+    }
+    if (afterPlan.expandBottomSheet) {
+        expandBottomSheet();
+    }
+    if (afterPlan.addTrafficLayer) {
+        addTrafficLayer();
+    }
+    if (afterPlan.previewTraffic && routeOptions && routeOptions.length > 0) {
+        const previewPolyline = routeOptions[afterPlan.previewPolylineRouteIndex || 0].polyline;
+        if (previewPolyline && previewPolyline.length > 0) {
+            routePolyline = previewPolyline;
+            console.log('[Route Preview] Fetching traffic edges for preview route');
+            fetchAndDisplayRouteTraffic();
+        }
+    }
+}
+
+/**
  * showRoutePreview function
  * @function showRoutePreview
  * @param {*} routeData - Route data to display in preview
@@ -6595,28 +6682,15 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         console.log(`[Route Preview] Displayed ${routeOptions.length} route(s) on map`);
     }
 
-    // Switch to route preview tab (only when NOT navigating)
+    const afterPlan = selection.buildRoutePreviewAfterDisplayPlan({
+        routeOptions,
+        selectedRouteIndex,
+        showTrafficEnabled,
+        hasTrafficLayer: !!trafficLayer,
+        routeTrafficEnabled,
+    });
     console.log('[Route Preview] Switching to routePreview tab');
-    switchTab('routePreview');
-
-    // Expand bottom sheet to show route preview results (user can scroll to see more)
-    expandBottomSheet();
-
-    // Ensure traffic layer stays visible if enabled
-    if (showTrafficEnabled && !trafficLayer) {
-        addTrafficLayer();
-    }
-
-    // Display route traffic edges on preview if enabled
-    if (routeTrafficEnabled && routeOptions && routeOptions.length > 0 && routeOptions[0].polyline) {
-        // Temporarily set routePolyline for traffic display
-        const previewPolyline = routeOptions[selectedRouteIndex || 0].polyline;
-        if (previewPolyline && previewPolyline.length > 0) {
-            routePolyline = previewPolyline;
-            console.log('[Route Preview] Fetching traffic edges for preview route');
-            fetchAndDisplayRouteTraffic();
-        }
-    }
+    applyRoutePreviewAfterDisplayFromPlan(afterPlan);
 
     console.log('[Route Preview] Route preview displayed successfully');
     showStatus(domPlan.statusMessage, 'success');
@@ -6629,9 +6703,6 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
  */
 function showAlternativeRoutesInPreview() {
     const RS = _routeSelection();
-    const container = document.getElementById('previewAlternativeRoutesList');
-    const parentContainer = document.getElementById('previewAlternativeRoutesContainer');
-
     const mount = RS.buildAlternativeRoutesPreviewMountPlans(routeOptions, {
         routeColors: routeColors(),
         currencySymbol: getCurrencySymbol(),
@@ -6639,33 +6710,9 @@ function showAlternativeRoutesInPreview() {
         fuelUnit: currentVehicleType === 'electric' ? 'kWh' : 'L',
         convertDistance: convertDistance,
     });
-
-    if (!mount.showContainer) {
-        parentContainer.style.display = 'none';
-        return;
-    }
-
-    container.innerHTML = '';
-    mount.cardPlans.forEach((plan, index) => {
-        const div = document.createElement('div');
-        div.style.cssText = plan.containerStyle;
-        div.innerHTML = plan.html;
-        div.onmouseover = () => {
-            div.style.borderColor = plan.hoverStyle.borderColor;
-            div.style.background = plan.hoverStyle.background;
-        };
-        div.onmouseout = () => {
-            div.style.borderColor = plan.restStyle.borderColor;
-            div.style.background = plan.restStyle.background;
-        };
-        div.onclick = () => {
-            selectRoute(index);
-            useRoute(index);
-        };
-        container.appendChild(div);
-    });
-
-    parentContainer.style.display = 'block';
+    applyAlternativeRoutesPreviewDomFromPlan(
+        RS.buildAlternativeRoutesPreviewDomApplyPlan(mount)
+    );
 }
 
 async function showRouteComparison() {
@@ -6715,18 +6762,9 @@ async function showRouteComparison() {
             distanceTexts: comparison.routes.map((route) => convertDistance(route.distance_km)),
         });
 
-        const modal = document.createElement('div');
-        modal.id = mountPlan.modalId;
-        modal.style.cssText = mountPlan.overlayStyle;
-        modal.innerHTML = mountPlan.innerHtml;
-
-        modal.addEventListener('click', (e) => {
-            if (e.target === modal) {
-                modal.remove();
-            }
-        });
-
-        document.body.appendChild(modal);
+        applyRouteComparisonModalFromPlan(
+            selection.buildRouteComparisonModalDomApplyPlan(mountPlan)
+        );
         showStatus(selection.getRouteComparisonSuccessMessage(), 'success');
     } catch (error) {
         showStatus('Error: ' + error.message, 'error');
