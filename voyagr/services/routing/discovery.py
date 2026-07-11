@@ -1,0 +1,158 @@
+"""
+Distinct Valhalla route-type discovery for /api/route.
+
+``append_distinct_valhalla_route_types`` adds the 📏 Shortest (auto_shorter) and
+⚡ Optimised Discovery (aggressive camera avoidance) options to the route list for
+car (``auto``) requests with hazard avoidance, when fewer than three routes were
+found so far. Extracted verbatim from voyagr_web.calculate_route; it mutates and
+returns the ``routes`` list and is a no-op (returns routes unchanged) when the
+guard doesn't apply.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, List, Optional
+
+try:
+    import polyline
+except ImportError:  # pragma: no cover - optional dependency guard mirrors voyagr_web
+    polyline = None  # type: ignore
+
+import requests
+
+from voyagr.services.hazards import build_valhalla_exclude_locations
+from voyagr.services.routing.orchestrator import (
+    build_valhalla_discovery_payload,
+    find_baseline_cameras_on_route,
+)
+from voyagr.services.routing.route_entries import build_valhalla_route_entry
+from voyagr.services.routing.valhalla_parsing import valhalla_trip_json_to_std_route_entry
+
+logger = logging.getLogger('voyagr_web')
+
+
+def append_distinct_valhalla_route_types(
+    routes: List[Dict[str, Any]],
+    *,
+    valhalla_costing: str,
+    enable_hazard_avoidance: bool,
+    url: str,
+    headers: Dict[str, str],
+    route_locations: List[Dict[str, Any]],
+    has_waypoints: bool,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    route_bbox: Dict[str, float],
+    route_geometry: Optional[str],
+    hazard_count: int,
+    hazards: Dict[str, List[Dict[str, Any]]],
+    cost_calculator: Any,
+    avoid_cameras: bool,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+) -> List[Dict[str, Any]]:
+    """Add 📏 Shortest and ⚡ Optimised Discovery routes (auto mode, hazard avoidance)."""
+    if not (valhalla_costing == 'auto' and enable_hazard_avoidance and len(routes) < 3):
+        return routes
+
+    logger.info(f"[VALHALLA] Standard routing: Adding distinct route types ({len(routes)} routes so far)")
+
+    # Build exclude_locations for alternative routes (use top 50 cameras closest to route)
+    alt_exclude = []
+    if hazards:
+        try:
+            alt_exclude = build_valhalla_exclude_locations(
+                hazards, route_bbox=route_bbox, max_hazards=50,
+                start_lat=start_lat, start_lon=start_lon,
+                end_lat=end_lat, end_lon=end_lon
+            )
+        except Exception as e:
+            logger.warning(f"[VALHALLA] Failed to build alt exclude_locations: {e}")
+
+    next_route_id = len(routes) + 1
+
+    # Route: Shortest Distance (auto_shorter costing); retry without exclusions if avoids over-constrain
+    try:
+        # fetch_shortest_route_json is a thin voyagr_web wrapper (prefer-exclusions
+        # logic); reached lazily via vw.* like other routing service helpers.
+        import voyagr_web as vw
+        shortest_locs = route_locations if has_waypoints else [
+            {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
+        ]
+        sh_data, sh_exclusions_applied = vw.fetch_shortest_route_json(
+            url, headers, shortest_locs,
+            alt_exclude if alt_exclude else None,
+            enable_hazard_avoidance=enable_hazard_avoidance,
+            avoid_cameras=avoid_cameras,
+        )
+        if sh_data:
+            entry = valhalla_trip_json_to_std_route_entry(
+                '📏 Shortest', sh_data, next_route_id, hazards, cost_calculator,
+                vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+                fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+                electricity_price=electricity_price, include_tolls=include_tolls,
+                include_caz=include_caz, caz_exempt=caz_exempt,
+            )
+            if entry:
+                if sh_exclusions_applied:
+                    entry['camera_exclusions_applied'] = True
+                routes.append(entry)
+                next_route_id += 1
+                logger.info(f"[VALHALLA] Added Shortest route: {entry['distance_km']:.1f}km")
+    except Exception as e:
+        logger.warning(f"[VALHALLA] Shortest route failed: {e}")
+
+    # Route: Optimised Discovery (aggressive camera avoidance)
+    try:
+        if route_geometry:
+            baseline_coords = polyline.decode(route_geometry, precision=6)
+            baseline_cameras = find_baseline_cameras_on_route(baseline_coords, alt_exclude)
+
+            if baseline_cameras:
+                disc_payload = build_valhalla_discovery_payload(
+                    start_lat=start_lat, start_lon=start_lon,
+                    end_lat=end_lat, end_lon=end_lon,
+                    exclude_locations=baseline_cameras[:50],
+                )
+                disc_response = requests.post(url, json=disc_payload, timeout=10, headers=headers)
+                if disc_response.status_code == 200:
+                    disc_data = disc_response.json()
+                    if 'trip' in disc_data and 'legs' in disc_data['trip']:
+                        disc_geom = disc_data['trip']['legs'][0]['shape']
+                        disc_dist = disc_data['trip']['summary']['length']
+                        disc_time = disc_data['trip']['summary']['time']
+                        route_entry = build_valhalla_route_entry(
+                            trip=disc_data['trip'],
+                            name='⚡ Optimised Discovery',
+                            route_id=next_route_id,
+                            traffic_multiplier=1.0,
+                            maneuver_length_in_meters=True,
+                            hazards=hazards,
+                            cost_calculator=cost_calculator,
+                            vehicle_type=vehicle_type,
+                            fuel_efficiency=fuel_efficiency,
+                            fuel_price=fuel_price,
+                            energy_efficiency=energy_efficiency,
+                            electricity_price=electricity_price,
+                            include_tolls=include_tolls,
+                            include_caz=include_caz,
+                            caz_exempt=caz_exempt,
+                        )
+                        if route_entry['hazard_count'] < hazard_count:
+                            route_entry['camera_exclusions_applied'] = True
+                            routes.append(route_entry)
+                            logger.info(f"[VALHALLA] Added Optimised Discovery route: {disc_dist:.1f}km, {route_entry['hazard_count']} cameras")
+    except Exception as e:
+        logger.warning(f"[VALHALLA] Optimised route failed: {e}")
+
+    logger.info(f"[VALHALLA] Final route count: {len(routes)}")
+    return routes
