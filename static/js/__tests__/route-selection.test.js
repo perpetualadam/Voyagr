@@ -159,6 +159,26 @@ describe('route comparison and selection helpers', () => {
         expect(options[0].polyline).toEqual([[1, 2]]);
         expect(decode).toHaveBeenCalledWith('x', 5);
     });
+
+    test('buildRouteLayerMountPlan converts polyline and assigns style by selection', () => {
+        const plan = RS.buildRouteLayerMountPlan(
+            { name: 'Fast', polyline: [[51.5, -0.1], [51.6, -0.2]] },
+            1,
+            1
+        );
+        expect(plan.valid).toBe(true);
+        expect(plan.layerId).toBe('route-layer-1');
+        expect(plan.lngLatCoords).toEqual([[-0.1, 51.5], [-0.2, 51.6]]);
+        expect(plan.style.weight).toBe(10);
+        expect(plan.geoJsonFeature.geometry.coordinates).toHaveLength(2);
+    });
+
+    test('findFirstTextSymbolLayerId returns first label layer id', () => {
+        expect(RS.findFirstTextSymbolLayerId([
+            { id: 'roads', type: 'line' },
+            { id: 'labels', type: 'symbol', layout: { 'text-field': '{name}' } },
+        ])).toBe('labels');
+    });
 });
 
 describe('route preview helpers', () => {

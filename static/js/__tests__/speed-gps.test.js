@@ -317,3 +317,54 @@ describe('mphToDisplaySpeed', () => {
         expect(SG.speedUnitLabel('km/h')).toBe('km/h');
     });
 });
+
+describe('accumulateNavOdometerSegment', () => {
+    const dist = (a, b, c, d) => Math.sqrt((c - a) ** 2 + (d - b) ** 2) * 111000;
+
+    test('accumulates plausible movement and advances anchor', () => {
+        const first = SG.accumulateNavOdometerSegment(null, 51.5, -0.1, 1000, dist);
+        expect(first.traveledMeters).toBe(0);
+        const second = SG.accumulateNavOdometerSegment(first, 51.5003, -0.1, 2000, dist);
+        expect(second.traveledMeters).toBeGreaterThan(0);
+        expect(second.lastGeo.lat).toBe(51.5003);
+    });
+
+    test('rejects teleport-scale jumps', () => {
+        const first = SG.accumulateNavOdometerSegment(null, 51.5, -0.1, 1000, dist);
+        const second = SG.accumulateNavOdometerSegment(first, 52.5, -0.1, 2000, dist);
+        expect(second.traveledMeters).toBe(0);
+    });
+});
+
+describe('resolveGpsHeadingDegrees', () => {
+    test('prefers device compass when moving', () => {
+        expect(SG.resolveGpsHeadingDegrees({ deviceHeading: 90, speed: 5 })).toBe(90);
+    });
+
+    test('derives heading from recent tracking history motion vector', () => {
+        const heading = SG.resolveGpsHeadingDegrees({
+            speed: 0,
+            trackingHistory: [
+                { lat: 51.50, lon: -0.10 },
+                { lat: 51.50, lon: -0.09 },
+            ],
+            calculateDistanceMeters: () => 100,
+        });
+        expect(heading).toBeGreaterThan(80);
+        expect(heading).toBeLessThan(100);
+    });
+});
+
+describe('computeFollowJumpMeters', () => {
+    test('returns max of follow-center and smooth-position deltas', () => {
+        const jump = SG.computeFollowJumpMeters({
+            displayLat: 51.51,
+            displayLon: -0.1,
+            smoothDisplayLat: 51.50,
+            smoothDisplayLon: -0.1,
+            lastFollowCenterGeo: { lat: 51.49, lon: -0.1 },
+            calculateDistanceMeters: (a, b, c, d) => Math.abs(c - a) * 111000,
+        });
+        expect(jump).toBeGreaterThan(1000);
+    });
+});

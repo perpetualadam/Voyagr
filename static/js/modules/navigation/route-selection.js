@@ -59,6 +59,95 @@
     }
 
     /**
+     * Line style for a route preview/alternative layer on the map.
+     * @param {number} index
+     * @param {number} selectedRouteIndex
+     * @param {string[]} [routeColors]
+     * @returns {{ color: string, weight: number, opacity: number }}
+     */
+    function buildRouteLayerStyle(index, selectedRouteIndex, routeColors) {
+        return {
+            color: resolveRouteColor(index, routeColors),
+            weight: (index === selectedRouteIndex) ? 10 : (index === 0 ? 8 : 6),
+            opacity: (index === selectedRouteIndex) ? 1.0 : 0.85,
+        };
+    }
+
+    /**
+     * Convert [lat, lon] polyline to MapLibre [lon, lat] coordinates.
+     * @param {Array<[number,number]>} polylinePoints
+     * @returns {Array<[number,number]>}
+     */
+    function latLonPolylineToLngLatCoords(polylinePoints) {
+        polylinePoints = polylinePoints || [];
+        var out = [];
+        for (var i = 0; i < polylinePoints.length; i++) {
+            var p = polylinePoints[i];
+            if (Array.isArray(p) && p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1])) {
+                out.push([p[1], p[0]]);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * GeoJSON Feature for a route line source.
+     * @param {Array<[number,number]>} lngLatCoords
+     * @returns {Object}
+     */
+    function buildRouteLineGeoJsonFeature(lngLatCoords) {
+        return {
+            type: 'Feature',
+            geometry: {
+                type: 'LineString',
+                coordinates: lngLatCoords,
+            },
+        };
+    }
+
+    /**
+     * First symbol layer with a text field — insert map layers before labels.
+     * @param {Array<Object>} styleLayers
+     * @returns {string|undefined}
+     */
+    function findFirstTextSymbolLayerId(styleLayers) {
+        if (!styleLayers || !styleLayers.length) return undefined;
+        for (var i = 0; i < styleLayers.length; i++) {
+            var layer = styleLayers[i];
+            if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
+                return layer.id;
+            }
+        }
+        return undefined;
+    }
+
+    /**
+     * Mount plan for one route line layer (pure; app performs map.addSource/addLayer).
+     * @param {Object} route
+     * @param {number} index
+     * @param {number} selectedRouteIndex
+     * @param {Object} [opts]
+     * @param {string[]} [opts.routeColors]
+     * @returns {Object}
+     */
+    function buildRouteLayerMountPlan(route, index, selectedRouteIndex, opts) {
+        opts = opts || {};
+        route = route || {};
+        var polylinePoints = route.polyline || [];
+        var lngLatCoords = latLonPolylineToLngLatCoords(polylinePoints);
+        return {
+            layerId: 'route-layer-' + index,
+            sourceId: 'route-source-' + index,
+            routeName: route.name,
+            polylinePointCount: polylinePoints.length,
+            lngLatCoords: lngLatCoords,
+            geoJsonFeature: buildRouteLineGeoJsonFeature(lngLatCoords),
+            style: buildRouteLayerStyle(index, selectedRouteIndex, opts.routeColors),
+            valid: lngLatCoords.length >= 2,
+        };
+    }
+
+    /**
      * Display values for navigation tab trip info from a route option.
      * @param {Object} route
      * @param {Object} fmt
@@ -1063,6 +1152,11 @@
         hazardBadgeColor: hazardBadgeColor,
         computeRouteTotalCost: computeRouteTotalCost,
         resolveRouteColor: resolveRouteColor,
+        buildRouteLayerStyle: buildRouteLayerStyle,
+        latLonPolylineToLngLatCoords: latLonPolylineToLngLatCoords,
+        buildRouteLineGeoJsonFeature: buildRouteLineGeoJsonFeature,
+        findFirstTextSymbolLayerId: findFirstTextSymbolLayerId,
+        buildRouteLayerMountPlan: buildRouteLayerMountPlan,
         buildTripInfoDisplayValues: buildTripInfoDisplayValues,
         buildTripInfoApplyPlan: buildTripInfoApplyPlan,
         buildRouteComparisonCardHtml: buildRouteComparisonCardHtml,

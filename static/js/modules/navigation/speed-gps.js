@@ -418,6 +418,130 @@
         return mph;
     }
 
+    var NAV_ODOMETER_DEFAULTS = {
+        MIN_STEP_M: 3,
+        MAX_STEP_M: 400,
+        MAX_SPEED_MPH: 160,
+        MIN_DT_S: 0.2,
+        MAX_DT_S: 30,
+        MS_TO_MPH: 2.237,
+    };
+
+    /**
+     * Accumulate whole-journey odometer distance from raw GPS fixes with gating.
+     * @param {Object|null} state - { lastGeo: {lat,lon,t}|null, traveledMeters }
+     * @param {number} lat
+     * @param {number} lon
+     * @param {number} nowMs
+     * @param {function(number,number,number,number): number} calculateDistanceMeters
+     * @param {Object} [constants]
+     * @returns {{ lastGeo: Object, traveledMeters: number }}
+     */
+    function accumulateNavOdometerSegment(state, lat, lon, nowMs, calculateDistanceMeters, constants) {
+        constants = constants || NAV_ODOMETER_DEFAULTS;
+        state = state || { lastGeo: null, traveledMeters: 0 };
+        var traveledMeters = state.traveledMeters || 0;
+        var lastGeo = state.lastGeo;
+
+        if (lastGeo) {
+            var segM = typeof calculateDistanceMeters === 'function'
+                ? calculateDistanceMeters(lastGeo.lat, lastGeo.lon, lat, lon)
+                : NaN;
+            var dtS = (nowMs - lastGeo.t) / 1000;
+            if (dtS > constants.MIN_DT_S && dtS < constants.MAX_DT_S) {
+                var segSpeedMph = Number.isFinite(segM)
+                    ? (segM / dtS) * constants.MS_TO_MPH
+                    : Infinity;
+                if (Number.isFinite(segM) &&
+                    segM >= constants.MIN_STEP_M &&
+                    segM < constants.MAX_STEP_M &&
+                    segSpeedMph <= constants.MAX_SPEED_MPH) {
+                    traveledMeters += segM;
+                }
+                lastGeo = { lat: lat, lon: lon, t: nowMs };
+            }
+        } else {
+            lastGeo = { lat: lat, lon: lon, t: nowMs };
+        }
+
+        return { lastGeo: lastGeo, traveledMeters: traveledMeters };
+    }
+
+    /**
+     * Resolve GPS heading for vehicle icon rotation (compass or motion vector).
+     * @param {Object} opts
+     * @param {number|null} [opts.deviceHeading]
+     * @param {number} [opts.speed]
+     * @param {Array<Object>} [opts.trackingHistory]
+     * @param {function(number,number,number,number): number} [opts.calculateDistanceMeters]
+     * @returns {number}
+     */
+    function resolveGpsHeadingDegrees(opts) {
+        opts = opts || {};
+        var deviceHeading = opts.deviceHeading;
+        var speed = opts.speed || 0;
+        var history = opts.trackingHistory || [];
+        var calculateDistanceMeters = opts.calculateDistanceMeters;
+
+        if (deviceHeading != null && speed > 1.5) {
+            return (deviceHeading + 360) % 360;
+        }
+        if (history.length > 1) {
+            var curr = history[history.length - 1];
+            var prev = history[history.length - 2];
+            for (var i = history.length - 2; i >= 0 && i >= history.length - 6; i--) {
+                var p = history[i];
+                if (typeof calculateDistanceMeters === 'function') {
+                    var segM = calculateDistanceMeters(p.lat, p.lon, curr.lat, curr.lon);
+                    if (segM >= 3) {
+                        prev = p;
+                        break;
+                    }
+                }
+            }
+            var dLon = curr.lon - prev.lon;
+            var dLat = curr.lat - prev.lat;
+            if (Math.abs(dLon) + Math.abs(dLat) > 1e-7) {
+                return (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360;
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Follow-jump distance for display-coordinate EMA urgency.
+     * @param {Object} opts
+     * @returns {number}
+     */
+    function computeFollowJumpMeters(opts) {
+        opts = opts || {};
+        var followJumpM = Number.POSITIVE_INFINITY;
+        var lastFollowCenter = opts.lastFollowCenterGeo;
+        var calculateDistanceMeters = opts.calculateDistanceMeters;
+
+        if (lastFollowCenter &&
+            Number.isFinite(lastFollowCenter.lat) &&
+            Number.isFinite(lastFollowCenter.lon) &&
+            typeof calculateDistanceMeters === 'function') {
+            followJumpM = calculateDistanceMeters(
+                opts.displayLat, opts.displayLon,
+                lastFollowCenter.lat, lastFollowCenter.lon
+            );
+        }
+        if (opts.smoothDisplayLat != null &&
+            opts.smoothDisplayLon != null &&
+            typeof calculateDistanceMeters === 'function') {
+            var smoothDeltaM = calculateDistanceMeters(
+                opts.smoothDisplayLat, opts.smoothDisplayLon,
+                opts.displayLat, opts.displayLon
+            );
+            if (Number.isFinite(smoothDeltaM)) {
+                followJumpM = Math.max(followJumpM, smoothDeltaM);
+            }
+        }
+        return followJumpM;
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         KMH_TO_MPH: KMH_TO_MPH,
@@ -441,7 +565,11 @@
         advanceSnappedRouteIndex: advanceSnappedRouteIndex,
         buildBetweenTurnDisplay: buildBetweenTurnDisplay,
         estimateDisplacementSpeedMph: estimateDisplacementSpeedMph,
-        stepPickRawSpeedMph: stepPickRawSpeedMph
+        stepPickRawSpeedMph: stepPickRawSpeedMph,
+        NAV_ODOMETER_DEFAULTS: NAV_ODOMETER_DEFAULTS,
+        accumulateNavOdometerSegment: accumulateNavOdometerSegment,
+        resolveGpsHeadingDegrees: resolveGpsHeadingDegrees,
+        computeFollowJumpMeters: computeFollowJumpMeters,
     };
 
     // ======================================================================

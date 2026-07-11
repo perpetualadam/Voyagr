@@ -223,14 +223,6 @@ let smartZoomEnabled = localStorage.getItem('smartZoomEnabled') === '1' || true;
 // let mapFollowingActive = ...;
 let navigationActive = false;
 
-/**
- * Camera padding while following navigation: keeps the vehicle icon in the lower ~quarter of the map
- * (more road ahead visible). Top inset pushes the focal point down; bottom inset clears the bottom sheet / chrome.
- */
-function getNavigationFollowPadding() {
-    return VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
-}
-
 window.addEventListener('resize', () => {
     console.log('[Viewport] Window resized; follow padding recomputed on next frame');
     if (typeof window.__voyagrMapResizeAndRepaint === 'function') {
@@ -2374,36 +2366,26 @@ function displayAllRoutesOnMap() {
  * Actually add route layers to the map (called after style is loaded)
  */
 function doAddRouteLayers() {
+    const RS = VoyagrModules.routeSelection();
+    const style = map.getStyle();
+    const beforeId = RS.findFirstTextSymbolLayerId(style && style.layers);
+
     // Add all routes using direct MapLibre API
     for (let i = routeOptions.length - 1; i >= 0; i--) {
         const route = routeOptions[i];
-        const polylinePoints = route.polyline || [];
+        const plan = RS.buildRouteLayerMountPlan(route, i, selectedRouteIndex);
 
-        console.log(`[Routes] Route ${i}: "${route.name}", polyline points: ${polylinePoints.length}`);
+        console.log(`[Routes] Route ${i}: "${plan.routeName}", polyline points: ${plan.polylinePointCount}`);
 
-        if (polylinePoints.length > 0) {
-            const color = ROUTE_COLORS[i % ROUTE_COLORS.length];
-            const weight = (i === selectedRouteIndex) ? 10 : (i === 0 ? 8 : 6);
-            const opacity = (i === selectedRouteIndex) ? 1.0 : 0.85;
+        if (!plan.valid) {
+            console.error(`[Routes] Route ${i}: Not enough valid points (${plan.lngLatCoords.length})`);
+            continue;
+        }
 
-            console.log(`[Routes] Drawing route ${i} with color ${color}, weight ${weight}`);
+        console.log(`[Routes] Drawing route ${i} with color ${plan.style.color}, weight ${plan.style.weight}`);
 
-            // Convert to [lon, lat] for MapLibre and validate
-            const lngLatCoords = [];
-            for (const p of polylinePoints) {
-                if (Array.isArray(p) && p.length >= 2 && !isNaN(p[0]) && !isNaN(p[1])) {
-                    lngLatCoords.push([p[1], p[0]]); // [lat, lon] -> [lon, lat]
-                }
-            }
-
-            if (lngLatCoords.length < 2) {
-                console.error(`[Routes] Route ${i}: Not enough valid points (${lngLatCoords.length})`);
-                continue;
-            }
-
-            // Use direct MapLibre API to add the layer
-            const layerId = `route-layer-${i}`;
-            const sourceId = `route-source-${i}`;
+        const layerId = plan.layerId;
+        const sourceId = plan.sourceId;
 
             try {
                 // Remove existing layer/source if present
@@ -2417,29 +2399,8 @@ function doAddRouteLayers() {
                 // Add source
                 map.addSource(sourceId, {
                     type: 'geojson',
-                    data: {
-                        type: 'Feature',
-                        geometry: {
-                            type: 'LineString',
-                            coordinates: lngLatCoords
-                        }
-                    }
+                    data: plan.geoJsonFeature,
                 });
-
-                // Find the first symbol layer to insert route before it
-                // This ensures routes render BELOW labels/text
-                const style = map.getStyle();
-                let beforeId = undefined;
-                if (style && style.layers) {
-                    const symbolLayer = style.layers.find(layer =>
-                        layer.type === 'symbol' &&
-                        layer.layout &&
-                        layer.layout['text-field']
-                    );
-                    if (symbolLayer) {
-                        beforeId = symbolLayer.id;
-                    }
-                }
 
                 // Add layer before symbol layers to keep labels on top
                 map.addLayer({
@@ -2451,9 +2412,9 @@ function doAddRouteLayers() {
                         'line-cap': 'round'
                     },
                     paint: {
-                        'line-color': color,
-                        'line-width': MapLibreHelpers.buildZoomScaledLineWidth(weight),
-                        'line-opacity': opacity
+                        'line-color': plan.style.color,
+                        'line-width': MapLibreHelpers.buildZoomScaledLineWidth(plan.style.weight),
+                        'line-opacity': plan.style.opacity
                     }
                 }, beforeId);
 
@@ -2472,9 +2433,6 @@ function doAddRouteLayers() {
             } catch (e) {
                 console.error(`[Routes] ✗ Error adding route ${i}:`, e);
             }
-        } else {
-            console.warn(`[Routes] Route ${i} has no polyline points!`);
-        }
     }
 
     // Fit map to show all routes
@@ -2537,20 +2495,9 @@ function bringRoutesToTop() {
         console.log(`[Routes] moveLayersToTop attempt ${retryCount}, layers:`, layerIds);
 
         try {
-            // Move each route layer above traffic but below road labels
             // Find the first symbol layer with text (road labels) once for all routes
             const style = map.getStyle();
-            let beforeId = undefined;
-            if (style && style.layers) {
-                const symbolLayer = style.layers.find(l =>
-                    l.type === 'symbol' &&
-                    l.layout &&
-                    l.layout['text-field']
-                );
-                if (symbolLayer) {
-                    beforeId = symbolLayer.id;
-                }
-            }
+            const beforeId = VoyagrModules.routeSelection().findFirstTextSymbolLayerId(style && style.layers);
 
             allRouteLayers.forEach((layer, idx) => {
                 if (layer && layer.id) {
@@ -5469,17 +5416,7 @@ function bringTrafficEdgesToTop() {
         // Find the first symbol/label layer to insert traffic edges BEFORE
         // This keeps traffic edges above routes but below road labels
         const style = map.getStyle();
-        let beforeId = undefined;
-        if (style && style.layers) {
-            const symbolLayer = style.layers.find(l =>
-                l.type === 'symbol' &&
-                l.layout &&
-                l.layout['text-field']
-            );
-            if (symbolLayer) {
-                beforeId = symbolLayer.id;
-            }
-        }
+        const beforeId = VoyagrModules.routeSelection().findFirstTextSymbolLayerId(style && style.layers);
 
         routeTrafficLayers.forEach(layer => {
             if (layer && layer.id && map.getLayer(layer.id)) {
@@ -5863,7 +5800,7 @@ async function checkTrafficAndReroute() {
             return;
         }
 
-        const changeType = detectSignificantTrafficChange(lastTrafficData, flow);
+        const changeType = VoyagrModules.trafficChange().detectSignificantTrafficChange(lastTrafficData, flow);
         lastTrafficData = flow;
 
         if (changeType) {
@@ -5880,15 +5817,6 @@ async function checkTrafficAndReroute() {
     } catch (error) {
         console.error('[Auto-Traffic] Error checking traffic:', error);
     }
-}
-
-/**
- * Decide whether a fresh route-traffic sample warrants a reroute attempt.
- * `current`/`previous` are sampleRouteTrafficAhead() results.
- */
-// detectSignificantTrafficChange moved to modules/navigation/traffic-change.js (VoyagrTrafficChange).
-function detectSignificantTrafficChange(previous, current) {
-    return VoyagrModules.trafficChange().detectSignificantTrafficChange(previous, current);
 }
 
 /**
@@ -6815,15 +6743,6 @@ function applyRouteUpdateDuringNavigation(routeData) {
 }
 
 /**
- * Resolve the route object used for preview (full API payload or single route option).
- * @param {Object} routeData
- * @returns {Object}
- */
-function resolvePreviewRoute(routeData) {
-    return VoyagrModules.routeSelection().resolvePreviewRoute(routeData, selectedRouteIndex);
-}
-
-/**
  * showRoutePreview function
  * @function showRoutePreview
  * @param {*} routeData - Route data to display in preview
@@ -6851,7 +6770,7 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
 
     console.log('[Route Preview] Currency:', symbol, 'Distance Unit:', distUnit);
 
-    const previewRouteSlice = resolvePreviewRoute(routeData);
+    const previewRouteSlice = selection.resolvePreviewRoute(routeData, selectedRouteIndex);
     const distanceKm = selection.resolvePreviewDistanceKm(routeData, previewRouteSlice);
 
     const previewDistanceEl = document.getElementById('previewDistance');
@@ -6915,7 +6834,7 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     });
 
     // Update hazard / preference information (from primary/selected route)
-    const previewRoute = resolvePreviewRoute(routeData);
+    const previewRoute = selection.resolvePreviewRoute(routeData, selectedRouteIndex);
     const hazardCount = previewRoute.hazard_count ?? routeData.hazard_count ?? 0;
     const camerasNearRoute = previewRoute.cameras_near_route ?? hazardCount;
     const hazardPenaltySeconds = previewRoute.hazard_penalty_seconds ?? routeData.hazard_penalty_seconds ?? 0;
@@ -9114,7 +9033,7 @@ function recenterOnVehicle() {
             zoom: smartZoom,
             bearing,
             pitch,
-            padding: getNavigationFollowPadding(),
+            padding: VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth),
             duration: 600,
             essential: true,
         });
@@ -9573,7 +9492,7 @@ function applySmartZoomWithAnimation(speedMph, distanceToNextTurn = null, roadTy
             let bearing = map.getBearing();
             let padding = undefined;
             if (navFollow) {
-                padding = getNavigationFollowPadding();
+                padding = VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
                 if (shouldUsePitchedDrivingCamera()) {
                     // Heading-up; flat (0°) when the user picked 2D map view, else tilted (60°).
                     pitch = shouldTiltDrivingCamera() ? 60 : 0;
@@ -10970,7 +10889,7 @@ function applyLiveNavigationCamera() {
         pitch: shouldTiltDrivingCamera() ? 60 : 0,
         bearing: heading,
         center: [currentLon, currentLat],
-        padding: getNavigationFollowPadding(),
+        padding: VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth),
     });
     console.log(`[Driver View] ${shouldTiltDrivingCamera() ? '60°' : 'flat 2D'} navigation camera (follow padding)`);
 }
@@ -11019,7 +10938,7 @@ function applyDriverPerspective() {
     if (shouldUsePitchedDrivingCamera()) {
         easeOptions.pitch = shouldTiltDrivingCamera() ? 60 : 0;
         easeOptions.bearing = heading;
-        easeOptions.padding = getNavigationFollowPadding();
+        easeOptions.padding = VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
         if (currentLat != null && currentLon != null) {
             easeOptions.center = [currentLon, currentLat];
         }
@@ -12540,49 +12459,32 @@ function startGPSTracking() {
                 trackingHistory.splice(0, trackingHistory.length - 40);
             }
 
-            // Whole-journey odometer: sum plausible movement between raw fixes. Gating on a
-            // minimum step (drops stationary GPS jitter) and a max step/speed (drops teleports)
-            // keeps it close to real driven distance for the end-of-trip summary.
+            // Whole-journey odometer: sum plausible movement between raw fixes.
             if (routeInProgress) {
                 const odoNow = Date.now();
-                if (_navOdometerLastGeo) {
-                    const segM = calculateDistanceMeters(_navOdometerLastGeo.lat, _navOdometerLastGeo.lon, lat, lon);
-                    const dtS = (odoNow - _navOdometerLastGeo.t) / 1000;
-                    if (dtS > 0.2 && dtS < 30) {
-                        const segSpeedMph = Number.isFinite(segM) ? (segM / dtS) * 2.237 : Infinity;
-                        if (Number.isFinite(segM) && segM >= 3 && segM < 400 && segSpeedMph <= 160) {
-                            _navTraveledMeters += segM;
-                        }
-                        // Advance the anchor each sane tick so a rejected jump can't make the
-                        // next segment measure from a stale point.
-                        _navOdometerLastGeo = { lat, lon, t: odoNow };
-                    }
-                } else {
-                    _navOdometerLastGeo = { lat, lon, t: odoNow };
+                const SGodo = _speedGps();
+                if (SGodo) {
+                    const odo = SGodo.accumulateNavOdometerSegment(
+                        { lastGeo: _navOdometerLastGeo, traveledMeters: _navTraveledMeters },
+                        lat,
+                        lon,
+                        odoNow,
+                        calculateDistanceMeters
+                    );
+                    _navOdometerLastGeo = odo.lastGeo;
+                    _navTraveledMeters = odo.traveledMeters;
                 }
             }
 
-            // Prefer device compass/course when moving; otherwise motion vector from recent fixes.
-            let gpsHeadingForBlend = 0;
-            if (deviceHeading != null && speed > 1.5) {
-                gpsHeadingForBlend = (deviceHeading + 360) % 360;
-            } else if (trackingHistory.length > 1) {
-                const curr = trackingHistory[trackingHistory.length - 1];
-                let prev = trackingHistory[trackingHistory.length - 2];
-                for (let i = trackingHistory.length - 2; i >= 0 && i >= trackingHistory.length - 6; i--) {
-                    const p = trackingHistory[i];
-                    const segM = calculateDistanceMeters(p.lat, p.lon, curr.lat, curr.lon);
-                    if (segM >= 3) {
-                        prev = p;
-                        break;
-                    }
-                }
-                const dLon = curr.lon - prev.lon;
-                const dLat = curr.lat - prev.lat;
-                if (Math.abs(dLon) + Math.abs(dLat) > 1e-7) {
-                    gpsHeadingForBlend = (Math.atan2(dLon, dLat) * 180 / Math.PI + 360) % 360;
-                }
-            }
+            const SGhead = _speedGps();
+            let gpsHeadingForBlend = SGhead
+                ? SGhead.resolveGpsHeadingDegrees({
+                    deviceHeading,
+                    speed,
+                    trackingHistory,
+                    calculateDistanceMeters,
+                })
+                : 0;
             let heading = gpsHeadingForBlend;
 
             /** Single raw-speed sample / tick (clamped inside pickRawSpeedMph) for zoom + HUD. */
@@ -12641,35 +12543,26 @@ function startGPSTracking() {
             }
 
             // Smooth the displayed position so raw↔snap blend changes don't jerk the icon.
-            let followJumpM = Number.POSITIVE_INFINITY;
-            try {
-                const lc = window.__voyagrLastFollowCenterGeo;
-                if (lc && Number.isFinite(lc.lat) && Number.isFinite(lc.lon)) {
-                    followJumpM = calculateDistanceMeters(displayLat, displayLon, lc.lat, lc.lon);
-                }
-            } catch (_ej) {
-                /* ignore */
-            }
-            if (_smoothDisplayLat != null && _smoothDisplayLon != null) {
-                const smoothDeltaM = calculateDistanceMeters(
-                    _smoothDisplayLat, _smoothDisplayLon, displayLat, displayLon
-                );
-                if (Number.isFinite(smoothDeltaM)) {
-                    followJumpM = Math.max(followJumpM, smoothDeltaM);
-                }
-            }
+            const SGpos = _speedGps();
+            const followJumpM = SGpos
+                ? SGpos.computeFollowJumpMeters({
+                    displayLat,
+                    displayLon,
+                    smoothDisplayLat: _smoothDisplayLat,
+                    smoothDisplayLon: _smoothDisplayLon,
+                    lastFollowCenterGeo: window.__voyagrLastFollowCenterGeo,
+                    calculateDistanceMeters,
+                })
+                : Number.POSITIVE_INFINITY;
             if (_smoothDisplayLat == null || _smoothDisplayLon == null) {
                 _smoothDisplayLat = displayLat;
                 _smoothDisplayLon = displayLon;
+            } else if (SGpos) {
+                _smoothDisplayLat = SGpos.smoothDisplayCoordinate(_smoothDisplayLat, displayLat, followJumpM);
+                _smoothDisplayLon = SGpos.smoothDisplayCoordinate(_smoothDisplayLon, displayLon, followJumpM);
             } else {
-                const SGpos = _speedGps();
-                if (SGpos) {
-                    _smoothDisplayLat = SGpos.smoothDisplayCoordinate(_smoothDisplayLat, displayLat, followJumpM);
-                    _smoothDisplayLon = SGpos.smoothDisplayCoordinate(_smoothDisplayLon, displayLon, followJumpM);
-                } else {
-                    _smoothDisplayLat = displayLat;
-                    _smoothDisplayLon = displayLon;
-                }
+                _smoothDisplayLat = displayLat;
+                _smoothDisplayLon = displayLon;
             }
             const markerLat = _smoothDisplayLat;
             const markerLon = _smoothDisplayLon;
@@ -12716,7 +12609,7 @@ function startGPSTracking() {
                 // Heading-up follow during active nav (or driver-view browsing). Tilt to 60° unless
                 // the user picked the flat 2D map view, in which case stay heading-up but flat.
                 const pitch = shouldTiltDrivingCamera() ? 60 : 0;
-                const padding = getNavigationFollowPadding();
+                const padding = VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
                 const bearing = shouldUsePitchedDrivingCamera() ? (heading || map.getBearing()) : 0;
 
                 if (followDue || followUrgent) {
@@ -12744,7 +12637,7 @@ function startGPSTracking() {
                     map.easeTo({
                         center: [markerLon, markerLat],
                         zoom: 16,
-                        padding: routeInProgress ? getNavigationFollowPadding() : undefined,
+                        padding: routeInProgress ? VoyagrModules.cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth) : undefined,
                         duration: followJumpM > 95 ? 650 : 420
                     });
                 }
