@@ -824,6 +824,47 @@
         };
     }
 
+    /**
+     * Apply plan for GPS position tick state patches and marker outputs.
+     * @param {Object|null|undefined} posTick - from buildGpsTrackingPositionTickPlan
+     * @param {Object} [opts]
+     * @param {number} opts.lat
+     * @param {number} opts.lon
+     * @param {number|null} [opts.smoothDisplayLat]
+     * @param {number|null} [opts.smoothDisplayLon]
+     * @returns {Object}
+     */
+    function buildGpsPositionStateApplyPlan(posTick, opts) {
+        opts = opts || {};
+        if (!posTick) {
+            var markerLat = opts.smoothDisplayLat;
+            var markerLon = opts.smoothDisplayLon;
+            var statePatch = {};
+            if (markerLat == null || markerLon == null) {
+                markerLat = opts.lat;
+                markerLon = opts.lon;
+                statePatch.smoothDisplayLat = opts.lat;
+                statePatch.smoothDisplayLon = opts.lon;
+            }
+            return {
+                action: 'apply',
+                heading: 0,
+                markerLat: markerLat,
+                markerLon: markerLon,
+                followJumpM: Number.POSITIVE_INFINITY,
+                statePatch: statePatch,
+            };
+        }
+        return {
+            action: 'apply',
+            heading: posTick.heading,
+            markerLat: posTick.markerLat,
+            markerLon: posTick.markerLon,
+            followJumpM: posTick.followJumpM,
+            statePatch: posTick.statePatch || {},
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         KMH_TO_MPH: KMH_TO_MPH,
@@ -856,6 +897,7 @@
         buildNavigationVehicleMarkerPositionPlan: buildNavigationVehicleMarkerPositionPlan,
         buildVehicleMarkerTickPlan: buildVehicleMarkerTickPlan,
         buildGpsTrackingPositionTickPlan: buildGpsTrackingPositionTickPlan,
+        buildGpsPositionStateApplyPlan: buildGpsPositionStateApplyPlan,
         computeVehicleMarkerRotationDeg: computeVehicleMarkerRotationDeg,
         normalizeGeolocationCoordsSample: normalizeGeolocationCoordsSample,
         buildTrackingHistoryAppendPlan: buildTrackingHistoryAppendPlan,

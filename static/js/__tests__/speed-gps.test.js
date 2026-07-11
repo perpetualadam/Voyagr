@@ -525,6 +525,38 @@ describe('buildGpsTrackingPositionTickPlan', () => {
     });
 });
 
+describe('buildGpsPositionStateApplyPlan', () => {
+    test('maps position tick to marker outputs and state patch', () => {
+        const posTick = SG.buildGpsTrackingPositionTickPlan({
+            lat: 51.5,
+            lon: -0.1,
+            routeInProgress: true,
+            routePolyline: [[51.5, -0.1], [51.501, -0.101]],
+            snapped: { lat: 51.5005, lon: -0.1005, index: 0, distance: 30 },
+            speedMph: 25,
+            resolveGpsHeading: () => 90,
+            calculateBearing: () => 90,
+            blendHeadingsCircular: (g, r, b) => g + (r - g) * b,
+        });
+        const apply = SG.buildGpsPositionStateApplyPlan(posTick, { lat: 51.5, lon: -0.1 });
+        expect(apply.action).toBe('apply');
+        expect(apply.markerLat).toBe(posTick.markerLat);
+        expect(apply.statePatch.lastSnappedRouteIndex).toBeGreaterThanOrEqual(0);
+    });
+
+    test('seeds smooth display coords when position tick is unavailable', () => {
+        const apply = SG.buildGpsPositionStateApplyPlan(null, {
+            lat: 51.5,
+            lon: -0.1,
+            smoothDisplayLat: null,
+            smoothDisplayLon: null,
+        });
+        expect(apply.markerLat).toBe(51.5);
+        expect(apply.statePatch.smoothDisplayLat).toBe(51.5);
+        expect(apply.followJumpM).toBe(Number.POSITIVE_INFINITY);
+    });
+});
+
 describe('buildVehicleMarkerTickPlan', () => {
     test('updates existing marker with rotation and lngLat', () => {
         const plan = SG.buildVehicleMarkerTickPlan({

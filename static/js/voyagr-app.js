@@ -12025,6 +12025,55 @@ function applyGpsVehicleMarkerTick(markerLat, markerLon, heading, speed, accurac
 }
 
 /**
+ * Apply GPS position state patches from a position apply plan.
+ * @param {Object} apply - from buildGpsPositionStateApplyPlan
+ */
+function applyGpsPositionStateFromPlan(apply) {
+    if (!apply || apply.action !== 'apply') return;
+    const patch = apply.statePatch || {};
+    if (patch.snapBlendWeightState != null) {
+        _snapBlendWeightState = patch.snapBlendWeightState;
+    }
+    if (patch.lastSnappedRouteIndex != null) {
+        lastSnappedRouteIndex = patch.lastSnappedRouteIndex;
+    }
+    if (patch.smoothDisplayLat != null) {
+        _smoothDisplayLat = patch.smoothDisplayLat;
+    }
+    if (patch.smoothDisplayLon != null) {
+        _smoothDisplayLon = patch.smoothDisplayLon;
+    }
+}
+
+/**
+ * Apply speed widget update from buildSpeedWidgetApplyPlan result.
+ * @param {Object} swPlan
+ */
+function applySpeedWidgetFromApplyPlan(swPlan) {
+    if (!swPlan || swPlan.action !== 'apply') return;
+
+    if (swPlan.resetFetchState) {
+        _lastActiveManeuverIdx = swPlan.newLastActiveManeuverIdx;
+        const state = _getSpeedLimitFetchState();
+        if (state) {
+            state.lastFetchAt = 0;
+            state.lastPosition = null;
+        }
+    }
+    updateSpeedWidget(swPlan.updateWidget.displaySpeedMph, swPlan.updateWidget.shownLimit);
+    if (swPlan.fetchHint) {
+        fetchSpeedLimitThrottled(
+            swPlan.fetchHint.lat,
+            swPlan.fetchHint.lon,
+            swPlan.fetchHint.displaySpeedMph,
+            swPlan.fetchHint.roadType,
+            swPlan.fetchHint.valhallaSpeedLimitMph,
+            swPlan.fetchHint.heading
+        );
+    }
+}
+
+/**
  * Turn detection, voice, and widget side-effects for one GPS tick.
  * @param {number} lat
  * @param {number} lon
@@ -12064,6 +12113,18 @@ function applyGpsHazardAndDeviationSideEffectsTick(lat, lon, accuracy, tickPlan)
     }
     if (tickPlan.processHazards) {
         processNavigationHazardAlerts(lat, lon);
+    }
+}
+
+/**
+ * Road name fetch side-effect for one GPS tick.
+ * @param {number} lat
+ * @param {number} lon
+ * @param {Object} tickPlan - from buildGpsNavigationSideEffectsTickPlan
+ */
+function applyGpsRoadNameSideEffectTick(lat, lon, tickPlan) {
+    if (tickPlan.fetchRoadName) {
+        fetchRoadNameThrottled(lat, lon);
     }
 }
 
@@ -12173,27 +12234,7 @@ function applyGpsLaneAndSpeedSideEffectsTick(ctx) {
                 heading,
             })
             : { action: 'skip' };
-        if (swPlan.action === 'apply') {
-            if (swPlan.resetFetchState) {
-                _lastActiveManeuverIdx = swPlan.newLastActiveManeuverIdx;
-                const state = _getSpeedLimitFetchState();
-                if (state) {
-                    state.lastFetchAt = 0;
-                    state.lastPosition = null;
-                }
-            }
-            updateSpeedWidget(swPlan.updateWidget.displaySpeedMph, swPlan.updateWidget.shownLimit);
-            if (swPlan.fetchHint) {
-                fetchSpeedLimitThrottled(
-                    swPlan.fetchHint.lat,
-                    swPlan.fetchHint.lon,
-                    swPlan.fetchHint.displaySpeedMph,
-                    swPlan.fetchHint.roadType,
-                    swPlan.fetchHint.valhallaSpeedLimitMph,
-                    swPlan.fetchHint.heading
-                );
-            }
-        }
+        applySpeedWidgetFromApplyPlan(swPlan);
     }
 }
 
@@ -12253,9 +12294,7 @@ function applyGpsNavigationSideEffectsTick(ctx) {
         });
     }
 
-    if (tickPlan.fetchRoadName) {
-        fetchRoadNameThrottled(lat, lon);
-    }
+    applyGpsRoadNameSideEffectTick(lat, lon, tickPlan);
 
     return { distanceToNextTurn };
 }
@@ -12338,19 +12377,26 @@ function applyGpsPositionTick(sample) {
                 : 0),
         })
         : null;
-    let heading = posTick ? posTick.heading : 0;
-    if (posTick) {
-        _snapBlendWeightState = posTick.statePatch.snapBlendWeightState;
-        lastSnappedRouteIndex = posTick.statePatch.lastSnappedRouteIndex;
-        _smoothDisplayLat = posTick.statePatch.smoothDisplayLat;
-        _smoothDisplayLon = posTick.statePatch.smoothDisplayLon;
-    } else if (_smoothDisplayLat == null || _smoothDisplayLon == null) {
-        _smoothDisplayLat = lat;
-        _smoothDisplayLon = lon;
-    }
-    const markerLat = _smoothDisplayLat;
-    const markerLon = _smoothDisplayLon;
-    const followJumpM = posTick ? posTick.followJumpM : Number.POSITIVE_INFINITY;
+    const posApply = SGpos
+        ? SGpos.buildGpsPositionStateApplyPlan(posTick, {
+            lat,
+            lon,
+            smoothDisplayLat: _smoothDisplayLat,
+            smoothDisplayLon: _smoothDisplayLon,
+        })
+        : {
+            action: 'apply',
+            heading: 0,
+            markerLat: lat,
+            markerLon: lon,
+            followJumpM: Number.POSITIVE_INFINITY,
+            statePatch: { smoothDisplayLat: lat, smoothDisplayLon: lon },
+        };
+    applyGpsPositionStateFromPlan(posApply);
+    const heading = posApply.heading;
+    const markerLat = posApply.markerLat;
+    const markerLon = posApply.markerLon;
+    const followJumpM = posApply.followJumpM;
 
     const displaySpeedMph = smoothGpsSpeedMph(speedMph);
     const SL = _speedLimitWidget();
