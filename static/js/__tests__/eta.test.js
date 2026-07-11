@@ -310,4 +310,17 @@ describe('journey summary helpers', () => {
     test('buildJourneySummaryModalApplyPlan returns not visible without route data', () => {
         expect(ETA.buildJourneySummaryModalApplyPlan(null, {})).toEqual({ visible: false });
     });
+
+    test('buildJourneySummaryModalExecutePlan wraps modal element ids', () => {
+        const execute = ETA.buildJourneySummaryModalExecutePlan({
+            visible: true,
+            distanceText: '10 km',
+            timeText: '20 min',
+            costText: '£5.00',
+            avgSpeedText: '30 km/h',
+        });
+        expect(execute.shouldShow).toBe(true);
+        expect(execute.elementIds.summaryDistance).toBe('summaryDistance');
+        expect(execute.expandBottomSheet).toBe(true);
+    });
 });

@@ -433,6 +433,31 @@
         };
     }
 
+    /**
+     * Execute plan for mounting the end-of-journey summary modal.
+     * @param {Object} applyPlan - from buildJourneySummaryModalApplyPlan
+     * @returns {Object}
+     */
+    function buildJourneySummaryModalExecutePlan(applyPlan) {
+        applyPlan = applyPlan || {};
+        return {
+            shouldShow: !!applyPlan.visible,
+            modalId: 'journeySummaryModal',
+            elementIds: {
+                summaryDistance: 'summaryDistance',
+                summaryTime: 'summaryTime',
+                summaryCost: 'summaryCost',
+                summaryAvgSpeed: 'summaryAvgSpeed',
+            },
+            distanceText: applyPlan.distanceText,
+            timeText: applyPlan.timeText,
+            costText: applyPlan.costText,
+            avgSpeedText: applyPlan.avgSpeedText,
+            expandBottomSheet: true,
+            logMessage: '[Journey Summary] Displayed summary',
+        };
+    }
+
     var api = {
         formatRemainingTime: formatRemainingTime,
         buildETAVoiceMessage: buildETAVoiceMessage,
@@ -453,6 +478,7 @@
         buildJourneySummaryBarApplyPlan: buildJourneySummaryBarApplyPlan,
         buildTraveledJourneyRoutePatch: buildTraveledJourneyRoutePatch,
         buildJourneySummaryModalApplyPlan: buildJourneySummaryModalApplyPlan,
+        buildJourneySummaryModalExecutePlan: buildJourneySummaryModalExecutePlan,
         MAX_PLAUSIBLE_AVG_KMH: MAX_PLAUSIBLE_AVG_KMH,
         TRAFFIC_RATIO_MAX_AGE_MS: TRAFFIC_RATIO_MAX_AGE_MS,
     };

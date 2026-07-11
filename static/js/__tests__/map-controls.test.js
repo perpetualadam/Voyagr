@@ -137,4 +137,19 @@ describe('map-controls module', () => {
         expect(lifecycle.startAutoTraffic).toBe(true);
         expect(lifecycle.startRouteTraffic).toBe(false);
     });
+
+    test('buildNavStopPreflightPlan and lifecycle execute plans', () => {
+        expect(MC.buildNavStopPreflightPlan(false, false).shouldStop).toBe(false);
+        expect(MC.buildNavStopPreflightPlan(true, false).shouldStop).toBe(true);
+        const lifecycle = MC.buildNavStopLifecycleExecutePlan({
+            routeInProgress: true,
+            lastCalculatedRoute: { distance_km: 10 },
+            hasWakeLock: true,
+            arModeActive: false,
+            updatePending: false,
+        });
+        expect(lifecycle.persistCompletedTrip).toBe(true);
+        expect(lifecycle.stopAutoTraffic).toBe(true);
+        expect(MC.buildNavStopStateResetPlan().routeInProgress).toBe(false);
+    });
 });

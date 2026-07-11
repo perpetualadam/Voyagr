@@ -230,4 +230,32 @@ describe('auto traffic interval dispatch plans', () => {
         expect(plan.toggles[0].elementId).toBe(TC.AUTO_TRAFFIC_UPDATE_TOGGLE_ID);
         expect(plan.toggles[2].enabled).toBe(true);
     });
+
+    test('buildUpdateTrafficConditionsOrchestrationPlan validates route presence', () => {
+        expect(TC.buildUpdateTrafficConditionsOrchestrationPlan(null, 'A', 'B').shouldFetch).toBe(false);
+        const orch = TC.buildUpdateTrafficConditionsOrchestrationPlan({}, 'A', 'B');
+        expect(orch.shouldFetch).toBe(true);
+        expect(orch.requestBody).toEqual({ start: 'A', end: 'B' });
+    });
+
+    test('buildDisplayTrafficUpdateExecutePlan compares normalized durations', () => {
+        expect(TC.parseStoredRouteDurationMinutes({ time: '20 min' })).toBe(20);
+        const changed = TC.buildDisplayTrafficUpdateExecutePlan(
+            { updated_duration_minutes: 25, traffic_level: 'heavy', congestion_percentage: 10, incidents_count: 1 },
+            { time: '20 min', distance_km: 10 },
+            { convertDistance: (km) => String(km), distUnit: 'mi' },
+            '12:00'
+        );
+        expect(changed.durationChanged).toBe(true);
+        expect(changed.durationChangedStatusMessage).toContain('20');
+        expect(changed.durationChangedStatusMessage).toContain('25');
+
+        const same = TC.buildDisplayTrafficUpdateExecutePlan(
+            { updated_duration_minutes: 20, traffic_level: 'light' },
+            { time: '20 min' },
+            {},
+            '12:00'
+        );
+        expect(same.durationChanged).toBe(false);
+    });
 });

@@ -2610,43 +2610,48 @@ let routeEditingEnabled = false;
  */
 function enableRouteEditing() {
     const WP = _waypoints();
-    const plan = WP.buildRouteEditMarkersPlan(routePath);
-    if (!plan.valid) {
-        showStatus(plan.statusMessage, plan.statusType);
+    const execute = WP.buildRouteEditEnableExecutePlan(
+        WP.buildRouteEditMarkersPlan(routePath)
+    );
+    if (!execute.shouldEnable) {
+        showStatus(execute.errorStatusMessage, execute.statusType);
         return;
     }
 
     routeEditingEnabled = true;
     clearRouteDragMarkers();
 
-    plan.markers.forEach((markerPlan) => {
+    execute.markers.forEach((markerPlan) => {
         addRouteDragMarker(markerPlan.lat, markerPlan.lon, markerPlan.routeIndex);
     });
 
-    showStatus(plan.statusMessage, plan.statusType);
-    console.log(`[Route Edit] Added ${routeDragMarkers.length} drag markers`);
+    showStatus(execute.statusMessage, execute.statusType);
+    console.log(execute.addedLogPrefix + routeDragMarkers.length + execute.addedLogSuffix);
 }
 
 /**
  * Add a draggable marker for route editing
  */
 function addRouteDragMarker(lat, lon, routeIndex) {
-    const mountPlan = _waypoints().buildRouteDragMarkerMountPlan(lat, lon, routeIndex);
-    const marker = MapLibreHelpers.createMarker(mountPlan.lat, mountPlan.lon, {
-        className: mountPlan.className,
-        html: mountPlan.markerHtml,
-        iconSize: mountPlan.iconSize,
-        iconAnchor: mountPlan.iconAnchor,
+    const WP = _waypoints();
+    const execute = WP.buildRouteDragMarkerExecutePlan(
+        WP.buildRouteDragMarkerMountPlan(lat, lon, routeIndex)
+    );
+    const marker = MapLibreHelpers.createMarker(execute.lat, execute.lon, {
+        className: execute.className,
+        html: execute.markerHtml,
+        iconSize: execute.iconSize,
+        iconAnchor: execute.iconAnchor,
     }).addTo(map);
 
     const el = marker.getElement();
-    if (el && mountPlan.cursorStyle) {
-        el.style.cursor = mountPlan.cursorStyle;
+    if (el && execute.cursorStyle) {
+        el.style.cursor = execute.cursorStyle;
     }
 
-    marker.routeIndex = mountPlan.routeIndex;
-    marker.originalLat = mountPlan.lat;
-    marker.originalLon = mountPlan.lon;
+    marker.routeIndex = execute.routeIndex;
+    marker.originalLat = execute.originalLat;
+    marker.originalLon = execute.originalLon;
 
     routeDragMarkers.push(marker);
 }
@@ -2678,13 +2683,16 @@ async function addDraggedViaPoint(lat, lon) {
  * Clear all route drag markers
  */
 function clearRouteDragMarkers() {
+    const execute = _waypoints().buildClearRouteDragMarkersExecutePlan();
+    if (!execute.shouldClear) return;
+
     routeDragMarkers.forEach(marker => {
         if (marker && typeof marker.remove === 'function') {
             marker.remove();
         }
     });
     routeDragMarkers = [];
-    routeEditingEnabled = false;
+    if (execute.disableRouteEditing) routeEditingEnabled = false;
 }
 
 /**
@@ -3340,17 +3348,33 @@ function useRoute(index) {
  * @returns {{ shareLink: string, encodedRoute: string }|null}
  */
 function buildEncodedShareLink(includeGeometry) {
-    if (!window.lastCalculatedRoute) return null;
-    const route = window.lastCalculatedRoute;
-    const startInput = document.getElementById('start').value;
-    const endInput = document.getElementById('end').value;
-    const sharing = _routeSharing();
-    const payload = sharing.buildShareableRoutePayload(route, startInput, endInput, includeGeometry);
-    const encodedRoute = sharing.encodeRoutePayload(payload);
+    const RS = _routeSharing();
+    const plan = RS.buildEncodedShareLinkPlan(
+        RS.buildEncodedShareLinkInputPlan({
+            route: window.lastCalculatedRoute,
+            startLabel: document.getElementById('start')?.value,
+            endLabel: document.getElementById('end')?.value,
+            origin: window.location.origin,
+            includeGeometry,
+        })
+    );
+    if (!plan.ok) return null;
     return {
-        shareLink: sharing.buildShareUrl(window.location.origin, encodedRoute),
-        encodedRoute: encodedRoute,
+        shareLink: plan.shareLink,
+        encodedRoute: plan.encodedRoute,
     };
+}
+
+function buildEncodedShareLinkPlan(includeGeometry) {
+    return _routeSharing().buildEncodedShareLinkPlan(
+        _routeSharing().buildEncodedShareLinkInputPlan({
+            route: window.lastCalculatedRoute,
+            startLabel: document.getElementById('start')?.value,
+            endLabel: document.getElementById('end')?.value,
+            origin: window.location.origin,
+            includeGeometry,
+        })
+    );
 }
 
 /**
@@ -3397,32 +3421,30 @@ function loadSharedRouteFromUrl() {
  * @returns {*} Return value description
  */
 function prepareRouteSharing() {
-    if (!window.lastCalculatedRoute) {
-        showStatus('No route calculated yet', 'error');
+    const RS = _routeSharing();
+    const execute = RS.buildPrepareRouteSharingExecutePlan(
+        RS.buildPrepareRouteSharingInputPlan({
+            route: window.lastCalculatedRoute,
+            startLabel: document.getElementById('start')?.value,
+            endLabel: document.getElementById('end')?.value,
+            distanceText: convertDistance(window.lastCalculatedRoute?.distance_km || 0),
+            distUnit: getDistanceUnit(),
+            currencySymbol: getCurrencySymbol(),
+        })
+    );
+    if (!execute.shouldPrepare) {
+        showStatus(execute.errorStatusMessage, 'error');
         return;
     }
 
-    const route = window.lastCalculatedRoute;
-    const startInput = document.getElementById('start').value;
-    const endInput = document.getElementById('end').value;
-    const symbol = getCurrencySymbol();
-    const summary = _routeSharing().buildRouteShareSummaryValues(route, {
-        startLabel: startInput,
-        endLabel: endInput,
-        distanceText: convertDistance(route.distance_km || 0),
-        distUnit: getDistanceUnit(),
-        currencySymbol: symbol,
+    Object.entries(execute.elementPatches).forEach(([id, text]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
     });
-
-    document.getElementById('shareStart').textContent = `Start: ${summary.startLabel}`;
-    document.getElementById('shareEnd').textContent = `End: ${summary.endLabel}`;
-    document.getElementById('shareDistance').textContent = `Distance: ${summary.distanceText} ${summary.distUnit}`;
-    document.getElementById('shareTime').textContent = `Duration: ${summary.durationText}`;
-    document.getElementById('shareCost').textContent = `Total Cost: ${summary.totalCostText}`;
 
     console.log('[Cost] Route sharing prepared with costs:', {
         distanceUnit: distanceUnit,
-        totalCost: summary.totalCost.toFixed(2),
+        totalCost: execute.summary.totalCost.toFixed(2),
     });
 }
 
@@ -3432,17 +3454,21 @@ function prepareRouteSharing() {
  * @returns {*} Return value description
  */
 function generateShareLink() {
-    const built = buildEncodedShareLink(true);
-    if (!built) {
-        showStatus('No route calculated yet', 'error');
+    const RS = _routeSharing();
+    const execute = RS.buildShareLinkGenerateExecutePlan(buildEncodedShareLinkPlan(true));
+    if (!execute.shouldGenerate) {
+        showStatus(execute.errorStatusMessage, 'error');
         return;
     }
 
-    document.getElementById('shareLink').value = built.shareLink;
-    document.getElementById('shareLinkContainer').style.display = 'block';
-    document.getElementById('qrCodeContainer').style.display = 'none';
+    const shareLinkInput = document.getElementById(execute.shareLinkInputId);
+    if (shareLinkInput) shareLinkInput.value = execute.shareLink;
+    const linkContainer = document.getElementById(execute.showContainerId);
+    if (linkContainer) linkContainer.style.display = 'block';
+    const qrContainer = document.getElementById(execute.hideContainerId);
+    if (qrContainer) qrContainer.style.display = 'none';
 
-    showStatus('Share link generated!', 'success');
+    showStatus(execute.successStatusMessage, 'success');
 }
 
 /**
@@ -3463,33 +3489,32 @@ function copyShareLink() {
  * @returns {*} Return value description
  */
 function generateQRCode() {
-    const built = buildEncodedShareLink(false);
-    if (!built) {
-        showStatus('No route calculated yet', 'error');
+    const RS = _routeSharing();
+    const execute = RS.buildQrCodeGenerateExecutePlan(buildEncodedShareLinkPlan(false));
+    if (!execute.shouldGenerate) {
+        showStatus(execute.errorStatusMessage, 'error');
         return;
     }
 
-    const shareLink = built.shareLink;
-    const RS = _routeSharing();
-
-    // Clear previous QR code
-    const qrContainer = document.getElementById('qrCode');
+    const qrContainer = document.getElementById(execute.qrContainerId);
+    if (!qrContainer) return;
     qrContainer.innerHTML = '';
 
-    const qrImageUrl = RS.buildQrCodeImageUrl(shareLink);
+    const qrImageUrl = RS.buildQrCodeImageUrl(execute.shareLink);
     const qrImage = document.createElement('img');
     qrImage.src = qrImageUrl;
     qrImage.alt = 'Route QR Code';
     qrImage.style.cssText = RS.getQrCodeImageStyleCssText();
     qrContainer.appendChild(qrImage);
 
-    // Store QR image URL for download
-    window.qrImageUrl = qrImageUrl;
+    if (execute.storeQrImageUrl) window.qrImageUrl = qrImageUrl;
 
-    document.getElementById('qrCodeContainer').style.display = 'block';
-    document.getElementById('shareLinkContainer').style.display = 'none';
+    const qrCodeContainer = document.getElementById(execute.qrCodeContainerId);
+    if (qrCodeContainer) qrCodeContainer.style.display = 'block';
+    const shareLinkContainer = document.getElementById(execute.shareLinkContainerId);
+    if (shareLinkContainer) shareLinkContainer.style.display = 'none';
 
-    showStatus('QR code generated!', 'success');
+    showStatus(execute.successStatusMessage, 'success');
 }
 
 /**
@@ -3517,22 +3542,21 @@ function downloadQRCode() {
  * @returns {*} Return value description
  */
 function shareViaWhatsApp() {
-    if (!window.lastCalculatedRoute) {
-        showStatus('No route calculated yet', 'error');
-        return;
-    }
-
-    const route = window.lastCalculatedRoute;
-    const message = _routeSharing().buildShareWhatsAppMessage(route, {
-        startLabel: document.getElementById('start').value,
-        endLabel: document.getElementById('end').value,
-        distanceText: convertDistance(route.distance_km),
+    const RS = _routeSharing();
+    const plan = RS.buildShareViaWhatsAppPlan(window.lastCalculatedRoute, {
+        startLabel: document.getElementById('start')?.value,
+        endLabel: document.getElementById('end')?.value,
+        distanceText: convertDistance(window.lastCalculatedRoute?.distance_km || 0),
         distUnit: getDistanceUnit(),
         currencySymbol: getCurrencySymbol(),
     });
+    if (!plan.ok) {
+        showStatus(plan.errorStatusMessage, 'error');
+        return;
+    }
 
-    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank');
-    showStatus('Opening WhatsApp...', 'success');
+    window.open(`${plan.whatsAppUrlPrefix}${encodeURIComponent(plan.message)}`, '_blank');
+    showStatus(plan.statusMessage, 'success');
 }
 
 /**
@@ -3541,26 +3565,23 @@ function shareViaWhatsApp() {
  * @returns {*} Return value description
  */
 function shareViaEmail() {
-    if (!window.lastCalculatedRoute) {
-        showStatus('No route calculated yet', 'error');
+    const RS = _routeSharing();
+    const startInput = document.getElementById('start')?.value;
+    const endInput = document.getElementById('end')?.value;
+    const plan = RS.buildShareViaEmailPlan(window.lastCalculatedRoute, {
+        startLabel: startInput,
+        endLabel: endInput,
+        distanceText: convertDistance(window.lastCalculatedRoute?.distance_km || 0),
+        distUnit: getDistanceUnit(),
+        currencySymbol: getCurrencySymbol(),
+    });
+    if (!plan.ok) {
+        showStatus(plan.errorStatusMessage, 'error');
         return;
     }
 
-    const route = window.lastCalculatedRoute;
-    const startInput = document.getElementById('start').value;
-    const endInput = document.getElementById('end').value;
-    const sharing = _routeSharing();
-    const fmt = {
-        startLabel: startInput,
-        endLabel: endInput,
-        distanceText: convertDistance(route.distance_km),
-        distUnit: getDistanceUnit(),
-        currencySymbol: getCurrencySymbol(),
-    };
-    const subject = sharing.buildShareEmailSubject(startInput, endInput);
-    const body = sharing.buildShareEmailBody(route, fmt);
-    window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    showStatus('Opening email client...', 'success');
+    window.location.href = `${plan.mailtoPrefix}${encodeURIComponent(plan.subject)}&body=${encodeURIComponent(plan.body)}`;
+    showStatus(plan.statusMessage, 'success');
 }
 
 // ===== ROUTE ANALYTICS FUNCTIONS =====
@@ -3904,36 +3925,35 @@ function deleteSavedRoute(routeId) {
  * @returns {*} Return value description
  */
 function updateTrafficConditions() {
-    if (!window.lastCalculatedRoute) {
-        showStatus('No route calculated yet', 'error');
+    const TC = _trafficChange();
+    const orch = TC.buildUpdateTrafficConditionsOrchestrationPlan(
+        window.lastCalculatedRoute,
+        document.getElementById('start')?.value,
+        document.getElementById('end')?.value
+    );
+    if (!orch.shouldFetch) {
+        showStatus(orch.errorStatusMessage, 'error');
         return;
     }
 
-    const startInput = document.getElementById('start').value;
-    const endInput = document.getElementById('end').value;
+    showStatus(orch.loadingStatusMessage, orch.loadingStatusType);
 
-    showStatus('Checking traffic conditions...', 'info');
-
-    // Fetch traffic data from backend
-    fetch('/api/traffic-conditions', {
+    fetch(orch.apiPath, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            start: startInput,
-            end: endInput
-        })
+        body: JSON.stringify(orch.requestBody),
     })
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 displayTrafficUpdate(data);
             } else {
-                showStatus('Could not fetch traffic data', 'error');
+                showStatus(orch.apiFailureStatusMessage, 'error');
             }
         })
         .catch(error => {
             console.error('Traffic update error:', error);
-            showStatus('Error updating traffic conditions', 'error');
+            showStatus(orch.fetchErrorStatusMessage, 'error');
         });
 }
 /**
@@ -3943,47 +3963,33 @@ function updateTrafficConditions() {
  * @returns {*} Return value description
  */
 function displayTrafficUpdate(data) {
-    const symbol = getCurrencySymbol();
-    const distUnit = getDistanceUnit();
+    const TC = _trafficChange();
+    const timeStr = new Date().toLocaleTimeString();
+    const execute = TC.buildDisplayTrafficUpdateExecutePlan(
+        data,
+        window.lastCalculatedRoute,
+        {
+            convertDistance,
+            distUnit: getDistanceUnit(),
+        },
+        timeStr
+    );
 
-    // Update traffic status
-    const trafficStatus = document.getElementById('trafficStatus');
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString();
-    trafficStatus.textContent = `Last updated: ${timeStr} | Conditions: ${data.traffic_level}`;
-
-    // Update route information if traffic has changed
-    if (data.updated_duration_minutes !== window.lastCalculatedRoute.time) {
-        const oldTime = parseInt(window.lastCalculatedRoute.time);
-        const newTime = data.updated_duration_minutes;
-        const timeDiff = newTime - oldTime;
-        const timeDiffStr = timeDiff > 0 ? `+${timeDiff}` : `${timeDiff}`;
-
-        showStatus(`Traffic update: Duration changed from ${oldTime} to ${newTime} min (${timeDiffStr} min)`, 'warning');
-
-        // Update route data
-        window.lastCalculatedRoute.time = newTime;
-        window.lastCalculatedRoute.traffic_level = data.traffic_level;
-        window.lastCalculatedRoute.updated_at = new Date().toISOString();
-
-        // Recalculate costs if distance changed
-        if (data.updated_distance_km) {
-            window.lastCalculatedRoute.distance_km = data.updated_distance_km;
-        }
-    } else {
-        showStatus(`Traffic conditions: ${data.traffic_level}`, 'success');
+    if (execute.shouldUpdateStatusElement) {
+        const trafficStatus = document.getElementById(execute.trafficStatusElementId);
+        if (trafficStatus) trafficStatus.textContent = execute.trafficStatusText;
     }
 
-    // Display traffic details
-    const trafficDetails = `
-        🚦 Traffic Level: ${data.traffic_level}
-        📏 Distance: ${convertDistance(data.updated_distance_km || window.lastCalculatedRoute.distance_km)} ${distUnit}
-        ⏱️ Duration: ${data.updated_duration_minutes} minutes
-        🚗 Congestion: ${data.congestion_percentage}%
-        ⚠️ Incidents: ${data.incidents_count}
-    `;
+    if (execute.durationChanged) {
+        showStatus(execute.durationChangedStatusMessage, execute.durationChangedStatusType);
+        window.lastCalculatedRoute = Object.assign({}, window.lastCalculatedRoute, execute.patchLastCalculatedRoute);
+    } else {
+        showStatus(execute.unchangedStatusMessage, execute.unchangedStatusType);
+        window.lastCalculatedRoute.traffic_level = execute.patchLastCalculatedRoute.traffic_level;
+        window.lastCalculatedRoute.updated_at = execute.patchLastCalculatedRoute.updated_at;
+    }
 
-    console.log('Traffic Update:', trafficDetails);
+    console.log(execute.detailsLogPrefix, execute.detailsLogMessage);
 }
 
 // Auto-update traffic every 5 minutes during navigation
@@ -15086,124 +15092,114 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
  * @returns {*} Return value description
  */
 function stopTurnByTurnNavigation() {
-    if (!routeInProgress && !isTrackingActive) {
-        updateNavigationFabVisibility();
+    const MC = _mapControls();
+    const preflight = MC.buildNavStopPreflightPlan(routeInProgress, isTrackingActive);
+    if (!preflight.shouldStop) {
+        if (preflight.updateNavFabOnly) updateNavigationFabVisibility();
         return;
     }
 
-    resetNavigationArrivalState();
+    const wasRouteInProgress = routeInProgress;
+    const lifecycle = MC.buildNavStopLifecycleExecutePlan({
+        routeInProgress: wasRouteInProgress,
+        lastCalculatedRoute: window.lastCalculatedRoute,
+        hasWakeLock: !!window.screenWakeLock,
+        arModeActive: arModeActive,
+        driverPerspectiveEnabled: driverPerspectiveEnabled,
+        updatePending: updatePending,
+    });
 
-    // Show summary if we have a valid route and were actually navigating.
-    // Use the real driven distance/time (odometer) so reroutes/detours are reflected,
-    // not just the final route leg stored in window.lastCalculatedRoute.
-    if (window.lastCalculatedRoute && routeInProgress) {
+    if (lifecycle.resetNavigationArrival) resetNavigationArrivalState();
+
+    if (lifecycle.buildTraveledSummary && window.lastCalculatedRoute && wasRouteInProgress) {
         const summaryRoute = buildTraveledJourneyRoute(window.lastCalculatedRoute);
-        void persistCompletedTrip(summaryRoute);
-        showJourneySummary(summaryRoute);
+        if (lifecycle.persistCompletedTrip) void persistCompletedTrip(summaryRoute);
+        if (lifecycle.showJourneySummary) showJourneySummary(summaryRoute);
     }
 
-    routeInProgress = false;
-    routeJoinConfirmedForDeviation = false;
+    const reset = MC.buildNavStopStateResetPlan();
+    routeInProgress = reset.routeInProgress;
+    routeJoinConfirmedForDeviation = reset.routeJoinConfirmedForDeviation;
     clearRerouteFailureRetries();
-    currentStepIndex = 0;
-    currentRouteSteps = [];
+    currentStepIndex = reset.currentStepIndex;
+    if (reset.clearRouteSteps) currentRouteSteps = [];
     resetVehicleMarkerDisplayState();
-    clearPersistedRoute();
-    stopGPSTracking();
-    hideRoadNameBar();
+    if (reset.clearPersistedRoute) clearPersistedRoute();
+    if (lifecycle.stopGpsTracking) stopGPSTracking();
+    if (lifecycle.hideRoadNameBar) hideRoadNameBar();
 
-    // ===== SCREEN WAKE LOCK: Release screen lock when navigation ends =====
-    if (window.screenWakeLock) {
+    if (lifecycle.releaseWakeLock && window.screenWakeLock) {
         window.screenWakeLock.release()
             .then(() => {
-                console.log('[Screen Wake Lock] Screen lock released - screen can turn off');
+                console.log(lifecycle.wakeLockReleaseLog);
                 window.screenWakeLock = null;
             })
             .catch(err => {
-                console.log('[Screen Wake Lock] Error releasing wake lock:', err);
+                console.log(lifecycle.wakeLockReleaseErrorLogPrefix, err);
             });
     }
 
-    // ===== PHASE 1: Stop live data refresh =====
-    stopLiveDataRefresh();
-    clearInitialETAAnnouncement();
-    initialETAMovementRetries = 0;
+    if (lifecycle.stopLiveDataRefresh) stopLiveDataRefresh();
+    if (lifecycle.clearInitialEtaAnnouncement) clearInitialETAAnnouncement();
+    initialETAMovementRetries = reset.initialETAMovementRetries;
 
-    // ===== STOP AUTO-TRAFFIC UPDATES =====
-    stopAutoTrafficUpdates();
-    console.log('[Navigation] Auto-traffic updates stopped');
-
-    // ===== STOP ROUTE TRAFFIC EDGE DISPLAY =====
-    stopRouteTrafficUpdates();
-    console.log('[Navigation] Route traffic edge display stopped');
-
-    // ===== HIDE ZOOM AND FOLLOW BUTTON =====
-    mapFollowingActive = false;
-    const navStopFabPlan = _mapControls().getNavStopFabHidePlan();
-    const zoomFollowBtn = document.getElementById('zoomFollowToggle');
-    if (zoomFollowBtn) {
-        zoomFollowBtn.style.display = navStopFabPlan.zoomFollowDisplay;
+    if (lifecycle.stopAutoTraffic) {
+        stopAutoTrafficUpdates();
+        console.log(lifecycle.autoTrafficStopLog);
+    }
+    if (lifecycle.stopRouteTraffic) {
+        stopRouteTrafficUpdates();
+        console.log(lifecycle.routeTrafficStopLog);
     }
 
-    const recenterBtn = document.getElementById('recenterVehicleFab');
-    if (recenterBtn) {
-        recenterBtn.style.display = navStopFabPlan.recenterDisplay;
+    mapFollowingActive = reset.mapFollowingActive;
+    if (lifecycle.applyFabHidePlan) {
+        const navStopFabPlan = MC.getNavStopFabHidePlan();
+        const zoomFollowBtn = document.getElementById('zoomFollowToggle');
+        if (zoomFollowBtn) zoomFollowBtn.style.display = navStopFabPlan.zoomFollowDisplay;
+
+        const recenterBtn = document.getElementById('recenterVehicleFab');
+        if (recenterBtn) recenterBtn.style.display = navStopFabPlan.recenterDisplay;
+
+        const journeyOverviewBtn = document.getElementById('journeyOverviewBtn');
+        if (journeyOverviewBtn) journeyOverviewBtn.style.display = navStopFabPlan.journeyOverviewDisplay;
+
+        const arModeBtn = document.getElementById('arModeBtn');
+        if (arModeBtn) arModeBtn.style.display = navStopFabPlan.arModeBtnDisplay;
+
+        const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
+        if (driverPerspectiveBtn) driverPerspectiveBtn.style.display = navStopFabPlan.driverPerspectiveDisplay;
     }
+    journeyOverviewActive = reset.journeyOverviewActive;
 
-    // ===== HIDE JOURNEY OVERVIEW BUTTON =====
-    const journeyOverviewBtn = document.getElementById('journeyOverviewBtn');
-    if (journeyOverviewBtn) {
-        journeyOverviewBtn.style.display = navStopFabPlan.journeyOverviewDisplay;
-    }
-    journeyOverviewActive = false;
+    if (lifecycle.updateRoadReportFab) updateRoadReportFabVisibility();
+    if (lifecycle.updateNavFabVisibility) updateNavigationFabVisibility();
+    if (lifecycle.updateSpeedWidget) updateSpeedWidgetVisibility();
+    if (lifecycle.hideTurnWidget) hideTurnInstructionWidget();
+    if (lifecycle.hideJourneySummaryBar) hideJourneySummaryBar();
 
-    updateRoadReportFabVisibility();
-    updateNavigationFabVisibility();
-
-    // ===== HIDE SPEED WIDGET (use consolidated function) =====
-    updateSpeedWidgetVisibility();
-
-    // ===== HIDE TURN INSTRUCTION WIDGET =====
-    hideTurnInstructionWidget();
-
-    // ===== HIDE JOURNEY SUMMARY BAR =====
-    hideJourneySummaryBar();
-
-    // ===== HIDE AR AND 3D VIEW BUTTONS =====
-    const arModeBtn = document.getElementById('arModeBtn');
-    if (arModeBtn) {
-        arModeBtn.style.display = navStopFabPlan.arModeBtnDisplay;
-    }
-    const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
-    if (driverPerspectiveBtn) {
-        driverPerspectiveBtn.style.display = navStopFabPlan.driverPerspectiveDisplay;
-    }
-    // Stop AR mode if active
-    if (arModeActive) {
+    if (lifecycle.stopArModeIfActive && arModeActive) {
         stopARMode();
     }
-    // After nav, flat map unless user still wants driver view for browsing
-    if (map) {
-        if (driverPerspectiveEnabled) {
+    if (lifecycle.applyMapPitchReset && map) {
+        if (lifecycle.driverPerspectiveEnabled) {
             applyDriverPerspective();
         } else {
             map.easeTo({ pitch: 0, bearing: 0, duration: 500 });
         }
     }
 
-    savedMapState = null;
+    savedMapState = reset.savedMapState;
 
-    // ===== PHASE 2: Apply pending PWA update if available =====
-    if (updatePending) {
-        showStatus('🔄 Applying pending update...', 'success');
+    if (lifecycle.applyPendingPwaUpdate && updatePending) {
+        showStatus(lifecycle.pwaUpdateStatusMessage, 'success');
         saveAppState();
         setTimeout(() => {
             window.location.reload();
-        }, 1000);
+        }, lifecycle.pwaReloadDelayMs);
         return;
     }
 
-    const MC = _mapControls();
     showStatus(MC.getNavStopStatusMessage(), 'info');
     const navStopNote = MC.getNavStopNotification();
     sendNotification(navStopNote.title, navStopNote.body, 'info');
@@ -16552,30 +16548,36 @@ function buildTraveledJourneyRoute(route) {
  * @param {Object} routeData - The route data (from window.lastCalculatedRoute)
  */
 function showJourneySummary(routeData) {
-    const modal = document.getElementById('journeySummaryModal');
+    const ETA = _eta();
+    const execute = ETA.buildJourneySummaryModalExecutePlan(
+        ETA.buildJourneySummaryModalApplyPlan(routeData, {
+            traveledMeters: _navTraveledMeters,
+            navStartedAt: _navStartedAt,
+            convertDistance,
+            distUnit: getDistanceUnit(),
+            convertSpeed,
+            speedUnit: getSpeedUnit(),
+            currencySymbol: getCurrencySymbol(),
+            adjustCost: adjustCostForUnits,
+        })
+    );
+    if (!execute.shouldShow) return;
+
+    const modal = document.getElementById(execute.modalId);
     if (!modal) return;
 
-    const plan = _eta().buildJourneySummaryModalApplyPlan(routeData, {
-        traveledMeters: _navTraveledMeters,
-        navStartedAt: _navStartedAt,
-        convertDistance,
-        distUnit: getDistanceUnit(),
-        convertSpeed,
-        speedUnit: getSpeedUnit(),
-        currencySymbol: getCurrencySymbol(),
-        adjustCost: adjustCostForUnits,
-    });
-
-    if (!plan.visible) return;
-
-    document.getElementById('summaryDistance').textContent = plan.distanceText;
-    document.getElementById('summaryTime').textContent = plan.timeText;
-    document.getElementById('summaryCost').textContent = plan.costText;
-    document.getElementById('summaryAvgSpeed').textContent = plan.avgSpeedText;
+    const distanceEl = document.getElementById(execute.elementIds.summaryDistance);
+    const timeEl = document.getElementById(execute.elementIds.summaryTime);
+    const costEl = document.getElementById(execute.elementIds.summaryCost);
+    const speedEl = document.getElementById(execute.elementIds.summaryAvgSpeed);
+    if (distanceEl) distanceEl.textContent = execute.distanceText;
+    if (timeEl) timeEl.textContent = execute.timeText;
+    if (costEl) costEl.textContent = execute.costText;
+    if (speedEl) speedEl.textContent = execute.avgSpeedText;
 
     modal.style.display = 'block';
-    expandBottomSheet();
-    console.log('[Journey Summary] Displayed summary');
+    if (execute.expandBottomSheet) expandBottomSheet();
+    if (execute.logMessage) console.log(execute.logMessage);
 }
 
 /**

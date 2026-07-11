@@ -277,6 +277,97 @@
     }
 
     /**
+     * Orchestration plan for updateTrafficConditions entry validation.
+     * @param {Object|null|undefined} lastCalculatedRoute
+     * @param {string} startLabel
+     * @param {string} endLabel
+     * @returns {Object}
+     */
+    function buildUpdateTrafficConditionsOrchestrationPlan(lastCalculatedRoute, startLabel, endLabel) {
+        if (!lastCalculatedRoute) {
+            return {
+                shouldFetch: false,
+                errorStatusMessage: 'No route calculated yet',
+            };
+        }
+        return {
+            shouldFetch: true,
+            requestBody: { start: startLabel, end: endLabel },
+            loadingStatusMessage: 'Checking traffic conditions...',
+            loadingStatusType: 'info',
+            apiPath: '/api/traffic-conditions',
+            fetchErrorStatusMessage: 'Error updating traffic conditions',
+            apiFailureStatusMessage: 'Could not fetch traffic data',
+        };
+    }
+
+    /**
+     * Parse stored route duration minutes from mixed time fields.
+     * @param {{ duration_minutes?: number, time?: string|number }|null|undefined} route
+     * @returns {number}
+     */
+    function parseStoredRouteDurationMinutes(route) {
+        route = route || {};
+        var minutes = route.duration_minutes;
+        if (minutes == null && route.time != null) {
+            minutes = parseInt(route.time, 10);
+        }
+        return Number.isFinite(minutes) ? minutes : 0;
+    }
+
+    /**
+     * Execute plan for applying a traffic-conditions API response to UI/state.
+     * @param {Object} data
+     * @param {Object} lastCalculatedRoute
+     * @param {Object} fmt
+     * @param {function(number): string} fmt.convertDistance
+     * @param {string} fmt.distUnit
+     * @param {string} [timeStr]
+     * @returns {Object}
+     */
+    function buildDisplayTrafficUpdateExecutePlan(data, lastCalculatedRoute, fmt, timeStr) {
+        data = data || {};
+        fmt = fmt || {};
+        lastCalculatedRoute = lastCalculatedRoute || {};
+        var oldMinutes = parseStoredRouteDurationMinutes(lastCalculatedRoute);
+        var newMinutes = data.updated_duration_minutes;
+        var durationChanged = Number.isFinite(newMinutes) && newMinutes !== oldMinutes;
+        var timeDiff = durationChanged ? newMinutes - oldMinutes : 0;
+        var timeDiffStr = timeDiff > 0 ? '+' + timeDiff : String(timeDiff);
+        var distanceKm = data.updated_distance_km || lastCalculatedRoute.distance_km;
+        var distanceText = typeof fmt.convertDistance === 'function'
+            ? fmt.convertDistance(distanceKm)
+            : String(distanceKm);
+        return {
+            shouldUpdateStatusElement: true,
+            trafficStatusElementId: 'trafficStatus',
+            trafficStatusText: 'Last updated: ' + (timeStr || '') + ' | Conditions: ' + (data.traffic_level || ''),
+            durationChanged: durationChanged,
+            durationChangedStatusMessage: durationChanged
+                ? 'Traffic update: Duration changed from ' + oldMinutes + ' to ' + newMinutes +
+                    ' min (' + timeDiffStr + ' min)'
+                : null,
+            durationChangedStatusType: 'warning',
+            unchangedStatusMessage: 'Traffic conditions: ' + (data.traffic_level || ''),
+            unchangedStatusType: 'success',
+            patchLastCalculatedRoute: {
+                time: durationChanged ? newMinutes : lastCalculatedRoute.time,
+                traffic_level: data.traffic_level,
+                updated_at: new Date().toISOString(),
+                distance_km: data.updated_distance_km || lastCalculatedRoute.distance_km,
+            },
+            detailsLogMessage: [
+                '🚦 Traffic Level: ' + (data.traffic_level || ''),
+                '📏 Distance: ' + distanceText + ' ' + (fmt.distUnit || ''),
+                '⏱️ Duration: ' + newMinutes + ' minutes',
+                '🚗 Congestion: ' + (data.congestion_percentage || 0) + '%',
+                '⚠️ Incidents: ' + (data.incidents_count || 0),
+            ].join('\n'),
+            detailsLogPrefix: 'Traffic Update:',
+        };
+    }
+
+    /**
      * Toggle plan for enabling/disabling automatic traffic updates.
      * @param {boolean} currentEnabled
      * @returns {Object}
@@ -367,6 +458,9 @@
         buildAutoTrafficIntervalTickPlan: buildAutoTrafficIntervalTickPlan,
         buildStopAutoTrafficUpdatesDispatchPlan: buildStopAutoTrafficUpdatesDispatchPlan,
         buildManualTrafficUpdateStatusPlan: buildManualTrafficUpdateStatusPlan,
+        buildUpdateTrafficConditionsOrchestrationPlan: buildUpdateTrafficConditionsOrchestrationPlan,
+        parseStoredRouteDurationMinutes: parseStoredRouteDurationMinutes,
+        buildDisplayTrafficUpdateExecutePlan: buildDisplayTrafficUpdateExecutePlan,
         buildAutoTrafficUpdateTogglePlan: buildAutoTrafficUpdateTogglePlan,
         buildAutoRerouteOnDeviationTogglePlan: buildAutoRerouteOnDeviationTogglePlan,
         buildInitAutoTrafficRerouteTogglesPlan: buildInitAutoTrafficRerouteTogglesPlan,

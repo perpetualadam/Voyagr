@@ -154,4 +154,19 @@ describe('route-sharing module', () => {
         expect(RS.getQrCodeImageStyleCssText()).toBe('width: 200px; height: 200px;');
         expect(RS.getQrCodeImageStyleCssText(128)).toBe('width: 128px; height: 128px;');
     });
+
+    test('buildEncodedShareLinkPlan and share execute plans', () => {
+        const link = RS.buildEncodedShareLinkPlan({
+            route: { distance_km: 10, time: '20 min', geometry: 'abc' },
+            startLabel: 'A',
+            endLabel: 'B',
+            origin: 'https://voyagr.test',
+            includeGeometry: true,
+        });
+        expect(link.ok).toBe(true);
+        expect(link.shareLink).toContain('https://voyagr.test');
+        expect(RS.buildShareLinkGenerateExecutePlan(link).shouldGenerate).toBe(true);
+        expect(RS.buildQrCodeGenerateExecutePlan(link).shouldGenerate).toBe(true);
+        expect(RS.buildShareViaWhatsAppPlan(null, {}).ok).toBe(false);
+    });
 });

@@ -231,6 +231,86 @@
     }
 
     /**
+     * Preflight plan for stopTurnByTurnNavigation when already idle.
+     * @param {boolean} routeInProgress
+     * @param {boolean} isTrackingActive
+     * @returns {Object}
+     */
+    function buildNavStopPreflightPlan(routeInProgress, isTrackingActive) {
+        if (!routeInProgress && !isTrackingActive) {
+            return {
+                shouldStop: false,
+                updateNavFabOnly: true,
+            };
+        }
+        return { shouldStop: true };
+    }
+
+    /**
+     * State reset plan when navigation stops.
+     * @returns {Object}
+     */
+    function buildNavStopStateResetPlan() {
+        return {
+            routeInProgress: false,
+            routeJoinConfirmedForDeviation: false,
+            currentStepIndex: 0,
+            clearRouteSteps: true,
+            clearRerouteFailureRetries: true,
+            clearPersistedRoute: true,
+            journeyOverviewActive: false,
+            mapFollowingActive: false,
+            savedMapState: null,
+            initialETAMovementRetries: 0,
+        };
+    }
+
+    /**
+     * Execute plan for navigation stop lifecycle side effects.
+     * @param {Object} o
+     * @param {boolean} o.routeInProgress
+     * @param {Object|null|undefined} o.lastCalculatedRoute
+     * @param {boolean} o.hasWakeLock
+     * @param {boolean} o.arModeActive
+     * @param {boolean} o.driverPerspectiveEnabled
+     * @param {boolean} o.updatePending
+     * @returns {Object}
+     */
+    function buildNavStopLifecycleExecutePlan(o) {
+        o = o || {};
+        var wasNavigating = !!(o.lastCalculatedRoute && o.routeInProgress);
+        return {
+            resetNavigationArrival: true,
+            buildTraveledSummary: wasNavigating,
+            persistCompletedTrip: wasNavigating,
+            showJourneySummary: wasNavigating,
+            stopGpsTracking: true,
+            hideRoadNameBar: true,
+            releaseWakeLock: !!o.hasWakeLock,
+            stopLiveDataRefresh: true,
+            clearInitialEtaAnnouncement: true,
+            stopAutoTraffic: true,
+            stopRouteTraffic: true,
+            updateRoadReportFab: true,
+            updateNavFabVisibility: true,
+            updateSpeedWidget: true,
+            hideTurnWidget: true,
+            hideJourneySummaryBar: true,
+            applyFabHidePlan: true,
+            stopArModeIfActive: !!o.arModeActive,
+            applyMapPitchReset: true,
+            driverPerspectiveEnabled: !!o.driverPerspectiveEnabled,
+            applyPendingPwaUpdate: !!o.updatePending,
+            autoTrafficStopLog: '[Navigation] Auto-traffic updates stopped',
+            routeTrafficStopLog: '[Navigation] Route traffic edge display stopped',
+            wakeLockReleaseLog: '[Screen Wake Lock] Screen lock released - screen can turn off',
+            wakeLockReleaseErrorLogPrefix: '[Screen Wake Lock] Error releasing wake lock:',
+            pwaUpdateStatusMessage: '🔄 Applying pending update...',
+            pwaReloadDelayMs: 1000,
+        };
+    }
+
+    /**
      * Status message shown when screen wake lock is acquired at nav start.
      * @returns {string}
      */
@@ -399,6 +479,9 @@
         getNavStopFabHidePlan: getNavStopFabHidePlan,
         getNavStopStatusMessage: getNavStopStatusMessage,
         getNavStopNotification: getNavStopNotification,
+        buildNavStopPreflightPlan: buildNavStopPreflightPlan,
+        buildNavStopStateResetPlan: buildNavStopStateResetPlan,
+        buildNavStopLifecycleExecutePlan: buildNavStopLifecycleExecutePlan,
         getWakeLockAcquiredStatusMessage: getWakeLockAcquiredStatusMessage,
         buildNavStartUserFeedbackPlan: buildNavStartUserFeedbackPlan,
         getNavStartNoGeometryStatusMessage: getNavStartNoGeometryStatusMessage,

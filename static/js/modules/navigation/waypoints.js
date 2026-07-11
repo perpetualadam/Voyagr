@@ -343,6 +343,63 @@
     }
 
     /**
+     * Execute plan for enabling route editing markers.
+     * @param {Object} markerPlan - from buildRouteEditMarkersPlan
+     * @returns {Object}
+     */
+    function buildRouteEditEnableExecutePlan(markerPlan) {
+        markerPlan = markerPlan || {};
+        if (!markerPlan.valid) {
+            return {
+                shouldEnable: false,
+                errorStatusMessage: markerPlan.statusMessage,
+                statusType: markerPlan.statusType,
+            };
+        }
+        return {
+            shouldEnable: true,
+            markers: markerPlan.markers || [],
+            statusMessage: markerPlan.statusMessage,
+            statusType: markerPlan.statusType,
+            addedLogPrefix: '[Route Edit] Added ',
+            addedLogSuffix: ' drag markers',
+        };
+    }
+
+    /**
+     * Execute plan for mounting one route drag marker.
+     * @param {Object} mountPlan - from buildRouteDragMarkerMountPlan
+     * @returns {Object}
+     */
+    function buildRouteDragMarkerExecutePlan(mountPlan) {
+        mountPlan = mountPlan || {};
+        return {
+            shouldMount: true,
+            lat: mountPlan.lat,
+            lon: mountPlan.lon,
+            routeIndex: mountPlan.routeIndex,
+            className: mountPlan.className,
+            markerHtml: mountPlan.markerHtml,
+            iconSize: mountPlan.iconSize,
+            iconAnchor: mountPlan.iconAnchor,
+            cursorStyle: mountPlan.cursorStyle,
+            originalLat: mountPlan.lat,
+            originalLon: mountPlan.lon,
+        };
+    }
+
+    /**
+     * Execute plan for clearing route drag markers.
+     * @returns {Object}
+     */
+    function buildClearRouteDragMarkersExecutePlan() {
+        return {
+            shouldClear: true,
+            disableRouteEditing: true,
+        };
+    }
+
+    /**
      * @param {string|number} label
      * @returns {string}
      */
@@ -1003,6 +1060,9 @@
         buildDraggedViaPointAddPlan: buildDraggedViaPointAddPlan,
         buildRouteEditingToggleDomApplyPlan: buildRouteEditingToggleDomApplyPlan,
         buildRouteEditingDisablePlan: buildRouteEditingDisablePlan,
+        buildRouteEditEnableExecutePlan: buildRouteEditEnableExecutePlan,
+        buildRouteDragMarkerExecutePlan: buildRouteDragMarkerExecutePlan,
+        buildClearRouteDragMarkersExecutePlan: buildClearRouteDragMarkersExecutePlan,
         ROUTE_EDIT_TOGGLE_ELEMENT_ID: ROUTE_EDIT_TOGGLE_ELEMENT_ID,
         ROUTE_EDIT_MARKER_INTERVAL_MIN: ROUTE_EDIT_MARKER_INTERVAL_MIN,
         buildViaPointMarkerHtml: buildViaPointMarkerHtml,

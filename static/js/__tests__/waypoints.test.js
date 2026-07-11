@@ -120,6 +120,19 @@ describe('waypoints module', () => {
         expect(dom.text).toContain('Editing');
     });
 
+    test('buildRouteEditEnableExecutePlan wraps marker mount plans', () => {
+        const execute = W.buildRouteEditEnableExecutePlan({
+            valid: true,
+            markers: [{ lat: 1, lon: 2, routeIndex: 5 }],
+            statusMessage: 'ok',
+            statusType: 'info',
+        });
+        expect(execute.shouldEnable).toBe(true);
+        expect(execute.markers).toHaveLength(1);
+        expect(W.buildRouteEditEnableExecutePlan({ valid: false, statusMessage: 'bad' }).shouldEnable).toBe(false);
+        expect(W.buildClearRouteDragMarkersExecutePlan().disableRouteEditing).toBe(true);
+    });
+
     test('buildViaPointAddPlan prepares marker label and status', () => {
         const plan = W.buildViaPointAddPlan(51.5, -0.1, null, 1);
         expect(plan.viaPoint.name).toBe('Via-point 2');

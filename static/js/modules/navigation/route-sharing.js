@@ -477,6 +477,175 @@
         };
     }
 
+    /**
+     * Input assembly for prepareRouteSharing summary values.
+     * @param {Object} o
+     * @returns {Object}
+     */
+    function buildPrepareRouteSharingInputPlan(o) {
+        o = o || {};
+        return {
+            route: o.route,
+            startLabel: o.startLabel,
+            endLabel: o.endLabel,
+            distanceText: o.distanceText,
+            distUnit: o.distUnit,
+            currencySymbol: o.currencySymbol,
+        };
+    }
+
+    /**
+     * Execute plan for writing route share summary fields to the DOM.
+     * @param {Object} input - from buildPrepareRouteSharingInputPlan
+     * @returns {Object}
+     */
+    function buildPrepareRouteSharingExecutePlan(input) {
+        input = input || {};
+        if (!input.route) {
+            return {
+                shouldPrepare: false,
+                errorStatusMessage: 'No route calculated yet',
+            };
+        }
+        var summary = buildRouteShareSummaryValues(input.route, input);
+        return {
+            shouldPrepare: true,
+            summary: summary,
+            elementPatches: {
+                shareStart: 'Start: ' + summary.startLabel,
+                shareEnd: 'End: ' + summary.endLabel,
+                shareDistance: 'Distance: ' + summary.distanceText + ' ' + summary.distUnit,
+                shareTime: 'Duration: ' + summary.durationText,
+                shareCost: 'Total Cost: ' + summary.totalCostText,
+            },
+        };
+    }
+
+    /**
+     * Input assembly for encoded share link generation.
+     * @param {Object} o
+     * @returns {Object}
+     */
+    function buildEncodedShareLinkInputPlan(o) {
+        o = o || {};
+        return {
+            route: o.route,
+            startLabel: o.startLabel,
+            endLabel: o.endLabel,
+            origin: o.origin,
+            includeGeometry: o.includeGeometry !== false,
+        };
+    }
+
+    /**
+     * Plan for building an encoded share URL from the current route.
+     * @param {Object} input - from buildEncodedShareLinkInputPlan
+     * @returns {Object}
+     */
+    function buildEncodedShareLinkPlan(input) {
+        input = input || {};
+        if (!input.route) {
+            return { ok: false, errorStatusMessage: 'No route calculated yet' };
+        }
+        var payload = buildShareableRoutePayload(
+            input.route,
+            input.startLabel,
+            input.endLabel,
+            input.includeGeometry
+        );
+        var encodedRoute = encodeRoutePayload(payload);
+        return {
+            ok: true,
+            shareLink: buildShareUrl(input.origin, encodedRoute),
+            encodedRoute: encodedRoute,
+        };
+    }
+
+    /**
+     * Execute plan for showing a generated share link in the UI.
+     * @param {Object} linkPlan - from buildEncodedShareLinkPlan
+     * @returns {Object}
+     */
+    function buildShareLinkGenerateExecutePlan(linkPlan) {
+        linkPlan = linkPlan || {};
+        if (!linkPlan.ok) {
+            return {
+                shouldGenerate: false,
+                errorStatusMessage: linkPlan.errorStatusMessage,
+            };
+        }
+        return {
+            shouldGenerate: true,
+            shareLink: linkPlan.shareLink,
+            shareLinkInputId: 'shareLink',
+            showContainerId: 'shareLinkContainer',
+            hideContainerId: 'qrCodeContainer',
+            successStatusMessage: 'Share link generated!',
+        };
+    }
+
+    /**
+     * Execute plan for generating and mounting a route QR code.
+     * @param {Object} linkPlan - from buildEncodedShareLinkPlan
+     * @returns {Object}
+     */
+    function buildQrCodeGenerateExecutePlan(linkPlan) {
+        linkPlan = linkPlan || {};
+        if (!linkPlan.ok) {
+            return {
+                shouldGenerate: false,
+                errorStatusMessage: linkPlan.errorStatusMessage,
+            };
+        }
+        return {
+            shouldGenerate: true,
+            shareLink: linkPlan.shareLink,
+            qrContainerId: 'qrCode',
+            qrCodeContainerId: 'qrCodeContainer',
+            shareLinkContainerId: 'shareLinkContainer',
+            successStatusMessage: 'QR code generated!',
+            storeQrImageUrl: true,
+        };
+    }
+
+    /**
+     * Plan for sharing a route via WhatsApp.
+     * @param {Object|null|undefined} route
+     * @param {Object} fmt
+     * @returns {Object}
+     */
+    function buildShareViaWhatsAppPlan(route, fmt) {
+        if (!route) {
+            return { ok: false, errorStatusMessage: 'No route calculated yet' };
+        }
+        return {
+            ok: true,
+            message: buildShareWhatsAppMessage(route, fmt),
+            statusMessage: 'Opening WhatsApp...',
+            whatsAppUrlPrefix: 'https://wa.me/?text=',
+        };
+    }
+
+    /**
+     * Plan for sharing a route via email.
+     * @param {Object|null|undefined} route
+     * @param {Object} fmt
+     * @returns {Object}
+     */
+    function buildShareViaEmailPlan(route, fmt) {
+        fmt = fmt || {};
+        if (!route) {
+            return { ok: false, errorStatusMessage: 'No route calculated yet' };
+        }
+        return {
+            ok: true,
+            subject: buildShareEmailSubject(fmt.startLabel, fmt.endLabel),
+            body: buildShareEmailBody(route, fmt),
+            statusMessage: 'Opening email client...',
+            mailtoPrefix: 'mailto:?subject=',
+        };
+    }
+
     var api = {
         buildShareableRoutePayload: buildShareableRoutePayload,
         encodeRoutePayload: encodeRoutePayload,
@@ -501,6 +670,14 @@
         buildUseSavedRoutePlan: buildUseSavedRoutePlan,
         buildDeleteSavedRoutePlan: buildDeleteSavedRoutePlan,
         buildDeleteSavedRouteExecutePlan: buildDeleteSavedRouteExecutePlan,
+        buildPrepareRouteSharingInputPlan: buildPrepareRouteSharingInputPlan,
+        buildPrepareRouteSharingExecutePlan: buildPrepareRouteSharingExecutePlan,
+        buildEncodedShareLinkInputPlan: buildEncodedShareLinkInputPlan,
+        buildEncodedShareLinkPlan: buildEncodedShareLinkPlan,
+        buildShareLinkGenerateExecutePlan: buildShareLinkGenerateExecutePlan,
+        buildQrCodeGenerateExecutePlan: buildQrCodeGenerateExecutePlan,
+        buildShareViaWhatsAppPlan: buildShareViaWhatsAppPlan,
+        buildShareViaEmailPlan: buildShareViaEmailPlan,
         QR_CODE_IMAGE_SIZE_PX: QR_CODE_IMAGE_SIZE_PX,
         buildQrCodeImageUrl: buildQrCodeImageUrl,
         getQrCodeImageStyleCssText: getQrCodeImageStyleCssText,
