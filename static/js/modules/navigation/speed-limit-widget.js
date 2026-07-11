@@ -463,6 +463,29 @@
         };
     }
 
+    /**
+     * Execute plan for refreshing the speed widget after unit changes.
+     * @param {Object} [o]
+     * @returns {Object}
+     */
+    function buildUpdateAllSpeedDisplaysExecutePlan(o) {
+        o = o || {};
+        var shownLimit = pickDisplaySpeedLimitMph(
+            o.apiSpeedLimitMph,
+            o.valhallaSpeedLimitMph,
+            o.roadType,
+            o.region,
+            { allowRoadTypeFallback: true }
+        );
+        return {
+            shouldUpdateWidget: Number.isFinite(o.gpsSpeedMph) && o.gpsSpeedMph >= 0,
+            gpsSpeedMph: o.gpsSpeedMph,
+            shownLimitMph: shownLimit,
+            shouldLog: true,
+            logMessage: '[Units] Speed unit updated to ' + (o.speedUnit || ''),
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         createFetchState: createFetchState,
@@ -482,6 +505,7 @@
         buildSpeedLimitFetchStateApplyPlan: buildSpeedLimitFetchStateApplyPlan,
         buildSpeedLimitApiSuccessApplyPlan: buildSpeedLimitApiSuccessApplyPlan,
         buildSpeedLimitFetchFallbackApplyPlan: buildSpeedLimitFetchFallbackApplyPlan,
+        buildUpdateAllSpeedDisplaysExecutePlan: buildUpdateAllSpeedDisplaysExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

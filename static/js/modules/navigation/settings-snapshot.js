@@ -681,6 +681,106 @@
     }
 
     /**
+     * Execute plan for resetting all settings to defaults.
+     * @param {Object} [resetPlan] - from buildSettingsResetPlan
+     * @returns {Object}
+     */
+    function buildResetAllSettingsExecutePlan(resetPlan) {
+        resetPlan = resetPlan || buildSettingsResetPlan();
+        return {
+            shouldReset: true,
+            confirmMessage: resetPlan.confirmMessage,
+            localStorageKeys: resetPlan.localStorageKeys || [],
+            runtimeDefaults: resetPlan.runtimeDefaults || {},
+            reloadAfterReset: !!resetPlan.reloadAfterReset,
+        };
+    }
+
+    /**
+     * Orchestration plan for applying settings to the UI.
+     * @returns {Object}
+     */
+    function buildApplySettingsToUiOrchestrationPlan() {
+        return {
+            successLog: '[Settings] All settings applied to UI',
+            errorLogPrefix: '[Settings] Error applying settings to UI:',
+        };
+    }
+
+    /**
+     * Execute plan for applying a settings UI plan to form controls.
+     * @param {Object} uiPlan - from buildSettingsUiApplyPlan
+     * @returns {Object}
+     */
+    function buildApplySettingsUiExecutePlan(uiPlan) {
+        uiPlan = uiPlan || {};
+        return {
+            shouldApply: true,
+            uiPlan: uiPlan,
+            routingMode: uiPlan.routingMode,
+            mapTheme: uiPlan.mapTheme,
+            detourLabel: uiPlan.detourLabel,
+            sideEffects: uiPlan.sideEffects || {},
+        };
+    }
+
+    /**
+     * Input assembly for collecting settings form fragments from the app.
+     * @param {Object} [o]
+     * @returns {Object}
+     */
+    function buildCollectSettingsFormStateInputPlan(o) {
+        o = o || {};
+        return {
+            routePreferences: o.routePreferences || {},
+            hazardPreferences: o.hazardPreferences || {},
+            parkingPreferences: o.parkingPreferences || {},
+            multiDropPreferences: o.multiDropPreferences || {},
+            mapTheme: o.mapTheme || 'standard',
+        };
+    }
+
+    /**
+     * Stored-state plan for settings UI apply input assembly.
+     * @param {Object} [o]
+     * @returns {Object}
+     */
+    function buildCollectSettingsUiStoredStatePlan(o) {
+        o = o || {};
+        var parkingPrefs = {};
+        if (o.parkingPreferences) {
+            parkingPrefs = o.parkingPreferences;
+        } else if (o.parkingPreferencesRaw) {
+            try {
+                parkingPrefs = JSON.parse(o.parkingPreferencesRaw);
+            } catch (_) {
+                parkingPrefs = {};
+            }
+        }
+        return {
+            routePreferences: o.routePreferences,
+            parkingPreferences: parkingPrefs,
+            mapTheme: o.mapTheme || 'standard',
+            parkingParseErrorLog: '[Settings] Error parsing parking preferences:',
+        };
+    }
+
+    /**
+     * Runtime-state input for settings UI apply beyond snapshot runtime fields.
+     * @param {Object} runtime
+     * @returns {Object}
+     */
+    function buildCollectSettingsUiRuntimeStateInputPlan(runtime) {
+        runtime = runtime || {};
+        return {
+            mlPredictionsEnabled: !!runtime.mlPredictionsEnabled,
+            voiceAnnouncementsEnabled: !!runtime.voiceAnnouncementsEnabled,
+            batterySavingEnabled: !!runtime.batterySavingEnabled,
+            gestureControlEnabled: !!runtime.gestureControlEnabled,
+        };
+    }
+
+    /**
      * Post-restore side-effect plan for traffic services after settings hydrate.
      * @param {Object} [runtime] - restored runtime fields from buildSettingsRestorePlan
      * @param {Object} [opts]
@@ -892,6 +992,12 @@
         buildLoadMultiDropPreferencesExecutePlan: buildLoadMultiDropPreferencesExecutePlan,
         buildClearDepartureTimeApplyPlan: buildClearDepartureTimeApplyPlan,
         buildSettingsResetPlan: buildSettingsResetPlan,
+        buildResetAllSettingsExecutePlan: buildResetAllSettingsExecutePlan,
+        buildApplySettingsToUiOrchestrationPlan: buildApplySettingsToUiOrchestrationPlan,
+        buildApplySettingsUiExecutePlan: buildApplySettingsUiExecutePlan,
+        buildCollectSettingsFormStateInputPlan: buildCollectSettingsFormStateInputPlan,
+        buildCollectSettingsUiStoredStatePlan: buildCollectSettingsUiStoredStatePlan,
+        buildCollectSettingsUiRuntimeStateInputPlan: buildCollectSettingsUiRuntimeStateInputPlan,
         buildSettingsRestorePostApplyPlan: buildSettingsRestorePostApplyPlan,
         buildSettingsUiApplyPlan: buildSettingsUiApplyPlan,
         buildSettingsUiInputPlan: buildSettingsUiInputPlan,

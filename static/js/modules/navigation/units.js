@@ -147,6 +147,72 @@
         return (distanceM / 1000).toFixed(1) + ' km';
     }
 
+    /**
+     * Format a stored km value for a distance display element.
+     * @param {number} km
+     * @param {string} distanceUnit
+     * @returns {string|null}
+     */
+    function buildDistanceDisplayText(km, distanceUnit) {
+        var parsed = parseFloat(km);
+        if (!Number.isFinite(parsed)) return null;
+        return convertDistance(parsed, distanceUnit) + ' ' + getDistanceUnit(distanceUnit);
+    }
+
+    /**
+     * Execute plan for refreshing distance labels after unit changes.
+     * @param {Object} [o]
+     * @returns {Object}
+     */
+    function buildUpdateAllDistanceDisplaysExecutePlan(o) {
+        o = o || {};
+        var patches = [];
+        var mainText = buildDistanceDisplayText(o.mainDistanceKm, o.distanceUnit);
+        if (mainText) patches.push({ id: 'distance', text: mainText });
+        var previewText = buildDistanceDisplayText(o.previewDistanceKm, o.distanceUnit);
+        if (previewText) patches.push({ id: 'previewDistance', text: previewText });
+        return {
+            shouldUpdate: patches.length > 0,
+            elementPatches: patches,
+        };
+    }
+
+    /**
+     * Execute plan for refreshing cost labels after currency changes.
+     * @param {Object} [o]
+     * @returns {Object}
+     */
+    function buildUpdateAllCostDisplaysExecutePlan(o) {
+        o = o || {};
+        var symbol = o.currencySymbol || '£';
+        var patches = [];
+        [
+            { id: 'fuelCost', value: o.fuelCost },
+            { id: 'tollCost', value: o.tollCost },
+            { id: 'cazCost', value: o.cazCost },
+        ].forEach(function (item) {
+            if (item.value != null && item.value !== '') {
+                patches.push({ id: item.id, text: symbol + item.value });
+            }
+        });
+        return {
+            shouldUpdate: patches.length > 0,
+            elementPatches: patches,
+        };
+    }
+
+    /**
+     * Execute plan for logging temperature unit changes.
+     * @param {string} temperatureUnit
+     * @returns {Object}
+     */
+    function buildUpdateAllTemperatureDisplaysExecutePlan(temperatureUnit) {
+        return {
+            shouldLog: true,
+            logMessage: '[Units] Temperature unit updated to ' + temperatureUnit,
+        };
+    }
+
     var api = {
         convertDistance: convertDistance,
         getDistanceUnit: getDistanceUnit,
@@ -161,6 +227,10 @@
         temperatureUnitStatusLabel: temperatureUnitStatusLabel,
         formatRemainingDistanceText: formatRemainingDistanceText,
         formatPoiDistanceMeters: formatPoiDistanceMeters,
+        buildDistanceDisplayText: buildDistanceDisplayText,
+        buildUpdateAllDistanceDisplaysExecutePlan: buildUpdateAllDistanceDisplaysExecutePlan,
+        buildUpdateAllCostDisplaysExecutePlan: buildUpdateAllCostDisplaysExecutePlan,
+        buildUpdateAllTemperatureDisplaysExecutePlan: buildUpdateAllTemperatureDisplaysExecutePlan,
         CURRENCY_SYMBOLS: CURRENCY_SYMBOLS,
     };
 

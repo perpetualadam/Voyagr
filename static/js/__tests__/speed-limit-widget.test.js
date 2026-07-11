@@ -184,4 +184,18 @@ describe('speed-limit-widget module', () => {
         expect(apply.statePatch.currentSpeedLimitMph).toBe(40);
         expect(apply.widgetUpdate.shownLimit).toBe(40);
     });
+
+    test('buildUpdateAllSpeedDisplaysExecutePlan refreshes widget with shown limit', () => {
+        const execute = SL.buildUpdateAllSpeedDisplaysExecutePlan({
+            apiSpeedLimitMph: 30,
+            valhallaSpeedLimitMph: 70,
+            roadType: 'motorway',
+            region: 'uk',
+            gpsSpeedMph: 45,
+            speedUnit: 'mph',
+        });
+        expect(execute.shouldUpdateWidget).toBe(true);
+        expect(execute.shownLimitMph).toBe(30);
+        expect(execute.logMessage).toContain('mph');
+    });
 });

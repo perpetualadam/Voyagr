@@ -1692,12 +1692,16 @@ function applySettingsUiFromPlan(plan) {
  * @returns {Object}
  */
 function collectSettingsUiRuntimeState() {
-    return {
-        ...collectSettingsSnapshotRuntimeState(),
+    const SS = _settingsSnapshot();
+    const extras = SS.buildCollectSettingsUiRuntimeStateInputPlan({
         mlPredictionsEnabled: localStorage.getItem('mlPredictionsEnabled') === 'true',
         voiceAnnouncementsEnabled: localStorage.getItem('voiceAnnouncementsEnabled') === 'true',
         batterySavingEnabled: localStorage.getItem('pref_batterySaving') === 'true',
         gestureControlEnabled: localStorage.getItem('gestureEnabled') === 'true',
+    });
+    return {
+        ...collectSettingsSnapshotRuntimeState(),
+        ...extras,
     };
 }
 
@@ -1706,21 +1710,22 @@ function collectSettingsUiRuntimeState() {
  * @returns {Object}
  */
 function collectSettingsUiStoredState() {
-    let parkingPrefs = {};
+    const SS = _settingsSnapshot();
     const savedParking = localStorage.getItem('parkingPreferences');
+    let parkingPrefs = {};
     if (savedParking) {
         try {
             parkingPrefs = JSON.parse(savedParking);
         } catch (e) {
-            console.log('[Settings] Error parsing parking preferences:', e);
+            console.log(SS.buildCollectSettingsUiStoredStatePlan({}).parkingParseErrorLog, e);
         }
     }
 
-    return {
+    return SS.buildCollectSettingsUiStoredStatePlan({
         routePreferences: _routePrefs().getRoutePreferences(localStorage),
         parkingPreferences: parkingPrefs,
         mapTheme: localStorage.getItem('mapTheme') || 'standard',
-    };
+    });
 }
 
 /**
@@ -1729,19 +1734,24 @@ function collectSettingsUiStoredState() {
  * @returns {*} Return value description
  */
 function applySettingsToUI() {
+    const SS = _settingsSnapshot();
+    const orch = SS.buildApplySettingsToUiOrchestrationPlan();
     try {
-        const SS = _settingsSnapshot();
-        const plan = SS.buildSettingsUiApplyPlan(
-            SS.buildSettingsUiInputPlan(
-                collectSettingsUiRuntimeState(),
-                collectSettingsUiStoredState()
+        const execute = SS.buildApplySettingsUiExecutePlan(
+            SS.buildSettingsUiApplyPlan(
+                SS.buildSettingsUiInputPlan(
+                    collectSettingsUiRuntimeState(),
+                    collectSettingsUiStoredState()
+                )
             )
         );
-        applySettingsUiFromPlan(plan);
+        if (execute.shouldApply) {
+            applySettingsUiFromPlan(execute.uiPlan);
+        }
 
-        console.log('[Settings] All settings applied to UI');
+        console.log(orch.successLog);
     } catch (error) {
-        console.error('[Settings] Error applying settings to UI:', error);
+        console.error(orch.errorLogPrefix, error);
     }
 }
 
@@ -1793,7 +1803,11 @@ function applySettingsResetFromPlan(plan) {
  * @returns {*} Return value description
  */
 function resetAllSettings() {
-    applySettingsResetFromPlan(_settingsSnapshot().buildSettingsResetPlan());
+    applySettingsResetFromPlan(
+        _settingsSnapshot().buildResetAllSettingsExecutePlan(
+            _settingsSnapshot().buildSettingsResetPlan()
+        )
+    );
 }
 
 /**
@@ -1874,23 +1888,19 @@ function importSettings() {
  * @returns {*} Return value description
  */
 function updateAllDistanceDisplays() {
-    // Update main distance display
-    const distanceElement = document.getElementById('distance');
-    if (distanceElement && distanceElement.dataset.km) {
-        const km = parseFloat(distanceElement.dataset.km);
-        if (!isNaN(km)) {
-            distanceElement.textContent = convertDistance(km) + ' ' + getDistanceUnit();
-        }
-    }
+    const mainEl = document.getElementById('distance');
+    const previewEl = document.getElementById('previewDistance');
+    const execute = _units().buildUpdateAllDistanceDisplaysExecutePlan({
+        distanceUnit,
+        mainDistanceKm: mainEl?.dataset.km,
+        previewDistanceKm: previewEl?.dataset.km,
+    });
+    if (!execute.shouldUpdate) return;
 
-    // Update route preview distance if available
-    const previewDistanceElement = document.getElementById('previewDistance');
-    if (previewDistanceElement && previewDistanceElement.dataset.km) {
-        const previewKm = parseFloat(previewDistanceElement.dataset.km);
-        if (!isNaN(previewKm)) {
-            previewDistanceElement.textContent = convertDistance(previewKm) + ' ' + getDistanceUnit();
-        }
-    }
+    execute.elementPatches.forEach(({ id, text }) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    });
 }
 
 // Update all cost displays
@@ -1903,17 +1913,18 @@ function updateAllCostDisplays() {
     const fuelCostEl = document.getElementById('fuelCost');
     const tollCostEl = document.getElementById('tollCost');
     const cazCostEl = document.getElementById('cazCost');
-    const symbol = getCurrencySymbol();
+    const execute = _units().buildUpdateAllCostDisplaysExecutePlan({
+        currencySymbol: getCurrencySymbol(),
+        fuelCost: fuelCostEl?.dataset.value,
+        tollCost: tollCostEl?.dataset.value,
+        cazCost: cazCostEl?.dataset.value,
+    });
+    if (!execute.shouldUpdate) return;
 
-    if (fuelCostEl && fuelCostEl.dataset.value) {
-        fuelCostEl.textContent = symbol + fuelCostEl.dataset.value;
-    }
-    if (tollCostEl && tollCostEl.dataset.value) {
-        tollCostEl.textContent = symbol + tollCostEl.dataset.value;
-    }
-    if (cazCostEl && cazCostEl.dataset.value) {
-        cazCostEl.textContent = symbol + cazCostEl.dataset.value;
-    }
+    execute.elementPatches.forEach(({ id, text }) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    });
 }
 
 // Update all speed displays
@@ -1923,19 +1934,18 @@ function updateAllCostDisplays() {
  * @returns {*} Return value description
  */
 function updateAllSpeedDisplays() {
-    const SL = _speedLimitWidget();
-    const shownLimit = SL
-        ? SL.pickDisplaySpeedLimitMph(
-            currentSpeedLimitMph,
-            null,
-            lastDetectedRoadType || getCurrentRoadType(undefined, currentGpsSpeedMph),
-            lastSpeedLimitRegion
-        )
-        : currentSpeedLimitMph;
-    if (Number.isFinite(currentGpsSpeedMph) && currentGpsSpeedMph >= 0) {
-        updateSpeedWidget(currentGpsSpeedMph, shownLimit);
+    const execute = _speedLimitWidget().buildUpdateAllSpeedDisplaysExecutePlan({
+        apiSpeedLimitMph: currentSpeedLimitMph,
+        valhallaSpeedLimitMph: null,
+        roadType: lastDetectedRoadType || getCurrentRoadType(undefined, currentGpsSpeedMph),
+        region: lastSpeedLimitRegion,
+        gpsSpeedMph: currentGpsSpeedMph,
+        speedUnit,
+    });
+    if (execute.shouldUpdateWidget) {
+        updateSpeedWidget(execute.gpsSpeedMph, execute.shownLimitMph);
     }
-    console.log('[Units] Speed unit updated to', speedUnit);
+    if (execute.shouldLog) console.log(execute.logMessage);
 }
 
 // Update all temperature displays
@@ -1945,8 +1955,8 @@ function updateAllSpeedDisplays() {
  * @returns {*} Return value description
  */
 function updateAllTemperatureDisplays() {
-    // This will be called when weather updates occur
-    console.log('[Units] Temperature unit updated to', temperatureUnit);
+    const execute = _units().buildUpdateAllTemperatureDisplaysExecutePlan(temperatureUnit);
+    if (execute.shouldLog) console.log(execute.logMessage);
 }
 
 // ===== TRIP HISTORY FUNCTIONS =====
@@ -4196,16 +4206,18 @@ function showStatus(message, type) {
  */
 function collectSettingsFormState() {
     const SS = _settingsSnapshot();
-    return SS.buildSettingsFormStateInputPlan({
-        routePreferences: collectRoutePreferencesFormState(),
-        hazardPreferences: SS.buildSettingsHazardPreferencesPlan({
-            avoidTolls: isAvoidTollsEnabled(),
-            getStorageItem: (key) => localStorage.getItem(key),
-        }),
-        parkingPreferences: collectParkingPreferencesFormState(),
-        multiDropPreferences: collectMultiDropFormState(),
-        mapTheme: localStorage.getItem('mapTheme') || 'standard',
-    });
+    return SS.buildSettingsFormStateInputPlan(
+        SS.buildCollectSettingsFormStateInputPlan({
+            routePreferences: collectRoutePreferencesFormState(),
+            hazardPreferences: SS.buildSettingsHazardPreferencesPlan({
+                avoidTolls: isAvoidTollsEnabled(),
+                getStorageItem: (key) => localStorage.getItem(key),
+            }),
+            parkingPreferences: collectParkingPreferencesFormState(),
+            multiDropPreferences: collectMultiDropFormState(),
+            mapTheme: localStorage.getItem('mapTheme') || 'standard',
+        })
+    );
 }
 
 /**

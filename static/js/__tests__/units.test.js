@@ -123,3 +123,31 @@ describe('formatPoiDistanceMeters', () => {
         expect(U.formatPoiDistanceMeters(2000, 'mi')).toMatch(/mi$/);
     });
 });
+
+describe('unit display refresh plans', () => {
+    test('buildUpdateAllDistanceDisplaysExecutePlan patches distance elements', () => {
+        const execute = U.buildUpdateAllDistanceDisplaysExecutePlan({
+            distanceUnit: 'mi',
+            mainDistanceKm: 10,
+            previewDistanceKm: 5,
+        });
+        expect(execute.shouldUpdate).toBe(true);
+        expect(execute.elementPatches).toHaveLength(2);
+        expect(execute.elementPatches[0].text).toContain('mi');
+    });
+
+    test('buildUpdateAllCostDisplaysExecutePlan prefixes currency symbol', () => {
+        const execute = U.buildUpdateAllCostDisplaysExecutePlan({
+            currencySymbol: '£',
+            fuelCost: '5.00',
+            tollCost: '1.50',
+        });
+        expect(execute.elementPatches[0].text).toBe('£5.00');
+        expect(execute.elementPatches[1].text).toBe('£1.50');
+    });
+
+    test('buildUpdateAllTemperatureDisplaysExecutePlan logs unit change', () => {
+        const execute = U.buildUpdateAllTemperatureDisplaysExecutePlan('fahrenheit');
+        expect(execute.logMessage).toContain('fahrenheit');
+    });
+});

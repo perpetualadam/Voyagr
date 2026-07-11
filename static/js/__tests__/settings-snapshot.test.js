@@ -451,4 +451,32 @@ describe('settings-snapshot module', () => {
         expect(prefs.optimizeStopOrder).toBe(true);
         expect(prefs.departureTime).toBe('09:00');
     });
+
+    test('buildApplySettingsToUiOrchestrationPlan and reset execute plan', () => {
+        const orch = SS.buildApplySettingsToUiOrchestrationPlan();
+        expect(orch.successLog).toContain('applied to UI');
+        const reset = SS.buildResetAllSettingsExecutePlan(SS.buildSettingsResetPlan());
+        expect(reset.shouldReset).toBe(true);
+        expect(reset.reloadAfterReset).toBe(true);
+    });
+
+    test('buildCollectSettingsFormStateInputPlan assembles settings fragments', () => {
+        const input = SS.buildCollectSettingsFormStateInputPlan({
+            routePreferences: { preferScenic: true },
+            mapTheme: 'dark',
+        });
+        const form = SS.buildSettingsFormStateInputPlan(input);
+        expect(form.routePreferences.preferScenic).toBe(true);
+        expect(form.mapTheme).toBe('dark');
+    });
+
+    test('buildCollectSettingsUiStoredStatePlan parses parking preferences JSON', () => {
+        const stored = SS.buildCollectSettingsUiStoredStatePlan({
+            routePreferences: { avoidHighways: true },
+            parkingPreferencesRaw: '{"maxWalkingDistance":"15"}',
+            mapTheme: 'satellite',
+        });
+        expect(stored.parkingPreferences.maxWalkingDistance).toBe('15');
+        expect(stored.mapTheme).toBe('satellite');
+    });
 });
