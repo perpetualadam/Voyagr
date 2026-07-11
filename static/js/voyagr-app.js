@@ -12088,24 +12088,38 @@ function applyGpsNavigationSideEffectsTick(ctx) {
     }
 
     if (sideEffects.showSpeedWidget) {
-        if (speedLimitPlan.resetFetchState) {
-            _lastActiveManeuverIdx = speedLimitPlan.newLastActiveManeuverIdx;
-            const state = _getSpeedLimitFetchState();
-            if (state) {
-                state.lastFetchAt = 0;
-                state.lastPosition = null;
-            }
-        }
-        updateSpeedWidget(speedLimitPlan.displaySpeedMph, speedLimitPlan.shownLimit);
-        if (routeInProgress || isTrackingActive) {
-            fetchSpeedLimitThrottled(
+        const SL = _speedLimitWidget();
+        const swPlan = SL
+            ? SL.buildSpeedWidgetApplyPlan({
+                showSpeedWidget: sideEffects.showSpeedWidget,
+                speedLimitPlan,
+                routeInProgress,
+                isTrackingActive,
                 lat,
                 lon,
-                speedLimitPlan.displaySpeedMph,
-                speedLimitPlan.roadType,
-                speedLimitPlan.valhallaSpeedLimitMph,
-                heading
-            );
+                heading,
+            })
+            : { action: 'skip' };
+        if (swPlan.action === 'apply') {
+            if (swPlan.resetFetchState) {
+                _lastActiveManeuverIdx = swPlan.newLastActiveManeuverIdx;
+                const state = _getSpeedLimitFetchState();
+                if (state) {
+                    state.lastFetchAt = 0;
+                    state.lastPosition = null;
+                }
+            }
+            updateSpeedWidget(swPlan.updateWidget.displaySpeedMph, swPlan.updateWidget.shownLimit);
+            if (swPlan.fetchHint) {
+                fetchSpeedLimitThrottled(
+                    swPlan.fetchHint.lat,
+                    swPlan.fetchHint.lon,
+                    swPlan.fetchHint.displaySpeedMph,
+                    swPlan.fetchHint.roadType,
+                    swPlan.fetchHint.valhallaSpeedLimitMph,
+                    swPlan.fetchHint.heading
+                );
+            }
         }
     }
 
@@ -12117,12 +12131,11 @@ function applyGpsNavigationSideEffectsTick(ctx) {
 }
 
 /**
- * Apply one GPS watchPosition fix: position, follow camera, navigation side-effects.
- * @param {GeolocationPosition} position
+ * Position, odometer, speed-limit, and side-effects setup for one GPS tick.
+ * @param {Object} sample - from normalizeGeolocationCoordsSample
+ * @returns {Object}
  */
-function applyGpsTrackingTick(position) {
-    const SGsample = _speedGps();
-    const sample = SGsample.normalizeGeolocationCoordsSample(position.coords);
+function applyGpsPositionTick(sample) {
     const lat = sample.lat;
     const lon = sample.lon;
     const accuracy = sample.accuracy;
@@ -12133,6 +12146,7 @@ function applyGpsTrackingTick(position) {
     currentLon = lon;
     updateRoadReportFabVisibility();
 
+    const SGsample = _speedGps();
     const historyPlan = SGsample.buildTrackingHistoryAppendPlan(trackingHistory, {
         lat: lat,
         lon: lon,
@@ -12242,31 +12256,52 @@ function applyGpsTrackingTick(position) {
         speedLimitShowWidget: speedLimitPlan.showWidget,
     });
 
-    // Update user marker on map with vehicle icon and heading
-    applyGpsVehicleMarkerTick(markerLat, markerLon, heading, speed, accuracy);
-
-    const followState = applyGpsFollowCameraTick(
-        markerLat,
-        markerLon,
-        followJumpM,
-        speedMph,
-        heading,
-        speedLimitPlan.roadType || 'unknown'
-    );
-    const navigationFollowEaseApplied = followState.navigationFollowEaseApplied;
-    const navigationFollowZoom = followState.navigationFollowZoom;
-
-    applyGpsNavigationSideEffectsTick({
+    return {
         lat,
         lon,
-        speed,
         accuracy,
-        heading,
+        speed,
         speedMph,
-        sideEffects,
+        markerLat,
+        markerLon,
+        heading,
+        followJumpM,
         speedLimitPlan,
-        navigationFollowEaseApplied,
-        navigationFollowZoom,
+        sideEffects,
+    };
+}
+
+/**
+ * Apply one GPS watchPosition fix: position, follow camera, navigation side-effects.
+ * @param {GeolocationPosition} position
+ */
+function applyGpsTrackingTick(position) {
+    const SGsample = _speedGps();
+    const sample = SGsample.normalizeGeolocationCoordsSample(position.coords);
+    const pos = applyGpsPositionTick(sample);
+
+    applyGpsVehicleMarkerTick(pos.markerLat, pos.markerLon, pos.heading, pos.speed, pos.accuracy);
+
+    const followState = applyGpsFollowCameraTick(
+        pos.markerLat,
+        pos.markerLon,
+        pos.followJumpM,
+        pos.speedMph,
+        pos.heading,
+        pos.speedLimitPlan.roadType || 'unknown'
+    );
+
+    applyGpsNavigationSideEffectsTick({
+        lat: pos.lat,
+        lon: pos.lon,
+        speed: pos.speed,
+        accuracy: pos.accuracy,
+        heading: pos.heading,
+        speedMph: pos.speedMph,
+        sideEffects: pos.sideEffects,
+        speedLimitPlan: pos.speedLimitPlan,
+        navigationFollowEaseApplied: followState.navigationFollowEaseApplied,
+        navigationFollowZoom: followState.navigationFollowZoom,
     });
 }
 

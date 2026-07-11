@@ -244,6 +244,43 @@
         return n > 0 ? n : null;
     }
 
+    /**
+     * Apply plan for speed widget update on one GPS tick.
+     * @param {Object} opts
+     * @param {boolean} opts.showSpeedWidget
+     * @param {Object} [opts.speedLimitPlan] - from buildNavSpeedLimitTickPlan
+     * @param {boolean} opts.routeInProgress
+     * @param {boolean} opts.isTrackingActive
+     * @param {number} opts.lat
+     * @param {number} opts.lon
+     * @param {number|null} [opts.heading]
+     * @returns {Object}
+     */
+    function buildSpeedWidgetApplyPlan(opts) {
+        opts = opts || {};
+        if (!opts.showSpeedWidget) {
+            return { action: 'skip' };
+        }
+        var plan = opts.speedLimitPlan || {};
+        return {
+            action: 'apply',
+            resetFetchState: !!plan.resetFetchState,
+            newLastActiveManeuverIdx: plan.newLastActiveManeuverIdx,
+            updateWidget: {
+                displaySpeedMph: plan.displaySpeedMph,
+                shownLimit: plan.shownLimit,
+            },
+            fetchHint: (opts.routeInProgress || opts.isTrackingActive) ? {
+                lat: opts.lat,
+                lon: opts.lon,
+                displaySpeedMph: plan.displaySpeedMph,
+                roadType: plan.roadType || 'unknown',
+                valhallaSpeedLimitMph: plan.valhallaSpeedLimitMph,
+                heading: opts.heading,
+            } : null,
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         createFetchState: createFetchState,
@@ -256,7 +293,8 @@
         sanitizeWidgetDisplayNumber: sanitizeWidgetDisplayNumber,
         formatSpeedForWidget: formatSpeedForWidget,
         speedLimitCacheKey: speedLimitCacheKey,
-        readCachedLimitMph: readCachedLimitMph
+        readCachedLimitMph: readCachedLimitMph,
+        buildSpeedWidgetApplyPlan: buildSpeedWidgetApplyPlan
     };
 
     if (typeof module !== 'undefined' && module.exports) {

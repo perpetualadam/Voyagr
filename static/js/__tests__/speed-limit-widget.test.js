@@ -58,4 +58,54 @@ describe('speed-limit-widget module', () => {
         expect(kmh.unitLabel).toBe('km/h');
         expect(kmh.value).toBeGreaterThan(95);
     });
+
+    test('buildSpeedWidgetApplyPlan skips when widget hidden', () => {
+        expect(SL.buildSpeedWidgetApplyPlan({ showSpeedWidget: false }).action).toBe('skip');
+    });
+
+    test('buildSpeedWidgetApplyPlan resets fetch state on maneuver change', () => {
+        const plan = SL.buildSpeedWidgetApplyPlan({
+            showSpeedWidget: true,
+            speedLimitPlan: {
+                resetFetchState: true,
+                newLastActiveManeuverIdx: 2,
+                displaySpeedMph: 45,
+                shownLimit: 50,
+                roadType: 'primary',
+                valhallaSpeedLimitMph: 50,
+            },
+            routeInProgress: true,
+            isTrackingActive: false,
+            lat: 51.5,
+            lon: -0.1,
+            heading: 90,
+        });
+        expect(plan.action).toBe('apply');
+        expect(plan.resetFetchState).toBe(true);
+        expect(plan.newLastActiveManeuverIdx).toBe(2);
+        expect(plan.updateWidget).toEqual({ displaySpeedMph: 45, shownLimit: 50 });
+        expect(plan.fetchHint).toMatchObject({
+            lat: 51.5,
+            lon: -0.1,
+            roadType: 'primary',
+            valhallaSpeedLimitMph: 50,
+            heading: 90,
+        });
+    });
+
+    test('buildSpeedWidgetApplyPlan omits fetch hint when idle', () => {
+        const plan = SL.buildSpeedWidgetApplyPlan({
+            showSpeedWidget: true,
+            speedLimitPlan: {
+                displaySpeedMph: 0,
+                shownLimit: null,
+                roadType: 'unknown',
+            },
+            routeInProgress: false,
+            isTrackingActive: false,
+            lat: 51.5,
+            lon: -0.1,
+        });
+        expect(plan.fetchHint).toBeNull();
+    });
 });
