@@ -402,4 +402,31 @@ describe('settings-snapshot module', () => {
         expect(SS.isRecognisedSettingsSnapshot({ random: true })).toBe(false);
         expect(SS.isRecognisedSettingsSnapshot(null)).toBe(false);
     });
+
+    test('buildSaveMultiDropPreferencesExecutePlan persists storage patches', () => {
+        const prefs = SS.buildMultiDropFormStatePlan({
+            optimizeStopOrder: true,
+            roundTrip: false,
+            trafficAwareRouting: true,
+            avoidRoadClosures: true,
+            avoidIncidents: false,
+            departureTime: '08:30',
+        });
+        const execute = SS.buildSaveMultiDropPreferencesExecutePlan(prefs);
+        expect(execute.shouldSave).toBe(true);
+        expect(execute.storagePatches.pref_optimizeStopOrder).toBe('true');
+        expect(execute.storagePatches.pref_departureTime).toBe('08:30');
+        expect(SS.buildLoadMultiDropPreferencesExecutePlan().ensureDefaultTrafficAwareRouting).toBe(true);
+    });
+
+    test('buildCollectMultiDropInputPlan passes through DOM reads', () => {
+        const input = SS.buildCollectMultiDropInputPlan({
+            optimizeStopOrder: true,
+            departureTime: '09:00',
+            getStorageItem: () => null,
+        });
+        const prefs = SS.buildMultiDropFormStatePlan(input);
+        expect(prefs.optimizeStopOrder).toBe(true);
+        expect(prefs.departureTime).toBe('09:00');
+    });
 });

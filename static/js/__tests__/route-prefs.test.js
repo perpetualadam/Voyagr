@@ -156,6 +156,10 @@ describe('route-prefs module', () => {
             expect(prefs.avoidHighways).toBe(true);
             expect(prefs.maxDetour).toBe(12);
         });
+
+        test('buildLoadRoutePreferencesExecutePlan enables form restore', () => {
+            expect(RoutePrefs.buildLoadRoutePreferencesExecutePlan().shouldLoad).toBe(true);
+        });
     });
 
     describe('route leg avoidance preference helpers', () => {

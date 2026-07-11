@@ -2141,16 +2141,20 @@ async function loadTripHistory() {
  * Filter trips list when user types in trip search (safe for numeric/string timestamps).
  */
 function bindTripHistorySearch() {
-    const input = document.getElementById('tripSearchInput');
+    const TH = _tripHistory();
+    const execute = TH.buildBindTripHistorySearchExecutePlan();
+    if (!execute.shouldBind) return;
+
+    const input = document.getElementById(execute.searchInputId);
     if (!input) return;
 
     input.oninput = (e) => {
-        const searchTerm = (e.target.value || '').toLowerCase().trim();
-        if (!searchTerm) {
+        const filter = TH.buildTripHistorySearchFilterPlan(e.target.value);
+        if (filter.showAll) {
             displayTripHistory(allTrips);
             return;
         }
-        displayTripHistory(_tripHistory().filterTripsBySearch(allTrips, searchTerm));
+        displayTripHistory(TH.filterTripsBySearch(allTrips, filter.searchTerm));
     };
 }
 
@@ -3362,8 +3366,9 @@ function buildEncodedShareLink(includeGeometry) {
 }
 
 function buildEncodedShareLinkPlan(includeGeometry) {
-    return _routeSharing().buildEncodedShareLinkPlan(
-        _routeSharing().buildEncodedShareLinkInputPlan({
+    const RS = _routeSharing();
+    return RS.buildEncodedShareLinkPlan(
+        RS.buildEncodedShareLinkInputPlan({
             route: window.lastCalculatedRoute,
             startLabel: document.getElementById('start')?.value,
             endLabel: document.getElementById('end')?.value,
@@ -3371,6 +3376,17 @@ function buildEncodedShareLinkPlan(includeGeometry) {
             includeGeometry,
         })
     );
+}
+
+function buildRouteShareFormatInput() {
+    const RS = _routeSharing();
+    return RS.buildRouteShareFormatInputPlan({
+        startLabel: document.getElementById('start')?.value,
+        endLabel: document.getElementById('end')?.value,
+        distanceText: convertDistance(window.lastCalculatedRoute?.distance_km || 0),
+        distUnit: getDistanceUnit(),
+        currencySymbol: getCurrencySymbol(),
+    });
 }
 
 /**
@@ -3487,7 +3503,7 @@ function copyShareLink() {
  */
 function generateQRCode() {
     const RS = _routeSharing();
-    const execute = RS.buildQrCodeGenerateExecutePlan(buildEncodedShareLinkPlan(false));
+    const execute = RS.buildGenerateQrCodeDomExecutePlan(buildEncodedShareLinkPlan(false));
     if (!execute.shouldGenerate) {
         showStatus(execute.errorStatusMessage, 'error');
         return;
@@ -3495,23 +3511,22 @@ function generateQRCode() {
 
     const qrContainer = document.getElementById(execute.qrContainerId);
     if (!qrContainer) return;
-    qrContainer.innerHTML = '';
+    if (execute.clearQrContainer) qrContainer.innerHTML = '';
 
-    const qrImageUrl = RS.buildQrCodeImageUrl(execute.shareLink);
     const qrImage = document.createElement('img');
-    qrImage.src = qrImageUrl;
-    qrImage.alt = 'Route QR Code';
-    qrImage.style.cssText = RS.getQrCodeImageStyleCssText();
+    qrImage.src = execute.qrImageUrl;
+    qrImage.alt = execute.imageAlt;
+    qrImage.style.cssText = execute.imageStyleCssText;
     qrContainer.appendChild(qrImage);
 
-    if (execute.storeQrImageUrl) window.qrImageUrl = qrImageUrl;
+    if (execute.storeQrImageUrl) window.qrImageUrl = execute.qrImageUrl;
 
     const qrCodeContainer = document.getElementById(execute.qrCodeContainerId);
-    if (qrCodeContainer) qrCodeContainer.style.display = 'block';
+    if (qrCodeContainer && execute.showQrCodeContainer) qrCodeContainer.style.display = 'block';
     const shareLinkContainer = document.getElementById(execute.shareLinkContainerId);
-    if (shareLinkContainer) shareLinkContainer.style.display = 'none';
+    if (shareLinkContainer && execute.hideShareLinkContainer) shareLinkContainer.style.display = 'none';
 
-    showStatus(execute.successStatusMessage, 'success');
+    showStatus(execute.successStatusMessage, execute.successStatusType);
 }
 
 /**
@@ -3541,20 +3556,16 @@ function downloadQRCode() {
  */
 function shareViaWhatsApp() {
     const RS = _routeSharing();
-    const plan = RS.buildShareViaWhatsAppPlan(window.lastCalculatedRoute, {
-        startLabel: document.getElementById('start')?.value,
-        endLabel: document.getElementById('end')?.value,
-        distanceText: convertDistance(window.lastCalculatedRoute?.distance_km || 0),
-        distUnit: getDistanceUnit(),
-        currencySymbol: getCurrencySymbol(),
-    });
-    if (!plan.ok) {
-        showStatus(plan.errorStatusMessage, 'error');
+    const execute = RS.buildShareViaWhatsAppExecutePlan(
+        RS.buildShareViaWhatsAppPlan(window.lastCalculatedRoute, buildRouteShareFormatInput())
+    );
+    if (!execute.shouldShare) {
+        showStatus(execute.errorStatusMessage, execute.errorStatusType);
         return;
     }
 
-    window.open(`${plan.whatsAppUrlPrefix}${encodeURIComponent(plan.message)}`, '_blank');
-    showStatus(plan.statusMessage, 'success');
+    window.open(execute.openUrl, execute.openInNewTab ? '_blank' : '_self');
+    showStatus(execute.statusMessage, execute.statusType);
 }
 
 /**
@@ -3564,22 +3575,16 @@ function shareViaWhatsApp() {
  */
 function shareViaEmail() {
     const RS = _routeSharing();
-    const startInput = document.getElementById('start')?.value;
-    const endInput = document.getElementById('end')?.value;
-    const plan = RS.buildShareViaEmailPlan(window.lastCalculatedRoute, {
-        startLabel: startInput,
-        endLabel: endInput,
-        distanceText: convertDistance(window.lastCalculatedRoute?.distance_km || 0),
-        distUnit: getDistanceUnit(),
-        currencySymbol: getCurrencySymbol(),
-    });
-    if (!plan.ok) {
-        showStatus(plan.errorStatusMessage, 'error');
+    const execute = RS.buildShareViaEmailExecutePlan(
+        RS.buildShareViaEmailPlan(window.lastCalculatedRoute, buildRouteShareFormatInput())
+    );
+    if (!execute.shouldShare) {
+        showStatus(execute.errorStatusMessage, execute.errorStatusType);
         return;
     }
 
-    window.location.href = `${plan.mailtoPrefix}${encodeURIComponent(plan.subject)}&body=${encodeURIComponent(plan.body)}`;
-    showStatus(plan.statusMessage, 'success');
+    window.location.href = execute.mailtoUrl;
+    showStatus(execute.statusMessage, execute.statusType);
 }
 
 // ===== ROUTE ANALYTICS FUNCTIONS =====
@@ -3686,13 +3691,25 @@ function collectRoutePreferencesFormState() {
 
 function saveMultiDropPreferences() {
     const SS = _settingsSnapshot();
-    const patches = SS.buildMultiDropPreferencesStoragePlan(collectMultiDropFormState());
-    Object.entries(patches).forEach(([key, value]) => {
+    const prefs = SS.buildMultiDropFormStatePlan(
+        SS.buildCollectMultiDropInputPlan({
+            optimizeStopOrder: document.getElementById('optimizeStopOrder')?.checked,
+            roundTrip: document.getElementById('roundTrip')?.checked,
+            trafficAwareRouting: document.getElementById('trafficAwareRouting')?.checked,
+            avoidRoadClosures: document.getElementById('avoidRoadClosures')?.checked,
+            avoidIncidents: document.getElementById('avoidIncidents')?.checked,
+            departureTime: document.getElementById('departureTime')?.value,
+            getStorageItem: (key) => localStorage.getItem(key),
+        })
+    );
+    const execute = SS.buildSaveMultiDropPreferencesExecutePlan(prefs);
+    if (!execute.shouldSave) return;
+
+    Object.entries(execute.storagePatches).forEach(([key, value]) => {
         localStorage.setItem(key, value);
     });
-
-    saveAllSettings();
-    showStatus('Multi-drop preferences saved!', 'success');
+    if (execute.saveAllSettings) saveAllSettings();
+    showStatus(execute.successStatusMessage, execute.successStatusType);
 }
 
 /**
@@ -3701,15 +3718,17 @@ function saveMultiDropPreferences() {
  */
 function collectMultiDropFormState() {
     const SS = _settingsSnapshot();
-    return SS.buildMultiDropFormStatePlan({
-        optimizeStopOrder: document.getElementById('optimizeStopOrder')?.checked,
-        roundTrip: document.getElementById('roundTrip')?.checked,
-        trafficAwareRouting: document.getElementById('trafficAwareRouting')?.checked,
-        avoidRoadClosures: document.getElementById('avoidRoadClosures')?.checked,
-        avoidIncidents: document.getElementById('avoidIncidents')?.checked,
-        departureTime: document.getElementById('departureTime')?.value,
-        getStorageItem: (key) => localStorage.getItem(key),
-    });
+    return SS.buildMultiDropFormStatePlan(
+        SS.buildCollectMultiDropInputPlan({
+            optimizeStopOrder: document.getElementById('optimizeStopOrder')?.checked,
+            roundTrip: document.getElementById('roundTrip')?.checked,
+            trafficAwareRouting: document.getElementById('trafficAwareRouting')?.checked,
+            avoidRoadClosures: document.getElementById('avoidRoadClosures')?.checked,
+            avoidIncidents: document.getElementById('avoidIncidents')?.checked,
+            departureTime: document.getElementById('departureTime')?.value,
+            getStorageItem: (key) => localStorage.getItem(key),
+        })
+    );
 }
 
 /**
@@ -3725,7 +3744,10 @@ function applyMultiDropPreferencesUiFromPlan(plan) {
 }
 
 function loadMultiDropPreferences() {
-    ensureDefaultTrafficAwareRouting();
+    const execute = _settingsSnapshot().buildLoadMultiDropPreferencesExecutePlan();
+    if (!execute.shouldLoad) return;
+
+    if (execute.ensureDefaultTrafficAwareRouting) ensureDefaultTrafficAwareRouting();
     applyMultiDropPreferencesUiFromPlan(
         _settingsSnapshot().buildMultiDropPreferencesUiApplyPlan(localStorage)
     );
@@ -3755,6 +3777,9 @@ function applyClearDepartureTimeFromPlan(plan) {
  * @returns {*} Return value description
  */
 function loadRoutePreferences() {
+    const execute = _routePrefs().buildLoadRoutePreferencesExecutePlan();
+    if (!execute.shouldLoad) return;
+
     applyRoutePreferencesUiFromPlan(
         _routePrefs().buildRoutePreferencesUiApplyPlan(localStorage)
     );

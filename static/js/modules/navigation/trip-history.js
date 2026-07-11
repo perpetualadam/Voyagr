@@ -435,6 +435,30 @@
     }
 
     /**
+     * Execute plan for binding trip-history search input filtering.
+     * @returns {Object}
+     */
+    function buildBindTripHistorySearchExecutePlan() {
+        return {
+            shouldBind: true,
+            searchInputId: 'tripSearchInput',
+        };
+    }
+
+    /**
+     * Filter plan for trip-history search input changes.
+     * @param {string} searchTerm
+     * @returns {Object}
+     */
+    function buildTripHistorySearchFilterPlan(searchTerm) {
+        var term = String(searchTerm || '').toLowerCase().trim();
+        return {
+            searchTerm: term,
+            showAll: !term,
+        };
+    }
+
+    /**
      * Build one trip-history list row HTML string.
      * @param {object} trip
      * @param {object} display - pre-formatted/escaped display fields
@@ -666,6 +690,8 @@
         buildDeleteTripHistoryOrchestrationPlan: buildDeleteTripHistoryOrchestrationPlan,
         buildDeleteTripHistoryLocalExecutePlan: buildDeleteTripHistoryLocalExecutePlan,
         buildDeleteTripHistoryResponseExecutePlan: buildDeleteTripHistoryResponseExecutePlan,
+        buildBindTripHistorySearchExecutePlan: buildBindTripHistorySearchExecutePlan,
+        buildTripHistorySearchFilterPlan: buildTripHistorySearchFilterPlan,
         buildLoadRouteAnalyticsOrchestrationPlan: buildLoadRouteAnalyticsOrchestrationPlan,
         buildLoadRouteAnalyticsResponseExecutePlan: buildLoadRouteAnalyticsResponseExecutePlan,
         buildAnalyticsDisplayInputPlan: buildAnalyticsDisplayInputPlan,

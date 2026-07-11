@@ -513,6 +513,50 @@
     }
 
     /**
+     * Input assembly for collecting multi-drop preference controls from the DOM.
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildCollectMultiDropInputPlan(opts) {
+        opts = opts || {};
+        return {
+            optimizeStopOrder: opts.optimizeStopOrder,
+            roundTrip: opts.roundTrip,
+            trafficAwareRouting: opts.trafficAwareRouting,
+            avoidRoadClosures: opts.avoidRoadClosures,
+            avoidIncidents: opts.avoidIncidents,
+            departureTime: opts.departureTime,
+            getStorageItem: opts.getStorageItem,
+        };
+    }
+
+    /**
+     * Execute plan for persisting multi-drop preferences from form state.
+     * @param {Object} prefs
+     * @returns {Object}
+     */
+    function buildSaveMultiDropPreferencesExecutePlan(prefs) {
+        return {
+            shouldSave: true,
+            storagePatches: buildMultiDropPreferencesStoragePlan(prefs),
+            saveAllSettings: true,
+            successStatusMessage: 'Multi-drop preferences saved!',
+            successStatusType: 'success',
+        };
+    }
+
+    /**
+     * Execute plan for loading multi-drop preferences into the form.
+     * @returns {Object}
+     */
+    function buildLoadMultiDropPreferencesExecutePlan() {
+        return {
+            shouldLoad: true,
+            ensureDefaultTrafficAwareRouting: true,
+        };
+    }
+
+    /**
      * Apply plan for clearing the multi-drop departure time control.
      * @returns {Object}
      */
@@ -773,6 +817,9 @@
         buildMultiDropFormStatePlan: buildMultiDropFormStatePlan,
         buildMultiDropPreferencesUiApplyPlan: buildMultiDropPreferencesUiApplyPlan,
         buildMultiDropPreferencesDomApplyPlan: buildMultiDropPreferencesDomApplyPlan,
+        buildCollectMultiDropInputPlan: buildCollectMultiDropInputPlan,
+        buildSaveMultiDropPreferencesExecutePlan: buildSaveMultiDropPreferencesExecutePlan,
+        buildLoadMultiDropPreferencesExecutePlan: buildLoadMultiDropPreferencesExecutePlan,
         buildClearDepartureTimeApplyPlan: buildClearDepartureTimeApplyPlan,
         buildSettingsResetPlan: buildSettingsResetPlan,
         buildSettingsRestorePostApplyPlan: buildSettingsRestorePostApplyPlan,

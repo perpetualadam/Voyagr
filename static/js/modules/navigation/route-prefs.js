@@ -249,6 +249,16 @@
     }
 
     /**
+     * Execute plan for loading route preferences into the form.
+     * @returns {Object}
+     */
+    function buildLoadRoutePreferencesExecutePlan() {
+        return {
+            shouldLoad: true,
+        };
+    }
+
+    /**
      * DOM apply plan for the max-detour percentage label (display only).
      * @param {number|string} maxDetour
      * @returns {{ labelElementId: string, text: string }}
@@ -379,6 +389,7 @@
         buildRoutePreferencesDomApplyPlan: buildRoutePreferencesDomApplyPlan,
         buildCollectRoutePreferencesInputPlan: buildCollectRoutePreferencesInputPlan,
         buildSaveRoutePreferencesExecutePlan: buildSaveRoutePreferencesExecutePlan,
+        buildLoadRoutePreferencesExecutePlan: buildLoadRoutePreferencesExecutePlan,
         buildDetourLabelApplyPlan: buildDetourLabelApplyPlan,
         buildRouteLegAvoidanceTogglesApplyPlan: buildRouteLegAvoidanceTogglesApplyPlan,
         buildRouteLegAvoidanceToggleStoragePlan: buildRouteLegAvoidanceToggleStoragePlan,

@@ -611,6 +611,50 @@
     }
 
     /**
+     * DOM execute plan for mounting a generated QR code image.
+     * @param {Object} linkPlan - from buildEncodedShareLinkPlan
+     * @returns {Object}
+     */
+    function buildGenerateQrCodeDomExecutePlan(linkPlan) {
+        var execute = buildQrCodeGenerateExecutePlan(linkPlan);
+        if (!execute.shouldGenerate) {
+            return execute;
+        }
+        return {
+            shouldGenerate: true,
+            shareLink: execute.shareLink,
+            qrImageUrl: buildQrCodeImageUrl(execute.shareLink),
+            qrContainerId: execute.qrContainerId,
+            qrCodeContainerId: execute.qrCodeContainerId,
+            shareLinkContainerId: execute.shareLinkContainerId,
+            imageAlt: 'Route QR Code',
+            imageStyleCssText: getQrCodeImageStyleCssText(),
+            clearQrContainer: true,
+            showQrCodeContainer: true,
+            hideShareLinkContainer: true,
+            storeQrImageUrl: execute.storeQrImageUrl,
+            successStatusMessage: execute.successStatusMessage,
+            successStatusType: 'success',
+        };
+    }
+
+    /**
+     * Input assembly for route share formatting (labels, distance, currency).
+     * @param {Object} [o]
+     * @returns {Object}
+     */
+    function buildRouteShareFormatInputPlan(o) {
+        o = o || {};
+        return {
+            startLabel: o.startLabel,
+            endLabel: o.endLabel,
+            distanceText: o.distanceText,
+            distUnit: o.distUnit,
+            currencySymbol: o.currencySymbol,
+        };
+    }
+
+    /**
      * Plan for sharing a route via WhatsApp.
      * @param {Object|null|undefined} route
      * @param {Object} fmt
@@ -645,6 +689,54 @@
             body: buildShareEmailBody(route, fmt),
             statusMessage: 'Opening email client...',
             mailtoPrefix: 'mailto:?subject=',
+        };
+    }
+
+    /**
+     * Execute plan for opening WhatsApp with a share message.
+     * @param {Object} plan - from buildShareViaWhatsAppPlan
+     * @returns {Object}
+     */
+    function buildShareViaWhatsAppExecutePlan(plan) {
+        plan = plan || {};
+        if (!plan.ok) {
+            return {
+                shouldShare: false,
+                errorStatusMessage: plan.errorStatusMessage,
+                errorStatusType: 'error',
+            };
+        }
+        return {
+            shouldShare: true,
+            openUrl: plan.whatsAppUrlPrefix + encodeURIComponent(plan.message),
+            openInNewTab: true,
+            statusMessage: plan.statusMessage,
+            statusType: 'success',
+        };
+    }
+
+    /**
+     * Execute plan for opening the email client with a share message.
+     * @param {Object} plan - from buildShareViaEmailPlan
+     * @returns {Object}
+     */
+    function buildShareViaEmailExecutePlan(plan) {
+        plan = plan || {};
+        if (!plan.ok) {
+            return {
+                shouldShare: false,
+                errorStatusMessage: plan.errorStatusMessage,
+                errorStatusType: 'error',
+            };
+        }
+        return {
+            shouldShare: true,
+            mailtoUrl: plan.mailtoPrefix
+                + encodeURIComponent(plan.subject)
+                + '&body='
+                + encodeURIComponent(plan.body),
+            statusMessage: plan.statusMessage,
+            statusType: 'success',
         };
     }
 
@@ -765,8 +857,12 @@
         buildEncodedShareLinkPlan: buildEncodedShareLinkPlan,
         buildShareLinkGenerateExecutePlan: buildShareLinkGenerateExecutePlan,
         buildQrCodeGenerateExecutePlan: buildQrCodeGenerateExecutePlan,
+        buildGenerateQrCodeDomExecutePlan: buildGenerateQrCodeDomExecutePlan,
+        buildRouteShareFormatInputPlan: buildRouteShareFormatInputPlan,
         buildShareViaWhatsAppPlan: buildShareViaWhatsAppPlan,
         buildShareViaEmailPlan: buildShareViaEmailPlan,
+        buildShareViaWhatsAppExecutePlan: buildShareViaWhatsAppExecutePlan,
+        buildShareViaEmailExecutePlan: buildShareViaEmailExecutePlan,
         buildLoadSharedRouteFromUrlOrchestrationPlan: buildLoadSharedRouteFromUrlOrchestrationPlan,
         buildLoadSharedRouteFromUrlExecutePlan: buildLoadSharedRouteFromUrlExecutePlan,
         buildCopyShareLinkExecutePlan: buildCopyShareLinkExecutePlan,

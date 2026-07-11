@@ -304,4 +304,12 @@ describe('analytics display helpers', () => {
         expect(T.buildDeleteTripHistoryResponseExecutePlan({ success: true }).shouldRemove).toBe(true);
         expect(T.buildDeleteTripHistoryResponseExecutePlan({ success: false }).shouldRemove).toBe(false);
     });
+
+    test('buildBindTripHistorySearchExecutePlan and search filter plan', () => {
+        const bind = T.buildBindTripHistorySearchExecutePlan();
+        expect(bind.shouldBind).toBe(true);
+        expect(bind.searchInputId).toBe('tripSearchInput');
+        expect(T.buildTripHistorySearchFilterPlan('  London ').searchTerm).toBe('london');
+        expect(T.buildTripHistorySearchFilterPlan('').showAll).toBe(true);
+    });
 });

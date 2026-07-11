@@ -221,4 +221,40 @@ describe('route-sharing module', () => {
         expect(execute.shouldDownload).toBe(true);
         expect(execute.downloadFileName).toBe('route-qr-code.png');
     });
+
+    test('buildShareViaWhatsAppExecutePlan and email execute plan open share URLs', () => {
+        const wa = RS.buildShareViaWhatsAppExecutePlan({
+            ok: true,
+            message: 'Route details',
+            statusMessage: 'Opening WhatsApp...',
+            whatsAppUrlPrefix: 'https://wa.me/?text=',
+        });
+        expect(wa.shouldShare).toBe(true);
+        expect(wa.openUrl).toContain(encodeURIComponent('Route details'));
+
+        const email = RS.buildShareViaEmailExecutePlan({
+            ok: true,
+            subject: 'My route',
+            body: 'Details here',
+            statusMessage: 'Opening email client...',
+            mailtoPrefix: 'mailto:?subject=',
+        });
+        expect(email.shouldShare).toBe(true);
+        expect(email.mailtoUrl).toContain(encodeURIComponent('My route'));
+        expect(RS.buildShareViaWhatsAppExecutePlan({ ok: false }).shouldShare).toBe(false);
+    });
+
+    test('buildGenerateQrCodeDomExecutePlan mounts QR image metadata', () => {
+        const link = RS.buildEncodedShareLinkPlan({
+            route: { distance_km: 10, time: '20 min', geometry: 'abc' },
+            startLabel: 'A',
+            endLabel: 'B',
+            origin: 'https://voyagr.test',
+            includeGeometry: false,
+        });
+        const execute = RS.buildGenerateQrCodeDomExecutePlan(link);
+        expect(execute.shouldGenerate).toBe(true);
+        expect(execute.qrImageUrl).toContain('api.qrserver.com');
+        expect(execute.imageAlt).toBe('Route QR Code');
+    });
 });
