@@ -65,6 +65,21 @@
         );
     }
 
+    /**
+     * Mount plan for the route calculation progress bar (app creates DOM from this).
+     * @param {string} [progressText]
+     * @returns {{ containerId: string, containerStyleCssText: string, innerHtml: string, animationStyleId: string, animationKeyframes: string }}
+     */
+    function buildRouteProgressMountPlan(progressText) {
+        return {
+            containerId: ROUTE_PROGRESS_CONTAINER_ID,
+            containerStyleCssText: getRouteProgressContainerStyleCssText(),
+            innerHtml: buildRouteProgressBarInnerHtml(progressText),
+            animationStyleId: ROUTE_PROGRESS_ANIMATION_STYLE_ID,
+            animationKeyframes: getRouteProgressAnimationKeyframes(),
+        };
+    }
+
     var api = {
         ROUTE_PROGRESS_CONTAINER_ID: ROUTE_PROGRESS_CONTAINER_ID,
         ROUTE_PROGRESS_BAR_ID: ROUTE_PROGRESS_BAR_ID,
@@ -74,6 +89,7 @@
         getRouteProgressContainerStyleCssText: getRouteProgressContainerStyleCssText,
         buildRouteProgressBarInnerHtml: buildRouteProgressBarInnerHtml,
         getRouteProgressAnimationKeyframes: getRouteProgressAnimationKeyframes,
+        buildRouteProgressMountPlan: buildRouteProgressMountPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

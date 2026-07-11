@@ -417,6 +417,72 @@
     }
 
     /**
+     * Assemble the full `/api/route` payload and log metadata for calculateRoute.
+     * @param {Object} o
+     * @param {{ getItem: function(string): (string|null) }} o.storage
+     * @param {string} o.geocodedStart
+     * @param {string} o.geocodedEnd
+     * @param {Array} [o.viaPoints]
+     * @param {Array} [o.stops]
+     * @param {string} o.routingMode
+     * @param {string} o.vehicleType
+     * @param {Object} o.costParams
+     * @param {boolean} o.avoidTolls
+     * @param {Object} o.routePrefs
+     * @param {boolean} o.routeInProgress
+     * @param {boolean} o.isTrackingActive
+     * @param {Array} o.trackingHistory
+     * @param {number|null} o.currentLat
+     * @param {number|null} o.currentLon
+     * @returns {{ requestBody: Object, routeStartCoordStr: string, viaPointsCount: number, stopsCount: number, totalStopTimeMinutes: number, optimizeStopOrder: boolean, roundTrip: boolean }}
+     */
+    function buildCalculateRouteApiPlan(o) {
+        o = o || {};
+        var viaPoints = o.viaPoints || [];
+        var stops = o.stops || [];
+        var storage = o.storage || { getItem: function () { return null; } };
+        var viaPointsData = mapViaPointsForApi(viaPoints);
+        var stopsData = mapStopsForApi(stops);
+        var totalStopTime = sumStopDurationsMinutes(stops);
+        var optimizeOrder = storage.getItem('pref_optimizeStopOrder') !== 'false';
+        var roundTrip = storage.getItem('pref_roundTrip') === 'true';
+        var departureTime = storage.getItem('pref_departureTime') || null;
+        var routeStartCoordStr = resolveLiveGpsStartCoord({
+            routeInProgress: o.routeInProgress,
+            isTrackingActive: o.isTrackingActive,
+            trackingHistory: o.trackingHistory,
+            currentLat: o.currentLat,
+            currentLon: o.currentLon,
+            geocodedStart: o.geocodedStart,
+        });
+        var requestBody = buildInitialRouteRequestBody({
+            start: routeStartCoordStr,
+            end: o.geocodedEnd,
+            viaPoints: viaPoints,
+            stops: stops,
+            optimizeStopOrder: optimizeOrder,
+            roundTrip: roundTrip,
+            departureTime: departureTime,
+            sharedOptions: buildInitialRouteSharedOptions(storage, {
+                routingMode: o.routingMode,
+                vehicleType: o.vehicleType,
+                costParams: o.costParams,
+                avoidTolls: o.avoidTolls,
+                routePrefs: o.routePrefs,
+            }),
+        });
+        return {
+            requestBody: requestBody,
+            routeStartCoordStr: routeStartCoordStr,
+            viaPointsCount: viaPointsData.length,
+            stopsCount: stopsData.length,
+            totalStopTimeMinutes: totalStopTime,
+            optimizeStopOrder: optimizeOrder,
+            roundTrip: roundTrip,
+        };
+    }
+
+    /**
      * User-facing message for a failed `/api/route` HTTP status when the body is not JSON
      * or does not contain a structured `error` field.
      * @param {number} status
@@ -526,6 +592,7 @@
         sumStopDurationsMinutes: sumStopDurationsMinutes,
         resolveLiveGpsStartCoord: resolveLiveGpsStartCoord,
         buildInitialRouteRequestBody: buildInitialRouteRequestBody,
+        buildCalculateRouteApiPlan: buildCalculateRouteApiPlan,
         buildRouteApiHttpErrorMessage: buildRouteApiHttpErrorMessage,
         buildNonJsonRouteApiErrorMessage: buildNonJsonRouteApiErrorMessage,
         parseRouteApiErrorMessage: parseRouteApiErrorMessage,

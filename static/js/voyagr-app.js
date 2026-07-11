@@ -3993,13 +3993,7 @@ function decodePolyline(encoded, precision = 6) {
         console.warn('[decodePolyline] Invalid input:', encoded);
         return [];
     }
-    const decoded = _polylineCodec().decodePolyline(encoded, precision);
-    console.log(`[decodePolyline] Decoded ${decoded.length} points with precision ${precision}`);
-    if (decoded.length > 0) {
-        console.log(`[decodePolyline] First point: [${decoded[0][0]}, ${decoded[0][1]}]`);
-        console.log(`[decodePolyline] Last point: [${decoded[decoded.length - 1][0]}, ${decoded[decoded.length - 1][1]}]`);
-    }
-    return decoded;
+    return _polylineCodec().decodePolyline(encoded, precision);
 }
 
 /**
@@ -4091,46 +4085,29 @@ async function calculateRoute() {
     // Show route calculation progress bar
     showRouteProgressBar();
 
-    const viaPointsData = _routingRequest().mapViaPointsForApi(viaPoints);
-    const stopsData = _routingRequest().mapStopsForApi(stops);
-    const totalStopTime = _routingRequest().sumStopDurationsMinutes(stops);
-
-    const routePrefs = getRoutePreferences();
-    const optimizeOrder = localStorage.getItem('pref_optimizeStopOrder') !== 'false';
-    const roundTrip = localStorage.getItem('pref_roundTrip') === 'true';
-    const departureTime = localStorage.getItem('pref_departureTime') || null;
-
-    const avoidTollRoads = isAvoidTollsEnabled();
-
-    const routeStartCoordStr = _routingRequest().resolveLiveGpsStartCoord({
+    const RR = _routingRequest();
+    const routePlan = RR.buildCalculateRouteApiPlan({
+        storage: localStorage,
+        geocodedStart: geocodedStart,
+        geocodedEnd: geocodedEnd,
+        viaPoints: viaPoints,
+        stops: stops,
+        routingMode: currentRoutingMode,
+        vehicleType: currentVehicleType,
+        costParams: getRouteCostParams(currentVehicleType),
+        avoidTolls: isAvoidTollsEnabled(),
+        routePrefs: getRoutePreferences(),
         routeInProgress: routeInProgress,
         isTrackingActive: isTrackingActive,
         trackingHistory: trackingHistory,
         currentLat: currentLat,
         currentLon: currentLon,
-        geocodedStart: geocodedStart,
     });
-
-    const requestBody = _routingRequest().buildInitialRouteRequestBody({
-        start: routeStartCoordStr,
-        end: geocodedEnd,
-        viaPoints: viaPoints,
-        stops: stops,
-        optimizeStopOrder: optimizeOrder,
-        roundTrip: roundTrip,
-        departureTime: departureTime,
-        sharedOptions: _routingRequest().buildInitialRouteSharedOptions(localStorage, {
-            routingMode: currentRoutingMode,
-            vehicleType: currentVehicleType,
-            costParams: getRouteCostParams(currentVehicleType),
-            avoidTolls: avoidTollRoads,
-            routePrefs: routePrefs,
-        }),
-    });
+    const requestBody = routePlan.requestBody;
 
     console.log('[calculateRoute] Making API request to /api/route with:', requestBody);
-    console.log('[calculateRoute] Via-points:', viaPointsData.length, 'Stops:', stopsData.length, 'Total stop time:', totalStopTime, 'min');
-    console.log('[calculateRoute] Multi-drop: optimize=' + optimizeOrder + ' roundTrip=' + roundTrip);
+    console.log('[calculateRoute] Via-points:', routePlan.viaPointsCount, 'Stops:', routePlan.stopsCount, 'Total stop time:', routePlan.totalStopTimeMinutes, 'min');
+    console.log('[calculateRoute] Multi-drop: optimize=' + routePlan.optimizeStopOrder + ' roundTrip=' + routePlan.roundTrip);
 
     fetch('/api/route', {
         method: 'POST',
@@ -4401,18 +4378,19 @@ async function calculateRoute() {
  */
 function showRouteProgressBar() {
     const RP = _routeProgress();
-    let progressContainer = document.getElementById(RP.ROUTE_PROGRESS_CONTAINER_ID);
+    const mount = RP.buildRouteProgressMountPlan();
+    let progressContainer = document.getElementById(mount.containerId);
 
     if (!progressContainer) {
         progressContainer = document.createElement('div');
-        progressContainer.id = RP.ROUTE_PROGRESS_CONTAINER_ID;
-        progressContainer.style.cssText = RP.getRouteProgressContainerStyleCssText();
-        progressContainer.innerHTML = RP.buildRouteProgressBarInnerHtml();
+        progressContainer.id = mount.containerId;
+        progressContainer.style.cssText = mount.containerStyleCssText;
+        progressContainer.innerHTML = mount.innerHtml;
 
-        if (!document.getElementById(RP.ROUTE_PROGRESS_ANIMATION_STYLE_ID)) {
+        if (!document.getElementById(mount.animationStyleId)) {
             const style = document.createElement('style');
-            style.id = RP.ROUTE_PROGRESS_ANIMATION_STYLE_ID;
-            style.textContent = RP.getRouteProgressAnimationKeyframes();
+            style.id = mount.animationStyleId;
+            style.textContent = mount.animationKeyframes;
             document.head.appendChild(style);
         }
 

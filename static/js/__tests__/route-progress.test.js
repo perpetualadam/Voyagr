@@ -26,4 +26,13 @@ describe('route-progress module', () => {
     test('getRouteProgressAnimationKeyframes defines progressGradient', () => {
         expect(RP.getRouteProgressAnimationKeyframes()).toContain('@keyframes progressGradient');
     });
+
+    test('buildRouteProgressMountPlan bundles container mount fields', () => {
+        const plan = RP.buildRouteProgressMountPlan('Routing…');
+        expect(plan.containerId).toBe('routeProgressContainer');
+        expect(plan.containerStyleCssText).toContain('position: fixed');
+        expect(plan.innerHtml).toContain('Routing…');
+        expect(plan.animationStyleId).toBe('progressAnimationStyle');
+        expect(plan.animationKeyframes).toContain('progressGradient');
+    });
 });

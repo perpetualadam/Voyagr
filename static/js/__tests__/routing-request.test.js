@@ -327,3 +327,64 @@ describe('route API error parsing', () => {
         expect(RR.getDegradedRoutingStatusMessage()).toContain('Valhalla/GraphHopper offline');
     });
 });
+
+describe('buildCalculateRouteApiPlan', () => {
+    test('assembles request body, live GPS start, and multi-drop metadata', () => {
+        const storage = mockStorage({
+            pref_optimizeStopOrder: 'false',
+            pref_roundTrip: 'true',
+            pref_departureTime: '08:30',
+            pref_avoidCameras: 'true',
+        });
+        const plan = RR.buildCalculateRouteApiPlan({
+            storage,
+            geocodedStart: '51.5,-0.1',
+            geocodedEnd: '52,-1',
+            viaPoints: [{ lat: 51.6, lon: -0.2 }],
+            stops: [{ lat: 51.7, lon: -0.3, duration: 10 }],
+            routingMode: 'auto',
+            vehicleType: 'petrol_diesel',
+            costParams: { fuel_efficiency: 6, fuel_price: 1.5 },
+            avoidTolls: false,
+            routePrefs: { routeOptimization: 'shortest' },
+            routeInProgress: true,
+            isTrackingActive: true,
+            trackingHistory: [{ lat: 51.51, lon: -0.11 }],
+            currentLat: 51.51,
+            currentLon: -0.11,
+        });
+        expect(plan.routeStartCoordStr).toBe('51.51,-0.11');
+        expect(plan.requestBody.start).toBe('51.51,-0.11');
+        expect(plan.requestBody.end).toBe('52,-1');
+        expect(plan.requestBody.optimize_stop_order).toBe(false);
+        expect(plan.requestBody.round_trip).toBe(true);
+        expect(plan.requestBody.departure_time).toBe('08:30');
+        expect(plan.requestBody.routing_mode).toBe('auto');
+        expect(plan.requestBody.route_optimization).toBe('shortest');
+        expect(plan.viaPointsCount).toBe(1);
+        expect(plan.stopsCount).toBe(1);
+        expect(plan.totalStopTimeMinutes).toBe(10);
+        expect(plan.optimizeStopOrder).toBe(false);
+        expect(plan.roundTrip).toBe(true);
+    });
+
+    test('uses geocoded start when live GPS is unavailable', () => {
+        const plan = RR.buildCalculateRouteApiPlan({
+            storage: mockStorage({}),
+            geocodedStart: '51.5,-0.1',
+            geocodedEnd: '52,-1',
+            routingMode: 'auto',
+            vehicleType: 'petrol_diesel',
+            costParams: {},
+            avoidTolls: false,
+            routePrefs: {},
+            routeInProgress: false,
+            isTrackingActive: false,
+            trackingHistory: [],
+            currentLat: null,
+            currentLon: null,
+        });
+        expect(plan.routeStartCoordStr).toBe('51.5,-0.1');
+        expect(plan.requestBody.start).toBe('51.5,-0.1');
+    });
+});
