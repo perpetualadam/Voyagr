@@ -156,6 +156,87 @@
         return html;
     }
 
+    var ROUTE_DRAG_MARKER_ICON_SIZE = [20, 20];
+    var WAYPOINT_MARKER_ICON_SIZE = [28, 28];
+
+    /**
+     * @returns {string}
+     */
+    function buildRouteDragMarkerHtml() {
+        return '<div style="background: #FF9800; border: 3px solid white; border-radius: 50%; width: 20px; height: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.4); cursor: grab;"></div>';
+    }
+
+    /**
+     * @param {string|number} label
+     * @returns {string}
+     */
+    function buildViaPointMarkerHtml(label) {
+        return (
+            '<div style="background: #FF9800; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">' +
+                label +
+            '</div>'
+        );
+    }
+
+    /**
+     * @returns {string}
+     */
+    function buildViaPointDragAddedMarkerHtml() {
+        return (
+            '<div style="background: #4CAF50; color: white; border-radius: 50%; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">✓</div>'
+        );
+    }
+
+    /**
+     * @returns {string}
+     */
+    function buildStopMarkerHtml() {
+        return (
+            '<div style="background: #E91E63; color: white; border-radius: 4px; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; font-size: 14px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>'
+        );
+    }
+
+    /**
+     * @param {string} removeOnclick
+     * @returns {string}
+     */
+    function buildWaypointRemoveButtonHtml(removeOnclick) {
+        return '<button onclick="' + removeOnclick + '" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer;">Remove</button>';
+    }
+
+    /**
+     * @param {string} pointName
+     * @param {string} removeOnclick
+     * @returns {string}
+     */
+    function buildViaPointPopupHtml(pointName, removeOnclick) {
+        return '<b>' + pointName + '</b><br>' + buildWaypointRemoveButtonHtml(removeOnclick);
+    }
+
+    /**
+     * @param {string} removeOnclick
+     * @returns {string}
+     */
+    function buildViaPointDragPopupHtml(removeOnclick) {
+        return (
+            '<div style="text-align: center;">' +
+                '<strong>Via Point</strong><br>' +
+                '<small>Drag to adjust</small><br>' +
+                '<button onclick="' + removeOnclick + '" style="background: #F44336; color: white; border: none; padding: 4px 8px; border-radius: 4px; margin-top: 6px; cursor: pointer;">Remove</button>' +
+            '</div>'
+        );
+    }
+
+    /**
+     * @param {string} stopName
+     * @param {number} duration
+     * @param {string} removeOnclick
+     * @returns {string}
+     */
+    function buildStopPopupHtml(stopName, duration, removeOnclick) {
+        return '<b>' + stopName + '</b><br>Duration: ' + duration + ' min<br>' + buildWaypointRemoveButtonHtml(removeOnclick);
+    }
+
     var api = {
         MULTIDROP_LEG_COLORS: MULTIDROP_LEG_COLORS,
         EMPTY_WAYPOINTS_HTML: EMPTY_WAYPOINTS_HTML,
@@ -164,6 +245,15 @@
         buildWaypointsListHtml: buildWaypointsListHtml,
         buildMultiDropLegHtml: buildMultiDropLegHtml,
         buildMultiDropItineraryHtml: buildMultiDropItineraryHtml,
+        ROUTE_DRAG_MARKER_ICON_SIZE: ROUTE_DRAG_MARKER_ICON_SIZE,
+        WAYPOINT_MARKER_ICON_SIZE: WAYPOINT_MARKER_ICON_SIZE,
+        buildRouteDragMarkerHtml: buildRouteDragMarkerHtml,
+        buildViaPointMarkerHtml: buildViaPointMarkerHtml,
+        buildViaPointDragAddedMarkerHtml: buildViaPointDragAddedMarkerHtml,
+        buildStopMarkerHtml: buildStopMarkerHtml,
+        buildViaPointPopupHtml: buildViaPointPopupHtml,
+        buildViaPointDragPopupHtml: buildViaPointDragPopupHtml,
+        buildStopPopupHtml: buildStopPopupHtml,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

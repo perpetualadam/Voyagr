@@ -132,6 +132,25 @@
         return (routeLabel || '') + (breakdown || '');
     }
 
+    /**
+     * @returns {string}
+     */
+    function buildParkingMapMarkerHtml() {
+        return (
+            '<div style="background: #FF9800; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>'
+        );
+    }
+
+    /**
+     * @param {string} name
+     * @param {string} distanceDisplay
+     * @param {string} distUnit
+     * @returns {string}
+     */
+    function buildParkingMapMarkerPopupHtml(name, distanceDisplay, distUnit) {
+        return '<strong>' + (name || '') + '</strong><br>Distance: ' + distanceDisplay + ' ' + distUnit;
+    }
+
     var api = {
         computeMultimodalLegTotals: computeMultimodalLegTotals,
         buildParkingRouteLabel: buildParkingRouteLabel,
@@ -140,6 +159,8 @@
         buildParkingOptionItemHtml: buildParkingOptionItemHtml,
         buildParkingEmptyStateHtml: buildParkingEmptyStateHtml,
         buildParkingPreviewRouteHtml: buildParkingPreviewRouteHtml,
+        buildParkingMapMarkerHtml: buildParkingMapMarkerHtml,
+        buildParkingMapMarkerPopupHtml: buildParkingMapMarkerPopupHtml,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

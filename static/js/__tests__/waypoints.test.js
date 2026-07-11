@@ -50,4 +50,14 @@ describe('waypoints module', () => {
         expect(W.MULTIDROP_LEG_COLORS.length).toBeGreaterThanOrEqual(5);
         expect(W.MULTIDROP_LEG_COLORS[0]).toMatch(/^#[0-9A-Fa-f]{6}$/);
     });
+
+    test('map marker HTML builders include remove handlers', () => {
+        expect(W.buildRouteDragMarkerHtml()).toContain('cursor: grab');
+        expect(W.buildViaPointMarkerHtml(2)).toContain('>2<');
+        expect(W.buildViaPointDragAddedMarkerHtml()).toContain('✓');
+        expect(W.buildStopMarkerHtml()).toContain('🅿️');
+        expect(W.buildViaPointPopupHtml('Via A', 'removeViaPoint(0)')).toContain('removeViaPoint(0)');
+        expect(W.buildViaPointDragPopupHtml('removeViaPoint(1)')).toContain('Drag to adjust');
+        expect(W.buildStopPopupHtml('Coffee', 15, 'removeStop(0)')).toContain('15 min');
+    });
 });
