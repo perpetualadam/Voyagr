@@ -10179,10 +10179,12 @@ function initPhase3Features() {
     loadMLPredictions();
 
     // Load AR setting
-    isAREnabled = localStorage.getItem('voyagr_ar_enabled') === 'true';
+    const MC = _mapControls();
+    const TU = VoyagrModules.toggleUI();
+    isAREnabled = MC.isAREnabledInStorage(localStorage);
     const arToggleBtn = document.getElementById('arToggleBtn');
-    if (arToggleBtn && isAREnabled) {
-        arToggleBtn.classList.add('active');
+    if (arToggleBtn) {
+        TU.applyToggleButton(arToggleBtn, isAREnabled, TU.TOGGLE_SWITCH_OPTS);
     }
 }
 /**
@@ -10710,14 +10712,12 @@ function voyagrShowMapIconHint(message) {
  * Modal listing visible map / toolbar buttons (mobile-friendly; desktop relies on hover titles).
  */
 function openMapControlsHintModal() {
+    const MC = _mapControls();
     const m = document.getElementById('mapControlsHintModal');
     const ul = document.getElementById('mapControlsHintList');
     if (!m || !ul) return;
     ul.innerHTML = '';
-    const sections = [
-        { title: 'Map (round buttons)', selector: '.fab-container .fab, #navControlButtons .fab' },
-        { title: 'Bottom sheet toolbar', selector: '.sheet-toolbar .sheet-icon-btn' },
-    ];
+    const sections = MC.MAP_CONTROLS_HINT_SECTIONS;
     for (let s = 0; s < sections.length; s++) {
         const sec = sections[s];
         const secTitle = document.createElement('li');
@@ -10727,28 +10727,23 @@ function openMapControlsHintModal() {
         const nodes = document.querySelectorAll(sec.selector);
         for (let i = 0; i < nodes.length; i++) {
             const el = nodes[i];
-            if (el.id === 'mapControlsHintFab') continue;
+            if (MC.shouldSkipMapControlsHintElement(el.id)) continue;
             const hint = el.getAttribute('title') || el.getAttribute('aria-label');
             if (!hint) continue;
             const st = window.getComputedStyle(el);
-            if (st.display === 'none' || st.visibility === 'hidden') continue;
-            const icon = (el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 6);
+            if (!MC.isMapControlsHintElementVisible(st.display, st.visibility)) continue;
             const li = document.createElement('li');
             li.className = 'map-hint-item';
-            li.textContent = (icon ? icon + ' \u2014 ' : '') + hint;
+            li.textContent = MC.formatMapControlsHintItemLabel(el.textContent, hint);
             ul.appendChild(li);
         }
     }
 
     const exTitle = document.createElement('li');
     exTitle.className = 'map-hint-section-title';
-    exTitle.textContent = 'Often hidden until you need them';
+    exTitle.textContent = MC.MAP_CONTROLS_HINT_HIDDEN_SECTION_TITLE;
     ul.appendChild(exTitle);
-    const extras = [
-        '\u2014 After you calculate a route, \u201cStart navigation\u201d can appear on the map.',
-        '\u2014 During turn-by-turn, Zoom & follow, Recenter, and Journey overview may appear as round buttons.',
-        '\u2014 Long-press any round map icon ~\u00bds for this same text as a bottom banner.',
-    ];
+    const extras = MC.MAP_CONTROLS_HINT_EXTRAS;
     for (let e = 0; e < extras.length; e++) {
         const li = document.createElement('li');
         li.className = 'map-hint-item';
@@ -11598,11 +11593,13 @@ let isAREnabled = false; // Global flag for preference
  * Toggle AR Setting (from Preferences)
  */
 function toggleARSetting() {
+    const MC = _mapControls();
+    const TU = VoyagrModules.toggleUI();
     const btn = document.getElementById('arToggleBtn');
     if (btn) {
-        btn.classList.toggle('active');
-        isAREnabled = btn.classList.contains('active');
-        localStorage.setItem('voyagr_ar_enabled', isAREnabled);
+        isAREnabled = TU.nextToggleState(isAREnabled);
+        TU.applyToggleButton(btn, isAREnabled, TU.TOGGLE_SWITCH_OPTS);
+        MC.writeAREnabledToStorage(localStorage, isAREnabled);
 
         updateARButtonVisibility();
 
@@ -11702,16 +11699,17 @@ async function stopARMode() {
  * Update AR button visual state
  */
 function updateARButtonState(status) {
+    const MC = _mapControls();
     const btn = document.getElementById('arModeBtn');
     if (!btn) return;
 
-    if (status === 'active' || status === 'active-fallback') {
+    const display = MC.getARModeButtonDisplay(status);
+    if (display.active) {
         btn.classList.add('active');
-        btn.innerHTML = _mapControls().AR_ACTIVE_LABEL;
     } else {
         btn.classList.remove('active');
-        btn.innerHTML = _mapControls().AR_INACTIVE_LABEL;
     }
+    btn.innerHTML = display.innerHtml;
 }
 
 /**
@@ -16335,35 +16333,24 @@ function selectPOI(poiLat, poiLon, poiName, userLat, userLon) {
 // ===== ROUTE AVOIDANCE PREFERENCES =====
 
 function toggleAvoidancePreference(pref) {
-    const btn = document.getElementById('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1));
+    const RP = VoyagrModules.routePrefs();
+    const TU = VoyagrModules.toggleUI();
+    const btn = document.getElementById(RP.resolveRouteLegAvoidanceButtonId(pref));
     if (!btn) return;
-    const isActive = btn.classList.toggle('active');
-    if (isActive) {
-        btn.style.background = '#4CAF50';
-        btn.style.borderColor = '#4CAF50';
-    } else {
-        btn.style.background = '#ccc';
-        btn.style.borderColor = '#ccc';
-    }
-    localStorage.setItem('pref_avoid_' + pref, isActive ? 'true' : 'false');
+    const isActive = TU.nextToggleState(btn.classList.contains('active'));
+    TU.applyToggleButton(btn, isActive, TU.TOGGLE_SWITCH_OPTS);
+    localStorage.setItem(RP.getRouteLegAvoidancePrefStorageKey(pref), isActive ? 'true' : 'false');
     console.log(`[Avoidance] ${pref} = ${isActive}`);
 }
 
 function loadAvoidancePreferences() {
-    const prefs = ['tollRoads', 'motorways', 'ferries'];
-    prefs.forEach(pref => {
-        const isActive = localStorage.getItem('pref_avoid_' + pref) === 'true';
-        const btn = document.getElementById('avoid' + pref.charAt(0).toUpperCase() + pref.slice(1));
+    const RP = VoyagrModules.routePrefs();
+    const TU = VoyagrModules.toggleUI();
+    RP.ROUTE_LEG_AVOIDANCE_PREF_KEYS.forEach(pref => {
+        const isActive = RP.isRouteLegAvoidancePrefEnabled(pref, localStorage);
+        const btn = document.getElementById(RP.resolveRouteLegAvoidanceButtonId(pref));
         if (btn) {
-            if (isActive) {
-                btn.classList.add('active');
-                btn.style.background = '#4CAF50';
-                btn.style.borderColor = '#4CAF50';
-            } else {
-                btn.classList.remove('active');
-                btn.style.background = '#ccc';
-                btn.style.borderColor = '#ccc';
-            }
+            TU.applyToggleButton(btn, isActive, TU.TOGGLE_SWITCH_OPTS);
         }
     });
 }

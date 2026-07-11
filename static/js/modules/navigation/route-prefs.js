@@ -45,6 +45,9 @@
     /** Ordered routing avoidance preference keys shown in settings. */
     var ROUTE_AVOIDANCE_PREF_KEYS = ROUTE_AVOIDANCE_PREFS_DEFAULT_ENABLED.slice();
 
+    /** Legacy route-leg avoidance prefs (toll roads, motorways, ferries). */
+    var ROUTE_LEG_AVOIDANCE_PREF_KEYS = ['tollRoads', 'motorways', 'ferries'];
+
     /**
      * @param {string} pref
      * @returns {string}
@@ -75,6 +78,33 @@
             return ROUTE_AVOIDANCE_PREFS_DEFAULT_ENABLED.indexOf(pref) >= 0;
         }
         return saved === 'true';
+    }
+
+    /**
+     * Storage key for legacy route-leg avoidance prefs (pref_avoid_tollRoads, etc.).
+     * @param {string} pref
+     * @returns {string}
+     */
+    function getRouteLegAvoidancePrefStorageKey(pref) {
+        return 'pref_avoid_' + pref;
+    }
+
+    /**
+     * Settings button id for legacy route-leg avoidance prefs.
+     * @param {string} pref
+     * @returns {string}
+     */
+    function resolveRouteLegAvoidanceButtonId(pref) {
+        return 'avoid' + pref.charAt(0).toUpperCase() + pref.slice(1);
+    }
+
+    /**
+     * @param {string} pref
+     * @param {Storage} storage
+     * @returns {boolean}
+     */
+    function isRouteLegAvoidancePrefEnabled(pref, storage) {
+        return storage.getItem(getRouteLegAvoidancePrefStorageKey(pref)) === 'true';
     }
 
     /**
@@ -151,9 +181,13 @@
         ROUTE_AVOIDANCE_PREF_BUTTON_IDS: ROUTE_AVOIDANCE_PREF_BUTTON_IDS,
         ROUTE_AVOIDANCE_PREFS_DEFAULT_ENABLED: ROUTE_AVOIDANCE_PREFS_DEFAULT_ENABLED,
         ROUTE_AVOIDANCE_PREF_KEYS: ROUTE_AVOIDANCE_PREF_KEYS,
+        ROUTE_LEG_AVOIDANCE_PREF_KEYS: ROUTE_LEG_AVOIDANCE_PREF_KEYS,
         getRouteAvoidancePrefStorageKey: getRouteAvoidancePrefStorageKey,
         resolveRouteAvoidanceButtonId: resolveRouteAvoidanceButtonId,
         isRouteAvoidancePrefEnabled: isRouteAvoidancePrefEnabled,
+        getRouteLegAvoidancePrefStorageKey: getRouteLegAvoidancePrefStorageKey,
+        resolveRouteLegAvoidanceButtonId: resolveRouteLegAvoidanceButtonId,
+        isRouteLegAvoidancePrefEnabled: isRouteLegAvoidancePrefEnabled,
         migrateTollPrefKey: migrateTollPrefKey,
         isAvoidTollsEnabled: isAvoidTollsEnabled,
         getRouteCostParams: getRouteCostParams,
