@@ -2342,17 +2342,7 @@ function displayAllRoutesOnMap() {
     }
 
     // Ensure all routes have valid polylines
-    for (let i = 0; i < routeOptions.length; i++) {
-        const route = routeOptions[i];
-        if ((!route.polyline || route.polyline.length === 0) && route.geometry) {
-            const source = (route.source || '').toLowerCase();
-            const precision =
-                Number.isFinite(route.geometry_precision)
-                    ? route.geometry_precision
-                    : (source.includes('osrm') ? 5 : 6);
-            route.polyline = decodePolyline(route.geometry, precision);
-        }
-    }
+    VoyagrModules.routeSelection().hydrateRouteOptionPolylines(routeOptions, decodePolyline);
 
     // Wait for style to load before adding layers
     const addRouteLayers = () => {
@@ -4431,52 +4421,13 @@ async function calculateRoute() {
                     // IMPORTANT: Populate routeOptions BEFORE showing route preview
                     // so that displayAllRoutesOnMap() has routes to display
                     if (data.routes && data.routes.length > 0) {
-                        // Real routes from routing engine - include source from response
                         const routeSource = data.source || 'Unknown';
-                        const routeSourceLower = routeSource.toLowerCase();
-                        const defaultPrecision =
-                            Number.isFinite(data.geometry_precision)
-                                ? data.geometry_precision
-                                : (routeSourceLower.includes('osrm') ? 5 : 6);
+                        const defaultPrecision = RS.resolveRouteGeometryPrecision(data);
                         console.log(`[Route API] Received ${data.routes.length} routes from ${routeSource}, default polyline precision ${defaultPrecision}`);
-                        routeOptions = data.routes.map(route => ({
-                            id: route.id,
-                            name: route.name,
-                            distance_km: route.distance_km,
-                            duration_minutes: route.duration_minutes,
-                            fuel_cost: route.fuel_cost,
-                            fuel_litres: route.fuel_litres || 0,
-                            toll_cost: route.toll_cost,
-                            caz_cost: route.caz_cost,
-                            hazard_count: route.hazard_count || 0,
-                            cameras_near_route: route.cameras_near_route ?? route.hazard_count ?? 0,
-                            geometry_precision: Number.isFinite(route.geometry_precision) ? route.geometry_precision : defaultPrecision,
-                            polyline: decodePolyline(route.geometry || '', Number.isFinite(route.geometry_precision) ? route.geometry_precision : defaultPrecision),
-                            geometry: route.geometry,
-                            hazards: route.hazards || [],
-                            maneuvers: route.maneuvers || [],  // FIXED: Include maneuvers for turn-by-turn navigation
-                            source: route.source || routeSource  // Prefer per-route source if provided
-                        }));
+                        routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routePath);
                         console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}:`, routeOptions.map(r => r.name));
                     } else {
-                        // Fallback: single route (for backward compatibility)
-                        routeOptions = [
-                            {
-                                id: 1,
-                                name: 'Route',
-                                distance_km: parseFloat(data.distance) || 0,
-                                duration_minutes: parseInt(data.time) || 0,
-                                fuel_cost: data.fuel_cost || 0,
-                                fuel_litres: data.fuel_litres || 0,
-                                toll_cost: data.toll_cost || 0,
-                                caz_cost: data.caz_cost || 0,
-                                hazard_count: 0,
-                                polyline: routePath,
-                                geometry: data.geometry,
-                                maneuvers: data.maneuvers || [],  // FIXED: Include maneuvers for turn-by-turn
-                                source: data.source || 'Unknown'
-                            }
-                        ];
+                        routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routePath);
                         console.log('[Route Comparison] Using single route (fallback)');
                     }
 
@@ -11347,7 +11298,7 @@ async function toggleARMode() {
                 const step = currentRouteSteps[currentStepIndex];
                 arNavigator.updateInstruction({
                     instruction: step.instruction,
-                    direction: getDirectionFromType(step.type),
+                    direction: VoyagrModules.turnInstructions().maneuverTypeToARDirectionKey(step.type),
                     distance: nextManeuverDistance
                 });
             }
@@ -11394,25 +11345,6 @@ function updateARInstruction(turnInfo) {
         direction: turnInfo?.direction || 'straight',
         distance: turnInfo?.distance || 0
     });
-}
-
-/**
- * Get direction string from Valhalla maneuver type
- */
-function getDirectionFromType(type) {
-    const typeMap = {
-        9: 'slight-right', 18: 'slight-right', 23: 'slight-right',
-        10: 'right',
-        11: 'sharp-right',
-        16: 'slight-left', 19: 'slight-left', 24: 'slight-left',
-        15: 'left',
-        14: 'sharp-left',
-        12: 'u-turn', 13: 'u-turn',
-        20: 'exit', 21: 'exit',
-        26: 'roundabout', 27: 'roundabout',
-        4: 'destination', 5: 'destination', 6: 'destination'
-    };
-    return typeMap[type] || 'straight';
 }
 
 // ===== TURN INSTRUCTION WIDGET =====
@@ -12960,23 +12892,9 @@ function startGPSTracking() {
             // Update lane guidance if navigating
             if (routeInProgress && currentRouteSteps.length > 0) {
                 const nextStep = currentRouteSteps[currentStepIndex];
-                let maneuverDir = 'straight';
-                if (nextStep) {
-                    const mType = nextStep.type || 0;
-                    // Map Valhalla type to lane guidance maneuver direction
-                    if ([15].includes(mType)) maneuverDir = 'left';
-                    else if ([14].includes(mType)) maneuverDir = 'sharp_left';
-                    else if ([16, 19, 24].includes(mType)) maneuverDir = 'slight_left';
-                    else if ([10].includes(mType)) maneuverDir = 'right';
-                    else if ([11].includes(mType)) maneuverDir = 'sharp_right';
-                    else if ([9, 18, 23].includes(mType)) maneuverDir = 'slight_right';
-                    else if ([20].includes(mType)) maneuverDir = 'exit_right';
-                    else if ([21].includes(mType)) maneuverDir = 'exit_left';
-                    else if ([12, 13].includes(mType)) maneuverDir = 'uturn';
-                    else if ([25, 35, 36].includes(mType)) maneuverDir = 'merge';
-                    else if ([26, 27].includes(mType)) maneuverDir = 'roundabout';
-                    else if ([4, 5, 6].includes(mType)) maneuverDir = 'destination';
-                }
+                const maneuverDir = nextStep
+                    ? VoyagrModules.turnInstructions().maneuverTypeToLaneDirectionKey(nextStep.type || 0)
+                    : 'straight';
                 const exitCount = (maneuverDir === 'roundabout')
                     ? effectiveRoundaboutExitCount(currentStepIndex)
                     : 0;

@@ -553,6 +553,118 @@
     }
 
     /**
+     * Per-route polyline precision from route fields or API default.
+     * @param {Object} route
+     * @param {number} [defaultPrecision]
+     * @returns {number}
+     */
+    function resolvePerRouteGeometryPrecision(route, defaultPrecision) {
+        route = route || {};
+        if (Number.isFinite(route.geometry_precision)) return route.geometry_precision;
+        if (Number.isFinite(defaultPrecision)) return defaultPrecision;
+        var sourceLower = String(route.source || '').toLowerCase();
+        return sourceLower.indexOf('osrm') >= 0 ? 5 : 6;
+    }
+
+    /**
+     * Canonical route option object for map display and selection.
+     * @param {Object} route
+     * @param {Object} opts
+     * @param {function(string, number): Array<[number,number]>} opts.decodePolyline
+     * @param {string} [opts.routeSource]
+     * @param {number} [opts.defaultPrecision]
+     * @returns {Object}
+     */
+    function normalizeRouteOption(route, opts) {
+        opts = opts || {};
+        route = route || {};
+        var routeSource = opts.routeSource || 'Unknown';
+        var defaultPrecision = Number.isFinite(opts.defaultPrecision)
+            ? opts.defaultPrecision
+            : resolveRouteGeometryPrecision({ source: routeSource });
+        var precision = resolvePerRouteGeometryPrecision(route, defaultPrecision);
+        var polyline = [];
+        if (typeof opts.decodePolyline === 'function') {
+            polyline = opts.decodePolyline(route.geometry || '', precision);
+        }
+        return {
+            id: route.id,
+            name: route.name,
+            distance_km: route.distance_km,
+            duration_minutes: route.duration_minutes,
+            fuel_cost: route.fuel_cost,
+            fuel_litres: route.fuel_litres || 0,
+            toll_cost: route.toll_cost,
+            caz_cost: route.caz_cost,
+            hazard_count: route.hazard_count || 0,
+            cameras_near_route: route.cameras_near_route != null
+                ? route.cameras_near_route
+                : (route.hazard_count != null ? route.hazard_count : 0),
+            geometry_precision: precision,
+            polyline: polyline,
+            geometry: route.geometry,
+            hazards: route.hazards || [],
+            maneuvers: route.maneuvers || [],
+            source: route.source || routeSource,
+        };
+    }
+
+    /**
+     * Build routeOptions from a calculateRoute API payload (multi-route or single fallback).
+     * @param {Object} data
+     * @param {function(string, number): Array<[number,number]>} decodePolyline
+     * @param {Array<[number,number]>} [routePathFallback]
+     * @returns {Array<Object>}
+     */
+    function buildRouteOptionsFromApiResponse(data, decodePolyline, routePathFallback) {
+        data = data || {};
+        if (data.routes && data.routes.length > 0) {
+            var routeSource = data.source || 'Unknown';
+            var defaultPrecision = resolveRouteGeometryPrecision(data);
+            return data.routes.map(function (route) {
+                return normalizeRouteOption(route, {
+                    decodePolyline: decodePolyline,
+                    routeSource: routeSource,
+                    defaultPrecision: defaultPrecision,
+                });
+            });
+        }
+        return [{
+            id: 1,
+            name: 'Route',
+            distance_km: parseFloat(data.distance) || 0,
+            duration_minutes: parseInt(data.time, 10) || 0,
+            fuel_cost: data.fuel_cost || 0,
+            fuel_litres: data.fuel_litres || 0,
+            toll_cost: data.toll_cost || 0,
+            caz_cost: data.caz_cost || 0,
+            hazard_count: 0,
+            polyline: routePathFallback || [],
+            geometry: data.geometry,
+            maneuvers: data.maneuvers || [],
+            source: data.source || 'Unknown',
+        }];
+    }
+
+    /**
+     * Decode missing polylines on route options in place.
+     * @param {Array<Object>} routeOptions
+     * @param {function(string, number): Array<[number,number]>} decodePolyline
+     * @returns {Array<Object>}
+     */
+    function hydrateRouteOptionPolylines(routeOptions, decodePolyline) {
+        if (!routeOptions || typeof decodePolyline !== 'function') return routeOptions;
+        for (var i = 0; i < routeOptions.length; i++) {
+            var route = routeOptions[i];
+            if ((!route.polyline || route.polyline.length === 0) && route.geometry) {
+                var precision = resolvePerRouteGeometryPrecision(route, null);
+                route.polyline = decodePolyline(route.geometry, precision);
+            }
+        }
+        return routeOptions;
+    }
+
+    /**
      * @param {[number,number]|null|undefined} point
      * @returns {boolean}
      */
@@ -976,6 +1088,10 @@
         pickActiveRouteDuringNavigation: pickActiveRouteDuringNavigation,
         buildInNavRerouteSuccessPlan: buildInNavRerouteSuccessPlan,
         resolveRouteGeometryPrecision: resolveRouteGeometryPrecision,
+        resolvePerRouteGeometryPrecision: resolvePerRouteGeometryPrecision,
+        normalizeRouteOption: normalizeRouteOption,
+        buildRouteOptionsFromApiResponse: buildRouteOptionsFromApiResponse,
+        hydrateRouteOptionPolylines: hydrateRouteOptionPolylines,
         isValidDecodedRoutePoint: isValidDecodedRoutePoint,
         buildStraightLineRoutePath: buildStraightLineRoutePath,
         resolvePreviewRoutePath: resolvePreviewRoutePath,

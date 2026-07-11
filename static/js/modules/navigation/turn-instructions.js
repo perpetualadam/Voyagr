@@ -60,6 +60,38 @@
         return null;  // 0,1,2,3,7,8,17,22 and transit/ferry types are not "turns"
     }
 
+    /** AR overlay uses hyphenated direction keys. */
+    var AR_DIRECTION_KEY_MAP = {
+        9: 'slight-right', 18: 'slight-right', 23: 'slight-right',
+        10: 'right',
+        11: 'sharp-right',
+        16: 'slight-left', 19: 'slight-left', 24: 'slight-left',
+        15: 'left',
+        14: 'sharp-left',
+        12: 'u-turn', 13: 'u-turn',
+        20: 'exit', 21: 'exit',
+        26: 'roundabout', 27: 'roundabout',
+        4: 'destination', 5: 'destination', 6: 'destination',
+    };
+
+    /**
+     * Lane-guidance direction key (underscore); non-turn maneuvers => straight.
+     * @param {number} type
+     * @returns {string}
+     */
+    function maneuverTypeToLaneDirectionKey(type) {
+        return maneuverTypeToDirectionKey(type) || 'straight';
+    }
+
+    /**
+     * AR navigation arrow direction key (hyphenated).
+     * @param {number} type
+     * @returns {string}
+     */
+    function maneuverTypeToARDirectionKey(type) {
+        return AR_DIRECTION_KEY_MAP[type] || 'straight';
+    }
+
     // Valhalla maneuver type → arrow / icon glyph. Left maneuvers show left arrows, etc.
     var TURN_ICON_MAP = {
         0: '↑', 1: '↑', 2: '↑', 3: '↑',
@@ -660,6 +692,8 @@
     var api = {
         calculateTurnDirection: calculateTurnDirection,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,
+        maneuverTypeToLaneDirectionKey: maneuverTypeToLaneDirectionKey,
+        maneuverTypeToARDirectionKey: maneuverTypeToARDirectionKey,
         getTurnIcon: getTurnIcon,
         formatTurnDistance: formatTurnDistance,
         getTurnDirectionText: getTurnDirectionText,

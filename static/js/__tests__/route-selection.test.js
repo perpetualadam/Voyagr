@@ -112,6 +112,53 @@ describe('route comparison and selection helpers', () => {
         expect(ordered[3].type).toBe('end');
         expect(ordered[1].lat).toBe(1);
     });
+
+    test('buildRouteOptionsFromApiResponse normalises multi-route payloads', () => {
+        const decode = jest.fn((geom, prec) => (geom ? [[51.5, -0.1], [51.6, -0.2]] : []));
+        const options = RS.buildRouteOptionsFromApiResponse({
+            source: 'OSRM',
+            geometry_precision: 5,
+            routes: [{
+                id: 2,
+                name: 'Fast',
+                distance_km: 10,
+                duration_minutes: 15,
+                geometry: 'abc',
+                hazard_count: 3,
+                maneuvers: [{ type: 10 }],
+            }],
+        }, decode);
+        expect(options).toHaveLength(1);
+        expect(options[0].name).toBe('Fast');
+        expect(options[0].geometry_precision).toBe(5);
+        expect(options[0].polyline).toHaveLength(2);
+        expect(decode).toHaveBeenCalledWith('abc', 5);
+        expect(options[0].cameras_near_route).toBe(3);
+    });
+
+    test('buildRouteOptionsFromApiResponse falls back to single route shape', () => {
+        const fallback = [[51.5, -0.1], [51.6, -0.2]];
+        const options = RS.buildRouteOptionsFromApiResponse({
+            distance: '8.5',
+            time: '22',
+            fuel_cost: 4,
+            geometry: 'geom',
+            maneuvers: [{ type: 8 }],
+            source: 'Valhalla',
+        }, jest.fn(), fallback);
+        expect(options).toHaveLength(1);
+        expect(options[0].distance_km).toBe(8.5);
+        expect(options[0].duration_minutes).toBe(22);
+        expect(options[0].polyline).toBe(fallback);
+    });
+
+    test('hydrateRouteOptionPolylines decodes missing polylines in place', () => {
+        const decode = jest.fn(() => [[1, 2]]);
+        const options = [{ geometry: 'x', source: 'osrm' }];
+        RS.hydrateRouteOptionPolylines(options, decode);
+        expect(options[0].polyline).toEqual([[1, 2]]);
+        expect(decode).toHaveBeenCalledWith('x', 5);
+    });
 });
 
 describe('route preview helpers', () => {

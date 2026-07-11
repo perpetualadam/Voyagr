@@ -78,6 +78,22 @@ describe('maneuverTypeToDirectionKey', () => {
     });
 });
 
+describe('maneuverTypeToLaneDirectionKey / maneuverTypeToARDirectionKey', () => {
+    test('lane key defaults non-turn maneuvers to straight', () => {
+        expect(TI.maneuverTypeToLaneDirectionKey(8)).toBe('straight');
+        expect(TI.maneuverTypeToLaneDirectionKey(10)).toBe('right');
+        expect(TI.maneuverTypeToLaneDirectionKey(20)).toBe('exit_right');
+    });
+
+    test('AR key uses hyphenated labels for overlay rotation', () => {
+        expect(TI.maneuverTypeToARDirectionKey(10)).toBe('right');
+        expect(TI.maneuverTypeToARDirectionKey(9)).toBe('slight-right');
+        expect(TI.maneuverTypeToARDirectionKey(12)).toBe('u-turn');
+        expect(TI.maneuverTypeToARDirectionKey(8)).toBe('straight');
+        expect(TI.maneuverTypeToARDirectionKey(20)).toBe('exit');
+    });
+});
+
 describe('refineManeuverDirection', () => {
     test('promotes ramp left on motorway to exit_left', () => {
         expect(TI.refineManeuverDirection(19, 'slight_left', 'motorway')).toBe('exit_left');
