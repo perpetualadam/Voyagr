@@ -90,4 +90,19 @@ describe('waypoints module', () => {
         expect(desc.lineColor).toBe(W.MULTIDROP_LEG_COLORS[1]);
         expect(W.buildMultiDropLegLayerDescriptor('', 0, null, decode)).toBeNull();
     });
+
+    test('buildRouteEditMarkersPlan spaces markers along route path', () => {
+        const routePath = Array.from({ length: 40 }, (_, i) => [51.5 + i * 0.001, -0.1]);
+        const plan = W.buildRouteEditMarkersPlan(routePath);
+        expect(plan.valid).toBe(true);
+        expect(plan.markers.length).toBeGreaterThan(0);
+        expect(plan.markers[0].routeIndex).toBeGreaterThanOrEqual(W.ROUTE_EDIT_MARKER_INTERVAL_MIN);
+    });
+
+    test('buildRouteDragMarkerMountPlan includes marker html and anchor', () => {
+        const mount = W.buildRouteDragMarkerMountPlan(51.5, -0.1, 12);
+        expect(mount.className).toBe('route-drag-marker');
+        expect(mount.markerHtml).toContain('FF9800');
+        expect(mount.routeIndex).toBe(12);
+    });
 });

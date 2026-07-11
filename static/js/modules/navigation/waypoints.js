@@ -198,6 +198,63 @@
         return '<div style="background: #FF9800; border: 3px solid white; border-radius: 50%; width: 20px; height: 20px; box-shadow: 0 2px 6px rgba(0,0,0,0.4); cursor: grab;"></div>';
     }
 
+    var ROUTE_EDIT_MARKER_INTERVAL_MIN = 10;
+    var ROUTE_EDIT_MARKER_DIVISOR = 15;
+
+    /**
+     * Plan for draggable route-edit markers along a path.
+     * @param {Array<[number,number]>} routePath
+     * @returns {Object}
+     */
+    function buildRouteEditMarkersPlan(routePath) {
+        routePath = routePath || [];
+        if (routePath.length < 2) {
+            return {
+                valid: false,
+                statusMessage: 'No route to edit',
+                statusType: 'error',
+            };
+        }
+        var interval = Math.max(
+            ROUTE_EDIT_MARKER_INTERVAL_MIN,
+            Math.floor(routePath.length / ROUTE_EDIT_MARKER_DIVISOR)
+        );
+        var markers = [];
+        for (var i = interval; i < routePath.length - interval; i += interval) {
+            markers.push({
+                lat: routePath[i][0],
+                lon: routePath[i][1],
+                routeIndex: i,
+            });
+        }
+        return {
+            valid: true,
+            markers: markers,
+            statusMessage: '🖐️ Drag the orange markers to modify the route (' + markers.length + ' edit points)',
+            statusType: 'info',
+        };
+    }
+
+    /**
+     * Mount spec for one route drag marker.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {number} routeIndex
+     * @returns {Object}
+     */
+    function buildRouteDragMarkerMountPlan(lat, lon, routeIndex) {
+        return {
+            lat: lat,
+            lon: lon,
+            routeIndex: routeIndex,
+            className: 'route-drag-marker',
+            markerHtml: buildRouteDragMarkerHtml(),
+            iconSize: ROUTE_DRAG_MARKER_ICON_SIZE,
+            iconAnchor: [10, 10],
+            cursorStyle: 'grab',
+        };
+    }
+
     /**
      * @param {string|number} label
      * @returns {string}
@@ -307,6 +364,9 @@
         ROUTE_DRAG_MARKER_ICON_SIZE: ROUTE_DRAG_MARKER_ICON_SIZE,
         WAYPOINT_MARKER_ICON_SIZE: WAYPOINT_MARKER_ICON_SIZE,
         buildRouteDragMarkerHtml: buildRouteDragMarkerHtml,
+        buildRouteEditMarkersPlan: buildRouteEditMarkersPlan,
+        buildRouteDragMarkerMountPlan: buildRouteDragMarkerMountPlan,
+        ROUTE_EDIT_MARKER_INTERVAL_MIN: ROUTE_EDIT_MARKER_INTERVAL_MIN,
         buildViaPointMarkerHtml: buildViaPointMarkerHtml,
         buildViaPointDragAddedMarkerHtml: buildViaPointDragAddedMarkerHtml,
         buildStopMarkerHtml: buildStopMarkerHtml,

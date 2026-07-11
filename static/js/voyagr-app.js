@@ -2439,23 +2439,21 @@ let routeEditingEnabled = false;
  * Enable route editing by adding draggable waypoints along the route
  */
 function enableRouteEditing() {
-    if (!routePath || routePath.length < 2) {
-        showStatus('No route to edit', 'error');
+    const WP = _waypoints();
+    const plan = WP.buildRouteEditMarkersPlan(routePath);
+    if (!plan.valid) {
+        showStatus(plan.statusMessage, plan.statusType);
         return;
     }
 
     routeEditingEnabled = true;
     clearRouteDragMarkers();
 
-    // Add drag markers at intervals along the route (every ~5km or ~20 points)
-    const interval = Math.max(10, Math.floor(routePath.length / 15));
+    plan.markers.forEach((markerPlan) => {
+        addRouteDragMarker(markerPlan.lat, markerPlan.lon, markerPlan.routeIndex);
+    });
 
-    for (let i = interval; i < routePath.length - interval; i += interval) {
-        const point = routePath[i];
-        addRouteDragMarker(point[0], point[1], i);
-    }
-
-    showStatus(`🖐️ Drag the orange markers to modify the route (${routeDragMarkers.length} edit points)`, 'info');
+    showStatus(plan.statusMessage, plan.statusType);
     console.log(`[Route Edit] Added ${routeDragMarkers.length} drag markers`);
 }
 
@@ -2463,24 +2461,22 @@ function enableRouteEditing() {
  * Add a draggable marker for route editing
  */
 function addRouteDragMarker(lat, lon, routeIndex) {
-    const WP = _waypoints();
-    const marker = MapLibreHelpers.createMarker(lat, lon, {
-        className: 'route-drag-marker',
-        html: WP.buildRouteDragMarkerHtml(),
-        iconSize: WP.ROUTE_DRAG_MARKER_ICON_SIZE,
-        iconAnchor: [10, 10]
+    const mountPlan = _waypoints().buildRouteDragMarkerMountPlan(lat, lon, routeIndex);
+    const marker = MapLibreHelpers.createMarker(mountPlan.lat, mountPlan.lon, {
+        className: mountPlan.className,
+        html: mountPlan.markerHtml,
+        iconSize: mountPlan.iconSize,
+        iconAnchor: mountPlan.iconAnchor,
     }).addTo(map);
 
-    // Note: MapLibre markers are not natively draggable like Leaflet
-    // We'll use custom drag handling
     const el = marker.getElement();
-    if (el) {
-        el.style.cursor = 'grab';
+    if (el && mountPlan.cursorStyle) {
+        el.style.cursor = mountPlan.cursorStyle;
     }
 
-    marker.routeIndex = routeIndex;
-    marker.originalLat = lat;
-    marker.originalLon = lon;
+    marker.routeIndex = mountPlan.routeIndex;
+    marker.originalLat = mountPlan.lat;
+    marker.originalLon = mountPlan.lon;
 
     routeDragMarkers.push(marker);
 }
@@ -5247,7 +5243,12 @@ function clearRouteTrafficLayers() {
  * Fetch traffic data for route and display colored edges
  */
 async function fetchAndDisplayRouteTraffic() {
-    if (!routeTrafficEnabled || !routePolyline || routePolyline.length < 2) {
+    const RTF = _routeTrafficFlow();
+    const dispatch = RTF.buildFetchRouteTrafficDispatchPlan({
+        routeTrafficEnabled,
+        routePolyline,
+    });
+    if (!dispatch.shouldFetch) {
         console.log('[Route Traffic] Not enabled or no route available');
         return;
     }
@@ -5255,10 +5256,7 @@ async function fetchAndDisplayRouteTraffic() {
     console.log('[Route Traffic] Fetching traffic data for route...');
 
     try {
-        // Sample route points (every 10th point to reduce API calls)
-        const sampleInterval = Math.max(1, Math.floor(routePolyline.length / 20));
-
-        const data = await fetchRouteTrafficFlowPayload(routePolyline, sampleInterval);
+        const data = await fetchRouteTrafficFlowPayload(routePolyline, dispatch.sampleInterval);
         if (!data) {
             console.debug('[Route Traffic] No traffic data (backoff or upstream unavailable)');
             return;
@@ -5281,33 +5279,34 @@ async function fetchAndDisplayRouteTraffic() {
  * Traffic edges are drawn ON TOP of the route with thick, visible lines
  */
 function displayRouteTrafficEdges(segments) {
-    // Clear existing traffic layers
     clearRouteTrafficLayers();
 
-    if (!map || !segments || segments.length === 0 || !routePolyline || routePolyline.length === 0) {
+    const RTF = _routeTrafficFlow();
+    const applyPlan = RTF.buildDisplayRouteTrafficEdgesApplyPlan(segments, routePolyline);
+    if (!map || !applyPlan.shouldDisplay) {
         console.log('[Route Traffic] Cannot display - map:', !!map, 'segments:', segments?.length, 'routePolyline:', routePolyline?.length);
         return;
     }
 
-    const RTF = _routeTrafficFlow();
-    const levelCounts = RTF.countTrafficSegmentLevels(segments);
-    console.log('[Route Traffic] Segment levels:', levelCounts);
+    console.log('[Route Traffic] Segment levels:', applyPlan.levelCounts);
 
-    const drawPlans = RTF.buildTrafficEdgeDrawPlans(segments, routePolyline);
-    drawPlans.forEach((plan) => {
-        const trafficLine = MapLibreHelpers.addPolyline(map, plan.points, {
-            color: plan.color,
-            weight: 6,
-            opacity: 0.9,
+    applyPlan.polylines.forEach((polylinePlan) => {
+        const trafficLine = MapLibreHelpers.addPolyline(map, polylinePlan.points, {
+            color: polylinePlan.color,
+            weight: polylinePlan.weight,
+            opacity: polylinePlan.opacity,
         });
         routeTrafficLayers.push(trafficLine);
     });
 
     console.log(`[Route Traffic] Added ${routeTrafficLayers.length} congested traffic edge layers`);
 
-    // Traffic below labels; active route line stays above traffic edges.
-    bringTrafficEdgesToTop();
-    bringNavRouteAboveTrafficEdges();
+    if (applyPlan.bringTrafficEdgesToTop) {
+        bringTrafficEdgesToTop();
+    }
+    if (applyPlan.bringNavRouteAboveTrafficEdges) {
+        bringNavRouteAboveTrafficEdges();
+    }
 }
 
 /**
@@ -5316,21 +5315,23 @@ function displayRouteTrafficEdges(segments) {
 function bringTrafficEdgesToTop() {
     if (!map || routeTrafficLayers.length === 0) return;
 
-    try {
-        // Find the first symbol/label layer to insert traffic edges BEFORE
-        // This keeps traffic edges above routes but below road labels
-        const style = map.getStyle();
-        const beforeId = _routeSelection().findFirstTextSymbolLayerId(style && style.layers);
+    const plan = _routeSelection().buildBringTrafficEdgesToTopDispatchPlan(
+        routeTrafficLayers,
+        map.getStyle() && map.getStyle().layers
+    );
+    if (!plan.shouldRun) return;
 
-        routeTrafficLayers.forEach(layer => {
-            if (layer && layer.id && map.getLayer(layer.id)) {
-                map.moveLayer(layer.id, beforeId);
+    try {
+        plan.layerIds.forEach((layerId) => {
+            if (map.getLayer(layerId)) {
+                map.moveLayer(layerId, plan.beforeId);
             }
         });
-        console.log(`[Route Traffic] Traffic edge layers moved before ${beforeId || 'top'}`);
+        console.log(`[Route Traffic] Traffic edge layers moved before ${plan.beforeId || 'top'}`);
 
-        // Ensure labels stay on top as final safety check
-        ensureLabelsOnTop();
+        if (plan.ensureLabelsOnTop) {
+            ensureLabelsOnTop();
+        }
     } catch (e) {
         console.log('[Route Traffic] Error moving traffic layers to top:', e.message);
     }
@@ -5344,34 +5345,23 @@ function bringTrafficEdgesToTop() {
 function bringNavRouteAboveTrafficEdges() {
     if (!map) return;
 
+    const plan = _routeSelection().buildBringNavRouteAboveTrafficEdgesDispatchPlan(
+        routeLayer,
+        allRouteLayers,
+        map.getStyle() && map.getStyle().layers
+    );
+    if (!plan.shouldRun) return;
+
     try {
-        const style = map.getStyle();
-        const beforeId = _routeSelection().findFirstTextSymbolLayerId(style && style.layers);
-
-        const routeLineIds = [];
-        if (routeLayer && routeLayer.id) {
-            if (routeLayer.outlineId && map.getLayer(routeLayer.outlineId)) {
-                routeLineIds.push(routeLayer.outlineId);
+        plan.layerIds.forEach((layerId) => {
+            if (map.getLayer(layerId)) {
+                map.moveLayer(layerId, plan.beforeId);
             }
-            if (map.getLayer(routeLayer.id)) {
-                routeLineIds.push(routeLayer.id);
-            }
-        }
-        if (allRouteLayers && allRouteLayers.length > 0) {
-            allRouteLayers.forEach(layer => {
-                if (layer && layer.id && map.getLayer(layer.id)) {
-                    routeLineIds.push(layer.id);
-                }
-            });
-        }
-
-        if (routeLineIds.length === 0) return;
-
-        routeLineIds.forEach(layerId => {
-            map.moveLayer(layerId, beforeId);
         });
-        ensureLabelsOnTop();
-        console.log('[Routes] Navigation route above traffic edges:', routeLineIds.join(', '));
+        if (plan.ensureLabelsOnTop) {
+            ensureLabelsOnTop();
+        }
+        console.log('[Routes] Navigation route above traffic edges:', plan.layerIds.join(', '));
     } catch (e) {
         console.warn('[Routes] bringNavRouteAboveTrafficEdges:', e.message);
     }
@@ -12808,12 +12798,6 @@ let VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = 10000;
 let voiceAnnouncementsEnabled = true;
 let voiceFrequencyMode = localStorage.getItem('voiceFrequencyMode') || 'all';
 
-const VOICE_FREQUENCY_THROTTLES = {
-    'all': 10000,
-    'important': 15000,
-    'minimal': 30000
-};
-
 
 
 
@@ -15685,7 +15669,7 @@ function showVolumeHintForNavigation() {
 function speakMessage(message, priority = 'normal') {
     const now = Date.now();
     const timeSinceLastAnnouncement = now - lastVoiceAnnouncementTime;
-    const throttle = VOICE_FREQUENCY_THROTTLES[voiceFrequencyMode] || VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS;
+    const throttle = _voiceAnnouncements().VOICE_FREQUENCY_THROTTLES[voiceFrequencyMode] || VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS;
 
     if (voiceFrequencyMode === 'minimal' && priority !== 'high') {
         console.log(`[Voice] Skipped (minimal mode): "${message}"`);

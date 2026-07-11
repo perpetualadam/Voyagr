@@ -114,3 +114,29 @@ describe('buildTrafficEdgeDrawPlans', () => {
         ])).toEqual({ green: 1, orange: 0, red: 2, black: 0 });
     });
 });
+
+describe('route traffic dispatch and display plans', () => {
+    test('buildFetchRouteTrafficDispatchPlan samples polyline when enabled', () => {
+        const dispatch = RTF.buildFetchRouteTrafficDispatchPlan({
+            routeTrafficEnabled: true,
+            routePolyline: polyline,
+        });
+        expect(dispatch.shouldFetch).toBe(true);
+        expect(dispatch.sampleInterval).toBe(1);
+    });
+
+    test('buildFetchRouteTrafficDispatchPlan rejects disabled or short routes', () => {
+        expect(RTF.buildFetchRouteTrafficDispatchPlan({ routeTrafficEnabled: false, routePolyline: polyline }).shouldFetch)
+            .toBe(false);
+    });
+
+    test('buildDisplayRouteTrafficEdgesApplyPlan maps congested segments to styled polylines', () => {
+        const apply = RTF.buildDisplayRouteTrafficEdgesApplyPlan(
+            [{ traffic_level: 'orange', start: [51.51, -0.11], end: [51.53, -0.13] }],
+            polyline
+        );
+        expect(apply.shouldDisplay).toBe(true);
+        expect(apply.polylines[0].weight).toBe(RTF.ROUTE_TRAFFIC_EDGE_POLYLINE_STYLE.weight);
+        expect(apply.bringTrafficEdgesToTop).toBe(true);
+    });
+});

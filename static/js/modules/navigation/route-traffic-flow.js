@@ -194,6 +194,61 @@
         return plans;
     }
 
+    var ROUTE_TRAFFIC_POLYLINE_SAMPLE_DIVISOR = 20;
+
+    /**
+     * Dispatch plan for fetching along-route traffic flow data.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.routeTrafficEnabled]
+     * @param {Array<[number,number]>} [opts.routePolyline]
+     * @returns {Object}
+     */
+    function buildFetchRouteTrafficDispatchPlan(opts) {
+        opts = opts || {};
+        var polyline = opts.routePolyline || [];
+        if (!opts.routeTrafficEnabled || polyline.length < 2) {
+            return { shouldFetch: false };
+        }
+        return {
+            shouldFetch: true,
+            sampleInterval: Math.max(1, Math.floor(polyline.length / ROUTE_TRAFFIC_POLYLINE_SAMPLE_DIVISOR)),
+            routePolylineLength: polyline.length,
+        };
+    }
+
+    var ROUTE_TRAFFIC_EDGE_POLYLINE_STYLE = { weight: 6, opacity: 0.9 };
+
+    /**
+     * Apply plan for drawing congested traffic edges along the route.
+     * @param {Array<Object>} segments
+     * @param {Array<[number,number]>} polyline
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildDisplayRouteTrafficEdgesApplyPlan(segments, polyline, opts) {
+        opts = opts || {};
+        segments = segments || [];
+        polyline = polyline || [];
+        if (!segments.length || polyline.length === 0) {
+            return { shouldDisplay: false };
+        }
+        var drawPlans = buildTrafficEdgeDrawPlans(segments, polyline, opts);
+        return {
+            shouldDisplay: drawPlans.length > 0,
+            levelCounts: countTrafficSegmentLevels(segments),
+            polylines: drawPlans.map(function (plan) {
+                return {
+                    points: plan.points,
+                    color: plan.color,
+                    weight: ROUTE_TRAFFIC_EDGE_POLYLINE_STYLE.weight,
+                    opacity: ROUTE_TRAFFIC_EDGE_POLYLINE_STYLE.opacity,
+                };
+            }),
+            bringTrafficEdgesToTop: true,
+            bringNavRouteAboveTrafficEdges: true,
+        };
+    }
+
     var api = {
         TRAFFIC_COLORS: TRAFFIC_COLORS,
         findForwardPolylineIndex: findForwardPolylineIndex,
@@ -203,6 +258,10 @@
         countTrafficSegmentLevels: countTrafficSegmentLevels,
         resolveTrafficEdgeColor: resolveTrafficEdgeColor,
         buildTrafficEdgeDrawPlans: buildTrafficEdgeDrawPlans,
+        buildFetchRouteTrafficDispatchPlan: buildFetchRouteTrafficDispatchPlan,
+        buildDisplayRouteTrafficEdgesApplyPlan: buildDisplayRouteTrafficEdgesApplyPlan,
+        ROUTE_TRAFFIC_POLYLINE_SAMPLE_DIVISOR: ROUTE_TRAFFIC_POLYLINE_SAMPLE_DIVISOR,
+        ROUTE_TRAFFIC_EDGE_POLYLINE_STYLE: ROUTE_TRAFFIC_EDGE_POLYLINE_STYLE,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -843,4 +843,24 @@ describe('route overview and single-route display plans', () => {
         expect(plan.labelLayerIds).toEqual(['road-label']);
         expect(plan.debounceMs).toBe(RS.ENSURE_LABELS_ON_TOP_DEBOUNCE_MS);
     });
+
+    test('buildBringTrafficEdgesToTopDispatchPlan orders traffic layers before labels', () => {
+        const plan = RS.buildBringTrafficEdgesToTopDispatchPlan(
+            [{ id: 'traffic-edge-0' }],
+            [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }]
+        );
+        expect(plan.shouldRun).toBe(true);
+        expect(plan.layerIds).toEqual(['traffic-edge-0']);
+        expect(plan.beforeId).toBe('labels');
+    });
+
+    test('buildBringNavRouteAboveTrafficEdgesDispatchPlan dedupes route line ids', () => {
+        const plan = RS.buildBringNavRouteAboveTrafficEdgesDispatchPlan(
+            { id: 'nav-route', outlineId: 'nav-route-outline' },
+            [{ id: 'route-layer-0' }, { id: 'route-layer-0' }],
+            [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }]
+        );
+        expect(plan.shouldRun).toBe(true);
+        expect(plan.layerIds).toEqual(['nav-route-outline', 'nav-route', 'route-layer-0']);
+    });
 });

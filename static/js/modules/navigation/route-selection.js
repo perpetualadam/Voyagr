@@ -1893,6 +1893,60 @@
         };
     }
 
+    /**
+     * Layer reorder plan for route-traffic edge overlays.
+     * @param {Array<{ id?: string }>} trafficLayers
+     * @param {Array<Object>} [styleLayers]
+     * @returns {Object}
+     */
+    function buildBringTrafficEdgesToTopDispatchPlan(trafficLayers, styleLayers) {
+        var layerIds = [];
+        (trafficLayers || []).forEach(function (layer) {
+            if (layer && layer.id) layerIds.push(layer.id);
+        });
+        if (layerIds.length === 0) {
+            return { shouldRun: false };
+        }
+        return {
+            shouldRun: true,
+            layerIds: layerIds,
+            beforeId: findFirstTextSymbolLayerId(styleLayers),
+            ensureLabelsOnTop: true,
+        };
+    }
+
+    /**
+     * Layer reorder plan to keep navigation route lines above traffic edges.
+     * @param {{ id?: string, outlineId?: string }|null|undefined} routeLayer
+     * @param {Array<{ id?: string }>} allRouteLayers
+     * @param {Array<Object>} [styleLayers]
+     * @returns {Object}
+     */
+    function buildBringNavRouteAboveTrafficEdgesDispatchPlan(routeLayer, allRouteLayers, styleLayers) {
+        var routeLineIds = [];
+        if (routeLayer && routeLayer.outlineId) {
+            routeLineIds.push(routeLayer.outlineId);
+        }
+        if (routeLayer && routeLayer.id) {
+            routeLineIds.push(routeLayer.id);
+        }
+        (allRouteLayers || []).forEach(function (layer) {
+            if (layer && layer.id) routeLineIds.push(layer.id);
+        });
+        var uniqueIds = routeLineIds.filter(function (id, index) {
+            return id && routeLineIds.indexOf(id) === index;
+        });
+        if (uniqueIds.length === 0) {
+            return { shouldRun: false };
+        }
+        return {
+            shouldRun: true,
+            layerIds: uniqueIds,
+            beforeId: findFirstTextSymbolLayerId(styleLayers),
+            ensureLabelsOnTop: true,
+        };
+    }
+
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
@@ -1978,6 +2032,8 @@
         buildRouteLayerMapLibreApplyPlan: buildRouteLayerMapLibreApplyPlan,
         buildDoAddRouteLayersBatchPlan: buildDoAddRouteLayersBatchPlan,
         buildEnsureLabelsOnTopDispatchPlan: buildEnsureLabelsOnTopDispatchPlan,
+        buildBringTrafficEdgesToTopDispatchPlan: buildBringTrafficEdgesToTopDispatchPlan,
+        buildBringNavRouteAboveTrafficEdgesDispatchPlan: buildBringNavRouteAboveTrafficEdgesDispatchPlan,
         ENSURE_LABELS_ON_TOP_DEBOUNCE_MS: ENSURE_LABELS_ON_TOP_DEBOUNCE_MS,
         DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS: DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,
