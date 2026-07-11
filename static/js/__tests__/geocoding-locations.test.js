@@ -314,6 +314,34 @@ describe('geocoding-locations module', () => {
         expect(GL.buildGeocodePlusCodeLookupPlan(state).action).toBe('resolve');
     });
 
+    test('buildGeocodeLocationsOrchestrationPlan and pair outcome apply plans', () => {
+        const orch = GL.buildGeocodeLocationsOrchestrationPlan();
+        expect(orch.startInputId).toBe('start');
+        expect(orch.setGeocodingFlag).toBe(true);
+
+        const failApply = GL.buildGeocodeEndpointFailureApplyPlan({
+            shouldAbort: true,
+            statusMessage: 'not found',
+            statusType: 'error',
+        });
+        expect(failApply.returnValue).toBeNull();
+
+        const successApply = GL.buildGeocodePairOutcomeApplyPlan(
+            GL.buildGeocodePairOutcomeExecutePlan(
+                GL.buildGeocodePairSuccessOutcomePlan(
+                    { lat: 1, lon: 2, address: 'A' },
+                    { lat: 3, lon: 4, address: 'B' }
+                )
+            )
+        );
+        expect(successApply.returnValue).toEqual({
+            start: '1,2',
+            end: '3,4',
+            startName: undefined,
+            endName: undefined,
+        });
+    });
+
     test('buildPickLocationFromMapExecutePlan enters picker mode with status copy', () => {
         const start = GL.buildPickLocationFromMapExecutePlan('start');
         expect(start.shouldPick).toBe(true);

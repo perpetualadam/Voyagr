@@ -9179,7 +9179,111 @@ function toggleZoomAndFollow() {
     updateRecenterButtonVisibility();
 }
 
-const RECENTER_MIN_DISTANCE_M = 70;
+function shouldShowRecenterVehicleButton() {
+    const MC = _mapControls();
+    const plan = MC.buildShouldShowRecenterVehicleButtonPlan({
+        hasMap: !!map,
+        currentLat,
+        currentLon,
+        routeInProgress,
+        isTrackingActive,
+        journeyOverviewActive,
+        zoomAndFollowEnabled,
+        mapFollowingActive,
+        distanceFromCenterM: metersMapCenterFromVehicle(),
+        minDistanceM: MC.RECENTER_MIN_DISTANCE_M,
+    });
+    return plan.shouldShow;
+}
+
+function applyRecenterButtonVisibilityFromPlan(execute) {
+    if (!execute || !execute.shouldUpdate) return;
+    const btn = document.getElementById(execute.buttonId);
+    if (btn) btn.style.display = execute.display;
+}
+
+function updateRecenterButtonVisibility() {
+    applyRecenterButtonVisibilityFromPlan(
+        _mapControls().buildRecenterButtonVisibilityExecutePlan(shouldShowRecenterVehicleButton())
+    );
+}
+
+function recenterOnVehicle() {
+    const MC = _mapControls();
+    const { lat, lon } = getVehicleDisplayCoordinates();
+    const preflight = MC.buildRecenterOnVehiclePreflightPlan({
+        hasMap: !!map,
+        currentLat,
+        currentLon,
+        displayLat: lat,
+        displayLon: lon,
+        journeyOverviewActive,
+        routeInProgress,
+    });
+    if (!preflight.shouldRecenter) {
+        showStatus(preflight.statusMessage, preflight.statusType);
+        return;
+    }
+
+    if (preflight.exitJourneyOverview) {
+        const exit = MC.buildRecenterJourneyOverviewExitPlan();
+        journeyOverviewActive = exit.journeyOverviewActive;
+        applyJourneyOverviewButtonUi(document.getElementById(exit.journeyBtnId), false);
+        if (exit.clearSavedMapState) savedMapState = null;
+    }
+
+    if (preflight.routeInProgress) {
+        mapFollowingActive = true;
+        const speedMps = currentUserMarker && Number.isFinite(currentUserMarker.speed)
+            ? currentUserMarker.speed
+            : 0;
+        const speedMph = speedMps * 2.23694;
+        const followInput = MC.buildRecenterNavigationFollowInputPlan({
+            lat,
+            lon,
+            speedMph,
+            roadType: getCurrentRoadType(undefined, speedMph),
+            heading: (currentUserMarker && Number.isFinite(currentUserMarker.heading))
+                ? currentUserMarker.heading
+                : map.getBearing(),
+            mapBearing: map.getBearing(),
+            shouldTilt: shouldTiltDrivingCamera(),
+            usePitchedDrivingCamera: shouldUsePitchedDrivingCamera(),
+            viewportHeight: window.innerHeight,
+            viewportWidth: window.innerWidth,
+        });
+        const followCamera = _cameraPitch().buildNavigationFollowCameraPlan(
+            Object.assign({}, followInput, {
+                computeSmartZoom: (spd, dist, rt) => _routeGeometry().calculateSmartZoom(
+                    spd, dist, rt, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
+                ),
+            })
+        );
+        const complete = MC.buildRecenterNavigationCompletePlan();
+
+        if (complete.setLastFollowCenterGeo) {
+            window.__voyagrLastFollowCenterGeo = { lat, lon };
+        }
+        if (complete.setLastFollowEaseAt) {
+            window.__voyagrLastFollowEaseAt = Date.now();
+        }
+        if (followCamera.easeTo) {
+            map.easeTo(followCamera.easeTo);
+        }
+        showStatus(complete.statusMessage, complete.statusType);
+    } else {
+        const tracking = MC.buildRecenterTrackingEasePlan({
+            lat,
+            lon,
+            currentZoom: map.getZoom(),
+        });
+        mapFollowingActive = tracking.mapFollowingActive;
+        map.easeTo(tracking.easeTo);
+        showStatus(tracking.statusMessage, tracking.statusType);
+    }
+
+    updateRecenterButtonVisibility();
+}
 
 /**
  * Snap GPS position to the active route polyline when navigation is in progress.
@@ -9223,85 +9327,6 @@ function metersMapCenterFromVehicle() {
     const center = map.getCenter();
     const vehicle = getVehicleDisplayCoordinates();
     return calculateDistanceMeters(vehicle.lat, vehicle.lon, center.lat, center.lng);
-}
-
-function shouldShowRecenterVehicleButton() {
-    if (!map || currentLat == null || currentLon == null) return false;
-    if (!routeInProgress && !isTrackingActive) return false;
-    if (journeyOverviewActive) return true;
-    if (routeInProgress && zoomAndFollowEnabled && !mapFollowingActive) return true;
-    return metersMapCenterFromVehicle() >= RECENTER_MIN_DISTANCE_M;
-}
-
-function updateRecenterButtonVisibility() {
-    const btn = document.getElementById('recenterVehicleFab');
-    if (!btn) return;
-    btn.style.display = shouldShowRecenterVehicleButton() ? 'flex' : 'none';
-}
-
-/**
- * Waze-style recenter: return to the vehicle icon and resume follow during navigation.
- */
-function recenterOnVehicle() {
-    if (!map || currentLat == null || currentLon == null) {
-        showStatus('Waiting for GPS position…', 'info');
-        return;
-    }
-
-    if (journeyOverviewActive) {
-        journeyOverviewActive = false;
-        const journeyBtn = document.getElementById('journeyOverviewBtn');
-        applyJourneyOverviewButtonUi(journeyBtn, false);
-        savedMapState = null;
-    }
-
-    const { lat, lon } = getVehicleDisplayCoordinates();
-
-    if (routeInProgress) {
-        mapFollowingActive = true;
-        const speedMps = currentUserMarker && Number.isFinite(currentUserMarker.speed)
-            ? currentUserMarker.speed
-            : 0;
-        const speedMph = speedMps * 2.23694;
-        const recenterRoadType = getCurrentRoadType(undefined, speedMph);
-        const followCamera = _cameraPitch().buildNavigationFollowCameraPlan({
-            speedMph,
-            roadType: recenterRoadType,
-            heading: (currentUserMarker && Number.isFinite(currentUserMarker.heading))
-                ? currentUserMarker.heading
-                : map.getBearing(),
-            mapBearing: map.getBearing(),
-            markerLat: lat,
-            markerLon: lon,
-            shouldEase: true,
-            durationMs: 600,
-            shouldTilt: shouldTiltDrivingCamera(),
-            usePitchedDrivingCamera: shouldUsePitchedDrivingCamera(),
-            viewportHeight: window.innerHeight,
-            viewportWidth: window.innerWidth,
-            computeSmartZoom: (spd, dist, rt) => _routeGeometry().calculateSmartZoom(
-                spd, dist, rt, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
-            ),
-        });
-
-        window.__voyagrLastFollowCenterGeo = { lat, lon };
-        window.__voyagrLastFollowEaseAt = Date.now();
-        if (followCamera.easeTo) {
-            map.easeTo(followCamera.easeTo);
-        }
-        showStatus('📍 Recentered on vehicle', 'success');
-    } else {
-        mapFollowingActive = true;
-        map.easeTo({
-            center: [lon, lat],
-            zoom: Math.max(map.getZoom(), 16),
-            duration: 500,
-            essential: true,
-        });
-        showStatus('📍 Recentered on your location', 'success');
-    }
-
-    updateRecenterButtonVisibility();
 }
 
 // Journey Overview state
@@ -15264,10 +15289,11 @@ async function resolveGeocodeEndpoint(GL, endpointPlan, which, fallbackAddress) 
 
 async function geocodeLocations(startAddress, endAddress) {
     const GL = _geocodingLocations();
-    isGeocoding = true;
+    const orch = GL.buildGeocodeLocationsOrchestrationPlan();
+    if (orch.setGeocodingFlag) isGeocoding = true;
 
-    const startInput = document.getElementById('start');
-    const endInput = document.getElementById('end');
+    const startInput = document.getElementById(orch.startInputId);
+    const endInput = document.getElementById(orch.endInputId);
     const pairPlans = GL.buildGeocodeLocationsInputPlan({
         startStored: GL.readStoredLocationFromDataset(startInput?.dataset, startAddress),
         startAddress,
@@ -15279,35 +15305,52 @@ async function geocodeLocations(startAddress, endAddress) {
     try {
         const startResolved = await resolveGeocodeEndpoint(GL, pairPlans.startPlan, 'start', startAddress);
         if (!startResolved.ok) {
-            const fail = GL.buildGeocodeEndpointFailureExecutePlan(startResolved.failure);
-            showStatus(fail.statusMessage, fail.statusType);
-            if (fail.clearGeocodingFlag) isGeocoding = false;
-            return null;
+            return applyGeocodeEndpointFailureFromPlan(
+                GL.buildGeocodeEndpointFailureApplyPlan(
+                    GL.buildGeocodeEndpointFailureExecutePlan(startResolved.failure)
+                )
+            );
         }
 
         const endResolved = await resolveGeocodeEndpoint(GL, pairPlans.endPlan, 'end', endAddress);
         if (!endResolved.ok) {
-            const fail = GL.buildGeocodeEndpointFailureExecutePlan(endResolved.failure);
-            showStatus(fail.statusMessage, fail.statusType);
-            if (fail.clearGeocodingFlag) isGeocoding = false;
-            return null;
+            return applyGeocodeEndpointFailureFromPlan(
+                GL.buildGeocodeEndpointFailureApplyPlan(
+                    GL.buildGeocodeEndpointFailureExecutePlan(endResolved.failure)
+                )
+            );
         }
 
-        const outcome = GL.buildGeocodePairOutcomeExecutePlan(
-            GL.buildGeocodePairSuccessOutcomePlan(startResolved.result, endResolved.result)
+        return applyGeocodePairOutcomeFromPlan(
+            GL.buildGeocodePairOutcomeApplyPlan(
+                GL.buildGeocodePairOutcomeExecutePlan(
+                    GL.buildGeocodePairSuccessOutcomePlan(startResolved.result, endResolved.result)
+                )
+            )
         );
-        showStatus(outcome.statusMessage, outcome.statusType);
-        if (outcome.clearGeocodingFlag) isGeocoding = false;
-        return outcome.coords;
     } catch (error) {
-        const outcome = GL.buildGeocodePairOutcomeExecutePlan(
+        const execute = GL.buildGeocodePairOutcomeExecutePlan(
             GL.buildGeocodePairErrorOutcomePlan(error.message)
         );
-        if (outcome.errorLogPrefix) console.log(outcome.errorLogPrefix, error);
-        showStatus(outcome.statusMessage, outcome.statusType);
-        if (outcome.clearGeocodingFlag) isGeocoding = false;
-        return null;
+        if (execute.errorLogPrefix) console.log(execute.errorLogPrefix, error);
+        return applyGeocodePairOutcomeFromPlan(
+            GL.buildGeocodePairOutcomeApplyPlan(execute)
+        );
     }
+}
+
+function applyGeocodeEndpointFailureFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return null;
+    showStatus(apply.statusMessage, apply.statusType);
+    if (apply.clearGeocodingFlag) isGeocoding = false;
+    return apply.returnValue;
+}
+
+function applyGeocodePairOutcomeFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return null;
+    showStatus(apply.statusMessage, apply.statusType);
+    if (apply.clearGeocodingFlag) isGeocoding = false;
+    return apply.returnValue;
 }
 
 // ===== TURN-BY-TURN NAVIGATION FUNCTIONS =====

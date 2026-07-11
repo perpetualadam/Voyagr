@@ -882,6 +882,145 @@
         };
     }
 
+    var RECENTER_MIN_DISTANCE_M = 70;
+    var RECENTER_VEHICLE_FAB_ID = 'recenterVehicleFab';
+    var JOURNEY_OVERVIEW_BTN_ID = 'journeyOverviewBtn';
+
+    /**
+     * Visibility plan for the recenter-vehicle FAB.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildShouldShowRecenterVehicleButtonPlan(input) {
+        input = input || {};
+        if (!input.hasMap || input.currentLat == null || input.currentLon == null) {
+            return { shouldShow: false };
+        }
+        if (!input.routeInProgress && !input.isTrackingActive) {
+            return { shouldShow: false };
+        }
+        if (input.journeyOverviewActive) {
+            return { shouldShow: true };
+        }
+        if (input.routeInProgress && input.zoomAndFollowEnabled && !input.mapFollowingActive) {
+            return { shouldShow: true };
+        }
+        var minDistance = input.minDistanceM != null ? input.minDistanceM : RECENTER_MIN_DISTANCE_M;
+        if (Number.isFinite(input.distanceFromCenterM) && input.distanceFromCenterM >= minDistance) {
+            return { shouldShow: true };
+        }
+        return { shouldShow: false };
+    }
+
+    /**
+     * DOM execute plan for recenter button visibility.
+     * @param {boolean} shouldShow
+     * @returns {Object}
+     */
+    function buildRecenterButtonVisibilityExecutePlan(shouldShow) {
+        return {
+            shouldUpdate: true,
+            buttonId: RECENTER_VEHICLE_FAB_ID,
+            display: shouldShow ? 'flex' : 'none',
+        };
+    }
+
+    /**
+     * Preflight for recenter-on-vehicle action.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildRecenterOnVehiclePreflightPlan(input) {
+        input = input || {};
+        if (!input.hasMap || input.currentLat == null || input.currentLon == null) {
+            return {
+                shouldRecenter: false,
+                statusMessage: 'Waiting for GPS position…',
+                statusType: 'info',
+            };
+        }
+        return {
+            shouldRecenter: true,
+            exitJourneyOverview: !!input.journeyOverviewActive,
+            vehicleLat: input.displayLat,
+            vehicleLon: input.displayLon,
+            routeInProgress: !!input.routeInProgress,
+        };
+    }
+
+    /**
+     * Execute plan for exiting journey overview before recenter.
+     * @returns {Object}
+     */
+    function buildRecenterJourneyOverviewExitPlan() {
+        return {
+            shouldExit: true,
+            journeyOverviewActive: false,
+            journeyBtnId: JOURNEY_OVERVIEW_BTN_ID,
+            clearSavedMapState: true,
+        };
+    }
+
+    /**
+     * Input plan for navigation follow camera during recenter.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildRecenterNavigationFollowInputPlan(input) {
+        input = input || {};
+        return {
+            mapFollowingActive: true,
+            speedMph: input.speedMph,
+            roadType: input.roadType,
+            heading: input.heading,
+            mapBearing: input.mapBearing,
+            markerLat: input.lat,
+            markerLon: input.lon,
+            shouldEase: true,
+            durationMs: 600,
+            shouldTilt: !!input.shouldTilt,
+            usePitchedDrivingCamera: !!input.usePitchedDrivingCamera,
+            viewportHeight: input.viewportHeight,
+            viewportWidth: input.viewportWidth,
+        };
+    }
+
+    /**
+     * Execute plan after navigation recenter camera ease.
+     * @returns {Object}
+     */
+    function buildRecenterNavigationCompletePlan() {
+        return {
+            setLastFollowCenterGeo: true,
+            setLastFollowEaseAt: true,
+            statusMessage: '📍 Recentered on vehicle',
+            statusType: 'success',
+            updateRecenterVisibility: true,
+        };
+    }
+
+    /**
+     * Execute plan for recenter while tracking (non-navigation).
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildRecenterTrackingEasePlan(input) {
+        input = input || {};
+        var zoom = Number.isFinite(input.currentZoom) ? input.currentZoom : 16;
+        return {
+            mapFollowingActive: true,
+            easeTo: {
+                center: [input.lon, input.lat],
+                zoom: Math.max(zoom, 16),
+                duration: 500,
+                essential: true,
+            },
+            statusMessage: '📍 Recentered on your location',
+            statusType: 'success',
+            updateRecenterVisibility: true,
+        };
+    }
+
     var api = {
         ZOOM_FOLLOW_ENABLED_ICON: ZOOM_FOLLOW_ENABLED_ICON,
         ZOOM_FOLLOW_DISABLED_ICON: ZOOM_FOLLOW_DISABLED_ICON,
@@ -914,6 +1053,16 @@
         buildMapExploreHandlersSetupPlan: buildMapExploreHandlersSetupPlan,
         buildMapExploreGestureExecutePlan: buildMapExploreGestureExecutePlan,
         buildMapExploreMoveEndExecutePlan: buildMapExploreMoveEndExecutePlan,
+        RECENTER_MIN_DISTANCE_M: RECENTER_MIN_DISTANCE_M,
+        RECENTER_VEHICLE_FAB_ID: RECENTER_VEHICLE_FAB_ID,
+        JOURNEY_OVERVIEW_BTN_ID: JOURNEY_OVERVIEW_BTN_ID,
+        buildShouldShowRecenterVehicleButtonPlan: buildShouldShowRecenterVehicleButtonPlan,
+        buildRecenterButtonVisibilityExecutePlan: buildRecenterButtonVisibilityExecutePlan,
+        buildRecenterOnVehiclePreflightPlan: buildRecenterOnVehiclePreflightPlan,
+        buildRecenterJourneyOverviewExitPlan: buildRecenterJourneyOverviewExitPlan,
+        buildRecenterNavigationFollowInputPlan: buildRecenterNavigationFollowInputPlan,
+        buildRecenterNavigationCompletePlan: buildRecenterNavigationCompletePlan,
+        buildRecenterTrackingEasePlan: buildRecenterTrackingEasePlan,
         buildOpenMapControlsHintModalExecutePlan: buildOpenMapControlsHintModalExecutePlan,
         buildCloseMapControlsHintModalExecutePlan: buildCloseMapControlsHintModalExecutePlan,
         buildFabLongPressHintBindPlan: buildFabLongPressHintBindPlan,

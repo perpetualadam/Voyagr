@@ -287,4 +287,18 @@ describe('map-controls module', () => {
         expect(gesture.pauseMapFollowing).toBe(true);
         expect(MC.buildMapExploreMoveEndExecutePlan().updateRecenterVisibility).toBe(true);
     });
+
+    test('recenter vehicle visibility and action plans', () => {
+        expect(MC.RECENTER_MIN_DISTANCE_M).toBe(70);
+        expect(MC.buildShouldShowRecenterVehicleButtonPlan({
+            hasMap: true,
+            currentLat: 1,
+            currentLon: 2,
+            routeInProgress: true,
+            journeyOverviewActive: true,
+        }).shouldShow).toBe(true);
+        expect(MC.buildRecenterButtonVisibilityExecutePlan(true).display).toBe('flex');
+        expect(MC.buildRecenterOnVehiclePreflightPlan({ hasMap: false }).shouldRecenter).toBe(false);
+        expect(MC.buildRecenterTrackingEasePlan({ lat: 1, lon: 2, currentZoom: 15 }).easeTo.zoom).toBe(16);
+    });
 });

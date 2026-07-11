@@ -395,6 +395,51 @@
     }
 
     /**
+     * Orchestration plan for geocodeLocations start/end pair resolution.
+     * @returns {Object}
+     */
+    function buildGeocodeLocationsOrchestrationPlan() {
+        return {
+            startInputId: 'start',
+            endInputId: 'end',
+            setGeocodingFlag: true,
+        };
+    }
+
+    /**
+     * Apply plan for a geocode endpoint failure during pair resolution.
+     * @param {Object} fail - from buildGeocodeEndpointFailureExecutePlan
+     * @returns {Object}
+     */
+    function buildGeocodeEndpointFailureApplyPlan(fail) {
+        fail = fail || {};
+        return {
+            shouldApply: !!fail.shouldAbort,
+            returnValue: null,
+            statusMessage: fail.statusMessage,
+            statusType: fail.statusType,
+            clearGeocodingFlag: fail.clearGeocodingFlag !== false,
+        };
+    }
+
+    /**
+     * Apply plan for a geocodeLocations pair outcome.
+     * @param {Object} outcome - from buildGeocodePairOutcomeExecutePlan
+     * @returns {Object}
+     */
+    function buildGeocodePairOutcomeApplyPlan(outcome) {
+        outcome = outcome || {};
+        return {
+            shouldApply: true,
+            returnValue: outcome.shouldReturnCoords ? outcome.coords : null,
+            statusMessage: outcome.statusMessage,
+            statusType: outcome.statusType,
+            clearGeocodingFlag: outcome.clearGeocodingFlag !== false,
+            errorLogPrefix: outcome.errorLogPrefix || null,
+        };
+    }
+
+    /**
      * Lookup plan for geocodeAddress before network fetch (coords, cache, or Nominatim).
      * @param {Object} input
      * @param {string} input.address
@@ -768,6 +813,9 @@
         buildGeocodeEndpointResolveExecutePlan: buildGeocodeEndpointResolveExecutePlan,
         buildGeocodeEndpointFailureExecutePlan: buildGeocodeEndpointFailureExecutePlan,
         buildGeocodePairOutcomeExecutePlan: buildGeocodePairOutcomeExecutePlan,
+        buildGeocodeLocationsOrchestrationPlan: buildGeocodeLocationsOrchestrationPlan,
+        buildGeocodeEndpointFailureApplyPlan: buildGeocodeEndpointFailureApplyPlan,
+        buildGeocodePairOutcomeApplyPlan: buildGeocodePairOutcomeApplyPlan,
         buildGeocodeAddressLookupPlan: buildGeocodeAddressLookupPlan,
         buildGeocodeAddressFetchSuccessPlan: buildGeocodeAddressFetchSuccessPlan,
         buildGeocodeNominatimFetchRequestPlan: buildGeocodeNominatimFetchRequestPlan,
