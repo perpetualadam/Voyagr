@@ -24,7 +24,7 @@
      */
     function toggleButtonStyle(enabled, opts = {}) {
         const on = !!enabled;
-        return {
+        const style = {
             active: on,
             background: on
                 ? (opts.activeBackground || ACTIVE_BACKGROUND)
@@ -33,6 +33,12 @@
                 ? (opts.activeBorder || ACTIVE_BORDER)
                 : (opts.inactiveBorder || INACTIVE_BORDER),
         };
+        if (opts.activeColor != null || opts.inactiveColor != null) {
+            style.color = on
+                ? (opts.activeColor != null ? opts.activeColor : 'white')
+                : (opts.inactiveColor != null ? opts.inactiveColor : '#333');
+        }
+        return style;
     }
 
     /**
@@ -51,6 +57,9 @@
             if (el.style) {
                 el.style.background = style.background;
                 el.style.borderColor = style.borderColor;
+                if (style.color != null) {
+                    el.style.color = style.color;
+                }
             }
         }
         return style;

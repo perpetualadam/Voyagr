@@ -42,6 +42,13 @@ describe('toggle-ui (real module)', () => {
             expect(T.toggleButtonStyle(1).active).toBe(true);
             expect(T.toggleButtonStyle(0).active).toBe(false);
         });
+
+        test('optional text colours when activeColor/inactiveColor provided', () => {
+            const on = T.toggleButtonStyle(true, { activeColor: 'white', inactiveColor: '#333' });
+            expect(on.color).toBe('white');
+            const off = T.toggleButtonStyle(false, { activeColor: 'white', inactiveColor: '#333' });
+            expect(off.color).toBe('#333');
+        });
     });
 
     describe('applyToggleButton', () => {
@@ -66,6 +73,14 @@ describe('toggle-ui (real module)', () => {
         test('null element is a safe no-op that still returns the style', () => {
             expect(() => T.applyToggleButton(null, true)).not.toThrow();
             expect(T.applyToggleButton(null, true).active).toBe(true);
+        });
+
+        test('applies optional text colour when colour opts provided', () => {
+            const el = document.createElement('button');
+            T.applyToggleButton(el, true, { activeColor: 'white', inactiveColor: '#333' });
+            expect(el.style.color).toBe('white');
+            T.applyToggleButton(el, false, { activeColor: 'white', inactiveColor: '#333' });
+            expect(el.style.color).toBe('rgb(51, 51, 51)');
         });
     });
 

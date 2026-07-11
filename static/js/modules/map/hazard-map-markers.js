@@ -7,6 +7,72 @@
 
     var HAZARD_MARKER_ICON_SIZE = [28, 28];
 
+    var DEFAULT_HAZARD_MARKER_CONFIG = {
+        emoji: '⚠️',
+        color: '#ff9800',
+        bgColor: '#fff3e0',
+        label: 'Hazard',
+    };
+
+    /**
+     * Map API / legacy hazard.type strings to marker style keys (camera_* , traffic_light, …).
+     * @param {*} raw
+     * @returns {string}
+     */
+    function normalizeCameraHazardTypeForMarker(raw) {
+        if (raw === 'traffic_signals' || raw === 'traffic_signal') return 'traffic_light';
+        if (raw == null || raw === '') return 'camera_speed';
+        var k = String(raw).toLowerCase();
+        if (k === 'camera') return 'camera_speed';
+        if (k === 'speed_camera') return 'camera_speed';
+        if (k === 'traffic_light_camera' || k === 'traffic-light-camera') return 'camera_red_light';
+        if (k.startsWith('camera_')) return k;
+        if (/(red_light|red-light|traffic_light|traffic light|rlc|tlc)/i.test(String(raw))) return 'camera_red_light';
+        if (/(spec|average|vec)/i.test(k)) return 'camera_average_speed';
+        if (k.indexOf('bus') >= 0) return 'camera_bus_lane';
+        if (k.indexOf('mobile') >= 0) return 'camera_mobile';
+        if (k === 'speed' || k === 'fixed' || k === 'gatso' || k === 'truvelo') return 'camera_speed';
+        return 'camera_other';
+    }
+
+    /**
+     * Shared SVG marker styles for route hazards and cameras-on-map layer.
+     * @returns {Object<string, Object>}
+     */
+    function getHazardMarkerStyleMap() {
+        var cameraSVG = '<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="5" width="16" height="16" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="13" r="4" fill="#222"/><circle cx="12" cy="13" r="2" fill="#FFD600"/><rect x="8" y="2" width="8" height="4" rx="1" fill="#222"/></svg>';
+        var cameraRedLightSVG = '<svg viewBox="0 0 24 24" width="20" height="20"><rect x="3" y="5" width="18" height="14" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="9.5" cy="12" r="3.2" fill="#222"/><circle cx="9.5" cy="12" r="1.6" fill="#FFD600"/><circle cx="16.5" cy="9.5" r="2.2" fill="#f44336" stroke="#b71c1c" stroke-width="0.8"/><circle cx="16.5" cy="14.5" r="2.2" fill="#fbc02d" stroke="#f57f17" stroke-width="0.8"/><circle cx="16.5" cy="19.5" r="2.2" fill="#388e3c" stroke="#1b5e20" stroke-width="0.8"/></svg>';
+        var cameraAvgSVG = '<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="7" width="16" height="11" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="12.5" r="3" fill="#222"/><path d="M5 18 L19 18" stroke="#222" stroke-width="1.3" stroke-dasharray="2 2"/></svg>';
+        var cameraBusSVG = '<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="7" width="16" height="12" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="12" cy="13" r="3" fill="#222"/><rect x="7" y="9" width="10" height="6" rx="1" fill="#1565c0"/></svg>';
+        var cameraMobileSVG = '<svg viewBox="0 0 24 24" width="20" height="20"><rect x="4" y="6" width="13" height="13" rx="2" fill="#FFD600" stroke="#222" stroke-width="1.5"/><circle cx="10.5" cy="12.5" r="3" fill="#222"/><path d="M17 8 L20 7 L19 14 L16 13 Z" fill="#555"/></svg>';
+
+        return {
+            camera: { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Speed camera' },
+            camera_speed: { svg: cameraSVG, color: '#FFD600', bgColor: '#fff9c4', label: 'Speed camera' },
+            camera_red_light: { svg: cameraRedLightSVG, color: '#e65100', bgColor: '#fff3e0', label: 'Traffic-light camera' },
+            camera_average_speed: { svg: cameraAvgSVG, color: '#6a1b9a', bgColor: '#f3e5f5', label: 'Average speed camera' },
+            camera_bus_lane: { svg: cameraBusSVG, color: '#0d47a1', bgColor: '#e3f2fd', label: 'Bus lane camera' },
+            camera_mobile: { svg: cameraMobileSVG, color: '#37474f', bgColor: '#eceff1', label: 'Mobile camera' },
+            camera_other: { svg: cameraSVG, color: '#f57c00', bgColor: '#fff8e1', label: 'Camera' },
+            traffic_light: { useOsmTrafficLightPill: true, color: '#2e7d32', bgColor: '#e8f5e9', label: 'Traffic light' },
+            police: { emoji: '🚔', color: '#1976d2', bgColor: '#e3f2fd', label: 'Police' },
+            roadworks: { emoji: '🚧', color: '#ffc107', bgColor: '#fff8e1', label: 'Roadworks' },
+            accident: { emoji: '⚠️', color: '#f44336', bgColor: '#ffebee', label: 'Accident' },
+            railway_crossing: { emoji: '🚂', color: '#795548', bgColor: '#efebe9', label: 'Railway Crossing' },
+            pothole: { emoji: '🕳️', color: '#607d8b', bgColor: '#eceff1', label: 'Pothole' },
+            debris: { emoji: '🪨', color: '#8d6e63', bgColor: '#efebe9', label: 'Debris' },
+        };
+    }
+
+    /**
+     * @param {Object<string, Object>} styleMap
+     * @param {string} typeKey
+     * @returns {Object}
+     */
+    function resolveHazardMarkerConfig(styleMap, typeKey) {
+        return (styleMap && styleMap[typeKey]) || DEFAULT_HAZARD_MARKER_CONFIG;
+    }
+
     /**
      * @param {Object} config
      * @param {string} svg
@@ -93,6 +159,10 @@
 
     var api = {
         HAZARD_MARKER_ICON_SIZE: HAZARD_MARKER_ICON_SIZE,
+        DEFAULT_HAZARD_MARKER_CONFIG: DEFAULT_HAZARD_MARKER_CONFIG,
+        normalizeCameraHazardTypeForMarker: normalizeCameraHazardTypeForMarker,
+        getHazardMarkerStyleMap: getHazardMarkerStyleMap,
+        resolveHazardMarkerConfig: resolveHazardMarkerConfig,
         buildHazardSvgMarkerHtml: buildHazardSvgMarkerHtml,
         buildHazardEmojiMarkerHtml: buildHazardEmojiMarkerHtml,
         buildHazardPopupEmojiIconHtml: buildHazardPopupEmojiIconHtml,

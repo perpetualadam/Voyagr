@@ -28,4 +28,17 @@ describe('hazard-map-markers module', () => {
         expect(html).toContain('Roadworks');
         expect(html).toContain('1.2 km ahead');
     });
+
+    test('normalizeCameraHazardTypeForMarker maps legacy camera strings', () => {
+        expect(HM.normalizeCameraHazardTypeForMarker('traffic_signals')).toBe('traffic_light');
+        expect(HM.normalizeCameraHazardTypeForMarker('camera_average_speed')).toBe('camera_average_speed');
+        expect(HM.normalizeCameraHazardTypeForMarker('traffic light camera')).toBe('camera_red_light');
+    });
+
+    test('getHazardMarkerStyleMap includes camera and traffic light entries', () => {
+        const map = HM.getHazardMarkerStyleMap();
+        expect(map.camera_speed.svg).toContain('<svg');
+        expect(map.traffic_light.useOsmTrafficLightPill).toBe(true);
+        expect(HM.resolveHazardMarkerConfig(map, 'unknown').label).toBe('Hazard');
+    });
 });
