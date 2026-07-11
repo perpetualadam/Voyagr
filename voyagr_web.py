@@ -665,74 +665,8 @@ CAZ_PASS_TYPES = [
 ]
 
 
-def check_route_in_caz(route_coords: List[Tuple[float, float]], vehicle_caz_pass: str = 'none') -> Dict[str, Any]:
-    """
-    Check if a route passes through any CAZ zones and calculate charges.
-
-    Args:
-        route_coords: List of (lat, lon) tuples representing the route
-        vehicle_caz_pass: The CAZ pass/exemption type the vehicle has
-
-    Returns:
-        Dictionary with:
-        - zones_crossed: List of zone IDs the route passes through
-        - total_charge: Total CAZ charge (0 if exempt/has pass)
-        - is_exempt: Whether the vehicle is exempt
-        - pass_covers: Whether a pass covers the charges
-        - zone_details: Details of each zone crossed
-    """
-    result = {
-        'zones_crossed': [],
-        'total_charge': 0.0,
-        'is_exempt': False,
-        'pass_covers': False,
-        'zone_details': []
-    }
-
-    # Check if vehicle has exemption
-    exempt_passes = ['exempt_electric', 'exempt_euro6', 'exempt_disabled', 'exempt_historic', 'exempt_military']
-    has_pass = ['pass_daily', 'pass_weekly', 'pass_monthly', 'pass_annual', 'auto_pay']
-
-    if vehicle_caz_pass in exempt_passes:
-        result['is_exempt'] = True
-    elif vehicle_caz_pass in has_pass:
-        result['pass_covers'] = True
-
-    if not route_coords or len(route_coords) == 0:
-        return result
-
-    # Check each CAZ zone
-    for zone_id, zone_data in CAZ_ZONES_DATA.items():
-        polygon = zone_data.get('polygon', [])
-        if not polygon:
-            continue
-
-        # Check if any route point falls within this zone
-        zone_crossed = False
-        for coord in route_coords:
-            if isinstance(coord, (list, tuple)) and len(coord) >= 2:
-                lat, lon = float(coord[0]), float(coord[1])
-                if point_in_polygon(lat, lon, polygon):
-                    zone_crossed = True
-                    break
-
-        if zone_crossed:
-            result['zones_crossed'].append(zone_id)
-            zone_detail = {
-                'zone_id': zone_id,
-                'name': zone_data['name'],
-                'city': zone_data['city'],
-                'daily_charge': zone_data['daily_charge'],
-                'purchase_url': zone_data.get('purchase_url', '')
-            }
-            result['zone_details'].append(zone_detail)
-
-            # Add charge only if not exempt and no pass
-            if not result['is_exempt'] and not result['pass_covers']:
-                result['total_charge'] += zone_data['daily_charge']
-
-    result['total_charge'] = round(result['total_charge'], 2)
-    return result
+# check_route_in_caz lives in voyagr.services.costs (single source of truth);
+# imported at module scope below.
 
 # ============================================================================
 # ROUTE CACHING SYSTEM (Phase 3 Optimization)
@@ -1264,7 +1198,16 @@ if dashcam_available:
 # ============================================================================
 # COST CALCULATION (single source of truth: voyagr/services/costs.py)
 # ============================================================================
-from voyagr.services.costs import CostCalculator
+from voyagr.services.costs import (
+    CostCalculator,
+    calculate_caz_cost,
+    calculate_energy_cost,
+    calculate_fuel_cost,
+    calculate_toll_cost,
+    check_route_in_caz,
+    invalidate_hazard_cache,
+    invalidate_route_cache,
+)
 
 # Initialize cost calculator
 cost_calculator = CostCalculator()
@@ -1282,43 +1225,8 @@ if speed_limit_detector:
 # ============================================================================
 # CACHE INVALIDATION
 # ============================================================================
-def invalidate_hazard_cache():
-    """Invalidate hazard-related caches when hazard data is updated."""
-    try:
-        with db_connection() as conn:
-            cursor = conn.cursor()
-
-            # Clear expired hazard reports (older than 24 hours)
-            cursor.execute('''
-                DELETE FROM community_hazard_reports
-                WHERE expiry_timestamp < ?
-            ''', (int(time.time()),))
-
-            conn.commit()
-        logger.info("Hazard cache invalidated and expired reports cleaned")
-        return True
-    except Exception as e:
-        logger.error(f"Error invalidating hazard cache: {e}")
-        return False
-
-def invalidate_route_cache():
-    """Invalidate route cache when preferences change."""
-    try:
-        with db_connection() as conn:
-            cursor = conn.cursor()
-
-            # Clear routes older than 24 hours
-            cursor.execute('''
-                DELETE FROM persistent_route_cache
-                WHERE last_accessed < datetime('now', '-24 hours')
-            ''')
-
-            conn.commit()
-        logger.info("Route cache invalidated and old routes cleaned")
-        return True
-    except Exception as e:
-        logger.error(f"Error invalidating route cache: {e}")
-        return False
+# invalidate_hazard_cache and invalidate_route_cache live in
+# voyagr.services.costs (single source of truth); imported at module scope above.
 
 # Cost calculation functions
 # decode_route_geometry is imported from voyagr.utils.geometry (single source of truth).
@@ -1328,126 +1236,9 @@ def invalidate_route_cache():
 # voyagr.services.routing.maneuvers (imported at module scope below).
 
 
-def calculate_fuel_cost(distance_km: float, fuel_efficiency_l_per_100km: float, fuel_price_gbp_per_l: float) -> float:
-    """Calculate fuel cost for a route."""
-    fuel_needed = (distance_km / 100) * fuel_efficiency_l_per_100km
-    return fuel_needed * fuel_price_gbp_per_l
-
-def calculate_energy_cost(distance_km: float, energy_efficiency_kwh_per_100km: float, electricity_price_gbp_per_kwh: float) -> float:
-    """Calculate energy cost for EV."""
-    energy_needed = (distance_km / 100) * energy_efficiency_kwh_per_100km
-    return energy_needed * electricity_price_gbp_per_kwh
-
-def calculate_toll_cost(_distance_km: float, _route_type: str = 'motorway', route_coords: Optional[List[Tuple[float, float]]] = None) -> float:
-    """Calculate toll cost based on actual toll roads, not distance.
-
-    IMPORTANT: Toll costs are NOT calculated based on distance anymore.
-    The _distance_km and _route_type parameters are kept for backward compatibility.
-    Only charges tolls if route passes through known UK toll roads:
-    - M6 Toll (£3.50)
-    - Dartford Crossing (£2.50)
-    - Severn Bridge (£6.70)
-    - Humber Bridge (£2.00)
-
-    Returns 0.0 by default (conservative approach) unless route_coords provided.
-
-    Args:
-        distance_km: Route distance (DEPRECATED - no longer used)
-        route_type: Type of route (DEPRECATED - no longer used)
-        route_coords: List of route coordinates to check for toll roads
-
-    Returns:
-        Toll cost in GBP (0 if no toll roads detected or no coordinates provided)
-    """
-    # If no coordinates provided, don't charge tolls (conservative approach)
-    # This prevents false toll charges on non-toll routes
-    if not route_coords or len(route_coords) == 0:
-        return 0.0
-
-    # Known UK toll roads with approximate locations
-    TOLL_ROADS: Dict[str, Dict[str, float]] = {
-        'M6 Toll': {'lat': 52.5, 'lon': -1.9, 'cost': 3.50, 'radius_km': 15},
-        'Dartford Crossing': {'lat': 51.45, 'lon': 0.2, 'cost': 2.50, 'radius_km': 10},
-        'Severn Bridge': {'lat': 51.4, 'lon': -2.6, 'cost': 6.70, 'radius_km': 15},
-        'Humber Bridge': {'lat': 53.7, 'lon': -0.4, 'cost': 2.00, 'radius_km': 10},
-    }
-
-    # Check if route passes through any known toll roads
-    total_toll: float = 0.0
-    tolls_charged: Set[str] = set()
-
-    for coord in route_coords:
-        if isinstance(coord, (list, tuple)) and len(coord) >= 2:
-            lat, lon = coord[0], coord[1]
-
-            for toll_name, toll_data in TOLL_ROADS.items():
-                if toll_name not in tolls_charged:
-                    # Simple distance check
-                    lat_diff = abs(lat - toll_data['lat'])
-                    lon_diff = abs(lon - toll_data['lon'])
-                    approx_distance = (lat_diff ** 2 + lon_diff ** 2) ** 0.5 * 111
-
-                    if approx_distance < toll_data['radius_km']:
-                        total_toll += toll_data['cost']
-                        tolls_charged.add(toll_name)
-
-    return round(total_toll, 2)
-
-def calculate_caz_cost(_distance_km: float, vehicle_type: str = 'petrol_diesel', is_exempt: bool = False,
-                       route_coords: Optional[List[Tuple[float, float]]] = None,
-                       vehicle_caz_pass: str = 'none') -> Tuple[float, Dict[str, Any]]:
-    """Calculate Congestion Charge Zone cost using polygon-based boundary detection.
-
-    Uses precise polygon boundaries for each UK CAZ zone instead of radius-based detection.
-    Checks if route coordinates fall within actual zone boundaries.
-
-    Args:
-        _distance_km: Route distance (DEPRECATED - kept for backward compatibility)
-        vehicle_type: Type of vehicle (petrol_diesel, electric, hybrid)
-        is_exempt: Whether vehicle is CAZ exempt (legacy parameter)
-        route_coords: List of route coordinates to check for CAZ zones
-        vehicle_caz_pass: The CAZ pass/exemption type (from CAZ_PASS_TYPES)
-
-    Returns:
-        Tuple of (cost, details_dict) where details_dict contains:
-        - zones_crossed: List of zone IDs crossed
-        - total_charge: Total charge amount
-        - is_exempt: Whether vehicle is exempt
-        - pass_covers: Whether a pass covers the charges
-        - zone_details: Details of each zone
-    """
-    # Default empty result
-    empty_result: Dict[str, Any] = {
-        'zones_crossed': [],
-        'total_charge': 0.0,
-        'is_exempt': False,
-        'pass_covers': False,
-        'zone_details': []
-    }
-
-    # Legacy exemption check
-    if is_exempt:
-        empty_result['is_exempt'] = True
-        return 0.0, empty_result
-
-    # Electric vehicles are always exempt
-    if vehicle_type == 'electric':
-        empty_result['is_exempt'] = True
-        return 0.0, empty_result
-
-    # Map vehicle_caz_pass 'exempt_electric' for electric vehicles
-    if vehicle_caz_pass == 'exempt_electric':
-        empty_result['is_exempt'] = True
-        return 0.0, empty_result
-
-    # If no coordinates provided, don't charge CAZ (conservative approach)
-    if not route_coords or len(route_coords) == 0:
-        return 0.0, empty_result
-
-    # Use polygon-based detection
-    caz_result = check_route_in_caz(route_coords, vehicle_caz_pass)
-
-    return caz_result['total_charge'], caz_result
+# calculate_fuel_cost, calculate_energy_cost, calculate_toll_cost and
+# calculate_caz_cost live in voyagr.services.costs (single source of truth);
+# imported at module scope above.
 
 # Hazard avoidance functions
 
