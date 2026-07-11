@@ -133,6 +133,25 @@ describe('route preview helpers', () => {
         expect(state.visible).toBe(true);
         expect(state.background).toBe('#E8F5E9');
     });
+
+    test('buildHazardPreviewPanelApplyPlan maps state to DOM apply plan', () => {
+        const plan = RS.buildHazardPreviewPanelApplyPlan({
+            visible: true,
+            title: '✓ Route preferences applied',
+            countLabel: 'Route score:',
+            count: '2',
+            showPenalty: true,
+            penaltyMinutes: 3,
+            background: '#FFF3E0',
+            borderLeftColor: '#FF9800',
+        });
+        expect(plan.visible).toBe(true);
+        expect(plan.containerDisplay).toBe('block');
+        expect(plan.penaltyRowDisplay).toBe('flex');
+        expect(plan.penaltyText).toBe('3 min');
+        expect(plan.containerBackground).toBe('#FFF3E0');
+        expect(RS.buildHazardPreviewPanelApplyPlan({ visible: false }).containerDisplay).toBe('none');
+    });
 });
 
 describe('route comparison modal helpers', () => {

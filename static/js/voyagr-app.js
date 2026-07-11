@@ -7193,21 +7193,22 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
             hazardCount: hazardCount,
             hazardPenaltySeconds: hazardPenaltySeconds,
         });
+        const plan = selection.buildHazardPreviewPanelApplyPlan(hazardState);
         const countEl = document.getElementById('previewHazardCount');
         const penaltyEl = document.getElementById('previewHazardPenalty');
-        if (hazardState.visible && countEl) {
-            countEl.textContent = hazardState.count;
-            if (hazardCountLabel) hazardCountLabel.textContent = hazardState.countLabel;
-            if (hazardTitleEl) hazardTitleEl.textContent = hazardState.title;
-            if (penaltyRow) penaltyRow.style.display = hazardState.showPenalty ? 'flex' : 'none';
-            if (penaltyEl && hazardState.showPenalty) {
-                penaltyEl.textContent = hazardState.penaltyMinutes + ' min';
+        if (plan.visible && countEl) {
+            countEl.textContent = plan.count;
+            if (hazardCountLabel) hazardCountLabel.textContent = plan.countLabel;
+            if (hazardTitleEl) hazardTitleEl.textContent = plan.title;
+            if (penaltyRow) penaltyRow.style.display = plan.penaltyRowDisplay;
+            if (penaltyEl && plan.penaltyText) {
+                penaltyEl.textContent = plan.penaltyText;
             }
-            hazardContainer.style.background = hazardState.background;
-            hazardContainer.style.borderLeftColor = hazardState.borderLeftColor;
-            hazardContainer.style.display = 'block';
+            hazardContainer.style.background = plan.containerBackground;
+            hazardContainer.style.borderLeftColor = plan.containerBorderLeftColor;
+            hazardContainer.style.display = plan.containerDisplay;
         } else {
-            hazardContainer.style.display = 'none';
+            hazardContainer.style.display = plan.containerDisplay;
         }
     }
 
@@ -8488,11 +8489,55 @@ function addToSearchHistory(query, resultName, lat, lon) {
 
 // Load and display favorite locations with edit/delete options
 /**
+ * Mount one favorites grid row from a module-built spec.
+ * @param {HTMLElement} grid
+ * @param {Object} fav
+ * @param {Object} handlers
+ */
+function mountFavoriteGridItem(grid, fav, handlers) {
+    const FAV = _favorites();
+    const spec = FAV.buildFavoriteGridItemSpec(fav, { escapeHtml });
+    const container = document.createElement('div');
+    container.className = spec.container.className;
+    container.style.cssText = spec.container.style;
+
+    const btn = document.createElement('button');
+    btn.className = spec.mainButton.className;
+    btn.style.cssText = spec.mainButton.style;
+    btn.innerHTML = spec.mainButton.html;
+    btn.onclick = () => handlers.onSelect(fav);
+
+    const editBtn = document.createElement('button');
+    editBtn.innerHTML = spec.editButton.html;
+    editBtn.title = spec.editButton.title;
+    editBtn.style.cssText = spec.editButton.style;
+    editBtn.onclick = (e) => {
+        e.stopPropagation();
+        handlers.onEdit(fav);
+    };
+
+    const delBtn = document.createElement('button');
+    delBtn.innerHTML = spec.deleteButton.html;
+    delBtn.title = spec.deleteButton.title;
+    delBtn.style.cssText = spec.deleteButton.style;
+    delBtn.onclick = (e) => {
+        e.stopPropagation();
+        handlers.onDelete(fav);
+    };
+
+    container.appendChild(btn);
+    container.appendChild(editBtn);
+    container.appendChild(delBtn);
+    grid.appendChild(container);
+}
+
+/**
  * loadFavorites function
  * @function loadFavorites
  * @returns {*} Return value description
  */
 function loadFavorites() {
+    const FAV = _favorites();
     fetchJsonWithAuth('/api/favorites')
         .then(({ res, data }) => {
             const section = document.getElementById('favoritesSection');
@@ -8504,49 +8549,22 @@ function loadFavorites() {
                 return;
             }
 
-            if (data.success && data.favorites.length > 0) {
-                const FAV = _favorites();
-                data.favorites.forEach(fav => {
-                    const container = document.createElement('div');
-                    container.className = 'favorite-item';
-                    container.style.cssText = FAV.FAVORITE_ITEM_CONTAINER_STYLE;
-
-                    const btn = document.createElement('button');
-                    btn.className = 'favorite-btn';
-                    btn.style.cssText = FAV.FAVORITE_BTN_STYLE;
-                    btn.innerHTML = FAV.buildFavoriteMainButtonHtml(fav, { escapeHtml });
-                    btn.onclick = () => {
-                        document.getElementById('end').value = fav.name;
-                        document.getElementById('end').dataset.lat = fav.lat;
-                        document.getElementById('end').dataset.lon = fav.lon;
-                        document.getElementById('end').dataset.displayName = fav.name;
-                        addToSearchHistory(fav.name, fav.name, fav.lat, fav.lon);
-                        expandBottomSheet();
-                        showStatus(`📍 Destination set to ${fav.name}`, 'success');
-                    };
-
-                    const editBtn = document.createElement('button');
-                    editBtn.innerHTML = FAV.buildFavoriteEditButtonHtml();
-                    editBtn.title = 'Edit';
-                    editBtn.style.cssText = FAV.FAVORITE_EDIT_BTN_STYLE;
-                    editBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        editFavorite(fav);
-                    };
-
-                    const delBtn = document.createElement('button');
-                    delBtn.innerHTML = FAV.buildFavoriteDeleteButtonHtml();
-                    delBtn.title = 'Delete';
-                    delBtn.style.cssText = FAV.FAVORITE_DELETE_BTN_STYLE;
-                    delBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        deleteFavorite(fav);
-                    };
-
-                    container.appendChild(btn);
-                    container.appendChild(editBtn);
-                    container.appendChild(delBtn);
-                    grid.appendChild(container);
+            const favorites = data.success && data.favorites ? data.favorites : [];
+            if (FAV.shouldShowFavoritesSection(false, favorites.length)) {
+                favorites.forEach(fav => {
+                    mountFavoriteGridItem(grid, fav, {
+                        onSelect: (item) => {
+                            document.getElementById('end').value = item.name;
+                            document.getElementById('end').dataset.lat = item.lat;
+                            document.getElementById('end').dataset.lon = item.lon;
+                            document.getElementById('end').dataset.displayName = item.name;
+                            addToSearchHistory(item.name, item.name, item.lat, item.lon);
+                            expandBottomSheet();
+                            showStatus(FAV.getFavoriteSelectStatusMessage(item.name), 'success');
+                        },
+                        onEdit: editFavorite,
+                        onDelete: deleteFavorite,
+                    });
                 });
 
                 section.style.display = 'block';
@@ -8583,7 +8601,7 @@ function editFavorite(fav) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            showStatus(`✅ Updated ${newName}`, 'success');
+            showStatus(_favorites().getFavoriteUpdatedStatusMessage(newName), 'success');
             loadFavorites();
         } else {
             showStatus(`❌ Error: ${data.error}`, 'error');
@@ -8613,7 +8631,7 @@ function deleteFavorite(fav) {
     .then(r => r.json())
     .then(data => {
         if (data.success) {
-            showStatus(`🗑️ Removed ${fav.name}`, 'success');
+            showStatus(_favorites().getFavoriteRemovedStatusMessage(fav.name), 'success');
             loadFavorites();
         } else {
             showStatus(`❌ Error: ${data.error}`, 'error');
@@ -10536,27 +10554,29 @@ function setMapTheme(themeOrEvent) {
  * @returns {*} Return value description
  */
 function loadMLPredictions() {
+    const ML = _mlPredictions();
     fetch('/api/ml-predictions')
         .then(response => response.json())
         .then(data => {
-            if (data.success && data.predictions.length > 0) {
+            if (ML.hasMlPredictionsToShow(data)) {
                 const section = document.getElementById('mlPredictionsSection');
                 const list = document.getElementById('mlPredictionsList');
                 list.innerHTML = '';
 
                 data.predictions.forEach(pred => {
                     const item = document.createElement('div');
-                    item.className = 'ml-prediction-item';
-                    item.innerHTML = _mlPredictions().buildMlPredictionItemHtml(pred);
+                    item.className = ML.ML_PREDICTION_ITEM_CLASS;
+                    item.innerHTML = ML.buildMlPredictionItemHtml(pred);
                     item.onclick = () => {
-                        document.getElementById('start').value = pred.start_address;
-                        document.getElementById('end').value = pred.end_address;
+                        const inputs = ML.getMlPredictionRouteInputs(pred);
+                        document.getElementById('start').value = inputs.start;
+                        document.getElementById('end').value = inputs.end;
                         calculateRoute();
                     };
                     list.appendChild(item);
                 });
 
-                section.classList.add('show');
+                section.classList.add(ML.ML_PREDICTIONS_SECTION_SHOW_CLASS);
             }
         })
         .catch(error => console.error('Error loading ML predictions:', error));
@@ -10568,18 +10588,15 @@ function loadMLPredictions() {
  * @returns {*} Return value description
  */
 function toggleMLPredictions() {
+    const ML = _mlPredictions();
+    const TU = VoyagrModules.toggleUI();
     const button = document.getElementById('mlPredictionsEnabled');
 
-    // Toggle the active class (like other toggle switches)
-    button.classList.toggle('active');
-    const enabled = button.classList.contains('active');
+    const enabled = TU.nextToggleState(button.classList.contains('active'));
+    TU.applyLabeledToggleButton(button, enabled);
 
-    VoyagrModules.toggleUI().applyLabeledToggleButton(button, enabled);
+    localStorage.setItem(ML.ML_PREDICTIONS_STORAGE_KEY, enabled ? 'true' : 'false');
 
-    // Save to localStorage
-    localStorage.setItem('mlPredictionsEnabled', enabled ? 'true' : 'false');
-
-    // Send to backend
     fetch('/api/app-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -10588,13 +10605,12 @@ function toggleMLPredictions() {
 
     if (enabled) {
         loadMLPredictions();
-        showStatus('🤖 Smart predictions enabled', 'success');
+        showStatus(ML.getMlPredictionsEnabledStatusMessage(true), 'success');
     } else {
-        document.getElementById('mlPredictionsSection').classList.remove('show');
-        showStatus('🤖 Smart predictions disabled', 'info');
+        document.getElementById('mlPredictionsSection').classList.remove(ML.ML_PREDICTIONS_SECTION_SHOW_CLASS);
+        showStatus(ML.getMlPredictionsEnabledStatusMessage(false), 'info');
     }
 
-    // Save all settings
     saveAllSettings();
 }
 

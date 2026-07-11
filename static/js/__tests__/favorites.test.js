@@ -19,4 +19,28 @@ describe('favorites module', () => {
         expect(FAV.buildFavoriteEditButtonHtml()).toBe('✏️');
         expect(FAV.buildFavoriteDeleteButtonHtml()).toBe('🗑️');
     });
+
+    test('shouldShowFavoritesSection hides when unauthorized or empty', () => {
+        expect(FAV.shouldShowFavoritesSection(true, 3)).toBe(false);
+        expect(FAV.shouldShowFavoritesSection(false, 0)).toBe(false);
+        expect(FAV.shouldShowFavoritesSection(false, 2)).toBe(true);
+    });
+
+    test('buildFavoriteGridItemSpec includes container and button specs', () => {
+        const spec = FAV.buildFavoriteGridItemSpec(
+            { name: 'Home', category: 'home' },
+            { escapeHtml }
+        );
+        expect(spec.container.className).toBe('favorite-item');
+        expect(spec.mainButton.className).toBe('favorite-btn');
+        expect(spec.mainButton.html).toContain('Home');
+        expect(spec.editButton.html).toBe('✏️');
+        expect(spec.deleteButton.html).toBe('🗑️');
+    });
+
+    test('status message helpers', () => {
+        expect(FAV.getFavoriteSelectStatusMessage('Work')).toContain('Work');
+        expect(FAV.getFavoriteUpdatedStatusMessage('Work')).toContain('Updated');
+        expect(FAV.getFavoriteRemovedStatusMessage('Work')).toContain('Removed');
+    });
 });

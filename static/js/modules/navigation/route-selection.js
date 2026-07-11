@@ -624,6 +624,29 @@
         return { visible: false };
     }
 
+    /**
+     * DOM apply plan for the route-preview hazard info panel.
+     * @param {Object} state - Output from {@link getHazardPreviewPanelState}.
+     * @returns {Object}
+     */
+    function buildHazardPreviewPanelApplyPlan(state) {
+        state = state || {};
+        if (!state.visible) {
+            return { visible: false, containerDisplay: 'none' };
+        }
+        return {
+            visible: true,
+            containerDisplay: 'block',
+            containerBackground: state.background,
+            containerBorderLeftColor: state.borderLeftColor,
+            count: state.count,
+            countLabel: state.countLabel,
+            title: state.title,
+            penaltyRowDisplay: state.showPenalty ? 'flex' : 'none',
+            penaltyText: state.showPenalty ? String(state.penaltyMinutes) + ' min' : null,
+        };
+    }
+
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
@@ -652,6 +675,7 @@
         buildPreviewCostValues: buildPreviewCostValues,
         buildCazStatusHtml: buildCazStatusHtml,
         getHazardPreviewPanelState: getHazardPreviewPanelState,
+        buildHazardPreviewPanelApplyPlan: buildHazardPreviewPanelApplyPlan,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,
         mergeLastCalculatedRouteFromSelection: mergeLastCalculatedRouteFromSelection,
         buildRoutePayloadFromPersisted: buildRoutePayloadFromPersisted,
