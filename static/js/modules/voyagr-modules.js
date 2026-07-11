@@ -40,6 +40,8 @@
         offlineNavigation: 'VoyagrOfflineNavigation',
         mlPredictions: 'VoyagrMlPredictions',
         searchAutocomplete: 'VoyagrSearchAutocomplete',
+        deviceEnvironment: 'VoyagrDeviceEnvironment',
+        routeProgress: 'VoyagrRouteProgress',
     };
 
     var cache = {};
