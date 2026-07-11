@@ -88,6 +88,25 @@ describe('porcupine-wake module', () => {
         expect(warm.warmUrls.length).toBeGreaterThan(2);
     });
 
+    test('buildWarmPicovoiceProbeResponsePlan aborts on failed probe', () => {
+        expect(PW.buildWarmPicovoiceProbeResponsePlan({ ok: false }).shouldAbort).toBe(true);
+        const ok = PW.buildWarmPicovoiceProbeResponsePlan({ ok: true });
+        expect(ok.shouldAbort).toBe(false);
+        expect(ok.continueProbing).toBe(true);
+    });
+
+    test('buildWarmPicovoicePostMessagePlan posts warm URLs after probes succeed', () => {
+        const warm = PW.buildWarmPicovoiceStaticCachePlan({
+            hasServiceWorker: true,
+            online: true,
+            controllerPresent: true,
+        });
+        const post = PW.buildWarmPicovoicePostMessagePlan(warm);
+        expect(post.shouldPost).toBe(true);
+        expect(post.messageType).toBe(warm.warmMessageType);
+        expect(post.urls).toEqual(warm.warmUrls);
+    });
+
     test('buildStopPorcupineWakePipelineExecutePlan describes teardown steps', () => {
         const execute = PW.buildStopPorcupineWakePipelineExecutePlan({
             hasBridgeEngine: true,

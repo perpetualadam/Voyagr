@@ -303,6 +303,14 @@ describe('voiceAnnouncementStateResetValues', () => {
         expect(patch.voiceAnnouncedForManeuverIndex).toBeNull();
         expect(patch.lastLaneVoiceKey).toBe('');
     });
+
+    test('buildVoiceAnnouncementStateResetExecutePlan clears threshold sets', () => {
+        const execute = VA.buildVoiceAnnouncementStateResetExecutePlan(999);
+        expect(execute.shouldReset).toBe(true);
+        expect(execute.patch.lastETAAnnouncementTime).toBe(999);
+        expect(execute.clearTurnThresholds).toBe(true);
+        expect(execute.clearInitialEtaAnnouncement).toBe(true);
+    });
 });
 
 describe('buildDestinationAnnouncementTickPlan', () => {

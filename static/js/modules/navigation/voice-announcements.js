@@ -310,6 +310,23 @@
         };
     }
 
+    /**
+     * Execute plan for resetting voice announcement state on route geometry change.
+     * @param {number} [nowMs]
+     * @returns {Object}
+     */
+    function buildVoiceAnnouncementStateResetExecutePlan(nowMs) {
+        var stamp = nowMs != null ? nowMs : Date.now();
+        return {
+            shouldReset: true,
+            patch: voiceAnnouncementStateResetValues(stamp),
+            clearTurnThresholds: true,
+            clearExitThresholds: true,
+            clearKeepThresholds: true,
+            clearInitialEtaAnnouncement: true,
+        };
+    }
+
     var DESTINATION_ANNOUNCEMENT_HYSTERESIS_M = 100;
     var DESTINATION_ANNOUNCEMENT_RESET_M = 11000;
 
@@ -729,6 +746,7 @@
         appendChainedFollowingManeuver: appendChainedFollowingManeuver,
         buildDestinationAnnouncement: buildDestinationAnnouncement,
         voiceAnnouncementStateResetValues: voiceAnnouncementStateResetValues,
+        buildVoiceAnnouncementStateResetExecutePlan: buildVoiceAnnouncementStateResetExecutePlan,
         VOICE_PREFS_STORAGE_KEY: VOICE_PREFS_STORAGE_KEY,
         VOICE_FREQUENCY_MODE_STORAGE_KEY: VOICE_FREQUENCY_MODE_STORAGE_KEY,
         VOICE_ANNOUNCEMENTS_ENABLED_STORAGE_KEY: VOICE_ANNOUNCEMENTS_ENABLED_STORAGE_KEY,

@@ -473,6 +473,27 @@ describe('reroute retry and notification helpers', () => {
         expect(post.updateTripInfo).toBe(true);
     });
 
+    test('buildRouteMapUpdateStateApplySectionsPlan and speed/progress helpers', () => {
+        const state = RD.buildRouteMapUpdateStatePlan(
+            { geometry: 'abc', maneuvers: [{ type: 1 }] },
+            {},
+            { now: 1000 }
+        );
+        const sections = RD.buildRouteMapUpdateStateApplySectionsPlan(state);
+        expect(sections.roadNameReset).toBe(true);
+
+        const fullSpeed = RD.buildRouteMapUpdateSpeedLimitResetPlan({ speedLimitReset: true });
+        expect(fullSpeed.kind).toBe('full-reroute');
+
+        const progress = RD.buildRouteMapUpdateProgressResetPlan({
+            progressResetWithoutGps: { currentStepIndex: 0, lastSnappedRouteIndex: 0, lastTurnDetectRouteVertexIndex: 0 },
+        });
+        expect(progress.action).toBe('resetProgress');
+
+        const fetchOrch = RD.buildAutomaticRerouteFetchOrchestrationPlan();
+        expect(fetchOrch.apiPath).toBe(RD.ROUTE_API_PATH);
+    });
+
     test('buildRerouteLogSettingsSnapshot uses route-prefs readers', () => {
         const storage = {
             getItem: (key) => {

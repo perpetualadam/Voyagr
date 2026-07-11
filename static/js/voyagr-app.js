@@ -6096,24 +6096,31 @@ function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) 
     return RR.buildAutomaticRerouteRequestPlan(collect.storage, collect.opts);
 }
 
+function applyVoiceAnnouncementStateResetFromPlan(execute) {
+    if (!execute || !execute.shouldReset) return;
+    const p = execute.patch;
+    lastETAAnnouncementTime = p.lastETAAnnouncementTime;
+    lastAnnouncedETA = p.lastAnnouncedETA;
+    lastDestinationAnnouncementDistance = p.lastDestinationAnnouncementDistance;
+    lastTurnDetectRouteVertexIndex = p.lastTurnDetectRouteVertexIndex;
+    initialETAMovementRetries = p.initialETAMovementRetries;
+    _voiceAnnouncedForManeuverIndex = p.voiceAnnouncedForManeuverIndex;
+    _voiceAnnouncedCategory = p.voiceAnnouncedCategory;
+    _lastLaneVoiceKey = p.lastLaneVoiceKey;
+    if (execute.clearTurnThresholds) announcedTurnThresholds.clear();
+    if (execute.clearExitThresholds) announcedExitThresholds.clear();
+    if (execute.clearKeepThresholds) announcedKeepThresholds.clear();
+    if (execute.clearInitialEtaAnnouncement) clearInitialETAAnnouncement();
+}
+
 /**
  * Reset voice/ETA/distance announcement state when geometry changes (reroute).
  * Prevents repeating the same milestones and back-to-back ETA after "route recalculated".
  */
 function resetVoiceAnnouncementStateForNewRoute() {
-    const patch = _voiceAnnouncements().voiceAnnouncementStateResetValues(Date.now());
-    lastETAAnnouncementTime = patch.lastETAAnnouncementTime;
-    lastAnnouncedETA = patch.lastAnnouncedETA;
-    lastDestinationAnnouncementDistance = patch.lastDestinationAnnouncementDistance;
-    lastTurnDetectRouteVertexIndex = patch.lastTurnDetectRouteVertexIndex;
-    initialETAMovementRetries = patch.initialETAMovementRetries;
-    _voiceAnnouncedForManeuverIndex = patch.voiceAnnouncedForManeuverIndex;
-    _voiceAnnouncedCategory = patch.voiceAnnouncedCategory;
-    _lastLaneVoiceKey = patch.lastLaneVoiceKey;
-    announcedTurnThresholds.clear();
-    announcedExitThresholds.clear();
-    announcedKeepThresholds.clear();
-    clearInitialETAAnnouncement();
+    applyVoiceAnnouncementStateResetFromPlan(
+        _voiceAnnouncements().buildVoiceAnnouncementStateResetExecutePlan(Date.now())
+    );
 }
 
 /**
@@ -6122,60 +6129,68 @@ function resetVoiceAnnouncementStateForNewRoute() {
  * @param {Object} newRoute
  */
 function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
-    if (plan.maneuvers.steps) {
+    const RD = _rerouteDecision();
+    const sections = RD.buildRouteMapUpdateStateApplySectionsPlan(plan);
+
+    if (sections.applyManeuvers) {
         currentRouteSteps = plan.maneuvers.steps;
         if (plan.maneuvers.logMessage) console.log(plan.maneuvers.logMessage);
     }
 
-    if (plan.vehicleMarkerReset) {
+    if (sections.vehicleMarkerReset) {
         resetVehicleMarkerDisplayState();
-        if (!plan.speedLimitReset) {
-            const SL = _speedLimitWidget();
-            const resetPlan = SL
-                ? SL.buildSpeedLimitFetchResetApplyPlan({
-                    kind: 'maneuver-change',
-                    newLastActiveManeuverIdx: -1,
-                    resetCurrentSpeedLimitMph: true,
-                    resetDetectedRoadType: true,
-                })
-                : null;
-            if (resetPlan) applySpeedLimitFetchResetFromPlan(resetPlan);
-        }
-    }
-    if (plan.speedLimitReset) {
-        const SL = _speedLimitWidget();
-        const resetPlan = SL ? SL.buildSpeedLimitFetchResetApplyPlan({ kind: 'full-reroute' }) : null;
-        if (resetPlan) applySpeedLimitFetchResetFromPlan(resetPlan);
-    }
-    if (plan.primeVehicleMarker) {
-        primeVehicleMarkerOnRoute(currentLat, currentLon);
-    } else if (plan.progressResetWithoutGps) {
-        currentStepIndex = plan.progressResetWithoutGps.currentStepIndex;
-        lastSnappedRouteIndex = plan.progressResetWithoutGps.lastSnappedRouteIndex;
-        lastTurnDetectRouteVertexIndex = plan.progressResetWithoutGps.lastTurnDetectRouteVertexIndex;
     }
 
-    if (plan.roadNameReset) {
+    const speedReset = RD.buildRouteMapUpdateSpeedLimitResetPlan(plan);
+    if (speedReset.shouldReset) {
+        const SL = _speedLimitWidget();
+        const resetPlan = SL
+            ? SL.buildSpeedLimitFetchResetApplyPlan(
+                speedReset.kind === 'full-reroute'
+                    ? { kind: speedReset.kind }
+                    : {
+                        kind: speedReset.kind,
+                        newLastActiveManeuverIdx: speedReset.newLastActiveManeuverIdx,
+                        resetCurrentSpeedLimitMph: speedReset.resetCurrentSpeedLimitMph,
+                        resetDetectedRoadType: speedReset.resetDetectedRoadType,
+                    }
+            )
+            : null;
+        if (resetPlan) applySpeedLimitFetchResetFromPlan(resetPlan);
+    }
+
+    const progress = RD.buildRouteMapUpdateProgressResetPlan(plan);
+    if (progress.action === 'primeVehicleMarker') {
+        primeVehicleMarkerOnRoute(currentLat, currentLon);
+    } else if (progress.action === 'resetProgress' && progress.patch) {
+        currentStepIndex = progress.patch.currentStepIndex;
+        lastSnappedRouteIndex = progress.patch.lastSnappedRouteIndex;
+        lastTurnDetectRouteVertexIndex = progress.patch.lastTurnDetectRouteVertexIndex;
+    }
+
+    if (sections.roadNameReset) {
         lastRoadNameFetch = 0;
         lastRoadNamePosition = null;
         currentRoadDisplayName = '';
     }
-    if (plan.navigationArrivalReset) {
+    if (sections.navigationArrivalReset) {
         resetNavigationArrivalState();
     }
 
-    const dev = plan.deviation;
-    deviationStartTimeCheck = dev.deviationStartTimeCheck;
-    rerouteAttemptCount = dev.rerouteAttemptCount;
-    postRerouteGraceUntil = dev.postRerouteGraceUntil;
-    routeJoinConfirmedForDeviation = dev.routeJoinConfirmedForDeviation;
-    deviationOffRouteStreak = dev.deviationOffRouteStreak;
-    lastRerouteTime = dev.lastRerouteTime;
-    lastRerouteAttemptTime = dev.lastRerouteAttemptTime;
-    rerouteInProgress = dev.rerouteInProgress;
-    if (dev.clearFailureRetries) clearRerouteFailureRetries();
+    const dev = sections.deviation;
+    if (dev) {
+        deviationStartTimeCheck = dev.deviationStartTimeCheck;
+        rerouteAttemptCount = dev.rerouteAttemptCount;
+        postRerouteGraceUntil = dev.postRerouteGraceUntil;
+        routeJoinConfirmedForDeviation = dev.routeJoinConfirmedForDeviation;
+        deviationOffRouteStreak = dev.deviationOffRouteStreak;
+        lastRerouteTime = dev.lastRerouteTime;
+        lastRerouteAttemptTime = dev.lastRerouteAttemptTime;
+        rerouteInProgress = dev.rerouteInProgress;
+        if (dev.clearFailureRetries) clearRerouteFailureRetries();
+    }
 
-    const post = _rerouteDecision().buildRouteMapUpdatePostApplyPlan(plan, {
+    const post = RD.buildRouteMapUpdatePostApplyPlan(plan, {
         currentLat,
         currentLon,
     });
@@ -10145,14 +10160,16 @@ function warmPicovoiceStaticCache() {
             if (!plan.shouldWarm) return;
             for (const u of plan.probeUrls) {
                 const r = await fetch(u, { method: 'HEAD', cache: 'no-store' }).catch(() => null);
-                if (!r || !r.ok) {
-                    return;
-                }
+                const probe = PW.buildWarmPicovoiceProbeResponsePlan({ ok: !!(r && r.ok) });
+                if (probe.shouldAbort) return;
             }
-            navigator.serviceWorker.controller.postMessage({
-                type: plan.warmMessageType,
-                urls: plan.warmUrls,
-            });
+            const post = PW.buildWarmPicovoicePostMessagePlan(plan);
+            if (post.shouldPost && navigator.serviceWorker.controller) {
+                navigator.serviceWorker.controller.postMessage({
+                    type: post.messageType,
+                    urls: post.urls,
+                });
+            }
         } catch (_e) {
             /* ignore */
         }
@@ -13733,11 +13750,12 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
         console.log(trigger.guard.logMessage);
 
         const routeRequest = buildRouteRequest(currentLat, currentLon, destination);
+        const fetchOrch = RD.buildAutomaticRerouteFetchOrchestrationPlan();
 
-        const response = await fetch('/api/route', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(routeRequest)
+        const response = await fetch(fetchOrch.apiPath, {
+            method: fetchOrch.method,
+            headers: fetchOrch.headers,
+            body: JSON.stringify(routeRequest),
         });
 
         const data = await response.json();

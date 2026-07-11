@@ -220,6 +220,34 @@
     }
 
     /**
+     * Probe tick plan while warming Picovoice vendor assets.
+     * @param {Object} [input]
+     * @param {boolean} [input.ok]
+     * @returns {Object}
+     */
+    function buildWarmPicovoiceProbeResponsePlan(input) {
+        input = input || {};
+        if (!input.ok) {
+            return { shouldAbort: true };
+        }
+        return { shouldAbort: false, continueProbing: true };
+    }
+
+    /**
+     * PostMessage plan after all Picovoice probes succeed.
+     * @param {Object} warmPlan - from buildWarmPicovoiceStaticCachePlan
+     * @returns {Object}
+     */
+    function buildWarmPicovoicePostMessagePlan(warmPlan) {
+        warmPlan = warmPlan || {};
+        return {
+            shouldPost: true,
+            messageType: warmPlan.warmMessageType,
+            urls: warmPlan.warmUrls,
+        };
+    }
+
+    /**
      * @param {Object} [input]
      * @returns {Object}
      */
@@ -265,6 +293,8 @@
         buildPorcupineWakeHotwordExecutePlan: buildPorcupineWakeHotwordExecutePlan,
         buildPorcupineStartConfigPlan: buildPorcupineStartConfigPlan,
         buildWarmPicovoiceStaticCachePlan: buildWarmPicovoiceStaticCachePlan,
+        buildWarmPicovoiceProbeResponsePlan: buildWarmPicovoiceProbeResponsePlan,
+        buildWarmPicovoicePostMessagePlan: buildWarmPicovoicePostMessagePlan,
         buildStopPorcupineWakePipelineExecutePlan: buildStopPorcupineWakePipelineExecutePlan,
         buildPorcupineInitAutoStartPlan: buildPorcupineInitAutoStartPlan,
     };

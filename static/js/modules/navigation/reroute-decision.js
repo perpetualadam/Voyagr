@@ -919,6 +919,74 @@
         };
     }
 
+    /**
+     * Section flags for applyRouteMapUpdateStateFromPlan in voyagr-app.
+     * @param {Object} plan - from buildRouteMapUpdateStatePlan
+     * @returns {Object}
+     */
+    function buildRouteMapUpdateStateApplySectionsPlan(plan) {
+        plan = plan || {};
+        return {
+            applyManeuvers: !!(plan.maneuvers && plan.maneuvers.steps),
+            vehicleMarkerReset: !!plan.vehicleMarkerReset,
+            roadNameReset: !!plan.roadNameReset,
+            navigationArrivalReset: !!plan.navigationArrivalReset,
+            deviation: plan.deviation,
+        };
+    }
+
+    /**
+     * Speed-limit reset plan during route map update.
+     * @param {Object} plan - from buildRouteMapUpdateStatePlan
+     * @returns {Object}
+     */
+    function buildRouteMapUpdateSpeedLimitResetPlan(plan) {
+        plan = plan || {};
+        if (plan.speedLimitReset) {
+            return { shouldReset: true, kind: 'full-reroute' };
+        }
+        if (plan.vehicleMarkerReset) {
+            return {
+                shouldReset: true,
+                kind: 'maneuver-change',
+                newLastActiveManeuverIdx: -1,
+                resetCurrentSpeedLimitMph: true,
+                resetDetectedRoadType: true,
+            };
+        }
+        return { shouldReset: false };
+    }
+
+    /**
+     * Vehicle marker / progress reset plan during route map update.
+     * @param {Object} plan - from buildRouteMapUpdateStatePlan
+     * @returns {Object}
+     */
+    function buildRouteMapUpdateProgressResetPlan(plan) {
+        plan = plan || {};
+        if (plan.primeVehicleMarker) {
+            return { action: 'primeVehicleMarker' };
+        }
+        if (plan.progressResetWithoutGps) {
+            return { action: 'resetProgress', patch: plan.progressResetWithoutGps };
+        }
+        return { action: 'none' };
+    }
+
+    var ROUTE_API_PATH = '/api/route';
+
+    /**
+     * Fetch orchestration for automatic deviation reroute.
+     * @returns {Object}
+     */
+    function buildAutomaticRerouteFetchOrchestrationPlan() {
+        return {
+            apiPath: ROUTE_API_PATH,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         normalizeAccuracy: normalizeAccuracy,
@@ -953,6 +1021,11 @@
         buildRouteMapUpdateStatePlan: buildRouteMapUpdateStatePlan,
         buildUpdateRouteOnMapExecutePlan: buildUpdateRouteOnMapExecutePlan,
         buildRouteMapUpdatePostApplyPlan: buildRouteMapUpdatePostApplyPlan,
+        buildRouteMapUpdateStateApplySectionsPlan: buildRouteMapUpdateStateApplySectionsPlan,
+        buildRouteMapUpdateSpeedLimitResetPlan: buildRouteMapUpdateSpeedLimitResetPlan,
+        buildRouteMapUpdateProgressResetPlan: buildRouteMapUpdateProgressResetPlan,
+        ROUTE_API_PATH: ROUTE_API_PATH,
+        buildAutomaticRerouteFetchOrchestrationPlan: buildAutomaticRerouteFetchOrchestrationPlan,
     };
 
     // CommonJS (Jest) export.
