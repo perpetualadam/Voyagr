@@ -458,6 +458,37 @@
     }
 
     /**
+     * DOM state apply plan for lane guidance overlay mutations.
+     * @param {Object|null|undefined} domPlan - from buildLaneGuidanceDomApplyPlan
+     * @param {Object} [opts]
+     * @param {boolean} [opts.voiceEnabled]
+     * @returns {Object}
+     */
+    function buildLaneGuidanceDomStateApplyPlan(domPlan, opts) {
+        opts = opts || {};
+        if (!domPlan || domPlan.action === 'hide') {
+            return { action: 'hide' };
+        }
+        var voice = null;
+        if (opts.voiceEnabled && domPlan.voicePlan) {
+            voice = {
+                message: domPlan.voicePlan.message,
+                priority: domPlan.voicePlan.priority,
+                announceKey: domPlan.voicePlan.announceKey,
+            };
+        }
+        return {
+            action: 'show',
+            displayClassName: domPlan.displayClassName,
+            urgencyClass: domPlan.urgencyClass || null,
+            badge: domPlan.badge || null,
+            indicators: domPlan.indicators || [],
+            guidanceText: domPlan.guidanceText || '',
+            voice: voice,
+        };
+    }
+
+    /**
      * @param {number} recommendedLane
      * @param {number} totalLanes
      * @returns {string}
@@ -572,6 +603,7 @@
         isLaneGuidanceCacheEntryFresh: isLaneGuidanceCacheEntryFresh,
         buildLaneGuidanceUiApplyPlan: buildLaneGuidanceUiApplyPlan,
         buildLaneGuidanceDomApplyPlan: buildLaneGuidanceDomApplyPlan,
+        buildLaneGuidanceDomStateApplyPlan: buildLaneGuidanceDomStateApplyPlan,
         resolveLanePositionLabel: resolveLanePositionLabel,
         buildLaneVoiceAnnouncementPlan: buildLaneVoiceAnnouncementPlan,
     };

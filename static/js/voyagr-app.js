@@ -8194,33 +8194,36 @@ function renderLaneGuidanceUI(data) {
 
     const LG = _laneGuidance();
     const domPlan = LG.buildLaneGuidanceDomApplyPlan(data, _lastLaneVoiceKey);
+    const apply = LG.buildLaneGuidanceDomStateApplyPlan(domPlan, {
+        voiceEnabled: voiceAnnouncementsEnabled,
+    });
 
-    if (domPlan.action === 'hide') {
+    if (apply.action === 'hide') {
         display.classList.remove('show');
         return;
     }
 
     const badgeEl = document.getElementById('laneGuidanceBadge');
-    if (badgeEl && domPlan.badge) {
-        badgeEl.textContent = domPlan.badge.text;
-        badgeEl.style.display = domPlan.badge.visible ? 'inline-block' : 'none';
+    if (badgeEl && apply.badge) {
+        badgeEl.textContent = apply.badge.text;
+        badgeEl.style.display = apply.badge.visible ? 'inline-block' : 'none';
     }
 
     visual.innerHTML = '';
-    for (const ind of domPlan.indicators) {
+    for (const ind of apply.indicators) {
         const lane = document.createElement('div');
         lane.className = ind.className;
         lane.innerHTML = ind.innerHtml;
         visual.appendChild(lane);
     }
 
-    display.className = domPlan.displayClassName;
-    if (domPlan.urgencyClass) display.classList.add(domPlan.urgencyClass);
-    text.textContent = domPlan.guidanceText;
+    display.className = apply.displayClassName;
+    if (apply.urgencyClass) display.classList.add(apply.urgencyClass);
+    text.textContent = apply.guidanceText;
 
-    if (voiceAnnouncementsEnabled && domPlan.voicePlan) {
-        speakMessage(domPlan.voicePlan.message, domPlan.voicePlan.priority);
-        _lastLaneVoiceKey = domPlan.voicePlan.announceKey;
+    if (apply.voice) {
+        speakMessage(apply.voice.message, apply.voice.priority);
+        _lastLaneVoiceKey = apply.voice.announceKey;
     }
 }
 
@@ -12049,6 +12052,22 @@ function applyGpsTurnSideEffectsTick(lat, lon, turnPlan) {
 }
 
 /**
+ * Route deviation and hazard side-effects for one GPS tick.
+ * @param {number} lat
+ * @param {number} lon
+ * @param {number} accuracy
+ * @param {Object} tickPlan - from buildGpsNavigationSideEffectsTickPlan
+ */
+function applyGpsHazardAndDeviationSideEffectsTick(lat, lon, accuracy, tickPlan) {
+    if (tickPlan.checkDeviation) {
+        checkRouteDeviation(lat, lon, accuracy);
+    }
+    if (tickPlan.processHazards) {
+        processNavigationHazardAlerts(lat, lon);
+    }
+}
+
+/**
  * Destination and arrival voice side-effects for one GPS tick.
  * @param {number} lat
  * @param {number} lon
@@ -12199,13 +12218,7 @@ function applyGpsNavigationSideEffectsTick(ctx) {
 
     const tickPlan = _routeProgress().buildGpsNavigationSideEffectsTickPlan({ sideEffects });
 
-    if (tickPlan.checkDeviation) {
-        checkRouteDeviation(lat, lon, accuracy);
-    }
-
-    if (tickPlan.processHazards) {
-        processNavigationHazardAlerts(lat, lon);
-    }
+    applyGpsHazardAndDeviationSideEffectsTick(lat, lon, accuracy, tickPlan);
 
     let distanceToNextTurn = null;
 
