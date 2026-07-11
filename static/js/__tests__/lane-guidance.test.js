@@ -357,6 +357,40 @@ describe('lane guidance fetch tick plan', () => {
     });
 });
 
+describe('buildLaneGuidanceFetchStateApplyPlan', () => {
+    test('skips throttled fetch ticks', () => {
+        expect(LG.buildLaneGuidanceFetchStateApplyPlan({ action: 'skip', reason: 'throttle' }).action)
+            .toBe('skip');
+    });
+
+    test('maps render-cached tick to apply plan', () => {
+        const apply = LG.buildLaneGuidanceFetchStateApplyPlan({
+            action: 'render-cached',
+            statePatch: { lastFetch: 1000, lastManeuver: 'left', lastPosition: { lat: 51, lon: 0 } },
+            renderPayload: { total_lanes: 3, recommended_lane: 2 },
+        });
+        expect(apply.kind).toBe('render-cached');
+        expect(apply.renderPayload.total_lanes).toBe(3);
+    });
+
+    test('maps fetch tick to network apply plan', () => {
+        const apply = LG.buildLaneGuidanceFetchStateApplyPlan({
+            action: 'fetch',
+            statePatch: { lastFetch: 1000, lastManeuver: 'right', lastPosition: { lat: 51, lon: 0 } },
+            url: '/api/lane-guidance?lat=51',
+            timeoutMs: 5000,
+            cacheKey: 'right|0|primary|51.000,0.000',
+            maneuver: 'right',
+            distToManeuver: 80,
+            roundaboutExitCount: 0,
+            roadType: 'primary',
+        });
+        expect(apply.kind).toBe('fetch');
+        expect(apply.fetch.url).toContain('/api/lane-guidance');
+        expect(apply.fetch.maneuver).toBe('right');
+    });
+});
+
 describe('buildLaneGuidanceFetchOutcomePlan', () => {
     test('caches successful API data for render', () => {
         const data = { success: true, total_lanes: 3, recommended_lane: 2, urgency: 'soon' };

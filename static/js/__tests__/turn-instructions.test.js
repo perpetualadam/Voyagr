@@ -429,6 +429,23 @@ describe('buildLaneGuidanceTickPlan', () => {
     });
 });
 
+describe('buildLaneGuidanceTickApplyPlan', () => {
+    test('skips when tick is not an update', () => {
+        expect(TI.buildLaneGuidanceTickApplyPlan({ action: 'skip' }).action).toBe('skip');
+    });
+
+    test('maps update tick to lane guidance inputs', () => {
+        const apply = TI.buildLaneGuidanceTickApplyPlan({
+            action: 'update',
+            maneuverDir: 'left',
+            roundaboutExitCount: 2,
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.maneuverDir).toBe('left');
+        expect(apply.roundaboutExitCount).toBe(2);
+    });
+});
+
 describe('buildNavStartTurnInstructionInit', () => {
     const polyline = [[51.5, -0.12], [51.51, -0.11], [51.52, -0.10]];
 

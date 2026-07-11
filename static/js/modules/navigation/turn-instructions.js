@@ -1037,6 +1037,22 @@
         };
     }
 
+    /**
+     * Apply plan for lane-guidance tick inputs on one GPS update.
+     * @param {Object|null|undefined} tick - from buildLaneGuidanceTickPlan
+     * @returns {Object}
+     */
+    function buildLaneGuidanceTickApplyPlan(tick) {
+        if (!tick || tick.action !== 'update') {
+            return { action: 'skip', reason: tick && tick.reason };
+        }
+        return {
+            action: 'apply',
+            maneuverDir: tick.maneuverDir,
+            roundaboutExitCount: tick.roundaboutExitCount,
+        };
+    }
+
     var api = {
         BETWEEN_TURN_MIN_DISTANCE_M: BETWEEN_TURN_MIN_DISTANCE_M,
         buildTurnWidgetDisplayPayloadFromTurnInfo: buildTurnWidgetDisplayPayloadFromTurnInfo,
@@ -1044,6 +1060,7 @@
         buildDetectUpcomingTurnStateApplyPlan: buildDetectUpcomingTurnStateApplyPlan,
         buildTurnWidgetTickPlan: buildTurnWidgetTickPlan,
         buildLaneGuidanceTickPlan: buildLaneGuidanceTickPlan,
+        buildLaneGuidanceTickApplyPlan: buildLaneGuidanceTickApplyPlan,
         calculateTurnDirection: calculateTurnDirection,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,
         maneuverTypeToLaneDirectionKey: maneuverTypeToLaneDirectionKey,

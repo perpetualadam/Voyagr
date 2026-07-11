@@ -8130,47 +8130,51 @@ function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
 
     if (tick.action === 'skip') return;
 
-    lastLaneGuidanceFetch = tick.statePatch.lastFetch;
-    lastLaneGuidanceManeuver = tick.statePatch.lastManeuver;
-    lastLaneGuidancePosition = tick.statePatch.lastPosition;
+    const apply = LG.buildLaneGuidanceFetchStateApplyPlan(tick);
+    if (apply.action === 'skip') return;
 
-    if (tick.action === 'render-cached') {
-        renderLaneGuidanceUI(tick.renderPayload);
+    lastLaneGuidanceFetch = apply.statePatch.lastFetch;
+    lastLaneGuidanceManeuver = apply.statePatch.lastManeuver;
+    lastLaneGuidancePosition = apply.statePatch.lastPosition;
+
+    if (apply.kind === 'render-cached') {
+        renderLaneGuidanceUI(apply.renderPayload);
         return;
     }
 
+    const fetchPlan = apply.fetch;
     const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    const timeoutId = controller ? setTimeout(() => controller.abort(), tick.timeoutMs) : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), fetchPlan.timeoutMs) : null;
 
     const useFallback = (reason) => {
         const outcome = LG.buildLaneGuidanceFetchOutcomePlan({
             apiSuccess: false,
             errorReason: reason,
-            maneuver: tick.maneuver,
-            distToManeuver: tick.distToManeuver,
-            roundaboutExitCount: tick.roundaboutExitCount,
-            roadType: tick.roadType,
+            maneuver: fetchPlan.maneuver,
+            distToManeuver: fetchPlan.distToManeuver,
+            roundaboutExitCount: fetchPlan.roundaboutExitCount,
+            roadType: fetchPlan.roadType,
         });
-        _laneGuidanceCache.set(tick.cacheKey, outcome.cacheEntry);
+        _laneGuidanceCache.set(fetchPlan.cacheKey, outcome.cacheEntry);
         _pruneLaneGuidanceCache();
         if (outcome.warnLine) console.warn(outcome.warnLine);
         renderLaneGuidanceUI(outcome.renderData);
     };
 
-    fetch(tick.url, controller ? { signal: controller.signal } : undefined)
+    fetch(fetchPlan.url, controller ? { signal: controller.signal } : undefined)
         .then((response) => response.json())
         .then((data) => {
             if (timeoutId) clearTimeout(timeoutId);
             const outcome = LG.buildLaneGuidanceFetchOutcomePlan({
                 apiSuccess: !!(data && data.success),
                 apiData: data,
-                maneuver: tick.maneuver,
-                distToManeuver: tick.distToManeuver,
-                roundaboutExitCount: tick.roundaboutExitCount,
-                roadType: tick.roadType,
+                maneuver: fetchPlan.maneuver,
+                distToManeuver: fetchPlan.distToManeuver,
+                roundaboutExitCount: fetchPlan.roundaboutExitCount,
+                roadType: fetchPlan.roadType,
                 errorReason: 'no data',
             });
-            _laneGuidanceCache.set(tick.cacheKey, outcome.cacheEntry);
+            _laneGuidanceCache.set(fetchPlan.cacheKey, outcome.cacheEntry);
             _pruneLaneGuidanceCache();
             if (outcome.warnLine) console.warn(outcome.warnLine);
             renderLaneGuidanceUI(outcome.renderData);
@@ -12045,6 +12049,68 @@ function applyGpsTurnSideEffectsTick(lat, lon, turnPlan) {
 }
 
 /**
+ * Destination and arrival voice side-effects for one GPS tick.
+ * @param {number} lat
+ * @param {number} lon
+ * @param {number} speedMs
+ * @param {Object} tickPlan - from buildGpsNavigationSideEffectsTickPlan
+ */
+function applyGpsNavigationVoiceSideEffectsTick(lat, lon, speedMs, tickPlan) {
+    if (tickPlan.announceDestination) {
+        announceDistanceToDestination(lat, lon);
+    }
+    if (tickPlan.checkArrival) {
+        checkNavigationArrival(lat, lon, speedMs);
+    }
+}
+
+/**
+ * Smart zoom side-effects for one GPS tick.
+ * @param {Object} ctx
+ * @returns {void}
+ */
+function applyGpsZoomSideEffectsTick(ctx) {
+    const {
+        speedMph,
+        distanceToNextTurn,
+        speedLimitPlan,
+        lat,
+        lon,
+        navigationFollowEaseApplied,
+        navigationFollowZoom,
+    } = ctx;
+
+    const CP = _cameraPitch();
+    const zoomTick = CP.buildNavigationZoomTickPlan({
+        smartZoomEnabled,
+        routeInProgress,
+        navigationFollowEaseApplied,
+        followZoom: navigationFollowZoom,
+    });
+    const zoomApply = CP.buildNavigationZoomApplyPlan(zoomTick, {
+        speedMph,
+        distanceToNextTurn,
+        roadType: speedLimitPlan.roadType || 'unknown',
+        lat,
+        lon,
+    });
+    if (zoomApply.action !== 'apply') return;
+
+    if (zoomApply.syncLastZoomLevel != null) {
+        lastZoomLevel = zoomApply.syncLastZoomLevel;
+    }
+    if (zoomApply.applySmartZoom) {
+        applySmartZoomWithAnimation(
+            zoomApply.applySmartZoom.speedMph,
+            zoomApply.applySmartZoom.distanceToNextTurn,
+            zoomApply.applySmartZoom.roadType,
+            zoomApply.applySmartZoom.lat,
+            zoomApply.applySmartZoom.lon
+        );
+    }
+}
+
+/**
  * Lane guidance and speed widget side-effects for one GPS tick.
  * @param {Object} ctx
  * @param {number} ctx.lat
@@ -12057,13 +12123,21 @@ function applyGpsLaneAndSpeedSideEffectsTick(ctx) {
     const { lat, lon, heading, tickPlan, speedLimitPlan } = ctx;
 
     if (tickPlan.updateLaneGuidance) {
-        const laneTick = _turnInstructions().buildLaneGuidanceTickPlan({
+        const TI = _turnInstructions();
+        const laneTick = TI.buildLaneGuidanceTickPlan({
             routeInProgress,
             routeSteps: currentRouteSteps,
             currentStepIndex,
         });
-        if (laneTick.action === 'update') {
-            updateLaneGuidance(lat, lon, heading, laneTick.maneuverDir, laneTick.roundaboutExitCount);
+        const laneApply = TI.buildLaneGuidanceTickApplyPlan(laneTick);
+        if (laneApply.action === 'apply') {
+            updateLaneGuidance(
+                lat,
+                lon,
+                heading,
+                laneApply.maneuverDir,
+                laneApply.roundaboutExitCount
+            );
         }
     }
 
@@ -12140,43 +12214,20 @@ function applyGpsNavigationSideEffectsTick(ctx) {
         distanceToNextTurn = turnResult.distanceToNextTurn;
     }
 
-    if (tickPlan.announceDestination) {
-        announceDistanceToDestination(lat, lon);
-    }
-
-    if (tickPlan.checkArrival) {
-        checkNavigationArrival(lat, lon, speed);
+    if (tickPlan.announceDestination || tickPlan.checkArrival) {
+        applyGpsNavigationVoiceSideEffectsTick(lat, lon, speed, tickPlan);
     }
 
     if (tickPlan.applyZoom) {
-        const CP = _cameraPitch();
-        const zoomTick = CP.buildNavigationZoomTickPlan({
-            smartZoomEnabled,
-            routeInProgress,
-            navigationFollowEaseApplied,
-            followZoom: navigationFollowZoom,
-        });
-        const zoomApply = CP.buildNavigationZoomApplyPlan(zoomTick, {
+        applyGpsZoomSideEffectsTick({
             speedMph,
             distanceToNextTurn,
-            roadType: speedLimitPlan.roadType || 'unknown',
+            speedLimitPlan,
             lat,
             lon,
+            navigationFollowEaseApplied,
+            navigationFollowZoom,
         });
-        if (zoomApply.action === 'apply') {
-            if (zoomApply.syncLastZoomLevel != null) {
-                lastZoomLevel = zoomApply.syncLastZoomLevel;
-            }
-            if (zoomApply.applySmartZoom) {
-                applySmartZoomWithAnimation(
-                    zoomApply.applySmartZoom.speedMph,
-                    zoomApply.applySmartZoom.distanceToNextTurn,
-                    zoomApply.applySmartZoom.roadType,
-                    zoomApply.applySmartZoom.lat,
-                    zoomApply.applySmartZoom.lon
-                );
-            }
-        }
     }
 
     if (tickPlan.updateLaneGuidance || tickPlan.showSpeedWidget) {

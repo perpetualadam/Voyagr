@@ -375,6 +375,37 @@
     }
 
     /**
+     * Apply plan for lane-guidance fetch tick state patches and next action.
+     * @param {Object|null|undefined} tick - from buildLaneGuidanceFetchTickPlan
+     * @returns {Object}
+     */
+    function buildLaneGuidanceFetchStateApplyPlan(tick) {
+        if (!tick || tick.action === 'skip') {
+            return { action: 'skip', reason: tick && tick.reason };
+        }
+        var apply = {
+            action: 'apply',
+            kind: tick.action,
+            statePatch: tick.statePatch || {},
+        };
+        if (tick.action === 'render-cached') {
+            apply.renderPayload = tick.renderPayload;
+        }
+        if (tick.action === 'fetch') {
+            apply.fetch = {
+                url: tick.url,
+                timeoutMs: tick.timeoutMs,
+                cacheKey: tick.cacheKey,
+                maneuver: tick.maneuver,
+                distToManeuver: tick.distToManeuver,
+                roundaboutExitCount: tick.roundaboutExitCount,
+                roadType: tick.roadType,
+            };
+        }
+        return apply;
+    }
+
+    /**
      * DOM apply plan for the lane guidance overlay.
      * @param {Object} data
      * @returns {Object}
@@ -533,6 +564,7 @@
         shouldSkipLaneGuidanceFetch: shouldSkipLaneGuidanceFetch,
         computeDistanceToManeuverMeters: computeDistanceToManeuverMeters,
         buildLaneGuidanceFetchTickPlan: buildLaneGuidanceFetchTickPlan,
+        buildLaneGuidanceFetchStateApplyPlan: buildLaneGuidanceFetchStateApplyPlan,
         buildLaneGuidanceFetchOutcomePlan: buildLaneGuidanceFetchOutcomePlan,
         buildLaneGuidanceCacheKey: buildLaneGuidanceCacheKey,
         buildLaneGuidanceApiUrl: buildLaneGuidanceApiUrl,
