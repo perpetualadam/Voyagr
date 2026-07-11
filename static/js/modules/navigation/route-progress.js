@@ -283,6 +283,35 @@
         };
     }
 
+    /**
+     * Full GPS tracking tick outcome: position outputs plus side-effects plan.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildGpsTrackingTickOutcomePlan(opts) {
+        opts = opts || {};
+        var sideEffects = buildGpsTrackingSideEffectsPlan({
+            routeInProgress: opts.routeInProgress,
+            routePolyline: opts.routePolyline,
+            routeSteps: opts.routeSteps,
+            isTrackingActive: opts.isTrackingActive,
+            speedLimitShowWidget: opts.speedLimitShowWidget,
+        });
+        return {
+            lat: opts.lat,
+            lon: opts.lon,
+            accuracy: opts.accuracy,
+            speed: opts.speed,
+            speedMph: opts.speedMph,
+            markerLat: opts.markerLat,
+            markerLon: opts.markerLon,
+            heading: opts.heading,
+            followJumpM: opts.followJumpM,
+            speedLimitPlan: opts.speedLimitPlan,
+            sideEffects: sideEffects,
+        };
+    }
+
     var api = {
         ROUTE_PROGRESS_CONTAINER_ID: ROUTE_PROGRESS_CONTAINER_ID,
         ROUTE_PROGRESS_BAR_ID: ROUTE_PROGRESS_BAR_ID,
@@ -302,6 +331,7 @@
         buildGpsNavigationActiveTickPlan: buildGpsNavigationActiveTickPlan,
         buildGpsTrackingSideEffectsPlan: buildGpsTrackingSideEffectsPlan,
         buildGpsNavigationSideEffectsTickPlan: buildGpsNavigationSideEffectsTickPlan,
+        buildGpsTrackingTickOutcomePlan: buildGpsTrackingTickOutcomePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

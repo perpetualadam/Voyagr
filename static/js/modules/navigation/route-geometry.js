@@ -142,7 +142,7 @@
                 opts.lat,
                 opts.lon,
                 opts.routePolyline,
-                opts.lastSnappedRouteIndex
+                opts.searchStartIndex != null ? opts.searchStartIndex : (opts.lastSnappedRouteIndex || 0)
             ),
         };
     }

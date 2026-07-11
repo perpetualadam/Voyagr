@@ -115,6 +115,23 @@ describe('buildGpsRouteSnapTickPlan', () => {
         expect(plan.snapped.index).toBe(0);
         expect(plan.snapped.distance).toBeLessThan(500);
     });
+
+    test('searchStartIndex overrides lastSnappedRouteIndex for route seeding', () => {
+        const plan = RG.buildGpsRouteSnapTickPlan({
+            lat: 51.52,
+            lon: -0.10,
+            routeInProgress: true,
+            routePolyline: [
+                [51.50, -0.12],
+                [51.51, -0.11],
+                [51.52, -0.10],
+            ],
+            lastSnappedRouteIndex: 0,
+            searchStartIndex: 0,
+        });
+        expect(plan.action).toBe('snap');
+        expect(plan.snapped.index).toBeGreaterThanOrEqual(0);
+    });
 });
 
 describe('distanceAlongRouteToVertexMeters', () => {

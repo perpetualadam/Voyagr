@@ -573,6 +573,30 @@ describe('buildNavSpeedLimitTickPlan', () => {
     });
 });
 
+describe('buildVehicleDisplayCoordinatesPlan', () => {
+    test('returns raw coords when lat/lon are invalid', () => {
+        expect(SG.buildVehicleDisplayCoordinatesPlan({ lat: null, lon: -0.1 }))
+            .toEqual({ lat: null, lon: -0.1 });
+    });
+
+    test('returns smoothed marker coords when smooth state exists', () => {
+        const coords = SG.buildVehicleDisplayCoordinatesPlan({
+            lat: 51.5,
+            lon: -0.1,
+            routeInProgress: true,
+            routePolyline: [[51.5, -0.1], [51.501, -0.101]],
+            snapped: { lat: 51.5005, lon: -0.1005, index: 0, distance: 30 },
+            smoothDisplayLat: 51.4995,
+            smoothDisplayLon: -0.0995,
+            useSmoothCoordsOnly: true,
+            calculateBearing: () => 90,
+            blendHeadingsCircular: (g, r, b) => g + (r - g) * b,
+        });
+        expect(coords.lat).toBe(51.4995);
+        expect(coords.lon).toBe(-0.0995);
+    });
+});
+
 describe('buildGpsTrackingPositionTickPlan', () => {
     test('returns marker position and state patch from snapped route', () => {
         const tick = SG.buildGpsTrackingPositionTickPlan({

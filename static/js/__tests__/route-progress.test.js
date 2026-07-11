@@ -189,6 +189,29 @@ describe('GPS tracking side effects plan', () => {
         expect(plan.navActive.active).toBe(false);
         expect(plan.checkDeviation).toBe(false);
     });
+
+    test('buildGpsTrackingTickOutcomePlan bundles position outputs and side effects', () => {
+        const outcome = RP.buildGpsTrackingTickOutcomePlan({
+            lat: 51.5,
+            lon: -0.1,
+            accuracy: 10,
+            speed: 5,
+            speedMph: 12,
+            markerLat: 51.5001,
+            markerLon: -0.1001,
+            heading: 90,
+            followJumpM: 20,
+            speedLimitPlan: { showWidget: true, roadType: 'primary' },
+            routeInProgress: true,
+            routePolyline: [[51.5, -0.1], [51.6, -0.2]],
+            routeSteps: [{ type: 8 }],
+            isTrackingActive: true,
+            speedLimitShowWidget: true,
+        });
+        expect(outcome.markerLat).toBe(51.5001);
+        expect(outcome.sideEffects.fetchRoadName).toBe(true);
+        expect(outcome.sideEffects.showSpeedWidget).toBe(true);
+    });
 });
 
 describe('GPS navigation side effects tick plan', () => {

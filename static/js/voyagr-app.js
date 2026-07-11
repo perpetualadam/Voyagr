@@ -5894,9 +5894,7 @@ function redrawNavigationVehicleMarker(reason) {
             ? currentUserMarker.accuracy
             : null;
 
-        const snapped = (routePolyline && routePolyline.length >= 2)
-            ? _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex)
-            : null;
+        const snapped = resolveGpsRouteSnapForTick(lat, lon);
         const posPlan = SG.buildNavigationVehicleMarkerPositionPlan({
             lat,
             lon,
@@ -5975,7 +5973,16 @@ function seedNavigationProgressOnNewRoute(lat, lon) {
     if (!routePolyline || routePolyline.length < 2) return;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
 
-    const snap = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, 0);
+    const snapPlan = _routeGeometry().buildGpsRouteSnapTickPlan({
+        lat,
+        lon,
+        routeInProgress: true,
+        routePolyline,
+        lastSnappedRouteIndex: 0,
+        searchStartIndex: 0,
+    });
+    const snap = snapPlan.snapped;
+    if (!snap) return;
     const idx = Math.max(0, Math.min(snap.index, routePolyline.length - 2));
     const plan = _routeProgress().buildNavigationProgressSeedPlan(
         idx,
@@ -8783,19 +8790,13 @@ function resolveGpsRouteSnapForTick(lat, lon) {
 
 /** Lat/lon for the vehicle icon (snapped to route during navigation). */
 function getVehicleDisplayCoordinates() {
-    const lat = currentLat;
-    const lon = currentLon;
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
-        return { lat, lon };
-    }
     const SG = _speedGps();
-    const snapped = resolveGpsRouteSnapForTick(lat, lon);
-    const posPlan = SG.buildNavigationVehicleMarkerPositionPlan({
-        lat,
-        lon,
+    return SG.buildVehicleDisplayCoordinatesPlan({
+        lat: currentLat,
+        lon: currentLon,
         routeInProgress,
         routePolyline,
-        snapped,
+        snapped: resolveGpsRouteSnapForTick(currentLat, currentLon),
         lastSnappedRouteIndex,
         prevSnapBlendWeightState: _snapBlendWeightState,
         smoothDisplayLat: _smoothDisplayLat,
@@ -8804,7 +8805,6 @@ function getVehicleDisplayCoordinates() {
         calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
         blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
     });
-    return { lat: posPlan.markerLat, lon: posPlan.markerLon };
 }
 
 function metersMapCenterFromVehicle() {
@@ -12525,15 +12525,7 @@ function applyGpsPositionTick(sample) {
     const followJumpM = plans.posApply.followJumpM;
     const speedLimitPlan = plans.speedLimitPlan;
 
-    const sideEffects = _routeProgress().buildGpsTrackingSideEffectsPlan({
-        routeInProgress,
-        routePolyline,
-        routeSteps: currentRouteSteps,
-        isTrackingActive,
-        speedLimitShowWidget: speedLimitPlan.showWidget,
-    });
-
-    return {
+    return _routeProgress().buildGpsTrackingTickOutcomePlan({
         lat,
         lon,
         accuracy,
@@ -12544,8 +12536,12 @@ function applyGpsPositionTick(sample) {
         heading,
         followJumpM,
         speedLimitPlan,
-        sideEffects,
-    };
+        routeInProgress,
+        routePolyline,
+        routeSteps: currentRouteSteps,
+        isTrackingActive,
+        speedLimitShowWidget: speedLimitPlan.showWidget,
+    });
 }
 
 /**
@@ -12874,7 +12870,7 @@ function primeVehicleMarkerOnRoute(lat, lon) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
     if (!routePolyline || routePolyline.length < 2) return;
     seedNavigationProgressOnNewRoute(lat, lon);
-    const snapped = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+    const snapped = resolveGpsRouteSnapForTick(lat, lon);
     const SG = _speedGps();
     const posPlan = SG.buildNavigationVehicleMarkerPositionPlan({
         lat,

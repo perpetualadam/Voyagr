@@ -725,6 +725,35 @@
     }
 
     /**
+     * Vehicle marker display coordinates for map overlays (recenter, distance checks).
+     * @param {Object} opts
+     * @returns {{ lat: number, lon: number }}
+     */
+    function buildVehicleDisplayCoordinatesPlan(opts) {
+        opts = opts || {};
+        var lat = opts.lat;
+        var lon = opts.lon;
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+            return { lat: lat, lon: lon };
+        }
+        var posPlan = buildNavigationVehicleMarkerPositionPlan({
+            lat: lat,
+            lon: lon,
+            routeInProgress: opts.routeInProgress,
+            routePolyline: opts.routePolyline,
+            snapped: opts.snapped,
+            lastSnappedRouteIndex: opts.lastSnappedRouteIndex,
+            prevSnapBlendWeightState: opts.prevSnapBlendWeightState,
+            smoothDisplayLat: opts.smoothDisplayLat,
+            smoothDisplayLon: opts.smoothDisplayLon,
+            useSmoothCoordsOnly: opts.useSmoothCoordsOnly,
+            calculateBearing: opts.calculateBearing,
+            blendHeadingsCircular: opts.blendHeadingsCircular,
+        });
+        return { lat: posPlan.markerLat, lon: posPlan.markerLon };
+    }
+
+    /**
      * CSS rotation for vehicle marker icon (degrees), compensating for map bearing.
      * @param {number} heading
      * @param {number} mapBearing
@@ -950,6 +979,7 @@
         computeFollowJumpMeters: computeFollowJumpMeters,
         buildSnappedVehicleDisplayPlan: buildSnappedVehicleDisplayPlan,
         buildNavigationVehicleMarkerPositionPlan: buildNavigationVehicleMarkerPositionPlan,
+        buildVehicleDisplayCoordinatesPlan: buildVehicleDisplayCoordinatesPlan,
         buildVehicleMarkerTickPlan: buildVehicleMarkerTickPlan,
         buildGpsTrackingPositionTickPlan: buildGpsTrackingPositionTickPlan,
         buildGpsCoordSampleTickPlan: buildGpsCoordSampleTickPlan,
