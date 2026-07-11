@@ -474,3 +474,98 @@ describe('route result patch helpers', () => {
         expect(patch.distance).toBe(10);
     });
 });
+
+describe('route preview panel and in-nav dispatch helpers', () => {
+    test('formatPreviewVehicleTypeLabel title-cases underscored types', () => {
+        expect(RS.formatPreviewVehicleTypeLabel('electric_car')).toBe('Electric Car');
+        expect(RS.formatPreviewVehicleTypeLabel('')).toBe('');
+    });
+
+    test('formatPreviewRoutingModeLabel capitalises routing mode', () => {
+        expect(RS.formatPreviewRoutingModeLabel('fastest')).toBe('Fastest');
+    });
+
+    test('parseRecentDestinationFromCoordString returns route record or null', () => {
+        expect(RS.parseRecentDestinationFromCoordString('52.1, -1.2', 'Leeds')).toEqual({
+            label: 'Leeds',
+            lat: 52.1,
+            lon: -1.2,
+            kind: 'route',
+        });
+        expect(RS.parseRecentDestinationFromCoordString('bad', 'X')).toBeNull();
+        expect(RS.parseRecentDestinationFromCoordString('', 'X')).toBeNull();
+    });
+
+    test('buildInNavRerouteDispatchPlan extends success plan with recent destination', () => {
+        const plan = RS.buildInNavRerouteDispatchPlan(
+            { geometry: 'abc', duration_minutes: 18 },
+            { time: '18' },
+            '51.5,-0.1',
+            'London',
+            { enabled: false }
+        );
+        expect(plan.lastCalculatedRoutePatch.geometry).toBe('abc');
+        expect(plan.recentDestination).toEqual({
+            label: 'London',
+            lat: 51.5,
+            lon: -0.1,
+            kind: 'route',
+        });
+        expect(plan.speakMessage).toBeNull();
+    });
+
+    test('buildRoutePreviewPanelApplyPlan returns formatted preview values', () => {
+        const plan = RS.buildRoutePreviewPanelApplyPlan({
+            routeData: {
+                routes: [{
+                    distance_km: 10,
+                    duration_minutes: 25,
+                    fuel_cost: 5,
+                    toll_cost: 2,
+                    caz_cost: 1,
+                    hazard_count: 3,
+                    cameras_near_route: 3,
+                }],
+            },
+            selectedRouteIndex: 0,
+            currencySymbol: '£',
+            distanceText: '6.2 mi',
+            startLabel: 'Home',
+            endLabel: 'Work',
+            routingMode: 'fastest',
+            vehicleType: 'petrol',
+            distanceUnit: 'mi',
+            preferencesApplied: true,
+            routeOptionsCount: 2,
+        });
+        expect(plan.distanceKm).toBe(10);
+        expect(plan.durationText).toBe('25 min');
+        expect(plan.routeLabel).toBe('Home → Work');
+        expect(plan.fuelCostText).toBe('£5.00');
+        expect(plan.totalCostText).toBe('£8.00');
+        expect(plan.routingModeText).toBe('Fastest');
+        expect(plan.vehicleTypeText).toBe('Petrol');
+        expect(plan.showAlternativeRoutes).toBe(true);
+        expect(plan.showMapRoutes).toBe(true);
+        expect(plan.hazardPlan.visible).toBe(true);
+    });
+
+    test('buildAlternativeRoutesPreviewMountPlans builds card plans with converted distance', () => {
+        const mount = RS.buildAlternativeRoutesPreviewMountPlans(
+            [
+                { distance_km: 10, duration_minutes: 20, fuel_cost: 4, toll_cost: 0, caz_cost: 0, name: 'A' },
+                { distance_km: 12, duration_minutes: 22, fuel_cost: 5, toll_cost: 0, caz_cost: 0, name: 'B' },
+            ],
+            {
+                routeColors: ['#f00', '#0f0'],
+                currencySymbol: '£',
+                distUnit: 'mi',
+                fuelUnit: 'L',
+                convertDistance: (km) => (km * 0.62).toFixed(1),
+            }
+        );
+        expect(mount.showContainer).toBe(true);
+        expect(mount.cardPlans).toHaveLength(2);
+        expect(mount.cardPlans[0].html).toContain('A');
+    });
+});

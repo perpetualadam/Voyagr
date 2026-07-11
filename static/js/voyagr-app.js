@@ -4162,16 +4162,17 @@ async function calculateRoute() {
                 console.log('[calculateRoute] Navigation active — using in-nav reroute path');
                 hideRouteProgressBar();
 
+                const RS = _routeSelection();
                 const activeRoute = pickActiveRouteDuringNavigation(data.routes, data);
                 if (!activeRoute) {
-                    showStatus(_routeSelection().buildInNavRerouteSuccessPlan({}, {}, '', '').noRouteErrorMessage, 'error');
+                    showStatus(RS.buildInNavRerouteDispatchPlan({}, {}, '', '').noRouteErrorMessage, 'error');
                     return;
                 }
                 if (activeRoute.geometry) {
                     updateRouteOnMap(activeRoute);
                 }
 
-                const reroutePlan = _routeSelection().buildInNavRerouteSuccessPlan(
+                const dispatch = RS.buildInNavRerouteDispatchPlan(
                     activeRoute,
                     data,
                     geocodedEnd,
@@ -4182,24 +4183,24 @@ async function calculateRoute() {
                 );
                 window.lastCalculatedRoute = {
                     ...window.lastCalculatedRoute,
-                    ...reroutePlan.lastCalculatedRoutePatch,
+                    ...dispatch.lastCalculatedRoutePatch,
                 };
 
-                if (reroutePlan.speakMessage) {
-                    speakMessage(reroutePlan.speakMessage, 'high');
+                if (dispatch.speakMessage) {
+                    speakMessage(dispatch.speakMessage, 'high');
                 }
 
-                showStatus(reroutePlan.statusMessage, reroutePlan.statusType);
-                try {
-                    const ep = (geocodedEnd || '').split(',');
-                    if (ep.length >= 2) {
-                        const elat = parseFloat(ep[0].trim());
-                        const elon = parseFloat(ep[1].trim());
-                        if (Number.isFinite(elat) && Number.isFinite(elon)) {
-                            recordRecentDestination(end, elat, elon, 'route');
-                        }
-                    }
-                } catch (_) { /* ignore */ }
+                showStatus(dispatch.statusMessage, dispatch.statusType);
+                if (dispatch.recentDestination) {
+                    try {
+                        recordRecentDestination(
+                            dispatch.recentDestination.label,
+                            dispatch.recentDestination.lat,
+                            dispatch.recentDestination.lon,
+                            dispatch.recentDestination.kind
+                        );
+                    } catch (_) { /* ignore */ }
+                }
                 return;
             }
 
@@ -6651,93 +6652,67 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
 
     const symbol = getCurrencySymbol();
     const distUnit = getDistanceUnit();
-    const speedUnit = getSpeedUnit();
     const selection = _routeSelection();
 
     console.log('[Route Preview] Currency:', symbol, 'Distance Unit:', distUnit);
 
-    const previewRouteSlice = selection.resolvePreviewRoute(routeData, selectedRouteIndex);
-    const distanceKm = selection.resolvePreviewDistanceKm(routeData, previewRouteSlice);
+    const panelPlan = selection.buildRoutePreviewPanelApplyPlan({
+        routeData: routeData,
+        selectedRouteIndex: selectedRouteIndex,
+        currencySymbol: symbol,
+        distanceText: convertDistance(selection.resolvePreviewDistanceKm(
+            routeData,
+            selection.resolvePreviewRoute(routeData, selectedRouteIndex)
+        )) + ' ' + distUnit,
+        startLabel: document.getElementById('start').value,
+        endLabel: document.getElementById('end').value,
+        routingMode: currentRoutingMode,
+        vehicleType: currentVehicleType,
+        distanceUnit: distanceUnit,
+        preferencesApplied: localStorage.getItem('pref_cameras') !== 'false',
+        routeOptionsCount: routeOptions ? routeOptions.length : 0,
+        skipMapDisplay: skipMapDisplay,
+    });
 
     const previewDistanceEl = document.getElementById('previewDistance');
     if (previewDistanceEl) {
-        previewDistanceEl.dataset.km = distanceKm;
-        previewDistanceEl.textContent = convertDistance(distanceKm) + ' ' + distUnit;
+        previewDistanceEl.dataset.km = panelPlan.distanceKm;
+        previewDistanceEl.textContent = panelPlan.distanceText;
     }
-    const previewCosts = selection.buildPreviewCostValues(previewRouteSlice, routeData);
-    document.getElementById('previewDuration').textContent =
-        (previewCosts.durationMinutes ?? 0) + ' min';
-
-    const startInput = document.getElementById('start').value;
-    const endInput = document.getElementById('end').value;
-    document.getElementById('previewRoute').textContent = `${startInput} → ${endInput}`;
-
-    const fuelCost = previewCosts.fuelCost;
-    const fuelLitres = previewCosts.fuelLitres;
-    const tollCost = previewCosts.tollCost;
-    const cazCost = previewCosts.cazCost;
-    const totalCost = previewCosts.totalCost;
-
-    document.getElementById('previewFuelCost').textContent = symbol + fuelCost.toFixed(2);
-    // Show fuel amount - litres for petrol/diesel/hybrid, kWh for electric
+    document.getElementById('previewDuration').textContent = panelPlan.durationText;
+    document.getElementById('previewRoute').textContent = panelPlan.routeLabel;
+    document.getElementById('previewFuelCost').textContent = panelPlan.fuelCostText;
     const fuelLitresEl = document.getElementById('previewFuelLitres');
     if (fuelLitresEl) {
-        if (fuelLitres > 0) {
-            const isElectric = currentVehicleType === 'electric';
-            const fuelUnit = isElectric ? 'kWh' : 'L';
-            fuelLitresEl.textContent = '(' + fuelLitres.toFixed(1) + ' ' + fuelUnit + ')';
+        if (panelPlan.fuelLitres.visible) {
+            fuelLitresEl.textContent = panelPlan.fuelLitres.text;
             fuelLitresEl.style.display = 'block';
         } else {
             fuelLitresEl.style.display = 'none';
         }
     }
-    document.getElementById('previewTollCost').textContent = symbol + tollCost.toFixed(2);
-    document.getElementById('previewCAZCost').textContent = symbol + cazCost.toFixed(2);
-    document.getElementById('previewTotalCost').textContent = symbol + totalCost.toFixed(2);
+    document.getElementById('previewTollCost').textContent = panelPlan.tollCostText;
+    document.getElementById('previewCAZCost').textContent = panelPlan.cazCostText;
+    document.getElementById('previewTotalCost').textContent = panelPlan.totalCostText;
 
-    // Update CAZ status display (merge primary route slice — alternates carry their own caz_details)
     const cazStatusContainer = document.getElementById('cazStatusContainer');
-    const primaryRouteForCaz = (routeData.routes && routeData.routes.length > 0) ? routeData.routes[0] : routeData;
-    const cazDetails = primaryRouteForCaz.caz_details || routeData.caz_details || {};
-
     if (cazStatusContainer) {
-        const cazStatus = selection.buildCazStatusHtml(cazDetails, cazCost, symbol);
-        if (cazStatus.visible) {
-            cazStatusContainer.innerHTML = cazStatus.html;
+        if (panelPlan.cazStatus.visible) {
+            cazStatusContainer.innerHTML = panelPlan.cazStatus.html;
             cazStatusContainer.style.display = 'block';
         } else {
             cazStatusContainer.style.display = 'none';
         }
     }
 
-    console.log('[Cost] Route preview costs:', {
-        distanceUnit: distanceUnit,
-        fuelCost: fuelCost.toFixed(2),
-        tollCost: tollCost.toFixed(2),
-        cazCost: cazCost.toFixed(2),
-        totalCost: totalCost.toFixed(2),
-        cazDetails: cazDetails
-    });
+    console.log('[Cost] Route preview costs:', panelPlan.costLog);
 
-    // Update hazard / preference information (from primary/selected route)
-    const previewRoute = selection.resolvePreviewRoute(routeData, selectedRouteIndex);
-    const hazardCount = previewRoute.hazard_count ?? routeData.hazard_count ?? 0;
-    const camerasNearRoute = previewRoute.cameras_near_route ?? hazardCount;
-    const hazardPenaltySeconds = previewRoute.hazard_penalty_seconds ?? routeData.hazard_penalty_seconds ?? 0;
-    const preferencesApplied = localStorage.getItem('pref_cameras') !== 'false';
     const hazardContainer = document.getElementById('hazardInfoContainer');
     const hazardTitleEl = hazardContainer ? hazardContainer.querySelector('h4') : null;
     const hazardCountLabel = hazardContainer ? hazardContainer.querySelector('[data-hazard-count-label]') : null;
     const penaltyRow = hazardContainer ? hazardContainer.querySelector('#previewHazardPenalty')?.closest('div') : null;
-
     if (hazardContainer) {
-        const hazardState = selection.getHazardPreviewPanelState({
-            preferencesApplied: preferencesApplied,
-            camerasNearRoute: camerasNearRoute,
-            hazardCount: hazardCount,
-            hazardPenaltySeconds: hazardPenaltySeconds,
-        });
-        const plan = selection.buildHazardPreviewPanelApplyPlan(hazardState);
+        const plan = panelPlan.hazardPlan;
         const countEl = document.getElementById('previewHazardCount');
         const penaltyEl = document.getElementById('previewHazardPenalty');
         if (plan.visible && countEl) {
@@ -6756,20 +6731,17 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         }
     }
 
-    // Update route details (routing engine stack is hidden from the preview UI)
-    document.getElementById('previewRoutingMode').textContent = currentRoutingMode.charAt(0).toUpperCase() + currentRoutingMode.slice(1);
-    document.getElementById('previewVehicleType').textContent = currentVehicleType.replace(/_/g, ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+    document.getElementById('previewRoutingMode').textContent = panelPlan.routingModeText;
+    document.getElementById('previewVehicleType').textContent = panelPlan.vehicleTypeText;
 
-    // Show alternative routes if available
-    if (routeOptions && routeOptions.length > 1) {
+    if (panelPlan.showAlternativeRoutes) {
         showAlternativeRoutesInPreview();
         console.log('[Route Preview] Showing alternative routes panel');
     } else {
         document.getElementById('previewAlternativeRoutesContainer').style.display = 'none';
     }
 
-    // Display routes on the map (unless skipMapDisplay is true - e.g., when selecting a specific route)
-    if (!skipMapDisplay && routeOptions && routeOptions.length > 0) {
+    if (panelPlan.showMapRoutes) {
         displayAllRoutesOnMap();
         console.log(`[Route Preview] Displayed ${routeOptions.length} route(s) on map`);
     }
@@ -6798,7 +6770,7 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     }
 
     console.log('[Route Preview] Route preview displayed successfully');
-    showStatus('📍 Review your route before starting navigation', 'success');
+    showStatus(panelPlan.statusMessage, 'success');
 }
 
 /**
@@ -6811,26 +6783,21 @@ function showAlternativeRoutesInPreview() {
     const container = document.getElementById('previewAlternativeRoutesList');
     const parentContainer = document.getElementById('previewAlternativeRoutesContainer');
 
-    if (!RS.shouldShowPreviewAlternativeRoutes(routeOptions ? routeOptions.length : 0)) {
+    const mount = RS.buildAlternativeRoutesPreviewMountPlans(routeOptions, {
+        routeColors: ROUTE_COLORS,
+        currencySymbol: getCurrencySymbol(),
+        distUnit: getDistanceUnit(),
+        fuelUnit: currentVehicleType === 'electric' ? 'kWh' : 'L',
+        convertDistance: convertDistance,
+    });
+
+    if (!mount.showContainer) {
         parentContainer.style.display = 'none';
         return;
     }
 
     container.innerHTML = '';
-    const symbol = getCurrencySymbol();
-    const distUnit = getDistanceUnit();
-    const fuelUnit = currentVehicleType === 'electric' ? 'kWh' : 'L';
-    const cardOpts = {
-        routeColors: ROUTE_COLORS,
-        currencySymbol: symbol,
-        distUnit: distUnit,
-        fuelUnit: fuelUnit,
-    };
-
-    routeOptions.forEach((route, index) => {
-        const plan = RS.buildPreviewAlternativeRouteCardMountPlan(route, index, Object.assign({}, cardOpts, {
-            distanceText: convertDistance(route.distance_km),
-        }));
+    mount.cardPlans.forEach((plan, index) => {
         const div = document.createElement('div');
         div.style.cssText = plan.containerStyle;
         div.innerHTML = plan.html;

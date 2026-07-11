@@ -1290,6 +1290,149 @@
         };
     }
 
+    /**
+     * @param {string} vehicleType
+     * @returns {string}
+     */
+    function formatPreviewVehicleTypeLabel(vehicleType) {
+        return String(vehicleType || '').replace(/_/g, ' ').split(' ').map(function (w) {
+            return w.charAt(0).toUpperCase() + w.slice(1);
+        }).join(' ');
+    }
+
+    /**
+     * @param {string} routingMode
+     * @returns {string}
+     */
+    function formatPreviewRoutingModeLabel(routingMode) {
+        var mode = String(routingMode || '');
+        return mode.charAt(0).toUpperCase() + mode.slice(1);
+    }
+
+    /**
+     * Parse a "lat,lon" coord string into a recent-destination record.
+     * @param {string} coordString
+     * @param {string} label
+     * @returns {{ label: string, lat: number, lon: number, kind: string }|null}
+     */
+    function parseRecentDestinationFromCoordString(coordString, label) {
+        if (!coordString || !label) return null;
+        var parts = String(coordString).split(',');
+        if (parts.length < 2) return null;
+        var lat = parseFloat(parts[0].trim());
+        var lon = parseFloat(parts[1].trim());
+        if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+        return { label: label, lat: lat, lon: lon, kind: 'route' };
+    }
+
+    /**
+     * In-navigation reroute dispatch plan (voice, status, patch, recent destination).
+     * @param {Object} activeRoute
+     * @param {Object} data
+     * @param {string} geocodedEnd
+     * @param {string} destinationLabel
+     * @param {Object} [voiceOpts]
+     * @returns {Object}
+     */
+    function buildInNavRerouteDispatchPlan(activeRoute, data, geocodedEnd, destinationLabel, voiceOpts) {
+        var plan = buildInNavRerouteSuccessPlan(activeRoute, data, geocodedEnd, destinationLabel, voiceOpts);
+        return {
+            lastCalculatedRoutePatch: plan.lastCalculatedRoutePatch,
+            durationMinutes: plan.durationMinutes,
+            speakMessage: plan.speakMessage,
+            statusMessage: plan.statusMessage,
+            statusType: plan.statusType,
+            noRouteErrorMessage: plan.noRouteErrorMessage,
+            recentDestination: parseRecentDestinationFromCoordString(geocodedEnd, destinationLabel),
+        };
+    }
+
+    /**
+     * Apply plan for the route preview bottom-sheet panel (values only; app writes DOM).
+     * @param {Object} o
+     * @returns {Object}
+     */
+    function buildRoutePreviewPanelApplyPlan(o) {
+        o = o || {};
+        var routeData = o.routeData || {};
+        var selectedIndex = o.selectedRouteIndex != null ? o.selectedRouteIndex : 0;
+        var previewRouteSlice = resolvePreviewRoute(routeData, selectedIndex);
+        var distanceKm = resolvePreviewDistanceKm(routeData, previewRouteSlice);
+        var previewCosts = buildPreviewCostValues(previewRouteSlice, routeData);
+        var symbol = o.currencySymbol || '£';
+        var primaryRouteForCaz = (routeData.routes && routeData.routes.length > 0)
+            ? routeData.routes[0]
+            : routeData;
+        var cazDetails = primaryRouteForCaz.caz_details || routeData.caz_details || {};
+        var cazStatus = buildCazStatusHtml(cazDetails, previewCosts.cazCost, symbol);
+        var previewRoute = resolvePreviewRoute(routeData, selectedIndex);
+        var hazardCount = previewRoute.hazard_count != null ? previewRoute.hazard_count : (routeData.hazard_count || 0);
+        var camerasNearRoute = previewRoute.cameras_near_route != null ? previewRoute.cameras_near_route : hazardCount;
+        var hazardPenaltySeconds = previewRoute.hazard_penalty_seconds != null
+            ? previewRoute.hazard_penalty_seconds
+            : (routeData.hazard_penalty_seconds || 0);
+        var hazardPlan = buildHazardPreviewPanelApplyPlan(getHazardPreviewPanelState({
+            preferencesApplied: !!o.preferencesApplied,
+            camerasNearRoute: camerasNearRoute,
+            hazardCount: hazardCount,
+            hazardPenaltySeconds: hazardPenaltySeconds,
+        }));
+        var isElectric = o.vehicleType === 'electric';
+        var fuelUnit = isElectric ? 'kWh' : 'L';
+        var routeOptionsCount = o.routeOptionsCount || 0;
+        return {
+            distanceKm: distanceKm,
+            distanceText: o.distanceText,
+            durationText: String(previewCosts.durationMinutes != null ? previewCosts.durationMinutes : 0) + ' min',
+            routeLabel: String(o.startLabel || '') + ' → ' + String(o.endLabel || ''),
+            fuelCostText: symbol + previewCosts.fuelCost.toFixed(2),
+            tollCostText: symbol + previewCosts.tollCost.toFixed(2),
+            cazCostText: symbol + previewCosts.cazCost.toFixed(2),
+            totalCostText: symbol + previewCosts.totalCost.toFixed(2),
+            fuelLitres: previewCosts.fuelLitres > 0
+                ? { visible: true, text: '(' + previewCosts.fuelLitres.toFixed(1) + ' ' + fuelUnit + ')' }
+                : { visible: false, text: '' },
+            cazStatus: cazStatus,
+            hazardPlan: hazardPlan,
+            routingModeText: formatPreviewRoutingModeLabel(o.routingMode),
+            vehicleTypeText: formatPreviewVehicleTypeLabel(o.vehicleType),
+            showAlternativeRoutes: routeOptionsCount > 1,
+            showMapRoutes: !o.skipMapDisplay && routeOptionsCount > 0,
+            statusMessage: '📍 Review your route before starting navigation',
+            costLog: {
+                distanceUnit: o.distanceUnit,
+                fuelCost: previewCosts.fuelCost.toFixed(2),
+                tollCost: previewCosts.tollCost.toFixed(2),
+                cazCost: previewCosts.cazCost.toFixed(2),
+                totalCost: previewCosts.totalCost.toFixed(2),
+                cazDetails: cazDetails,
+            },
+        };
+    }
+
+    /**
+     * Mount plans for alternative-route cards in the preview panel.
+     * @param {Array<Object>} routeOptions
+     * @param {Object} opts
+     * @returns {{ showContainer: boolean, cardPlans: Array<Object> }}
+     */
+    function buildAlternativeRoutesPreviewMountPlans(routeOptions, opts) {
+        opts = opts || {};
+        var routes = routeOptions || [];
+        var cardPlans = [];
+        for (var i = 0; i < routes.length; i++) {
+            cardPlans.push(buildPreviewAlternativeRouteCardMountPlan(routes[i], i, Object.assign({}, opts, {
+                distanceText: typeof opts.convertDistance === 'function'
+                    ? opts.convertDistance(routes[i].distance_km)
+                    : String(routes[i].distance_km),
+            })));
+        }
+        return {
+            showContainer: shouldShowPreviewAlternativeRoutes(routes.length),
+            cardPlans: cardPlans,
+        };
+    }
+
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
@@ -1350,6 +1493,12 @@
         buildCazStatusHtml: buildCazStatusHtml,
         getHazardPreviewPanelState: getHazardPreviewPanelState,
         buildHazardPreviewPanelApplyPlan: buildHazardPreviewPanelApplyPlan,
+        formatPreviewVehicleTypeLabel: formatPreviewVehicleTypeLabel,
+        formatPreviewRoutingModeLabel: formatPreviewRoutingModeLabel,
+        parseRecentDestinationFromCoordString: parseRecentDestinationFromCoordString,
+        buildInNavRerouteDispatchPlan: buildInNavRerouteDispatchPlan,
+        buildRoutePreviewPanelApplyPlan: buildRoutePreviewPanelApplyPlan,
+        buildAlternativeRoutesPreviewMountPlans: buildAlternativeRoutesPreviewMountPlans,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,
         mergeLastCalculatedRouteFromSelection: mergeLastCalculatedRouteFromSelection,
         buildRoutePayloadFromPersisted: buildRoutePayloadFromPersisted,
