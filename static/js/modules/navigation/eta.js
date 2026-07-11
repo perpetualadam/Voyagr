@@ -471,6 +471,115 @@
         };
     }
 
+    var ETA_ANNOUNCEMENT_INTERVAL_MS = 600000;
+    var ETA_INITIAL_ANNOUNCE_DELAY_MS = 30000;
+    var INITIAL_ETA_MOVEMENT_RETRY_MS = 20000;
+    var INITIAL_ETA_MOVEMENT_MAX_RETRIES = 15;
+
+    /**
+     * Periodic ETA voice announcement tick plan.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildAnnounceETAIfNeededPlan(input) {
+        input = input || {};
+        if (!input.routeInProgress || !input.hasRoute || !input.voiceEnabled) {
+            return { action: 'skip', reason: 'inactive' };
+        }
+        var now = input.now != null ? input.now : Date.now();
+        var intervalMs = input.intervalMs != null ? input.intervalMs : ETA_ANNOUNCEMENT_INTERVAL_MS;
+        var elapsed = now - (input.lastETAAnnouncementTime || 0);
+        if (elapsed <= intervalMs) {
+            return { action: 'skip', reason: 'interval' };
+        }
+        if (!input.baseRemainingMinutes) {
+            return {
+                action: 'skip',
+                reason: 'no-duration',
+                warnLog: '[ETA] No valid route duration for voice',
+            };
+        }
+        var timeRemainingMinutes = typeof input.applyTrafficRatio === 'function'
+            ? input.applyTrafficRatio(input.baseRemainingMinutes)
+            : input.baseRemainingMinutes;
+        return {
+            action: 'announce',
+            timeRemainingMinutes: timeRemainingMinutes,
+            etaMs: now + timeRemainingMinutes * 60000,
+            logPrefix: '[Voice] ETA announcement:',
+            updateLastETAAnnouncementTime: now,
+        };
+    }
+
+    /**
+     * Movement gate for the first ETA voice announcement after nav start.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildInitialETAMovementDeferPlan(input) {
+        input = input || {};
+        if (input.hasStartedMoving) {
+            return { action: 'proceed', resetRetries: true };
+        }
+        var retries = (input.retries || 0) + 1;
+        var maxRetries = input.maxRetries != null ? input.maxRetries : INITIAL_ETA_MOVEMENT_MAX_RETRIES;
+        if (retries <= maxRetries) {
+            return {
+                action: 'defer',
+                retries: retries,
+                retryDelayMs: input.retryDelayMs != null ? input.retryDelayMs : INITIAL_ETA_MOVEMENT_RETRY_MS,
+                logMessage: '[Voice] Initial ETA deferred until movement (retry ' + retries + '/' + maxRetries + ')',
+            };
+        }
+        return {
+            action: 'skip',
+            logMessage: '[Voice] Initial ETA skipped after max stationary retries; periodic ETA still applies',
+        };
+    }
+
+    /**
+     * Execute plan for the first ETA voice announcement after movement gate passes.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildInitialETAAnnouncementExecutePlan(input) {
+        input = input || {};
+        if (!input.routeInProgress || !input.hasRoute || !input.voiceEnabled) {
+            return { shouldAnnounce: false };
+        }
+        if (!input.baseRemainingMinutes) {
+            return { shouldAnnounce: false };
+        }
+        var now = input.now != null ? input.now : Date.now();
+        var timeRemainingMinutes = typeof input.applyTrafficRatio === 'function'
+            ? input.applyTrafficRatio(input.baseRemainingMinutes)
+            : input.baseRemainingMinutes;
+        return {
+            shouldAnnounce: true,
+            refreshTrafficIfDue: !!input.refreshTrafficIfDue,
+            timeRemainingMinutes: timeRemainingMinutes,
+            etaMs: now + timeRemainingMinutes * 60000,
+            logPrefix: '[Voice] Initial ETA announcement:',
+            updateLastETAAnnouncementTime: now,
+            resetMovementRetries: true,
+        };
+    }
+
+    /**
+     * Schedule plan for deferred initial ETA announcement after navigation starts.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildScheduleInitialETAAnnouncementPlan(input) {
+        input = input || {};
+        return {
+            shouldSchedule: true,
+            clearExisting: true,
+            delayMs: input.delayMs != null ? input.delayMs : ETA_INITIAL_ANNOUNCE_DELAY_MS,
+            action: 'speakInitialETAAnnouncement',
+        };
+    }
+
     var api = {
         formatRemainingTime: formatRemainingTime,
         buildETAVoiceMessage: buildETAVoiceMessage,
@@ -493,6 +602,14 @@
         buildJourneySummaryModalApplyPlan: buildJourneySummaryModalApplyPlan,
         buildJourneySummaryModalExecutePlan: buildJourneySummaryModalExecutePlan,
         buildCloseJourneySummaryExecutePlan: buildCloseJourneySummaryExecutePlan,
+        ETA_ANNOUNCEMENT_INTERVAL_MS: ETA_ANNOUNCEMENT_INTERVAL_MS,
+        ETA_INITIAL_ANNOUNCE_DELAY_MS: ETA_INITIAL_ANNOUNCE_DELAY_MS,
+        INITIAL_ETA_MOVEMENT_RETRY_MS: INITIAL_ETA_MOVEMENT_RETRY_MS,
+        INITIAL_ETA_MOVEMENT_MAX_RETRIES: INITIAL_ETA_MOVEMENT_MAX_RETRIES,
+        buildAnnounceETAIfNeededPlan: buildAnnounceETAIfNeededPlan,
+        buildInitialETAMovementDeferPlan: buildInitialETAMovementDeferPlan,
+        buildInitialETAAnnouncementExecutePlan: buildInitialETAAnnouncementExecutePlan,
+        buildScheduleInitialETAAnnouncementPlan: buildScheduleInitialETAAnnouncementPlan,
         MAX_PLAUSIBLE_AVG_KMH: MAX_PLAUSIBLE_AVG_KMH,
         TRAFFIC_RATIO_MAX_AGE_MS: TRAFFIC_RATIO_MAX_AGE_MS,
     };

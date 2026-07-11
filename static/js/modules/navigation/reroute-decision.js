@@ -987,6 +987,137 @@
         };
     }
 
+    /**
+     * Execute plan for automatic reroute trigger guard (skip/defer/fetch).
+     * @param {Object} trigger - from buildAutomaticRerouteTriggerPlan
+     * @returns {Object}
+     */
+    function buildAutomaticRerouteTriggerExecutePlan(trigger) {
+        trigger = trigger || {};
+        if (trigger.action === 'skip') {
+            return { action: 'skip', logMessage: trigger.logMessage };
+        }
+        if (trigger.action === 'defer') {
+            return {
+                action: 'defer',
+                lastRerouteAttemptTime: trigger.lastRerouteAttemptTime,
+                logMessage: trigger.guard && trigger.guard.logMessage,
+                scheduleRetry: !!trigger.scheduleRetry,
+                resetRerouteInProgress: !!trigger.resetRerouteInProgress,
+            };
+        }
+        return {
+            action: 'fetch',
+            lastRerouteAttemptTime: trigger.lastRerouteAttemptTime,
+            rerouteInProgress: true,
+            logMessage: trigger.guard && trigger.guard.logMessage,
+        };
+    }
+
+    /**
+     * Build outcome + apply plans from automatic reroute API response.
+     * @param {Object} data
+     * @param {Object} [opts]
+     * @returns {{ outcome: Object, apply: Object }}
+     */
+    function buildAutomaticRerouteResponsePlans(data, opts) {
+        var outcome = buildAutomaticRerouteOutcomePlan(data, opts);
+        return {
+            outcome: outcome,
+            apply: buildAutomaticRerouteResultApplyPlan(outcome),
+        };
+    }
+
+    /**
+     * Build error + apply plans from automatic reroute fetch failure.
+     * @param {Object} [opts]
+     * @returns {{ errPlan: Object, apply: Object }}
+     */
+    function buildAutomaticRerouteErrorResponsePlans(opts) {
+        var errPlan = buildAutomaticRerouteErrorPlan(opts);
+        return {
+            errPlan: errPlan,
+            apply: buildAutomaticRerouteResultApplyPlan(errPlan),
+        };
+    }
+
+    /**
+     * Side-effect execute plan for applyAutomaticRerouteResult in voyagr-app.
+     * @param {Object} apply - from buildAutomaticRerouteResultApplyPlan
+     * @returns {Object}
+     */
+    function buildAutomaticRerouteResultExecutePlan(apply) {
+        apply = apply || {};
+        if (apply.action !== 'apply') {
+            return { shouldApply: false };
+        }
+        if (apply.kind === 'failure') {
+            return {
+                shouldApply: true,
+                kind: 'failure',
+                logs: apply.logs || [],
+                notification: apply.notification || null,
+                scheduleRetry: !!apply.scheduleRetry,
+                resetRerouteInProgress: !!apply.resetRerouteInProgress,
+            };
+        }
+        return {
+            shouldApply: true,
+            kind: 'success',
+            clearFailureRetries: !!apply.clearFailureRetries,
+            logs: apply.logs || [],
+            showUnavoidableHazards: !!apply.showUnavoidableHazards,
+            newRoute: apply.newRoute,
+            hazardsList: apply.hazardsList,
+            hazardCount: apply.hazardCount,
+            preferPrimaryRouteOnNextNavUpdate: !!apply.preferPrimaryRouteOnNextNavUpdate,
+            updateRouteOnMap: !!apply.updateRouteOnMap,
+            logRerouteEvent: !!apply.logRerouteEvent,
+            voice: apply.voice || null,
+            notification: apply.notification || null,
+        };
+    }
+
+    /**
+     * Consolidated execute plan for applyRouteMapUpdateStateFromPlan.
+     * @param {Object} plan - from buildRouteMapUpdateStatePlan
+     * @param {Object} [input]
+     * @param {number|null} [input.currentLat]
+     * @param {number|null} [input.currentLon]
+     * @param {Object} [input.newRoute]
+     * @returns {Object}
+     */
+    function buildRouteMapUpdateStateExecutePlan(plan, input) {
+        plan = plan || {};
+        input = input || {};
+        var newRoute = input.newRoute || {};
+        var sections = buildRouteMapUpdateStateApplySectionsPlan(plan);
+        var speedReset = buildRouteMapUpdateSpeedLimitResetPlan(plan);
+        var progress = buildRouteMapUpdateProgressResetPlan(plan);
+        var post = buildRouteMapUpdatePostApplyPlan(plan, input);
+
+        return {
+            maneuvers: sections.applyManeuvers ? {
+                steps: plan.maneuvers.steps,
+                logMessage: plan.maneuvers.logMessage,
+            } : null,
+            vehicleMarkerReset: sections.vehicleMarkerReset,
+            speedLimitReset: speedReset,
+            progress: progress,
+            roadNameReset: sections.roadNameReset,
+            navigationArrivalReset: sections.navigationArrivalReset,
+            deviation: sections.deviation,
+            post: post,
+            lastCalculatedRoutePatch: plan.lastCalculatedRoutePatch,
+            tripInfo: post.updateTripInfo ? {
+                distance_km: newRoute.distance_km,
+                duration_minutes: newRoute.duration_minutes,
+                fuel_cost: newRoute.fuel_cost,
+                toll_cost: newRoute.toll_cost,
+            } : null,
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         normalizeAccuracy: normalizeAccuracy,
@@ -1024,8 +1155,13 @@
         buildRouteMapUpdateStateApplySectionsPlan: buildRouteMapUpdateStateApplySectionsPlan,
         buildRouteMapUpdateSpeedLimitResetPlan: buildRouteMapUpdateSpeedLimitResetPlan,
         buildRouteMapUpdateProgressResetPlan: buildRouteMapUpdateProgressResetPlan,
+        buildRouteMapUpdateStateExecutePlan: buildRouteMapUpdateStateExecutePlan,
         ROUTE_API_PATH: ROUTE_API_PATH,
         buildAutomaticRerouteFetchOrchestrationPlan: buildAutomaticRerouteFetchOrchestrationPlan,
+        buildAutomaticRerouteTriggerExecutePlan: buildAutomaticRerouteTriggerExecutePlan,
+        buildAutomaticRerouteResponsePlans: buildAutomaticRerouteResponsePlans,
+        buildAutomaticRerouteErrorResponsePlans: buildAutomaticRerouteErrorResponsePlans,
+        buildAutomaticRerouteResultExecutePlan: buildAutomaticRerouteResultExecutePlan,
     };
 
     // CommonJS (Jest) export.

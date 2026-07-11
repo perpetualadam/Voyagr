@@ -6130,19 +6130,23 @@ function resetVoiceAnnouncementStateForNewRoute() {
  */
 function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
     const RD = _rerouteDecision();
-    const sections = RD.buildRouteMapUpdateStateApplySectionsPlan(plan);
+    const execute = RD.buildRouteMapUpdateStateExecutePlan(plan, {
+        currentLat,
+        currentLon,
+        newRoute,
+    });
 
-    if (sections.applyManeuvers) {
-        currentRouteSteps = plan.maneuvers.steps;
-        if (plan.maneuvers.logMessage) console.log(plan.maneuvers.logMessage);
+    if (execute.maneuvers) {
+        currentRouteSteps = execute.maneuvers.steps;
+        if (execute.maneuvers.logMessage) console.log(execute.maneuvers.logMessage);
     }
 
-    if (sections.vehicleMarkerReset) {
+    if (execute.vehicleMarkerReset) {
         resetVehicleMarkerDisplayState();
     }
 
-    const speedReset = RD.buildRouteMapUpdateSpeedLimitResetPlan(plan);
-    if (speedReset.shouldReset) {
+    const speedReset = execute.speedLimitReset;
+    if (speedReset && speedReset.shouldReset) {
         const SL = _speedLimitWidget();
         const resetPlan = SL
             ? SL.buildSpeedLimitFetchResetApplyPlan(
@@ -6159,7 +6163,7 @@ function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
         if (resetPlan) applySpeedLimitFetchResetFromPlan(resetPlan);
     }
 
-    const progress = RD.buildRouteMapUpdateProgressResetPlan(plan);
+    const progress = execute.progress;
     if (progress.action === 'primeVehicleMarker') {
         primeVehicleMarkerOnRoute(currentLat, currentLon);
     } else if (progress.action === 'resetProgress' && progress.patch) {
@@ -6168,16 +6172,16 @@ function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
         lastTurnDetectRouteVertexIndex = progress.patch.lastTurnDetectRouteVertexIndex;
     }
 
-    if (sections.roadNameReset) {
+    if (execute.roadNameReset) {
         lastRoadNameFetch = 0;
         lastRoadNamePosition = null;
         currentRoadDisplayName = '';
     }
-    if (sections.navigationArrivalReset) {
+    if (execute.navigationArrivalReset) {
         resetNavigationArrivalState();
     }
 
-    const dev = sections.deviation;
+    const dev = execute.deviation;
     if (dev) {
         deviationStartTimeCheck = dev.deviationStartTimeCheck;
         rerouteAttemptCount = dev.rerouteAttemptCount;
@@ -6190,21 +6194,23 @@ function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
         if (dev.clearFailureRetries) clearRerouteFailureRetries();
     }
 
-    const post = RD.buildRouteMapUpdatePostApplyPlan(plan, {
-        currentLat,
-        currentLon,
-    });
+    const post = execute.post;
     if (post.refreshTurnWidget) {
         updateTurnWidgetFromPosition(currentLat, currentLon);
     }
     if (post.fetchRoadName) {
         fetchRoadNameThrottled(currentLat, currentLon);
     }
-    if (post.updateTripInfo) {
-        updateTripInfo(newRoute.distance_km, newRoute.duration_minutes, newRoute.fuel_cost, newRoute.toll_cost);
+    if (execute.tripInfo) {
+        updateTripInfo(
+            execute.tripInfo.distance_km,
+            execute.tripInfo.duration_minutes,
+            execute.tripInfo.fuel_cost,
+            execute.tripInfo.toll_cost
+        );
     }
     if (post.patchLastCalculatedRoute) {
-        window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
+        window.lastCalculatedRoute = execute.lastCalculatedRoutePatch;
     }
     if (post.completeLog) console.log(post.completeLog);
 }
@@ -13166,11 +13172,6 @@ let _navStartedAt = 0;
 // ETA announcement variables
 let lastETAAnnouncementTime = 0;
 let lastAnnouncedETA = null;
-const ETA_ANNOUNCEMENT_INTERVAL_MS = 600000; // Announce ETA every 10 minutes (600,000 ms)
-const ETA_INITIAL_ANNOUNCE_DELAY_MS = 30000; // First check for initial ETA voice after navigation starts
-/** Initial ETA is deferred until movement; retry interval and cap (avoids repeating ETA while stationary). */
-const INITIAL_ETA_MOVEMENT_RETRY_MS = 20000;
-const INITIAL_ETA_MOVEMENT_MAX_RETRIES = 15; // ~5 minutes of retries, then skip initial ETA
 let initialETAMovementRetries = 0;
 const NAV_TRAFFIC_ETA_MIN_INTERVAL_MS = 12000; // Min time between traffic-conditions fetches (ETA refresh is ~30s)
 const ETA_CHANGE_THRESHOLD_MS = 300000; // Announce if ETA changes by >5 minutes (300,000 ms)
@@ -13681,43 +13682,44 @@ function checkRouteDeviation(lat, lon, accuracy) {
  */
 function applyAutomaticRerouteResult(ctx) {
     const { apply, startLat, startLon, destination } = ctx;
-    if (!apply || apply.action !== 'apply') return;
+    const execute = _rerouteDecision().buildAutomaticRerouteResultExecutePlan(apply);
+    if (!execute.shouldApply) return;
 
-    if (apply.kind === 'failure') {
-        apply.logs.forEach((line) => console.log(line));
-        if (apply.notification) {
-            sendNotification(apply.notification.title, apply.notification.body, apply.notification.type);
+    if (execute.kind === 'failure') {
+        execute.logs.forEach((line) => console.log(line));
+        if (execute.notification) {
+            sendNotification(execute.notification.title, execute.notification.body, execute.notification.type);
         }
-        if (apply.scheduleRetry) scheduleAutomaticRerouteRetry();
-        if (apply.resetRerouteInProgress) rerouteInProgress = false;
+        if (execute.scheduleRetry) scheduleAutomaticRerouteRetry();
+        if (execute.resetRerouteInProgress) rerouteInProgress = false;
         return;
     }
 
-    if (apply.clearFailureRetries) clearRerouteFailureRetries();
-    apply.logs.forEach((line) => console.log(line));
+    if (execute.clearFailureRetries) clearRerouteFailureRetries();
+    execute.logs.forEach((line) => console.log(line));
 
-    if (apply.showUnavoidableHazards) {
-        handleUnavoidableHazards(apply.newRoute, apply.hazardsList, apply.hazardCount);
+    if (execute.showUnavoidableHazards) {
+        handleUnavoidableHazards(execute.newRoute, execute.hazardsList, execute.hazardCount);
     }
-    if (apply.preferPrimaryRouteOnNextNavUpdate) {
+    if (execute.preferPrimaryRouteOnNextNavUpdate) {
         _preferPrimaryRouteOnNextNavUpdate = true;
     }
-    if (apply.updateRouteOnMap) updateRouteOnMap(apply.newRoute);
-    if (apply.logRerouteEvent) {
-        logReroutingEvent(startLat, startLon, destination, apply.newRoute, apply.hazardCount);
+    if (execute.updateRouteOnMap) updateRouteOnMap(execute.newRoute);
+    if (execute.logRerouteEvent) {
+        logReroutingEvent(startLat, startLon, destination, execute.newRoute, execute.hazardCount);
     }
 
-    if (apply.voice && apply.voice.enabled) {
-        if (apply.voice.shouldSpeak) {
-            lastRerouteAnnouncementTime = apply.voice.announceAt;
-            speakMessage(apply.voice.message, 'high');
+    if (execute.voice && execute.voice.enabled) {
+        if (execute.voice.shouldSpeak) {
+            lastRerouteAnnouncementTime = execute.voice.announceAt;
+            speakMessage(execute.voice.message, 'high');
         } else {
             console.log('[Voice] Skipping duplicate reroute announcement');
         }
     }
 
-    if (apply.notification) {
-        sendNotification(apply.notification.title, apply.notification.body, apply.notification.type);
+    if (execute.notification) {
+        sendNotification(execute.notification.title, execute.notification.body, execute.notification.type);
     }
 }
 
@@ -13740,24 +13742,25 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
         startLat: currentLat,
         startLon: currentLon,
     });
+    const triggerExecute = RD.buildAutomaticRerouteTriggerExecutePlan(trigger);
 
-    if (trigger.action === 'skip') {
-        console.log(trigger.logMessage);
+    if (triggerExecute.action === 'skip') {
+        console.log(triggerExecute.logMessage);
         return;
     }
 
-    lastRerouteAttemptTime = trigger.lastRerouteAttemptTime;
+    lastRerouteAttemptTime = triggerExecute.lastRerouteAttemptTime;
 
-    if (trigger.action === 'defer') {
-        if (trigger.guard.logMessage) console.log(trigger.guard.logMessage);
-        if (trigger.scheduleRetry) scheduleAutomaticRerouteRetry();
-        if (trigger.resetRerouteInProgress) rerouteInProgress = false;
+    if (triggerExecute.action === 'defer') {
+        if (triggerExecute.logMessage) console.log(triggerExecute.logMessage);
+        if (triggerExecute.scheduleRetry) scheduleAutomaticRerouteRetry();
+        if (triggerExecute.resetRerouteInProgress) rerouteInProgress = false;
         return;
     }
 
-    rerouteInProgress = true;
+    rerouteInProgress = triggerExecute.rerouteInProgress;
     try {
-        console.log(trigger.guard.logMessage);
+        if (triggerExecute.logMessage) console.log(triggerExecute.logMessage);
 
         const routeRequest = buildRouteRequest(currentLat, currentLon, destination);
         const fetchOrch = RD.buildAutomaticRerouteFetchOrchestrationPlan();
@@ -13769,7 +13772,7 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
         });
 
         const data = await response.json();
-        const outcome = RD.buildAutomaticRerouteOutcomePlan(data, {
+        const responsePlans = RD.buildAutomaticRerouteResponsePlans(data, {
             convertDistance,
             distUnit: getDistanceUnit(),
             voiceEnabled: voiceAnnouncementsEnabled,
@@ -13777,19 +13780,17 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
             rerouteFailureRetryCount,
             now: Date.now(),
         });
-        const apply = RD.buildAutomaticRerouteResultApplyPlan(outcome);
         applyAutomaticRerouteResult({
-            apply,
+            apply: responsePlans.apply,
             startLat: currentLat,
             startLon: currentLon,
             destination,
         });
     } catch (error) {
         console.error('[Rerouting] Error during automatic reroute:', error);
-        const errPlan = RD.buildAutomaticRerouteErrorPlan({ rerouteFailureRetryCount });
-        const apply = RD.buildAutomaticRerouteResultApplyPlan(errPlan);
+        const errorPlans = RD.buildAutomaticRerouteErrorResponsePlans({ rerouteFailureRetryCount });
         applyAutomaticRerouteResult({
-            apply,
+            apply: errorPlans.apply,
             startLat: currentLat,
             startLon: currentLon,
             destination,
@@ -14197,75 +14198,92 @@ async function updateETACalculation() {
  * FIX: Added movement detection to prevent incorrect ETA announcements before journey starts
  */
 function announceETAIfNeeded() {
-    if (!routeInProgress || !window.lastCalculatedRoute || !voiceAnnouncementsEnabled) return;
-
-    const now = Date.now();
-    const timeSinceLastAnnouncement = now - lastETAAnnouncementTime;
-
-    if (timeSinceLastAnnouncement > ETA_ANNOUNCEMENT_INTERVAL_MS) {
-        const base = computeBaseNavigationETAMinutes();
-        if (!base) {
-            console.warn('[ETA] No valid route duration for voice');
-            return;
-        }
-        const timeRemainingMinutes = applyTrafficRatioToBaseRemaining(base.timeRemainingMinutes);
-        const eta = new Date(now + timeRemainingMinutes * 60000);
-        const message = _eta().buildETAVoiceMessage(timeRemainingMinutes, eta);
-        console.log(`[Voice] ETA announcement: ${message}`);
-        speakMessage(message);
-        lastETAAnnouncementTime = now;
-        lastAnnouncedETA = eta;
-    }
-}
-
-async function speakInitialETAAnnouncement() {
-    if (!routeInProgress || !window.lastCalculatedRoute || !voiceAnnouncementsEnabled) return;
-
-    if (!hasUserStartedMoving()) {
-        initialETAMovementRetries += 1;
-        if (initialETAMovementRetries <= INITIAL_ETA_MOVEMENT_MAX_RETRIES) {
-            if (initialETAAnnouncementTimeoutId) {
-                clearTimeout(initialETAAnnouncementTimeoutId);
-                initialETAAnnouncementTimeoutId = null;
-            }
-            initialETAAnnouncementTimeoutId = setTimeout(() => {
-                initialETAAnnouncementTimeoutId = null;
-                void speakInitialETAAnnouncement();
-            }, INITIAL_ETA_MOVEMENT_RETRY_MS);
-            console.log('[Voice] Initial ETA deferred until movement (retry %s/%s)',
-                initialETAMovementRetries, INITIAL_ETA_MOVEMENT_MAX_RETRIES);
-        } else {
-            console.log('[Voice] Initial ETA skipped after max stationary retries; periodic ETA still applies');
-        }
+    const ETA = _eta();
+    const base = computeBaseNavigationETAMinutes();
+    const tick = ETA.buildAnnounceETAIfNeededPlan({
+        routeInProgress,
+        hasRoute: !!window.lastCalculatedRoute,
+        voiceEnabled: voiceAnnouncementsEnabled,
+        now: Date.now(),
+        lastETAAnnouncementTime,
+        baseRemainingMinutes: base ? base.timeRemainingMinutes : null,
+        applyTrafficRatio: applyTrafficRatioToBaseRemaining,
+    });
+    if (tick.action !== 'announce') {
+        if (tick.warnLog) console.warn(tick.warnLog);
         return;
     }
 
-    initialETAMovementRetries = 0;
+    const eta = new Date(tick.etaMs);
+    const message = ETA.buildETAVoiceMessage(tick.timeRemainingMinutes, eta);
+    console.log(`${tick.logPrefix} ${message}`);
+    speakMessage(message);
+    lastETAAnnouncementTime = tick.updateLastETAAnnouncementTime;
+    lastAnnouncedETA = eta;
+}
+
+async function speakInitialETAAnnouncement() {
+    const ETA = _eta();
+    const movement = ETA.buildInitialETAMovementDeferPlan({
+        hasStartedMoving: hasUserStartedMoving(),
+        retries: initialETAMovementRetries,
+    });
+    if (movement.action === 'defer') {
+        initialETAMovementRetries = movement.retries;
+        if (initialETAAnnouncementTimeoutId) {
+            clearTimeout(initialETAAnnouncementTimeoutId);
+            initialETAAnnouncementTimeoutId = null;
+        }
+        initialETAAnnouncementTimeoutId = setTimeout(() => {
+            initialETAAnnouncementTimeoutId = null;
+            void speakInitialETAAnnouncement();
+        }, movement.retryDelayMs);
+        console.log(movement.logMessage);
+        return;
+    }
+    if (movement.action === 'skip') {
+        console.log(movement.logMessage);
+        return;
+    }
 
     const base = computeBaseNavigationETAMinutes();
-    if (!base) return;
-    if (_eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode) && currentLat != null && currentLon != null) {
+    const execute = ETA.buildInitialETAAnnouncementExecutePlan({
+        routeInProgress,
+        hasRoute: !!window.lastCalculatedRoute,
+        voiceEnabled: voiceAnnouncementsEnabled,
+        baseRemainingMinutes: base ? base.timeRemainingMinutes : null,
+        applyTrafficRatio: applyTrafficRatioToBaseRemaining,
+        refreshTrafficIfDue: ETA.shouldApplyTrafficAwareETA(localStorage, currentRoutingMode)
+            && currentLat != null
+            && currentLon != null,
+        now: Date.now(),
+    });
+    if (!execute.shouldAnnounce) return;
+
+    if (execute.resetMovementRetries) initialETAMovementRetries = 0;
+    if (execute.refreshTrafficIfDue && base) {
         await refreshNavTrafficETAIfDue(base.timeRemainingMinutes, base.progressPercent, true);
     }
-    const now = Date.now();
-    const timeRemainingMinutes = applyTrafficRatioToBaseRemaining(base.timeRemainingMinutes);
-    const eta = new Date(now + timeRemainingMinutes * 60000);
-    const message = _eta().buildETAVoiceMessage(timeRemainingMinutes, eta);
-    console.log(`[Voice] Initial ETA announcement: ${message}`);
+
+    const eta = new Date(execute.etaMs);
+    const message = ETA.buildETAVoiceMessage(execute.timeRemainingMinutes, eta);
+    console.log(`${execute.logPrefix} ${message}`);
     speakMessage(message);
-    lastETAAnnouncementTime = now;
+    lastETAAnnouncementTime = execute.updateLastETAAnnouncementTime;
     lastAnnouncedETA = eta;
 }
 
 function scheduleInitialETAAnnouncement() {
-    if (initialETAAnnouncementTimeoutId) {
+    const schedule = _eta().buildScheduleInitialETAAnnouncementPlan();
+    if (!schedule.shouldSchedule) return;
+    if (schedule.clearExisting && initialETAAnnouncementTimeoutId) {
         clearTimeout(initialETAAnnouncementTimeoutId);
         initialETAAnnouncementTimeoutId = null;
     }
     initialETAAnnouncementTimeoutId = setTimeout(() => {
         initialETAAnnouncementTimeoutId = null;
         speakInitialETAAnnouncement();
-    }, ETA_INITIAL_ANNOUNCE_DELAY_MS);
+    }, schedule.delayMs);
 }
 
 function clearInitialETAAnnouncement() {

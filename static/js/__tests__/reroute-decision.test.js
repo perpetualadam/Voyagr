@@ -494,6 +494,65 @@ describe('reroute retry and notification helpers', () => {
         expect(fetchOrch.apiPath).toBe(RD.ROUTE_API_PATH);
     });
 
+    test('buildRouteMapUpdateStateExecutePlan consolidates apply sections', () => {
+        const state = RD.buildRouteMapUpdateStatePlan(
+            { geometry: 'abc', maneuvers: [{ type: 1 }], distance_km: 8, duration_minutes: 12 },
+            { destination: 'Home' },
+            { now: 1000, hasCurrentGps: true }
+        );
+        const execute = RD.buildRouteMapUpdateStateExecutePlan(state, {
+            currentLat: 51.5,
+            currentLon: -0.1,
+            newRoute: { distance_km: 8, duration_minutes: 12, fuel_cost: 1, toll_cost: 2 },
+        });
+        expect(execute.maneuvers.steps).toHaveLength(1);
+        expect(execute.speedLimitReset.shouldReset).toBe(true);
+        expect(execute.post.refreshTurnWidget).toBe(true);
+        expect(execute.tripInfo.duration_minutes).toBe(12);
+    });
+
+    test('buildAutomaticRerouteTriggerExecutePlan maps skip/defer/fetch', () => {
+        expect(RD.buildAutomaticRerouteTriggerExecutePlan({ action: 'skip', logMessage: 'nope' }).action)
+            .toBe('skip');
+        const defer = RD.buildAutomaticRerouteTriggerExecutePlan({
+            action: 'defer',
+            lastRerouteAttemptTime: 50,
+            guard: { logMessage: 'wait' },
+            scheduleRetry: true,
+            resetRerouteInProgress: true,
+        });
+        expect(defer.action).toBe('defer');
+        expect(defer.scheduleRetry).toBe(true);
+        const fetch = RD.buildAutomaticRerouteTriggerExecutePlan({
+            action: 'fetch',
+            lastRerouteAttemptTime: 60,
+            guard: { logMessage: 'go' },
+        });
+        expect(fetch.rerouteInProgress).toBe(true);
+    });
+
+    test('buildAutomaticRerouteResultExecutePlan maps success and failure', () => {
+        const failure = RD.buildAutomaticRerouteResultExecutePlan({
+            action: 'apply',
+            kind: 'failure',
+            logs: ['err'],
+            scheduleRetry: true,
+            resetRerouteInProgress: true,
+        });
+        expect(failure.shouldApply).toBe(true);
+        expect(failure.kind).toBe('failure');
+
+        const success = RD.buildAutomaticRerouteResultExecutePlan({
+            action: 'apply',
+            kind: 'success',
+            updateRouteOnMap: true,
+            logRerouteEvent: true,
+            voice: { enabled: true, shouldSpeak: true, announceAt: 1, message: 'ok' },
+        });
+        expect(success.updateRouteOnMap).toBe(true);
+        expect(success.voice.shouldSpeak).toBe(true);
+    });
+
     test('buildRerouteLogSettingsSnapshot uses route-prefs readers', () => {
         const storage = {
             getItem: (key) => {

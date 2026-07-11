@@ -331,4 +331,47 @@ describe('journey summary helpers', () => {
         expect(execute.switchTab).toBe('navigation');
         expect(execute.clearForm).toBe(true);
     });
+
+    test('buildAnnounceETAIfNeededPlan gates on interval and route state', () => {
+        expect(ETA.buildAnnounceETAIfNeededPlan({ routeInProgress: false }).action).toBe('skip');
+        const interval = ETA.buildAnnounceETAIfNeededPlan({
+            routeInProgress: true,
+            hasRoute: true,
+            voiceEnabled: true,
+            now: 100_000,
+            lastETAAnnouncementTime: 50_000,
+            baseRemainingMinutes: 20,
+            applyTrafficRatio: (m) => m,
+        });
+        expect(interval.action).toBe('skip');
+        const announce = ETA.buildAnnounceETAIfNeededPlan({
+            routeInProgress: true,
+            hasRoute: true,
+            voiceEnabled: true,
+            now: 700_000,
+            lastETAAnnouncementTime: 50_000,
+            baseRemainingMinutes: 20,
+            applyTrafficRatio: (m) => m,
+        });
+        expect(announce.action).toBe('announce');
+        expect(announce.timeRemainingMinutes).toBe(20);
+    });
+
+    test('buildInitialETAMovementDeferPlan retries then skips', () => {
+        const defer = ETA.buildInitialETAMovementDeferPlan({ hasStartedMoving: false, retries: 0 });
+        expect(defer.action).toBe('defer');
+        expect(defer.retries).toBe(1);
+        const skip = ETA.buildInitialETAMovementDeferPlan({
+            hasStartedMoving: false,
+            retries: ETA.INITIAL_ETA_MOVEMENT_MAX_RETRIES,
+        });
+        expect(skip.action).toBe('skip');
+        expect(ETA.buildInitialETAMovementDeferPlan({ hasStartedMoving: true }).action).toBe('proceed');
+    });
+
+    test('buildScheduleInitialETAAnnouncementPlan defaults nav-start delay', () => {
+        const schedule = ETA.buildScheduleInitialETAAnnouncementPlan();
+        expect(schedule.shouldSchedule).toBe(true);
+        expect(schedule.delayMs).toBe(ETA.ETA_INITIAL_ANNOUNCE_DELAY_MS);
+    });
 });
