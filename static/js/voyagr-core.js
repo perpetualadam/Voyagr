@@ -14,7 +14,12 @@ let endMarker = null;
 let mapPickerMode = null; // 'start' or 'end' when picking location from map
 
 // ===== ZOOM AND FOLLOW VARIABLES =====
-let zoomAndFollowEnabled = localStorage.getItem('zoomAndFollowEnabled') === 'true' || true; // Default: enabled
+let zoomAndFollowEnabled = (typeof VoyagrMapControls !== 'undefined'
+    && typeof VoyagrMapControls.resolveZoomAndFollowEnabledFromStorage === 'function')
+    ? VoyagrMapControls.resolveZoomAndFollowEnabledFromStorage(
+        localStorage.getItem('zoomAndFollowEnabled')
+    )
+    : (localStorage.getItem('zoomAndFollowEnabled') !== 'false');
 let mapFollowingActive = false; // Whether we're currently following the vehicle
 
 // ===== UNIT CONVERSION VARIABLES =====

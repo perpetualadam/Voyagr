@@ -1058,6 +1058,23 @@ describe('route overview and single-route display plans', () => {
         expect(mount.mapMissingLogMessage).toContain('Map not available');
     });
 
+    test('buildDoAddRouteLayersExecutePlan bundles batch and post-mount plans', () => {
+        const execute = RS.buildDoAddRouteLayersExecutePlan(
+            RS.buildDoAddRouteLayersOrchestrationPlan({
+                routeOptions: [{ polyline: [[51, -0.1], [51.1, -0.2]], name: 'A' }],
+                selectedRouteIndex: 0,
+                styleLayers: [{ id: 'road-label', type: 'symbol', layout: { 'text-field': 'x' } }],
+                showTrafficEnabled: false,
+                hasTrafficLayer: false,
+                mountedLayerCount: 1,
+            })
+        );
+        expect(execute.shouldExecute).toBe(true);
+        expect(execute.batchExecute.layerSteps.length).toBeGreaterThan(0);
+        expect(execute.postMount.bringRoutesToTop).toBe(true);
+        expect(RS.buildBringRoutesToTopOrchestrationPlan(2).layerCount).toBe(2);
+    });
+
     test('buildRecalculateRouteWithPreferencesExecutePlan schedules delayed recalc', () => {
         const execute = RS.buildRecalculateRouteWithPreferencesExecutePlan({
             ok: true,

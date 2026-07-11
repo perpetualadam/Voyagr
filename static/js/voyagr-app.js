@@ -2651,22 +2651,20 @@ function applyDoAddRouteLayersBatchFromPlan(executePlan) {
 
 function doAddRouteLayers() {
     const RS = _routeSelection();
-    const batch = RS.buildDoAddRouteLayersBatchPlan(
-        routeOptions,
-        selectedRouteIndex,
-        map.getStyle().layers
+    const execute = RS.buildDoAddRouteLayersExecutePlan(
+        RS.buildDoAddRouteLayersOrchestrationPlan({
+            routeOptions,
+            selectedRouteIndex,
+            styleLayers: map.getStyle().layers,
+            showTrafficEnabled,
+            hasTrafficLayer: !!trafficLayer,
+            mountedLayerCount: allRouteLayers.length,
+        })
     );
+    if (!execute.shouldExecute) return;
 
-    applyDoAddRouteLayersBatchFromPlan(RS.buildDoAddRouteLayersBatchExecutePlan(batch));
-
-    const sideEffects = RS.buildAllRoutesMapSideEffectsPlan(routeOptions, {
-        showTrafficEnabled,
-        hasTrafficLayer: !!trafficLayer,
-    });
-    const postMount = RS.buildDoAddRouteLayersPostMountExecutePlan(sideEffects, {
-        mountedLayerCount: allRouteLayers.length,
-    });
-    applyDoAddRouteLayersPostMountFromPlan(postMount);
+    applyDoAddRouteLayersBatchFromPlan(execute.batchExecute);
+    applyDoAddRouteLayersPostMountFromPlan(execute.postMount);
 }
 
 /**
@@ -2677,15 +2675,16 @@ function doAddRouteLayers() {
  */
 function bringRoutesToTop() {
     const RS = _routeSelection();
+    const orch = RS.buildBringRoutesToTopOrchestrationPlan(allRouteLayers?.length || 0);
     const plan = RS.buildBringRoutesToTopExecutePlan(
         allRouteLayers,
         map && map.getStyle ? map.getStyle().layers : null
     );
 
-    console.log('[Routes] bringRoutesToTop called, allRouteLayers:', allRouteLayers?.length || 0);
+    console.log(orch.entryLogPrefix, orch.layerCount);
 
     if (!map) {
-        console.warn('[Routes] bringRoutesToTop: map not available');
+        console.warn(orch.mapMissingLogMessage);
         return;
     }
     applyBringRoutesToTopFromPlan(plan);
@@ -8831,11 +8830,11 @@ function _poiSearch() { return VoyagrModules.poiSearch(); }
 function _routingRequest() { return VoyagrModules.routingRequest(); }
 
 function applyZoomFollowButtonUi(btn, enabled) {
-    if (!btn) return;
-    const display = _mapControls().getZoomFollowButtonDisplay(enabled);
-    btn.classList.toggle('active', display.active);
-    btn.style.background = display.background;
-    btn.innerHTML = display.innerHtml;
+    const plan = _mapControls().buildZoomFollowButtonUiExecutePlan(enabled);
+    if (!btn || !plan.shouldApply) return;
+    btn.classList.toggle('active', plan.active);
+    btn.style.background = plan.background;
+    btn.innerHTML = plan.innerHtml;
 }
 
 function applyJourneyOverviewButtonUi(btn, overviewActive) {
@@ -9160,29 +9159,36 @@ function toggleSpeedWidget() {
  * @returns {*} Return value description
  */
 function toggleZoomAndFollow() {
-    zoomAndFollowEnabled = !zoomAndFollowEnabled;
-    applyZoomFollowButtonUi(document.getElementById('zoomFollowToggle'), zoomAndFollowEnabled);
-    localStorage.setItem('zoomAndFollowEnabled', zoomAndFollowEnabled ? 'true' : 'false');
+    const MC = _mapControls();
+    const orch = MC.buildToggleZoomAndFollowOrchestrationPlan({
+        currentEnabled: zoomAndFollowEnabled,
+    });
+    zoomAndFollowEnabled = orch.nextEnabled;
+    applyZoomFollowButtonUi(document.getElementById(orch.toggleButtonId), zoomAndFollowEnabled);
+    localStorage.setItem(orch.storageKey, orch.storageValue);
 
-    if (zoomAndFollowEnabled) {
-        mapFollowingActive = true;
-        showStatus('📍 Zoom & Follow enabled - map will follow your vehicle', 'success');
-        console.log('[Zoom & Follow] Enabled');
-
-        // Immediately center on current position if available
-        if (currentLat && currentLon && map) {
-            map.flyTo({
-                center: [currentLon, currentLat],
-                zoom: 17,
-                duration: 500
-            });
+    if (orch.action === 'enable') {
+        const execute = MC.buildToggleZoomAndFollowEnabledExecutePlan({
+            hasMap: !!map,
+            currentLat,
+            currentLon,
+        });
+        mapFollowingActive = execute.mapFollowingActive;
+        showStatus(execute.statusMessage, execute.statusType);
+        console.log(execute.logMessage);
+        if (execute.flyTo) {
+            map.flyTo(execute.flyTo);
         }
     } else {
-        mapFollowingActive = false;
-        showStatus('📍 Zoom & Follow disabled - map is free to pan', 'info');
-        console.log('[Zoom & Follow] Disabled');
+        const execute = MC.buildToggleZoomAndFollowDisabledExecutePlan();
+        mapFollowingActive = execute.mapFollowingActive;
+        showStatus(execute.statusMessage, execute.statusType);
+        console.log(execute.logMessage);
     }
-    updateRecenterButtonVisibility();
+
+    if (orch.updateRecenterVisibility) {
+        updateRecenterButtonVisibility();
+    }
 }
 
 /**

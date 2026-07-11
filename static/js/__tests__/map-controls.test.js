@@ -327,4 +327,22 @@ describe('map-controls module', () => {
         expect(deactivate.flyTo.pitch).toBe(55);
         expect(MC.buildJourneyOverviewButtonUiExecutePlan(true).innerHtml).toBe(MC.JOURNEY_RETURN_ICON);
     });
+
+    test('zoom and follow toggle plans and storage resolver', () => {
+        expect(MC.resolveZoomAndFollowEnabledFromStorage(null)).toBe(true);
+        expect(MC.resolveZoomAndFollowEnabledFromStorage('false')).toBe(false);
+        expect(MC.resolveZoomAndFollowEnabledFromStorage('true')).toBe(true);
+
+        const orch = MC.buildToggleZoomAndFollowOrchestrationPlan({ currentEnabled: true });
+        expect(orch.action).toBe('disable');
+        expect(orch.nextEnabled).toBe(false);
+
+        const enable = MC.buildToggleZoomAndFollowEnabledExecutePlan({
+            hasMap: true,
+            currentLat: 51.5,
+            currentLon: -0.1,
+        });
+        expect(enable.flyTo.zoom).toBe(17);
+        expect(MC.buildZoomFollowButtonUiExecutePlan(true).active).toBe(true);
+    });
 });

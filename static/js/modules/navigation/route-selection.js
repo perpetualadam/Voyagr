@@ -2717,6 +2717,62 @@
         };
     }
 
+    /**
+     * Orchestration plan for doAddRouteLayers batch mount and post-mount effects.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildDoAddRouteLayersOrchestrationPlan(input) {
+        input = input || {};
+        return {
+            shouldExecute: true,
+            routeOptions: input.routeOptions || [],
+            selectedRouteIndex: input.selectedRouteIndex != null ? input.selectedRouteIndex : 0,
+            styleLayers: input.styleLayers || [],
+            showTrafficEnabled: !!input.showTrafficEnabled,
+            hasTrafficLayer: !!input.hasTrafficLayer,
+            mountedLayerCount: input.mountedLayerCount != null ? input.mountedLayerCount : 0,
+        };
+    }
+
+    /**
+     * Execute plan for doAddRouteLayers batch apply and post-mount side effects.
+     * @param {Object} orch - from buildDoAddRouteLayersOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildDoAddRouteLayersExecutePlan(orch) {
+        orch = orch || {};
+        var batch = buildDoAddRouteLayersBatchPlan(
+            orch.routeOptions,
+            orch.selectedRouteIndex,
+            orch.styleLayers
+        );
+        var sideEffects = buildAllRoutesMapSideEffectsPlan(orch.routeOptions, {
+            showTrafficEnabled: orch.showTrafficEnabled,
+            hasTrafficLayer: orch.hasTrafficLayer,
+        });
+        return {
+            shouldExecute: true,
+            batchExecute: buildDoAddRouteLayersBatchExecutePlan(batch),
+            postMount: buildDoAddRouteLayersPostMountExecutePlan(sideEffects, {
+                mountedLayerCount: orch.mountedLayerCount,
+            }),
+        };
+    }
+
+    /**
+     * Orchestration plan for bringRoutesToTop entry logging.
+     * @param {number} [layerCount]
+     * @returns {Object}
+     */
+    function buildBringRoutesToTopOrchestrationPlan(layerCount) {
+        return {
+            entryLogPrefix: '[Routes] bringRoutesToTop called, allRouteLayers:',
+            layerCount: layerCount || 0,
+            mapMissingLogMessage: '[Routes] bringRoutesToTop: map not available',
+        };
+    }
+
     var ENSURE_LABELS_ON_TOP_DEBOUNCE_MS = 50;
 
     /**
@@ -2980,6 +3036,9 @@
         buildRouteLayerMapLibreMountExecutePlan: buildRouteLayerMapLibreMountExecutePlan,
         buildDoAddRouteLayersBatchPlan: buildDoAddRouteLayersBatchPlan,
         buildDoAddRouteLayersBatchExecutePlan: buildDoAddRouteLayersBatchExecutePlan,
+        buildDoAddRouteLayersOrchestrationPlan: buildDoAddRouteLayersOrchestrationPlan,
+        buildDoAddRouteLayersExecutePlan: buildDoAddRouteLayersExecutePlan,
+        buildBringRoutesToTopOrchestrationPlan: buildBringRoutesToTopOrchestrationPlan,
         buildEnsureLabelsOnTopDispatchPlan: buildEnsureLabelsOnTopDispatchPlan,
         buildEnsureLabelsOnTopExecutePlan: buildEnsureLabelsOnTopExecutePlan,
         buildBringTrafficEdgesToTopDispatchPlan: buildBringTrafficEdgesToTopDispatchPlan,

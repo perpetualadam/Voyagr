@@ -164,6 +164,90 @@
         };
     }
 
+    var ZOOM_FOLLOW_TOGGLE_ID = 'zoomFollowToggle';
+    var ZOOM_FOLLOW_STORAGE_KEY = 'zoomAndFollowEnabled';
+
+    /**
+     * Resolve zoom-and-follow preference from localStorage (default on when unset).
+     * @param {string|null|undefined} storedValue
+     * @returns {boolean}
+     */
+    function resolveZoomAndFollowEnabledFromStorage(storedValue) {
+        if (storedValue === null || storedValue === undefined || storedValue === '') {
+            return true;
+        }
+        return storedValue === 'true';
+    }
+
+    /**
+     * Orchestration plan for toggling zoom-and-follow mode.
+     * @param {Object} [input]
+     * @param {boolean} [input.currentEnabled]
+     * @returns {Object}
+     */
+    function buildToggleZoomAndFollowOrchestrationPlan(input) {
+        input = input || {};
+        var nextEnabled = !input.currentEnabled;
+        return {
+            shouldToggle: true,
+            nextEnabled: nextEnabled,
+            storageKey: ZOOM_FOLLOW_STORAGE_KEY,
+            storageValue: nextEnabled ? 'true' : 'false',
+            toggleButtonId: ZOOM_FOLLOW_TOGGLE_ID,
+            updateRecenterVisibility: true,
+            action: nextEnabled ? 'enable' : 'disable',
+        };
+    }
+
+    /**
+     * Execute plan when zoom-and-follow is enabled.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildToggleZoomAndFollowEnabledExecutePlan(input) {
+        input = input || {};
+        var hasPosition = !!(input.hasMap && input.currentLat && input.currentLon);
+        return {
+            mapFollowingActive: true,
+            statusMessage: '📍 Zoom & Follow enabled - map will follow your vehicle',
+            statusType: 'success',
+            logMessage: '[Zoom & Follow] Enabled',
+            flyTo: hasPosition ? {
+                center: [input.currentLon, input.currentLat],
+                zoom: 17,
+                duration: 500,
+            } : null,
+        };
+    }
+
+    /**
+     * Execute plan when zoom-and-follow is disabled.
+     * @returns {Object}
+     */
+    function buildToggleZoomAndFollowDisabledExecutePlan() {
+        return {
+            mapFollowingActive: false,
+            statusMessage: '📍 Zoom & Follow disabled - map is free to pan',
+            statusType: 'info',
+            logMessage: '[Zoom & Follow] Disabled',
+        };
+    }
+
+    /**
+     * DOM execute plan for zoom-and-follow button styling.
+     * @param {boolean} enabled
+     * @returns {Object}
+     */
+    function buildZoomFollowButtonUiExecutePlan(enabled) {
+        var display = getZoomFollowButtonDisplay(enabled);
+        return {
+            shouldApply: true,
+            active: display.active,
+            background: display.background,
+            innerHtml: display.innerHtml,
+        };
+    }
+
     /**
      * Display values for the journey overview map FAB.
      * @param {boolean} overviewActive
@@ -1184,6 +1268,13 @@
         buildToggleJourneyOverviewActivatePlan: buildToggleJourneyOverviewActivatePlan,
         buildToggleJourneyOverviewDeactivatePlan: buildToggleJourneyOverviewDeactivatePlan,
         buildJourneyOverviewButtonUiExecutePlan: buildJourneyOverviewButtonUiExecutePlan,
+        ZOOM_FOLLOW_TOGGLE_ID: ZOOM_FOLLOW_TOGGLE_ID,
+        ZOOM_FOLLOW_STORAGE_KEY: ZOOM_FOLLOW_STORAGE_KEY,
+        resolveZoomAndFollowEnabledFromStorage: resolveZoomAndFollowEnabledFromStorage,
+        buildToggleZoomAndFollowOrchestrationPlan: buildToggleZoomAndFollowOrchestrationPlan,
+        buildToggleZoomAndFollowEnabledExecutePlan: buildToggleZoomAndFollowEnabledExecutePlan,
+        buildToggleZoomAndFollowDisabledExecutePlan: buildToggleZoomAndFollowDisabledExecutePlan,
+        buildZoomFollowButtonUiExecutePlan: buildZoomFollowButtonUiExecutePlan,
         buildOpenMapControlsHintModalExecutePlan: buildOpenMapControlsHintModalExecutePlan,
         buildCloseMapControlsHintModalExecutePlan: buildCloseMapControlsHintModalExecutePlan,
         buildFabLongPressHintBindPlan: buildFabLongPressHintBindPlan,
