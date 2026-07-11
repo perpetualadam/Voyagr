@@ -30,4 +30,21 @@ describe('device-environment module', () => {
         expect(DE.getVolumeHintBannerStyleCssText()).toContain('position:fixed');
         expect(DE.getVolumeHintBannerStyleCssText()).toContain('safe-area-inset-bottom');
     });
+
+    test('buildShowVolumeHintExecutePlan includes spoken line when voice is enabled', () => {
+        const on = DE.buildShowVolumeHintExecutePlan({ voiceAnnouncementsEnabled: true });
+        expect(on.speakIfVoiceEnabled).toBe(true);
+        expect(on.bannerHtml).toContain('Check volume');
+        expect(on.autoDismissMs).toBe(DE.VOLUME_HINT.autoDismissMs);
+
+        const off = DE.buildShowVolumeHintExecutePlan({ voiceAnnouncementsEnabled: false });
+        expect(off.speakIfVoiceEnabled).toBe(false);
+    });
+
+    test('buildNavStartVolumeHintSchedulePlan defaults nav-start delay', () => {
+        const schedule = DE.buildNavStartVolumeHintSchedulePlan({ delayMs: 2600 });
+        expect(schedule.shouldSchedule).toBe(true);
+        expect(schedule.delayMs).toBe(2600);
+        expect(schedule.action).toBe('showVolumeHintForNavigation');
+    });
 });

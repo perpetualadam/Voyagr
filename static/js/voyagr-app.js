@@ -1517,7 +1517,9 @@ function loadAllSettings() {
             return false;
         }
         applySettingsRestorePostEffectsFromPlan(
-            SS.buildSettingsRestorePostApplyPlan(restorePlan.runtime || {}, { routeInProgress })
+            SS.buildApplySettingsRestorePostEffectsExecutePlan(
+                SS.buildSettingsRestorePostApplyPlan(restorePlan.runtime || {}, { routeInProgress })
+            )
         );
 
         console.log(orch.successLog);
@@ -1529,11 +1531,11 @@ function loadAllSettings() {
 }
 
 /**
- * Apply post-restore traffic service side effects from a pure plan.
- * @param {Object} plan - from buildSettingsRestorePostApplyPlan
+ * Apply post-restore traffic service side effects from a pure execute plan.
+ * @param {Object} plan - from buildApplySettingsRestorePostEffectsExecutePlan
  */
 function applySettingsRestorePostEffectsFromPlan(plan) {
-    if (!plan || !plan.hasEffects) return;
+    if (!plan || !plan.shouldDispatch) return;
     (plan.effects || []).forEach((effect) => {
         if (effect === 'stopRouteTrafficUpdates') stopRouteTrafficUpdates();
         else if (effect === 'startRouteTrafficUpdates') startRouteTrafficUpdates();
@@ -7297,52 +7299,60 @@ let _porcupineWakeStarting = false;
 let _porcupineWakeLastDetectionMs = 0;
 
 function picovoiceClientConfigured() {
-    return !!(
-        typeof window !== 'undefined' &&
-        window.VoyagrPicovoiceWebAssetsOk &&
-        typeof window.PICOVOICE_ACCESS_KEY === 'string' &&
-        window.PICOVOICE_ACCESS_KEY.trim().length > 0 &&
-        typeof PorcupineWeb !== 'undefined' &&
-        typeof WebVoiceProcessor !== 'undefined'
-    );
+    const PW = _porcupineWake();
+    return PW.isPicovoiceClientConfigured({
+        assetsOk: !!(typeof window !== 'undefined' && window.VoyagrPicovoiceWebAssetsOk),
+        accessKey: typeof window !== 'undefined' ? window.PICOVOICE_ACCESS_KEY : '',
+        hasPorcupineWeb: typeof PorcupineWeb !== 'undefined',
+        hasWebVoiceProcessor: typeof WebVoiceProcessor !== 'undefined',
+    });
 }
 
 function loadPorcupineWakeUi() {
-    const row = document.getElementById('porcupineWakePrefRow');
-    const help = document.getElementById('porcupineWakeHelp');
-    const toggle = document.getElementById('porcupineWakeToggle');
-    if (!row || !toggle) {
-        return;
-    }
-    if (!picovoiceClientConfigured()) {
+    const PW = _porcupineWake();
+    const TU = _toggleUI();
+    const execute = PW.buildLoadPorcupineWakeUiExecutePlan({
+        configured: picovoiceClientConfigured(),
+        enabled: localStorage.getItem(PW.VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true',
+    });
+    if (!execute.shouldApply) return;
+
+    const row = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.row);
+    const help = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.help);
+    const toggle = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.toggle);
+    if (!row || !toggle) return;
+
+    if (execute.hideRow) {
         row.style.display = 'none';
         if (help) help.style.display = 'none';
         return;
     }
-    row.style.display = '';
-    if (help) help.style.display = '';
-    const enabled = localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true';
-    _toggleUI().applyLabeledToggleButton(toggle, enabled);
+    if (execute.showRow) row.style.display = '';
+    if (execute.showHelp && help) help.style.display = '';
+    if (execute.toggle) {
+        TU.applyLabeledToggleButton(toggle, execute.toggle.enabled);
+    }
 }
 
 function togglePorcupineWakeWord() {
-    const button = document.getElementById('porcupineWakeToggle');
-    if (!button || !picovoiceClientConfigured()) {
-        return;
-    }
-    button.classList.toggle('active');
-    const enabled = button.classList.contains('active');
-    _toggleUI().applyLabeledToggleButton(button, enabled);
-    localStorage.setItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY, enabled ? 'true' : 'false');
-    if (enabled) {
-        void startPorcupineWakePipeline();
-        showStatus('Wake word listening enabled', 'success');
-    } else {
-        porcupineWakeResumeAfterVoice = false;
-        void stopPorcupineWakePipeline();
-        showStatus('Wake word listening disabled', 'success');
-    }
-    saveAllSettings();
+    const PW = _porcupineWake();
+    const TU = _toggleUI();
+    const button = document.getElementById(PW.PORCUPINE_WAKE_UI_IDS.toggle);
+    if (!button || !picovoiceClientConfigured()) return;
+
+    const collected = PW.buildTogglePorcupineWakeWordCollectPlan({
+        currentEnabled: button.classList.contains('active'),
+    });
+    const execute = PW.buildTogglePorcupineWakeWordExecutePlan({ enabled: collected.enabled });
+    if (!execute.shouldApply) return;
+
+    TU.applyLabeledToggleButton(button, execute.toggle.enabled);
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    if (execute.clearResumeAfterVoice) porcupineWakeResumeAfterVoice = false;
+    if (execute.startPipeline) void startPorcupineWakePipeline();
+    if (execute.stopPipeline) void stopPorcupineWakePipeline();
+    showStatus(execute.statusMessage, execute.statusType);
+    if (execute.saveAllSettings) saveAllSettings();
 }
 
 function maybeResumePorcupineWakeAfterVoice() {
@@ -8501,6 +8511,12 @@ function _offlineNavigation() { return VoyagrModules.offlineNavigation(); }
 /** Unit-tested ML prediction list HTML (modules/navigation/ml-predictions.js). */
 function _mlPredictions() { return VoyagrModules.mlPredictions(); }
 
+/** Unit-tested Porcupine wake-word UI plans (modules/navigation/porcupine-wake.js). */
+function _porcupineWake() { return VoyagrModules.porcupineWake(); }
+
+/** Unit-tested battery-saving mode plans (modules/navigation/battery-saving.js). */
+function _batterySaving() { return VoyagrModules.batterySaving(); }
+
 /** Unit-tested search autocomplete row HTML (modules/navigation/search-autocomplete.js). */
 function _searchAutocomplete() { return VoyagrModules.searchAutocomplete(); }
 
@@ -9561,7 +9577,6 @@ function initPhase3Features() {
     }
 
     // Load ML predictions
-    // Load ML predictions
     loadMLPredictions();
 
     // Load AR setting
@@ -9723,13 +9738,17 @@ let originalGPSFrequency = 1000; // ms
  * @returns {*} Return value description
  */
 function updateBatteryStatus(battery) {
+    const BS = _batterySaving();
     const level = Math.round(battery.level * 100);
 
     // Update battery level for adaptive refresh intervals (no visible widget)
     currentBatteryLevel = battery.level;
 
-    // Auto-enable battery saving if low
-    if (level < 15 && !batterySavingMode) {
+    const autoEnable = BS.buildBatteryAutoEnablePlan({
+        levelPercent: level,
+        currentlyEnabled: batterySavingMode,
+    });
+    if (autoEnable.shouldEnable) {
         enableBatterySavingMode();
     }
 }
@@ -9740,8 +9759,9 @@ function updateBatteryStatus(battery) {
  * @returns {*} Return value description
  */
 function toggleBatterySavingMode() {
-    batterySavingMode = !batterySavingMode;
-    if (batterySavingMode) {
+    const BS = _batterySaving();
+    const collected = BS.buildToggleBatterySavingCollectPlan(batterySavingMode);
+    if (collected.enable) {
         enableBatterySavingMode();
     } else {
         disableBatterySavingMode();
@@ -9753,30 +9773,33 @@ function toggleBatterySavingMode() {
  * @function enableBatterySavingMode
  * @returns {*} Return value description
  */
+function applyBatterySavingModeFromPlan(execute) {
+    if (!execute || !execute.shouldApply) return;
+    const TU = _toggleUI();
+    if (execute.setBatterySavingMode) batterySavingMode = execute.batterySavingMode;
+    if (execute.toggle) {
+        TU.applyToggleButton(document.getElementById(execute.toggle.id), execute.toggle.enabled);
+    }
+    if (execute.disableBodyAnimation) document.body.style.animation = 'none';
+    if (execute.disableElementAnimations) {
+        document.querySelectorAll('[style*="animation"]').forEach((el) => {
+            el.style.animation = 'none';
+        });
+    }
+    if (execute.restoreBodyAnimation) document.body.style.animation = '';
+    if (execute.storageKey) localStorage.setItem(execute.storageKey, execute.storageValue);
+    if (execute.persistApiBody) {
+        fetch('/api/app-settings', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(execute.persistApiBody),
+        }).catch((error) => console.error('Error updating battery mode:', error));
+    }
+    if (execute.statusMessage) showStatus(execute.statusMessage, execute.statusType);
+}
+
 function enableBatterySavingMode() {
-    batterySavingMode = true;
-    _toggleUI().applyToggleButton(document.getElementById('batterySavingMode'), true);
-
-    // NOTE: We intentionally do NOT re-create the GPS watcher here. The previous code cleared
-    // the active navigation watcher (gpsWatchId) and replaced it with an EMPTY callback, which
-    // silently froze all position/speed/turn updates — the vehicle marker stopped moving and
-    // the speed widget stuck at 0 — whenever battery saving toggled (including the automatic
-    // toggle below 15% battery). Battery is still saved via the reduced animations below; the
-    // real navigation watcher keeps running so the app does not break.
-
-    // Disable animations
-    document.body.style.animation = 'none';
-    document.querySelectorAll('[style*="animation"]').forEach(el => {
-        el.style.animation = 'none';
-    });
-
-    showStatus('🔋 Battery saving mode enabled', 'success');
-    localStorage.setItem('pref_batterySaving', 'true');
-    fetch('/api/app-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ battery_saving_mode: 1 })
-    }).catch(error => console.error('Error updating battery mode:', error));
+    applyBatterySavingModeFromPlan(_batterySaving().buildEnableBatterySavingExecutePlan());
 }
 
 /**
@@ -9785,23 +9808,7 @@ function enableBatterySavingMode() {
  * @returns {*} Return value description
  */
 function disableBatterySavingMode() {
-    batterySavingMode = false;
-    _toggleUI().applyToggleButton(document.getElementById('batterySavingMode'), false);
-
-    // NOTE: As in enableBatterySavingMode, we no longer tear down and re-create the navigation
-    // GPS watcher here. The old empty-callback replacement broke live tracking; the active
-    // high-accuracy watcher created by the navigation flow stays in place.
-
-    // Re-enable animations
-    document.body.style.animation = '';
-
-    showStatus('🔋 Battery saving mode disabled', 'info');
-    localStorage.setItem('pref_batterySaving', 'false');
-    fetch('/api/app-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ battery_saving_mode: 0 })
-    }).catch(error => console.error('Error updating battery mode:', error));
+    applyBatterySavingModeFromPlan(_batterySaving().buildDisableBatterySavingExecutePlan());
 }
 
 // ===== PHASE 3 FEATURES: MAP THEMES =====
@@ -9923,31 +9930,34 @@ function setMapTheme(themeOrEvent) {
  */
 function loadMLPredictions() {
     const ML = _mlPredictions();
-    fetch('/api/ml-predictions')
-        .then(response => response.json())
-        .then(data => {
-            if (ML.hasMlPredictionsToShow(data)) {
-                const section = document.getElementById('mlPredictionsSection');
-                const list = document.getElementById('mlPredictionsList');
-                list.innerHTML = '';
+    const fetchPlan = ML.buildLoadMlPredictionsFetchPlan();
+    if (!fetchPlan.shouldFetch) return;
 
-                data.predictions.forEach(pred => {
-                    const item = document.createElement('div');
-                    item.className = ML.ML_PREDICTION_ITEM_CLASS;
-                    item.innerHTML = ML.buildMlPredictionItemHtml(pred);
-                    item.onclick = () => {
-                        const inputs = ML.getMlPredictionRouteInputs(pred);
-                        document.getElementById('start').value = inputs.start;
-                        document.getElementById('end').value = inputs.end;
-                        calculateRoute();
-                    };
-                    list.appendChild(item);
-                });
+    fetch(fetchPlan.url)
+        .then((response) => response.json())
+        .then((data) => {
+            const render = ML.buildLoadMlPredictionsDomRenderPlan(data);
+            if (!render.shouldRender) return;
 
-                section.classList.add(ML.ML_PREDICTIONS_SECTION_SHOW_CLASS);
-            }
+            const section = document.getElementById(fetchPlan.sectionId);
+            const list = document.getElementById(fetchPlan.listId);
+            if (!section || !list) return;
+
+            list.innerHTML = '';
+            (render.items || []).forEach((item) => {
+                const el = document.createElement('div');
+                el.className = item.className;
+                el.innerHTML = item.html;
+                el.onclick = () => {
+                    document.getElementById(fetchPlan.startInputId).value = item.routeInputs.start;
+                    document.getElementById(fetchPlan.endInputId).value = item.routeInputs.end;
+                    calculateRoute();
+                };
+                list.appendChild(el);
+            });
+            section.classList.add(render.sectionShowClass);
         })
-        .catch(error => console.error('Error loading ML predictions:', error));
+        .catch((error) => console.error(fetchPlan.errorLogPrefix, error));
 }
 
 /**
@@ -9959,27 +9969,30 @@ function toggleMLPredictions() {
     const ML = _mlPredictions();
     const TU = _toggleUI();
     const button = document.getElementById('mlPredictionsEnabled');
+    if (!button) return;
 
-    const enabled = TU.nextToggleState(button.classList.contains('active'));
-    TU.applyLabeledToggleButton(button, enabled);
+    const collected = ML.buildToggleMlPredictionsCollectPlan({
+        currentEnabled: button.classList.contains('active'),
+    });
+    const execute = ML.buildToggleMlPredictionsExecutePlan({ enabled: collected.enabled });
+    if (!execute.shouldApply) return;
 
-    localStorage.setItem(ML.ML_PREDICTIONS_STORAGE_KEY, enabled ? 'true' : 'false');
+    TU.applyLabeledToggleButton(button, execute.toggle.enabled);
+    localStorage.setItem(execute.storageKey, execute.storageValue);
 
     fetch('/api/app-settings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ml_predictions_enabled: enabled ? 1 : 0 })
-    }).catch(error => console.error('Error updating ML predictions:', error));
+        body: JSON.stringify(execute.persistApiBody),
+    }).catch((error) => console.error('Error updating ML predictions:', error));
 
-    if (enabled) {
-        loadMLPredictions();
-        showStatus(ML.getMlPredictionsEnabledStatusMessage(true), 'success');
-    } else {
-        document.getElementById('mlPredictionsSection').classList.remove(ML.ML_PREDICTIONS_SECTION_SHOW_CLASS);
-        showStatus(ML.getMlPredictionsEnabledStatusMessage(false), 'info');
+    if (execute.loadPredictions) loadMLPredictions();
+    if (execute.hideSection) {
+        const section = document.getElementById(execute.sectionId);
+        if (section) section.classList.remove(execute.sectionShowClass);
     }
-
-    saveAllSettings();
+    showStatus(execute.statusMessage, execute.statusType);
+    if (execute.saveAllSettings) saveAllSettings();
 }
 
 // Warm Picovoice vendor bundles after idle load (optional offline wake).
@@ -14141,8 +14154,8 @@ function saveAppState() {
                 debris: localStorage.getItem('pref_debris'),
                 gestureControl: localStorage.getItem('pref_gestureControl'),
                 batterySaving: localStorage.getItem('pref_batterySaving'),
-                mapTheme: localStorage.getItem('pref_mapTheme'),
-                mlPredictions: localStorage.getItem('pref_mlPredictions'),
+                mapTheme: localStorage.getItem('mapTheme'),
+                mlPredictions: localStorage.getItem('mlPredictionsEnabled'),
                 optimizeStopOrder: localStorage.getItem('pref_optimizeStopOrder'),
                 roundTrip: localStorage.getItem('pref_roundTrip'),
                 trafficAwareRouting: localStorage.getItem('pref_trafficAwareRouting'),
@@ -15083,12 +15096,22 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
         startGPSTracking();
     }
 
-    setTimeout(() => {
-        if (!map || currentLat == null || currentLon == null) return;
-        if (zoomAndFollowEnabled && mapFollowingActive) {
-            applyLiveNavigationCamera();
-        }
-    }, stateInit.driverViewDelayMs);
+    const driverViewSchedule = MC.buildNavStartDriverViewSchedulePlan({
+        delayMs: stateInit.driverViewDelayMs,
+        hasMap: !!map,
+        hasPosition: currentLat != null && currentLon != null,
+        zoomAndFollowEnabled,
+        mapFollowingActive,
+    });
+    if (driverViewSchedule.shouldSchedule) {
+        setTimeout(() => {
+            const when = driverViewSchedule.applyWhenReady;
+            if (!when.hasMap || !when.hasPosition) return;
+            if (when.zoomAndFollowEnabled && when.mapFollowingActive) {
+                applyLiveNavigationCamera();
+            }
+        }, driverViewSchedule.delayMs);
+    }
 
     if (lifecycle.startLiveDataRefresh) startLiveDataRefresh();
     if (lifecycle.updateEta) void updateETACalculation();
@@ -15181,16 +15204,21 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
         speakMessage(navStartFeedback.speakMessage);
     }
     showStatus(navStartFeedback.statusMessage, navStartFeedback.statusType);
+    const volumeHintSchedule = _deviceEnvironment().buildNavStartVolumeHintSchedulePlan({
+        delayMs: stateInit.volumeHintDelayMs,
+    });
     try {
-        setTimeout(() => {
-            try {
-                showVolumeHintForNavigation();
-            } catch (e) {
-                console.warn('[EnvHint] volume hint:', e);
-            }
-        }, stateInit.volumeHintDelayMs);
+        if (volumeHintSchedule.shouldSchedule) {
+            setTimeout(() => {
+                try {
+                    showVolumeHintForNavigation();
+                } catch (e) {
+                    console.warn(volumeHintSchedule.errorLogPrefix, e);
+                }
+            }, volumeHintSchedule.delayMs);
+        }
     } catch (e) {
-        console.warn('[EnvHint] volume hint schedule:', e);
+        console.warn(volumeHintSchedule.scheduleErrorLogPrefix, e);
     }
 }
 
@@ -15880,42 +15908,45 @@ function initDeviceEnvironmentNotifications() {
  */
 function showVolumeHintForNavigation() {
     const DE = _deviceEnvironment();
-    const hint = DE.VOLUME_HINT;
+    const execute = DE.buildShowVolumeHintExecutePlan({
+        voiceAnnouncementsEnabled: typeof voiceAnnouncementsEnabled !== 'undefined'
+            && voiceAnnouncementsEnabled,
+    });
+    if (!execute.shouldShow) return;
 
-    if (typeof voiceAnnouncementsEnabled !== 'undefined' && voiceAnnouncementsEnabled) {
+    if (execute.speakIfVoiceEnabled) {
         try {
-            speakMessage(hint.spokenLine, 'high');
+            speakMessage(execute.spokenLine, execute.spokenPriority);
         } catch (e) {
             console.log('[EnvHint] volume TTS:', e);
         }
     }
 
-    let chip = document.getElementById(DE.VOLUME_HINT_BANNER_ID);
+    let chip = document.getElementById(execute.bannerId);
     if (chip) chip.remove();
     chip = document.createElement('div');
-    chip.id = DE.VOLUME_HINT_BANNER_ID;
+    chip.id = execute.bannerId;
     chip.setAttribute('role', 'status');
-    chip.style.cssText = DE.getVolumeHintBannerStyleCssText();
-    chip.innerHTML = DE.buildVolumeHintBannerHtml(hint.line, hint.detail);
+    chip.style.cssText = execute.bannerStyleCssText;
+    chip.innerHTML = execute.bannerHtml;
     document.body.appendChild(chip);
-    // Must query inside `chip` (or append before getElementById): detached nodes are not in document, so getElementById returned null and clicks did nothing.
-    const dismiss = chip.querySelector('#volumeHintDismiss');
+    const dismiss = chip.querySelector('#' + execute.dismissButtonId);
     if (dismiss) dismiss.onclick = () => chip.remove();
-    const ok = chip.querySelector('#volumeHintOk');
+    const ok = chip.querySelector('#' + execute.okButtonId);
     if (ok) ok.onclick = () => chip.remove();
 
     setTimeout(() => {
-        const el = document.getElementById(DE.VOLUME_HINT_BANNER_ID);
+        const el = document.getElementById(execute.bannerId);
         if (el) el.remove();
-    }, hint.autoDismissMs);
+    }, execute.autoDismissMs);
 
-    if ('Notification' in window && Notification.permission === 'granted') {
+    if (execute.showNotification && 'Notification' in window && Notification.permission === 'granted') {
         try {
-            new Notification(hint.notificationTitle, {
-                body: `${hint.line} ${hint.detail}`,
-                icon: '/favicon.ico',
-                tag: 'voyagr-volume-hint',
-                silent: true
+            new Notification(execute.notificationTitle, {
+                body: execute.notificationBody,
+                icon: execute.notificationIcon,
+                tag: execute.notificationTag,
+                silent: execute.notificationSilent,
             });
         } catch (e) {
             console.log('[EnvHint] volume Notification:', e);

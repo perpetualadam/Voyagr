@@ -900,6 +900,19 @@
     }
 
     /**
+     * Execute plan for dispatching post-restore traffic service side effects.
+     * @param {Object} postApplyPlan - from buildSettingsRestorePostApplyPlan
+     * @returns {Object}
+     */
+    function buildApplySettingsRestorePostEffectsExecutePlan(postApplyPlan) {
+        postApplyPlan = postApplyPlan || {};
+        return {
+            shouldDispatch: !!postApplyPlan.hasEffects,
+            effects: postApplyPlan.effects || [],
+        };
+    }
+
+    /**
      * DOM apply plan for settings form controls (values only; app writes DOM).
      * @param {Object} input
      * @returns {Object}
@@ -1092,6 +1105,7 @@
         buildCollectSettingsUiStoredStatePlan: buildCollectSettingsUiStoredStatePlan,
         buildCollectSettingsUiRuntimeStateInputPlan: buildCollectSettingsUiRuntimeStateInputPlan,
         buildSettingsRestorePostApplyPlan: buildSettingsRestorePostApplyPlan,
+        buildApplySettingsRestorePostEffectsExecutePlan: buildApplySettingsRestorePostEffectsExecutePlan,
         buildSettingsUiApplyPlan: buildSettingsUiApplyPlan,
         buildSettingsUiInputPlan: buildSettingsUiInputPlan,
         buildSettingsUiDomApplyPlan: buildSettingsUiDomApplyPlan,

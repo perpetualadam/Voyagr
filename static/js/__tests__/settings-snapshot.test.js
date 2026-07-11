@@ -349,6 +349,18 @@ describe('settings-snapshot module', () => {
         expect(enabledIdle.hasEffects).toBe(false);
     });
 
+    test('buildApplySettingsRestorePostEffectsExecutePlan mirrors post-apply effects', () => {
+        const post = SS.buildSettingsRestorePostApplyPlan(
+            { routeTrafficEnabled: false },
+            { routeInProgress: true }
+        );
+        const execute = SS.buildApplySettingsRestorePostEffectsExecutePlan(post);
+        expect(execute.shouldDispatch).toBe(true);
+        expect(execute.effects).toEqual(['stopRouteTrafficUpdates']);
+        expect(SS.buildApplySettingsRestorePostEffectsExecutePlan({ hasEffects: false }).shouldDispatch)
+            .toBe(false);
+    });
+
     test('buildClearDepartureTimeApplyPlan clears departure time control', () => {
         const plan = SS.buildClearDepartureTimeApplyPlan();
         expect(plan.elementId).toBe('departureTime');

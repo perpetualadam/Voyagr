@@ -148,6 +148,20 @@ describe('map-controls module', () => {
         expect(execute.updateSpeedWidget).toBe(true);
     });
 
+    test('buildNavStartDriverViewSchedulePlan gates camera apply on map and follow state', () => {
+        const schedule = MC.buildNavStartDriverViewSchedulePlan({
+            delayMs: 1500,
+            hasMap: true,
+            hasPosition: true,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+        });
+        expect(schedule.shouldSchedule).toBe(true);
+        expect(schedule.delayMs).toBe(1500);
+        expect(schedule.applyWhenReady.hasMap).toBe(true);
+        expect(schedule.applyWhenReady.mapFollowingActive).toBe(true);
+    });
+
     test('buildNavStartWakeLockExecutePlan requests lock when API is available', () => {
         const supported = MC.buildNavStartWakeLockExecutePlan(true, {
             wakeLockAcquireLog: 'acquired',

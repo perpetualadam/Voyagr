@@ -472,6 +472,31 @@
     }
 
     /**
+     * Schedule plan for applying live navigation camera after nav start delay.
+     * @param {Object} [input]
+     * @param {number} [input.delayMs]
+     * @param {boolean} [input.hasMap]
+     * @param {boolean} [input.hasPosition]
+     * @param {boolean} [input.zoomAndFollowEnabled]
+     * @param {boolean} [input.mapFollowingActive]
+     * @returns {Object}
+     */
+    function buildNavStartDriverViewSchedulePlan(input) {
+        input = input || {};
+        return {
+            shouldSchedule: Number.isFinite(input.delayMs) && input.delayMs >= 0,
+            delayMs: input.delayMs != null ? input.delayMs : 1500,
+            applyWhenReady: {
+                hasMap: !!input.hasMap,
+                hasPosition: !!input.hasPosition,
+                zoomAndFollowEnabled: !!input.zoomAndFollowEnabled,
+                mapFollowingActive: !!input.mapFollowingActive,
+            },
+            action: 'applyLiveNavigationCamera',
+        };
+    }
+
+    /**
      * Execute plan for requesting a screen wake lock when navigation starts.
      * @param {boolean} hasWakeLockApi
      * @param {Object} [stateInit] - from buildNavStartStateInitPlan
@@ -548,6 +573,7 @@
         buildNavStartStateInitPlan: buildNavStartStateInitPlan,
         buildNavStartLifecycleExecutePlan: buildNavStartLifecycleExecutePlan,
         buildNavStartFabDomExecutePlan: buildNavStartFabDomExecutePlan,
+        buildNavStartDriverViewSchedulePlan: buildNavStartDriverViewSchedulePlan,
         buildNavStartWakeLockExecutePlan: buildNavStartWakeLockExecutePlan,
     };
 

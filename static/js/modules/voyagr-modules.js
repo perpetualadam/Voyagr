@@ -40,6 +40,8 @@
         poiSearch: 'VoyagrPoiSearch',
         offlineNavigation: 'VoyagrOfflineNavigation',
         mlPredictions: 'VoyagrMlPredictions',
+        porcupineWake: 'VoyagrPorcupineWake',
+        batterySaving: 'VoyagrBatterySaving',
         searchAutocomplete: 'VoyagrSearchAutocomplete',
         geocodingLocations: 'VoyagrGeocodingLocations',
         deviceEnvironment: 'VoyagrDeviceEnvironment',

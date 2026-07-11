@@ -97,6 +97,51 @@
         );
     }
 
+    /**
+     * Execute plan for showing the navigation volume reminder banner/toast.
+     * @param {Object} [input]
+     * @param {boolean} [input.voiceAnnouncementsEnabled]
+     * @returns {Object}
+     */
+    function buildShowVolumeHintExecutePlan(input) {
+        input = input || {};
+        return {
+            shouldShow: true,
+            speakIfVoiceEnabled: !!input.voiceAnnouncementsEnabled,
+            spokenLine: VOLUME_HINT.spokenLine,
+            spokenPriority: 'high',
+            bannerId: VOLUME_HINT_BANNER_ID,
+            bannerStyleCssText: getVolumeHintBannerStyleCssText(),
+            bannerHtml: buildVolumeHintBannerHtml(VOLUME_HINT.line, VOLUME_HINT.detail),
+            dismissButtonId: 'volumeHintDismiss',
+            okButtonId: 'volumeHintOk',
+            autoDismissMs: VOLUME_HINT.autoDismissMs,
+            showNotification: true,
+            notificationTitle: VOLUME_HINT.notificationTitle,
+            notificationBody: VOLUME_HINT.line + ' ' + VOLUME_HINT.detail,
+            notificationTag: 'voyagr-volume-hint',
+            notificationSilent: true,
+            notificationIcon: '/favicon.ico',
+        };
+    }
+
+    /**
+     * Schedule plan for deferring the volume hint after navigation starts.
+     * @param {Object} [input]
+     * @param {number} [input.delayMs]
+     * @returns {Object}
+     */
+    function buildNavStartVolumeHintSchedulePlan(input) {
+        input = input || {};
+        return {
+            shouldSchedule: Number.isFinite(input.delayMs) && input.delayMs >= 0,
+            delayMs: input.delayMs != null ? input.delayMs : 2600,
+            action: 'showVolumeHintForNavigation',
+            errorLogPrefix: '[EnvHint] volume hint:',
+            scheduleErrorLogPrefix: '[EnvHint] volume hint schedule:',
+        };
+    }
+
     var api = {
         VOLUME_HINT_BANNER_ID: VOLUME_HINT_BANNER_ID,
         ENV_HINT_MIN_MS: ENV_HINT_MIN_MS,
@@ -105,6 +150,8 @@
         buildInAppNotificationHtml: buildInAppNotificationHtml,
         getVolumeHintBannerStyleCssText: getVolumeHintBannerStyleCssText,
         buildVolumeHintBannerHtml: buildVolumeHintBannerHtml,
+        buildShowVolumeHintExecutePlan: buildShowVolumeHintExecutePlan,
+        buildNavStartVolumeHintSchedulePlan: buildNavStartVolumeHintSchedulePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
