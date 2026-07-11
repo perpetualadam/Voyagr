@@ -4707,52 +4707,19 @@ async function calculateRoute() {
  * Show route calculation progress bar
  */
 function showRouteProgressBar() {
-    let progressContainer = document.getElementById('routeProgressContainer');
+    const RP = _routeProgress();
+    let progressContainer = document.getElementById(RP.ROUTE_PROGRESS_CONTAINER_ID);
 
     if (!progressContainer) {
-        // Create progress bar container
         progressContainer = document.createElement('div');
-        progressContainer.id = 'routeProgressContainer';
-        progressContainer.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 9999;
-            background: rgba(102, 126, 234, 0.1);
-            padding: 0;
-        `;
+        progressContainer.id = RP.ROUTE_PROGRESS_CONTAINER_ID;
+        progressContainer.style.cssText = RP.getRouteProgressContainerStyleCssText();
+        progressContainer.innerHTML = RP.buildRouteProgressBarInnerHtml();
 
-        progressContainer.innerHTML = `
-            <div id="routeProgressBar" style="
-                height: 4px;
-                background: linear-gradient(90deg, #667eea, #764ba2, #667eea);
-                background-size: 200% 100%;
-                animation: progressGradient 1.5s ease-in-out infinite;
-                width: 100%;
-            "></div>
-            <div style="
-                text-align: center;
-                padding: 8px;
-                font-size: 13px;
-                color: #667eea;
-                font-weight: 500;
-            ">
-                <span id="routeProgressText">📍 Calculating route...</span>
-            </div>
-        `;
-
-        // Add animation keyframes if not already present
-        if (!document.getElementById('progressAnimationStyle')) {
+        if (!document.getElementById(RP.ROUTE_PROGRESS_ANIMATION_STYLE_ID)) {
             const style = document.createElement('style');
-            style.id = 'progressAnimationStyle';
-            style.textContent = `
-                @keyframes progressGradient {
-                    0% { background-position: 0% 50%; }
-                    50% { background-position: 100% 50%; }
-                    100% { background-position: 0% 50%; }
-                }
-            `;
+            style.id = RP.ROUTE_PROGRESS_ANIMATION_STYLE_ID;
+            style.textContent = RP.getRouteProgressAnimationKeyframes();
             document.head.appendChild(style);
         }
 
@@ -4767,7 +4734,7 @@ function showRouteProgressBar() {
  * Hide route calculation progress bar
  */
 function hideRouteProgressBar() {
-    const progressContainer = document.getElementById('routeProgressContainer');
+    const progressContainer = document.getElementById(_routeProgress().ROUTE_PROGRESS_CONTAINER_ID);
     if (progressContainer) {
         progressContainer.style.display = 'none';
     }
@@ -9312,6 +9279,12 @@ function _mlPredictions() { return VoyagrModules.mlPredictions(); }
 
 /** Unit-tested search autocomplete row HTML (modules/navigation/search-autocomplete.js). */
 function _searchAutocomplete() { return VoyagrModules.searchAutocomplete(); }
+
+/** Unit-tested device environment hint copy and banner HTML (modules/ui/device-environment.js). */
+function _deviceEnvironment() { return VoyagrModules.deviceEnvironment(); }
+
+/** Unit-tested route calculation progress bar HTML (modules/navigation/route-progress.js). */
+function _routeProgress() { return VoyagrModules.routeProgress(); }
 
 /** Unit-tested speed-limit widget helpers (modules/navigation/speed-limit-widget.js). */
 function _speedLimitWidget() { return VoyagrModules.speedLimitWidget(); }
@@ -17141,7 +17114,6 @@ function sendNotification(title, message, type = 'info') {
  * @returns {*} Return value description
  */
 function showInAppNotification(title, message, type = 'info', durationMs = 5000) {
-    // Create notification element
     const notifContainer = document.getElementById('notificationContainer');
     if (!notifContainer) {
         console.log('Notification container not found');
@@ -17150,15 +17122,7 @@ function showInAppNotification(title, message, type = 'info', durationMs = 5000)
 
     const notif = document.createElement('div');
     notif.className = `in-app-notification notification-${type}`;
-    notif.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: start;">
-            <div>
-                <div style="font-weight: bold; margin-bottom: 4px;">${title}</div>
-                <div style="font-size: 14px; opacity: 0.9;">${message}</div>
-            </div>
-            <button onclick="this.parentElement.parentElement.remove()" style="background: none; border: none; cursor: pointer; font-size: 18px;">×</button>
-        </div>
-    `;
+    notif.innerHTML = _deviceEnvironment().buildInAppNotificationHtml(title, message);
 
     notifContainer.appendChild(notif);
 
@@ -17172,7 +17136,6 @@ function showInAppNotification(title, message, type = 'info', durationMs = 5000)
 
 /** Min interval between same-class environment hints (offline / GPS / volume). */
 const _envHintLast = { offline: 0, online: 0, gps: 0, volume: 0 };
-const ENV_HINT_MIN_MS = 45000;
 
 /**
  * In-app (+ system notification if permitted) for connectivity / GPS / volume reminders.
@@ -17180,8 +17143,9 @@ const ENV_HINT_MIN_MS = 45000;
  * @param {'offline'|'online'|'gps'|'volume'} channel
  */
 function sendEnvironmentHint(channel, title, message, type = 'warning') {
+    const DE = _deviceEnvironment();
     const now = Date.now();
-    if (now - (_envHintLast[channel] || 0) < ENV_HINT_MIN_MS) return;
+    if (now - (_envHintLast[channel] || 0) < DE.ENV_HINT_MIN_MS) return;
     _envHintLast[channel] = now;
 
     showInAppNotification(title, message, type);
@@ -17207,13 +17171,13 @@ function sendEnvironmentHint(channel, title, message, type = 'warning') {
  */
 function initDeviceEnvironmentNotifications() {
     try {
-        const offlineTitle = 'No internet connection';
-        const offlineMsg =
-            'You are offline. New routes, search, and live data need a connection. Saved routes and GPS can still work when location is allowed.';
+        const DE = _deviceEnvironment();
+        const hints = DE.ENV_HINT_MESSAGES;
 
-        const notifyOffline = () => sendEnvironmentHint('offline', offlineTitle, offlineMsg, 'warning');
+        const notifyOffline = () =>
+            sendEnvironmentHint('offline', hints.offline.title, hints.offline.message, hints.offline.type);
         const notifyOnline = () =>
-            sendEnvironmentHint('online', 'Back online', 'Connection restored. Live routing and updates are available again.', 'success');
+            sendEnvironmentHint('online', hints.online.title, hints.online.message, hints.online.type);
 
         if (typeof navigator !== 'undefined' && !navigator.onLine) {
             notifyOffline();
@@ -17231,9 +17195,9 @@ function initDeviceEnvironmentNotifications() {
                             if (status.state === 'denied') {
                                 sendEnvironmentHint(
                                     'gps',
-                                    'Location blocked',
-                                    'Enable location access for this site in your browser or system settings so GPS navigation and position updates work.',
-                                    'warning'
+                                    hints.gps.title,
+                                    hints.gps.message,
+                                    hints.gps.type
                                 );
                             }
                         };
@@ -17257,52 +17221,24 @@ function initDeviceEnvironmentNotifications() {
  * Does not use #status — wake lock and other code overwrite that element.
  */
 function showVolumeHintForNavigation() {
-    const line =
-        'Turn your device volume up to hear turn-by-turn directions.';
-    const detail = 'Browsers cannot detect mute or low volume.';
+    const DE = _deviceEnvironment();
+    const hint = DE.VOLUME_HINT;
 
     if (typeof voiceAnnouncementsEnabled !== 'undefined' && voiceAnnouncementsEnabled) {
         try {
-            speakMessage('Turn your device volume up to hear spoken directions.', 'high');
+            speakMessage(hint.spokenLine, 'high');
         } catch (e) {
             console.log('[EnvHint] volume TTS:', e);
         }
     }
 
-    let chip = document.getElementById('volumeHintBanner');
+    let chip = document.getElementById(DE.VOLUME_HINT_BANNER_ID);
     if (chip) chip.remove();
     chip = document.createElement('div');
-    chip.id = 'volumeHintBanner';
+    chip.id = DE.VOLUME_HINT_BANNER_ID;
     chip.setAttribute('role', 'status');
-    chip.style.cssText = [
-        'position:fixed',
-        'left:50%',
-        'bottom:max(108px, calc(env(safe-area-inset-bottom, 0px) + 88px))',
-        'transform:translateX(-50%)',
-        'z-index:10001',
-        'max-width:min(420px,92vw)',
-        'padding:14px 16px',
-        'background:#E3F2FD',
-        'border:2px solid #2196F3',
-        'border-radius:14px',
-        'box-shadow:0 8px 28px rgba(0,0,0,.22)',
-        'font-family:-apple-system,BlinkMacSystemFont,sans-serif',
-        'font-size:15px',
-        'color:#0d47a1',
-        'text-align:center'
-    ].join(';');
-    chip.innerHTML = `
-        <div style="display:flex;justify-content:flex-end;margin:-4px -4px 4px 0;">
-            <button type="button" id="volumeHintDismiss" aria-label="Dismiss" title="Dismiss"
-                style="border:none;background:transparent;color:#1565c0;font-size:22px;line-height:1;cursor:pointer;padding:4px 8px;">×</button>
-        </div>
-        <strong style="display:block;margin-bottom:6px;">🔊 Check volume</strong>
-        <span>${line}</span><br>
-        <span style="font-size:13px;opacity:.9">${detail}</span>
-        <div style="margin-top:10px;">
-            <button type="button" id="volumeHintOk" style="padding:8px 18px;border:none;border-radius:10px;background:#2196F3;color:#fff;font-weight:600;cursor:pointer;font-size:14px;">OK</button>
-        </div>
-    `;
+    chip.style.cssText = DE.getVolumeHintBannerStyleCssText();
+    chip.innerHTML = DE.buildVolumeHintBannerHtml(hint.line, hint.detail);
     document.body.appendChild(chip);
     // Must query inside `chip` (or append before getElementById): detached nodes are not in document, so getElementById returned null and clicks did nothing.
     const dismiss = chip.querySelector('#volumeHintDismiss');
@@ -17311,14 +17247,14 @@ function showVolumeHintForNavigation() {
     if (ok) ok.onclick = () => chip.remove();
 
     setTimeout(() => {
-        const el = document.getElementById('volumeHintBanner');
+        const el = document.getElementById(DE.VOLUME_HINT_BANNER_ID);
         if (el) el.remove();
-    }, 14000);
+    }, hint.autoDismissMs);
 
     if ('Notification' in window && Notification.permission === 'granted') {
         try {
-            new Notification('Voice guidance', {
-                body: `${line} ${detail}`,
+            new Notification(hint.notificationTitle, {
+                body: `${hint.line} ${hint.detail}`,
                 icon: '/favicon.ico',
                 tag: 'voyagr-volume-hint',
                 silent: true
