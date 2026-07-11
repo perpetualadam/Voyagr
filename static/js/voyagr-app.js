@@ -104,47 +104,12 @@ function voyagrClosest(raw, selector) {
 }
 
 // ===== RECENT DESTINATIONS (local history; works without auth) =====
-const VOYAGR_RECENT_DEST_KEY = 'voyagrRecentDestinations';
-const VOYAGR_RECENT_DEST_LIMIT = 15;
-
 function loadRecentDestinations() {
-    try {
-        const raw = localStorage.getItem(VOYAGR_RECENT_DEST_KEY);
-        if (!raw) return [];
-        const arr = JSON.parse(raw);
-        return Array.isArray(arr) ? arr : [];
-    } catch (e) {
-        return [];
-    }
+    return VoyagrModules.recentDestinations().loadRecentDestinations();
 }
 
 function recordRecentDestination(label, lat, lon, kind) {
-    if (!label || lat == null || lon == null) return;
-    const latN = parseFloat(lat);
-    const lonN = parseFloat(lon);
-    if (!Number.isFinite(latN) || !Number.isFinite(lonN)) return;
-    const trimmedLabel = String(label).trim();
-    if (!trimmedLabel) return;
-    const list = loadRecentDestinations();
-    const entry = {
-        label: trimmedLabel,
-        lat: latN,
-        lon: lonN,
-        ts: Date.now(),
-        kind: kind || 'search'
-    };
-    const filtered = list.filter(
-        (x) =>
-            !(
-                Math.abs(x.lat - latN) < 1e-5 &&
-                Math.abs(x.lon - lonN) < 1e-5 &&
-                (x.label || '') === trimmedLabel
-            )
-    );
-    filtered.unshift(entry);
-    try {
-        localStorage.setItem(VOYAGR_RECENT_DEST_KEY, JSON.stringify(filtered.slice(0, VOYAGR_RECENT_DEST_LIMIT)));
-    } catch (e) { /* quota */ }
+    return VoyagrModules.recentDestinations().recordRecentDestination(label, lat, lon, kind);
 }
 
 // ===== DEBUG SCROLL FUNCTION =====
@@ -2289,13 +2254,7 @@ function removeLocalTripByServerId(serverId) {
 }
 
 function escapeHtml(value) {
-    if (value === null || value === undefined) return '';
-    return String(value)
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#39;');
+    return VoyagrModules.html().escapeHtml(value);
 }
 
 async function getSupabaseAccessToken() {
@@ -13294,19 +13253,8 @@ function startJourneySummaryUpdates() {
  * @returns {string} Formatted time string
  */
 function formatETATime(date) {
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
-
-    // Check user preference for 24-hour format (default to 24h)
     const use24Hour = localStorage.getItem('use24HourFormat') !== 'false';
-
-    if (use24Hour) {
-        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
-    } else {
-        const period = hours >= 12 ? 'PM' : 'AM';
-        const hour12 = hours % 12 || 12;
-        return `${hour12}:${String(minutes).padStart(2, '0')} ${period}`;
-    }
+    return VoyagrModules.eta().formatETATime(date, use24Hour);
 }
 
 /**

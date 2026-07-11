@@ -5,9 +5,7 @@
  * Extracted from voyagr-app.js:
  *   - formatRemainingTime  — e.g. "45 min" or "2h 15min"
  *   - buildETAVoiceMessage — "You will arrive in X at HH:MM"
- *
- * formatETATime reads localStorage (12/24h pref) and therefore stays in the
- * monolith as orchestration.
+ *   - formatETATime        — clock display for the ETA bar (12h/24h)
  */
 (function (root) {
     'use strict';
@@ -44,9 +42,27 @@
         return 'You will arrive in ' + timeRemainingMinutes + ' minutes at ' + etaStr;
     }
 
+    /**
+     * Format a Date for the ETA clock display.
+     * @param {Date} date
+     * @param {boolean} [use24Hour=true] - false → 12-hour clock with AM/PM
+     * @returns {string}
+     */
+    function formatETATime(date, use24Hour) {
+        var hours = date.getHours();
+        var minutes = date.getMinutes();
+        if (use24Hour !== false) {
+            return String(hours).padStart(2, '0') + ':' + String(minutes).padStart(2, '0');
+        }
+        var period = hours >= 12 ? 'PM' : 'AM';
+        var hour12 = hours % 12 || 12;
+        return hour12 + ':' + String(minutes).padStart(2, '0') + ' ' + period;
+    }
+
     var api = {
         formatRemainingTime: formatRemainingTime,
         buildETAVoiceMessage: buildETAVoiceMessage,
+        formatETATime: formatETATime,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

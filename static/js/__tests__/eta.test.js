@@ -4,9 +4,10 @@
 const ETA = require('../modules/navigation/eta.js');
 
 describe('eta module surface', () => {
-    test('exposes formatRemainingTime and buildETAVoiceMessage', () => {
+    test('exposes formatRemainingTime, buildETAVoiceMessage, and formatETATime', () => {
         expect(typeof ETA.formatRemainingTime).toBe('function');
         expect(typeof ETA.buildETAVoiceMessage).toBe('function');
+        expect(typeof ETA.formatETATime).toBe('function');
     });
 });
 
@@ -40,5 +41,22 @@ describe('buildETAVoiceMessage', () => {
         const d = new Date(2026, 0, 1, 9, 5);
         // Original: `${etaHours}:${String(etaMinutes).padStart(2,'0')}` → "9:05"
         expect(ETA.buildETAVoiceMessage(5, d)).toContain('9:05');
+    });
+});
+
+describe('formatETATime', () => {
+    test('24-hour format zero-pads hours and minutes', () => {
+        const d = new Date(2026, 0, 1, 9, 5);
+        expect(ETA.formatETATime(d, true)).toBe('09:05');
+    });
+
+    test('12-hour format uses AM/PM', () => {
+        const d = new Date(2026, 0, 1, 14, 30);
+        expect(ETA.formatETATime(d, false)).toBe('2:30 PM');
+    });
+
+    test('defaults to 24-hour when use24Hour omitted', () => {
+        const d = new Date(2026, 0, 1, 23, 0);
+        expect(ETA.formatETATime(d)).toBe('23:00');
     });
 });
