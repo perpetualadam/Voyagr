@@ -340,6 +340,43 @@
      * @param {number} totalCount
      * @returns {string}
      */
+    var UNAVOIDABLE_HAZARDS_MODAL_ID = 'unavoidableHazardsModal';
+    var UNAVOIDABLE_HAZARDS_BACKDROP_ID = 'unavoidableHazardsBackdrop';
+
+    /**
+     * @returns {string}
+     */
+    function getUnavoidableHazardsModalStyleCssText() {
+        return [
+            'position: fixed',
+            'top: 50%',
+            'left: 50%',
+            'transform: translate(-50%, -50%)',
+            'background: white',
+            'border-radius: 16px',
+            'padding: 20px',
+            'box-shadow: 0 10px 40px rgba(0,0,0,0.3)',
+            'z-index: 10001',
+            'max-width: 320px',
+            'text-align: center',
+        ].join('; ') + ';';
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getUnavoidableHazardsBackdropStyleCssText() {
+        return [
+            'position: fixed',
+            'top: 0',
+            'left: 0',
+            'width: 100%',
+            'height: 100%',
+            'background: rgba(0,0,0,0.5)',
+            'z-index: 10000',
+        ].join('; ') + ';';
+    }
+
     function buildUnavoidableHazardsModalHtml(hazardListHtml, totalCount) {
         totalCount = totalCount || 0;
         var hazardWord = totalCount > 1 ? 'hazards' : 'hazard';
@@ -379,6 +416,10 @@
         formatHazardTypeSummary: formatHazardTypeSummary,
         buildUnavoidableHazardsListHtml: buildUnavoidableHazardsListHtml,
         buildUnavoidableHazardsModalHtml: buildUnavoidableHazardsModalHtml,
+        UNAVOIDABLE_HAZARDS_MODAL_ID: UNAVOIDABLE_HAZARDS_MODAL_ID,
+        UNAVOIDABLE_HAZARDS_BACKDROP_ID: UNAVOIDABLE_HAZARDS_BACKDROP_ID,
+        getUnavoidableHazardsModalStyleCssText: getUnavoidableHazardsModalStyleCssText,
+        getUnavoidableHazardsBackdropStyleCssText: getUnavoidableHazardsBackdropStyleCssText,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

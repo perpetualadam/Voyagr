@@ -2163,12 +2163,9 @@ async function loadTripHistory() {
             const list = document.getElementById('tripHistoryList');
             if (list && list.firstChild) {
                 const banner = document.createElement('div');
-                banner.style.cssText =
-                    'padding:12px;background:#E3F2FD;border-radius:8px;margin-bottom:12px;font-size:13px;color:#1565C0;';
-                banner.textContent =
-                    allTrips.length > 0
-                        ? '📱 Showing trips saved on this device. Sign in to sync trips with your account.'
-                        : '📱 No trips on this device yet. Finish navigation to save a trip here, then sign in to sync across devices.';
+                const TH = VoyagrModules.tripHistory();
+                banner.style.cssText = TH.getTripHistorySignInBannerStyleCssText();
+                banner.textContent = TH.buildTripHistorySignInBannerText(allTrips.length > 0);
                 list.insertBefore(banner, list.firstChild);
             }
             bindTripHistorySearch();
@@ -3548,18 +3545,17 @@ function generateQRCode() {
     }
 
     const shareLink = built.shareLink;
+    const RS = VoyagrModules.routeSharing();
 
     // Clear previous QR code
     const qrContainer = document.getElementById('qrCode');
     qrContainer.innerHTML = '';
 
-    // Generate QR code using QR Server API
-    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(shareLink)}`;
+    const qrImageUrl = RS.buildQrCodeImageUrl(shareLink);
     const qrImage = document.createElement('img');
     qrImage.src = qrImageUrl;
     qrImage.alt = 'Route QR Code';
-    qrImage.style.width = '200px';
-    qrImage.style.height = '200px';
+    qrImage.style.cssText = RS.getQrCodeImageStyleCssText();
     qrContainer.appendChild(qrImage);
 
     // Store QR image URL for download
@@ -7496,7 +7492,7 @@ function showAlternativeRoutesInPreview() {
     routeOptions.forEach((route, index) => {
         const routeColor = ROUTE_COLORS[index % ROUTE_COLORS.length];
         const div = document.createElement('div');
-        div.style.cssText = `background: white; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid ${routeColor}; border: 2px solid #ddd; cursor: pointer; transition: all 0.3s ease; overflow: hidden;`;
+        div.style.cssText = VoyagrModules.routeSelection().getPreviewAlternativeRouteCardContainerStyleCssText(routeColor);
         div.innerHTML = VoyagrModules.routeSelection().buildPreviewAlternativeRouteCardHtml(route, index, {
             routeColors: ROUTE_COLORS,
             currencySymbol: symbol,
@@ -14659,47 +14655,27 @@ function handleUnavoidableHazards(route, hazardsList, hazardCount) {
  * Show modal for unavoidable hazards
  */
 function showUnavoidableHazardsModal(hazardTypes, totalCount) {
+    const hazardAlerts = VoyagrModules.hazardAlerts();
     // Check if modal already exists
-    let modal = document.getElementById('unavoidableHazardsModal');
+    let modal = document.getElementById(hazardAlerts.UNAVOIDABLE_HAZARDS_MODAL_ID);
     if (!modal) {
         // Create modal
         modal = document.createElement('div');
-        modal.id = 'unavoidableHazardsModal';
-        modal.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: white;
-            border-radius: 16px;
-            padding: 20px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-            z-index: 10001;
-            max-width: 320px;
-            text-align: center;
-        `;
+        modal.id = hazardAlerts.UNAVOIDABLE_HAZARDS_MODAL_ID;
+        modal.style.cssText = hazardAlerts.getUnavoidableHazardsModalStyleCssText();
         document.body.appendChild(modal);
     }
 
     // Build hazard list HTML
-    const hazardAlerts = VoyagrModules.hazardAlerts();
     const hazardListHtml = hazardAlerts.buildUnavoidableHazardsListHtml(hazardTypes);
     modal.innerHTML = hazardAlerts.buildUnavoidableHazardsModalHtml(hazardListHtml, totalCount);
 
     // Add backdrop
-    let backdrop = document.getElementById('unavoidableHazardsBackdrop');
+    let backdrop = document.getElementById(hazardAlerts.UNAVOIDABLE_HAZARDS_BACKDROP_ID);
     if (!backdrop) {
         backdrop = document.createElement('div');
-        backdrop.id = 'unavoidableHazardsBackdrop';
-        backdrop.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 10000;
-        `;
+        backdrop.id = hazardAlerts.UNAVOIDABLE_HAZARDS_BACKDROP_ID;
+        backdrop.style.cssText = hazardAlerts.getUnavoidableHazardsBackdropStyleCssText();
         backdrop.onclick = closeUnavoidableHazardsModal;
         document.body.appendChild(backdrop);
     }
@@ -14715,8 +14691,9 @@ function showUnavoidableHazardsModal(hazardTypes, totalCount) {
  * Close unavoidable hazards modal
  */
 function closeUnavoidableHazardsModal() {
-    const modal = document.getElementById('unavoidableHazardsModal');
-    const backdrop = document.getElementById('unavoidableHazardsBackdrop');
+    const hazardAlerts = VoyagrModules.hazardAlerts();
+    const modal = document.getElementById(hazardAlerts.UNAVOIDABLE_HAZARDS_MODAL_ID);
+    const backdrop = document.getElementById(hazardAlerts.UNAVOIDABLE_HAZARDS_BACKDROP_ID);
     if (modal) modal.style.display = 'none';
     if (backdrop) backdrop.style.display = 'none';
 }
@@ -16806,28 +16783,21 @@ function searchAlongRouteByType(type) {
 function addPOIMarkersToMap(pois, type) {
     clearPOIMarkers();
 
-    const icons = { fuel: '⛽', food: '🍔', parking: '🅿️', charging: '🔌', pharmacy: '💊', hospital: '🏥', groceries: '🛒' };
-    const icon = icons[type] || '📍';
+    const POI = VoyagrModules.poiSearch();
+    const icon = POI.getPoiMapMarkerIcon(type);
 
     pois.forEach((poi, idx) => {
         if (!window.map) return;
 
         const el = document.createElement('div');
         el.className = 'poi-marker';
-        el.style.cssText = 'font-size: 24px; cursor: pointer; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));';
+        el.style.cssText = POI.getPoiMapMarkerStyleCssText();
         el.textContent = icon;
         el.title = poi.name;
 
         const marker = new maplibregl.Marker({ element: el })
             .setLngLat([poi.lon, poi.lat])
-            .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(
-                `<div style="padding: 8px;">
-                    <strong>${poi.name}</strong><br>
-                    <span style="font-size: 12px; color: #666;">${poi.address || ''}</span><br>
-                    <span style="font-size: 11px; color: #888;">${(poi.distance_m / 1000).toFixed(1)} km away</span>
-                    ${poi.phone ? `<br><a href="tel:${poi.phone}" style="font-size: 12px;">${poi.phone}</a>` : ''}
-                </div>`
-            ))
+            .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(POI.buildPoiMapMarkerPopupHtml(poi)))
             .addTo(window.map);
 
         if (!window._poiMarkers) window._poiMarkers = [];

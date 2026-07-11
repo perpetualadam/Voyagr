@@ -244,6 +244,30 @@
         );
     }
 
+    var QR_CODE_IMAGE_SIZE_PX = 200;
+
+    /**
+     * QR Server API image URL for a share link.
+     * @param {string} shareLink
+     * @param {number} [size=200]
+     * @returns {string}
+     */
+    function buildQrCodeImageUrl(shareLink, size) {
+        var px = Number(size) || QR_CODE_IMAGE_SIZE_PX;
+        return 'https://api.qrserver.com/v1/create-qr-code/?size=' + px + 'x' + px +
+            '&data=' + encodeURIComponent(shareLink || '');
+    }
+
+    /**
+     * Inline style for the generated QR code image element.
+     * @param {number} [size=200]
+     * @returns {string}
+     */
+    function getQrCodeImageStyleCssText(size) {
+        var px = Number(size) || QR_CODE_IMAGE_SIZE_PX;
+        return 'width: ' + px + 'px; height: ' + px + 'px;';
+    }
+
     /**
      * @param {Array<Object>} routes
      * @param {Object} opts
@@ -281,6 +305,9 @@
         computeSavedRouteTotalCost: computeSavedRouteTotalCost,
         buildSavedRouteRowHtml: buildSavedRouteRowHtml,
         buildSavedRoutesListHtml: buildSavedRoutesListHtml,
+        QR_CODE_IMAGE_SIZE_PX: QR_CODE_IMAGE_SIZE_PX,
+        buildQrCodeImageUrl: buildQrCodeImageUrl,
+        getQrCodeImageStyleCssText: getQrCodeImageStyleCssText,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

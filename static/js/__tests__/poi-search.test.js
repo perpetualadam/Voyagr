@@ -30,4 +30,19 @@ describe('poi-search module', () => {
         expect(html).toContain('closePOIModal');
         expect(html).toContain('Nearby Fuel');
     });
+
+    test('map marker helpers use burger icon for food and build popup', () => {
+        expect(POI.getPoiMapMarkerIcon('food')).toBe('🍔');
+        expect(POI.getPoiTypeIcon('food')).toBe('🍽️');
+        expect(POI.getPoiMapMarkerStyleCssText()).toContain('font-size: 24px');
+        const popup = POI.buildPoiMapMarkerPopupHtml({
+            name: 'Cafe',
+            address: '1 High St',
+            distance_m: 1500,
+            phone: '01234',
+        });
+        expect(popup).toContain('Cafe');
+        expect(popup).toContain('1.5 km away');
+        expect(popup).toContain('tel:01234');
+    });
 });

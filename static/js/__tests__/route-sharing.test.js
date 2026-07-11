@@ -104,4 +104,13 @@ describe('route-sharing module', () => {
         expect(html).toContain('useSavedRoute(1)');
         expect(RS.computeSavedRouteTotalCost({ fuel_cost: 5, toll_cost: 1, caz_cost: 0.5 })).toBe(6.5);
     });
+
+    test('buildQrCodeImageUrl encodes share link and style sets dimensions', () => {
+        const url = RS.buildQrCodeImageUrl('https://voyagr.test?route=abc', 200);
+        expect(url).toContain('api.qrserver.com');
+        expect(url).toContain('200x200');
+        expect(url).toContain(encodeURIComponent('https://voyagr.test?route=abc'));
+        expect(RS.getQrCodeImageStyleCssText()).toBe('width: 200px; height: 200px;');
+        expect(RS.getQrCodeImageStyleCssText(128)).toBe('width: 128px; height: 128px;');
+    });
 });

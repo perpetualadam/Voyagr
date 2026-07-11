@@ -274,6 +274,16 @@
     }
 
     /**
+     * Container style for a preview alternative-route card.
+     * @param {string} routeColor
+     * @returns {string}
+     */
+    function getPreviewAlternativeRouteCardContainerStyleCssText(routeColor) {
+        return 'background: white; padding: 10px; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid ' +
+            routeColor + '; border: 2px solid #ddd; cursor: pointer; transition: all 0.3s ease; overflow: hidden;';
+    }
+
+    /**
      * Inner HTML for a preview alternative-route row.
      * @param {Object} route
      * @param {number} index
@@ -602,6 +612,7 @@
         buildRouteComparisonRecommendationsHtml: buildRouteComparisonRecommendationsHtml,
         buildRouteComparisonReportHtml: buildRouteComparisonReportHtml,
         buildRouteComparisonModalHtml: buildRouteComparisonModalHtml,
+        getPreviewAlternativeRouteCardContainerStyleCssText: getPreviewAlternativeRouteCardContainerStyleCssText,
         buildPreviewAlternativeRouteCardHtml: buildPreviewAlternativeRouteCardHtml,
         pickActiveRouteDuringNavigation: pickActiveRouteDuringNavigation,
         orderWaypointsGreedy: orderWaypointsGreedy,
