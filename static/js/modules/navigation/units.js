@@ -213,6 +213,118 @@
         };
     }
 
+    /**
+     * DOM apply plan for loading unit preference selects.
+     * @param {Object} [o]
+     * @returns {Object}
+     */
+    function buildLoadUnitPreferencesDomApplyPlan(o) {
+        o = o || {};
+        return {
+            shouldApply: true,
+            selects: [
+                { id: 'distanceUnit', value: o.distanceUnit },
+                { id: 'currencyUnit', value: o.currencyUnit },
+                { id: 'speedUnit', value: o.speedUnit },
+                { id: 'temperatureUnit', value: o.temperatureUnit },
+            ],
+        };
+    }
+
+    /**
+     * Request plan for persisting unit settings to the backend API.
+     * @param {Object} [o]
+     * @returns {Object}
+     */
+    function buildSaveUnitSettingsBackendRequestPlan(o) {
+        o = o || {};
+        return {
+            shouldSave: true,
+            apiPath: '/api/app-settings',
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: {
+                distance_unit: o.distanceUnit,
+                currency_unit: o.currencyUnit,
+                speed_unit: o.speedUnit,
+                temperature_unit: o.temperatureUnit,
+            },
+            errorLogPrefix: 'Error saving unit settings:',
+        };
+    }
+
+    /**
+     * Execute plan for changing the distance unit preference.
+     * @param {string} newUnit
+     * @returns {Object}
+     */
+    function buildDistanceUnitChangeExecutePlan(newUnit) {
+        return {
+            shouldChange: true,
+            newUnit: newUnit,
+            storageKey: 'unit_distance',
+            updateDisplays: true,
+            saveSettings: true,
+            saveBackend: true,
+            statusMessage: 'Distance unit changed to ' + distanceUnitStatusLabel(newUnit),
+            statusType: 'success',
+        };
+    }
+
+    /**
+     * Execute plan for changing the currency unit preference.
+     * @param {string} newUnit
+     * @returns {Object}
+     */
+    function buildCurrencyUnitChangeExecutePlan(newUnit) {
+        return {
+            shouldChange: true,
+            newUnit: newUnit,
+            storageKey: 'unit_currency',
+            updateDisplays: true,
+            saveSettings: true,
+            saveBackend: true,
+            statusMessage: 'Currency changed to ' + newUnit,
+            statusType: 'success',
+        };
+    }
+
+    /**
+     * Execute plan for changing the speed unit preference.
+     * @param {string} newUnit
+     * @returns {Object}
+     */
+    function buildSpeedUnitChangeExecutePlan(newUnit) {
+        return {
+            shouldChange: true,
+            newUnit: newUnit,
+            storageKey: 'unit_speed',
+            updateDisplays: true,
+            saveSettings: true,
+            saveBackend: true,
+            statusMessage: 'Speed unit changed to ' + speedUnitStatusLabel(newUnit),
+            statusType: 'success',
+        };
+    }
+
+    /**
+     * Execute plan for changing the temperature unit preference.
+     * @param {string} newUnit
+     * @returns {Object}
+     */
+    function buildTemperatureUnitChangeExecutePlan(newUnit) {
+        return {
+            shouldChange: true,
+            newUnit: newUnit,
+            storageKey: 'unit_temperature',
+            updateDisplays: true,
+            saveSettings: true,
+            saveBackend: true,
+            statusMessage: 'Temperature unit changed to ' + temperatureUnitStatusLabel(newUnit),
+            statusType: 'success',
+        };
+    }
+
     var api = {
         convertDistance: convertDistance,
         getDistanceUnit: getDistanceUnit,
@@ -231,6 +343,12 @@
         buildUpdateAllDistanceDisplaysExecutePlan: buildUpdateAllDistanceDisplaysExecutePlan,
         buildUpdateAllCostDisplaysExecutePlan: buildUpdateAllCostDisplaysExecutePlan,
         buildUpdateAllTemperatureDisplaysExecutePlan: buildUpdateAllTemperatureDisplaysExecutePlan,
+        buildLoadUnitPreferencesDomApplyPlan: buildLoadUnitPreferencesDomApplyPlan,
+        buildSaveUnitSettingsBackendRequestPlan: buildSaveUnitSettingsBackendRequestPlan,
+        buildDistanceUnitChangeExecutePlan: buildDistanceUnitChangeExecutePlan,
+        buildCurrencyUnitChangeExecutePlan: buildCurrencyUnitChangeExecutePlan,
+        buildSpeedUnitChangeExecutePlan: buildSpeedUnitChangeExecutePlan,
+        buildTemperatureUnitChangeExecutePlan: buildTemperatureUnitChangeExecutePlan,
         CURRENCY_SYMBOLS: CURRENCY_SYMBOLS,
     };
 

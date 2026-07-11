@@ -177,4 +177,15 @@ describe('multimodal-parking module', () => {
         expect(storage.storageKey).toBe(MP.PARKING_PREFS_STORAGE_KEY);
         expect(JSON.parse(storage.storageValue).maxWalkingDistance).toBe('8');
     });
+
+    test('buildSaveParkingPreferencesExecutePlan and load execute plan', () => {
+        const prefs = { maxWalkingDistance: '12', preferredType: 'garage', pricePreference: 'cheap' };
+        const save = MP.buildSaveParkingPreferencesExecutePlan(prefs);
+        expect(save.shouldSave).toBe(true);
+        expect(save.storageKey).toBe(MP.PARKING_PREFS_STORAGE_KEY);
+        const load = MP.buildLoadParkingPreferencesExecutePlan(prefs);
+        expect(load.shouldApply).toBe(true);
+        expect(load.domPlan.selects.find((item) => item.id === 'parkingPreferredType').value).toBe('garage');
+        expect(MP.buildLoadParkingPreferencesOrchestrationPlan().storageKey).toBe(MP.PARKING_PREFS_STORAGE_KEY);
+    });
 });

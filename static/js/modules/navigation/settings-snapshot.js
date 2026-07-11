@@ -697,6 +697,53 @@
     }
 
     /**
+     * Execute plan for applying runtime default globals after settings reset.
+     * @param {Object} [defaults]
+     * @returns {Object}
+     */
+    function buildApplySettingsResetRuntimeExecutePlan(defaults) {
+        defaults = defaults || {};
+        var patches = [];
+        if (defaults.distanceUnit) patches.push({ key: 'distanceUnit', value: defaults.distanceUnit });
+        if (defaults.currencyUnit) patches.push({ key: 'currencyUnit', value: defaults.currencyUnit });
+        if (defaults.speedUnit) patches.push({ key: 'speedUnit', value: defaults.speedUnit });
+        if (defaults.temperatureUnit) patches.push({ key: 'temperatureUnit', value: defaults.temperatureUnit });
+        if (defaults.currentVehicleType) patches.push({ key: 'currentVehicleType', value: defaults.currentVehicleType });
+        if (defaults.currentRoutingMode) patches.push({ key: 'currentRoutingMode', value: defaults.currentRoutingMode });
+        if (defaults.smartZoomEnabled !== undefined) {
+            patches.push({ key: 'smartZoomEnabled', value: !!defaults.smartZoomEnabled });
+        }
+        if (defaults.autoTrafficUpdateEnabled !== undefined) {
+            patches.push({ key: 'autoTrafficUpdateEnabled', value: !!defaults.autoTrafficUpdateEnabled });
+        }
+        if (defaults.autoRerouteOnDeviationEnabled !== undefined) {
+            patches.push({ key: 'autoRerouteOnDeviationEnabled', value: !!defaults.autoRerouteOnDeviationEnabled });
+        }
+        if (defaults.routeTrafficEnabled !== undefined) {
+            patches.push({ key: 'routeTrafficEnabled', value: !!defaults.routeTrafficEnabled });
+        }
+        if (defaults.showCamerasEnabled !== undefined) {
+            patches.push({ key: 'showCamerasEnabled', value: !!defaults.showCamerasEnabled });
+        }
+        if (defaults.showOsmTrafficLightsEnabled !== undefined) {
+            patches.push({ key: 'showOsmTrafficLightsEnabled', value: !!defaults.showOsmTrafficLightsEnabled });
+        }
+        if (defaults.showOsmRailwayCrossingsEnabled !== undefined) {
+            patches.push({ key: 'showOsmRailwayCrossingsEnabled', value: !!defaults.showOsmRailwayCrossingsEnabled });
+        }
+        if (defaults.showTrafficEnabled !== undefined) {
+            patches.push({ key: 'showTrafficEnabled', value: !!defaults.showTrafficEnabled });
+        }
+        if (defaults.speedWidgetEnabled !== undefined) {
+            patches.push({ key: 'speedWidgetEnabled', value: !!defaults.speedWidgetEnabled });
+        }
+        return {
+            shouldApply: patches.length > 0,
+            runtimePatches: patches,
+        };
+    }
+
+    /**
      * Orchestration plan for applying settings to the UI.
      * @returns {Object}
      */
@@ -993,6 +1040,7 @@
         buildClearDepartureTimeApplyPlan: buildClearDepartureTimeApplyPlan,
         buildSettingsResetPlan: buildSettingsResetPlan,
         buildResetAllSettingsExecutePlan: buildResetAllSettingsExecutePlan,
+        buildApplySettingsResetRuntimeExecutePlan: buildApplySettingsResetRuntimeExecutePlan,
         buildApplySettingsToUiOrchestrationPlan: buildApplySettingsToUiOrchestrationPlan,
         buildApplySettingsUiExecutePlan: buildApplySettingsUiExecutePlan,
         buildCollectSettingsFormStateInputPlan: buildCollectSettingsFormStateInputPlan,

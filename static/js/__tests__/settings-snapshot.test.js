@@ -479,4 +479,13 @@ describe('settings-snapshot module', () => {
         expect(stored.parkingPreferences.maxWalkingDistance).toBe('15');
         expect(stored.mapTheme).toBe('satellite');
     });
+
+    test('buildApplySettingsResetRuntimeExecutePlan lists runtime default patches', () => {
+        const execute = SS.buildApplySettingsResetRuntimeExecutePlan(
+            SS.buildSettingsResetPlan().runtimeDefaults
+        );
+        expect(execute.shouldApply).toBe(true);
+        expect(execute.runtimePatches.find((item) => item.key === 'distanceUnit').value).toBe('km');
+        expect(execute.runtimePatches.find((item) => item.key === 'speedWidgetEnabled').value).toBe(true);
+    });
 });

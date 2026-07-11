@@ -150,4 +150,28 @@ describe('unit display refresh plans', () => {
         const execute = U.buildUpdateAllTemperatureDisplaysExecutePlan('fahrenheit');
         expect(execute.logMessage).toContain('fahrenheit');
     });
+
+    test('buildDistanceUnitChangeExecutePlan persists and refreshes displays', () => {
+        const execute = U.buildDistanceUnitChangeExecutePlan('mi');
+        expect(execute.shouldChange).toBe(true);
+        expect(execute.storageKey).toBe('unit_distance');
+        expect(execute.statusMessage).toContain('miles');
+        expect(U.buildSaveUnitSettingsBackendRequestPlan({
+            distanceUnit: 'km',
+            currencyUnit: 'GBP',
+            speedUnit: 'kmh',
+            temperatureUnit: 'celsius',
+        }).body.distance_unit).toBe('km');
+    });
+
+    test('buildLoadUnitPreferencesDomApplyPlan maps all unit selects', () => {
+        const execute = U.buildLoadUnitPreferencesDomApplyPlan({
+            distanceUnit: 'mi',
+            currencyUnit: 'USD',
+            speedUnit: 'mph',
+            temperatureUnit: 'fahrenheit',
+        });
+        expect(execute.selects).toHaveLength(4);
+        expect(execute.selects[0].id).toBe('distanceUnit');
+    });
 });

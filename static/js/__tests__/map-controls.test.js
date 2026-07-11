@@ -148,6 +148,22 @@ describe('map-controls module', () => {
         expect(execute.updateSpeedWidget).toBe(true);
     });
 
+    test('buildNavStartWakeLockExecutePlan requests lock when API is available', () => {
+        const supported = MC.buildNavStartWakeLockExecutePlan(true, {
+            wakeLockAcquireLog: 'acquired',
+            wakeLockReleaseLog: 'released',
+        });
+        expect(supported.shouldRequest).toBe(true);
+        expect(supported.lockType).toBe('screen');
+        expect(supported.successStatusMessage).toBeTruthy();
+
+        const unsupported = MC.buildNavStartWakeLockExecutePlan(false, {
+            wakeLockUnsupportedLog: 'unsupported',
+        });
+        expect(unsupported.shouldRequest).toBe(false);
+        expect(unsupported.unsupportedLog).toBe('unsupported');
+    });
+
     test('buildNavStopPreflightPlan and lifecycle execute plans', () => {
         expect(MC.buildNavStopPreflightPlan(false, false).shouldStop).toBe(false);
         expect(MC.buildNavStopPreflightPlan(true, false).shouldStop).toBe(true);

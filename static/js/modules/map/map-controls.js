@@ -471,6 +471,36 @@
         };
     }
 
+    /**
+     * Execute plan for requesting a screen wake lock when navigation starts.
+     * @param {boolean} hasWakeLockApi
+     * @param {Object} [stateInit] - from buildNavStartStateInitPlan
+     * @returns {Object}
+     */
+    function buildNavStartWakeLockExecutePlan(hasWakeLockApi, stateInit) {
+        stateInit = stateInit || {};
+        if (!hasWakeLockApi) {
+            return {
+                shouldRequest: false,
+                unsupportedLog: stateInit.wakeLockUnsupportedLog
+                    || '[Screen Wake Lock] Screen Wake Lock API not supported on this device',
+            };
+        }
+        return {
+            shouldRequest: true,
+            lockType: 'screen',
+            windowProperty: 'screenWakeLock',
+            acquireLog: stateInit.wakeLockAcquireLog
+                || '[Screen Wake Lock] Screen lock acquired - screen will stay on',
+            releaseLog: stateInit.wakeLockReleaseLog
+                || '[Screen Wake Lock] Screen lock released',
+            failureLogPrefix: stateInit.wakeLockFailureLogPrefix
+                || '[Screen Wake Lock] Failed to acquire wake lock:',
+            successStatusMessage: getWakeLockAcquiredStatusMessage(),
+            successStatusType: 'success',
+        };
+    }
+
     var api = {
         ZOOM_FOLLOW_ENABLED_ICON: ZOOM_FOLLOW_ENABLED_ICON,
         ZOOM_FOLLOW_DISABLED_ICON: ZOOM_FOLLOW_DISABLED_ICON,
@@ -518,6 +548,7 @@
         buildNavStartStateInitPlan: buildNavStartStateInitPlan,
         buildNavStartLifecycleExecutePlan: buildNavStartLifecycleExecutePlan,
         buildNavStartFabDomExecutePlan: buildNavStartFabDomExecutePlan,
+        buildNavStartWakeLockExecutePlan: buildNavStartWakeLockExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

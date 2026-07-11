@@ -451,6 +451,58 @@
     }
 
     /**
+     * Input assembly for collecting parking preference controls from the DOM.
+     * @param {Object} [formState]
+     * @returns {Object}
+     */
+    function buildCollectParkingPreferencesInputPlan(formState) {
+        return buildParkingPreferencesCollectPlan(formState);
+    }
+
+    /**
+     * Execute plan for saving parking preferences to storage.
+     * @param {Object} prefs
+     * @returns {Object}
+     */
+    function buildSaveParkingPreferencesExecutePlan(prefs) {
+        var storage = buildParkingPreferencesStoragePlan(prefs);
+        return {
+            shouldSave: true,
+            storageKey: storage.storageKey,
+            storageValue: storage.storageValue,
+            saveAllSettings: true,
+            logMessage: '[Parking] Preferences saved:',
+            prefs: prefs || {},
+        };
+    }
+
+    /**
+     * Orchestration plan for loading parking preferences from storage.
+     * @returns {Object}
+     */
+    function buildLoadParkingPreferencesOrchestrationPlan() {
+        return {
+            storageKey: PARKING_PREFS_STORAGE_KEY,
+            errorLogPrefix: '[Parking] Error loading preferences:',
+        };
+    }
+
+    /**
+     * Execute plan for applying loaded parking preferences to the form.
+     * @param {Object} prefs
+     * @returns {Object}
+     */
+    function buildLoadParkingPreferencesExecutePlan(prefs) {
+        prefs = prefs || {};
+        return {
+            shouldApply: true,
+            domPlan: buildParkingPreferencesDomApplyPlan(buildParkingPreferencesUiApplyPlan(prefs)),
+            logMessage: '[Parking] Preferences loaded:',
+            prefs: prefs,
+        };
+    }
+
+    /**
      * @returns {string}
      */
     function getParkingSelectLoadingMessage() {
@@ -506,6 +558,10 @@
         buildParkingPreferencesStoragePlan: buildParkingPreferencesStoragePlan,
         buildParkingPreferencesUiApplyPlan: buildParkingPreferencesUiApplyPlan,
         buildParkingPreferencesDomApplyPlan: buildParkingPreferencesDomApplyPlan,
+        buildCollectParkingPreferencesInputPlan: buildCollectParkingPreferencesInputPlan,
+        buildSaveParkingPreferencesExecutePlan: buildSaveParkingPreferencesExecutePlan,
+        buildLoadParkingPreferencesOrchestrationPlan: buildLoadParkingPreferencesOrchestrationPlan,
+        buildLoadParkingPreferencesExecutePlan: buildLoadParkingPreferencesExecutePlan,
         getParkingSelectLoadingMessage: getParkingSelectLoadingMessage,
         getParkingSelectSuccessMessage: getParkingSelectSuccessMessage,
         getParkingSelectNoStartMessage: getParkingSelectNoStartMessage,

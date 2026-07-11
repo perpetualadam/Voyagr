@@ -448,10 +448,14 @@ function goBackToPreviousTab() {
  * @returns {*} Return value description
  */
 function loadUnitPreferences() {
-    document.getElementById('distanceUnit').value = distanceUnit;
-    document.getElementById('currencyUnit').value = currencyUnit;
-    document.getElementById('speedUnit').value = speedUnit;
-    document.getElementById('temperatureUnit').value = temperatureUnit;
+    const execute = _units().buildLoadUnitPreferencesDomApplyPlan({
+        distanceUnit,
+        currencyUnit,
+        speedUnit,
+        temperatureUnit,
+    });
+    if (!execute.shouldApply) return;
+    applyDomSelectsFromPlan(execute.selects);
 }
 
 // Update distance unit
@@ -461,13 +465,18 @@ function loadUnitPreferences() {
  * @returns {*} Return value description
  */
 function updateDistanceUnit() {
-    const newUnit = document.getElementById('distanceUnit').value;
-    distanceUnit = newUnit;
-    localStorage.setItem('unit_distance', newUnit);
-    saveUnitSettingsToBackend();
-    updateAllDistanceDisplays();
-    saveAllSettings();
-    showStatus(`Distance unit changed to ${_units().distanceUnitStatusLabel(newUnit)}`, 'success');
+    const U = _units();
+    const execute = U.buildDistanceUnitChangeExecutePlan(
+        document.getElementById('distanceUnit')?.value
+    );
+    if (!execute.shouldChange) return;
+
+    distanceUnit = execute.newUnit;
+    localStorage.setItem(execute.storageKey, execute.newUnit);
+    if (execute.saveBackend) saveUnitSettingsToBackend();
+    if (execute.updateDisplays) updateAllDistanceDisplays();
+    if (execute.saveSettings) saveAllSettings();
+    showStatus(execute.statusMessage, execute.statusType);
 }
 
 // Update currency unit
@@ -477,13 +486,18 @@ function updateDistanceUnit() {
  * @returns {*} Return value description
  */
 function updateCurrencyUnit() {
-    const newUnit = document.getElementById('currencyUnit').value;
-    currencyUnit = newUnit;
-    localStorage.setItem('unit_currency', newUnit);
-    saveUnitSettingsToBackend();
-    updateAllCostDisplays();
-    saveAllSettings();
-    showStatus(`Currency changed to ${newUnit}`, 'success');
+    const U = _units();
+    const execute = U.buildCurrencyUnitChangeExecutePlan(
+        document.getElementById('currencyUnit')?.value
+    );
+    if (!execute.shouldChange) return;
+
+    currencyUnit = execute.newUnit;
+    localStorage.setItem(execute.storageKey, execute.newUnit);
+    if (execute.saveBackend) saveUnitSettingsToBackend();
+    if (execute.updateDisplays) updateAllCostDisplays();
+    if (execute.saveSettings) saveAllSettings();
+    showStatus(execute.statusMessage, execute.statusType);
 }
 
 // Update speed unit
@@ -493,13 +507,18 @@ function updateCurrencyUnit() {
  * @returns {*} Return value description
  */
 function updateSpeedUnit() {
-    const newUnit = document.getElementById('speedUnit').value;
-    speedUnit = newUnit;
-    localStorage.setItem('unit_speed', newUnit);
-    saveUnitSettingsToBackend();
-    updateAllSpeedDisplays();
-    saveAllSettings();
-    showStatus(`Speed unit changed to ${_units().speedUnitStatusLabel(newUnit)}`, 'success');
+    const U = _units();
+    const execute = U.buildSpeedUnitChangeExecutePlan(
+        document.getElementById('speedUnit')?.value
+    );
+    if (!execute.shouldChange) return;
+
+    speedUnit = execute.newUnit;
+    localStorage.setItem(execute.storageKey, execute.newUnit);
+    if (execute.saveBackend) saveUnitSettingsToBackend();
+    if (execute.updateDisplays) updateAllSpeedDisplays();
+    if (execute.saveSettings) saveAllSettings();
+    showStatus(execute.statusMessage, execute.statusType);
 }
 
 // Update temperature unit
@@ -509,13 +528,18 @@ function updateSpeedUnit() {
  * @returns {*} Return value description
  */
 function updateTemperatureUnit() {
-    const newUnit = document.getElementById('temperatureUnit').value;
-    temperatureUnit = newUnit;
-    localStorage.setItem('unit_temperature', newUnit);
-    saveUnitSettingsToBackend();
-    updateAllTemperatureDisplays();
-    saveAllSettings();
-    showStatus(`Temperature unit changed to ${_units().temperatureUnitStatusLabel(newUnit)}`, 'success');
+    const U = _units();
+    const execute = U.buildTemperatureUnitChangeExecutePlan(
+        document.getElementById('temperatureUnit')?.value
+    );
+    if (!execute.shouldChange) return;
+
+    temperatureUnit = execute.newUnit;
+    localStorage.setItem(execute.storageKey, execute.newUnit);
+    if (execute.saveBackend) saveUnitSettingsToBackend();
+    if (execute.updateDisplays) updateAllTemperatureDisplays();
+    if (execute.saveSettings) saveAllSettings();
+    showStatus(execute.statusMessage, execute.statusType);
 }
 
 // Save unit settings to backend
@@ -525,16 +549,19 @@ function updateTemperatureUnit() {
  * @returns {*} Return value description
  */
 function saveUnitSettingsToBackend() {
-    fetch('/api/app-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            distance_unit: distanceUnit,
-            currency_unit: currencyUnit,
-            speed_unit: speedUnit,
-            temperature_unit: temperatureUnit
-        })
-    }).catch(error => console.error('Error saving unit settings:', error));
+    const request = _units().buildSaveUnitSettingsBackendRequestPlan({
+        distanceUnit,
+        currencyUnit,
+        speedUnit,
+        temperatureUnit,
+    });
+    if (!request.shouldSave) return;
+
+    fetch(request.apiPath, {
+        method: request.method,
+        headers: request.headers,
+        body: JSON.stringify(request.body),
+    }).catch((error) => console.error(request.errorLogPrefix, error));
 }
 
 // ===== COMPREHENSIVE PERSISTENT SETTINGS SYSTEM =====
@@ -1756,6 +1783,35 @@ function applySettingsToUI() {
 }
 
 /**
+ * Apply runtime default globals from a settings reset execute plan.
+ * @param {Object} execute - from buildApplySettingsResetRuntimeExecutePlan
+ */
+function applySettingsResetRuntimeFromPlan(execute) {
+    if (!execute || !execute.shouldApply) return;
+
+    (execute.runtimePatches || []).forEach(({ key, value }) => {
+        switch (key) {
+            case 'distanceUnit': distanceUnit = value; break;
+            case 'currencyUnit': currencyUnit = value; break;
+            case 'speedUnit': speedUnit = value; break;
+            case 'temperatureUnit': temperatureUnit = value; break;
+            case 'currentVehicleType': currentVehicleType = value; break;
+            case 'currentRoutingMode': currentRoutingMode = value; break;
+            case 'smartZoomEnabled': smartZoomEnabled = value; break;
+            case 'autoTrafficUpdateEnabled': autoTrafficUpdateEnabled = value; break;
+            case 'autoRerouteOnDeviationEnabled': autoRerouteOnDeviationEnabled = value; break;
+            case 'routeTrafficEnabled': routeTrafficEnabled = value; break;
+            case 'showCamerasEnabled': showCamerasEnabled = value; break;
+            case 'showOsmTrafficLightsEnabled': showOsmTrafficLightsEnabled = value; break;
+            case 'showOsmRailwayCrossingsEnabled': showOsmRailwayCrossingsEnabled = value; break;
+            case 'showTrafficEnabled': showTrafficEnabled = value; break;
+            case 'speedWidgetEnabled': speedWidgetEnabled = value; break;
+            default: break;
+        }
+    });
+}
+
+/**
  * Apply settings reset from a pure reset plan.
  * @param {Object} plan - from buildSettingsResetPlan
  * @returns {boolean} true when reset was confirmed and applied
@@ -1768,28 +1824,9 @@ function applySettingsResetFromPlan(plan) {
         localStorage.removeItem(key);
     });
 
-    const defaults = plan.runtimeDefaults || {};
-    if (defaults.distanceUnit) distanceUnit = defaults.distanceUnit;
-    if (defaults.currencyUnit) currencyUnit = defaults.currencyUnit;
-    if (defaults.speedUnit) speedUnit = defaults.speedUnit;
-    if (defaults.temperatureUnit) temperatureUnit = defaults.temperatureUnit;
-    if (defaults.currentVehicleType) currentVehicleType = defaults.currentVehicleType;
-    if (defaults.currentRoutingMode) currentRoutingMode = defaults.currentRoutingMode;
-    if (defaults.smartZoomEnabled !== undefined) smartZoomEnabled = defaults.smartZoomEnabled;
-    if (defaults.autoTrafficUpdateEnabled !== undefined) autoTrafficUpdateEnabled = defaults.autoTrafficUpdateEnabled;
-    if (defaults.autoRerouteOnDeviationEnabled !== undefined) {
-        autoRerouteOnDeviationEnabled = defaults.autoRerouteOnDeviationEnabled;
-    }
-    if (defaults.routeTrafficEnabled !== undefined) routeTrafficEnabled = defaults.routeTrafficEnabled;
-    if (defaults.showCamerasEnabled !== undefined) showCamerasEnabled = defaults.showCamerasEnabled;
-    if (defaults.showOsmTrafficLightsEnabled !== undefined) {
-        showOsmTrafficLightsEnabled = defaults.showOsmTrafficLightsEnabled;
-    }
-    if (defaults.showOsmRailwayCrossingsEnabled !== undefined) {
-        showOsmRailwayCrossingsEnabled = defaults.showOsmRailwayCrossingsEnabled;
-    }
-    if (defaults.showTrafficEnabled !== undefined) showTrafficEnabled = defaults.showTrafficEnabled;
-    if (defaults.speedWidgetEnabled !== undefined) speedWidgetEnabled = defaults.speedWidgetEnabled;
+    applySettingsResetRuntimeFromPlan(
+        _settingsSnapshot().buildApplySettingsResetRuntimeExecutePlan(plan.runtimeDefaults)
+    );
 
     if (plan.reloadAfterReset) {
         location.reload();
@@ -7119,11 +7156,13 @@ let parkingDrivingRoute = null;
  * @returns {Object}
  */
 function collectParkingPreferencesFormState() {
-    return _multimodalParking().buildParkingPreferencesCollectPlan({
-        maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance')?.value,
-        preferredType: document.getElementById('parkingPreferredType')?.value,
-        pricePreference: document.getElementById('parkingPricePreference')?.value,
-    });
+    return _multimodalParking().buildParkingPreferencesCollectPlan(
+        _multimodalParking().buildCollectParkingPreferencesInputPlan({
+            maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance')?.value,
+            preferredType: document.getElementById('parkingPreferredType')?.value,
+            pricePreference: document.getElementById('parkingPricePreference')?.value,
+        })
+    );
 }
 
 /**
@@ -7134,10 +7173,12 @@ function collectParkingPreferencesFormState() {
 function saveParkingPreferences() {
     const MP = _multimodalParking();
     const prefs = collectParkingPreferencesFormState();
-    const storage = MP.buildParkingPreferencesStoragePlan(prefs);
-    localStorage.setItem(storage.storageKey, storage.storageValue);
-    saveAllSettings();
-    console.log('[Parking] Preferences saved:', prefs);
+    const execute = MP.buildSaveParkingPreferencesExecutePlan(prefs);
+    if (!execute.shouldSave) return;
+
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    if (execute.saveAllSettings) saveAllSettings();
+    console.log(execute.logMessage, execute.prefs);
 }
 
 /**
@@ -7146,19 +7187,20 @@ function saveParkingPreferences() {
  * @returns {*} Return value description
  */
 function loadParkingPreferences() {
+    const MP = _multimodalParking();
+    const orch = MP.buildLoadParkingPreferencesOrchestrationPlan();
     try {
-        const MP = _multimodalParking();
-        const saved = localStorage.getItem(MP.PARKING_PREFS_STORAGE_KEY);
+        const saved = localStorage.getItem(orch.storageKey);
         if (!saved) return;
 
         const prefs = JSON.parse(saved);
-        const domPlan = MP.buildParkingPreferencesDomApplyPlan(
-            MP.buildParkingPreferencesUiApplyPlan(prefs)
-        );
-        applyDomSelectsFromPlan(domPlan.selects);
-        console.log('[Parking] Preferences loaded:', prefs);
+        const execute = MP.buildLoadParkingPreferencesExecutePlan(prefs);
+        if (!execute.shouldApply) return;
+
+        applyDomSelectsFromPlan(execute.domPlan.selects);
+        console.log(execute.logMessage, execute.prefs);
     } catch (e) {
-        console.log('[Parking] Error loading preferences:', e);
+        console.log(orch.errorLogPrefix, e);
     }
 }
 
@@ -15016,21 +15058,23 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     }
 
     if ('wakeLock' in navigator) {
-        navigator.wakeLock.request('screen')
-            .then(wakeLock => {
-                window.screenWakeLock = wakeLock;
-                console.log(stateInit.wakeLockAcquireLog);
-                showStatus(MC.getWakeLockAcquiredStatusMessage(), 'success');
+        const wakeLockExecute = MC.buildNavStartWakeLockExecutePlan(true, stateInit);
+        navigator.wakeLock.request(wakeLockExecute.lockType)
+            .then((wakeLock) => {
+                window[wakeLockExecute.windowProperty] = wakeLock;
+                console.log(wakeLockExecute.acquireLog);
+                showStatus(wakeLockExecute.successStatusMessage, wakeLockExecute.successStatusType);
 
                 wakeLock.addEventListener('release', () => {
-                    console.log(stateInit.wakeLockReleaseLog);
+                    console.log(wakeLockExecute.releaseLog);
                 });
             })
-            .catch(err => {
-                console.log(stateInit.wakeLockFailureLogPrefix, err.name, err.message);
+            .catch((err) => {
+                console.log(wakeLockExecute.failureLogPrefix, err.name, err.message);
             });
     } else {
-        console.log(stateInit.wakeLockUnsupportedLog);
+        const wakeLockExecute = MC.buildNavStartWakeLockExecutePlan(false, stateInit);
+        console.log(wakeLockExecute.unsupportedLog);
     }
 
     const lifecycle = MC.buildNavStartLifecycleExecutePlan({
