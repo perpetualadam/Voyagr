@@ -4843,63 +4843,35 @@ function displayHazardMarkers(hazards) {
         let markerHtml;
         let markerIconSize;
         let popupIcon;
+        const HM = _hazardMapMarkers();
 
         if (config.useOsmTrafficLightPill) {
             markerHtml = getOsmTrafficLightMarkerPillHTML();
             markerIconSize = [26, 38];
             popupIcon = `<div style="width:26px;height:38px;margin:0 auto;">${getOsmTrafficLightMarkerPillHTML()}</div>`;
         } else if (config.svg) {
-            const isCamera = true;
-            markerHtml = `<div style="
-                background: ${config.bgColor};
-                border: 2px solid ${config.color};
-                border-radius: ${isCamera ? '4px' : '50%'};
-                width: 28px;
-                height: 28px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 12px;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                cursor: pointer;
-            ">${config.svg}</div>`;
-            markerIconSize = [28, 28];
+            markerHtml = HM.buildHazardSvgMarkerHtml(config, config.svg);
+            markerIconSize = HM.HAZARD_MARKER_ICON_SIZE;
             popupIcon = config.svg;
         } else {
-            markerHtml = `<div style="
-                background: ${config.bgColor};
-                border: 2px solid ${config.color};
-                border-radius: 50%;
-                width: 28px;
-                height: 28px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                font-size: 14px;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-                cursor: pointer;
-            ">${config.emoji}</div>`;
-            markerIconSize = [28, 28];
-            popupIcon = `<span style="font-size: 24px;">${config.emoji}</span>`;
+            markerHtml = HM.buildHazardEmojiMarkerHtml(config);
+            markerIconSize = HM.HAZARD_MARKER_ICON_SIZE;
+            popupIcon = HM.buildHazardPopupEmojiIconHtml(config.emoji);
         }
 
-        const hazardDistanceText = hazard.distance_km
-            ? `<div style="font-size: 11px; color: #888; margin-top: 5px;">${hazard.distance_km.toFixed(1)} km ahead</div>`
-            : '';
+        const hazardDistanceText = HM.buildHazardDistanceAheadHtml(hazard.distance_km);
 
         const marker = MapLibreHelpers.createMarker(hazard.lat, hazard.lon, {
             className: 'hazard-marker',
             html: markerHtml,
             iconSize: markerIconSize,
             iconAnchor: [markerIconSize[0] / 2, markerIconSize[1] / 2],
-            popup: `
-                <div style="text-align: center; min-width: 150px;">
-                    <div style="margin-bottom: 8px; display: flex; justify-content: center;">${popupIcon}</div>
-                    <div style="font-weight: bold; color: ${config.color}; margin-bottom: 5px;">${config.label}</div>
-                    ${hazard.description ? `<div style="font-size: 12px; color: #666;">${hazard.description}</div>` : ''}
-                    ${hazardDistanceText}
-                </div>
-            `
+            popup: HM.buildHazardMarkerPopupHtml({
+                popupIcon,
+                config,
+                description: hazard.description,
+                distanceHtml: hazardDistanceText,
+            })
         }).addTo(map);
 
         window.hazardMarkers.push(marker);
@@ -9248,6 +9220,15 @@ function _mapControls() { return VoyagrModules.mapControls(); }
 
 /** Unit-tested camera map marker HTML (modules/map/camera-map-markers.js). */
 function _cameraMapMarkers() { return VoyagrModules.cameraMapMarkers(); }
+
+/** Unit-tested route hazard map marker HTML (modules/map/hazard-map-markers.js). */
+function _hazardMapMarkers() { return VoyagrModules.hazardMapMarkers(); }
+
+/** Unit-tested PWA install banner HTML (modules/ui/pwa-install.js). */
+function _pwaInstall() { return VoyagrModules.pwaInstall(); }
+
+/** Unit-tested best-time-to-leave panel HTML (modules/navigation/best-time-leave.js). */
+function _bestTimeLeave() { return VoyagrModules.bestTimeLeave(); }
 
 /** Unit-tested speed-limit widget helpers (modules/navigation/speed-limit-widget.js). */
 function _speedLimitWidget() { return VoyagrModules.speedLimitWidget(); }
@@ -16927,41 +16908,16 @@ function analysebestTimeToLeave() {
             const slotsDiv = document.getElementById('bestTimeSlots');
             if (!container || !slotsDiv) return;
 
-            const trafficColors = {
-                low: '#4CAF50', moderate: '#FF9800', heavy: '#FF5722', severe: '#D32F2F'
-            };
-
-            let html = '';
-            data.all_slots.sort((a, b) => {
+            const sortedSlots = data.all_slots.slice().sort((a, b) => {
                 const timeA = a.time.split(':').map(Number);
                 const timeB = b.time.split(':').map(Number);
                 return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
             });
 
-            data.all_slots.forEach(slot => {
-                const color = trafficColors[slot.traffic_level] || '#999';
-                const isBest = data.best_time && slot.time === data.best_time.time;
-                const barWidth = Math.max(10, Math.min(100, slot.congestion_pct));
-                html += `
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 6px 8px; border-radius: 6px; ${isBest ? 'background: #e8f5e9; border: 1px solid #81C784;' : 'background: #fafafa;'}">
-                        <span style="font-size: 13px; font-weight: ${isBest ? '700' : '500'}; min-width: 45px;">${slot.is_now ? 'Now' : slot.time}</span>
-                        <div style="flex: 1; background: #eee; border-radius: 4px; height: 8px; overflow: hidden;">
-                            <div style="width: ${barWidth}%; height: 100%; background: ${color}; border-radius: 4px;"></div>
-                        </div>
-                        <span style="font-size: 11px; color: ${color}; font-weight: 600; min-width: 60px; text-align: right;">${slot.traffic_level}</span>
-                        ${isBest ? '<span style="font-size: 11px; color: #388E3C; font-weight: 700;">BEST</span>' : ''}
-                    </div>`;
+            slotsDiv.innerHTML = _bestTimeLeave().buildBestTimeSlotsPanelHtml(sortedSlots, data.best_time, {
+                source: data.source,
+                analysed_at: data.analysed_at,
             });
-
-            html += `<div style="font-size: 11px; color: #888; margin-top: 8px;">Source: ${data.source} | Analysed at ${data.analysed_at}</div>`;
-
-            if (data.best_time && !data.best_time.is_now) {
-                html += `<button onclick="applyBestDepartureTime('${data.best_time.time}')" style="margin-top: 8px; width: 100%; padding: 8px; background: #4CAF50; color: white; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;">
-                    Set departure to ${data.best_time.time}
-                </button>`;
-            }
-
-            slotsDiv.innerHTML = html;
             container.style.display = 'block';
             showStatus('Traffic analysis complete', 'success');
         } else {
@@ -17605,7 +17561,7 @@ function isAndroid() {
 }
 
 function dismissAddToHomeScreenForDays(days) {
-    const el = document.getElementById('voyagr-add-homescreen-banner');
+    const el = document.getElementById(_pwaInstall().PWA_BANNER_ID);
     if (el) el.remove();
     const ms = days * 24 * 60 * 60 * 1000;
     localStorage.setItem('voyagr_add_homescreen_dismiss_until', String(Date.now() + ms));
@@ -17626,7 +17582,7 @@ function tryShowInstallBanner() {
     const deferred = voyagrDeferredInstallPrompt;
     let mode = ios ? 'ios' : deferred ? 'install' : 'generic';
 
-    const existing = document.getElementById('voyagr-add-homescreen-banner');
+    const existing = document.getElementById(_pwaInstall().PWA_BANNER_ID);
     if (existing) {
         const cur = existing.getAttribute('data-mode');
         if (cur === mode) return;
@@ -17639,14 +17595,15 @@ function tryShowInstallBanner() {
         }
     }
 
-    if (document.getElementById('voyagr-add-homescreen-banner')) return;
+    if (document.getElementById(_pwaInstall().PWA_BANNER_ID)) return;
 
+    const PWA = _pwaInstall();
     const bar = document.createElement('div');
-    bar.id = 'voyagr-add-homescreen-banner';
+    bar.id = PWA.PWA_BANNER_ID;
     bar.setAttribute('data-mode', mode);
     bar.setAttribute('role', 'dialog');
     bar.setAttribute('aria-label', 'Add Voyagr to home screen');
-    bar.style.cssText = 'position:fixed;bottom:0;left:0;right:0;z-index:99999;background:#1a237e;color:#fff;padding:12px 14px;display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;font-size:14px;box-shadow:0 -4px 16px rgba(0,0,0,0.25);';
+    bar.style.cssText = PWA.getPwaInstallBannerStyleCssText();
 
     const msg = document.createElement('div');
     msg.style.flex = '1';
@@ -17660,18 +17617,18 @@ function tryShowInstallBanner() {
     const btnLater = document.createElement('button');
     btnLater.type = 'button';
     btnLater.textContent = 'Not now';
-    btnLater.style.cssText = 'padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,0.5);background:transparent;color:#fff;cursor:pointer;font-size:13px;';
+    btnLater.style.cssText = PWA.getPwaDismissButtonStyleCssText();
     btnLater.onclick = () => dismissAddToHomeScreenForDays(14);
 
     if (mode === 'ios') {
-        msg.innerHTML = '<strong>Add Voyagr to your home screen</strong><br><span style="opacity:0.92;font-size:12px;">Tap <strong>Share</strong>, then <strong>Add to Home Screen</strong>.</span>';
+        msg.innerHTML = PWA.buildPwaInstallMessageHtml('ios');
         actions.appendChild(btnLater);
     } else if (mode === 'install') {
-        msg.innerHTML = '<strong>Install Voyagr</strong><span style="opacity:0.92;font-size:12px;display:block;margin-top:4px;">Add this app to your home screen for quick access.</span>';
+        msg.innerHTML = PWA.buildPwaInstallMessageHtml('install');
         const btnInstall = document.createElement('button');
         btnInstall.type = 'button';
         btnInstall.textContent = 'Add to Home screen';
-        btnInstall.style.cssText = 'padding:8px 14px;border-radius:8px;border:none;background:#7c4dff;color:#fff;cursor:pointer;font-weight:600;font-size:13px;';
+        btnInstall.style.cssText = PWA.getPwaPrimaryButtonStyleCssText();
         btnInstall.onclick = async () => {
             const ev = voyagrDeferredInstallPrompt;
             if (!ev) return;
@@ -17685,11 +17642,11 @@ function tryShowInstallBanner() {
         actions.appendChild(btnLater);
         actions.appendChild(btnInstall);
     } else {
-        msg.innerHTML = '<strong>Add Voyagr to your home screen</strong><span style="opacity:0.92;font-size:12px;display:block;margin-top:4px;">Use your browser menu: Install app or Add to Home Screen.</span>';
+        msg.innerHTML = PWA.buildPwaInstallMessageHtml('generic');
         const btnOk = document.createElement('button');
         btnOk.type = 'button';
         btnOk.textContent = 'Got it';
-        btnOk.style.cssText = 'padding:8px 14px;border-radius:8px;border:none;background:#7c4dff;color:#fff;cursor:pointer;font-weight:600;font-size:13px;';
+        btnOk.style.cssText = PWA.getPwaPrimaryButtonStyleCssText();
         btnOk.onclick = () => dismissAddToHomeScreenForDays(14);
         actions.appendChild(btnLater);
         actions.appendChild(btnOk);
