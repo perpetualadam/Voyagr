@@ -312,3 +312,51 @@ describe('buildNavigationFollowApplyPlan', () => {
         expect(buildNavigationFollowApplyPlan({ hasMap: false }).action).toBe('skip');
     });
 });
+
+describe('buildSmartZoomApplyPlan', () => {
+    const { buildSmartZoomEasePlan, buildSmartZoomApplyPlan } = require('../modules/navigation/camera-pitch.js');
+
+    test('skips when ease plan does not apply', () => {
+        expect(buildSmartZoomApplyPlan({ shouldApply: false }).action).toBe('skip');
+    });
+
+    test('returns easeTo apply plan with turn log line', () => {
+        const easePlan = buildSmartZoomEasePlan({
+            smartZoomEnabled: true,
+            routeInProgress: true,
+            speedMph: 20,
+            distanceToNextTurn: 200,
+            roadType: 'residential',
+            lastZoomLevel: 13,
+            userLat: 51.5,
+            userLon: -0.1,
+            hasMap: true,
+            turnZoomThreshold: 500,
+            computeSmartZoom: () => 17,
+        });
+        const apply = buildSmartZoomApplyPlan(easePlan);
+        expect(apply.action).toBe('apply');
+        expect(apply.newZoomLevel).toBe(17);
+        expect(apply.easeTo.zoom).toBe(17);
+        expect(apply.logLine).toContain('Turn-based zoom');
+        expect(apply.lastTurnZoomApplied).toBe(true);
+    });
+
+    test('returns speed-based log when not a turn zoom', () => {
+        const easePlan = buildSmartZoomEasePlan({
+            smartZoomEnabled: true,
+            routeInProgress: true,
+            speedMph: 60,
+            distanceToNextTurn: null,
+            roadType: 'primary',
+            lastZoomLevel: 13,
+            userLat: 51.5,
+            userLon: -0.1,
+            hasMap: true,
+            computeSmartZoom: () => 15,
+        });
+        const apply = buildSmartZoomApplyPlan(easePlan);
+        expect(apply.logLine).toContain('Speed-based zoom');
+        expect(apply.lastTurnZoomApplied).toBe(false);
+    });
+});

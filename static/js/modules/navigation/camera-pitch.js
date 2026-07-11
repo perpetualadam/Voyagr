@@ -287,6 +287,39 @@
         return none;
     }
 
+    /**
+     * Apply plan for smart zoom animation after buildSmartZoomEasePlan.
+     * @param {Object} easePlan
+     * @returns {Object}
+     */
+    function buildSmartZoomApplyPlan(easePlan) {
+        if (!easePlan || !easePlan.shouldApply) {
+            return { action: 'skip' };
+        }
+
+        var apply = {
+            action: 'apply',
+            newZoomLevel: easePlan.newZoomLevel,
+            lastTurnZoomApplied: !!easePlan.lastTurnZoomApplied,
+        };
+
+        if (easePlan.easeTo) {
+            apply.easeTo = easePlan.easeTo;
+        } else if (easePlan.setZoomOnly) {
+            apply.setZoomOnly = true;
+        }
+
+        if (easePlan.logTurn) {
+            apply.logLine = '[SmartZoom] Turn-based zoom to level ' + easePlan.newZoomLevel +
+                ' - Turn in ' + easePlan.logDistanceToTurn.toFixed(0) + ' m';
+        } else {
+            apply.logLine = '[SmartZoom] Speed-based zoom to level ' + easePlan.newZoomLevel +
+                ' for speed ' + easePlan.logSpeedMph.toFixed(1) + ' mph';
+        }
+
+        return apply;
+    }
+
     const api = {
         decideDrivingCamera: decideDrivingCamera,
         computeFollowPadding: computeFollowPadding,
@@ -294,6 +327,7 @@
         buildNavigationFollowCameraPlan: buildNavigationFollowCameraPlan,
         buildNavigationFollowApplyPlan: buildNavigationFollowApplyPlan,
         buildSmartZoomEasePlan: buildSmartZoomEasePlan,
+        buildSmartZoomApplyPlan: buildSmartZoomApplyPlan,
         buildNavigationZoomTickPlan: buildNavigationZoomTickPlan,
     };
 
