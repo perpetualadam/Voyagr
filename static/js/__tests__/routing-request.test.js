@@ -301,3 +301,29 @@ describe('multi-drop and initial route helpers', () => {
         expect(RR.readRerouteIncludeFlags(storage).includeCaz).toBe(false);
     });
 });
+
+describe('route API error parsing', () => {
+    test('isRouteApiJsonContentType detects JSON responses', () => {
+        expect(RR.isRouteApiJsonContentType('application/json')).toBe(true);
+        expect(RR.isRouteApiJsonContentType('application/json; charset=utf-8')).toBe(true);
+        expect(RR.isRouteApiJsonContentType('text/html')).toBe(false);
+        expect(RR.isRouteApiJsonContentType(null)).toBe(false);
+    });
+
+    test('buildNonJsonRouteApiErrorMessage maps gateway and timeout bodies', () => {
+        expect(RR.buildNonJsonRouteApiErrorMessage(504, '')).toContain('Gateway Timeout');
+        expect(RR.buildNonJsonRouteApiErrorMessage(502, '')).toContain('Bad Gateway');
+        expect(RR.buildNonJsonRouteApiErrorMessage(500, '')).toContain('Internal Server Error');
+        expect(RR.buildNonJsonRouteApiErrorMessage(503, 'upstream Timeout')).toContain('timed out');
+    });
+
+    test('parseRouteApiErrorMessage prefers JSON error field', () => {
+        expect(RR.parseRouteApiErrorMessage(400, JSON.stringify({ error: '  Bad coords  ' }))).toBe('Bad coords');
+        expect(RR.parseRouteApiErrorMessage(408, '{}')).toContain('timed out');
+        expect(RR.buildRouteApiHttpErrorMessage(418, '')).toContain('418');
+    });
+
+    test('getDegradedRoutingStatusMessage warns about offline engines', () => {
+        expect(RR.getDegradedRoutingStatusMessage()).toContain('Valhalla/GraphHopper offline');
+    });
+});

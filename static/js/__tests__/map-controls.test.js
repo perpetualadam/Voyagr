@@ -89,4 +89,16 @@ describe('map-controls module', () => {
         expect(MC.getNavStopStatusMessage()).toBe('Navigation stopped');
         expect(MC.getNavStopNotification().title).toBe('Navigation Ended');
     });
+
+    test('nav start feedback and wake lock status copy', () => {
+        expect(MC.getWakeLockAcquiredStatusMessage()).toContain('Screen lock');
+        const fresh = MC.buildNavStartUserFeedbackPlan(false);
+        expect(fresh.notificationTitle).toBe('Navigation Started');
+        expect(fresh.speakMessage).toContain('Navigation started');
+        expect(fresh.statusMessage).toContain('active');
+        const resume = MC.buildNavStartUserFeedbackPlan(true);
+        expect(resume.notificationTitle).toBe('Navigation resumed');
+        expect(resume.speakMessage).toBeNull();
+        expect(resume.statusMessage).toContain('resumed');
+    });
 });
