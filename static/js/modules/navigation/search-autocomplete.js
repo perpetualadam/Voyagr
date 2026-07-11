@@ -128,6 +128,35 @@
         );
     }
 
+    /**
+     * Primary label for a geocode autocomplete result row.
+     * @param {Object} result
+     * @returns {string}
+     */
+    function resolveGeocodeResultDisplayName(result) {
+        result = result || {};
+        var name = result.name || (result.address && result.address.road) ||
+            (result.address && result.address.city) || result.display_name || 'Location';
+        var houseNum = result.address && result.address.house_number;
+        if (houseNum && !String(name).startsWith(String(houseNum))) {
+            name = houseNum + ' ' + name;
+        }
+        return name;
+    }
+
+    /**
+     * Truncated display_name for autocomplete secondary line.
+     * @param {Object} result
+     * @param {number} [maxLen=60]
+     * @returns {string}
+     */
+    function resolveGeocodeResultShortAddress(result, maxLen) {
+        result = result || {};
+        var limit = Number(maxLen) || 60;
+        var address = result.display_name || '';
+        return address.length > limit ? address.substring(0, limit) + '...' : address;
+    }
+
     var api = {
         DEFAULT_NO_RESULTS_MESSAGE: DEFAULT_NO_RESULTS_MESSAGE,
         getLocationIcon: getLocationIcon,
@@ -136,6 +165,8 @@
         buildRecentDestinationItemHtml: buildRecentDestinationItemHtml,
         buildServerSearchHistoryItemHtml: buildServerSearchHistoryItemHtml,
         buildGeocodeAutocompleteItemHtml: buildGeocodeAutocompleteItemHtml,
+        resolveGeocodeResultDisplayName: resolveGeocodeResultDisplayName,
+        resolveGeocodeResultShortAddress: resolveGeocodeResultShortAddress,
         AUTOCOMPLETE_LOADING_RECENT_TEXT: AUTOCOMPLETE_LOADING_RECENT_TEXT,
         AUTOCOMPLETE_SEARCHING_TEXT: AUTOCOMPLETE_SEARCHING_TEXT,
         AUTOCOMPLETE_RECENT_LOAD_ERROR_MESSAGE: AUTOCOMPLETE_RECENT_LOAD_ERROR_MESSAGE,

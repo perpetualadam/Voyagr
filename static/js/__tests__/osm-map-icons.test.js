@@ -33,4 +33,9 @@ describe('osm-map-icons module', () => {
         expect(html).toContain('width:26px;height:38px;margin:0 auto');
         expect(html).toContain('<pill/>');
     });
+
+    test('OSM traffic light marker dimensions are exported', () => {
+        expect(OSM.OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE).toEqual([26, 38]);
+        expect(OSM.OSM_TRAFFIC_LIGHT_MARKER_ICON_ANCHOR).toEqual([13, 19]);
+    });
 });

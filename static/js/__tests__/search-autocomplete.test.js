@@ -60,4 +60,13 @@ describe('search-autocomplete module', () => {
         expect(SA.buildAutocompleteLoadingHtml(SA.AUTOCOMPLETE_SEARCHING_TEXT)).toContain('autocomplete-loading');
         expect(SA.AUTOCOMPLETE_SEARCH_FAILED_MESSAGE).toContain('Search failed');
     });
+
+    test('resolveGeocodeResultDisplayName prefixes house number and truncates address', () => {
+        expect(SA.resolveGeocodeResultDisplayName({
+            name: 'High Street',
+            address: { house_number: '10', road: 'High Street' },
+        })).toBe('10 High Street');
+        const longName = 'x'.repeat(80);
+        expect(SA.resolveGeocodeResultShortAddress({ display_name: longName }, 60)).toBe('x'.repeat(60) + '...');
+    });
 });

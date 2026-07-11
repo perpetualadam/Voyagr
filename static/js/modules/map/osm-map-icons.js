@@ -49,6 +49,9 @@
         );
     }
 
+    var OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE = [26, 38];
+    var OSM_TRAFFIC_LIGHT_MARKER_ICON_ANCHOR = [13, 19];
+
     /**
      * @param {string} iconSvg
      * @returns {string}
@@ -104,6 +107,8 @@
         buildRailwayCrossingIconSvg: buildRailwayCrossingIconSvg,
         buildOsmTrafficLightFallbackSvg: buildOsmTrafficLightFallbackSvg,
         buildOsmTrafficLightMarkerPillHtml: buildOsmTrafficLightMarkerPillHtml,
+        OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE: OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE,
+        OSM_TRAFFIC_LIGHT_MARKER_ICON_ANCHOR: OSM_TRAFFIC_LIGHT_MARKER_ICON_ANCHOR,
         buildOsmTrafficLightPopupIconWrapperHtml: buildOsmTrafficLightPopupIconWrapperHtml,
         buildRailwayCrossingMarkerHtml: buildRailwayCrossingMarkerHtml,
         buildRailwayCrossingPopupHtml: buildRailwayCrossingPopupHtml,
