@@ -689,6 +689,68 @@
         return { ok: true, branch: 'proceed' };
     }
 
+    /**
+     * Execute plan for calculateRoute preflight logging and status side effects.
+     * @param {Object} preflight - from buildCalculateRoutePreflightPlan
+     * @returns {Object}
+     */
+    function buildCalculateRoutePreflightExecutePlan(preflight) {
+        preflight = preflight || {};
+        return {
+            shouldProceed: !!preflight.ok,
+            statusMessage: preflight.statusMessage,
+            statusType: preflight.statusType,
+            missingInputsLogMessage: preflight.branch === 'missing_inputs' || preflight.branch === 'empty_locations'
+                ? '[calculateRoute] ERROR: ' + preflight.statusMessage
+                : null,
+            geocodingBusyLogMessage: preflight.branch === 'geocoding_busy'
+                ? '[calculateRoute] WARNING: Geocoding already in progress'
+                : null,
+        };
+    }
+
+    /**
+     * Log plan for calculateRoute API request metadata.
+     * @param {Object} routePlan - from buildCalculateRouteApiPlan
+     * @returns {Object}
+     */
+    function buildCalculateRouteApiRequestLogPlan(routePlan) {
+        routePlan = routePlan || {};
+        return {
+            requestLogPrefix: '[calculateRoute] Making API request to /api/route with:',
+            viaPointsLogMessage: '[calculateRoute] Via-points: ' + (routePlan.viaPointsCount || 0) +
+                ' Stops: ' + (routePlan.stopsCount || 0) +
+                ' Total stop time: ' + (routePlan.totalStopTimeMinutes || 0) + ' min',
+            multiDropLogMessage: '[calculateRoute] Multi-drop: optimize=' + !!routePlan.optimizeStopOrder +
+                ' roundTrip=' + !!routePlan.roundTrip,
+        };
+    }
+
+    /**
+     * Execute plan for calculateRoute API response dispatch and logging.
+     * @param {Object} data - parsed /api/route JSON body
+     * @param {boolean} routeInProgress
+     * @returns {Object}
+     */
+    function buildCalculateRouteResponseExecutePlan(data, routeInProgress) {
+        var apiPlan = buildRouteApiResultPlan(data);
+        var dispatch = buildCalculateRouteDispatchPlan(apiPlan, routeInProgress);
+        return {
+            responseLogPrefix: '[Route API] Response received:',
+            responseLogMeta: dispatch.responseLogMeta,
+            degradedLogPrefix: '[Route API] Degraded routing — local engines failed:',
+            degradedLogWarning: dispatch.degradedLogWarning,
+            degradedStatusMessage: dispatch.degradedStatusMessage,
+            branch: dispatch.branch,
+            hideRouteProgressBar: dispatch.hideRouteProgressBar,
+            statusMessage: dispatch.statusMessage,
+            statusType: dispatch.statusType,
+            inNavRerouteLogMessage: dispatch.branch === 'in_nav_reroute'
+                ? '[calculateRoute] Navigation active — using in-nav reroute path'
+                : null,
+        };
+    }
+
     var api = {
         buildSharedRouteOptions: buildSharedRouteOptions,
         isInitialRouteHazardAvoidanceEnabled: isInitialRouteHazardAvoidanceEnabled,
@@ -720,6 +782,9 @@
         buildRouteApiResultPlan: buildRouteApiResultPlan,
         buildCalculateRouteDispatchPlan: buildCalculateRouteDispatchPlan,
         buildCalculateRoutePreflightPlan: buildCalculateRoutePreflightPlan,
+        buildCalculateRoutePreflightExecutePlan: buildCalculateRoutePreflightExecutePlan,
+        buildCalculateRouteApiRequestLogPlan: buildCalculateRouteApiRequestLogPlan,
+        buildCalculateRouteResponseExecutePlan: buildCalculateRouteResponseExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

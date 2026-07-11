@@ -495,6 +495,76 @@ describe('buildCalculateRoutePreflightPlan', () => {
     });
 });
 
+describe('buildCalculateRoutePreflightExecutePlan', () => {
+    test('maps preflight branches to log messages', () => {
+        const missing = RR.buildCalculateRoutePreflightExecutePlan(
+            RR.buildCalculateRoutePreflightPlan({
+                hasStartInput: false,
+                hasEndInput: true,
+                start: 'A',
+                end: 'B',
+                isGeocoding: false,
+            })
+        );
+        expect(missing.shouldProceed).toBe(false);
+        expect(missing.missingInputsLogMessage).toContain('ERROR');
+
+        const busy = RR.buildCalculateRoutePreflightExecutePlan(
+            RR.buildCalculateRoutePreflightPlan({
+                hasStartInput: true,
+                hasEndInput: true,
+                start: 'A',
+                end: 'B',
+                isGeocoding: true,
+            })
+        );
+        expect(busy.geocodingBusyLogMessage).toContain('Geocoding already in progress');
+    });
+});
+
+describe('buildCalculateRouteApiRequestLogPlan', () => {
+    test('formats via-point and multi-drop log lines', () => {
+        const logs = RR.buildCalculateRouteApiRequestLogPlan({
+            viaPointsCount: 2,
+            stopsCount: 1,
+            totalStopTimeMinutes: 15,
+            optimizeStopOrder: true,
+            roundTrip: false,
+        });
+        expect(logs.viaPointsLogMessage).toContain('Via-points: 2');
+        expect(logs.multiDropLogMessage).toContain('optimize=true');
+    });
+});
+
+describe('buildCalculateRouteResponseExecutePlan', () => {
+    test('routes idle success to idle_preview branch', () => {
+        const plan = RR.buildCalculateRouteResponseExecutePlan(
+            { success: true, source: 'valhalla', distance: '10 km', time: '20 min' },
+            false
+        );
+        expect(plan.branch).toBe('idle_preview');
+        expect(plan.inNavRerouteLogMessage).toBeNull();
+    });
+
+    test('routes in-nav success to in_nav_reroute branch with log message', () => {
+        const plan = RR.buildCalculateRouteResponseExecutePlan(
+            { success: true, source: 'valhalla' },
+            true
+        );
+        expect(plan.branch).toBe('in_nav_reroute');
+        expect(plan.inNavRerouteLogMessage).toContain('in-nav reroute');
+    });
+
+    test('routes API errors to error branch', () => {
+        const plan = RR.buildCalculateRouteResponseExecutePlan(
+            { success: false, error: 'bad coords' },
+            false
+        );
+        expect(plan.branch).toBe('error');
+        expect(plan.statusMessage).toBe('Error: bad coords');
+    });
+});
+
 describe('buildAutomaticRerouteRequestPlan', () => {
     test('assembles reroute body from storage and runtime prefs', () => {
         const storage = mockStorage({

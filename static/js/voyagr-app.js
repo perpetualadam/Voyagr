@@ -4314,25 +4314,23 @@ function applyCalculateRouteIdlePreviewOutcome(data, labels) {
     try {
         const GL = _geocodingLocations();
         const RS = _routeSelection();
-        const distanceKm = parseFloat(data.distance_km || data.distance) || 0;
-        const previewPlan = RS.buildRoutePreviewSuccessPlan({
-            geocodedStart: labels.geocodedStart,
-            geocodedEnd: labels.geocodedEnd,
-            startLabel: labels.start,
-            endLabel: labels.end,
-            data,
-            parseLatLonPair: GL.parseLatLonPairString.bind(GL),
-            invalidFormatMessage: GL.getInvalidCoordinatesFormatStatusMessage(),
-            invalidCoordsMessage: GL.getInvalidCoordinatesStatusMessage(),
-            decodePolyline,
-            fmt: {
-                distanceText: convertDistance(distanceKm),
+        const previewPlan = RS.buildRoutePreviewSuccessPlan(
+            RS.buildRoutePreviewSuccessInputPlan({
+                geocodedStart: labels.geocodedStart,
+                geocodedEnd: labels.geocodedEnd,
+                startLabel: labels.start,
+                endLabel: labels.end,
+                data,
+                parseLatLonPair: GL.parseLatLonPairString.bind(GL),
+                invalidFormatMessage: GL.getInvalidCoordinatesFormatStatusMessage(),
+                invalidCoordsMessage: GL.getInvalidCoordinatesStatusMessage(),
+                decodePolyline,
+                convertDistance,
                 distUnit: getDistanceUnit(),
                 currencySymbol: getCurrencySymbol(),
-                notificationDistanceText: convertDistance(distanceKm),
-            },
-            parseDurationMinutes: _routeSharing().parseSharedRouteDurationMinutes,
-        });
+                parseDurationMinutes: _routeSharing().parseSharedRouteDurationMinutes,
+            })
+        );
         const plan = RS.buildCalculateRouteIdlePreviewExecutePlan(previewPlan, data);
 
         if (!plan.shouldExecute) {
@@ -4406,18 +4404,19 @@ async function calculateRoute() {
         end,
         isGeocoding,
     });
+    const preflightExecute = _routingRequest().buildCalculateRoutePreflightExecutePlan(preflight);
 
     console.log('[calculateRoute] Start:', start);
     console.log('[calculateRoute] End:', end);
     console.log('[calculateRoute] Start dataset:', startInput?.dataset);
     console.log('[calculateRoute] End dataset:', endInput?.dataset);
 
-    if (!preflight.ok) {
-        showStatus(preflight.statusMessage, preflight.statusType);
-        if (preflight.branch === 'missing_inputs' || preflight.branch === 'empty_locations') {
-            console.error('[calculateRoute] ERROR:', preflight.statusMessage);
-        } else if (preflight.branch === 'geocoding_busy') {
-            console.warn('[calculateRoute] WARNING: Geocoding already in progress');
+    if (!preflightExecute.shouldProceed) {
+        showStatus(preflightExecute.statusMessage, preflightExecute.statusType);
+        if (preflightExecute.missingInputsLogMessage) {
+            console.error(preflightExecute.missingInputsLogMessage);
+        } else if (preflightExecute.geocodingBusyLogMessage) {
+            console.warn(preflightExecute.geocodingBusyLogMessage);
         }
         return;
     }
@@ -4461,10 +4460,11 @@ async function calculateRoute() {
         currentLon: currentLon,
     });
     const requestBody = routePlan.requestBody;
+    const requestLog = RR.buildCalculateRouteApiRequestLogPlan(routePlan);
 
-    console.log('[calculateRoute] Making API request to /api/route with:', requestBody);
-    console.log('[calculateRoute] Via-points:', routePlan.viaPointsCount, 'Stops:', routePlan.stopsCount, 'Total stop time:', routePlan.totalStopTimeMinutes, 'min');
-    console.log('[calculateRoute] Multi-drop: optimize=' + routePlan.optimizeStopOrder + ' roundTrip=' + routePlan.roundTrip);
+    console.log(requestLog.requestLogPrefix, requestBody);
+    console.log(requestLog.viaPointsLogMessage);
+    console.log(requestLog.multiDropLogMessage);
 
     fetch('/api/route', {
         method: 'POST',
@@ -4495,29 +4495,28 @@ async function calculateRoute() {
         })
         .then(data => {
             const RR = _routingRequest();
-            const apiPlan = RR.buildRouteApiResultPlan(data);
-            const dispatch = RR.buildCalculateRouteDispatchPlan(apiPlan, routeInProgress);
-            console.log('[Route API] Response received:', dispatch.responseLogMeta);
+            const responsePlan = RR.buildCalculateRouteResponseExecutePlan(data, routeInProgress);
+            console.log(responsePlan.responseLogPrefix, responsePlan.responseLogMeta);
 
-            if (dispatch.degradedLogWarning) {
+            if (responsePlan.degradedLogWarning) {
                 console.warn(
-                    '[Route API] Degraded routing — local engines failed:',
-                    dispatch.degradedLogWarning.warning,
-                    dispatch.degradedLogWarning.engines
+                    responsePlan.degradedLogPrefix,
+                    responsePlan.degradedLogWarning.warning,
+                    responsePlan.degradedLogWarning.engines
                 );
             }
-            if (dispatch.degradedStatusMessage) {
-                showStatus(dispatch.degradedStatusMessage, 'warning');
+            if (responsePlan.degradedStatusMessage) {
+                showStatus(responsePlan.degradedStatusMessage, 'warning');
             }
 
-            if (dispatch.branch === 'error') {
-                showStatus(dispatch.statusMessage, dispatch.statusType);
+            if (responsePlan.branch === 'error') {
+                showStatus(responsePlan.statusMessage, responsePlan.statusType);
                 hideRouteProgressBar();
                 return;
             }
 
-            if (dispatch.branch === 'in_nav_reroute') {
-                console.log('[calculateRoute] Navigation active — using in-nav reroute path');
+            if (responsePlan.branch === 'in_nav_reroute') {
+                console.log(responsePlan.inNavRerouteLogMessage);
                 applyCalculateRouteInNavRerouteOutcome(data, geocodedEnd, end);
                 return;
             }
@@ -6728,34 +6727,30 @@ function startNavigation() {
  * @param {Object} routeData - API route payload or single route object
  */
 function applyRouteUpdateDuringNavigation(routeData) {
-    console.log('[Route Preview] Navigation active — silent route update (no preview UI / no sheet)');
-
+    const RS = _routeSelection();
     const activeRoute = pickActiveRouteDuringNavigation(routeData.routes, routeData);
-    if (!activeRoute) {
-        showStatus('❌ No route to apply', 'error');
+    const plan = RS.buildRouteUpdateDuringNavigationExecutePlan(
+        activeRoute,
+        routeData,
+        window.lastCalculatedRoute
+    );
+
+    console.log(plan.entryLogMessage);
+
+    if (!plan.shouldExecute) {
+        showStatus(plan.errorStatusMessage, 'error');
         return;
     }
 
-    if (activeRoute.geometry) {
-        updateRouteOnMap(activeRoute);
+    if (plan.updateRouteOnMap) {
+        updateRouteOnMap(plan.activeRoute);
     }
 
-    if (window.lastCalculatedRoute) {
-        const durationMinutes = activeRoute.duration_minutes ??
-            (routeData.time ? parseInt(routeData.time, 10) : null) ??
-            window.lastCalculatedRoute.duration_minutes;
-        const prevNav = window.lastCalculatedRoute;
-        window.lastCalculatedRoute = {
-            ...prevNav,
-            ...routeData,
-            ...activeRoute,
-            duration_minutes: durationMinutes,
-            destination: prevNav.destination || routeData.destination || activeRoute.destination,
-            destinationName: prevNav.destinationName || routeData.destinationName || activeRoute.destinationName,
-        };
+    if (plan.patchLastCalculatedRoute) {
+        window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
     }
 
-    showStatus('✅ Route updated — continuing navigation', 'success');
+    showStatus(plan.statusMessage, plan.statusType);
 }
 
 /**
@@ -6764,16 +6759,17 @@ function applyRouteUpdateDuringNavigation(routeData) {
  * @returns {HTMLElement|null}
  */
 function applyRouteComparisonModalFromPlan(domPlan) {
-    if (!domPlan || domPlan.action !== 'mount') return null;
-    if (domPlan.removeExisting) {
-        const existing = document.getElementById(domPlan.modalId);
+    const plan = _routeSelection().buildRouteComparisonModalExecutePlan(domPlan);
+    if (!plan.shouldExecute) return null;
+    if (plan.removeExisting) {
+        const existing = document.getElementById(plan.modalId);
         if (existing) existing.remove();
     }
     const modal = document.createElement('div');
-    modal.id = domPlan.modalId;
-    modal.style.cssText = domPlan.overlayStyle;
-    modal.innerHTML = domPlan.innerHtml;
-    if (domPlan.dismissOnOverlayClick) {
+    modal.id = plan.modalId;
+    modal.style.cssText = plan.overlayStyle;
+    modal.innerHTML = plan.innerHtml;
+    if (plan.dismissOnOverlayClick) {
         modal.addEventListener('click', (e) => {
             if (e.target === modal) modal.remove();
         });
@@ -6939,27 +6935,29 @@ function showAlternativeRoutesInPreview() {
 }
 
 async function showRouteComparison() {
-    console.log('[RouteComparison] showRouteComparison called');
-    console.log('[RouteComparison] routeOptions:', routeOptions);
-    console.log('[RouteComparison] routeOptions length:', routeOptions ? routeOptions.length : 0);
-
     const selection = _routeSelection();
     const routeCount = routeOptions ? routeOptions.length : 0;
-    if (!selection.hasRoutesForComparison(routeCount)) {
-        console.error('[RouteComparison] No routes available:', routeCount);
-        showStatus(selection.getRouteComparisonNoRoutesMessage(), 'error');
+    const orch = selection.buildShowRouteComparisonOrchestrationPlan(routeCount);
+
+    console.log(orch.entryLogMessage);
+    console.log('[RouteComparison] routeOptions:', routeOptions);
+    console.log('[RouteComparison] routeOptions length:', routeCount);
+
+    if (!orch.shouldProceed) {
+        console.error(orch.errorLogMessage, routeCount);
+        showStatus(orch.errorStatusMessage, 'error');
         return;
     }
 
-    if (routeCount < 2) {
-        console.warn('[RouteComparison] Only 1 route available, showing it anyway');
-        showStatus(selection.getRouteComparisonSingleRouteMessage(), 'info');
+    if (orch.singleRouteWarning) {
+        console.warn(orch.singleRouteLogMessage);
+        showStatus(orch.singleRouteStatusMessage, 'info');
     }
 
     try {
         const routesForComparison = selection.buildRouteComparisonRequestRoutes(routeOptions);
 
-        console.log('[RouteComparison] Sending routes to API:', routesForComparison);
+        console.log(orch.routesLogPrefix, routesForComparison);
 
         const response = await fetch('/api/route-comparison', {
             method: 'POST',
@@ -6968,27 +6966,25 @@ async function showRouteComparison() {
         });
 
         const data = await response.json();
-        console.log('[RouteComparison] API response:', data);
+        const successPlan = selection.buildShowRouteComparisonSuccessExecutePlan({
+            apiSuccess: !!data.success,
+            apiError: data.error,
+            comparison: data.comparison,
+            currencySymbol: getCurrencySymbol(),
+            distUnit: getDistanceUnit(),
+            convertDistance,
+        });
 
-        if (!data.success) {
-            console.error('[RouteComparison] API error:', data.error);
-            showStatus(selection.getRouteComparisonApiErrorMessage(data.error), 'error');
+        console.log(successPlan.responseLogPrefix || '[RouteComparison] API response:', data);
+
+        if (!successPlan.shouldMountModal) {
+            console.error(successPlan.errorLogMessage, data.error);
+            showStatus(successPlan.errorStatusMessage, 'error');
             return;
         }
 
-        const comparison = data.comparison;
-        const symbol = getCurrencySymbol();
-        const distUnit = getDistanceUnit();
-        const mountPlan = selection.buildRouteComparisonModalMountPlan(comparison, {
-            currencySymbol: symbol,
-            distUnit: distUnit,
-            distanceTexts: comparison.routes.map((route) => convertDistance(route.distance_km)),
-        });
-
-        applyRouteComparisonModalFromPlan(
-            selection.buildRouteComparisonModalDomApplyPlan(mountPlan)
-        );
-        showStatus(selection.getRouteComparisonSuccessMessage(), 'success');
+        applyRouteComparisonModalFromPlan(successPlan.domApplyPlan);
+        showStatus(successPlan.successStatusMessage, 'success');
     } catch (error) {
         showStatus('Error: ' + error.message, 'error');
         console.error('[Comparison] Error:', error);

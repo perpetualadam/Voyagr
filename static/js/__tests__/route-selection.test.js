@@ -265,6 +265,27 @@ describe('route preview helpers', () => {
         expect(RS.buildPreviewRouteCoordsPlan('bad', '52,-1', parse, { invalidFormat: 'fmt' }).errorStatusMessage).toBe('fmt');
     });
 
+    test('buildRoutePreviewSuccessInputPlan assembles formatters for preview plan', () => {
+        const input = RS.buildRoutePreviewSuccessInputPlan({
+            geocodedStart: '51.5,-0.1',
+            geocodedEnd: '52,-1',
+            startLabel: 'Start',
+            endLabel: 'End',
+            data: { distance_km: 10, time: '20 min' },
+            parseLatLonPair: () => ({ valid: true, coords: [51.5, -0.1] }),
+            decodePolyline: () => [],
+            convertDistance: (km) => (km * 0.62).toFixed(1),
+            distUnit: 'mi',
+            currencySymbol: '£',
+            parseDurationMinutes: () => 20,
+        });
+        expect(input.fmt.distanceText).toBe('6.2');
+        expect(input.fmt.distUnit).toBe('mi');
+        expect(input.fmt.currencySymbol).toBe('£');
+        const plan = RS.buildRoutePreviewSuccessPlan(input);
+        expect(plan.ok).toBe(true);
+    });
+
     test('buildRoutePreviewSuccessPlan assembles preview apply metadata', () => {
         const plan = RS.buildRoutePreviewSuccessPlan({
             geocodedStart: '51.5,-0.1',
@@ -773,6 +794,77 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(execute.multiRouteLogMessage).toContain('2 routes');
         expect(RS.buildCalculateRouteIdlePreviewExecutePlan({ ok: false, errorStatusMessage: 'bad' }).shouldExecute)
             .toBe(false);
+    });
+
+    test('buildRouteUpdateDuringNavigationExecutePlan patches lastCalculatedRoute', () => {
+        const execute = RS.buildRouteUpdateDuringNavigationExecutePlan(
+            { name: 'Fastest', geometry: 'abc', duration_minutes: 25 },
+            { time: '25 min', destination: '52,0' },
+            { destination: '51,0', destinationName: 'Old', duration_minutes: 20, name: 'Fastest' }
+        );
+        expect(execute.shouldExecute).toBe(true);
+        expect(execute.updateRouteOnMap).toBe(true);
+        expect(execute.patchLastCalculatedRoute).toBe(true);
+        expect(execute.lastCalculatedRoutePatch.duration_minutes).toBe(25);
+        expect(execute.lastCalculatedRoutePatch.destination).toBe('51,0');
+        expect(RS.buildRouteUpdateDuringNavigationExecutePlan(null, {}, {}).shouldExecute).toBe(false);
+    });
+
+    test('buildShowRouteComparisonOrchestrationPlan blocks empty route lists', () => {
+        const blocked = RS.buildShowRouteComparisonOrchestrationPlan(0);
+        expect(blocked.shouldProceed).toBe(false);
+        expect(blocked.errorStatusMessage).toContain('Calculate a route');
+
+        const ok = RS.buildShowRouteComparisonOrchestrationPlan(2);
+        expect(ok.shouldProceed).toBe(true);
+        expect(ok.singleRouteWarning).toBe(false);
+
+        const single = RS.buildShowRouteComparisonOrchestrationPlan(1);
+        expect(single.shouldProceed).toBe(true);
+        expect(single.singleRouteWarning).toBe(true);
+    });
+
+    test('buildShowRouteComparisonSuccessExecutePlan mounts modal on API success', () => {
+        const success = RS.buildShowRouteComparisonSuccessExecutePlan({
+            apiSuccess: true,
+            comparison: {
+                routes: [{
+                    route_id: 1,
+                    distance_km: 10,
+                    duration_minutes: 20,
+                    total_cost: 8,
+                    cost_per_km: 0.8,
+                    name: 'A',
+                }],
+                recommendations: [],
+            },
+            currencySymbol: '£',
+            distUnit: 'mi',
+            convertDistance: (km) => String(km),
+        });
+        expect(success.shouldMountModal).toBe(true);
+        expect(success.domApplyPlan.action).toBe('mount');
+
+        const fail = RS.buildShowRouteComparisonSuccessExecutePlan({
+            apiSuccess: false,
+            apiError: 'bad',
+        });
+        expect(fail.shouldMountModal).toBe(false);
+        expect(fail.errorStatusMessage).toContain('bad');
+    });
+
+    test('buildRouteComparisonModalExecutePlan wraps DOM mount fields', () => {
+        const execute = RS.buildRouteComparisonModalExecutePlan({
+            action: 'mount',
+            modalId: 'routeComparisonModal',
+            overlayStyle: 'position:fixed',
+            innerHtml: '<div>report</div>',
+            dismissOnOverlayClick: true,
+            removeExisting: true,
+        });
+        expect(execute.shouldExecute).toBe(true);
+        expect(execute.modalId).toBe('routeComparisonModal');
+        expect(RS.buildRouteComparisonModalExecutePlan({ action: 'skip' }).shouldExecute).toBe(false);
     });
 
     test('buildAlternativeRoutesPreviewMountPlans builds card plans with converted distance', () => {

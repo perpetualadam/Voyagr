@@ -480,6 +480,89 @@
     }
 
     /**
+     * Execute plan for mounting the route comparison modal overlay.
+     * @param {Object|null|undefined} domPlan - from buildRouteComparisonModalDomApplyPlan
+     * @returns {Object}
+     */
+    function buildRouteComparisonModalExecutePlan(domPlan) {
+        domPlan = domPlan || {};
+        return {
+            shouldExecute: domPlan.action === 'mount',
+            modalId: domPlan.modalId,
+            overlayStyle: domPlan.overlayStyle,
+            innerHtml: domPlan.innerHtml,
+            dismissOnOverlayClick: !!domPlan.dismissOnOverlayClick,
+            removeExisting: !!domPlan.removeExisting,
+        };
+    }
+
+    /**
+     * Orchestration plan for showRouteComparison entry validation.
+     * @param {number} [routeCount]
+     * @returns {Object}
+     */
+    function buildShowRouteComparisonOrchestrationPlan(routeCount) {
+        var count = routeCount || 0;
+        var base = {
+            entryLogMessage: '[RouteComparison] showRouteComparison called',
+            routeCount: count,
+        };
+        if (!hasRoutesForComparison(count)) {
+            return Object.assign({}, base, {
+                shouldProceed: false,
+                errorStatusMessage: getRouteComparisonNoRoutesMessage(),
+                errorLogMessage: '[RouteComparison] No routes available:',
+            });
+        }
+        return Object.assign({}, base, {
+            shouldProceed: true,
+            singleRouteWarning: count < 2,
+            singleRouteStatusMessage: getRouteComparisonSingleRouteMessage(),
+            singleRouteLogMessage: '[RouteComparison] Only 1 route available, showing it anyway',
+            routesLogPrefix: '[RouteComparison] Sending routes to API:',
+        });
+    }
+
+    /**
+     * Execute plan after a successful route-comparison API response.
+     * @param {Object} o
+     * @param {boolean} o.apiSuccess
+     * @param {string} [o.apiError]
+     * @param {Object} [o.comparison]
+     * @param {string} o.currencySymbol
+     * @param {string} o.distUnit
+     * @param {function(number): string} o.convertDistance
+     * @returns {Object}
+     */
+    function buildShowRouteComparisonSuccessExecutePlan(o) {
+        o = o || {};
+        if (!o.apiSuccess) {
+            return {
+                shouldMountModal: false,
+                errorStatusMessage: getRouteComparisonApiErrorMessage(o.apiError),
+                errorLogMessage: '[RouteComparison] API error:',
+            };
+        }
+        var comparison = o.comparison || {};
+        var routes = comparison.routes || [];
+        var mountPlan = buildRouteComparisonModalMountPlan(comparison, {
+            currencySymbol: o.currencySymbol,
+            distUnit: o.distUnit,
+            distanceTexts: routes.map(function (route) {
+                return typeof o.convertDistance === 'function'
+                    ? o.convertDistance(route.distance_km)
+                    : String(route.distance_km);
+            }),
+        });
+        return {
+            shouldMountModal: true,
+            domApplyPlan: buildRouteComparisonModalDomApplyPlan(mountPlan),
+            successStatusMessage: getRouteComparisonSuccessMessage(),
+            responseLogPrefix: '[RouteComparison] API response:',
+        };
+    }
+
+    /**
      * Post-panel UI plan after route preview values are written to the DOM.
      * @param {Object} opts
      * @returns {Object}
@@ -767,6 +850,78 @@
             }
         }
         return activeRoute;
+    }
+
+    /**
+     * Patch plan for silent in-navigation route updates (no preview UI).
+     * @param {Object|null|undefined} activeRoute
+     * @param {Object} routeData
+     * @param {Object|null|undefined} prevLastCalculatedRoute
+     * @returns {Object}
+     */
+    function buildNavRouteSilentUpdatePatchPlan(activeRoute, routeData, prevLastCalculatedRoute) {
+        routeData = routeData || {};
+        if (!prevLastCalculatedRoute || !activeRoute) {
+            return { shouldPatch: false };
+        }
+        var durationMinutes = activeRoute.duration_minutes ||
+            (routeData.time ? parseInt(routeData.time, 10) : null) ||
+            prevLastCalculatedRoute.duration_minutes;
+        var patch = {};
+        var key;
+        for (key in prevLastCalculatedRoute) {
+            if (Object.prototype.hasOwnProperty.call(prevLastCalculatedRoute, key)) {
+                patch[key] = prevLastCalculatedRoute[key];
+            }
+        }
+        for (key in routeData) {
+            if (Object.prototype.hasOwnProperty.call(routeData, key)) {
+                patch[key] = routeData[key];
+            }
+        }
+        for (key in activeRoute) {
+            if (Object.prototype.hasOwnProperty.call(activeRoute, key)) {
+                patch[key] = activeRoute[key];
+            }
+        }
+        patch.duration_minutes = durationMinutes;
+        patch.destination = prevLastCalculatedRoute.destination ||
+            routeData.destination ||
+            activeRoute.destination;
+        patch.destinationName = prevLastCalculatedRoute.destinationName ||
+            routeData.destinationName ||
+            activeRoute.destinationName;
+        return { shouldPatch: true, patch: patch };
+    }
+
+    /**
+     * Execute plan for silent in-navigation route updates during preview delegation.
+     * @param {Object|null|undefined} activeRoute
+     * @param {Object} routeData
+     * @param {Object|null|undefined} prevLastCalculatedRoute
+     * @returns {Object}
+     */
+    function buildRouteUpdateDuringNavigationExecutePlan(activeRoute, routeData, prevLastCalculatedRoute) {
+        routeData = routeData || {};
+        var entryLogMessage = '[Route Preview] Navigation active — silent route update (no preview UI / no sheet)';
+        if (!activeRoute) {
+            return {
+                shouldExecute: false,
+                entryLogMessage: entryLogMessage,
+                errorStatusMessage: '❌ No route to apply',
+            };
+        }
+        var patchPlan = buildNavRouteSilentUpdatePatchPlan(activeRoute, routeData, prevLastCalculatedRoute);
+        return {
+            shouldExecute: true,
+            entryLogMessage: entryLogMessage,
+            updateRouteOnMap: !!activeRoute.geometry,
+            activeRoute: activeRoute,
+            patchLastCalculatedRoute: patchPlan.shouldPatch,
+            lastCalculatedRoutePatch: patchPlan.patch,
+            statusMessage: '✅ Route updated — continuing navigation',
+            statusType: 'success',
+        };
     }
 
     /**
@@ -1100,6 +1255,51 @@
      */
     function isCurrentLocationPlaceholder(label) {
         return /^\s*current location\s*$/i.test(String(label || ''));
+    }
+
+    /**
+     * Input assembly for buildRoutePreviewSuccessPlan from runtime labels and formatters.
+     * @param {Object} o
+     * @param {string} o.geocodedStart
+     * @param {string} o.geocodedEnd
+     * @param {string} o.startLabel
+     * @param {string} o.endLabel
+     * @param {Object} o.data
+     * @param {function(string): { valid: boolean, coords?: [number, number] }} o.parseLatLonPair
+     * @param {string} [o.invalidFormatMessage]
+     * @param {string} [o.invalidCoordsMessage]
+     * @param {function(string, number): Array<[number,number]>} o.decodePolyline
+     * @param {function(number): string} o.convertDistance
+     * @param {string} o.distUnit
+     * @param {string} o.currencySymbol
+     * @param {function(*): number} o.parseDurationMinutes
+     * @returns {Object}
+     */
+    function buildRoutePreviewSuccessInputPlan(o) {
+        o = o || {};
+        var data = o.data || {};
+        var distanceKm = parseFloat(data.distance_km || data.distance) || 0;
+        var distanceText = typeof o.convertDistance === 'function'
+            ? o.convertDistance(distanceKm)
+            : String(distanceKm);
+        return {
+            geocodedStart: o.geocodedStart,
+            geocodedEnd: o.geocodedEnd,
+            startLabel: o.startLabel,
+            endLabel: o.endLabel,
+            data: data,
+            parseLatLonPair: o.parseLatLonPair,
+            invalidFormatMessage: o.invalidFormatMessage,
+            invalidCoordsMessage: o.invalidCoordsMessage,
+            decodePolyline: o.decodePolyline,
+            fmt: {
+                distanceText: distanceText,
+                distUnit: o.distUnit || '',
+                currencySymbol: o.currencySymbol || '',
+                notificationDistanceText: distanceText,
+            },
+            parseDurationMinutes: o.parseDurationMinutes,
+        };
     }
 
     /**
@@ -2504,6 +2704,9 @@
         hasRoutesForComparison: hasRoutesForComparison,
         buildRouteComparisonModalMountPlan: buildRouteComparisonModalMountPlan,
         buildRouteComparisonModalDomApplyPlan: buildRouteComparisonModalDomApplyPlan,
+        buildRouteComparisonModalExecutePlan: buildRouteComparisonModalExecutePlan,
+        buildShowRouteComparisonOrchestrationPlan: buildShowRouteComparisonOrchestrationPlan,
+        buildShowRouteComparisonSuccessExecutePlan: buildShowRouteComparisonSuccessExecutePlan,
         buildRoutePreviewAfterDisplayPlan: buildRoutePreviewAfterDisplayPlan,
         buildRoutePreviewAfterDisplayExecutePlan: buildRoutePreviewAfterDisplayExecutePlan,
         buildShowRoutePreviewOrchestrationPlan: buildShowRoutePreviewOrchestrationPlan,
@@ -2521,6 +2724,8 @@
         shouldShowPreviewAlternativeRoutes: shouldShowPreviewAlternativeRoutes,
         buildPreviewAlternativeRouteCardMountPlan: buildPreviewAlternativeRouteCardMountPlan,
         pickActiveRouteDuringNavigation: pickActiveRouteDuringNavigation,
+        buildNavRouteSilentUpdatePatchPlan: buildNavRouteSilentUpdatePatchPlan,
+        buildRouteUpdateDuringNavigationExecutePlan: buildRouteUpdateDuringNavigationExecutePlan,
         buildInNavRerouteSuccessPlan: buildInNavRerouteSuccessPlan,
         resolveRouteGeometryPrecision: resolveRouteGeometryPrecision,
         resolvePerRouteGeometryPrecision: resolvePerRouteGeometryPrecision,
@@ -2535,6 +2740,7 @@
         resolveInitialRouteDurationMinutes: resolveInitialRouteDurationMinutes,
         buildLastCalculatedRoutePatch: buildLastCalculatedRoutePatch,
         buildPreviewRouteCoordsPlan: buildPreviewRouteCoordsPlan,
+        buildRoutePreviewSuccessInputPlan: buildRoutePreviewSuccessInputPlan,
         buildRoutePreviewSuccessPlan: buildRoutePreviewSuccessPlan,
         buildCalculateRouteIdlePreviewExecutePlan: buildCalculateRouteIdlePreviewExecutePlan,
         isCurrentLocationPlaceholder: isCurrentLocationPlaceholder,
