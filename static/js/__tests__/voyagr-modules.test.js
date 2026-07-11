@@ -48,6 +48,9 @@ describe('VoyagrModules registry', () => {
         global.VoyagrOsmMapIcons = require('../modules/map/osm-map-icons');
         global.VoyagrMapControls = require('../modules/map/map-controls');
         global.VoyagrCameraMapMarkers = require('../modules/map/camera-map-markers');
+        global.VoyagrHazardMapMarkers = require('../modules/map/hazard-map-markers');
+        global.VoyagrPwaInstall = require('../modules/ui/pwa-install');
+        global.VoyagrBestTimeLeave = require('../modules/navigation/best-time-leave');
         jest.resetModules();
     });
 

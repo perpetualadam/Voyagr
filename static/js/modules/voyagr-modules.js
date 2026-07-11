@@ -49,6 +49,9 @@
         osmMapIcons: 'VoyagrOsmMapIcons',
         mapControls: 'VoyagrMapControls',
         cameraMapMarkers: 'VoyagrCameraMapMarkers',
+        hazardMapMarkers: 'VoyagrHazardMapMarkers',
+        pwaInstall: 'VoyagrPwaInstall',
+        bestTimeLeave: 'VoyagrBestTimeLeave',
     };
 
     var cache = {};
