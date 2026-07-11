@@ -151,3 +151,53 @@ describe('normalizeAvoidPoints', () => {
         expect(RR.normalizeAvoidPoints(null)).toEqual([]);
     });
 });
+
+describe('buildRerouteRequestBody', () => {
+    test('combines start/end, avoid_points, include flags and shared options', () => {
+        const body = RR.buildRerouteRequestBody({
+            startLat: 51.5,
+            startLon: -0.1,
+            destination: '51.6,-0.2',
+            avoidPoints: [{ lat: 1, lon: 2 }],
+            includeTolls: true,
+            includeCaz: false,
+            sharedOptions: baseOpts({ routingMode: 'auto', avoidTolls: true }),
+        });
+        expect(body.start).toBe('51.5,-0.1');
+        expect(body.end).toBe('51.6,-0.2');
+        expect(body.avoid_points).toEqual([{ lat: 1, lon: 2 }]);
+        expect(body.include_tolls).toBe(true);
+        expect(body.include_caz).toBe(false);
+        expect(body.routing_mode).toBe('auto');
+        expect(body.avoid_tolls).toBe(true);
+    });
+});
+
+describe('multimodal route bodies', () => {
+    test('buildMultimodalDrivingLegBody maps driving leg fields', () => {
+        const body = RR.buildMultimodalDrivingLegBody({
+            startLat: 51.5, startLon: -0.1, endLat: 51.51, endLon: -0.11,
+            vehicleType: 'petrol_diesel',
+            costParams: { fuel_price: 1.5 },
+            includeTolls: true, avoidTolls: false, avoidCaz: true,
+            enableHazardAvoidance: true,
+            avoidCameras: true, avoidTrafficLights: true, avoidRailwayCrossings: false,
+        });
+        expect(body.routing_mode).toBe('auto');
+        expect(body.fuel_price).toBe(1.5);
+        expect(body.enable_hazard_avoidance).toBe(true);
+        expect(body.avoid_railway_crossings).toBe(false);
+    });
+
+    test('buildMultimodalWalkingLegBody maps pedestrian leg fields', () => {
+        const body = RR.buildMultimodalWalkingLegBody({
+            startLat: 51.51, startLon: -0.11, endLat: 51.52, endLon: -0.12,
+            enableHazardAvoidance: true,
+            avoidCameras: true, avoidTrafficLights: true, avoidRailwayCrossings: true,
+        });
+        expect(body.routing_mode).toBe('pedestrian');
+        expect(body.vehicle_type).toBe('pedestrian');
+        expect(body.avoid_cameras).toBe(true);
+        expect(body).not.toHaveProperty('include_tolls');
+    });
+});

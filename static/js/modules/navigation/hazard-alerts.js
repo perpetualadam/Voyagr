@@ -265,6 +265,75 @@
         return out;
     }
 
+    var HAZARD_TYPE_ICONS = {
+        camera: '📷',
+        traffic_light: '🚦',
+        police: '👮',
+        accident: '🚗💥',
+        roadworks: '🚧',
+        traffic_jam: '🚗',
+        hazard: '⚠️',
+        toll: '💰',
+        caz: '🏙️',
+    };
+
+    /**
+     * @param {string} type
+     * @returns {string}
+     */
+    function getHazardIcon(type) {
+        return HAZARD_TYPE_ICONS[type] || '⚠️';
+    }
+
+    /**
+     * Count hazards by type string.
+     * @param {Array<{type?: string}>} hazardsList
+     * @returns {Object<string, number>}
+     */
+    function groupHazardsByType(hazardsList) {
+        var hazardTypes = {};
+        (hazardsList || []).forEach(function (hazard) {
+            var type = (hazard && hazard.type) || 'unknown';
+            hazardTypes[type] = (hazardTypes[type] || 0) + 1;
+        });
+        return hazardTypes;
+    }
+
+    /**
+     * Human-readable comma-separated hazard summary.
+     * @param {Object<string, number>} hazardTypes
+     * @returns {string}
+     */
+    function formatHazardTypeSummary(hazardTypes) {
+        var parts = [];
+        for (var type in hazardTypes) {
+            if (Object.prototype.hasOwnProperty.call(hazardTypes, type)) {
+                parts.push(hazardTypes[type] + 'x ' + type.replace(/_/g, ' '));
+            }
+        }
+        return parts.join(', ') || 'See map for hazard markers along this route.';
+    }
+
+    /**
+     * List-item HTML for the unavoidable-hazards modal.
+     * @param {Object<string, number>} hazardTypes
+     * @returns {string}
+     */
+    function buildUnavoidableHazardsListHtml(hazardTypes) {
+        var html = '';
+        for (var type in hazardTypes) {
+            if (!Object.prototype.hasOwnProperty.call(hazardTypes, type)) continue;
+            var count = hazardTypes[type];
+            var icon = getHazardIcon(type);
+            html += '<div style="display: flex; align-items: center; gap: 8px; padding: 8px; background: #fff3e0; border-radius: 8px; margin: 5px 0;">' +
+                '<span style="font-size: 20px;">' + icon + '</span>' +
+                '<span style="flex: 1; text-align: left;">' + type.replace(/_/g, ' ') + '</span>' +
+                '<span style="font-weight: bold; color: #e65100;">' + count + '</span>' +
+            '</div>';
+        }
+        return html;
+    }
+
     var api = {
         CAMERA_HAZARD_TYPES: CAMERA_HAZARD_TYPES,
         isCameraHazardType: isCameraHazardType,
@@ -277,7 +346,11 @@
         formatHazardDistanceForUserMeters: formatHazardDistanceForUserMeters,
         alertDistanceForHazard: alertDistanceForHazard,
         resolveHazardDistanceMeters: resolveHazardDistanceMeters,
-        collectHazardsToAnnounce: collectHazardsToAnnounce
+        collectHazardsToAnnounce: collectHazardsToAnnounce,
+        getHazardIcon: getHazardIcon,
+        groupHazardsByType: groupHazardsByType,
+        formatHazardTypeSummary: formatHazardTypeSummary,
+        buildUnavoidableHazardsListHtml: buildUnavoidableHazardsListHtml,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

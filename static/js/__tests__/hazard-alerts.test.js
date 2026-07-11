@@ -54,4 +54,25 @@ describe('hazard-alerts module', () => {
         );
         expect(merged).toHaveLength(2);
     });
+
+    test('groupHazardsByType counts hazard types', () => {
+        const grouped = HA.groupHazardsByType([
+            { type: 'camera' },
+            { type: 'camera' },
+            { type: 'roadworks' },
+        ]);
+        expect(grouped).toEqual({ camera: 2, roadworks: 1 });
+    });
+
+    test('formatHazardTypeSummary builds readable summary', () => {
+        expect(HA.formatHazardTypeSummary({ camera: 2, traffic_light: 1 }))
+            .toBe('2x camera, 1x traffic light');
+    });
+
+    test('buildUnavoidableHazardsListHtml includes icon and count', () => {
+        const html = HA.buildUnavoidableHazardsListHtml({ camera: 2 });
+        expect(html).toContain('📷');
+        expect(html).toContain('camera');
+        expect(html).toContain('2');
+    });
 });

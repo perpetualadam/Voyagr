@@ -184,6 +184,28 @@
         return Math.max(0, remaining);
     }
 
+    /**
+     * Index of the nearest polyline vertex to a GPS position (vertex snap, not segment projection).
+     * @param {number} lat
+     * @param {number} lon
+     * @param {Array<[number,number]>} polyline
+     * @returns {number}
+     */
+    function findNearestPolylineVertexIndex(lat, lon, polyline) {
+        if (!polyline || polyline.length === 0) return 0;
+        var minDistance = Infinity;
+        var nearestIndex = 0;
+        for (var i = 0; i < polyline.length; i++) {
+            var routePoint = polyline[i];
+            var distance = haversineDistanceMeters(lat, lon, routePoint[0], routePoint[1]);
+            if (distance < minDistance) {
+                minDistance = distance;
+                nearestIndex = i;
+            }
+        }
+        return nearestIndex;
+    }
+
     var api = {
         haversineDistanceMeters: haversineDistanceMeters,
         bearing: bearing,
@@ -193,6 +215,7 @@
         distanceAlongRouteToVertexMeters: distanceAlongRouteToVertexMeters,
         totalPolylineLengthMeters: totalPolylineLengthMeters,
         computeRemainingDistanceAlongRoute: computeRemainingDistanceAlongRoute,
+        findNearestPolylineVertexIndex: findNearestPolylineVertexIndex,
         cumulativeDistanceBetweenVertices: cumulativeDistanceBetweenVertices,
         inferRoadClassFromManeuver: inferRoadClassFromManeuver,
         inferRoadClassFromStreetNames: inferRoadClassFromStreetNames,

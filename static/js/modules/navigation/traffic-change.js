@@ -49,7 +49,57 @@
         return false;
     }
 
-    var api = { detectSignificantTrafficChange: detectSignificantTrafficChange };
+    /**
+     * Effective minutes on the current route including measured traffic delay.
+     * @param {number} baseMinutes
+     * @param {number} [measuredDelayMin]
+     * @returns {number}
+     */
+    function computeEffectiveRouteMinutes(baseMinutes, measuredDelayMin) {
+        return baseMinutes + (measuredDelayMin || 0);
+    }
+
+    /**
+     * Minutes saved by accepting a traffic-based reroute alternative.
+     * @param {number} oldBaseMinutes
+     * @param {number} measuredDelayMin
+     * @param {number} newRouteMinutes
+     * @returns {number}
+     */
+    function computeTrafficRerouteTimeSaved(oldBaseMinutes, measuredDelayMin, newRouteMinutes) {
+        return computeEffectiveRouteMinutes(oldBaseMinutes, measuredDelayMin) - newRouteMinutes;
+    }
+
+    /**
+     * Whether a traffic reroute alternative should replace the active route.
+     * @param {boolean} isSevere
+     * @param {number} timeSavedMinutes
+     * @param {number} [minSavedMinutes=2]
+     * @returns {boolean}
+     */
+    function shouldAcceptTrafficReroute(isSevere, timeSavedMinutes, minSavedMinutes) {
+        var minSaved = typeof minSavedMinutes === 'number' ? minSavedMinutes : 2;
+        return !!isSevere || timeSavedMinutes >= minSaved;
+    }
+
+    /**
+     * User-facing save-time message for traffic reroute notifications.
+     * @param {number} timeSavedMinutes
+     * @returns {string}
+     */
+    function formatTrafficRerouteSaveMessage(timeSavedMinutes) {
+        return timeSavedMinutes > 0
+            ? 'Saves about ' + timeSavedMinutes.toFixed(0) + ' minutes.'
+            : '';
+    }
+
+    var api = {
+        detectSignificantTrafficChange: detectSignificantTrafficChange,
+        computeEffectiveRouteMinutes: computeEffectiveRouteMinutes,
+        computeTrafficRerouteTimeSaved: computeTrafficRerouteTimeSaved,
+        shouldAcceptTrafficReroute: shouldAcceptTrafficReroute,
+        formatTrafficRerouteSaveMessage: formatTrafficRerouteSaveMessage,
+    };
 
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = api;

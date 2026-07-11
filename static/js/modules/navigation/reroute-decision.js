@@ -188,12 +188,67 @@
         });
     }
 
+    /**
+     * Build a reroute analytics/debug event object.
+     * @param {Object} o
+     * @param {string} o.timestampIso
+     * @param {number} o.startLat
+     * @param {number} o.startLon
+     * @param {string} o.destination
+     * @param {{ distance_km: number, duration_minutes: number }} o.route
+     * @param {number} o.hazardCount
+     * @param {{ avoidCameras: boolean, avoidTolls: boolean, avoidCaz: boolean }} o.settings
+     * @returns {Object}
+     */
+    function buildRerouteLogEvent(o) {
+        o = o || {};
+        return {
+            timestamp: o.timestampIso,
+            type: 'automatic_reroute',
+            start: { lat: o.startLat, lon: o.startLon },
+            destination: o.destination,
+            route: {
+                distance_km: o.route.distance_km,
+                duration_minutes: o.route.duration_minutes,
+                hazard_count: o.hazardCount,
+            },
+            settings: {
+                avoid_cameras: !!o.settings.avoidCameras,
+                avoid_tolls: !!o.settings.avoidTolls,
+                avoid_caz: !!o.settings.avoidCaz,
+            },
+        };
+    }
+
+    /**
+     * Append a reroute log entry, keeping only the most recent N events.
+     * @param {Storage} storage
+     * @param {Object} event
+     * @param {number} [maxEntries=20]
+     * @returns {Object[]} Updated log array
+     */
+    function appendRerouteLogEntry(storage, event, maxEntries) {
+        var max = typeof maxEntries === 'number' ? maxEntries : 20;
+        var rerouteLog = [];
+        try {
+            rerouteLog = JSON.parse(storage.getItem('rerouteLog') || '[]');
+        } catch (e) {
+            rerouteLog = [];
+        }
+        rerouteLog.push(event);
+        var trimmed = rerouteLog.slice(-max);
+        storage.setItem('rerouteLog', JSON.stringify(trimmed));
+        return trimmed;
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         normalizeAccuracy: normalizeAccuracy,
         isTrustworthyAccuracy: isTrustworthyAccuracy,
         effectiveDeviationThreshold: effectiveDeviationThreshold,
-        decideRouteDeviation: decideRouteDeviation
+        decideRouteDeviation: decideRouteDeviation,
+        buildRerouteLogEvent: buildRerouteLogEvent,
+        appendRerouteLogEntry: appendRerouteLogEntry,
     };
 
     // CommonJS (Jest) export.
