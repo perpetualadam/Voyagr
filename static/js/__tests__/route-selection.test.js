@@ -241,3 +241,34 @@ describe('route comparison modal helpers', () => {
         expect(RS.getRouteComparisonSuccessMessage()).toContain('comparison');
     });
 });
+
+describe('buildInNavRerouteSuccessPlan', () => {
+    test('merges route payload and builds voice announcement when enabled', () => {
+        const plan = RS.buildInNavRerouteSuccessPlan(
+            { geometry: 'abc', duration_minutes: 25, distance_km: 12 },
+            { success: true, time: '30', distance: '15' },
+            '52.0,-1.0',
+            'Leeds',
+            { enabled: true, convertDistance: (km) => km * 0.62, distUnit: 'mi' }
+        );
+        expect(plan.lastCalculatedRoutePatch.geometry).toBe('abc');
+        expect(plan.lastCalculatedRoutePatch.destination).toBe('52.0,-1.0');
+        expect(plan.lastCalculatedRoutePatch.destinationName).toBe('Leeds');
+        expect(plan.durationMinutes).toBe(25);
+        expect(plan.speakMessage).toContain('Route recalculated');
+        expect(plan.speakMessage).toContain('mi');
+        expect(plan.statusMessage).toContain('continuing navigation');
+    });
+
+    test('omits speak message when voice disabled', () => {
+        const plan = RS.buildInNavRerouteSuccessPlan(
+            { duration_minutes: 10 },
+            { time: '10' },
+            '51,0',
+            'Home',
+            { enabled: false }
+        );
+        expect(plan.speakMessage).toBeNull();
+        expect(plan.noRouteErrorMessage).toContain('No route returned');
+    });
+});

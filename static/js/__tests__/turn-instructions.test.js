@@ -345,3 +345,45 @@ describe('instructions panel HTML helpers', () => {
         expect(html).toContain('→ Next');
     });
 });
+
+describe('effectiveRoundaboutExitCountFromSteps', () => {
+    test('reads exit count from enter maneuver', () => {
+        const steps = [{ type: 26, roundabout_exit_count: 3 }];
+        expect(TI.effectiveRoundaboutExitCountFromSteps(steps, 0)).toBe(3);
+    });
+
+    test('falls back to next exit maneuver after roundabout enter', () => {
+        const steps = [
+            { type: 26, roundabout_exit_count: 0 },
+            { type: 27, roundabout_exit_count: 2 },
+        ];
+        expect(TI.effectiveRoundaboutExitCountFromSteps(steps, 0)).toBe(2);
+    });
+});
+
+describe('buildNavStartTurnInstructionInit', () => {
+    const polyline = [[51.5, -0.12], [51.51, -0.11], [51.52, -0.10]];
+
+    test('builds initial turn widget payload from first step', () => {
+        const steps = [{
+            type: 10,
+            instruction: 'Turn right',
+            street_names: ['High Street'],
+            begin_shape_index: 2,
+            distance: 100,
+        }];
+        const init = TI.buildNavStartTurnInstructionInit(steps, 0, polyline, {
+            haversineDistanceMeters: () => 250,
+            resolveRoadClass: () => 'primary',
+        });
+        expect(init.direction).toBe('right');
+        expect(init.distance).toBe(250);
+        expect(init.streetName).toBe('High Street');
+        expect(init.valhallaType).toBe(10);
+    });
+
+    test('returns null for empty steps or polyline', () => {
+        expect(TI.buildNavStartTurnInstructionInit([], 0, polyline, {})).toBeNull();
+        expect(TI.buildNavStartTurnInstructionInit([{ type: 1 }], 0, [], {})).toBeNull();
+    });
+});

@@ -191,6 +191,18 @@
     }
 
     /**
+     * Primary map FABs shown when turn-by-turn navigation starts.
+     * @returns {{ zoomFollowDisplay: string, journeyOverviewDisplay: string, mapFollowingActive: boolean }}
+     */
+    function getNavStartFabDisplayPlan() {
+        return {
+            zoomFollowDisplay: 'block',
+            journeyOverviewDisplay: 'block',
+            mapFollowingActive: true,
+        };
+    }
+
+    /**
      * Map FABs hidden when navigation stops.
      * @returns {{ zoomFollowDisplay: string, recenterDisplay: string, journeyOverviewDisplay: string, arModeBtnDisplay: string, driverPerspectiveDisplay: string }}
      */
@@ -281,6 +293,7 @@
         applyARModeButtonState: applyARModeButtonState,
         getNavigationFabVisibilityPlan: getNavigationFabVisibilityPlan,
         getNavStartExtraFabDisplay: getNavStartExtraFabDisplay,
+        getNavStartFabDisplayPlan: getNavStartFabDisplayPlan,
         getNavStopFabHidePlan: getNavStopFabHidePlan,
         getNavStopStatusMessage: getNavStopStatusMessage,
         getNavStopNotification: getNavStopNotification,

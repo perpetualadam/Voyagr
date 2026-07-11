@@ -40,6 +40,7 @@
         offlineNavigation: 'VoyagrOfflineNavigation',
         mlPredictions: 'VoyagrMlPredictions',
         searchAutocomplete: 'VoyagrSearchAutocomplete',
+        geocodingLocations: 'VoyagrGeocodingLocations',
         deviceEnvironment: 'VoyagrDeviceEnvironment',
         routeProgress: 'VoyagrRouteProgress',
         previewMarker: 'VoyagrPreviewMarker',
