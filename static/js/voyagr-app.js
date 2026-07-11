@@ -8267,7 +8267,7 @@ const MAX_DISPLAY_GPS_SPEED_MPH = 185.0;
 
 let _smoothedSpeedMph = 0;
 let _smoothedSpeedInitAt = 0;
-/** Tracks last sane raw mph accepted by {@link pickRawSpeedMph} for outlier rejection. */
+/** Tracks last sane raw mph accepted by coord-sample tick for outlier rejection. */
 let _lastGoodRawPickMph = 0;
 /**
  * Count of consecutive displacement-derived speed samples while the device keeps
@@ -8457,37 +8457,6 @@ function smoothGpsSpeedMph(rawMph) {
     return r.value;
 }
 
-/**
- * Pick the best GPS-speed estimate for this tick:
- *  - Trust `coords.speed` (m/s) when the device reports a finite, non-negative value.
- *  - Otherwise derive speed from displacement between the two most recent fixes — this
- *    keeps the widget useful on devices that always report `null`.
- *
- * @param {number|null|undefined} coordsSpeed - `position.coords.speed` (m/s) for this fix.
- * @param {Array<{lat:number,lon:number,timestamp:Date|number,accuracy?:number}>} history - Recent fixes.
- * @param {number|undefined|null} coordAccuracy - `coords.accuracy` (meters) for this tick.
- * @returns {number} Best-effort mph reading (still raw — caller should run through {@link smoothGpsSpeedMph}).
- */
-/**
- * Reject implausible GPS speed spikes (e.g. 145 mph) before display smoothing.
- * @param {number} mph - Candidate speed in mph
- * @param {number} prevPick - Last accepted raw mph
- * @returns {number}
- */
-
-// pickRawSpeedMph body moved to modules/navigation/speed-gps.js as the pure
-// stepPickRawSpeedMph step function. This orchestration wrapper holds the mutable
-// state and calls it, matching the pattern of smoothGpsSpeedMph / stepSmoothGpsSpeedMph.
-function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
-    const SG = _speedGps();
-    const r = SG.stepPickRawSpeedMph(
-        { lastGoodRawPickMph: _lastGoodRawPickMph, consecutiveDisplacementMoves: _consecutiveDisplacementMoves },
-        coordsSpeed, history, coordAccuracy
-    );
-    _lastGoodRawPickMph = r.state.lastGoodRawPickMph;
-    _consecutiveDisplacementMoves = r.state.consecutiveDisplacementMoves;
-    return r.value;
-}
 /**
  * updateSpeedWidget function
  * @function updateSpeedWidget
