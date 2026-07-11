@@ -244,6 +244,158 @@
             + '&west=' + west;
     }
 
+    function buildAreaBoundsApiUrl(north, south, east, west, apiPath) {
+        return apiPath
+            + '?north=' + north
+            + '&south=' + south
+            + '&east=' + east
+            + '&west=' + west;
+    }
+
+    var CAMERA_LAYER_INIT_FLAG = '__voyagrCameraLayerInitialized';
+    var CAMERA_MOVE_DEBOUNCE_MS = 500;
+    var OSM_OVERLAY_MOVE_DEBOUNCE_MS = 2000;
+    var CAMERA_MARKER_CLASS = 'camera-marker';
+    var OSM_TRAFFIC_LIGHT_MARKER_CLASS = 'osm-traffic-light-marker';
+    var OSM_RAILWAY_CROSSING_MARKER_CLASS = 'osm-railway-crossing-marker';
+
+    /**
+     * @param {number} lat
+     * @param {number} lon
+     * @returns {string}
+     */
+    function overlayLocationKey(lat, lon) {
+        return Number(lat).toFixed(5) + ',' + Number(lon).toFixed(5);
+    }
+
+    /**
+     * @param {Array<Object>} cameras
+     * @returns {Object}
+     */
+    function buildDisplayCameraMarkersCollectPlan(cameras) {
+        if (!cameras || !cameras.length) {
+            return { shouldDisplay: false, clearMarkers: true };
+        }
+        var seen = Object.create(null);
+        var items = [];
+        (cameras || []).forEach(function (camera) {
+            var key = overlayLocationKey(camera.lat, camera.lon);
+            if (seen[key]) return;
+            seen[key] = true;
+            items.push({
+                lat: camera.lat,
+                lon: camera.lon,
+                bucket: camera.bucket || camera.type,
+                description: camera.description,
+                locationKey: key,
+            });
+        });
+        return {
+            shouldDisplay: items.length > 0,
+            clearMarkers: items.length === 0,
+            items: items,
+            markerClassName: CAMERA_MARKER_CLASS,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            markerSvgSize: 24,
+            popupSvgSize: 32,
+            displayedLogPrefix: '[Cameras] Displayed ',
+            displayedLogSuffix: ' camera markers',
+        };
+    }
+
+    /**
+     * @param {Array<Object>} lights
+     * @returns {Object}
+     */
+    function buildDisplayOsmTrafficLightMarkersCollectPlan(lights) {
+        if (!lights || !lights.length) {
+            return { shouldDisplay: false, clearMarkers: true };
+        }
+        var seen = Object.create(null);
+        var items = [];
+        (lights || []).forEach(function (light) {
+            var key = overlayLocationKey(light.lat, light.lon);
+            if (seen[key]) return;
+            seen[key] = true;
+            items.push({ lat: light.lat, lon: light.lon, locationKey: key });
+        });
+        return {
+            shouldDisplay: items.length > 0,
+            clearMarkers: items.length === 0,
+            items: items,
+            markerClassName: OSM_TRAFFIC_LIGHT_MARKER_CLASS,
+            markersProperty: 'osmTrafficLightMarkers',
+        };
+    }
+
+    /**
+     * @param {Array<Object>} crossings
+     * @returns {Object}
+     */
+    function buildDisplayOsmRailwayCrossingMarkersCollectPlan(crossings) {
+        if (!crossings || !crossings.length) {
+            return { shouldDisplay: false, clearMarkers: true };
+        }
+        var seen = Object.create(null);
+        var items = [];
+        (crossings || []).forEach(function (cx) {
+            var key = overlayLocationKey(cx.lat, cx.lon);
+            if (seen[key]) return;
+            seen[key] = true;
+            items.push({ lat: cx.lat, lon: cx.lon, locationKey: key });
+        });
+        return {
+            shouldDisplay: items.length > 0,
+            clearMarkers: items.length === 0,
+            items: items,
+            markerClassName: OSM_RAILWAY_CROSSING_MARKER_CLASS,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            markersProperty: 'osmRailwayCrossingMarkers',
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.hasMap]
+     * @param {boolean} [input.alreadyInitialized]
+     * @param {boolean} [input.showCamerasEnabled]
+     * @param {boolean} [input.showOsmTrafficLightsEnabled]
+     * @param {boolean} [input.showOsmRailwayCrossingsEnabled]
+     * @returns {Object}
+     */
+    function buildInitializeCameraLayerExecutePlan(input) {
+        input = input || {};
+        if (!input.hasMap) {
+            return {
+                shouldInit: false,
+                mapNotReadyLog: '[Cameras] Map not ready, deferring camera layer init',
+            };
+        }
+        if (input.alreadyInitialized) {
+            return { shouldInit: false, skipDuplicateInit: true };
+        }
+        return {
+            shouldInit: true,
+            initFlagProperty: CAMERA_LAYER_INIT_FLAG,
+            cameraMoveDebounceMs: CAMERA_MOVE_DEBOUNCE_MS,
+            osmOverlayDebounceMs: OSM_OVERLAY_MOVE_DEBOUNCE_MS,
+            mapMoveEvent: 'moveend',
+            toggles: [
+                { id: SHOW_CAMERAS_TOGGLE_ID, enabled: !!input.showCamerasEnabled, labeled: false },
+                { id: SHOW_OSM_TRAFFIC_LIGHTS_TOGGLE_ID, enabled: !!input.showOsmTrafficLightsEnabled, labeled: true },
+                { id: SHOW_OSM_RAILWAY_CROSSINGS_TOGGLE_ID, enabled: !!input.showOsmRailwayCrossingsEnabled, labeled: true },
+            ],
+            initialFetches: {
+                cameras: !!input.showCamerasEnabled,
+                osmTrafficLights: !!input.showOsmTrafficLightsEnabled,
+                osmRailwayCrossings: !!input.showOsmRailwayCrossingsEnabled,
+            },
+            initLogMessage: '[Cameras] Camera layer initialized',
+        };
+    }
+
     var api = {
         SHOW_CAMERAS_STORAGE_KEY: SHOW_CAMERAS_STORAGE_KEY,
         SHOW_CAMERAS_TOGGLE_ID: SHOW_CAMERAS_TOGGLE_ID,
@@ -269,6 +421,11 @@
         buildFetchCamerasDispatchPlan: buildFetchCamerasDispatchPlan,
         buildFetchOsmOverlayDispatchPlan: buildFetchOsmOverlayDispatchPlan,
         buildAreaBoundsApiUrl: buildAreaBoundsApiUrl,
+        overlayLocationKey: overlayLocationKey,
+        buildDisplayCameraMarkersCollectPlan: buildDisplayCameraMarkersCollectPlan,
+        buildDisplayOsmTrafficLightMarkersCollectPlan: buildDisplayOsmTrafficLightMarkersCollectPlan,
+        buildDisplayOsmRailwayCrossingMarkersCollectPlan: buildDisplayOsmRailwayCrossingMarkersCollectPlan,
+        buildInitializeCameraLayerExecutePlan: buildInitializeCameraLayerExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

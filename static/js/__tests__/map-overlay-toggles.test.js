@@ -47,4 +47,28 @@ describe('map-overlay-toggles module', () => {
         expect(plan.url).toContain('north=51.52');
         expect(plan.url).toContain(OT.OSM_TRAFFIC_LIGHTS_AREA_API_PATH);
     });
+
+    test('buildDisplayCameraMarkersCollectPlan dedupes locations', () => {
+        const collect = OT.buildDisplayCameraMarkersCollectPlan([
+            { lat: 51.5, lon: -0.1, type: 'camera_speed' },
+            { lat: 51.5, lon: -0.1, type: 'camera_speed' },
+            { lat: 51.51, lon: -0.11, type: 'camera_red_light' },
+        ]);
+        expect(collect.shouldDisplay).toBe(true);
+        expect(collect.items.length).toBe(2);
+    });
+
+    test('buildInitializeCameraLayerExecutePlan wires debounce and toggles', () => {
+        const init = OT.buildInitializeCameraLayerExecutePlan({
+            hasMap: true,
+            alreadyInitialized: false,
+            showCamerasEnabled: true,
+            showOsmTrafficLightsEnabled: false,
+            showOsmRailwayCrossingsEnabled: true,
+        });
+        expect(init.shouldInit).toBe(true);
+        expect(init.cameraMoveDebounceMs).toBe(500);
+        expect(init.toggles.length).toBe(3);
+        expect(init.initialFetches.cameras).toBe(true);
+    });
 });

@@ -2751,10 +2751,13 @@ function applyRouteEditingToggleDomFromPlan(domPlan) {
 
 function toggleRouteEditing() {
     const WP = _waypoints();
-    if (routeEditingEnabled) {
-        const disablePlan = WP.buildRouteEditingDisablePlan();
-        if (disablePlan.clearRouteDragMarkers) clearRouteDragMarkers();
-        showStatus(disablePlan.statusMessage, disablePlan.statusType);
+    const orch = WP.buildToggleRouteEditingOrchestrationPlan({
+        currentlyEnabled: routeEditingEnabled,
+    });
+
+    if (orch.action === 'disable') {
+        if (orch.clearRouteDragMarkers) clearRouteDragMarkers();
+        showStatus(orch.statusMessage, orch.statusType);
     } else {
         enableRouteEditing();
     }
@@ -5160,16 +5163,21 @@ function addTrafficLayer() {
  * Remove traffic layer from map
  */
 function removeTrafficLayer() {
-    if (trafficLayer && map) {
-        if (map.getLayer('traffic-layer')) {
-            map.removeLayer('traffic-layer');
-        }
-        if (map.getSource('traffic-source')) {
-            map.removeSource('traffic-source');
-        }
-        trafficLayer = null;
-        console.log('[Traffic] Traffic layer removed');
+    const MLT = _mapLayerToggles();
+    const execute = MLT.buildRemoveTrafficLayerExecutePlan({
+        hasTrafficLayerRef: !!trafficLayer,
+        hasMap: !!map,
+    });
+    if (!execute.shouldRemove) return;
+
+    if (map.getLayer(execute.layerId)) {
+        map.removeLayer(execute.layerId);
     }
+    if (map.getSource(execute.sourceId)) {
+        map.removeSource(execute.sourceId);
+    }
+    if (execute.clearTrafficLayerRef) trafficLayer = null;
+    console.log(execute.logMessage);
 }
 
 let _trafficTileErrorStreak = 0;
@@ -5181,14 +5189,21 @@ let _trafficLayerPausedUntil = 0;
  * @param {number} statusCode
  */
 function voyagrOnTrafficTileLoadError(statusCode) {
-    if (statusCode !== 429 && statusCode !== 500 && statusCode !== 502 && statusCode !== 503) return;
-    _trafficTileErrorStreak++;
-    if (_trafficTileErrorStreak < 3) return;
-    if (Date.now() < _trafficLayerPausedUntil) return;
-    _trafficLayerPausedUntil = Date.now() + 120000;
-    _trafficTileErrorStreak = 0;
-    removeTrafficLayer();
-    console.warn('[Traffic] Pausing traffic overlay for 2 min after repeated tile errors');
+    const backoff = _mapLayerToggles().buildTrafficTileErrorBackoffPlan({
+        statusCode,
+        errorStreak: _trafficTileErrorStreak,
+        pausedUntil: _trafficLayerPausedUntil,
+    });
+    if (backoff.incrementStreak) {
+        _trafficTileErrorStreak = backoff.nextStreak;
+        return;
+    }
+    if (!backoff.shouldBackoff) return;
+
+    _trafficLayerPausedUntil = backoff.pauseUntil;
+    if (backoff.resetStreak) _trafficTileErrorStreak = 0;
+    if (backoff.removeTrafficLayer) removeTrafficLayer();
+    console.warn(backoff.logMessage);
 }
 if (typeof window !== 'undefined') {
     window.voyagrOnTrafficTileLoadError = voyagrOnTrafficTileLoadError;
@@ -5275,78 +5290,74 @@ function setWeatherLayerType(type) {
  * Uses OpenWeatherMap's free weather tile API
  */
 function addWeatherLayer() {
-    if (!map) {
-        console.log('[Weather] Map not ready');
+    const WL = _weatherLayer();
+    const orch = WL.buildAddWeatherLayerOrchestrationPlan({
+        hasMap: !!map,
+        isStyleLoaded: !!(map && map.isStyleLoaded && map.isStyleLoaded()),
+    });
+    if (!orch.shouldProceed) {
+        if (orch.mapNotReadyLog) console.log(orch.mapNotReadyLog);
         return;
     }
 
     try {
-        if (weatherLayer && !map.getLayer('weather-layer')) {
+        if (weatherLayer && map && !map.getLayer(WL.WEATHER_LAYER_ID)) {
             weatherLayer = null;
         }
     } catch (e) {
         /* ignore */
     }
 
-    // Remove existing weather layer if any
     removeWeatherLayer();
 
-    // Get OpenWeatherMap API key (same as used for weather data)
     let owmApiKey = window.OPENWEATHERMAP_API_KEY || '';
-
-    // If key not available from inline script, try fetching from API
-    if (!owmApiKey) {
-        console.log('[Weather] Fetching API key from server...');
-        fetch('/api/config')
-            .then(r => r.json())
-            .then(data => {
+    const credFetch = WL.buildWeatherCredentialsFetchPlan({ hasApiKey: !!owmApiKey });
+    if (credFetch.shouldFetch) {
+        console.log(credFetch.fetchLogMessage);
+        fetch(credFetch.url)
+            .then((r) => r.json())
+            .then((data) => {
                 applySupportLinksFromConfig(data);
-                if (data.success && data.openweathermap_api_key) {
-                    window.OPENWEATHERMAP_API_KEY = data.openweathermap_api_key;
-                    console.log('[Weather] API key loaded from server, reinitializing...');
-                    addWeatherLayer(); // Retry with new key
+                if (data.success && data[credFetch.apiKeyField]) {
+                    window.OPENWEATHERMAP_API_KEY = data[credFetch.apiKeyField];
+                    console.log(credFetch.retryLogMessage);
+                    addWeatherLayer();
                 } else {
-                    console.log('[Weather] No API key from server - weather layer unavailable');
-                    showStatus('⚠️ Weather layer requires API key', 'warning');
+                    console.log(credFetch.noKeyLogMessage);
+                    showStatus(credFetch.noKeyStatusMessage, credFetch.noKeyStatusType);
                 }
             })
-            .catch(err => console.log('[Weather] Failed to fetch config:', err));
+            .catch((err) => console.log(credFetch.errorLogPrefix, err));
         return;
     }
 
-    // Wait for style to load before adding weather layer
     const addWeatherLayerNow = () => {
         try {
-            // OpenWeatherMap weather tiles via modules/map/weather-layer.js.
-            // Available layers: precipitation_new, clouds_new, temp_new, wind_new, pressure_new
-            const WL = _weatherLayer();
             const tileUrl = WL.buildWeatherTileUrl(weatherLayerType, owmApiKey);
 
-            if (!map.getSource('weather-source')) {
-                map.addSource('weather-source', WL.buildWeatherSourceSpec(tileUrl));
+            if (!map.getSource(orch.sourceId)) {
+                map.addSource(orch.sourceId, WL.buildWeatherSourceSpec(tileUrl));
             }
 
-            if (!map.getLayer('weather-layer')) {
-                // Add weather layer below route layers but above base map
+            if (!map.getLayer(orch.layerId)) {
                 map.addLayer(WL.buildWeatherLayerSpec());
             }
 
-            weatherLayer = { id: 'weather-layer' };
-            console.log(`[Weather] OpenWeatherMap ${weatherLayerType} layer added successfully`);
+            weatherLayer = { id: orch.layerId };
+            console.log(orch.successLogMessage);
 
-            // Ensure routes stay on top of weather
-            bringRoutesToTop();
+            if (orch.bringRoutesToTop) bringRoutesToTop();
         } catch (e) {
             console.error('[Weather] Error adding weather layer:', e);
         }
     };
 
-    if (map.isStyleLoaded()) {
+    if (orch.isStyleLoaded) {
         addWeatherLayerNow();
     } else {
-        console.log('[Weather] Waiting for style to load...');
+        console.log(orch.waitForStyleLog);
         map.once('style.load', addWeatherLayerNow);
-        setTimeout(addWeatherLayerNow, 1000);
+        setTimeout(addWeatherLayerNow, orch.styleFallbackMs);
     }
 }
 
@@ -5354,37 +5365,42 @@ function addWeatherLayer() {
  * Remove weather layer from map
  */
 function removeWeatherLayer() {
-    if (weatherLayer && map) {
-        if (map.getLayer('weather-layer')) {
-            map.removeLayer('weather-layer');
-        }
-        if (map.getSource('weather-source')) {
-            map.removeSource('weather-source');
-        }
-        weatherLayer = null;
-        console.log('[Weather] Weather layer removed');
+    const execute = _weatherLayer().buildRemoveWeatherLayerExecutePlan({
+        hasWeatherLayerRef: !!weatherLayer,
+        hasMap: !!map,
+    });
+    if (!execute.shouldRemove) return;
+
+    if (map.getLayer(execute.layerId)) {
+        map.removeLayer(execute.layerId);
     }
+    if (map.getSource(execute.sourceId)) {
+        map.removeSource(execute.sourceId);
+    }
+    if (execute.clearWeatherLayerRef) weatherLayer = null;
+    console.log(execute.logMessage);
 }
 
 /**
  * Initialize weather layer based on saved preference
  */
 function initWeatherLayer() {
-    const toggle = document.getElementById('showWeatherToggle');
-    _toggleUI().applyToggleButton(toggle, showWeatherEnabled);
+    const execute = _weatherLayer().buildInitWeatherLayerExecutePlan({ enabled: showWeatherEnabled });
+    if (!execute.shouldApply) return;
 
-    if (showWeatherEnabled && map) {
-        try {
-            const st = map.getStyle && map.getStyle();
-            if (st && st.name === 'voyagr-bootstrap') {
-                console.log('[Weather] Deferring weather overlay until basemap style loads');
-                return;
-            }
-        } catch (e) {
-            /* ignore */
+    _toggleUI().applyToggleButton(document.getElementById(execute.toggleId), execute.enabled);
+
+    if (!execute.addWeatherLayer || !map) return;
+    try {
+        const st = map.getStyle && map.getStyle();
+        if (execute.deferOnBootstrapStyle && st && st.name === execute.bootstrapStyleName) {
+            console.log(execute.deferLogMessage);
+            return;
         }
-        addWeatherLayer();
+    } catch (e) {
+        /* ignore */
     }
+    addWeatherLayer();
 }
 
 // ===== ROUTE TRAFFIC EDGE COLORING =====
@@ -5696,11 +5712,12 @@ function pickActiveRouteDuringNavigation(routeList, singleRoutePayload) {
  */
 function toggleAutoTrafficUpdate() {
     const TC = _trafficChange();
+    const TU = _toggleUI();
     const plan = TC.buildAutoTrafficUpdateTogglePlan(autoTrafficUpdateEnabled);
     autoTrafficUpdateEnabled = plan.nextEnabled;
-    localStorage.setItem(plan.storageKey, plan.storageValue);
+    TU.writeBoolPref(plan.storageKey, autoTrafficUpdateEnabled);
 
-    _toggleUI().applyToggleButton(document.getElementById(plan.toggleElementId), autoTrafficUpdateEnabled);
+    TU.applyToggleButton(document.getElementById(plan.toggleElementId), autoTrafficUpdateEnabled);
 
     showStatus(plan.statusMessage, plan.statusType);
     if (plan.startUpdatesIfRouteInProgress && routeInProgress) {
@@ -5717,11 +5734,12 @@ function toggleAutoTrafficUpdate() {
  */
 function toggleAutoRerouteOnDeviation() {
     const TC = _trafficChange();
+    const TU = _toggleUI();
     const plan = TC.buildAutoRerouteOnDeviationTogglePlan(autoRerouteOnDeviationEnabled);
     autoRerouteOnDeviationEnabled = plan.nextEnabled;
-    localStorage.setItem(plan.storageKey, plan.storageValue);
+    TU.writeBoolPref(plan.storageKey, autoRerouteOnDeviationEnabled);
 
-    _toggleUI().applyToggleButton(document.getElementById(plan.toggleElementId), autoRerouteOnDeviationEnabled);
+    TU.applyToggleButton(document.getElementById(plan.toggleElementId), autoRerouteOnDeviationEnabled);
 
     showStatus(plan.statusMessage, plan.statusType);
 
@@ -6459,45 +6477,40 @@ function fetchAndDisplayCameras() {
  * Display camera markers on the map (separate layer from route hazards)
  */
 function displayCameraMarkers(cameras) {
-    if (!cameras || cameras.length === 0) {
-        clearCameraMarkers();
+    const OT = _mapOverlayToggles();
+    const collect = OT.buildDisplayCameraMarkersCollectPlan(cameras);
+    if (!collect.shouldDisplay) {
+        if (collect.clearMarkers) clearCameraMarkers();
         return;
     }
 
-    // Clear existing camera markers
     clearCameraMarkers();
 
     const HM = _hazardMapMarkers();
     const styleMap = HM.getHazardMarkerStyleMap();
+    const CAM = _cameraMapMarkers();
 
-    const seenLocations = new Set();
-
-    cameras.forEach(camera => {
-        const locationKey = `${camera.lat.toFixed(5)},${camera.lon.toFixed(5)}`;
-        if (seenLocations.has(locationKey)) return;
-        seenLocations.add(locationKey);
-
-        const bucket = HM.normalizeCameraHazardTypeForMarker(camera.bucket || camera.type);
+    collect.items.forEach((camera) => {
+        const bucket = HM.normalizeCameraHazardTypeForMarker(camera.bucket);
         let config = styleMap[bucket] || styleMap.camera_speed;
         if (!config || !config.svg) {
             config = styleMap.camera_speed;
         }
-        const CAM = _cameraMapMarkers();
-        const svgForMarker = CAM.scaleHazardMarkerSvg(config.svg, 24, 24);
-        const svgForPopup = CAM.scaleHazardMarkerSvg(config.svg, 32, 32);
+        const svgForMarker = CAM.scaleHazardMarkerSvg(config.svg, collect.markerSvgSize, collect.markerSvgSize);
+        const svgForPopup = CAM.scaleHazardMarkerSvg(config.svg, collect.popupSvgSize, collect.popupSvgSize);
 
         const marker = MapLibreHelpers.createMarker(camera.lat, camera.lon, {
-            className: 'camera-marker',
+            className: collect.markerClassName,
             html: CAM.buildCameraMarkerHtml(config, svgForMarker),
-            iconSize: [32, 32],
-            iconAnchor: [16, 16],
-            popup: CAM.buildCameraMarkerPopupHtml(config, svgForPopup, camera.description)
+            iconSize: collect.iconSize,
+            iconAnchor: collect.iconAnchor,
+            popup: CAM.buildCameraMarkerPopupHtml(config, svgForPopup, camera.description),
         }).addTo(map);
 
         window.cameraMarkers.push(marker);
     });
 
-    console.log(`[Cameras] Displayed ${window.cameraMarkers.length} camera markers`);
+    console.log(collect.displayedLogPrefix + window.cameraMarkers.length + collect.displayedLogSuffix);
 }
 
 function toggleShowOsmTrafficLights() {
@@ -6640,49 +6653,45 @@ function fetchAndDisplayOsmRailwayCrossings() {
 }
 
 function displayOsmTrafficLightMarkers(lights) {
-    if (!lights || lights.length === 0) {
-        clearOsmTrafficLightMarkers();
+    const OT = _mapOverlayToggles();
+    const collect = OT.buildDisplayOsmTrafficLightMarkersCollectPlan(lights);
+    if (!collect.shouldDisplay) {
+        if (collect.clearMarkers) clearOsmTrafficLightMarkers();
         return;
     }
     clearOsmTrafficLightMarkers();
     const OSM = _osmMapIcons();
-    const seen = new Set();
-    lights.forEach(light => {
-        const key = `${Number(light.lat).toFixed(5)},${Number(light.lon).toFixed(5)}`;
-        if (seen.has(key)) return;
-        seen.add(key);
-        const pill = getOsmTrafficLightMarkerPillHTML();
+    const pill = getOsmTrafficLightMarkerPillHTML();
+    collect.items.forEach((light) => {
         const marker = MapLibreHelpers.createMarker(light.lat, light.lon, {
-            className: 'osm-traffic-light-marker',
+            className: collect.markerClassName,
             html: pill,
             iconSize: OSM.OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE,
             iconAnchor: OSM.OSM_TRAFFIC_LIGHT_MARKER_ICON_ANCHOR,
-            popup: OSM.buildOsmTrafficLightPopupHtml(pill)
+            popup: OSM.buildOsmTrafficLightPopupHtml(pill),
         }).addTo(map);
         window.osmTrafficLightMarkers.push(marker);
     });
 }
 
 function displayOsmRailwayCrossingMarkers(crossings) {
-    if (!crossings || crossings.length === 0) {
-        clearOsmRailwayCrossingMarkers();
+    const OT = _mapOverlayToggles();
+    const collect = OT.buildDisplayOsmRailwayCrossingMarkersCollectPlan(crossings);
+    if (!collect.shouldDisplay) {
+        if (collect.clearMarkers) clearOsmRailwayCrossingMarkers();
         return;
     }
     clearOsmRailwayCrossingMarkers();
     const OSM = _osmMapIcons();
     const crossingIcon = OSM.buildRailwayCrossingIconSvg();
     const popupHtml = OSM.buildRailwayCrossingPopupHtml(crossingIcon);
-    const seen = new Set();
-    crossings.forEach(cx => {
-        const key = `${Number(cx.lat).toFixed(5)},${Number(cx.lon).toFixed(5)}`;
-        if (seen.has(key)) return;
-        seen.add(key);
+    collect.items.forEach((cx) => {
         const marker = MapLibreHelpers.createMarker(cx.lat, cx.lon, {
-            className: 'osm-railway-crossing-marker',
+            className: collect.markerClassName,
             html: OSM.buildRailwayCrossingMarkerHtml(crossingIcon),
-            iconSize: [32, 32],
-            iconAnchor: [16, 16],
-            popup: popupHtml
+            iconSize: collect.iconSize,
+            iconAnchor: collect.iconAnchor,
+            popup: popupHtml,
         }).addTo(map);
         window.osmRailwayCrossingMarkers.push(marker);
     });
@@ -6692,54 +6701,47 @@ function displayOsmRailwayCrossingMarkers(crossings) {
  * Initialize camera layer - called after map is ready
  */
 function initializeCameraLayer() {
-    if (!map) {
-        console.log('[Cameras] Map not ready, deferring camera layer init');
+    const OT = _mapOverlayToggles();
+    const execute = OT.buildInitializeCameraLayerExecutePlan({
+        hasMap: !!map,
+        alreadyInitialized: !!window.__voyagrCameraLayerInitialized,
+        showCamerasEnabled,
+        showOsmTrafficLightsEnabled,
+        showOsmRailwayCrossingsEnabled,
+    });
+    if (!execute.shouldInit) {
+        if (execute.mapNotReadyLog) console.log(execute.mapNotReadyLog);
         return;
     }
+    window[execute.initFlagProperty] = true;
 
-    // Prevent duplicate handler registration if init runs multiple times
-    if (window.__voyagrCameraLayerInitialized) {
-        return;
-    }
-    window.__voyagrCameraLayerInitialized = true;
-
-    // Set toggle state based on saved preference
     const TU = _toggleUI();
-    TU.applyToggleButton(document.getElementById('showCamerasToggle'), showCamerasEnabled);
-    TU.applyLabeledToggleButton(document.getElementById('showOsmTrafficLightsToggle'), showOsmTrafficLightsEnabled);
-    TU.applyLabeledToggleButton(document.getElementById('showOsmRailwayCrossingsToggle'), showOsmRailwayCrossingsEnabled);
+    (execute.toggles || []).forEach((toggle) => {
+        const el = document.getElementById(toggle.id);
+        if (!el) return;
+        if (toggle.labeled) TU.applyLabeledToggleButton(el, toggle.enabled);
+        else TU.applyToggleButton(el, toggle.enabled);
+    });
 
-    // Fetch cameras on map move (with debounce)
     let osmOverlayFetchTimeout = null;
-    map.on('moveend', () => {
-        if (cameraFetchTimeout) {
-            clearTimeout(cameraFetchTimeout);
-        }
+    map.on(execute.mapMoveEvent, () => {
+        if (cameraFetchTimeout) clearTimeout(cameraFetchTimeout);
         cameraFetchTimeout = setTimeout(() => {
             fetchAndDisplayCameras();
-        }, 500);
-        if (osmOverlayFetchTimeout) {
-            clearTimeout(osmOverlayFetchTimeout);
-        }
-        // OSM Overpass queries are slow — debounce longer and skip huge viewports.
+        }, execute.cameraMoveDebounceMs);
+        if (osmOverlayFetchTimeout) clearTimeout(osmOverlayFetchTimeout);
         osmOverlayFetchTimeout = setTimeout(() => {
             fetchAndDisplayOsmTrafficLights();
             fetchAndDisplayOsmRailwayCrossings();
-        }, 2000);
+        }, execute.osmOverlayDebounceMs);
     });
 
-    // Initial fetch if enabled
-    if (showCamerasEnabled) {
-        fetchAndDisplayCameras();
-    }
-    if (showOsmTrafficLightsEnabled) {
-        fetchAndDisplayOsmTrafficLights();
-    }
-    if (showOsmRailwayCrossingsEnabled) {
-        fetchAndDisplayOsmRailwayCrossings();
-    }
+    const initial = execute.initialFetches || {};
+    if (initial.cameras) fetchAndDisplayCameras();
+    if (initial.osmTrafficLights) fetchAndDisplayOsmTrafficLights();
+    if (initial.osmRailwayCrossings) fetchAndDisplayOsmRailwayCrossings();
 
-    console.log('[Cameras] Camera layer initialized');
+    console.log(execute.initLogMessage);
 }
 
 /**

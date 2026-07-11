@@ -108,5 +108,18 @@ describe('weather-layer module (real implementation)', () => {
             expect(execute.layerType).toBe(WL.DEFAULT_WEATHER_LAYER_TYPE);
             expect(execute.statusMessage).toContain('Precipitation');
         });
+
+        test('weather add/remove/init orchestration plans', () => {
+            const add = WL.buildAddWeatherLayerOrchestrationPlan({ hasMap: true, isStyleLoaded: false });
+            expect(add.shouldProceed).toBe(true);
+            expect(add.sourceId).toBe(WL.WEATHER_SOURCE_ID);
+
+            const remove = WL.buildRemoveWeatherLayerExecutePlan({ hasWeatherLayerRef: true, hasMap: true });
+            expect(remove.shouldRemove).toBe(true);
+
+            const init = WL.buildInitWeatherLayerExecutePlan({ enabled: true });
+            expect(init.deferOnBootstrapStyle).toBe(true);
+            expect(init.addWeatherLayer).toBe(true);
+        });
     });
 });

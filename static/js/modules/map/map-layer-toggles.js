@@ -34,6 +34,9 @@
     var TRAFFIC_STYLE_POLL_MAX_ATTEMPTS = 40;
     var TRAFFIC_STYLE_POLL_INTERVAL_MS = 250;
     var TRAFFIC_RASTER_OPACITY = 0.6;
+    var TRAFFIC_TILE_ERROR_PAUSE_MS = 120000;
+    var TRAFFIC_TILE_ERROR_STREAK_THRESHOLD = 3;
+    var TRAFFIC_TILE_ERROR_STATUS_CODES = [429, 500, 502, 503];
 
     /**
      * Resolve a boolean preference stored as 'true'/'false' strings (default on unless 'false').
@@ -336,6 +339,54 @@
 
     /**
      * @param {Object} [input]
+     * @param {boolean} [input.hasTrafficLayerRef]
+     * @param {boolean} [input.hasMap]
+     * @returns {Object}
+     */
+    function buildRemoveTrafficLayerExecutePlan(input) {
+        input = input || {};
+        return {
+            shouldRemove: !!(input.hasTrafficLayerRef && input.hasMap),
+            layerId: TRAFFIC_LAYER_ID,
+            sourceId: TRAFFIC_SOURCE_ID,
+            clearTrafficLayerRef: true,
+            logMessage: '[Traffic] Traffic layer removed',
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {number} [input.statusCode]
+     * @param {number} [input.errorStreak]
+     * @param {number} [input.pausedUntil]
+     * @param {number} [input.nowMs]
+     * @returns {Object}
+     */
+    function buildTrafficTileErrorBackoffPlan(input) {
+        input = input || {};
+        var statusCode = input.statusCode;
+        if (TRAFFIC_TILE_ERROR_STATUS_CODES.indexOf(statusCode) < 0) {
+            return { shouldBackoff: false, incrementStreak: false };
+        }
+        var nextStreak = (input.errorStreak || 0) + 1;
+        if (nextStreak < TRAFFIC_TILE_ERROR_STREAK_THRESHOLD) {
+            return { shouldBackoff: false, incrementStreak: true, nextStreak: nextStreak };
+        }
+        var nowMs = input.nowMs != null ? input.nowMs : Date.now();
+        if (input.pausedUntil && nowMs < input.pausedUntil) {
+            return { shouldBackoff: false };
+        }
+        return {
+            shouldBackoff: true,
+            resetStreak: true,
+            pauseUntil: nowMs + TRAFFIC_TILE_ERROR_PAUSE_MS,
+            removeTrafficLayer: true,
+            logMessage: '[Traffic] Pausing traffic overlay for 2 min after repeated tile errors',
+        };
+    }
+
+    /**
+     * @param {Object} [input]
      * @param {boolean} [input.hasMap]
      * @param {boolean} [input.pendingGuardSet]
      * @param {boolean} [input.isStyleLoaded]
@@ -434,6 +485,8 @@
         buildTrafficRasterLayerSpec: buildTrafficRasterLayerSpec,
         buildTrafficLayerCredentialsFetchPlan: buildTrafficLayerCredentialsFetchPlan,
         buildAddTrafficLayerOrchestrationPlan: buildAddTrafficLayerOrchestrationPlan,
+        buildRemoveTrafficLayerExecutePlan: buildRemoveTrafficLayerExecutePlan,
+        buildTrafficTileErrorBackoffPlan: buildTrafficTileErrorBackoffPlan,
         buildVectorStyleReadyReconcilePlan: buildVectorStyleReadyReconcilePlan,
     };
 

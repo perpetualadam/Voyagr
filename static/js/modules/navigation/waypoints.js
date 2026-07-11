@@ -337,9 +337,30 @@
     function buildRouteEditingDisablePlan() {
         return {
             clearRouteDragMarkers: true,
+            disableRouteEditing: true,
             statusMessage: 'Route editing disabled',
             statusType: 'info',
         };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.currentlyEnabled]
+     * @returns {Object}
+     */
+    function buildToggleRouteEditingOrchestrationPlan(input) {
+        input = input || {};
+        if (input.currentlyEnabled) {
+            var disable = buildRouteEditingDisablePlan();
+            return {
+                action: 'disable',
+                clearRouteDragMarkers: disable.clearRouteDragMarkers,
+                disableRouteEditing: disable.disableRouteEditing,
+                statusMessage: disable.statusMessage,
+                statusType: disable.statusType,
+            };
+        }
+        return { action: 'enable' };
     }
 
     /**
@@ -1060,6 +1081,7 @@
         buildDraggedViaPointAddPlan: buildDraggedViaPointAddPlan,
         buildRouteEditingToggleDomApplyPlan: buildRouteEditingToggleDomApplyPlan,
         buildRouteEditingDisablePlan: buildRouteEditingDisablePlan,
+        buildToggleRouteEditingOrchestrationPlan: buildToggleRouteEditingOrchestrationPlan,
         buildRouteEditEnableExecutePlan: buildRouteEditEnableExecutePlan,
         buildRouteDragMarkerExecutePlan: buildRouteDragMarkerExecutePlan,
         buildClearRouteDragMarkersExecutePlan: buildClearRouteDragMarkersExecutePlan,

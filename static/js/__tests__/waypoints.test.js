@@ -120,6 +120,13 @@ describe('waypoints module', () => {
         expect(dom.text).toContain('Editing');
     });
 
+    test('buildToggleRouteEditingOrchestrationPlan disables with clear markers', () => {
+        const disable = W.buildToggleRouteEditingOrchestrationPlan({ currentlyEnabled: true });
+        expect(disable.action).toBe('disable');
+        expect(disable.disableRouteEditing).toBe(true);
+        expect(W.buildToggleRouteEditingOrchestrationPlan({ currentlyEnabled: false }).action).toBe('enable');
+    });
+
     test('buildRouteEditEnableExecutePlan wraps marker mount plans', () => {
         const execute = W.buildRouteEditEnableExecutePlan({
             valid: true,

@@ -83,4 +83,20 @@ describe('map-layer-toggles module', () => {
         expect(plan.addTrafficLayer).toBe(true);
         expect(plan.addWeatherLayer).toBe(false);
     });
+
+    test('buildRemoveTrafficLayerExecutePlan and tile error backoff', () => {
+        const remove = MLT.buildRemoveTrafficLayerExecutePlan({
+            hasTrafficLayerRef: true,
+            hasMap: true,
+        });
+        expect(remove.layerId).toBe(MLT.TRAFFIC_LAYER_ID);
+
+        const streak = MLT.buildTrafficTileErrorBackoffPlan({ statusCode: 429, errorStreak: 1 });
+        expect(streak.incrementStreak).toBe(true);
+        expect(streak.nextStreak).toBe(2);
+
+        const backoff = MLT.buildTrafficTileErrorBackoffPlan({ statusCode: 500, errorStreak: 2 });
+        expect(backoff.shouldBackoff).toBe(true);
+        expect(backoff.removeTrafficLayer).toBe(true);
+    });
 });

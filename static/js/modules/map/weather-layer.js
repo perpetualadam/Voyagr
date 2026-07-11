@@ -25,6 +25,9 @@
     const WEATHER_LAYER_TYPE_STORAGE_KEY = 'weatherLayerType';
     const SHOW_WEATHER_TOGGLE_ID = 'showWeatherToggle';
     const SHOW_WEATHER_DEFAULT_ENABLED = false;
+    const WEATHER_CONFIG_API_PATH = '/api/config';
+    const WEATHER_BOOTSTRAP_STYLE_NAME = 'voyagr-bootstrap';
+    const WEATHER_STYLE_FALLBACK_MS = 1000;
 
     /**
      * Build the OpenWeatherMap raster tile URL template.
@@ -156,6 +159,100 @@
         };
     }
 
+    function buildSetWeatherLayerTypeExecutePlan(type) {
+        const safeType = isValidWeatherLayerType(type) ? type : DEFAULT_WEATHER_LAYER_TYPE;
+        return {
+            shouldApply: true,
+            layerType: safeType,
+            storageKey: WEATHER_LAYER_TYPE_STORAGE_KEY,
+            storageValue: safeType,
+            refreshLayerWhenEnabled: true,
+            statusMessage: '🌧️ Weather layer: ' + weatherLayerDisplayName(safeType),
+            statusType: 'info',
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.hasApiKey]
+     * @returns {Object}
+     */
+    function buildWeatherCredentialsFetchPlan(input) {
+        input = input || {};
+        if (input.hasApiKey) {
+            return { shouldFetch: false };
+        }
+        return {
+            shouldFetch: true,
+            url: WEATHER_CONFIG_API_PATH,
+            fetchLogMessage: '[Weather] Fetching API key from server...',
+            apiKeyField: 'openweathermap_api_key',
+            retryLogMessage: '[Weather] API key loaded from server, reinitializing...',
+            noKeyLogMessage: '[Weather] No API key from server - weather layer unavailable',
+            noKeyStatusMessage: '⚠️ Weather layer requires API key',
+            noKeyStatusType: 'warning',
+            errorLogPrefix: '[Weather] Failed to fetch config:',
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.hasMap]
+     * @param {boolean} [input.isStyleLoaded]
+     * @returns {Object}
+     */
+    function buildAddWeatherLayerOrchestrationPlan(input) {
+        input = input || {};
+        if (!input.hasMap) {
+            return { shouldProceed: false, mapNotReadyLog: '[Weather] Map not ready' };
+        }
+        return {
+            shouldProceed: true,
+            sourceId: WEATHER_SOURCE_ID,
+            layerId: WEATHER_LAYER_ID,
+            isStyleLoaded: !!input.isStyleLoaded,
+            waitForStyleLog: '[Weather] Waiting for style to load...',
+            styleFallbackMs: WEATHER_STYLE_FALLBACK_MS,
+            successLogMessage: '[Weather] OpenWeatherMap layer added successfully',
+            bringRoutesToTop: true,
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.hasWeatherLayerRef]
+     * @param {boolean} [input.hasMap]
+     * @returns {Object}
+     */
+    function buildRemoveWeatherLayerExecutePlan(input) {
+        input = input || {};
+        return {
+            shouldRemove: !!(input.hasWeatherLayerRef && input.hasMap),
+            layerId: WEATHER_LAYER_ID,
+            sourceId: WEATHER_SOURCE_ID,
+            clearWeatherLayerRef: true,
+            logMessage: '[Weather] Weather layer removed',
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.enabled]
+     * @returns {Object}
+     */
+    function buildInitWeatherLayerExecutePlan(input) {
+        input = input || {};
+        return {
+            shouldApply: true,
+            enabled: !!input.enabled,
+            toggleId: SHOW_WEATHER_TOGGLE_ID,
+            addWeatherLayer: !!input.enabled,
+            deferOnBootstrapStyle: true,
+            bootstrapStyleName: WEATHER_BOOTSTRAP_STYLE_NAME,
+            deferLogMessage: '[Weather] Deferring weather overlay until basemap style loads',
+        };
+    }
+
     const api = {
         WEATHER_LAYER_TYPE_NAMES,
         DEFAULT_WEATHER_LAYER_TYPE,
@@ -165,6 +262,7 @@
         WEATHER_LAYER_TYPE_STORAGE_KEY,
         SHOW_WEATHER_TOGGLE_ID,
         SHOW_WEATHER_DEFAULT_ENABLED,
+        WEATHER_CONFIG_API_PATH,
         buildWeatherTileUrl,
         buildWeatherSourceSpec,
         buildWeatherLayerSpec,
@@ -175,6 +273,10 @@
         buildToggleWeatherLayerCollectPlan,
         buildToggleWeatherLayerExecutePlan,
         buildSetWeatherLayerTypeExecutePlan,
+        buildWeatherCredentialsFetchPlan,
+        buildAddWeatherLayerOrchestrationPlan,
+        buildRemoveWeatherLayerExecutePlan,
+        buildInitWeatherLayerExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
