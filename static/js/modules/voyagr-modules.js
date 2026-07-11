@@ -27,6 +27,8 @@
         cameraPitch: 'VoyagrCameraPitch',
         html: 'VoyagrHtml',
         recentDestinations: 'VoyagrRecentDestinations',
+        domHelpers: 'VoyagrDomHelpers',
+        routePrefs: 'VoyagrRoutePrefs',
     };
 
     var cache = {};

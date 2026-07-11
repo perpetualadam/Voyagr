@@ -21,66 +21,16 @@ if (typeof window !== 'undefined' && window.ethereum) {
 // navigation/UI modules. App-layer wrappers below inject live prefs from voyagr-core.
 
 // ===== ROUTE PREFERENCE MIGRATION =====
-// 'pref_avoid_tollRoads' is the canonical localStorage key for the "Avoid Toll Roads"
-// toggle in Route Preferences. Older builds used 'pref_tolls' (from a now-removed
-// Hazard Avoidance duplicate, which defaulted to ENABLED). We run a one-time
-// migration: if the new key is unset but the legacy key is present, carry the
-// user's prior choice forward. After migration, only 'pref_avoid_tollRoads' is
-// written; 'pref_tolls' is kept as a read-only fallback so rollbacks don't lose state.
-(function migrateTollPrefKey() {
-    try {
-        const canon = localStorage.getItem('pref_avoid_tollRoads');
-        const legacy = localStorage.getItem('pref_tolls');
-        if (canon === null && legacy !== null) {
-            // Old semantic: 'true' / null / missing ⇒ avoid tolls enabled; 'false' ⇒ user opted out.
-            const avoid = legacy !== 'false';
-            localStorage.setItem('pref_avoid_tollRoads', avoid ? 'true' : 'false');
-        }
-    } catch (e) {
-        console.warn('[Migration] Toll pref migration skipped:', e);
-    }
-})();
+// Toll pref migration runs in modules/navigation/route-prefs.js on module load.
 
-/**
- * Canonical reader for the "Avoid Toll Roads" preference. Prefers the new key;
- * falls back to the legacy default-enabled semantic when neither is set yet.
- * @returns {boolean}
- */
 function isAvoidTollsEnabled() {
-    try {
-        const canon = localStorage.getItem('pref_avoid_tollRoads');
-        if (canon !== null) return canon === 'true';
-        // Legacy default was true (avoid tolls unless user opted out).
-        return localStorage.getItem('pref_tolls') !== 'false';
-    } catch (e) {
-        return false;
-    }
+    return VoyagrModules.routePrefs().isAvoidTollsEnabled(localStorage);
 }
 window.isAvoidTollsEnabled = isAvoidTollsEnabled;
 
-/** UK retail fuel/energy defaults (May 2026) — overridable via localStorage. */
-const DEFAULT_ROUTE_COST_PARAMS = {
-    petrol_diesel: { fuel_price: 1.60, fuel_efficiency: 6.5, electricity_price: 0.32, energy_efficiency: 18.5 },
-    electric: { fuel_price: 1.60, fuel_efficiency: 6.5, electricity_price: 0.32, energy_efficiency: 18.5 },
-    hybrid: { fuel_price: 1.60, fuel_efficiency: 6.5, electricity_price: 0.32, energy_efficiency: 18.5 },
-    pedestrian: { fuel_price: 1.60, fuel_efficiency: 6.5, electricity_price: 0.32, energy_efficiency: 18.5 },
-    bicycle: { fuel_price: 1.60, fuel_efficiency: 6.5, electricity_price: 0.32, energy_efficiency: 18.5 },
-};
-
-/**
- * Fuel/energy params for route cost — localStorage overrides, then vehicle-type defaults.
- * @param {string} [vehicleType]
- * @returns {{fuel_efficiency: number, fuel_price: number, energy_efficiency: number, electricity_price: number}}
- */
 function getRouteCostParams(vehicleType) {
-    const vt = vehicleType || (typeof currentVehicleType !== 'undefined' ? currentVehicleType : null) || 'petrol_diesel';
-    const defaults = DEFAULT_ROUTE_COST_PARAMS[vt] || DEFAULT_ROUTE_COST_PARAMS.petrol_diesel;
-    return {
-        fuel_efficiency: parseFloat(localStorage.getItem('fuelEfficiency') || String(defaults.fuel_efficiency)),
-        fuel_price: parseFloat(localStorage.getItem('fuelPrice') || String(defaults.fuel_price)),
-        energy_efficiency: parseFloat(localStorage.getItem('energyEfficiency') || String(defaults.energy_efficiency)),
-        electricity_price: parseFloat(localStorage.getItem('electricityPrice') || String(defaults.electricity_price)),
-    };
+    const vt = vehicleType || (typeof currentVehicleType !== 'undefined' ? currentVehicleType : null);
+    return VoyagrModules.routePrefs().getRouteCostParams(vt, localStorage);
 }
 window.getRouteCostParams = getRouteCostParams;
 
@@ -92,15 +42,11 @@ let bottomSheetIsExpanded = false; // Tracks logical state (expanded or collapse
 
 /** Event target as Element — Text nodes have no .closest (fixes mobile taps on emoji/labels). */
 function voyagrEventTargetElement(raw) {
-    if (!raw || typeof raw !== 'object') return null;
-    if (raw.nodeType === Node.ELEMENT_NODE) return raw;
-    if (raw.nodeType === Node.TEXT_NODE && raw.parentElement) return raw.parentElement;
-    return null;
+    return VoyagrModules.domHelpers().eventTargetElement(raw);
 }
 
 function voyagrClosest(raw, selector) {
-    const el = voyagrEventTargetElement(raw);
-    return el && typeof el.closest === 'function' ? el.closest(selector) : null;
+    return VoyagrModules.domHelpers().closest(raw, selector);
 }
 
 // ===== RECENT DESTINATIONS (local history; works without auth) =====
