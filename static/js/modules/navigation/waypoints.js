@@ -885,6 +885,64 @@
     }
 
     /**
+     * MapLibre apply spec for one multi-drop leg line layer.
+     * @param {Object} layerPlan
+     * @returns {Object}
+     */
+    function buildMultiDropLegLayerMapLibreApplyPlan(layerPlan) {
+        layerPlan = layerPlan || {};
+        if (!layerPlan.coordinates || layerPlan.coordinates.length < 2) {
+            return { valid: false };
+        }
+        return {
+            valid: true,
+            layerId: layerPlan.layerId,
+            sourceId: layerPlan.sourceId,
+            geoJsonFeature: {
+                type: 'Feature',
+                geometry: {
+                    type: 'LineString',
+                    coordinates: layerPlan.coordinates,
+                },
+            },
+            layerLayout: {
+                'line-join': 'round',
+                'line-cap': 'round',
+            },
+            paint: {
+                lineColor: layerPlan.lineColor,
+                lineWidth: layerPlan.lineWidth,
+                lineOpacity: layerPlan.lineOpacity,
+            },
+        };
+    }
+
+    /**
+     * Execute plan for drawing all multi-drop leg layers on the map.
+     * @param {Object} applyPlan - from buildMultiDropLegsMapApplyPlan
+     * @returns {Object}
+     */
+    function buildMultiDropLegsMapExecutePlan(applyPlan) {
+        applyPlan = applyPlan || {};
+        if (!applyPlan.shouldDraw) {
+            return { shouldExecute: false, layers: [] };
+        }
+        var layers = [];
+        (applyPlan.layers || []).forEach(function (layerPlan, idx) {
+            var spec = buildMultiDropLegLayerMapLibreApplyPlan(layerPlan);
+            if (spec.valid) {
+                spec.legIndex = idx;
+                spec.errorLogPrefix = '[MultiDrop] Failed to draw leg ';
+                layers.push(spec);
+            }
+        });
+        return {
+            shouldExecute: layers.length > 0,
+            layers: layers,
+        };
+    }
+
+    /**
      * Clear plan for multi-drop leg map layers.
      * @param {number} [maxLegs]
      * @returns {Object}
@@ -980,6 +1038,8 @@
         buildWaypointDropDispatchPlan: buildWaypointDropDispatchPlan,
         buildWaypointDragOpacityResetPlan: buildWaypointDragOpacityResetPlan,
         buildMultiDropLegsMapApplyPlan: buildMultiDropLegsMapApplyPlan,
+        buildMultiDropLegLayerMapLibreApplyPlan: buildMultiDropLegLayerMapLibreApplyPlan,
+        buildMultiDropLegsMapExecutePlan: buildMultiDropLegsMapExecutePlan,
         buildClearMultiDropLayersPlan: buildClearMultiDropLayersPlan,
     };
 

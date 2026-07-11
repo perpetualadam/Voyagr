@@ -66,4 +66,15 @@ describe('hazard-map-markers module', () => {
         expect(list.routeCount).toBe(3);
         expect(list.hazards).toHaveLength(2);
     });
+
+    test('buildDisplayAllRouteHazardsPlan requests display when hazards exist', () => {
+        const plan = HM.buildDisplayAllRouteHazardsPlan([
+            { hazards: [{ lat: 1, lon: 2, type: 'camera' }] },
+            { hazards: [] },
+        ]);
+        expect(plan.shouldDisplay).toBe(true);
+        expect(plan.hazardCount).toBe(1);
+        expect(plan.logMessage).toContain('1 total');
+        expect(HM.buildDisplayAllRouteHazardsPlan([{ hazards: [] }]).shouldDisplay).toBe(false);
+    });
 });

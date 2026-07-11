@@ -168,6 +168,19 @@ describe('settings-snapshot module', () => {
         expect(input.mlPredictionsEnabled).toBe(true);
     });
 
+    test('buildSettingsSavePlan serialises snapshot for canonical storage key', () => {
+        const save = SS.buildSettingsSavePlan(
+            SS.buildSettingsSnapshotInputPlan(
+                { distanceUnit: 'mi', vehicleType: 'electric', routingMode: 'auto' },
+                { mapTheme: 'dark' }
+            )
+        );
+        expect(save.storageKey).toBe(SS.SETTINGS_STORAGE_KEY);
+        expect(JSON.parse(save.storageValue).unit_distance).toBe('mi');
+        expect(save.persistActiveProfile).toBe(true);
+        expect(save.logMessage).toContain('saved');
+    });
+
     test('buildSettingsSnapshotInputPlan merges runtime and form state', () => {
         const input = SS.buildSettingsSnapshotInputPlan(
             {

@@ -182,6 +182,26 @@
     }
 
     /**
+     * Display plan for hazards from all route comparison options.
+     * @param {Array<Object>} routeOptions
+     * @returns {Object}
+     */
+    function buildDisplayAllRouteHazardsPlan(routeOptions) {
+        var list = buildAllRoutesHazardsList(routeOptions);
+        if (!list.hazards.length) {
+            return { shouldDisplay: false };
+        }
+        return {
+            shouldDisplay: true,
+            hazards: list.hazards,
+            routeCount: list.routeCount,
+            hazardCount: list.hazards.length,
+            logMessage: '[Hazards] Displaying hazards from all ' + list.routeCount +
+                ' routes: ' + list.hazards.length + ' total',
+        };
+    }
+
+    /**
      * Build marker mount specs for route hazards (no MapLibre calls).
      * @param {Array<Object>} hazards
      * @param {Object} [opts]
@@ -265,6 +285,7 @@
         buildHazardDistanceAheadHtml: buildHazardDistanceAheadHtml,
         buildHazardMarkerPopupHtml: buildHazardMarkerPopupHtml,
         buildAllRoutesHazardsList: buildAllRoutesHazardsList,
+        buildDisplayAllRouteHazardsPlan: buildDisplayAllRouteHazardsPlan,
         buildHazardMarkersMountPlans: buildHazardMarkersMountPlans,
     };
 

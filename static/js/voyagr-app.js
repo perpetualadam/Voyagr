@@ -1440,16 +1440,17 @@ function collectSettingsSnapshotRuntimeState() {
 
 function saveAllSettings() {
     const SS = _settingsSnapshot();
-    const snapshotInput = SS.buildSettingsSnapshotInputPlan(
-        collectSettingsSnapshotRuntimeState(),
-        collectSettingsFormState()
+    const savePlan = SS.buildSettingsSavePlan(
+        SS.buildSettingsSnapshotInputPlan(
+            collectSettingsSnapshotRuntimeState(),
+            collectSettingsFormState()
+        )
     );
-    const allSettings = SS.buildSettingsSnapshot(snapshotInput);
 
-    localStorage.setItem(SS.SETTINGS_STORAGE_KEY, JSON.stringify(allSettings));
-    console.log('[Settings] All settings saved to localStorage', allSettings);
+    localStorage.setItem(savePlan.storageKey, savePlan.storageValue);
+    console.log(savePlan.logMessage, savePlan.snapshot);
 
-    persistActiveProfile();
+    if (savePlan.persistActiveProfile) persistActiveProfile();
 }
 
 /**
@@ -2534,6 +2535,26 @@ function applyRouteLayerFromMapLibrePlan(applyPlan) {
     }
 }
 
+/**
+ * Apply a doAddRouteLayers batch execute plan.
+ * @param {Object} executePlan - from buildDoAddRouteLayersBatchExecutePlan
+ */
+function applyDoAddRouteLayersBatchFromPlan(executePlan) {
+    if (!executePlan) return;
+
+    (executePlan.layerSteps || []).forEach((step) => {
+        if (step.startLogMessage) console.log(step.startLogMessage);
+        if (!step.valid) {
+            if (step.invalidLogMessage) console.error(step.invalidLogMessage);
+            return;
+        }
+        if (step.drawLogMessage) console.log(step.drawLogMessage);
+        if (applyRouteLayerFromMapLibrePlan(step.applyPlan) && step.successLogMessage) {
+            console.log(step.successLogMessage);
+        }
+    });
+}
+
 function doAddRouteLayers() {
     const RS = _routeSelection();
     const batch = RS.buildDoAddRouteLayersBatchPlan(
@@ -2542,20 +2563,7 @@ function doAddRouteLayers() {
         map.getStyle().layers
     );
 
-    batch.layers.forEach((applyPlan) => {
-        console.log(`[Routes] Route ${applyPlan.routeIndex}: "${applyPlan.routeName}", polyline points: ${applyPlan.polylinePointCount}`);
-
-        if (!applyPlan.valid) {
-            console.error(`[Routes] Route ${applyPlan.routeIndex}: Not enough valid points (${applyPlan.lngLatCoordCount})`);
-            return;
-        }
-
-        console.log(`[Routes] Drawing route ${applyPlan.routeIndex} with color ${applyPlan.paint.lineColor}, weight ${applyPlan.paint.lineWeight}`);
-
-        if (applyRouteLayerFromMapLibrePlan(applyPlan)) {
-            console.log(`[Routes] ✓ Route ${applyPlan.routeIndex} layer added directly: ${applyPlan.layerId}${batch.beforeId ? ` (before ${batch.beforeId})` : ''}`);
-        }
-    });
+    applyDoAddRouteLayersBatchFromPlan(RS.buildDoAddRouteLayersBatchExecutePlan(batch));
 
     const sideEffects = RS.buildAllRoutesMapSideEffectsPlan(routeOptions, {
         showTrafficEnabled,
@@ -3109,43 +3117,56 @@ function displayMultiDropLegs(data) {
 }
 
 /**
+ * Apply one multi-drop leg layer from a MapLibre apply plan.
+ * @param {Object} applyPlan
+ * @returns {boolean}
+ */
+function applyMultiDropLegLayerFromMapLibrePlan(applyPlan) {
+    if (!applyPlan || !applyPlan.valid) return false;
+
+    try {
+        const { layerId, sourceId } = applyPlan;
+        if (map.getLayer(layerId)) map.removeLayer(layerId);
+        if (map.getSource(sourceId)) map.removeSource(sourceId);
+
+        map.addSource(sourceId, {
+            type: 'geojson',
+            data: applyPlan.geoJsonFeature,
+        });
+
+        map.addLayer({
+            id: layerId,
+            type: 'line',
+            source: sourceId,
+            layout: applyPlan.layerLayout,
+            paint: {
+                'line-color': applyPlan.paint.lineColor,
+                'line-width': MapLibreHelpers.buildZoomScaledLineWidth(applyPlan.paint.lineWidth),
+                'line-opacity': applyPlan.paint.lineOpacity,
+            },
+        });
+        return true;
+    } catch (e) {
+        const prefix = applyPlan.errorLogPrefix || '[MultiDrop] Failed to draw leg ';
+        console.warn(`${prefix}${applyPlan.legIndex}:`, e);
+        return false;
+    }
+}
+
+/**
  * Draw multi-drop route legs on the map with distinct colors per leg
  */
 function drawMultiDropLegsOnMap(data) {
     if (!map) return;
 
     const WP = _waypoints();
-    const applyPlan = WP.buildMultiDropLegsMapApplyPlan(data, decodePolyline);
-    if (!applyPlan.shouldDraw) return;
+    const executePlan = WP.buildMultiDropLegsMapExecutePlan(
+        WP.buildMultiDropLegsMapApplyPlan(data, decodePolyline)
+    );
+    if (!executePlan.shouldExecute) return;
 
-    applyPlan.layers.forEach((layerPlan, idx) => {
-        try {
-            const { layerId, sourceId, coordinates, lineColor } = layerPlan;
-            if (map.getLayer(layerId)) map.removeLayer(layerId);
-            if (map.getSource(sourceId)) map.removeSource(sourceId);
-
-            map.addSource(sourceId, {
-                type: 'geojson',
-                data: {
-                    type: 'Feature',
-                    geometry: { type: 'LineString', coordinates }
-                }
-            });
-
-            map.addLayer({
-                id: layerId,
-                type: 'line',
-                source: sourceId,
-                layout: { 'line-join': 'round', 'line-cap': 'round' },
-                paint: {
-                    'line-color': lineColor,
-                    'line-width': MapLibreHelpers.buildZoomScaledLineWidth(layerPlan.lineWidth),
-                    'line-opacity': layerPlan.lineOpacity
-                }
-            });
-        } catch (e) {
-            console.warn(`[MultiDrop] Failed to draw leg ${idx}:`, e);
-        }
+    executePlan.layers.forEach((layerPlan) => {
+        applyMultiDropLegLayerFromMapLibrePlan(layerPlan);
     });
 }
 
@@ -4641,11 +4662,11 @@ function clearHazardMarkers() {
  * Display hazards from all routes on the map
  */
 function displayAllRouteHazards() {
-    const hazardList = _hazardMapMarkers().buildAllRoutesHazardsList(routeOptions);
-    if (hazardList.hazards.length > 0) {
-        displayHazardMarkers(hazardList.hazards);
-        console.log(`[Hazards] Displaying hazards from all ${hazardList.routeCount} routes: ${hazardList.hazards.length} total`);
-    }
+    const plan = _hazardMapMarkers().buildDisplayAllRouteHazardsPlan(routeOptions);
+    if (!plan.shouldDisplay) return;
+
+    displayHazardMarkers(plan.hazards);
+    if (plan.logMessage) console.log(plan.logMessage);
 }
 
 // ===== BOTTOM SHEET CONTROL =====

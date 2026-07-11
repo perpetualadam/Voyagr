@@ -2033,6 +2033,41 @@
         };
     }
 
+    /**
+     * Execute plan for applying a doAddRouteLayers batch with log metadata.
+     * @param {Object} batch - from buildDoAddRouteLayersBatchPlan
+     * @returns {Object}
+     */
+    function buildDoAddRouteLayersBatchExecutePlan(batch) {
+        batch = batch || {};
+        var layers = batch.layers || [];
+        var beforeId = batch.beforeId;
+        var layerSteps = layers.map(function (applyPlan) {
+            var idx = applyPlan.routeIndex;
+            var valid = !!applyPlan.valid;
+            return {
+                applyPlan: applyPlan,
+                valid: valid,
+                startLogMessage: '[Routes] Route ' + idx + ': "' + applyPlan.routeName +
+                    '", polyline points: ' + applyPlan.polylinePointCount,
+                invalidLogMessage: valid ? null :
+                    '[Routes] Route ' + idx + ': Not enough valid points (' +
+                    (applyPlan.lngLatCoordCount || 0) + ')',
+                drawLogMessage: valid ?
+                    '[Routes] Drawing route ' + idx + ' with color ' + applyPlan.paint.lineColor +
+                    ', weight ' + applyPlan.paint.lineWeight : null,
+                successLogMessage: valid ?
+                    '[Routes] ✓ Route ' + idx + ' layer added directly: ' + applyPlan.layerId +
+                    (beforeId ? ' (before ' + beforeId + ')' : '') : null,
+            };
+        });
+        return {
+            beforeId: beforeId,
+            layerSteps: layerSteps,
+            layerCount: layerSteps.length,
+        };
+    }
+
     var ENSURE_LABELS_ON_TOP_DEBOUNCE_MS = 50;
 
     /**
@@ -2270,6 +2305,7 @@
         buildBringRoutesToTopExecutePlan: buildBringRoutesToTopExecutePlan,
         buildRouteLayerMapLibreApplyPlan: buildRouteLayerMapLibreApplyPlan,
         buildDoAddRouteLayersBatchPlan: buildDoAddRouteLayersBatchPlan,
+        buildDoAddRouteLayersBatchExecutePlan: buildDoAddRouteLayersBatchExecutePlan,
         buildEnsureLabelsOnTopDispatchPlan: buildEnsureLabelsOnTopDispatchPlan,
         buildEnsureLabelsOnTopExecutePlan: buildEnsureLabelsOnTopExecutePlan,
         buildBringTrafficEdgesToTopDispatchPlan: buildBringTrafficEdgesToTopDispatchPlan,

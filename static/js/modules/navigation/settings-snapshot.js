@@ -112,6 +112,22 @@
     }
 
     /**
+     * Save plan for persisting a settings snapshot to localStorage.
+     * @param {Object} snapshotInput - from buildSettingsSnapshotInputPlan
+     * @returns {Object}
+     */
+    function buildSettingsSavePlan(snapshotInput) {
+        var snapshot = buildSettingsSnapshot(snapshotInput);
+        return {
+            storageKey: SETTINGS_STORAGE_KEY,
+            storageValue: JSON.stringify(snapshot),
+            snapshot: snapshot,
+            logMessage: '[Settings] All settings saved to localStorage',
+            persistActiveProfile: true,
+        };
+    }
+
+    /**
      * Build localStorage patches and runtime variable updates from a saved snapshot.
      * @param {Object|null|undefined} settings
      * @returns {{ found: boolean, localStorage?: Object, runtime?: Object }}
@@ -678,6 +694,7 @@
         SETTINGS_STORAGE_KEY: SETTINGS_STORAGE_KEY,
         buildSettingsSnapshot: buildSettingsSnapshot,
         buildSettingsSnapshotInputPlan: buildSettingsSnapshotInputPlan,
+        buildSettingsSavePlan: buildSettingsSavePlan,
         buildSettingsRestorePlan: buildSettingsRestorePlan,
         isRecognisedSettingsSnapshot: isRecognisedSettingsSnapshot,
         buildSettingsExportPlan: buildSettingsExportPlan,

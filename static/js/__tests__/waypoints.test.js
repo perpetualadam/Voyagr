@@ -260,6 +260,19 @@ describe('waypoints module', () => {
         expect(plan.layers[0].lineOpacity).toBe(0.85);
     });
 
+    test('buildMultiDropLegsMapExecutePlan builds MapLibre apply specs', () => {
+        const decode = jest.fn(() => [[51.5, -0.1], [51.6, -0.2]]);
+        const apply = W.buildMultiDropLegsMapApplyPlan({
+            all_geometry: ['geom'],
+            legs: [{ geometry_precision: 6 }],
+        }, decode);
+        const execute = W.buildMultiDropLegsMapExecutePlan(apply);
+        expect(execute.shouldExecute).toBe(true);
+        expect(execute.layers[0].geoJsonFeature.geometry.type).toBe('LineString');
+        expect(execute.layers[0].paint.lineColor).toBeTruthy();
+        expect(W.buildMultiDropLegsMapExecutePlan({ shouldDraw: false }).shouldExecute).toBe(false);
+    });
+
     test('buildClearMultiDropLayersPlan enumerates leg layer ids', () => {
         const plan = W.buildClearMultiDropLayersPlan(3);
         expect(plan.layerSpecs).toHaveLength(3);

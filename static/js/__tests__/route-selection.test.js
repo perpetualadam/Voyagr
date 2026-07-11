@@ -899,6 +899,19 @@ describe('route overview and single-route display plans', () => {
         expect(batch.layers[1].routeIndex).toBe(0);
     });
 
+    test('buildDoAddRouteLayersBatchExecutePlan adds log metadata per layer step', () => {
+        const batch = RS.buildDoAddRouteLayersBatchPlan(
+            [{ name: 'Fast', polyline: [[51.5, -0.1], [51.6, -0.2]] }],
+            0,
+            [{ type: 'symbol', layout: { 'text-field': 'x' }, id: 'labels' }]
+        );
+        const execute = RS.buildDoAddRouteLayersBatchExecutePlan(batch);
+        expect(execute.layerCount).toBe(1);
+        expect(execute.layerSteps[0].valid).toBe(true);
+        expect(execute.layerSteps[0].startLogMessage).toContain('Fast');
+        expect(execute.layerSteps[0].successLogMessage).toContain('route-layer-0');
+    });
+
     test('buildEnsureLabelsOnTopDispatchPlan collects text symbol layer ids', () => {
         const plan = RS.buildEnsureLabelsOnTopDispatchPlan([
             { id: 'route-layer-0', type: 'line' },
