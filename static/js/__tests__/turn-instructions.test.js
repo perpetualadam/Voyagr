@@ -168,3 +168,157 @@ describe('getTurnDirectionText', () => {
         expect(TI.getTurnDirectionText(undefined)).toBe('continue');
     });
 });
+
+describe('refineManeuverDirection', () => {
+    test('non-motorway road class leaves the direction unchanged', () => {
+        expect(TI.refineManeuverDirection(10, 'right', 'residential')).toBe('right');
+    });
+
+    test('already-exit directions are preserved on motorways', () => {
+        expect(TI.refineManeuverDirection(10, 'exit_left', 'motorway')).toBe('exit_left');
+        expect(TI.refineManeuverDirection(10, 'exit_right', 'motorway')).toBe('exit_right');
+    });
+
+    test('motorway right-family maneuver types become exit_right', () => {
+        [18, 9, 23, 10].forEach((t) => {
+            expect(TI.refineManeuverDirection(t, 'right', 'motorway')).toBe('exit_right');
+        });
+    });
+
+    test('motorway left-family maneuver types become exit_left', () => {
+        [19, 16, 24, 15, 14].forEach((t) => {
+            expect(TI.refineManeuverDirection(t, 'left', 'motorway')).toBe('exit_left');
+        });
+    });
+
+    test('motorway type without an exit mapping keeps the original direction', () => {
+        expect(TI.refineManeuverDirection(8, 'straight', 'motorway')).toBe('straight');
+    });
+
+    test('missing direction is returned as-is', () => {
+        expect(TI.refineManeuverDirection(10, null, 'motorway')).toBeNull();
+    });
+});
+
+describe('getRoundaboutDirectionText', () => {
+    test('exit (type 27) with a count uses the ordinal exit', () => {
+        expect(TI.getRoundaboutDirectionText(27, 1)).toBe('take the 1st exit');
+        expect(TI.getRoundaboutDirectionText(27, 2)).toBe('take the 2nd exit');
+        expect(TI.getRoundaboutDirectionText(27, 3)).toBe('take the 3rd exit');
+        expect(TI.getRoundaboutDirectionText(27, 4)).toBe('take the 4th exit');
+        expect(TI.getRoundaboutDirectionText(27, 11)).toBe('take the 11th exit');
+    });
+
+    test('enter (type 26) with a count phrases "at the roundabout"', () => {
+        expect(TI.getRoundaboutDirectionText(26, 2)).toBe('at the roundabout, take the 2nd exit');
+    });
+
+    test('no exit count falls back to enter/leave phrasing', () => {
+        expect(TI.getRoundaboutDirectionText(27, 0)).toBe('leave the roundabout');
+        expect(TI.getRoundaboutDirectionText(26, 0)).toBe('enter the roundabout');
+    });
+});
+
+describe('buildTurnDisplayInstruction', () => {
+    test('roundabout delegates to roundabout phrasing', () => {
+        expect(TI.buildTurnDisplayInstruction('roundabout', 'ignored', 27, 2)).toBe('take the 2nd exit');
+    });
+
+    test('exit/slight directions use direction text over raw instruction', () => {
+        expect(TI.buildTurnDisplayInstruction('exit_left', 'raw text')).toBe(TI.getTurnDirectionText('exit_left'));
+        expect(TI.buildTurnDisplayInstruction('slight_right', 'raw text')).toBe(TI.getTurnDirectionText('slight_right'));
+    });
+
+    test('raw instruction is used when present for ordinary turns', () => {
+        expect(TI.buildTurnDisplayInstruction('left', 'Turn left onto High St')).toBe('Turn left onto High St');
+    });
+
+    test('falls back to direction text (then straight) when no raw instruction', () => {
+        expect(TI.buildTurnDisplayInstruction('left', '   ')).toBe(TI.getTurnDirectionText('left'));
+        expect(TI.buildTurnDisplayInstruction(null)).toBe(TI.getTurnDirectionText('straight'));
+    });
+});
+
+describe('ordinalEnglishExit', () => {
+    test('1st, 2nd, 3rd, 4th, 11th, 12th, 13th, 21st', () => {
+        expect(TI.ordinalEnglishExit(1)).toBe('1st');
+        expect(TI.ordinalEnglishExit(2)).toBe('2nd');
+        expect(TI.ordinalEnglishExit(3)).toBe('3rd');
+        expect(TI.ordinalEnglishExit(4)).toBe('4th');
+        expect(TI.ordinalEnglishExit(11)).toBe('11th');
+        expect(TI.ordinalEnglishExit(12)).toBe('12th');
+        expect(TI.ordinalEnglishExit(13)).toBe('13th');
+        expect(TI.ordinalEnglishExit(21)).toBe('21st');
+    });
+});
+
+describe('laneOrdinalEnglish', () => {
+    test('1st-3rd then nth', () => {
+        expect(TI.laneOrdinalEnglish(1)).toBe('1st');
+        expect(TI.laneOrdinalEnglish(2)).toBe('2nd');
+        expect(TI.laneOrdinalEnglish(3)).toBe('3rd');
+        expect(TI.laneOrdinalEnglish(4)).toBe('4th');
+    });
+});
+
+describe('buildTurnLaneHintHtml', () => {
+    test('roundabout exit count badge', () => {
+        const html = TI.buildTurnLaneHintHtml({ type: 27, lanes: null }, 2, 500);
+        expect(html).toContain('2nd exit');
+    });
+
+    test('keep-left chip for slight-left type within 900m', () => {
+        const html = TI.buildTurnLaneHintHtml({ type: 16, lanes: null }, 0, 400);
+        expect(html).toContain('Keep left');
+    });
+
+    test('no keep chip beyond 900m', () => {
+        const html = TI.buildTurnLaneHintHtml({ type: 16, lanes: null }, 0, 1000);
+        expect(html).toBe('');
+    });
+
+    test('hard turn types get no keep chip', () => {
+        // type 15 = left turn, should NOT get "Keep left"
+        const html = TI.buildTurnLaneHintHtml({ type: 15, lanes: null }, 0, 500);
+        expect(html).not.toContain('Keep left');
+    });
+
+    test('null maneuver returns empty string', () => {
+        expect(TI.buildTurnLaneHintHtml(null, 0, 500)).toBe('');
+    });
+
+    test('keep-right chip for slight-right type within 900m', () => {
+        const html = TI.buildTurnLaneHintHtml({ type: 9, lanes: null }, 0, 400);
+        expect(html).toContain('Keep right');
+    });
+
+    test('active lane indicator shows lane ordinal chip', () => {
+        const html = TI.buildTurnLaneHintHtml(
+            { type: 10, lanes: [{ active: false }, { active: true }] },
+            0, 500
+        );
+        expect(html).toContain('2nd lane');
+    });
+
+    test('valid_indications fallback sets lane chip when no active flag', () => {
+        const html = TI.buildTurnLaneHintHtml(
+            { type: 10, lanes: [{ valid_indications: [] }, { valid_indications: ['right'] }] },
+            0, 500
+        );
+        expect(html).toContain('2nd lane');
+    });
+});
+
+describe('isMotorwayRoadClass', () => {
+    test('null/empty road class is not a motorway', () => {
+        expect(TI.isMotorwayRoadClass(null)).toBe(false);
+        expect(TI.isMotorwayRoadClass('')).toBe(false);
+    });
+
+    test('motorway/trunk families are recognised (case-insensitive)', () => {
+        ['motorway', 'motorway_link', 'trunk', 'TRUNK_LINK'].forEach((rc) => {
+            expect(TI.isMotorwayRoadClass(rc)).toBe(true);
+        });
+        expect(TI.isMotorwayRoadClass('residential')).toBe(false);
+    });
+});

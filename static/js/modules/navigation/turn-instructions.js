@@ -221,6 +221,88 @@
         return getTurnDirectionText(direction || 'straight');
     }
 
+    // ======================================================================
+    // Ordinal helpers and lane-hint HTML (pure; extracted from voyagr-app.js)
+    // ======================================================================
+
+    /**
+     * English ordinal for roundabout/exit numbering: 1st, 2nd, 3rd, 4th, 11th, 21st …
+     * @param {number} n
+     * @returns {string}
+     */
+    function ordinalEnglishExit(n) {
+        var j = n % 10;
+        var k = n % 100;
+        if (j === 1 && k !== 11) return n + 'st';
+        if (j === 2 && k !== 12) return n + 'nd';
+        if (j === 3 && k !== 13) return n + 'rd';
+        return n + 'th';
+    }
+
+    /**
+     * English ordinal for lane numbering (1st, 2nd, 3rd, nth).
+     * @param {number} n
+     * @returns {string}
+     */
+    function laneOrdinalEnglish(n) {
+        if (n === 1) return '1st';
+        if (n === 2) return '2nd';
+        if (n === 3) return '3rd';
+        return n + 'th';
+    }
+
+    // Maneuver types that warrant a "Keep left" hint.
+    var KEEP_LEFT_TYPES  = [16, 19, 21, 24, 36]; // slight/ramp/exit/stay/merge LEFT
+    // Maneuver types that warrant a "Keep right" hint.
+    var KEEP_RIGHT_TYPES = [9, 18, 20, 23, 35];  // slight/ramp/exit/stay/merge RIGHT
+
+    /**
+     * Build the lane-hint chip HTML for the next-turn widget (exit count badge, lane
+     * position badge, and "Keep left/right" fallback when within 900 m).
+     *
+     * @param {object|null} maneuver - Valhalla maneuver object
+     * @param {number} exitCount - Result of the caller's effectiveRoundaboutExitCount()
+     * @param {number|null} distanceMeters - Current distance to this maneuver
+     * @returns {string} HTML fragment (may be empty)
+     */
+    function buildTurnLaneHintHtml(maneuver, exitCount, distanceMeters) {
+        if (!maneuver) return '';
+        var mt = maneuver.type || 0;
+        var chips = [];
+
+        if ((mt === 26 || mt === 27) && exitCount > 0) {
+            chips.push('<span class="lane-hint-chip">' + ordinalEnglishExit(exitCount) + ' exit</span>');
+        }
+
+        var lanes = maneuver.lanes;
+        if (Array.isArray(lanes) && lanes.length > 1) {
+            var idx = -1;
+            for (var i = 0; i < lanes.length; i++) {
+                if (lanes[i] && (lanes[i].active === true || lanes[i].active_indication === true)) { idx = i; break; }
+            }
+            if (idx < 0) {
+                for (var ii = 0; ii < lanes.length; ii++) {
+                    if (lanes[ii] && Array.isArray(lanes[ii].valid_indications) && lanes[ii].valid_indications.length > 0) { idx = ii; break; }
+                }
+            }
+            if (idx >= 0) {
+                chips.push('<span class="lane-hint-chip">' + laneOrdinalEnglish(idx + 1) + ' lane</span>');
+            }
+        }
+
+        // Keep-hint: only for forks/keeps/ramps/exits — NOT hard turns (to avoid
+        // "keep left" being shown alongside a "Turn left" instruction).
+        var isKeep = KEEP_LEFT_TYPES.indexOf(mt) >= 0 || KEEP_RIGHT_TYPES.indexOf(mt) >= 0;
+        if (isKeep && chips.length === 0 && typeof distanceMeters === 'number' && distanceMeters < 900) {
+            if (KEEP_LEFT_TYPES.indexOf(mt) >= 0) {
+                chips.push('<span class="lane-hint-chip">Keep left</span>');
+            } else {
+                chips.push('<span class="lane-hint-chip">Keep right</span>');
+            }
+        }
+        return chips.join(' ');
+    }
+
     var api = {
         calculateTurnDirection: calculateTurnDirection,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,
@@ -231,6 +313,9 @@
         refineManeuverDirection: refineManeuverDirection,
         getRoundaboutDirectionText: getRoundaboutDirectionText,
         buildTurnDisplayInstruction: buildTurnDisplayInstruction,
+        ordinalEnglishExit: ordinalEnglishExit,
+        laneOrdinalEnglish: laneOrdinalEnglish,
+        buildTurnLaneHintHtml: buildTurnLaneHintHtml,
         TURN_ICON_MAP: TURN_ICON_MAP,
         DIRECTION_TEXT_MAP: DIRECTION_TEXT_MAP
     };

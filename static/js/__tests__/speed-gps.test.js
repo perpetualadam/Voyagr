@@ -204,6 +204,88 @@ describe('stepSmoothGpsSpeedMph', () => {
         const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 0, initAt: 1000 }, 0.3, 2000);
         expect(r.value).toBe(0);
     });
+
+    test('resets to the raw value when the init window has elapsed', () => {
+        // moving (smoothed >= dead band), fix well past INIT_RESET_MS (5000)
+        const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 20, initAt: 1000 }, 30, 7000);
+        expect(r.value).toBe(30);
+        expect(r.state.smoothedMph).toBe(30);
+    });
+
+    test('resets to the raw value when there is no prior init timestamp', () => {
+        const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 20, initAt: 0 }, 28, 2000);
+        expect(r.value).toBe(28);
+    });
+
+    test('a very large jump decays gradually instead of snapping fully', () => {
+        // delta 60 >= LARGE_JUMP_MPH(55): smoothed = 0.8*10 + 0.2*70 = 22
+        const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 10, initAt: 1000 }, 70, 2000);
+        expect(r.value).toBeCloseTo(22, 5);
+    });
+
+    test('a medium jump snaps to the raw value', () => {
+        // delta 10 in [SNAP_DELTA_MPH(8), LARGE_JUMP_MPH(55)) -> snap
+        const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 10, initAt: 1000 }, 20, 2000);
+        expect(r.value).toBe(20);
+    });
+
+    test('a small delta is EMA-smoothed', () => {
+        // delta 3 < SNAP_DELTA_MPH: smoothed = 0.55*10 + 0.45*13 = 11.35
+        const r = SG.stepSmoothGpsSpeedMph({ smoothedMph: 10, initAt: 1000 }, 13, 2000);
+        expect(r.value).toBeCloseTo(11.35, 5);
+    });
+});
+
+describe('stepPickRawSpeedMph', () => {
+    const emptyState = () => ({ lastGoodRawPickMph: 0, consecutiveDisplacementMoves: 0 });
+
+    test('exposes the function', () => {
+        expect(typeof SG.stepPickRawSpeedMph).toBe('function');
+    });
+
+    test('returns 0 with no data', () => {
+        const r = SG.stepPickRawSpeedMph(emptyState(), null, [], null);
+        expect(r.value).toBe(0);
+        expect(r.state.lastGoodRawPickMph).toBe(0);
+    });
+
+    test('trusts a valid device coords.speed (m/s) directly', () => {
+        // 20 m/s ≈ 44.7 mph
+        const r = SG.stepPickRawSpeedMph(emptyState(), 20, [], null);
+        expect(r.value).toBeGreaterThan(40);
+        expect(r.value).toBeLessThan(55);
+        expect(r.state.lastGoodRawPickMph).toBe(r.value);
+    });
+
+    test('returns 0 when device explicitly reports stopped', () => {
+        const r = SG.stepPickRawSpeedMph(emptyState(), 0, [], null);
+        expect(r.value).toBe(0);
+    });
+
+    test('derives speed from two close history fixes (normal driving ~35 mph)', () => {
+        const now = Date.now();
+        // ~11 m apart in 0.7 s ≈ 15.7 m/s ≈ 35 mph — plausible urban driving
+        const hist = [
+            { lat: 51.5000, lon: -0.1000, timestamp: now - 700 },
+            { lat: 51.5001, lon: -0.1000, timestamp: now },
+        ];
+        const r = SG.stepPickRawSpeedMph(emptyState(), null, hist, null);
+        expect(r.value).toBeGreaterThan(20);
+        expect(r.value).toBeLessThan(60);
+        expect(r.state.consecutiveDisplacementMoves).toBeGreaterThanOrEqual(1);
+    });
+
+    test('caps at MAX_DISPLAY_GPS_SPEED_MPH', () => {
+        // Unrealistically fast coords.speed (1000 m/s → 2237 mph) must be capped
+        const r = SG.stepPickRawSpeedMph(emptyState(), 1000, [], null);
+        expect(r.value).toBeLessThanOrEqual(SG.DEFAULTS.MAX_DISPLAY_GPS_SPEED_MPH);
+    });
+
+    test('state threads through successive calls', () => {
+        const r1 = SG.stepPickRawSpeedMph(emptyState(), 20, [], null);
+        const r2 = SG.stepPickRawSpeedMph(r1.state, 22, [], null);
+        expect(r2.state.lastGoodRawPickMph).toBeGreaterThan(0);
+    });
 });
 
 describe('normalizeGeolocationSpeedToMph', () => {

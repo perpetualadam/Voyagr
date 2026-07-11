@@ -199,11 +199,12 @@ window.debugScrollIssue = function() {
  * @param {*} km - Parameter description
  * @returns {*} Return value description
  */
+// convertDistance / getDistanceUnit / convertTemperature / getTemperatureUnit /
+// getFuelEfficiencyInUnits / getFuelEfficiencyLabel moved to modules/navigation/units.js
+// (VoyagrUnits). Thin stubs pass the global setting as an explicit arg.
 function convertDistance(km) {
-    if (distanceUnit === 'mi') {
-        return (km * 0.621371).toFixed(2);
-    }
-    return km.toFixed(2);
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.convertDistance(km, distanceUnit) : Number(km).toFixed(2);
 }
 
 /**
@@ -212,7 +213,8 @@ function convertDistance(km) {
  * @returns {*} Return value description
  */
 function getDistanceUnit() {
-    return distanceUnit === 'mi' ? 'mi' : 'km';
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.getDistanceUnit(distanceUnit) : (distanceUnit === 'mi' ? 'mi' : 'km');
 }
 
 /**
@@ -254,10 +256,8 @@ function getSpeedUnit() {
  * @returns {*} Return value description
  */
 function convertTemperature(celsius) {
-    if (temperatureUnit === 'fahrenheit') {
-        return ((celsius * 9 / 5) + 32).toFixed(1);
-    }
-    return celsius.toFixed(1);
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.convertTemperature(celsius, temperatureUnit) : Number(celsius).toFixed(1);
 }
 
 /**
@@ -266,7 +266,8 @@ function convertTemperature(celsius) {
  * @returns {*} Return value description
  */
 function getTemperatureUnit() {
-    return temperatureUnit === 'fahrenheit' ? '°F' : '°C';
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.getTemperatureUnit(temperatureUnit) : (temperatureUnit === 'fahrenheit' ? '°F' : '°C');
 }
 
 /**
@@ -274,8 +275,10 @@ function getTemperatureUnit() {
  * @function getCurrencySymbol
  * @returns {*} Return value description
  */
+// getCurrencySymbol / adjustCostForUnits moved to modules/navigation/units.js (VoyagrUnits).
 function getCurrencySymbol() {
-    return currencySymbols[currencyUnit] || '£';
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.getCurrencySymbol(currencyUnit) : (currencySymbols[currencyUnit] || '£');
 }
 /**
  * adjustCostForUnits function
@@ -285,9 +288,8 @@ function getCurrencySymbol() {
  * @returns {*} Return value description
  */
 function adjustCostForUnits(cost, costType = 'fuel') {
-    // Currency totals from the API are absolute amounts (£ / $ / €).
-    // Distance unit (mi vs km) must not rescale money — only distance labels change.
-    return cost;
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.adjustCostForUnits(cost) : cost;
 }
 /**
  * getFuelEfficiencyInUnits function
@@ -296,12 +298,8 @@ function adjustCostForUnits(cost, costType = 'fuel') {
  * @returns {*} Return value description
  */
 function getFuelEfficiencyInUnits(liters_per_100km) {
-    if (distanceUnit === 'mi') {
-        // Convert L/100km to MPG (miles per gallon)
-        // 1 L/100km ≈ 235.214 / L/100km = MPG
-        return (235.214 / liters_per_100km).toFixed(1);
-    }
-    return liters_per_100km.toFixed(1);
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.getFuelEfficiencyInUnits(liters_per_100km, distanceUnit) : Number(liters_per_100km).toFixed(1);
 }
 
 /**
@@ -310,7 +308,8 @@ function getFuelEfficiencyInUnits(liters_per_100km) {
  * @returns {*} Return value description
  */
 function getFuelEfficiencyLabel() {
-    return distanceUnit === 'mi' ? 'MPG' : 'L/100km';
+    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
+    return U ? U.getFuelEfficiencyLabel(distanceUnit) : (distanceUnit === 'mi' ? 'MPG' : 'L/100km');
 }
 
 // ===== NAVIGATION VARIABLES =====
@@ -4591,88 +4590,42 @@ function setupMapClickHandler() {
  * @param {*} precision - Precision level (5 for OSRM/GraphHopper, 6 for Valhalla). Default: 6
  * @returns {*} Array of [lat, lon] coordinates
  */
+// decodePolyline / encodePolyline moved to modules/navigation/polyline-codec.js
+// (VoyagrPolylineCodec global). Thin stubs below keep all existing callers working.
+
+/**
+ * Decode an encoded polyline string to [lat,lon] pairs.
+ * Delegates to VoyagrPolylineCodec (pure, unit-tested). Precision 6 = Valhalla, 5 = OSRM/GH.
+ * @param {string} encoded
+ * @param {number} [precision=6]
+ * @returns {Array<[number, number]>}
+ */
 function decodePolyline(encoded, precision = 6) {
+    const PC = (typeof VoyagrPolylineCodec !== 'undefined') ? VoyagrPolylineCodec : null;
     if (!encoded || typeof encoded !== 'string') {
         console.warn('[decodePolyline] Invalid input:', encoded);
         return [];
     }
-
-    // Valhalla uses precision 6 (1e6), OSRM/GraphHopper use precision 5 (1e5)
-    const inv = 1.0 / Math.pow(10, precision);
-    const decoded = [];
-    let previous = [0, 0];
-    let i = 0;
-
-    try {
-        while (i < encoded.length) {
-            let ll = [0, 0];
-            for (let j = 0; j < 2; j++) {
-                let shift = 0;
-                let result = 0;
-                let byte = 0;
-                do {
-                    byte = encoded.charCodeAt(i++) - 63;
-                    result |= (byte & 0x1f) << shift;
-                    shift += 5;
-                } while (byte >= 0x20);
-                ll[j] = previous[j] + (result & 1 ? ~(result >> 1) : result >> 1);
-                previous[j] = ll[j];
-            }
-            // Polyline format is [lat, lon], which is what Leaflet expects
-            decoded.push([ll[0] * inv, ll[1] * inv]);
-        }
-
-        console.log(`[decodePolyline] Decoded ${decoded.length} points with precision ${precision}`);
-        if (decoded.length > 0) {
-            console.log(`[decodePolyline] First point: [${decoded[0][0]}, ${decoded[0][1]}]`);
-            console.log(`[decodePolyline] Last point: [${decoded[decoded.length - 1][0]}, ${decoded[decoded.length - 1][1]}]`);
-        }
-
-        return decoded;
-    } catch (error) {
-        console.error('[decodePolyline] Error decoding polyline:', error);
-        return [];
+    const decoded = PC ? PC.decodePolyline(encoded, precision) : [];
+    console.log(`[decodePolyline] Decoded ${decoded.length} points with precision ${precision}`);
+    if (decoded.length > 0) {
+        console.log(`[decodePolyline] First point: [${decoded[0][0]}, ${decoded[0][1]}]`);
+        console.log(`[decodePolyline] Last point: [${decoded[decoded.length - 1][0]}, ${decoded[decoded.length - 1][1]}]`);
     }
+    return decoded;
 }
 
 /**
- * Encode decoded [lat,lon] vertices to an encoded polyline string (paired with decodePolyline / Google polyline alg).
- * Used offline when only decoded points survived persistence.
- *
+ * Encode [lat,lon] vertex pairs to an encoded polyline string.
+ * Delegates to VoyagrPolylineCodec. Used offline when only decoded points survived persistence.
  * @param {Array<[number, number]>} points
- * @param {number} precision
+ * @param {number} [precision=6]
  * @returns {string}
  */
 function encodePolyline(points, precision = 6) {
+    const PC = (typeof VoyagrPolylineCodec !== 'undefined') ? VoyagrPolylineCodec : null;
     if (!Array.isArray(points) || points.length === 0) return '';
-    const factor = Math.pow(10, precision);
-    let prevLatRounded = 0;
-    let prevLonRounded = 0;
-    let result = '';
-
-    /** Google polyline zigzag on integer delta (inverse of decodePolyline bit assembly). */
-    const encodeUnsignedChunk = (delta) => {
-        const n = Math.round(delta);
-        let u = (n << 1) ^ (n >> 31);
-        u = u >>> 0;
-        while (u >= 0x20) {
-            result += String.fromCharCode((0x20 | (u & 0x1f)) + 63);
-            u >>>= 5;
-        }
-        result += String.fromCharCode((u >>> 0) + 63);
-    };
-
-    for (let p = 0; p < points.length; p++) {
-        const pt = points[p];
-        if (!pt || pt.length < 2) continue;
-        const latR = Math.round(pt[0] * factor);
-        const lonR = Math.round(pt[1] * factor);
-        encodeUnsignedChunk(latR - prevLatRounded);
-        encodeUnsignedChunk(lonR - prevLonRounded);
-        prevLatRounded = latR;
-        prevLonRounded = lonR;
-    }
-    return result;
+    return PC ? PC.encodePolyline(points, precision) : '';
 }
 
 /**
@@ -4859,31 +4812,31 @@ async function calculateRoute() {
         Number.isFinite(currentLon);
     const routeStartCoordStr = liveGpsOk ? `${currentLat},${currentLon}` : geocodedStart;
 
+    // Shared hazard/avoidance/cost/preference fields are built by the pure
+    // VoyagrRoutingRequest module (shared with the reroute path); this handler
+    // adds start/end and the multi-drop fields it alone sends.
     const requestBody = {
         start: routeStartCoordStr,
         end: geocodedEnd,
-        routing_mode: currentRoutingMode,
-        vehicle_type: currentVehicleType,
-        ...getRouteCostParams(currentVehicleType),
-        enable_hazard_avoidance: enableHazardAvoidance,
-        avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
-        avoid_caz: localStorage.getItem('pref_caz') !== 'false',
-        avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-        avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+        ...VoyagrRoutingRequest.buildSharedRouteOptions({
+            routingMode: currentRoutingMode,
+            vehicleType: currentVehicleType,
+            costParams: getRouteCostParams(currentVehicleType),
+            enableHazardAvoidance: enableHazardAvoidance,
+            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
+            avoidCaz: localStorage.getItem('pref_caz') !== 'false',
+            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
+            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+            avoidTolls: avoidTollRoads,
+            avoidMotorways: avoidMotorways,
+            avoidFerries: avoidFerries,
+            routePrefs: routePrefs,
+        }),
         via_points: viaPointsData,
         stops: stopsData,
         optimize_stop_order: optimizeOrder,
         round_trip: roundTrip,
         departure_time: departureTime,
-        avoid_tolls: avoidTollRoads,
-        avoid_motorways: avoidMotorways,
-        avoid_ferries: avoidFerries,
-        // Extended route preferences — translated server-side into Valhalla auto costing_options.
-        prefer_scenic: !!routePrefs.preferScenic,
-        prefer_quiet: !!routePrefs.preferQuiet,
-        avoid_unpaved: !!routePrefs.avoidUnpaved,
-        route_optimization: routePrefs.routeOptimization || 'fastest',
-        max_detour: (typeof routePrefs.maxDetour === 'number') ? routePrefs.maxDetour : 20,
     };
 
     console.log('[calculateRoute] Making API request to /api/route with:', requestBody);
@@ -6985,31 +6938,14 @@ async function checkTrafficAndReroute() {
  * Decide whether a fresh route-traffic sample warrants a reroute attempt.
  * `current`/`previous` are sampleRouteTrafficAhead() results.
  */
+// detectSignificantTrafficChange moved to modules/navigation/traffic-change.js (VoyagrTrafficChange).
 function detectSignificantTrafficChange(previous, current) {
+    const TC = (typeof VoyagrTrafficChange !== 'undefined') ? VoyagrTrafficChange : null;
+    if (TC) return TC.detectSignificantTrafficChange(previous, current);
+    // Inline fallback.
     if (!current) return false;
-
-    // Severe (near-standstill / black) congestion with somewhere to route around.
-    if (current.severe && current.congestedPoints.length > 0) {
-        console.log('[Auto-Traffic] Severe congestion ahead');
-        return 'severe';
-    }
-    // A meaningful absolute delay is worth a look even on the first sample.
-    if (current.delayMin >= 4 && current.congestedPoints.length > 0) {
-        console.log(`[Auto-Traffic] Significant delay ahead (~${current.delayMin.toFixed(1)} min)`);
-        return 'congestion';
-    }
-    // Otherwise only act when conditions got materially worse since the last check.
-    if (previous) {
-        const delayJump = current.delayMin - (previous.delayMin || 0);
-        if (delayJump >= 3 && current.congestedPoints.length > 0) {
-            console.log(`[Auto-Traffic] Delay increased by ~${delayJump.toFixed(1)} min`);
-            return 'congestion';
-        }
-        if (current.congestedCount > (previous.congestedCount || 0) + 1 && current.congestedPoints.length > 0) {
-            console.log(`[Auto-Traffic] More congested segments: ${previous.congestedCount} -> ${current.congestedCount}`);
-            return 'congestion';
-        }
-    }
+    if (current.severe && current.congestedPoints.length > 0) return 'severe';
+    if (current.delayMin >= 4 && current.congestedPoints.length > 0) return 'congestion';
     return false;
 }
 
@@ -7131,29 +7067,29 @@ function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) 
             .map(p => ({ lat: p.lat, lon: p.lon }))
         : [];
 
+    // Shared hazard/avoidance/cost/preference fields come from the pure
+    // VoyagrRoutingRequest module (shared with calculateRoute); this path adds
+    // start/end, explicit avoid_points, and the include_tolls/include_caz flags.
     return {
         start: `${startLat},${startLon}`,
         end: destination,
         avoid_points: cleanAvoidPoints,
-        routing_mode: currentRoutingMode || 'auto',
-        vehicle_type: currentVehicleType || 'petrol_diesel',
-        ...getRouteCostParams(currentVehicleType),
         include_tolls: localStorage.getItem('includeTolls') !== 'false',
         include_caz: localStorage.getItem('includeCAZ') !== 'false',
-        enable_hazard_avoidance: enableHazardAvoidance,
-        avoid_cameras: localStorage.getItem('pref_cameras') !== 'false',
-        avoid_traffic_lights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-        avoid_railway_crossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
-        avoid_tolls: isAvoidTollsEnabled(),
-        avoid_motorways: localStorage.getItem('pref_avoid_motorways') === 'true',
-        avoid_ferries: localStorage.getItem('pref_avoid_ferries') === 'true',
-        avoid_caz: localStorage.getItem('pref_caz') !== 'false',
-        // Extended route preferences — mirror calculateRoute so reroutes honour the same settings.
-        prefer_scenic: !!routePrefs.preferScenic,
-        prefer_quiet: !!routePrefs.preferQuiet,
-        avoid_unpaved: !!routePrefs.avoidUnpaved,
-        route_optimization: routePrefs.routeOptimization || 'fastest',
-        max_detour: (typeof routePrefs.maxDetour === 'number') ? routePrefs.maxDetour : 20,
+        ...VoyagrRoutingRequest.buildSharedRouteOptions({
+            routingMode: currentRoutingMode || 'auto',
+            vehicleType: currentVehicleType || 'petrol_diesel',
+            costParams: getRouteCostParams(currentVehicleType),
+            enableHazardAvoidance: enableHazardAvoidance,
+            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
+            avoidCaz: localStorage.getItem('pref_caz') !== 'false',
+            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
+            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+            avoidTolls: isAvoidTollsEnabled(),
+            avoidMotorways: localStorage.getItem('pref_avoid_motorways') === 'true',
+            avoidFerries: localStorage.getItem('pref_avoid_ferries') === 'true',
+            routePrefs: routePrefs,
+        }),
     };
 }
 
@@ -10292,107 +10228,29 @@ function rejectGpsSpeedSpikeMph(mph, prevPick) {
     return Number.isFinite(mph) && mph >= 0 ? mph : 0;
 }
 
+// pickRawSpeedMph body moved to modules/navigation/speed-gps.js as the pure
+// stepPickRawSpeedMph step function. This orchestration wrapper holds the mutable
+// state and calls it, matching the pattern of smoothGpsSpeedMph / stepSmoothGpsSpeedMph.
 function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
     const SG = _speedGps();
+    if (SG && SG.stepPickRawSpeedMph) {
+        const r = SG.stepPickRawSpeedMph(
+            { lastGoodRawPickMph: _lastGoodRawPickMph, consecutiveDisplacementMoves: _consecutiveDisplacementMoves },
+            coordsSpeed, history, coordAccuracy
+        );
+        _lastGoodRawPickMph = r.state.lastGoodRawPickMph;
+        _consecutiveDisplacementMoves = r.state.consecutiveDisplacementMoves;
+        return r.value;
+    }
+    // Inline fallback when module is not yet loaded.
     const accCurr = Number.isFinite(coordAccuracy) && coordAccuracy > 2 ? coordAccuracy : null;
-
-    const finish = (mph) => {
-        let x = mph;
-        if (!Number.isFinite(x) || x < 0) x = 0;
-        x = Math.min(x, MAX_DISPLAY_GPS_SPEED_MPH);
-        _lastGoodRawPickMph = x;
-        return x;
-    };
-
-    const deviceReportsStopped = Number.isFinite(coordsSpeed) && coordsSpeed === 0;
-
     if (Number.isFinite(coordsSpeed) && coordsSpeed > 0) {
-        let derivedHint = null;
-        if (Array.isArray(history) && history.length >= 2) {
-            const curr = history[history.length - 1];
-            const prev = history[history.length - 2];
-            const tCurr = curr && curr.timestamp ? +curr.timestamp : 0;
-            const tPrev = prev && prev.timestamp ? +prev.timestamp : 0;
-            const dtSec = (tCurr - tPrev) / 1000;
-            if (dtSec > 0.2 && dtSec < 10) {
-                const distM = calculateDistanceMeters(prev.lat, prev.lon, curr.lat, curr.lon);
-                if (Number.isFinite(distM) && distM <= 500) {
-                    derivedHint = Math.min((distM / dtSec) * 2.237, MAX_DISPLAY_GPS_SPEED_MPH);
-                }
-            }
-        }
-
-        let mph = SG && SG.normalizeGeolocationSpeedToMph
-            ? SG.normalizeGeolocationSpeedToMph(coordsSpeed, derivedHint)
-            : coordsSpeed * 2.237;
-        if (mph == null || !Number.isFinite(mph)) mph = coordsSpeed * 2.237;
+        let mph = coordsSpeed * 2.237;
         mph = Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH);
-        const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : mph;
-
-        mph = rejectGpsSpeedSpikeMph(mph, prevPick);
-        if (prevPick > 5 && mph > prevPick + 85 && accCurr != null && accCurr > 40) {
-            mph = prevPick;
-        }
-        if (mph >= 2) {
-            _consecutiveDisplacementMoves = Math.min(_consecutiveDisplacementMoves + 1, 20);
-        }
-
-        return finish(mph);
+        _lastGoodRawPickMph = mph;
+        return mph;
     }
-
-    if (Array.isArray(history) && history.length >= 2) {
-        const curr = history[history.length - 1];
-        const prev = history[history.length - 2];
-        const tCurr = curr && curr.timestamp ? +curr.timestamp : 0;
-        const tPrev = prev && prev.timestamp ? +prev.timestamp : 0;
-        const dtSec = (tCurr - tPrev) / 1000;
-        const accAvg = Number.isFinite(prev.accuracy) && Number.isFinite(curr.accuracy)
-            ? Math.max(Number(prev.accuracy), Number(curr.accuracy))
-            : (accCurr != null ? accCurr : null);
-
-        if (dtSec > 0.2 && dtSec < 10) {
-            const distM = calculateDistanceMeters(prev.lat, prev.lon, curr.lat, curr.lon);
-            if (!Number.isFinite(distM) || distM > 500) {
-                return finish(0);
-            }
-
-            if (deviceReportsStopped) {
-                const noiseFloorM = SG
-                    ? SG.displacementNoiseFloorMeters(deviceReportsStopped, _consecutiveDisplacementMoves, accAvg)
-                    : Math.max(Number.isFinite(accAvg) ? accAvg : 8, 8);
-                if (distM < noiseFloorM) {
-                    return finish(0);
-                }
-            }
-
-            const prevPick = Number.isFinite(_lastGoodRawPickMph) ? _lastGoodRawPickMph : 0;
-            let mph = SG
-                ? SG.estimateDisplacementSpeedMph({
-                    distM,
-                    dtSec,
-                    prevPickMph: prevPick,
-                    accAvg,
-                    deviceReportsStopped,
-                    consecutiveDisplacementMoves: _consecutiveDisplacementMoves
-                })
-                : null;
-
-            if (mph == null) {
-                mph = (distM / dtSec) * 2.237;
-                mph = rejectGpsSpeedSpikeMph(Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH), prevPick);
-            }
-
-            if (deviceReportsStopped && mph >= 2) {
-                _consecutiveDisplacementMoves = Math.min(_consecutiveDisplacementMoves + 1, 20);
-            } else if (mph >= 2) {
-                _consecutiveDisplacementMoves = Math.min(_consecutiveDisplacementMoves + 1, 20);
-            }
-
-            return finish(mph);
-        }
-    }
-
-    return finish(0);
+    return 0;
 }
 /**
  * updateSpeedWidget function
@@ -10481,19 +10339,12 @@ function updateSpeedWidgetVisibility() {
  * @param {number} lon2 - Longitude of second point
  * @returns {number} Distance in meters
  */
+// calculateDistanceMeters / calculateHaversineDistance / calculateDistance moved to
+// modules/navigation/route-geometry.js (VoyagrRouteGeometry.haversineDistanceMeters).
+// Thin stubs below keep all existing callers working.
 function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // Earth's radius in meters
-    const φ1 = lat1 * Math.PI / 180;
-    const φ2 = lat2 * Math.PI / 180;
-    const Δφ = (lat2 - lat1) * Math.PI / 180;
-    const Δλ = (lon2 - lon1) * Math.PI / 180;
-
-    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
-              Math.cos(φ1) * Math.cos(φ2) *
-              Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-
-    return R * c; // Distance in meters
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.haversineDistanceMeters(lat1, lon1, lat2, lon2) : 0;
 }
 
 /**
@@ -10521,33 +10372,16 @@ function getActiveRouteManeuverIndex(snappedIndex) {
  * @param {Object|null} step - A Valhalla maneuver object (or null).
  * @returns {string|null} Road class string, or null when nothing useful could be inferred.
  */
+// inferRoadClassFromManeuver / inferRoadClassFromStreetNames moved to
+// modules/navigation/route-geometry.js. Thin stubs keep all callers working.
 function inferRoadClassFromManeuver(step) {
-    if (!step) return null;
-    if (step.road_class) return step.road_class;
-    const instruction = (step.instruction || '').toLowerCase();
-    if (instruction.includes('motorway') || instruction.includes('m1') || instruction.includes('m25')) {
-        return 'motorway';
-    } else if (instruction.includes('a-road') || instruction.includes('a road')) {
-        return 'primary';
-    } else if (instruction.includes('b-road') || instruction.includes('b road')) {
-        return 'secondary';
-    }
-    return null;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.inferRoadClassFromManeuver(step) : (step && step.road_class) || null;
 }
 
-/**
- * Infer road class from UK-style road numbers in street names (M1, A40, B1234).
- * @param {string[]|null|undefined} streetNames
- * @returns {string|null}
- */
 function inferRoadClassFromStreetNames(streetNames) {
-    if (!Array.isArray(streetNames) || streetNames.length === 0) return null;
-    const raw = String(streetNames[0] || '').trim().toUpperCase();
-    if (!raw) return null;
-    if (/^M\d/.test(raw) || raw.includes('MOTORWAY')) return 'motorway';
-    if (/^A\d/.test(raw)) return 'primary';
-    if (/^B\d/.test(raw)) return 'secondary';
-    return null;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.inferRoadClassFromStreetNames(streetNames) : null;
 }
 
 /**
@@ -10959,14 +10793,8 @@ function toggleJourneyOverview() {
  * @returns {*} Return value description
  */
 function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
-    const R = 6371000; // Earth's radius in meters
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.haversineDistanceMeters(lat1, lon1, lat2, lon2) : 0;
 }
 /**
  * calculateBearing function
@@ -10978,15 +10806,8 @@ function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
  * @returns {*} Return value description
  */
 function calculateBearing(lat1, lon1, lat2, lon2) {
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const lat1Rad = lat1 * Math.PI / 180;
-    const lat2Rad = lat2 * Math.PI / 180;
-
-    const y = Math.sin(dLon) * Math.cos(lat2Rad);
-    const x = Math.cos(lat1Rad) * Math.sin(lat2Rad) - Math.sin(lat1Rad) * Math.cos(lat2Rad) * Math.cos(dLon);
-    const bearing = (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-
-    return bearing;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.bearing(lat1, lon1, lat2, lon2) : 0;
 }
 /**
  * calculateTurnDirection function
@@ -11026,33 +10847,12 @@ function calculateTurnDirection(bearing1, bearing2) {
  * @param {number} targetVertexIndex - Maneuver begin_shape_index (clamped to polyline)
  * @returns {number} Meters, >= 0
  */
+// distanceAlongRouteToVertexMeters: implementation lives in route-geometry.js
+// (VoyagrRouteGeometry.distanceAlongRouteToVertexMeters). Thin stub keeps all callers working.
 function distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex) {
-    if (!routePolyline || routePolyline.length < 2 || !snap) return 0;
-    const n = routePolyline.length;
-    const vi = Math.max(0, Math.min(Math.floor(Number(targetVertexIndex) || 0), n - 1));
-    const i0 = Math.max(0, Math.min(snap.index, n - 2));
-    const t = snap.t !== undefined && snap.t !== null
-        ? Math.max(0, Math.min(1, Number(snap.t)))
-        : 0;
-    const a = routePolyline[i0];
-    const b = routePolyline[i0 + 1];
-    const segLen = calculateHaversineDistance(a[0], a[1], b[0], b[1]);
-    if (vi < i0) {
-        return 0;
-    }
-    let d = 0;
-    if (vi > i0) {
-        d += (1 - t) * segLen;
-        for (let j = i0 + 1; j < vi; j++) {
-            d += calculateHaversineDistance(
-                routePolyline[j][0], routePolyline[j][1],
-                routePolyline[j + 1][0], routePolyline[j + 1][1]
-            );
-        }
-    } else {
-        d += t * segLen;
-    }
-    return Math.max(0, d);
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    if (RG) return RG.distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex);
+    return 0;
 }
 
 /**
@@ -11106,19 +10906,12 @@ function buildTurnDisplayInstruction(turnInfo) {
 }
 
 /** Cumulative along-route distance (m) between two polyline vertex indices. */
+// cumulativeRouteDistanceBetween: pure version (explicit polyline arg) is in
+// route-geometry.js as cumulativeDistanceBetweenVertices. This wrapper still reads
+// the global routePolyline — it stays as orchestration glue.
 function cumulativeRouteDistanceBetween(i, j) {
-    if (!routePolyline || routePolyline.length < 2) return Infinity;
-    let a = Math.max(0, Math.min(i | 0, routePolyline.length - 1));
-    let b = Math.max(0, Math.min(j | 0, routePolyline.length - 1));
-    if (b < a) { const t = a; a = b; b = t; }
-    let d = 0;
-    for (let k = a; k < b; k++) {
-        d += calculateHaversineDistance(
-            routePolyline[k][0], routePolyline[k][1],
-            routePolyline[k + 1][0], routePolyline[k + 1][1]
-        );
-    }
-    return d;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.cumulativeDistanceBetweenVertices(routePolyline, i, j) : Infinity;
 }
 
 /**
@@ -11159,9 +10952,14 @@ function effectiveRoundaboutExitCount(stepIndex) {
     return 0;
 }
 
+// ordinalEnglishExit / laneOrdinalEnglish / buildTurnLaneHintHtml moved to
+// modules/navigation/turn-instructions.js. Thin stubs keep all callers working.
+
 function ordinalEnglishExit(n) {
-    const j = n % 10;
-    const k = n % 100;
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    if (TI) return TI.ordinalEnglishExit(n);
+    // Inline fallback (module not yet loaded).
+    const j = n % 10, k = n % 100;
     if (j === 1 && k !== 11) return `${n}st`;
     if (j === 2 && k !== 12) return `${n}nd`;
     if (j === 3 && k !== 13) return `${n}rd`;
@@ -11169,44 +10967,22 @@ function ordinalEnglishExit(n) {
 }
 
 function laneOrdinalEnglish(n) {
-    if (n === 1) return '1st';
-    if (n === 2) return '2nd';
-    if (n === 3) return '3rd';
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    if (TI) return TI.laneOrdinalEnglish(n);
+    if (n <= 3) return ['1st', '2nd', '3rd'][n - 1] || `${n}th`;
     return `${n}th`;
 }
 
+// buildTurnLaneHintHtml: the module version takes an explicit exitCount instead of a
+// maneuverIndex, so callers resolve the count and pass it. The stub signature keeps
+// the original (maneuverIndex) for backward compatibility and resolves the count here.
 function buildTurnLaneHintHtml(maneuver, maneuverIndex, distanceMeters) {
-    if (!maneuver) return '';
-    const mt = maneuver.type || 0;
-    const chips = [];
-    const exitCt = maneuverIndex != null ? effectiveRoundaboutExitCount(maneuverIndex) : (Number(maneuver.roundabout_exit_count) || 0);
-    if ((mt === 26 || mt === 27) && exitCt > 0) {
-        chips.push(`<span class="lane-hint-chip">${ordinalEnglishExit(exitCt)} exit</span>`);
-    }
-    const lanes = maneuver.lanes;
-    if (Array.isArray(lanes) && lanes.length > 1) {
-        let idx = lanes.findIndex((l) => l && (l.active === true || l.active_indication === true));
-        if (idx < 0) {
-            idx = lanes.findIndex((l) => l && Array.isArray(l.valid_indications) && l.valid_indications.length > 0);
-        }
-        if (idx >= 0) {
-            chips.push(`<span class="lane-hint-chip">${laneOrdinalEnglish(idx + 1)} lane</span>`);
-        }
-    }
-    // "Keep left/right" lane hints only make sense for forks / keeps / ramps / exits /
-    // merges — NOT hard turns. A genuine "Turn left" (15) or "Turn right" (10) must never
-    // be annotated "Keep left/right", which previously read as "keep left instead of turn left".
-    const keepLeftTypes = [16, 19, 21, 24, 36];   // slight/ramp/exit/stay/merge LEFT
-    const keepRightTypes = [9, 18, 20, 23, 35];   // slight/ramp/exit/stay/merge RIGHT
-    const showsKeepHint = keepLeftTypes.includes(mt) || keepRightTypes.includes(mt);
-    if (showsKeepHint && chips.length === 0 && typeof distanceMeters === 'number' && distanceMeters < 900) {
-        if (keepLeftTypes.includes(mt)) {
-            chips.push('<span class="lane-hint-chip">Keep left</span>');
-        } else if (keepRightTypes.includes(mt)) {
-            chips.push('<span class="lane-hint-chip">Keep right</span>');
-        }
-    }
-    return chips.join(' ');
+    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
+    if (!TI) return '';
+    const exitCt = maneuverIndex != null
+        ? effectiveRoundaboutExitCount(maneuverIndex)
+        : (Number((maneuver || {}).roundabout_exit_count) || 0);
+    return TI.buildTurnLaneHintHtml(maneuver, exitCt, distanceMeters);
 }
 
 /**
@@ -11562,32 +11338,19 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
  * @param {*} roadType - Parameter description
  * @returns {*} Return value description
  */
+// calculateSmartZoom moved to modules/navigation/route-geometry.js (VoyagrRouteGeometry).
+// Stub passes the global constants so live behaviour is unchanged.
 function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
-    let zoomLevel = ZOOM_LEVELS.urban_low_speed; // Default
-
-    // Priority 1: Turn-based zoom (highest priority)
-    if (distanceToNextTurn !== null && distanceToNextTurn < TURN_ZOOM_THRESHOLD) {
-        // Zoom in for turn details when within 500m
-        zoomLevel = ZOOM_LEVELS.turn_ahead;
-        return zoomLevel;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    if (RG && RG.calculateSmartZoom) {
+        return RG.calculateSmartZoom(speedMph, distanceToNextTurn, roadType, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD);
     }
-
-    // Priority 2: Speed-based zoom
-    if (speedMph > 100) {
-        // Motorway - zoom out to see more ahead
-        zoomLevel = ZOOM_LEVELS.motorway_high_speed;
-    } else if (speedMph > 50) {
-        // Main road - medium zoom
-        zoomLevel = ZOOM_LEVELS.main_road_medium_speed;
-    } else if (speedMph > 20) {
-        // Urban - normal zoom
-        zoomLevel = ZOOM_LEVELS.urban_low_speed;
-    } else {
-        // Parking/very slow - zoom in
-        zoomLevel = ZOOM_LEVELS.parking_very_low_speed;
-    }
-
-    return zoomLevel;
+    // Inline fallback.
+    if (distanceToNextTurn !== null && distanceToNextTurn < TURN_ZOOM_THRESHOLD) return ZOOM_LEVELS.turn_ahead;
+    if (speedMph > 100) return ZOOM_LEVELS.motorway_high_speed;
+    if (speedMph > 50)  return ZOOM_LEVELS.main_road_medium_speed;
+    if (speedMph > 20)  return ZOOM_LEVELS.urban_low_speed;
+    return ZOOM_LEVELS.parking_very_low_speed;
 }
 
 /**
@@ -11599,9 +11362,10 @@ function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urb
  * @param {number} zoomLevel - Current zoom level
  * @returns {Array} [offsetLat, offsetLon] - Offset center coordinates
  */
+// calculateDriverViewCenter moved to route-geometry.js (pure stub — MapLibre padding handles offset).
 function calculateDriverViewCenter(lat, lon, heading, zoomLevel) {
-    // MapLibre native: We use padding to offset the center, so we return the raw coords here.
-    return [lat, lon];
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG && RG.calculateDriverViewCenter ? RG.calculateDriverViewCenter(lat, lon, heading, zoomLevel) : [lat, lon];
 }
 /**
  * applySmartZoomWithAnimation function
@@ -12649,6 +12413,9 @@ function _createOfflineBanner() {
     `;
     banner.innerHTML = `<span>📡</span><span>You're offline — GPS & cached map tiles still work</span>`;
     document.body.prepend(banner);
+    // Push the top-anchored nav widgets (turn card + Then row + lane guidance, and the
+    // speed widget) down so this full-width banner doesn't cover them (see CSS).
+    document.body.classList.add('voyagr-has-offline-banner');
 }
 
 function _removeOfflineBanner() {
@@ -12657,6 +12424,7 @@ function _removeOfflineBanner() {
         banner.style.transform = 'translateY(-100%)';
         setTimeout(() => banner.remove(), 350);
     }
+    document.body.classList.remove('voyagr-has-offline-banner');
 }
 
 function _handleOffline() {
@@ -13545,16 +13313,20 @@ function updateTurnInstructionDisplay(turnInfo) {
     if (!distanceEl || !instructionEl) return;
 
     if (turnInfo) {
-        const onCurrentRoad = turnInfo.direction === 'straight'
-            && (turnInfo.distance == null || turnInfo.distance < 15);
+        // "Continue"/straight keeps you on the current road (prefix "on"); real turns join
+        // a new road (prefix "onto"). Show the running countdown "In <dist>" whenever we
+        // have a meaningful distance (in the user's units), and only fall back to a bare
+        // "On" when essentially at/using the current road (< 15 m or no distance).
+        const isContinue = turnInfo.direction === 'straight';
+        const hasCountdown = turnInfo.distance != null && turnInfo.distance >= 15;
         const formattedDistance = formatTurnDistance(turnInfo.distance || 0);
-        distanceEl.textContent = onCurrentRoad ? 'On' : `In ${formattedDistance}`;
+        distanceEl.textContent = hasCountdown ? `In ${formattedDistance}` : 'On';
 
         instructionEl.textContent = buildTurnDisplayInstruction(turnInfo);
 
         if (streetEl) {
             if (turnInfo.streetName) {
-                const prefix = onCurrentRoad ? 'on' : 'onto';
+                const prefix = isContinue ? 'on' : 'onto';
                 streetEl.textContent = `${prefix} ${turnInfo.streetName}`;
                 streetEl.style.display = 'block';
             } else {
@@ -13650,8 +13422,11 @@ function updateThenRow(maneuverIndex, currentDistance) {
                 if (exitCt > 0) label = `Roundabout, ${ordinalEnglishExit(exitCt)} exit`;
             }
             const onto = follow.streetName ? ` onto ${follow.streetName}` : '';
+            // Distance to the following maneuver, formatted in the user's selected units
+            // via the same helper as the main turn row (respects the mph/km UI choice).
+            const thenDistance = formatTurnDistance(follow.gapMeters);
             if (iconEl) iconEl.textContent = getTurnIcon(follow.valhallaType);
-            if (textEl) textEl.textContent = `${label}${onto}`;
+            if (textEl) textEl.textContent = `In ${thenDistance} · ${label}${onto}`;
             show = true;
         }
     }
@@ -13850,6 +13625,20 @@ function updateTurnWidgetFromPosition(lat, lon) {
         : null;
 
     if (betweenTurn) {
+        // The next actionable maneuver is beyond the turn-detection range, so show how
+        // far until it (in the user's units) instead of a bare "On". Reuse the same snap +
+        // along-route helpers detectUpcomingTurn uses (no duplicated distance logic).
+        const nextManeuver = (activeIdx >= 0 && activeIdx + 1 < currentRouteSteps.length)
+            ? currentRouteSteps[activeIdx + 1]
+            : null;
+        if (nextManeuver) {
+            const snap = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+            const targetIdx = Math.min(nextManeuver.begin_shape_index || 0, routePolyline.length - 1);
+            const distToNext = distanceAlongRouteToVertexMeters(routePolyline, snap, targetIdx);
+            if (Number.isFinite(distToNext) && distToNext >= 15) {
+                betweenTurn.distance = distToNext;
+            }
+        }
         updateTurnInstructionDisplay(betweenTurn);
     } else {
         updateTurnInstructionDisplay(null);
@@ -15136,6 +14925,18 @@ function startGPSTracking() {
                         );
                     }
                 }
+                // The hint above is validated against the maneuver's own road_class, which can
+                // outlast the road you're actually on (e.g. a 70 mph motorway edge lingering
+                // after you turn onto a 30 mph street). This is the display fallback used when
+                // the speed-limit API has no data, so re-check it against the CURRENT road type
+                // and drop it if implausible — mirrors the API-side road-type sanitisation.
+                if (valhallaSpeedLimitMph != null) {
+                    const _sgLimit = _speedGps();
+                    if (_sgLimit && typeof _sgLimit.isPlausibleEdgeSpeedLimitMph === 'function'
+                        && !_sgLimit.isPlausibleEdgeSpeedLimitMph(valhallaSpeedLimitMph, roadType, displaySpeedMph)) {
+                        valhallaSpeedLimitMph = null;
+                    }
+                }
 
                 if (activeManeuverIdx >= 0 && activeManeuverIdx !== _lastActiveManeuverIdx) {
                     _lastActiveManeuverIdx = activeManeuverIdx;
@@ -15444,14 +15245,10 @@ function findNearestRouteIndex(lat, lon, polyline) {
  * @param {number} blendTowardRoute 0 GPS only, 1 route only
  */
 function blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowardRoute) {
-    if (!Number.isFinite(gpsHeadingDegrees)) gpsHeadingDegrees = 0;
-    if (!Number.isFinite(routeHeadingDegrees)) return gpsHeadingDegrees;
-    let t = Number(blendTowardRoute);
-    if (!Number.isFinite(t)) return gpsHeadingDegrees;
-    t = Math.max(0, Math.min(1, t));
-    let d = (((routeHeadingDegrees - gpsHeadingDegrees) % 360) + 360) % 360;
-    if (d > 180) d -= 360;
-    return (((gpsHeadingDegrees + d * t) % 360) + 360) % 360;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    if (RG) return RG.blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowardRoute);
+    if (!Number.isFinite(gpsHeadingDegrees)) return 0;
+    return gpsHeadingDegrees;
 }
 
 /**
@@ -15472,109 +15269,36 @@ function blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowa
  * We scale the longitude axis by cos(latitude) so the dot-product gives the true
  * perpendicular foot on the segment, producing an accurate snap.
  */
+// _projectToSegment / snapToRoutePolyline / getTotalPolylineLengthMeters /
+// computeRemainingDistanceAlongRoute moved to modules/navigation/route-geometry.js.
+// Thin stubs delegate to VoyagrRouteGeometry; all existing callers work unchanged.
+
 function _projectToSegment(lat, lon, ax, ay, bx, by, cosLat) {
-    // Scale lon axis so 1 unit ≈ same metres as 1 unit of lat
-    const sAy = ay * cosLat;
-    const sBy = by * cosLat;
-    const sLon = lon * cosLat;
-
-    const abx = bx - ax;
-    const aby = sBy - sAy;
-    const apx = lat - ax;
-    const apy = sLon - sAy;
-
-    const ab2 = abx * abx + aby * aby;
-    let t = ab2 === 0 ? 0 : (apx * abx + apy * aby) / ab2;
-    t = Math.max(0, Math.min(1, t));
-
-    const projLat = ax + t * (bx - ax);
-    const projLon = ay + t * (by - ay); // Interpolate in original lon space
-    return { projLat, projLon, t };
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    if (RG) return RG.projectToSegment(lat, lon, ax, ay, bx, by, cosLat);
+    return { projLat: ax, projLon: ay, t: 0 };
 }
 
 function snapToRoutePolyline(lat, lon, polyline, searchStartIndex = 0) {
-    if (!polyline || polyline.length < 2) {
-        return { lat, lon, index: 0, distance: 0, t: 0 };
-    }
-
-    // Precompute cos(latitude) once for longitude scaling
-    const cosLat = Math.cos(lat * Math.PI / 180);
-
-    let bestLat = polyline[0][0];
-    let bestLon = polyline[0][1];
-    let bestDist = Infinity;
-    let bestIndex = 0;
-    let bestT = 0;
-
-    // Helper: test one segment
-    const testSegment = (i) => {
-        const ax = polyline[i][0], ay = polyline[i][1];
-        const bx = polyline[i + 1][0], by = polyline[i + 1][1];
-        const { projLat, projLon, t } = _projectToSegment(lat, lon, ax, ay, bx, by, cosLat);
-        const dist = calculateDistance(lat, lon, projLat, projLon);
-        if (dist < bestDist) {
-            bestDist = dist;
-            bestLat = projLat;
-            bestLon = projLon;
-            bestIndex = i;
-            bestT = t;
-        }
-    };
-
-    // Search a window around the expected position first (fast path)
-    const searchStart = Math.max(0, searchStartIndex - 15);
-    const searchEnd = Math.min(polyline.length - 1, searchStartIndex + 250);
-    for (let i = searchStart; i < searchEnd; i++) {
-        testSegment(i);
-    }
-
-    // If nothing close found, search the full polyline
-    if (bestDist > 60 && (searchStart > 0 || searchEnd < polyline.length - 1)) {
-        for (let i = 0; i < polyline.length - 1; i++) {
-            if (i >= searchStart && i < searchEnd) continue;
-            testSegment(i);
-        }
-    }
-
-    return { lat: bestLat, lon: bestLon, index: bestIndex, distance: bestDist, t: bestT };
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    if (RG) return RG.snapToRoutePolyline(lat, lon, polyline, searchStartIndex);
+    return { lat, lon, index: 0, distance: 0, t: 0 };
 }
 
 /**
  * Total path length along the polyline (meters).
  */
 function getTotalPolylineLengthMeters(polyline) {
-    if (!polyline || polyline.length < 2) return 0;
-    let total = 0;
-    for (let i = 0; i < polyline.length - 1; i++) {
-        total += calculateDistance(
-            polyline[i][0], polyline[i][1],
-            polyline[i + 1][0], polyline[i + 1][1]
-        );
-    }
-    return total;
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.totalPolylineLengthMeters(polyline) : 0;
 }
 
 /**
  * Remaining distance (meters) along the polyline from the snapped GPS position to the route end.
- * Uses the same snap logic as the map marker so ETA tracks progress along the line.
  */
 function computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex = 0) {
-    if (!polyline || polyline.length < 2) return 0;
-    const snap = snapToRoutePolyline(lat, lon, polyline, searchStartIndex);
-    const i = snap.index;
-    const t = snap.t !== undefined ? snap.t : 0;
-    const segLen = calculateDistance(
-        polyline[i][0], polyline[i][1],
-        polyline[i + 1][0], polyline[i + 1][1]
-    );
-    let remaining = (1 - t) * segLen;
-    for (let j = i + 1; j < polyline.length - 1; j++) {
-        remaining += calculateDistance(
-            polyline[j][0], polyline[j][1],
-            polyline[j + 1][0], polyline[j + 1][1]
-        );
-    }
-    return Math.max(0, remaining);
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex) : 0;
 }
 
 /**
@@ -16627,16 +16351,10 @@ async function triggerAutomaticReroute(currentLat, currentLon) {
  * @param {*} lon2 - Parameter description
  * @returns {*} Return value description
  */
+// calculateDistance moved to route-geometry (unified with calculateHaversineDistance).
 function calculateDistance(lat1, lon1, lat2, lon2) {
-    // Haversine formula for distance calculation
-    const R = 6371; // Earth's radius in km
-    const dLat = (lat2 - lat1) * Math.PI / 180;
-    const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-        Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-        Math.sin(dLon / 2) * Math.sin(dLon / 2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-    return R * c * 1000; // Return in meters
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    return RG ? RG.haversineDistanceMeters(lat1, lon1, lat2, lon2) : 0;
 }
 
 // Hazard announcement debouncing
