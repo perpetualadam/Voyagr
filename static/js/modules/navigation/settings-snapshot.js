@@ -329,6 +329,32 @@
     }
 
     /**
+     * Orchestration plan for applying a parsed settings import.
+     * @param {Object} importPlan - from buildSettingsImportApplyPlan or buildSettingsImportParsePlan
+     * @param {Object} [opts]
+     * @param {boolean} [opts.routeInProgress]
+     * @returns {Object}
+     */
+    function buildSettingsImportOrchestrationPlan(importPlan, opts) {
+        importPlan = importPlan || {};
+        opts = opts || {};
+        if (!importPlan.ok) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            writeStorage: true,
+            storageKey: importPlan.storageKey,
+            storageValue: importPlan.storageValue,
+            restoreSettings: !!importPlan.restoreAfterImport,
+            applySettingsUi: !!importPlan.applyUiAfterImport,
+            routeInProgress: !!opts.routeInProgress,
+            statusMessage: importPlan.statusMessage,
+            statusType: importPlan.statusType,
+        };
+    }
+
+    /**
      * localStorage patches for multi-drop preference values.
      * @param {Object} prefs
      * @returns {Object<string, string>}
@@ -425,9 +451,12 @@
         'routePreferences',
         'pref_avoid_tollRoads', 'pref_avoid_motorways', 'pref_avoid_ferries',
         'pref_tolls', 'pref_caz', 'pref_cameras',
+        'pref_trafficLightsAvoid', 'pref_railwayCrossingsAvoid',
         'mapTheme', 'smartZoomEnabled',
         'parkingPreferences',
         'autoTrafficUpdate', 'autoRerouteOnDeviation', 'routeTrafficEnabled',
+        'showCamerasEnabled', 'showOsmTrafficLightsOnMap',
+        'showOsmRailwayCrossingsOnMap', 'showTrafficEnabled', 'speedWidgetEnabled',
     ];
 
     /**
@@ -449,6 +478,11 @@
                 autoTrafficUpdateEnabled: true,
                 autoRerouteOnDeviationEnabled: true,
                 routeTrafficEnabled: true,
+                showCamerasEnabled: true,
+                showOsmTrafficLightsEnabled: true,
+                showOsmRailwayCrossingsEnabled: true,
+                showTrafficEnabled: true,
+                speedWidgetEnabled: true,
             },
             reloadAfterReset: true,
         };
@@ -649,6 +683,7 @@
         buildSettingsExportPlan: buildSettingsExportPlan,
         buildSettingsImportApplyPlan: buildSettingsImportApplyPlan,
         buildSettingsImportParsePlan: buildSettingsImportParsePlan,
+        buildSettingsImportOrchestrationPlan: buildSettingsImportOrchestrationPlan,
         buildMultiDropPreferencesStoragePlan: buildMultiDropPreferencesStoragePlan,
         buildMultiDropPreferencesUiApplyPlan: buildMultiDropPreferencesUiApplyPlan,
         buildMultiDropPreferencesDomApplyPlan: buildMultiDropPreferencesDomApplyPlan,

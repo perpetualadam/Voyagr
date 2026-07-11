@@ -1759,6 +1759,138 @@
         };
     }
 
+    /**
+     * Pure plan for clearing orphaned route-layer / polyline map artifacts.
+     * @param {Object|null|undefined} style - MapLibre style object
+     * @returns {Object}
+     */
+    function buildClearAllRouteLayersFromMapPlan(style) {
+        style = style || {};
+        var layers = style.layers || [];
+        var sources = style.sources || {};
+        var layerIds = [];
+        var sourceIds = [];
+
+        layers.forEach(function (layer) {
+            if (layer && layer.id && (
+                layer.id.indexOf('route-layer-') === 0 ||
+                layer.id.indexOf('polyline-') === 0
+            )) {
+                layerIds.push(layer.id);
+            }
+        });
+
+        Object.keys(sources).forEach(function (sourceId) {
+            if (sourceId.indexOf('route-layer-') === 0 || sourceId.indexOf('polyline-') === 0) {
+                sourceIds.push(sourceId);
+            }
+        });
+
+        return {
+            layerIds: layerIds,
+            sourceIds: sourceIds,
+            hasArtifacts: layerIds.length > 0 || sourceIds.length > 0,
+            successLogMessage: '[Routes] Cleared ' + layerIds.length +
+                ' layers and ' + sourceIds.length + ' sources from map',
+            layerErrorLogPrefix: '[Routes] Error removing layer ',
+            sourceErrorLogPrefix: '[Routes] Error removing source ',
+            fatalErrorLogPrefix: '[Routes] Error clearing route layers:',
+        };
+    }
+
+    /**
+     * Pre-mount plan before adding route comparison layers.
+     * @param {Object} dispatch - from buildDisplayAllRoutesMapDispatchPlan
+     * @returns {Object}
+     */
+    function buildDisplayAllRoutesMapPreMountPlan(dispatch) {
+        dispatch = dispatch || {};
+        return {
+            clearRouteLayerHandle: true,
+            clearAllRouteLayerHandles: true,
+            clearMapRouteLayers: !!dispatch.clearAllRouteLayers,
+            hydratePolylines: !!dispatch.hydratePolylines,
+        };
+    }
+
+    /**
+     * Style-load execute plan for deferred route layer mounting.
+     * @param {Object} dispatch - from buildDisplayAllRoutesMapDispatchPlan
+     * @param {Object} [opts]
+     * @param {boolean} [opts.isStyleLoaded]
+     * @returns {Object}
+     */
+    function buildDisplayAllRoutesMapStyleLoadExecutePlan(dispatch, opts) {
+        dispatch = dispatch || {};
+        opts = opts || {};
+        var styleLoad = dispatch.styleLoad || {};
+        if (!styleLoad.waitIfNeeded || opts.isStyleLoaded) {
+            return { strategy: 'immediate' };
+        }
+        return {
+            strategy: 'wait',
+            waitForStyleLoadEvent: true,
+            fallbackTimeoutMs: styleLoad.fallbackTimeoutMs,
+            runFallbackOnlyIfNoLayers: !!styleLoad.skipFallbackIfLayersPresent,
+            waitLogMessage: '[Routes] Waiting for style to load...',
+            fallbackLogMessage: '[Routes] Fallback: adding layers after timeout',
+            addLayersLogMessage: '[Routes] Adding route layers (isStyleLoaded: false)',
+        };
+    }
+
+    /**
+     * Post-mount execute plan after doAddRouteLayers batch apply.
+     * @param {Object} sideEffects - from buildAllRoutesMapSideEffectsPlan
+     * @param {Object} [opts]
+     * @param {number} [opts.mountedLayerCount]
+     * @returns {Object}
+     */
+    function buildDoAddRouteLayersPostMountExecutePlan(sideEffects, opts) {
+        sideEffects = sideEffects || {};
+        opts = opts || {};
+        return {
+            fitBounds: sideEffects.fitBounds || null,
+            displayAllRouteHazards: !!sideEffects.displayAllRouteHazards,
+            ensureTomTomTrafficLayer: !!sideEffects.ensureTomTomTrafficLayer,
+            bringRoutesToTop: !!sideEffects.bringRoutesToTop,
+            debugInspectRouteLayers: true,
+            debugInspectDelayMs: 200,
+            completionLogMessage: '[Routes] Displayed ' + (opts.mountedLayerCount || 0) + ' routes on map',
+            debugLogPrefix: '[Routes] DEBUG: MapLibre has these route layers:',
+        };
+    }
+
+    /**
+     * Execute plan for displaySingleRoute side effects after map mount.
+     * @param {Object} displayPlan - from buildSingleRouteMapDisplayPlan
+     * @returns {Object}
+     */
+    function buildSingleRouteMapDisplayExecutePlan(displayPlan) {
+        displayPlan = displayPlan || {};
+        if (!displayPlan.valid) {
+            return { shouldExecute: false };
+        }
+        var tl = displayPlan.trafficLights || {};
+        return {
+            shouldExecute: true,
+            clearAllRouteLayers: !!displayPlan.clearAllRouteLayers,
+            polyline: displayPlan.polyline,
+            hazards: displayPlan.hazards,
+            ensureTomTomTrafficLayer: !!displayPlan.ensureTomTomTrafficLayer,
+            routeTraffic: displayPlan.routeTraffic || {},
+            trafficLights: {
+                action: tl.action || 'skip',
+                polylinePoints: tl.polylinePoints || [],
+                hasOsmTlsInHazards: !!tl.hasOsmTlsInHazards,
+                plotAvailable: !!tl.plotAvailable,
+            },
+            logLine: displayPlan.logLine,
+            plotTrafficLightsLogMessage: '[Routes] Plotting traffic lights on selected route (OSM via /api/traffic-lights)',
+            skipDuplicatePlotLogMessage: '[Routes] Traffic lights on route from hazard markers (OSM); skipping duplicate plot',
+            moduleUnavailableLogMessage: '[Routes] Traffic lights module not available for route plotting',
+        };
+    }
+
     var DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS = 1000;
     var BRING_ROUTES_TO_TOP_INITIAL_DELAY_MS = 100;
     var BRING_ROUTES_TO_TOP_RETRY_DELAY_MS = 100;
@@ -2127,7 +2259,12 @@
         routeHazardsIncludeOsmTrafficLights: routeHazardsIncludeOsmTrafficLights,
         buildRouteOverviewDispatchPlan: buildRouteOverviewDispatchPlan,
         buildSingleRouteMapDisplayPlan: buildSingleRouteMapDisplayPlan,
+        buildSingleRouteMapDisplayExecutePlan: buildSingleRouteMapDisplayExecutePlan,
         buildAllRoutesMapSideEffectsPlan: buildAllRoutesMapSideEffectsPlan,
+        buildClearAllRouteLayersFromMapPlan: buildClearAllRouteLayersFromMapPlan,
+        buildDisplayAllRoutesMapPreMountPlan: buildDisplayAllRoutesMapPreMountPlan,
+        buildDisplayAllRoutesMapStyleLoadExecutePlan: buildDisplayAllRoutesMapStyleLoadExecutePlan,
+        buildDoAddRouteLayersPostMountExecutePlan: buildDoAddRouteLayersPostMountExecutePlan,
         buildDisplayAllRoutesMapDispatchPlan: buildDisplayAllRoutesMapDispatchPlan,
         buildBringRoutesToTopDispatchPlan: buildBringRoutesToTopDispatchPlan,
         buildBringRoutesToTopExecutePlan: buildBringRoutesToTopExecutePlan,

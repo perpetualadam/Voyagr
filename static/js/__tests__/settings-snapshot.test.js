@@ -259,10 +259,23 @@ describe('settings-snapshot module', () => {
         expect(plan.localStorageKeys).toContain('autoTrafficUpdate');
         expect(plan.localStorageKeys).toContain('autoRerouteOnDeviation');
         expect(plan.localStorageKeys).toContain('routeTrafficEnabled');
+        expect(plan.localStorageKeys).toContain('showTrafficEnabled');
+        expect(plan.localStorageKeys).toContain('speedWidgetEnabled');
         expect(plan.runtimeDefaults.distanceUnit).toBe('km');
         expect(plan.runtimeDefaults.autoTrafficUpdateEnabled).toBe(true);
         expect(plan.runtimeDefaults.routeTrafficEnabled).toBe(true);
+        expect(plan.runtimeDefaults.showCamerasEnabled).toBe(true);
         expect(plan.reloadAfterReset).toBe(true);
+    });
+
+    test('buildSettingsImportOrchestrationPlan chains restore and UI apply steps', () => {
+        const parse = SS.buildSettingsImportParsePlan('{"unit_distance":"mi"}');
+        const orch = SS.buildSettingsImportOrchestrationPlan(parse, { routeInProgress: true });
+        expect(orch.shouldApply).toBe(true);
+        expect(orch.restoreSettings).toBe(true);
+        expect(orch.applySettingsUi).toBe(true);
+        expect(orch.routeInProgress).toBe(true);
+        expect(SS.buildSettingsImportOrchestrationPlan({ ok: false }).shouldApply).toBe(false);
     });
 
     test('buildSettingsRestorePostApplyPlan stops traffic services when disabled', () => {

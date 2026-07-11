@@ -795,6 +795,57 @@ describe('route overview and single-route display plans', () => {
         expect(plan.styleLoad.fallbackTimeoutMs).toBe(RS.DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS);
     });
 
+    test('buildClearAllRouteLayersFromMapPlan lists route and polyline artifacts', () => {
+        const plan = RS.buildClearAllRouteLayersFromMapPlan({
+            layers: [
+                { id: 'route-layer-0' },
+                { id: 'polyline-1' },
+                { id: 'background' },
+            ],
+            sources: {
+                'route-layer-0': {},
+                'polyline-1': {},
+                'tomtom-traffic': {},
+            },
+        });
+        expect(plan.layerIds).toEqual(['route-layer-0', 'polyline-1']);
+        expect(plan.sourceIds).toEqual(['route-layer-0', 'polyline-1']);
+        expect(plan.hasArtifacts).toBe(true);
+    });
+
+    test('buildDisplayAllRoutesMapStyleLoadExecutePlan chooses immediate or wait strategy', () => {
+        const dispatch = RS.buildDisplayAllRoutesMapDispatchPlan([{ polyline: [[1, 2]] }]);
+        expect(RS.buildDisplayAllRoutesMapStyleLoadExecutePlan(dispatch, { isStyleLoaded: true }).strategy)
+            .toBe('immediate');
+        const wait = RS.buildDisplayAllRoutesMapStyleLoadExecutePlan(dispatch, { isStyleLoaded: false });
+        expect(wait.strategy).toBe('wait');
+        expect(wait.fallbackTimeoutMs).toBe(RS.DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS);
+    });
+
+    test('buildDoAddRouteLayersPostMountExecutePlan requests hazards and z-order side effects', () => {
+        const side = RS.buildAllRoutesMapSideEffectsPlan([{ polyline: [[1, 2]] }], {
+            showTrafficEnabled: true,
+            hasTrafficLayer: false,
+        });
+        const plan = RS.buildDoAddRouteLayersPostMountExecutePlan(side, { mountedLayerCount: 2 });
+        expect(plan.displayAllRouteHazards).toBe(true);
+        expect(plan.bringRoutesToTop).toBe(true);
+        expect(plan.ensureTomTomTrafficLayer).toBe(true);
+        expect(plan.completionLogMessage).toContain('2');
+    });
+
+    test('buildSingleRouteMapDisplayExecutePlan wraps valid display plan', () => {
+        const display = RS.buildSingleRouteMapDisplayPlan(
+            { name: 'Fastest', polyline: [[51.5, -0.1], [51.6, -0.2]], hazards: [] },
+            0,
+            { routeTrafficEnabled: true }
+        );
+        const plan = RS.buildSingleRouteMapDisplayExecutePlan(display);
+        expect(plan.shouldExecute).toBe(true);
+        expect(plan.routeTraffic.enabled).toBe(true);
+        expect(RS.buildSingleRouteMapDisplayExecutePlan({ valid: false }).shouldExecute).toBe(false);
+    });
+
     test('buildBringRoutesToTopDispatchPlan lists layer ids and label anchor', () => {
         const layers = [{ id: 'a' }, { type: 'symbol', layout: { 'text-field': 'x' }, id: 'label' }];
         const plan = RS.buildBringRoutesToTopDispatchPlan(

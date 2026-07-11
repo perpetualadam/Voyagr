@@ -1767,6 +1767,15 @@ function applySettingsResetFromPlan(plan) {
         autoRerouteOnDeviationEnabled = defaults.autoRerouteOnDeviationEnabled;
     }
     if (defaults.routeTrafficEnabled !== undefined) routeTrafficEnabled = defaults.routeTrafficEnabled;
+    if (defaults.showCamerasEnabled !== undefined) showCamerasEnabled = defaults.showCamerasEnabled;
+    if (defaults.showOsmTrafficLightsEnabled !== undefined) {
+        showOsmTrafficLightsEnabled = defaults.showOsmTrafficLightsEnabled;
+    }
+    if (defaults.showOsmRailwayCrossingsEnabled !== undefined) {
+        showOsmRailwayCrossingsEnabled = defaults.showOsmRailwayCrossingsEnabled;
+    }
+    if (defaults.showTrafficEnabled !== undefined) showTrafficEnabled = defaults.showTrafficEnabled;
+    if (defaults.speedWidgetEnabled !== undefined) speedWidgetEnabled = defaults.speedWidgetEnabled;
 
     if (plan.reloadAfterReset) {
         location.reload();
@@ -1808,6 +1817,23 @@ function exportSettings() {
 }
 
 /**
+ * Apply a settings import orchestration plan.
+ * @param {Object} plan - from buildSettingsImportOrchestrationPlan
+ * @returns {boolean}
+ */
+function applySettingsImportFromOrchestrationPlan(plan) {
+    if (!plan || !plan.shouldApply) return false;
+
+    if (plan.writeStorage) {
+        localStorage.setItem(plan.storageKey, plan.storageValue);
+    }
+    if (plan.restoreSettings) loadAllSettings();
+    if (plan.applySettingsUi) applySettingsToUI();
+    showStatus(plan.statusMessage, plan.statusType);
+    return true;
+}
+
+/**
  * importSettings function
  * @function importSettings
  * @returns {*} Return value description
@@ -1822,15 +1848,11 @@ function importSettings() {
             const reader = new FileReader();
             reader.onload = (event) => {
                 const SS = _settingsSnapshot();
-                const plan = SS.buildSettingsImportParsePlan(event.target.result);
-                if (!plan.ok) {
-                    showStatus(plan.statusMessage, plan.statusType);
-                    return;
+                const parsePlan = SS.buildSettingsImportParsePlan(event.target.result);
+                const orch = SS.buildSettingsImportOrchestrationPlan(parsePlan, { routeInProgress });
+                if (!applySettingsImportFromOrchestrationPlan(orch)) {
+                    showStatus(parsePlan.statusMessage, parsePlan.statusType);
                 }
-                localStorage.setItem(plan.storageKey, plan.storageValue);
-                if (plan.restoreAfterImport) loadAllSettings();
-                if (plan.applyUiAfterImport) applySettingsToUI();
-                showStatus(plan.statusMessage, plan.statusType);
             };
             reader.readAsText(file);
         }
@@ -2241,56 +2263,181 @@ function clearAllRouteLayersFromMap() {
 
     try {
         const style = map.getStyle();
-        if (!style || !style.layers) return;
+        const plan = _routeSelection().buildClearAllRouteLayersFromMapPlan(style);
+        if (!plan.hasArtifacts) return;
 
-        // Find and remove all route-related layers and sources
-        const layersToRemove = [];
-        const sourcesToRemove = [];
-
-        style.layers.forEach(layer => {
-            // Match route-layer-X, polyline-X patterns
-            if (layer.id && (
-                layer.id.startsWith('route-layer-') ||
-                layer.id.startsWith('polyline-')
-            )) {
-                layersToRemove.push(layer.id);
-            }
-        });
-
-        // Remove layers first
-        layersToRemove.forEach(layerId => {
+        plan.layerIds.forEach((layerId) => {
             try {
                 if (map.getLayer(layerId)) {
                     map.removeLayer(layerId);
                 }
             } catch (e) {
-                console.warn(`[Routes] Error removing layer ${layerId}:`, e.message);
+                console.warn(`${plan.layerErrorLogPrefix}${layerId}:`, e.message);
             }
         });
 
-        // Then remove sources
-        Object.keys(style.sources || {}).forEach(sourceId => {
-            if (sourceId.startsWith('route-layer-') || sourceId.startsWith('polyline-')) {
-                sourcesToRemove.push(sourceId);
-            }
-        });
-
-        sourcesToRemove.forEach(sourceId => {
+        plan.sourceIds.forEach((sourceId) => {
             try {
                 if (map.getSource(sourceId)) {
                     map.removeSource(sourceId);
                 }
             } catch (e) {
-                console.warn(`[Routes] Error removing source ${sourceId}:`, e.message);
+                console.warn(`${plan.sourceErrorLogPrefix}${sourceId}:`, e.message);
             }
         });
 
-        if (layersToRemove.length > 0 || sourcesToRemove.length > 0) {
-            console.log(`[Routes] Cleared ${layersToRemove.length} layers and ${sourcesToRemove.length} sources from map`);
-        }
+        if (plan.successLogMessage) console.log(plan.successLogMessage);
     } catch (e) {
         console.error('[Routes] Error clearing route layers:', e);
     }
+}
+
+/**
+ * Clear in-memory route layer handles from a pre-mount plan.
+ * @param {Object} plan - from buildDisplayAllRoutesMapPreMountPlan
+ */
+function clearRouteLayerHandlesFromPlan(plan) {
+    if (!plan) return;
+    if (plan.clearRouteLayerHandle && routeLayer && typeof routeLayer.remove === 'function') {
+        routeLayer.remove();
+        routeLayer = null;
+    }
+    if (plan.clearAllRouteLayerHandles) {
+        allRouteLayers.forEach((layer) => {
+            if (layer && typeof layer.remove === 'function') {
+                layer.remove();
+            }
+        });
+        allRouteLayers = [];
+    }
+}
+
+/**
+ * Schedule route layer mounting based on a style-load execute plan.
+ * @param {Object} stylePlan - from buildDisplayAllRoutesMapStyleLoadExecutePlan
+ * @param {Function} addRouteLayersFn
+ */
+function scheduleDisplayAllRoutesLayerMountFromPlan(stylePlan, addRouteLayersFn) {
+    if (!stylePlan || stylePlan.strategy === 'immediate') {
+        addRouteLayersFn();
+        return;
+    }
+
+    if (stylePlan.waitLogMessage) console.log(stylePlan.waitLogMessage);
+    map.once('style.load', addRouteLayersFn);
+    setTimeout(() => {
+        if (stylePlan.runFallbackOnlyIfNoLayers && allRouteLayers.length === 0) {
+            if (stylePlan.fallbackLogMessage) console.log(stylePlan.fallbackLogMessage);
+            addRouteLayersFn();
+        }
+    }, stylePlan.fallbackTimeoutMs);
+}
+
+/**
+ * Apply post-mount side effects after doAddRouteLayers.
+ * @param {Object} plan - from buildDoAddRouteLayersPostMountExecutePlan
+ */
+function applyDoAddRouteLayersPostMountFromPlan(plan) {
+    if (!plan) return;
+
+    if (plan.fitBounds) {
+        MapLibreHelpers.fitMapBounds(
+            map,
+            plan.fitBounds.coords,
+            { padding: plan.fitBounds.padding }
+        );
+    }
+
+    if (plan.displayAllRouteHazards) {
+        displayAllRouteHazards();
+    }
+
+    if (plan.ensureTomTomTrafficLayer) {
+        addTrafficLayer();
+    }
+
+    if (plan.bringRoutesToTop) {
+        bringRoutesToTop();
+    }
+
+    if (plan.debugInspectRouteLayers) {
+        setTimeout(() => {
+            const style = map.getStyle();
+            if (style && style.layers) {
+                const routeLayers = style.layers.filter((l) => l.id.startsWith('route-layer-'));
+                console.log(plan.debugLogPrefix,
+                    routeLayers.map((l) => ({ id: l.id, color: l.paint?.['line-color'] })));
+            }
+        }, plan.debugInspectDelayMs);
+    }
+
+    if (plan.completionLogMessage) console.log(plan.completionLogMessage);
+}
+
+/**
+ * Apply displaySingleRoute side effects from a pure execute plan.
+ * @param {Object} plan - from buildSingleRouteMapDisplayExecutePlan
+ */
+function applySingleRouteMapDisplayFromPlan(plan) {
+    if (!plan || !plan.shouldExecute) return;
+
+    if (plan.clearAllRouteLayers) {
+        clearAllRouteLayersFromMap();
+    }
+
+    const polylinePoints = plan.polyline.points || [];
+    if (polylinePoints.length > 0) {
+        const layer = MapLibreHelpers.addPolyline(map, polylinePoints, {
+            color: plan.polyline.color,
+            weight: plan.polyline.weight,
+            opacity: plan.polyline.opacity,
+        });
+
+        allRouteLayers.push(layer);
+        MapLibreHelpers.fitMapBounds(map, polylinePoints, { padding: plan.polyline.fitBoundsPadding });
+    }
+
+    if (plan.hazards.action === 'show') {
+        displayHazardMarkers(plan.hazards.list);
+    } else {
+        clearHazardMarkers();
+    }
+
+    if (plan.ensureTomTomTrafficLayer) {
+        addTrafficLayer();
+    }
+
+    if (plan.routeTraffic.enabled) {
+        routePolyline = plan.routeTraffic.polylinePoints;
+        fetchAndDisplayRouteTraffic();
+    }
+
+    const tl = plan.trafficLights;
+    if (tl.polylinePoints.length > 0) {
+        const plotRouteTrafficLights =
+            (typeof window !== 'undefined' &&
+             window.TrafficLights &&
+             typeof window.TrafficLights.plotTrafficLightsOnRoute === 'function')
+                ? window.TrafficLights.plotTrafficLightsOnRoute
+                : (typeof plotTrafficLightsOnRoute === 'function' ? plotTrafficLightsOnRoute : null);
+
+        if (window.TrafficLights && typeof window.TrafficLights.clearAllTrafficLights === 'function') {
+            if (tl.action === 'clear') {
+                window.TrafficLights.clearAllTrafficLights();
+            }
+        }
+
+        if (tl.action === 'plot' && plotRouteTrafficLights) {
+            console.log(plan.plotTrafficLightsLogMessage);
+            plotRouteTrafficLights(tl.polylinePoints);
+        } else if (tl.hasOsmTlsInHazards) {
+            console.log(plan.skipDuplicatePlotLogMessage);
+        } else if (!plotRouteTrafficLights) {
+            console.warn(plan.moduleUnavailableLogMessage);
+        }
+    }
+
+    if (plan.logLine) console.log(plan.logLine);
 }
 
 /**
@@ -2310,23 +2457,12 @@ function displayAllRoutesOnMap() {
         return;
     }
 
-    if (routeLayer && typeof routeLayer.remove === 'function') {
-        routeLayer.remove();
-        routeLayer = null;
-    }
-
-    allRouteLayers.forEach(layer => {
-        if (layer && typeof layer.remove === 'function') {
-            layer.remove();
-        }
-    });
-    allRouteLayers = [];
-
-    if (dispatch.clearAllRouteLayers) {
+    const preMount = RS.buildDisplayAllRoutesMapPreMountPlan(dispatch);
+    clearRouteLayerHandlesFromPlan(preMount);
+    if (preMount.clearMapRouteLayers) {
         clearAllRouteLayersFromMap();
     }
-
-    if (dispatch.hydratePolylines) {
+    if (preMount.hydratePolylines) {
         RS.hydrateRouteOptionPolylines(routeOptions, decodePolyline);
     }
 
@@ -2340,19 +2476,10 @@ function displayAllRoutesOnMap() {
         return;
     }
 
-    const styleLoad = dispatch.styleLoad || {};
-    if (!styleLoad.waitIfNeeded || map.isStyleLoaded()) {
-        addRouteLayers();
-    } else {
-        console.log('[Routes] Waiting for style to load...');
-        map.once('style.load', addRouteLayers);
-        setTimeout(() => {
-            if (styleLoad.skipFallbackIfLayersPresent && allRouteLayers.length === 0) {
-                console.log('[Routes] Fallback: adding layers after timeout');
-                addRouteLayers();
-            }
-        }, styleLoad.fallbackTimeoutMs);
-    }
+    const stylePlan = RS.buildDisplayAllRoutesMapStyleLoadExecutePlan(dispatch, {
+        isStyleLoaded: map.isStyleLoaded(),
+    });
+    scheduleDisplayAllRoutesLayerMountFromPlan(stylePlan, addRouteLayers);
 }
 
 /**
@@ -2434,38 +2561,10 @@ function doAddRouteLayers() {
         showTrafficEnabled,
         hasTrafficLayer: !!trafficLayer,
     });
-
-    if (sideEffects.fitBounds) {
-        MapLibreHelpers.fitMapBounds(
-            map,
-            sideEffects.fitBounds.coords,
-            { padding: sideEffects.fitBounds.padding }
-        );
-    }
-
-    if (sideEffects.displayAllRouteHazards) {
-        displayAllRouteHazards();
-    }
-
-    if (sideEffects.ensureTomTomTrafficLayer) {
-        addTrafficLayer();
-    }
-
-    if (sideEffects.bringRoutesToTop) {
-        bringRoutesToTop();
-    }
-
-    // Debug: Check what layers exist in MapLibre
-    setTimeout(() => {
-        const style = map.getStyle();
-        if (style && style.layers) {
-            const routeLayers = style.layers.filter(l => l.id.startsWith('route-layer-'));
-            console.log('[Routes] DEBUG: MapLibre has these route layers:',
-                routeLayers.map(l => ({ id: l.id, color: l.paint?.['line-color'] })));
-        }
-    }, 200);
-
-    console.log(`[Routes] Displayed ${allRouteLayers.length} routes on map`);
+    const postMount = RS.buildDoAddRouteLayersPostMountExecutePlan(sideEffects, {
+        mountedLayerCount: allRouteLayers.length,
+    });
+    applyDoAddRouteLayersPostMountFromPlan(postMount);
 }
 
 /**
@@ -3155,7 +3254,7 @@ function updateTripInfoFromRouteOption(route) {
  */
 function displaySingleRoute(index) {
     const RS = _routeSelection();
-    const plan = RS.buildSingleRouteMapDisplayPlan(routeOptions && routeOptions[index], index, {
+    const displayPlan = RS.buildSingleRouteMapDisplayPlan(routeOptions && routeOptions[index], index, {
         routeColors: routeColors(),
         showTrafficEnabled,
         routeTrafficEnabled,
@@ -3164,80 +3263,17 @@ function displaySingleRoute(index) {
         trafficLightsPlotAvailable: (window.TrafficLights && typeof window.TrafficLights.plotTrafficLightsOnRoute === 'function')
             || typeof plotTrafficLightsOnRoute === 'function',
     });
+    const plan = RS.buildSingleRouteMapDisplayExecutePlan(displayPlan);
 
     console.log(`[Routes] displaySingleRoute(${index}) - clearing all existing routes`);
 
-    if (!plan.valid) return;
+    if (!plan.shouldExecute) return;
 
-    if (routeLayer) {
-        if (typeof routeLayer.remove === 'function') routeLayer.remove();
-        routeLayer = null;
-    }
-
-    allRouteLayers.forEach(layer => {
-        if (layer && typeof layer.remove === 'function') {
-            layer.remove();
-        }
+    clearRouteLayerHandlesFromPlan({
+        clearRouteLayerHandle: true,
+        clearAllRouteLayerHandles: true,
     });
-    allRouteLayers = [];
-
-    if (plan.clearAllRouteLayers) {
-        clearAllRouteLayersFromMap();
-    }
-
-    const polylinePoints = plan.polyline.points || [];
-    if (polylinePoints.length > 0) {
-        const layer = MapLibreHelpers.addPolyline(map, polylinePoints, {
-            color: plan.polyline.color,
-            weight: plan.polyline.weight,
-            opacity: plan.polyline.opacity,
-        });
-
-        allRouteLayers.push(layer);
-        MapLibreHelpers.fitMapBounds(map, polylinePoints, { padding: plan.polyline.fitBoundsPadding });
-    }
-
-    if (plan.hazards.action === 'show') {
-        displayHazardMarkers(plan.hazards.list);
-    } else {
-        clearHazardMarkers();
-    }
-
-    if (plan.ensureTomTomTrafficLayer) {
-        addTrafficLayer();
-    }
-
-    if (plan.routeTraffic.enabled) {
-        routePolyline = plan.routeTraffic.polylinePoints;
-        fetchAndDisplayRouteTraffic();
-    }
-
-    const tl = plan.trafficLights;
-    if (tl.polylinePoints.length > 0) {
-        const plotRouteTrafficLights =
-            (typeof window !== 'undefined' &&
-             window.TrafficLights &&
-             typeof window.TrafficLights.plotTrafficLightsOnRoute === 'function')
-                ? window.TrafficLights.plotTrafficLightsOnRoute
-                : (typeof plotTrafficLightsOnRoute === 'function' ? plotTrafficLightsOnRoute : null);
-
-        if (window.TrafficLights && typeof window.TrafficLights.clearAllTrafficLights === 'function') {
-            if (tl.action === 'clear') {
-                window.TrafficLights.clearAllTrafficLights();
-            }
-        }
-
-        if (tl.action === 'plot' && plotRouteTrafficLights) {
-            console.log('[Routes] Plotting traffic lights on selected route (OSM via /api/traffic-lights)');
-            plotRouteTrafficLights(tl.polylinePoints);
-        } else if (tl.hasOsmTlsInHazards) {
-            console.log('[Routes] Traffic lights on route from hazard markers (OSM); skipping duplicate plot');
-        } else if (!plotRouteTrafficLights) {
-            console.warn('[Routes] Traffic lights module not available for route plotting');
-        }
-    }
-
-    console.log(`[Routes] ${plan.logLine}`);
+    applySingleRouteMapDisplayFromPlan(plan);
 }
 
 /**
@@ -6167,24 +6203,6 @@ function seedNavigationProgressOnNewRoute(lat, lon) {
     }
 
     console.log(plan.logMessage);
-}
-
-/**
- * Initialize auto-traffic and auto-reroute toggles
- */
-function initAutoTrafficRerouteToggles() {
-    const TC = _trafficChange();
-    const RTF = _routeTrafficFlow();
-    const plan = TC.buildInitAutoTrafficRerouteTogglesPlan({
-        autoTrafficUpdateEnabled,
-        autoRerouteOnDeviationEnabled,
-        routeTrafficEnabled,
-        routeTrafficToggleId: RTF.ROUTE_TRAFFIC_TOGGLE_ID,
-    });
-    const TU = _toggleUI();
-    plan.toggles.forEach((toggle) => {
-        TU.applyToggleButton(document.getElementById(toggle.elementId), toggle.enabled);
-    });
 }
 
 // ===== CAZ (CLEAN AIR ZONE) INFORMATION =====
