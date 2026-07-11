@@ -88,6 +88,7 @@ jobs:
           tests/test_multidrop_request.py
           tests/test_valhalla_excludes.py
           tests/test_graphhopper_attempt.py
+          tests/test_route_discovery.py
           tests/test_osrm_maneuvers.py
           tests/test_route_entries.py
           tests/test_route_success_response.py
