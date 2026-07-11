@@ -3271,7 +3271,7 @@ function buildEncodedShareLink(includeGeometry) {
     const route = window.lastCalculatedRoute;
     const startInput = document.getElementById('start').value;
     const endInput = document.getElementById('end').value;
-    const sharing = VoyagrModules.routeSharing();
+    const sharing = _routeSharing();
     const payload = sharing.buildShareableRoutePayload(route, startInput, endInput, includeGeometry);
     const encodedRoute = sharing.encodeRoutePayload(payload);
     return {
@@ -3285,7 +3285,7 @@ function buildEncodedShareLink(includeGeometry) {
  * @returns {boolean} true when a shared route was applied
  */
 function loadSharedRouteFromUrl() {
-    const sharing = VoyagrModules.routeSharing();
+    const sharing = _routeSharing();
     const encoded = sharing.extractRouteParamFromSearch(window.location.search);
     if (!encoded) return false;
 
@@ -3333,7 +3333,7 @@ function prepareRouteSharing() {
     const startInput = document.getElementById('start').value;
     const endInput = document.getElementById('end').value;
     const symbol = getCurrencySymbol();
-    const summary = VoyagrModules.routeSharing().buildRouteShareSummaryValues(route, {
+    const summary = _routeSharing().buildRouteShareSummaryValues(route, {
         startLabel: startInput,
         endLabel: endInput,
         distanceText: convertDistance(route.distance_km || 0),
@@ -3397,7 +3397,7 @@ function generateQRCode() {
     }
 
     const shareLink = built.shareLink;
-    const RS = VoyagrModules.routeSharing();
+    const RS = _routeSharing();
 
     // Clear previous QR code
     const qrContainer = document.getElementById('qrCode');
@@ -3450,7 +3450,7 @@ function shareViaWhatsApp() {
     }
 
     const route = window.lastCalculatedRoute;
-    const message = VoyagrModules.routeSharing().buildShareWhatsAppMessage(route, {
+    const message = _routeSharing().buildShareWhatsAppMessage(route, {
         startLabel: document.getElementById('start').value,
         endLabel: document.getElementById('end').value,
         distanceText: convertDistance(route.distance_km),
@@ -3476,7 +3476,7 @@ function shareViaEmail() {
     const route = window.lastCalculatedRoute;
     const startInput = document.getElementById('start').value;
     const endInput = document.getElementById('end').value;
-    const sharing = VoyagrModules.routeSharing();
+    const sharing = _routeSharing();
     const fmt = {
         startLabel: startInput,
         endLabel: endInput,
@@ -3752,7 +3752,7 @@ function saveCurrentRoute() {
 function loadSavedRoutes() {
     const savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
     const savedRoutesList = document.getElementById('savedRoutesList');
-    savedRoutesList.innerHTML = VoyagrModules.routeSharing().buildSavedRoutesListHtml(savedRoutes, {
+    savedRoutesList.innerHTML = _routeSharing().buildSavedRoutesListHtml(savedRoutes, {
         currencySymbol: getCurrencySymbol(),
         distUnit: getDistanceUnit(),
         distanceTexts: savedRoutes.map((route) => convertDistance(route.distance_km)),
@@ -4093,9 +4093,9 @@ async function calculateRoute() {
     // Show route calculation progress bar
     showRouteProgressBar();
 
-    const viaPointsData = VoyagrRoutingRequest.mapViaPointsForApi(viaPoints);
-    const stopsData = VoyagrRoutingRequest.mapStopsForApi(stops);
-    const totalStopTime = VoyagrRoutingRequest.sumStopDurationsMinutes(stops);
+    const viaPointsData = _routingRequest().mapViaPointsForApi(viaPoints);
+    const stopsData = _routingRequest().mapStopsForApi(stops);
+    const totalStopTime = _routingRequest().sumStopDurationsMinutes(stops);
 
     const routePrefs = getRoutePreferences();
     const optimizeOrder = localStorage.getItem('pref_optimizeStopOrder') !== 'false';
@@ -4104,7 +4104,7 @@ async function calculateRoute() {
 
     const avoidTollRoads = isAvoidTollsEnabled();
 
-    const routeStartCoordStr = VoyagrRoutingRequest.resolveLiveGpsStartCoord({
+    const routeStartCoordStr = _routingRequest().resolveLiveGpsStartCoord({
         routeInProgress: routeInProgress,
         isTrackingActive: isTrackingActive,
         trackingHistory: trackingHistory,
@@ -4113,7 +4113,7 @@ async function calculateRoute() {
         geocodedStart: geocodedStart,
     });
 
-    const requestBody = VoyagrRoutingRequest.buildInitialRouteRequestBody({
+    const requestBody = _routingRequest().buildInitialRouteRequestBody({
         start: routeStartCoordStr,
         end: geocodedEnd,
         viaPoints: viaPoints,
@@ -4121,7 +4121,7 @@ async function calculateRoute() {
         optimizeStopOrder: optimizeOrder,
         roundTrip: roundTrip,
         departureTime: departureTime,
-        sharedOptions: VoyagrRoutingRequest.buildInitialRouteSharedOptions(localStorage, {
+        sharedOptions: _routingRequest().buildInitialRouteSharedOptions(localStorage, {
             routingMode: currentRoutingMode,
             vehicleType: currentVehicleType,
             costParams: getRouteCostParams(currentVehicleType),
@@ -4145,17 +4145,17 @@ async function calculateRoute() {
             console.log('[calculateRoute] API response status:', response.status);
 
             const contentType = response.headers.get('content-type');
-            if (!VoyagrRoutingRequest.isRouteApiJsonContentType(contentType)) {
+            if (!_routingRequest().isRouteApiJsonContentType(contentType)) {
                 console.error('[calculateRoute] Non-JSON response received:', contentType);
                 return response.text().then(text => {
                     console.error('[calculateRoute] Response text:', text.substring(0, 200));
-                    throw new Error(VoyagrRoutingRequest.buildNonJsonRouteApiErrorMessage(response.status, text));
+                    throw new Error(_routingRequest().buildNonJsonRouteApiErrorMessage(response.status, text));
                 });
             }
 
             if (!response.ok) {
                 return response.text().then(text => {
-                    throw new Error(VoyagrRoutingRequest.parseRouteApiErrorMessage(response.status, text));
+                    throw new Error(_routingRequest().parseRouteApiErrorMessage(response.status, text));
                 });
             }
 
@@ -4178,7 +4178,7 @@ async function calculateRoute() {
                     data.routing_warning || data.source,
                     data.engines_failed || {}
                 );
-                showStatus(VoyagrRoutingRequest.getDegradedRoutingStatusMessage(), 'warning');
+                showStatus(_routingRequest().getDegradedRoutingStatusMessage(), 'warning');
             }
 
             if (data.success) {
@@ -4231,7 +4231,7 @@ async function calculateRoute() {
 
                 // Parse coordinates
                 try {
-                    const GL = VoyagrModules.geocodingLocations();
+                    const GL = _geocodingLocations();
                     const startParsed = GL.parseLatLonPairString(geocodedStart);
                     const endParsed = GL.parseLatLonPairString(geocodedEnd);
 
@@ -4253,7 +4253,7 @@ async function calculateRoute() {
                     if (endMarker && typeof endMarker.remove === 'function') endMarker.remove();
                     if (routeLayer && typeof routeLayer.remove === 'function') routeLayer.remove();
 
-                    const PM = VoyagrModules.previewMarker();
+                    const PM = _previewMarker();
                     const startMarkerOpts = PM.getRouteEndpointMarkerOptions('start');
                     const endMarkerOpts = PM.getRouteEndpointMarkerOptions('end');
 
@@ -5120,7 +5120,7 @@ function setWeatherLayerType(type) {
         addWeatherLayer();
     }
 
-    const typeName = VoyagrModules.weatherLayer().weatherLayerDisplayName(type);
+    const typeName = _weatherLayer().weatherLayerDisplayName(type);
     showStatus(`🌧️ Weather layer: ${typeName}`, 'info');
 }
 
@@ -5173,7 +5173,7 @@ function addWeatherLayer() {
         try {
             // OpenWeatherMap weather tiles via modules/map/weather-layer.js.
             // Available layers: precipitation_new, clouds_new, temp_new, wind_new, pressure_new
-            const WL = VoyagrModules.weatherLayer();
+            const WL = _weatherLayer();
             const tileUrl = WL.buildWeatherTileUrl(weatherLayerType, owmApiKey);
 
             if (!map.getSource('weather-source')) {
@@ -5341,7 +5341,7 @@ function displayRouteTrafficEdges(segments) {
         return;
     }
 
-    const RTF = VoyagrModules.routeTrafficFlow();
+    const RTF = _routeTrafficFlow();
     const levelCounts = RTF.countTrafficSegmentLevels(segments);
     console.log('[Route Traffic] Segment levels:', levelCounts);
 
@@ -5688,7 +5688,7 @@ async function fetchRouteTrafficFlowPayload(points, sampleInterval) {
 }
 
 async function sampleRouteTrafficAhead() {
-    const RTF = VoyagrModules.routeTrafficFlow();
+    const RTF = _routeTrafficFlow();
     if (!routePolyline || routePolyline.length < 2) return null;
     const startIdx = Math.max(0, Math.min(lastSnappedRouteIndex || 0, routePolyline.length - 2));
     const plan = RTF.buildTrafficFlowSamplePlan(routePolyline, startIdx, 8);
@@ -5739,7 +5739,7 @@ async function checkTrafficAndReroute() {
             return;
         }
 
-        const changeType = VoyagrModules.trafficChange().detectSignificantTrafficChange(lastTrafficData, flow);
+        const changeType = _trafficChange().detectSignificantTrafficChange(lastTrafficData, flow);
         lastTrafficData = flow;
 
         if (changeType) {
@@ -5791,18 +5791,18 @@ async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measured
         if (data.success && data.routes && data.routes.length > 0) {
             const newRoute = data.routes[0];
             const oldBase = window.lastCalculatedRoute.duration_minutes || 0;
-            const timeSaved = VoyagrModules.trafficChange().computeTrafficRerouteTimeSaved(
+            const timeSaved = _trafficChange().computeTrafficRerouteTimeSaved(
                 oldBase,
                 measuredDelayMin,
                 newRoute.duration_minutes
             );
 
-            if (VoyagrModules.trafficChange().shouldAcceptTrafficReroute(isSevere, timeSaved)) {
+            if (_trafficChange().shouldAcceptTrafficReroute(isSevere, timeSaved)) {
                 updateRouteOnMap(newRoute);
                 _routeTrafficSampleCache = null;
                 lastTrafficData = null;
                 const reason = isSevere ? 'severe congestion' : 'traffic';
-                const saveMsg = VoyagrModules.trafficChange().formatTrafficRerouteSaveMessage(timeSaved);
+                const saveMsg = _trafficChange().formatTrafficRerouteSaveMessage(timeSaved);
                 sendNotification('✅ Route Updated',
                     `New route found due to ${reason}. ${saveMsg}`, 'success');
                 if (voiceAnnouncementsEnabled) {
@@ -5837,7 +5837,7 @@ function resolveNavigationDestination() {
         const last = routePolyline[routePolyline.length - 1];
         polylineEnd = { lat: last[0], lon: last[1] };
     }
-    return VoyagrModules.navigationDestination().resolveDestinationLatLon({
+    return _navigationDestination().resolveDestinationLatLon({
         lastRouteDestination: lr && typeof lr.destination === 'string' ? lr.destination : null,
         endCoords: endEl && endEl.dataset && endEl.dataset.lat != null && endEl.dataset.lon != null
             ? { lat: parseFloat(endEl.dataset.lat), lon: parseFloat(endEl.dataset.lon) }
@@ -5851,7 +5851,7 @@ function resolveNavigationDestination() {
  */
 function buildRouteRequest(startLat, startLon, destination, avoidPoints = null) {
     const routePrefs = (typeof getRoutePreferences === 'function') ? getRoutePreferences() : {};
-    const RR = VoyagrRoutingRequest;
+    const RR = _routingRequest();
     const includeFlags = RR.readRerouteIncludeFlags(localStorage);
 
     return RR.buildRerouteRequestBody({
@@ -7520,7 +7520,7 @@ function showParkingEmptyState(message) {
     const parkingSection = document.getElementById('parkingSection');
     const parkingListDiv = document.getElementById('parkingList');
     if (!parkingSection || !parkingListDiv) return;
-    parkingListDiv.innerHTML = VoyagrModules.multimodalParking().buildParkingEmptyStateHtml(message);
+    parkingListDiv.innerHTML = _multimodalParking().buildParkingEmptyStateHtml(message);
     parkingSection.style.display = 'block';
     scrollParkingResultsIntoView();
 }
@@ -7653,7 +7653,7 @@ function displayParkingOptions(parkingList, destinationCoords) {
 
     parkingListDiv.innerHTML = '';
 
-    const parkingModule = VoyagrModules.multimodalParking();
+    const parkingModule = _multimodalParking();
     const topParkingOptions = parkingModule.getParkingOptionsDisplaySlice(parkingList);
     console.log('[Parking] Displaying top', topParkingOptions.length, 'parking options');
 
@@ -7706,8 +7706,8 @@ function displayParkingOptions(parkingList, destinationCoords) {
 }
 
 async function selectParking(parking, destinationCoords) {
-    const MP = VoyagrModules.multimodalParking();
-    const RR = VoyagrRoutingRequest;
+    const MP = _multimodalParking();
+    const RR = _routingRequest();
     selectedParking = parking;
     showStatus(MP.getParkingSelectLoadingMessage(), 'loading');
 
@@ -7794,7 +7794,7 @@ function displayParkingRoutes(drivingData, walkingData, parking, destination) {
     console.log('[Parking] drivingData:', drivingData);
     console.log('[Parking] walkingData:', walkingData);
 
-    const parkingModule = VoyagrModules.multimodalParking();
+    const parkingModule = _multimodalParking();
 
     // Remove previous parking routes
     if (parkingDrivingRoute && typeof parkingDrivingRoute.remove === 'function') parkingDrivingRoute.remove();
@@ -7839,17 +7839,17 @@ function displayParkingRoutes(drivingData, walkingData, parking, destination) {
  * @returns {*} Return value description
  */
 function updateParkingPreview(drivingData, walkingData, parking) {
-    const totals = VoyagrModules.multimodalParking().computeMultimodalLegTotals(drivingData, walkingData);
+    const totals = _multimodalParking().computeMultimodalLegTotals(drivingData, walkingData);
     const distUnit = getDistanceUnit();
     const convertedDist = convertDistance(totals.totalDistKm);
     const startLabel = document.getElementById('start').value;
     const endLabel = document.getElementById('end').value;
-    const routeLabel = VoyagrModules.multimodalParking().buildParkingRouteLabel(
+    const routeLabel = _multimodalParking().buildParkingRouteLabel(
         startLabel,
         parking.name,
         endLabel
     );
-    const breakdown = VoyagrModules.multimodalParking().buildParkingBreakdownHtml({
+    const breakdown = _multimodalParking().buildParkingBreakdownHtml({
         drivingDistDisplay: convertDistance(totals.drivingDistKm),
         drivingTimeMin: totals.drivingTimeMin,
         walkingDistDisplay: convertDistance(totals.walkingDistKm),
@@ -7859,7 +7859,7 @@ function updateParkingPreview(drivingData, walkingData, parking) {
 
     document.getElementById('previewDistance').textContent = convertedDist + ' ' + distUnit;
     document.getElementById('previewDuration').textContent = Math.round(totals.totalTimeMin) + ' min';
-    document.getElementById('previewRoute').innerHTML = VoyagrModules.multimodalParking().buildParkingPreviewRouteHtml(routeLabel, breakdown);
+    document.getElementById('previewRoute').innerHTML = _multimodalParking().buildParkingPreviewRouteHtml(routeLabel, breakdown);
 }
 
 /**
@@ -8269,7 +8269,7 @@ let _lastLaneVoiceKey = '';
 const _laneGuidanceCache = new Map();        // key -> { data, ts, fallback }
 
 function _pruneLaneGuidanceCache() {
-    const LG = VoyagrModules.laneGuidance();
+    const LG = _laneGuidance();
     const now = Date.now();
     for (const [k, v] of _laneGuidanceCache) {
         if (now - v.ts > LG.LANE_GUIDANCE_CACHE_TTL_MS) _laneGuidanceCache.delete(k);
@@ -8281,7 +8281,7 @@ function _pruneLaneGuidanceCache() {
 }
 
 function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
-    const LG = VoyagrModules.laneGuidance();
+    const LG = _laneGuidance();
     roundaboutExitCount = roundaboutExitCount || 0;
     const now = Date.now();
 
@@ -8375,7 +8375,7 @@ function renderLaneGuidanceUI(data) {
 
     if (!display || !visual || !text) return;
 
-    const LG = VoyagrModules.laneGuidance();
+    const LG = _laneGuidance();
     const plan = LG.buildLaneGuidanceUiApplyPlan(data);
     if (!plan.visible) {
         display.classList.remove('show');
@@ -8568,6 +8568,18 @@ function _weatherLayer() { return VoyagrModules.weatherLayer(); }
 /** Unit-tested navigation destination resolution (modules/navigation/navigation-destination.js). */
 function _navigationDestination() { return VoyagrModules.navigationDestination(); }
 
+/** Unit-tested multimodal parking helpers (modules/navigation/multimodal-parking.js). */
+function _multimodalParking() { return VoyagrModules.multimodalParking(); }
+
+/** Unit-tested lane guidance helpers (modules/navigation/lane-guidance.js). */
+function _laneGuidance() { return VoyagrModules.laneGuidance(); }
+
+/** Unit-tested POI search helpers (modules/navigation/poi-search.js). */
+function _poiSearch() { return VoyagrModules.poiSearch(); }
+
+/** Unit-tested routing request builders (modules/navigation/routing-request.js). */
+function _routingRequest() { return VoyagrModules.routingRequest(); }
+
 function applyZoomFollowButtonUi(btn, enabled) {
     if (!btn) return;
     const display = _mapControls().getZoomFollowButtonDisplay(enabled);
@@ -8665,7 +8677,7 @@ function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
     currentGpsSpeedKmh = currentSpeedInMph * 1.609344;
 
     const SG = _speedGps();
-    const SL = VoyagrModules.speedLimitWidget();
+    const SL = _speedLimitWidget();
     const displaySpeedUnit = getSpeedUnit();
     const gpsDisplay = SL.formatSpeedForWidget(currentSpeedInMph, speedUnit, SG);
 
@@ -14715,7 +14727,7 @@ function selectAutocompleteResult(fieldId, lat, lon, name) {
 }
 
 async function geocodeAddress(address) {
-    const GL = VoyagrModules.geocodingLocations();
+    const GL = _geocodingLocations();
     const trimmedAddress = GL.normalizeGeocodeQuery(address);
     if (!trimmedAddress) {
         return null;
@@ -14789,7 +14801,7 @@ async function geocodeAddress(address) {
 }
 
 async function geocodeLocations(startAddress, endAddress) {
-    const GL = VoyagrModules.geocodingLocations();
+    const GL = _geocodingLocations();
     isGeocoding = true;
     showStatus(GL.getGeocodeLoadingStatusMessage(), 'loading');
 
@@ -15281,7 +15293,7 @@ function quickSearch(type) {
  * @param {number} userLon - User's longitude
  */
 function displayPOIResults(results, type, userLat, userLon) {
-    const POI = VoyagrModules.poiSearch();
+    const POI = _poiSearch();
     closePOIModal();
     document.body.insertAdjacentHTML('beforeend', POI.buildPoiResultsModalHtml(results, type,
         POI.buildPoiResultsModalDisplayOpts(
@@ -15298,7 +15310,7 @@ function displayPOIResults(results, type, userLat, userLon) {
  * Close the POI results modal
  */
 function closePOIModal() {
-    const POI = VoyagrModules.poiSearch();
+    const POI = _poiSearch();
     const modal = document.getElementById(POI.POI_MODAL_ID);
     if (modal) {
         modal.remove();
@@ -15322,7 +15334,7 @@ function selectPOI(poiLat, poiLon, poiName, userLat, userLon) {
     // Set end to POI location
     document.getElementById('end').value = `${poiLat},${poiLon}`;
 
-    showStatus(VoyagrModules.poiSearch().getPoiSelectDestinationStatusMessage(poiName), 'success');
+    showStatus(_poiSearch().getPoiSelectDestinationStatusMessage(poiName), 'success');
 
     // Automatically calculate route
     calculateRoute();
@@ -15410,7 +15422,7 @@ function hideRoadNameBar() {
 // ===== SEARCH ALONG ROUTE =====
 
 function searchAlongRoute() {
-    const POI = VoyagrModules.poiSearch();
+    const POI = _poiSearch();
     const cats = document.getElementById('alongRouteCategories');
     if (cats) {
         cats.style.display = POI.toggleAlongRouteCategoriesDisplay(cats.style.display);
@@ -15418,7 +15430,7 @@ function searchAlongRoute() {
 }
 
 function searchAlongRouteByType(type) {
-    const POI = VoyagrModules.poiSearch();
+    const POI = _poiSearch();
     if (!POI.canSearchAlongRoute(routePolyline ? routePolyline.length : 0)) {
         showStatus(POI.getAlongRouteNoRouteMessage(), 'error');
         return;
@@ -15452,7 +15464,7 @@ function searchAlongRouteByType(type) {
 function addPOIMarkersToMap(pois, type) {
     clearPOIMarkers();
 
-    const POI = VoyagrModules.poiSearch();
+    const POI = _poiSearch();
     const icon = POI.getPoiMapMarkerIcon(type);
 
     pois.forEach((poi, idx) => {
@@ -16054,7 +16066,7 @@ function updateTripInfo(distance, time, fuelCost, tollCost) {
             distUnit: getDistanceUnit(),
             currencySymbol: getCurrencySymbol(),
         },
-        VoyagrModules.routeSharing().parseSharedRouteDurationMinutes
+        _routeSharing().parseSharedRouteDurationMinutes
     );
     if (!plan.visible || !tripInfo) return;
 
