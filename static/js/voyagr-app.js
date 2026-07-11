@@ -10847,33 +10847,12 @@ function calculateTurnDirection(bearing1, bearing2) {
  * @param {number} targetVertexIndex - Maneuver begin_shape_index (clamped to polyline)
  * @returns {number} Meters, >= 0
  */
+// distanceAlongRouteToVertexMeters: implementation lives in route-geometry.js
+// (VoyagrRouteGeometry.distanceAlongRouteToVertexMeters). Thin stub keeps all callers working.
 function distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex) {
-    if (!routePolyline || routePolyline.length < 2 || !snap) return 0;
-    const n = routePolyline.length;
-    const vi = Math.max(0, Math.min(Math.floor(Number(targetVertexIndex) || 0), n - 1));
-    const i0 = Math.max(0, Math.min(snap.index, n - 2));
-    const t = snap.t !== undefined && snap.t !== null
-        ? Math.max(0, Math.min(1, Number(snap.t)))
-        : 0;
-    const a = routePolyline[i0];
-    const b = routePolyline[i0 + 1];
-    const segLen = calculateHaversineDistance(a[0], a[1], b[0], b[1]);
-    if (vi < i0) {
-        return 0;
-    }
-    let d = 0;
-    if (vi > i0) {
-        d += (1 - t) * segLen;
-        for (let j = i0 + 1; j < vi; j++) {
-            d += calculateHaversineDistance(
-                routePolyline[j][0], routePolyline[j][1],
-                routePolyline[j + 1][0], routePolyline[j + 1][1]
-            );
-        }
-    } else {
-        d += t * segLen;
-    }
-    return Math.max(0, d);
+    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
+    if (RG) return RG.distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex);
+    return 0;
 }
 
 /**

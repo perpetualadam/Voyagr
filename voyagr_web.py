@@ -1771,16 +1771,6 @@ def fetch_valhalla_auto_shorter_json(
     )
 
 
-def _valhalla_shortest_exclusions_required(
-    enable_hazard_avoidance: bool,
-    avoid_cameras: bool,
-    exclude_locations: Optional[List[Dict[str, Any]]],
-) -> bool:
-    """Deprecated: use fetch_shortest_route_json (kept for call-site compatibility)."""
-    del exclude_locations
-    return bool(enable_hazard_avoidance and avoid_cameras)
-
-
 def fetch_shortest_route_json(
     url: str,
     headers: Dict[str, str],
@@ -5765,41 +5755,9 @@ def calculate_route():
                                 logger.warning(f"[VALHALLA] Failed to build alt exclude_locations: {e}")
 
                         # Helper function to build a route entry for standard routing
-                        def build_std_route_entry(name, geometry, distance_km, duration_sec, route_id, valhalla_data=None):
-                            coords = polyline.decode(geometry, precision=6)
-                            penalty, haz_count = score_route_by_hazards(coords, hazards)
-                            hazards_list = get_hazards_on_route(coords, hazards)
-                            costs = cost_calculator.calculate_costs(
-                                distance_km, vehicle_type, fuel_efficiency, fuel_price,
-                                energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
-                                route_coords=coords
-                            )
-
-                            # Extract maneuvers from Valhalla response if available
-                            route_maneuvers = extract_valhalla_maneuvers(
-                                valhalla_data.get('trip') if valhalla_data else None,
-                                length_in_meters=True,
-                            )
-
-                            return {
-                                'id': route_id,
-                                'name': name,
-                                'distance_km': round(distance_km, 2),
-                                'duration_minutes': round(duration_sec / 60, 0),
-                                'fuel_cost': round(costs['fuel_cost'], 2),
-                                'fuel_litres': round(costs['fuel_litres'], 2),
-                                'toll_cost': round(costs['toll_cost'], 2),
-                                'caz_cost': round(costs['caz_cost'], 2),
-                                'caz_details': costs.get('caz_details', {}),
-                                'geometry': geometry,
-                                'geometry_precision': 6,
-                                'hazard_penalty_seconds': round(penalty, 0),
-                                'hazard_count': haz_count,
-                                'hazards': hazards_list,
-                                'maneuvers': route_maneuvers,
-                                'source': 'Valhalla',
-                            }
-
+                        # Optimised Discovery route entries are built by the shared
+                        # build_valhalla_route_entry (metre-unit maneuvers, traffic_multiplier=1.0).
+                        # The nested build_std_route_entry helper has been removed.
                         next_route_id = len(routes) + 1
 
                         # Route: Shortest Distance (auto_shorter costing); retry without exclusions if avoids over-constrain
@@ -5849,7 +5807,23 @@ def calculate_route():
                                             disc_geom = disc_data['trip']['legs'][0]['shape']
                                             disc_dist = disc_data['trip']['summary']['length']
                                             disc_time = disc_data['trip']['summary']['time']
-                                            route_entry = build_std_route_entry('⚡ Optimised Discovery', disc_geom, disc_dist, disc_time, next_route_id, disc_data)
+                                            route_entry = build_valhalla_route_entry(
+                                                trip=disc_data['trip'],
+                                                name='⚡ Optimised Discovery',
+                                                route_id=next_route_id,
+                                                traffic_multiplier=1.0,
+                                                maneuver_length_in_meters=True,
+                                                hazards=hazards,
+                                                cost_calculator=cost_calculator,
+                                                vehicle_type=vehicle_type,
+                                                fuel_efficiency=fuel_efficiency,
+                                                fuel_price=fuel_price,
+                                                energy_efficiency=energy_efficiency,
+                                                electricity_price=electricity_price,
+                                                include_tolls=include_tolls,
+                                                include_caz=include_caz,
+                                                caz_exempt=caz_exempt,
+                                            )
                                             if route_entry['hazard_count'] < hazard_count:
                                                 route_entry['camera_exclusions_applied'] = True
                                                 routes.append(route_entry)
