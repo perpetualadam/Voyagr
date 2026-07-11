@@ -120,4 +120,17 @@ describe('toggle-ui (real module)', () => {
             expect(T.nextToggleState(true)).toBe(false);
         });
     });
+
+    describe('applyLabeledToggleButton', () => {
+        test('exports shared label colour opts', () => {
+            expect(T.LABELED_TOGGLE_OPTS).toEqual({ activeColor: 'white', inactiveColor: '#333' });
+        });
+
+        test('applies white label colour when enabled', () => {
+            const el = document.createElement('button');
+            T.applyLabeledToggleButton(el, true);
+            expect(el.style.color).toBe('white');
+            expect(el.classList.contains('active')).toBe(true);
+        });
+    });
 });

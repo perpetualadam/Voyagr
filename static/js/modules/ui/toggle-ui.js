@@ -16,6 +16,9 @@
     const INACTIVE_BACKGROUND = '#ddd';
     const INACTIVE_BORDER = '#999';
 
+    /** Default text colours for settings toggles that show white/grey labels. */
+    const LABELED_TOGGLE_OPTS = { activeColor: 'white', inactiveColor: '#333' };
+
     /**
      * Compute the pill-button style for a given enabled state.
      * @param {boolean} enabled
@@ -66,6 +69,17 @@
     }
 
     /**
+     * Apply toggle style with default white/grey label colours (settings panel toggles).
+     * @param {HTMLElement|null} el
+     * @param {boolean} enabled
+     * @param {object} [opts] - Optional overrides merged with {@link LABELED_TOGGLE_OPTS}.
+     * @returns {{ active: boolean, background: string, borderColor: string, color?: string }}
+     */
+    function applyLabeledToggleButton(el, enabled, opts = {}) {
+        return applyToggleButton(el, enabled, Object.assign({}, LABELED_TOGGLE_OPTS, opts));
+    }
+
+    /**
      * Read a boolean preference stored as 'true'/'false'.
      * @param {string} key
      * @param {boolean} [defaultValue=false] - Returned when the key is absent/unrecognised.
@@ -106,8 +120,10 @@
         ACTIVE_BORDER,
         INACTIVE_BACKGROUND,
         INACTIVE_BORDER,
+        LABELED_TOGGLE_OPTS,
         toggleButtonStyle,
         applyToggleButton,
+        applyLabeledToggleButton,
         readBoolPref,
         writeBoolPref,
         nextToggleState,

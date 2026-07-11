@@ -1705,72 +1705,35 @@ function applySettingsToUI() {
 
         const smartZoomToggle = document.getElementById('smartZoomToggle');
         if (smartZoomToggle) {
-            if (smartZoomEnabled) {
-                smartZoomToggle.classList.add('active');
-            } else {
-                smartZoomToggle.classList.remove('active');
-            }
+            VoyagrModules.toggleUI().applyToggleButton(smartZoomToggle, smartZoomEnabled);
         }
 
         // Apply ML predictions toggle state
         const mlPredictionsEnabled = localStorage.getItem('mlPredictionsEnabled') === 'true';
         const mlToggle = document.getElementById('mlPredictionsEnabled');
         if (mlToggle) {
-            VoyagrModules.toggleUI().applyToggleButton(mlToggle, mlPredictionsEnabled, {
-                activeColor: 'white',
-                inactiveColor: '#333',
-            });
+            VoyagrModules.toggleUI().applyLabeledToggleButton(mlToggle, mlPredictionsEnabled);
         }
 
         // Apply voice announcements toggle state
         const voiceAnnouncementsEnabled = localStorage.getItem('voiceAnnouncementsEnabled') === 'true';
         const voiceToggle = document.getElementById('voiceAnnouncementsEnabled');
         if (voiceToggle) {
-            if (voiceAnnouncementsEnabled) {
-                voiceToggle.classList.add('active');
-                voiceToggle.style.background = '#4CAF50';
-                voiceToggle.style.borderColor = '#4CAF50';
-                voiceToggle.style.color = 'white';
-            } else {
-                voiceToggle.classList.remove('active');
-                voiceToggle.style.background = '#ddd';
-                voiceToggle.style.borderColor = '#999';
-                voiceToggle.style.color = '#333';
-            }
+            VoyagrModules.toggleUI().applyLabeledToggleButton(voiceToggle, voiceAnnouncementsEnabled);
         }
 
         // Apply battery saving mode toggle state
         const batterySavingEnabled = localStorage.getItem('pref_batterySaving') === 'true';
         const batteryToggle = document.getElementById('batterySavingMode');
         if (batteryToggle) {
-            if (batterySavingEnabled) {
-                batteryToggle.classList.add('active');
-                batteryToggle.style.background = '#4CAF50';
-                batteryToggle.style.borderColor = '#4CAF50';
-                batteryToggle.style.color = 'white';
-            } else {
-                batteryToggle.classList.remove('active');
-                batteryToggle.style.background = '#ddd';
-                batteryToggle.style.borderColor = '#999';
-                batteryToggle.style.color = '#333';
-            }
+            VoyagrModules.toggleUI().applyLabeledToggleButton(batteryToggle, batterySavingEnabled);
         }
 
         // Apply gesture control toggle state
         const gestureControlEnabled = localStorage.getItem('gestureEnabled') === 'true';
         const gestureToggle = document.getElementById('gestureEnabled');
         if (gestureToggle) {
-            if (gestureControlEnabled) {
-                gestureToggle.classList.add('active');
-                gestureToggle.style.background = '#4CAF50';
-                gestureToggle.style.borderColor = '#4CAF50';
-                gestureToggle.style.color = 'white';
-            } else {
-                gestureToggle.classList.remove('active');
-                gestureToggle.style.background = '#ddd';
-                gestureToggle.style.borderColor = '#999';
-                gestureToggle.style.color = '#333';
-            }
+            VoyagrModules.toggleUI().applyLabeledToggleButton(gestureToggle, gestureControlEnabled);
         }
 
         // Apply UI theme preference
@@ -1780,29 +1743,13 @@ function applySettingsToUI() {
         // Apply auto-traffic update toggle state
         const autoTrafficToggle = document.getElementById('autoTrafficUpdateToggle');
         if (autoTrafficToggle) {
-            if (autoTrafficUpdateEnabled) {
-                autoTrafficToggle.classList.add('active');
-                autoTrafficToggle.style.background = '#4CAF50';
-                autoTrafficToggle.style.borderColor = '#4CAF50';
-            } else {
-                autoTrafficToggle.classList.remove('active');
-                autoTrafficToggle.style.background = '#ddd';
-                autoTrafficToggle.style.borderColor = '#999';
-            }
+            VoyagrModules.toggleUI().applyToggleButton(autoTrafficToggle, autoTrafficUpdateEnabled);
         }
 
         // Apply auto-reroute on deviation toggle state
         const autoRerouteToggle = document.getElementById('autoRerouteDeviationToggle');
         if (autoRerouteToggle) {
-            if (autoRerouteOnDeviationEnabled) {
-                autoRerouteToggle.classList.add('active');
-                autoRerouteToggle.style.background = '#4CAF50';
-                autoRerouteToggle.style.borderColor = '#4CAF50';
-            } else {
-                autoRerouteToggle.classList.remove('active');
-                autoRerouteToggle.style.background = '#ddd';
-                autoRerouteToggle.style.borderColor = '#999';
-            }
+            VoyagrModules.toggleUI().applyToggleButton(autoRerouteToggle, autoRerouteOnDeviationEnabled);
         }
 
         applySpeedWidgetToggleUi();
@@ -5967,16 +5914,7 @@ function toggleAutoTrafficUpdate() {
     localStorage.setItem('autoTrafficUpdate', autoTrafficUpdateEnabled ? 'true' : 'false');
 
     const toggle = document.getElementById('autoTrafficUpdateToggle');
-    if (toggle) {
-        toggle.classList.toggle('active', autoTrafficUpdateEnabled);
-        if (autoTrafficUpdateEnabled) {
-            toggle.style.background = '#4CAF50';
-            toggle.style.borderColor = '#4CAF50';
-        } else {
-            toggle.style.background = '#ddd';
-            toggle.style.borderColor = '#999';
-        }
-    }
+    VoyagrModules.toggleUI().applyToggleButton(toggle, autoTrafficUpdateEnabled);
 
     if (autoTrafficUpdateEnabled) {
         showStatus('🚦 Auto-traffic updates enabled', 'success');
@@ -5999,16 +5937,7 @@ function toggleAutoRerouteOnDeviation() {
     localStorage.setItem('autoRerouteOnDeviation', autoRerouteOnDeviationEnabled ? 'true' : 'false');
 
     const toggle = document.getElementById('autoRerouteDeviationToggle');
-    if (toggle) {
-        toggle.classList.toggle('active', autoRerouteOnDeviationEnabled);
-        if (autoRerouteOnDeviationEnabled) {
-            toggle.style.background = '#4CAF50';
-            toggle.style.borderColor = '#4CAF50';
-        } else {
-            toggle.style.background = '#ddd';
-            toggle.style.borderColor = '#999';
-        }
-    }
+    VoyagrModules.toggleUI().applyToggleButton(toggle, autoRerouteOnDeviationEnabled);
 
     if (autoRerouteOnDeviationEnabled) {
         showStatus('🔄 Auto-reroute on deviation enabled', 'success');
@@ -6599,38 +6528,15 @@ function seedNavigationProgressOnNewRoute(lat, lon) {
  * Initialize auto-traffic and auto-reroute toggles
  */
 function initAutoTrafficRerouteToggles() {
+    const TU = VoyagrModules.toggleUI();
     // Auto-traffic update toggle
-    const trafficToggle = document.getElementById('autoTrafficUpdateToggle');
-    if (trafficToggle) {
-        trafficToggle.classList.toggle('active', autoTrafficUpdateEnabled);
-        if (autoTrafficUpdateEnabled) {
-            trafficToggle.style.background = '#4CAF50';
-            trafficToggle.style.borderColor = '#4CAF50';
-        }
-    }
+    TU.applyToggleButton(document.getElementById('autoTrafficUpdateToggle'), autoTrafficUpdateEnabled);
 
     // Auto-reroute on deviation toggle
-    const rerouteToggle = document.getElementById('autoRerouteDeviationToggle');
-    if (rerouteToggle) {
-        rerouteToggle.classList.toggle('active', autoRerouteOnDeviationEnabled);
-        if (autoRerouteOnDeviationEnabled) {
-            rerouteToggle.style.background = '#4CAF50';
-            rerouteToggle.style.borderColor = '#4CAF50';
-        }
-    }
+    TU.applyToggleButton(document.getElementById('autoRerouteDeviationToggle'), autoRerouteOnDeviationEnabled);
 
     // Route traffic edge toggle
-    const routeTrafficToggle = document.getElementById('routeTrafficToggle');
-    if (routeTrafficToggle) {
-        routeTrafficToggle.classList.toggle('active', routeTrafficEnabled);
-        if (routeTrafficEnabled) {
-            routeTrafficToggle.style.background = '#4CAF50';
-            routeTrafficToggle.style.borderColor = '#4CAF50';
-        } else {
-            routeTrafficToggle.style.background = '#ddd';
-            routeTrafficToggle.style.borderColor = '#999';
-        }
-    }
+    TU.applyToggleButton(document.getElementById('routeTrafficToggle'), routeTrafficEnabled);
 }
 
 // ===== CAZ (CLEAN AIR ZONE) INFORMATION =====
@@ -6748,9 +6654,7 @@ function toggleShowCameras() {
     localStorage.setItem('showCamerasEnabled', showCamerasEnabled);
 
     const toggle = document.getElementById('showCamerasToggle');
-    if (toggle) {
-        toggle.classList.toggle('active', showCamerasEnabled);
-    }
+    VoyagrModules.toggleUI().applyToggleButton(toggle, showCamerasEnabled);
 
     if (showCamerasEnabled) {
         fetchAndDisplayCameras();
@@ -6858,10 +6762,7 @@ function toggleShowOsmTrafficLights() {
     showOsmTrafficLightsEnabled = !showOsmTrafficLightsEnabled;
     localStorage.setItem('showOsmTrafficLightsOnMap', showOsmTrafficLightsEnabled ? 'true' : 'false');
     const toggle = document.getElementById('showOsmTrafficLightsToggle');
-    VoyagrModules.toggleUI().applyToggleButton(toggle, showOsmTrafficLightsEnabled, {
-        activeColor: 'white',
-        inactiveColor: '#333',
-    });
+    VoyagrModules.toggleUI().applyLabeledToggleButton(toggle, showOsmTrafficLightsEnabled);
     if (showOsmTrafficLightsEnabled) {
         fetchAndDisplayOsmTrafficLights();
     } else {
@@ -6874,10 +6775,7 @@ function toggleShowOsmRailwayCrossings() {
     showOsmRailwayCrossingsEnabled = !showOsmRailwayCrossingsEnabled;
     localStorage.setItem('showOsmRailwayCrossingsOnMap', showOsmRailwayCrossingsEnabled ? 'true' : 'false');
     const toggle = document.getElementById('showOsmRailwayCrossingsToggle');
-    VoyagrModules.toggleUI().applyToggleButton(toggle, showOsmRailwayCrossingsEnabled, {
-        activeColor: 'white',
-        inactiveColor: '#333',
-    });
+    VoyagrModules.toggleUI().applyLabeledToggleButton(toggle, showOsmRailwayCrossingsEnabled);
     if (showOsmRailwayCrossingsEnabled) {
         fetchAndDisplayOsmRailwayCrossings();
     } else {
@@ -7049,36 +6947,10 @@ function initializeCameraLayer() {
     window.__voyagrCameraLayerInitialized = true;
 
     // Set toggle state based on saved preference
-    const toggle = document.getElementById('showCamerasToggle');
-    if (toggle) {
-        toggle.classList.toggle('active', showCamerasEnabled);
-    }
-    const osmTlToggle = document.getElementById('showOsmTrafficLightsToggle');
-    if (osmTlToggle) {
-        osmTlToggle.classList.toggle('active', showOsmTrafficLightsEnabled);
-        if (showOsmTrafficLightsEnabled) {
-            osmTlToggle.style.background = '#4CAF50';
-            osmTlToggle.style.borderColor = '#4CAF50';
-            osmTlToggle.style.color = 'white';
-        } else {
-            osmTlToggle.style.background = '#ddd';
-            osmTlToggle.style.borderColor = '#999';
-            osmTlToggle.style.color = '#333';
-        }
-    }
-    const osmRxToggle = document.getElementById('showOsmRailwayCrossingsToggle');
-    if (osmRxToggle) {
-        osmRxToggle.classList.toggle('active', showOsmRailwayCrossingsEnabled);
-        if (showOsmRailwayCrossingsEnabled) {
-            osmRxToggle.style.background = '#4CAF50';
-            osmRxToggle.style.borderColor = '#4CAF50';
-            osmRxToggle.style.color = 'white';
-        } else {
-            osmRxToggle.style.background = '#ddd';
-            osmRxToggle.style.borderColor = '#999';
-            osmRxToggle.style.color = '#333';
-        }
-    }
+    const TU = VoyagrModules.toggleUI();
+    TU.applyToggleButton(document.getElementById('showCamerasToggle'), showCamerasEnabled);
+    TU.applyLabeledToggleButton(document.getElementById('showOsmTrafficLightsToggle'), showOsmTrafficLightsEnabled);
+    TU.applyLabeledToggleButton(document.getElementById('showOsmRailwayCrossingsToggle'), showOsmRailwayCrossingsEnabled);
 
     // Fetch cameras on map move (with debounce)
     let osmOverlayFetchTimeout = null;
@@ -7678,15 +7550,7 @@ function loadVoicePreferences() {
             const toggleButton = document.getElementById('voiceAnnouncementsEnabled');
             const announcementsEnabled = prefs.announcementsEnabled !== false;
 
-            if (announcementsEnabled) {
-                toggleButton.classList.add('active');
-                toggleButton.style.background = '#4CAF50';
-                toggleButton.style.borderColor = '#4CAF50';
-            } else {
-                toggleButton.classList.remove('active');
-                toggleButton.style.background = '#ddd';
-                toggleButton.style.borderColor = '#999';
-            }
+            VoyagrModules.toggleUI().applyLabeledToggleButton(toggleButton, announcementsEnabled);
 
             TURN_ANNOUNCEMENT_DISTANCES.length = 0;
             TURN_ANNOUNCEMENT_DISTANCES.push(prefs.turnDistance1, prefs.turnDistance2, prefs.turnDistance3, 50);
@@ -7698,9 +7562,7 @@ function loadVoicePreferences() {
             // Initialize with defaults if no saved preferences
             const toggleButton = document.getElementById('voiceAnnouncementsEnabled');
             if (toggleButton) {
-                toggleButton.classList.add('active');
-                toggleButton.style.background = '#4CAF50';
-                toggleButton.style.borderColor = '#4CAF50';
+                VoyagrModules.toggleUI().applyLabeledToggleButton(toggleButton, true);
                 voiceAnnouncementsEnabled = true;
             }
             console.log('[Voice] No saved preferences, using defaults');
@@ -7745,17 +7607,7 @@ function loadPorcupineWakeUi() {
     row.style.display = '';
     if (help) help.style.display = '';
     const enabled = localStorage.getItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true';
-    if (enabled) {
-        toggle.classList.add('active');
-        toggle.style.background = '#4CAF50';
-        toggle.style.borderColor = '#4CAF50';
-        toggle.style.color = 'white';
-    } else {
-        toggle.classList.remove('active');
-        toggle.style.background = '#ddd';
-        toggle.style.borderColor = '#999';
-        toggle.style.color = '#333';
-    }
+    VoyagrModules.toggleUI().applyLabeledToggleButton(toggle, enabled);
 }
 
 function togglePorcupineWakeWord() {
@@ -7765,15 +7617,7 @@ function togglePorcupineWakeWord() {
     }
     button.classList.toggle('active');
     const enabled = button.classList.contains('active');
-    if (enabled) {
-        button.style.background = '#4CAF50';
-        button.style.borderColor = '#4CAF50';
-        button.style.color = 'white';
-    } else {
-        button.style.background = '#ddd';
-        button.style.borderColor = '#999';
-        button.style.color = '#333';
-    }
+    VoyagrModules.toggleUI().applyLabeledToggleButton(button, enabled);
     localStorage.setItem(VOYAGR_PORCUPINE_WAKE_STORAGE_KEY, enabled ? 'true' : 'false');
     if (enabled) {
         void startPorcupineWakePipeline();
@@ -9464,18 +9308,7 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
  */
 function applySpeedWidgetToggleUi() {
     const toggle = document.getElementById('speedWidgetToggle');
-    if (toggle) {
-        toggle.classList.toggle('active', speedWidgetEnabled);
-        if (speedWidgetEnabled) {
-            toggle.style.background = '#4CAF50';
-            toggle.style.borderColor = '#4CAF50';
-            toggle.style.color = 'white';
-        } else {
-            toggle.style.background = '#ddd';
-            toggle.style.borderColor = '#999';
-            toggle.style.color = '#333';
-        }
-    }
+    VoyagrModules.toggleUI().applyLabeledToggleButton(toggle, speedWidgetEnabled);
     _lastSpeedWidgetVisible = null;
     updateSpeedWidgetVisibility();
 }
@@ -10771,10 +10604,7 @@ function toggleMLPredictions() {
     button.classList.toggle('active');
     const enabled = button.classList.contains('active');
 
-    VoyagrModules.toggleUI().applyToggleButton(button, enabled, {
-        activeColor: 'white',
-        inactiveColor: '#333',
-    });
+    VoyagrModules.toggleUI().applyLabeledToggleButton(button, enabled);
 
     // Save to localStorage
     localStorage.setItem('mlPredictionsEnabled', enabled ? 'true' : 'false');
