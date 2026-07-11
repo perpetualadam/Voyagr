@@ -12,4 +12,9 @@ describe('map-controls module', () => {
         expect(MC.AR_ACTIVE_LABEL).toContain('Exit AR');
         expect(MC.AR_INACTIVE_LABEL).toContain('AR View');
     });
+
+    test('exposes journey overview button background colours', () => {
+        expect(MC.JOURNEY_OVERVIEW_ACTIVE_BACKGROUND).toBe('#4CAF50');
+        expect(MC.JOURNEY_OVERVIEW_INACTIVE_BACKGROUND).toBe('#9C27B0');
+    });
 });

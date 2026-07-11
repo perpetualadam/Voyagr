@@ -68,4 +68,17 @@ describe('route-prefs module', () => {
             expect(prefs.maxDetour).toBe(35);
         });
     });
+
+    describe('route avoidance preference helpers', () => {
+        test('resolveRouteAvoidanceButtonId maps known prefs', () => {
+            expect(RoutePrefs.resolveRouteAvoidanceButtonId('caz')).toBe('avoidCAZ');
+            expect(RoutePrefs.resolveRouteAvoidanceButtonId('cameras')).toBe('avoidCameras');
+        });
+
+        test('isRouteAvoidancePrefEnabled defaults cameras to enabled', () => {
+            expect(RoutePrefs.isRouteAvoidancePrefEnabled('cameras', localStorage)).toBe(true);
+            localStorage.setItem('pref_cameras', 'false');
+            expect(RoutePrefs.isRouteAvoidancePrefEnabled('cameras', localStorage)).toBe(false);
+        });
+    });
 });

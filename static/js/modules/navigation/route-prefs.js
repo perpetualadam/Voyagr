@@ -26,6 +26,57 @@
         maxDetour: 20,
     };
 
+    /** Map routing avoidance pref keys to settings button element ids. */
+    var ROUTE_AVOIDANCE_PREF_BUTTON_IDS = {
+        caz: 'avoidCAZ',
+        cameras: 'avoidCameras',
+        trafficLightsAvoid: 'avoidTrafficLights',
+        railwayCrossingsAvoid: 'avoidRailwayCrossings',
+    };
+
+    /** Routing avoidance prefs that default to enabled when unset in storage. */
+    var ROUTE_AVOIDANCE_PREFS_DEFAULT_ENABLED = [
+        'caz',
+        'cameras',
+        'trafficLightsAvoid',
+        'railwayCrossingsAvoid',
+    ];
+
+    /** Ordered routing avoidance preference keys shown in settings. */
+    var ROUTE_AVOIDANCE_PREF_KEYS = ROUTE_AVOIDANCE_PREFS_DEFAULT_ENABLED.slice();
+
+    /**
+     * @param {string} pref
+     * @returns {string}
+     */
+    function getRouteAvoidancePrefStorageKey(pref) {
+        return 'pref_' + pref;
+    }
+
+    /**
+     * @param {string} pref
+     * @returns {string}
+     */
+    function resolveRouteAvoidanceButtonId(pref) {
+        if (ROUTE_AVOIDANCE_PREF_BUTTON_IDS[pref]) {
+            return ROUTE_AVOIDANCE_PREF_BUTTON_IDS[pref];
+        }
+        return 'avoid' + pref.charAt(0).toUpperCase() + pref.slice(1);
+    }
+
+    /**
+     * @param {string} pref
+     * @param {Storage} storage
+     * @returns {boolean}
+     */
+    function isRouteAvoidancePrefEnabled(pref, storage) {
+        var saved = storage.getItem(getRouteAvoidancePrefStorageKey(pref));
+        if (saved === null) {
+            return ROUTE_AVOIDANCE_PREFS_DEFAULT_ENABLED.indexOf(pref) >= 0;
+        }
+        return saved === 'true';
+    }
+
     /**
      * Read saved route preferences from storage, with defaults when unset.
      * @param {Storage} storage
@@ -97,6 +148,12 @@
     var api = {
         DEFAULT_ROUTE_COST_PARAMS: DEFAULT_ROUTE_COST_PARAMS,
         DEFAULT_ROUTE_PREFERENCES: DEFAULT_ROUTE_PREFERENCES,
+        ROUTE_AVOIDANCE_PREF_BUTTON_IDS: ROUTE_AVOIDANCE_PREF_BUTTON_IDS,
+        ROUTE_AVOIDANCE_PREFS_DEFAULT_ENABLED: ROUTE_AVOIDANCE_PREFS_DEFAULT_ENABLED,
+        ROUTE_AVOIDANCE_PREF_KEYS: ROUTE_AVOIDANCE_PREF_KEYS,
+        getRouteAvoidancePrefStorageKey: getRouteAvoidancePrefStorageKey,
+        resolveRouteAvoidanceButtonId: resolveRouteAvoidanceButtonId,
+        isRouteAvoidancePrefEnabled: isRouteAvoidancePrefEnabled,
         migrateTollPrefKey: migrateTollPrefKey,
         isAvoidTollsEnabled: isAvoidTollsEnabled,
         getRouteCostParams: getRouteCostParams,

@@ -343,6 +343,24 @@
     var UNAVOIDABLE_HAZARDS_MODAL_ID = 'unavoidableHazardsModal';
     var UNAVOIDABLE_HAZARDS_BACKDROP_ID = 'unavoidableHazardsBackdrop';
 
+    var HAZARD_CAMERA_PREF_SUBTYPES = [
+        'camera_speed',
+        'camera_red_light',
+        'camera_average_speed',
+        'camera_bus_lane',
+        'camera_mobile',
+        'camera_other',
+    ];
+
+    /**
+     * @param {Object|null|undefined} pref
+     * @returns {boolean}
+     */
+    function isHazardPreferenceEnabled(pref) {
+        if (!pref) return true;
+        return pref.enabled === true || pref.enabled === 1;
+    }
+
     /**
      * @returns {string}
      */
@@ -418,6 +436,8 @@
         buildUnavoidableHazardsModalHtml: buildUnavoidableHazardsModalHtml,
         UNAVOIDABLE_HAZARDS_MODAL_ID: UNAVOIDABLE_HAZARDS_MODAL_ID,
         UNAVOIDABLE_HAZARDS_BACKDROP_ID: UNAVOIDABLE_HAZARDS_BACKDROP_ID,
+        HAZARD_CAMERA_PREF_SUBTYPES: HAZARD_CAMERA_PREF_SUBTYPES,
+        isHazardPreferenceEnabled: isHazardPreferenceEnabled,
         getUnavoidableHazardsModalStyleCssText: getUnavoidableHazardsModalStyleCssText,
         getUnavoidableHazardsBackdropStyleCssText: getUnavoidableHazardsBackdropStyleCssText,
     };
