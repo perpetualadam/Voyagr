@@ -5740,33 +5740,11 @@ function resetVoiceAnnouncementStateForNewRoute() {
 }
 
 /**
- * Update route on map with new route data
+ * Apply navigation state patches after a reroute map layer update.
+ * @param {Object} plan - from buildRouteMapUpdateStatePlan
+ * @param {Object} newRoute
  */
-function updateRouteOnMap(newRoute) {
-    resetVoiceAnnouncementStateForNewRoute();
-
-    if (routeLayer && typeof routeLayer.remove === 'function') {
-        routeLayer.remove();
-    }
-
-    const RD = _rerouteDecision();
-    const plan = RD.buildRouteMapUpdateStatePlan(newRoute, window.lastCalculatedRoute, {
-        now: Date.now(),
-        hasCurrentGps: currentLat != null && currentLon != null,
-        convertDistance,
-        distUnit: getDistanceUnit(),
-    });
-
-    routePolyline = decodePolyline(newRoute.geometry, plan.polylineDecodePrecision);
-    console.log(`[Reroute] Route polyline decoded: ${routePolyline.length} points`);
-
-    const mount = _routeSelection().buildNavActiveRouteLayerMountPlan({
-        routePolyline,
-        navRouteColor: navActiveRouteColor(),
-    });
-    routeLayer = MapLibreHelpers.addPolyline(map, mount.polyline, mount.style);
-    bringNavRouteAboveTrafficEdges();
-
+function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
     if (plan.maneuvers.steps) {
         currentRouteSteps = plan.maneuvers.steps;
         if (plan.maneuvers.logMessage) console.log(plan.maneuvers.logMessage);
@@ -5822,6 +5800,37 @@ function updateRouteOnMap(newRoute) {
     updateTripInfo(newRoute.distance_km, newRoute.duration_minutes, newRoute.fuel_cost, newRoute.toll_cost);
     window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
     console.log(plan.completeLog);
+}
+
+/**
+ * Update route on map with new route data
+ */
+function updateRouteOnMap(newRoute) {
+    resetVoiceAnnouncementStateForNewRoute();
+
+    if (routeLayer && typeof routeLayer.remove === 'function') {
+        routeLayer.remove();
+    }
+
+    const RD = _rerouteDecision();
+    const plan = RD.buildRouteMapUpdateStatePlan(newRoute, window.lastCalculatedRoute, {
+        now: Date.now(),
+        hasCurrentGps: currentLat != null && currentLon != null,
+        convertDistance,
+        distUnit: getDistanceUnit(),
+    });
+
+    routePolyline = decodePolyline(newRoute.geometry, plan.polylineDecodePrecision);
+    console.log(`[Reroute] Route polyline decoded: ${routePolyline.length} points`);
+
+    const mount = _routeSelection().buildNavActiveRouteLayerMountPlan({
+        routePolyline,
+        navRouteColor: navActiveRouteColor(),
+    });
+    routeLayer = MapLibreHelpers.addPolyline(map, mount.polyline, mount.style);
+    bringNavRouteAboveTrafficEdges();
+
+    applyRouteMapUpdateStateFromPlan(plan, newRoute);
 }
 
 /**
@@ -12860,6 +12869,56 @@ function checkRouteDeviation(lat, lon, accuracy) {
 }
 
 /**
+ * Apply automatic reroute API outcome (success or failure).
+ * @param {Object} ctx
+ * @param {Object} ctx.apply - from buildAutomaticRerouteResultApplyPlan
+ * @param {number} ctx.startLat
+ * @param {number} ctx.startLon
+ * @param {string} ctx.destination
+ */
+function applyAutomaticRerouteResult(ctx) {
+    const { apply, startLat, startLon, destination } = ctx;
+    if (!apply || apply.action !== 'apply') return;
+
+    if (apply.kind === 'failure') {
+        apply.logs.forEach((line) => console.log(line));
+        if (apply.notification) {
+            sendNotification(apply.notification.title, apply.notification.body, apply.notification.type);
+        }
+        if (apply.scheduleRetry) scheduleAutomaticRerouteRetry();
+        if (apply.resetRerouteInProgress) rerouteInProgress = false;
+        return;
+    }
+
+    if (apply.clearFailureRetries) clearRerouteFailureRetries();
+    apply.logs.forEach((line) => console.log(line));
+
+    if (apply.showUnavoidableHazards) {
+        handleUnavoidableHazards(apply.newRoute, apply.hazardsList, apply.hazardCount);
+    }
+    if (apply.preferPrimaryRouteOnNextNavUpdate) {
+        _preferPrimaryRouteOnNextNavUpdate = true;
+    }
+    if (apply.updateRouteOnMap) updateRouteOnMap(apply.newRoute);
+    if (apply.logRerouteEvent) {
+        logReroutingEvent(startLat, startLon, destination, apply.newRoute, apply.hazardCount);
+    }
+
+    if (apply.voice && apply.voice.enabled) {
+        if (apply.voice.shouldSpeak) {
+            lastRerouteAnnouncementTime = apply.voice.announceAt;
+            speakMessage(apply.voice.message, 'high');
+        } else {
+            console.log('[Voice] Skipping duplicate reroute announcement');
+        }
+    }
+
+    if (apply.notification) {
+        sendNotification(apply.notification.title, apply.notification.body, apply.notification.type);
+    }
+}
+
+/**
  * Trigger automatic reroute with hazard handling
  * This enhanced version handles unavoidable hazards gracefully
  */
@@ -12914,51 +12973,23 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
             rerouteFailureRetryCount,
             now: Date.now(),
         });
-
-        if (outcome.ok) {
-            if (outcome.clearFailureRetries) clearRerouteFailureRetries();
-            console.log(outcome.successLog);
-
-            if (outcome.showUnavoidableHazards) {
-                handleUnavoidableHazards(outcome.newRoute, outcome.hazardsList, outcome.hazardCount);
-            }
-
-            if (outcome.preferPrimaryRouteOnNextNavUpdate) {
-                _preferPrimaryRouteOnNextNavUpdate = true;
-            }
-
-            updateRouteOnMap(outcome.newRoute);
-            logReroutingEvent(currentLat, currentLon, destination, outcome.newRoute, outcome.hazardCount);
-
-            if (outcome.voice && outcome.voice.enabled) {
-                if (outcome.voice.shouldSpeak) {
-                    lastRerouteAnnouncementTime = outcome.voice.announceAt;
-                    speakMessage(outcome.voice.message, 'high');
-                } else {
-                    console.log('[Voice] Skipping duplicate reroute announcement');
-                }
-            }
-
-            if (outcome.notification) {
-                sendNotification(outcome.notification.title, outcome.notification.body, outcome.notification.type);
-            }
-            console.log(outcome.completeLog);
-        } else {
-            if (outcome.errorLog) console.log(outcome.errorLog);
-            if (outcome.notification) {
-                sendNotification(outcome.notification.title, outcome.notification.body, outcome.notification.type);
-            }
-            if (outcome.scheduleRetry) scheduleAutomaticRerouteRetry();
-            if (outcome.resetRerouteInProgress) rerouteInProgress = false;
-        }
+        const apply = RD.buildAutomaticRerouteResultApplyPlan(outcome);
+        applyAutomaticRerouteResult({
+            apply,
+            startLat: currentLat,
+            startLon: currentLon,
+            destination,
+        });
     } catch (error) {
         console.error('[Rerouting] Error during automatic reroute:', error);
         const errPlan = RD.buildAutomaticRerouteErrorPlan({ rerouteFailureRetryCount });
-        if (errPlan.notification) {
-            sendNotification(errPlan.notification.title, errPlan.notification.body, errPlan.notification.type);
-        }
-        if (errPlan.scheduleRetry) scheduleAutomaticRerouteRetry();
-        if (errPlan.resetRerouteInProgress) rerouteInProgress = false;
+        const apply = RD.buildAutomaticRerouteResultApplyPlan(errPlan);
+        applyAutomaticRerouteResult({
+            apply,
+            startLat: currentLat,
+            startLon: currentLon,
+            destination,
+        });
     }
 }
 

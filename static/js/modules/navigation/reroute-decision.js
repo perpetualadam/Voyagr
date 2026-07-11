@@ -708,6 +708,43 @@
         };
     }
 
+    /**
+     * Apply plan for automatic reroute API outcome or fetch error.
+     * @param {Object|null|undefined} outcome - from buildAutomaticRerouteOutcomePlan or buildAutomaticRerouteErrorPlan
+     * @returns {Object}
+     */
+    function buildAutomaticRerouteResultApplyPlan(outcome) {
+        if (!outcome) return { action: 'skip' };
+        if (!outcome.ok) {
+            return {
+                action: 'apply',
+                kind: 'failure',
+                logs: outcome.errorLog ? [outcome.errorLog] : [],
+                notification: outcome.notification || null,
+                scheduleRetry: !!outcome.scheduleRetry,
+                resetRerouteInProgress: !!outcome.resetRerouteInProgress,
+            };
+        }
+        var logs = [];
+        if (outcome.successLog) logs.push(outcome.successLog);
+        if (outcome.completeLog) logs.push(outcome.completeLog);
+        return {
+            action: 'apply',
+            kind: 'success',
+            clearFailureRetries: !!outcome.clearFailureRetries,
+            logs: logs,
+            newRoute: outcome.newRoute,
+            hazardCount: outcome.hazardCount,
+            hazardsList: outcome.hazardsList,
+            showUnavoidableHazards: !!outcome.showUnavoidableHazards,
+            preferPrimaryRouteOnNextNavUpdate: !!outcome.preferPrimaryRouteOnNextNavUpdate,
+            voice: outcome.voice || null,
+            notification: outcome.notification || null,
+            updateRouteOnMap: true,
+            logRerouteEvent: true,
+        };
+    }
+
     var POST_REROUTE_GRACE_MS = 90000;
 
     /**
@@ -814,6 +851,7 @@
         buildAutomaticRerouteGuardPlan: buildAutomaticRerouteGuardPlan,
         buildAutomaticRerouteOutcomePlan: buildAutomaticRerouteOutcomePlan,
         buildAutomaticRerouteErrorPlan: buildAutomaticRerouteErrorPlan,
+        buildAutomaticRerouteResultApplyPlan: buildAutomaticRerouteResultApplyPlan,
         POST_REROUTE_GRACE_MS: POST_REROUTE_GRACE_MS,
         resolveRouteManeuversFromPayload: resolveRouteManeuversFromPayload,
         buildRouteMapUpdateStatePlan: buildRouteMapUpdateStatePlan,

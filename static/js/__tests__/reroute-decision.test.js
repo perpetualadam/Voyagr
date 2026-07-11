@@ -397,6 +397,46 @@ describe('reroute retry and notification helpers', () => {
         expect(RD.buildAutomaticRerouteErrorPlan({ rerouteFailureRetryCount: 1 }).notification).toBeNull();
     });
 
+    test('buildAutomaticRerouteResultApplyPlan maps success outcome to apply hints', () => {
+        const outcome = RD.buildAutomaticRerouteOutcomePlan({
+            success: true,
+            routes: [{ distance_km: 8, duration_minutes: 15, hazard_count: 2 }],
+        }, {
+            convertDistance: (km) => km.toFixed(1),
+            distUnit: 'km',
+            voiceEnabled: true,
+            lastRerouteAnnouncementTime: 0,
+            now: 70000,
+        });
+        const apply = RD.buildAutomaticRerouteResultApplyPlan(outcome);
+        expect(apply.action).toBe('apply');
+        expect(apply.kind).toBe('success');
+        expect(apply.updateRouteOnMap).toBe(true);
+        expect(apply.logRerouteEvent).toBe(true);
+        expect(apply.showUnavoidableHazards).toBe(true);
+        expect(apply.logs.length).toBeGreaterThan(0);
+    });
+
+    test('buildAutomaticRerouteResultApplyPlan maps failure outcome to retry hints', () => {
+        const apply = RD.buildAutomaticRerouteResultApplyPlan(
+            RD.buildAutomaticRerouteOutcomePlan({ success: false, error: 'timeout' }, {
+                rerouteFailureRetryCount: 0,
+            })
+        );
+        expect(apply.kind).toBe('failure');
+        expect(apply.scheduleRetry).toBe(true);
+        expect(apply.resetRerouteInProgress).toBe(true);
+        expect(apply.logs[0]).toContain('timeout');
+    });
+
+    test('buildAutomaticRerouteResultApplyPlan maps fetch error plan', () => {
+        const apply = RD.buildAutomaticRerouteResultApplyPlan(
+            RD.buildAutomaticRerouteErrorPlan({ rerouteFailureRetryCount: 0 })
+        );
+        expect(apply.kind).toBe('failure');
+        expect(apply.notification.title).toContain('Error');
+    });
+
     test('resolveRouteManeuversFromPayload prefers top-level maneuvers', () => {
         const resolved = RD.resolveRouteManeuversFromPayload({
             maneuvers: [{ type: 1 }],
