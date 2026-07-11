@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 
 import requests
 
+from voyagr.config import CAMERA_HAZARD_BUCKETS
 from voyagr.utils.geometry import get_distance_between_points
 from voyagr.services.hazards import build_valhalla_exclude_locations
 from voyagr.services.routing.valhalla_parsing import valhalla_trip_json_to_std_route_entry
@@ -17,15 +18,6 @@ PRIMARY_OPTIMISED_NAME = '⚡ Optimised'
 SHORTEST_ROUTE_NAME = '📏 Shortest'
 SCENIC_ROUTE_NAME = '🌿 Scenic'
 ROUTE_B_NAME = '🛣️ Route B'
-
-CAMERA_HAZARD_BUCKETS: Tuple[str, ...] = (
-    'camera_speed',
-    'camera_red_light',
-    'camera_average_speed',
-    'camera_bus_lane',
-    'camera_mobile',
-    'camera_other',
-)
 
 # Tighter than default 500m scoring — catches cameras the user sees on the map near the line.
 SHORTEST_CAMERA_PROXIMITY_METERS = 150

@@ -5,7 +5,7 @@ Application settings and environment configuration.
 import logging
 import os
 from pathlib import Path
-from typing import List
+from typing import List, Tuple
 from dotenv import load_dotenv
 
 _log = logging.getLogger(__name__)
@@ -34,6 +34,20 @@ GRAPHHOPPER_TIMEOUT = int(os.getenv('GRAPHHOPPER_TIMEOUT', '30'))
 # DATABASE CONFIGURATION
 # ============================================================================
 DB_FILE = 'voyagr_web.db'
+
+# ============================================================================
+# HAZARD CONFIGURATION
+# ============================================================================
+# SCDB-derived camera hazard buckets. Single source of truth shared by the DB
+# migration/preferences seeding and the Optimised-route camera scoring.
+CAMERA_HAZARD_BUCKETS: Tuple[str, ...] = (
+    'camera_speed',
+    'camera_red_light',
+    'camera_average_speed',
+    'camera_bus_lane',
+    'camera_mobile',
+    'camera_other',
+)
 
 # ============================================================================
 # AUTHENTICATION

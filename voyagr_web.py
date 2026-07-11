@@ -761,15 +761,9 @@ from voyagr.models import db_connection
 # Database setup
 DB_FILE = 'voyagr_web.db'
 
-# Camera hazard buckets (must exist before init_db() — used in DB migration)
-CAMERA_HAZARD_BUCKETS: Tuple[str, ...] = (
-    'camera_speed',
-    'camera_red_light',
-    'camera_average_speed',
-    'camera_bus_lane',
-    'camera_mobile',
-    'camera_other',
-)
+# Camera hazard buckets: single source of truth is voyagr.config (shared with the
+# Optimised-route camera scoring in voyagr.services.routing.optimised_route).
+from voyagr.config import CAMERA_HAZARD_BUCKETS
 
 
 def migrate_legacy_camera_hazard_preferences(cursor: sqlite3.Cursor) -> None:
