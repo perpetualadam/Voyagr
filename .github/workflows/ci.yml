@@ -85,6 +85,7 @@ jobs:
           tests/test_valhalla_maneuvers.py
           tests/test_valhalla_parsing.py
           tests/test_init_db_schema.py
+          tests/test_multidrop_request.py
           tests/test_osrm_maneuvers.py
           tests/test_route_entries.py
           tests/test_route_success_response.py
