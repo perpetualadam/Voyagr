@@ -105,6 +105,47 @@ describe('route-sharing module', () => {
         expect(RS.computeSavedRouteTotalCost({ fuel_cost: 5, toll_cost: 1, caz_cost: 0.5 })).toBe(6.5);
     });
 
+    test('buildSaveCurrentRoutePlan validates inputs and builds payload', () => {
+        expect(RS.buildSaveCurrentRoutePlan({}).ok).toBe(false);
+        const plan = RS.buildSaveCurrentRoutePlan({
+            lastCalculatedRoute: { distance_km: 10, time: '20 min', geometry: 'abc' },
+            routeName: 'Commute',
+            startLabel: 'A',
+            endLabel: 'B',
+            now: 1000,
+        });
+        expect(plan.ok).toBe(true);
+        expect(plan.savedRoute.name).toBe('Commute');
+        expect(RS.buildSaveCurrentRouteExecutePlan(plan).shouldSave).toBe(true);
+    });
+
+    test('buildUseSavedRoutePlan includes destination for recalculate', () => {
+        const plan = RS.buildUseSavedRoutePlan(1, [{
+            id: 1,
+            name: 'Commute',
+            start: 'A',
+            end: 'B',
+            distance_km: 10,
+            duration_minutes: 20,
+            fuel_cost: 5,
+            toll_cost: 0,
+            caz_cost: 0,
+            geometry: 'abc',
+        }]);
+        expect(plan.ok).toBe(true);
+        expect(plan.lastCalculatedRoutePatch.destination).toBe('B');
+        expect(plan.lastCalculatedRoutePatch.destinationName).toBe('B');
+    });
+
+    test('buildDeleteSavedRouteExecutePlan filters route list', () => {
+        const execute = RS.buildDeleteSavedRouteExecutePlan(
+            RS.buildDeleteSavedRoutePlan(2),
+            [{ id: 1 }, { id: 2 }, { id: 3 }]
+        );
+        expect(execute.nextRoutes).toHaveLength(2);
+        expect(execute.nextRoutes.map((r) => r.id)).toEqual([1, 3]);
+    });
+
     test('buildQrCodeImageUrl encodes share link and style sets dimensions', () => {
         const url = RS.buildQrCodeImageUrl('https://voyagr.test?route=abc', 200);
         expect(url).toContain('api.qrserver.com');

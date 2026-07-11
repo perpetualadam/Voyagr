@@ -114,4 +114,27 @@ describe('map-controls module', () => {
         expect(MC.getNavStartInvalidGeometryStatusMessage()).toContain('Invalid');
         expect(MC.getNavStartDecodeGeometryErrorStatusMessage()).toContain('decode');
     });
+
+    test('buildNavStartPreflightPlan and state init plans', () => {
+        expect(MC.buildNavStartPreflightPlan(null).ok).toBe(false);
+        const preflight = MC.buildNavStartPreflightPlan({ geometry: 'abc', maneuvers: [] });
+        expect(preflight.ok).toBe(true);
+
+        const state = MC.buildNavStartStateInitPlan(
+            { geometry: 'abc', geometry_precision: 5, maneuvers: [{ type: 1 }] },
+            { resumeStepIndex: 2, fromPersistedResume: true }
+        );
+        expect(state.currentStepIndex).toBe(2);
+        expect(state.resetVoiceOnStart).toBe(false);
+        expect(state.navPrecision).toBe(5);
+
+        const lifecycle = MC.buildNavStartLifecycleExecutePlan({
+            isTrackingActive: false,
+            autoTrafficUpdateEnabled: true,
+            routeTrafficEnabled: false,
+        });
+        expect(lifecycle.startGpsIfInactive).toBe(true);
+        expect(lifecycle.startAutoTraffic).toBe(true);
+        expect(lifecycle.startRouteTraffic).toBe(false);
+    });
 });

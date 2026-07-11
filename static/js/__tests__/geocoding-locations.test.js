@@ -249,6 +249,34 @@ describe('geocoding-locations module', () => {
         expect(GL.buildGeocodeHttpErrorPlan(429).errorMessage).toBe('API error: 429');
     });
 
+    test('buildGeocodeAddressOrchestrationPlan branches empty, resolve, and fetch', () => {
+        expect(GL.buildGeocodeAddressOrchestrationPlan({ action: 'empty' }).branch).toBe('empty');
+        const resolve = GL.buildGeocodeAddressOrchestrationPlan({
+            action: 'resolve',
+            source: 'cache',
+            trimmed: 'Leeds',
+            result: { lat: 1, lon: 2 },
+        });
+        expect(resolve.branch).toBe('resolve');
+        expect(GL.buildGeocodeAddressResolveExecutePlan(resolve).shouldReturn).toBe(true);
+        const fetch = GL.buildGeocodeAddressOrchestrationPlan({
+            action: 'nominatim_fetch',
+            trimmed: 'Leeds',
+        });
+        expect(fetch.branch).toBe('fetch');
+    });
+
+    test('buildGeocodeNominatimSuccessExecutePlan includes cache metadata', () => {
+        const outcome = GL.buildGeocodeNominatimResponsePlan(
+            { ok: true, geocoded: { lat: 51.5, lon: -0.1, display_name: 'London' } },
+            'London'
+        );
+        const success = GL.buildGeocodeNominatimSuccessExecutePlan(outcome, { trimmed: 'London' });
+        expect(success.shouldCache).toBe(true);
+        expect(success.cacheKey).toBe('London');
+        expect(success.result.lat).toBe(51.5);
+    });
+
     test('buildGeocodePlusCodeLookupPlan resolves valid decoded plus codes', () => {
         const resolved = GL.buildGeocodePlusCodeLookupPlan({
             plusCodesEnabled: true,

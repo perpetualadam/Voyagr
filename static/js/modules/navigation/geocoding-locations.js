@@ -486,6 +486,106 @@
     }
 
     /**
+     * Orchestration plan for geocodeAddress lookup branching.
+     * @param {Object} lookup - from buildGeocodeAddressLookupPlan
+     * @returns {Object}
+     */
+    function buildGeocodeAddressOrchestrationPlan(lookup) {
+        lookup = lookup || {};
+        if (lookup.action === 'empty') {
+            return { branch: 'empty' };
+        }
+        if (lookup.action === 'resolve') {
+            return {
+                branch: 'resolve',
+                result: lookup.result,
+                resolveLogPrefix: '[Geocoding] Resolved via ' + (lookup.source || 'unknown') + ':',
+                trimmed: lookup.trimmed,
+            };
+        }
+        return {
+            branch: 'fetch',
+            lookup: lookup,
+            trimmed: lookup.trimmed,
+        };
+    }
+
+    /**
+     * Execute plan when geocodeAddress resolves via coordinates or cache.
+     * @param {Object} orch - from buildGeocodeAddressOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildGeocodeAddressResolveExecutePlan(orch) {
+        orch = orch || {};
+        return {
+            shouldReturn: orch.branch === 'resolve',
+            result: orch.result,
+            resolveLogPrefix: orch.resolveLogPrefix,
+            trimmed: orch.trimmed,
+        };
+    }
+
+    /**
+     * Log plan when a Plus Code is detected and decoded.
+     * @param {string} trimmed
+     * @returns {Object}
+     */
+    function buildGeocodePlusCodeResolveLogPlan(trimmed) {
+        return {
+            detectLogMessage: '[Geocoding] Detected Plus Code:',
+            decodeLogPrefix: '[Geocoding] Decoded Plus Code to:',
+            trimmed: trimmed,
+        };
+    }
+
+    /**
+     * Execute plan after a successful Nominatim fetch.
+     * @param {Object} outcome - from buildGeocodeNominatimResponsePlan
+     * @param {Object} fetchPlan - from buildGeocodeNominatimFetchRequestPlan
+     * @returns {Object}
+     */
+    function buildGeocodeNominatimSuccessExecutePlan(outcome, fetchPlan) {
+        outcome = outcome || {};
+        fetchPlan = fetchPlan || {};
+        var success = outcome.success || {};
+        return {
+            shouldCache: true,
+            cacheKey: success.cacheKey,
+            cacheEntry: success.cacheEntry,
+            result: success.result,
+            successLogPrefix: '[Geocoding] Success:',
+            trimmed: fetchPlan.trimmed,
+        };
+    }
+
+    /**
+     * Execute plan when Nominatim returns no results.
+     * @param {Object} outcome - from buildGeocodeNominatimResponsePlan
+     * @returns {Object}
+     */
+    function buildGeocodeNominatimEmptyExecutePlan(outcome) {
+        outcome = outcome || {};
+        return {
+            shouldReturnNull: true,
+            emptyLogPrefix: '[Geocoding] No results for:',
+            trimmed: outcome.trimmed,
+        };
+    }
+
+    /**
+     * Execute plan when geocodeAddress fetch throws.
+     * @param {string} message
+     * @returns {Object}
+     */
+    function buildGeocodeAddressFetchErrorExecutePlan(message) {
+        return {
+            shouldReturnNull: true,
+            errorLogPrefix: '[Geocoding] Error:',
+            errorMessage: message,
+        };
+    }
+
+    /**
      * Error plan for a non-OK Nominatim HTTP status.
      * @param {number} status
      * @returns {Object}
@@ -564,6 +664,12 @@
         buildGeocodeAddressFetchSuccessPlan: buildGeocodeAddressFetchSuccessPlan,
         buildGeocodeNominatimFetchRequestPlan: buildGeocodeNominatimFetchRequestPlan,
         buildGeocodeNominatimResponsePlan: buildGeocodeNominatimResponsePlan,
+        buildGeocodeAddressOrchestrationPlan: buildGeocodeAddressOrchestrationPlan,
+        buildGeocodeAddressResolveExecutePlan: buildGeocodeAddressResolveExecutePlan,
+        buildGeocodePlusCodeResolveLogPlan: buildGeocodePlusCodeResolveLogPlan,
+        buildGeocodeNominatimSuccessExecutePlan: buildGeocodeNominatimSuccessExecutePlan,
+        buildGeocodeNominatimEmptyExecutePlan: buildGeocodeNominatimEmptyExecutePlan,
+        buildGeocodeAddressFetchErrorExecutePlan: buildGeocodeAddressFetchErrorExecutePlan,
         buildGeocodeHttpErrorPlan: buildGeocodeHttpErrorPlan,
         buildGeocodePlusCodeLookupPlan: buildGeocodePlusCodeLookupPlan,
     };

@@ -283,6 +283,87 @@
         return 'Error: Could not decode route geometry';
     }
 
+    /**
+     * Preflight plan for startTurnByTurnNavigation after route merge.
+     * @param {Object|null|undefined} mergedRouteData
+     * @returns {Object}
+     */
+    function buildNavStartPreflightPlan(mergedRouteData) {
+        if (!mergedRouteData || !mergedRouteData.geometry) {
+            return {
+                ok: false,
+                errorStatusMessage: getNavStartNoGeometryStatusMessage(),
+            };
+        }
+        return { ok: true, routeData: mergedRouteData };
+    }
+
+    /**
+     * State init plan for navigation session variables at start.
+     * @param {Object} routeData
+     * @param {Object|null|undefined} navStartOpts
+     * @returns {Object}
+     */
+    function buildNavStartStateInitPlan(routeData, navStartOpts) {
+        routeData = routeData || {};
+        navStartOpts = navStartOpts || null;
+        var isQuietResume = !!(navStartOpts && navStartOpts.fromPersistedResume);
+        var resumeStepIdx = 0;
+        if (navStartOpts != null && Number.isFinite(navStartOpts.resumeStepIndex)) {
+            resumeStepIdx = Math.max(0, Math.floor(navStartOpts.resumeStepIndex));
+        }
+        var navPrecision = Number.isFinite(routeData.geometry_precision)
+            ? routeData.geometry_precision
+            : 6;
+        return {
+            routeInProgress: true,
+            currentStepIndex: resumeStepIdx,
+            maneuvers: routeData.maneuvers || [],
+            resetVoiceOnStart: !isQuietResume,
+            isQuietResume: isQuietResume,
+            navPrecision: navPrecision,
+            geometry: routeData.geometry,
+            persistActiveRoute: true,
+            precacheTiles: true,
+            driverViewDelayMs: 1500,
+            volumeHintDelayMs: 2600,
+            polylineDecodeLogPrefix: 'Route polyline decoded:',
+            maneuversLogPrefix: 'Route maneuvers:',
+            emptyPolylineErrorLog: '[Navigation] Failed to decode route geometry - polyline is empty',
+            decodeGeometryErrorLogPrefix: 'Could not decode geometry:',
+            wakeLockAcquireLog: '[Screen Wake Lock] Screen lock acquired - screen will stay on',
+            wakeLockReleaseLog: '[Screen Wake Lock] Screen lock released',
+            wakeLockUnsupportedLog: '[Screen Wake Lock] Screen Wake Lock API not supported on this device',
+            wakeLockFailureLogPrefix: '[Screen Wake Lock] Failed to acquire wake lock:',
+        };
+    }
+
+    /**
+     * Execute plan for post-geometry navigation lifecycle side effects.
+     * @param {Object} o
+     * @param {boolean} o.isTrackingActive
+     * @param {boolean} o.autoTrafficUpdateEnabled
+     * @param {boolean} o.routeTrafficEnabled
+     * @returns {Object}
+     */
+    function buildNavStartLifecycleExecutePlan(o) {
+        o = o || {};
+        return {
+            startGpsIfInactive: !o.isTrackingActive,
+            startLiveDataRefresh: true,
+            updateEta: true,
+            scheduleInitialEtaAnnouncement: true,
+            startAutoTraffic: !!o.autoTrafficUpdateEnabled,
+            startRouteTraffic: !!o.routeTrafficEnabled,
+            showTurnWidget: true,
+            showJourneySummaryBar: true,
+            updateNavFabVisibility: true,
+            showMapIconHint: 'Tap the red ⏹ button to end navigation when you arrive.',
+            autoTrafficLogMessage: '[Navigation] Auto-traffic updates started',
+            routeTrafficLogMessage: '[Navigation] Route traffic edge display started',
+        };
+    }
+
     var api = {
         ZOOM_FOLLOW_ENABLED_ICON: ZOOM_FOLLOW_ENABLED_ICON,
         ZOOM_FOLLOW_DISABLED_ICON: ZOOM_FOLLOW_DISABLED_ICON,
@@ -323,6 +404,9 @@
         getNavStartNoGeometryStatusMessage: getNavStartNoGeometryStatusMessage,
         getNavStartInvalidGeometryStatusMessage: getNavStartInvalidGeometryStatusMessage,
         getNavStartDecodeGeometryErrorStatusMessage: getNavStartDecodeGeometryErrorStatusMessage,
+        buildNavStartPreflightPlan: buildNavStartPreflightPlan,
+        buildNavStartStateInitPlan: buildNavStartStateInitPlan,
+        buildNavStartLifecycleExecutePlan: buildNavStartLifecycleExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

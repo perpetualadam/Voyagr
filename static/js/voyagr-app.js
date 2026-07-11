@@ -3812,44 +3812,33 @@ function recalculateRouteWithPreferences() {
  * @returns {*} Return value description
  */
 function saveCurrentRoute() {
-    if (!window.lastCalculatedRoute) {
-        showStatus('No route calculated yet', 'error');
+    const RS = _routeSharing();
+    const execute = RS.buildSaveCurrentRouteExecutePlan(
+        RS.buildSaveCurrentRoutePlan({
+            lastCalculatedRoute: window.lastCalculatedRoute,
+            routeName: document.getElementById('routeName')?.value,
+            startLabel: document.getElementById('start')?.value,
+            endLabel: document.getElementById('end')?.value,
+        })
+    );
+
+    if (!execute.shouldSave) {
+        showStatus(execute.errorStatusMessage, 'error');
         return;
     }
 
-    const routeName = document.getElementById('routeName').value.trim();
-    if (!routeName) {
-        showStatus('Please enter a route name', 'error');
-        return;
+    let savedRoutes = JSON.parse(localStorage.getItem(execute.storageKey) || '[]');
+    savedRoutes.push(execute.savedRoute);
+    localStorage.setItem(execute.storageKey, JSON.stringify(savedRoutes));
+    if (execute.persistProfile) persistActiveProfile();
+
+    if (execute.clearRouteNameInput) {
+        const routeNameInput = document.getElementById(execute.routeNameInputId);
+        if (routeNameInput) routeNameInput.value = '';
     }
 
-    const route = window.lastCalculatedRoute;
-    const startInput = document.getElementById('start').value;
-    const endInput = document.getElementById('end').value;
-
-    const savedRoute = {
-        id: Date.now(),
-        name: routeName,
-        start: startInput,
-        end: endInput,
-        distance_km: route.distance_km,
-        duration_minutes: route.time,
-        fuel_cost: route.fuel_cost,
-        toll_cost: route.toll_cost,
-        caz_cost: route.caz_cost,
-        geometry: route.geometry,
-        timestamp: new Date().toISOString()
-    };
-
-    // Get existing saved routes
-    let savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
-    savedRoutes.push(savedRoute);
-    localStorage.setItem('savedRoutes', JSON.stringify(savedRoutes));
-    persistActiveProfile();
-
-    document.getElementById('routeName').value = '';
-    showStatus(`Route "${routeName}" saved!`, 'success');
-    loadSavedRoutes();
+    showStatus(execute.successStatusMessage, 'success');
+    if (execute.reloadList) loadSavedRoutes();
 }
 
 /**
@@ -3858,13 +3847,18 @@ function saveCurrentRoute() {
  * @returns {*} Return value description
  */
 function loadSavedRoutes() {
-    const savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
-    const savedRoutesList = document.getElementById('savedRoutesList');
-    savedRoutesList.innerHTML = _routeSharing().buildSavedRoutesListHtml(savedRoutes, {
-        currencySymbol: getCurrencySymbol(),
-        distUnit: getDistanceUnit(),
-        distanceTexts: savedRoutes.map((route) => convertDistance(route.distance_km)),
-    });
+    const RS = _routeSharing();
+    const savedRoutes = JSON.parse(localStorage.getItem(RS.SAVED_ROUTES_STORAGE_KEY) || '[]');
+    const execute = RS.buildLoadSavedRoutesExecutePlan(
+        RS.buildLoadSavedRoutesListInputPlan(savedRoutes, {
+            convertDistance,
+            currencySymbol: getCurrencySymbol(),
+            distUnit: getDistanceUnit(),
+        })
+    );
+    const savedRoutesList = document.getElementById(execute.listContainerId);
+    if (!savedRoutesList) return;
+    savedRoutesList.innerHTML = execute.listHtml;
 }
 /**
  * useSavedRoute function
@@ -3873,23 +3867,16 @@ function loadSavedRoutes() {
  * @returns {*} Return value description
  */
 function useSavedRoute(routeId) {
-    const savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
-    const route = savedRoutes.find(r => r.id === routeId);
+    const RS = _routeSharing();
+    const savedRoutes = JSON.parse(localStorage.getItem(RS.SAVED_ROUTES_STORAGE_KEY) || '[]');
+    const plan = RS.buildUseSavedRoutePlan(routeId, savedRoutes);
+    if (!plan.ok) return;
 
-    if (route) {
-        document.getElementById('start').value = route.start;
-        document.getElementById('end').value = route.end;
-        window.lastCalculatedRoute = {
-            distance_km: route.distance_km,
-            time: route.duration_minutes,
-            fuel_cost: route.fuel_cost,
-            toll_cost: route.toll_cost,
-            caz_cost: route.caz_cost,
-            geometry: route.geometry
-        };
-        showStatus(`Loaded route: ${route.name}`, 'success');
-        switchTab('navigation');
-    }
+    document.getElementById('start').value = plan.startLabel;
+    document.getElementById('end').value = plan.endLabel;
+    window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
+    showStatus(plan.successStatusMessage, 'success');
+    switchTab(plan.switchTab);
 }
 /**
  * deleteSavedRoute function
@@ -3898,14 +3885,16 @@ function useSavedRoute(routeId) {
  * @returns {*} Return value description
  */
 function deleteSavedRoute(routeId) {
-    if (confirm('Delete this saved route?')) {
-        let savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
-        savedRoutes = savedRoutes.filter(r => r.id !== routeId);
-        localStorage.setItem('savedRoutes', JSON.stringify(savedRoutes));
-        persistActiveProfile();
-        showStatus('Route deleted', 'success');
-        loadSavedRoutes();
-    }
+    const RS = _routeSharing();
+    const deletePlan = RS.buildDeleteSavedRoutePlan(routeId);
+    if (!confirm(deletePlan.confirmMessage)) return;
+
+    const savedRoutes = JSON.parse(localStorage.getItem(deletePlan.storageKey) || '[]');
+    const execute = RS.buildDeleteSavedRouteExecutePlan(deletePlan, savedRoutes);
+    localStorage.setItem(execute.storageKey, JSON.stringify(execute.nextRoutes));
+    if (execute.persistProfile) persistActiveProfile();
+    showStatus(execute.successStatusMessage, 'success');
+    if (execute.reloadList) loadSavedRoutes();
 }
 
 // ===== REAL-TIME TRAFFIC UPDATE FUNCTIONS =====
@@ -4676,29 +4665,32 @@ function displayAllRouteHazards() {
  * Initialize bottom sheet interactions (drag, toggle, scroll)
  */
 function initBottomSheetLogic() {
+    const DH = _domHelpers();
     const bottomSheet = document.getElementById('bottomSheet');
     const handle = document.querySelector('.bottom-sheet-handle');
     const header = document.querySelector('.bottom-sheet-header');
+    const initPlan = DH.buildBottomSheetInitOrchestrationPlan(!!bottomSheet, !!handle);
 
-    if (!bottomSheet || !handle) {
-        console.warn('Bottom Sheet elements not found');
+    if (!initPlan.shouldInit) {
+        console.warn(initPlan.missingElementsLogMessage);
         return;
     }
 
     let startY = 0;
     let currentY = 0;
     let isDragging = false;
-    const DRAG_THRESHOLD = 50; // px to trigger state change
+    const DRAG_THRESHOLD = initPlan.dragThresholdPx;
 
     const onDragStart = (e) => {
-        // Only allow dragging from handle or header (unless content is scrolled to top)
-        if (!_domHelpers().closest(e.target, '.bottom-sheet-handle') && !_domHelpers().closest(e.target, '.bottom-sheet-header')) {
-            return;
-        }
+        const allow = DH.buildBottomSheetDragStartAllowedPlan(
+            !!DH.closest(e.target, initPlan.handleSelector),
+            !!DH.closest(e.target, initPlan.headerSelector)
+        );
+        if (!allow.allowDrag) return;
 
         isDragging = true;
         startY = e.touches ? e.touches[0].clientY : e.clientY;
-        bottomSheet.style.transition = 'none'; // Disable transition during drag
+        bottomSheet.style.transition = 'none';
     };
 
     const onDragMove = (e) => {
@@ -4706,29 +4698,19 @@ function initBottomSheetLogic() {
 
         const y = e.touches ? e.touches[0].clientY : e.clientY;
         const deltaY = y - startY;
-
-        // Simple resistance/follow logic could go here
-        // For now, we'll just track if the drag is significant
         currentY = deltaY;
     };
 
-    const onDragEnd = (e) => {
+    const onDragEnd = () => {
         if (!isDragging) return;
         isDragging = false;
-        bottomSheet.style.transition = ''; // Re-enable transitions
+        bottomSheet.style.transition = '';
 
-        // Determine snap direction
-        if (currentY < -DRAG_THRESHOLD) {
+        const snap = DH.buildBottomSheetDragSnapPlan(currentY, bottomSheetIsExpanded, DRAG_THRESHOLD);
+        if (snap.action === 'expand') {
             expandBottomSheet();
-        } else if (currentY > DRAG_THRESHOLD) {
-            collapseBottomSheet();
         } else {
-            // Revert to current state if drag wasn't far enough
-            if (bottomSheetIsExpanded) {
-                expandBottomSheet();
-            } else {
-                collapseBottomSheet();
-            }
+            collapseBottomSheet();
         }
         currentY = 0;
     };
@@ -14732,17 +14714,19 @@ async function geocodeAddress(address) {
         nominatimBaseUrl: NOMINATIM_API,
         limit: 8,
     });
+    let orch = GL.buildGeocodeAddressOrchestrationPlan(lookup);
 
-    if (lookup.action === 'empty') {
+    if (orch.branch === 'empty') {
         return null;
     }
 
-    if (lookup.action === 'resolve') {
-        console.log(`[Geocoding] Resolved via ${lookup.source}:`, lookup.trimmed);
-        return lookup.result;
+    if (orch.branch === 'resolve') {
+        const resolve = GL.buildGeocodeAddressResolveExecutePlan(orch);
+        console.log(resolve.resolveLogPrefix, resolve.trimmed);
+        return resolve.result;
     }
 
-    const trimmedAddress = lookup.trimmed;
+    const trimmedAddress = orch.trimmed;
     const plusCodesEnabled = localStorage.getItem('googlePlusCodesEnabled') === 'true';
     const hasPlusCodeService = typeof GooglePlusCodesService !== 'undefined';
     let plusCodeState = { isValidCode: false, decoded: null, errorMessage: null };
@@ -14768,8 +14752,9 @@ async function geocodeAddress(address) {
         errorMessage: plusCodeState.errorMessage,
     });
     if (plusPlan.action === 'resolve') {
-        console.log('[Geocoding] Detected Plus Code:', trimmedAddress);
-        console.log('[Geocoding] Decoded Plus Code to:', plusPlan.result.lat, plusPlan.result.lon);
+        const plusLog = GL.buildGeocodePlusCodeResolveLogPlan(trimmedAddress);
+        console.log(plusLog.detectLogMessage, trimmedAddress);
+        console.log(plusLog.decodeLogPrefix, plusPlan.result.lat, plusPlan.result.lon);
         return plusPlan.result;
     }
 
@@ -14779,9 +14764,11 @@ async function geocodeAddress(address) {
         nominatimBaseUrl: NOMINATIM_API,
         limit: 8,
     });
-    if (lookup.action === 'resolve') {
-        console.log('[Geocoding] Cache hit for:', trimmedAddress);
-        return lookup.result;
+    orch = GL.buildGeocodeAddressOrchestrationPlan(lookup);
+    if (orch.branch === 'resolve') {
+        const resolve = GL.buildGeocodeAddressResolveExecutePlan(orch);
+        console.log('[Geocoding] Cache hit for:', resolve.trimmed);
+        return resolve.result;
     }
 
     try {
@@ -14804,18 +14791,20 @@ async function geocodeAddress(address) {
             if (outcome.branch === 'api_error') {
                 throw new Error(outcome.errorMessage);
             }
-            console.log('[Geocoding] No results for:', outcome.trimmed);
+            const empty = GL.buildGeocodeNominatimEmptyExecutePlan(outcome);
+            console.log(empty.emptyLogPrefix, empty.trimmed);
             return null;
         }
 
-        const success = outcome.success;
+        const success = GL.buildGeocodeNominatimSuccessExecutePlan(outcome, fetchPlan);
         geocodingCache = GL.writeGeocodeCacheEntry(geocodingCache, success.cacheKey, success.cacheEntry);
         saveGeocodeCache();
 
-        console.log('[Geocoding] Success:', fetchPlan.trimmed, '→', success.result.lat, success.result.lon);
+        console.log(success.successLogPrefix, success.trimmed, '→', success.result.lat, success.result.lon);
         return success.result;
     } catch (error) {
-        console.log('[Geocoding] Error:', error.message);
+        const fetchErr = GL.buildGeocodeAddressFetchErrorExecutePlan(error.message);
+        console.log(fetchErr.errorLogPrefix, fetchErr.errorMessage);
         return null;
     }
 }
@@ -14894,28 +14883,26 @@ async function geocodeLocations(startAddress, endAddress) {
  */
 function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     const MC = _mapControls();
-    routeData = _routeSelection().mergeNavigationRouteFromSelected(
+    const mergedRoute = _routeSelection().mergeNavigationRouteFromSelected(
         routeData, routeOptions, selectedRouteIndex
     );
-    if (!routeData || !routeData.geometry) {
-        showStatus(MC.getNavStartNoGeometryStatusMessage(), 'error');
+    const preflight = MC.buildNavStartPreflightPlan(mergedRoute);
+    if (!preflight.ok) {
+        showStatus(preflight.errorStatusMessage, 'error');
         return;
     }
+    routeData = preflight.routeData;
 
     window.lastCalculatedRoute = Object.assign({}, window.lastCalculatedRoute || {}, routeData);
 
-    const isQuietResume = !!(navStartOpts && navStartOpts.fromPersistedResume);
-    if (!isQuietResume) {
+    const stateInit = MC.buildNavStartStateInitPlan(routeData, navStartOpts);
+    if (stateInit.resetVoiceOnStart) {
         resetVoiceAnnouncementStateForNewRoute();
     }
-    let resumeStepIdx = 0;
-    if (navStartOpts != null && Number.isFinite(navStartOpts.resumeStepIndex)) {
-        resumeStepIdx = Math.max(0, Math.floor(navStartOpts.resumeStepIndex));
-    }
 
-    routeInProgress = true;
-    currentStepIndex = resumeStepIdx;
-    currentRouteSteps = routeData.maneuvers || [];
+    routeInProgress = stateInit.routeInProgress;
+    currentStepIndex = stateInit.currentStepIndex;
+    currentRouteSteps = stateInit.maneuvers;
     lastTurnDetectRouteVertexIndex = 0;
     routeJoinConfirmedForDeviation = false;
     resetVehicleMarkerDisplayState();
@@ -14930,17 +14917,15 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     window.navETASnapshot = _eta().createEmptyNavETASnapshot();
 
     try {
-        const navPrecision = Number.isFinite(routeData.geometry_precision) ? routeData.geometry_precision : 6;
-        routePolyline = decodePolyline(routeData.geometry, navPrecision);
-        console.log('Route polyline decoded:', routePolyline.length, 'points', `(precision ${navPrecision})`);
-        console.log('Route maneuvers:', currentRouteSteps.length, 'steps');
+        routePolyline = decodePolyline(stateInit.geometry, stateInit.navPrecision);
+        console.log(stateInit.polylineDecodeLogPrefix, routePolyline.length, 'points', `(precision ${stateInit.navPrecision})`);
+        console.log(stateInit.maneuversLogPrefix, currentRouteSteps.length, 'steps');
 
-        persistActiveRoute();
-        precacheRouteTiles(routePolyline);
+        if (stateInit.persistActiveRoute) persistActiveRoute();
+        if (stateInit.precacheTiles) precacheRouteTiles(routePolyline);
 
-        // Validate decoded polyline
         if (!routePolyline || routePolyline.length === 0) {
-            console.error('[Navigation] Failed to decode route geometry - polyline is empty');
+            console.error(stateInit.emptyPolylineErrorLog);
             showStatus(MC.getNavStartInvalidGeometryStatusMessage(), 'error');
             return;
         }
@@ -14951,60 +14936,58 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
             lastSnappedRouteIndex = 0;
         }
     } catch (e) {
-        console.error('Could not decode geometry:', e);
+        console.error(stateInit.decodeGeometryErrorLogPrefix, e);
         showStatus(MC.getNavStartDecodeGeometryErrorStatusMessage(), 'error');
         return;
     }
 
-    // ===== SCREEN WAKE LOCK: Keep screen on during navigation =====
     if ('wakeLock' in navigator) {
         navigator.wakeLock.request('screen')
             .then(wakeLock => {
                 window.screenWakeLock = wakeLock;
-                console.log('[Screen Wake Lock] Screen lock acquired - screen will stay on');
-                showStatus(_mapControls().getWakeLockAcquiredStatusMessage(), 'success');
+                console.log(stateInit.wakeLockAcquireLog);
+                showStatus(MC.getWakeLockAcquiredStatusMessage(), 'success');
 
-                // Handle wake lock release
                 wakeLock.addEventListener('release', () => {
-                    console.log('[Screen Wake Lock] Screen lock released');
+                    console.log(stateInit.wakeLockReleaseLog);
                 });
             })
             .catch(err => {
-                console.log('[Screen Wake Lock] Failed to acquire wake lock:', err.name, err.message);
-                // This is not critical - navigation will continue without wake lock
+                console.log(stateInit.wakeLockFailureLogPrefix, err.name, err.message);
             });
     } else {
-        console.log('[Screen Wake Lock] Screen Wake Lock API not supported on this device');
+        console.log(stateInit.wakeLockUnsupportedLog);
     }
 
-    // Start GPS tracking if not already active
-    if (!isTrackingActive) {
+    const lifecycle = MC.buildNavStartLifecycleExecutePlan({
+        isTrackingActive,
+        autoTrafficUpdateEnabled,
+        routeTrafficEnabled,
+    });
+
+    if (lifecycle.startGpsIfInactive) {
         startGPSTracking();
     }
 
-    // ===== DRIVER VIEW: 60° after first GPS fix when following (always during navigation) =====
     setTimeout(() => {
         if (!map || currentLat == null || currentLon == null) return;
         if (zoomAndFollowEnabled && mapFollowingActive) {
             applyLiveNavigationCamera();
         }
-    }, 1500);
+    }, stateInit.driverViewDelayMs);
 
-    // ===== PHASE 1: Start live data refresh =====
-    startLiveDataRefresh();
-    void updateETACalculation();
-    scheduleInitialETAAnnouncement();
+    if (lifecycle.startLiveDataRefresh) startLiveDataRefresh();
+    if (lifecycle.updateEta) void updateETACalculation();
+    if (lifecycle.scheduleInitialEtaAnnouncement) scheduleInitialETAAnnouncement();
 
-    // ===== START AUTO-TRAFFIC UPDATES =====
-    if (autoTrafficUpdateEnabled) {
+    if (lifecycle.startAutoTraffic) {
         startAutoTrafficUpdates();
-        console.log('[Navigation] Auto-traffic updates started');
+        console.log(lifecycle.autoTrafficLogMessage);
     }
 
-    // ===== START ROUTE TRAFFIC EDGE DISPLAY =====
-    if (routeTrafficEnabled) {
+    if (lifecycle.startRouteTraffic) {
         startRouteTrafficUpdates();
-        console.log('[Navigation] Route traffic edge display started');
+        console.log(lifecycle.routeTrafficLogMessage);
     }
 
     // ===== SHOW ZOOM AND FOLLOW BUTTON =====
@@ -15027,34 +15010,37 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     // Speed widget shows current GPS speed and road speed limit for safety (use consolidated function)
     updateSpeedWidgetVisibility();
 
-    // ===== SHOW TURN INSTRUCTION WIDGET during navigation =====
-    showTurnInstructionWidget();
-    // Initialize with first instruction if available
-    if (currentLat != null && currentLon != null) {
-        updateTurnWidgetFromPosition(currentLat, currentLon);
-    } else if (currentRouteSteps && currentRouteSteps.length > 0 && routePolyline && routePolyline.length > 0) {
-        const TI = _turnInstructions();
-        const RG = _routeGeometry();
-        const turnInit = TI.buildNavStartTurnInstructionInit(
-            currentRouteSteps,
-            currentStepIndex,
-            routePolyline,
-            {
-                haversineDistanceMeters: RG.haversineDistanceMeters,
-                resolveRoadClass: (step) => step.road_class || _routeGeometry().inferRoadClassFromManeuver(step),
+    if (lifecycle.showTurnWidget) {
+        showTurnInstructionWidget();
+        if (currentLat != null && currentLon != null) {
+            updateTurnWidgetFromPosition(currentLat, currentLon);
+        } else if (currentRouteSteps && currentRouteSteps.length > 0 && routePolyline && routePolyline.length > 0) {
+            const TI = _turnInstructions();
+            const RG = _routeGeometry();
+            const turnInit = TI.buildNavStartTurnInstructionInit(
+                currentRouteSteps,
+                currentStepIndex,
+                routePolyline,
+                {
+                    haversineDistanceMeters: RG.haversineDistanceMeters,
+                    resolveRoadClass: (step) => step.road_class || _routeGeometry().inferRoadClassFromManeuver(step),
+                }
+            );
+            if (turnInit) {
+                updateTurnInstructionDisplay(turnInit);
             }
-        );
-        if (turnInit) {
-            updateTurnInstructionDisplay(turnInit);
         }
     }
 
-    // ===== SHOW JOURNEY SUMMARY BAR during navigation =====
-    showJourneySummaryBar();
+    if (lifecycle.showJourneySummaryBar) {
+        showJourneySummaryBar();
+    }
 
-    updateNavigationFabVisibility();
+    if (lifecycle.updateNavFabVisibility) {
+        updateNavigationFabVisibility();
+    }
     try {
-        voyagrShowMapIconHint('Tap the red ⏹ button to end navigation when you arrive.');
+        voyagrShowMapIconHint(lifecycle.showMapIconHint);
     } catch (_hintErr) {
         /* ignore */
     }
@@ -15071,7 +15057,7 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
         _toggleUI().applyToggleButton(driverPerspectiveBtn, shouldUsePitchedDrivingCamera());
     }
 
-    const navStartFeedback = _mapControls().buildNavStartUserFeedbackPlan(isQuietResume);
+    const navStartFeedback = MC.buildNavStartUserFeedbackPlan(stateInit.isQuietResume);
     sendNotification(
         navStartFeedback.notificationTitle,
         navStartFeedback.notificationBody,
@@ -15082,14 +15068,13 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     }
     showStatus(navStartFeedback.statusMessage, navStartFeedback.statusType);
     try {
-        // After wake-lock + other status messages (they overwrite #status).
         setTimeout(() => {
             try {
                 showVolumeHintForNavigation();
             } catch (e) {
                 console.warn('[EnvHint] volume hint:', e);
             }
-        }, 2600);
+        }, stateInit.volumeHintDelayMs);
     } catch (e) {
         console.warn('[EnvHint] volume hint schedule:', e);
     }

@@ -37,4 +37,18 @@ describe('dom-helpers', () => {
         expect(Dom.SWAP_LOCATIONS_REST_STYLE.borderColor).toBe('#ddd');
         expect(Dom.SWAP_LOCATIONS_FLASH_MS).toBe(300);
     });
+
+    test('buildBottomSheetInitOrchestrationPlan requires sheet and handle', () => {
+        expect(Dom.buildBottomSheetInitOrchestrationPlan(false, true).shouldInit).toBe(false);
+        const plan = Dom.buildBottomSheetInitOrchestrationPlan(true, true);
+        expect(plan.shouldInit).toBe(true);
+        expect(plan.dragThresholdPx).toBe(Dom.BOTTOM_SHEET_DRAG_THRESHOLD_PX);
+    });
+
+    test('buildBottomSheetDragSnapPlan expands, collapses, or reverts', () => {
+        expect(Dom.buildBottomSheetDragSnapPlan(-60, false).action).toBe('expand');
+        expect(Dom.buildBottomSheetDragSnapPlan(60, true).action).toBe('collapse');
+        expect(Dom.buildBottomSheetDragSnapPlan(5, true).action).toBe('expand');
+        expect(Dom.buildBottomSheetDragStartAllowedPlan(true, false).allowDrag).toBe(true);
+    });
 });
