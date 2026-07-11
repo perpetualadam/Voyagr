@@ -1418,25 +1418,29 @@ window.redeemPromoCode = redeemPromoCode;
  * @function saveAllSettings
  * @returns {*} Return value description
  */
+function collectSettingsSnapshotRuntimeState() {
+    return {
+        distanceUnit,
+        currencyUnit,
+        speedUnit,
+        temperatureUnit,
+        vehicleType: currentVehicleType,
+        routingMode: currentRoutingMode,
+        smartZoomEnabled,
+        showCamerasEnabled,
+        showOsmTrafficLightsEnabled,
+        showOsmRailwayCrossingsEnabled,
+        showTrafficEnabled,
+        autoTrafficUpdateEnabled,
+        autoRerouteOnDeviationEnabled,
+        speedWidgetEnabled,
+    };
+}
+
 function saveAllSettings() {
     const SS = _settingsSnapshot();
     const snapshotInput = SS.buildSettingsSnapshotInputPlan(
-        {
-            distanceUnit,
-            currencyUnit,
-            speedUnit,
-            temperatureUnit,
-            vehicleType: currentVehicleType,
-            routingMode: currentRoutingMode,
-            smartZoomEnabled,
-            showCamerasEnabled,
-            showOsmTrafficLightsEnabled,
-            showOsmRailwayCrossingsEnabled,
-            showTrafficEnabled,
-            autoTrafficUpdateEnabled,
-            autoRerouteOnDeviationEnabled,
-            speedWidgetEnabled,
-        },
+        collectSettingsSnapshotRuntimeState(),
         collectSettingsFormState()
     );
     const allSettings = SS.buildSettingsSnapshot(snapshotInput);
@@ -1452,6 +1456,34 @@ function saveAllSettings() {
  * @function loadAllSettings
  * @returns {*} Return value description
  */
+function applySettingsRestoreFromPlan(plan) {
+    if (!plan || !plan.found) return false;
+
+    Object.entries(plan.localStorage || {}).forEach(([key, value]) => {
+        if (value !== undefined) {
+            localStorage.setItem(key, value);
+        }
+    });
+
+    const rt = plan.runtime || {};
+    if (rt.distanceUnit) distanceUnit = rt.distanceUnit;
+    if (rt.currencyUnit) currencyUnit = rt.currencyUnit;
+    if (rt.speedUnit) speedUnit = rt.speedUnit;
+    if (rt.temperatureUnit) temperatureUnit = rt.temperatureUnit;
+    if (rt.currentVehicleType) currentVehicleType = rt.currentVehicleType;
+    if (rt.currentRoutingMode) currentRoutingMode = rt.currentRoutingMode;
+    if (rt.smartZoomEnabled !== undefined) smartZoomEnabled = rt.smartZoomEnabled;
+    if (rt.showCamerasEnabled !== undefined) showCamerasEnabled = rt.showCamerasEnabled;
+    if (rt.showOsmTrafficLightsEnabled !== undefined) showOsmTrafficLightsEnabled = rt.showOsmTrafficLightsEnabled;
+    if (rt.showOsmRailwayCrossingsEnabled !== undefined) showOsmRailwayCrossingsEnabled = rt.showOsmRailwayCrossingsEnabled;
+    if (rt.showTrafficEnabled !== undefined) showTrafficEnabled = rt.showTrafficEnabled;
+    if (rt.autoTrafficUpdateEnabled !== undefined) autoTrafficUpdateEnabled = rt.autoTrafficUpdateEnabled;
+    if (rt.autoRerouteOnDeviationEnabled !== undefined) autoRerouteOnDeviationEnabled = rt.autoRerouteOnDeviationEnabled;
+    if (rt.speedWidgetEnabled !== undefined) speedWidgetEnabled = rt.speedWidgetEnabled;
+
+    return true;
+}
+
 function loadAllSettings() {
     const SS = _settingsSnapshot();
     try {
@@ -1463,32 +1495,9 @@ function loadAllSettings() {
 
         const settings = JSON.parse(saved);
         console.log('[Settings] Loaded settings from localStorage', settings);
-        const plan = SS.buildSettingsRestorePlan(settings);
-        if (!plan.found) {
+        if (!applySettingsRestoreFromPlan(SS.buildSettingsRestorePlan(settings))) {
             return false;
         }
-
-        Object.entries(plan.localStorage || {}).forEach(([key, value]) => {
-            if (value !== undefined) {
-                localStorage.setItem(key, value);
-            }
-        });
-
-        const rt = plan.runtime || {};
-        if (rt.distanceUnit) distanceUnit = rt.distanceUnit;
-        if (rt.currencyUnit) currencyUnit = rt.currencyUnit;
-        if (rt.speedUnit) speedUnit = rt.speedUnit;
-        if (rt.temperatureUnit) temperatureUnit = rt.temperatureUnit;
-        if (rt.currentVehicleType) currentVehicleType = rt.currentVehicleType;
-        if (rt.currentRoutingMode) currentRoutingMode = rt.currentRoutingMode;
-        if (rt.smartZoomEnabled !== undefined) smartZoomEnabled = rt.smartZoomEnabled;
-        if (rt.showCamerasEnabled !== undefined) showCamerasEnabled = rt.showCamerasEnabled;
-        if (rt.showOsmTrafficLightsEnabled !== undefined) showOsmTrafficLightsEnabled = rt.showOsmTrafficLightsEnabled;
-        if (rt.showOsmRailwayCrossingsEnabled !== undefined) showOsmRailwayCrossingsEnabled = rt.showOsmRailwayCrossingsEnabled;
-        if (rt.showTrafficEnabled !== undefined) showTrafficEnabled = rt.showTrafficEnabled;
-        if (rt.autoTrafficUpdateEnabled !== undefined) autoTrafficUpdateEnabled = rt.autoTrafficUpdateEnabled;
-        if (rt.autoRerouteOnDeviationEnabled !== undefined) autoRerouteOnDeviationEnabled = rt.autoRerouteOnDeviationEnabled;
-        if (rt.speedWidgetEnabled !== undefined) speedWidgetEnabled = rt.speedWidgetEnabled;
 
         console.log('[Settings] All settings restored successfully');
         return true;
@@ -1585,15 +1594,7 @@ function applySettingsUiFromPlan(plan) {
  */
 function collectSettingsUiRuntimeState() {
     return {
-        distanceUnit,
-        currencyUnit,
-        speedUnit,
-        temperatureUnit,
-        vehicleType: currentVehicleType,
-        routingMode: currentRoutingMode,
-        smartZoomEnabled,
-        autoTrafficUpdateEnabled,
-        autoRerouteOnDeviationEnabled,
+        ...collectSettingsSnapshotRuntimeState(),
         mlPredictionsEnabled: localStorage.getItem('mlPredictionsEnabled') === 'true',
         voiceAnnouncementsEnabled: localStorage.getItem('voiceAnnouncementsEnabled') === 'true',
         batterySavingEnabled: localStorage.getItem('pref_batterySaving') === 'true',
@@ -1688,19 +1689,22 @@ function resetAllSettings() {
  * @returns {*} Return value description
  */
 function exportSettings() {
-    const settings = localStorage.getItem('voyagr_all_settings');
-    if (settings) {
-        const dataStr = JSON.stringify(JSON.parse(settings), null, 2);
-        const dataBlob = new Blob([dataStr], { type: 'application/json' });
-        const url = URL.createObjectURL(dataBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `voyagr-settings-${new Date().toISOString().split('T')[0]}.json`;
-        link.click();
-        showStatus('✅ Settings exported', 'success');
-    } else {
-        showStatus('❌ No settings to export', 'error');
+    const SS = _settingsSnapshot();
+    const plan = SS.buildSettingsExportPlan(
+        localStorage.getItem(SS.SETTINGS_STORAGE_KEY),
+        new Date().toISOString().split('T')[0]
+    );
+    if (!plan.ok) {
+        showStatus(plan.statusMessage, plan.statusType);
+        return;
     }
+    const dataBlob = new Blob([plan.prettyJson], { type: plan.mimeType });
+    const url = URL.createObjectURL(dataBlob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = plan.downloadFilename;
+    link.click();
+    showStatus(plan.statusMessage, plan.statusType);
 }
 
 /**
@@ -1717,16 +1721,16 @@ function importSettings() {
         if (file) {
             const reader = new FileReader();
             reader.onload = (event) => {
-                try {
-                    const settings = JSON.parse(event.target.result);
-                    localStorage.setItem('voyagr_all_settings', JSON.stringify(settings));
-                    loadAllSettings();
-                    applySettingsToUI();
-                    showStatus('✅ Settings imported successfully', 'success');
-                } catch (error) {
-                    console.error('Error importing settings:', error);
-                    showStatus('❌ Error importing settings', 'error');
+                const SS = _settingsSnapshot();
+                const plan = SS.buildSettingsImportParsePlan(event.target.result);
+                if (!plan.ok) {
+                    showStatus(plan.statusMessage, plan.statusType);
+                    return;
                 }
+                localStorage.setItem(plan.storageKey, plan.storageValue);
+                if (plan.restoreAfterImport) loadAllSettings();
+                if (plan.applyUiAfterImport) applySettingsToUI();
+                showStatus(plan.statusMessage, plan.statusType);
             };
             reader.readAsText(file);
         }

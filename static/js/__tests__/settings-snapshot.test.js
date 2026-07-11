@@ -245,4 +245,39 @@ describe('settings-snapshot module', () => {
         expect(plan.statusMessage).toContain('cleared');
         expect(plan.statusType).toBe('info');
     });
+
+    test('buildSettingsExportPlan builds download metadata from stored snapshot', () => {
+        const raw = JSON.stringify({ unit_distance: 'km', vehicleType: 'petrol' });
+        const plan = SS.buildSettingsExportPlan(raw, '2026-07-11');
+        expect(plan.ok).toBe(true);
+        expect(plan.downloadFilename).toBe('voyagr-settings-2026-07-11.json');
+        expect(plan.mimeType).toBe('application/json');
+        expect(plan.prettyJson).toContain('"unit_distance": "km"');
+        expect(plan.statusType).toBe('success');
+    });
+
+    test('buildSettingsExportPlan rejects missing or invalid snapshot', () => {
+        expect(SS.buildSettingsExportPlan(null).ok).toBe(false);
+        expect(SS.buildSettingsExportPlan('not-json').ok).toBe(false);
+    });
+
+    test('buildSettingsImportApplyPlan writes snapshot to canonical storage key', () => {
+        const settings = { unit_distance: 'mi', vehicleType: 'electric' };
+        const plan = SS.buildSettingsImportApplyPlan(settings);
+        expect(plan.ok).toBe(true);
+        expect(plan.storageKey).toBe(SS.SETTINGS_STORAGE_KEY);
+        expect(JSON.parse(plan.storageValue).unit_distance).toBe('mi');
+        expect(plan.restoreAfterImport).toBe(true);
+        expect(plan.applyUiAfterImport).toBe(true);
+    });
+
+    test('buildSettingsImportParsePlan parses JSON text into import apply plan', () => {
+        const plan = SS.buildSettingsImportParsePlan('{"unit_speed":"mph"}');
+        expect(plan.ok).toBe(true);
+        expect(JSON.parse(plan.storageValue).unit_speed).toBe('mph');
+    });
+
+    test('buildSettingsImportParsePlan rejects invalid JSON', () => {
+        expect(SS.buildSettingsImportParsePlan('{bad').ok).toBe(false);
+    });
 });

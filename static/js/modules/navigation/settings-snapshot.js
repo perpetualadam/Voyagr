@@ -194,6 +194,82 @@
     }
 
     /**
+     * Export plan for the voyagr_all_settings JSON blob.
+     * @param {string|null|undefined} rawJson
+     * @param {string} [dateIso] - YYYY-MM-DD for filename
+     * @returns {Object}
+     */
+    function buildSettingsExportPlan(rawJson, dateIso) {
+        if (!rawJson) {
+            return {
+                ok: false,
+                statusMessage: '❌ No settings to export',
+                statusType: 'error',
+            };
+        }
+        var parsed;
+        try {
+            parsed = JSON.parse(rawJson);
+        } catch (_) {
+            return {
+                ok: false,
+                statusMessage: '❌ Invalid settings export',
+                statusType: 'error',
+            };
+        }
+        var stamp = dateIso || new Date().toISOString().split('T')[0];
+        return {
+            ok: true,
+            downloadFilename: 'voyagr-settings-' + stamp + '.json',
+            mimeType: 'application/json',
+            prettyJson: JSON.stringify(parsed, null, 2),
+            statusMessage: '✅ Settings exported',
+            statusType: 'success',
+        };
+    }
+
+    /**
+     * Apply plan for importing a parsed settings snapshot.
+     * @param {Object|null|undefined} settings
+     * @returns {Object}
+     */
+    function buildSettingsImportApplyPlan(settings) {
+        if (!settings || typeof settings !== 'object') {
+            return {
+                ok: false,
+                statusMessage: '❌ Error importing settings',
+                statusType: 'error',
+            };
+        }
+        return {
+            ok: true,
+            storageKey: SETTINGS_STORAGE_KEY,
+            storageValue: JSON.stringify(settings),
+            restoreAfterImport: true,
+            applyUiAfterImport: true,
+            statusMessage: '✅ Settings imported successfully',
+            statusType: 'success',
+        };
+    }
+
+    /**
+     * Parse imported settings JSON text into an import apply plan.
+     * @param {string} rawText
+     * @returns {Object}
+     */
+    function buildSettingsImportParsePlan(rawText) {
+        try {
+            return buildSettingsImportApplyPlan(JSON.parse(rawText));
+        } catch (e) {
+            return {
+                ok: false,
+                statusMessage: '❌ Error importing settings',
+                statusType: 'error',
+            };
+        }
+    }
+
+    /**
      * localStorage patches for multi-drop preference values.
      * @param {Object} prefs
      * @returns {Object<string, string>}
@@ -473,6 +549,9 @@
         buildSettingsSnapshot: buildSettingsSnapshot,
         buildSettingsSnapshotInputPlan: buildSettingsSnapshotInputPlan,
         buildSettingsRestorePlan: buildSettingsRestorePlan,
+        buildSettingsExportPlan: buildSettingsExportPlan,
+        buildSettingsImportApplyPlan: buildSettingsImportApplyPlan,
+        buildSettingsImportParsePlan: buildSettingsImportParsePlan,
         buildMultiDropPreferencesStoragePlan: buildMultiDropPreferencesStoragePlan,
         buildMultiDropPreferencesUiApplyPlan: buildMultiDropPreferencesUiApplyPlan,
         buildMultiDropPreferencesDomApplyPlan: buildMultiDropPreferencesDomApplyPlan,
