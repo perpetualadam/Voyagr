@@ -16,6 +16,9 @@ if (typeof window !== 'undefined' && window.ethereum) {
 // Variables: map, routeLayer, startMarker, endMarker, mapPickerMode
 // Unit variables: distanceUnit, currencyUnit, speedUnit, temperatureUnit
 // Currency symbols: currencySymbols
+//
+// VoyagrModules (modules/voyagr-modules.js) is the central registry for extracted
+// navigation/UI modules. App-layer wrappers below inject live prefs from voyagr-core.
 
 // ===== ROUTE PREFERENCE MIGRATION =====
 // 'pref_avoid_tollRoads' is the canonical localStorage key for the "Avoid Toll Roads"
@@ -201,10 +204,9 @@ window.debugScrollIssue = function() {
  */
 // convertDistance / getDistanceUnit / convertTemperature / getTemperatureUnit /
 // getFuelEfficiencyInUnits / getFuelEfficiencyLabel moved to modules/navigation/units.js
-// (VoyagrUnits). Thin stubs pass the global setting as an explicit arg.
+// (VoyagrUnits). App wrappers pass the global setting as an explicit arg.
 function convertDistance(km) {
-    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
-    return U ? U.convertDistance(km, distanceUnit) : Number(km).toFixed(2);
+    return VoyagrModules.units().convertDistance(km, distanceUnit);
 }
 
 /**
@@ -213,8 +215,7 @@ function convertDistance(km) {
  * @returns {*} Return value description
  */
 function getDistanceUnit() {
-    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
-    return U ? U.getDistanceUnit(distanceUnit) : (distanceUnit === 'mi' ? 'mi' : 'km');
+    return VoyagrModules.units().getDistanceUnit(distanceUnit);
 }
 
 /**
@@ -224,18 +225,12 @@ function getDistanceUnit() {
  * @returns {*} Return value description
  */
 function convertSpeed(kmh) {
-    const SG = _speedGps();
+    const SG = VoyagrModules.speedGps();
     const n = Number(kmh);
     if (!Number.isFinite(n)) return '0.0';
-    if (SG) {
-        const mph = SG.kmhToMph(n);
-        const display = SG.mphToDisplaySpeed(mph, speedUnit);
-        return display.toFixed(1);
-    }
-    if (speedUnit === 'mph') {
-        return (kmh * 0.621371).toFixed(1);
-    }
-    return kmh.toFixed(1);
+    const mph = SG.kmhToMph(n);
+    const display = SG.mphToDisplaySpeed(mph, speedUnit);
+    return display.toFixed(1);
 }
 
 /**
@@ -244,9 +239,7 @@ function convertSpeed(kmh) {
  * @returns {*} Return value description
  */
 function getSpeedUnit() {
-    const SG = _speedGps();
-    if (SG) return SG.speedUnitLabel(speedUnit);
-    return speedUnit === 'mph' ? 'mph' : 'km/h';
+    return VoyagrModules.speedGps().speedUnitLabel(speedUnit);
 }
 
 /**
@@ -256,8 +249,7 @@ function getSpeedUnit() {
  * @returns {*} Return value description
  */
 function convertTemperature(celsius) {
-    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
-    return U ? U.convertTemperature(celsius, temperatureUnit) : Number(celsius).toFixed(1);
+    return VoyagrModules.units().convertTemperature(celsius, temperatureUnit);
 }
 
 /**
@@ -266,8 +258,7 @@ function convertTemperature(celsius) {
  * @returns {*} Return value description
  */
 function getTemperatureUnit() {
-    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
-    return U ? U.getTemperatureUnit(temperatureUnit) : (temperatureUnit === 'fahrenheit' ? '°F' : '°C');
+    return VoyagrModules.units().getTemperatureUnit(temperatureUnit);
 }
 
 /**
@@ -277,8 +268,7 @@ function getTemperatureUnit() {
  */
 // getCurrencySymbol / adjustCostForUnits moved to modules/navigation/units.js (VoyagrUnits).
 function getCurrencySymbol() {
-    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
-    return U ? U.getCurrencySymbol(currencyUnit) : (currencySymbols[currencyUnit] || '£');
+    return VoyagrModules.units().getCurrencySymbol(currencyUnit);
 }
 /**
  * adjustCostForUnits function
@@ -288,8 +278,7 @@ function getCurrencySymbol() {
  * @returns {*} Return value description
  */
 function adjustCostForUnits(cost, costType = 'fuel') {
-    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
-    return U ? U.adjustCostForUnits(cost) : cost;
+    return VoyagrModules.units().adjustCostForUnits(cost);
 }
 /**
  * getFuelEfficiencyInUnits function
@@ -298,8 +287,7 @@ function adjustCostForUnits(cost, costType = 'fuel') {
  * @returns {*} Return value description
  */
 function getFuelEfficiencyInUnits(liters_per_100km) {
-    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
-    return U ? U.getFuelEfficiencyInUnits(liters_per_100km, distanceUnit) : Number(liters_per_100km).toFixed(1);
+    return VoyagrModules.units().getFuelEfficiencyInUnits(liters_per_100km, distanceUnit);
 }
 
 /**
@@ -308,8 +296,7 @@ function getFuelEfficiencyInUnits(liters_per_100km) {
  * @returns {*} Return value description
  */
 function getFuelEfficiencyLabel() {
-    const U = (typeof VoyagrUnits !== 'undefined') ? VoyagrUnits : null;
-    return U ? U.getFuelEfficiencyLabel(distanceUnit) : (distanceUnit === 'mi' ? 'MPG' : 'L/100km');
+    return VoyagrModules.units().getFuelEfficiencyLabel(distanceUnit);
 }
 
 // ===== NAVIGATION VARIABLES =====
@@ -2139,14 +2126,10 @@ function saveRawLocalTrips(entries) {
     }
 }
 
+// parseLatLonString / mergeServerAndLocalTrips moved to
+// modules/navigation/trip-history.js (VoyagrTripHistory).
 function parseLatLonString(str) {
-    if (!str || typeof str !== 'string') return null;
-    const p = str.split(',');
-    if (p.length < 2) return null;
-    const lat = parseFloat(p[0].trim());
-    const lon = parseFloat(p[1].trim());
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
-    return { lat, lon };
+    return VoyagrModules.tripHistory().parseLatLonString(str);
 }
 
 /**
@@ -2292,40 +2275,7 @@ async function persistCompletedTrip(route) {
 }
 
 function mergeServerAndLocalTrips(serverTrips, rawLocal) {
-    const out = Array.isArray(serverTrips) ? serverTrips.slice() : [];
-    const serverIds = new Set(out.map((t) => t.id));
-
-    (rawLocal || []).forEach((e) => {
-        const row = {
-            start_lat: e.start_lat,
-            start_lon: e.start_lon,
-            end_lat: e.end_lat,
-            end_lon: e.end_lon,
-            start_address: e.start_address,
-            end_address: e.end_address,
-            distance_km: e.distance_km,
-            duration_minutes: e.duration_minutes,
-            fuel_cost: e.fuel_cost,
-            toll_cost: e.toll_cost,
-            caz_cost: e.caz_cost,
-            routing_mode: e.routing_mode,
-            timestamp: e.timestamp
-        };
-        if (e.serverId != null) {
-            if (serverIds.has(e.serverId)) return;
-            out.push({ ...row, id: e.serverId, _localOnly: false });
-            serverIds.add(e.serverId);
-        } else {
-            out.push({ ...row, id: -e.localId, _localOnly: true });
-        }
-    });
-
-    out.sort((a, b) => {
-        const ta = new Date(a.timestamp).getTime();
-        const tb = new Date(b.timestamp).getTime();
-        return tb - ta;
-    });
-    return out;
+    return VoyagrModules.tripHistory().mergeServerAndLocalTrips(serverTrips, rawLocal);
 }
 
 function removeLocalTripByLocalId(localId) {
@@ -4601,12 +4551,11 @@ function setupMapClickHandler() {
  * @returns {Array<[number, number]>}
  */
 function decodePolyline(encoded, precision = 6) {
-    const PC = (typeof VoyagrPolylineCodec !== 'undefined') ? VoyagrPolylineCodec : null;
     if (!encoded || typeof encoded !== 'string') {
         console.warn('[decodePolyline] Invalid input:', encoded);
         return [];
     }
-    const decoded = PC ? PC.decodePolyline(encoded, precision) : [];
+    const decoded = VoyagrModules.polylineCodec().decodePolyline(encoded, precision);
     console.log(`[decodePolyline] Decoded ${decoded.length} points with precision ${precision}`);
     if (decoded.length > 0) {
         console.log(`[decodePolyline] First point: [${decoded[0][0]}, ${decoded[0][1]}]`);
@@ -4623,9 +4572,8 @@ function decodePolyline(encoded, precision = 6) {
  * @returns {string}
  */
 function encodePolyline(points, precision = 6) {
-    const PC = (typeof VoyagrPolylineCodec !== 'undefined') ? VoyagrPolylineCodec : null;
     if (!Array.isArray(points) || points.length === 0) return '';
-    return PC ? PC.encodePolyline(points, precision) : '';
+    return VoyagrModules.polylineCodec().encodePolyline(points, precision);
 }
 
 /**
@@ -6047,26 +5995,9 @@ let weatherLayerType = localStorage.getItem('weatherLayerType') || 'precipitatio
  */
 function toggleWeatherLayer() {
     showWeatherEnabled = !showWeatherEnabled;
-    // Persist + restyle via the pure, unit-tested modules/ui/toggle-ui.js helper when
-    // present, with an inline fallback so the toggle still works if it failed to load.
-    const T = (typeof VoyagrToggleUI !== 'undefined') ? VoyagrToggleUI : null;
     const toggle = document.getElementById('showWeatherToggle');
-    if (T) {
-        T.writeBoolPref('showWeatherEnabled', showWeatherEnabled);
-        T.applyToggleButton(toggle, showWeatherEnabled);
-    } else {
-        localStorage.setItem('showWeatherEnabled', showWeatherEnabled ? 'true' : 'false');
-        if (toggle) {
-            toggle.classList.toggle('active', showWeatherEnabled);
-            if (showWeatherEnabled) {
-                toggle.style.background = '#4CAF50';
-                toggle.style.borderColor = '#4CAF50';
-            } else {
-                toggle.style.background = '#ddd';
-                toggle.style.borderColor = '#999';
-            }
-        }
-    }
+    VoyagrModules.toggleUI().writeBoolPref('showWeatherEnabled', showWeatherEnabled);
+    VoyagrModules.toggleUI().applyToggleButton(toggle, showWeatherEnabled);
 
     if (showWeatherEnabled) {
         addWeatherLayer();
@@ -6095,13 +6026,7 @@ function setWeatherLayerType(type) {
         addWeatherLayer();
     }
 
-    const WL = (typeof VoyagrWeatherLayer !== 'undefined') ? VoyagrWeatherLayer : null;
-    const typeName = WL ? WL.weatherLayerDisplayName(type) : ({
-        'precipitation_new': 'Precipitation',
-        'clouds_new': 'Clouds',
-        'temp_new': 'Temperature',
-        'wind_new': 'Wind'
-    }[type] || type);
+    const typeName = VoyagrModules.weatherLayer().weatherLayerDisplayName(type);
     showStatus(`🌧️ Weather layer: ${typeName}`, 'info');
 }
 
@@ -6152,36 +6077,18 @@ function addWeatherLayer() {
     // Wait for style to load before adding weather layer
     const addWeatherLayerNow = () => {
         try {
-            // OpenWeatherMap weather tiles. Tile URL + source/layer specs come from the
-            // pure, unit-tested modules/map/weather-layer.js helper when present, with an
-            // inline fallback so the app keeps working if that script failed to load.
+            // OpenWeatherMap weather tiles via modules/map/weather-layer.js.
             // Available layers: precipitation_new, clouds_new, temp_new, wind_new, pressure_new
-            const WL = (typeof VoyagrWeatherLayer !== 'undefined') ? VoyagrWeatherLayer : null;
-            const tileUrl = WL
-                ? WL.buildWeatherTileUrl(weatherLayerType, owmApiKey)
-                : `https://tile.openweathermap.org/map/${weatherLayerType}/{z}/{x}/{y}.png?appid=${owmApiKey}`;
+            const WL = VoyagrModules.weatherLayer();
+            const tileUrl = WL.buildWeatherTileUrl(weatherLayerType, owmApiKey);
 
             if (!map.getSource('weather-source')) {
-                map.addSource('weather-source', WL ? WL.buildWeatherSourceSpec(tileUrl) : {
-                    type: 'raster',
-                    tiles: [tileUrl],
-                    tileSize: 256,
-                    minzoom: 1,
-                    maxzoom: 18,
-                    bounds: [-180, -85.0511, 180, 85.0511]
-                });
+                map.addSource('weather-source', WL.buildWeatherSourceSpec(tileUrl));
             }
 
             if (!map.getLayer('weather-layer')) {
                 // Add weather layer below route layers but above base map
-                map.addLayer(WL ? WL.buildWeatherLayerSpec() : {
-                    id: 'weather-layer',
-                    type: 'raster',
-                    source: 'weather-source',
-                    minzoom: 1,
-                    maxzoom: 18,
-                    paint: { 'raster-opacity': 0.7 }
-                });
+                map.addLayer(WL.buildWeatherLayerSpec());
             }
 
             weatherLayer = { id: 'weather-layer' };
@@ -6223,20 +6130,8 @@ function removeWeatherLayer() {
  * Initialize weather layer based on saved preference
  */
 function initWeatherLayer() {
-    const T = (typeof VoyagrToggleUI !== 'undefined') ? VoyagrToggleUI : null;
     const toggle = document.getElementById('showWeatherToggle');
-    if (T) {
-        T.applyToggleButton(toggle, showWeatherEnabled);
-    } else if (toggle) {
-        toggle.classList.toggle('active', showWeatherEnabled);
-        if (showWeatherEnabled) {
-            toggle.style.background = '#4CAF50';
-            toggle.style.borderColor = '#4CAF50';
-        } else {
-            toggle.style.background = '#ddd';
-            toggle.style.borderColor = '#999';
-        }
-    }
+    VoyagrModules.toggleUI().applyToggleButton(toggle, showWeatherEnabled);
 
     if (showWeatherEnabled && map) {
         try {
@@ -6276,24 +6171,9 @@ const TRAFFIC_COLORS = {
  */
 function toggleRouteTraffic() {
     routeTrafficEnabled = !routeTrafficEnabled;
-    const T = (typeof VoyagrToggleUI !== 'undefined') ? VoyagrToggleUI : null;
     const toggle = document.getElementById('routeTrafficToggle');
-    if (T) {
-        T.writeBoolPref('routeTrafficEnabled', routeTrafficEnabled);
-        T.applyToggleButton(toggle, routeTrafficEnabled);
-    } else {
-        localStorage.setItem('routeTrafficEnabled', routeTrafficEnabled ? 'true' : 'false');
-        if (toggle) {
-            toggle.classList.toggle('active', routeTrafficEnabled);
-            if (routeTrafficEnabled) {
-                toggle.style.background = '#4CAF50';
-                toggle.style.borderColor = '#4CAF50';
-            } else {
-                toggle.style.background = '#ddd';
-                toggle.style.borderColor = '#999';
-            }
-        }
-    }
+    VoyagrModules.toggleUI().writeBoolPref('routeTrafficEnabled', routeTrafficEnabled);
+    VoyagrModules.toggleUI().applyToggleButton(toggle, routeTrafficEnabled);
 
     if (routeTrafficEnabled) {
         showStatus('🚦 Route traffic display enabled', 'success');
@@ -6940,13 +6820,7 @@ async function checkTrafficAndReroute() {
  */
 // detectSignificantTrafficChange moved to modules/navigation/traffic-change.js (VoyagrTrafficChange).
 function detectSignificantTrafficChange(previous, current) {
-    const TC = (typeof VoyagrTrafficChange !== 'undefined') ? VoyagrTrafficChange : null;
-    if (TC) return TC.detectSignificantTrafficChange(previous, current);
-    // Inline fallback.
-    if (!current) return false;
-    if (current.severe && current.congestedPoints.length > 0) return 'severe';
-    if (current.delayMin >= 4 && current.congestedPoints.length > 0) return 'congestion';
-    return false;
+    return VoyagrModules.trafficChange().detectSignificantTrafficChange(previous, current);
 }
 
 /**
@@ -9914,81 +9788,16 @@ function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
  * heuristic. Single-lane roads return total_lanes=1 so the overlay stays hidden.
  */
 function _buildDeterministicLaneGuidance(maneuver, distance, exitCount, roadType) {
-    // Delegate to the pure, unit-tested modules/navigation/lane-guidance.js helper when
-    // present, with an inline fallback so lane guidance still works if that script failed
-    // to load.
-    const LG = (typeof VoyagrLaneGuidance !== 'undefined') ? VoyagrLaneGuidance : null;
-    if (LG) return LG.buildDeterministicLaneGuidance(maneuver, distance, exitCount, roadType);
-
-    const LANE_DEFAULTS = {
-        motorway: 3, trunk: 3, primary: 2, secondary: 2,
-        tertiary: 1, residential: 1, unclassified: 1,
-    };
-    let totalLanes = LANE_DEFAULTS[roadType] || 2;
-    if (totalLanes < 1) totalLanes = 1;
-
-    let lane;
-    let dir = 'through';
-    if (maneuver === 'roundabout' && exitCount > 0) {
-        lane = exitCount >= 3 ? totalLanes : 1;
-        dir = exitCount >= 3 ? 'right' : (exitCount <= 1 ? 'left' : 'through');
-    } else if (['left', 'slight_left', 'sharp_left', 'exit_left'].includes(maneuver)) {
-        lane = 1;
-        dir = maneuver.indexOf('slight') >= 0 ? 'slight_left' : 'left';
-    } else if (['right', 'slight_right', 'sharp_right', 'exit_right', 'exit'].includes(maneuver)) {
-        lane = totalLanes;
-        dir = maneuver.indexOf('slight') >= 0 ? 'slight_right' : 'right';
-    } else if (maneuver === 'uturn') {
-        lane = totalLanes;
-        dir = 'right';
-    } else {
-        lane = Math.max(1, Math.ceil(totalLanes / 2));
-        dir = 'through';
-    }
-
-    const ARROW = { left: '←', slight_left: '↖', through: '↑', slight_right: '↗', right: '→' };
-    const lane_arrows = [];
-    for (let i = 1; i <= totalLanes; i++) {
-        const isRec = i === lane;
-        lane_arrows.push({
-            directions: [isRec ? dir : 'through'],
-            arrow: isRec ? (ARROW[dir] || '↑') : '↑',
-            primary: isRec ? dir : 'through',
-        });
-    }
-
-    const lanePos = _laneNameFor(lane, totalLanes);
-    const urgencyFields = _laneUrgencyFields(distance, lanePos, maneuver, exitCount);
-
-    return {
-        success: true, total_lanes: totalLanes, recommended_lane: lane,
-        lane_arrows, next_maneuver: maneuver,
-        ...urgencyFields,
-        road_name: '', highway_type: roadType || 'unknown',
-        has_osm_data: false, has_turn_lanes: false, roundabout_exit_count: exitCount,
-        estimated: true,
-    };
+    return VoyagrModules.laneGuidance().buildDeterministicLaneGuidance(maneuver, distance, exitCount, roadType);
 }
 
 function _ordinal(n) {
-    const LG = (typeof VoyagrLaneGuidance !== 'undefined') ? VoyagrLaneGuidance : null;
-    if (LG) return LG.ordinal(n);
-
-    const s = ['th','st','nd','rd'];
-    const v = n % 100;
-    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+    return VoyagrModules.laneGuidance().ordinal(n);
 }
 
 /** Human-friendly name for a 1-based lane (mirrors backend _descriptive_lane_name). */
 function _laneNameFor(lane, total) {
-    const LG = (typeof VoyagrLaneGuidance !== 'undefined') ? VoyagrLaneGuidance : null;
-    if (LG) return LG.laneNameFor(lane, total);
-
-    if (total <= 1) return 'lane';
-    if (lane === 1) return 'left lane';
-    if (lane === total) return 'right lane';
-    if (total === 3 && lane === 2) return 'middle lane';
-    return `lane ${lane}`;
+    return VoyagrModules.laneGuidance().laneNameFor(lane, total);
 }
 
 /**
@@ -9996,23 +9805,7 @@ function _laneNameFor(lane, total) {
  * live distance so a cached lane structure never shows stale urgency as you approach.
  */
 function _laneUrgencyFields(distance, lanePos, maneuver, exitCount) {
-    const LG = (typeof VoyagrLaneGuidance !== 'undefined') ? VoyagrLaneGuidance : null;
-    if (LG) return LG.laneUrgencyFields(distance, lanePos, maneuver, exitCount);
-
-    let urgency = 'none', urgency_text = '';
-    if (distance <= 100) { urgency = 'now'; urgency_text = `Get in the ${lanePos} now!`; }
-    else if (distance <= 300) { urgency = 'soon'; urgency_text = `Move to the ${lanePos}`; }
-    else if (distance <= 800) { urgency = 'ahead'; urgency_text = `Prepare to use the ${lanePos}`; }
-    else if (distance <= 1500) { urgency = 'info'; urgency_text = `Stay in the ${lanePos}`; }
-    let guidance_text = `Use the ${lanePos}`;
-    if (maneuver === 'roundabout' && exitCount > 0) {
-        guidance_text = `Use the ${lanePos} and take the ${_ordinal(exitCount)} exit`;
-    }
-    return {
-        urgency, urgency_text, guidance_text,
-        lane_change_needed: ['now', 'soon', 'ahead'].includes(urgency),
-        distance_to_maneuver: distance,
-    };
+    return VoyagrModules.laneGuidance().laneUrgencyFields(distance, lanePos, maneuver, exitCount);
 }
 
 function renderLaneGuidanceUI(data) {
@@ -10022,13 +9815,10 @@ function renderLaneGuidanceUI(data) {
 
     if (!display || !visual || !text) return;
 
-    // Delegate the rendering *decisions* to the pure, unit-tested
-    // modules/navigation/lane-guidance.js view-model when present, with inline fallbacks so
-    // the overlay still renders if that script failed to load.
-    const LG = (typeof VoyagrLaneGuidance !== 'undefined') ? VoyagrLaneGuidance : null;
+    const LG = VoyagrModules.laneGuidance();
 
     // Don't show lane guidance for single-lane roads or when no maneuver is approaching
-    const show = LG ? LG.shouldShow(data) : (data.total_lanes > 1 && data.urgency !== 'none');
+    const show = LG.shouldShow(data);
     if (!show) {
         display.classList.remove('show');
         return;
@@ -10037,27 +9827,14 @@ function renderLaneGuidanceUI(data) {
     // Mark non-OSM (estimated / fallback) guidance so the driver knows it's approximate.
     const badgeEl = document.getElementById('laneGuidanceBadge');
     if (badgeEl) {
-        const badge = LG ? LG.badge(data)
-            : (data.has_osm_data ? { text: '', visible: false } : { text: 'Estimated', visible: true });
+        const badge = LG.badge(data);
         badgeEl.textContent = badge.text;
         badgeEl.style.display = badge.visible ? 'inline-block' : 'none';
     }
 
     // Build lane visual with direction arrows
     visual.innerHTML = '';
-    const indicators = LG ? LG.laneIndicators(data) : (function () {
-        const laneArrows = data.lane_arrows || [];
-        const out = [];
-        for (let i = 0; i < data.total_lanes; i++) {
-            const arrowInfo = laneArrows[i];
-            out.push({
-                arrow: arrowInfo ? arrowInfo.arrow : '↑',
-                recommended: (i + 1) === data.recommended_lane,
-                hasDirection: !!(arrowInfo && arrowInfo.directions && data.has_turn_lanes)
-            });
-        }
-        return out;
-    })();
+    const indicators = LG.laneIndicators(data);
 
     for (const ind of indicators) {
         const lane = document.createElement('div');
@@ -10070,18 +9847,11 @@ function renderLaneGuidanceUI(data) {
 
     // Set urgency styling
     display.className = 'lane-guidance-display show';
-    const urgencyCls = LG ? LG.urgencyClass(data.urgency)
-        : (data.urgency === 'now' ? 'urgency-now'
-            : data.urgency === 'soon' ? 'urgency-soon'
-            : data.urgency === 'ahead' ? 'urgency-ahead' : '');
+    const urgencyCls = LG.urgencyClass(data.urgency);
     if (urgencyCls) display.classList.add(urgencyCls);
 
     // Build guidance text with distance context
-    const guidanceText = LG ? LG.displayText(data) : (function () {
-        let t = data.guidance_text || '';
-        if (data.urgency_text && data.urgency !== 'none' && data.urgency !== 'info') t = data.urgency_text;
-        return t;
-    })();
+    const guidanceText = LG.displayText(data);
     text.textContent = guidanceText;
 
     // Voice announcement for lane guidance at junctions, roundabouts, and urgent lane changes
@@ -10168,19 +9938,13 @@ let _lastGoodRawPickMph = 0;
 let _consecutiveDisplacementMoves = 0;
 
 /** Unit-tested speed/GPS helpers (modules/navigation/speed-gps.js). */
-function _speedGps() {
-    return (typeof VoyagrSpeedGps !== 'undefined') ? VoyagrSpeedGps : null;
-}
+function _speedGps() { return VoyagrModules.speedGps(); }
 
 /** Unit-tested hazard alert helpers (modules/navigation/hazard-alerts.js). */
-function _hazardAlerts() {
-    return (typeof VoyagrHazardAlerts !== 'undefined') ? VoyagrHazardAlerts : null;
-}
+function _hazardAlerts() { return VoyagrModules.hazardAlerts(); }
 
 /** Unit-tested speed-limit widget helpers (modules/navigation/speed-limit-widget.js). */
-function _speedLimitWidget() {
-    return (typeof VoyagrSpeedLimitWidget !== 'undefined') ? VoyagrSpeedLimitWidget : null;
-}
+function _speedLimitWidget() { return VoyagrModules.speedLimitWidget(); }
 
 /**
  * Smooth a raw mph reading to reduce GPS jitter without sacrificing responsiveness.
@@ -10191,10 +9955,7 @@ function _speedLimitWidget() {
  * @returns {number} Smoothed mph value to show in the widget.
  */
 function smoothGpsSpeedMph(rawMph) {
-    const SG = _speedGps();
-    if (!SG) {
-        return Number.isFinite(rawMph) && rawMph > 0 ? rawMph : 0;
-    }
+    const SG = VoyagrModules.speedGps();
     const r = SG.stepSmoothGpsSpeedMph(
         { smoothedMph: _smoothedSpeedMph, initAt: _smoothedSpeedInitAt },
         rawMph,
@@ -10223,34 +9984,21 @@ function smoothGpsSpeedMph(rawMph) {
  * @returns {number}
  */
 function rejectGpsSpeedSpikeMph(mph, prevPick) {
-    const SG = _speedGps();
-    if (SG) return SG.rejectGpsSpeedSpikeMph(mph, prevPick);
-    return Number.isFinite(mph) && mph >= 0 ? mph : 0;
+    return VoyagrModules.speedGps().rejectGpsSpeedSpikeMph(mph, prevPick);
 }
 
 // pickRawSpeedMph body moved to modules/navigation/speed-gps.js as the pure
 // stepPickRawSpeedMph step function. This orchestration wrapper holds the mutable
 // state and calls it, matching the pattern of smoothGpsSpeedMph / stepSmoothGpsSpeedMph.
 function pickRawSpeedMph(coordsSpeed, history, coordAccuracy) {
-    const SG = _speedGps();
-    if (SG && SG.stepPickRawSpeedMph) {
-        const r = SG.stepPickRawSpeedMph(
-            { lastGoodRawPickMph: _lastGoodRawPickMph, consecutiveDisplacementMoves: _consecutiveDisplacementMoves },
-            coordsSpeed, history, coordAccuracy
-        );
-        _lastGoodRawPickMph = r.state.lastGoodRawPickMph;
-        _consecutiveDisplacementMoves = r.state.consecutiveDisplacementMoves;
-        return r.value;
-    }
-    // Inline fallback when module is not yet loaded.
-    const accCurr = Number.isFinite(coordAccuracy) && coordAccuracy > 2 ? coordAccuracy : null;
-    if (Number.isFinite(coordsSpeed) && coordsSpeed > 0) {
-        let mph = coordsSpeed * 2.237;
-        mph = Math.min(mph, MAX_DISPLAY_GPS_SPEED_MPH);
-        _lastGoodRawPickMph = mph;
-        return mph;
-    }
-    return 0;
+    const SG = VoyagrModules.speedGps();
+    const r = SG.stepPickRawSpeedMph(
+        { lastGoodRawPickMph: _lastGoodRawPickMph, consecutiveDisplacementMoves: _consecutiveDisplacementMoves },
+        coordsSpeed, history, coordAccuracy
+    );
+    _lastGoodRawPickMph = r.state.lastGoodRawPickMph;
+    _consecutiveDisplacementMoves = r.state.consecutiveDisplacementMoves;
+    return r.value;
 }
 /**
  * updateSpeedWidget function
@@ -10266,22 +10014,15 @@ function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
     currentGpsSpeedMph = currentSpeedInMph;
     currentGpsSpeedKmh = currentSpeedInMph * 1.609344;
 
-    const SG = _speedGps();
-    const SL = _speedLimitWidget();
+    const SG = VoyagrModules.speedGps();
+    const SL = VoyagrModules.speedLimitWidget();
     const displaySpeedUnit = getSpeedUnit();
-    const gpsDisplay = SL
-        ? SL.formatSpeedForWidget(currentSpeedInMph, speedUnit, SG)
-        : {
-            value: Math.round(SG ? SG.mphToDisplaySpeed(currentSpeedInMph, speedUnit) : currentSpeedInMph),
-            unitLabel: displaySpeedUnit
-        };
+    const gpsDisplay = SL.formatSpeedForWidget(currentSpeedInMph, speedUnit, SG);
 
     const speedValueEl = document.getElementById('speedValue');
     const speedUnitEl = document.getElementById('speedUnitDisplay');
     if (speedValueEl) {
-        speedValueEl.textContent = String(
-            SL ? SL.sanitizeWidgetDisplayNumber(gpsDisplay.value) : gpsDisplay.value
-        );
+        speedValueEl.textContent = String(SL.sanitizeWidgetDisplayNumber(gpsDisplay.value));
     }
     if (speedUnitEl) speedUnitEl.textContent = gpsDisplay.unitLabel;
 
@@ -10294,12 +10035,8 @@ function updateSpeedWidget(currentSpeedInMph, speedLimitInMph = null) {
 
         if (resolvedLimit !== null && resolvedLimit > 0) {
             currentSpeedLimitMph = resolvedLimit;
-            const limitDisplay = SL
-                ? SL.formatSpeedForWidget(resolvedLimit, speedUnit, SG)
-                : { value: Math.round(resolvedLimit), unitLabel: displaySpeedUnit };
-            limitValueEl.textContent = String(
-                SL ? SL.sanitizeWidgetDisplayNumber(limitDisplay.value) : limitDisplay.value
-            );
+            const limitDisplay = SL.formatSpeedForWidget(resolvedLimit, speedUnit, SG);
+            limitValueEl.textContent = String(SL.sanitizeWidgetDisplayNumber(limitDisplay.value));
             limitUnitEl.textContent = limitDisplay.unitLabel;
             widget.style.borderLeft = '4px solid #4285F4';
         } else {
@@ -10343,8 +10080,7 @@ function updateSpeedWidgetVisibility() {
 // modules/navigation/route-geometry.js (VoyagrRouteGeometry.haversineDistanceMeters).
 // Thin stubs below keep all existing callers working.
 function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    return RG ? RG.haversineDistanceMeters(lat1, lon1, lat2, lon2) : 0;
+    return VoyagrModules.routeGeometry().haversineDistanceMeters(lat1, lon1, lat2, lon2);
 }
 
 /**
@@ -10360,10 +10096,7 @@ function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
  * @returns {number} Index into `currentRouteSteps`, or -1 if not available.
  */
 function getActiveRouteManeuverIndex(snappedIndex) {
-    const SG = _speedGps();
-    if (SG) return SG.getActiveRouteManeuverIndex(currentRouteSteps, snappedIndex);
-    if (!Array.isArray(currentRouteSteps) || currentRouteSteps.length === 0) return -1;
-    return 0;
+    return VoyagrModules.speedGps().getActiveRouteManeuverIndex(currentRouteSteps, snappedIndex);
 }
 
 /**
@@ -10375,13 +10108,11 @@ function getActiveRouteManeuverIndex(snappedIndex) {
 // inferRoadClassFromManeuver / inferRoadClassFromStreetNames moved to
 // modules/navigation/route-geometry.js. Thin stubs keep all callers working.
 function inferRoadClassFromManeuver(step) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    return RG ? RG.inferRoadClassFromManeuver(step) : (step && step.road_class) || null;
+    return VoyagrModules.routeGeometry().inferRoadClassFromManeuver(step);
 }
 
 function inferRoadClassFromStreetNames(streetNames) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    return RG ? RG.inferRoadClassFromStreetNames(streetNames) : null;
+    return VoyagrModules.routeGeometry().inferRoadClassFromStreetNames(streetNames);
 }
 
 /**
@@ -10793,8 +10524,7 @@ function toggleJourneyOverview() {
  * @returns {*} Return value description
  */
 function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    return RG ? RG.haversineDistanceMeters(lat1, lon1, lat2, lon2) : 0;
+    return VoyagrModules.routeGeometry().haversineDistanceMeters(lat1, lon1, lat2, lon2);
 }
 /**
  * calculateBearing function
@@ -10806,8 +10536,7 @@ function calculateHaversineDistance(lat1, lon1, lat2, lon2) {
  * @returns {*} Return value description
  */
 function calculateBearing(lat1, lon1, lat2, lon2) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    return RG ? RG.bearing(lat1, lon1, lat2, lon2) : 0;
+    return VoyagrModules.routeGeometry().bearing(lat1, lon1, lat2, lon2);
 }
 /**
  * calculateTurnDirection function
@@ -10817,27 +10546,7 @@ function calculateBearing(lat1, lon1, lat2, lon2) {
  * @returns {*} Return value description
  */
 function calculateTurnDirection(bearing1, bearing2) {
-    // Delegate to the pure, unit-tested modules/navigation/turn-instructions.js helper when
-    // present, with an inline fallback so navigation still works if that script failed to load.
-    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
-    if (TI) return TI.calculateTurnDirection(bearing1, bearing2);
-
-    let bearingChange = bearing2 - bearing1;
-
-    // Normalize to -180 to 180 range
-    if (bearingChange > 180) bearingChange -= 360;
-    if (bearingChange < -180) bearingChange += 360;
-
-    // Classify turn. Boundary between "slight" (keep) and a full "left/right" turn is at
-    // 35 degrees: gentle motorway forks/curves stay "slight", but a genuine turn onto a
-    // slip road / side road (>=35 deg) is announced as a turn rather than "keep".
-    if (bearingChange < -135) return 'sharp_left';
-    if (bearingChange < -35) return 'left';
-    if (bearingChange < -10) return 'slight_left';
-    if (bearingChange <= 10) return 'straight';
-    if (bearingChange <= 35) return 'slight_right';
-    if (bearingChange <= 135) return 'right';
-    return 'sharp_right';
+    return VoyagrModules.turnInstructions().calculateTurnDirection(bearing1, bearing2);
 }
 /**
  * Distance along the polyline from a snapped point (snapped onto segment i0) to
@@ -10850,9 +10559,7 @@ function calculateTurnDirection(bearing1, bearing2) {
 // distanceAlongRouteToVertexMeters: implementation lives in route-geometry.js
 // (VoyagrRouteGeometry.distanceAlongRouteToVertexMeters). Thin stub keeps all callers working.
 function distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    if (RG) return RG.distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex);
-    return 0;
+    return VoyagrModules.routeGeometry().distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex);
 }
 
 /**
@@ -10862,47 +10569,24 @@ function distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex
  * mappings in detectUpcomingTurn / updateTurnWidgetFromPosition.
  */
 function maneuverTypeToDirectionKey(type) {
-    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
-    if (TI) return TI.maneuverTypeToDirectionKey(type);
-
-    if ([4, 5, 6].includes(type)) return 'destination';
-    if (type === 9 || type === 18 || type === 23) return 'slight_right';
-    if (type === 10) return 'right';
-    if (type === 11) return 'sharp_right';
-    if (type === 16 || type === 19 || type === 24) return 'slight_left';
-    if (type === 15) return 'left';
-    if (type === 14) return 'sharp_left';
-    if (type === 12 || type === 13) return 'uturn';
-    if (type === 20) return 'exit_right';
-    if (type === 21) return 'exit_left';
-    if (type === 25 || type === 35 || type === 36) return 'merge';
-    if (type === 26 || type === 27) return 'roundabout';
-    return null;  // 0,1,2,3,7,8,17,22 and transit/ferry types are not "turns"
+    return VoyagrModules.turnInstructions().maneuverTypeToDirectionKey(type);
 }
 
 /** Promote ramp/turn to exit phrasing when leaving motorway/trunk. */
 function refineManeuverDirectionForRoute(type, direction, maneuver) {
-    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
     const roadClass = maneuver && (maneuver.road_class || inferRoadClassFromManeuver(maneuver));
-    if (TI && TI.refineManeuverDirection) {
-        return TI.refineManeuverDirection(type, direction, roadClass);
-    }
-    return direction;
+    return VoyagrModules.turnInstructions().refineManeuverDirection(type, direction, roadClass);
 }
 
 /** Widget instruction line — exit/keep/roundabout phrasing over raw engine text when clearer. */
 function buildTurnDisplayInstruction(turnInfo) {
-    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
     if (!turnInfo) return 'Continue on current road';
-    if (TI && TI.buildTurnDisplayInstruction) {
-        return TI.buildTurnDisplayInstruction(
-            turnInfo.direction,
-            turnInfo.instruction,
-            turnInfo.valhallaType,
-            turnInfo.roundabout_exit_count
-        );
-    }
-    return turnInfo.instruction || getTurnDirectionText(turnInfo.direction || 'straight');
+    return VoyagrModules.turnInstructions().buildTurnDisplayInstruction(
+        turnInfo.direction,
+        turnInfo.instruction,
+        turnInfo.valhallaType,
+        turnInfo.roundabout_exit_count
+    );
 }
 
 /** Cumulative along-route distance (m) between two polyline vertex indices. */
@@ -10910,8 +10594,7 @@ function buildTurnDisplayInstruction(turnInfo) {
 // route-geometry.js as cumulativeDistanceBetweenVertices. This wrapper still reads
 // the global routePolyline — it stays as orchestration glue.
 function cumulativeRouteDistanceBetween(i, j) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    return RG ? RG.cumulativeDistanceBetweenVertices(routePolyline, i, j) : Infinity;
+    return VoyagrModules.routeGeometry().cumulativeDistanceBetweenVertices(routePolyline, i, j);
 }
 
 /**
@@ -10956,32 +10639,21 @@ function effectiveRoundaboutExitCount(stepIndex) {
 // modules/navigation/turn-instructions.js. Thin stubs keep all callers working.
 
 function ordinalEnglishExit(n) {
-    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
-    if (TI) return TI.ordinalEnglishExit(n);
-    // Inline fallback (module not yet loaded).
-    const j = n % 10, k = n % 100;
-    if (j === 1 && k !== 11) return `${n}st`;
-    if (j === 2 && k !== 12) return `${n}nd`;
-    if (j === 3 && k !== 13) return `${n}rd`;
-    return `${n}th`;
+    return VoyagrModules.turnInstructions().ordinalEnglishExit(n);
 }
 
 function laneOrdinalEnglish(n) {
-    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
-    if (TI) return TI.laneOrdinalEnglish(n);
-    if (n <= 3) return ['1st', '2nd', '3rd'][n - 1] || `${n}th`;
-    return `${n}th`;
+    return VoyagrModules.turnInstructions().laneOrdinalEnglish(n);
 }
 
 // buildTurnLaneHintHtml: the module version takes an explicit exitCount instead of a
 // maneuverIndex, so callers resolve the count and pass it. The stub signature keeps
 // the original (maneuverIndex) for backward compatibility and resolves the count here.
 function buildTurnLaneHintHtml(maneuver, maneuverIndex, distanceMeters) {
-    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
-    if (!TI) return '';
+    const TI = VoyagrModules.turnInstructions();
     const exitCt = maneuverIndex != null
         ? effectiveRoundaboutExitCount(maneuverIndex)
-        : (Number((maneuver || {}).roundabout_exit_count) || 0);
+        : (maneuver && maneuver.roundabout_exit_count) || 0;
     return TI.buildTurnLaneHintHtml(maneuver, exitCt, distanceMeters);
 }
 
@@ -11341,16 +11013,9 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
 // calculateSmartZoom moved to modules/navigation/route-geometry.js (VoyagrRouteGeometry).
 // Stub passes the global constants so live behaviour is unchanged.
 function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    if (RG && RG.calculateSmartZoom) {
-        return RG.calculateSmartZoom(speedMph, distanceToNextTurn, roadType, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD);
-    }
-    // Inline fallback.
-    if (distanceToNextTurn !== null && distanceToNextTurn < TURN_ZOOM_THRESHOLD) return ZOOM_LEVELS.turn_ahead;
-    if (speedMph > 100) return ZOOM_LEVELS.motorway_high_speed;
-    if (speedMph > 50)  return ZOOM_LEVELS.main_road_medium_speed;
-    if (speedMph > 20)  return ZOOM_LEVELS.urban_low_speed;
-    return ZOOM_LEVELS.parking_very_low_speed;
+    return VoyagrModules.routeGeometry().calculateSmartZoom(
+        speedMph, distanceToNextTurn, roadType, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
+    );
 }
 
 /**
@@ -11364,8 +11029,7 @@ function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urb
  */
 // calculateDriverViewCenter moved to route-geometry.js (pure stub — MapLibre padding handles offset).
 function calculateDriverViewCenter(lat, lon, heading, zoomLevel) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    return RG && RG.calculateDriverViewCenter ? RG.calculateDriverViewCenter(lat, lon, heading, zoomLevel) : [lat, lon];
+    return VoyagrModules.routeGeometry().calculateDriverViewCenter(lat, lon, heading, zoomLevel);
 }
 /**
  * applySmartZoomWithAnimation function
@@ -13220,51 +12884,7 @@ function hideTurnInstructionWidget() {
  * @returns {string} Unicode arrow or icon
  */
 function getTurnIcon(type) {
-    // Valhalla maneuver types: https://valhalla.github.io/valhalla/api/turn-by-turn/api-reference/
-    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
-    if (TI) return TI.getTurnIcon(type);
-
-    // Inline fallback. Left maneuvers show left arrows, right show right.
-    const iconMap = {
-        0: '↑',    // None/Continue
-        1: '↑',    // Start
-        2: '↑',    // Start Right
-        3: '↑',    // Start Left
-        4: '🏁',   // Destination
-        5: '🏁',   // Destination Right
-        6: '🏁',   // Destination Left
-        7: '↑',    // Becomes
-        8: '↑',    // Continue
-        9: '↱',    // Slight Right       → arrow bending right
-        10: '→',   // Right              → right arrow
-        11: '↳',   // Sharp Right        → sharp right arrow
-        12: '↩',   // U-turn Right
-        13: '↩',   // U-turn Left
-        14: '↲',   // Sharp Left         → sharp left arrow
-        15: '←',   // Left               → left arrow
-        16: '↰',   // Slight Left        → arrow bending left
-        17: '↑',   // Ramp Straight
-        18: '↱',   // Ramp Right         → arrow bending right
-        19: '↰',   // Ramp Left          → arrow bending left
-        20: '↗',   // Exit Right         → arrow upper-right
-        21: '↖',   // Exit Left          → arrow upper-left (FIX: was showing right in some paths)
-        22: '↑',   // Stay Straight
-        23: '↱',   // Stay Right         → arrow bending right
-        24: '↰',   // Stay Left          → arrow bending left
-        25: '⚙️',   // Merge
-        26: '🔄',  // Roundabout Enter
-        27: '↗',   // Roundabout Exit
-        28: '⛴️',   // Ferry Enter
-        29: '🚗',  // Ferry Exit
-        30: '🚇',  // Transit
-        31: '🚶',  // Transit Connection Start
-        32: '🚶',  // Transit Connection End
-        33: '🚏',  // Transit Connection Destination
-        34: '⛴️',  // Post Transit Connection Destination
-        35: '⚙️',  // Merge Right
-        36: '⚙️'   // Merge Left
-    };
-    return iconMap[type] || '↑';
+    return VoyagrModules.turnInstructions().getTurnIcon(type);
 }
 
 /**
@@ -13273,30 +12893,7 @@ function getTurnIcon(type) {
  * @returns {string} Formatted distance string
  */
 function formatTurnDistance(distanceMeters) {
-    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
-    if (TI) return TI.formatTurnDistance(distanceMeters, distanceUnit);
-
-    const useMiles = distanceUnit === 'mi';
-
-    if (useMiles) {
-        const miles = distanceMeters / 1609.34;
-        if (miles < 0.1) {
-            const feet = Math.round(distanceMeters * 3.28084);
-            return `${feet} ft`;
-        } else if (miles < 1) {
-            return `${(miles * 5280 / 100).toFixed(0) * 100} ft`;
-        } else {
-            return `${miles.toFixed(1)} mi`;
-        }
-    } else {
-        if (distanceMeters < 100) {
-            return `${Math.round(distanceMeters)} m`;
-        } else if (distanceMeters < 1000) {
-            return `${Math.round(distanceMeters / 10) * 10} m`;
-        } else {
-            return `${(distanceMeters / 1000).toFixed(1)} km`;
-        }
-    }
+    return VoyagrModules.turnInstructions().formatTurnDistance(distanceMeters, distanceUnit);
 }
 
 /**
@@ -13719,12 +13316,7 @@ function formatETATime(date) {
  */
 // formatRemainingTime moved to modules/navigation/eta.js (VoyagrETA).
 function formatRemainingTime(minutes) {
-    const ETA = (typeof VoyagrETA !== 'undefined') ? VoyagrETA : null;
-    if (ETA) return ETA.formatRemainingTime(minutes);
-    if (minutes < 1) return '<1 min';
-    if (minutes < 60) return `${Math.round(minutes)} min`;
-    const hours = Math.floor(minutes / 60), mins = Math.round(minutes % 60);
-    return mins === 0 ? `${hours}h` : `${hours}h ${mins}min`;
+    return VoyagrModules.eta().formatRemainingTime(minutes);
 }
 
 /**
@@ -15190,10 +14782,7 @@ function renderTurnInfoETAPanel(baseMinutes, adjustedMinutes, progressPercent, t
 
 // buildETAVoiceMessage moved to modules/navigation/eta.js (VoyagrETA).
 function buildETAVoiceMessage(timeRemainingMinutes, etaDate) {
-    const ETA = (typeof VoyagrETA !== 'undefined') ? VoyagrETA : null;
-    if (ETA) return ETA.buildETAVoiceMessage(timeRemainingMinutes, etaDate);
-    const h = etaDate.getHours(), m = etaDate.getMinutes();
-    return `You will arrive in ${timeRemainingMinutes} minutes at ${h}:${String(m).padStart(2, '0')}`;
+    return VoyagrModules.eta().buildETAVoiceMessage(timeRemainingMinutes, etaDate);
 }
 
 let lastVoiceAnnouncementTime = 0;
@@ -15241,10 +14830,7 @@ function findNearestRouteIndex(lat, lon, polyline) {
  * @param {number} blendTowardRoute 0 GPS only, 1 route only
  */
 function blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowardRoute) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    if (RG) return RG.blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowardRoute);
-    if (!Number.isFinite(gpsHeadingDegrees)) return 0;
-    return gpsHeadingDegrees;
+    return VoyagrModules.routeGeometry().blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowardRoute);
 }
 
 /**
@@ -15270,31 +14856,25 @@ function blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowa
 // Thin stubs delegate to VoyagrRouteGeometry; all existing callers work unchanged.
 
 function _projectToSegment(lat, lon, ax, ay, bx, by, cosLat) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    if (RG) return RG.projectToSegment(lat, lon, ax, ay, bx, by, cosLat);
-    return { projLat: ax, projLon: ay, t: 0 };
+    return VoyagrModules.routeGeometry().projectToSegment(lat, lon, ax, ay, bx, by, cosLat);
 }
 
 function snapToRoutePolyline(lat, lon, polyline, searchStartIndex = 0) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    if (RG) return RG.snapToRoutePolyline(lat, lon, polyline, searchStartIndex);
-    return { lat, lon, index: 0, distance: 0, t: 0 };
+    return VoyagrModules.routeGeometry().snapToRoutePolyline(lat, lon, polyline, searchStartIndex);
 }
 
 /**
  * Total path length along the polyline (meters).
  */
 function getTotalPolylineLengthMeters(polyline) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    return RG ? RG.totalPolylineLengthMeters(polyline) : 0;
+    return VoyagrModules.routeGeometry().totalPolylineLengthMeters(polyline);
 }
 
 /**
  * Remaining distance (meters) along the polyline from the snapped GPS position to the route end.
  */
 function computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex = 0) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    return RG ? RG.computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex) : 0;
+    return VoyagrModules.routeGeometry().computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex);
 }
 
 /**
@@ -15418,33 +14998,7 @@ const SNAP_TO_ROUTE_MAX_DISTANCE = SNAP_TO_ROUTE_BASE_METERS;
  * @returns {*} Return value description
  */
 function getTurnDirectionText(direction) {
-    const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
-    if (TI) return TI.getTurnDirectionText(direction);
-
-    const directionMap = {
-        'sharp_left': 'turn sharply left',
-        'sharp-left': 'turn sharply left',
-        'left': 'turn left',
-        'slight_left': 'keep left',
-        'slight-left': 'keep left',
-        'straight': 'continue straight',
-        'slight_right': 'keep right',
-        'slight-right': 'keep right',
-        'right': 'turn right',
-        'sharp_right': 'turn sharply right',
-        'sharp-right': 'turn sharply right',
-        'uturn': 'make a U-turn',
-        'u-turn': 'make a U-turn',
-        'exit': 'take the exit',
-        'exit_right': 'take the exit on the right',
-        'exit-right': 'take the exit on the right',
-        'exit_left': 'take the exit on the left',
-        'exit-left': 'take the exit on the left',
-        'merge': 'merge',
-        'roundabout': 'enter the roundabout',
-        'destination': 'arrive at your destination'
-    };
-    return directionMap[direction] || 'continue';
+    return VoyagrModules.turnInstructions().getTurnDirectionText(direction);
 }
 /**
  * announceDistanceToDestination function
@@ -15463,37 +15017,10 @@ function announceDistanceToDestination(currentLat, currentLon) {
     for (const announcementDistance of DESTINATION_ANNOUNCEMENT_DISTANCES) {
         // Announce when within range (with hysteresis to avoid repeated announcements)
         if (remainingDistance <= announcementDistance && lastDestinationAnnouncementDistance > announcementDistance + 100) {
-            let message = '';
             const distUnit = getDistanceUnit();
-
-            // Delegate to the pure, unit-tested modules/navigation/voice-announcements.js
-            // helper when present, with an inline fallback so milestone announcements still
-            // work if that script failed to load.
-            const VA = (typeof VoyagrVoiceAnnouncements !== 'undefined') ? VoyagrVoiceAnnouncements : null;
-            if (VA) {
-                message = VA.buildDestinationAnnouncement(announcementDistance, distUnit);
-            } else if (announcementDistance === 10000) {
-                const displayDist = distUnit === 'mi' ? (10 * 0.621371).toFixed(1) : '10';
-                message = `${displayDist} ${distUnit} to destination`;
-            } else if (announcementDistance === 5000) {
-                const displayDist = distUnit === 'mi' ? (5 * 0.621371).toFixed(1) : '5';
-                message = `${displayDist} ${distUnit} to destination`;
-            } else if (announcementDistance === 2000) {
-                const displayDist = distUnit === 'mi' ? (2 * 0.621371).toFixed(1) : '2';
-                message = `${displayDist} ${distUnit} to destination`;
-            } else if (announcementDistance === 1000) {
-                const displayDist = distUnit === 'mi' ? (1 * 0.621371).toFixed(1) : '1';
-                message = `${displayDist} ${distUnit} to destination`;
-            } else if (announcementDistance === 500) {
-                // 500 meters = ~1640 feet = ~0.31 miles
-                if (distUnit === 'mi') {
-                    message = `1600 feet to destination`;
-                } else {
-                    message = `500 meters to destination`;
-                }
-            } else if (announcementDistance === 100) {
-                message = `Arriving at destination`;
-            }
+            const message = VoyagrModules.voiceAnnouncements().buildDestinationAnnouncement(
+                announcementDistance, distUnit
+            );
 
             const displayRemaining = convertDistance(remainingDistance / 1000);
             console.log(`[Voice] Distance announcement: ${message} (remaining: ${displayRemaining} ${distUnit})`);
@@ -15642,28 +15169,17 @@ function announceUpcomingTurn(turnInfo) {
     const direction = turnInfo.direction || 'straight';
     let directionText = getTurnDirectionText(direction);
     if (direction === 'roundabout') {
-        const TI = (typeof VoyagrTurnInstructions !== 'undefined') ? VoyagrTurnInstructions : null;
-        if (TI && TI.getRoundaboutDirectionText) {
-            directionText = TI.getRoundaboutDirectionText(
-                turnInfo.valhallaType,
-                turnInfo.roundabout_exit_count
-            );
-        }
+        directionText = VoyagrModules.turnInstructions().getRoundaboutDirectionText(
+            turnInfo.valhallaType,
+            turnInfo.roundabout_exit_count
+        );
     }
     const streetName = turnInfo.streetName || '';
-    // Valhalla: verbal_transition_alert_instruction (early), verbal_pre_transition_instruction (immediately prior)
     const verbalAlert = (turnInfo.verbal_transition_alert_instruction || '').trim();
     const verbalPre = (turnInfo.verbal_pre_transition_instruction || '').trim();
-    // Delegate phrasing/predicates to the pure, unit-tested
-    // modules/navigation/voice-announcements.js helper when present, with inline fallbacks
-    // so spoken guidance still works if that script failed to load.
-    const VA = (typeof VoyagrVoiceAnnouncements !== 'undefined') ? VoyagrVoiceAnnouncements : null;
-    const isExit = VA ? VA.isExitDirection(direction)
-        : (direction === 'exit' || direction === 'exit_right' || direction === 'exit_left'
-            || direction === 'exit-right' || direction === 'exit-left');
-    const isKeep = VA ? VA.isKeepDirection(direction)
-        : (direction === 'slight_right' || direction === 'slight_left'
-            || direction === 'slight-right' || direction === 'slight-left');
+    const VA = VoyagrModules.voiceAnnouncements();
+    const isExit = VA.isExitDirection(direction);
+    const isKeep = VA.isKeepDirection(direction);
 
     // Exits and keep-right/left on motorways need earlier warnings at highway speeds
     const announcementDistances = isExit ? EXIT_ANNOUNCEMENT_DISTANCES
@@ -15700,99 +15216,17 @@ function announceUpcomingTurn(turnInfo) {
             }
         }
 
-            let message = '';
-
-            if (VA) {
-                message = VA.buildTurnAnnouncement({
-                    announcementDistance: announcementDistance,
-                    direction: direction,
-                    distanceUnit: distanceUnit,
-                    streetName: streetName,
-                    directionText: directionText,
-                    verbalAlert: verbalAlert,
-                    verbalPre: verbalPre,
-                    valhallaType: turnInfo.valhallaType,
-                    roundaboutExitCount: turnInfo.roundabout_exit_count
-                });
-            } else {
-            const streetInfo = streetName ? ` toward ${streetName}` : '';
-
-            if (isExit) {
-                const exitSide = (direction === 'exit_left' || direction === 'exit-left')
-                    ? ' on the left' : (direction === 'exit_right' || direction === 'exit-right') ? ' on the right' : '';
-                if (announcementDistance === 2000) {
-                    if (distanceUnit === 'mi') {
-                        message = `In about 1 mile, take the exit${exitSide}${streetInfo}`;
-                    } else {
-                        message = `In 2 kilometers, take the exit${exitSide}${streetInfo}`;
-                    }
-                } else if (announcementDistance === 800) {
-                    if (distanceUnit === 'mi') {
-                        message = `In half a mile, prepare to exit${exitSide}${streetInfo}`;
-                    } else {
-                        message = `In 800 meters, prepare to exit${exitSide}${streetInfo}`;
-                    }
-                } else if (announcementDistance === 200) {
-                    message = `Exit ahead${exitSide}${streetInfo}`;
-                } else if (announcementDistance === 100) {
-                    message = `Exit now${exitSide}${streetInfo}`;
-                }
-            } else if (isKeep) {
-                const keepDir = (direction === 'slight_left' || direction === 'slight-left') ? 'left' : 'right';
-                const streetOnto = streetName ? ` toward ${streetName}` : '';
-                // Prefer Valhalla's own phrasing where available: for ramps / "stay" / fork
-                // maneuvers it often says "Turn left to take the ramp" or "Take the ramp on
-                // the left", which is clearer than a synthesised "keep left" when the action
-                // is really a turn. Fall back to the distance-based synthesised wording.
-                if (announcementDistance === 1000) {
-                    if (verbalAlert) {
-                        message = verbalAlert;
-                    } else if (distanceUnit === 'mi') {
-                        message = `In half a mile, keep ${keepDir}${streetOnto}`;
-                    } else {
-                        message = `In 1 kilometer, keep ${keepDir}${streetOnto}`;
-                    }
-                } else if (announcementDistance === 400) {
-                    if (distanceUnit === 'mi') {
-                        message = `In 1300 feet, keep ${keepDir}${streetOnto}`;
-                    } else {
-                        message = `In 400 meters, keep ${keepDir}${streetOnto}`;
-                    }
-                } else if (announcementDistance === 150) {
-                    message = verbalPre || `Keep ${keepDir}${streetOnto}`;
-                } else if (announcementDistance === 50) {
-                    message = verbalPre || `Keep ${keepDir} now`;
-                }
-            } else {
-                const streetOnto = streetName ? ` onto ${streetName}` : '';
-
-                if (announcementDistance === 500) {
-                    if (verbalAlert) {
-                        message = verbalAlert;
-                    } else if (distanceUnit === 'mi') {
-                        message = `In 1600 feet, ${directionText}${streetOnto}`;
-                    } else {
-                        message = `In 500 meters, ${directionText}${streetOnto}`;
-                    }
-                } else if (announcementDistance === 200) {
-                    if (distanceUnit === 'mi') {
-                        message = `In 600 feet, ${directionText}${streetOnto}`;
-                    } else {
-                        message = `In 200 meters, ${directionText}${streetOnto}`;
-                    }
-                } else if (announcementDistance === 100) {
-                    if (verbalPre) {
-                        message = verbalPre;
-                    } else if (distanceUnit === 'mi') {
-                        message = `In 300 feet, ${directionText}${streetOnto}`;
-                    } else {
-                        message = `In 100 meters, ${directionText}${streetOnto}`;
-                    }
-                } else if (announcementDistance === 50) {
-                    message = `${directionText}${streetOnto}`;
-                }
-            }
-            }
+        let message = VA.buildTurnAnnouncement({
+            announcementDistance: announcementDistance,
+            direction: direction,
+            distanceUnit: distanceUnit,
+            streetName: streetName,
+            directionText: directionText,
+            verbalAlert: verbalAlert,
+            verbalPre: verbalPre,
+            valhallaType: turnInfo.valhallaType,
+            roundaboutExitCount: turnInfo.roundabout_exit_count
+        });
 
             // At the most-imminent threshold, chain the very next maneuver if it follows
             // immediately (e.g. "Turn left, then turn right") so the driver hears it in advance.
@@ -15926,118 +15360,47 @@ function checkRouteDeviation(lat, lon, accuracy) {
     const snap = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
     const minDistance = snap.distance;
 
-    // Delegate the (pure) off-route decision to the unit-tested
-    // modules/navigation/reroute-decision.js helper when present. It returns the action +
-    // the new tracking state; the side effects (logging, notification, reroute) stay here.
-    const VRD = (typeof VoyagrRerouteDecision !== 'undefined') ? VoyagrRerouteDecision : null;
-    if (VRD) {
-        const wasJoined = routeJoinConfirmedForDeviation;
-        const decision = VRD.decideRouteDeviation({
-            autoRerouteEnabled: autoRerouteOnDeviationEnabled,
-            hasRoute: true,
-            remainingToDest: remainingToDest,
-            accuracy: accuracy,
-            minDistance: minDistance,
-            routeJoinConfirmed: routeJoinConfirmedForDeviation,
-            deviationStartTime: deviationStartTimeCheck,
-            lastRerouteTime: lastRerouteTime,
-            lastRerouteAttemptTime: lastRerouteAttemptTime,
-            offRouteStreak: deviationOffRouteStreak,
-            now: now
-        });
+    const VRD = VoyagrModules.rerouteDecision();
+    const wasJoined = routeJoinConfirmedForDeviation;
+    const decision = VRD.decideRouteDeviation({
+        autoRerouteEnabled: autoRerouteOnDeviationEnabled,
+        hasRoute: true,
+        remainingToDest: remainingToDest,
+        accuracy: accuracy,
+        minDistance: minDistance,
+        routeJoinConfirmed: routeJoinConfirmedForDeviation,
+        deviationStartTime: deviationStartTimeCheck,
+        lastRerouteTime: lastRerouteTime,
+        lastRerouteAttemptTime: lastRerouteAttemptTime,
+        offRouteStreak: deviationOffRouteStreak,
+        now: now
+    });
 
-        routeJoinConfirmedForDeviation = decision.routeJoinConfirmed;
-        deviationStartTimeCheck = decision.deviationStartTime;
-        deviationOffRouteStreak = decision.offRouteStreak != null ? decision.offRouteStreak : 0;
+    routeJoinConfirmedForDeviation = decision.routeJoinConfirmed;
+    deviationStartTimeCheck = decision.deviationStartTime;
+    deviationOffRouteStreak = decision.offRouteStreak != null ? decision.offRouteStreak : 0;
 
-        if (!wasJoined && decision.routeJoinConfirmed) {
-            console.log('[Rerouting] Route join detected — deviation monitoring active');
-        }
-
-        if (decision.action === 'reroute') {
-            lastRerouteAttemptTime = decision.lastRerouteAttemptTime || now;
-            lastRerouteDeviation = minDistance;
-            rerouteAttemptCount++;
-            console.log(`[Rerouting] Deviation confirmed: ${minDistance.toFixed(0)}m for ${(decision.deviationDuration / 1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
-
-            let deviationDisplay;
-            if (distanceUnit === 'mi') {
-                const deviationFeet = Math.round(minDistance * 3.28084);
-                deviationDisplay = `${deviationFeet} ft`;
-            } else {
-                deviationDisplay = `${minDistance.toFixed(0)} m`;
-            }
-            sendNotification('🔄 Route Deviation', `You are ${deviationDisplay} off route for ${(decision.deviationDuration / 1000).toFixed(0)}s. Recalculating...`, 'warning');
-            triggerAutomaticRerouteWithHazardHandling(lat, lon);
-        } else if (decision.action === 'debounced' || decision.action === 'waiting') {
-            lastRerouteDeviation = minDistance;
-        }
-        return;
+    if (!wasJoined && decision.routeJoinConfirmed) {
+        console.log('[Rerouting] Route join detected — deviation monitoring active');
     }
 
-    // ----- Inline fallback (reroute-decision module failed to load) -----
-    // Widen the off-route threshold by part of the GPS error so noisy-but-on-road
-    // fixes don't count as a deviation. Genuine wrong-road deviations are far larger.
-    const effectiveThreshold = DEVIATION_THRESHOLD_METERS + Math.min(DEVIATION_ACC_EXTRA_CAP_M, acc * 0.5);
-
-    if (!routeJoinConfirmedForDeviation) {
-        if (minDistance <= ROUTE_JOIN_GATE_METERS) {
-            routeJoinConfirmedForDeviation = true;
-            if (deviationStartTimeCheck) deviationStartTimeCheck = null;
-            console.log('[Rerouting] Route join detected — deviation monitoring active');
-        } else {
-            if (deviationStartTimeCheck) deviationStartTimeCheck = null;
-            return;
-        }
-    }
-
-    // If deviation beyond the accuracy-aware threshold
-    if (minDistance > effectiveThreshold) {
-        // Start tracking deviation time if not already
-        if (!deviationStartTimeCheck) {
-            deviationStartTimeCheck = now;
-            console.log(`[Rerouting] Deviation started: ${minDistance.toFixed(0)}m off route (threshold ${effectiveThreshold.toFixed(0)}m)`);
-        }
-
-        const deviationDuration = now - deviationStartTimeCheck;
-
-        // Only reroute if deviated for more than 10 seconds
-        if (deviationDuration >= DEVIATION_TIME_THRESHOLD_MS) {
-            const timeSinceLastReroute = now - lastRerouteTime;
-
-            // Only reroute if enough time has passed (debounce)
-            if (timeSinceLastReroute > REROUTE_DEBOUNCE_MS) {
-                rerouteAttemptCount++;
-                console.log(`[Rerouting] Deviation confirmed: ${minDistance.toFixed(0)}m for ${(deviationDuration / 1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
-
-                // Convert deviation distance to user's preferred units
-                let deviationDisplay;
-                if (distanceUnit === 'mi') {
-                    // Convert meters to feet for imperial users
-                    const deviationFeet = Math.round(minDistance * 3.28084);
-                    deviationDisplay = `${deviationFeet} ft`;
-                } else {
-                    deviationDisplay = `${minDistance.toFixed(0)} m`;
-                }
-
-                sendNotification('🔄 Route Deviation', `You are ${deviationDisplay} off route for ${(deviationDuration / 1000).toFixed(0)}s. Recalculating...`, 'warning');
-                triggerAutomaticRerouteWithHazardHandling(lat, lon);
-                lastRerouteTime = now;
-                deviationStartTimeCheck = null; // Reset after reroute
-            } else {
-                console.log(`[Rerouting] Deviation ${minDistance.toFixed(0)}m for ${(deviationDuration / 1000).toFixed(1)}s - debouncing (${(REROUTE_DEBOUNCE_MS - timeSinceLastReroute).toFixed(0)}ms remaining)`);
-            }
-        } else {
-            console.log(`[Rerouting] Deviation ${minDistance.toFixed(0)}m - waiting for ${((DEVIATION_TIME_THRESHOLD_MS - deviationDuration) / 1000).toFixed(1)}s more`);
-        }
-
+    if (decision.action === 'reroute') {
+        lastRerouteAttemptTime = decision.lastRerouteAttemptTime || now;
         lastRerouteDeviation = minDistance;
-    } else {
-        // Back on route - reset deviation tracking
-        if (deviationStartTimeCheck) {
-            console.log(`[Rerouting] Back on route (${minDistance.toFixed(0)}m from route)`);
-            deviationStartTimeCheck = null;
+        rerouteAttemptCount++;
+        console.log(`[Rerouting] Deviation confirmed: ${minDistance.toFixed(0)}m for ${(decision.deviationDuration / 1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
+
+        let deviationDisplay;
+        if (distanceUnit === 'mi') {
+            const deviationFeet = Math.round(minDistance * 3.28084);
+            deviationDisplay = `${deviationFeet} ft`;
+        } else {
+            deviationDisplay = `${minDistance.toFixed(0)} m`;
         }
+        sendNotification('🔄 Route Deviation', `You are ${deviationDisplay} off route for ${(decision.deviationDuration / 1000).toFixed(0)}s. Recalculating...`, 'warning');
+        triggerAutomaticRerouteWithHazardHandling(lat, lon);
+    } else if (decision.action === 'debounced' || decision.action === 'waiting') {
+        lastRerouteDeviation = minDistance;
     }
 }
 
@@ -16349,8 +15712,7 @@ async function triggerAutomaticReroute(currentLat, currentLon) {
  */
 // calculateDistance moved to route-geometry (unified with calculateHaversineDistance).
 function calculateDistance(lat1, lon1, lat2, lon2) {
-    const RG = (typeof VoyagrRouteGeometry !== 'undefined') ? VoyagrRouteGeometry : null;
-    return RG ? RG.haversineDistanceMeters(lat1, lon1, lat2, lon2) : 0;
+    return VoyagrModules.routeGeometry().haversineDistanceMeters(lat1, lon1, lat2, lon2);
 }
 
 // Hazard announcement debouncing
