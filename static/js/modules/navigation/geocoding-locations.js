@@ -185,6 +185,41 @@
         return 'Error: Invalid coordinates';
     }
 
+    /**
+     * Read a cached geocode entry, marking it as cached for status copy.
+     * @param {Object} cache
+     * @param {string} key
+     * @returns {({ lat: number, lon: number, display_name: string, cached: boolean }|null)}
+     */
+    function readGeocodeCacheHit(cache, key) {
+        cache = cache || {};
+        if (!cache[key]) return null;
+        var hit = cache[key];
+        return {
+            lat: hit.lat,
+            lon: hit.lon,
+            display_name: hit.display_name,
+            cached: true,
+        };
+    }
+
+    /**
+     * Store a geocode result in the in-memory cache (without the cached flag).
+     * @param {Object} cache
+     * @param {string} key
+     * @param {{ lat: number, lon: number, display_name: string }} entry
+     * @returns {Object}
+     */
+    function writeGeocodeCacheEntry(cache, key, entry) {
+        if (!cache || !key || !entry) return cache || {};
+        cache[key] = {
+            lat: entry.lat,
+            lon: entry.lon,
+            display_name: entry.display_name,
+        };
+        return cache;
+    }
+
     var api = {
         readStoredLocationFromDataset: readStoredLocationFromDataset,
         getGeocodeLoadingStatusMessage: getGeocodeLoadingStatusMessage,
@@ -200,6 +235,8 @@
         parseLatLonPairString: parseLatLonPairString,
         getInvalidCoordinatesFormatStatusMessage: getInvalidCoordinatesFormatStatusMessage,
         getInvalidCoordinatesStatusMessage: getInvalidCoordinatesStatusMessage,
+        readGeocodeCacheHit: readGeocodeCacheHit,
+        writeGeocodeCacheEntry: writeGeocodeCacheEntry,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

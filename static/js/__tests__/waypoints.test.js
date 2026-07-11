@@ -60,4 +60,13 @@ describe('waypoints module', () => {
         expect(W.buildViaPointDragPopupHtml('removeViaPoint(1)')).toContain('Drag to adjust');
         expect(W.buildStopPopupHtml('Coffee', 15, 'removeStop(0)')).toContain('15 min');
     });
+
+    test('buildMultiDropLegLayerDescriptor decodes geometry for map layers', () => {
+        const decode = jest.fn(() => [[51.5, -0.1], [51.6, -0.2]]);
+        const desc = W.buildMultiDropLegLayerDescriptor('encoded', 1, { geometry_precision: 6 }, decode);
+        expect(desc.layerId).toBe('multidrop-leg-1');
+        expect(desc.coordinates).toEqual([[-0.1, 51.5], [-0.2, 51.6]]);
+        expect(desc.lineColor).toBe(W.MULTIDROP_LEG_COLORS[1]);
+        expect(W.buildMultiDropLegLayerDescriptor('', 0, null, decode)).toBeNull();
+    });
 });

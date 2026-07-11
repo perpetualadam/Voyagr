@@ -3076,20 +3076,14 @@ function displayMultiDropLegs(data) {
 function drawMultiDropLegsOnMap(data) {
     if (!map || !data.all_geometry) return;
 
-    const legColors = VoyagrModules.waypoints().MULTIDROP_LEG_COLORS;
-
+    const WP = VoyagrModules.waypoints();
     data.all_geometry.forEach((geom, idx) => {
-        if (!geom) return;
+        const leg = data.legs && data.legs[idx];
+        const descriptor = WP.buildMultiDropLegLayerDescriptor(geom, idx, leg, decodePolyline);
+        if (!descriptor) return;
+
         try {
-            const precision = (data.legs && data.legs[idx]) ?
-                              (data.legs[idx].geometry_precision || 6) : 6;
-            const decoded = decodePolyline(geom, precision);
-            if (decoded.length < 2) return;
-
-            const coords = decoded.map(p => [p[1], p[0]]);
-            const layerId = `multidrop-leg-${idx}`;
-            const sourceId = `multidrop-leg-source-${idx}`;
-
+            const { layerId, sourceId, coordinates, lineColor } = descriptor;
             if (map.getLayer(layerId)) map.removeLayer(layerId);
             if (map.getSource(sourceId)) map.removeSource(sourceId);
 
@@ -3097,7 +3091,7 @@ function drawMultiDropLegsOnMap(data) {
                 type: 'geojson',
                 data: {
                     type: 'Feature',
-                    geometry: { type: 'LineString', coordinates: coords }
+                    geometry: { type: 'LineString', coordinates }
                 }
             });
 
@@ -3107,7 +3101,7 @@ function drawMultiDropLegsOnMap(data) {
                 source: sourceId,
                 layout: { 'line-join': 'round', 'line-cap': 'round' },
                 paint: {
-                    'line-color': legColors[idx % legColors.length],
+                    'line-color': lineColor,
                     'line-width': MapLibreHelpers.buildZoomScaledLineWidth(5),
                     'line-opacity': 0.85
                 }
@@ -4409,10 +4403,8 @@ async function calculateRoute() {
 
                     lastZoomLevel = map.getZoom();
 
-                    // Update info - include stop time if present
-                    let displayTime = data.time;
+                    const displayTime = RS.resolveRouteDisplayTime(data);
                     if (data.total_stop_time && data.total_stop_time > 0) {
-                        displayTime = data.total_time_with_stops || data.time;
                         console.log(`[Route] Total time with ${data.stops_count} stops: ${displayTime}`);
                     }
                     updateTripInfo(data.distance, displayTime, data.fuel_cost || '-', data.toll_cost || '-');
@@ -4424,17 +4416,10 @@ async function calculateRoute() {
                         displayMultiDropLegs(data);
                     }
 
-                    const durationMinutes = (data.routes && data.routes.length > 0)
-                        ? data.routes[0].duration_minutes
-                        : (data.total_duration_minutes || (data.time ? parseInt(data.time) : 0));
+                    const durationMinutes = RS.resolveInitialRouteDurationMinutes(data);
 
                     window.lastRouteApiResponse = data;
-                    window.lastCalculatedRoute = {
-                        ...data,
-                        duration_minutes: durationMinutes,  // FIXED: Ensure duration_minutes is at top level
-                        destination: geocodedEnd,  // Store geocoded coordinates for automatic rerouting
-                        destinationName: end  // Store human-readable name for display
-                    };
+                    window.lastCalculatedRoute = RS.buildLastCalculatedRoutePatch(data, geocodedEnd, end);
 
                     console.log(`[Route] Stored route with duration_minutes: ${durationMinutes}`);
 
@@ -9476,10 +9461,6 @@ function effectiveRoundaboutExitCount(stepIndex) {
 // ordinalEnglishExit / laneOrdinalEnglish / buildTurnLaneHintHtml live in
 // modules/navigation/turn-instructions.js — call VoyagrModules.turnInstructions() directly.
 
-function laneOrdinalEnglish(n) {
-    return VoyagrModules.turnInstructions().laneOrdinalEnglish(n);
-}
-
 /**
  * detectUpcomingTurn function
  * @function detectUpcomingTurn
@@ -9527,80 +9508,16 @@ function detectUpcomingTurn(userLat, userLon) {
     // next one is far away (e.g. motorway exit in 19 mi), show "Continue" — not a false
     // "turn left" from polyline bearing noise.
     if (!currentRouteSteps || currentRouteSteps.length === 0) {
-    // Fallback: Use geometry-based turn detection if no maneuvers available
-    // Reuse the snapped, monotonically non-decreasing index from the top of the function
-    const closestIndex = lastTurnDetectRouteVertexIndex;
-
-    // Look ahead for significant direction changes (turns)
-    let nextTurnIndex = null;
-    let maxBearingChange = 0;
-
-    // Get current bearing (from closest point to next point)
-    let currentBearing = null;
-    if (closestIndex < routePolyline.length - 1) {
-        const currPoint = routePolyline[closestIndex];
-        const nextPoint = routePolyline[closestIndex + 1];
-        currentBearing = calculateBearing(currPoint[0], currPoint[1], nextPoint[0], nextPoint[1]);
-    }
-
-    // Scan ahead up to 50 points to find the next significant turn
-    const scanDistance = Math.min(50, routePolyline.length - closestIndex - 1);
-    for (let i = closestIndex + 2; i < closestIndex + scanDistance; i++) {
-        if (i >= routePolyline.length) break;
-
-        const prevPoint = routePolyline[i - 1];
-        const currPoint = routePolyline[i];
-        const bearing = calculateBearing(prevPoint[0], prevPoint[1], currPoint[0], currPoint[1]);
-
-        if (currentBearing !== null) {
-            let bearingChange = bearing - currentBearing;
-            // Normalize to -180 to 180
-            if (bearingChange > 180) bearingChange -= 360;
-            if (bearingChange < -180) bearingChange += 360;
-
-            // Look for significant direction changes (>10 degrees)
-            if (Math.abs(bearingChange) > 10 && Math.abs(bearingChange) > maxBearingChange) {
-                maxBearingChange = Math.abs(bearingChange);
-                nextTurnIndex = i;
+        return TI.findGeometryFallbackTurn(
+            routePolyline,
+            turnSnap,
+            lastTurnDetectRouteVertexIndex,
+            {
+                bearing: RG.bearing,
+                calculateTurnDirection: TI.calculateTurnDirection,
+                distanceAlongRouteToVertexMeters: RG.distanceAlongRouteToVertexMeters,
             }
-        }
-    }
-
-    // If no significant turn found, use the next point ahead
-    if (nextTurnIndex === null) {
-        nextTurnIndex = Math.min(closestIndex + 5, routePolyline.length - 1);
-    }
-
-    if (nextTurnIndex === closestIndex || nextTurnIndex === closestIndex + 1) {
-        return null; // No turn ahead
-    }
-
-    const nextTurnPoint = routePolyline[nextTurnIndex];
-    const distanceToTurn = distanceAlongRouteToVertexMeters(
-        routePolyline, turnSnap, nextTurnIndex
-    );
-
-    // Calculate turn direction using proper bearing calculation
-    let turnDirection = 'straight';
-    if (closestIndex > 0 && nextTurnIndex < routePolyline.length - 1) {
-        const prevPoint = routePolyline[Math.max(0, closestIndex - 1)];
-        const currPoint = routePolyline[closestIndex];
-        const nextPoint = routePolyline[nextTurnIndex];
-
-        const bearing1 = calculateBearing(prevPoint[0], prevPoint[1], currPoint[0], currPoint[1]);
-        const bearing2 = calculateBearing(currPoint[0], currPoint[1], nextPoint[0], nextPoint[1]);
-
-        turnDirection = calculateTurnDirection(bearing1, bearing2);
-    }
-
-    return {
-        distance: distanceToTurn,
-        lat: nextTurnPoint[0],
-        lon: nextTurnPoint[1],
-        index: nextTurnIndex,
-        direction: turnDirection,
-        streetName: ''
-    };
+        );
     }
 
     return null;
@@ -15429,10 +15346,10 @@ async function geocodeAddress(address) {
         }
     }
 
-    // Check cache first
-    if (geocodingCache[trimmedAddress]) {
+    const cachedHit = GL.readGeocodeCacheHit(geocodingCache, trimmedAddress);
+    if (cachedHit) {
         console.log('[Geocoding] Cache hit for:', trimmedAddress);
-        return { ...geocodingCache[trimmedAddress], cached: true };
+        return cachedHit;
     }
 
     try {
@@ -15462,8 +15379,7 @@ async function geocodeAddress(address) {
             return null;
         }
 
-        // Cache the result
-        geocodingCache[trimmedAddress] = geocoded;
+        geocodingCache = GL.writeGeocodeCacheEntry(geocodingCache, trimmedAddress, geocoded);
         saveGeocodeCache();
 
         console.log('[Geocoding] Success:', trimmedAddress, '→', geocoded.lat, geocoded.lon);

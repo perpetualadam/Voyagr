@@ -447,3 +447,31 @@ describe('turn detection helpers', () => {
         expect(turn.distance).toBe(200);
     });
 });
+
+describe('findGeometryFallbackTurn', () => {
+    const polyline = [
+        [51.5, -0.12],
+        [51.501, -0.119],
+        [51.502, -0.118],
+        [51.504, -0.115],
+        [51.506, -0.110],
+    ];
+
+    test('detects geometry fallback turn payload on polyline-only routes', () => {
+        const turnSnap = { index: 1, t: 0 };
+        const result = TI.findGeometryFallbackTurn(polyline, turnSnap, 1, {
+            bearing: () => 90,
+            calculateTurnDirection: () => 'left',
+            distanceAlongRouteToVertexMeters: () => 420,
+        });
+        expect(result).not.toBeNull();
+        expect(result.distance).toBe(420);
+        expect(result.index).toBe(4);
+        expect(result.lat).toBe(polyline[4][0]);
+        expect(result.streetName).toBe('');
+    });
+
+    test('returns null when polyline is too short', () => {
+        expect(TI.findGeometryFallbackTurn([[51.5, -0.1]], { index: 0 }, 0, {})).toBeNull();
+    });
+});

@@ -593,6 +593,53 @@
     }
 
     /**
+     * Trip time string for the trip-info panel, including stop dwell when present.
+     * @param {Object} data
+     * @returns {*}
+     */
+    function resolveRouteDisplayTime(data) {
+        data = data || {};
+        if (data.total_stop_time && data.total_stop_time > 0) {
+            return data.total_time_with_stops || data.time;
+        }
+        return data.time;
+    }
+
+    /**
+     * Duration in minutes from an initial `/api/route` success payload.
+     * @param {Object} data
+     * @returns {number}
+     */
+    function resolveInitialRouteDurationMinutes(data) {
+        data = data || {};
+        if (data.routes && data.routes.length > 0) {
+            return data.routes[0].duration_minutes;
+        }
+        return data.total_duration_minutes || (data.time ? parseInt(data.time, 10) : 0);
+    }
+
+    /**
+     * Fields merged into `window.lastCalculatedRoute` after a successful calculateRoute.
+     * @param {Object} data
+     * @param {string} geocodedEnd
+     * @param {string} destinationLabel
+     * @returns {Object}
+     */
+    function buildLastCalculatedRoutePatch(data, geocodedEnd, destinationLabel) {
+        data = data || {};
+        var patch = {};
+        for (var k in data) {
+            if (Object.prototype.hasOwnProperty.call(data, k)) {
+                patch[k] = data[k];
+            }
+        }
+        patch.duration_minutes = resolveInitialRouteDurationMinutes(data);
+        patch.destination = geocodedEnd;
+        patch.destinationName = destinationLabel;
+        return patch;
+    }
+
+    /**
      * Greedy nearest-neighbour ordering of via-points and stops between start and end.
      * @param {number} startLat
      * @param {number} startLon
@@ -900,6 +947,9 @@
         buildStraightLineRoutePath: buildStraightLineRoutePath,
         resolvePreviewRoutePath: resolvePreviewRoutePath,
         buildRouteCalculatedStatusMessage: buildRouteCalculatedStatusMessage,
+        resolveRouteDisplayTime: resolveRouteDisplayTime,
+        resolveInitialRouteDurationMinutes: resolveInitialRouteDurationMinutes,
+        buildLastCalculatedRoutePatch: buildLastCalculatedRoutePatch,
         orderWaypointsGreedy: orderWaypointsGreedy,
         resolvePreviewRoute: resolvePreviewRoute,
         resolvePreviewDistanceKm: resolvePreviewDistanceKm,

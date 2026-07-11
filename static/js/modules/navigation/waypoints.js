@@ -237,6 +237,31 @@
         return '<b>' + stopName + '</b><br>Duration: ' + duration + ' min<br>' + buildWaypointRemoveButtonHtml(removeOnclick);
     }
 
+    /**
+     * MapLibre layer descriptor for one multi-drop leg geometry string.
+     * @param {string} geom - Encoded polyline
+     * @param {number} idx - Leg index
+     * @param {Object|null|undefined} leg - Leg metadata from API
+     * @param {function(string, number): Array<[number,number]>} decodePolyline
+     * @returns {{ layerId: string, sourceId: string, coordinates: Array<[number,number]>, lineColor: string }|null}
+     */
+    function buildMultiDropLegLayerDescriptor(geom, idx, leg, decodePolyline) {
+        if (!geom || typeof decodePolyline !== 'function') return null;
+        try {
+            var precision = leg ? (leg.geometry_precision || 6) : 6;
+            var decoded = decodePolyline(geom, precision);
+            if (!decoded || decoded.length < 2) return null;
+            return {
+                layerId: 'multidrop-leg-' + idx,
+                sourceId: 'multidrop-leg-source-' + idx,
+                coordinates: decoded.map(function (p) { return [p[1], p[0]]; }),
+                lineColor: MULTIDROP_LEG_COLORS[idx % MULTIDROP_LEG_COLORS.length],
+            };
+        } catch (_e) {
+            return null;
+        }
+    }
+
     var api = {
         MULTIDROP_LEG_COLORS: MULTIDROP_LEG_COLORS,
         EMPTY_WAYPOINTS_HTML: EMPTY_WAYPOINTS_HTML,
@@ -245,6 +270,7 @@
         buildWaypointsListHtml: buildWaypointsListHtml,
         buildMultiDropLegHtml: buildMultiDropLegHtml,
         buildMultiDropItineraryHtml: buildMultiDropItineraryHtml,
+        buildMultiDropLegLayerDescriptor: buildMultiDropLegLayerDescriptor,
         ROUTE_DRAG_MARKER_ICON_SIZE: ROUTE_DRAG_MARKER_ICON_SIZE,
         WAYPOINT_MARKER_ICON_SIZE: WAYPOINT_MARKER_ICON_SIZE,
         buildRouteDragMarkerHtml: buildRouteDragMarkerHtml,

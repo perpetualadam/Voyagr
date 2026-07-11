@@ -68,4 +68,16 @@ describe('geocoding-locations module', () => {
         expect(GL.getInvalidCoordinatesFormatStatusMessage()).toContain('format');
         expect(GL.getInvalidCoordinatesStatusMessage()).toContain('Invalid coordinates');
     });
+
+    test('geocode cache read/write helpers', () => {
+        const cache = {};
+        expect(GL.readGeocodeCacheHit(cache, 'missing')).toBeNull();
+        GL.writeGeocodeCacheEntry(cache, 'Leeds', { lat: 53.8, lon: -1.5, display_name: 'Leeds' });
+        expect(GL.readGeocodeCacheHit(cache, 'Leeds')).toEqual({
+            lat: 53.8,
+            lon: -1.5,
+            display_name: 'Leeds',
+            cached: true,
+        });
+    });
 });
