@@ -193,6 +193,68 @@
         return '<span class="lane-arrow">' + (arrow || '↑') + '</span>';
     }
 
+    var LANE_GUIDANCE_FETCH_INTERVAL_MS = 3000;
+    var LANE_GUIDANCE_CACHE_TTL_MS = 20000;
+    var LANE_GUIDANCE_FALLBACK_TTL_MS = 8000;
+    var LANE_GUIDANCE_FETCH_TIMEOUT_MS = 2500;
+    var LANE_GUIDANCE_CACHE_MAX_ENTRIES = 40;
+    var LANE_GUIDANCE_POSITION_THRESHOLD_M = 50;
+
+    /**
+     * @param {Object} o
+     * @returns {boolean}
+     */
+    function shouldSkipLaneGuidanceFetch(o) {
+        o = o || {};
+        var posChanged = !o.lastPosition || o.distanceMovedMeters > LANE_GUIDANCE_POSITION_THRESHOLD_M;
+        var maneuverChanged = o.maneuver !== o.lastManeuver;
+        return !posChanged && !maneuverChanged &&
+            (o.now - o.lastFetch) < LANE_GUIDANCE_FETCH_INTERVAL_MS;
+    }
+
+    /**
+     * @param {string} maneuver
+     * @param {number} roundaboutExitCount
+     * @param {string} roadType
+     * @param {number} lat
+     * @param {number} lon
+     * @returns {string}
+     */
+    function buildLaneGuidanceCacheKey(maneuver, roundaboutExitCount, roadType, lat, lon) {
+        return maneuver + '|' + roundaboutExitCount + '|' + roadType + '|' +
+            lat.toFixed(3) + ',' + lon.toFixed(3);
+    }
+
+    /**
+     * @param {Object} o
+     * @returns {string}
+     */
+    function buildLaneGuidanceApiUrl(o) {
+        o = o || {};
+        return '/api/lane-guidance?lat=' + o.lat + '&lon=' + o.lon +
+            '&heading=' + o.heading + '&maneuver=' + o.maneuver +
+            '&distance=' + o.distance + '&road_type=' + o.roadType +
+            '&roundabout_exit_count=' + (o.roundaboutExitCount || 0);
+    }
+
+    /**
+     * @param {boolean} isFallback
+     * @returns {number}
+     */
+    function getLaneGuidanceCacheTtlMs(isFallback) {
+        return isFallback ? LANE_GUIDANCE_FALLBACK_TTL_MS : LANE_GUIDANCE_CACHE_TTL_MS;
+    }
+
+    /**
+     * @param {{ ts: number, fallback?: boolean }} entry
+     * @param {number} now
+     * @returns {boolean}
+     */
+    function isLaneGuidanceCacheEntryFresh(entry, now) {
+        if (!entry) return false;
+        return (now - entry.ts) < getLaneGuidanceCacheTtlMs(!!entry.fallback);
+    }
+
     var api = {
         ARROW: ARROW,
         LANE_DEFAULTS: LANE_DEFAULTS,
@@ -205,7 +267,18 @@
         urgencyClass: urgencyClass,
         displayText: displayText,
         laneIndicators: laneIndicators,
-        buildLaneIndicatorHtml: buildLaneIndicatorHtml
+        buildLaneIndicatorHtml: buildLaneIndicatorHtml,
+        LANE_GUIDANCE_FETCH_INTERVAL_MS: LANE_GUIDANCE_FETCH_INTERVAL_MS,
+        LANE_GUIDANCE_CACHE_TTL_MS: LANE_GUIDANCE_CACHE_TTL_MS,
+        LANE_GUIDANCE_FALLBACK_TTL_MS: LANE_GUIDANCE_FALLBACK_TTL_MS,
+        LANE_GUIDANCE_FETCH_TIMEOUT_MS: LANE_GUIDANCE_FETCH_TIMEOUT_MS,
+        LANE_GUIDANCE_CACHE_MAX_ENTRIES: LANE_GUIDANCE_CACHE_MAX_ENTRIES,
+        LANE_GUIDANCE_POSITION_THRESHOLD_M: LANE_GUIDANCE_POSITION_THRESHOLD_M,
+        shouldSkipLaneGuidanceFetch: shouldSkipLaneGuidanceFetch,
+        buildLaneGuidanceCacheKey: buildLaneGuidanceCacheKey,
+        buildLaneGuidanceApiUrl: buildLaneGuidanceApiUrl,
+        getLaneGuidanceCacheTtlMs: getLaneGuidanceCacheTtlMs,
+        isLaneGuidanceCacheEntryFresh: isLaneGuidanceCacheEntryFresh,
     };
 
     // CommonJS (Jest) export.

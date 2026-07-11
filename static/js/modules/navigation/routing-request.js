@@ -96,6 +96,34 @@
     }
 
     /**
+     * Shared avoidance prefs for multimodal driving/walking legs.
+     * @param {Storage} storage
+     * @returns {Object}
+     */
+    function readMultimodalLegAvoidancePrefs(storage) {
+        return {
+            enableHazardAvoidance: isMultimodalLegHazardAvoidanceEnabled(storage),
+            avoidCameras: storage.getItem('pref_cameras') !== 'false',
+            avoidTrafficLights: storage.getItem('pref_trafficLightsAvoid') !== 'false',
+            avoidRailwayCrossings: storage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+        };
+    }
+
+    /**
+     * Driving-leg-only prefs read from storage (avoidTolls resolved by caller).
+     * @param {Storage} storage
+     * @param {boolean} avoidTolls
+     * @returns {Object}
+     */
+    function readMultimodalDrivingLegStoragePrefs(storage, avoidTolls) {
+        return {
+            includeTolls: storage.getItem('includeTolls') !== 'false',
+            avoidTolls: !!avoidTolls,
+            avoidCaz: storage.getItem('pref_caz') !== 'false',
+        };
+    }
+
+    /**
      * Master hazard-avoidance flag for automatic reroute (buildRouteRequest).
      * @param {Storage} storage
      * @param {function(): boolean} isAvoidTollsEnabled
@@ -326,6 +354,8 @@
         buildSharedRouteOptions: buildSharedRouteOptions,
         isInitialRouteHazardAvoidanceEnabled: isInitialRouteHazardAvoidanceEnabled,
         isMultimodalLegHazardAvoidanceEnabled: isMultimodalLegHazardAvoidanceEnabled,
+        readMultimodalLegAvoidancePrefs: readMultimodalLegAvoidancePrefs,
+        readMultimodalDrivingLegStoragePrefs: readMultimodalDrivingLegStoragePrefs,
         isRerouteHazardAvoidanceEnabled: isRerouteHazardAvoidanceEnabled,
         normalizeAvoidPoints: normalizeAvoidPoints,
         formatCoordPair: formatCoordPair,

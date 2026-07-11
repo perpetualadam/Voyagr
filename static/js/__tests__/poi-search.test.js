@@ -45,4 +45,13 @@ describe('poi-search module', () => {
         expect(popup).toContain('1.5 km away');
         expect(popup).toContain('tel:01234');
     });
+
+    test('along-route search helpers', () => {
+        expect(POI.canSearchAlongRoute(2)).toBe(true);
+        expect(POI.canSearchAlongRoute(1)).toBe(false);
+        expect(POI.toggleAlongRouteCategoriesDisplay('none')).toBe('block');
+        expect(POI.buildAlongRouteSearchBody([[51, 0]], 'fuel').type).toBe('fuel');
+        expect(POI.getAlongRouteNoRouteMessage()).toContain('Calculate');
+        expect(POI.getAlongRouteResultsMessage('fuel', 3)).toContain('3');
+    });
 });

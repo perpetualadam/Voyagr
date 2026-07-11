@@ -253,4 +253,22 @@ describe('multi-drop and initial route helpers', () => {
         expect(body.departure_time).toBe('08:00');
         expect(body.routing_mode).toBe('auto');
     });
+
+    test('readMultimodalLegAvoidancePrefs and driving storage prefs', () => {
+        const storage = mockStorage({
+            pref_cameras: 'false',
+            pref_trafficLightsAvoid: 'true',
+            pref_railwayCrossingsAvoid: 'false',
+            includeTolls: 'false',
+            pref_caz: 'true',
+        });
+        const leg = RR.readMultimodalLegAvoidancePrefs(storage);
+        expect(leg.avoidCameras).toBe(false);
+        expect(leg.avoidTrafficLights).toBe(true);
+        expect(leg.enableHazardAvoidance).toBe(true);
+        const driving = RR.readMultimodalDrivingLegStoragePrefs(storage, true);
+        expect(driving.includeTolls).toBe(false);
+        expect(driving.avoidTolls).toBe(true);
+        expect(driving.avoidCaz).toBe(true);
+    });
 });

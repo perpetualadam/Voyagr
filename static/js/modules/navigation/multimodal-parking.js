@@ -201,6 +201,47 @@
         };
     }
 
+    /**
+     * @param {Object|null|undefined} lastCalculatedRoute
+     * @returns {{ lat: number, lon: number }|null}
+     */
+    function resolveParkingStartCoordsFromRoute(lastCalculatedRoute) {
+        if (!lastCalculatedRoute || lastCalculatedRoute.start_lat == null) return null;
+        return {
+            lat: lastCalculatedRoute.start_lat,
+            lon: lastCalculatedRoute.start_lon,
+        };
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getParkingSelectLoadingMessage() {
+        return '🅿️ Calculating routes via parking...';
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getParkingSelectSuccessMessage() {
+        return '✅ Routes calculated. Driving + Walking shown on map';
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getParkingSelectNoStartMessage() {
+        return 'Could not determine start location';
+    }
+
+    /**
+     * @param {string} leg
+     * @returns {string}
+     */
+    function getParkingSelectLegErrorMessage(leg) {
+        return 'Error calculating ' + leg + ' route';
+    }
+
     var api = {
         computeMultimodalLegTotals: computeMultimodalLegTotals,
         buildParkingRouteLabel: buildParkingRouteLabel,
@@ -215,6 +256,11 @@
         sortParkingOptionsByDistance: sortParkingOptionsByDistance,
         getParkingOptionsDisplaySlice: getParkingOptionsDisplaySlice,
         buildParkingOptionItemMountPlan: buildParkingOptionItemMountPlan,
+        resolveParkingStartCoordsFromRoute: resolveParkingStartCoordsFromRoute,
+        getParkingSelectLoadingMessage: getParkingSelectLoadingMessage,
+        getParkingSelectSuccessMessage: getParkingSelectSuccessMessage,
+        getParkingSelectNoStartMessage: getParkingSelectNoStartMessage,
+        getParkingSelectLegErrorMessage: getParkingSelectLegErrorMessage,
         buildParkingOptionItemHtml: buildParkingOptionItemHtml,
         buildParkingEmptyStateHtml: buildParkingEmptyStateHtml,
         buildParkingPreviewRouteHtml: buildParkingPreviewRouteHtml,

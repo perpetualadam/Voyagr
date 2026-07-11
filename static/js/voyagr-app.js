@@ -8109,40 +8109,34 @@ function displayParkingOptions(parkingList, destinationCoords) {
 }
 
 async function selectParking(parking, destinationCoords) {
+    const MP = VoyagrModules.multimodalParking();
+    const RR = VoyagrRoutingRequest;
     selectedParking = parking;
-    showStatus('🅿️ Calculating routes via parking...', 'loading');
+    showStatus(MP.getParkingSelectLoadingMessage(), 'loading');
 
     try {
-        // Get current location or start location
-        const startInput = document.getElementById('start').value;
-        let startCoords = null;
-
-        if (window.lastCalculatedRoute && window.lastCalculatedRoute.start_lat) {
-            startCoords = {
-                lat: window.lastCalculatedRoute.start_lat,
-                lon: window.lastCalculatedRoute.start_lon
-            };
-        } else {
-            showStatus('Could not determine start location', 'error');
+        const startCoords = MP.resolveParkingStartCoordsFromRoute(window.lastCalculatedRoute);
+        if (!startCoords) {
+            showStatus(MP.getParkingSelectNoStartMessage(), 'error');
             return;
         }
 
-        // Calculate driving route to parking
-        const enableHazardAvoidanceParking = VoyagrRoutingRequest.isMultimodalLegHazardAvoidanceEnabled(localStorage);
-        const drivingBody = VoyagrRoutingRequest.buildMultimodalDrivingLegBody({
+        const legPrefs = RR.readMultimodalLegAvoidancePrefs(localStorage);
+        const drivingExtras = RR.readMultimodalDrivingLegStoragePrefs(localStorage, isAvoidTollsEnabled());
+        const drivingBody = RR.buildMultimodalDrivingLegBody({
             startLat: startCoords.lat,
             startLon: startCoords.lon,
             endLat: parking.lat,
             endLon: parking.lon,
             vehicleType: currentVehicleType,
             costParams: getRouteCostParams(currentVehicleType),
-            includeTolls: localStorage.getItem('includeTolls') !== 'false',
-            avoidTolls: isAvoidTollsEnabled(),
-            avoidCaz: localStorage.getItem('pref_caz') !== 'false',
-            enableHazardAvoidance: enableHazardAvoidanceParking,
-            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
-            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+            includeTolls: drivingExtras.includeTolls,
+            avoidTolls: drivingExtras.avoidTolls,
+            avoidCaz: drivingExtras.avoidCaz,
+            enableHazardAvoidance: legPrefs.enableHazardAvoidance,
+            avoidCameras: legPrefs.avoidCameras,
+            avoidTrafficLights: legPrefs.avoidTrafficLights,
+            avoidRailwayCrossings: legPrefs.avoidRailwayCrossings,
         });
 
         const drivingResponse = await fetch('/api/route', {
@@ -8153,21 +8147,19 @@ async function selectParking(parking, destinationCoords) {
 
         const drivingData = await drivingResponse.json();
         if (!drivingData.success) {
-            showStatus('Error calculating driving route', 'error');
+            showStatus(MP.getParkingSelectLegErrorMessage('driving'), 'error');
             return;
         }
 
-        // Calculate walking route from parking to destination
-        const enableHazardAvoidanceWalking = VoyagrRoutingRequest.isMultimodalLegHazardAvoidanceEnabled(localStorage);
-        const walkingBody = VoyagrRoutingRequest.buildMultimodalWalkingLegBody({
+        const walkingBody = RR.buildMultimodalWalkingLegBody({
             startLat: parking.lat,
             startLon: parking.lon,
             endLat: destinationCoords.lat,
             endLon: destinationCoords.lon,
-            enableHazardAvoidance: enableHazardAvoidanceWalking,
-            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
-            avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
+            enableHazardAvoidance: legPrefs.enableHazardAvoidance,
+            avoidCameras: legPrefs.avoidCameras,
+            avoidTrafficLights: legPrefs.avoidTrafficLights,
+            avoidRailwayCrossings: legPrefs.avoidRailwayCrossings,
         });
 
         const walkingResponse = await fetch('/api/route', {
@@ -8178,17 +8170,13 @@ async function selectParking(parking, destinationCoords) {
 
         const walkingData = await walkingResponse.json();
         if (!walkingData.success) {
-            showStatus('Error calculating walking route', 'error');
+            showStatus(MP.getParkingSelectLegErrorMessage('walking'), 'error');
             return;
         }
 
-        // Display both routes on map
         displayParkingRoutes(drivingData, walkingData, parking, destinationCoords);
-
-        // Update preview with combined journey info
         updateParkingPreview(drivingData, walkingData, parking);
-
-        showStatus('✅ Routes calculated. Driving + Walking shown on map', 'success');
+        showStatus(MP.getParkingSelectSuccessMessage(), 'success');
 
     } catch (error) {
         console.error('[Parking] Error selecting parking:', error);
@@ -8675,7 +8663,6 @@ function addCurrentToFavorites() {
  */
 // Lane guidance throttle to avoid API spam
 let lastLaneGuidanceFetch = 0;
-const LANE_GUIDANCE_FETCH_INTERVAL = 3000; // 3 seconds
 let lastLaneGuidanceManeuver = '';
 let lastLaneGuidancePosition = null;
 let _lastLaneVoiceKey = '';
@@ -8683,30 +8670,37 @@ let _lastLaneVoiceKey = '';
 // Short client-side cache of lane-guidance responses so the overlay shows instantly when
 // revisiting the same approach and so a slow/unavailable Overpass doesn't blank it out.
 const _laneGuidanceCache = new Map();        // key -> { data, ts, fallback }
-const LANE_GUIDANCE_CACHE_TTL = 20000;       // reuse OSM-derived guidance for 20s
-const LANE_GUIDANCE_FALLBACK_TTL = 8000;     // shorter reuse for deterministic fallback (keep retrying OSM)
-const LANE_GUIDANCE_FETCH_TIMEOUT = 2500;    // treat Overpass as "slow" beyond this and fall back
 
 function _pruneLaneGuidanceCache() {
+    const LG = VoyagrModules.laneGuidance();
     const now = Date.now();
     for (const [k, v] of _laneGuidanceCache) {
-        if (now - v.ts > LANE_GUIDANCE_CACHE_TTL) _laneGuidanceCache.delete(k);
+        if (now - v.ts > LG.LANE_GUIDANCE_CACHE_TTL_MS) _laneGuidanceCache.delete(k);
     }
-    while (_laneGuidanceCache.size > 40) {
+    while (_laneGuidanceCache.size > LG.LANE_GUIDANCE_CACHE_MAX_ENTRIES) {
         const firstKey = _laneGuidanceCache.keys().next().value;
         _laneGuidanceCache.delete(firstKey);
     }
 }
 
 function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
+    const LG = VoyagrModules.laneGuidance();
     roundaboutExitCount = roundaboutExitCount || 0;
     const now = Date.now();
 
-    const posChanged = !lastLaneGuidancePosition ||
-        calculateDistance(lat, lon, lastLaneGuidancePosition.lat, lastLaneGuidancePosition.lon) > 50;
-    const maneuverChanged = maneuver !== lastLaneGuidanceManeuver;
+    let distanceMovedMeters = 999;
+    if (lastLaneGuidancePosition) {
+        distanceMovedMeters = calculateDistance(lat, lon, lastLaneGuidancePosition.lat, lastLaneGuidancePosition.lon);
+    }
 
-    if (!posChanged && !maneuverChanged && (now - lastLaneGuidanceFetch) < LANE_GUIDANCE_FETCH_INTERVAL) {
+    if (LG.shouldSkipLaneGuidanceFetch({
+        now: now,
+        lastFetch: lastLaneGuidanceFetch,
+        lastPosition: lastLaneGuidancePosition,
+        distanceMovedMeters: distanceMovedMeters,
+        maneuver: maneuver,
+        lastManeuver: lastLaneGuidanceManeuver,
+    })) {
         return;
     }
 
@@ -8727,27 +8721,29 @@ function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
     lastLaneGuidanceManeuver = maneuver;
     lastLaneGuidancePosition = { lat, lon };
 
-    // Serve a fresh cached result instantly (key bucketed to ~110m so nearby ticks reuse it).
-    const cacheKey = `${maneuver}|${roundaboutExitCount}|${roadType}|${lat.toFixed(3)},${lon.toFixed(3)}`;
+    const cacheKey = LG.buildLaneGuidanceCacheKey(maneuver, roundaboutExitCount, roadType, lat, lon);
     const cached = _laneGuidanceCache.get(cacheKey);
-    if (cached) {
-        const ttl = cached.fallback ? LANE_GUIDANCE_FALLBACK_TTL : LANE_GUIDANCE_CACHE_TTL;
-        if (now - cached.ts < ttl) {
-            // Reuse the cached lane STRUCTURE but recompute urgency from the live distance.
-            const lanePos = _laneNameFor(cached.data.recommended_lane, cached.data.total_lanes);
-            renderLaneGuidanceUI({
-                ...cached.data,
-                ..._laneUrgencyFields(distToManeuver, lanePos, maneuver, roundaboutExitCount),
-            });
-            return;
-        }
+    if (LG.isLaneGuidanceCacheEntryFresh(cached, now)) {
+        const lanePos = _laneNameFor(cached.data.recommended_lane, cached.data.total_lanes);
+        renderLaneGuidanceUI({
+            ...cached.data,
+            ..._laneUrgencyFields(distToManeuver, lanePos, maneuver, roundaboutExitCount),
+        });
+        return;
     }
 
-    const url = `/api/lane-guidance?lat=${lat}&lon=${lon}&heading=${heading}&maneuver=${maneuver}&distance=${distToManeuver}&road_type=${roadType}&roundabout_exit_count=${roundaboutExitCount}`;
+    const url = LG.buildLaneGuidanceApiUrl({
+        lat: lat,
+        lon: lon,
+        heading: heading,
+        maneuver: maneuver,
+        distance: distToManeuver,
+        roadType: roadType,
+        roundaboutExitCount: roundaboutExitCount,
+    });
 
-    // Abort (and fall back) if Overpass is slow, so the overlay never stalls.
     const controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    const timeoutId = controller ? setTimeout(() => controller.abort(), LANE_GUIDANCE_FETCH_TIMEOUT) : null;
+    const timeoutId = controller ? setTimeout(() => controller.abort(), LG.LANE_GUIDANCE_FETCH_TIMEOUT_MS) : null;
 
     const useFallback = (reason) => {
         const fb = _buildDeterministicLaneGuidance(maneuver, distToManeuver, roundaboutExitCount, roadType);
@@ -13733,14 +13729,12 @@ function checkNavigationArrival(lat, lon, speedMs) {
 
 /** Show/hide map FABs that depend on active turn-by-turn navigation. */
 function updateNavigationFabVisibility() {
+    const MC = _mapControls();
+    const plan = MC.getNavigationFabVisibilityPlan(routeInProgress);
     const endBtn = document.getElementById('endNavigationBtn');
     const startBtn = document.getElementById('startNavBtn');
-    if (routeInProgress) {
-        if (endBtn) endBtn.style.display = 'block';
-        if (startBtn) startBtn.style.display = 'none';
-    } else {
-        if (endBtn) endBtn.style.display = 'none';
-    }
+    if (endBtn) endBtn.style.display = plan.endBtnDisplay;
+    if (startBtn && plan.startBtnDisplay != null) startBtn.style.display = plan.startBtnDisplay;
     syncBottomSheetOverlapFabs();
     updateRecenterButtonVisibility();
 }
@@ -15999,13 +15993,14 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     }
 
     // ===== SHOW AR AND 3D VIEW BUTTONS during navigation =====
+    const navFabDisplay = _mapControls().getNavStartExtraFabDisplay();
     const arModeBtn = document.getElementById('arModeBtn');
     if (arModeBtn) {
-        arModeBtn.style.display = 'flex';
+        arModeBtn.style.display = navFabDisplay.arModeBtnDisplay;
     }
     const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
     if (driverPerspectiveBtn) {
-        driverPerspectiveBtn.style.display = 'flex';
+        driverPerspectiveBtn.style.display = navFabDisplay.driverPerspectiveBtnDisplay;
         VoyagrModules.toggleUI().applyToggleButton(driverPerspectiveBtn, shouldUsePitchedDrivingCamera());
     }
 
@@ -16409,44 +16404,42 @@ function hideRoadNameBar() {
 // ===== SEARCH ALONG ROUTE =====
 
 function searchAlongRoute() {
+    const POI = VoyagrModules.poiSearch();
     const cats = document.getElementById('alongRouteCategories');
     if (cats) {
-        cats.style.display = cats.style.display === 'none' ? 'block' : 'none';
+        cats.style.display = POI.toggleAlongRouteCategoriesDisplay(cats.style.display);
     }
 }
 
 function searchAlongRouteByType(type) {
-    if (!routePolyline || routePolyline.length < 2) {
-        showStatus('Calculate a route first', 'error');
+    const POI = VoyagrModules.poiSearch();
+    if (!POI.canSearchAlongRoute(routePolyline ? routePolyline.length : 0)) {
+        showStatus(POI.getAlongRouteNoRouteMessage(), 'error');
         return;
     }
 
-    showStatus(`Searching for ${type} along route...`, 'info');
+    showStatus(POI.getAlongRouteSearchingMessage(type), 'info');
 
     const routePoints = routePolyline.map(p => [p[0], p[1]]);
 
     fetch('/api/poi-along-route', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            route_points: routePoints,
-            type: type,
-            radius: 1000,
-        })
+        body: JSON.stringify(POI.buildAlongRouteSearchBody(routePoints, type)),
     })
     .then(r => r.json())
     .then(data => {
         if (data.success && data.results && data.results.length > 0) {
             displayPOIResults(data.results, type, currentLat || 51.5074, currentLon || -0.1278);
             addPOIMarkersToMap(data.results, type);
-            showStatus(`Found ${data.results.length} ${type} along route`, 'success');
+            showStatus(POI.getAlongRouteResultsMessage(type, data.results.length), 'success');
         } else {
-            showStatus(`No ${type} found along route`, 'info');
+            showStatus(POI.getAlongRouteNoResultsMessage(type), 'info');
         }
     })
     .catch(err => {
         console.error('[AlongRoute] Error:', err);
-        showStatus('Search failed', 'error');
+        showStatus(POI.getAlongRouteSearchFailedMessage(), 'error');
     });
 }
 

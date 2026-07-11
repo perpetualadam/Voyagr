@@ -72,4 +72,13 @@ describe('map-controls module', () => {
         expect(btn.classList.contains('active')).toBe(true);
         expect(btn.innerHTML).toBe(MC.AR_ACTIVE_LABEL);
     });
+
+    test('navigation FAB visibility plans', () => {
+        const active = MC.getNavigationFabVisibilityPlan(true);
+        expect(active.endBtnDisplay).toBe('block');
+        expect(active.startBtnDisplay).toBe('none');
+        const idle = MC.getNavigationFabVisibilityPlan(false);
+        expect(idle.endBtnDisplay).toBe('none');
+        expect(MC.getNavStartExtraFabDisplay().arModeBtnDisplay).toBe('flex');
+    });
 });

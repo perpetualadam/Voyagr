@@ -151,6 +151,78 @@
         return html;
     }
 
+    var ALONG_ROUTE_SEARCH_RADIUS_M = 1000;
+    var ALONG_ROUTE_MIN_ROUTE_POINTS = 2;
+
+    /**
+     * @param {number} routePointCount
+     * @returns {boolean}
+     */
+    function canSearchAlongRoute(routePointCount) {
+        return routePointCount >= ALONG_ROUTE_MIN_ROUTE_POINTS;
+    }
+
+    /**
+     * @param {string} currentDisplay
+     * @returns {string}
+     */
+    function toggleAlongRouteCategoriesDisplay(currentDisplay) {
+        return currentDisplay === 'none' ? 'block' : 'none';
+    }
+
+    /**
+     * @param {Array<Array<number>>} routePoints
+     * @param {string} type
+     * @param {number} [radius]
+     * @returns {Object}
+     */
+    function buildAlongRouteSearchBody(routePoints, type, radius) {
+        return {
+            route_points: routePoints || [],
+            type: type,
+            radius: radius == null ? ALONG_ROUTE_SEARCH_RADIUS_M : radius,
+        };
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getAlongRouteNoRouteMessage() {
+        return 'Calculate a route first';
+    }
+
+    /**
+     * @param {string} type
+     * @returns {string}
+     */
+    function getAlongRouteSearchingMessage(type) {
+        return 'Searching for ' + type + ' along route...';
+    }
+
+    /**
+     * @param {string} type
+     * @param {number} count
+     * @returns {string}
+     */
+    function getAlongRouteResultsMessage(type, count) {
+        return 'Found ' + count + ' ' + type + ' along route';
+    }
+
+    /**
+     * @param {string} type
+     * @returns {string}
+     */
+    function getAlongRouteNoResultsMessage(type) {
+        return 'No ' + type + ' found along route';
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getAlongRouteSearchFailedMessage() {
+        return 'Search failed';
+    }
+
     var api = {
         POI_TYPE_ICONS: POI_TYPE_ICONS,
         POI_MAP_MARKER_ICONS: POI_MAP_MARKER_ICONS,
@@ -161,6 +233,16 @@
         formatPoiTypeTitle: formatPoiTypeTitle,
         buildPoiResultItemHtml: buildPoiResultItemHtml,
         buildPoiResultsModalHtml: buildPoiResultsModalHtml,
+        ALONG_ROUTE_SEARCH_RADIUS_M: ALONG_ROUTE_SEARCH_RADIUS_M,
+        ALONG_ROUTE_MIN_ROUTE_POINTS: ALONG_ROUTE_MIN_ROUTE_POINTS,
+        canSearchAlongRoute: canSearchAlongRoute,
+        toggleAlongRouteCategoriesDisplay: toggleAlongRouteCategoriesDisplay,
+        buildAlongRouteSearchBody: buildAlongRouteSearchBody,
+        getAlongRouteNoRouteMessage: getAlongRouteNoRouteMessage,
+        getAlongRouteSearchingMessage: getAlongRouteSearchingMessage,
+        getAlongRouteResultsMessage: getAlongRouteResultsMessage,
+        getAlongRouteNoResultsMessage: getAlongRouteNoResultsMessage,
+        getAlongRouteSearchFailedMessage: getAlongRouteSearchFailedMessage,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
