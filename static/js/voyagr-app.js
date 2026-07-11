@@ -1646,39 +1646,40 @@ function applySettingsToUI() {
 }
 
 /**
+ * Apply settings reset from a pure reset plan.
+ * @param {Object} plan - from buildSettingsResetPlan
+ * @returns {boolean} true when reset was confirmed and applied
+ */
+function applySettingsResetFromPlan(plan) {
+    if (!plan) return false;
+    if (!confirm(plan.confirmMessage)) return false;
+
+    (plan.localStorageKeys || []).forEach((key) => {
+        localStorage.removeItem(key);
+    });
+
+    const defaults = plan.runtimeDefaults || {};
+    if (defaults.distanceUnit) distanceUnit = defaults.distanceUnit;
+    if (defaults.currencyUnit) currencyUnit = defaults.currencyUnit;
+    if (defaults.speedUnit) speedUnit = defaults.speedUnit;
+    if (defaults.temperatureUnit) temperatureUnit = defaults.temperatureUnit;
+    if (defaults.currentVehicleType) currentVehicleType = defaults.currentVehicleType;
+    if (defaults.currentRoutingMode) currentRoutingMode = defaults.currentRoutingMode;
+    if (defaults.smartZoomEnabled !== undefined) smartZoomEnabled = defaults.smartZoomEnabled;
+
+    if (plan.reloadAfterReset) {
+        location.reload();
+    }
+    return true;
+}
+
+/**
  * resetAllSettings function
  * @function resetAllSettings
  * @returns {*} Return value description
  */
 function resetAllSettings() {
-    if (confirm('Are you sure you want to reset all settings to defaults?')) {
-        // Clear all settings from localStorage
-        const keysToRemove = [
-            'voyagr_all_settings',
-            'unit_distance', 'unit_currency', 'unit_speed', 'unit_temperature',
-            'vehicleType', 'routingMode',
-            'routePreferences',
-            'pref_avoid_tollRoads', 'pref_avoid_motorways', 'pref_avoid_ferries',
-            'pref_tolls', 'pref_caz', 'pref_cameras',
-            'mapTheme', 'smartZoomEnabled',
-            'parkingPreferences'
-        ];
-
-        keysToRemove.forEach(key => localStorage.removeItem(key));
-
-        // Reset variables to defaults
-        distanceUnit = 'km';
-        currencyUnit = 'GBP';
-        speedUnit = 'kmh';
-        temperatureUnit = 'celsius';
-        currentVehicleType = 'petrol_diesel';
-        currentRoutingMode = 'auto';
-        smartZoomEnabled = true;
-
-        // Reload page to apply defaults
-        location.reload();
-        showStatus('✅ Settings reset to defaults', 'success');
-    }
+    applySettingsResetFromPlan(_settingsSnapshot().buildSettingsResetPlan());
 }
 
 /**
@@ -3475,11 +3476,28 @@ function displayAnalytics(data) {
  * @returns {*} Return value description
  */
 function saveRoutePreferences() {
-    const preferences = collectSettingsFormState().routePreferences;
+    const preferences = collectRoutePreferencesFormState();
 
     localStorage.setItem('routePreferences', JSON.stringify(preferences));
     saveAllSettings();
     showStatus('Route preferences saved!', 'success');
+}
+
+/**
+ * Read route preference controls from the DOM (source of truth for save).
+ * @returns {Object}
+ */
+function collectRoutePreferencesFormState() {
+    return {
+        avoidHighways: document.getElementById('avoidHighways')?.checked || false,
+        preferScenic: document.getElementById('preferScenic')?.checked || false,
+        avoidTolls: isAvoidTollsEnabled(),
+        avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
+        preferQuiet: document.getElementById('preferQuiet')?.checked || false,
+        avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
+        routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
+        maxDetour: parseInt(document.getElementById('maxDetour')?.value || 20),
+    };
 }
 
 function saveMultiDropPreferences() {
@@ -3534,17 +3552,9 @@ function collectMultiDropFormState() {
 function applyMultiDropPreferencesUiFromPlan(plan) {
     if (!plan) return;
 
-    const ids = plan.elementIds || {};
-    const checks = plan.checks || {};
-    Object.entries(checks).forEach(([key, value]) => {
-        const el = document.getElementById(ids[key]);
-        if (el) el.checked = !!value;
-    });
-
-    const departureEl = document.getElementById(ids.departureTime);
-    if (departureEl && plan.departureTime !== undefined) {
-        departureEl.value = plan.departureTime;
-    }
+    const domPlan = _settingsSnapshot().buildMultiDropPreferencesDomApplyPlan(plan);
+    applyDomChecksFromPlan(domPlan.checks);
+    applyDomSelectsFromPlan(domPlan.selects);
 }
 
 function loadMultiDropPreferences() {
@@ -3995,16 +4005,7 @@ function showStatus(message, type) {
  */
 function collectSettingsFormState() {
     return {
-        routePreferences: {
-            avoidHighways: document.getElementById('avoidHighways')?.checked || false,
-            preferScenic: document.getElementById('preferScenic')?.checked || false,
-            avoidTolls: isAvoidTollsEnabled(),
-            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
-            preferQuiet: document.getElementById('preferQuiet')?.checked || false,
-            avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
-            routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
-            maxDetour: parseInt(document.getElementById('maxDetour')?.value || 20),
-        },
+        routePreferences: collectRoutePreferencesFormState(),
         hazardPreferences: {
             avoidTolls: isAvoidTollsEnabled(),
             avoidCAZ: localStorage.getItem('pref_caz') !== 'false',

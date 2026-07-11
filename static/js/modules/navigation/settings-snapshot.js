@@ -249,6 +249,27 @@
     }
 
     /**
+     * DOM apply plan with explicit element ids for multi-drop preference controls.
+     * @param {Object} uiPlan - from buildMultiDropPreferencesUiApplyPlan
+     * @returns {Object}
+     */
+    function buildMultiDropPreferencesDomApplyPlan(uiPlan) {
+        uiPlan = uiPlan || {};
+        var ids = uiPlan.elementIds || {};
+        var checks = uiPlan.checks || {};
+        var selects = [];
+        if (ids.departureTime) {
+            selects.push({ id: ids.departureTime, value: uiPlan.departureTime || '' });
+        }
+        return {
+            checks: Object.keys(checks).map(function (key) {
+                return { id: ids[key], checked: checks[key] };
+            }).filter(function (item) { return item.id; }),
+            selects: selects,
+        };
+    }
+
+    /**
      * Apply plan for clearing the multi-drop departure time control.
      * @returns {Object}
      */
@@ -258,6 +279,39 @@
             removeStorageKey: 'pref_departureTime',
             statusMessage: 'Departure time cleared - using current time',
             statusType: 'info',
+        };
+    }
+
+    /** localStorage keys cleared by resetAllSettings. */
+    var SETTINGS_RESET_LOCAL_STORAGE_KEYS = [
+        SETTINGS_STORAGE_KEY,
+        'unit_distance', 'unit_currency', 'unit_speed', 'unit_temperature',
+        'vehicleType', 'routingMode',
+        'routePreferences',
+        'pref_avoid_tollRoads', 'pref_avoid_motorways', 'pref_avoid_ferries',
+        'pref_tolls', 'pref_caz', 'pref_cameras',
+        'mapTheme', 'smartZoomEnabled',
+        'parkingPreferences',
+    ];
+
+    /**
+     * Reset plan for clearing saved settings and restoring runtime defaults.
+     * @returns {Object}
+     */
+    function buildSettingsResetPlan() {
+        return {
+            confirmMessage: 'Are you sure you want to reset all settings to defaults?',
+            localStorageKeys: SETTINGS_RESET_LOCAL_STORAGE_KEYS.slice(),
+            runtimeDefaults: {
+                distanceUnit: 'km',
+                currencyUnit: 'GBP',
+                speedUnit: 'kmh',
+                temperatureUnit: 'celsius',
+                currentVehicleType: 'petrol_diesel',
+                currentRoutingMode: 'auto',
+                smartZoomEnabled: true,
+            },
+            reloadAfterReset: true,
         };
     }
 
@@ -421,7 +475,9 @@
         buildSettingsRestorePlan: buildSettingsRestorePlan,
         buildMultiDropPreferencesStoragePlan: buildMultiDropPreferencesStoragePlan,
         buildMultiDropPreferencesUiApplyPlan: buildMultiDropPreferencesUiApplyPlan,
+        buildMultiDropPreferencesDomApplyPlan: buildMultiDropPreferencesDomApplyPlan,
         buildClearDepartureTimeApplyPlan: buildClearDepartureTimeApplyPlan,
+        buildSettingsResetPlan: buildSettingsResetPlan,
         buildSettingsUiApplyPlan: buildSettingsUiApplyPlan,
         buildSettingsUiInputPlan: buildSettingsUiInputPlan,
         buildSettingsUiDomApplyPlan: buildSettingsUiDomApplyPlan,

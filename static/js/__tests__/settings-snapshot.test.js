@@ -211,6 +211,33 @@ describe('settings-snapshot module', () => {
         expect(plan.elementIds.optimizeStopOrder).toBe('optimizeStopOrder');
     });
 
+    test('buildMultiDropPreferencesDomApplyPlan maps checks and departure time', () => {
+        const uiPlan = SS.buildMultiDropPreferencesUiApplyPlan({
+            getItem(key) {
+                const values = {
+                    pref_optimizeStopOrder: 'true',
+                    pref_roundTrip: 'false',
+                    pref_trafficAwareRouting: 'true',
+                    pref_avoidRoadClosures: 'false',
+                    pref_avoidIncidents: 'true',
+                    pref_departureTime: '07:45',
+                };
+                return values[key] != null ? values[key] : null;
+            },
+        });
+        const dom = SS.buildMultiDropPreferencesDomApplyPlan(uiPlan);
+        expect(dom.checks.find((item) => item.id === 'optimizeStopOrder').checked).toBe(true);
+        expect(dom.selects.find((item) => item.id === 'departureTime').value).toBe('07:45');
+    });
+
+    test('buildSettingsResetPlan lists storage keys and runtime defaults', () => {
+        const plan = SS.buildSettingsResetPlan();
+        expect(plan.localStorageKeys).toContain(SS.SETTINGS_STORAGE_KEY);
+        expect(plan.localStorageKeys).toContain('routePreferences');
+        expect(plan.runtimeDefaults.distanceUnit).toBe('km');
+        expect(plan.reloadAfterReset).toBe(true);
+    });
+
     test('buildClearDepartureTimeApplyPlan clears departure time control', () => {
         const plan = SS.buildClearDepartureTimeApplyPlan();
         expect(plan.elementId).toBe('departureTime');
