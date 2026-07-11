@@ -255,6 +255,66 @@
         };
     }
 
+    var ROUTE_EDIT_TOGGLE_ELEMENT_ID = 'editRouteBtn';
+
+    /**
+     * Apply plan for adding a via-point from route drag.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {number} viaPointsCount
+     * @returns {Object}
+     */
+    function buildDraggedViaPointAddPlan(lat, lon, viaPointsCount) {
+        var index = viaPointsCount || 0;
+        return {
+            viaPoint: {
+                lat: lat,
+                lon: lon,
+                name: 'Drag point ' + (index + 1),
+                type: 'via',
+            },
+            viaIndex: index,
+            marker: {
+                className: 'via-point-marker',
+                iconSize: WAYPOINT_MARKER_ICON_SIZE,
+                iconAnchor: [14, 14],
+                removeOnclick: 'removeViaPoint(' + index + ')',
+            },
+            clearRouteDragMarkers: true,
+            updateWaypointsList: true,
+            recalculateRoute: true,
+            statusMessage: '🔄 Recalculating route with new via-point...',
+            statusType: 'info',
+        };
+    }
+
+    /**
+     * DOM apply plan for the route editing toggle button.
+     * @param {boolean} routeEditingEnabled
+     * @returns {Object}
+     */
+    function buildRouteEditingToggleDomApplyPlan(routeEditingEnabled) {
+        return {
+            elementId: ROUTE_EDIT_TOGGLE_ELEMENT_ID,
+            active: !!routeEditingEnabled,
+            text: routeEditingEnabled
+                ? '✏️ Editing... (click to stop)'
+                : '✏️ Edit Route',
+        };
+    }
+
+    /**
+     * Dispatch plan when toggling route editing off.
+     * @returns {Object}
+     */
+    function buildRouteEditingDisablePlan() {
+        return {
+            clearRouteDragMarkers: true,
+            statusMessage: 'Route editing disabled',
+            statusType: 'info',
+        };
+    }
+
     /**
      * @param {string|number} label
      * @returns {string}
@@ -366,6 +426,10 @@
         buildRouteDragMarkerHtml: buildRouteDragMarkerHtml,
         buildRouteEditMarkersPlan: buildRouteEditMarkersPlan,
         buildRouteDragMarkerMountPlan: buildRouteDragMarkerMountPlan,
+        buildDraggedViaPointAddPlan: buildDraggedViaPointAddPlan,
+        buildRouteEditingToggleDomApplyPlan: buildRouteEditingToggleDomApplyPlan,
+        buildRouteEditingDisablePlan: buildRouteEditingDisablePlan,
+        ROUTE_EDIT_TOGGLE_ELEMENT_ID: ROUTE_EDIT_TOGGLE_ELEMENT_ID,
         ROUTE_EDIT_MARKER_INTERVAL_MIN: ROUTE_EDIT_MARKER_INTERVAL_MIN,
         buildViaPointMarkerHtml: buildViaPointMarkerHtml,
         buildViaPointDragAddedMarkerHtml: buildViaPointDragAddedMarkerHtml,

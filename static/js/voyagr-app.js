@@ -2485,35 +2485,23 @@ function addRouteDragMarker(lat, lon, routeIndex) {
  * Add a via-point from route dragging and recalculate
  */
 async function addDraggedViaPoint(lat, lon) {
-    // Add as via-point
-    const viaPoint = {
-        lat: lat,
-        lon: lon,
-        name: `Drag point ${viaPoints.length + 1}`,
-        type: 'via'
-    };
-    viaPoints.push(viaPoint);
-
-    // Add visual marker with MapLibre
     const WP = _waypoints();
-    const viaIndex = viaPoints.length - 1;
+    const plan = WP.buildDraggedViaPointAddPlan(lat, lon, viaPoints.length);
+    viaPoints.push(plan.viaPoint);
+
     const marker = MapLibreHelpers.createMarker(lat, lon, {
-        className: 'via-point-marker',
+        className: plan.marker.className,
         html: WP.buildViaPointDragAddedMarkerHtml(),
-        iconSize: WP.WAYPOINT_MARKER_ICON_SIZE,
-        iconAnchor: [14, 14],
-        popup: WP.buildViaPointDragPopupHtml('removeViaPoint(' + viaIndex + ')')
+        iconSize: plan.marker.iconSize,
+        iconAnchor: plan.marker.iconAnchor,
+        popup: WP.buildViaPointDragPopupHtml(plan.marker.removeOnclick),
     }).addTo(map);
 
     viaPointMarkers.push(marker);
-    updateWaypointsList();
-
-    // Clear drag markers and recalculate route
-    clearRouteDragMarkers();
-    showStatus('🔄 Recalculating route with new via-point...', 'info');
-
-    // Recalculate route
-    await calculateRoute();
+    if (plan.updateWaypointsList) updateWaypointsList();
+    if (plan.clearRouteDragMarkers) clearRouteDragMarkers();
+    showStatus(plan.statusMessage, plan.statusType);
+    if (plan.recalculateRoute) await calculateRoute();
 }
 
 /**
@@ -2532,20 +2520,27 @@ function clearRouteDragMarkers() {
 /**
  * Toggle route editing mode
  */
+function applyRouteEditingToggleDomFromPlan(domPlan) {
+    if (!domPlan) return;
+    const btn = document.getElementById(domPlan.elementId);
+    if (!btn) return;
+    btn.classList.toggle('active', domPlan.active);
+    btn.textContent = domPlan.text;
+}
+
 function toggleRouteEditing() {
+    const WP = _waypoints();
     if (routeEditingEnabled) {
-        clearRouteDragMarkers();
-        showStatus('Route editing disabled', 'info');
+        const disablePlan = WP.buildRouteEditingDisablePlan();
+        if (disablePlan.clearRouteDragMarkers) clearRouteDragMarkers();
+        showStatus(disablePlan.statusMessage, disablePlan.statusType);
     } else {
         enableRouteEditing();
     }
 
-    // Update button state
-    const btn = document.getElementById('editRouteBtn');
-    if (btn) {
-        btn.classList.toggle('active', routeEditingEnabled);
-        btn.textContent = routeEditingEnabled ? '✏️ Editing... (click to stop)' : '✏️ Edit Route';
-    }
+    applyRouteEditingToggleDomFromPlan(
+        WP.buildRouteEditingToggleDomApplyPlan(routeEditingEnabled)
+    );
 }
 
 /**
@@ -5573,41 +5568,44 @@ const ROUTE_TRAFFIC_SAMPLE_TTL_MS = 60 * 1000;
 let _routeTrafficFlowBackoffUntil = 0;
 
 async function fetchRouteTrafficFlowPayload(points, sampleInterval) {
-    if (Date.now() < _routeTrafficFlowBackoffUntil) {
+    const RTF = _routeTrafficFlow();
+    const preflight = RTF.buildRouteTrafficFlowPreflightPlan(_routeTrafficFlowBackoffUntil);
+    if (!preflight.shouldRequest) {
         return null;
     }
 
+    const requestPlan = RTF.buildRouteTrafficFlowFetchRequestPlan(points, sampleInterval);
     let response;
     try {
-        response = await fetch('/api/route-traffic-flow', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ points, sample_interval: sampleInterval })
+        response = await fetch(requestPlan.url, {
+            method: requestPlan.method,
+            headers: requestPlan.headers,
+            body: requestPlan.body,
         });
     } catch (e) {
-        _routeTrafficFlowBackoffUntil = Date.now() + 60000;
-        console.debug('[Route Traffic] network error:', e && e.message);
+        const fail = RTF.buildRouteTrafficFlowResponsePlan({ errorKind: 'network' });
+        _routeTrafficFlowBackoffUntil = Date.now() + fail.setBackoffMs;
+        console.debug('[Route Traffic]', fail.logMessage + ':', e && e.message);
         return null;
     }
 
-    if (!response.ok) {
-        _routeTrafficFlowBackoffUntil = Date.now() + (response.status >= 500 ? 90000 : 30000);
-        console.debug('[Route Traffic] HTTP', response.status);
-        return null;
-    }
-
-    const contentType = response.headers.get('content-type') || '';
-    if (!contentType.includes('application/json')) {
-        _routeTrafficFlowBackoffUntil = Date.now() + 60000;
-        console.debug('[Route Traffic] non-JSON response');
+    const outcome = RTF.buildRouteTrafficFlowResponsePlan({
+        ok: response.ok,
+        status: response.status,
+        contentType: response.headers.get('content-type') || '',
+    });
+    if (!outcome.ok) {
+        _routeTrafficFlowBackoffUntil = Date.now() + outcome.setBackoffMs;
+        console.debug('[Route Traffic]', outcome.logMessage);
         return null;
     }
 
     try {
         return await response.json();
     } catch (e) {
-        _routeTrafficFlowBackoffUntil = Date.now() + 60000;
-        console.debug('[Route Traffic] JSON parse failed:', e && e.message);
+        const fail = RTF.buildRouteTrafficFlowParseFailurePlan();
+        _routeTrafficFlowBackoffUntil = Date.now() + fail.setBackoffMs;
+        console.debug('[Route Traffic]', fail.logMessage + ':', e && e.message);
         return null;
     }
 }

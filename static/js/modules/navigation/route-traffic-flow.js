@@ -249,6 +249,91 @@
         };
     }
 
+    var ROUTE_TRAFFIC_FLOW_API_PATH = '/api/route-traffic-flow';
+    var ROUTE_TRAFFIC_BACKOFF_NETWORK_MS = 60000;
+    var ROUTE_TRAFFIC_BACKOFF_NON_JSON_MS = 60000;
+    var ROUTE_TRAFFIC_BACKOFF_JSON_PARSE_MS = 60000;
+    var ROUTE_TRAFFIC_BACKOFF_CLIENT_ERROR_MS = 30000;
+    var ROUTE_TRAFFIC_BACKOFF_SERVER_ERROR_MS = 90000;
+
+    /**
+     * Preflight plan respecting upstream backoff window.
+     * @param {number} backoffUntil
+     * @param {number} [now]
+     * @returns {{ shouldRequest: boolean, reason?: string }}
+     */
+    function buildRouteTrafficFlowPreflightPlan(backoffUntil, now) {
+        var stamp = now != null ? now : Date.now();
+        if (backoffUntil && stamp < backoffUntil) {
+            return { shouldRequest: false, reason: 'backoff' };
+        }
+        return { shouldRequest: true };
+    }
+
+    /**
+     * Fetch request plan for /api/route-traffic-flow.
+     * @param {Array<[number,number]>} points
+     * @param {number} sampleInterval
+     * @returns {Object}
+     */
+    function buildRouteTrafficFlowFetchRequestPlan(points, sampleInterval) {
+        return {
+            url: ROUTE_TRAFFIC_FLOW_API_PATH,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                points: points || [],
+                sample_interval: sampleInterval,
+            }),
+        };
+    }
+
+    /**
+     * Outcome plan for a route-traffic-flow HTTP response.
+     * @param {Object} meta
+     * @returns {Object}
+     */
+    function buildRouteTrafficFlowResponsePlan(meta) {
+        meta = meta || {};
+        if (meta.errorKind === 'network') {
+            return {
+                ok: false,
+                setBackoffMs: ROUTE_TRAFFIC_BACKOFF_NETWORK_MS,
+                logMessage: 'network error',
+            };
+        }
+        if (!meta.ok) {
+            return {
+                ok: false,
+                setBackoffMs: (meta.status || 0) >= 500
+                    ? ROUTE_TRAFFIC_BACKOFF_SERVER_ERROR_MS
+                    : ROUTE_TRAFFIC_BACKOFF_CLIENT_ERROR_MS,
+                logMessage: 'HTTP ' + (meta.status || 0),
+            };
+        }
+        var contentType = meta.contentType || '';
+        if (contentType.indexOf('application/json') < 0) {
+            return {
+                ok: false,
+                setBackoffMs: ROUTE_TRAFFIC_BACKOFF_NON_JSON_MS,
+                logMessage: 'non-JSON response',
+            };
+        }
+        return { ok: true, parseJson: true };
+    }
+
+    /**
+     * Failure plan when response JSON parsing fails.
+     * @returns {Object}
+     */
+    function buildRouteTrafficFlowParseFailurePlan() {
+        return {
+            ok: false,
+            setBackoffMs: ROUTE_TRAFFIC_BACKOFF_JSON_PARSE_MS,
+            logMessage: 'JSON parse failed',
+        };
+    }
+
     var api = {
         TRAFFIC_COLORS: TRAFFIC_COLORS,
         findForwardPolylineIndex: findForwardPolylineIndex,
@@ -260,6 +345,12 @@
         buildTrafficEdgeDrawPlans: buildTrafficEdgeDrawPlans,
         buildFetchRouteTrafficDispatchPlan: buildFetchRouteTrafficDispatchPlan,
         buildDisplayRouteTrafficEdgesApplyPlan: buildDisplayRouteTrafficEdgesApplyPlan,
+        buildRouteTrafficFlowPreflightPlan: buildRouteTrafficFlowPreflightPlan,
+        buildRouteTrafficFlowFetchRequestPlan: buildRouteTrafficFlowFetchRequestPlan,
+        buildRouteTrafficFlowResponsePlan: buildRouteTrafficFlowResponsePlan,
+        buildRouteTrafficFlowParseFailurePlan: buildRouteTrafficFlowParseFailurePlan,
+        ROUTE_TRAFFIC_FLOW_API_PATH: ROUTE_TRAFFIC_FLOW_API_PATH,
+        ROUTE_TRAFFIC_BACKOFF_SERVER_ERROR_MS: ROUTE_TRAFFIC_BACKOFF_SERVER_ERROR_MS,
         ROUTE_TRAFFIC_POLYLINE_SAMPLE_DIVISOR: ROUTE_TRAFFIC_POLYLINE_SAMPLE_DIVISOR,
         ROUTE_TRAFFIC_EDGE_POLYLINE_STYLE: ROUTE_TRAFFIC_EDGE_POLYLINE_STYLE,
     };

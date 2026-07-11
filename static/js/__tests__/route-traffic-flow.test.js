@@ -140,3 +140,22 @@ describe('route traffic dispatch and display plans', () => {
         expect(apply.bringTrafficEdgesToTop).toBe(true);
     });
 });
+
+describe('route traffic flow fetch plans', () => {
+    test('buildRouteTrafficFlowPreflightPlan respects backoff window', () => {
+        expect(RTF.buildRouteTrafficFlowPreflightPlan(Date.now() + 5000, Date.now()).shouldRequest).toBe(false);
+        expect(RTF.buildRouteTrafficFlowPreflightPlan(0).shouldRequest).toBe(true);
+    });
+
+    test('buildRouteTrafficFlowFetchRequestPlan posts sampled points', () => {
+        const request = RTF.buildRouteTrafficFlowFetchRequestPlan(polyline, 2);
+        expect(request.url).toBe(RTF.ROUTE_TRAFFIC_FLOW_API_PATH);
+        expect(JSON.parse(request.body).sample_interval).toBe(2);
+    });
+
+    test('buildRouteTrafficFlowResponsePlan maps HTTP and parse failures to backoff', () => {
+        expect(RTF.buildRouteTrafficFlowResponsePlan({ ok: false, status: 503 }).setBackoffMs)
+            .toBe(RTF.ROUTE_TRAFFIC_BACKOFF_SERVER_ERROR_MS);
+        expect(RTF.buildRouteTrafficFlowParseFailurePlan().logMessage).toContain('JSON');
+    });
+});

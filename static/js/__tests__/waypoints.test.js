@@ -105,4 +105,18 @@ describe('waypoints module', () => {
         expect(mount.markerHtml).toContain('FF9800');
         expect(mount.routeIndex).toBe(12);
     });
+
+    test('buildDraggedViaPointAddPlan prepares via point and recalc status', () => {
+        const plan = W.buildDraggedViaPointAddPlan(51.5, -0.1, 2);
+        expect(plan.viaPoint.name).toBe('Drag point 3');
+        expect(plan.marker.removeOnclick).toBe('removeViaPoint(2)');
+        expect(plan.recalculateRoute).toBe(true);
+    });
+
+    test('buildRouteEditingToggleDomApplyPlan maps edit button label', () => {
+        const dom = W.buildRouteEditingToggleDomApplyPlan(true);
+        expect(dom.elementId).toBe(W.ROUTE_EDIT_TOGGLE_ELEMENT_ID);
+        expect(dom.active).toBe(true);
+        expect(dom.text).toContain('Editing');
+    });
 });
