@@ -218,4 +218,16 @@ describe('auto traffic interval dispatch plans', () => {
         expect(enable.saveAllSettings).toBe(true);
         expect(enable.statusType).toBe('success');
     });
+
+    test('buildInitAutoTrafficRerouteTogglesPlan lists all three traffic toggles', () => {
+        const plan = TC.buildInitAutoTrafficRerouteTogglesPlan({
+            autoTrafficUpdateEnabled: true,
+            autoRerouteOnDeviationEnabled: false,
+            routeTrafficEnabled: true,
+            routeTrafficToggleId: 'routeTrafficToggle',
+        });
+        expect(plan.toggles).toHaveLength(3);
+        expect(plan.toggles[0].elementId).toBe(TC.AUTO_TRAFFIC_UPDATE_TOGGLE_ID);
+        expect(plan.toggles[2].enabled).toBe(true);
+    });
 });

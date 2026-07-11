@@ -792,6 +792,17 @@
     }
 
     /**
+     * Drag-over plan for waypoint list reordering.
+     * @returns {Object}
+     */
+    function buildWaypointDragOverPlan() {
+        return {
+            preventDefault: true,
+            dropEffect: 'move',
+        };
+    }
+
+    /**
      * Map apply plan for drawing all multi-drop leg geometries.
      * @param {Object} data
      * @param {function(string, number): Array<[number,number]>} decodePolyline
@@ -914,6 +925,7 @@
         MULTIDROP_LEG_CLEAR_MAX: MULTIDROP_LEG_CLEAR_MAX,
         buildWaypointsListDomApplyPlan: buildWaypointsListDomApplyPlan,
         buildWaypointDragStartPlan: buildWaypointDragStartPlan,
+        buildWaypointDragOverPlan: buildWaypointDragOverPlan,
         buildWaypointDragOpacityResetPlan: buildWaypointDragOpacityResetPlan,
         buildMultiDropLegsMapApplyPlan: buildMultiDropLegsMapApplyPlan,
         buildClearMultiDropLayersPlan: buildClearMultiDropLayersPlan,

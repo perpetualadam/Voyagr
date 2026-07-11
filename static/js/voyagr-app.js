@@ -1554,6 +1554,33 @@ function applyLabeledTogglesFromPlan(toggles, TU) {
 }
 
 /**
+ * Apply map layer reorder instructions from a pure execute plan.
+ * @param {Object} plan
+ * @returns {boolean}
+ */
+function applyMapLayerReorderFromPlan(plan) {
+    if (!plan || !plan.shouldExecute || !map) return false;
+    try {
+        plan.layerIds.forEach((layerId) => {
+            if (map.getLayer(layerId)) {
+                map.moveLayer(layerId, plan.beforeId);
+            }
+        });
+        if (plan.ensureLabelsOnTop) ensureLabelsOnTop();
+        if (plan.successLogMessage) console.log(plan.successLogMessage);
+        return true;
+    } catch (e) {
+        const prefix = plan.errorLogPrefix || '[Map] Layer reorder error:';
+        if (plan.useWarnOnError) {
+            console.warn(prefix, e.message);
+        } else {
+            console.log(prefix, e.message);
+        }
+        return false;
+    }
+}
+
+/**
  * Apply settings form controls from a pure UI apply plan.
  * @param {Object} plan - from buildSettingsUiApplyPlan
  */
@@ -2877,8 +2904,9 @@ function onWaypointDragStart(e) {
 }
 
 function onWaypointDragOver(e) {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
+    const plan = _waypoints().buildWaypointDragOverPlan();
+    if (plan.preventDefault) e.preventDefault();
+    e.dataTransfer.dropEffect = plan.dropEffect;
 }
 
 function onWaypointDrop(e) {
@@ -5322,15 +5350,16 @@ function displayRouteTrafficEdges(segments) {
     clearRouteTrafficLayers();
 
     const RTF = _routeTrafficFlow();
-    const applyPlan = RTF.buildDisplayRouteTrafficEdgesApplyPlan(segments, routePolyline);
-    if (!map || !applyPlan.shouldDisplay) {
-        console.log('[Route Traffic] Cannot display - map:', !!map, 'segments:', segments?.length, 'routePolyline:', routePolyline?.length);
+    const displayPlan = RTF.buildRouteTrafficEdgesDisplayPlan(segments, routePolyline, { hasMap: !!map });
+    if (!displayPlan.shouldDisplay) {
+        const log = displayPlan.cannotDisplayLog || {};
+        console.log('[Route Traffic] Cannot display - map:', log.map, 'segments:', log.segmentCount, 'routePolyline:', log.polylineLength);
         return;
     }
 
-    console.log('[Route Traffic] Segment levels:', applyPlan.levelCounts);
+    console.log('[Route Traffic] Segment levels:', displayPlan.levelCounts);
 
-    applyPlan.polylines.forEach((polylinePlan) => {
+    displayPlan.polylines.forEach((polylinePlan) => {
         const trafficLine = MapLibreHelpers.addPolyline(map, polylinePlan.points, {
             color: polylinePlan.color,
             weight: polylinePlan.weight,
@@ -5341,10 +5370,10 @@ function displayRouteTrafficEdges(segments) {
 
     console.log(`[Route Traffic] Added ${routeTrafficLayers.length} congested traffic edge layers`);
 
-    if (applyPlan.bringTrafficEdgesToTop) {
+    if (displayPlan.bringTrafficEdgesToTop) {
         bringTrafficEdgesToTop();
     }
-    if (applyPlan.bringNavRouteAboveTrafficEdges) {
+    if (displayPlan.bringNavRouteAboveTrafficEdges) {
         bringNavRouteAboveTrafficEdges();
     }
 }
@@ -5355,26 +5384,12 @@ function displayRouteTrafficEdges(segments) {
 function bringTrafficEdgesToTop() {
     if (!map || routeTrafficLayers.length === 0) return;
 
-    const plan = _routeSelection().buildBringTrafficEdgesToTopDispatchPlan(
+    const RS = _routeSelection();
+    const plan = RS.buildBringTrafficEdgesToTopExecutePlan(
         routeTrafficLayers,
         map.getStyle() && map.getStyle().layers
     );
-    if (!plan.shouldRun) return;
-
-    try {
-        plan.layerIds.forEach((layerId) => {
-            if (map.getLayer(layerId)) {
-                map.moveLayer(layerId, plan.beforeId);
-            }
-        });
-        console.log(`[Route Traffic] Traffic edge layers moved before ${plan.beforeId || 'top'}`);
-
-        if (plan.ensureLabelsOnTop) {
-            ensureLabelsOnTop();
-        }
-    } catch (e) {
-        console.log('[Route Traffic] Error moving traffic layers to top:', e.message);
-    }
+    applyMapLayerReorderFromPlan(plan);
 }
 
 /**
@@ -5385,26 +5400,13 @@ function bringTrafficEdgesToTop() {
 function bringNavRouteAboveTrafficEdges() {
     if (!map) return;
 
-    const plan = _routeSelection().buildBringNavRouteAboveTrafficEdgesDispatchPlan(
+    const RS = _routeSelection();
+    const plan = RS.buildBringNavRouteAboveTrafficEdgesExecutePlan(
         routeLayer,
         allRouteLayers,
         map.getStyle() && map.getStyle().layers
     );
-    if (!plan.shouldRun) return;
-
-    try {
-        plan.layerIds.forEach((layerId) => {
-            if (map.getLayer(layerId)) {
-                map.moveLayer(layerId, plan.beforeId);
-            }
-        });
-        if (plan.ensureLabelsOnTop) {
-            ensureLabelsOnTop();
-        }
-        console.log('[Routes] Navigation route above traffic edges:', plan.layerIds.join(', '));
-    } catch (e) {
-        console.warn('[Routes] bringNavRouteAboveTrafficEdges:', e.message);
-    }
+    applyMapLayerReorderFromPlan(plan);
 }
 
 // Debounce timer for ensureLabelsOnTop to prevent excessive calls
@@ -6124,15 +6126,18 @@ function seedNavigationProgressOnNewRoute(lat, lon) {
  * Initialize auto-traffic and auto-reroute toggles
  */
 function initAutoTrafficRerouteToggles() {
+    const TC = _trafficChange();
+    const RTF = _routeTrafficFlow();
+    const plan = TC.buildInitAutoTrafficRerouteTogglesPlan({
+        autoTrafficUpdateEnabled,
+        autoRerouteOnDeviationEnabled,
+        routeTrafficEnabled,
+        routeTrafficToggleId: RTF.ROUTE_TRAFFIC_TOGGLE_ID,
+    });
     const TU = _toggleUI();
-    // Auto-traffic update toggle
-    TU.applyToggleButton(document.getElementById('autoTrafficUpdateToggle'), autoTrafficUpdateEnabled);
-
-    // Auto-reroute on deviation toggle
-    TU.applyToggleButton(document.getElementById('autoRerouteDeviationToggle'), autoRerouteOnDeviationEnabled);
-
-    // Route traffic edge toggle
-    TU.applyToggleButton(document.getElementById('routeTrafficToggle'), routeTrafficEnabled);
+    plan.toggles.forEach((toggle) => {
+        TU.applyToggleButton(document.getElementById(toggle.elementId), toggle.enabled);
+    });
 }
 
 // ===== CAZ (CLEAN AIR ZONE) INFORMATION =====

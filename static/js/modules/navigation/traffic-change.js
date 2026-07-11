@@ -318,6 +318,35 @@
         };
     }
 
+    /**
+     * Init plan for auto-traffic, deviation reroute, and route-traffic toggles.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.autoTrafficUpdateEnabled]
+     * @param {boolean} [opts.autoRerouteOnDeviationEnabled]
+     * @param {boolean} [opts.routeTrafficEnabled]
+     * @param {string} [opts.routeTrafficToggleId]
+     * @returns {Object}
+     */
+    function buildInitAutoTrafficRerouteTogglesPlan(opts) {
+        opts = opts || {};
+        return {
+            toggles: [
+                {
+                    elementId: AUTO_TRAFFIC_UPDATE_TOGGLE_ID,
+                    enabled: !!opts.autoTrafficUpdateEnabled,
+                },
+                {
+                    elementId: AUTO_REROUTE_DEVIATION_TOGGLE_ID,
+                    enabled: !!opts.autoRerouteOnDeviationEnabled,
+                },
+                {
+                    elementId: opts.routeTrafficToggleId || 'routeTrafficToggle',
+                    enabled: !!opts.routeTrafficEnabled,
+                },
+            ],
+        };
+    }
+
     var api = {
         TRAFFIC_UPDATE_INTERVAL_MS: TRAFFIC_UPDATE_INTERVAL_MS,
         AUTO_TRAFFIC_UPDATE_STORAGE_KEY: AUTO_TRAFFIC_UPDATE_STORAGE_KEY,
@@ -340,6 +369,7 @@
         buildManualTrafficUpdateStatusPlan: buildManualTrafficUpdateStatusPlan,
         buildAutoTrafficUpdateTogglePlan: buildAutoTrafficUpdateTogglePlan,
         buildAutoRerouteOnDeviationTogglePlan: buildAutoRerouteOnDeviationTogglePlan,
+        buildInitAutoTrafficRerouteTogglesPlan: buildInitAutoTrafficRerouteTogglesPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

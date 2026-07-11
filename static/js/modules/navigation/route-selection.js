@@ -1947,6 +1947,57 @@
         };
     }
 
+    /**
+     * Execute plan for moving route-traffic edge layers above basemap features.
+     * @param {Array<{ id?: string }>} trafficLayers
+     * @param {Array<Object>} [styleLayers]
+     * @returns {Object}
+     */
+    function buildBringTrafficEdgesToTopExecutePlan(trafficLayers, styleLayers) {
+        var dispatch = buildBringTrafficEdgesToTopDispatchPlan(trafficLayers, styleLayers);
+        if (!dispatch.shouldRun) {
+            return { shouldExecute: false };
+        }
+        return {
+            shouldExecute: true,
+            layerIds: dispatch.layerIds,
+            beforeId: dispatch.beforeId,
+            ensureLabelsOnTop: dispatch.ensureLabelsOnTop,
+            successLogMessage: '[Route Traffic] Traffic edge layers moved before ' +
+                (dispatch.beforeId || 'top'),
+            errorLogPrefix: '[Route Traffic] Error moving traffic layers to top:',
+            useWarnOnError: false,
+        };
+    }
+
+    /**
+     * Execute plan for keeping navigation routes above traffic edge overlays.
+     * @param {{ id?: string, outlineId?: string }|null|undefined} routeLayer
+     * @param {Array<{ id?: string }>} allRouteLayers
+     * @param {Array<Object>} [styleLayers]
+     * @returns {Object}
+     */
+    function buildBringNavRouteAboveTrafficEdgesExecutePlan(routeLayer, allRouteLayers, styleLayers) {
+        var dispatch = buildBringNavRouteAboveTrafficEdgesDispatchPlan(
+            routeLayer,
+            allRouteLayers,
+            styleLayers
+        );
+        if (!dispatch.shouldRun) {
+            return { shouldExecute: false };
+        }
+        return {
+            shouldExecute: true,
+            layerIds: dispatch.layerIds,
+            beforeId: dispatch.beforeId,
+            ensureLabelsOnTop: dispatch.ensureLabelsOnTop,
+            successLogMessage: '[Routes] Navigation route above traffic edges: ' +
+                dispatch.layerIds.join(', '),
+            errorLogPrefix: '[Routes] bringNavRouteAboveTrafficEdges:',
+            useWarnOnError: true,
+        };
+    }
+
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
@@ -2034,6 +2085,8 @@
         buildEnsureLabelsOnTopDispatchPlan: buildEnsureLabelsOnTopDispatchPlan,
         buildBringTrafficEdgesToTopDispatchPlan: buildBringTrafficEdgesToTopDispatchPlan,
         buildBringNavRouteAboveTrafficEdgesDispatchPlan: buildBringNavRouteAboveTrafficEdgesDispatchPlan,
+        buildBringTrafficEdgesToTopExecutePlan: buildBringTrafficEdgesToTopExecutePlan,
+        buildBringNavRouteAboveTrafficEdgesExecutePlan: buildBringNavRouteAboveTrafficEdgesExecutePlan,
         ENSURE_LABELS_ON_TOP_DEBOUNCE_MS: ENSURE_LABELS_ON_TOP_DEBOUNCE_MS,
         DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS: DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,

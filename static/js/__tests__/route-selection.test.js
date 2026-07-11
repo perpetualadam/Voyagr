@@ -863,4 +863,25 @@ describe('route overview and single-route display plans', () => {
         expect(plan.shouldRun).toBe(true);
         expect(plan.layerIds).toEqual(['nav-route-outline', 'nav-route', 'route-layer-0']);
     });
+
+    test('buildBringTrafficEdgesToTopExecutePlan wraps dispatch with log messages', () => {
+        const plan = RS.buildBringTrafficEdgesToTopExecutePlan(
+            [{ id: 'traffic-edge-0' }],
+            [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }]
+        );
+        expect(plan.shouldExecute).toBe(true);
+        expect(plan.successLogMessage).toContain('Traffic edge');
+        expect(plan.useWarnOnError).toBe(false);
+    });
+
+    test('buildBringNavRouteAboveTrafficEdgesExecutePlan warns on errors', () => {
+        const plan = RS.buildBringNavRouteAboveTrafficEdgesExecutePlan(
+            { id: 'nav-route' },
+            [],
+            [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }]
+        );
+        expect(plan.shouldExecute).toBe(true);
+        expect(plan.useWarnOnError).toBe(true);
+        expect(plan.successLogMessage).toContain('nav-route');
+    });
 });

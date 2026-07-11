@@ -253,6 +253,38 @@
         };
     }
 
+    /**
+     * Display orchestration plan for mounting route-traffic edge polylines.
+     * @param {Array<Object>} segments
+     * @param {Array<[number,number]>} polyline
+     * @param {Object} [opts]
+     * @param {boolean} [opts.hasMap]
+     * @returns {Object}
+     */
+    function buildRouteTrafficEdgesDisplayPlan(segments, polyline, opts) {
+        opts = opts || {};
+        var apply = buildDisplayRouteTrafficEdgesApplyPlan(segments, polyline, opts);
+        var hasMap = opts.hasMap !== false;
+        if (!hasMap || !apply.shouldDisplay) {
+            return {
+                shouldDisplay: false,
+                cannotDisplayLog: {
+                    map: hasMap,
+                    segmentCount: (segments || []).length,
+                    polylineLength: (polyline || []).length,
+                },
+            };
+        }
+        return {
+            shouldDisplay: true,
+            levelCounts: apply.levelCounts,
+            polylines: apply.polylines,
+            polylineMountCount: apply.polylines.length,
+            bringTrafficEdgesToTop: apply.bringTrafficEdgesToTop,
+            bringNavRouteAboveTrafficEdges: apply.bringNavRouteAboveTrafficEdges,
+        };
+    }
+
     var ROUTE_TRAFFIC_SAMPLE_TTL_MS = 60 * 1000;
     var ROUTE_TRAFFIC_AHEAD_SAMPLE_SEGMENT_COUNT = 8;
 
@@ -562,6 +594,7 @@
         buildTrafficEdgeDrawPlans: buildTrafficEdgeDrawPlans,
         buildFetchRouteTrafficDispatchPlan: buildFetchRouteTrafficDispatchPlan,
         buildDisplayRouteTrafficEdgesApplyPlan: buildDisplayRouteTrafficEdgesApplyPlan,
+        buildRouteTrafficEdgesDisplayPlan: buildRouteTrafficEdgesDisplayPlan,
         buildRouteTrafficFlowPreflightPlan: buildRouteTrafficFlowPreflightPlan,
         buildRouteTrafficFlowFetchRequestPlan: buildRouteTrafficFlowFetchRequestPlan,
         buildRouteTrafficFlowResponsePlan: buildRouteTrafficFlowResponsePlan,

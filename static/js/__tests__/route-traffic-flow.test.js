@@ -284,4 +284,23 @@ describe('route traffic ahead sampling and cache plans', () => {
 
         expect(RTF.buildFetchAndDisplayRouteTrafficResponsePlan(null).reason).toBe('no_data');
     });
+
+    test('buildRouteTrafficEdgesDisplayPlan mounts polylines when map and segments exist', () => {
+        const plan = RTF.buildRouteTrafficEdgesDisplayPlan(
+            [{ traffic_level: 'orange', start: [51.51, -0.11], end: [51.53, -0.13] }],
+            polyline,
+            { hasMap: true }
+        );
+        expect(plan.shouldDisplay).toBe(true);
+        expect(plan.polylineMountCount).toBeGreaterThan(0);
+        expect(plan.bringTrafficEdgesToTop).toBe(true);
+
+        const blocked = RTF.buildRouteTrafficEdgesDisplayPlan(
+            [{ traffic_level: 'orange', start: [51.51, -0.11], end: [51.53, -0.13] }],
+            polyline,
+            { hasMap: false }
+        );
+        expect(blocked.shouldDisplay).toBe(false);
+        expect(blocked.cannotDisplayLog.map).toBe(false);
+    });
 });

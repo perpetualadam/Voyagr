@@ -215,6 +215,12 @@ describe('waypoints module', () => {
         expect(W.buildWaypointDragStartPlan('', NaN).shouldDrag).toBe(false);
     });
 
+    test('buildWaypointDragOverPlan sets move drop effect', () => {
+        const plan = W.buildWaypointDragOverPlan();
+        expect(plan.preventDefault).toBe(true);
+        expect(plan.dropEffect).toBe('move');
+    });
+
     test('buildMultiDropLegsMapApplyPlan builds layer specs from geometry', () => {
         const decode = jest.fn(() => [[51.5, -0.1], [51.6, -0.2]]);
         const plan = W.buildMultiDropLegsMapApplyPlan({
