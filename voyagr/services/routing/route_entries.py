@@ -1,24 +1,29 @@
 """
-Build a standard Voyagr route entry from a Valhalla ``trip``.
+Standard Voyagr route-entry builders.
 
-The primary /api/route success path constructed the "Fastest" route and each
-alternate with the same cost + hazard + maneuver computation and the same output
-shape (only the main route also carries traffic-adjustment fields). That ~40-line
-pattern was duplicated; it lives here as a single pure helper so it can be unit
-tested offline and reused.
+``build_valhalla_route_entry``  — primary/alternate/retry Valhalla routes.
+``build_graphhopper_optimised_route_entry`` — ⚡ Optimised (GraphHopper) route.
 
-Dependencies are the already-extracted service modules (geometry, hazards,
-maneuvers); the cost calculator instance is injected by the caller, matching the
-monolith's behaviour exactly (same rounding, same field set).
+Dependencies are already-extracted service modules (geometry, hazards, maneuvers,
+GraphHopper utils); the cost calculator instance is injected so both builders are
+testable offline.  Moving ``build_graphhopper_optimised_route_entry`` here breaks
+the circular ``enrichment.py → voyagr_web`` import.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
+import logging
+from typing import Any, Dict, List, Optional
+
+import polyline as _polyline_module
 
 from voyagr.utils.geometry import decode_route_geometry
+from voyagr.utils.graphhopper import GH_SIGN_TO_VALHALLA, remap_shape_index_after_reencode
+from voyagr.utils.osrm import infer_road_class_from_names
 from voyagr.services.hazards import get_hazards_on_route, score_route_by_hazards
 from voyagr.services.routing.maneuvers import extract_valhalla_maneuvers
+
+logger = logging.getLogger('voyagr_web')
 
 
 def _first_leg_shape(trip: Dict[str, Any]) -> Optional[str]:
@@ -103,3 +108,117 @@ def build_valhalla_route_entry(
         entry['traffic_multiplier'] = round(traffic_multiplier, 2)
         entry['traffic_level'] = traffic_level
     return entry
+
+
+def build_graphhopper_optimised_route_entry(
+    graphhopper_route: Dict[str, Any],
+    hazards: Dict[str, List[Dict[str, Any]]],
+    cost_calculator: Any,
+    *,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+    traffic_multiplier: float = 1.0,
+) -> Optional[Dict[str, Any]]:
+    """
+    Turn a successful ``route_with_graphhopper()`` result into the same route-dict
+    shape used by ``/api/route`` (⚡ Optimised, maneuvers, costs, hazards along geometry).
+
+    Moved here from ``voyagr_web`` to break the circular
+    ``enrichment.py → voyagr_web.build_graphhopper_optimised_route_entry`` dependency.
+    Behaviour is identical; all helpers are imported from existing service modules.
+    """
+    if not graphhopper_route or not graphhopper_route.get('success'):
+        return None
+    try:
+        gh_distance_km = graphhopper_route.get('distance_km', 0)
+        gh_duration_min = graphhopper_route.get('duration_seconds', 0) / 60
+        gh_geometry = graphhopper_route.get('geometry', '')
+        if not gh_geometry:
+            return None
+
+        gh_coords = _polyline_module.decode(gh_geometry, precision=5)
+        gh_geometry_p6 = _polyline_module.encode(gh_coords, precision=6)
+        gh_coords_p6 = _polyline_module.decode(gh_geometry_p6, precision=6)
+
+        gh_costs = cost_calculator.calculate_costs(
+            gh_distance_km, vehicle_type, fuel_efficiency, fuel_price,
+            energy_efficiency, electricity_price, include_tolls, include_caz, caz_exempt,
+            route_coords=gh_coords,
+        )
+
+        gh_hazard_penalty, gh_hazard_count = score_route_by_hazards(gh_coords, hazards)
+        gh_hazards_list = get_hazards_on_route(gh_coords, hazards)
+        gh_duration_min = gh_duration_min * traffic_multiplier
+
+        gh_max_speed_segments: List = []
+        try:
+            details = graphhopper_route.get('details') or {}
+            for seg in (details.get('max_speed') or []):
+                if isinstance(seg, list) and len(seg) >= 3:
+                    frm, to, val = seg[0], seg[1], seg[2]
+                    if isinstance(val, (int, float)) and val > 0:
+                        gh_max_speed_segments.append((int(frm), int(to), float(val)))
+        except Exception:
+            gh_max_speed_segments = []
+
+        def _speed_limit_kmh(point_idx: int) -> Optional[int]:
+            for frm, to, val in gh_max_speed_segments:
+                if frm <= point_idx < to:
+                    return round(val)
+            return None
+
+        gh_maneuvers = []
+        for instr in graphhopper_route.get('instructions', []):
+            sign = instr.get('sign', 0)
+            valhalla_type = GH_SIGN_TO_VALHALLA.get(sign, 8)
+            interval = instr.get('interval') or [0, 0]
+            begin_src = interval[0] if interval else 0
+            end_src = interval[1] if len(interval) > 1 else begin_src
+            begin_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, begin_src)
+            end_idx = remap_shape_index_after_reencode(gh_coords, gh_coords_p6, end_src)
+            instr_text = instr.get('text', '')
+            maneuver: Dict[str, Any] = {
+                'instruction': instr_text,
+                'verbal_pre_transition_instruction': instr_text,
+                'distance': instr.get('distance', 0) / 1000.0,
+                'time': instr.get('time', 0) / 1000.0,
+                'type': valhalla_type,
+                'street_names': [instr.get('street_name', '')] if instr.get('street_name') else [],
+                'begin_shape_index': begin_idx,
+                'end_shape_index': end_idx,
+            }
+            sl_kmh = _speed_limit_kmh(begin_src)
+            if sl_kmh is not None:
+                maneuver['speed_limit'] = sl_kmh
+            street_label = instr.get('street_name', '') or ''
+            gh_rc = infer_road_class_from_names(street_label, maneuver.get('street_names'))
+            if gh_rc:
+                maneuver['road_class'] = gh_rc
+            gh_maneuvers.append(maneuver)
+
+        return {
+            'id': 0,
+            'name': '⚡ Optimised',
+            'distance_km': round(gh_distance_km, 2),
+            'duration_minutes': round(gh_duration_min, 0),
+            'fuel_cost': round(gh_costs['fuel_cost'], 2),
+            'fuel_litres': round(gh_costs['fuel_litres'], 2),
+            'toll_cost': round(gh_costs['toll_cost'], 2),
+            'caz_cost': round(gh_costs['caz_cost'], 2),
+            'geometry': gh_geometry_p6,
+            'geometry_precision': 6,
+            'hazard_penalty_seconds': round(gh_hazard_penalty, 0),
+            'hazard_count': gh_hazard_count,
+            'hazards': gh_hazards_list,
+            'maneuvers': gh_maneuvers,
+            'source': 'GraphHopper',
+        }
+    except Exception as e:
+        logger.warning(f"[GRAPHHOPPER] build_graphhopper_optimised_route_entry failed: {e}")
+        return None
