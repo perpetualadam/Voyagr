@@ -64,4 +64,23 @@ describe('pwa-install module', () => {
         expect(execute.activeTab).toBe('navigation');
         expect(execute.scheduleMapRepaint).toBe(true);
     });
+
+    test('buildRefreshAppExecutePlan and check-for-updates outcome plans', () => {
+        const refresh = PWA.buildRefreshAppExecutePlan();
+        expect(refresh.saveAppState).toBe(true);
+        expect(refresh.reloadReason).toBe('manual-refresh');
+
+        expect(PWA.buildCheckForUpdatesPreflightPlan({ hasServiceWorker: false }).action)
+            .toBe('unsupported');
+
+        const waiting = PWA.buildCheckForUpdatesRegistrationOutcomePlan({
+            hasRegistration: true,
+            hasWaiting: true,
+        });
+        expect(waiting.action).toBe('activate-waiting');
+        expect(waiting.skipWaitingMessageType).toBe('SKIP_WAITING');
+
+        const version = PWA.buildDisplayPwaVersionExecutePlan({ buildDate: '2026-07-11' });
+        expect(version.versionText).toContain('2026-07-11');
+    });
 });

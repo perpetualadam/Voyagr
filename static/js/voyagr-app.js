@@ -2149,13 +2149,7 @@ async function loadTripHistory() {
             allTrips = TH.mergeServerAndLocalTrips([], loadRawLocalTrips());
             displayTripHistory(allTrips);
             const auth = TH.buildLoadTripHistoryAuthExecutePlan(allTrips);
-            const list = document.getElementById(orch.listContainerId);
-            if (list && list.firstChild && auth.shouldShowSignInBanner) {
-                const banner = document.createElement('div');
-                banner.style.cssText = auth.bannerStyle;
-                banner.textContent = auth.bannerText;
-                list.insertBefore(banner, list.firstChild);
-            }
+            applyTripHistoryAuthBannerFromPlan(auth, orch);
             if (auth.bindSearch) bindTripHistorySearch();
             return;
         }
@@ -2166,13 +2160,30 @@ async function loadTripHistory() {
     } catch (error) {
         console.error(orch.errorLogPrefix, error);
         const execute = TH.buildLoadTripHistoryErrorExecutePlan();
-        allTrips = execute.clearAllTrips ? [] : allTrips;
-        const list = document.getElementById(orch.listContainerId);
-        if (list && execute.shouldRenderError) {
-            list.innerHTML = execute.listInnerHtml;
-        }
-        if (execute.bindSearch) bindTripHistorySearch();
+        const dom = TH.buildLoadTripHistoryErrorDomExecutePlan(execute, orch);
+        if (dom.clearAllTrips) allTrips = [];
+        applyTripHistoryErrorListFromPlan(dom);
+        if (dom.bindSearch) bindTripHistorySearch();
     }
+}
+
+function applyTripHistoryAuthBannerFromPlan(auth, orch) {
+    const TH = _tripHistory();
+    const list = document.getElementById(orch.listContainerId);
+    const mount = TH.buildLoadTripHistoryAuthBannerMountExecutePlan(auth, {
+        listHasChildren: !!(list && list.firstChild),
+    });
+    if (!mount.shouldMount || !list) return;
+    const banner = document.createElement('div');
+    banner.style.cssText = mount.bannerStyle;
+    banner.textContent = mount.bannerText;
+    list.insertBefore(banner, list.firstChild);
+}
+
+function applyTripHistoryErrorListFromPlan(dom) {
+    if (!dom || !dom.shouldApply) return;
+    const list = document.getElementById(dom.listContainerId);
+    if (list) list.innerHTML = dom.listInnerHtml;
 }
 /**
  * displayTripHistory function
@@ -13154,7 +13165,6 @@ let _navStartedAt = 0;
 let lastETAAnnouncementTime = 0;
 let lastAnnouncedETA = null;
 let initialETAMovementRetries = 0;
-const NAV_TRAFFIC_ETA_MIN_INTERVAL_MS = 12000; // Min time between traffic-conditions fetches (ETA refresh is ~30s)
 const ETA_CHANGE_THRESHOLD_MS = 300000; // Announce if ETA changes by >5 minutes (300,000 ms)
 const ETA_MIN_INTERVAL_MS = 60000; // Minimum 1 minute between any ETA announcements (prevents excessive frequency)
 
@@ -13198,43 +13208,49 @@ function applyTrafficRatioToBaseRemaining(baseRemainingMinutes) {
 }
 
 async function refreshNavTrafficETAIfDue(baseRemainingMinutes, progressPercent, forceFetch = false) {
-    window.navETASnapshot.baseRemainingMinutes = baseRemainingMinutes;
-    window.navETASnapshot.progressPercent = progressPercent;
-
-    if (!_eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode) || !currentLat || !currentLon) {
-        window.navETASnapshot.trafficAdjustedMinutes = null;
-        return;
-    }
-
-    const now = Date.now();
-    if (!_eta().shouldRefreshNavTrafficETA(
-        now,
-        lastNavTrafficFetchAt,
-        NAV_TRAFFIC_ETA_MIN_INTERVAL_MS,
+    const ETA = _eta();
+    const preflight = ETA.buildRefreshNavTrafficETAPreflightPlan({
+        baseRemainingMinutes,
+        progressPercent,
+        applyTrafficAware: ETA.shouldApplyTrafficAwareETA(localStorage, currentRoutingMode),
+        lat: currentLat,
+        lon: currentLon,
+        now: Date.now(),
+        lastFetchAt: lastNavTrafficFetchAt,
+        minIntervalMs: ETA.NAV_TRAFFIC_ETA_MIN_INTERVAL_MS,
         forceFetch,
-        !!window.navETASnapshot.trafficFetchAt
-    )) {
+        hasPriorTrafficFetch: !!window.navETASnapshot.trafficFetchAt,
+    });
+
+    window.navETASnapshot.baseRemainingMinutes = preflight.snapshotPatch.baseRemainingMinutes;
+    window.navETASnapshot.progressPercent = preflight.snapshotPatch.progressPercent;
+
+    if (preflight.action !== 'fetch') {
+        if (preflight.clearTrafficAdjusted) {
+            window.navETASnapshot.trafficAdjustedMinutes = null;
+        }
         return;
     }
-    lastNavTrafficFetchAt = now;
+
+    lastNavTrafficFetchAt = preflight.updateLastFetchAt;
 
     try {
-        const flow = await getRouteTrafficAhead(forceFetch);
-        const trafficUpdate = _eta().buildTrafficSnapshotFromFlow(
-            baseRemainingMinutes,
+        const flow = await getRouteTrafficAhead(preflight.forceFetch);
+        const apply = ETA.buildRefreshNavTrafficETASnapshotApplyPlan(
             flow,
+            baseRemainingMinutes,
             Date.now()
         );
-        if (trafficUpdate) {
+        if (apply.shouldMerge) {
             window.navETASnapshot = {
                 ...window.navETASnapshot,
-                ...trafficUpdate,
+                ...apply.patch,
             };
-        } else {
+        } else if (apply.clearTrafficAdjusted) {
             window.navETASnapshot.trafficAdjustedMinutes = null;
         }
     } catch (e) {
-        console.warn('[ETA] Traffic flow fetch failed:', e);
+        console.warn(preflight.errorLogPrefix, e);
     }
 }
 
@@ -14429,13 +14445,17 @@ function restoreAppState() {
  * Refresh the PWA app - saves state and reloads
  */
 function refreshApp() {
-    showStatus('🔄 Refreshing app...', 'info');
+    const execute = _pwaInstall().buildRefreshAppExecutePlan();
+    if (!execute.shouldRefresh) return;
 
-    // Save current app state (tab, bottom sheet, preferences)
-    saveAppState();
+    showStatus(execute.statusRefreshing.message, execute.statusRefreshing.type);
+    if (execute.saveAppState) saveAppState();
 
-    if (!scheduleAppReload('manual-refresh', 500)) {
-        showStatus('🔄 Refresh already in progress...', 'info');
+    if (!scheduleAppReload(execute.reloadReason, execute.reloadDelayMs)) {
+        showStatus(
+            execute.alreadyScheduledStatus.message,
+            execute.alreadyScheduledStatus.type
+        );
     }
 }
 
@@ -14443,35 +14463,45 @@ function refreshApp() {
  * Check for PWA updates and apply if available
  */
 async function checkForUpdates() {
-    showStatus('📥 Checking for updates...', 'info');
+    const PWA = _pwaInstall();
+    const preflight = PWA.buildCheckForUpdatesPreflightPlan({
+        hasServiceWorker: 'serviceWorker' in navigator,
+    });
 
-    if ('serviceWorker' in navigator) {
-        try {
-            const registration = await navigator.serviceWorker.getRegistration();
+    if (preflight.action === 'unsupported') {
+        showStatus(preflight.statusMessage, preflight.statusType);
+        return;
+    }
 
-            if (registration) {
-                // Force service worker to check for updates
-                await safeServiceWorkerUpdate(registration, 'manual');
+    showStatus(preflight.statusChecking.message, preflight.statusChecking.type);
 
-                if (registration.waiting) {
-                    // New version waiting - activate it (controllerchange will reload)
-                    showStatus('📥 New update found! Reloading...', 'success');
-                    saveAppState();
-                    registration.waiting.postMessage({ type: 'SKIP_WAITING' });
-                } else if (registration.installing) {
-                    showStatus('📥 Update installing...', 'info');
-                } else {
-                    showStatus('✅ App is up to date!', 'success');
-                }
-            } else {
-                showStatus('⚠️ Service worker not registered', 'warning');
-            }
-        } catch (error) {
-            console.error('[PWA] Update check failed:', error);
-            showStatus('❌ Update check failed', 'error');
+    try {
+        const registration = await navigator.serviceWorker.getRegistration();
+        if (!registration) {
+            const missing = PWA.buildCheckForUpdatesRegistrationOutcomePlan({ hasRegistration: false });
+            showStatus(missing.statusMessage, missing.statusType);
+            return;
         }
-    } else {
-        showStatus('⚠️ PWA not supported on this browser', 'warning');
+
+        await safeServiceWorkerUpdate(registration, 'manual');
+
+        const outcome = PWA.buildCheckForUpdatesRegistrationOutcomePlan({
+            hasRegistration: true,
+            hasWaiting: !!registration.waiting,
+            hasInstalling: !!registration.installing,
+        });
+
+        if (outcome.action === 'activate-waiting') {
+            showStatus(outcome.statusMessage, outcome.statusType);
+            if (outcome.saveAppState) saveAppState();
+            registration.waiting.postMessage({ type: outcome.skipWaitingMessageType });
+            return;
+        }
+
+        showStatus(outcome.statusMessage, outcome.statusType);
+    } catch (error) {
+        console.error(preflight.errorLogPrefix, error);
+        showStatus(preflight.errorStatus.message, preflight.errorStatus.type);
     }
 }
 
@@ -14479,12 +14509,10 @@ async function checkForUpdates() {
  * Display PWA version info
  */
 function displayPWAVersion() {
-    const versionElement = document.getElementById('pwaVersionText');
-    if (versionElement) {
-        // Generate version based on service worker cache version or build date
-        const buildDate = new Date().toISOString().split('T')[0];
-        versionElement.textContent = `App version: PWA ${buildDate}`;
-    }
+    const execute = _pwaInstall().buildDisplayPwaVersionExecutePlan();
+    if (!execute.shouldUpdate) return;
+    const versionElement = document.getElementById(execute.elementId);
+    if (versionElement) versionElement.textContent = execute.versionText;
 }
 
 // Call on page load

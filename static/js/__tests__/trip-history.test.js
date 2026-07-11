@@ -312,4 +312,24 @@ describe('analytics display helpers', () => {
         expect(T.buildTripHistorySearchFilterPlan('  London ').searchTerm).toBe('london');
         expect(T.buildTripHistorySearchFilterPlan('').showAll).toBe(true);
     });
+
+    test('buildLoadTripHistoryAuthBannerMountExecutePlan requires list children', () => {
+        const auth = T.buildLoadTripHistoryAuthExecutePlan([{ id: 1 }]);
+        expect(T.buildLoadTripHistoryAuthBannerMountExecutePlan(auth, { listHasChildren: false }).shouldMount)
+            .toBe(false);
+        const mount = T.buildLoadTripHistoryAuthBannerMountExecutePlan(auth, { listHasChildren: true });
+        expect(mount.shouldMount).toBe(true);
+        expect(mount.bannerText).toContain('device');
+    });
+
+    test('buildLoadTripHistoryErrorDomExecutePlan maps error list html', () => {
+        const orch = T.buildLoadTripHistoryOrchestrationPlan();
+        const dom = T.buildLoadTripHistoryErrorDomExecutePlan(
+            T.buildLoadTripHistoryErrorExecutePlan(),
+            orch
+        );
+        expect(dom.shouldApply).toBe(true);
+        expect(dom.listContainerId).toBe('tripHistoryList');
+        expect(dom.listInnerHtml).toContain('Error loading trips');
+    });
 });

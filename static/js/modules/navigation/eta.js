@@ -60,6 +60,7 @@
     }
 
     var TRAFFIC_RATIO_MAX_AGE_MS = 90000;
+    var NAV_TRAFFIC_ETA_MIN_INTERVAL_MS = 12000;
 
     /**
      * One-time default: traffic-aware ETA on; only explicit 'false' disables.
@@ -633,6 +634,70 @@
         };
     }
 
+    /**
+     * Preflight for nav traffic-conditions fetch that feeds ETA snapshot.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildRefreshNavTrafficETAPreflightPlan(input) {
+        input = input || {};
+        var snapshotPatch = {
+            baseRemainingMinutes: input.baseRemainingMinutes,
+            progressPercent: input.progressPercent,
+        };
+        if (!input.applyTrafficAware || input.lat == null || input.lon == null) {
+            return {
+                action: 'skip',
+                snapshotPatch: snapshotPatch,
+                clearTrafficAdjusted: true,
+            };
+        }
+        var now = input.now != null ? input.now : Date.now();
+        var minInterval = input.minIntervalMs != null
+            ? input.minIntervalMs
+            : NAV_TRAFFIC_ETA_MIN_INTERVAL_MS;
+        if (!shouldRefreshNavTrafficETA(
+            now,
+            input.lastFetchAt,
+            minInterval,
+            !!input.forceFetch,
+            !!input.hasPriorTrafficFetch
+        )) {
+            return {
+                action: 'skip',
+                snapshotPatch: snapshotPatch,
+                clearTrafficAdjusted: false,
+                reason: 'throttled',
+            };
+        }
+        return {
+            action: 'fetch',
+            snapshotPatch: snapshotPatch,
+            updateLastFetchAt: now,
+            forceFetch: !!input.forceFetch,
+            errorLogPrefix: '[ETA] Traffic flow fetch failed:',
+        };
+    }
+
+    /**
+     * Apply plan for merging TomTom flow sample into navETASnapshot.
+     * @param {Object|null|undefined} flow
+     * @param {number} baseRemainingMinutes
+     * @param {number} [now]
+     * @returns {Object}
+     */
+    function buildRefreshNavTrafficETASnapshotApplyPlan(flow, baseRemainingMinutes, now) {
+        var trafficUpdate = buildTrafficSnapshotFromFlow(
+            baseRemainingMinutes,
+            flow,
+            now != null ? now : Date.now()
+        );
+        if (trafficUpdate) {
+            return { shouldMerge: true, patch: trafficUpdate };
+        }
+        return { shouldMerge: false, clearTrafficAdjusted: true };
+    }
+
     var api = {
         formatRemainingTime: formatRemainingTime,
         buildETAVoiceMessage: buildETAVoiceMessage,
@@ -665,6 +730,9 @@
         buildScheduleInitialETAAnnouncementPlan: buildScheduleInitialETAAnnouncementPlan,
         buildUpdateETACalculationTickPlan: buildUpdateETACalculationTickPlan,
         buildTurnInfoETAPanelRenderPlan: buildTurnInfoETAPanelRenderPlan,
+        buildRefreshNavTrafficETAPreflightPlan: buildRefreshNavTrafficETAPreflightPlan,
+        buildRefreshNavTrafficETASnapshotApplyPlan: buildRefreshNavTrafficETASnapshotApplyPlan,
+        NAV_TRAFFIC_ETA_MIN_INTERVAL_MS: NAV_TRAFFIC_ETA_MIN_INTERVAL_MS,
         MAX_PLAUSIBLE_AVG_KMH: MAX_PLAUSIBLE_AVG_KMH,
         TRAFFIC_RATIO_MAX_AGE_MS: TRAFFIC_RATIO_MAX_AGE_MS,
     };

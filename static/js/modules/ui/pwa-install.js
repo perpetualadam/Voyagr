@@ -216,6 +216,96 @@
         };
     }
 
+    /**
+     * Execute plan for manual app refresh (save state + reload).
+     * @returns {Object}
+     */
+    function buildRefreshAppExecutePlan() {
+        return {
+            shouldRefresh: true,
+            statusRefreshing: { message: '🔄 Refreshing app...', type: 'info' },
+            saveAppState: true,
+            reloadReason: 'manual-refresh',
+            reloadDelayMs: 500,
+            alreadyScheduledStatus: { message: '🔄 Refresh already in progress...', type: 'info' },
+        };
+    }
+
+    /**
+     * Preflight for checking PWA/service-worker updates.
+     * @param {Object} [input]
+     * @param {boolean} [input.hasServiceWorker]
+     * @returns {Object}
+     */
+    function buildCheckForUpdatesPreflightPlan(input) {
+        input = input || {};
+        if (!input.hasServiceWorker) {
+            return {
+                action: 'unsupported',
+                statusMessage: '⚠️ PWA not supported on this browser',
+                statusType: 'warning',
+            };
+        }
+        return {
+            action: 'check',
+            statusChecking: { message: '📥 Checking for updates...', type: 'info' },
+            errorLogPrefix: '[PWA] Update check failed:',
+            errorStatus: { message: '❌ Update check failed', type: 'error' },
+        };
+    }
+
+    /**
+     * Outcome plan after inspecting service worker registration state.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildCheckForUpdatesRegistrationOutcomePlan(input) {
+        input = input || {};
+        if (!input.hasRegistration) {
+            return {
+                action: 'no-registration',
+                statusMessage: '⚠️ Service worker not registered',
+                statusType: 'warning',
+            };
+        }
+        if (input.hasWaiting) {
+            return {
+                action: 'activate-waiting',
+                saveAppState: true,
+                statusMessage: '📥 New update found! Reloading...',
+                statusType: 'success',
+                skipWaitingMessageType: 'SKIP_WAITING',
+            };
+        }
+        if (input.hasInstalling) {
+            return {
+                action: 'installing',
+                statusMessage: '📥 Update installing...',
+                statusType: 'info',
+            };
+        }
+        return {
+            action: 'up-to-date',
+            statusMessage: '✅ App is up to date!',
+            statusType: 'success',
+        };
+    }
+
+    /**
+     * Execute plan for displaying the PWA version label.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildDisplayPwaVersionExecutePlan(input) {
+        input = input || {};
+        var buildDate = input.buildDate || new Date().toISOString().split('T')[0];
+        return {
+            shouldUpdate: true,
+            elementId: 'pwaVersionText',
+            versionText: 'App version: PWA ' + buildDate,
+        };
+    }
+
     var api = {
         PWA_BANNER_ID: PWA_BANNER_ID,
         SW_REGISTRATION_PATH: SW_REGISTRATION_PATH,
@@ -232,6 +322,10 @@
         buildScheduleAppReloadPlan: buildScheduleAppReloadPlan,
         buildScheduleMapRepaintAfterUiChangePlan: buildScheduleMapRepaintAfterUiChangePlan,
         buildRestoreUiStateAfterReloadExecutePlan: buildRestoreUiStateAfterReloadExecutePlan,
+        buildRefreshAppExecutePlan: buildRefreshAppExecutePlan,
+        buildCheckForUpdatesPreflightPlan: buildCheckForUpdatesPreflightPlan,
+        buildCheckForUpdatesRegistrationOutcomePlan: buildCheckForUpdatesRegistrationOutcomePlan,
+        buildDisplayPwaVersionExecutePlan: buildDisplayPwaVersionExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

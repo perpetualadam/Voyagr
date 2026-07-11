@@ -404,4 +404,35 @@ describe('journey summary helpers', () => {
         expect(render.panelHtml).toContain('14:30');
         expect(render.panelHtml).toContain('Moderate');
     });
+
+    test('buildRefreshNavTrafficETAPreflightPlan throttles and skips without GPS', () => {
+        expect(ETA.buildRefreshNavTrafficETAPreflightPlan({
+            applyTrafficAware: false,
+            baseRemainingMinutes: 10,
+            progressPercent: 20,
+        }).clearTrafficAdjusted).toBe(true);
+        const fetch = ETA.buildRefreshNavTrafficETAPreflightPlan({
+            applyTrafficAware: true,
+            lat: 51.5,
+            lon: -0.1,
+            baseRemainingMinutes: 10,
+            progressPercent: 20,
+            now: 30_000,
+            lastFetchAt: 0,
+            forceFetch: false,
+            hasPriorTrafficFetch: false,
+        });
+        expect(fetch.action).toBe('fetch');
+        expect(ETA.NAV_TRAFFIC_ETA_MIN_INTERVAL_MS).toBe(12000);
+    });
+
+    test('buildRefreshNavTrafficETASnapshotApplyPlan merges TomTom flow', () => {
+        const apply = ETA.buildRefreshNavTrafficETASnapshotApplyPlan(
+            { source: 'TomTom', delayMin: 4, severe: false },
+            20,
+            1000
+        );
+        expect(apply.shouldMerge).toBe(true);
+        expect(apply.patch.trafficAdjustedMinutes).toBe(24);
+    });
 });

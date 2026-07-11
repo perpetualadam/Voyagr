@@ -269,6 +269,42 @@
     }
 
     /**
+     * DOM mount execute plan for the 401 trip-history sign-in banner.
+     * @param {Object} authExecute - from buildLoadTripHistoryAuthExecutePlan
+     * @param {Object} [input]
+     * @param {boolean} [input.listHasChildren]
+     * @returns {Object}
+     */
+    function buildLoadTripHistoryAuthBannerMountExecutePlan(authExecute, input) {
+        authExecute = authExecute || {};
+        input = input || {};
+        return {
+            shouldMount: !!authExecute.shouldShowSignInBanner && !!input.listHasChildren,
+            bannerStyle: authExecute.bannerStyle,
+            bannerText: authExecute.bannerText,
+            insertBeforeFirstChild: !!authExecute.insertBannerBeforeFirstChild,
+        };
+    }
+
+    /**
+     * DOM apply plan when trip-history loading fails.
+     * @param {Object} execute - from buildLoadTripHistoryErrorExecutePlan
+     * @param {Object} [orch]
+     * @returns {Object}
+     */
+    function buildLoadTripHistoryErrorDomExecutePlan(execute, orch) {
+        execute = execute || {};
+        orch = orch || {};
+        return {
+            shouldApply: !!execute.shouldRenderError,
+            listContainerId: orch.listContainerId || 'tripHistoryList',
+            listInnerHtml: execute.listInnerHtml,
+            clearAllTrips: !!execute.clearAllTrips,
+            bindSearch: !!execute.bindSearch,
+        };
+    }
+
+    /**
      * Execute plan for a trip-history API response.
      * @param {{ status?: number }} res
      * @param {Object} data
@@ -682,6 +718,8 @@
         computeTripTotalCost: computeTripTotalCost,
         buildLoadTripHistoryOrchestrationPlan: buildLoadTripHistoryOrchestrationPlan,
         buildLoadTripHistoryAuthExecutePlan: buildLoadTripHistoryAuthExecutePlan,
+        buildLoadTripHistoryAuthBannerMountExecutePlan: buildLoadTripHistoryAuthBannerMountExecutePlan,
+        buildLoadTripHistoryErrorDomExecutePlan: buildLoadTripHistoryErrorDomExecutePlan,
         buildLoadTripHistoryResponseExecutePlan: buildLoadTripHistoryResponseExecutePlan,
         buildLoadTripHistoryErrorExecutePlan: buildLoadTripHistoryErrorExecutePlan,
         buildDisplayTripHistoryInputPlan: buildDisplayTripHistoryInputPlan,
