@@ -214,6 +214,41 @@
     }
 
     /**
+     * Input assembly for collecting route preference controls from the DOM.
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildCollectRoutePreferencesInputPlan(opts) {
+        opts = opts || {};
+        return {
+            avoidHighways: !!opts.avoidHighways,
+            preferScenic: !!opts.preferScenic,
+            avoidTolls: !!opts.avoidTolls,
+            avoidCAZ: opts.avoidCAZ !== undefined ? !!opts.avoidCAZ : true,
+            preferQuiet: !!opts.preferQuiet,
+            avoidUnpaved: !!opts.avoidUnpaved,
+            routeOptimization: opts.routeOptimization || 'fastest',
+            maxDetour: opts.maxDetour != null ? opts.maxDetour : 20,
+        };
+    }
+
+    /**
+     * Execute plan for persisting route preferences from form state.
+     * @param {Object} preferences
+     * @returns {Object}
+     */
+    function buildSaveRoutePreferencesExecutePlan(preferences) {
+        return {
+            shouldSave: true,
+            storageKey: 'routePreferences',
+            preferences: preferences || {},
+            saveAllSettings: true,
+            successStatusMessage: 'Route preferences saved!',
+            successStatusType: 'success',
+        };
+    }
+
+    /**
      * DOM apply plan for the max-detour percentage label (display only).
      * @param {number|string} maxDetour
      * @returns {{ labelElementId: string, text: string }}
@@ -342,6 +377,8 @@
         buildRoutePreferencesFormStatePlan: buildRoutePreferencesFormStatePlan,
         buildRoutePreferencesUiApplyPlan: buildRoutePreferencesUiApplyPlan,
         buildRoutePreferencesDomApplyPlan: buildRoutePreferencesDomApplyPlan,
+        buildCollectRoutePreferencesInputPlan: buildCollectRoutePreferencesInputPlan,
+        buildSaveRoutePreferencesExecutePlan: buildSaveRoutePreferencesExecutePlan,
         buildDetourLabelApplyPlan: buildDetourLabelApplyPlan,
         buildRouteLegAvoidanceTogglesApplyPlan: buildRouteLegAvoidanceTogglesApplyPlan,
         buildRouteLegAvoidanceToggleStoragePlan: buildRouteLegAvoidanceToggleStoragePlan,

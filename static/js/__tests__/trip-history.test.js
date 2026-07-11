@@ -256,4 +256,52 @@ describe('analytics display helpers', () => {
         expect(execute.frequentRoutesListId).toBe('frequentRoutesList');
         expect(execute.frequentRoutesHtml).toContain('A → B');
     });
+
+    test('buildLoadTripHistoryResponseExecutePlan maps auth and success', () => {
+        const orch = T.buildLoadTripHistoryOrchestrationPlan();
+        expect(orch.apiPath).toBe('/api/trip-history');
+        expect(T.buildLoadTripHistoryResponseExecutePlan({ status: 401 }, {}).action).toBe('auth');
+        const ok = T.buildLoadTripHistoryResponseExecutePlan(
+            { status: 200 },
+            { success: true, trips: [{ id: 1 }] }
+        );
+        expect(ok.action).toBe('success');
+        expect(ok.serverTrips).toHaveLength(1);
+    });
+
+    test('buildDisplayTripHistoryExecutePlan renders rows or empty state', () => {
+        const empty = T.buildDisplayTripHistoryExecutePlan(
+            T.buildDisplayTripHistoryInputPlan([], {})
+        );
+        expect(empty.listInnerHtml).toContain('No trips found');
+
+        const execute = T.buildDisplayTripHistoryExecutePlan(
+            T.buildDisplayTripHistoryInputPlan(
+                [{ id: 1, start_address: 'A', end_address: 'B', distance_km: 10, duration_minutes: 20, routing_mode: 'auto', timestamp: Date.now(), fuel_cost: 1, toll_cost: 0, caz_cost: 0 }],
+                { escapeHtml: (s) => s, convertDistance: (km) => String(km), distUnit: 'mi', currencySymbol: '£' }
+            )
+        );
+        expect(execute.rows).toHaveLength(1);
+        expect(execute.rows[0].display.totalCost).toBe('1.00');
+    });
+
+    test('buildRecalculateTripExecutePlan populates form from trip row', () => {
+        const execute = T.buildRecalculateTripExecutePlan(2, [
+            { id: 2, start_address: 'Home', end_address: 'Work' },
+        ]);
+        expect(execute.shouldRecalculate).toBe(true);
+        expect(execute.startValue).toBe('Home');
+        expect(execute.switchTab).toBe('navigation');
+    });
+
+    test('buildDeleteTripHistory plans distinguish local and server deletes', () => {
+        const orch = T.buildDeleteTripHistoryOrchestrationPlan(-3);
+        expect(orch.isLocalOnly).toBe(true);
+        const local = T.buildDeleteTripHistoryLocalExecutePlan(orch, [{ id: -3 }, { id: 1 }]);
+        expect(local.shouldDeleteLocal).toBe(true);
+        expect(local.nextTrips).toHaveLength(1);
+
+        expect(T.buildDeleteTripHistoryResponseExecutePlan({ success: true }).shouldRemove).toBe(true);
+        expect(T.buildDeleteTripHistoryResponseExecutePlan({ success: false }).shouldRemove).toBe(false);
+    });
 });

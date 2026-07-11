@@ -713,6 +713,28 @@
         };
     }
 
+    /**
+     * Execute plan for downloading the generated QR code image.
+     * @param {string|null|undefined} qrImageUrl
+     * @returns {Object}
+     */
+    function buildDownloadQrCodeExecutePlan(qrImageUrl) {
+        if (!qrImageUrl) {
+            return {
+                shouldDownload: false,
+                errorStatusMessage: 'Generate QR code first',
+                errorStatusType: 'error',
+            };
+        }
+        return {
+            shouldDownload: true,
+            imageUrl: qrImageUrl,
+            downloadFileName: 'route-qr-code.png',
+            successStatusMessage: 'QR code downloaded!',
+            successStatusType: 'success',
+        };
+    }
+
     var api = {
         buildShareableRoutePayload: buildShareableRoutePayload,
         encodeRoutePayload: encodeRoutePayload,
@@ -748,6 +770,7 @@
         buildLoadSharedRouteFromUrlOrchestrationPlan: buildLoadSharedRouteFromUrlOrchestrationPlan,
         buildLoadSharedRouteFromUrlExecutePlan: buildLoadSharedRouteFromUrlExecutePlan,
         buildCopyShareLinkExecutePlan: buildCopyShareLinkExecutePlan,
+        buildDownloadQrCodeExecutePlan: buildDownloadQrCodeExecutePlan,
         QR_CODE_IMAGE_SIZE_PX: QR_CODE_IMAGE_SIZE_PX,
         buildQrCodeImageUrl: buildQrCodeImageUrl,
         getQrCodeImageStyleCssText: getQrCodeImageStyleCssText,

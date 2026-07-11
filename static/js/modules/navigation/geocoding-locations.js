@@ -632,6 +632,82 @@
         };
     }
 
+    /**
+     * Execute plan for entering map location-pick mode.
+     * @param {'start'|'end'} field
+     * @returns {Object}
+     */
+    function buildPickLocationFromMapExecutePlan(field) {
+        return {
+            shouldPick: true,
+            mapPickerMode: field,
+            collapseBottomSheet: true,
+            statusMessage: 'Click on the map to select ' + (field === 'start' ? 'start' : 'destination') + ' location',
+            statusType: 'loading',
+        };
+    }
+
+    /**
+     * Dispatch plan for map click events (waypoints vs location picker).
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildMapClickDispatchPlan(opts) {
+        opts = opts || {};
+        if (opts.addingViaPoint || opts.addingStop) {
+            return {
+                action: 'waypoint',
+                lat: opts.lat,
+                lon: opts.lon,
+                addingViaPoint: !!opts.addingViaPoint,
+                addingStop: !!opts.addingStop,
+            };
+        }
+        if (opts.mapPickerMode) {
+            return {
+                action: 'location_picker',
+                lat: opts.lat,
+                lon: opts.lon,
+                mapPickerMode: opts.mapPickerMode,
+            };
+        }
+        return { action: 'none' };
+    }
+
+    /**
+     * Execute plan for applying a map click while in location-pick mode.
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildMapClickLocationPickerExecutePlan(opts) {
+        opts = opts || {};
+        var mode = opts.mapPickerMode;
+        var lat = opts.lat;
+        var lon = opts.lon;
+        if (!mode || lat == null || lon == null) {
+            return { shouldApply: false };
+        }
+        var isStart = mode === 'start';
+        return {
+            shouldApply: true,
+            inputId: mode,
+            inputValue: lat + ',' + lon,
+            removeExistingMarker: true,
+            markerTarget: isStart ? 'start' : 'end',
+            markerOptions: {
+                radius: 8,
+                fillColor: isStart ? '#00ff00' : '#ff0000',
+                color: '#000',
+                weight: 2,
+                fillOpacity: 0.8,
+            },
+            clearMapPickerMode: true,
+            collapseBottomSheet: true,
+            successStatusMessage: 'Location selected!',
+            successStatusType: 'success',
+        };
+    }
+
     var api = {
         readStoredLocationFromDataset: readStoredLocationFromDataset,
         getGeocodeLoadingStatusMessage: getGeocodeLoadingStatusMessage,
@@ -672,6 +748,9 @@
         buildGeocodeAddressFetchErrorExecutePlan: buildGeocodeAddressFetchErrorExecutePlan,
         buildGeocodeHttpErrorPlan: buildGeocodeHttpErrorPlan,
         buildGeocodePlusCodeLookupPlan: buildGeocodePlusCodeLookupPlan,
+        buildPickLocationFromMapExecutePlan: buildPickLocationFromMapExecutePlan,
+        buildMapClickDispatchPlan: buildMapClickDispatchPlan,
+        buildMapClickLocationPickerExecutePlan: buildMapClickLocationPickerExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

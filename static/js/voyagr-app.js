@@ -2096,39 +2096,39 @@ async function fetchJsonWithAuth(url, options = {}) {
 }
 
 async function loadTripHistory() {
+    const TH = _tripHistory();
+    const orch = TH.buildLoadTripHistoryOrchestrationPlan();
     try {
-        const { res, data } = await fetchJsonWithAuth('/api/trip-history');
+        const { res, data } = await fetchJsonWithAuth(orch.apiPath);
+        const response = TH.buildLoadTripHistoryResponseExecutePlan(res, data);
 
-        if (res.status === 401) {
-            allTrips = _tripHistory().mergeServerAndLocalTrips([], loadRawLocalTrips());
+        if (response.action === 'auth') {
+            allTrips = TH.mergeServerAndLocalTrips([], loadRawLocalTrips());
             displayTripHistory(allTrips);
-            const list = document.getElementById('tripHistoryList');
-            if (list && list.firstChild) {
+            const auth = TH.buildLoadTripHistoryAuthExecutePlan(allTrips);
+            const list = document.getElementById(orch.listContainerId);
+            if (list && list.firstChild && auth.shouldShowSignInBanner) {
                 const banner = document.createElement('div');
-                const TH = _tripHistory();
-                banner.style.cssText = TH.getTripHistorySignInBannerStyleCssText();
-                banner.textContent = TH.buildTripHistorySignInBannerText(allTrips.length > 0);
+                banner.style.cssText = auth.bannerStyle;
+                banner.textContent = auth.bannerText;
                 list.insertBefore(banner, list.firstChild);
             }
-            bindTripHistorySearch();
+            if (auth.bindSearch) bindTripHistorySearch();
             return;
         }
 
-        if (data && data.success && Array.isArray(data.trips)) {
-            allTrips = _tripHistory().mergeServerAndLocalTrips(data.trips, loadRawLocalTrips());
-            displayTripHistory(allTrips);
-        } else {
-            allTrips = _tripHistory().mergeServerAndLocalTrips([], loadRawLocalTrips());
-            displayTripHistory(allTrips);
-        }
+        const serverTrips = response.serverTrips || [];
+        allTrips = TH.mergeServerAndLocalTrips(serverTrips, loadRawLocalTrips());
+        displayTripHistory(allTrips);
     } catch (error) {
-        console.error('Error loading trip history:', error);
-        allTrips = [];
-        const list = document.getElementById('tripHistoryList');
-        if (list) {
-            list.innerHTML = _tripHistory().TRIP_HISTORY_ERROR_HTML;
+        console.error(orch.errorLogPrefix, error);
+        const execute = TH.buildLoadTripHistoryErrorExecutePlan();
+        allTrips = execute.clearAllTrips ? [] : allTrips;
+        const list = document.getElementById(orch.listContainerId);
+        if (list && execute.shouldRenderError) {
+            list.innerHTML = execute.listInnerHtml;
         }
-        bindTripHistorySearch();
+        if (execute.bindSearch) bindTripHistorySearch();
     }
 }
 /**
@@ -2155,65 +2155,60 @@ function bindTripHistorySearch() {
 }
 
 function displayTripHistory(trips) {
+    const TH = _tripHistory();
+    const execute = TH.buildDisplayTripHistoryExecutePlan(
+        TH.buildDisplayTripHistoryInputPlan(trips, {
+            escapeHtml: _html().escapeHtml,
+            convertDistance: convertDistance,
+            distUnit: getDistanceUnit(),
+            currencySymbol: getCurrencySymbol(),
+        })
+    );
+    if (!execute.shouldRender) return;
+
     const listContainer = document.getElementById('tripHistoryList');
     if (!listContainer) return;
 
-    const TH = _tripHistory();
-
-    if (!trips || trips.length === 0) {
-        listContainer.innerHTML = TH.EMPTY_TRIP_LIST_HTML;
-        bindTripHistorySearch();
-        return;
+    if (execute.listInnerHtml) {
+        listContainer.innerHTML = execute.listInnerHtml;
+    } else if (execute.rows) {
+        listContainer.innerHTML = execute.rows.map((row) =>
+            TH.buildTripHistoryRowHtml(row.trip, row.display)
+        ).join('');
     }
 
-    listContainer.innerHTML = trips.map((trip) => {
-        const totalCost = (
-            parseFloat(trip.fuel_cost || 0) +
-            parseFloat(trip.toll_cost || 0) +
-            parseFloat(trip.caz_cost || 0)
-        ).toFixed(2);
-        return TH.buildTripHistoryRowHtml(trip, {
-            startAddr: _html().escapeHtml(trip.start_address || 'Start'),
-            endAddr: _html().escapeHtml(trip.end_address || 'End'),
-            dateStr: TH.formatTripListTimestamp(trip.timestamp),
-            distance: convertDistance(trip.distance_km),
-            distUnit: getDistanceUnit(),
-            totalCost,
-            symbol: getCurrencySymbol(),
-        });
-    }).join('');
-
-    bindTripHistorySearch();
+    if (execute.bindSearch) bindTripHistorySearch();
 }
 
 async function recalculateTrip(tripId) {
-    const trip = allTrips.find(t => t.id === tripId);
-    if (!trip) return;
+    const execute = _tripHistory().buildRecalculateTripExecutePlan(tripId, allTrips);
+    if (!execute.shouldRecalculate) return;
 
-    // Populate form with trip data
-    document.getElementById('start').value = trip.start_address || `${trip.start_lat},${trip.start_lon}`;
-    document.getElementById('end').value = trip.end_address || `${trip.end_lat},${trip.end_lon}`;
+    const startEl = document.getElementById(execute.startInputId);
+    const endEl = document.getElementById(execute.endInputId);
+    if (startEl) startEl.value = execute.startValue;
+    if (endEl) endEl.value = execute.endValue;
 
-    // Switch back to navigation tab
-    switchTab('navigation');
+    if (execute.switchTab) switchTab(execute.switchTab);
 
-    // Trigger route calculation
     setTimeout(() => {
         calculateRoute();
-    }, 300);
+    }, execute.calculateDelayMs);
 
-    showStatus('Trip loaded. Recalculating route...', 'success');
+    showStatus(execute.successStatusMessage, execute.successStatusType);
 }
 
 async function deleteTripHistory(tripId) {
-    if (!confirm('Are you sure you want to delete this trip?')) return;
+    const TH = _tripHistory();
+    const orch = TH.buildDeleteTripHistoryOrchestrationPlan(tripId);
+    if (!confirm(orch.confirmMessage)) return;
 
-    if (tripId < 0) {
-        const localId = -tripId;
-        removeLocalTripByLocalId(localId);
-        allTrips = allTrips.filter((t) => t.id !== tripId);
+    const localExecute = TH.buildDeleteTripHistoryLocalExecutePlan(orch, allTrips);
+    if (localExecute.shouldDeleteLocal) {
+        removeLocalTripByLocalId(localExecute.localId);
+        allTrips = localExecute.nextTrips;
         displayTripHistory(allTrips);
-        showStatus('Trip removed from this device', 'success');
+        showStatus(localExecute.successStatusMessage, localExecute.successStatusType);
         return;
     }
 
@@ -2221,19 +2216,20 @@ async function deleteTripHistory(tripId) {
         const token = await getSupabaseAccessToken();
         const headers = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
-        const response = await fetch(`/api/trip-history/${tripId}`, {
-            method: 'DELETE'
-            , headers
+        const response = await fetch(orch.apiPath, {
+            method: 'DELETE',
+            headers,
         });
         const data = await response.json();
+        const execute = TH.buildDeleteTripHistoryResponseExecutePlan(data);
 
-        if (data.success) {
+        if (execute.shouldRemove) {
             removeLocalTripByServerId(tripId);
             allTrips = allTrips.filter(t => t.id !== tripId);
             displayTripHistory(allTrips);
-            showStatus('Trip deleted', 'success');
+            showStatus(execute.successStatusMessage, execute.successStatusType);
         } else {
-            showStatus('Error deleting trip', 'error');
+            showStatus(execute.errorStatusMessage, execute.errorStatusType);
         }
     } catch (error) {
         console.error('Error deleting trip:', error);
@@ -3524,17 +3520,18 @@ function generateQRCode() {
  * @returns {*} Return value description
  */
 function downloadQRCode() {
-    if (!window.qrImageUrl) {
-        showStatus('Generate QR code first', 'error');
+    const execute = _routeSharing().buildDownloadQrCodeExecutePlan(window.qrImageUrl);
+    if (!execute.shouldDownload) {
+        showStatus(execute.errorStatusMessage, execute.errorStatusType);
         return;
     }
 
     const link = document.createElement('a');
-    link.href = window.qrImageUrl;
-    link.download = 'route-qr-code.png';
+    link.href = execute.imageUrl;
+    link.download = execute.downloadFileName;
     link.click();
 
-    showStatus('QR code downloaded!', 'success');
+    showStatus(execute.successStatusMessage, execute.successStatusType);
 }
 
 /**
@@ -3646,11 +3643,25 @@ function displayAnalytics(data) {
  * @returns {*} Return value description
  */
 function saveRoutePreferences() {
-    const preferences = collectRoutePreferencesFormState();
+    const RP = _routePrefs();
+    const preferences = RP.buildRoutePreferencesFormStatePlan(
+        RP.buildCollectRoutePreferencesInputPlan({
+            avoidHighways: document.getElementById('avoidHighways')?.checked || false,
+            preferScenic: document.getElementById('preferScenic')?.checked || false,
+            avoidTolls: isAvoidTollsEnabled(),
+            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
+            preferQuiet: document.getElementById('preferQuiet')?.checked || false,
+            avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
+            routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
+            maxDetour: document.getElementById('maxDetour')?.value || 20,
+        })
+    );
+    const execute = RP.buildSaveRoutePreferencesExecutePlan(preferences);
+    if (!execute.shouldSave) return;
 
-    localStorage.setItem('routePreferences', JSON.stringify(preferences));
-    saveAllSettings();
-    showStatus('Route preferences saved!', 'success');
+    localStorage.setItem(execute.storageKey, JSON.stringify(execute.preferences));
+    if (execute.saveAllSettings) saveAllSettings();
+    showStatus(execute.successStatusMessage, execute.successStatusType);
 }
 
 /**
@@ -3658,16 +3669,19 @@ function saveRoutePreferences() {
  * @returns {Object}
  */
 function collectRoutePreferencesFormState() {
-    return _routePrefs().buildRoutePreferencesFormStatePlan({
-        avoidHighways: document.getElementById('avoidHighways')?.checked || false,
-        preferScenic: document.getElementById('preferScenic')?.checked || false,
-        avoidTolls: isAvoidTollsEnabled(),
-        avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
-        preferQuiet: document.getElementById('preferQuiet')?.checked || false,
-        avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
-        routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
-        maxDetour: document.getElementById('maxDetour')?.value || 20,
-    });
+    const RP = _routePrefs();
+    return RP.buildRoutePreferencesFormStatePlan(
+        RP.buildCollectRoutePreferencesInputPlan({
+            avoidHighways: document.getElementById('avoidHighways')?.checked || false,
+            preferScenic: document.getElementById('preferScenic')?.checked || false,
+            avoidTolls: isAvoidTollsEnabled(),
+            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
+            preferQuiet: document.getElementById('preferQuiet')?.checked || false,
+            avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
+            routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
+            maxDetour: document.getElementById('maxDetour')?.value || 20,
+        })
+    );
 }
 
 function saveMultiDropPreferences() {
@@ -4039,41 +4053,49 @@ function setupMapClickHandler() {
         return;
     }
 
-    // Map click handler for location picker
+    const GL = _geocodingLocations();
     map.on('click', (e) => {
-        // Handle via-point and stop adding first
-        if (addingViaPoint || addingStop) {
+        const lat = e.lngLat.lat;
+        const lon = e.lngLat.lng;
+        const dispatch = GL.buildMapClickDispatchPlan({
+            addingViaPoint,
+            addingStop,
+            mapPickerMode,
+            lat,
+            lon,
+        });
+
+        if (dispatch.action === 'waypoint') {
             handleMapClickForWaypoints(e);
             return;
         }
 
-        if (mapPickerMode) {
-            // MapLibre uses e.lngLat (not e.latlng like Leaflet)
-            const lat = e.lngLat.lat;
-            const lon = e.lngLat.lng;
-            document.getElementById(mapPickerMode).value = `${lat},${lon}`;
+        if (dispatch.action === 'location_picker') {
+            const execute = GL.buildMapClickLocationPickerExecutePlan(dispatch);
+            if (!execute.shouldApply) return;
 
-            // Add marker
-            if (mapPickerMode === 'start' && startMarker && typeof startMarker.remove === 'function') startMarker.remove();
-            if (mapPickerMode === 'end' && endMarker && typeof endMarker.remove === 'function') endMarker.remove();
+            const inputEl = document.getElementById(execute.inputId);
+            if (inputEl) inputEl.value = execute.inputValue;
 
-            const marker = MapLibreHelpers.createCircleMarker(lat, lon, {
-                radius: 8,
-                fillColor: mapPickerMode === 'start' ? '#00ff00' : '#ff0000',
-                color: '#000',
-                weight: 2,
-                fillOpacity: 0.8
-            }).addTo(map);
+            if (execute.removeExistingMarker) {
+                if (execute.markerTarget === 'start' && startMarker && typeof startMarker.remove === 'function') {
+                    startMarker.remove();
+                }
+                if (execute.markerTarget === 'end' && endMarker && typeof endMarker.remove === 'function') {
+                    endMarker.remove();
+                }
+            }
 
-            if (mapPickerMode === 'start') {
+            const marker = MapLibreHelpers.createCircleMarker(lat, lon, execute.markerOptions).addTo(map);
+            if (execute.markerTarget === 'start') {
                 startMarker = marker;
             } else {
                 endMarker = marker;
             }
 
-            mapPickerMode = null;
-            showStatus('Location selected!', 'success');
-            collapseBottomSheet();
+            if (execute.clearMapPickerMode) mapPickerMode = null;
+            if (execute.collapseBottomSheet) collapseBottomSheet();
+            showStatus(execute.successStatusMessage, execute.successStatusType);
         }
     });
 }
@@ -14504,9 +14526,12 @@ function updateAutoGpsLocation() {
  * @returns {*} Return value description
  */
 function pickLocationFromMap(field) {
-    mapPickerMode = field;
-    collapseBottomSheet();
-    showStatus('Click on the map to select ' + (field === 'start' ? 'start' : 'destination') + ' location', 'loading');
+    const execute = _geocodingLocations().buildPickLocationFromMapExecutePlan(field);
+    if (!execute.shouldPick) return;
+
+    mapPickerMode = execute.mapPickerMode;
+    if (execute.collapseBottomSheet) collapseBottomSheet();
+    showStatus(execute.statusMessage, execute.statusType);
 }
 
 // ===== GEOCODING FUNCTIONS =====

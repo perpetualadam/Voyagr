@@ -137,6 +137,25 @@ describe('route-prefs module', () => {
             expect(dom.selects.find((item) => item.id === 'maxDetour').value).toBe(20);
             expect(dom.detourLabel.text).toBe('20%');
         });
+
+        test('buildSaveRoutePreferencesExecutePlan persists preferences copy', () => {
+            const prefs = RoutePrefs.buildRoutePreferencesFormStatePlan({ preferScenic: true });
+            const execute = RoutePrefs.buildSaveRoutePreferencesExecutePlan(prefs);
+            expect(execute.shouldSave).toBe(true);
+            expect(execute.storageKey).toBe('routePreferences');
+            expect(execute.preferences.preferScenic).toBe(true);
+            expect(execute.successStatusType).toBe('success');
+        });
+
+        test('buildCollectRoutePreferencesInputPlan normalises DOM reads', () => {
+            const input = RoutePrefs.buildCollectRoutePreferencesInputPlan({
+                avoidHighways: true,
+                maxDetour: '12',
+            });
+            const prefs = RoutePrefs.buildRoutePreferencesFormStatePlan(input);
+            expect(prefs.avoidHighways).toBe(true);
+            expect(prefs.maxDetour).toBe(12);
+        });
     });
 
     describe('route leg avoidance preference helpers', () => {

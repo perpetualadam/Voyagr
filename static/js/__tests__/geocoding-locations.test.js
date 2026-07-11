@@ -297,4 +297,31 @@ describe('geocoding-locations module', () => {
             decoded: { lat: 1, lon: 2 },
         }).action).toBe('skip');
     });
+
+    test('buildPickLocationFromMapExecutePlan enters picker mode with status copy', () => {
+        const start = GL.buildPickLocationFromMapExecutePlan('start');
+        expect(start.shouldPick).toBe(true);
+        expect(start.mapPickerMode).toBe('start');
+        expect(start.statusMessage).toContain('start');
+        expect(GL.buildPickLocationFromMapExecutePlan('end').statusMessage).toContain('destination');
+    });
+
+    test('buildMapClickDispatchPlan routes waypoint and picker clicks', () => {
+        expect(GL.buildMapClickDispatchPlan({ addingViaPoint: true, lat: 1, lon: 2 }).action).toBe('waypoint');
+        expect(GL.buildMapClickDispatchPlan({ mapPickerMode: 'end', lat: 3, lon: 4 }).action).toBe('location_picker');
+        expect(GL.buildMapClickDispatchPlan({}).action).toBe('none');
+    });
+
+    test('buildMapClickLocationPickerExecutePlan applies start marker styling', () => {
+        const execute = GL.buildMapClickLocationPickerExecutePlan({
+            mapPickerMode: 'start',
+            lat: 51.5,
+            lon: -0.12,
+        });
+        expect(execute.shouldApply).toBe(true);
+        expect(execute.inputValue).toBe('51.5,-0.12');
+        expect(execute.markerTarget).toBe('start');
+        expect(execute.markerOptions.fillColor).toBe('#00ff00');
+        expect(GL.buildMapClickLocationPickerExecutePlan({ mapPickerMode: 'end', lat: 1, lon: 2 }).markerOptions.fillColor).toBe('#ff0000');
+    });
 });

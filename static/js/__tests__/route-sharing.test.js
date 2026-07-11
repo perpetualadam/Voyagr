@@ -214,4 +214,11 @@ describe('route-sharing module', () => {
         expect(execute.shareLinkInputId).toBe('shareLink');
         expect(execute.successStatusType).toBe('success');
     });
+
+    test('buildDownloadQrCodeExecutePlan requires generated image URL', () => {
+        expect(RS.buildDownloadQrCodeExecutePlan(null).shouldDownload).toBe(false);
+        const execute = RS.buildDownloadQrCodeExecutePlan('https://example.com/qr.png');
+        expect(execute.shouldDownload).toBe(true);
+        expect(execute.downloadFileName).toBe('route-qr-code.png');
+    });
 });

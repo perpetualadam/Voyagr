@@ -227,6 +227,214 @@
     }
 
     /**
+     * Sum fuel, toll, and CAZ costs for a trip row.
+     * @param {Object} trip
+     * @returns {string}
+     */
+    function computeTripTotalCost(trip) {
+        trip = trip || {};
+        return (
+            parseFloat(trip.fuel_cost || 0) +
+            parseFloat(trip.toll_cost || 0) +
+            parseFloat(trip.caz_cost || 0)
+        ).toFixed(2);
+    }
+
+    /**
+     * Orchestration plan for loading trip history from the API.
+     * @returns {Object}
+     */
+    function buildLoadTripHistoryOrchestrationPlan() {
+        return {
+            apiPath: '/api/trip-history',
+            listContainerId: 'tripHistoryList',
+            searchInputId: 'tripSearchInput',
+            errorLogPrefix: 'Error loading trip history:',
+        };
+    }
+
+    /**
+     * Execute plan for a 401 trip-history response (device-local fallback).
+     * @param {Array<Object>} allTrips
+     * @returns {Object}
+     */
+    function buildLoadTripHistoryAuthExecutePlan(allTrips) {
+        return {
+            shouldShowSignInBanner: true,
+            bannerStyle: getTripHistorySignInBannerStyleCssText(),
+            bannerText: buildTripHistorySignInBannerText((allTrips || []).length > 0),
+            insertBannerBeforeFirstChild: true,
+            bindSearch: true,
+        };
+    }
+
+    /**
+     * Execute plan for a trip-history API response.
+     * @param {{ status?: number }} res
+     * @param {Object} data
+     * @returns {Object}
+     */
+    function buildLoadTripHistoryResponseExecutePlan(res, data) {
+        res = res || {};
+        data = data || {};
+        if (res.status === 401) {
+            return { action: 'auth' };
+        }
+        if (data && data.success && Array.isArray(data.trips)) {
+            return { action: 'success', serverTrips: data.trips };
+        }
+        return { action: 'empty', serverTrips: [] };
+    }
+
+    /**
+     * Execute plan when trip-history loading fails.
+     * @returns {Object}
+     */
+    function buildLoadTripHistoryErrorExecutePlan() {
+        return {
+            shouldRenderError: true,
+            listInnerHtml: TRIP_HISTORY_ERROR_HTML,
+            clearAllTrips: true,
+            bindSearch: true,
+        };
+    }
+
+    /**
+     * Input assembly for rendering the trip history list.
+     * @param {Array<Object>} trips
+     * @param {Object} fmt
+     * @returns {Object}
+     */
+    function buildDisplayTripHistoryInputPlan(trips, fmt) {
+        return {
+            trips: trips || [],
+            fmt: fmt || {},
+        };
+    }
+
+    /**
+     * Execute plan for rendering the trip history list.
+     * @param {Object} input - from buildDisplayTripHistoryInputPlan
+     * @returns {Object}
+     */
+    function buildDisplayTripHistoryExecutePlan(input) {
+        input = input || {};
+        var trips = input.trips || [];
+        if (!trips.length) {
+            return {
+                shouldRender: true,
+                listInnerHtml: EMPTY_TRIP_LIST_HTML,
+                bindSearch: true,
+            };
+        }
+        var fmt = input.fmt || {};
+        return {
+            shouldRender: true,
+            rows: trips.map(function (trip) {
+                return {
+                    trip: trip,
+                    display: {
+                        startAddr: typeof fmt.escapeHtml === 'function'
+                            ? fmt.escapeHtml(trip.start_address || 'Start')
+                            : (trip.start_address || 'Start'),
+                        endAddr: typeof fmt.escapeHtml === 'function'
+                            ? fmt.escapeHtml(trip.end_address || 'End')
+                            : (trip.end_address || 'End'),
+                        dateStr: formatTripListTimestamp(trip.timestamp),
+                        distance: typeof fmt.convertDistance === 'function'
+                            ? fmt.convertDistance(trip.distance_km)
+                            : String(trip.distance_km || ''),
+                        distUnit: fmt.distUnit || '',
+                        totalCost: computeTripTotalCost(trip),
+                        symbol: fmt.currencySymbol || '',
+                    },
+                };
+            }),
+            bindSearch: true,
+        };
+    }
+
+    /**
+     * Execute plan for recalculating a trip from history.
+     * @param {number} tripId
+     * @param {Array<Object>} allTrips
+     * @returns {Object}
+     */
+    function buildRecalculateTripExecutePlan(tripId, allTrips) {
+        var trip = (allTrips || []).find(function (t) { return t.id === tripId; });
+        if (!trip) {
+            return { shouldRecalculate: false };
+        }
+        return {
+            shouldRecalculate: true,
+            startInputId: 'start',
+            endInputId: 'end',
+            startValue: trip.start_address || (trip.start_lat + ',' + trip.start_lon),
+            endValue: trip.end_address || (trip.end_lat + ',' + trip.end_lon),
+            switchTab: 'navigation',
+            calculateDelayMs: 300,
+            successStatusMessage: 'Trip loaded. Recalculating route...',
+            successStatusType: 'success',
+        };
+    }
+
+    /**
+     * Orchestration plan for deleting a trip from history.
+     * @param {number} tripId
+     * @returns {Object}
+     */
+    function buildDeleteTripHistoryOrchestrationPlan(tripId) {
+        return {
+            tripId: tripId,
+            confirmMessage: 'Are you sure you want to delete this trip?',
+            apiPath: '/api/trip-history/' + tripId,
+            localId: tripId < 0 ? -tripId : null,
+            isLocalOnly: tripId < 0,
+        };
+    }
+
+    /**
+     * Execute plan for deleting a device-local trip row.
+     * @param {Object} orch - from buildDeleteTripHistoryOrchestrationPlan
+     * @param {Array<Object>} allTrips
+     * @returns {Object}
+     */
+    function buildDeleteTripHistoryLocalExecutePlan(orch, allTrips) {
+        orch = orch || {};
+        if (!orch.isLocalOnly) {
+            return { shouldDeleteLocal: false };
+        }
+        return {
+            shouldDeleteLocal: true,
+            localId: orch.localId,
+            nextTrips: (allTrips || []).filter(function (t) { return t.id !== orch.tripId; }),
+            successStatusMessage: 'Trip removed from this device',
+            successStatusType: 'success',
+        };
+    }
+
+    /**
+     * Execute plan for a trip-history delete API response.
+     * @param {Object} data
+     * @returns {Object}
+     */
+    function buildDeleteTripHistoryResponseExecutePlan(data) {
+        data = data || {};
+        if (data.success) {
+            return {
+                shouldRemove: true,
+                successStatusMessage: 'Trip deleted',
+                successStatusType: 'success',
+            };
+        }
+        return {
+            shouldRemove: false,
+            errorStatusMessage: 'Error deleting trip',
+            errorStatusType: 'error',
+        };
+    }
+
+    /**
      * Build one trip-history list row HTML string.
      * @param {object} trip
      * @param {object} display - pre-formatted/escaped display fields
@@ -447,6 +655,17 @@
         filterTripsBySearch: filterTripsBySearch,
         buildTripHistoryRowHtml: buildTripHistoryRowHtml,
         buildAnalyticsDisplayValues: buildAnalyticsDisplayValues,
+        computeTripTotalCost: computeTripTotalCost,
+        buildLoadTripHistoryOrchestrationPlan: buildLoadTripHistoryOrchestrationPlan,
+        buildLoadTripHistoryAuthExecutePlan: buildLoadTripHistoryAuthExecutePlan,
+        buildLoadTripHistoryResponseExecutePlan: buildLoadTripHistoryResponseExecutePlan,
+        buildLoadTripHistoryErrorExecutePlan: buildLoadTripHistoryErrorExecutePlan,
+        buildDisplayTripHistoryInputPlan: buildDisplayTripHistoryInputPlan,
+        buildDisplayTripHistoryExecutePlan: buildDisplayTripHistoryExecutePlan,
+        buildRecalculateTripExecutePlan: buildRecalculateTripExecutePlan,
+        buildDeleteTripHistoryOrchestrationPlan: buildDeleteTripHistoryOrchestrationPlan,
+        buildDeleteTripHistoryLocalExecutePlan: buildDeleteTripHistoryLocalExecutePlan,
+        buildDeleteTripHistoryResponseExecutePlan: buildDeleteTripHistoryResponseExecutePlan,
         buildLoadRouteAnalyticsOrchestrationPlan: buildLoadRouteAnalyticsOrchestrationPlan,
         buildLoadRouteAnalyticsResponseExecutePlan: buildLoadRouteAnalyticsResponseExecutePlan,
         buildAnalyticsDisplayInputPlan: buildAnalyticsDisplayInputPlan,
