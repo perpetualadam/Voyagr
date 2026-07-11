@@ -203,4 +203,25 @@ describe('geocoding-locations module', () => {
     test('buildGeocodeHttpErrorPlan formats status code', () => {
         expect(GL.buildGeocodeHttpErrorPlan(429).errorMessage).toBe('API error: 429');
     });
+
+    test('buildGeocodePlusCodeLookupPlan resolves valid decoded plus codes', () => {
+        const resolved = GL.buildGeocodePlusCodeLookupPlan({
+            plusCodesEnabled: true,
+            hasPlusCodeService: true,
+            trimmed: 'CODE',
+            isValidCode: true,
+            decoded: { lat: 51.5, lon: -0.1 },
+        });
+        expect(resolved.action).toBe('resolve');
+        expect(resolved.result.lat).toBe(51.5);
+        expect(resolved.source).toBe('plus_code');
+
+        expect(GL.buildGeocodePlusCodeLookupPlan({
+            plusCodesEnabled: false,
+            hasPlusCodeService: true,
+            trimmed: 'CODE',
+            isValidCode: true,
+            decoded: { lat: 1, lon: 2 },
+        }).action).toBe('skip');
+    });
 });

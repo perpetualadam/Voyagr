@@ -333,6 +333,35 @@
     }
 
     /**
+     * Merge runtime globals and stored prefs into buildSettingsUiApplyPlan input.
+     * @param {Object} runtime
+     * @param {Object} stored
+     * @returns {Object}
+     */
+    function buildSettingsUiInputPlan(runtime, stored) {
+        runtime = runtime || {};
+        stored = stored || {};
+        return {
+            distanceUnit: runtime.distanceUnit,
+            currencyUnit: runtime.currencyUnit,
+            speedUnit: runtime.speedUnit,
+            temperatureUnit: runtime.temperatureUnit,
+            vehicleType: runtime.vehicleType,
+            routingMode: runtime.routingMode,
+            routePreferences: stored.routePreferences,
+            parkingPreferences: stored.parkingPreferences,
+            mapTheme: stored.mapTheme != null ? stored.mapTheme : 'standard',
+            smartZoomEnabled: runtime.smartZoomEnabled,
+            autoTrafficUpdateEnabled: runtime.autoTrafficUpdateEnabled,
+            autoRerouteOnDeviationEnabled: runtime.autoRerouteOnDeviationEnabled,
+            mlPredictionsEnabled: runtime.mlPredictionsEnabled,
+            voiceAnnouncementsEnabled: runtime.voiceAnnouncementsEnabled,
+            batterySavingEnabled: runtime.batterySavingEnabled,
+            gestureControlEnabled: runtime.gestureControlEnabled,
+        };
+    }
+
+    /**
      * DOM apply plan with explicit element ids for settings UI orchestration.
      * @param {Object} uiPlan - from buildSettingsUiApplyPlan
      * @returns {Object}
@@ -394,6 +423,7 @@
         buildMultiDropPreferencesUiApplyPlan: buildMultiDropPreferencesUiApplyPlan,
         buildClearDepartureTimeApplyPlan: buildClearDepartureTimeApplyPlan,
         buildSettingsUiApplyPlan: buildSettingsUiApplyPlan,
+        buildSettingsUiInputPlan: buildSettingsUiInputPlan,
         buildSettingsUiDomApplyPlan: buildSettingsUiDomApplyPlan,
     };
 

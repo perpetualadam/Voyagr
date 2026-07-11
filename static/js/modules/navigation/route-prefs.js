@@ -172,6 +172,27 @@
     }
 
     /**
+     * DOM apply plan with explicit element ids for route preference controls.
+     * @param {Object} uiPlan - from buildRoutePreferencesUiApplyPlan
+     * @returns {Object}
+     */
+    function buildRoutePreferencesDomApplyPlan(uiPlan) {
+        uiPlan = uiPlan || {};
+        var ids = uiPlan.elementIds || {};
+        var checks = uiPlan.checks || {};
+        var selects = uiPlan.selects || {};
+        return {
+            checks: Object.keys(checks).map(function (key) {
+                return { id: ids[key], checked: checks[key] };
+            }).filter(function (item) { return item.id; }),
+            selects: Object.keys(selects).map(function (key) {
+                return { id: ids[key], value: selects[key] };
+            }).filter(function (item) { return item.id; }),
+            detourLabel: uiPlan.detourLabel,
+        };
+    }
+
+    /**
      * DOM apply plan for the max-detour percentage label (display only).
      * @param {number|string} maxDetour
      * @returns {{ labelElementId: string, text: string }}
@@ -298,6 +319,7 @@
         getRouteCostParams: getRouteCostParams,
         getRoutePreferences: getRoutePreferences,
         buildRoutePreferencesUiApplyPlan: buildRoutePreferencesUiApplyPlan,
+        buildRoutePreferencesDomApplyPlan: buildRoutePreferencesDomApplyPlan,
         buildDetourLabelApplyPlan: buildDetourLabelApplyPlan,
         buildRouteLegAvoidanceTogglesApplyPlan: buildRouteLegAvoidanceTogglesApplyPlan,
         buildRouteLegAvoidanceToggleStoragePlan: buildRouteLegAvoidanceToggleStoragePlan,

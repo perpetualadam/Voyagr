@@ -432,6 +432,40 @@
         };
     }
 
+    /**
+     * Lookup plan for Plus Code geocoding after service validation in the app.
+     * @param {Object} input
+     * @param {boolean} input.plusCodesEnabled
+     * @param {boolean} input.hasPlusCodeService
+     * @param {string} input.trimmed
+     * @param {boolean} [input.isValidCode]
+     * @param {{ lat: number, lon: number }|null} [input.decoded]
+     * @param {string} [input.errorMessage]
+     * @returns {Object}
+     */
+    function buildGeocodePlusCodeLookupPlan(input) {
+        input = input || {};
+        if (!input.plusCodesEnabled || !input.hasPlusCodeService) {
+            return { action: 'skip' };
+        }
+        if (!input.isValidCode) {
+            return { action: 'not_plus_code', trimmed: input.trimmed };
+        }
+        if (!input.decoded || !Number.isFinite(input.decoded.lat) || !Number.isFinite(input.decoded.lon)) {
+            return {
+                action: 'decode_failed',
+                trimmed: input.trimmed,
+                errorMessage: input.errorMessage,
+            };
+        }
+        return {
+            action: 'resolve',
+            trimmed: input.trimmed,
+            result: buildPlusCodeGeocodeResult(input.trimmed, input.decoded),
+            source: 'plus_code',
+        };
+    }
+
     var api = {
         readStoredLocationFromDataset: readStoredLocationFromDataset,
         getGeocodeLoadingStatusMessage: getGeocodeLoadingStatusMessage,
@@ -461,6 +495,7 @@
         buildGeocodeNominatimFetchRequestPlan: buildGeocodeNominatimFetchRequestPlan,
         buildGeocodeNominatimResponsePlan: buildGeocodeNominatimResponsePlan,
         buildGeocodeHttpErrorPlan: buildGeocodeHttpErrorPlan,
+        buildGeocodePlusCodeLookupPlan: buildGeocodePlusCodeLookupPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

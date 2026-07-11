@@ -114,6 +114,16 @@ describe('route-prefs module', () => {
                 text: '25%',
             });
         });
+
+        test('buildRoutePreferencesDomApplyPlan maps checks and selects to element ids', () => {
+            const uiPlan = RoutePrefs.buildRoutePreferencesUiApplyPlan({
+                getItem() { return null; },
+            });
+            const dom = RoutePrefs.buildRoutePreferencesDomApplyPlan(uiPlan);
+            expect(dom.checks.find((item) => item.id === 'preferScenic').checked).toBe(false);
+            expect(dom.selects.find((item) => item.id === 'maxDetour').value).toBe(20);
+            expect(dom.detourLabel.text).toBe('20%');
+        });
     });
 
     describe('route leg avoidance preference helpers', () => {

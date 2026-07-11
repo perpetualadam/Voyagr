@@ -1580,46 +1580,63 @@ function applySettingsUiFromPlan(plan) {
 }
 
 /**
+ * Collect runtime globals for settings UI apply.
+ * @returns {Object}
+ */
+function collectSettingsUiRuntimeState() {
+    return {
+        distanceUnit,
+        currencyUnit,
+        speedUnit,
+        temperatureUnit,
+        vehicleType: currentVehicleType,
+        routingMode: currentRoutingMode,
+        smartZoomEnabled,
+        autoTrafficUpdateEnabled,
+        autoRerouteOnDeviationEnabled,
+        mlPredictionsEnabled: localStorage.getItem('mlPredictionsEnabled') === 'true',
+        voiceAnnouncementsEnabled: localStorage.getItem('voiceAnnouncementsEnabled') === 'true',
+        batterySavingEnabled: localStorage.getItem('pref_batterySaving') === 'true',
+        gestureControlEnabled: localStorage.getItem('gestureEnabled') === 'true',
+    };
+}
+
+/**
+ * Collect stored preferences for settings UI apply.
+ * @returns {Object}
+ */
+function collectSettingsUiStoredState() {
+    let parkingPrefs = {};
+    const savedParking = localStorage.getItem('parkingPreferences');
+    if (savedParking) {
+        try {
+            parkingPrefs = JSON.parse(savedParking);
+        } catch (e) {
+            console.log('[Settings] Error parsing parking preferences:', e);
+        }
+    }
+
+    return {
+        routePreferences: _routePrefs().getRoutePreferences(localStorage),
+        parkingPreferences: parkingPrefs,
+        mapTheme: localStorage.getItem('mapTheme') || 'standard',
+    };
+}
+
+/**
  * applySettingsToUI function
  * @function applySettingsToUI
  * @returns {*} Return value description
  */
 function applySettingsToUI() {
     try {
-        let routePrefs = {};
-        const savedRoutePrefs = localStorage.getItem('routePreferences');
-        if (savedRoutePrefs) {
-            routePrefs = JSON.parse(savedRoutePrefs);
-        }
-
-        let parkingPrefs = {};
-        const savedParking = localStorage.getItem('parkingPreferences');
-        if (savedParking) {
-            try {
-                parkingPrefs = JSON.parse(savedParking);
-            } catch (e) {
-                console.log('[Settings] Error parsing parking preferences:', e);
-            }
-        }
-
-        const plan = _settingsSnapshot().buildSettingsUiApplyPlan({
-            distanceUnit,
-            currencyUnit,
-            speedUnit,
-            temperatureUnit,
-            vehicleType: currentVehicleType,
-            routingMode: currentRoutingMode,
-            routePreferences: routePrefs,
-            parkingPreferences: parkingPrefs,
-            mapTheme: localStorage.getItem('mapTheme') || 'standard',
-            smartZoomEnabled,
-            autoTrafficUpdateEnabled,
-            autoRerouteOnDeviationEnabled,
-            mlPredictionsEnabled: localStorage.getItem('mlPredictionsEnabled') === 'true',
-            voiceAnnouncementsEnabled: localStorage.getItem('voiceAnnouncementsEnabled') === 'true',
-            batterySavingEnabled: localStorage.getItem('pref_batterySaving') === 'true',
-            gestureControlEnabled: localStorage.getItem('gestureEnabled') === 'true',
-        });
+        const SS = _settingsSnapshot();
+        const plan = SS.buildSettingsUiApplyPlan(
+            SS.buildSettingsUiInputPlan(
+                collectSettingsUiRuntimeState(),
+                collectSettingsUiStoredState()
+            )
+        );
         applySettingsUiFromPlan(plan);
 
         console.log('[Settings] All settings applied to UI');
@@ -3573,21 +3590,11 @@ function loadRoutePreferences() {
 function applyRoutePreferencesUiFromPlan(plan) {
     if (!plan) return;
 
-    const ids = plan.elementIds || {};
-    const checks = plan.checks || {};
-    Object.entries(checks).forEach(([key, value]) => {
-        const el = document.getElementById(ids[key]);
-        if (el) el.checked = !!value;
-    });
-
-    const selects = plan.selects || {};
-    Object.entries(selects).forEach(([key, value]) => {
-        const el = document.getElementById(ids[key]);
-        if (el) el.value = value;
-    });
-
-    if (plan.detourLabel) {
-        applyDetourLabelFromPlan(plan.detourLabel);
+    const domPlan = _routePrefs().buildRoutePreferencesDomApplyPlan(plan);
+    applyDomChecksFromPlan(domPlan.checks);
+    applyDomSelectsFromPlan(domPlan.selects);
+    if (domPlan.detourLabel) {
+        applyDetourLabelFromPlan(domPlan.detourLabel);
     }
 }
 
@@ -14715,18 +14722,33 @@ async function geocodeAddress(address) {
 
     const trimmedAddress = lookup.trimmed;
     const plusCodesEnabled = localStorage.getItem('googlePlusCodesEnabled') === 'true';
-    if (plusCodesEnabled && typeof GooglePlusCodesService !== 'undefined') {
+    const hasPlusCodeService = typeof GooglePlusCodesService !== 'undefined';
+    let plusCodeState = { isValidCode: false, decoded: null, errorMessage: null };
+    if (plusCodesEnabled && hasPlusCodeService) {
         try {
             const service = new GooglePlusCodesService();
             if (service.isValidCode(trimmedAddress)) {
-                console.log('[Geocoding] Detected Plus Code:', trimmedAddress);
-                const decoded = service.decode(trimmedAddress);
-                console.log('[Geocoding] Decoded Plus Code to:', decoded.lat, decoded.lon);
-                return GL.buildPlusCodeGeocodeResult(trimmedAddress, decoded);
+                plusCodeState.isValidCode = true;
+                plusCodeState.decoded = service.decode(trimmedAddress);
             }
         } catch (error) {
+            plusCodeState.errorMessage = error.message;
             console.log('[Geocoding] Plus Code decode error:', error.message);
         }
+    }
+
+    const plusPlan = GL.buildGeocodePlusCodeLookupPlan({
+        plusCodesEnabled,
+        hasPlusCodeService,
+        trimmed: trimmedAddress,
+        isValidCode: plusCodeState.isValidCode,
+        decoded: plusCodeState.decoded,
+        errorMessage: plusCodeState.errorMessage,
+    });
+    if (plusPlan.action === 'resolve') {
+        console.log('[Geocoding] Detected Plus Code:', trimmedAddress);
+        console.log('[Geocoding] Decoded Plus Code to:', plusPlan.result.lat, plusPlan.result.lon);
+        return plusPlan.result;
     }
 
     lookup = GL.buildGeocodeAddressLookupPlan({

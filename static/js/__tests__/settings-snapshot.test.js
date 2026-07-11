@@ -125,6 +125,27 @@ describe('settings-snapshot module', () => {
         expect(dom.detourLabel.text).toBe('15%');
     });
 
+    test('buildSettingsUiInputPlan merges runtime and stored state', () => {
+        const input = SS.buildSettingsUiInputPlan(
+            {
+                distanceUnit: 'mi',
+                vehicleType: 'electric',
+                smartZoomEnabled: true,
+                mlPredictionsEnabled: true,
+            },
+            {
+                routePreferences: { maxDetour: 12 },
+                parkingPreferences: { maxWalkingDistance: '5' },
+                mapTheme: 'dark',
+            }
+        );
+        expect(input.distanceUnit).toBe('mi');
+        expect(input.routePreferences.maxDetour).toBe(12);
+        expect(input.parkingPreferences.maxWalkingDistance).toBe('5');
+        expect(input.mapTheme).toBe('dark');
+        expect(input.mlPredictionsEnabled).toBe(true);
+    });
+
     test('buildSettingsSnapshotInputPlan merges runtime and form state', () => {
         const input = SS.buildSettingsSnapshotInputPlan(
             {
