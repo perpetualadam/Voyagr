@@ -234,3 +234,48 @@ describe('buildLaneIndicatorHtml', () => {
         expect(LG.buildLaneIndicatorHtml()).toContain('↑');
     });
 });
+
+describe('lane guidance fetch throttle helpers', () => {
+    test('shouldSkipLaneGuidanceFetch respects interval and position', () => {
+        expect(LG.shouldSkipLaneGuidanceFetch({
+            now: 2000,
+            lastFetch: 0,
+            lastPosition: { lat: 1, lon: 1 },
+            distanceMovedMeters: 10,
+            maneuver: 'left',
+            lastManeuver: 'left',
+        })).toBe(true);
+        expect(LG.shouldSkipLaneGuidanceFetch({
+            now: 5000,
+            lastFetch: 0,
+            lastPosition: null,
+            distanceMovedMeters: 0,
+            maneuver: 'left',
+            lastManeuver: 'left',
+        })).toBe(false);
+    });
+
+    test('buildLaneGuidanceCacheKey and API URL', () => {
+        const key = LG.buildLaneGuidanceCacheKey('left', 2, 'primary', 51.501, -0.1);
+        expect(key).toContain('left');
+        expect(key).toContain('primary');
+        const url = LG.buildLaneGuidanceApiUrl({
+            lat: 51.5,
+            lon: -0.1,
+            heading: 90,
+            maneuver: 'left',
+            distance: 120,
+            roadType: 'primary',
+            roundaboutExitCount: 0,
+        });
+        expect(url).toContain('/api/lane-guidance');
+        expect(url).toContain('maneuver=left');
+    });
+
+    test('isLaneGuidanceCacheEntryFresh uses fallback TTL', () => {
+        const now = 10000;
+        expect(LG.isLaneGuidanceCacheEntryFresh({ ts: 9000, fallback: false }, now)).toBe(true);
+        expect(LG.isLaneGuidanceCacheEntryFresh({ ts: 1000, fallback: true }, now)).toBe(false);
+        expect(LG.isLaneGuidanceCacheEntryFresh({ ts: 5000, fallback: true }, now)).toBe(true);
+    });
+});

@@ -170,6 +170,26 @@
         btn.innerHTML = display.innerHtml;
     }
 
+    /**
+     * End/start navigation FAB visibility during turn-by-turn.
+     * @param {boolean} routeInProgress
+     * @returns {{ endBtnDisplay: string, startBtnDisplay: string|null }}
+     */
+    function getNavigationFabVisibilityPlan(routeInProgress) {
+        if (routeInProgress) {
+            return { endBtnDisplay: 'block', startBtnDisplay: 'none' };
+        }
+        return { endBtnDisplay: 'none', startBtnDisplay: null };
+    }
+
+    /**
+     * Extra map FABs shown when navigation starts (AR + driver perspective).
+     * @returns {{ arModeBtnDisplay: string, driverPerspectiveBtnDisplay: string }}
+     */
+    function getNavStartExtraFabDisplay() {
+        return { arModeBtnDisplay: 'flex', driverPerspectiveBtnDisplay: 'flex' };
+    }
+
     var api = {
         ZOOM_FOLLOW_ENABLED_ICON: ZOOM_FOLLOW_ENABLED_ICON,
         ZOOM_FOLLOW_DISABLED_ICON: ZOOM_FOLLOW_DISABLED_ICON,
@@ -199,6 +219,8 @@
         applyARModeToggleButton: applyARModeToggleButton,
         getARFabVisibilityDisplay: getARFabVisibilityDisplay,
         applyARModeButtonState: applyARModeButtonState,
+        getNavigationFabVisibilityPlan: getNavigationFabVisibilityPlan,
+        getNavStartExtraFabDisplay: getNavStartExtraFabDisplay,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

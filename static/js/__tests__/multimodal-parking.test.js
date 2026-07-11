@@ -102,4 +102,12 @@ describe('multimodal-parking module', () => {
         expect(plan.hoverBackground).toBe('#FFF3E0');
         expect(plan.restBackground).toBe('white');
     });
+
+    test('parking select helpers resolve start coords and status copy', () => {
+        expect(MP.resolveParkingStartCoordsFromRoute({ start_lat: 51.5, start_lon: -0.1 }))
+            .toEqual({ lat: 51.5, lon: -0.1 });
+        expect(MP.resolveParkingStartCoordsFromRoute(null)).toBeNull();
+        expect(MP.getParkingSelectLoadingMessage()).toContain('Calculating');
+        expect(MP.getParkingSelectLegErrorMessage('driving')).toContain('driving');
+    });
 });
