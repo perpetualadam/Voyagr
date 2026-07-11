@@ -14,6 +14,35 @@
         bicycle: { fuel_price: 1.60, fuel_efficiency: 6.5, electricity_price: 0.32, energy_efficiency: 18.5 },
     };
 
+    /** Default route preference object when routePreferences is unset in storage. */
+    var DEFAULT_ROUTE_PREFERENCES = {
+        avoidHighways: false,
+        preferScenic: false,
+        avoidTolls: true,
+        avoidCAZ: true,
+        preferQuiet: false,
+        avoidUnpaved: false,
+        routeOptimization: 'fastest',
+        maxDetour: 20,
+    };
+
+    /**
+     * Read saved route preferences from storage, with defaults when unset.
+     * @param {Storage} storage
+     * @returns {Object}
+     */
+    function getRoutePreferences(storage) {
+        try {
+            var saved = storage.getItem('routePreferences');
+            if (saved) return JSON.parse(saved);
+        } catch (e) {
+            if (typeof console !== 'undefined' && console.warn) {
+                console.warn('[RoutePrefs] Failed to parse routePreferences:', e);
+            }
+        }
+        return Object.assign({}, DEFAULT_ROUTE_PREFERENCES);
+    }
+
     /**
      * One-time migration: pref_avoid_tollRoads ← pref_tolls when canonical key unset.
      * @param {Storage} storage
@@ -67,9 +96,11 @@
 
     var api = {
         DEFAULT_ROUTE_COST_PARAMS: DEFAULT_ROUTE_COST_PARAMS,
+        DEFAULT_ROUTE_PREFERENCES: DEFAULT_ROUTE_PREFERENCES,
         migrateTollPrefKey: migrateTollPrefKey,
         isAvoidTollsEnabled: isAvoidTollsEnabled,
         getRouteCostParams: getRouteCostParams,
+        getRoutePreferences: getRoutePreferences,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

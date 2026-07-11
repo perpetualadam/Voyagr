@@ -3984,20 +3984,7 @@ function updateDetourLabel() {
  * @returns {*} Return value description
  */
 function getRoutePreferences() {
-    const saved = localStorage.getItem('routePreferences');
-    if (saved) {
-        return JSON.parse(saved);
-    }
-    return {
-        avoidHighways: false,
-        preferScenic: false,
-        avoidTolls: true,  // Default: avoid tolls
-        avoidCAZ: true,    // Default: avoid Clean Air Zones
-        preferQuiet: false,
-        avoidUnpaved: false,
-        routeOptimization: 'fastest',
-        maxDetour: 20
-    };
+    return VoyagrModules.routePrefs().getRoutePreferences(localStorage);
 }
 
 /**
@@ -4464,27 +4451,10 @@ async function calculateRoute() {
     // Check if hazard avoidance is enabled (any hazard type selected)
     const enableHazardAvoidance = VoyagrRoutingRequest.isInitialRouteHazardAvoidanceEnabled(localStorage);
 
-    // Build via-points array for multi-stop routing
-    const viaPointsData = viaPoints.map(vp => ({
-        lat: vp.lat,
-        lon: vp.lon,
-        name: vp.name,
-        type: 'via'
-    }));
+    const viaPointsData = VoyagrRoutingRequest.mapViaPointsForApi(viaPoints);
+    const stopsData = VoyagrRoutingRequest.mapStopsForApi(stops);
+    const totalStopTime = VoyagrRoutingRequest.sumStopDurationsMinutes(stops);
 
-    // Build stops array with duration
-    const stopsData = stops.map(s => ({
-        lat: s.lat,
-        lon: s.lon,
-        name: s.name,
-        type: 'stop',
-        duration: s.duration || 15
-    }));
-
-    // Calculate total stop time for display
-    const totalStopTime = stops.reduce((sum, s) => sum + (s.duration || 15), 0);
-
-    // Multi-drop settings from route preferences
     const routePrefs = getRoutePreferences();
     const optimizeOrder = localStorage.getItem('pref_optimizeStopOrder') !== 'false';
     const roundTrip = localStorage.getItem('pref_roundTrip') === 'true';
@@ -4494,24 +4464,24 @@ async function calculateRoute() {
     const avoidMotorways = localStorage.getItem('pref_avoid_motorways') === 'true';
     const avoidFerries = localStorage.getItem('pref_avoid_ferries') === 'true';
 
-    const liveGpsOk =
-        routeInProgress &&
-        isTrackingActive &&
-        Array.isArray(trackingHistory) &&
-        trackingHistory.length > 0 &&
-        typeof currentLat === 'number' &&
-        Number.isFinite(currentLat) &&
-        typeof currentLon === 'number' &&
-        Number.isFinite(currentLon);
-    const routeStartCoordStr = liveGpsOk ? `${currentLat},${currentLon}` : geocodedStart;
+    const routeStartCoordStr = VoyagrRoutingRequest.resolveLiveGpsStartCoord({
+        routeInProgress: routeInProgress,
+        isTrackingActive: isTrackingActive,
+        trackingHistory: trackingHistory,
+        currentLat: currentLat,
+        currentLon: currentLon,
+        geocodedStart: geocodedStart,
+    });
 
-    // Shared hazard/avoidance/cost/preference fields are built by the pure
-    // VoyagrRoutingRequest module (shared with the reroute path); this handler
-    // adds start/end and the multi-drop fields it alone sends.
-    const requestBody = {
+    const requestBody = VoyagrRoutingRequest.buildInitialRouteRequestBody({
         start: routeStartCoordStr,
         end: geocodedEnd,
-        ...VoyagrRoutingRequest.buildSharedRouteOptions({
+        viaPoints: viaPoints,
+        stops: stops,
+        optimizeStopOrder: optimizeOrder,
+        roundTrip: roundTrip,
+        departureTime: departureTime,
+        sharedOptions: {
             routingMode: currentRoutingMode,
             vehicleType: currentVehicleType,
             costParams: getRouteCostParams(currentVehicleType),
@@ -4524,13 +4494,8 @@ async function calculateRoute() {
             avoidMotorways: avoidMotorways,
             avoidFerries: avoidFerries,
             routePrefs: routePrefs,
-        }),
-        via_points: viaPointsData,
-        stops: stopsData,
-        optimize_stop_order: optimizeOrder,
-        round_trip: roundTrip,
-        departure_time: departureTime,
-    };
+        },
+    });
 
     console.log('[calculateRoute] Making API request to /api/route with:', requestBody);
     console.log('[calculateRoute] Via-points:', viaPointsData.length, 'Stops:', stopsData.length, 'Total stop time:', totalStopTime, 'min');
@@ -8953,35 +8918,28 @@ function displayParkingRoutes(drivingData, walkingData, parking, destination) {
  * @returns {*} Return value description
  */
 function updateParkingPreview(drivingData, walkingData, parking) {
-    const drivingDist = drivingData.distance_km || 0;
-    const drivingTime = drivingData.duration_minutes || 0;
-    const walkingDist = walkingData.distance_km || 0;
-    const walkingTime = walkingData.duration_minutes || 0;
-    const totalDist = drivingDist + walkingDist;
-    const totalTime = drivingTime + walkingTime;
-
+    const totals = VoyagrModules.multimodalParking().computeMultimodalLegTotals(drivingData, walkingData);
     const distUnit = getDistanceUnit();
-    const convertedDist = convertDistance(totalDist);
+    const convertedDist = convertDistance(totals.totalDistKm);
+    const startLabel = document.getElementById('start').value;
+    const endLabel = document.getElementById('end').value;
+    const routeLabel = VoyagrModules.multimodalParking().buildParkingRouteLabel(
+        startLabel,
+        parking.name,
+        endLabel
+    );
+    const breakdown = VoyagrModules.multimodalParking().buildParkingBreakdownHtml({
+        drivingDistDisplay: convertDistance(totals.drivingDistKm),
+        drivingTimeMin: totals.drivingTimeMin,
+        walkingDistDisplay: convertDistance(totals.walkingDistKm),
+        walkingTimeMin: totals.walkingTimeMin,
+        distUnit: distUnit,
+    });
 
-    // Update preview info
     document.getElementById('previewDistance').textContent = convertedDist + ' ' + distUnit;
-    document.getElementById('previewDuration').textContent = Math.round(totalTime) + ' min';
-    document.getElementById('previewRoute').textContent = `${document.getElementById('start').value} → 🅿️ ${parking.name} → ${document.getElementById('end').value}`;
-
-    // Show breakdown with proper unit conversion
-    const drivingDisplayDist = convertDistance(drivingDist);
-    const walkingDisplayDist = convertDistance(walkingDist);
-    const breakdown = `
-        <div style="font-size: 12px; line-height: 1.6; color: #333;">
-            <div style="margin-bottom: 8px;">
-                <strong>🚗 Driving:</strong> ${drivingDisplayDist} ${distUnit} / ${Math.round(drivingTime)} min
-            </div>
-            <div>
-                <strong>🚶 Walking:</strong> ${walkingDisplayDist} ${distUnit} / ${Math.round(walkingTime)} min
-            </div>
-        </div>
-    `;
-    document.getElementById('previewRoute').innerHTML = `${document.getElementById('start').value} → 🅿️ ${parking.name} → ${document.getElementById('end').value}` + breakdown;
+    document.getElementById('previewDuration').textContent = Math.round(totals.totalTimeMin) + ' min';
+    document.getElementById('previewRoute').textContent = routeLabel;
+    document.getElementById('previewRoute').innerHTML = routeLabel + breakdown;
 }
 
 /**

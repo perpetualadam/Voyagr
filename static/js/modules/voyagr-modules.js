@@ -33,6 +33,7 @@
         routeSelection: 'VoyagrRouteSelection',
         navigationDestination: 'VoyagrNavigationDestination',
         movementDetection: 'VoyagrMovementDetection',
+        multimodalParking: 'VoyagrMultimodalParking',
     };
 
     var cache = {};
