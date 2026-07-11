@@ -272,3 +272,38 @@ describe('buildInNavRerouteSuccessPlan', () => {
         expect(plan.noRouteErrorMessage).toContain('No route returned');
     });
 });
+
+describe('preview route path and status helpers', () => {
+    const start = [51.5, -0.1];
+    const end = [51.6, -0.2];
+    const decode = jest.fn(() => [[51.5, -0.1], [51.55, -0.15], [51.6, -0.2]]);
+
+    test('resolveRouteGeometryPrecision prefers API value and OSRM default', () => {
+        expect(RS.resolveRouteGeometryPrecision({ geometry_precision: 5 })).toBe(5);
+        expect(RS.resolveRouteGeometryPrecision({ source: 'osrm' })).toBe(5);
+        expect(RS.resolveRouteGeometryPrecision({ source: 'valhalla' })).toBe(6);
+    });
+
+    test('resolvePreviewRoutePath decodes geometry or falls back to straight line', () => {
+        const ok = RS.resolvePreviewRoutePath(start, end, { geometry: 'abc', source: 'valhalla' }, decode);
+        expect(ok.usedFallback).toBe(false);
+        expect(ok.routePath).toHaveLength(3);
+        const bad = RS.resolvePreviewRoutePath(start, end, { geometry: 'bad' }, () => []);
+        expect(bad.usedFallback).toBe(true);
+        expect(bad.routePath).toEqual([[51.5, -0.1], [51.6, -0.2]]);
+    });
+
+    test('buildRouteCalculatedStatusMessage includes timing and multi-drop hints', () => {
+        const msg = RS.buildRouteCalculatedStatusMessage({
+            response_time_ms: 42.7,
+            via_points_count: 2,
+            stops_count: 1,
+            multi_drop: true,
+            optimized: true,
+        });
+        expect(msg).toContain('successfully');
+        expect(msg).toContain('43ms');
+        expect(msg).toContain('via-points');
+        expect(msg).toContain('optimized');
+    });
+});

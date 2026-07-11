@@ -439,6 +439,97 @@
         return null;
     }
 
+    /**
+     * Max along-route distance (m) to surface an upcoming maneuver by direction type.
+     * @param {string} direction
+     * @returns {number}
+     */
+    function getTurnDetectionMaxDistanceMeters(direction) {
+        var isExitDir = direction === 'exit' || direction === 'exit_right' || direction === 'exit_left';
+        var isKeepDir = direction === 'slight_right' || direction === 'slight_left';
+        var isRb = direction === 'roundabout';
+        if (isExitDir) return 2500;
+        if (isKeepDir) return 1500;
+        if (isRb) return 900;
+        return 750;
+    }
+
+    /**
+     * Lock turn-detection progress forward so snap index never moves backward on curves.
+     * @param {number} snapIndex
+     * @param {number} lastIndex
+     * @returns {{ userRouteIndex: number, lastTurnDetectRouteVertexIndex: number }}
+     */
+    function advanceMonotonicTurnDetectIndex(snapIndex, lastIndex) {
+        var userRouteIndex = snapIndex;
+        var nextLast = lastIndex;
+        if (userRouteIndex < lastIndex) {
+            userRouteIndex = lastIndex;
+        } else {
+            nextLast = userRouteIndex;
+        }
+        return {
+            userRouteIndex: userRouteIndex,
+            lastTurnDetectRouteVertexIndex: nextLast,
+        };
+    }
+
+    /**
+     * Find the next Valhalla maneuver within voice/widget detection range ahead of the user.
+     * @param {Array<Object>} steps
+     * @param {number} userRouteIndex
+     * @param {Array<[number,number]>} polyline
+     * @param {{ index: number, t?: number }} turnSnap
+     * @param {Object} [opts]
+     * @param {function(Array, Object, number): number} [opts.distanceAlongRouteToVertexMeters]
+     * @param {function(Object, boolean): string} [opts.getManeuverStreetLabel]
+     * @param {function(Object): (string|null)} [opts.resolveRoadClass]
+     * @param {function(Array, number): number} [opts.effectiveRoundaboutExitCountFromSteps]
+     * @returns {Object|null}
+     */
+    function findUpcomingManeuverTurn(steps, userRouteIndex, polyline, turnSnap, opts) {
+        opts = opts || {};
+        if (!steps || !steps.length || !polyline || !polyline.length) return null;
+        var distAlong = opts.distanceAlongRouteToVertexMeters;
+        var getStreetLabel = opts.getManeuverStreetLabel || function () { return ''; };
+        var resolveRoadClass = opts.resolveRoadClass || function (s) { return s.road_class || null; };
+        var roundaboutExit = opts.effectiveRoundaboutExitCountFromSteps || effectiveRoundaboutExitCountFromSteps;
+
+        for (var i = 0; i < steps.length; i++) {
+            var maneuver = steps[i];
+            var maneuverShapeIndex = maneuver.begin_shape_index || 0;
+            if (maneuverShapeIndex < userRouteIndex - 5) continue;
+
+            var type = maneuver.type || 0;
+            var direction = maneuverTypeToDirectionKey(type);
+            if (direction === null) continue;
+            direction = refineManeuverDirection(type, direction, resolveRoadClass(maneuver));
+
+            var targetIndex = Math.min(maneuverShapeIndex, polyline.length - 1);
+            var distanceToManeuver = distAlong ? distAlong(polyline, turnSnap, targetIndex) : 0;
+            var maxDetectionDistance = getTurnDetectionMaxDistanceMeters(direction);
+
+            if (distanceToManeuver <= maxDetectionDistance) {
+                return {
+                    stepIndex: i,
+                    distance: distanceToManeuver,
+                    direction: direction,
+                    streetName: getStreetLabel(maneuver, false),
+                    instruction: maneuver.instruction || maneuver.verbal_pre_transition_instruction || '',
+                    verbal_transition_alert_instruction: maneuver.verbal_transition_alert_instruction || '',
+                    verbal_pre_transition_instruction: maneuver.verbal_pre_transition_instruction || '',
+                    verbal_post_transition_instruction: maneuver.verbal_post_transition_instruction || '',
+                    roundabout_exit_count: roundaboutExit(steps, i),
+                    maneuver: maneuver,
+                    maneuverIndex: i,
+                    valhallaType: type,
+                };
+            }
+            if (distanceToManeuver > maxDetectionDistance) break;
+        }
+        return null;
+    }
+
     var api = {
         calculateTurnDirection: calculateTurnDirection,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,
@@ -458,6 +549,9 @@
         effectiveRoundaboutExitCountFromSteps: effectiveRoundaboutExitCountFromSteps,
         buildNavStartTurnInstructionInit: buildNavStartTurnInstructionInit,
         findFollowingManeuver: findFollowingManeuver,
+        getTurnDetectionMaxDistanceMeters: getTurnDetectionMaxDistanceMeters,
+        advanceMonotonicTurnDetectIndex: advanceMonotonicTurnDetectIndex,
+        findUpcomingManeuverTurn: findUpcomingManeuverTurn,
         TURN_ICON_MAP: TURN_ICON_MAP,
         DIRECTION_TEXT_MAP: DIRECTION_TEXT_MAP
     };

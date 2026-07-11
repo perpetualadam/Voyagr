@@ -230,4 +230,16 @@ describe('journey and traffic panel helpers', () => {
         expect(html).toContain('3.2 mi');
         expect(html).toContain('Route progress: 62%');
     });
+
+    test('createEmptyNavETASnapshot returns zeroed navigation defaults', () => {
+        expect(ETA.createEmptyNavETASnapshot()).toEqual({
+            baseRemainingMinutes: 0,
+            trafficAdjustedMinutes: null,
+            trafficLevel: null,
+            congestionPercent: null,
+            progressPercent: 0,
+            trafficFetchAt: 0,
+            baseAtTrafficFetch: 0,
+        });
+    });
 });

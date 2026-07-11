@@ -292,6 +292,22 @@
         );
     }
 
+    /**
+     * Fresh nav ETA + traffic snapshot at navigation start.
+     * @returns {{ baseRemainingMinutes: number, trafficAdjustedMinutes: null, trafficLevel: null, congestionPercent: null, progressPercent: number, trafficFetchAt: number, baseAtTrafficFetch: number }}
+     */
+    function createEmptyNavETASnapshot() {
+        return {
+            baseRemainingMinutes: 0,
+            trafficAdjustedMinutes: null,
+            trafficLevel: null,
+            congestionPercent: null,
+            progressPercent: 0,
+            trafficFetchAt: 0,
+            baseAtTrafficFetch: 0,
+        };
+    }
+
     var api = {
         formatRemainingTime: formatRemainingTime,
         buildETAVoiceMessage: buildETAVoiceMessage,
@@ -308,6 +324,7 @@
         buildTrafficStatusLine: buildTrafficStatusLine,
         buildTurnInfoETAPanelHtml: buildTurnInfoETAPanelHtml,
         buildDestinationProgressPanelHtml: buildDestinationProgressPanelHtml,
+        createEmptyNavETASnapshot: createEmptyNavETASnapshot,
         TRAFFIC_RATIO_MAX_AGE_MS: TRAFFIC_RATIO_MAX_AGE_MS,
     };
 
