@@ -283,6 +283,7 @@
         if (!hazards || !hazards.length) {
             return {
                 shouldDisplay: false,
+                clearExisting: false,
                 emptyLogMessage: '[Hazards] No hazards to display',
             };
         }
@@ -290,7 +291,10 @@
         if (!mountPlan.markers.length) {
             return {
                 shouldDisplay: false,
-                emptyLogMessage: '[Hazards] No hazards to display',
+                clearExisting: true,
+                emptyLogMessage: '[Hazards] No valid hazards to display',
+                skippedInvalid: mountPlan.skippedInvalid,
+                skippedDuplicate: mountPlan.skippedDuplicate,
             };
         }
         return {
@@ -301,6 +305,20 @@
             successLogMessage: '[Hazards] Displayed ' + mountPlan.markers.length + ' hazard markers on map',
             skippedInvalid: mountPlan.skippedInvalid,
             skippedDuplicate: mountPlan.skippedDuplicate,
+        };
+    }
+
+    /**
+     * Clear plan for removing hazard markers from the map.
+     * @param {number} [markerCount]
+     * @returns {Object}
+     */
+    function buildClearHazardMarkersPlan(markerCount) {
+        var count = markerCount || 0;
+        return {
+            shouldClear: count > 0,
+            markerCount: count,
+            resetMarkerArray: true,
         };
     }
 
@@ -318,6 +336,7 @@
         buildAllRoutesHazardsList: buildAllRoutesHazardsList,
         buildDisplayAllRouteHazardsPlan: buildDisplayAllRouteHazardsPlan,
         buildDisplayHazardMarkersPlan: buildDisplayHazardMarkersPlan,
+        buildClearHazardMarkersPlan: buildClearHazardMarkersPlan,
         buildHazardMarkersMountPlans: buildHazardMarkersMountPlans,
     };
 

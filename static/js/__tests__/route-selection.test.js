@@ -417,6 +417,36 @@ describe('route comparison modal helpers', () => {
         expect(plan.previewPolylineRouteIndex).toBe(0);
     });
 
+    test('buildRoutePreviewAfterDisplayExecutePlan wraps after-display flags', () => {
+        const execute = RS.buildRoutePreviewAfterDisplayExecutePlan({
+            switchToPreviewTab: true,
+            previewTraffic: true,
+            previewPolylineRouteIndex: 1,
+        });
+        expect(execute.shouldExecute).toBe(true);
+        expect(execute.switchToPreviewTab).toBe(true);
+        expect(execute.previewTraffic).toBe(true);
+        expect(execute.previewPolylineRouteIndex).toBe(1);
+    });
+
+    test('buildShowRoutePreviewOrchestrationPlan gates nav update and missing data', () => {
+        expect(RS.buildShowRoutePreviewOrchestrationPlan({ routeData: null }).shouldShow).toBe(false);
+        expect(RS.buildShowRoutePreviewOrchestrationPlan({
+            routeData: { distance_km: 10 },
+            routeInProgress: true,
+        }).delegateToNavUpdate).toBe(true);
+
+        const orch = RS.buildShowRoutePreviewOrchestrationPlan({
+            routeData: { distance_km: 10, routes: [{}, {}] },
+            routeOptionsCount: 2,
+            currencySymbol: '£',
+            distanceText: '10 km',
+        });
+        expect(orch.shouldShow).toBe(true);
+        expect(orch.showAlternativeRoutesWhenMultiple).toBe(true);
+        expect(orch.panelInput.currencySymbol).toBe('£');
+    });
+
     test('buildAlternativeRoutesPreviewDomApplyPlan maps mount to DOM apply', () => {
         const mount = RS.buildAlternativeRoutesPreviewMountPlans(
             [{ distance_km: 10, duration_minutes: 20, fuel_cost: 4, toll_cost: 0, caz_cost: 0, name: 'A' }],

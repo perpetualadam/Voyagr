@@ -504,6 +504,80 @@
     }
 
     /**
+     * Execute plan for post-preview tab, sheet, and traffic side effects.
+     * @param {Object} afterPlan - from buildRoutePreviewAfterDisplayPlan
+     * @returns {Object}
+     */
+    function buildRoutePreviewAfterDisplayExecutePlan(afterPlan) {
+        afterPlan = afterPlan || {};
+        return {
+            shouldExecute: true,
+            switchToPreviewTab: !!afterPlan.switchToPreviewTab,
+            expandBottomSheet: !!afterPlan.expandBottomSheet,
+            addTrafficLayer: !!afterPlan.addTrafficLayer,
+            previewTraffic: !!afterPlan.previewTraffic,
+            previewPolylineRouteIndex: afterPlan.previewPolylineRouteIndex != null
+                ? afterPlan.previewPolylineRouteIndex
+                : 0,
+            previewTrafficLogMessage: '[Route Preview] Fetching traffic edges for preview route',
+        };
+    }
+
+    /**
+     * Orchestration plan for showRoutePreview entry and side-effect sequencing.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildShowRoutePreviewOrchestrationPlan(opts) {
+        opts = opts || {};
+        if (!opts.routeData) {
+            return {
+                shouldShow: false,
+                errorStatusMessage: 'No route data available',
+                errorLogMessage: '[Route Preview] No route data provided',
+            };
+        }
+        if (opts.routeInProgress) {
+            return {
+                shouldShow: false,
+                delegateToNavUpdate: true,
+            };
+        }
+        var routeOptionsCount = opts.routeOptionsCount || 0;
+        return {
+            shouldShow: true,
+            entryLogMessage: '[Route Preview] showRoutePreview called with data:',
+            panelInput: {
+                routeData: opts.routeData,
+                selectedRouteIndex: opts.selectedRouteIndex != null ? opts.selectedRouteIndex : 0,
+                currencySymbol: opts.currencySymbol,
+                distanceText: opts.distanceText,
+                startLabel: opts.startLabel,
+                endLabel: opts.endLabel,
+                routingMode: opts.routingMode,
+                vehicleType: opts.vehicleType,
+                distanceUnit: opts.distanceUnit,
+                preferencesApplied: !!opts.preferencesApplied,
+                routeOptionsCount: routeOptionsCount,
+                skipMapDisplay: !!opts.skipMapDisplay,
+            },
+            showAlternativeRoutesWhenMultiple: routeOptionsCount > 1,
+            showMapRoutes: !opts.skipMapDisplay && routeOptionsCount > 0,
+            afterDisplayInput: {
+                routeOptions: opts.routeOptions,
+                selectedRouteIndex: opts.selectedRouteIndex,
+                showTrafficEnabled: !!opts.showTrafficEnabled,
+                hasTrafficLayer: !!opts.hasTrafficLayer,
+                routeTrafficEnabled: !!opts.routeTrafficEnabled,
+            },
+            switchTabLogMessage: '[Route Preview] Switching to routePreview tab',
+            mapRoutesLogMessage: '[Route Preview] Displayed ' + routeOptionsCount + ' route(s) on map',
+            alternativeRoutesLogMessage: '[Route Preview] Showing alternative routes panel',
+            successLogMessage: '[Route Preview] Route preview displayed successfully',
+        };
+    }
+
+    /**
      * DOM apply plan for alternative-route cards in the preview panel.
      * @param {Object|null|undefined} mount - from buildAlternativeRoutesPreviewMountPlans
      * @returns {Object}
@@ -2316,6 +2390,8 @@
         buildRouteComparisonModalMountPlan: buildRouteComparisonModalMountPlan,
         buildRouteComparisonModalDomApplyPlan: buildRouteComparisonModalDomApplyPlan,
         buildRoutePreviewAfterDisplayPlan: buildRoutePreviewAfterDisplayPlan,
+        buildRoutePreviewAfterDisplayExecutePlan: buildRoutePreviewAfterDisplayExecutePlan,
+        buildShowRoutePreviewOrchestrationPlan: buildShowRoutePreviewOrchestrationPlan,
         buildAlternativeRoutesPreviewDomApplyPlan: buildAlternativeRoutesPreviewDomApplyPlan,
         getRouteComparisonNoRoutesMessage: getRouteComparisonNoRoutesMessage,
         getRouteComparisonSingleRouteMessage: getRouteComparisonSingleRouteMessage,

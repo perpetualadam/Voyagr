@@ -114,12 +114,33 @@
         };
     }
 
+    /**
+     * Execute plan for applying route preview map markers and bounds.
+     * @param {Object} applyPlan - from buildRoutePreviewMapApplyPlan
+     * @returns {Object}
+     */
+    function buildRoutePreviewMapExecutePlan(applyPlan) {
+        applyPlan = applyPlan || {};
+        return {
+            shouldExecute: !!applyPlan,
+            removeExistingMarkers: !!applyPlan.removeExistingMarkers,
+            startMarker: applyPlan.startMarker || null,
+            endMarker: applyPlan.endMarker || null,
+            fitBounds: applyPlan.fitBounds || null,
+            pathLog: applyPlan.pathLog || null,
+            requiresMap: !!applyPlan.requiresMap,
+            mapMissingLogMessage: '[Route] Map not initialized',
+            mapMissingStatusMessage: 'Error: Map not initialized',
+        };
+    }
+
     var api = {
         PREVIEW_MARKER_CLASS: PREVIEW_MARKER_CLASS,
         getPreviewMarkerStyleCssText: getPreviewMarkerStyleCssText,
         buildPreviewMarkerInnerHtml: buildPreviewMarkerInnerHtml,
         getRouteEndpointMarkerOptions: getRouteEndpointMarkerOptions,
         buildRoutePreviewMapApplyPlan: buildRoutePreviewMapApplyPlan,
+        buildRoutePreviewMapExecutePlan: buildRoutePreviewMapExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

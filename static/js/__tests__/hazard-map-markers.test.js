@@ -89,6 +89,17 @@ describe('hazard-map-markers module', () => {
 
         const empty = HM.buildDisplayHazardMarkersPlan([]);
         expect(empty.shouldDisplay).toBe(false);
+        expect(empty.clearExisting).toBe(false);
         expect(empty.emptyLogMessage).toContain('No hazards');
+
+        const invalid = HM.buildDisplayHazardMarkersPlan([{ lat: NaN, lon: 1 }]);
+        expect(invalid.shouldDisplay).toBe(false);
+        expect(invalid.clearExisting).toBe(true);
+    });
+
+    test('buildClearHazardMarkersPlan clears when markers exist', () => {
+        expect(HM.buildClearHazardMarkersPlan(3).shouldClear).toBe(true);
+        expect(HM.buildClearHazardMarkersPlan(0).shouldClear).toBe(false);
+        expect(HM.buildClearHazardMarkersPlan(0).resetMarkerArray).toBe(true);
     });
 });

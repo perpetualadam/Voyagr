@@ -3644,7 +3644,7 @@ function saveRoutePreferences() {
  * @returns {Object}
  */
 function collectRoutePreferencesFormState() {
-    return {
+    return _routePrefs().buildRoutePreferencesFormStatePlan({
         avoidHighways: document.getElementById('avoidHighways')?.checked || false,
         preferScenic: document.getElementById('preferScenic')?.checked || false,
         avoidTolls: isAvoidTollsEnabled(),
@@ -3652,8 +3652,8 @@ function collectRoutePreferencesFormState() {
         preferQuiet: document.getElementById('preferQuiet')?.checked || false,
         avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
         routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
-        maxDetour: parseInt(document.getElementById('maxDetour')?.value || 20),
-    };
+        maxDetour: document.getElementById('maxDetour')?.value || 20,
+    });
 }
 
 function saveMultiDropPreferences() {
@@ -4271,9 +4271,10 @@ function applyCalculateRouteIdleUiFromPlan(idleUiPlan, data) {
  * @returns {boolean} false when map is not initialised
  */
 function applyRoutePreviewMapFromPlan(plan) {
-    if (!plan) return false;
+    const executePlan = _previewMarker().buildRoutePreviewMapExecutePlan(plan);
+    if (!executePlan.shouldExecute) return false;
 
-    if (plan.removeExistingMarkers) {
+    if (executePlan.removeExistingMarkers) {
         if (startMarker && typeof startMarker.remove === 'function') startMarker.remove();
         if (endMarker && typeof endMarker.remove === 'function') endMarker.remove();
         if (routeLayer && typeof routeLayer.remove === 'function') routeLayer.remove();
@@ -4292,29 +4293,29 @@ function applyRoutePreviewMapFromPlan(plan) {
         return marker;
     };
 
-    if (plan.startMarker) {
-        startMarker = createEndpointMarker(plan.startMarker);
+    if (executePlan.startMarker) {
+        startMarker = createEndpointMarker(executePlan.startMarker);
     }
-    if (plan.endMarker) {
-        endMarker = createEndpointMarker(plan.endMarker);
+    if (executePlan.endMarker) {
+        endMarker = createEndpointMarker(executePlan.endMarker);
     }
 
-    if (plan.pathLog) {
-        if (plan.pathLog.level === 'error') {
-            console.error(plan.pathLog.message);
+    if (executePlan.pathLog) {
+        if (executePlan.pathLog.level === 'error') {
+            console.error(executePlan.pathLog.message);
         } else {
-            console.log(plan.pathLog.message);
+            console.log(executePlan.pathLog.message);
         }
     }
 
-    if (plan.requiresMap && !map) {
-        console.error('[Route] Map not initialized');
-        showStatus('Error: Map not initialized', 'error');
+    if (executePlan.requiresMap && !map) {
+        console.error(executePlan.mapMissingLogMessage);
+        showStatus(executePlan.mapMissingStatusMessage, 'error');
         return false;
     }
 
-    if (plan.fitBounds && map) {
-        MapLibreHelpers.fitMapBounds(map, plan.fitBounds.routePath, { padding: plan.fitBounds.padding });
+    if (executePlan.fitBounds && map) {
+        MapLibreHelpers.fitMapBounds(map, executePlan.fitBounds.routePath, { padding: executePlan.fitBounds.padding });
         lastZoomLevel = map.getZoom();
     }
 
@@ -4624,6 +4625,7 @@ function displayHazardMarkers(hazards) {
     });
 
     if (!plan.shouldDisplay) {
+        if (plan.clearExisting) clearHazardMarkers();
         if (plan.emptyLogMessage) console.log(plan.emptyLogMessage);
         return;
     }
@@ -4649,15 +4651,20 @@ function displayHazardMarkers(hazards) {
  * Clear all hazard markers from the map
  */
 function clearHazardMarkers() {
-    if (window.hazardMarkers) {
-        window.hazardMarkers.forEach(marker => {
-            // MapLibre markers use remove() method instead of Leaflet's removeLayer
-            if (marker && typeof marker.remove === 'function') {
-                marker.remove();
-            }
-        });
+    const HM = _hazardMapMarkers();
+    const existing = window.hazardMarkers || [];
+    const plan = HM.buildClearHazardMarkersPlan(existing.length);
+    if (!plan.shouldClear) {
+        if (plan.resetMarkerArray) window.hazardMarkers = [];
+        return;
     }
-    window.hazardMarkers = [];
+
+    existing.forEach((marker) => {
+        if (marker && typeof marker.remove === 'function') {
+            marker.remove();
+        }
+    });
+    if (plan.resetMarkerArray) window.hazardMarkers = [];
 }
 
 /**
@@ -6833,21 +6840,23 @@ function applyAlternativeRoutesPreviewDomFromPlan(domPlan) {
  * @param {Object} afterPlan - from buildRoutePreviewAfterDisplayPlan
  */
 function applyRoutePreviewAfterDisplayFromPlan(afterPlan) {
-    if (!afterPlan) return;
-    if (afterPlan.switchToPreviewTab) {
+    const plan = _routeSelection().buildRoutePreviewAfterDisplayExecutePlan(afterPlan);
+    if (!plan.shouldExecute) return;
+
+    if (plan.switchToPreviewTab) {
         switchTab('routePreview');
     }
-    if (afterPlan.expandBottomSheet) {
+    if (plan.expandBottomSheet) {
         expandBottomSheet();
     }
-    if (afterPlan.addTrafficLayer) {
+    if (plan.addTrafficLayer) {
         addTrafficLayer();
     }
-    if (afterPlan.previewTraffic && routeOptions && routeOptions.length > 0) {
-        const previewPolyline = routeOptions[afterPlan.previewPolylineRouteIndex || 0].polyline;
+    if (plan.previewTraffic && routeOptions && routeOptions.length > 0) {
+        const previewPolyline = routeOptions[plan.previewPolylineRouteIndex || 0].polyline;
         if (previewPolyline && previewPolyline.length > 0) {
             routePolyline = previewPolyline;
-            console.log('[Route Preview] Fetching traffic edges for preview route');
+            if (plan.previewTrafficLogMessage) console.log(plan.previewTrafficLogMessage);
             fetchAndDisplayRouteTraffic();
         }
     }
@@ -6861,33 +6870,15 @@ function applyRoutePreviewAfterDisplayFromPlan(afterPlan) {
  * @returns {*} Return value description
  */
 function showRoutePreview(routeData, skipMapDisplay = false) {
-    console.log('[Route Preview] showRoutePreview called with data:', routeData, 'skipMapDisplay:', skipMapDisplay);
-
-    if (!routeData) {
-        showStatus('No route data available', 'error');
-        console.error('[Route Preview] No route data provided');
-        return;
-    }
-
-    if (routeInProgress) {
-        applyRouteUpdateDuringNavigation(routeData);
-        return;
-    }
-
-    const symbol = getCurrencySymbol();
-    const distUnit = getDistanceUnit();
-    const selection = _routeSelection();
-
-    console.log('[Route Preview] Currency:', symbol, 'Distance Unit:', distUnit);
-
-    const panelPlan = selection.buildRoutePreviewPanelApplyPlan({
-        routeData: routeData,
-        selectedRouteIndex: selectedRouteIndex,
-        currencySymbol: symbol,
-        distanceText: convertDistance(selection.resolvePreviewDistanceKm(
-            routeData,
-            selection.resolvePreviewRoute(routeData, selectedRouteIndex)
-        )) + ' ' + distUnit,
+    const RS = _routeSelection();
+    const previewRoute = RS.resolvePreviewRoute(routeData, selectedRouteIndex);
+    const orch = RS.buildShowRoutePreviewOrchestrationPlan({
+        routeData,
+        skipMapDisplay,
+        routeInProgress,
+        selectedRouteIndex,
+        currencySymbol: getCurrencySymbol(),
+        distanceText: convertDistance(RS.resolvePreviewDistanceKm(routeData, previewRoute)) + ' ' + getDistanceUnit(),
         startLabel: document.getElementById('start').value,
         endLabel: document.getElementById('end').value,
         routingMode: currentRoutingMode,
@@ -6895,34 +6886,46 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         distanceUnit: distanceUnit,
         preferencesApplied: localStorage.getItem('pref_cameras') !== 'false',
         routeOptionsCount: routeOptions ? routeOptions.length : 0,
-        skipMapDisplay: skipMapDisplay,
-    });
-
-    const domPlan = selection.buildRoutePreviewPanelDomApplyPlan(panelPlan);
-    applyRoutePreviewPanelDomFromPlan(domPlan);
-    console.log('[Cost] Route preview costs:', domPlan.costLog);
-
-    if (domPlan.previewAlternativeRoutesContainer.showAlternativeRoutes) {
-        showAlternativeRoutesInPreview();
-        console.log('[Route Preview] Showing alternative routes panel');
-    }
-
-    if (domPlan.showMapRoutes) {
-        displayAllRoutesOnMap();
-        console.log(`[Route Preview] Displayed ${routeOptions.length} route(s) on map`);
-    }
-
-    const afterPlan = selection.buildRoutePreviewAfterDisplayPlan({
         routeOptions,
-        selectedRouteIndex,
         showTrafficEnabled,
         hasTrafficLayer: !!trafficLayer,
         routeTrafficEnabled,
     });
-    console.log('[Route Preview] Switching to routePreview tab');
-    applyRoutePreviewAfterDisplayFromPlan(afterPlan);
 
-    console.log('[Route Preview] Route preview displayed successfully');
+    if (!orch.shouldShow) {
+        if (orch.delegateToNavUpdate) {
+            applyRouteUpdateDuringNavigation(routeData);
+            return;
+        }
+        showStatus(orch.errorStatusMessage, 'error');
+        if (orch.errorLogMessage) console.error(orch.errorLogMessage);
+        return;
+    }
+
+    if (orch.entryLogMessage) {
+        console.log(orch.entryLogMessage, routeData, 'skipMapDisplay:', skipMapDisplay);
+    }
+    console.log('[Route Preview] Currency:', orch.panelInput.currencySymbol, 'Distance Unit:', getDistanceUnit());
+
+    const panelPlan = RS.buildRoutePreviewPanelApplyPlan(orch.panelInput);
+    const domPlan = RS.buildRoutePreviewPanelDomApplyPlan(panelPlan);
+    applyRoutePreviewPanelDomFromPlan(domPlan);
+    console.log('[Cost] Route preview costs:', domPlan.costLog);
+
+    if (orch.showAlternativeRoutesWhenMultiple && domPlan.previewAlternativeRoutesContainer.showAlternativeRoutes) {
+        showAlternativeRoutesInPreview();
+        if (orch.alternativeRoutesLogMessage) console.log(orch.alternativeRoutesLogMessage);
+    }
+
+    if (orch.showMapRoutes && domPlan.showMapRoutes) {
+        displayAllRoutesOnMap();
+        if (orch.mapRoutesLogMessage) console.log(orch.mapRoutesLogMessage);
+    }
+
+    if (orch.switchTabLogMessage) console.log(orch.switchTabLogMessage);
+    applyRoutePreviewAfterDisplayFromPlan(RS.buildRoutePreviewAfterDisplayPlan(orch.afterDisplayInput));
+
+    if (orch.successLogMessage) console.log(orch.successLogMessage);
     showStatus(domPlan.statusMessage, 'success');
 }
 

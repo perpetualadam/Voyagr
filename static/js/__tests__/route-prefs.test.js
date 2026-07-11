@@ -108,6 +108,19 @@ describe('route-prefs module', () => {
             expect(plan.detourLabel.text).toBe('30%');
         });
 
+        test('buildRoutePreferencesFormStatePlan normalises DOM reads', () => {
+            const prefs = RoutePrefs.buildRoutePreferencesFormStatePlan({
+                avoidHighways: true,
+                avoidTolls: true,
+                avoidCAZ: false,
+                maxDetour: '15',
+            });
+            expect(prefs.avoidHighways).toBe(true);
+            expect(prefs.avoidCAZ).toBe(false);
+            expect(prefs.maxDetour).toBe(15);
+            expect(RoutePrefs.buildRoutePreferencesFormStatePlan({ maxDetour: 'bad' }).maxDetour).toBe(20);
+        });
+
         test('buildDetourLabelApplyPlan formats percentage label', () => {
             expect(RoutePrefs.buildDetourLabelApplyPlan(25)).toEqual({
                 labelElementId: 'detourLabel',

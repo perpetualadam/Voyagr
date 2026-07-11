@@ -53,4 +53,17 @@ describe('preview-marker module', () => {
         expect(plan.pathLog.level).toBe('error');
         expect(plan.pathLog.message).toContain('empty');
     });
+
+    test('buildRoutePreviewMapExecutePlan wraps apply plan with execute flags', () => {
+        const apply = PM.buildRoutePreviewMapApplyPlan({
+            startCoords: [51.5, -0.1],
+            endCoords: [51.6, -0.2],
+            routePath: [[51.5, -0.1], [51.6, -0.2]],
+        });
+        const execute = PM.buildRoutePreviewMapExecutePlan(apply);
+        expect(execute.shouldExecute).toBe(true);
+        expect(execute.removeExistingMarkers).toBe(true);
+        expect(execute.requiresMap).toBe(true);
+        expect(execute.mapMissingStatusMessage).toContain('Map not initialized');
+    });
 });

@@ -141,6 +141,27 @@
     }
 
     /**
+     * Form-state plan for route preference controls read from the DOM.
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildRoutePreferencesFormStatePlan(opts) {
+        opts = opts || {};
+        var maxDetour = opts.maxDetour != null ? parseInt(opts.maxDetour, 10) : 20;
+        if (isNaN(maxDetour)) maxDetour = 20;
+        return {
+            avoidHighways: !!opts.avoidHighways,
+            preferScenic: !!opts.preferScenic,
+            avoidTolls: !!opts.avoidTolls,
+            avoidCAZ: opts.avoidCAZ !== undefined ? !!opts.avoidCAZ : true,
+            preferQuiet: !!opts.preferQuiet,
+            avoidUnpaved: !!opts.avoidUnpaved,
+            routeOptimization: opts.routeOptimization || 'fastest',
+            maxDetour: maxDetour,
+        };
+    }
+
+    /**
      * DOM apply plan for route preference form controls.
      * @param {Storage} storage
      * @returns {Object}
@@ -318,6 +339,7 @@
         isAvoidTollsEnabled: isAvoidTollsEnabled,
         getRouteCostParams: getRouteCostParams,
         getRoutePreferences: getRoutePreferences,
+        buildRoutePreferencesFormStatePlan: buildRoutePreferencesFormStatePlan,
         buildRoutePreferencesUiApplyPlan: buildRoutePreferencesUiApplyPlan,
         buildRoutePreferencesDomApplyPlan: buildRoutePreferencesDomApplyPlan,
         buildDetourLabelApplyPlan: buildDetourLabelApplyPlan,
