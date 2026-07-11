@@ -7,6 +7,43 @@
 
     var SETTINGS_STORAGE_KEY = 'voyagr_all_settings';
 
+    var SETTINGS_SNAPSHOT_KEYS = [
+        'unit_distance',
+        'unit_currency',
+        'unit_speed',
+        'unit_temperature',
+        'vehicleType',
+        'routingMode',
+        'routePreferences',
+        'hazardPreferences',
+        'mapTheme',
+        'smartZoomEnabled',
+        'showCamerasEnabled',
+        'showOsmTrafficLightsEnabled',
+        'showOsmRailwayCrossingsEnabled',
+        'showTrafficEnabled',
+        'autoTrafficUpdateEnabled',
+        'autoRerouteOnDeviationEnabled',
+        'speedWidgetEnabled',
+        'parkingPreferences',
+        'multiDropPreferences',
+        'lastSaved',
+    ];
+
+    /**
+     * True when parsed JSON looks like a Voyagr settings export.
+     * @param {*} settings
+     * @returns {boolean}
+     */
+    function isRecognisedSettingsSnapshot(settings) {
+        if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+            return false;
+        }
+        return SETTINGS_SNAPSHOT_KEYS.some(function (key) {
+            return settings[key] !== undefined;
+        });
+    }
+
     /**
      * Build the voyagr_all_settings JSON blob from runtime + form state supplied by the app.
      * @param {Object} input
@@ -234,10 +271,25 @@
      * @returns {Object}
      */
     function buildSettingsImportApplyPlan(settings) {
-        if (!settings || typeof settings !== 'object') {
+        if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
             return {
                 ok: false,
                 statusMessage: '❌ Error importing settings',
+                statusType: 'error',
+            };
+        }
+        if (!isRecognisedSettingsSnapshot(settings)) {
+            return {
+                ok: false,
+                statusMessage: '❌ Invalid settings file — not a Voyagr settings export',
+                statusType: 'error',
+            };
+        }
+        var restorePlan = buildSettingsRestorePlan(settings);
+        if (!restorePlan.found) {
+            return {
+                ok: false,
+                statusMessage: '❌ Invalid settings file — could not restore snapshot',
                 statusType: 'error',
             };
         }
@@ -549,6 +601,7 @@
         buildSettingsSnapshot: buildSettingsSnapshot,
         buildSettingsSnapshotInputPlan: buildSettingsSnapshotInputPlan,
         buildSettingsRestorePlan: buildSettingsRestorePlan,
+        isRecognisedSettingsSnapshot: isRecognisedSettingsSnapshot,
         buildSettingsExportPlan: buildSettingsExportPlan,
         buildSettingsImportApplyPlan: buildSettingsImportApplyPlan,
         buildSettingsImportParsePlan: buildSettingsImportParsePlan,

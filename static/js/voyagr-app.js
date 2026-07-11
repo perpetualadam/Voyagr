@@ -2326,26 +2326,30 @@ function doAddRouteLayers() {
             }
     }
 
-    // Fit map to show all routes
-    if (allRouteLayers.length > 0 && routeOptions[0] && routeOptions[0].polyline) {
-        // Combine all coordinates for bounds
-        const allCoords = routeOptions.flatMap(r => r.polyline || []);
-        if (allCoords.length > 0) {
-            MapLibreHelpers.fitMapBounds(map, allCoords, { padding: 50 });
-        }
+    const sideEffects = RS.buildAllRoutesMapSideEffectsPlan(routeOptions, {
+        showTrafficEnabled,
+        hasTrafficLayer: !!trafficLayer,
+    });
+
+    if (sideEffects.fitBounds) {
+        MapLibreHelpers.fitMapBounds(
+            map,
+            sideEffects.fitBounds.coords,
+            { padding: sideEffects.fitBounds.padding }
+        );
     }
 
-    // Display hazards from all routes
-    displayAllRouteHazards();
+    if (sideEffects.displayAllRouteHazards) {
+        displayAllRouteHazards();
+    }
 
-    // Ensure traffic layer stays visible if enabled
-    if (showTrafficEnabled && !trafficLayer) {
+    if (sideEffects.ensureTomTomTrafficLayer) {
         addTrafficLayer();
     }
 
-    // CRITICAL: Move route layers to top of rendering order
-    // Wait for all layers to be added before bringing them to top
-    bringRoutesToTop();
+    if (sideEffects.bringRoutesToTop) {
+        bringRoutesToTop();
+    }
 
     // Debug: Check what layers exist in MapLibre
     setTimeout(() => {
@@ -4464,57 +4468,24 @@ function displayHazardMarkers(hazards) {
         return;
     }
 
-    // Clear existing hazard markers
     clearHazardMarkers();
 
     const HM = _hazardMapMarkers();
-    const hazardConfig = HM.getHazardMarkerStyleMap();
+    const OSM = _osmMapIcons();
+    const pillHtml = getOsmTrafficLightMarkerPillHTML();
+    const mountPlan = HM.buildHazardMarkersMountPlans(hazards, {
+        osmTrafficLightPillHtml: pillHtml,
+        osmTrafficLightIconSize: OSM.OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE,
+        osmTrafficLightPopupIcon: OSM.buildOsmTrafficLightPopupIconWrapperHtml(pillHtml),
+    });
 
-    // Track unique locations to avoid duplicates
-    const seenLocations = new Set();
-
-    // Display each hazard
-    hazards.forEach(hazard => {
-        const locationKey = `${hazard.lat.toFixed(5)},${hazard.lon.toFixed(5)}`;
-        if (seenLocations.has(locationKey)) return;
-        seenLocations.add(locationKey);
-
-        const hazardTypeKey = HM.normalizeCameraHazardTypeForMarker(hazard.type);
-        const config = HM.resolveHazardMarkerConfig(hazardConfig, hazardTypeKey);
-
-        let markerHtml;
-        let markerIconSize;
-        let popupIcon;
-
-        if (config.useOsmTrafficLightPill) {
-            const OSM = _osmMapIcons();
-            const pillHtml = getOsmTrafficLightMarkerPillHTML();
-            markerHtml = pillHtml;
-            markerIconSize = OSM.OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE;
-            popupIcon = OSM.buildOsmTrafficLightPopupIconWrapperHtml(pillHtml);
-        } else if (config.svg) {
-            markerHtml = HM.buildHazardSvgMarkerHtml(config, config.svg);
-            markerIconSize = HM.HAZARD_MARKER_ICON_SIZE;
-            popupIcon = config.svg;
-        } else {
-            markerHtml = HM.buildHazardEmojiMarkerHtml(config);
-            markerIconSize = HM.HAZARD_MARKER_ICON_SIZE;
-            popupIcon = HM.buildHazardPopupEmojiIconHtml(config.emoji);
-        }
-
-        const hazardDistanceText = HM.buildHazardDistanceAheadHtml(hazard.distance_km);
-
-        const marker = MapLibreHelpers.createMarker(hazard.lat, hazard.lon, {
-            className: 'hazard-marker',
-            html: markerHtml,
-            iconSize: markerIconSize,
-            iconAnchor: [markerIconSize[0] / 2, markerIconSize[1] / 2],
-            popup: HM.buildHazardMarkerPopupHtml({
-                popupIcon,
-                config,
-                description: hazard.description,
-                distanceHtml: hazardDistanceText,
-            })
+    mountPlan.markers.forEach((spec) => {
+        const marker = MapLibreHelpers.createMarker(spec.lat, spec.lon, {
+            className: spec.className,
+            html: spec.markerHtml,
+            iconSize: spec.iconSize,
+            iconAnchor: spec.iconAnchor,
+            popup: spec.popupHtml,
         }).addTo(map);
 
         window.hazardMarkers.push(marker);
@@ -4542,19 +4513,10 @@ function clearHazardMarkers() {
  * Display hazards from all routes on the map
  */
 function displayAllRouteHazards() {
-    if (!routeOptions || routeOptions.length === 0) return;
-
-    // Collect all hazards from all routes
-    const allHazards = [];
-    routeOptions.forEach(route => {
-        if (route.hazards && route.hazards.length > 0) {
-            allHazards.push(...route.hazards);
-        }
-    });
-
-    if (allHazards.length > 0) {
-        displayHazardMarkers(allHazards);
-        console.log(`[Hazards] Displaying hazards from all ${routeOptions.length} routes: ${allHazards.length} total`);
+    const hazardList = _hazardMapMarkers().buildAllRoutesHazardsList(routeOptions);
+    if (hazardList.hazards.length > 0) {
+        displayHazardMarkers(hazardList.hazards);
+        console.log(`[Hazards] Displaying hazards from all ${hazardList.routeCount} routes: ${hazardList.hazards.length} total`);
     }
 }
 

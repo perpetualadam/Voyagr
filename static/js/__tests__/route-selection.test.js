@@ -771,4 +771,19 @@ describe('route overview and single-route display plans', () => {
         expect(plan.trafficLights.action).toBe('plot');
         expect(plan.hazards.action).toBe('show');
     });
+
+    test('buildAllRoutesMapSideEffectsPlan requests fit bounds and hazard display', () => {
+        const plan = RS.buildAllRoutesMapSideEffectsPlan(
+            [
+                { polyline: [[51.5, -0.1], [51.6, -0.2]] },
+                { polyline: [[51.55, -0.15]] },
+            ],
+            { showTrafficEnabled: true, hasTrafficLayer: false }
+        );
+        expect(plan.fitBounds.coords).toHaveLength(3);
+        expect(plan.fitBounds.padding).toBe(50);
+        expect(plan.displayAllRouteHazards).toBe(true);
+        expect(plan.ensureTomTomTrafficLayer).toBe(true);
+        expect(plan.bringRoutesToTop).toBe(true);
+    });
 });

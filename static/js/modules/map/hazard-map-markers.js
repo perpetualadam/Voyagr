@@ -23,6 +23,11 @@
         if (raw === 'traffic_signals' || raw === 'traffic_signal') return 'traffic_light';
         if (raw == null || raw === '') return 'camera_speed';
         var k = String(raw).toLowerCase();
+        if (k === 'roadworks' || k === 'police' || k === 'accident' ||
+            k === 'railway_crossing' || k === 'pothole' || k === 'debris' ||
+            k === 'traffic_light') {
+            return k;
+        }
         if (k === 'camera') return 'camera_speed';
         if (k === 'speed_camera') return 'camera_speed';
         if (k === 'traffic_light_camera' || k === 'traffic-light-camera') return 'camera_red_light';
@@ -157,6 +162,97 @@
         );
     }
 
+    /**
+     * Collect hazards from all route options (deduped list, not by location).
+     * @param {Array<Object>} routeOptions
+     * @returns {{ hazards: Array<Object>, routeCount: number }}
+     */
+    function buildAllRoutesHazardsList(routeOptions) {
+        var allHazards = [];
+        var routes = routeOptions || [];
+        routes.forEach(function (route) {
+            if (route && route.hazards && route.hazards.length > 0) {
+                allHazards.push.apply(allHazards, route.hazards);
+            }
+        });
+        return {
+            hazards: allHazards,
+            routeCount: routes.length,
+        };
+    }
+
+    /**
+     * Build marker mount specs for route hazards (no MapLibre calls).
+     * @param {Array<Object>} hazards
+     * @param {Object} [opts]
+     * @param {string} [opts.osmTrafficLightPillHtml]
+     * @param {Array<number>} [opts.osmTrafficLightIconSize]
+     * @param {string} [opts.osmTrafficLightPopupIcon]
+     * @returns {{ markers: Array<Object>, skippedInvalid: number, skippedDuplicate: number }}
+     */
+    function buildHazardMarkersMountPlans(hazards, opts) {
+        opts = opts || {};
+        var hazardConfig = getHazardMarkerStyleMap();
+        var seenLocations = {};
+        var markers = [];
+        var skippedInvalid = 0;
+        var skippedDuplicate = 0;
+
+        (hazards || []).forEach(function (hazard) {
+            if (!hazard || !Number.isFinite(hazard.lat) || !Number.isFinite(hazard.lon)) {
+                skippedInvalid += 1;
+                return;
+            }
+            var locationKey = hazard.lat.toFixed(5) + ',' + hazard.lon.toFixed(5);
+            if (seenLocations[locationKey]) {
+                skippedDuplicate += 1;
+                return;
+            }
+            seenLocations[locationKey] = true;
+
+            var hazardTypeKey = normalizeCameraHazardTypeForMarker(hazard.type);
+            var config = resolveHazardMarkerConfig(hazardConfig, hazardTypeKey);
+            var markerHtml;
+            var markerIconSize;
+            var popupIcon;
+
+            if (config.useOsmTrafficLightPill && opts.osmTrafficLightPillHtml) {
+                markerHtml = opts.osmTrafficLightPillHtml;
+                markerIconSize = opts.osmTrafficLightIconSize || HAZARD_MARKER_ICON_SIZE;
+                popupIcon = opts.osmTrafficLightPopupIcon || opts.osmTrafficLightPillHtml;
+            } else if (config.svg) {
+                markerHtml = buildHazardSvgMarkerHtml(config, config.svg);
+                markerIconSize = HAZARD_MARKER_ICON_SIZE;
+                popupIcon = config.svg;
+            } else {
+                markerHtml = buildHazardEmojiMarkerHtml(config);
+                markerIconSize = HAZARD_MARKER_ICON_SIZE;
+                popupIcon = buildHazardPopupEmojiIconHtml(config.emoji);
+            }
+
+            markers.push({
+                lat: hazard.lat,
+                lon: hazard.lon,
+                className: 'hazard-marker',
+                markerHtml: markerHtml,
+                iconSize: markerIconSize,
+                iconAnchor: [markerIconSize[0] / 2, markerIconSize[1] / 2],
+                popupHtml: buildHazardMarkerPopupHtml({
+                    popupIcon: popupIcon,
+                    config: config,
+                    description: hazard.description,
+                    distanceHtml: buildHazardDistanceAheadHtml(hazard.distance_km),
+                }),
+            });
+        });
+
+        return {
+            markers: markers,
+            skippedInvalid: skippedInvalid,
+            skippedDuplicate: skippedDuplicate,
+        };
+    }
+
     var api = {
         HAZARD_MARKER_ICON_SIZE: HAZARD_MARKER_ICON_SIZE,
         DEFAULT_HAZARD_MARKER_CONFIG: DEFAULT_HAZARD_MARKER_CONFIG,
@@ -168,6 +264,8 @@
         buildHazardPopupEmojiIconHtml: buildHazardPopupEmojiIconHtml,
         buildHazardDistanceAheadHtml: buildHazardDistanceAheadHtml,
         buildHazardMarkerPopupHtml: buildHazardMarkerPopupHtml,
+        buildAllRoutesHazardsList: buildAllRoutesHazardsList,
+        buildHazardMarkersMountPlans: buildHazardMarkersMountPlans,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

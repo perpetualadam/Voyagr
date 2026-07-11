@@ -280,4 +280,15 @@ describe('settings-snapshot module', () => {
     test('buildSettingsImportParsePlan rejects invalid JSON', () => {
         expect(SS.buildSettingsImportParsePlan('{bad').ok).toBe(false);
     });
+
+    test('buildSettingsImportApplyPlan rejects unrecognised JSON objects', () => {
+        expect(SS.buildSettingsImportApplyPlan({ foo: 'bar' }).ok).toBe(false);
+        expect(SS.buildSettingsImportApplyPlan({ unit_distance: 'km' }).ok).toBe(true);
+    });
+
+    test('isRecognisedSettingsSnapshot detects Voyagr export keys', () => {
+        expect(SS.isRecognisedSettingsSnapshot({ vehicleType: 'petrol' })).toBe(true);
+        expect(SS.isRecognisedSettingsSnapshot({ random: true })).toBe(false);
+        expect(SS.isRecognisedSettingsSnapshot(null)).toBe(false);
+    });
 });

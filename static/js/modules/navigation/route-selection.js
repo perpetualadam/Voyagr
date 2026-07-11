@@ -1735,6 +1735,30 @@
         };
     }
 
+    /**
+     * Side-effect plan after all route layers are mounted on the map.
+     * @param {Array<Object>} routeOptions
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildAllRoutesMapSideEffectsPlan(routeOptions, opts) {
+        opts = opts || {};
+        var routes = routeOptions || [];
+        var allCoords = [];
+        routes.forEach(function (route) {
+            if (route && route.polyline && route.polyline.length > 0) {
+                allCoords = allCoords.concat(route.polyline);
+            }
+        });
+        return {
+            fitBounds: allCoords.length > 0 ? { coords: allCoords, padding: 50 } : null,
+            displayAllRouteHazards: routes.length > 0,
+            ensureTomTomTrafficLayer: !!opts.showTrafficEnabled && !opts.hasTrafficLayer,
+            bringRoutesToTop: true,
+            routeCount: routes.length,
+        };
+    }
+
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
@@ -1814,6 +1838,7 @@
         routeHazardsIncludeOsmTrafficLights: routeHazardsIncludeOsmTrafficLights,
         buildRouteOverviewDispatchPlan: buildRouteOverviewDispatchPlan,
         buildSingleRouteMapDisplayPlan: buildSingleRouteMapDisplayPlan,
+        buildAllRoutesMapSideEffectsPlan: buildAllRoutesMapSideEffectsPlan,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,
         mergeLastCalculatedRouteFromSelection: mergeLastCalculatedRouteFromSelection,
         buildRoutePayloadFromPersisted: buildRoutePayloadFromPersisted,
