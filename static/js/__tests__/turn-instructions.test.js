@@ -322,3 +322,26 @@ describe('isMotorwayRoadClass', () => {
         expect(TI.isMotorwayRoadClass('residential')).toBe(false);
     });
 });
+
+describe('instructions panel HTML helpers', () => {
+    test('INSTRUCTIONS_EMPTY_HTML shows fallback message', () => {
+        expect(TI.INSTRUCTIONS_EMPTY_HTML).toContain('No instructions available');
+    });
+
+    test('buildInstructionListItemHtml includes preview onclick handler', () => {
+        const html = TI.buildInstructionListItemHtml({
+            itemClass: 'instruction-item current',
+            stepIndex: 2,
+            shapeIndex: 40,
+            icon: '→',
+            instruction: 'Turn right',
+            exitBadge: '',
+            streetName: 'High St',
+            statusHtml: TI.buildInstructionStatusHtml(false, true),
+        });
+        expect(html).toContain('previewInstructionOnMap(2, 40)');
+        expect(html).toContain('Turn right');
+        expect(html).toContain('High St');
+        expect(html).toContain('→ Next');
+    });
+});

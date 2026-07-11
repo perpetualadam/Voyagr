@@ -123,6 +123,15 @@
         return '<div style="font-size:13px;color:#666;line-height:1.5;padding:4px 0;">' + message + '</div>';
     }
 
+    /**
+     * @param {string} routeLabel
+     * @param {string} breakdown
+     * @returns {string}
+     */
+    function buildParkingPreviewRouteHtml(routeLabel, breakdown) {
+        return (routeLabel || '') + (breakdown || '');
+    }
+
     var api = {
         computeMultimodalLegTotals: computeMultimodalLegTotals,
         buildParkingRouteLabel: buildParkingRouteLabel,
@@ -130,6 +139,7 @@
         computeWalkingMinutesFromMeters: computeWalkingMinutesFromMeters,
         buildParkingOptionItemHtml: buildParkingOptionItemHtml,
         buildParkingEmptyStateHtml: buildParkingEmptyStateHtml,
+        buildParkingPreviewRouteHtml: buildParkingPreviewRouteHtml,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

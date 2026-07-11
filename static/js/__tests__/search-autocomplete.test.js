@@ -55,4 +55,9 @@ describe('search-autocomplete module', () => {
         expect(html).toContain('10 High St');
         expect(html).toContain('High St, Town');
     });
+
+    test('buildAutocompleteLoadingHtml and status message constants', () => {
+        expect(SA.buildAutocompleteLoadingHtml(SA.AUTOCOMPLETE_SEARCHING_TEXT)).toContain('autocomplete-loading');
+        expect(SA.AUTOCOMPLETE_SEARCH_FAILED_MESSAGE).toContain('Search failed');
+    });
 });

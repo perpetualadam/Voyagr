@@ -47,6 +47,7 @@ describe('VoyagrModules registry', () => {
         global.VoyagrVehicleMarker = require('../modules/map/vehicle-marker');
         global.VoyagrOsmMapIcons = require('../modules/map/osm-map-icons');
         global.VoyagrMapControls = require('../modules/map/map-controls');
+        global.VoyagrCameraMapMarkers = require('../modules/map/camera-map-markers');
         jest.resetModules();
     });
 
