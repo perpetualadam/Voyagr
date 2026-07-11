@@ -1628,29 +1628,47 @@ function applyMapLayerReorderFromPlan(plan) {
 function applyBringRoutesToTopFromPlan(plan) {
     if (!plan || !plan.shouldExecute || !map) return;
 
+    const RS = _routeSelection();
+
     const moveLayersToTop = (retryCount = 0) => {
-        let allFound = true;
-        console.log(`[Routes] moveLayersToTop attempt ${retryCount}, layers:`, plan.layerIds);
+        const attemptLog = RS.buildBringRoutesToTopAttemptLogPlan(retryCount, plan.layerIds);
+        console.log(attemptLog.attemptLogMessage, attemptLog.layerIds);
 
         try {
+            const presentById = {};
             plan.layerIds.forEach((layerId) => {
-                if (map.getLayer(layerId)) {
+                presentById[layerId] = !!map.getLayer(layerId);
+            });
+
+            plan.layerIds.forEach((layerId) => {
+                const moveLog = RS.buildBringRoutesToTopLayerMoveLogPlan(
+                    layerId,
+                    plan.beforeId,
+                    presentById[layerId]
+                );
+                if (moveLog.found) {
                     map.moveLayer(layerId, plan.beforeId);
-                    console.log(`[Routes] Moved layer ${layerId}${plan.beforeId ? ` before ${plan.beforeId}` : ' to top'}`);
-                } else {
-                    allFound = false;
-                    console.log(`[Routes] Layer ${layerId} not found in map yet`);
+                    if (moveLog.movedLogMessage) console.log(moveLog.movedLogMessage);
+                } else if (moveLog.notFoundLogMessage) {
+                    console.log(moveLog.notFoundLogMessage);
                 }
             });
 
-            if (!allFound && retryCount < plan.maxRetries) {
-                setTimeout(() => moveLayersToTop(retryCount + 1), plan.retryDelayMs);
-            } else if (allFound) {
-                if (plan.successLogMessage) console.log(plan.successLogMessage);
-                if (plan.ensureLabelsOnTopAfterSuccess) {
-                    ensureLabelsOnTop();
-                }
-            } else if (plan.partialFailureLogMessage) {
+            const presence = RS.buildBringRoutesToTopLayerPresencePlan(plan.layerIds, presentById);
+            const outcome = RS.buildBringRoutesToTopRetryOutcomePlan({
+                allFound: presence.allFound,
+                retryCount,
+                maxRetries: plan.maxRetries,
+                retryDelayMs: plan.retryDelayMs,
+                ensureLabelsOnTopAfterSuccess: plan.ensureLabelsOnTopAfterSuccess,
+            });
+
+            if (outcome.action === 'retry') {
+                setTimeout(() => moveLayersToTop(outcome.nextRetryCount), outcome.retryDelayMs);
+            } else if (outcome.action === 'success') {
+                if (outcome.logSuccess && plan.successLogMessage) console.log(plan.successLogMessage);
+                if (outcome.ensureLabelsOnTop) ensureLabelsOnTop();
+            } else if (outcome.logPartialFailure && plan.partialFailureLogMessage) {
                 console.warn(plan.partialFailureLogMessage);
             }
         } catch (e) {
@@ -1659,14 +1677,22 @@ function applyBringRoutesToTopFromPlan(plan) {
         }
     };
 
+    const startup = RS.buildBringRoutesToTopStartupPlan({
+        isStyleLoaded: map.isStyleLoaded(),
+        waitForIdleIfStyleNotLoaded: plan.waitForIdleIfStyleNotLoaded,
+        initialDelayMs: plan.initialDelayMs,
+        waitForIdleLogMessage: plan.waitForIdleLogMessage,
+    });
+    if (startup.action === 'skip') return;
+
     setTimeout(() => {
-        if (map.isStyleLoaded()) {
+        if (startup.action === 'immediate') {
             moveLayersToTop(0);
-        } else if (plan.waitForIdleIfStyleNotLoaded) {
-            if (plan.waitForIdleLogMessage) console.log(plan.waitForIdleLogMessage);
+        } else if (startup.action === 'wait_idle') {
+            if (startup.waitForIdleLogMessage) console.log(startup.waitForIdleLogMessage);
             map.once('idle', () => moveLayersToTop(0));
         }
-    }, plan.initialDelayMs);
+    }, startup.initialDelayMs);
 }
 
 /**
@@ -2764,38 +2790,40 @@ function addRouteDragMarker(lat, lon, routeIndex) {
  */
 async function addDraggedViaPoint(lat, lon) {
     const WP = _waypoints();
-    const plan = WP.buildDraggedViaPointAddPlan(lat, lon, viaPoints.length);
-    viaPoints.push(plan.viaPoint);
+    const apply = WP.buildDraggedViaPointApplyPlan(lat, lon, viaPoints.length);
+    viaPoints.push(apply.viaPoint);
 
-    const marker = MapLibreHelpers.createMarker(lat, lon, {
-        className: plan.marker.className,
-        html: WP.buildViaPointDragAddedMarkerHtml(),
-        iconSize: plan.marker.iconSize,
-        iconAnchor: plan.marker.iconAnchor,
-        popup: WP.buildViaPointDragPopupHtml(plan.marker.removeOnclick),
+    const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
+        className: apply.markerMount.className,
+        html: apply.markerMount.markerHtml,
+        iconSize: apply.markerMount.iconSize,
+        iconAnchor: apply.markerMount.iconAnchor,
+        popup: apply.markerMount.popupHtml,
     }).addTo(map);
 
     viaPointMarkers.push(marker);
-    if (plan.updateWaypointsList) updateWaypointsList();
-    if (plan.clearRouteDragMarkers) clearRouteDragMarkers();
-    showStatus(plan.statusMessage, plan.statusType);
-    if (plan.recalculateRoute) await calculateRoute();
+    if (apply.updateWaypointsList) updateWaypointsList();
+    if (apply.clearRouteDragMarkers) clearRouteDragMarkers();
+    showStatus(apply.statusMessage, apply.statusType);
+    if (apply.recalculateRoute) await calculateRoute();
 }
 
 /**
  * Clear all route drag markers
  */
 function clearRouteDragMarkers() {
-    const execute = _waypoints().buildClearRouteDragMarkersExecutePlan();
-    if (!execute.shouldClear) return;
+    const apply = _waypoints().buildClearRouteDragMarkersApplyPlan();
+    if (!apply.shouldClear) return;
 
-    routeDragMarkers.forEach(marker => {
-        if (marker && typeof marker.remove === 'function') {
-            marker.remove();
-        }
-    });
-    routeDragMarkers = [];
-    if (execute.disableRouteEditing) routeEditingEnabled = false;
+    if (apply.removeAllMarkers) {
+        routeDragMarkers.forEach(marker => {
+            if (marker && typeof marker.remove === 'function') {
+                marker.remove();
+            }
+        });
+        routeDragMarkers = [];
+    }
+    if (apply.disableRouteEditing) routeEditingEnabled = false;
 }
 
 /**
@@ -5721,11 +5749,14 @@ function applyEnsureLabelsOnTopFromPlan(plan) {
  * Debounced to prevent excessive calls during rapid layer additions
  */
 function ensureLabelsOnTop() {
-    if (!map) return;
+    const RS = _routeSelection();
+    const orch = RS.buildEnsureLabelsOnTopOrchestrationPlan({
+        hasMap: !!map,
+        styleLayers: map && map.getStyle && map.getStyle().layers,
+    });
+    if (!orch.shouldRun) return;
 
-    const plan = _routeSelection().buildEnsureLabelsOnTopExecutePlan(
-        map.getStyle() && map.getStyle().layers
-    );
+    const plan = RS.buildEnsureLabelsOnTopExecutePlan(orch.styleLayers);
     if (!plan.shouldExecute) {
         if (plan.noLabelsLogMessage) console.log(plan.noLabelsLogMessage);
         return;
@@ -10025,13 +10056,9 @@ function updateBatteryStatus(battery) {
  * @returns {*} Return value description
  */
 function toggleBatterySavingMode() {
-    const BS = _batterySaving();
-    const collected = BS.buildToggleBatterySavingCollectPlan(batterySavingMode);
-    if (collected.enable) {
-        enableBatterySavingMode();
-    } else {
-        disableBatterySavingMode();
-    }
+    applyBatterySavingModeFromPlan(
+        _batterySaving().buildToggleBatterySavingExecutePlan(batterySavingMode)
+    );
 }
 
 /**

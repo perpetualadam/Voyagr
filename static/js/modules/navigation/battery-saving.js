@@ -48,6 +48,19 @@
     }
 
     /**
+     * Execute plan for toggling battery-saving mode on or off.
+     * @param {boolean} [currentlyEnabled]
+     * @returns {Object}
+     */
+    function buildToggleBatterySavingExecutePlan(currentlyEnabled) {
+        var collected = buildToggleBatterySavingCollectPlan(currentlyEnabled);
+        if (collected.enable) {
+            return buildEnableBatterySavingExecutePlan();
+        }
+        return buildDisableBatterySavingExecutePlan();
+    }
+
+    /**
      * @returns {Object}
      */
     function buildEnableBatterySavingExecutePlan() {
@@ -121,6 +134,7 @@
         BATTERY_AUTO_ENABLE_THRESHOLD_PERCENT: BATTERY_AUTO_ENABLE_THRESHOLD_PERCENT,
         buildBatteryAutoEnablePlan: buildBatteryAutoEnablePlan,
         buildToggleBatterySavingCollectPlan: buildToggleBatterySavingCollectPlan,
+        buildToggleBatterySavingExecutePlan: buildToggleBatterySavingExecutePlan,
         buildEnableBatterySavingExecutePlan: buildEnableBatterySavingExecutePlan,
         buildDisableBatterySavingExecutePlan: buildDisableBatterySavingExecutePlan,
         buildRestoreBatterySavingUiPlan: buildRestoreBatterySavingUiPlan,

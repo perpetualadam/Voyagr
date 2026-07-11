@@ -32,6 +32,15 @@ describe('battery-saving module', () => {
         });
     });
 
+    test('buildToggleBatterySavingExecutePlan returns enable or disable execute plan', () => {
+        const enable = BS.buildToggleBatterySavingExecutePlan(false);
+        expect(enable.batterySavingMode).toBe(true);
+        expect(enable.persistApiBody).toEqual({ battery_saving_mode: 1 });
+        const disable = BS.buildToggleBatterySavingExecutePlan(true);
+        expect(disable.batterySavingMode).toBe(false);
+        expect(disable.persistApiBody).toEqual({ battery_saving_mode: 0 });
+    });
+
     test('enable and disable execute plans persist storage and API body', () => {
         const enable = BS.buildEnableBatterySavingExecutePlan();
         expect(enable.batterySavingMode).toBe(true);

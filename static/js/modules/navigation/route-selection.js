@@ -2773,7 +2773,143 @@
         };
     }
 
+    /**
+     * Log plan for one bringRoutesToTop retry attempt.
+     * @param {number} retryCount
+     * @param {Array<string>} [layerIds]
+     * @returns {Object}
+     */
+    function buildBringRoutesToTopAttemptLogPlan(retryCount, layerIds) {
+        return {
+            attemptLogMessage: '[Routes] moveLayersToTop attempt ' + (retryCount || 0) + ', layers:',
+            layerIds: layerIds || [],
+        };
+    }
+
+    /**
+     * Log plan for moving one route layer during bringRoutesToTop.
+     * @param {string} layerId
+     * @param {string|undefined} beforeId
+     * @param {boolean} found
+     * @returns {Object}
+     */
+    function buildBringRoutesToTopLayerMoveLogPlan(layerId, beforeId, found) {
+        if (found) {
+            return {
+                found: true,
+                movedLogMessage: '[Routes] Moved layer ' + layerId +
+                    (beforeId ? ' before ' + beforeId : ' to top'),
+            };
+        }
+        return {
+            found: false,
+            notFoundLogMessage: '[Routes] Layer ' + layerId + ' not found in map yet',
+        };
+    }
+
+    /**
+     * Presence summary for route layers on the current map style.
+     * @param {Array<string>} layerIds
+     * @param {Object<string, boolean>} [presentById]
+     * @returns {Object}
+     */
+    function buildBringRoutesToTopLayerPresencePlan(layerIds, presentById) {
+        var ids = layerIds || [];
+        var present = presentById || {};
+        var missingLayerIds = [];
+        var allFound = ids.length > 0;
+        ids.forEach(function (layerId) {
+            if (!present[layerId]) {
+                allFound = false;
+                missingLayerIds.push(layerId);
+            }
+        });
+        if (ids.length === 0) {
+            allFound = false;
+        }
+        return {
+            allFound: allFound,
+            missingLayerIds: missingLayerIds,
+        };
+    }
+
+    /**
+     * Outcome plan after one bringRoutesToTop layer-move attempt.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildBringRoutesToTopRetryOutcomePlan(input) {
+        input = input || {};
+        var retryCount = input.retryCount || 0;
+        var maxRetries = input.maxRetries != null
+            ? input.maxRetries
+            : BRING_ROUTES_TO_TOP_MAX_RETRIES;
+        if (input.allFound) {
+            return {
+                action: 'success',
+                logSuccess: true,
+                ensureLabelsOnTop: !!input.ensureLabelsOnTopAfterSuccess,
+            };
+        }
+        if (retryCount < maxRetries) {
+            return {
+                action: 'retry',
+                nextRetryCount: retryCount + 1,
+                retryDelayMs: input.retryDelayMs != null
+                    ? input.retryDelayMs
+                    : BRING_ROUTES_TO_TOP_RETRY_DELAY_MS,
+            };
+        }
+        return {
+            action: 'partial_failure',
+            logPartialFailure: true,
+        };
+    }
+
+    /**
+     * Startup plan for deferred bringRoutesToTop execution.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildBringRoutesToTopStartupPlan(input) {
+        input = input || {};
+        var initialDelayMs = input.initialDelayMs != null
+            ? input.initialDelayMs
+            : BRING_ROUTES_TO_TOP_INITIAL_DELAY_MS;
+        if (input.isStyleLoaded) {
+            return {
+                action: 'immediate',
+                initialDelayMs: initialDelayMs,
+            };
+        }
+        if (input.waitForIdleIfStyleNotLoaded) {
+            return {
+                action: 'wait_idle',
+                initialDelayMs: initialDelayMs,
+                waitForIdleLogMessage: input.waitForIdleLogMessage ||
+                    '[Routes] Waiting for map idle...',
+            };
+        }
+        return { action: 'skip' };
+    }
+
     var ENSURE_LABELS_ON_TOP_DEBOUNCE_MS = 50;
+
+    /**
+     * Orchestration plan for ensureLabelsOnTop entry guards.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildEnsureLabelsOnTopOrchestrationPlan(input) {
+        input = input || {};
+        if (!input.hasMap) {
+            return { shouldRun: false };
+        }
+        return {
+            shouldRun: true,
+            styleLayers: input.styleLayers || [],
+        };
+    }
 
     /**
      * Dispatch plan to move road label symbol layers above route overlays.
@@ -3039,6 +3175,12 @@
         buildDoAddRouteLayersOrchestrationPlan: buildDoAddRouteLayersOrchestrationPlan,
         buildDoAddRouteLayersExecutePlan: buildDoAddRouteLayersExecutePlan,
         buildBringRoutesToTopOrchestrationPlan: buildBringRoutesToTopOrchestrationPlan,
+        buildBringRoutesToTopAttemptLogPlan: buildBringRoutesToTopAttemptLogPlan,
+        buildBringRoutesToTopLayerMoveLogPlan: buildBringRoutesToTopLayerMoveLogPlan,
+        buildBringRoutesToTopLayerPresencePlan: buildBringRoutesToTopLayerPresencePlan,
+        buildBringRoutesToTopRetryOutcomePlan: buildBringRoutesToTopRetryOutcomePlan,
+        buildBringRoutesToTopStartupPlan: buildBringRoutesToTopStartupPlan,
+        buildEnsureLabelsOnTopOrchestrationPlan: buildEnsureLabelsOnTopOrchestrationPlan,
         buildEnsureLabelsOnTopDispatchPlan: buildEnsureLabelsOnTopDispatchPlan,
         buildEnsureLabelsOnTopExecutePlan: buildEnsureLabelsOnTopExecutePlan,
         buildBringTrafficEdgesToTopDispatchPlan: buildBringTrafficEdgesToTopDispatchPlan,

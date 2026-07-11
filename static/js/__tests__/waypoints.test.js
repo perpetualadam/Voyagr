@@ -122,6 +122,15 @@ describe('waypoints module', () => {
         expect(plan.recalculateRoute).toBe(true);
     });
 
+    test('buildDraggedViaPointApplyPlan wraps marker mount and side effects', () => {
+        const apply = W.buildDraggedViaPointApplyPlan(51.5, -0.1, 1);
+        expect(apply.viaPoint.name).toBe('Drag point 2');
+        expect(apply.markerMount.markerHtml).toContain('4CAF50');
+        expect(apply.markerMount.popupHtml).toContain('removeViaPoint(1)');
+        expect(apply.clearRouteDragMarkers).toBe(true);
+        expect(apply.recalculateRoute).toBe(true);
+    });
+
     test('buildRouteEditingToggleDomApplyPlan maps edit button label', () => {
         const dom = W.buildRouteEditingToggleDomApplyPlan(true);
         expect(dom.elementId).toBe(W.ROUTE_EDIT_TOGGLE_ELEMENT_ID);
@@ -147,6 +156,7 @@ describe('waypoints module', () => {
         expect(execute.markers).toHaveLength(1);
         expect(W.buildRouteEditEnableExecutePlan({ valid: false, statusMessage: 'bad' }).shouldEnable).toBe(false);
         expect(W.buildClearRouteDragMarkersExecutePlan().disableRouteEditing).toBe(true);
+        expect(W.buildClearRouteDragMarkersApplyPlan().removeAllMarkers).toBe(true);
     });
 
     test('buildViaPointAddPlan prepares marker label and status', () => {

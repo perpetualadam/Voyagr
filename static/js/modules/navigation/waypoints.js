@@ -319,6 +319,34 @@
     }
 
     /**
+     * Apply plan for mounting a dragged via-point marker and side effects.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {number} viaPointsCount
+     * @returns {Object}
+     */
+    function buildDraggedViaPointApplyPlan(lat, lon, viaPointsCount) {
+        var add = buildDraggedViaPointAddPlan(lat, lon, viaPointsCount);
+        return {
+            lat: lat,
+            lon: lon,
+            viaPoint: add.viaPoint,
+            markerMount: {
+                className: add.marker.className,
+                markerHtml: buildViaPointDragAddedMarkerHtml(),
+                iconSize: add.marker.iconSize,
+                iconAnchor: add.marker.iconAnchor,
+                popupHtml: buildViaPointDragPopupHtml(add.marker.removeOnclick),
+            },
+            updateWaypointsList: add.updateWaypointsList,
+            clearRouteDragMarkers: add.clearRouteDragMarkers,
+            recalculateRoute: add.recalculateRoute,
+            statusMessage: add.statusMessage,
+            statusType: add.statusType,
+        };
+    }
+
+    /**
      * DOM apply plan for the route editing toggle button.
      * @param {boolean} routeEditingEnabled
      * @returns {Object}
@@ -440,6 +468,19 @@
         return {
             shouldClear: true,
             disableRouteEditing: true,
+        };
+    }
+
+    /**
+     * Apply plan for clearing route drag markers from the map.
+     * @returns {Object}
+     */
+    function buildClearRouteDragMarkersApplyPlan() {
+        var execute = buildClearRouteDragMarkersExecutePlan();
+        return {
+            shouldClear: execute.shouldClear,
+            removeAllMarkers: true,
+            disableRouteEditing: execute.disableRouteEditing,
         };
     }
 
@@ -1102,6 +1143,7 @@
         buildRouteEditMarkersPlan: buildRouteEditMarkersPlan,
         buildRouteDragMarkerMountPlan: buildRouteDragMarkerMountPlan,
         buildDraggedViaPointAddPlan: buildDraggedViaPointAddPlan,
+        buildDraggedViaPointApplyPlan: buildDraggedViaPointApplyPlan,
         buildRouteEditingToggleDomApplyPlan: buildRouteEditingToggleDomApplyPlan,
         buildRouteEditingDisablePlan: buildRouteEditingDisablePlan,
         buildToggleRouteEditingOrchestrationPlan: buildToggleRouteEditingOrchestrationPlan,
@@ -1109,6 +1151,7 @@
         buildRouteDragMarkerExecutePlan: buildRouteDragMarkerExecutePlan,
         buildRouteDragMarkerDragEndDispatchPlan: buildRouteDragMarkerDragEndDispatchPlan,
         buildClearRouteDragMarkersExecutePlan: buildClearRouteDragMarkersExecutePlan,
+        buildClearRouteDragMarkersApplyPlan: buildClearRouteDragMarkersApplyPlan,
         ROUTE_EDIT_TOGGLE_ELEMENT_ID: ROUTE_EDIT_TOGGLE_ELEMENT_ID,
         ROUTE_EDIT_MARKER_INTERVAL_MIN: ROUTE_EDIT_MARKER_INTERVAL_MIN,
         buildViaPointMarkerHtml: buildViaPointMarkerHtml,

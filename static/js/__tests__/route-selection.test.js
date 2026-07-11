@@ -1179,6 +1179,51 @@ describe('route overview and single-route display plans', () => {
         expect(RS.buildBringRoutesToTopExecutePlan([], []).shouldExecute).toBe(false);
     });
 
+    test('buildBringRoutesToTopRetryOutcomePlan schedules retry then partial failure', () => {
+        expect(RS.buildBringRoutesToTopRetryOutcomePlan({
+            allFound: true,
+            ensureLabelsOnTopAfterSuccess: true,
+        })).toEqual({
+            action: 'success',
+            logSuccess: true,
+            ensureLabelsOnTop: true,
+        });
+        const retry = RS.buildBringRoutesToTopRetryOutcomePlan({
+            allFound: false,
+            retryCount: 1,
+            maxRetries: 5,
+        });
+        expect(retry.action).toBe('retry');
+        expect(retry.nextRetryCount).toBe(2);
+        expect(retry.retryDelayMs).toBeGreaterThan(0);
+        expect(RS.buildBringRoutesToTopRetryOutcomePlan({
+            allFound: false,
+            retryCount: 5,
+            maxRetries: 5,
+        }).action).toBe('partial_failure');
+    });
+
+    test('buildBringRoutesToTopStartupPlan chooses immediate or wait_idle', () => {
+        expect(RS.buildBringRoutesToTopStartupPlan({ isStyleLoaded: true }).action).toBe('immediate');
+        expect(RS.buildBringRoutesToTopStartupPlan({
+            isStyleLoaded: false,
+            waitForIdleIfStyleNotLoaded: true,
+        }).action).toBe('wait_idle');
+        expect(RS.buildBringRoutesToTopStartupPlan({
+            isStyleLoaded: false,
+            waitForIdleIfStyleNotLoaded: false,
+        }).action).toBe('skip');
+    });
+
+    test('buildBringRoutesToTopLayerPresencePlan tracks missing layer ids', () => {
+        const presence = RS.buildBringRoutesToTopLayerPresencePlan(
+            ['route-layer-0', 'route-layer-1'],
+            { 'route-layer-0': true, 'route-layer-1': false }
+        );
+        expect(presence.allFound).toBe(false);
+        expect(presence.missingLayerIds).toEqual(['route-layer-1']);
+    });
+
     test('buildRouteLayerMapLibreApplyPlan maps mount plan to MapLibre layer spec', () => {
         const mount = RS.buildRouteLayerMountPlan(
             { name: 'Fastest', polyline: [[51.5, -0.1], [51.6, -0.2]] },
@@ -1293,5 +1338,15 @@ describe('route overview and single-route display plans', () => {
         expect(plan.debounceMs).toBeGreaterThan(0);
         expect(plan.movedLogMessage).toContain('label layers');
         expect(RS.buildEnsureLabelsOnTopExecutePlan([]).shouldExecute).toBe(false);
+    });
+
+    test('buildEnsureLabelsOnTopOrchestrationPlan guards missing map', () => {
+        expect(RS.buildEnsureLabelsOnTopOrchestrationPlan({ hasMap: false }).shouldRun).toBe(false);
+        const orch = RS.buildEnsureLabelsOnTopOrchestrationPlan({
+            hasMap: true,
+            styleLayers: [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }],
+        });
+        expect(orch.shouldRun).toBe(true);
+        expect(orch.styleLayers).toHaveLength(1);
     });
 });
