@@ -9,6 +9,8 @@
 (function (root) {
     'use strict';
 
+    var TRAFFIC_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
+
     /**
      * Decide whether a traffic snapshot represents a significant change that
      * warrants an automatic reroute attempt.
@@ -209,7 +211,69 @@
         };
     }
 
+    /**
+     * Dispatch plan for starting automatic traffic updates during navigation.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.autoTrafficUpdateEnabled]
+     * @param {*} [opts.trafficUpdateInterval]
+     * @returns {Object}
+     */
+    function buildStartAutoTrafficUpdatesDispatchPlan(opts) {
+        opts = opts || {};
+        if (!opts.autoTrafficUpdateEnabled || opts.trafficUpdateInterval) {
+            return { shouldStart: false };
+        }
+        return {
+            shouldStart: true,
+            intervalMs: TRAFFIC_UPDATE_INTERVAL_MS,
+            immediateCheck: true,
+            logMessage: '[Auto-Traffic] Starting automatic traffic updates (every 5 minutes)',
+        };
+    }
+
+    /**
+     * Tick plan for the auto-traffic interval callback.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.routeInProgress]
+     * @param {boolean} [opts.autoTrafficUpdateEnabled]
+     * @returns {Object}
+     */
+    function buildAutoTrafficIntervalTickPlan(opts) {
+        opts = opts || {};
+        return {
+            shouldCheck: !!(opts.routeInProgress && opts.autoTrafficUpdateEnabled),
+        };
+    }
+
+    /**
+     * Dispatch plan for stopping automatic traffic updates.
+     * @param {*} [trafficUpdateInterval]
+     * @returns {Object}
+     */
+    function buildStopAutoTrafficUpdatesDispatchPlan(trafficUpdateInterval) {
+        if (!trafficUpdateInterval) {
+            return { shouldStop: false };
+        }
+        return {
+            shouldStop: true,
+            logMessage: '[Auto-Traffic] Stopped automatic traffic updates',
+        };
+    }
+
+    /**
+     * Status plan for manual traffic update button handler.
+     * @param {string} phase - 'start' | 'complete'
+     * @returns {Object}
+     */
+    function buildManualTrafficUpdateStatusPlan(phase) {
+        if (phase === 'start') {
+            return { statusMessage: '🚦 Updating traffic...', statusType: 'info' };
+        }
+        return { statusMessage: '🚦 Traffic updated', statusType: 'success' };
+    }
+
     var api = {
+        TRAFFIC_UPDATE_INTERVAL_MS: TRAFFIC_UPDATE_INTERVAL_MS,
         detectSignificantTrafficChange: detectSignificantTrafficChange,
         computeEffectiveRouteMinutes: computeEffectiveRouteMinutes,
         computeTrafficRerouteTimeSaved: computeTrafficRerouteTimeSaved,
@@ -220,6 +284,10 @@
         buildTrafficChangeNotificationPlan: buildTrafficChangeNotificationPlan,
         buildTrafficReroutePreflightPlan: buildTrafficReroutePreflightPlan,
         buildTrafficRerouteAcceptancePlan: buildTrafficRerouteAcceptancePlan,
+        buildStartAutoTrafficUpdatesDispatchPlan: buildStartAutoTrafficUpdatesDispatchPlan,
+        buildAutoTrafficIntervalTickPlan: buildAutoTrafficIntervalTickPlan,
+        buildStopAutoTrafficUpdatesDispatchPlan: buildStopAutoTrafficUpdatesDispatchPlan,
+        buildManualTrafficUpdateStatusPlan: buildManualTrafficUpdateStatusPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

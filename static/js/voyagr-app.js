@@ -2587,128 +2587,147 @@ let addingStop = false;
  * Toggle via-point adding mode
  */
 function toggleAddViaPoint() {
-    addingViaPoint = !addingViaPoint;
-    addingStop = false;
+    const WP = _waypoints();
+    const plan = WP.buildAddViaPointTogglePlan(!addingViaPoint);
+    addingViaPoint = plan.addingViaPoint;
+    addingStop = plan.addingStop;
 
-    const btn = document.getElementById('addViaPointBtn');
+    const btn = document.getElementById(plan.buttonId);
     if (btn) {
-        btn.classList.toggle('active', addingViaPoint);
-        btn.textContent = addingViaPoint ? '📍 Click map to add via-point' : '📍 Add Via-Point';
+        btn.classList.toggle('active', plan.buttonActive);
+        btn.textContent = plan.buttonText;
     }
 
-    if (addingViaPoint) {
-        showStatus('Click on the map to add a via-point', 'info');
-        map.getContainer().style.cursor = 'crosshair';
-    } else {
-        map.getContainer().style.cursor = '';
+    if (plan.statusMessage) {
+        showStatus(plan.statusMessage, plan.statusType);
     }
+    map.getContainer().style.cursor = plan.mapCursor;
 }
 
 /**
  * Toggle stop adding mode
  */
 function toggleAddStop() {
-    addingStop = !addingStop;
-    addingViaPoint = false;
+    const WP = _waypoints();
+    const plan = WP.buildAddStopTogglePlan(!addingStop);
+    addingViaPoint = plan.addingViaPoint;
+    addingStop = plan.addingStop;
 
-    const btn = document.getElementById('addStopBtn');
+    const btn = document.getElementById(plan.buttonId);
     if (btn) {
-        btn.classList.toggle('active', addingStop);
-        btn.textContent = addingStop ? '🛑 Click map to add stop' : '🛑 Add Stop';
+        btn.classList.toggle('active', plan.buttonActive);
+        btn.textContent = plan.buttonText;
     }
 
-    if (addingStop) {
-        showStatus('Click on the map to add a stop', 'info');
-        map.getContainer().style.cursor = 'crosshair';
-    } else {
-        map.getContainer().style.cursor = '';
+    if (plan.statusMessage) {
+        showStatus(plan.statusMessage, plan.statusType);
     }
+    map.getContainer().style.cursor = plan.mapCursor;
 }
 
 /**
  * Handle map click for adding via-points or stops
  */
 function handleMapClickForWaypoints(e) {
-    const lat = e.lngLat.lat;
-    const lon = e.lngLat.lng;
-    if (addingViaPoint) {
-        addViaPoint(lat, lon);
+    const WP = _waypoints();
+    const dispatch = WP.buildMapClickWaypointDispatchPlan({
+        addingViaPoint,
+        addingStop,
+        lat: e.lngLat.lat,
+        lon: e.lngLat.lng,
+    });
+    if (dispatch.action === 'add_via') {
+        addViaPoint(dispatch.lat, dispatch.lon);
         toggleAddViaPoint();
-    } else if (addingStop) {
-        addStop(lat, lon);
+    } else if (dispatch.action === 'add_stop') {
+        addStop(dispatch.lat, dispatch.lon);
         toggleAddStop();
     }
 }
 
 async function addViaPointFromAddress() {
-    const input = document.getElementById('viaPointAddress');
+    const WP = _waypoints();
+    const input = document.getElementById(WP.VIA_POINT_ADDRESS_INPUT_ID);
     if (!input) return;
 
-    const lat = input.dataset.lat;
-    const lon = input.dataset.lon;
-    const name = input.dataset.displayName || input.value.trim();
+    const dispatch = WP.buildWaypointAddressAddDispatchPlan({
+        lat: input.dataset.lat,
+        lon: input.dataset.lon,
+        displayName: input.dataset.displayName,
+        query: input.value,
+    }, 'via');
 
-    if (lat && lon) {
-        addViaPoint(parseFloat(lat), parseFloat(lon), name);
+    if (dispatch.action === 'prompt') {
+        showStatus(dispatch.statusMessage, dispatch.statusType);
+        return;
+    }
+
+    if (dispatch.action === 'add_resolved') {
+        addViaPoint(dispatch.lat, dispatch.lon, dispatch.name);
         input.value = '';
         delete input.dataset.lat;
         delete input.dataset.lon;
         delete input.dataset.displayName;
-        const dd = getAutocompleteDropdown('viaPointAddress');
-        if (dd) dd.classList.remove('show');
+        if (dispatch.hideAutocomplete) {
+            const dd = getAutocompleteDropdown(dispatch.inputId);
+            if (dd) dd.classList.remove('show');
+        }
         return;
     }
 
-    const query = input.value.trim();
-    if (!query) {
-        showStatus('Type an address to add as via-point', 'info');
-        return;
-    }
-
-    showStatus('🔍 Looking up via-point address...', 'loading');
-    const result = await geocodeAddress(query);
+    showStatus(dispatch.loadingMessage, 'loading');
+    const result = await geocodeAddress(dispatch.query);
     if (result) {
-        addViaPoint(result.lat, result.lon, result.display_name || query);
+        addViaPoint(result.lat, result.lon, result.display_name || dispatch.query);
+        const success = WP.buildWaypointAddressGeocodeSuccessPlan('via', result.display_name || dispatch.query);
         input.value = '';
-        showStatus(`📍 Via-point added: ${result.display_name || query}`, 'success');
+        showStatus(success.statusMessage, success.statusType);
     } else {
-        showStatus('❌ Could not find that address', 'error');
+        const fail = WP.buildWaypointAddressGeocodeFailurePlan();
+        showStatus(fail.statusMessage, fail.statusType);
     }
 }
 
 async function addStopFromAddress() {
-    const input = document.getElementById('stopAddress');
+    const WP = _waypoints();
+    const input = document.getElementById(WP.STOP_ADDRESS_INPUT_ID);
     if (!input) return;
 
-    const lat = input.dataset.lat;
-    const lon = input.dataset.lon;
-    const name = input.dataset.displayName || input.value.trim();
+    const dispatch = WP.buildWaypointAddressAddDispatchPlan({
+        lat: input.dataset.lat,
+        lon: input.dataset.lon,
+        displayName: input.dataset.displayName,
+        query: input.value,
+    }, 'stop');
 
-    if (lat && lon) {
-        addStop(parseFloat(lat), parseFloat(lon), name);
+    if (dispatch.action === 'prompt') {
+        showStatus(dispatch.statusMessage, dispatch.statusType);
+        return;
+    }
+
+    if (dispatch.action === 'add_resolved') {
+        addStop(dispatch.lat, dispatch.lon, dispatch.name);
         input.value = '';
         delete input.dataset.lat;
         delete input.dataset.lon;
         delete input.dataset.displayName;
-        const dd = getAutocompleteDropdown('stopAddress');
-        if (dd) dd.classList.remove('show');
+        if (dispatch.hideAutocomplete) {
+            const dd = getAutocompleteDropdown(dispatch.inputId);
+            if (dd) dd.classList.remove('show');
+        }
         return;
     }
 
-    const query = input.value.trim();
-    if (!query) {
-        showStatus('Type an address to add as stop', 'info');
-        return;
-    }
-
-    showStatus('🔍 Looking up stop address...', 'loading');
-    const result = await geocodeAddress(query);
+    showStatus(dispatch.loadingMessage, 'loading');
+    const result = await geocodeAddress(dispatch.query);
     if (result) {
-        addStop(result.lat, result.lon, result.display_name || query);
+        addStop(result.lat, result.lon, result.display_name || dispatch.query);
+        const success = WP.buildWaypointAddressGeocodeSuccessPlan('stop', result.display_name || dispatch.query);
         input.value = '';
-        showStatus(`🛑 Stop added: ${result.display_name || query}`, 'success');
+        showStatus(success.statusMessage, success.statusType);
     } else {
-        showStatus('❌ Could not find that address', 'error');
+        const fail = WP.buildWaypointAddressGeocodeFailurePlan();
+        showStatus(fail.statusMessage, fail.statusType);
     }
 }
 
@@ -2820,15 +2839,19 @@ function refreshViaPointMarkers() {
  * Clear all via-points and stops
  */
 function clearAllWaypoints() {
+    const WP = _waypoints();
+    const plan = WP.buildClearAllWaypointsPlan();
     viaPoints = [];
     stops = [];
-    viaPointMarkers.forEach(m => { if (m && typeof m.remove === 'function') m.remove(); });
-    stopMarkers.forEach(m => { if (m && typeof m.remove === 'function') m.remove(); });
+    if (plan.removeAllMarkers) {
+        viaPointMarkers.forEach(m => { if (m && typeof m.remove === 'function') m.remove(); });
+        stopMarkers.forEach(m => { if (m && typeof m.remove === 'function') m.remove(); });
+    }
     viaPointMarkers = [];
     stopMarkers = [];
-    clearMultiDropLayers();
-    updateWaypointsList();
-    showStatus('All waypoints cleared', 'info');
+    if (plan.clearMultiDropLayers) clearMultiDropLayers();
+    if (plan.updateWaypointsList) updateWaypointsList();
+    showStatus(plan.statusMessage, plan.statusType);
 }
 
 /**
@@ -2862,27 +2885,36 @@ function onWaypointDrop(e) {
     const targetIdx = parseInt(target.dataset.index);
 
     if (_draggedWaypoint.type === targetType) {
-        const arr = _draggedWaypoint.type === 'via' ? viaPoints : stops;
-        const markerArr = _draggedWaypoint.type === 'via' ? viaPointMarkers : stopMarkers;
-        const item = arr.splice(_draggedWaypoint.index, 1)[0];
-        const marker = markerArr.splice(_draggedWaypoint.index, 1)[0];
-        arr.splice(targetIdx, 0, item);
-        markerArr.splice(targetIdx, 0, marker);
-        updateWaypointsList();
+        const WP = _waypoints();
+        const count = targetType === 'via' ? viaPoints.length : stops.length;
+        const plan = WP.buildWaypointReorderPlan(_draggedWaypoint.type, _draggedWaypoint.index, targetIdx, count);
+        if (plan.shouldReorder) {
+            const arr = targetType === 'via' ? viaPoints : stops;
+            const markerArr = targetType === 'via' ? viaPointMarkers : stopMarkers;
+            const item = arr.splice(plan.fromIndex, 1)[0];
+            const marker = markerArr.splice(plan.fromIndex, 1)[0];
+            arr.splice(plan.toIndex, 0, item);
+            markerArr.splice(plan.toIndex, 0, marker);
+            if (plan.updateWaypointsList) updateWaypointsList();
+            if (plan.refreshViaMarkers) refreshViaPointMarkers();
+        }
     }
     _draggedWaypoint = null;
     document.querySelectorAll('.waypoint-item').forEach(el => el.style.opacity = '1');
 }
 
 function moveWaypoint(type, index, direction) {
+    const WP = _waypoints();
+    const count = type === 'via' ? viaPoints.length : stops.length;
+    const plan = WP.buildWaypointMovePlan(type, index, direction, count);
+    if (!plan.shouldMove) return;
+
     const arr = type === 'via' ? viaPoints : stops;
     const markerArr = type === 'via' ? viaPointMarkers : stopMarkers;
-    const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= arr.length) return;
-    [arr[index], arr[newIndex]] = [arr[newIndex], arr[index]];
-    [markerArr[index], markerArr[newIndex]] = [markerArr[newIndex], markerArr[index]];
-    updateWaypointsList();
-    if (type === 'via') refreshViaPointMarkers();
+    [arr[plan.fromIndex], arr[plan.toIndex]] = [arr[plan.toIndex], arr[plan.fromIndex]];
+    [markerArr[plan.fromIndex], markerArr[plan.toIndex]] = [markerArr[plan.toIndex], markerArr[plan.fromIndex]];
+    if (plan.updateWaypointsList) updateWaypointsList();
+    if (plan.refreshViaMarkers) refreshViaPointMarkers();
 }
 
 /**
@@ -5454,7 +5486,6 @@ function stopRouteTrafficUpdates() {
 let autoTrafficUpdateEnabled = localStorage.getItem('autoTrafficUpdate') !== 'false'; // Default: enabled
 let autoRerouteOnDeviationEnabled = localStorage.getItem('autoRerouteOnDeviation') !== 'false'; // Default: enabled
 let trafficUpdateInterval = null;
-const TRAFFIC_UPDATE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 let lastTrafficData = null;
 let lastTrafficUpdateTime = 0;
 
@@ -5537,30 +5568,36 @@ function toggleAutoRerouteOnDeviation() {
  * Start automatic traffic updates during navigation
  */
 function startAutoTrafficUpdates() {
-    if (!autoTrafficUpdateEnabled || trafficUpdateInterval) return;
+    const TC = _trafficChange();
+    const plan = TC.buildStartAutoTrafficUpdatesDispatchPlan({
+        autoTrafficUpdateEnabled,
+        trafficUpdateInterval,
+    });
+    if (!plan.shouldStart) return;
 
-    console.log('[Auto-Traffic] Starting automatic traffic updates (every 5 minutes)');
+    console.log(plan.logMessage);
 
-    // Immediate first update
-    checkTrafficAndReroute();
+    if (plan.immediateCheck) checkTrafficAndReroute();
 
-    // Set up interval
     trafficUpdateInterval = setInterval(() => {
-        if (routeInProgress && autoTrafficUpdateEnabled) {
-            checkTrafficAndReroute();
-        }
-    }, TRAFFIC_UPDATE_INTERVAL_MS);
+        const tick = TC.buildAutoTrafficIntervalTickPlan({
+            routeInProgress,
+            autoTrafficUpdateEnabled,
+        });
+        if (tick.shouldCheck) checkTrafficAndReroute();
+    }, plan.intervalMs);
 }
 
 /**
  * Stop automatic traffic updates
  */
 function stopAutoTrafficUpdates() {
-    if (trafficUpdateInterval) {
-        clearInterval(trafficUpdateInterval);
-        trafficUpdateInterval = null;
-        console.log('[Auto-Traffic] Stopped automatic traffic updates');
-    }
+    const TC = _trafficChange();
+    const plan = TC.buildStopAutoTrafficUpdatesDispatchPlan(trafficUpdateInterval);
+    if (!plan.shouldStop) return;
+    clearInterval(trafficUpdateInterval);
+    trafficUpdateInterval = null;
+    console.log(plan.logMessage);
 }
 
 // Shared along-route traffic sampler (Levers A + B). Samples live TomTom flow on the
@@ -5587,8 +5624,9 @@ async function fetchRouteTrafficFlowPayload(points, sampleInterval) {
         });
     } catch (e) {
         const fail = RTF.buildRouteTrafficFlowResponsePlan({ errorKind: 'network' });
-        _routeTrafficFlowBackoffUntil = Date.now() + fail.setBackoffMs;
-        console.debug('[Route Traffic]', fail.logMessage + ':', e && e.message);
+        const backoff = RTF.buildRouteTrafficFlowBackoffUpdatePlan(fail);
+        _routeTrafficFlowBackoffUntil = backoff.backoffUntil;
+        console.debug('[Route Traffic]', backoff.logMessage + ':', e && e.message);
         return null;
     }
 
@@ -5598,8 +5636,9 @@ async function fetchRouteTrafficFlowPayload(points, sampleInterval) {
         contentType: response.headers.get('content-type') || '',
     });
     if (!outcome.ok) {
-        _routeTrafficFlowBackoffUntil = Date.now() + outcome.setBackoffMs;
-        console.debug('[Route Traffic]', outcome.logMessage);
+        const backoff = RTF.buildRouteTrafficFlowBackoffUpdatePlan(outcome);
+        _routeTrafficFlowBackoffUntil = backoff.backoffUntil;
+        console.debug('[Route Traffic]', backoff.logMessage);
         return null;
     }
 
@@ -5607,8 +5646,9 @@ async function fetchRouteTrafficFlowPayload(points, sampleInterval) {
         return await response.json();
     } catch (e) {
         const fail = RTF.buildRouteTrafficFlowParseFailurePlan();
-        _routeTrafficFlowBackoffUntil = Date.now() + fail.setBackoffMs;
-        console.debug('[Route Traffic]', fail.logMessage + ':', e && e.message);
+        const backoff = RTF.buildRouteTrafficFlowBackoffUpdatePlan(fail);
+        _routeTrafficFlowBackoffUntil = backoff.backoffUntil;
+        console.debug('[Route Traffic]', backoff.logMessage + ':', e && e.message);
         return null;
     }
 }
@@ -5755,9 +5795,12 @@ async function triggerTrafficBasedReroute(changeType, avoidPoints = [], measured
  * Manual traffic update button handler
  */
 async function manualTrafficUpdate() {
-    showStatus('🚦 Updating traffic...', 'info');
+    const TC = _trafficChange();
+    const start = TC.buildManualTrafficUpdateStatusPlan('start');
+    showStatus(start.statusMessage, start.statusType);
     await checkTrafficAndReroute();
-    showStatus('🚦 Traffic updated', 'success');
+    const done = TC.buildManualTrafficUpdateStatusPlan('complete');
+    showStatus(done.statusMessage, done.statusType);
 }
 
 /**

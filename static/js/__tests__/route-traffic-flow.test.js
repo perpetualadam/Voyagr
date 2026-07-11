@@ -205,4 +205,12 @@ describe('route traffic ahead sampling and cache plans', () => {
         expect(forced.useCache).toBe(false);
         expect(forced.shouldFetch).toBe(true);
     });
+
+    test('buildRouteTrafficFlowBackoffUpdatePlan computes backoffUntil from failure plan', () => {
+        const now = 1_000_000;
+        const fail = RTF.buildRouteTrafficFlowResponsePlan({ errorKind: 'network' });
+        const backoff = RTF.buildRouteTrafficFlowBackoffUpdatePlan(fail, now);
+        expect(backoff.backoffUntil).toBe(now + fail.setBackoffMs);
+        expect(backoff.logMessage).toContain('network');
+    });
 });

@@ -154,4 +154,51 @@ describe('waypoints module', () => {
         expect(W.buildStopRemovePlan(3, 2).shouldRemove).toBe(false);
         expect(W.buildStopRemovePlan(1, 2).shouldRemove).toBe(true);
     });
+
+    test('buildClearAllWaypointsPlan clears markers and multidrop layers', () => {
+        const plan = W.buildClearAllWaypointsPlan();
+        expect(plan.removeAllMarkers).toBe(true);
+        expect(plan.clearMultiDropLayers).toBe(true);
+        expect(plan.statusMessage).toContain('cleared');
+    });
+
+    test('buildWaypointMovePlan and buildWaypointReorderPlan refresh via markers', () => {
+        expect(W.buildWaypointMovePlan('via', 0, 1, 2).refreshViaMarkers).toBe(true);
+        expect(W.buildWaypointMovePlan('stop', 0, 1, 2).refreshViaMarkers).toBe(false);
+        expect(W.buildWaypointMovePlan('via', 0, -1, 2).shouldMove).toBe(false);
+
+        const reorder = W.buildWaypointReorderPlan('via', 0, 1, 2);
+        expect(reorder.shouldReorder).toBe(true);
+        expect(reorder.refreshViaMarkers).toBe(true);
+        expect(W.buildWaypointReorderPlan('via', 1, 1, 2).shouldReorder).toBe(false);
+    });
+
+    test('buildWaypointAddressAddDispatchPlan resolves coords or geocodes query', () => {
+        const resolved = W.buildWaypointAddressAddDispatchPlan({
+            lat: '51.5',
+            lon: '-0.1',
+            displayName: 'London',
+            query: 'London',
+        }, 'via');
+        expect(resolved.action).toBe('add_resolved');
+        expect(resolved.lat).toBeCloseTo(51.5);
+
+        expect(W.buildWaypointAddressAddDispatchPlan({ query: '' }, 'stop').action).toBe('prompt');
+        expect(W.buildWaypointAddressAddDispatchPlan({ query: 'Oxford' }, 'via').action).toBe('geocode');
+    });
+
+    test('buildWaypointAddressGeocodeSuccessPlan and failure plan set status', () => {
+        expect(W.buildWaypointAddressGeocodeSuccessPlan('via', 'A').statusMessage).toContain('Via-point');
+        expect(W.buildWaypointAddressGeocodeFailurePlan().statusType).toBe('error');
+    });
+
+    test('buildAddViaPointTogglePlan and map click dispatch toggle modes', () => {
+        const toggle = W.buildAddViaPointTogglePlan(true);
+        expect(toggle.buttonId).toBe(W.ADD_VIA_POINT_BTN_ID);
+        expect(toggle.mapCursor).toBe('crosshair');
+        expect(W.buildMapClickWaypointDispatchPlan({ addingViaPoint: true, lat: 1, lon: 2 }).action)
+            .toBe('add_via');
+        expect(W.buildMapClickWaypointDispatchPlan({ addingStop: true, lat: 1, lon: 2 }).action)
+            .toBe('add_stop');
+    });
 });

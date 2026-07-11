@@ -382,6 +382,21 @@
         };
     }
 
+    /**
+     * Apply plan for updating route-traffic-flow backoff after a failed request.
+     * @param {Object} failPlan
+     * @param {number} [now]
+     * @returns {Object}
+     */
+    function buildRouteTrafficFlowBackoffUpdatePlan(failPlan, now) {
+        failPlan = failPlan || {};
+        var stamp = now != null ? now : Date.now();
+        return {
+            backoffUntil: stamp + (failPlan.setBackoffMs || 0),
+            logMessage: failPlan.logMessage || 'request failed',
+        };
+    }
+
     var api = {
         TRAFFIC_COLORS: TRAFFIC_COLORS,
         findForwardPolylineIndex: findForwardPolylineIndex,
@@ -397,6 +412,7 @@
         buildRouteTrafficFlowFetchRequestPlan: buildRouteTrafficFlowFetchRequestPlan,
         buildRouteTrafficFlowResponsePlan: buildRouteTrafficFlowResponsePlan,
         buildRouteTrafficFlowParseFailurePlan: buildRouteTrafficFlowParseFailurePlan,
+        buildRouteTrafficFlowBackoffUpdatePlan: buildRouteTrafficFlowBackoffUpdatePlan,
         ROUTE_TRAFFIC_SAMPLE_TTL_MS: ROUTE_TRAFFIC_SAMPLE_TTL_MS,
         ROUTE_TRAFFIC_AHEAD_SAMPLE_SEGMENT_COUNT: ROUTE_TRAFFIC_AHEAD_SAMPLE_SEGMENT_COUNT,
         buildSampleRouteTrafficAheadDispatchPlan: buildSampleRouteTrafficAheadDispatchPlan,

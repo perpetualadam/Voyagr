@@ -256,6 +256,10 @@
     }
 
     var ROUTE_EDIT_TOGGLE_ELEMENT_ID = 'editRouteBtn';
+    var VIA_POINT_ADDRESS_INPUT_ID = 'viaPointAddress';
+    var STOP_ADDRESS_INPUT_ID = 'stopAddress';
+    var ADD_VIA_POINT_BTN_ID = 'addViaPointBtn';
+    var ADD_STOP_BTN_ID = 'addStopBtn';
 
     /**
      * Apply plan for adding a via-point from route drag.
@@ -510,6 +514,219 @@
     }
 
     /**
+     * Clear plan for all via-points and stops.
+     * @returns {Object}
+     */
+    function buildClearAllWaypointsPlan() {
+        return {
+            clearViaPoints: true,
+            clearStops: true,
+            removeAllMarkers: true,
+            clearMultiDropLayers: true,
+            updateWaypointsList: true,
+            statusMessage: 'All waypoints cleared',
+            statusType: 'info',
+        };
+    }
+
+    /**
+     * Move plan for reordering a waypoint up or down in the list.
+     * @param {string} type - 'via' | 'stop'
+     * @param {number} index
+     * @param {number} direction - -1 or 1
+     * @param {number} [count]
+     * @returns {Object}
+     */
+    function buildWaypointMovePlan(type, index, direction, count) {
+        count = count || 0;
+        var newIndex = index + direction;
+        if (newIndex < 0 || newIndex >= count) {
+            return { shouldMove: false };
+        }
+        return {
+            shouldMove: true,
+            type: type,
+            fromIndex: index,
+            toIndex: newIndex,
+            updateWaypointsList: true,
+            refreshViaMarkers: type === 'via',
+        };
+    }
+
+    /**
+     * Reorder plan for drag-and-drop waypoint list changes.
+     * @param {string} type - 'via' | 'stop'
+     * @param {number} dragIndex
+     * @param {number} targetIndex
+     * @param {number} [count]
+     * @returns {Object}
+     */
+    function buildWaypointReorderPlan(type, dragIndex, targetIndex, count) {
+        count = count || 0;
+        if (dragIndex < 0 || dragIndex >= count || targetIndex < 0 || targetIndex >= count) {
+            return { shouldReorder: false };
+        }
+        if (dragIndex === targetIndex) {
+            return { shouldReorder: false };
+        }
+        return {
+            shouldReorder: true,
+            type: type,
+            fromIndex: dragIndex,
+            toIndex: targetIndex,
+            updateWaypointsList: true,
+            refreshViaMarkers: type === 'via',
+            resetDragOpacity: true,
+        };
+    }
+
+    /**
+     * Dispatch plan for adding a waypoint from an address input field.
+     * @param {Object} inputState
+     * @param {string} [inputState.lat]
+     * @param {string} [inputState.lon]
+     * @param {string} [inputState.displayName]
+     * @param {string} [inputState.query]
+     * @param {string} waypointKind - 'via' | 'stop'
+     * @returns {Object}
+     */
+    function buildWaypointAddressAddDispatchPlan(inputState, waypointKind) {
+        inputState = inputState || {};
+        var isVia = waypointKind === 'via';
+        var inputId = isVia ? VIA_POINT_ADDRESS_INPUT_ID : STOP_ADDRESS_INPUT_ID;
+        var lat = inputState.lat;
+        var lon = inputState.lon;
+        var displayName = inputState.displayName || (inputState.query || '').trim();
+        var query = (inputState.query || '').trim();
+
+        if (lat && lon) {
+            return {
+                action: 'add_resolved',
+                inputId: inputId,
+                lat: parseFloat(lat),
+                lon: parseFloat(lon),
+                name: displayName,
+                clearInput: true,
+                hideAutocomplete: true,
+            };
+        }
+
+        if (!query) {
+            return {
+                action: 'prompt',
+                statusMessage: isVia
+                    ? 'Type an address to add as via-point'
+                    : 'Type an address to add as stop',
+                statusType: 'info',
+            };
+        }
+
+        return {
+            action: 'geocode',
+            inputId: inputId,
+            query: query,
+            waypointKind: waypointKind,
+            loadingMessage: isVia
+                ? '🔍 Looking up via-point address...'
+                : '🔍 Looking up stop address...',
+        };
+    }
+
+    /**
+     * Status plan after geocoding succeeds for a waypoint address.
+     * @param {string} waypointKind - 'via' | 'stop'
+     * @param {string} displayName
+     * @returns {Object}
+     */
+    function buildWaypointAddressGeocodeSuccessPlan(waypointKind, displayName) {
+        var isVia = waypointKind === 'via';
+        return {
+            clearInput: true,
+            statusMessage: isVia
+                ? '📍 Via-point added: ' + displayName
+                : '🛑 Stop added: ' + displayName,
+            statusType: 'success',
+        };
+    }
+
+    /**
+     * Status plan when geocoding fails for a waypoint address.
+     * @returns {Object}
+     */
+    function buildWaypointAddressGeocodeFailurePlan() {
+        return {
+            statusMessage: '❌ Could not find that address',
+            statusType: 'error',
+        };
+    }
+
+    /**
+     * Toggle plan for via-point map-pick mode.
+     * @param {boolean} addingViaPoint
+     * @returns {Object}
+     */
+    function buildAddViaPointTogglePlan(addingViaPoint) {
+        return {
+            addingViaPoint: !!addingViaPoint,
+            addingStop: false,
+            buttonId: ADD_VIA_POINT_BTN_ID,
+            buttonActive: !!addingViaPoint,
+            buttonText: addingViaPoint ? '📍 Click map to add via-point' : '📍 Add Via-Point',
+            statusMessage: addingViaPoint ? 'Click on the map to add a via-point' : null,
+            statusType: 'info',
+            mapCursor: addingViaPoint ? 'crosshair' : '',
+        };
+    }
+
+    /**
+     * Toggle plan for stop map-pick mode.
+     * @param {boolean} addingStop
+     * @returns {Object}
+     */
+    function buildAddStopTogglePlan(addingStop) {
+        return {
+            addingViaPoint: false,
+            addingStop: !!addingStop,
+            buttonId: ADD_STOP_BTN_ID,
+            buttonActive: !!addingStop,
+            buttonText: addingStop ? '🛑 Click map to add stop' : '🛑 Add Stop',
+            statusMessage: addingStop ? 'Click on the map to add a stop' : null,
+            statusType: 'info',
+            mapCursor: addingStop ? 'crosshair' : '',
+        };
+    }
+
+    /**
+     * Dispatch plan for map clicks while adding waypoints.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.addingViaPoint]
+     * @param {boolean} [opts.addingStop]
+     * @param {number} [opts.lat]
+     * @param {number} [opts.lon]
+     * @returns {Object}
+     */
+    function buildMapClickWaypointDispatchPlan(opts) {
+        opts = opts || {};
+        if (opts.addingViaPoint) {
+            return {
+                action: 'add_via',
+                lat: opts.lat,
+                lon: opts.lon,
+                toggleOffVia: true,
+            };
+        }
+        if (opts.addingStop) {
+            return {
+                action: 'add_stop',
+                lat: opts.lat,
+                lon: opts.lon,
+                toggleOffStop: true,
+            };
+        }
+        return { action: 'none' };
+    }
+
+    /**
      * MapLibre layer descriptor for one multi-drop leg geometry string.
      * @param {string} geom - Encoded polyline
      * @param {number} idx - Leg index
@@ -565,6 +782,19 @@
         buildViaPointMarkersRefreshPlan: buildViaPointMarkersRefreshPlan,
         buildStopAddPlan: buildStopAddPlan,
         buildStopRemovePlan: buildStopRemovePlan,
+        buildClearAllWaypointsPlan: buildClearAllWaypointsPlan,
+        buildWaypointMovePlan: buildWaypointMovePlan,
+        buildWaypointReorderPlan: buildWaypointReorderPlan,
+        buildWaypointAddressAddDispatchPlan: buildWaypointAddressAddDispatchPlan,
+        buildWaypointAddressGeocodeSuccessPlan: buildWaypointAddressGeocodeSuccessPlan,
+        buildWaypointAddressGeocodeFailurePlan: buildWaypointAddressGeocodeFailurePlan,
+        buildAddViaPointTogglePlan: buildAddViaPointTogglePlan,
+        buildAddStopTogglePlan: buildAddStopTogglePlan,
+        buildMapClickWaypointDispatchPlan: buildMapClickWaypointDispatchPlan,
+        VIA_POINT_ADDRESS_INPUT_ID: VIA_POINT_ADDRESS_INPUT_ID,
+        STOP_ADDRESS_INPUT_ID: STOP_ADDRESS_INPUT_ID,
+        ADD_VIA_POINT_BTN_ID: ADD_VIA_POINT_BTN_ID,
+        ADD_STOP_BTN_ID: ADD_STOP_BTN_ID,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

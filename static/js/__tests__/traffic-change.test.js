@@ -152,3 +152,44 @@ describe('traffic reroute dispatch plans', () => {
         expect(marginal.notificationTitle).toBeNull();
     });
 });
+
+describe('auto traffic interval dispatch plans', () => {
+    test('buildStartAutoTrafficUpdatesDispatchPlan requires enabled unset interval', () => {
+        expect(TC.buildStartAutoTrafficUpdatesDispatchPlan({
+            autoTrafficUpdateEnabled: false,
+            trafficUpdateInterval: null,
+        }).shouldStart).toBe(false);
+        expect(TC.buildStartAutoTrafficUpdatesDispatchPlan({
+            autoTrafficUpdateEnabled: true,
+            trafficUpdateInterval: {},
+        }).shouldStart).toBe(false);
+        const plan = TC.buildStartAutoTrafficUpdatesDispatchPlan({
+            autoTrafficUpdateEnabled: true,
+            trafficUpdateInterval: null,
+        });
+        expect(plan.shouldStart).toBe(true);
+        expect(plan.intervalMs).toBe(TC.TRAFFIC_UPDATE_INTERVAL_MS);
+        expect(plan.immediateCheck).toBe(true);
+    });
+
+    test('buildAutoTrafficIntervalTickPlan checks route and setting', () => {
+        expect(TC.buildAutoTrafficIntervalTickPlan({
+            routeInProgress: true,
+            autoTrafficUpdateEnabled: true,
+        }).shouldCheck).toBe(true);
+        expect(TC.buildAutoTrafficIntervalTickPlan({
+            routeInProgress: false,
+            autoTrafficUpdateEnabled: true,
+        }).shouldCheck).toBe(false);
+    });
+
+    test('buildStopAutoTrafficUpdatesDispatchPlan only stops active interval', () => {
+        expect(TC.buildStopAutoTrafficUpdatesDispatchPlan(null).shouldStop).toBe(false);
+        expect(TC.buildStopAutoTrafficUpdatesDispatchPlan({}).shouldStop).toBe(true);
+    });
+
+    test('buildManualTrafficUpdateStatusPlan maps start and complete phases', () => {
+        expect(TC.buildManualTrafficUpdateStatusPlan('start').statusMessage).toContain('Updating');
+        expect(TC.buildManualTrafficUpdateStatusPlan('complete').statusType).toBe('success');
+    });
+});
