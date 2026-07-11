@@ -115,6 +115,166 @@
         return Math.max(1, Math.round(baseRemainingMinutes * ratio));
     }
 
+    /**
+     * Progress-based remaining time (minutes) from GPS on polyline.
+     * @param {Object} o
+     * @param {boolean} o.routeInProgress
+     * @param {object|null} o.lastCalculatedRoute
+     * @param {Array<[number,number]>} o.polyline
+     * @param {number} o.originalDurationMinutes
+     * @param {boolean} o.userHasStartedMoving
+     * @param {number|null} o.currentLat
+     * @param {number|null} o.currentLon
+     * @param {number} [o.lastSnappedRouteIndex]
+     * @param {{ totalPolylineLengthMeters: function, computeRemainingDistanceAlongRoute: function }} o.routeGeometry
+     * @returns {{ originalDurationMinutes: number, timeRemainingMinutes: number, progressPercent: number }|null}
+     */
+    function computeBaseNavigationETAMinutes(o) {
+        o = o || {};
+        if (!o.routeInProgress || !o.lastCalculatedRoute || !o.polyline || o.polyline.length === 0) {
+            return null;
+        }
+        var originalDurationMinutes = o.originalDurationMinutes;
+        if (!originalDurationMinutes || originalDurationMinutes <= 0) return null;
+
+        var rg = o.routeGeometry;
+        var totalDistance = rg.totalPolylineLengthMeters(o.polyline);
+        var remainingDistance = totalDistance;
+        if (o.userHasStartedMoving && o.currentLat != null && o.currentLon != null && o.polyline.length >= 2) {
+            remainingDistance = rg.computeRemainingDistanceAlongRoute(
+                o.currentLat, o.currentLon, o.polyline, o.lastSnappedRouteIndex || 0
+            );
+        }
+        var progressPercent = 0;
+        if (totalDistance > 0) {
+            progressPercent = Math.max(0, Math.min(100, ((totalDistance - remainingDistance) / totalDistance) * 100));
+        }
+        var timeRemainingMinutes = Math.round(originalDurationMinutes * (1 - (progressPercent / 100)));
+        if (timeRemainingMinutes < 0 || timeRemainingMinutes > originalDurationMinutes) return null;
+        return {
+            originalDurationMinutes: originalDurationMinutes,
+            timeRemainingMinutes: timeRemainingMinutes,
+            progressPercent: progressPercent,
+        };
+    }
+
+    /**
+     * Remaining journey time for the summary bar (pre-movement uses full duration).
+     * @param {Object} o
+     * @param {object|null} o.lastCalculatedRoute
+     * @param {number} o.routeDurationMin
+     * @param {boolean} o.userHasStartedMoving
+     * @param {number} o.remainingDistanceMeters
+     * @param {number} o.polylineTotalM
+     * @returns {number|null} Minutes remaining, or null when route duration unavailable
+     */
+    function computeJourneyRemainingTimeMinutes(o) {
+        o = o || {};
+        if (!o.lastCalculatedRoute || !(o.routeDurationMin > 0)) return null;
+
+        var totalDuration = o.routeDurationMin;
+        var totalDistance = o.polylineTotalM > 0
+            ? o.polylineTotalM
+            : ((o.lastCalculatedRoute.distance_km || 0) * 1000 || 1);
+
+        if (o.userHasStartedMoving) {
+            var progress = 1 - (o.remainingDistanceMeters / totalDistance);
+            var remaining = totalDuration * (1 - progress);
+            if (remaining < 0) remaining = 0;
+            if (remaining > 1440) remaining = totalDuration;
+            return remaining;
+        }
+        return totalDuration;
+    }
+
+    /**
+     * Fallback remaining time when route duration is unavailable (50 km/h average).
+     * @param {number} remainingDistanceMeters
+     * @returns {number}
+     */
+    function estimateRemainingTimeFromDistance(remainingDistanceMeters) {
+        var avgSpeedKmh = 50;
+        return (remainingDistanceMeters / 1000 / avgSpeedKmh) * 60;
+    }
+
+    /**
+     * Whether a nav traffic-conditions fetch is due.
+     * @param {number} nowMs
+     * @param {number} lastFetchAt
+     * @param {number} minIntervalMs
+     * @param {boolean} forceFetch
+     * @param {boolean} hasPriorTrafficFetch
+     * @returns {boolean}
+     */
+    function shouldRefreshNavTrafficETA(nowMs, lastFetchAt, minIntervalMs, forceFetch, hasPriorTrafficFetch) {
+        if (forceFetch) return true;
+        if (!hasPriorTrafficFetch) return true;
+        return (nowMs - lastFetchAt) >= minIntervalMs;
+    }
+
+    /**
+     * Build navETASnapshot traffic fields from a TomTom flow sample.
+     * @param {number} baseRemainingMinutes
+     * @param {{ source?: string, delayMin?: number, severe?: boolean, avgCongestion?: number|null }|null|undefined} flow
+     * @param {number} nowMs
+     * @returns {{ trafficAdjustedMinutes: number, trafficLevel: string, congestionPercent: number|null, trafficFetchAt: number, baseAtTrafficFetch: number }|null}
+     */
+    function buildTrafficSnapshotFromFlow(baseRemainingMinutes, flow, nowMs) {
+        if (!flow || flow.source !== 'TomTom') return null;
+        var baseAt = Math.max(1, Math.round(baseRemainingMinutes));
+        var delayMin = flow.delayMin || 0;
+        var adjusted = Math.max(1, Math.round(baseAt + delayMin));
+        var level = flow.severe ? 'Heavy' : (delayMin >= 3 ? 'Moderate' : 'Light');
+        return {
+            trafficAdjustedMinutes: adjusted,
+            trafficLevel: level,
+            congestionPercent: flow.avgCongestion != null ? flow.avgCongestion : null,
+            trafficFetchAt: nowMs,
+            baseAtTrafficFetch: baseAt,
+        };
+    }
+
+    /**
+     * Traffic status line for the turn-info ETA panel.
+     * @param {boolean} showTraffic
+     * @param {string|null} trafficLevel
+     * @param {number|null} congestionPercent
+     * @returns {string}
+     */
+    function buildTrafficStatusLine(showTraffic, trafficLevel, congestionPercent) {
+        if (!showTraffic) return '';
+        if (trafficLevel) {
+            var line = 'Traffic: ' + trafficLevel;
+            if (congestionPercent != null) line += ' · ' + congestionPercent + '% congestion';
+            return line;
+        }
+        return 'Traffic: updating…';
+    }
+
+    /**
+     * HTML for the turn-info ETA panel (caller supplies locale-formatted clock time).
+     * @param {number} displayMins
+     * @param {number} progressPercent
+     * @param {string} etaClockText
+     * @param {string} [trafficLine]
+     * @returns {string}
+     */
+    function buildTurnInfoETAPanelHtml(displayMins, progressPercent, etaClockText, trafficLine) {
+        var trafficHtml = trafficLine
+            ? '<div style="font-size: 11px; color: #555; margin-top: 4px;">' + trafficLine + '</div>'
+            : '';
+        return (
+            '<div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">' +
+                '<div style="font-size: 12px; color: #666;">ETA</div>' +
+                '<div style="font-size: 18px; font-weight: bold; color: #333;">' + etaClockText + '</div>' +
+                '<div style="font-size: 12px; color: #999; margin-top: 5px;">' +
+                    displayMins + ' min remaining (' + progressPercent.toFixed(0) + '% complete)' +
+                '</div>' +
+                trafficHtml +
+            '</div>'
+        );
+    }
+
     var api = {
         formatRemainingTime: formatRemainingTime,
         buildETAVoiceMessage: buildETAVoiceMessage,
@@ -123,6 +283,13 @@
         shouldApplyTrafficAwareETA: shouldApplyTrafficAwareETA,
         normalizeRouteDurationMinutes: normalizeRouteDurationMinutes,
         applyTrafficRatioToBaseRemaining: applyTrafficRatioToBaseRemaining,
+        computeBaseNavigationETAMinutes: computeBaseNavigationETAMinutes,
+        computeJourneyRemainingTimeMinutes: computeJourneyRemainingTimeMinutes,
+        estimateRemainingTimeFromDistance: estimateRemainingTimeFromDistance,
+        shouldRefreshNavTrafficETA: shouldRefreshNavTrafficETA,
+        buildTrafficSnapshotFromFlow: buildTrafficSnapshotFromFlow,
+        buildTrafficStatusLine: buildTrafficStatusLine,
+        buildTurnInfoETAPanelHtml: buildTurnInfoETAPanelHtml,
         TRAFFIC_RATIO_MAX_AGE_MS: TRAFFIC_RATIO_MAX_AGE_MS,
     };
 

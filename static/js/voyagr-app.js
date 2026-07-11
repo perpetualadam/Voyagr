@@ -13068,48 +13068,32 @@ function updateJourneySummaryBar() {
     }
 
     // Format remaining distance in user's preferred units
-    const useMiles = distanceUnit === 'mi';
-    let distanceText;
-    if (useMiles) {
-        const miles = remainingDistanceMeters / 1609.34;
-        distanceText = miles < 0.1 ? `${Math.round(remainingDistanceMeters * 3.28084)} ft` : `${miles.toFixed(1)} mi`;
-    } else {
-        const km = remainingDistanceMeters / 1000;
-        distanceText = km < 0.1 ? `${Math.round(remainingDistanceMeters)} m` : `${km.toFixed(1)} km`;
-    }
+    const distanceText = VoyagrModules.units().formatRemainingDistanceText(
+        remainingDistanceMeters,
+        distanceUnit
+    );
     distanceEl.textContent = distanceText;
 
     // Calculate remaining time based on route data
     let remainingTimeMinutes = 0;
 
     const routeDurationMin = getRouteOriginalDurationMinutes();
-    if (window.lastCalculatedRoute && routeDurationMin > 0) {
-        const totalDuration = routeDurationMin;
-        const polylineTotalM = getTotalPolylineLengthMeters(routePolyline);
-        const totalDistance =
-            polylineTotalM > 0 ? polylineTotalM : (window.lastCalculatedRoute.distance_km * 1000 || 1);
-
+    const journeyMinutes = VoyagrModules.eta().computeJourneyRemainingTimeMinutes({
+        lastCalculatedRoute: window.lastCalculatedRoute,
+        routeDurationMin: routeDurationMin,
+        userHasStartedMoving: userHasStartedMoving,
+        remainingDistanceMeters: remainingDistanceMeters,
+        polylineTotalM: getTotalPolylineLengthMeters(routePolyline),
+    });
+    if (journeyMinutes != null) {
         if (userHasStartedMoving) {
-            // User is moving: Use progress-based calculation (same length basis as remaining distance)
-            const progress = 1 - (remainingDistanceMeters / totalDistance);
-            remainingTimeMinutes = totalDuration * (1 - progress);
-
-            // Sanity check
-            if (remainingTimeMinutes < 0) remainingTimeMinutes = 0;
-            if (remainingTimeMinutes > 1440) remainingTimeMinutes = totalDuration; // Cap at 24h
-
-            console.log(`[ETA] Progress-based: ${progress.toFixed(2)} complete, ${remainingTimeMinutes.toFixed(1)} min remaining`);
+            console.log(`[ETA] Progress-based: ${(1 - remainingDistanceMeters / getTotalPolylineLengthMeters(routePolyline)).toFixed(2)} complete, ${journeyMinutes.toFixed(1)} min remaining`);
         } else {
-            // User hasn't started moving: Use original route duration
-            // This prevents GPS inaccuracy from showing incorrect progress
-            remainingTimeMinutes = totalDuration;
-            console.log(`[ETA] Pre-movement: Using original duration ${totalDuration.toFixed(1)} min`);
+            console.log(`[ETA] Pre-movement: Using original duration ${journeyMinutes.toFixed(1)} min`);
         }
-        remainingTimeMinutes = applyTrafficRatioToBaseRemaining(remainingTimeMinutes);
+        remainingTimeMinutes = applyTrafficRatioToBaseRemaining(journeyMinutes);
     } else {
-        // Fallback: estimate based on average speed (50 km/h)
-        const avgSpeedKmh = 50;
-        remainingTimeMinutes = (remainingDistanceMeters / 1000 / avgSpeedKmh) * 60;
+        remainingTimeMinutes = VoyagrModules.eta().estimateRemainingTimeFromDistance(remainingDistanceMeters);
     }
 
     // Format remaining time
@@ -14335,27 +14319,17 @@ function getRouteOriginalDurationMinutes() {
  * @returns {{ originalDurationMinutes: number, timeRemainingMinutes: number, progressPercent: number } | null}
  */
 function computeBaseNavigationETAMinutes() {
-    if (!routeInProgress || !window.lastCalculatedRoute || !routePolyline || routePolyline.length === 0) {
-        return null;
-    }
-    const originalDurationMinutes = getRouteOriginalDurationMinutes();
-    if (!originalDurationMinutes || originalDurationMinutes <= 0) return null;
-
-    const userHasStartedMoving = hasUserStartedMoving();
-    const totalDistance = getTotalPolylineLengthMeters(routePolyline);
-    let remainingDistance = totalDistance;
-    if (userHasStartedMoving && currentLat != null && currentLon != null && routePolyline.length >= 2) {
-        remainingDistance = computeRemainingDistanceAlongRoute(
-            currentLat, currentLon, routePolyline, lastSnappedRouteIndex
-        );
-    }
-    let progressPercent = 0;
-    if (totalDistance > 0) {
-        progressPercent = Math.max(0, Math.min(100, ((totalDistance - remainingDistance) / totalDistance) * 100));
-    }
-    const timeRemainingMinutes = Math.round(originalDurationMinutes * (1 - (progressPercent / 100)));
-    if (timeRemainingMinutes < 0 || timeRemainingMinutes > originalDurationMinutes) return null;
-    return { originalDurationMinutes, timeRemainingMinutes, progressPercent };
+    return VoyagrModules.eta().computeBaseNavigationETAMinutes({
+        routeInProgress: routeInProgress,
+        lastCalculatedRoute: window.lastCalculatedRoute,
+        polyline: routePolyline,
+        originalDurationMinutes: getRouteOriginalDurationMinutes(),
+        userHasStartedMoving: hasUserStartedMoving(),
+        currentLat: currentLat,
+        currentLon: currentLon,
+        lastSnappedRouteIndex: lastSnappedRouteIndex,
+        routeGeometry: VoyagrModules.routeGeometry(),
+    });
 }
 
 function applyTrafficRatioToBaseRemaining(baseRemainingMinutes) {
@@ -14377,28 +14351,28 @@ async function refreshNavTrafficETAIfDue(baseRemainingMinutes, progressPercent, 
     }
 
     const now = Date.now();
-    if (!forceFetch && now - lastNavTrafficFetchAt < NAV_TRAFFIC_ETA_MIN_INTERVAL_MS && window.navETASnapshot.trafficFetchAt) {
+    if (!VoyagrModules.eta().shouldRefreshNavTrafficETA(
+        now,
+        lastNavTrafficFetchAt,
+        NAV_TRAFFIC_ETA_MIN_INTERVAL_MS,
+        forceFetch,
+        !!window.navETASnapshot.trafficFetchAt
+    )) {
         return;
     }
     lastNavTrafficFetchAt = now;
 
     try {
-        // Lever B: sample live traffic ALONG the remaining route (not just the current
-        // point) so the ETA reflects jams further ahead. Shares the cached sample with the
-        // reroute monitor. Only real TomTom data adjusts the ETA; simulated data leaves the
-        // free-flow base ETA untouched to avoid random fluctuations.
         const flow = await getRouteTrafficAhead(forceFetch);
-        if (flow && flow.source === 'TomTom') {
-            const baseAt = Math.max(1, Math.round(baseRemainingMinutes));
-            const adjusted = Math.max(1, Math.round(baseAt + flow.delayMin));
-            const level = flow.severe ? 'Heavy' : (flow.delayMin >= 3 ? 'Moderate' : 'Light');
+        const trafficUpdate = VoyagrModules.eta().buildTrafficSnapshotFromFlow(
+            baseRemainingMinutes,
+            flow,
+            Date.now()
+        );
+        if (trafficUpdate) {
             window.navETASnapshot = {
                 ...window.navETASnapshot,
-                trafficAdjustedMinutes: adjusted,
-                trafficLevel: level,
-                congestionPercent: flow.avgCongestion != null ? flow.avgCongestion : null,
-                trafficFetchAt: Date.now(),
-                baseAtTrafficFetch: baseAt
+                ...trafficUpdate,
             };
         } else {
             window.navETASnapshot.trafficAdjustedMinutes = null;
@@ -14414,27 +14388,17 @@ function renderTurnInfoETAPanel(baseMinutes, adjustedMinutes, progressPercent, t
     const now = Date.now();
     const displayMins = adjustedMinutes != null ? adjustedMinutes : baseMinutes;
     const eta = new Date(now + displayMins * 60000);
-    let trafficLine = '';
-    if (shouldApplyTrafficAwareETA()) {
-        if (trafficLevel) {
-            trafficLine = `Traffic: ${trafficLevel}`;
-            if (congestionPercent != null) trafficLine += ` · ${congestionPercent}% congestion`;
-        } else {
-            trafficLine = 'Traffic: updating…';
-        }
-    }
-    turnInfo.innerHTML = `
-            <div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
-                <div style="font-size: 12px; color: #666;">ETA</div>
-                <div style="font-size: 18px; font-weight: bold; color: #333;">
-                    ${eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </div>
-                <div style="font-size: 12px; color: #999; margin-top: 5px;">
-                    ${displayMins} min remaining (${progressPercent.toFixed(0)}% complete)
-                </div>
-                ${trafficLine ? `<div style="font-size: 11px; color: #555; margin-top: 4px;">${trafficLine}</div>` : ''}
-            </div>
-        `;
+    const trafficLine = VoyagrModules.eta().buildTrafficStatusLine(
+        shouldApplyTrafficAwareETA(),
+        trafficLevel,
+        congestionPercent
+    );
+    turnInfo.innerHTML = VoyagrModules.eta().buildTurnInfoETAPanelHtml(
+        displayMins,
+        progressPercent,
+        eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        trafficLine
+    );
 }
 
 // buildETAVoiceMessage moved to modules/navigation/eta.js (VoyagrETA).

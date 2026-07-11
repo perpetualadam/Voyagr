@@ -111,6 +111,25 @@
         return temperatureUnit === 'fahrenheit' ? 'Fahrenheit' : 'Celsius';
     }
 
+    /**
+     * Format remaining along-route distance for the journey summary bar.
+     * @param {number} remainingDistanceMeters
+     * @param {string} distanceUnit - 'mi' or 'km'
+     * @returns {string}
+     */
+    function formatRemainingDistanceText(remainingDistanceMeters, distanceUnit) {
+        if (distanceUnit === 'mi') {
+            var miles = remainingDistanceMeters / 1609.34;
+            return miles < 0.1
+                ? Math.round(remainingDistanceMeters * 3.28084) + ' ft'
+                : miles.toFixed(1) + ' mi';
+        }
+        var km = remainingDistanceMeters / 1000;
+        return km < 0.1
+            ? Math.round(remainingDistanceMeters) + ' m'
+            : km.toFixed(1) + ' km';
+    }
+
     var api = {
         convertDistance: convertDistance,
         getDistanceUnit: getDistanceUnit,
@@ -123,6 +142,7 @@
         distanceUnitStatusLabel: distanceUnitStatusLabel,
         speedUnitStatusLabel: speedUnitStatusLabel,
         temperatureUnitStatusLabel: temperatureUnitStatusLabel,
+        formatRemainingDistanceText: formatRemainingDistanceText,
         CURRENCY_SYMBOLS: CURRENCY_SYMBOLS,
     };
 
