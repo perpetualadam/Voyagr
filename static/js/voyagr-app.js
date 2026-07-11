@@ -4769,7 +4769,9 @@ function toggleBottomSheet() {
 // ===== TOMTOM TRAFFIC FLOW LAYER =====
 // Real-time traffic visualization overlay
 let trafficLayer = null;
-let showTrafficEnabled = localStorage.getItem('showTrafficEnabled') !== 'false'; // Default: enabled
+let showTrafficEnabled = MLT
+    ? MLT.resolveShowTrafficEnabledFromStorage(localStorage.getItem('showTrafficEnabled'))
+    : localStorage.getItem('showTrafficEnabled') !== 'false';
 
 // ===== 3D BUILDINGS TOGGLE =====
 // Controls fill-extrusion 3D building visibility
@@ -4908,26 +4910,32 @@ function toggleRoadLabels() {
 
 // ===== GOOGLE PLUS CODES TOGGLE =====
 // Controls Google Plus Codes input for destination search
-let googlePlusCodesEnabled = localStorage.getItem('googlePlusCodesEnabled') === 'true'; // Default: disabled
+const GPC = typeof VoyagrGooglePlusCodesPrefs !== 'undefined' ? VoyagrGooglePlusCodesPrefs : null;
+let googlePlusCodesEnabled = GPC
+    ? GPC.resolveGooglePlusCodesEnabledFromStorage(localStorage.getItem('googlePlusCodesEnabled'))
+    : localStorage.getItem('googlePlusCodesEnabled') === 'true';
 
 /**
  * Toggle Google Plus Codes input on/off
  * @function toggleGooglePlusCodes
  */
 function toggleGooglePlusCodes() {
-    googlePlusCodesEnabled = !googlePlusCodesEnabled;
-    localStorage.setItem('googlePlusCodesEnabled', googlePlusCodesEnabled ? 'true' : 'false');
+    const prefs = _googlePlusCodesPrefs();
+    const TU = _toggleUI();
+    const collected = prefs.buildToggleGooglePlusCodesCollectPlan({ currentlyEnabled: googlePlusCodesEnabled });
+    const execute = prefs.buildToggleGooglePlusCodesExecutePlan({ enabled: collected.enabled });
+    if (!execute.shouldApply) return;
 
-    const toggle = document.getElementById('googlePlusCodesToggle');
-    _toggleUI().applyToggleButton(toggle, googlePlusCodesEnabled, {
-        inactiveBackground: '#ccc',
-        inactiveBorder: '#ccc',
-    });
-
-    showStatus(googlePlusCodesEnabled ? '📍 Google Plus Codes enabled' : '📍 Google Plus Codes disabled', 'info');
-    console.log(`[Google Plus Codes] ${googlePlusCodesEnabled ? 'Enabled' : 'Disabled'}`);
-
-    saveAllSettings();
+    googlePlusCodesEnabled = execute.enabled;
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    TU.applyToggleButton(
+        document.getElementById(execute.toggleId),
+        googlePlusCodesEnabled,
+        execute.toggleInactiveStyles
+    );
+    showStatus(execute.statusMessage, execute.statusType);
+    console.log(execute.logMessage);
+    if (execute.saveAllSettings) saveAllSettings();
 }
 
 /**
@@ -4962,25 +4970,24 @@ function set3DBuildingOpacity(opacity) {
  * Toggle TomTom traffic flow layer on/off
  */
 function toggleTrafficLayer() {
-    showTrafficEnabled = !showTrafficEnabled;
-    localStorage.setItem('showTrafficEnabled', showTrafficEnabled);
+    const layerToggles = _mapLayerToggles();
+    const TU = _toggleUI();
+    const collected = layerToggles.buildToggleTrafficLayerCollectPlan({ currentlyEnabled: showTrafficEnabled });
+    const execute = layerToggles.buildToggleTrafficLayerExecutePlan({ enabled: collected.enabled });
+    if (!execute.shouldApply) return;
 
-    const toggle = document.getElementById('showTrafficToggle');
-    if (toggle) {
-        toggle.classList.toggle('active', showTrafficEnabled);
-    }
+    showTrafficEnabled = execute.enabled;
+    TU.writeBoolPref(execute.storageKey, showTrafficEnabled);
+    TU.applyToggleButton(document.getElementById(execute.toggleId), showTrafficEnabled);
 
-    if (showTrafficEnabled) {
+    if (execute.mapAction === 'addTrafficLayer') {
         addTrafficLayer();
-        showStatus('🚦 Traffic layer enabled', 'success');
-        console.log('[Traffic] Traffic flow layer enabled');
     } else {
         removeTrafficLayer();
-        showStatus('🚦 Traffic layer disabled', 'info');
-        console.log('[Traffic] Traffic flow layer disabled');
     }
-
-    saveAllSettings();
+    showStatus(execute.statusMessage, execute.statusType);
+    console.log(execute.logMessage);
+    if (execute.saveAllSettings) saveAllSettings();
 }
 
 /**
@@ -5210,51 +5217,57 @@ if (typeof window !== 'undefined') {
  * Initialize traffic layer based on saved preference
  */
 function initTrafficLayer() {
-    const toggle = document.getElementById('showTrafficToggle');
-    if (toggle) {
-        toggle.classList.toggle('active', showTrafficEnabled);
-    }
+    const execute = _mapLayerToggles().buildInitTrafficLayerExecutePlan({ enabled: showTrafficEnabled });
+    if (!execute.shouldApply) return;
 
-    if (showTrafficEnabled && map) {
-        try {
-            const st = map.getStyle && map.getStyle();
-            if (st && st.name === 'voyagr-bootstrap') {
-                console.log('[Traffic] Deferring traffic flow until basemap style loads');
-                return;
-            }
-        } catch (e) {
-            /* ignore */
+    _toggleUI().applyToggleButton(document.getElementById(execute.toggleId), execute.enabled);
+
+    if (!execute.addTrafficLayer || !map) return;
+    try {
+        const st = map.getStyle && map.getStyle();
+        if (execute.deferOnBootstrapStyle && st && st.name === execute.bootstrapStyleName) {
+            console.log(execute.deferLogMessage);
+            return;
         }
-        addTrafficLayer();
+    } catch (e) {
+        /* ignore */
     }
+    addTrafficLayer();
 }
 
 // ===== WEATHER LAYER (OpenWeatherMap Tiles) =====
 // Real-time weather visualization overlay showing precipitation/clouds/temperature
 let weatherLayer = null;
-let showWeatherEnabled = localStorage.getItem('showWeatherEnabled') === 'true'; // Default: disabled
-let weatherLayerType = localStorage.getItem('weatherLayerType') || 'precipitation_new'; // precipitation_new, clouds_new, temp_new
+const WL_INIT = typeof VoyagrWeatherLayer !== 'undefined' ? VoyagrWeatherLayer : null;
+let showWeatherEnabled = WL_INIT
+    ? WL_INIT.resolveShowWeatherEnabledFromStorage(localStorage.getItem('showWeatherEnabled'))
+    : localStorage.getItem('showWeatherEnabled') === 'true';
+let weatherLayerType = WL_INIT
+    ? WL_INIT.resolveWeatherLayerTypeFromStorage(localStorage.getItem('weatherLayerType'))
+    : (localStorage.getItem('weatherLayerType') || 'precipitation_new');
 
 /**
  * Toggle weather layer on/off
  */
 function toggleWeatherLayer() {
-    showWeatherEnabled = !showWeatherEnabled;
-    const toggle = document.getElementById('showWeatherToggle');
-    _toggleUI().writeBoolPref('showWeatherEnabled', showWeatherEnabled);
-    _toggleUI().applyToggleButton(toggle, showWeatherEnabled);
+    const WL = _weatherLayer();
+    const TU = _toggleUI();
+    const collected = WL.buildToggleWeatherLayerCollectPlan({ currentlyEnabled: showWeatherEnabled });
+    const execute = WL.buildToggleWeatherLayerExecutePlan({ enabled: collected.enabled });
+    if (!execute.shouldApply) return;
 
-    if (showWeatherEnabled) {
+    showWeatherEnabled = execute.enabled;
+    TU.writeBoolPref(execute.storageKey, showWeatherEnabled);
+    TU.applyToggleButton(document.getElementById(execute.toggleId), showWeatherEnabled);
+
+    if (execute.mapAction === 'addWeatherLayer') {
         addWeatherLayer();
-        showStatus('🌧️ Weather layer enabled', 'success');
-        console.log('[Weather] Weather layer enabled');
     } else {
         removeWeatherLayer();
-        showStatus('🌧️ Weather layer disabled', 'info');
-        console.log('[Weather] Weather layer disabled');
     }
-
-    saveAllSettings();
+    showStatus(execute.statusMessage, execute.statusType);
+    console.log(execute.logMessage);
+    if (execute.saveAllSettings) saveAllSettings();
 }
 
 /**
@@ -5262,17 +5275,18 @@ function toggleWeatherLayer() {
  * @param {string} type - Layer type: 'precipitation_new', 'clouds_new', 'temp_new', 'wind_new'
  */
 function setWeatherLayerType(type) {
-    weatherLayerType = type;
-    localStorage.setItem('weatherLayerType', type);
+    const execute = _weatherLayer().buildSetWeatherLayerTypeExecutePlan(type);
+    if (!execute.shouldApply) return;
 
-    // If weather layer is enabled, refresh it with new type
-    if (showWeatherEnabled && map) {
+    weatherLayerType = execute.layerType;
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+
+    if (execute.refreshLayerWhenEnabled && showWeatherEnabled && map) {
         removeWeatherLayer();
         addWeatherLayer();
     }
 
-    const typeName = _weatherLayer().weatherLayerDisplayName(type);
-    showStatus(`🌧️ Weather layer: ${typeName}`, 'info');
+    showStatus(execute.statusMessage, execute.statusType);
 }
 
 /**
@@ -8543,6 +8557,7 @@ function _osmMapIcons() { return VoyagrModules.osmMapIcons(); }
 /** Unit-tested navigation map control icons (modules/map/map-controls.js). */
 function _mapControls() { return VoyagrModules.mapControls(); }
 function _mapLayerToggles() { return VoyagrModules.mapLayerToggles(); }
+function _mapView3D() { return VoyagrModules.mapView3D(); }
 function _mapTheme() { return VoyagrModules.mapTheme(); }
 
 /** Unit-tested route geometry helpers (modules/navigation/route-geometry.js). */
@@ -8574,6 +8589,7 @@ function _domHelpers() { return VoyagrModules.domHelpers(); }
 
 /** Unit-tested geocoding / location parse helpers (modules/navigation/geocoding-locations.js). */
 function _geocodingLocations() { return VoyagrModules.geocodingLocations(); }
+function _googlePlusCodesPrefs() { return VoyagrModules.googlePlusCodesPrefs(); }
 
 /** Unit-tested units / currency / temperature helpers (modules/navigation/units.js). */
 function _units() { return VoyagrModules.units(); }
@@ -10804,26 +10820,34 @@ function applyLiveNavigationCamera() {
  * During active navigation with zoom-and-follow, the map stays at 60° either way.
  */
 function toggleDriverPerspective() {
-    driverPerspectiveEnabled = !driverPerspectiveEnabled;
-    localStorage.setItem('driverPerspectiveEnabled', driverPerspectiveEnabled.toString());
+    const MV = _mapView3D();
+    const TU = _toggleUI();
+    const collected = MV.buildToggleDriverPerspectiveCollectPlan({
+        currentlyEnabled: driverPerspectiveEnabled,
+    });
+    const execute = MV.buildToggleDriverPerspectiveExecutePlan({
+        enabled: collected.enabled,
+        activeNavFollow: isActiveNavigationFollow(),
+    });
+    if (!execute.shouldApply) return;
 
-    const btn = document.getElementById('driverPerspectiveToggle');
-    const pitched = shouldUsePitchedDrivingCamera();
-    _toggleUI().applyToggleButton(btn, pitched);
+    driverPerspectiveEnabled = execute.enabled;
+    localStorage.setItem(execute.storageKey, execute.storageValue);
 
-    if (map) {
+    const btn = document.getElementById(execute.toggleId);
+    if (execute.applyToggleWithPitchedState) {
+        TU.applyToggleButton(btn, shouldUsePitchedDrivingCamera());
+    }
+
+    if (map && execute.applyDriverPerspective) {
         applyDriverPerspective();
     }
 
-    if (driverPerspectiveEnabled) {
-        showStatus('🚗 Driver\'s view enabled', 'info');
-    } else if (isActiveNavigationFollow()) {
-        showStatus('🚗 Preference saved — driver view stays on during navigation', 'info');
-    } else {
-        showStatus('🗺️ Standard view', 'info');
+    showStatus(execute.statusMessage, execute.statusType);
+    if (execute.recomputeMapView3D && typeof _recomputeMapView3DFromGranular === 'function') {
+        _recomputeMapView3DFromGranular();
     }
-    if (typeof _recomputeMapView3DFromGranular === 'function') _recomputeMapView3DFromGranular();
-    saveAllSettings();
+    if (execute.saveAllSettings) saveAllSettings();
 }
 
 /**
@@ -10866,57 +10890,74 @@ function applyDriverPerspective() {
 // It reuses the existing flags/functions (no separate state). The choice applies while
 // browsing AND during turn-by-turn navigation: 2D navigation still follows heading-up,
 // it just stays flat instead of tilting to 60° (see shouldTiltDrivingCamera()).
-let mapView3DEnabled = (localStorage.getItem('mapView3DEnabled') !== null)
-    ? (localStorage.getItem('mapView3DEnabled') === 'true')
-    : (driverPerspectiveEnabled || buildings3DEnabled);
+let mapView3DEnabled = _mapView3D().resolveMapView3DEnabledFromStorage(
+    localStorage.getItem('mapView3DEnabled'),
+    driverPerspectiveEnabled || buildings3DEnabled
+);
 
 /** Reflect the current 2D/3D state on the master toggle and the two granular toggles. */
 function syncMapView3DToggleUI() {
     const TU = _toggleUI();
-    const master = document.getElementById('mapView3DToggle');
+    const plan = _mapView3D().buildSyncMapView3DToggleUIPlan({
+        mapView3DEnabled,
+        driverPerspectiveEnabled,
+        buildings3DEnabled,
+    });
+    if (!plan.shouldApply) return;
+
+    const master = document.getElementById(plan.masterToggleId);
     if (master) {
-        TU.applyToggleButton(master, mapView3DEnabled);
-        if (!mapView3DEnabled) {
+        TU.applyToggleButton(master, plan.mapView3DEnabled);
+        if (plan.clearMasterInactiveStylesWhenOff && !plan.mapView3DEnabled) {
             master.style.background = '';
             master.style.borderColor = '';
         }
     }
-    TU.applyToggleButton(document.getElementById('driverPerspectiveToggle'), driverPerspectiveEnabled);
-    TU.applyToggleButton(document.getElementById('buildings3DToggle'), buildings3DEnabled);
+    TU.applyToggleButton(document.getElementById(plan.driverPerspectiveToggleId), plan.driverPerspectiveEnabled);
+    TU.applyToggleButton(document.getElementById(plan.buildings3DToggleId), plan.buildings3DEnabled);
 }
 
 /** Apply a 2D/3D scene preset by driving the existing tilt + buildings machinery. */
 function setMapView3D(enabled) {
-    mapView3DEnabled = !!enabled;
-    localStorage.setItem('mapView3DEnabled', mapView3DEnabled ? 'true' : 'false');
+    const execute = _mapView3D().buildSetMapView3DExecutePlan(enabled, {
+        heightMultiplier: buildings3DHeightMultiplier,
+        opacity: buildings3DOpacity,
+    });
+    if (!execute.shouldApply) return;
 
-    // Camera tilt (reuses driver-perspective flag + camera logic).
-    driverPerspectiveEnabled = mapView3DEnabled;
-    localStorage.setItem('driverPerspectiveEnabled', driverPerspectiveEnabled.toString());
-    if (map) applyDriverPerspective();
+    mapView3DEnabled = execute.mapView3DEnabled;
+    localStorage.setItem(execute.mapViewStorageKey, execute.mapViewStorageValue);
 
-    // 3D building extrusions follow the scene.
-    buildings3DEnabled = mapView3DEnabled;
-    localStorage.setItem('buildings3DEnabled', buildings3DEnabled ? 'true' : 'false');
+    driverPerspectiveEnabled = execute.driverPerspectiveEnabled;
+    localStorage.setItem(execute.driverPerspectiveStorageKey, execute.driverPerspectiveStorageValue);
+    if (map && execute.applyDriverPerspective) applyDriverPerspective();
+
+    buildings3DEnabled = execute.buildings3DEnabled;
+    localStorage.setItem(execute.buildings3DStorageKey, execute.buildings3DStorageValue);
     if (map && typeof MapLibreHelpers !== 'undefined') {
-        if (buildings3DEnabled) {
+        if (execute.mapBuildingsAction === 'add3DBuildings') {
             MapLibreHelpers.add3DBuildings(map, {
-                heightMultiplier: buildings3DHeightMultiplier,
-                opacity: buildings3DOpacity
+                heightMultiplier: execute.heightMultiplier,
+                opacity: execute.opacity,
             });
         } else {
             MapLibreHelpers.remove3DBuildings(map);
         }
     }
 
-    syncMapView3DToggleUI();
+    if (execute.syncToggleUI) syncMapView3DToggleUI();
 }
 
 /** Toggle between 2D and 3D map view (Settings → AR & 3D View). */
 function toggleMapView3D() {
-    setMapView3D(!mapView3DEnabled);
-    showStatus(mapView3DEnabled ? '🏙️ 3D map view' : '🗺️ 2D map view', 'info');
-    if (typeof saveAllSettings === 'function') saveAllSettings();
+    const MV = _mapView3D();
+    const collected = MV.buildToggleMapView3DCollectPlan({ currentlyEnabled: mapView3DEnabled });
+    const execute = MV.buildToggleMapView3DExecutePlan({ enabled: collected.enabled });
+    if (!execute.shouldApply) return;
+
+    setMapView3D(execute.enabled);
+    showStatus(execute.statusMessage, execute.statusType);
+    if (execute.saveAllSettings && typeof saveAllSettings === 'function') saveAllSettings();
 }
 
 /**
@@ -10924,9 +10965,15 @@ function toggleMapView3D() {
  * is changed on its own. The scene reads as "3D" if either aspect is on.
  */
 function _recomputeMapView3DFromGranular() {
-    mapView3DEnabled = !!(driverPerspectiveEnabled || buildings3DEnabled);
-    localStorage.setItem('mapView3DEnabled', mapView3DEnabled ? 'true' : 'false');
-    syncMapView3DToggleUI();
+    const execute = _mapView3D().buildRecomputeMapView3DFromGranularExecutePlan({
+        driverPerspectiveEnabled,
+        buildings3DEnabled,
+    });
+    if (!execute.shouldApply) return;
+
+    mapView3DEnabled = execute.mapView3DEnabled;
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    if (execute.syncToggleUI) syncMapView3DToggleUI();
 }
 
 // ===== AR NAVIGATION MODE =====
@@ -11994,102 +12041,92 @@ window.addEventListener('load', () => {
  * @returns {*} Return value description
  */
 function initBottomSheet() {
+    const DH = _domHelpers();
     const bottomSheet = document.getElementById('bottomSheet');
     const handle = document.querySelector('.bottom-sheet-handle');
     const header = document.querySelector('.bottom-sheet-header');
+    const initPlan = DH.buildBottomSheetFullInitOrchestrationPlan(!!bottomSheet, !!handle);
     let isDragging = false;
 
-    console.log('[BottomSheet] Initializing...', { bottomSheet, handle, header });
+    console.log(initPlan.initLogMessage, { bottomSheet, handle, header });
 
-    if (!bottomSheet || !handle) {
-        console.error('[BottomSheet] ERROR: bottomSheet or handle not found!');
+    if (!initPlan.shouldInit) {
+        console.error(initPlan.missingElementsErrorLog);
         return;
     }
 
-    // Click on handle or header to expand/collapse
-    handle.addEventListener('click', (e) => {
-        console.log('[BottomSheet] Handle clicked, expanded:', bottomSheetIsExpanded);
-        e.stopPropagation();
-        if (bottomSheetIsExpanded) {
-            collapseBottomSheet();
-        } else {
-            expandBottomSheet();
+    const applyDragVisual = (diff) => {
+        const feedback = DH.buildBottomSheetDragVisualFeedbackPlan({
+            diff,
+            isExpanded: bottomSheetIsExpanded,
+            previewMaxPx: initPlan.dragCollapsePreviewMaxPx,
+        });
+        if (feedback.shouldApplyTransform) {
+            bottomSheet.style.transform = `translateY(${feedback.transformTranslateY}px)`;
         }
+    };
+
+    const finishDrag = (diff) => {
+        bottomSheet.style.transition = '';
+        bottomSheet.style.transform = '';
+        const snap = DH.buildBottomSheetDragSnapPlan(diff, bottomSheetIsExpanded, initPlan.dragThresholdPx);
+        if (snap.action === 'collapse') {
+            collapseBottomSheet();
+            console.log(initPlan.collapseSwipeLogMessage);
+        } else if (snap.action === 'expand') {
+            expandBottomSheet();
+            console.log(initPlan.expandSwipeLogMessage);
+        }
+    };
+
+    handle.addEventListener('click', (e) => {
+        console.log(initPlan.handleClickLogMessage, bottomSheetIsExpanded);
+        e.stopPropagation();
+        if (bottomSheetIsExpanded) collapseBottomSheet();
+        else expandBottomSheet();
     });
 
     if (header) {
         header.addEventListener('click', (e) => {
-            // Don't expand if clicking on the icon buttons
-            if (_domHelpers().closest(e.target, 'button')) return;
+            const allow = DH.buildBottomSheetHeaderClickAllowedPlan(
+                !!DH.closest(e.target, initPlan.headerButtonIgnoreSelector)
+            );
+            if (!allow.allowToggle) return;
             e.stopPropagation();
-            if (bottomSheetIsExpanded) {
-                collapseBottomSheet();
-            } else {
-                expandBottomSheet();
-            }
+            if (bottomSheetIsExpanded) collapseBottomSheet();
+            else expandBottomSheet();
         });
     }
 
-    // NEW: Allow expanding by clicking anywhere on the bottom sheet when collapsed
-    // But only if clicking on handle/header, not on content (to allow scrolling)
     bottomSheet.addEventListener('click', (e) => {
-        // Don't expand if clicking inside the content area (allows interaction with buttons, scroll, etc.)
-        if (_domHelpers().closest(e.target, '.bottom-sheet-content')) {
-            return;
-        }
-        if (!bottomSheetIsExpanded) {
-            console.log('[BottomSheet] Sheet clicked while collapsed - Expanding');
-            expandBottomSheet();
-        }
+        const expandPlan = DH.buildBottomSheetBodyClickExpandPlan(
+            !!DH.closest(e.target, initPlan.contentSelector),
+            bottomSheetIsExpanded
+        );
+        if (!expandPlan.shouldExpand) return;
+        console.log(initPlan.sheetExpandClickLogMessage);
+        expandBottomSheet();
     });
 
-    // Touch events for dragging - supports BOTH expand (swipe up) and collapse (swipe down)
     handle.addEventListener('touchstart', (e) => {
         isDragging = true;
         bottomSheetStartY = e.touches[0].clientY;
         bottomSheetCurrentY = bottomSheetStartY;
-        bottomSheet.style.transition = 'none'; // Disable transitions during drag
+        bottomSheet.style.transition = 'none';
     }, { passive: true });
 
     handle.addEventListener('touchmove', (e) => {
         if (!isDragging) return;
         bottomSheetCurrentY = e.touches[0].clientY;
-        const diff = bottomSheetCurrentY - bottomSheetStartY;
-
-        // Visual feedback during drag
-        if (bottomSheetIsExpanded && diff > 0) {
-            // Dragging down while expanded - allow collapse gesture
-            bottomSheet.style.transform = `translateY(${diff}px)`;
-        } else if (!bottomSheetIsExpanded && diff < 0) {
-            // Dragging up while collapsed - show preview of expansion
-            // Limit the visual feedback to prevent over-dragging
-            const clampedDiff = Math.max(diff, -100);
-            bottomSheet.style.transform = `translateY(${clampedDiff}px)`;
-        }
+        applyDragVisual(bottomSheetCurrentY - bottomSheetStartY);
     }, { passive: true });
 
     handle.addEventListener('touchend', () => {
         if (!isDragging) return;
         isDragging = false;
-        const diff = bottomSheetCurrentY - bottomSheetStartY;
-        const threshold = 50; // Reduced threshold for better responsiveness
-
-        // Re-enable transitions for smooth animation
-        bottomSheet.style.transition = '';
-        bottomSheet.style.transform = '';
-
-        if (bottomSheetIsExpanded && diff > threshold) {
-            // Swiped down while expanded - collapse
-            collapseBottomSheet();
-            console.log('[BottomSheet] Collapsed via swipe down');
-        } else if (!bottomSheetIsExpanded && diff < -threshold) {
-            // Swiped up while collapsed - expand
-            expandBottomSheet();
-            console.log('[BottomSheet] Expanded via swipe up');
-        }
+        finishDrag(bottomSheetCurrentY - bottomSheetStartY);
     }, { passive: true });
 
-    // Mouse events for desktop browsers - supports BOTH expand and collapse
     handle.addEventListener('mousedown', (e) => {
         isDragging = true;
         bottomSheetStartY = e.clientY;
@@ -12100,39 +12137,19 @@ function initBottomSheet() {
     document.addEventListener('mousemove', (e) => {
         if (!isDragging) return;
         bottomSheetCurrentY = e.clientY;
-        const diff = bottomSheetCurrentY - bottomSheetStartY;
-
-        if (bottomSheetIsExpanded && diff > 0) {
-            // Dragging down while expanded
-            bottomSheet.style.transform = `translateY(${diff}px)`;
-        } else if (!bottomSheetIsExpanded && diff < 0) {
-            // Dragging up while collapsed
-            const clampedDiff = Math.max(diff, -100);
-            bottomSheet.style.transform = `translateY(${clampedDiff}px)`;
-        }
+        applyDragVisual(bottomSheetCurrentY - bottomSheetStartY);
     });
 
     document.addEventListener('mouseup', () => {
         if (!isDragging) return;
         isDragging = false;
-        const diff = bottomSheetCurrentY - bottomSheetStartY;
-        const threshold = 50; // pixels
-
-        bottomSheet.style.transition = '';
-        bottomSheet.style.transform = '';
-
-        if (bottomSheetIsExpanded && diff > threshold) {
-            // Collapse
-            collapseBottomSheet();
-        } else if (!bottomSheetIsExpanded && diff < -threshold) {
-            // Expand
-            expandBottomSheet();
-        }
+        finishDrag(bottomSheetCurrentY - bottomSheetStartY);
     });
 
-    // Expand on input focus
-    document.getElementById('start').addEventListener('focus', expandBottomSheet);
-    document.getElementById('end').addEventListener('focus', expandBottomSheet);
+    (initPlan.focusExpandInputIds || []).forEach((inputId) => {
+        const input = document.getElementById(inputId);
+        if (input) input.addEventListener('focus', expandBottomSheet);
+    });
 
     syncBottomSheetOverlapFabs();
 }

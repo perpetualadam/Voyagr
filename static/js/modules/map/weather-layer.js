@@ -21,6 +21,10 @@
     const DEFAULT_WEATHER_LAYER_TYPE = 'precipitation_new';
     const WEATHER_SOURCE_ID = 'weather-source';
     const WEATHER_LAYER_ID = 'weather-layer';
+    const SHOW_WEATHER_STORAGE_KEY = 'showWeatherEnabled';
+    const WEATHER_LAYER_TYPE_STORAGE_KEY = 'weatherLayerType';
+    const SHOW_WEATHER_TOGGLE_ID = 'showWeatherToggle';
+    const SHOW_WEATHER_DEFAULT_ENABLED = false;
 
     /**
      * Build the OpenWeatherMap raster tile URL template.
@@ -81,16 +85,96 @@
         return WEATHER_LAYER_TYPE_NAMES[type] || type;
     }
 
+    /**
+     * @param {string|null|undefined} storageValue
+     * @returns {boolean}
+     */
+    function resolveShowWeatherEnabledFromStorage(storageValue) {
+        if (storageValue === null || storageValue === undefined || storageValue === '') {
+            return SHOW_WEATHER_DEFAULT_ENABLED;
+        }
+        return storageValue === 'true' || storageValue === '1';
+    }
+
+    /**
+     * @param {string|null|undefined} storageValue
+     * @returns {string}
+     */
+    function resolveWeatherLayerTypeFromStorage(storageValue) {
+        if (storageValue && isValidWeatherLayerType(storageValue)) {
+            return storageValue;
+        }
+        return DEFAULT_WEATHER_LAYER_TYPE;
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.currentlyEnabled]
+     * @returns {Object}
+     */
+    function buildToggleWeatherLayerCollectPlan(input) {
+        input = input || {};
+        return { enabled: !input.currentlyEnabled };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.enabled]
+     * @returns {Object}
+     */
+    function buildToggleWeatherLayerExecutePlan(input) {
+        input = input || {};
+        const enabled = !!input.enabled;
+        return {
+            shouldApply: true,
+            enabled,
+            toggleId: SHOW_WEATHER_TOGGLE_ID,
+            storageKey: SHOW_WEATHER_STORAGE_KEY,
+            storageValue: enabled ? 'true' : 'false',
+            mapAction: enabled ? 'addWeatherLayer' : 'removeWeatherLayer',
+            saveAllSettings: true,
+            statusMessage: enabled ? '🌧️ Weather layer enabled' : '🌧️ Weather layer disabled',
+            statusType: enabled ? 'success' : 'info',
+            logMessage: enabled ? '[Weather] Weather layer enabled' : '[Weather] Weather layer disabled',
+        };
+    }
+
+    /**
+     * @param {string} type
+     * @returns {Object}
+     */
+    function buildSetWeatherLayerTypeExecutePlan(type) {
+        const safeType = isValidWeatherLayerType(type) ? type : DEFAULT_WEATHER_LAYER_TYPE;
+        return {
+            shouldApply: true,
+            layerType: safeType,
+            storageKey: WEATHER_LAYER_TYPE_STORAGE_KEY,
+            storageValue: safeType,
+            refreshLayerWhenEnabled: true,
+            statusMessage: '🌧️ Weather layer: ' + weatherLayerDisplayName(safeType),
+            statusType: 'info',
+        };
+    }
+
     const api = {
         WEATHER_LAYER_TYPE_NAMES,
         DEFAULT_WEATHER_LAYER_TYPE,
         WEATHER_SOURCE_ID,
         WEATHER_LAYER_ID,
+        SHOW_WEATHER_STORAGE_KEY,
+        WEATHER_LAYER_TYPE_STORAGE_KEY,
+        SHOW_WEATHER_TOGGLE_ID,
+        SHOW_WEATHER_DEFAULT_ENABLED,
         buildWeatherTileUrl,
         buildWeatherSourceSpec,
         buildWeatherLayerSpec,
         isValidWeatherLayerType,
         weatherLayerDisplayName,
+        resolveShowWeatherEnabledFromStorage,
+        resolveWeatherLayerTypeFromStorage,
+        buildToggleWeatherLayerCollectPlan,
+        buildToggleWeatherLayerExecutePlan,
+        buildSetWeatherLayerTypeExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

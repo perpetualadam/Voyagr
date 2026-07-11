@@ -23,6 +23,9 @@
 
     var TRAFFIC_LAYER_ID = 'traffic-layer';
     var WEATHER_LAYER_ID = 'weather-layer';
+    var SHOW_TRAFFIC_STORAGE_KEY = 'showTrafficEnabled';
+    var SHOW_TRAFFIC_TOGGLE_ID = 'showTrafficToggle';
+    var SHOW_TRAFFIC_DEFAULT_ENABLED = true;
 
     /**
      * Resolve a boolean preference stored as 'true'/'false' strings (default on unless 'false').
@@ -183,6 +186,68 @@
     }
 
     /**
+     * @param {string|null|undefined} storageValue
+     * @returns {boolean}
+     */
+    function resolveShowTrafficEnabledFromStorage(storageValue) {
+        return resolveDefaultOnBooleanFromStorage(storageValue, SHOW_TRAFFIC_DEFAULT_ENABLED);
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.currentlyEnabled]
+     * @returns {Object}
+     */
+    function buildToggleTrafficLayerCollectPlan(input) {
+        input = input || {};
+        var enabled = !input.currentlyEnabled;
+        return { enabled: enabled };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.enabled]
+     * @returns {Object}
+     */
+    function buildToggleTrafficLayerExecutePlan(input) {
+        input = input || {};
+        var enabled = !!input.enabled;
+        return {
+            shouldApply: true,
+            enabled: enabled,
+            toggleId: SHOW_TRAFFIC_TOGGLE_ID,
+            storageKey: SHOW_TRAFFIC_STORAGE_KEY,
+            storageValue: enabled ? 'true' : 'false',
+            mapAction: enabled ? 'addTrafficLayer' : 'removeTrafficLayer',
+            saveAllSettings: true,
+            statusMessage: enabled ? '🚦 Traffic layer enabled' : '🚦 Traffic layer disabled',
+            statusType: enabled ? 'success' : 'info',
+            logMessage: enabled
+                ? '[Traffic] Traffic flow layer enabled'
+                : '[Traffic] Traffic flow layer disabled',
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.enabled]
+     * @returns {Object}
+     */
+    function buildInitTrafficLayerExecutePlan(input) {
+        input = input || {};
+        var enabled = !!input.enabled;
+        return {
+            shouldApply: true,
+            enabled: enabled,
+            toggleId: SHOW_TRAFFIC_TOGGLE_ID,
+            addTrafficLayer: enabled,
+            deferOnBootstrapStyle: true,
+            bootstrapStyleName: 'voyagr-bootstrap',
+            deferLogMessage: '[Traffic] Deferring traffic flow until basemap style loads',
+        };
+    }
+
+    /**
      * Plan for voyagr-vector-style-ready handler (re-apply labels, reconcile overlays).
      * @param {Object} [input]
      * @param {boolean} [input.hasMap]
@@ -223,6 +288,9 @@
         BUILDINGS_3D_TOGGLE_ID: BUILDINGS_3D_TOGGLE_ID,
         ROAD_LABELS_STORAGE_KEY: ROAD_LABELS_STORAGE_KEY,
         ROAD_LABELS_TOGGLE_ID: ROAD_LABELS_TOGGLE_ID,
+        SHOW_TRAFFIC_STORAGE_KEY: SHOW_TRAFFIC_STORAGE_KEY,
+        SHOW_TRAFFIC_TOGGLE_ID: SHOW_TRAFFIC_TOGGLE_ID,
+        SHOW_TRAFFIC_DEFAULT_ENABLED: SHOW_TRAFFIC_DEFAULT_ENABLED,
         BUILDINGS_3D_DEFAULT_HEIGHT: BUILDINGS_3D_DEFAULT_HEIGHT,
         BUILDINGS_3D_DEFAULT_OPACITY: BUILDINGS_3D_DEFAULT_OPACITY,
         resolveDefaultOnBooleanFromStorage: resolveDefaultOnBooleanFromStorage,
@@ -236,6 +304,10 @@
         buildToggleRoadLabelsExecutePlan: buildToggleRoadLabelsExecutePlan,
         buildSet3DBuildingHeightExecutePlan: buildSet3DBuildingHeightExecutePlan,
         buildSet3DBuildingOpacityExecutePlan: buildSet3DBuildingOpacityExecutePlan,
+        resolveShowTrafficEnabledFromStorage: resolveShowTrafficEnabledFromStorage,
+        buildToggleTrafficLayerCollectPlan: buildToggleTrafficLayerCollectPlan,
+        buildToggleTrafficLayerExecutePlan: buildToggleTrafficLayerExecutePlan,
+        buildInitTrafficLayerExecutePlan: buildInitTrafficLayerExecutePlan,
         buildVectorStyleReadyReconcilePlan: buildVectorStyleReadyReconcilePlan,
     };
 

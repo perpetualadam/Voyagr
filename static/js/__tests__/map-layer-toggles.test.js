@@ -43,6 +43,14 @@ describe('map-layer-toggles module', () => {
         expect(execute.statusMessage).toContain('enabled');
     });
 
+    test('buildToggleTrafficLayerExecutePlan uses toggle button storage format', () => {
+        const execute = MLT.buildToggleTrafficLayerExecutePlan({ enabled: true });
+        expect(execute.toggleId).toBe(MLT.SHOW_TRAFFIC_TOGGLE_ID);
+        expect(execute.storageValue).toBe('true');
+        expect(execute.mapAction).toBe('addTrafficLayer');
+        expect(MLT.resolveShowTrafficEnabledFromStorage('false')).toBe(false);
+    });
+
     test('buildVectorStyleReadyReconcilePlan re-applies labels and overlay resets', () => {
         const plan = MLT.buildVectorStyleReadyReconcilePlan({
             hasMap: true,

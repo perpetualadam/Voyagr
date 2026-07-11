@@ -48,8 +48,26 @@ describe('dom-helpers', () => {
     test('buildBottomSheetDragSnapPlan expands, collapses, or reverts', () => {
         expect(Dom.buildBottomSheetDragSnapPlan(-60, false).action).toBe('expand');
         expect(Dom.buildBottomSheetDragSnapPlan(60, true).action).toBe('collapse');
-        expect(Dom.buildBottomSheetDragSnapPlan(5, true).action).toBe('expand');
+        expect(Dom.buildBottomSheetDragSnapPlan(5, true).action).toBe('revert');
         expect(Dom.buildBottomSheetDragStartAllowedPlan(true, false).allowDrag).toBe(true);
+    });
+
+    test('buildBottomSheetDragVisualFeedbackPlan clamps expand preview', () => {
+        const down = Dom.buildBottomSheetDragVisualFeedbackPlan({ diff: 30, isExpanded: true });
+        expect(down.shouldApplyTransform).toBe(true);
+        expect(down.transformTranslateY).toBe(30);
+
+        const up = Dom.buildBottomSheetDragVisualFeedbackPlan({ diff: -200, isExpanded: false });
+        expect(up.transformTranslateY).toBe(-100);
+
+        const noop = Dom.buildBottomSheetDragVisualFeedbackPlan({ diff: 5, isExpanded: false });
+        expect(noop.shouldApplyTransform).toBe(false);
+    });
+
+    test('buildBottomSheetFullInitOrchestrationPlan extends base init plan', () => {
+        const plan = Dom.buildBottomSheetFullInitOrchestrationPlan(true, true);
+        expect(plan.focusExpandInputIds).toContain('start');
+        expect(plan.dragCollapsePreviewMaxPx).toBe(Dom.BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX);
     });
 
     test('buildBottomSheetOverlapFabDisplayPlan hides nav FABs when sheet expanded', () => {

@@ -86,9 +86,27 @@ describe('weather-layer module (real implementation)', () => {
             const url = WL.buildWeatherTileUrl('wind_new', 'k');
             const source = WL.buildWeatherSourceSpec(url);
             const layer = WL.buildWeatherLayerSpec();
-            // The layer must reference the same source id the app registers.
             expect(layer.source).toBe(WL.WEATHER_SOURCE_ID);
             expect(source.tiles[0]).toContain('wind_new');
+        });
+    });
+
+    describe('toggle and preference plans', () => {
+        test('resolveShowWeatherEnabledFromStorage defaults off', () => {
+            expect(WL.resolveShowWeatherEnabledFromStorage(null)).toBe(false);
+            expect(WL.resolveShowWeatherEnabledFromStorage('true')).toBe(true);
+        });
+
+        test('buildToggleWeatherLayerExecutePlan wires map action', () => {
+            const execute = WL.buildToggleWeatherLayerExecutePlan({ enabled: true });
+            expect(execute.mapAction).toBe('addWeatherLayer');
+            expect(execute.storageKey).toBe(WL.SHOW_WEATHER_STORAGE_KEY);
+        });
+
+        test('buildSetWeatherLayerTypeExecutePlan falls back invalid types', () => {
+            const execute = WL.buildSetWeatherLayerTypeExecutePlan('bogus');
+            expect(execute.layerType).toBe(WL.DEFAULT_WEATHER_LAYER_TYPE);
+            expect(execute.statusMessage).toContain('Precipitation');
         });
     });
 });

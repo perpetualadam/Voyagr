@@ -48,6 +48,9 @@
     ];
     var BOTTOM_SHEET_HANDLE_SELECTOR = '.bottom-sheet-handle';
     var BOTTOM_SHEET_CONTENT_SELECTOR = '.bottom-sheet-content';
+    var BOTTOM_SHEET_HEADER_SELECTOR = '.bottom-sheet-header';
+    var BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX = 100;
+    var BOTTOM_SHEET_FOCUS_EXPAND_INPUT_IDS = ['start', 'end'];
     var ROUTE_PREVIEW_HANDLE_TITLE = 'Swipe up to see route details';
 
     /**
@@ -91,13 +94,93 @@
      */
     function buildBottomSheetDragSnapPlan(deltaY, isExpanded, thresholdPx) {
         var threshold = thresholdPx != null ? thresholdPx : BOTTOM_SHEET_DRAG_THRESHOLD_PX;
-        if (deltaY < -threshold) {
-            return { action: 'expand' };
-        }
-        if (deltaY > threshold) {
+        if (isExpanded && deltaY > threshold) {
             return { action: 'collapse' };
         }
-        return { action: isExpanded ? 'expand' : 'collapse', revert: true };
+        if (!isExpanded && deltaY < -threshold) {
+            return { action: 'expand' };
+        }
+        return { action: 'revert' };
+    }
+
+    /**
+     * Visual transform feedback while dragging the bottom sheet handle.
+     * @param {Object} [input]
+     * @param {number} [input.diff]
+     * @param {boolean} [input.isExpanded]
+     * @param {number} [input.previewMaxPx]
+     * @returns {Object}
+     */
+    function buildBottomSheetDragVisualFeedbackPlan(input) {
+        input = input || {};
+        var diff = input.diff != null ? input.diff : 0;
+        var isExpanded = !!input.isExpanded;
+        var previewMaxPx = input.previewMaxPx != null
+            ? input.previewMaxPx
+            : BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX;
+
+        if (isExpanded && diff > 0) {
+            return {
+                shouldApplyTransform: true,
+                transformTranslateY: diff,
+            };
+        }
+        if (!isExpanded && diff < 0) {
+            return {
+                shouldApplyTransform: true,
+                transformTranslateY: Math.max(diff, -previewMaxPx),
+            };
+        }
+        return { shouldApplyTransform: false };
+    }
+
+    /**
+     * Whether a header click should toggle the sheet (ignore icon buttons).
+     * @param {boolean} clickedButton
+     * @returns {Object}
+     */
+    function buildBottomSheetHeaderClickAllowedPlan(clickedButton) {
+        return { allowToggle: !clickedButton };
+    }
+
+    /**
+     * Whether a sheet body click should expand when collapsed.
+     * @param {boolean} clickedContent
+     * @param {boolean} isExpanded
+     * @returns {Object}
+     */
+    function buildBottomSheetBodyClickExpandPlan(clickedContent, isExpanded) {
+        return {
+            shouldExpand: !isExpanded && !clickedContent,
+        };
+    }
+
+    /**
+     * Extended init orchestration for initBottomSheet wiring.
+     * @param {boolean} hasBottomSheet
+     * @param {boolean} hasHandle
+     * @returns {Object}
+     */
+    function buildBottomSheetFullInitOrchestrationPlan(hasBottomSheet, hasHandle) {
+        var base = buildBottomSheetInitOrchestrationPlan(hasBottomSheet, hasHandle);
+        if (!base.shouldInit) {
+            return Object.assign({}, base, {
+                missingElementsErrorLog: '[BottomSheet] ERROR: bottomSheet or handle not found!',
+            });
+        }
+        return Object.assign({}, base, {
+            headerSelector: BOTTOM_SHEET_HEADER_SELECTOR,
+            contentSelector: BOTTOM_SHEET_CONTENT_SELECTOR,
+            headerButtonIgnoreSelector: 'button',
+            dragCollapsePreviewMaxPx: BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX,
+            focusExpandInputIds: BOTTOM_SHEET_FOCUS_EXPAND_INPUT_IDS.slice(),
+            initLogMessage: '[BottomSheet] Initializing...',
+            missingElementsErrorLog: '[BottomSheet] ERROR: bottomSheet or handle not found!',
+            handleClickLogMessage: '[BottomSheet] Handle clicked, expanded:',
+            sheetExpandClickLogMessage: '[BottomSheet] Sheet clicked while collapsed - Expanding',
+            collapseSwipeLogMessage: '[BottomSheet] Collapsed via swipe down',
+            expandSwipeLogMessage: '[BottomSheet] Expanded via swipe up',
+        });
     }
 
     /**
@@ -223,9 +306,14 @@
         BOTTOM_SHEET_ID: BOTTOM_SHEET_ID,
         BOTTOM_SHEET_EXPANDED_CLASS: BOTTOM_SHEET_EXPANDED_CLASS,
         BOTTOM_SHEET_OVERLAP_ALWAYS_HIDE_IDS: BOTTOM_SHEET_OVERLAP_ALWAYS_HIDE_IDS,
+        BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX: BOTTOM_SHEET_DRAG_COLLAPSE_PREVIEW_MAX_PX,
         buildBottomSheetInitOrchestrationPlan: buildBottomSheetInitOrchestrationPlan,
+        buildBottomSheetFullInitOrchestrationPlan: buildBottomSheetFullInitOrchestrationPlan,
         buildBottomSheetDragStartAllowedPlan: buildBottomSheetDragStartAllowedPlan,
         buildBottomSheetDragSnapPlan: buildBottomSheetDragSnapPlan,
+        buildBottomSheetDragVisualFeedbackPlan: buildBottomSheetDragVisualFeedbackPlan,
+        buildBottomSheetHeaderClickAllowedPlan: buildBottomSheetHeaderClickAllowedPlan,
+        buildBottomSheetBodyClickExpandPlan: buildBottomSheetBodyClickExpandPlan,
         buildBottomSheetOverlapFabDisplayPlan: buildBottomSheetOverlapFabDisplayPlan,
         buildExpandBottomSheetExecutePlan: buildExpandBottomSheetExecutePlan,
         buildCollapseBottomSheetExecutePlan: buildCollapseBottomSheetExecutePlan,
