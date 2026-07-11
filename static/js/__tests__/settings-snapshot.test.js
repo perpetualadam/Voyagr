@@ -488,4 +488,17 @@ describe('settings-snapshot module', () => {
         expect(execute.runtimePatches.find((item) => item.key === 'distanceUnit').value).toBe('km');
         expect(execute.runtimePatches.find((item) => item.key === 'speedWidgetEnabled').value).toBe(true);
     });
+
+    test('buildApplySettingsRestoreExecutePlan hydrates storage and runtime patches', () => {
+        const restorePlan = SS.buildSettingsRestorePlan({
+            unit_distance: 'mi',
+            unit_currency: 'USD',
+            smartZoomEnabled: false,
+        });
+        const execute = SS.buildApplySettingsRestoreExecutePlan(restorePlan);
+        expect(execute.shouldRestore).toBe(true);
+        expect(execute.localStoragePatches.find((item) => item.key === 'unit_distance').value).toBe('mi');
+        expect(execute.runtimeExecute.runtimePatches.find((item) => item.key === 'distanceUnit').value).toBe('mi');
+        expect(SS.buildApplySettingsRestoreRuntimeExecutePlan({ speedUnit: 'mph' }).runtimePatches[0].value).toBe('mph');
+    });
 });

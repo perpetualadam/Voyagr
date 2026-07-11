@@ -697,49 +697,91 @@
     }
 
     /**
+     * Build runtime global patches from a settings restore or reset object.
+     * @param {Object} [runtime]
+     * @returns {Object}
+     */
+    function buildApplySettingsRuntimePatchesExecutePlan(runtime) {
+        runtime = runtime || {};
+        var patches = [];
+        if (runtime.distanceUnit) patches.push({ key: 'distanceUnit', value: runtime.distanceUnit });
+        if (runtime.currencyUnit) patches.push({ key: 'currencyUnit', value: runtime.currencyUnit });
+        if (runtime.speedUnit) patches.push({ key: 'speedUnit', value: runtime.speedUnit });
+        if (runtime.temperatureUnit) patches.push({ key: 'temperatureUnit', value: runtime.temperatureUnit });
+        if (runtime.currentVehicleType) patches.push({ key: 'currentVehicleType', value: runtime.currentVehicleType });
+        if (runtime.currentRoutingMode) patches.push({ key: 'currentRoutingMode', value: runtime.currentRoutingMode });
+        if (runtime.smartZoomEnabled !== undefined) {
+            patches.push({ key: 'smartZoomEnabled', value: !!runtime.smartZoomEnabled });
+        }
+        if (runtime.autoTrafficUpdateEnabled !== undefined) {
+            patches.push({ key: 'autoTrafficUpdateEnabled', value: !!runtime.autoTrafficUpdateEnabled });
+        }
+        if (runtime.autoRerouteOnDeviationEnabled !== undefined) {
+            patches.push({ key: 'autoRerouteOnDeviationEnabled', value: !!runtime.autoRerouteOnDeviationEnabled });
+        }
+        if (runtime.routeTrafficEnabled !== undefined) {
+            patches.push({ key: 'routeTrafficEnabled', value: !!runtime.routeTrafficEnabled });
+        }
+        if (runtime.showCamerasEnabled !== undefined) {
+            patches.push({ key: 'showCamerasEnabled', value: !!runtime.showCamerasEnabled });
+        }
+        if (runtime.showOsmTrafficLightsEnabled !== undefined) {
+            patches.push({ key: 'showOsmTrafficLightsEnabled', value: !!runtime.showOsmTrafficLightsEnabled });
+        }
+        if (runtime.showOsmRailwayCrossingsEnabled !== undefined) {
+            patches.push({ key: 'showOsmRailwayCrossingsEnabled', value: !!runtime.showOsmRailwayCrossingsEnabled });
+        }
+        if (runtime.showTrafficEnabled !== undefined) {
+            patches.push({ key: 'showTrafficEnabled', value: !!runtime.showTrafficEnabled });
+        }
+        if (runtime.speedWidgetEnabled !== undefined) {
+            patches.push({ key: 'speedWidgetEnabled', value: !!runtime.speedWidgetEnabled });
+        }
+        return {
+            shouldApply: patches.length > 0,
+            runtimePatches: patches,
+        };
+    }
+
+    /**
      * Execute plan for applying runtime default globals after settings reset.
      * @param {Object} [defaults]
      * @returns {Object}
      */
     function buildApplySettingsResetRuntimeExecutePlan(defaults) {
-        defaults = defaults || {};
-        var patches = [];
-        if (defaults.distanceUnit) patches.push({ key: 'distanceUnit', value: defaults.distanceUnit });
-        if (defaults.currencyUnit) patches.push({ key: 'currencyUnit', value: defaults.currencyUnit });
-        if (defaults.speedUnit) patches.push({ key: 'speedUnit', value: defaults.speedUnit });
-        if (defaults.temperatureUnit) patches.push({ key: 'temperatureUnit', value: defaults.temperatureUnit });
-        if (defaults.currentVehicleType) patches.push({ key: 'currentVehicleType', value: defaults.currentVehicleType });
-        if (defaults.currentRoutingMode) patches.push({ key: 'currentRoutingMode', value: defaults.currentRoutingMode });
-        if (defaults.smartZoomEnabled !== undefined) {
-            patches.push({ key: 'smartZoomEnabled', value: !!defaults.smartZoomEnabled });
+        return buildApplySettingsRuntimePatchesExecutePlan(defaults);
+    }
+
+    /**
+     * Execute plan for applying runtime globals after settings restore.
+     * @param {Object} [runtime]
+     * @returns {Object}
+     */
+    function buildApplySettingsRestoreRuntimeExecutePlan(runtime) {
+        return buildApplySettingsRuntimePatchesExecutePlan(runtime);
+    }
+
+    /**
+     * Execute plan for hydrating localStorage and runtime from a restore plan.
+     * @param {Object} restorePlan - from buildSettingsRestorePlan
+     * @returns {Object}
+     */
+    function buildApplySettingsRestoreExecutePlan(restorePlan) {
+        restorePlan = restorePlan || {};
+        if (!restorePlan.found) {
+            return { shouldRestore: false };
         }
-        if (defaults.autoTrafficUpdateEnabled !== undefined) {
-            patches.push({ key: 'autoTrafficUpdateEnabled', value: !!defaults.autoTrafficUpdateEnabled });
-        }
-        if (defaults.autoRerouteOnDeviationEnabled !== undefined) {
-            patches.push({ key: 'autoRerouteOnDeviationEnabled', value: !!defaults.autoRerouteOnDeviationEnabled });
-        }
-        if (defaults.routeTrafficEnabled !== undefined) {
-            patches.push({ key: 'routeTrafficEnabled', value: !!defaults.routeTrafficEnabled });
-        }
-        if (defaults.showCamerasEnabled !== undefined) {
-            patches.push({ key: 'showCamerasEnabled', value: !!defaults.showCamerasEnabled });
-        }
-        if (defaults.showOsmTrafficLightsEnabled !== undefined) {
-            patches.push({ key: 'showOsmTrafficLightsEnabled', value: !!defaults.showOsmTrafficLightsEnabled });
-        }
-        if (defaults.showOsmRailwayCrossingsEnabled !== undefined) {
-            patches.push({ key: 'showOsmRailwayCrossingsEnabled', value: !!defaults.showOsmRailwayCrossingsEnabled });
-        }
-        if (defaults.showTrafficEnabled !== undefined) {
-            patches.push({ key: 'showTrafficEnabled', value: !!defaults.showTrafficEnabled });
-        }
-        if (defaults.speedWidgetEnabled !== undefined) {
-            patches.push({ key: 'speedWidgetEnabled', value: !!defaults.speedWidgetEnabled });
-        }
+        var localStoragePatches = [];
+        Object.keys(restorePlan.localStorage || {}).forEach(function (key) {
+            var value = restorePlan.localStorage[key];
+            if (value !== undefined) {
+                localStoragePatches.push({ key: key, value: value });
+            }
+        });
         return {
-            shouldApply: patches.length > 0,
-            runtimePatches: patches,
+            shouldRestore: true,
+            localStoragePatches: localStoragePatches,
+            runtimeExecute: buildApplySettingsRestoreRuntimeExecutePlan(restorePlan.runtime),
         };
     }
 
@@ -1023,6 +1065,9 @@
         buildSettingsHazardPreferencesPlan: buildSettingsHazardPreferencesPlan,
         buildSettingsFormStateInputPlan: buildSettingsFormStateInputPlan,
         buildSettingsRestorePlan: buildSettingsRestorePlan,
+        buildApplySettingsRestoreExecutePlan: buildApplySettingsRestoreExecutePlan,
+        buildApplySettingsRuntimePatchesExecutePlan: buildApplySettingsRuntimePatchesExecutePlan,
+        buildApplySettingsRestoreRuntimeExecutePlan: buildApplySettingsRestoreRuntimeExecutePlan,
         isRecognisedSettingsSnapshot: isRecognisedSettingsSnapshot,
         buildSettingsExportPlan: buildSettingsExportPlan,
         buildExportSettingsDomExecutePlan: buildExportSettingsDomExecutePlan,

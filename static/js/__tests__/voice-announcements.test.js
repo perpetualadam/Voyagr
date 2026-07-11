@@ -523,4 +523,22 @@ describe('voice preferences plans', () => {
         expect(dom.labeledToggle.id).toBe('voiceAnnouncementsEnabled');
         expect(dom.labeledToggle.enabled).toBe(true);
     });
+
+    test('buildSaveVoicePreferencesExecutePlan and load execute plans', () => {
+        const prefs = {
+            turnDistance1: 400,
+            turnDistance2: 150,
+            turnDistance3: 80,
+            hazardDistance: 600,
+            voiceFrequencyMode: 'minimal',
+            announcementsEnabled: true,
+        };
+        const save = VA.buildSaveVoicePreferencesExecutePlan(prefs);
+        expect(save.shouldSave).toBe(true);
+        expect(save.storagePatches).toHaveLength(2);
+        const load = VA.buildLoadVoicePreferencesExecutePlan(prefs);
+        expect(load.shouldApply).toBe(true);
+        expect(load.domPlan.selects.find((item) => item.id === 'voiceTurnDistance1').value).toBe('400');
+        expect(VA.buildLoadVoicePreferencesDefaultsExecutePlan().useDefaults).toBe(true);
+    });
 });

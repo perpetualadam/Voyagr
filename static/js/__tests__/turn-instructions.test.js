@@ -473,6 +473,33 @@ describe('buildNavStartTurnInstructionInit', () => {
     });
 });
 
+describe('buildNavStartTurnWidgetExecutePlan', () => {
+    test('prefers GPS position update when coordinates are available', () => {
+        const execute = TI.buildNavStartTurnWidgetExecutePlan({
+            currentLat: 51.5,
+            currentLon: -0.12,
+            steps: [{ type: 10 }],
+            stepIndex: 0,
+            polyline: [[51.5, -0.12]],
+        });
+        expect(execute.shouldShowWidget).toBe(true);
+        expect(execute.updateFromGps).toBe(true);
+        expect(execute.initFromRoute).toBe(false);
+    });
+
+    test('falls back to route init when GPS is unavailable', () => {
+        const execute = TI.buildNavStartTurnWidgetExecutePlan({
+            currentLat: null,
+            currentLon: null,
+            steps: [{ type: 10 }],
+            stepIndex: 0,
+            polyline: [[51.5, -0.12]],
+        });
+        expect(execute.updateFromGps).toBe(false);
+        expect(execute.initFromRoute).toBe(true);
+    });
+});
+
 describe('findFollowingManeuver', () => {
     const polyline = [[51.5, -0.12], [51.51, -0.11], [51.52, -0.10]];
     const steps = [

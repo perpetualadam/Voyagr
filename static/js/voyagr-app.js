@@ -1488,31 +1488,15 @@ function saveAllSettings() {
  * @returns {*} Return value description
  */
 function applySettingsRestoreFromPlan(plan) {
-    if (!plan || !plan.found) return false;
+    const SS = _settingsSnapshot();
+    const execute = SS.buildApplySettingsRestoreExecutePlan(plan);
+    if (!execute.shouldRestore) return false;
 
-    Object.entries(plan.localStorage || {}).forEach(([key, value]) => {
-        if (value !== undefined) {
-            localStorage.setItem(key, value);
-        }
+    (execute.localStoragePatches || []).forEach(({ key, value }) => {
+        localStorage.setItem(key, value);
     });
 
-    const rt = plan.runtime || {};
-    if (rt.distanceUnit) distanceUnit = rt.distanceUnit;
-    if (rt.currencyUnit) currencyUnit = rt.currencyUnit;
-    if (rt.speedUnit) speedUnit = rt.speedUnit;
-    if (rt.temperatureUnit) temperatureUnit = rt.temperatureUnit;
-    if (rt.currentVehicleType) currentVehicleType = rt.currentVehicleType;
-    if (rt.currentRoutingMode) currentRoutingMode = rt.currentRoutingMode;
-    if (rt.smartZoomEnabled !== undefined) smartZoomEnabled = rt.smartZoomEnabled;
-    if (rt.showCamerasEnabled !== undefined) showCamerasEnabled = rt.showCamerasEnabled;
-    if (rt.showOsmTrafficLightsEnabled !== undefined) showOsmTrafficLightsEnabled = rt.showOsmTrafficLightsEnabled;
-    if (rt.showOsmRailwayCrossingsEnabled !== undefined) showOsmRailwayCrossingsEnabled = rt.showOsmRailwayCrossingsEnabled;
-    if (rt.showTrafficEnabled !== undefined) showTrafficEnabled = rt.showTrafficEnabled;
-    if (rt.autoTrafficUpdateEnabled !== undefined) autoTrafficUpdateEnabled = rt.autoTrafficUpdateEnabled;
-    if (rt.autoRerouteOnDeviationEnabled !== undefined) autoRerouteOnDeviationEnabled = rt.autoRerouteOnDeviationEnabled;
-    if (rt.routeTrafficEnabled !== undefined) routeTrafficEnabled = rt.routeTrafficEnabled;
-    if (rt.speedWidgetEnabled !== undefined) speedWidgetEnabled = rt.speedWidgetEnabled;
-
+    applySettingsResetRuntimeFromPlan(execute.runtimeExecute);
     return true;
 }
 
@@ -7209,16 +7193,19 @@ function loadParkingPreferences() {
  * @returns {Object}
  */
 function collectVoicePreferencesFormState() {
-    return _voiceAnnouncements().buildVoicePreferencesCollectPlan({
-        turnDistance1: document.getElementById('voiceTurnDistance1')?.value,
-        turnDistance2: document.getElementById('voiceTurnDistance2')?.value,
-        turnDistance3: document.getElementById('voiceTurnDistance3')?.value,
-        hazardDistance: document.getElementById('voiceHazardDistance')?.value,
-        voiceFrequencyMode: document.getElementById('voiceFrequencyMode')?.value,
-        announcementsEnabled: typeof voiceAnnouncementsEnabled === 'boolean'
-            ? voiceAnnouncementsEnabled
-            : (localStorage.getItem('voiceAnnouncementsEnabled') === 'true'),
-    });
+    const VA = _voiceAnnouncements();
+    return VA.buildVoicePreferencesCollectPlan(
+        VA.buildCollectVoicePreferencesInputPlan({
+            turnDistance1: document.getElementById('voiceTurnDistance1')?.value,
+            turnDistance2: document.getElementById('voiceTurnDistance2')?.value,
+            turnDistance3: document.getElementById('voiceTurnDistance3')?.value,
+            hazardDistance: document.getElementById('voiceHazardDistance')?.value,
+            voiceFrequencyMode: document.getElementById('voiceFrequencyMode')?.value,
+            announcementsEnabled: typeof voiceAnnouncementsEnabled === 'boolean'
+                ? voiceAnnouncementsEnabled
+                : (localStorage.getItem('voiceAnnouncementsEnabled') === 'true'),
+        })
+    );
 }
 
 /**
@@ -7245,13 +7232,18 @@ function applyVoicePreferencesRuntimeFromPlan(plan) {
 function saveVoicePreferences() {
     const VA = _voiceAnnouncements();
     const prefs = collectVoicePreferencesFormState();
-    const storage = VA.buildVoicePreferencesStoragePlan(prefs);
-    localStorage.setItem(storage.voicePreferencesKey, storage.voicePreferencesValue);
-    localStorage.setItem(storage.voiceFrequencyModeKey, storage.voiceFrequencyModeValue);
-    applyVoicePreferencesRuntimeFromPlan(VA.buildVoicePreferencesRuntimeApplyPlan(prefs));
+    const execute = VA.buildSaveVoicePreferencesExecutePlan(prefs);
+    if (!execute.shouldSave) return;
 
-    console.log('[Voice] Preferences saved:', prefs);
-    showStatus('✅ Voice preferences updated', 'success');
+    (execute.storagePatches || []).forEach(({ key, value }) => {
+        localStorage.setItem(key, value);
+    });
+    if (execute.applyRuntime) {
+        applyVoicePreferencesRuntimeFromPlan(execute.runtimePlan);
+    }
+
+    console.log(execute.logMessage, execute.prefs);
+    showStatus(execute.successStatusMessage, execute.successStatusType);
 }
 
 /**
@@ -7260,34 +7252,38 @@ function saveVoicePreferences() {
  * @returns {*} Return value description
  */
 function loadVoicePreferences() {
+    const VA = _voiceAnnouncements();
+    const orch = VA.buildLoadVoicePreferencesOrchestrationPlan();
     try {
-        const VA = _voiceAnnouncements();
-        const saved = localStorage.getItem(VA.VOICE_PREFS_STORAGE_KEY);
+        const saved = localStorage.getItem(orch.storageKey);
         if (saved) {
             const prefs = JSON.parse(saved);
-            const domPlan = VA.buildVoicePreferencesDomApplyPlan(
-                VA.buildVoicePreferencesUiApplyPlan(prefs)
-            );
-            applyDomSelectsFromPlan(domPlan.selects);
+            const execute = VA.buildLoadVoicePreferencesExecutePlan(prefs);
+            if (!execute.shouldApply) return;
+
+            applyDomSelectsFromPlan(execute.domPlan.selects);
             _toggleUI().applyLabeledToggleButton(
-                document.getElementById(domPlan.labeledToggle.id),
-                domPlan.labeledToggle.enabled
+                document.getElementById(execute.domPlan.labeledToggle.id),
+                execute.domPlan.labeledToggle.enabled
             );
-            applyVoicePreferencesRuntimeFromPlan(VA.buildVoicePreferencesRuntimeApplyPlan(prefs));
-            console.log('[Voice] Preferences loaded:', prefs);
-        } else {
-            const domPlan = VA.buildVoicePreferencesDomApplyPlan(
-                VA.buildVoicePreferencesUiApplyPlan(null)
-            );
-            const toggleButton = document.getElementById(domPlan.labeledToggle.id);
-            if (toggleButton) {
-                _toggleUI().applyLabeledToggleButton(toggleButton, domPlan.labeledToggle.enabled);
-                voiceAnnouncementsEnabled = domPlan.labeledToggle.enabled;
-            }
-            console.log('[Voice] No saved preferences, using defaults');
+            applyVoicePreferencesRuntimeFromPlan(execute.runtimePlan);
+            console.log(orch.loadedLogMessage, execute.prefs);
+            return;
         }
+
+        const defaults = VA.buildLoadVoicePreferencesDefaultsExecutePlan();
+        if (!defaults.shouldApply) return;
+
+        const toggleButton = document.getElementById(defaults.domPlan.labeledToggle.id);
+        if (toggleButton) {
+            _toggleUI().applyLabeledToggleButton(toggleButton, defaults.domPlan.labeledToggle.enabled);
+            if (defaults.setAnnouncementsEnabledFromToggle) {
+                voiceAnnouncementsEnabled = defaults.domPlan.labeledToggle.enabled;
+            }
+        }
+        console.log(orch.defaultsLogMessage);
     } catch (e) {
-        console.log('[Voice] Error loading preferences:', e);
+        console.log(orch.errorLogPrefix, e);
     }
 }
 
@@ -15132,23 +15128,32 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     }
 
     if (lifecycle.showTurnWidget) {
-        showTurnInstructionWidget();
-        if (currentLat != null && currentLon != null) {
-            updateTurnWidgetFromPosition(currentLat, currentLon);
-        } else if (currentRouteSteps && currentRouteSteps.length > 0 && routePolyline && routePolyline.length > 0) {
-            const TI = _turnInstructions();
-            const RG = _routeGeometry();
-            const turnInit = TI.buildNavStartTurnInstructionInit(
-                currentRouteSteps,
-                currentStepIndex,
-                routePolyline,
-                {
-                    haversineDistanceMeters: RG.haversineDistanceMeters,
-                    resolveRoadClass: (step) => step.road_class || _routeGeometry().inferRoadClassFromManeuver(step),
+        const turnExecute = _turnInstructions().buildNavStartTurnWidgetExecutePlan({
+            currentLat,
+            currentLon,
+            steps: currentRouteSteps,
+            stepIndex: currentStepIndex,
+            polyline: routePolyline,
+            haversineDistanceMeters: _routeGeometry().haversineDistanceMeters,
+            resolveRoadClass: (step) => step.road_class || _routeGeometry().inferRoadClassFromManeuver(step),
+        });
+        if (turnExecute.shouldShowWidget) {
+            showTurnInstructionWidget();
+            if (turnExecute.updateFromGps) {
+                updateTurnWidgetFromPosition(currentLat, currentLon);
+            } else if (turnExecute.initFromRoute) {
+                const turnInit = _turnInstructions().buildNavStartTurnInstructionInit(
+                    turnExecute.steps,
+                    turnExecute.stepIndex,
+                    turnExecute.polyline,
+                    {
+                        haversineDistanceMeters: turnExecute.haversineDistanceMeters,
+                        resolveRoadClass: turnExecute.resolveRoadClass,
+                    }
+                );
+                if (turnInit) {
+                    updateTurnInstructionDisplay(turnInit);
                 }
-            );
-            if (turnInit) {
-                updateTurnInstructionDisplay(turnInit);
             }
         }
     }

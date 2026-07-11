@@ -597,6 +597,79 @@
         };
     }
 
+    /**
+     * Input assembly for collecting voice preference controls from the DOM.
+     * @param {Object} [formState]
+     * @returns {Object}
+     */
+    function buildCollectVoicePreferencesInputPlan(formState) {
+        return formState || {};
+    }
+
+    /**
+     * Execute plan for saving voice preferences to storage and runtime.
+     * @param {Object} prefs
+     * @returns {Object}
+     */
+    function buildSaveVoicePreferencesExecutePlan(prefs) {
+        var storage = buildVoicePreferencesStoragePlan(prefs);
+        return {
+            shouldSave: true,
+            storagePatches: [
+                { key: storage.voicePreferencesKey, value: storage.voicePreferencesValue },
+                { key: storage.voiceFrequencyModeKey, value: storage.voiceFrequencyModeValue },
+            ],
+            applyRuntime: true,
+            runtimePlan: buildVoicePreferencesRuntimeApplyPlan(prefs),
+            logMessage: '[Voice] Preferences saved:',
+            prefs: prefs || {},
+            successStatusMessage: '✅ Voice preferences updated',
+            successStatusType: 'success',
+        };
+    }
+
+    /**
+     * Orchestration plan for loading voice preferences from storage.
+     * @returns {Object}
+     */
+    function buildLoadVoicePreferencesOrchestrationPlan() {
+        return {
+            storageKey: VOICE_PREFS_STORAGE_KEY,
+            errorLogPrefix: '[Voice] Error loading preferences:',
+            defaultsLogMessage: '[Voice] No saved preferences, using defaults',
+            loadedLogMessage: '[Voice] Preferences loaded:',
+        };
+    }
+
+    /**
+     * Execute plan for applying saved voice preferences to the form and runtime.
+     * @param {Object} prefs
+     * @returns {Object}
+     */
+    function buildLoadVoicePreferencesExecutePlan(prefs) {
+        return {
+            shouldApply: true,
+            useDefaults: false,
+            domPlan: buildVoicePreferencesDomApplyPlan(buildVoicePreferencesUiApplyPlan(prefs)),
+            runtimePlan: buildVoicePreferencesRuntimeApplyPlan(prefs),
+            prefs: prefs || {},
+        };
+    }
+
+    /**
+     * Execute plan for applying default voice preferences when storage is empty.
+     * @returns {Object}
+     */
+    function buildLoadVoicePreferencesDefaultsExecutePlan() {
+        var domPlan = buildVoicePreferencesDomApplyPlan(buildVoicePreferencesUiApplyPlan(null));
+        return {
+            shouldApply: true,
+            useDefaults: true,
+            domPlan: domPlan,
+            setAnnouncementsEnabledFromToggle: true,
+        };
+    }
+
     var api = {
         DESTINATION_ANNOUNCEMENT_HYSTERESIS_M: DESTINATION_ANNOUNCEMENT_HYSTERESIS_M,
         DESTINATION_ANNOUNCEMENT_RESET_M: DESTINATION_ANNOUNCEMENT_RESET_M,
@@ -623,6 +696,11 @@
         buildVoicePreferencesRuntimeApplyPlan: buildVoicePreferencesRuntimeApplyPlan,
         buildVoicePreferencesUiApplyPlan: buildVoicePreferencesUiApplyPlan,
         buildVoicePreferencesDomApplyPlan: buildVoicePreferencesDomApplyPlan,
+        buildCollectVoicePreferencesInputPlan: buildCollectVoicePreferencesInputPlan,
+        buildSaveVoicePreferencesExecutePlan: buildSaveVoicePreferencesExecutePlan,
+        buildLoadVoicePreferencesOrchestrationPlan: buildLoadVoicePreferencesOrchestrationPlan,
+        buildLoadVoicePreferencesExecutePlan: buildLoadVoicePreferencesExecutePlan,
+        buildLoadVoicePreferencesDefaultsExecutePlan: buildLoadVoicePreferencesDefaultsExecutePlan,
     };
 
     // CommonJS (Jest) export.

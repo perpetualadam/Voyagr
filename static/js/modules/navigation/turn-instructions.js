@@ -431,6 +431,29 @@
     }
 
     /**
+     * Execute plan for showing the turn widget when navigation starts.
+     * @param {Object} [o]
+     * @returns {Object}
+     */
+    function buildNavStartTurnWidgetExecutePlan(o) {
+        o = o || {};
+        var hasGps = o.currentLat != null && o.currentLon != null;
+        var canInitFromRoute = !!(
+            o.steps && o.steps.length && o.polyline && o.polyline.length
+        );
+        return {
+            shouldShowWidget: true,
+            updateFromGps: hasGps,
+            initFromRoute: !hasGps && canInitFromRoute,
+            steps: o.steps,
+            stepIndex: o.stepIndex,
+            polyline: o.polyline,
+            haversineDistanceMeters: o.haversineDistanceMeters,
+            resolveRoadClass: o.resolveRoadClass,
+        };
+    }
+
+    /**
      * Full instructions-list HTML for the expanded turn-by-turn panel.
      * @param {Array<Object>} steps
      * @param {number} currentStepIndex
@@ -1080,6 +1103,7 @@
         buildInstructionListItemHtml: buildInstructionListItemHtml,
         effectiveRoundaboutExitCountFromSteps: effectiveRoundaboutExitCountFromSteps,
         buildNavStartTurnInstructionInit: buildNavStartTurnInstructionInit,
+        buildNavStartTurnWidgetExecutePlan: buildNavStartTurnWidgetExecutePlan,
         buildInstructionsListHtml: buildInstructionsListHtml,
         findFollowingManeuver: findFollowingManeuver,
         DIRECTION_KEY_TO_VALHALLA_TYPE: DIRECTION_KEY_TO_VALHALLA_TYPE,
