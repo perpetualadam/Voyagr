@@ -152,3 +152,42 @@ describe('buildTripHistoryRowHtml', () => {
         expect(html).toContain('A → B');
     });
 });
+
+describe('analytics display helpers', () => {
+    test('buildAnalyticsDisplayValues converts mph and formats summary', () => {
+        const display = T.buildAnalyticsDisplayValues(
+            {
+                total_trips: 5,
+                total_cost: 42.5,
+                avg_duration: 18,
+                total_fuel_cost: 30,
+                total_toll_cost: 10,
+                total_caz_cost: 2.5,
+                total_time_minutes: 125,
+                avg_speed: 80,
+            },
+            {
+                currencySymbol: '£',
+                totalDistanceText: '120',
+                speedUnit: 'mph',
+                speedUnitLabel: 'mph',
+            }
+        );
+        expect(display.totalTrips).toBe(5);
+        expect(display.totalCostText).toBe('£42.50');
+        expect(display.totalTimeText).toBe('2h 5m');
+        expect(display.avgSpeedText).toMatch(/mph$/);
+    });
+
+    test('buildFrequentRoutesListHtml renders rows or empty state', () => {
+        const empty = T.buildFrequentRoutesListHtml([], {});
+        expect(empty).toContain('No trip history yet');
+
+        const html = T.buildFrequentRoutesListHtml(
+            [{ start: 'A', end: 'B', count: 3, avg_distance: 10, avg_cost: 4.5 }],
+            { currencySymbol: '£', distUnit: 'mi', distanceTexts: ['6.21'], escapeHtml: (s) => s }
+        );
+        expect(html).toContain('A → B');
+        expect(html).toContain('3 trips');
+    });
+});

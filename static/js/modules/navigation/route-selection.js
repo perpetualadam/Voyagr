@@ -326,6 +326,137 @@
         return base;
     }
 
+    /**
+     * Resolve the route object used for preview (full API payload or single route option).
+     * @param {Object|null|undefined} routeData
+     * @param {number} [selectedRouteIndex]
+     * @returns {Object}
+     */
+    function resolvePreviewRoute(routeData, selectedRouteIndex) {
+        if (!routeData) return {};
+        if (routeData.routes && routeData.routes.length > 0) {
+            var idx = Math.max(0, Math.min(Number(selectedRouteIndex) || 0, routeData.routes.length - 1));
+            return routeData.routes[idx];
+        }
+        return routeData;
+    }
+
+    /**
+     * Resolve preview distance in km from route payload fallbacks.
+     * @param {Object} routeData
+     * @param {Object} previewSlice
+     * @returns {number}
+     */
+    function resolvePreviewDistanceKm(routeData, previewSlice) {
+        routeData = routeData || {};
+        previewSlice = previewSlice || {};
+        var distanceKm = previewSlice.distance_km || 0;
+        if (!distanceKm && routeData.routes && routeData.routes.length > 0) {
+            distanceKm = routeData.routes[0].distance_km || 0;
+        } else if (!distanceKm && routeData.distance_km) {
+            distanceKm = routeData.distance_km;
+        } else if (!distanceKm && routeData.distance) {
+            distanceKm = parseFloat(routeData.distance) || 0;
+        }
+        return distanceKm;
+    }
+
+    /**
+     * Cost breakdown values for route preview panel.
+     * @param {Object} previewSlice
+     * @param {Object} routeData
+     * @returns {Object}
+     */
+    function buildPreviewCostValues(previewSlice, routeData) {
+        previewSlice = previewSlice || {};
+        routeData = routeData || {};
+        var fuelCost = parseFloat(previewSlice.fuel_cost != null ? previewSlice.fuel_cost : (routeData.fuel_cost || 0));
+        var fuelLitres = parseFloat(previewSlice.fuel_litres != null ? previewSlice.fuel_litres : (routeData.fuel_litres || 0));
+        var tollCost = parseFloat(previewSlice.toll_cost != null ? previewSlice.toll_cost : (routeData.toll_cost || 0));
+        var cazCost = parseFloat(previewSlice.caz_cost != null ? previewSlice.caz_cost : (routeData.caz_cost || 0));
+        return {
+            fuelCost: fuelCost,
+            fuelLitres: fuelLitres,
+            tollCost: tollCost,
+            cazCost: cazCost,
+            totalCost: fuelCost + tollCost + cazCost,
+            durationMinutes: previewSlice.duration_minutes != null
+                ? previewSlice.duration_minutes
+                : (routeData.time != null ? routeData.time : routeData.duration_minutes),
+        };
+    }
+
+    /**
+     * CAZ status HTML for route preview.
+     * @param {Object} cazDetails
+     * @param {number} cazCost
+     * @param {string} currencySymbol
+     * @returns {{ html: string, visible: boolean }}
+     */
+    function buildCazStatusHtml(cazDetails, cazCost, currencySymbol) {
+        cazDetails = cazDetails || {};
+        var zonesCrossed = cazDetails.zones_crossed && cazDetails.zones_crossed.length > 0;
+        if (zonesCrossed) {
+            if (cazDetails.is_exempt) {
+                return {
+                    visible: true,
+                    html: '<div style="color: #4caf50; font-size: 12px;">✅ CAZ Exempt (' + (cazDetails.exemption_reason || 'Electric Vehicle') + ')</div>',
+                };
+            }
+            if (cazDetails.pass_covers) {
+                return {
+                    visible: true,
+                    html: '<div style="color: #2196f3; font-size: 12px;">🎫 CAZ covered by ' + (cazDetails.pass_type || 'Pass') + '</div>',
+                };
+            }
+            return {
+                visible: true,
+                html: '<div style="color: #ff9800; font-size: 12px;">⚠️ Passes through: ' + cazDetails.zones_crossed.join(', ') + '</div>',
+            };
+        }
+        if (cazCost > 0) {
+            return {
+                visible: true,
+                html: '<div style="color: #ff9800; font-size: 12px;">⚠️ CAZ charge included in total (' + currencySymbol + cazCost.toFixed(2) + '). Zone names unavailable for this route.</div>',
+            };
+        }
+        return { visible: false, html: '' };
+    }
+
+    /**
+     * Hazard preview panel display state for route preview.
+     * @param {Object} o
+     * @returns {Object}
+     */
+    function getHazardPreviewPanelState(o) {
+        o = o || {};
+        if (o.preferencesApplied && o.camerasNearRoute != null) {
+            return {
+                visible: true,
+                title: '✓ Route preferences applied',
+                countLabel: 'Route score:',
+                count: String(o.camerasNearRoute),
+                showPenalty: o.hazardPenaltySeconds > 0,
+                penaltyMinutes: o.hazardPenaltySeconds > 0 ? Math.round(o.hazardPenaltySeconds / 60) : 0,
+                background: o.camerasNearRoute === 0 ? '#E8F5E9' : '#FFF3E0',
+                borderLeftColor: o.camerasNearRoute === 0 ? '#4CAF50' : '#FF9800',
+            };
+        }
+        if (o.hazardCount > 0 && o.hazardPenaltySeconds > 0) {
+            return {
+                visible: true,
+                title: '⚠️ Route alerts',
+                countLabel: 'Route score:',
+                count: String(o.hazardCount),
+                showPenalty: true,
+                penaltyMinutes: Math.round(o.hazardPenaltySeconds / 60),
+                background: '#FFF3E0',
+                borderLeftColor: '#FF9800',
+            };
+        }
+        return { visible: false };
+    }
+
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
@@ -338,6 +469,11 @@
         buildPreviewAlternativeRouteCardHtml: buildPreviewAlternativeRouteCardHtml,
         pickActiveRouteDuringNavigation: pickActiveRouteDuringNavigation,
         orderWaypointsGreedy: orderWaypointsGreedy,
+        resolvePreviewRoute: resolvePreviewRoute,
+        resolvePreviewDistanceKm: resolvePreviewDistanceKm,
+        buildPreviewCostValues: buildPreviewCostValues,
+        buildCazStatusHtml: buildCazStatusHtml,
+        getHazardPreviewPanelState: getHazardPreviewPanelState,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,
         mergeLastCalculatedRouteFromSelection: mergeLastCalculatedRouteFromSelection,
         buildRoutePayloadFromPersisted: buildRoutePayloadFromPersisted,

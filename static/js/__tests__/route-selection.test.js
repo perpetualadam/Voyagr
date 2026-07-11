@@ -89,3 +89,48 @@ describe('route comparison and selection helpers', () => {
         expect(ordered[1].lat).toBe(1);
     });
 });
+
+describe('route preview helpers', () => {
+    test('resolvePreviewRoute picks selected alternative', () => {
+        const route = RS.resolvePreviewRoute({
+            routes: [{ distance_km: 1 }, { distance_km: 9 }],
+        }, 1);
+        expect(route.distance_km).toBe(9);
+    });
+
+    test('resolvePreviewDistanceKm falls back through payload shapes', () => {
+        expect(RS.resolvePreviewDistanceKm({ distance_km: 7 }, {})).toBe(7);
+        expect(RS.resolvePreviewDistanceKm({ routes: [{ distance_km: 4 }] }, {})).toBe(4);
+        expect(RS.resolvePreviewDistanceKm({ distance: '12.5' }, {})).toBe(12.5);
+    });
+
+    test('buildPreviewCostValues sums fuel toll and caz', () => {
+        const costs = RS.buildPreviewCostValues(
+            { fuel_cost: 5, toll_cost: 2, caz_cost: 1, duration_minutes: 30 },
+            {}
+        );
+        expect(costs.totalCost).toBe(8);
+        expect(costs.durationMinutes).toBe(30);
+    });
+
+    test('buildCazStatusHtml shows exempt message', () => {
+        const caz = RS.buildCazStatusHtml(
+            { zones_crossed: ['London'], is_exempt: true, exemption_reason: 'EV' },
+            0,
+            '£'
+        );
+        expect(caz.visible).toBe(true);
+        expect(caz.html).toContain('CAZ Exempt');
+    });
+
+    test('getHazardPreviewPanelState prefers preferences-applied branch', () => {
+        const state = RS.getHazardPreviewPanelState({
+            preferencesApplied: true,
+            camerasNearRoute: 0,
+            hazardCount: 3,
+            hazardPenaltySeconds: 0,
+        });
+        expect(state.visible).toBe(true);
+        expect(state.background).toBe('#E8F5E9');
+    });
+});

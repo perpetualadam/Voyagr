@@ -34,6 +34,8 @@
         navigationDestination: 'VoyagrNavigationDestination',
         movementDetection: 'VoyagrMovementDetection',
         multimodalParking: 'VoyagrMultimodalParking',
+        routeSharing: 'VoyagrRouteSharing',
+        waypoints: 'VoyagrWaypoints',
     };
 
     var cache = {};
