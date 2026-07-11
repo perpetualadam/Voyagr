@@ -144,6 +144,136 @@
     }
 
     /**
+     * Normalize route options for POST /api/route-comparison.
+     * @param {Array<Object>} routes
+     * @returns {Array<Object>}
+     */
+    function buildRouteComparisonRequestRoutes(routes) {
+        routes = routes || [];
+        var out = [];
+        for (var i = 0; i < routes.length; i++) {
+            var route = routes[i] || {};
+            out.push({
+                distance_km: route.distance_km || 0,
+                duration_minutes: route.duration_minutes || 0,
+                fuel_cost: route.fuel_cost || 0,
+                toll_cost: route.toll_cost || 0,
+                caz_cost: route.caz_cost || 0,
+            });
+        }
+        return out;
+    }
+
+    /**
+     * @param {Object} route
+     * @param {number} index
+     * @param {Object} opts
+     * @returns {string}
+     */
+    function buildRouteComparisonTableRowHtml(route, index, opts) {
+        opts = opts || {};
+        var bgColor = index % 2 === 0 ? '#f9f9f9' : '#fff';
+        return (
+            '<tr style="background: ' + bgColor + '; border-bottom: 1px solid #ddd;">' +
+                '<td style="padding: 8px;"><strong>Route ' + route.route_id + '</strong></td>' +
+                '<td style="padding: 8px; text-align: center;">' + opts.distanceText + ' ' + opts.distUnit + '</td>' +
+                '<td style="padding: 8px; text-align: center;">' + Math.round(route.duration_minutes || 0) + ' min</td>' +
+                '<td style="padding: 8px; text-align: center;"><strong>' + opts.currencySymbol + route.total_cost.toFixed(2) + '</strong></td>' +
+                '<td style="padding: 8px; text-align: center;">' + opts.currencySymbol + route.cost_per_km.toFixed(2) + '</td>' +
+            '</tr>'
+        );
+    }
+
+    /**
+     * @param {Array<Object>} routes
+     * @param {Object} opts
+     * @returns {string}
+     */
+    function buildRouteComparisonTableHtml(routes, opts) {
+        routes = routes || [];
+        opts = opts || {};
+        var html = '<div style="overflow-x: auto; margin: 10px 0;">';
+        html += '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+        html += '<thead><tr style="background: #667eea; color: white;">';
+        html += '<th style="padding: 8px; text-align: left;">Route</th>';
+        html += '<th style="padding: 8px; text-align: center;">Distance</th>';
+        html += '<th style="padding: 8px; text-align: center;">Time</th>';
+        html += '<th style="padding: 8px; text-align: center;">Cost</th>';
+        html += '<th style="padding: 8px; text-align: center;">Cost/km</th>';
+        html += '</tr></thead><tbody>';
+        for (var i = 0; i < routes.length; i++) {
+            html += buildRouteComparisonTableRowHtml(routes[i], i, {
+                currencySymbol: opts.currencySymbol,
+                distUnit: opts.distUnit,
+                distanceText: opts.distanceTexts ? opts.distanceTexts[i] : opts.distanceText,
+            });
+        }
+        html += '</tbody></table></div>';
+        return html;
+    }
+
+    /**
+     * @param {Object} recommendations
+     * @returns {string}
+     */
+    function buildRouteComparisonRecommendationsHtml(recommendations) {
+        recommendations = recommendations || {};
+        var html = '<div style="margin-top: 15px; padding: 10px; background: #f0f4ff; border-radius: 6px;">';
+        html += '<strong style="color: #667eea;">💡 Recommendations:</strong><br>';
+        html += '<div style="margin-top: 8px; font-size: 12px;">';
+        if (recommendations.cheapest) {
+            html += '<div style="margin-bottom: 6px;">💰 <strong>Cheapest:</strong> Route ' +
+                recommendations.cheapest.route_id + ' - ' + recommendations.cheapest.reason + '</div>';
+        }
+        if (recommendations.fastest) {
+            html += '<div style="margin-bottom: 6px;">⚡ <strong>Fastest:</strong> Route ' +
+                recommendations.fastest.route_id + ' - ' + recommendations.fastest.reason + '</div>';
+        }
+        if (recommendations.shortest) {
+            html += '<div>📍 <strong>Shortest:</strong> Route ' +
+                recommendations.shortest.route_id + ' - ' + recommendations.shortest.reason + '</div>';
+        }
+        html += '</div></div>';
+        return html;
+    }
+
+    /**
+     * Full comparison report (table + recommendations).
+     * @param {Object} comparison
+     * @param {Object} opts
+     * @returns {string}
+     */
+    function buildRouteComparisonReportHtml(comparison, opts) {
+        comparison = comparison || {};
+        opts = opts || {};
+        var html = buildRouteComparisonTableHtml(comparison.routes, opts);
+        if (comparison.recommendations) {
+            html += buildRouteComparisonRecommendationsHtml(comparison.recommendations);
+        }
+        return html;
+    }
+
+    /**
+     * Modal shell HTML for the route comparison report.
+     * @param {string} reportHtml
+     * @returns {string}
+     */
+    function buildRouteComparisonModalHtml(reportHtml) {
+        return (
+            '<div style="background: white; padding: 20px; border-radius: 12px; max-width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">' +
+                '<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">' +
+                    '<h3 style="margin: 0; color: #333;">Route Comparison</h3>' +
+                    '<button onclick="document.getElementById(\'routeComparisonModal\').remove()" style="background: none; border: none; font-size: 24px; cursor: pointer; color: #999;">×</button>' +
+                '</div>' +
+                reportHtml +
+                '<div style="margin-top: 15px; display: flex; gap: 10px;">' +
+                    '<button onclick="document.getElementById(\'routeComparisonModal\').remove()" style="flex: 1; padding: 10px; background: #ddd; border: none; border-radius: 6px; cursor: pointer; font-weight: 600;">Close</button>' +
+                '</div>' +
+            '</div>'
+        );
+    }
+
+    /**
      * Inner HTML for a preview alternative-route row.
      * @param {Object} route
      * @param {number} index
@@ -466,6 +596,12 @@
         buildTripInfoDisplayValues: buildTripInfoDisplayValues,
         buildRouteComparisonCardHtml: buildRouteComparisonCardHtml,
         buildRouteComparisonListHtml: buildRouteComparisonListHtml,
+        buildRouteComparisonRequestRoutes: buildRouteComparisonRequestRoutes,
+        buildRouteComparisonTableRowHtml: buildRouteComparisonTableRowHtml,
+        buildRouteComparisonTableHtml: buildRouteComparisonTableHtml,
+        buildRouteComparisonRecommendationsHtml: buildRouteComparisonRecommendationsHtml,
+        buildRouteComparisonReportHtml: buildRouteComparisonReportHtml,
+        buildRouteComparisonModalHtml: buildRouteComparisonModalHtml,
         buildPreviewAlternativeRouteCardHtml: buildPreviewAlternativeRouteCardHtml,
         pickActiveRouteDuringNavigation: pickActiveRouteDuringNavigation,
         orderWaypointsGreedy: orderWaypointsGreedy,
