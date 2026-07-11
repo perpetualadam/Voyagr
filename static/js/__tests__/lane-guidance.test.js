@@ -8,7 +8,7 @@ const LG = require('../modules/navigation/lane-guidance.js');
 describe('lane-guidance module surface', () => {
     test('exposes the expected pure functions', () => {
         ['ordinal', 'laneNameFor', 'laneUrgencyFields', 'buildDeterministicLaneGuidance',
-            'shouldShow', 'badge', 'urgencyClass', 'displayText', 'laneIndicators']
+            'shouldShow', 'badge', 'urgencyClass', 'displayText', 'laneIndicators', 'buildLaneIndicatorHtml']
             .forEach((fn) => expect(typeof LG[fn]).toBe('function'));
     });
 });
@@ -222,5 +222,15 @@ describe('view-model: laneIndicators', () => {
 
     test('null data yields no indicators', () => {
         expect(LG.laneIndicators(null)).toEqual([]);
+    });
+});
+
+describe('buildLaneIndicatorHtml', () => {
+    test('wraps arrow in lane-arrow span', () => {
+        expect(LG.buildLaneIndicatorHtml('→')).toBe('<span class="lane-arrow">→</span>');
+    });
+
+    test('defaults to straight arrow when missing', () => {
+        expect(LG.buildLaneIndicatorHtml()).toContain('↑');
     });
 });

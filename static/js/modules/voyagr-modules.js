@@ -42,6 +42,9 @@
         searchAutocomplete: 'VoyagrSearchAutocomplete',
         deviceEnvironment: 'VoyagrDeviceEnvironment',
         routeProgress: 'VoyagrRouteProgress',
+        previewMarker: 'VoyagrPreviewMarker',
+        favorites: 'VoyagrFavorites',
+        cazInfo: 'VoyagrCazInfo',
     };
 
     var cache = {};

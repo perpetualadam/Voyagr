@@ -41,6 +41,9 @@ describe('VoyagrModules registry', () => {
         global.VoyagrSearchAutocomplete = require('../modules/navigation/search-autocomplete');
         global.VoyagrDeviceEnvironment = require('../modules/ui/device-environment');
         global.VoyagrRouteProgress = require('../modules/navigation/route-progress');
+        global.VoyagrPreviewMarker = require('../modules/map/preview-marker');
+        global.VoyagrFavorites = require('../modules/navigation/favorites');
+        global.VoyagrCazInfo = require('../modules/navigation/caz-info');
         jest.resetModules();
     });
 
