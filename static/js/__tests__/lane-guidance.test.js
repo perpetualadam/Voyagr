@@ -398,6 +398,20 @@ describe('lane guidance UI and voice apply plans', () => {
         expect(plan.guidanceText).toBeTruthy();
     });
 
+    test('buildLaneGuidanceDomApplyPlan hides single-lane guidance', () => {
+        expect(LG.buildLaneGuidanceDomApplyPlan({ total_lanes: 1, urgency: 'none' }).action)
+            .toBe('hide');
+    });
+
+    test('buildLaneGuidanceDomApplyPlan includes indicator nodes and voice plan', () => {
+        const data = LG.buildDeterministicLaneGuidance('left', 120, 0, 'primary');
+        const domPlan = LG.buildLaneGuidanceDomApplyPlan(data, '');
+        expect(domPlan.action).toBe('show');
+        expect(domPlan.indicators.length).toBeGreaterThan(1);
+        expect(domPlan.indicators[0].innerHtml).toBeTruthy();
+        expect(domPlan.guidanceText).toBeTruthy();
+    });
+
     test('buildLaneVoiceAnnouncementPlan returns message for urgent lane change', () => {
         const data = LG.buildDeterministicLaneGuidance('left', 80, 0, 'primary');
         const plan = LG.buildLaneVoiceAnnouncementPlan(data, '');

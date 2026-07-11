@@ -394,6 +394,39 @@
     }
 
     /**
+     * DOM apply plan for lane guidance overlay (app performs element mutations).
+     * @param {Object} data
+     * @param {string} [lastVoiceKey]
+     * @returns {Object}
+     */
+    function buildLaneGuidanceDomApplyPlan(data, lastVoiceKey) {
+        var uiPlan = buildLaneGuidanceUiApplyPlan(data);
+        if (!uiPlan.visible) {
+            return { action: 'hide' };
+        }
+
+        var indicators = (uiPlan.indicators || []).map(function (ind) {
+            var cls = 'lane-indicator';
+            if (ind.recommended) cls += ' recommended';
+            if (ind.hasDirection) cls += ' has-direction';
+            return {
+                className: cls,
+                innerHtml: buildLaneIndicatorHtml(ind.arrow),
+            };
+        });
+
+        return {
+            action: 'show',
+            displayClassName: uiPlan.displayClassName,
+            urgencyClass: uiPlan.urgencyClass,
+            badge: uiPlan.badge,
+            indicators: indicators,
+            guidanceText: uiPlan.guidanceText,
+            voicePlan: buildLaneVoiceAnnouncementPlan(data, lastVoiceKey),
+        };
+    }
+
+    /**
      * @param {number} recommendedLane
      * @param {number} totalLanes
      * @returns {string}
@@ -506,6 +539,7 @@
         getLaneGuidanceCacheTtlMs: getLaneGuidanceCacheTtlMs,
         isLaneGuidanceCacheEntryFresh: isLaneGuidanceCacheEntryFresh,
         buildLaneGuidanceUiApplyPlan: buildLaneGuidanceUiApplyPlan,
+        buildLaneGuidanceDomApplyPlan: buildLaneGuidanceDomApplyPlan,
         resolveLanePositionLabel: resolveLanePositionLabel,
         buildLaneVoiceAnnouncementPlan: buildLaneVoiceAnnouncementPlan,
     };

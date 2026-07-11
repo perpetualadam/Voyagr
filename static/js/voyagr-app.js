@@ -8180,38 +8180,34 @@ function renderLaneGuidanceUI(data) {
     if (!display || !visual || !text) return;
 
     const LG = _laneGuidance();
-    const plan = LG.buildLaneGuidanceUiApplyPlan(data);
-    if (!plan.visible) {
+    const domPlan = LG.buildLaneGuidanceDomApplyPlan(data, _lastLaneVoiceKey);
+
+    if (domPlan.action === 'hide') {
         display.classList.remove('show');
         return;
     }
 
     const badgeEl = document.getElementById('laneGuidanceBadge');
-    if (badgeEl) {
-        badgeEl.textContent = plan.badge.text;
-        badgeEl.style.display = plan.badge.visible ? 'inline-block' : 'none';
+    if (badgeEl && domPlan.badge) {
+        badgeEl.textContent = domPlan.badge.text;
+        badgeEl.style.display = domPlan.badge.visible ? 'inline-block' : 'none';
     }
 
     visual.innerHTML = '';
-    for (const ind of plan.indicators) {
+    for (const ind of domPlan.indicators) {
         const lane = document.createElement('div');
-        lane.className = 'lane-indicator';
-        if (ind.recommended) lane.classList.add('recommended');
-        lane.innerHTML = LG.buildLaneIndicatorHtml(ind.arrow);
-        if (ind.hasDirection) lane.classList.add('has-direction');
+        lane.className = ind.className;
+        lane.innerHTML = ind.innerHtml;
         visual.appendChild(lane);
     }
 
-    display.className = plan.displayClassName;
-    if (plan.urgencyClass) display.classList.add(plan.urgencyClass);
-    text.textContent = plan.guidanceText;
+    display.className = domPlan.displayClassName;
+    if (domPlan.urgencyClass) display.classList.add(domPlan.urgencyClass);
+    text.textContent = domPlan.guidanceText;
 
-    if (voiceAnnouncementsEnabled) {
-        const voicePlan = LG.buildLaneVoiceAnnouncementPlan(data, _lastLaneVoiceKey);
-        if (voicePlan) {
-            speakMessage(voicePlan.message, voicePlan.priority);
-            _lastLaneVoiceKey = voicePlan.announceKey;
-        }
+    if (voiceAnnouncementsEnabled && domPlan.voicePlan) {
+        speakMessage(domPlan.voicePlan.message, domPlan.voicePlan.priority);
+        _lastLaneVoiceKey = domPlan.voicePlan.announceKey;
     }
 }
 
@@ -11894,6 +11890,76 @@ function collapseBottomSheet() {
 
 // ===== GPS TRACKING FUNCTIONS =====
 /**
+ * Apply follow-camera ease for one GPS tick; returns zoom coordination flags.
+ * @param {number} markerLat
+ * @param {number} markerLon
+ * @param {number} followJumpM
+ * @param {number} speedMph
+ * @param {number} heading
+ * @param {string} roadType
+ * @returns {{ navigationFollowEaseApplied: boolean, navigationFollowZoom: (number|null) }}
+ */
+function applyGpsFollowCameraTick(markerLat, markerLon, followJumpM, speedMph, heading, roadType) {
+    const CP = _cameraPitch();
+    const followPlan = CP.buildNavigationFollowEasePlan({
+        nowMs: Date.now(),
+        lastFollowEaseAt: window.__voyagrLastFollowEaseAt || 0,
+        followJumpM,
+        zoomAndFollowEnabled,
+        mapFollowingActive,
+        mapUserPanned: !!(map && map._userPanned),
+        routeInProgress,
+    });
+
+    const followCamera = (followPlan.mode === 'navigation' && map)
+        ? CP.buildNavigationFollowCameraPlan({
+            speedMph,
+            roadType: roadType || 'unknown',
+            heading: heading || map.getBearing(),
+            mapBearing: map.getBearing(),
+            markerLat,
+            markerLon,
+            shouldEase: followPlan.shouldEase,
+            durationMs: followPlan.durationMs,
+            shouldTilt: shouldTiltDrivingCamera(),
+            usePitchedDrivingCamera: shouldUsePitchedDrivingCamera(),
+            viewportHeight: window.innerHeight,
+            viewportWidth: window.innerWidth,
+            computeSmartZoom: (spd, dist, rt) => _routeGeometry().calculateSmartZoom(
+                spd, dist, rt, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
+            ),
+        })
+        : null;
+
+    const apply = CP.buildNavigationFollowApplyPlan({
+        hasMap: !!map,
+        followEasePlan: followPlan,
+        followCameraPlan: followCamera,
+        markerLat,
+        markerLon,
+        viewportHeight: window.innerHeight,
+        viewportWidth: window.innerWidth,
+        isActiveNavigationFollow: isActiveNavigationFollow(),
+        driverPerspectiveEnabled,
+    });
+
+    if (apply.statePatch) {
+        window.__voyagrLastFollowEaseAt = apply.statePatch.lastFollowEaseAt;
+        window.__voyagrLastFollowCenterGeo = apply.statePatch.lastFollowCenterGeo;
+    }
+    if (apply.easeTo && map) {
+        map.easeTo(apply.easeTo);
+    }
+    if (apply.logLine) console.log(apply.logLine);
+    if (apply.updateRecenterVisibility) updateRecenterButtonVisibility();
+
+    return {
+        navigationFollowEaseApplied: !!apply.navigationFollowEaseApplied,
+        navigationFollowZoom: apply.navigationFollowZoom,
+    };
+}
+
+/**
  * Apply one GPS watchPosition fix: position, follow camera, navigation side-effects.
  * @param {GeolocationPosition} position
  */
@@ -12059,63 +12125,16 @@ function applyGpsTrackingTick(position) {
         currentUserMarker.addTo(map);
     }
 
-    const CP = _cameraPitch();
-    const followPlan = CP.buildNavigationFollowEasePlan({
-        nowMs: Date.now(),
-        lastFollowEaseAt: window.__voyagrLastFollowEaseAt || 0,
+    const followState = applyGpsFollowCameraTick(
+        markerLat,
+        markerLon,
         followJumpM,
-        zoomAndFollowEnabled,
-        mapFollowingActive,
-        mapUserPanned: !!(map && map._userPanned),
-        routeInProgress,
-    });
-
-    let navigationFollowEaseApplied = false;
-    let navigationFollowZoom = null;
-
-    if (followPlan.mode === 'navigation' && map) {
-        const followCamera = CP.buildNavigationFollowCameraPlan({
-            speedMph,
-            roadType: speedLimitPlan.roadType || 'unknown',
-            heading: heading || map.getBearing(),
-            mapBearing: map.getBearing(),
-            markerLat,
-            markerLon,
-            shouldEase: followPlan.shouldEase,
-            durationMs: followPlan.durationMs,
-            shouldTilt: shouldTiltDrivingCamera(),
-            usePitchedDrivingCamera: shouldUsePitchedDrivingCamera(),
-            viewportHeight: window.innerHeight,
-            viewportWidth: window.innerWidth,
-            computeSmartZoom: (spd, dist, rt) => _routeGeometry().calculateSmartZoom(
-                spd, dist, rt, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
-            ),
-        });
-
-        if (followCamera.easeTo) {
-            window.__voyagrLastFollowEaseAt = followPlan.nowMs;
-            window.__voyagrLastFollowCenterGeo = { lat: markerLat, lon: markerLon };
-            map.easeTo(followCamera.easeTo);
-            navigationFollowEaseApplied = true;
-            navigationFollowZoom = followCamera.zoom;
-        }
-
-        console.log(`[Navigation] View: pitch ${followCamera.pitch}°, bearing ${Math.round(followCamera.bearing)}°, zoom ${followCamera.zoom.toFixed(1)}, pitchedNav: ${isActiveNavigationFollow()}, pref: ${driverPerspectiveEnabled}`);
-        updateRecenterButtonVisibility();
-    } else if (followPlan.mode === 'browsing' && map) {
-        if (followPlan.shouldEase) {
-            window.__voyagrLastFollowEaseAt = followPlan.nowMs;
-            window.__voyagrLastFollowCenterGeo = { lat: markerLat, lon: markerLon };
-            map.easeTo({
-                center: [markerLon, markerLat],
-                zoom: followPlan.zoom,
-                padding: followPlan.includePadding
-                    ? CP.computeFollowPadding(window.innerHeight, window.innerWidth)
-                    : undefined,
-                duration: followPlan.browsingDurationMs
-            });
-        }
-    }
+        speedMph,
+        heading,
+        speedLimitPlan.roadType || 'unknown'
+    );
+    const navigationFollowEaseApplied = followState.navigationFollowEaseApplied;
+    const navigationFollowZoom = followState.navigationFollowZoom;
 
     if (sideEffects.checkDeviation) {
         checkRouteDeviation(lat, lon, accuracy);
@@ -12151,7 +12170,7 @@ function applyGpsTrackingTick(position) {
         checkNavigationArrival(lat, lon, speed);
     }
 
-    const zoomTick = CP.buildNavigationZoomTickPlan({
+    const zoomTick = _cameraPitch().buildNavigationZoomTickPlan({
         smartZoomEnabled,
         routeInProgress,
         navigationFollowEaseApplied,

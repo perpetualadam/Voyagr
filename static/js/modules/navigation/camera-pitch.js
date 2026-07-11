@@ -221,11 +221,78 @@
         };
     }
 
+    /**
+     * Apply plan for navigation/browsing follow camera on a GPS tick.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildNavigationFollowApplyPlan(opts) {
+        opts = opts || {};
+        var none = {
+            action: 'skip',
+            navigationFollowEaseApplied: false,
+            navigationFollowZoom: null,
+        };
+
+        if (!opts.hasMap) return none;
+
+        var followPlan = opts.followEasePlan || {};
+        if (followPlan.mode === 'none') return none;
+
+        if (followPlan.mode === 'navigation') {
+            var followCamera = opts.followCameraPlan || {};
+            var applied = !!followCamera.easeTo;
+            var result = {
+                action: 'navigation',
+                navigationFollowEaseApplied: applied,
+                navigationFollowZoom: applied ? followCamera.zoom : null,
+                updateRecenterVisibility: true,
+                logLine: '[Navigation] View: pitch ' + (followCamera.pitch || 0) + '°, bearing ' +
+                    Math.round(followCamera.bearing || 0) + '°, zoom ' +
+                    (followCamera.zoom != null ? followCamera.zoom.toFixed(1) : '0') +
+                    ', pitchedNav: ' + !!opts.isActiveNavigationFollow +
+                    ', pref: ' + !!opts.driverPerspectiveEnabled,
+            };
+            if (applied) {
+                result.easeTo = followCamera.easeTo;
+                result.statePatch = {
+                    lastFollowEaseAt: followPlan.nowMs,
+                    lastFollowCenterGeo: { lat: opts.markerLat, lon: opts.markerLon },
+                };
+            }
+            return result;
+        }
+
+        if (followPlan.mode === 'browsing' && followPlan.shouldEase) {
+            var pad = followPlan.includePadding
+                ? computeFollowPadding(opts.viewportHeight || 0, opts.viewportWidth || 0)
+                : undefined;
+            return {
+                action: 'browsing',
+                navigationFollowEaseApplied: false,
+                navigationFollowZoom: null,
+                easeTo: {
+                    center: [opts.markerLon, opts.markerLat],
+                    zoom: followPlan.zoom,
+                    padding: pad,
+                    duration: followPlan.browsingDurationMs,
+                },
+                statePatch: {
+                    lastFollowEaseAt: followPlan.nowMs,
+                    lastFollowCenterGeo: { lat: opts.markerLat, lon: opts.markerLon },
+                },
+            };
+        }
+
+        return none;
+    }
+
     const api = {
         decideDrivingCamera: decideDrivingCamera,
         computeFollowPadding: computeFollowPadding,
         buildNavigationFollowEasePlan: buildNavigationFollowEasePlan,
         buildNavigationFollowCameraPlan: buildNavigationFollowCameraPlan,
+        buildNavigationFollowApplyPlan: buildNavigationFollowApplyPlan,
         buildSmartZoomEasePlan: buildSmartZoomEasePlan,
         buildNavigationZoomTickPlan: buildNavigationZoomTickPlan,
     };

@@ -240,3 +240,75 @@ describe('buildNavigationZoomTickPlan', () => {
         expect(plan.syncLastZoomLevel).toBeNull();
     });
 });
+
+describe('buildNavigationFollowApplyPlan', () => {
+    const {
+        buildNavigationFollowEasePlan,
+        buildNavigationFollowCameraPlan,
+        buildNavigationFollowApplyPlan,
+    } = require('../modules/navigation/camera-pitch.js');
+
+    test('navigation mode eases and logs view state', () => {
+        const easePlan = buildNavigationFollowEasePlan({
+            nowMs: 5000,
+            lastFollowEaseAt: 0,
+            followJumpM: 50,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+        });
+        const cameraPlan = buildNavigationFollowCameraPlan({
+            speedMph: 60,
+            roadType: 'primary',
+            heading: 90,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            shouldEase: true,
+            shouldTilt: true,
+            usePitchedDrivingCamera: true,
+            viewportHeight: 800,
+            viewportWidth: 400,
+            computeSmartZoom: () => 15,
+        });
+        const apply = buildNavigationFollowApplyPlan({
+            hasMap: true,
+            followEasePlan: easePlan,
+            followCameraPlan: cameraPlan,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            isActiveNavigationFollow: true,
+            driverPerspectiveEnabled: false,
+        });
+        expect(apply.action).toBe('navigation');
+        expect(apply.navigationFollowEaseApplied).toBe(true);
+        expect(apply.easeTo.center).toEqual([-0.1, 51.5]);
+        expect(apply.logLine).toContain('[Navigation] View');
+        expect(apply.updateRecenterVisibility).toBe(true);
+    });
+
+    test('browsing mode eases with padding when route in progress', () => {
+        const easePlan = buildNavigationFollowEasePlan({
+            nowMs: 1000,
+            lastFollowEaseAt: 0,
+            followJumpM: 10,
+            zoomAndFollowEnabled: false,
+            mapUserPanned: false,
+            routeInProgress: true,
+        });
+        const apply = buildNavigationFollowApplyPlan({
+            hasMap: true,
+            followEasePlan: easePlan,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            viewportHeight: 800,
+            viewportWidth: 400,
+        });
+        expect(apply.action).toBe('browsing');
+        expect(apply.easeTo.zoom).toBe(16);
+        expect(apply.easeTo.padding).toBeDefined();
+        expect(apply.statePatch.lastFollowCenterGeo).toEqual({ lat: 51.5, lon: -0.1 });
+    });
+
+    test('skips when no map available', () => {
+        expect(buildNavigationFollowApplyPlan({ hasMap: false }).action).toBe('skip');
+    });
+});
