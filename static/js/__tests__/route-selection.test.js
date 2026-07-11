@@ -550,6 +550,37 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(plan.hazardPlan.visible).toBe(true);
     });
 
+    test('buildRoutePreviewPanelDomApplyPlan maps panel plan to DOM patches', () => {
+        const panelPlan = RS.buildRoutePreviewPanelApplyPlan({
+            routeData: {
+                routes: [{
+                    distance_km: 8,
+                    duration_minutes: 18,
+                    fuel_cost: 4,
+                    toll_cost: 1,
+                    caz_cost: 0,
+                    hazard_count: 0,
+                    cameras_near_route: 0,
+                }],
+            },
+            selectedRouteIndex: 0,
+            currencySymbol: '£',
+            distanceText: '5 mi',
+            startLabel: 'A',
+            endLabel: 'B',
+            routingMode: 'fastest',
+            vehicleType: 'petrol',
+            routeOptionsCount: 1,
+        });
+        const dom = RS.buildRoutePreviewPanelDomApplyPlan(panelPlan);
+        expect(dom.previewDistance.textContent).toBe('5 mi');
+        expect(dom.previewDuration.textContent).toBe('18 min');
+        expect(dom.previewRoute.textContent).toBe('A → B');
+        expect(dom.previewFuelCost.textContent).toBe('£4.00');
+        expect(dom.previewAlternativeRoutesContainer.showAlternativeRoutes).toBe(false);
+        expect(dom.showMapRoutes).toBe(true);
+    });
+
     test('buildAlternativeRoutesPreviewMountPlans builds card plans with converted distance', () => {
         const mount = RS.buildAlternativeRoutesPreviewMountPlans(
             [

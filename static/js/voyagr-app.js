@@ -6581,74 +6581,16 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         skipMapDisplay: skipMapDisplay,
     });
 
-    const previewDistanceEl = document.getElementById('previewDistance');
-    if (previewDistanceEl) {
-        previewDistanceEl.dataset.km = panelPlan.distanceKm;
-        previewDistanceEl.textContent = panelPlan.distanceText;
-    }
-    document.getElementById('previewDuration').textContent = panelPlan.durationText;
-    document.getElementById('previewRoute').textContent = panelPlan.routeLabel;
-    document.getElementById('previewFuelCost').textContent = panelPlan.fuelCostText;
-    const fuelLitresEl = document.getElementById('previewFuelLitres');
-    if (fuelLitresEl) {
-        if (panelPlan.fuelLitres.visible) {
-            fuelLitresEl.textContent = panelPlan.fuelLitres.text;
-            fuelLitresEl.style.display = 'block';
-        } else {
-            fuelLitresEl.style.display = 'none';
-        }
-    }
-    document.getElementById('previewTollCost').textContent = panelPlan.tollCostText;
-    document.getElementById('previewCAZCost').textContent = panelPlan.cazCostText;
-    document.getElementById('previewTotalCost').textContent = panelPlan.totalCostText;
+    const domPlan = selection.buildRoutePreviewPanelDomApplyPlan(panelPlan);
+    applyRoutePreviewPanelDomFromPlan(domPlan);
+    console.log('[Cost] Route preview costs:', domPlan.costLog);
 
-    const cazStatusContainer = document.getElementById('cazStatusContainer');
-    if (cazStatusContainer) {
-        if (panelPlan.cazStatus.visible) {
-            cazStatusContainer.innerHTML = panelPlan.cazStatus.html;
-            cazStatusContainer.style.display = 'block';
-        } else {
-            cazStatusContainer.style.display = 'none';
-        }
-    }
-
-    console.log('[Cost] Route preview costs:', panelPlan.costLog);
-
-    const hazardContainer = document.getElementById('hazardInfoContainer');
-    const hazardTitleEl = hazardContainer ? hazardContainer.querySelector('h4') : null;
-    const hazardCountLabel = hazardContainer ? hazardContainer.querySelector('[data-hazard-count-label]') : null;
-    const penaltyRow = hazardContainer ? hazardContainer.querySelector('#previewHazardPenalty')?.closest('div') : null;
-    if (hazardContainer) {
-        const plan = panelPlan.hazardPlan;
-        const countEl = document.getElementById('previewHazardCount');
-        const penaltyEl = document.getElementById('previewHazardPenalty');
-        if (plan.visible && countEl) {
-            countEl.textContent = plan.count;
-            if (hazardCountLabel) hazardCountLabel.textContent = plan.countLabel;
-            if (hazardTitleEl) hazardTitleEl.textContent = plan.title;
-            if (penaltyRow) penaltyRow.style.display = plan.penaltyRowDisplay;
-            if (penaltyEl && plan.penaltyText) {
-                penaltyEl.textContent = plan.penaltyText;
-            }
-            hazardContainer.style.background = plan.containerBackground;
-            hazardContainer.style.borderLeftColor = plan.containerBorderLeftColor;
-            hazardContainer.style.display = plan.containerDisplay;
-        } else {
-            hazardContainer.style.display = plan.containerDisplay;
-        }
-    }
-
-    document.getElementById('previewRoutingMode').textContent = panelPlan.routingModeText;
-    document.getElementById('previewVehicleType').textContent = panelPlan.vehicleTypeText;
-
-    if (panelPlan.showAlternativeRoutes) {
+    if (domPlan.previewAlternativeRoutesContainer.showAlternativeRoutes) {
         showAlternativeRoutesInPreview();
         console.log('[Route Preview] Showing alternative routes panel');
-    } else {
-        document.getElementById('previewAlternativeRoutesContainer').style.display = 'none';
     }
 
-    if (panelPlan.showMapRoutes) {
+    if (domPlan.showMapRoutes) {
         displayAllRoutesOnMap();
         console.log(`[Route Preview] Displayed ${routeOptions.length} route(s) on map`);
     }
@@ -6677,7 +6619,7 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     }
 
     console.log('[Route Preview] Route preview displayed successfully');
-    showStatus(panelPlan.statusMessage, 'success');
+    showStatus(domPlan.statusMessage, 'success');
 }
 
 /**
@@ -12440,99 +12382,172 @@ function applyGpsCoordSampleTick(sample) {
 }
 
 /**
+ * Build inputs for buildGpsPositionTickPlan from app navigation state.
+ * @param {Object} coord - from applyGpsCoordSampleTick
+ * @returns {Object}
+ */
+function buildGpsPositionTickInputs(coord) {
+    const SGhead = _speedGps();
+    const SL = _speedLimitWidget();
+    return {
+        lat: coord.lat,
+        lon: coord.lon,
+        accuracy: coord.accuracy,
+        routeInProgress,
+        routePolyline,
+        snapped: resolveGpsRouteSnapForTick(coord.lat, coord.lon),
+        lastSnappedRouteIndex,
+        prevSnapBlendWeightState: _snapBlendWeightState,
+        speedMph: coord.speedMph,
+        smoothDisplayLat: _smoothDisplayLat,
+        smoothDisplayLon: _smoothDisplayLon,
+        lastFollowCenterGeo: window.__voyagrLastFollowCenterGeo,
+        calculateDistanceMeters,
+        calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
+        blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
+        resolveGpsHeading: () => (SGhead
+            ? SGhead.resolveGpsHeadingDegrees({
+                deviceHeading: coord.deviceHeading,
+                speed: coord.speed,
+                trackingHistory,
+                calculateDistanceMeters,
+            })
+            : 0),
+        isTrackingActive,
+        currentRouteSteps,
+        displaySpeedMph: smoothGpsSpeedMph(coord.speedMph),
+        currentSpeedLimitMph,
+        lastSpeedLimitRegion,
+        lastActiveManeuverIdx: _lastActiveManeuverIdx,
+        resolveRoadType: (idx, spd) => _routeGeometry().resolveCurrentRoadType({
+            maneuverIdxOverride: idx,
+            gpsSpeedMph: spd,
+            currentRouteSteps,
+            currentStepIndex,
+            lastDetectedRoadType,
+        }),
+        pickDisplaySpeedLimitMph: SL
+            ? (api, val, rt, region) => SL.pickDisplaySpeedLimitMph(api, val, rt, region)
+            : null,
+    };
+}
+
+/**
+ * Apply route preview panel DOM patches from a pure DOM apply plan.
+ * @param {Object} domPlan - from buildRoutePreviewPanelDomApplyPlan
+ */
+function applyRoutePreviewPanelDomFromPlan(domPlan) {
+    if (!domPlan) return;
+
+    const previewDistanceEl = document.getElementById('previewDistance');
+    if (previewDistanceEl && domPlan.previewDistance) {
+        previewDistanceEl.dataset.km = domPlan.previewDistance.datasetKm;
+        previewDistanceEl.textContent = domPlan.previewDistance.textContent;
+    }
+
+    const setText = (id, text) => {
+        const el = document.getElementById(id);
+        if (el && text != null) el.textContent = text;
+    };
+    setText('previewDuration', domPlan.previewDuration && domPlan.previewDuration.textContent);
+    setText('previewRoute', domPlan.previewRoute && domPlan.previewRoute.textContent);
+    setText('previewFuelCost', domPlan.previewFuelCost && domPlan.previewFuelCost.textContent);
+    setText('previewTollCost', domPlan.previewTollCost && domPlan.previewTollCost.textContent);
+    setText('previewCAZCost', domPlan.previewCAZCost && domPlan.previewCAZCost.textContent);
+    setText('previewTotalCost', domPlan.previewTotalCost && domPlan.previewTotalCost.textContent);
+    setText('previewRoutingMode', domPlan.previewRoutingMode && domPlan.previewRoutingMode.textContent);
+    setText('previewVehicleType', domPlan.previewVehicleType && domPlan.previewVehicleType.textContent);
+
+    const fuelLitresEl = document.getElementById('previewFuelLitres');
+    if (fuelLitresEl && domPlan.previewFuelLitres) {
+        if (domPlan.previewFuelLitres.visible) {
+            fuelLitresEl.textContent = domPlan.previewFuelLitres.textContent;
+            fuelLitresEl.style.display = domPlan.previewFuelLitres.display;
+        } else {
+            fuelLitresEl.style.display = domPlan.previewFuelLitres.display;
+        }
+    }
+
+    const cazStatusContainer = document.getElementById('cazStatusContainer');
+    if (cazStatusContainer && domPlan.cazStatusContainer) {
+        if (domPlan.cazStatusContainer.visible) {
+            cazStatusContainer.innerHTML = domPlan.cazStatusContainer.innerHtml;
+            cazStatusContainer.style.display = domPlan.cazStatusContainer.display;
+        } else {
+            cazStatusContainer.style.display = domPlan.cazStatusContainer.display;
+        }
+    }
+
+    const hazardContainer = document.getElementById('hazardInfoContainer');
+    if (hazardContainer && domPlan.hazardInfoContainer) {
+        const plan = domPlan.hazardInfoContainer;
+        const hazardTitleEl = hazardContainer.querySelector('h4');
+        const hazardCountLabel = hazardContainer.querySelector('[data-hazard-count-label]');
+        const penaltyRow = hazardContainer.querySelector('#previewHazardPenalty')?.closest('div');
+        const countEl = document.getElementById('previewHazardCount');
+        const penaltyEl = document.getElementById('previewHazardPenalty');
+        if (plan.visible && countEl) {
+            countEl.textContent = plan.count;
+            if (hazardCountLabel) hazardCountLabel.textContent = plan.countLabel;
+            if (hazardTitleEl) hazardTitleEl.textContent = plan.title;
+            if (penaltyRow) penaltyRow.style.display = plan.penaltyRowDisplay;
+            if (penaltyEl && plan.penaltyText) {
+                penaltyEl.textContent = plan.penaltyText;
+            }
+            hazardContainer.style.background = plan.containerBackground;
+            hazardContainer.style.borderLeftColor = plan.containerBorderLeftColor;
+            hazardContainer.style.display = plan.containerDisplay;
+        } else {
+            hazardContainer.style.display = plan.containerDisplay;
+        }
+    }
+
+    const altContainer = document.getElementById('previewAlternativeRoutesContainer');
+    if (altContainer && domPlan.previewAlternativeRoutesContainer
+        && domPlan.previewAlternativeRoutesContainer.display != null) {
+        altContainer.style.display = domPlan.previewAlternativeRoutesContainer.display;
+    }
+}
+
+/**
  * Position, odometer, speed-limit, and side-effects setup for one GPS tick.
  * @param {Object} sample - from normalizeGeolocationCoordsSample
  * @returns {Object}
  */
 function applyGpsPositionTick(sample) {
     const coord = applyGpsCoordSampleTick(sample);
-    const lat = coord.lat;
-    const lon = coord.lon;
-    const accuracy = coord.accuracy;
-    const speed = coord.speed;
-    const deviceHeading = coord.deviceHeading;
-    const speedMph = coord.speedMph;
-
-    const SGhead = _speedGps();
     const SGpos = _speedGps();
-    const snapped = resolveGpsRouteSnapForTick(lat, lon);
-    const SL = _speedLimitWidget();
     const plans = SGpos
-        ? SGpos.buildGpsPositionTickPlan({
-            lat,
-            lon,
-            accuracy,
-            routeInProgress,
-            routePolyline,
-            snapped,
-            lastSnappedRouteIndex,
-            prevSnapBlendWeightState: _snapBlendWeightState,
-            speedMph,
-            smoothDisplayLat: _smoothDisplayLat,
-            smoothDisplayLon: _smoothDisplayLon,
-            lastFollowCenterGeo: window.__voyagrLastFollowCenterGeo,
-            calculateDistanceMeters,
-            calculateBearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
-            blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
-            resolveGpsHeading: () => (SGhead
-                ? SGhead.resolveGpsHeadingDegrees({
-                    deviceHeading,
-                    speed,
-                    trackingHistory,
-                    calculateDistanceMeters,
-                })
-                : 0),
-            isTrackingActive,
-            currentRouteSteps,
-            displaySpeedMph: smoothGpsSpeedMph(speedMph),
-            currentSpeedLimitMph,
-            lastSpeedLimitRegion,
-            lastActiveManeuverIdx: _lastActiveManeuverIdx,
-            resolveRoadType: (idx, spd) => _routeGeometry().resolveCurrentRoadType({
-                maneuverIdxOverride: idx,
-                gpsSpeedMph: spd,
-                currentRouteSteps,
-                currentStepIndex,
-                lastDetectedRoadType,
-            }),
-            pickDisplaySpeedLimitMph: SL
-                ? (api, val, rt, region) => SL.pickDisplaySpeedLimitMph(api, val, rt, region)
-                : null,
-        })
+        ? SGpos.buildGpsPositionTickPlan(buildGpsPositionTickInputs(coord))
         : {
             posApply: {
                 action: 'apply',
                 heading: 0,
-                markerLat: lat,
-                markerLon: lon,
+                markerLat: coord.lat,
+                markerLon: coord.lon,
                 followJumpM: Number.POSITIVE_INFINITY,
-                statePatch: { smoothDisplayLat: lat, smoothDisplayLon: lon },
+                statePatch: { smoothDisplayLat: coord.lat, smoothDisplayLon: coord.lon },
             },
             speedLimitPlan: { roadType: 'unknown', shownLimit: null, resetFetchState: false, showWidget: false },
         };
     applyGpsPositionStateFromPlan(plans.posApply);
-    const heading = plans.posApply.heading;
-    const markerLat = plans.posApply.markerLat;
-    const markerLon = plans.posApply.markerLon;
-    const followJumpM = plans.posApply.followJumpM;
-    const speedLimitPlan = plans.speedLimitPlan;
 
     return _routeProgress().buildGpsTrackingTickOutcomePlan({
-        lat,
-        lon,
-        accuracy,
-        speed,
-        speedMph,
-        markerLat,
-        markerLon,
-        heading,
-        followJumpM,
-        speedLimitPlan,
+        lat: coord.lat,
+        lon: coord.lon,
+        accuracy: coord.accuracy,
+        speed: coord.speed,
+        speedMph: coord.speedMph,
+        markerLat: plans.posApply.markerLat,
+        markerLon: plans.posApply.markerLon,
+        heading: plans.posApply.heading,
+        followJumpM: plans.posApply.followJumpM,
+        speedLimitPlan: plans.speedLimitPlan,
         routeInProgress,
         routePolyline,
         routeSteps: currentRouteSteps,
         isTrackingActive,
-        speedLimitShowWidget: speedLimitPlan.showWidget,
+        speedLimitShowWidget: plans.speedLimitPlan.showWidget,
     });
 }
 

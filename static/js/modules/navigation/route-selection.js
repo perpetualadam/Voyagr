@@ -1411,6 +1411,50 @@
     }
 
     /**
+     * DOM apply plan for route preview panel fields (app maps element ids to patches).
+     * @param {Object} panelPlan - from buildRoutePreviewPanelApplyPlan
+     * @returns {Object}
+     */
+    function buildRoutePreviewPanelDomApplyPlan(panelPlan) {
+        panelPlan = panelPlan || {};
+        var hazard = panelPlan.hazardPlan || {};
+        var fuelLitres = panelPlan.fuelLitres || { visible: false, text: '' };
+        var caz = panelPlan.cazStatus || { visible: false, html: '' };
+        return {
+            previewDistance: {
+                datasetKm: panelPlan.distanceKm,
+                textContent: panelPlan.distanceText,
+            },
+            previewDuration: { textContent: panelPlan.durationText },
+            previewRoute: { textContent: panelPlan.routeLabel },
+            previewFuelCost: { textContent: panelPlan.fuelCostText },
+            previewFuelLitres: {
+                visible: fuelLitres.visible,
+                textContent: fuelLitres.text,
+                display: fuelLitres.visible ? 'block' : 'none',
+            },
+            previewTollCost: { textContent: panelPlan.tollCostText },
+            previewCAZCost: { textContent: panelPlan.cazCostText },
+            previewTotalCost: { textContent: panelPlan.totalCostText },
+            cazStatusContainer: {
+                visible: caz.visible,
+                innerHtml: caz.html,
+                display: caz.visible ? 'block' : 'none',
+            },
+            hazardInfoContainer: hazard,
+            previewRoutingMode: { textContent: panelPlan.routingModeText },
+            previewVehicleType: { textContent: panelPlan.vehicleTypeText },
+            previewAlternativeRoutesContainer: {
+                showAlternativeRoutes: !!panelPlan.showAlternativeRoutes,
+                display: panelPlan.showAlternativeRoutes ? null : 'none',
+            },
+            showMapRoutes: !!panelPlan.showMapRoutes,
+            statusMessage: panelPlan.statusMessage,
+            costLog: panelPlan.costLog,
+        };
+    }
+
+    /**
      * Mount plans for alternative-route cards in the preview panel.
      * @param {Array<Object>} routeOptions
      * @param {Object} opts
@@ -1543,6 +1587,7 @@
         parseRecentDestinationFromCoordString: parseRecentDestinationFromCoordString,
         buildInNavRerouteDispatchPlan: buildInNavRerouteDispatchPlan,
         buildRoutePreviewPanelApplyPlan: buildRoutePreviewPanelApplyPlan,
+        buildRoutePreviewPanelDomApplyPlan: buildRoutePreviewPanelDomApplyPlan,
         buildAlternativeRoutesPreviewMountPlans: buildAlternativeRoutesPreviewMountPlans,
         buildNavActiveRoutePolylineStyle: buildNavActiveRoutePolylineStyle,
         buildNavRouteLayerRedrawGuardPlan: buildNavRouteLayerRedrawGuardPlan,
