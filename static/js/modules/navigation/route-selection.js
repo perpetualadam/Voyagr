@@ -1815,6 +1815,84 @@
         };
     }
 
+    /**
+     * MapLibre apply spec for one route line layer.
+     * @param {Object} mountPlan - from buildRouteLayerMountPlan
+     * @param {string|undefined} beforeId
+     * @returns {Object}
+     */
+    function buildRouteLayerMapLibreApplyPlan(mountPlan, beforeId) {
+        mountPlan = mountPlan || {};
+        if (!mountPlan.valid) {
+            return {
+                valid: false,
+                routeName: mountPlan.routeName,
+                polylinePointCount: mountPlan.polylinePointCount,
+                lngLatCoordCount: mountPlan.lngLatCoords ? mountPlan.lngLatCoords.length : 0,
+            };
+        }
+        return {
+            valid: true,
+            layerId: mountPlan.layerId,
+            sourceId: mountPlan.sourceId,
+            beforeId: beforeId,
+            routeName: mountPlan.routeName,
+            polylinePointCount: mountPlan.polylinePointCount,
+            geoJsonFeature: mountPlan.geoJsonFeature,
+            layerLayout: {
+                'line-join': 'round',
+                'line-cap': 'round',
+            },
+            paint: {
+                lineColor: mountPlan.style.color,
+                lineWeight: mountPlan.style.weight,
+                lineOpacity: mountPlan.style.opacity,
+            },
+        };
+    }
+
+    /**
+     * Batch apply plans for doAddRouteLayers (reverse index order).
+     * @param {Array<Object>} routeOptions
+     * @param {number} selectedRouteIndex
+     * @param {Array<Object>} [styleLayers]
+     * @returns {{ beforeId: string|undefined, layers: Array<Object> }}
+     */
+    function buildDoAddRouteLayersBatchPlan(routeOptions, selectedRouteIndex, styleLayers) {
+        var routes = routeOptions || [];
+        var beforeId = findFirstTextSymbolLayerId(styleLayers);
+        var layers = [];
+        for (var i = routes.length - 1; i >= 0; i--) {
+            var mountPlan = buildRouteLayerMountPlan(routes[i], i, selectedRouteIndex);
+            var applyPlan = buildRouteLayerMapLibreApplyPlan(mountPlan, beforeId);
+            applyPlan.routeIndex = i;
+            layers.push(applyPlan);
+        }
+        return {
+            beforeId: beforeId,
+            layers: layers,
+        };
+    }
+
+    var ENSURE_LABELS_ON_TOP_DEBOUNCE_MS = 50;
+
+    /**
+     * Dispatch plan to move road label symbol layers above route overlays.
+     * @param {Array<Object>} [styleLayers]
+     * @returns {Object}
+     */
+    function buildEnsureLabelsOnTopDispatchPlan(styleLayers) {
+        var labelLayerIds = collectTextSymbolLayerIds(styleLayers);
+        if (labelLayerIds.length === 0) {
+            return { shouldRun: false };
+        }
+        return {
+            shouldRun: true,
+            labelLayerIds: labelLayerIds,
+            debounceMs: ENSURE_LABELS_ON_TOP_DEBOUNCE_MS,
+        };
+    }
+
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
@@ -1897,6 +1975,10 @@
         buildAllRoutesMapSideEffectsPlan: buildAllRoutesMapSideEffectsPlan,
         buildDisplayAllRoutesMapDispatchPlan: buildDisplayAllRoutesMapDispatchPlan,
         buildBringRoutesToTopDispatchPlan: buildBringRoutesToTopDispatchPlan,
+        buildRouteLayerMapLibreApplyPlan: buildRouteLayerMapLibreApplyPlan,
+        buildDoAddRouteLayersBatchPlan: buildDoAddRouteLayersBatchPlan,
+        buildEnsureLabelsOnTopDispatchPlan: buildEnsureLabelsOnTopDispatchPlan,
+        ENSURE_LABELS_ON_TOP_DEBOUNCE_MS: ENSURE_LABELS_ON_TOP_DEBOUNCE_MS,
         DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS: DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,
         mergeLastCalculatedRouteFromSelection: mergeLastCalculatedRouteFromSelection,

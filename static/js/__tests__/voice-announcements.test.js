@@ -486,3 +486,41 @@ describe('buildTurnAnnouncementStateApplyPlan', () => {
         expect(apply.resetThresholds).toBe(true);
     });
 });
+
+describe('voice preferences plans', () => {
+    test('buildVoicePreferencesCollectPlan applies defaults for missing values', () => {
+        const prefs = VA.buildVoicePreferencesCollectPlan({ turnDistance1: '300' });
+        expect(prefs.turnDistance1).toBe(300);
+        expect(prefs.turnDistance2).toBe(VA.VOICE_PREFS_DEFAULTS.turnDistance2);
+        expect(prefs.voiceFrequencyMode).toBe('all');
+    });
+
+    test('buildVoicePreferencesRuntimeApplyPlan maps distances and throttle', () => {
+        const runtime = VA.buildVoicePreferencesRuntimeApplyPlan({
+            turnDistance1: 400,
+            turnDistance2: 150,
+            turnDistance3: 80,
+            hazardDistance: 600,
+            voiceFrequencyMode: 'minimal',
+            announcementsEnabled: false,
+        });
+        expect(runtime.turnAnnouncementDistances).toEqual([400, 150, 80, 50]);
+        expect(runtime.hazardWarningDistance).toBe(600);
+        expect(runtime.voiceAnnouncementMinIntervalMs).toBe(VA.VOICE_FREQUENCY_THROTTLES.minimal);
+        expect(runtime.voiceAnnouncementsEnabled).toBe(false);
+    });
+
+    test('buildVoicePreferencesDomApplyPlan maps controls to element ids', () => {
+        const dom = VA.buildVoicePreferencesDomApplyPlan({
+            turnDistance1: 500,
+            turnDistance2: 200,
+            turnDistance3: 100,
+            hazardDistance: 500,
+            voiceFrequencyMode: 'important',
+            announcementsEnabled: true,
+        });
+        expect(dom.selects.find((item) => item.id === 'voiceTurnDistance1').value).toBe('500');
+        expect(dom.labeledToggle.id).toBe('voiceAnnouncementsEnabled');
+        expect(dom.labeledToggle.enabled).toBe(true);
+    });
+});

@@ -504,6 +504,99 @@
         };
     }
 
+    var VOICE_PREFS_STORAGE_KEY = 'voicePreferences';
+    var VOICE_FREQUENCY_MODE_STORAGE_KEY = 'voiceFrequencyMode';
+    var VOICE_PREFS_DEFAULTS = {
+        turnDistance1: 500,
+        turnDistance2: 200,
+        turnDistance3: 100,
+        hazardDistance: 500,
+        voiceFrequencyMode: 'all',
+        announcementsEnabled: true,
+    };
+    var VOICE_FREQUENCY_THROTTLES = {
+        all: 10000,
+        important: 15000,
+        minimal: 30000,
+    };
+    var VOICE_TURN_DISTANCE_TAIL_M = 50;
+    var VOICE_DESTINATION_ANNOUNCEMENT_DISTANCES_M = [10000, 5000, 2000, 1000, 500, 100];
+    var VOICE_PREFS_ELEMENT_IDS = {
+        turnDistance1: 'voiceTurnDistance1',
+        turnDistance2: 'voiceTurnDistance2',
+        turnDistance3: 'voiceTurnDistance3',
+        hazardDistance: 'voiceHazardDistance',
+        voiceFrequencyMode: 'voiceFrequencyMode',
+        announcementsEnabled: 'voiceAnnouncementsEnabled',
+    };
+
+    function parseVoicePrefInt(value, fallback) {
+        var parsed = parseInt(value, 10);
+        return Number.isFinite(parsed) && !isNaN(parsed) ? parsed : fallback;
+    }
+
+    function buildVoicePreferencesCollectPlan(formState) {
+        formState = formState || {};
+        var freqMode = formState.voiceFrequencyMode || VOICE_PREFS_DEFAULTS.voiceFrequencyMode;
+        return {
+            turnDistance1: parseVoicePrefInt(formState.turnDistance1, VOICE_PREFS_DEFAULTS.turnDistance1),
+            turnDistance2: parseVoicePrefInt(formState.turnDistance2, VOICE_PREFS_DEFAULTS.turnDistance2),
+            turnDistance3: parseVoicePrefInt(formState.turnDistance3, VOICE_PREFS_DEFAULTS.turnDistance3),
+            hazardDistance: parseVoicePrefInt(formState.hazardDistance, VOICE_PREFS_DEFAULTS.hazardDistance),
+            voiceFrequencyMode: freqMode,
+            announcementsEnabled: formState.announcementsEnabled !== false,
+        };
+    }
+
+    function buildVoicePreferencesStoragePlan(prefs) {
+        prefs = prefs || {};
+        return {
+            voicePreferencesKey: VOICE_PREFS_STORAGE_KEY,
+            voicePreferencesValue: JSON.stringify(prefs),
+            voiceFrequencyModeKey: VOICE_FREQUENCY_MODE_STORAGE_KEY,
+            voiceFrequencyModeValue: prefs.voiceFrequencyMode || VOICE_PREFS_DEFAULTS.voiceFrequencyMode,
+        };
+    }
+
+    function buildVoicePreferencesRuntimeApplyPlan(prefs) {
+        prefs = buildVoicePreferencesCollectPlan(prefs);
+        var freqMode = prefs.voiceFrequencyMode || VOICE_PREFS_DEFAULTS.voiceFrequencyMode;
+        return {
+            turnAnnouncementDistances: [
+                prefs.turnDistance1,
+                prefs.turnDistance2,
+                prefs.turnDistance3,
+                VOICE_TURN_DISTANCE_TAIL_M,
+            ],
+            destinationAnnouncementDistances: VOICE_DESTINATION_ANNOUNCEMENT_DISTANCES_M.slice(),
+            hazardWarningDistance: prefs.hazardDistance,
+            voiceAnnouncementsEnabled: prefs.announcementsEnabled,
+            voiceFrequencyMode: freqMode,
+            voiceAnnouncementMinIntervalMs: VOICE_FREQUENCY_THROTTLES[freqMode] || VOICE_FREQUENCY_THROTTLES.all,
+        };
+    }
+
+    function buildVoicePreferencesUiApplyPlan(stored) {
+        return buildVoicePreferencesCollectPlan(stored || {});
+    }
+
+    function buildVoicePreferencesDomApplyPlan(uiPlan) {
+        uiPlan = uiPlan || {};
+        return {
+            selects: [
+                { id: VOICE_PREFS_ELEMENT_IDS.turnDistance1, value: String(uiPlan.turnDistance1) },
+                { id: VOICE_PREFS_ELEMENT_IDS.turnDistance2, value: String(uiPlan.turnDistance2) },
+                { id: VOICE_PREFS_ELEMENT_IDS.turnDistance3, value: String(uiPlan.turnDistance3) },
+                { id: VOICE_PREFS_ELEMENT_IDS.hazardDistance, value: String(uiPlan.hazardDistance) },
+                { id: VOICE_PREFS_ELEMENT_IDS.voiceFrequencyMode, value: uiPlan.voiceFrequencyMode },
+            ],
+            labeledToggle: {
+                id: VOICE_PREFS_ELEMENT_IDS.announcementsEnabled,
+                enabled: uiPlan.announcementsEnabled !== false,
+            },
+        };
+    }
+
     var api = {
         DESTINATION_ANNOUNCEMENT_HYSTERESIS_M: DESTINATION_ANNOUNCEMENT_HYSTERESIS_M,
         DESTINATION_ANNOUNCEMENT_RESET_M: DESTINATION_ANNOUNCEMENT_RESET_M,
@@ -521,6 +614,15 @@
         appendChainedFollowingManeuver: appendChainedFollowingManeuver,
         buildDestinationAnnouncement: buildDestinationAnnouncement,
         voiceAnnouncementStateResetValues: voiceAnnouncementStateResetValues,
+        VOICE_PREFS_STORAGE_KEY: VOICE_PREFS_STORAGE_KEY,
+        VOICE_FREQUENCY_MODE_STORAGE_KEY: VOICE_FREQUENCY_MODE_STORAGE_KEY,
+        VOICE_PREFS_DEFAULTS: VOICE_PREFS_DEFAULTS,
+        VOICE_FREQUENCY_THROTTLES: VOICE_FREQUENCY_THROTTLES,
+        buildVoicePreferencesCollectPlan: buildVoicePreferencesCollectPlan,
+        buildVoicePreferencesStoragePlan: buildVoicePreferencesStoragePlan,
+        buildVoicePreferencesRuntimeApplyPlan: buildVoicePreferencesRuntimeApplyPlan,
+        buildVoicePreferencesUiApplyPlan: buildVoicePreferencesUiApplyPlan,
+        buildVoicePreferencesDomApplyPlan: buildVoicePreferencesDomApplyPlan,
     };
 
     // CommonJS (Jest) export.

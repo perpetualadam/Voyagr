@@ -2258,75 +2258,77 @@ function displayAllRoutesOnMap() {
 /**
  * Actually add route layers to the map (called after style is loaded)
  */
-function doAddRouteLayers() {
-    const RS = _routeSelection();
-    const style = map.getStyle();
-    const beforeId = RS.findFirstTextSymbolLayerId(style && style.layers);
+/**
+ * Apply one route line layer from a MapLibre apply plan.
+ * @param {Object} applyPlan
+ * @returns {boolean}
+ */
+function applyRouteLayerFromMapLibrePlan(applyPlan) {
+    if (!applyPlan || !applyPlan.valid) return false;
 
-    // Add all routes using direct MapLibre API
-    for (let i = routeOptions.length - 1; i >= 0; i--) {
-        const route = routeOptions[i];
-        const plan = RS.buildRouteLayerMountPlan(route, i, selectedRouteIndex);
-
-        console.log(`[Routes] Route ${i}: "${plan.routeName}", polyline points: ${plan.polylinePointCount}`);
-
-        if (!plan.valid) {
-            console.error(`[Routes] Route ${i}: Not enough valid points (${plan.lngLatCoords.length})`);
-            continue;
+    try {
+        if (map.getLayer(applyPlan.layerId)) {
+            map.removeLayer(applyPlan.layerId);
+        }
+        if (map.getSource(applyPlan.sourceId)) {
+            map.removeSource(applyPlan.sourceId);
         }
 
-        console.log(`[Routes] Drawing route ${i} with color ${plan.style.color}, weight ${plan.style.weight}`);
+        map.addSource(applyPlan.sourceId, {
+            type: 'geojson',
+            data: applyPlan.geoJsonFeature,
+        });
 
-        const layerId = plan.layerId;
-        const sourceId = plan.sourceId;
+        map.addLayer({
+            id: applyPlan.layerId,
+            type: 'line',
+            source: applyPlan.sourceId,
+            layout: applyPlan.layerLayout,
+            paint: {
+                'line-color': applyPlan.paint.lineColor,
+                'line-width': MapLibreHelpers.buildZoomScaledLineWidth(applyPlan.paint.lineWeight),
+                'line-opacity': applyPlan.paint.lineOpacity,
+            },
+        }, applyPlan.beforeId);
 
-            try {
-                // Remove existing layer/source if present
-                if (map.getLayer(layerId)) {
-                    map.removeLayer(layerId);
-                }
-                if (map.getSource(sourceId)) {
-                    map.removeSource(sourceId);
-                }
-
-                // Add source
-                map.addSource(sourceId, {
-                    type: 'geojson',
-                    data: plan.geoJsonFeature,
-                });
-
-                // Add layer before symbol layers to keep labels on top
-                map.addLayer({
-                    id: layerId,
-                    type: 'line',
-                    source: sourceId,
-                    layout: {
-                        'line-join': 'round',
-                        'line-cap': 'round'
-                    },
-                    paint: {
-                        'line-color': plan.style.color,
-                        'line-width': MapLibreHelpers.buildZoomScaledLineWidth(plan.style.weight),
-                        'line-opacity': plan.style.opacity
-                    }
-                }, beforeId);
-
-                console.log(`[Routes] ✓ Route ${i} layer added directly: ${layerId}${beforeId ? ` (before ${beforeId})` : ''}`);
-
-                // Create a simple layer object for tracking
-                const layer = {
-                    id: layerId,
-                    remove: () => {
-                        if (map.getLayer(layerId)) map.removeLayer(layerId);
-                        if (map.getSource(sourceId)) map.removeSource(sourceId);
-                    }
-                };
-                allRouteLayers.unshift(layer);
-
-            } catch (e) {
-                console.error(`[Routes] ✗ Error adding route ${i}:`, e);
-            }
+        const layerId = applyPlan.layerId;
+        const sourceId = applyPlan.sourceId;
+        allRouteLayers.unshift({
+            id: layerId,
+            remove: () => {
+                if (map.getLayer(layerId)) map.removeLayer(layerId);
+                if (map.getSource(sourceId)) map.removeSource(sourceId);
+            },
+        });
+        return true;
+    } catch (e) {
+        console.error(`[Routes] ✗ Error adding route ${applyPlan.routeIndex}:`, e);
+        return false;
     }
+}
+
+function doAddRouteLayers() {
+    const RS = _routeSelection();
+    const batch = RS.buildDoAddRouteLayersBatchPlan(
+        routeOptions,
+        selectedRouteIndex,
+        map.getStyle().layers
+    );
+
+    batch.layers.forEach((applyPlan) => {
+        console.log(`[Routes] Route ${applyPlan.routeIndex}: "${applyPlan.routeName}", polyline points: ${applyPlan.polylinePointCount}`);
+
+        if (!applyPlan.valid) {
+            console.error(`[Routes] Route ${applyPlan.routeIndex}: Not enough valid points (${applyPlan.lngLatCoordCount})`);
+            return;
+        }
+
+        console.log(`[Routes] Drawing route ${applyPlan.routeIndex} with color ${applyPlan.paint.lineColor}, weight ${applyPlan.paint.lineWeight}`);
+
+        if (applyRouteLayerFromMapLibrePlan(applyPlan)) {
+            console.log(`[Routes] ✓ Route ${applyPlan.routeIndex} layer added directly: ${applyPlan.layerId}${batch.beforeId ? ` (before ${batch.beforeId})` : ''}`);
+        }
+    });
 
     const sideEffects = RS.buildAllRoutesMapSideEffectsPlan(routeOptions, {
         showTrafficEnabled,
@@ -5386,20 +5388,18 @@ let ensureLabelsTimeout = null;
 function ensureLabelsOnTop() {
     if (!map) return;
 
-    // Debounce to prevent excessive calls
+    const plan = _routeSelection().buildEnsureLabelsOnTopDispatchPlan(
+        map.getStyle() && map.getStyle().layers
+    );
+    if (!plan.shouldRun) {
+        console.log('[Labels] No label layers found');
+        return;
+    }
+
     clearTimeout(ensureLabelsTimeout);
     ensureLabelsTimeout = setTimeout(() => {
         try {
-            const style = map.getStyle();
-            if (!style || !style.layers) return;
-
-            const labelLayerIds = _routeSelection().collectTextSymbolLayerIds(style.layers);
-            if (labelLayerIds.length === 0) {
-                console.log('[Labels] No label layers found');
-                return;
-            }
-
-            labelLayerIds.forEach((layerId) => {
+            plan.labelLayerIds.forEach((layerId) => {
                 try {
                     if (map.getLayer(layerId)) {
                         map.moveLayer(layerId);
@@ -5409,11 +5409,11 @@ function ensureLabelsOnTop() {
                 }
             });
 
-            console.log(`[Labels] Moved ${labelLayerIds.length} label layers to top`);
+            console.log(`[Labels] Moved ${plan.labelLayerIds.length} label layers to top`);
         } catch (e) {
             console.log('[Labels] Error ensuring labels on top:', e.message);
         }
-    }, 50);  // 50ms debounce delay
+    }, plan.debounceMs);
 }
 
 /**
@@ -6957,35 +6957,50 @@ function loadParkingPreferences() {
 }
 
 /**
+ * Collect voice preference values from settings form controls.
+ * @returns {Object}
+ */
+function collectVoicePreferencesFormState() {
+    return _voiceAnnouncements().buildVoicePreferencesCollectPlan({
+        turnDistance1: document.getElementById('voiceTurnDistance1')?.value,
+        turnDistance2: document.getElementById('voiceTurnDistance2')?.value,
+        turnDistance3: document.getElementById('voiceTurnDistance3')?.value,
+        hazardDistance: document.getElementById('voiceHazardDistance')?.value,
+        voiceFrequencyMode: document.getElementById('voiceFrequencyMode')?.value,
+        announcementsEnabled: typeof voiceAnnouncementsEnabled === 'boolean'
+            ? voiceAnnouncementsEnabled
+            : (localStorage.getItem('voiceAnnouncementsEnabled') === 'true'),
+    });
+}
+
+/**
+ * Apply voice preference runtime globals from a pure runtime apply plan.
+ * @param {Object} plan
+ */
+function applyVoicePreferencesRuntimeFromPlan(plan) {
+    if (!plan) return;
+    TURN_ANNOUNCEMENT_DISTANCES.length = 0;
+    TURN_ANNOUNCEMENT_DISTANCES.push(...plan.turnAnnouncementDistances);
+    DESTINATION_ANNOUNCEMENT_DISTANCES.length = 0;
+    DESTINATION_ANNOUNCEMENT_DISTANCES.push(...plan.destinationAnnouncementDistances);
+    HAZARD_WARNING_DISTANCE = plan.hazardWarningDistance;
+    voiceAnnouncementsEnabled = plan.voiceAnnouncementsEnabled;
+    voiceFrequencyMode = plan.voiceFrequencyMode;
+    VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = plan.voiceAnnouncementMinIntervalMs;
+}
+
+/**
  * saveVoicePreferences function
  * @function saveVoicePreferences
  * @returns {*} Return value description
  */
 function saveVoicePreferences() {
-    const freqSelect = document.getElementById('voiceFrequencyMode');
-    const freqMode = freqSelect ? freqSelect.value : 'all';
-
-    const prefs = {
-        turnDistance1: parseInt(document.getElementById('voiceTurnDistance1').value),
-        turnDistance2: parseInt(document.getElementById('voiceTurnDistance2').value),
-        turnDistance3: parseInt(document.getElementById('voiceTurnDistance3').value),
-        hazardDistance: parseInt(document.getElementById('voiceHazardDistance').value),
-        voiceFrequencyMode: freqMode,
-        announcementsEnabled: typeof voiceAnnouncementsEnabled === 'boolean'
-            ? voiceAnnouncementsEnabled
-            : (localStorage.getItem('voiceAnnouncementsEnabled') === 'true')
-    };
-    localStorage.setItem('voicePreferences', JSON.stringify(prefs));
-    localStorage.setItem('voiceFrequencyMode', freqMode);
-
-    TURN_ANNOUNCEMENT_DISTANCES.length = 0;
-    TURN_ANNOUNCEMENT_DISTANCES.push(prefs.turnDistance1, prefs.turnDistance2, prefs.turnDistance3, 50);
-    DESTINATION_ANNOUNCEMENT_DISTANCES.length = 0;
-    DESTINATION_ANNOUNCEMENT_DISTANCES.push(10000, 5000, 2000, 1000, 500, 100);
-    HAZARD_WARNING_DISTANCE = prefs.hazardDistance;
-    voiceAnnouncementsEnabled = prefs.announcementsEnabled;
-    voiceFrequencyMode = freqMode;
-    VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = VOICE_FREQUENCY_THROTTLES[freqMode] || 10000;
+    const VA = _voiceAnnouncements();
+    const prefs = collectVoicePreferencesFormState();
+    const storage = VA.buildVoicePreferencesStoragePlan(prefs);
+    localStorage.setItem(storage.voicePreferencesKey, storage.voicePreferencesValue);
+    localStorage.setItem(storage.voiceFrequencyModeKey, storage.voiceFrequencyModeValue);
+    applyVoicePreferencesRuntimeFromPlan(VA.buildVoicePreferencesRuntimeApplyPlan(prefs));
 
     console.log('[Voice] Preferences saved:', prefs);
     showStatus('✅ Voice preferences updated', 'success');
@@ -6998,38 +7013,28 @@ function saveVoicePreferences() {
  */
 function loadVoicePreferences() {
     try {
-        const saved = localStorage.getItem('voicePreferences');
+        const VA = _voiceAnnouncements();
+        const saved = localStorage.getItem(VA.VOICE_PREFS_STORAGE_KEY);
         if (saved) {
             const prefs = JSON.parse(saved);
-            document.getElementById('voiceTurnDistance1').value = prefs.turnDistance1 || 500;
-            document.getElementById('voiceTurnDistance2').value = prefs.turnDistance2 || 200;
-            document.getElementById('voiceTurnDistance3').value = prefs.turnDistance3 || 100;
-            document.getElementById('voiceHazardDistance').value = prefs.hazardDistance || 500;
-
-            const freqSelect = document.getElementById('voiceFrequencyMode');
-            if (freqSelect) {
-                freqSelect.value = prefs.voiceFrequencyMode || 'all';
-            }
-            voiceFrequencyMode = prefs.voiceFrequencyMode || 'all';
-            VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = VOICE_FREQUENCY_THROTTLES[voiceFrequencyMode] || 10000;
-
-            const toggleButton = document.getElementById('voiceAnnouncementsEnabled');
-            const announcementsEnabled = prefs.announcementsEnabled !== false;
-
-            _toggleUI().applyLabeledToggleButton(toggleButton, announcementsEnabled);
-
-            TURN_ANNOUNCEMENT_DISTANCES.length = 0;
-            TURN_ANNOUNCEMENT_DISTANCES.push(prefs.turnDistance1, prefs.turnDistance2, prefs.turnDistance3, 50);
-            HAZARD_WARNING_DISTANCE = prefs.hazardDistance || 500;
-            voiceAnnouncementsEnabled = announcementsEnabled;
-
+            const domPlan = VA.buildVoicePreferencesDomApplyPlan(
+                VA.buildVoicePreferencesUiApplyPlan(prefs)
+            );
+            applyDomSelectsFromPlan(domPlan.selects);
+            _toggleUI().applyLabeledToggleButton(
+                document.getElementById(domPlan.labeledToggle.id),
+                domPlan.labeledToggle.enabled
+            );
+            applyVoicePreferencesRuntimeFromPlan(VA.buildVoicePreferencesRuntimeApplyPlan(prefs));
             console.log('[Voice] Preferences loaded:', prefs);
         } else {
-            // Initialize with defaults if no saved preferences
-            const toggleButton = document.getElementById('voiceAnnouncementsEnabled');
+            const domPlan = VA.buildVoicePreferencesDomApplyPlan(
+                VA.buildVoicePreferencesUiApplyPlan(null)
+            );
+            const toggleButton = document.getElementById(domPlan.labeledToggle.id);
             if (toggleButton) {
-                _toggleUI().applyLabeledToggleButton(toggleButton, true);
-                voiceAnnouncementsEnabled = true;
+                _toggleUI().applyLabeledToggleButton(toggleButton, domPlan.labeledToggle.enabled);
+                voiceAnnouncementsEnabled = domPlan.labeledToggle.enabled;
             }
             console.log('[Voice] No saved preferences, using defaults');
         }

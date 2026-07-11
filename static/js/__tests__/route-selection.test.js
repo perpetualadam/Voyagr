@@ -806,4 +806,41 @@ describe('route overview and single-route display plans', () => {
         expect(plan.beforeId).toBe('label');
         expect(plan.maxRetries).toBe(5);
     });
+
+    test('buildRouteLayerMapLibreApplyPlan maps mount plan to MapLibre layer spec', () => {
+        const mount = RS.buildRouteLayerMountPlan(
+            { name: 'Fastest', polyline: [[51.5, -0.1], [51.6, -0.2]] },
+            0,
+            0
+        );
+        const apply = RS.buildRouteLayerMapLibreApplyPlan(mount, 'label-layer');
+        expect(apply.valid).toBe(true);
+        expect(apply.layerId).toBe('route-layer-0');
+        expect(apply.paint.lineColor).toBeTruthy();
+        expect(apply.beforeId).toBe('label-layer');
+    });
+
+    test('buildDoAddRouteLayersBatchPlan returns reverse-order apply layers', () => {
+        const batch = RS.buildDoAddRouteLayersBatchPlan(
+            [
+                { name: 'A', polyline: [[1, 2], [3, 4]] },
+                { name: 'B', polyline: [[5, 6], [7, 8]] },
+            ],
+            1,
+            [{ type: 'symbol', layout: { 'text-field': 'x' }, id: 'labels' }]
+        );
+        expect(batch.layers).toHaveLength(2);
+        expect(batch.layers[0].routeIndex).toBe(1);
+        expect(batch.layers[1].routeIndex).toBe(0);
+    });
+
+    test('buildEnsureLabelsOnTopDispatchPlan collects text symbol layer ids', () => {
+        const plan = RS.buildEnsureLabelsOnTopDispatchPlan([
+            { id: 'route-layer-0', type: 'line' },
+            { id: 'road-label', type: 'symbol', layout: { 'text-field': 'name' } },
+        ]);
+        expect(plan.shouldRun).toBe(true);
+        expect(plan.labelLayerIds).toEqual(['road-label']);
+        expect(plan.debounceMs).toBe(RS.ENSURE_LABELS_ON_TOP_DEBOUNCE_MS);
+    });
 });
