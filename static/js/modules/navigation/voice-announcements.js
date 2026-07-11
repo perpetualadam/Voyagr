@@ -310,7 +310,160 @@
         };
     }
 
+    var DESTINATION_ANNOUNCEMENT_HYSTERESIS_M = 100;
+    var DESTINATION_ANNOUNCEMENT_RESET_M = 11000;
+
+    /**
+     * Destination distance voice tick plan with hysteresis and far-range reset.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildDestinationAnnouncementTickPlan(opts) {
+        opts = opts || {};
+        if (!opts.routeInProgress || !opts.routePolylineLength || !opts.voiceAnnouncementsEnabled) {
+            return { action: 'skip', reason: 'inactive' };
+        }
+
+        var remaining = opts.remainingDistanceM;
+        var lastAnnounced = opts.lastDestinationAnnouncementDistance;
+        var distances = opts.destinationDistances || [];
+
+        for (var i = 0; i < distances.length; i++) {
+            var announcementDistance = distances[i];
+            if (remaining <= announcementDistance &&
+                lastAnnounced > announcementDistance + DESTINATION_ANNOUNCEMENT_HYSTERESIS_M) {
+                return {
+                    action: 'announce',
+                    announcementDistance: announcementDistance,
+                    spokenMessage: buildDestinationAnnouncement(
+                        announcementDistance,
+                        opts.distanceUnit
+                    ),
+                    statePatch: { lastDestinationAnnouncementDistance: remaining },
+                };
+            }
+        }
+
+        if (remaining > DESTINATION_ANNOUNCEMENT_RESET_M) {
+            return {
+                action: 'reset',
+                statePatch: { lastDestinationAnnouncementDistance: Infinity },
+            };
+        }
+
+        return { action: 'none' };
+    }
+
+    /**
+     * Turn voice announcement tick plan: threshold pick, message build, state patch hints.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildTurnAnnouncementTickPlan(opts) {
+        opts = opts || {};
+        if (!opts.turnInfo || !opts.voiceAnnouncementsEnabled) {
+            return { action: 'skip', reason: 'disabled' };
+        }
+
+        var distance = opts.turnInfo.distance;
+        if (typeof distance !== 'number' || isNaN(distance) || distance < 0) {
+            return {
+                action: 'skip',
+                reason: 'invalid-distance',
+                warnLine: '[Voice] Invalid turn distance: ' + distance,
+            };
+        }
+
+        var direction = opts.turnInfo.direction || 'straight';
+        var category = resolveTurnAnnouncementCategory(direction);
+        var announcementDistances = resolveAnnouncementDistancesForDirection(
+            direction,
+            opts.turnDistances,
+            opts.exitDistances,
+            opts.keepDistances
+        );
+
+        var maneuverIdx = opts.turnInfo.maneuverIndex;
+        var clearThresholds = maneuverIdx != null && (
+            maneuverIdx !== opts.voiceAnnouncedForManeuverIndex ||
+            category !== opts.voiceAnnouncedCategory
+        );
+
+        var announcedValues = clearThresholds
+            ? []
+            : (opts.announcedThresholdValues || []).slice();
+        var announcedSet = new Set(announcedValues);
+
+        var plan = {
+            action: 'none',
+            category: category,
+            clearThresholds: clearThresholds,
+            resetThresholds: false,
+            resetCategory: null,
+            statePatch: {},
+            announcedThresholdValues: announcedValues,
+        };
+
+        if (clearThresholds) {
+            plan.statePatch.voiceAnnouncedForManeuverIndex = maneuverIdx;
+            plan.statePatch.voiceAnnouncedCategory = category;
+        }
+
+        var picked = pickTurnAnnouncementThreshold(distance, announcementDistances, announcedSet);
+        if (picked) {
+            for (var mp = 0; mp < picked.markPassed.length; mp++) {
+                announcedSet.add(picked.markPassed[mp]);
+            }
+
+            var message = buildTurnAnnouncement({
+                announcementDistance: picked.threshold,
+                direction: direction,
+                distanceUnit: opts.distanceUnit,
+                streetName: opts.turnInfo.streetName || '',
+                directionText: opts.directionText || 'continue',
+                verbalAlert: (opts.turnInfo.verbal_transition_alert_instruction || '').trim(),
+                verbalPre: (opts.turnInfo.verbal_pre_transition_instruction || '').trim(),
+                valhallaType: opts.turnInfo.valhallaType,
+                roundaboutExitCount: opts.turnInfo.roundabout_exit_count,
+            });
+
+            if (message && opts.followingManeuver) {
+                message = appendChainedFollowingManeuver(
+                    message,
+                    picked.threshold,
+                    announcementDistances,
+                    opts.followingManeuver,
+                    opts.chainAppendOpts || {}
+                );
+            }
+
+            if (message) {
+                announcedSet.add(picked.threshold);
+                plan.action = 'announce';
+                plan.speak = true;
+                plan.speakPriority = 'high';
+                plan.spokenMessage = message;
+                plan.logLine = '[Voice] Announcing ' + category + ': ' + message +
+                    ' (distance: ' + distance.toFixed(0) + 'm)';
+            }
+
+            plan.announcedThresholdValues = Array.from(announcedSet);
+        }
+
+        var resetDistance = resolveThresholdResetDistance(direction);
+        if (distance > resetDistance) {
+            plan.resetThresholds = true;
+            plan.resetCategory = category;
+        }
+
+        return plan;
+    }
+
     var api = {
+        DESTINATION_ANNOUNCEMENT_HYSTERESIS_M: DESTINATION_ANNOUNCEMENT_HYSTERESIS_M,
+        DESTINATION_ANNOUNCEMENT_RESET_M: DESTINATION_ANNOUNCEMENT_RESET_M,
+        buildDestinationAnnouncementTickPlan: buildDestinationAnnouncementTickPlan,
+        buildTurnAnnouncementTickPlan: buildTurnAnnouncementTickPlan,
         isExitDirection: isExitDirection,
         isKeepDirection: isKeepDirection,
         buildTurnAnnouncement: buildTurnAnnouncement,

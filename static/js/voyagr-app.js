@@ -12542,31 +12542,30 @@ function primeVehicleMarkerOnRoute(lat, lon) {
  * @returns {*} Return value description
  */
 function announceDistanceToDestination(currentLat, currentLon) {
-    // FIXED: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
     if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceAnnouncementsEnabled) return;
 
     const remainingDistance = getNavigationRemainingDistanceMeters(currentLat, currentLon);
+    const VA = _voiceAnnouncements();
+    const tick = VA.buildDestinationAnnouncementTickPlan({
+        routeInProgress,
+        routePolylineLength: routePolyline.length,
+        voiceAnnouncementsEnabled,
+        remainingDistanceM: remainingDistance,
+        lastDestinationAnnouncementDistance,
+        destinationDistances: DESTINATION_ANNOUNCEMENT_DISTANCES,
+        distanceUnit: getDistanceUnit(),
+    });
 
-    // Check if we should announce at this distance
-    for (const announcementDistance of DESTINATION_ANNOUNCEMENT_DISTANCES) {
-        // Announce when within range (with hysteresis to avoid repeated announcements)
-        if (remainingDistance <= announcementDistance && lastDestinationAnnouncementDistance > announcementDistance + 100) {
-            const distUnit = getDistanceUnit();
-            const message = _voiceAnnouncements().buildDestinationAnnouncement(
-                announcementDistance, distUnit
-            );
+    if (tick.action === 'skip') return;
 
-            const displayRemaining = convertDistance(remainingDistance / 1000);
-            console.log(`[Voice] Distance announcement: ${message} (remaining: ${displayRemaining} ${distUnit})`);
-            speakMessage(message);
-            lastDestinationAnnouncementDistance = remainingDistance;
-            break;
-        }
+    if (tick.statePatch && tick.statePatch.lastDestinationAnnouncementDistance != null) {
+        lastDestinationAnnouncementDistance = tick.statePatch.lastDestinationAnnouncementDistance;
     }
 
-    // Reset announcement when destination is reached
-    if (remainingDistance > 11000) {
-        lastDestinationAnnouncementDistance = Infinity;
+    if (tick.action === 'announce' && tick.spokenMessage) {
+        const displayRemaining = convertDistance(remainingDistance / 1000);
+        console.log(`[Voice] Distance announcement: ${tick.spokenMessage} (remaining: ${displayRemaining} ${getDistanceUnit()})`);
+        speakMessage(tick.spokenMessage);
     }
 }
 /**
@@ -12576,16 +12575,10 @@ function announceDistanceToDestination(currentLat, currentLon) {
  * @returns {*} Return value description
  */
 function announceUpcomingTurn(turnInfo) {
-    if (!turnInfo || !voiceAnnouncementsEnabled) return;
-
-    const distance = turnInfo.distance;
-    if (typeof distance !== 'number' || isNaN(distance) || distance < 0) {
-        console.warn('[Voice] Invalid turn distance:', distance);
-        return;
-    }
-
-    const direction = turnInfo.direction || 'straight';
     const TI = _turnInstructions();
+    const VA = _voiceAnnouncements();
+
+    const direction = turnInfo?.direction || 'straight';
     let directionText = TI.getTurnDirectionText(direction);
     if (direction === 'roundabout') {
         directionText = TI.getRoundaboutDirectionText(
@@ -12593,73 +12586,59 @@ function announceUpcomingTurn(turnInfo) {
             turnInfo.roundabout_exit_count
         );
     }
-    const VA = _voiceAnnouncements();
-    const announcementDistances = VA.resolveAnnouncementDistancesForDirection(
-        direction,
-        TURN_ANNOUNCEMENT_DISTANCES,
-        EXIT_ANNOUNCEMENT_DISTANCES,
-        KEEP_ANNOUNCEMENT_DISTANCES
-    );
+
     const category = VA.resolveTurnAnnouncementCategory(direction);
     const thresholdSet = category === 'exit' ? announcedExitThresholds
         : category === 'keep' ? announcedKeepThresholds
         : announcedTurnThresholds;
-    const maneuverIdx = turnInfo.maneuverIndex;
-    if (maneuverIdx != null && (maneuverIdx !== _voiceAnnouncedForManeuverIndex || category !== _voiceAnnouncedCategory)) {
+
+    const tick = VA.buildTurnAnnouncementTickPlan({
+        turnInfo,
+        voiceAnnouncementsEnabled,
+        distanceUnit,
+        directionText,
+        turnDistances: TURN_ANNOUNCEMENT_DISTANCES,
+        exitDistances: EXIT_ANNOUNCEMENT_DISTANCES,
+        keepDistances: KEEP_ANNOUNCEMENT_DISTANCES,
+        announcedThresholdValues: Array.from(thresholdSet),
+        voiceAnnouncedForManeuverIndex: _voiceAnnouncedForManeuverIndex,
+        voiceAnnouncedCategory: _voiceAnnouncedCategory,
+        followingManeuver: turnInfo?.maneuverIndex != null
+            ? getFollowingManeuver(turnInfo.maneuverIndex)
+            : null,
+        chainAppendOpts: {
+            getTurnDirectionText: TI.getTurnDirectionText.bind(TI),
+            effectiveRoundaboutExitCount: (idx) => effectiveRoundaboutExitCount(idx),
+            ordinalEnglishExit: TI.ordinalEnglishExit,
+        },
+    });
+
+    if (tick.action === 'skip') {
+        if (tick.warnLine) console.warn(tick.warnLine);
+        return;
+    }
+
+    if (tick.clearThresholds) thresholdSet.clear();
+    if (tick.statePatch.voiceAnnouncedForManeuverIndex != null) {
+        _voiceAnnouncedForManeuverIndex = tick.statePatch.voiceAnnouncedForManeuverIndex;
+    }
+    if (tick.statePatch.voiceAnnouncedCategory != null) {
+        _voiceAnnouncedCategory = tick.statePatch.voiceAnnouncedCategory;
+    }
+    if (tick.announcedThresholdValues) {
         thresholdSet.clear();
-        _voiceAnnouncedForManeuverIndex = maneuverIdx;
-        _voiceAnnouncedCategory = category;
+        tick.announcedThresholdValues.forEach((d) => thresholdSet.add(d));
     }
 
-    const picked = VA.pickTurnAnnouncementThreshold(distance, announcementDistances, thresholdSet);
-    if (picked) {
-        for (const d of picked.markPassed) {
-            thresholdSet.add(d);
-        }
-
-        let message = VA.buildTurnAnnouncement({
-            announcementDistance: picked.threshold,
-            direction,
-            distanceUnit,
-            streetName: turnInfo.streetName || '',
-            directionText,
-            verbalAlert: (turnInfo.verbal_transition_alert_instruction || '').trim(),
-            verbalPre: (turnInfo.verbal_pre_transition_instruction || '').trim(),
-            valhallaType: turnInfo.valhallaType,
-            roundaboutExitCount: turnInfo.roundabout_exit_count,
-        });
-
-        if (message && turnInfo.maneuverIndex != null) {
-            const follow = getFollowingManeuver(turnInfo.maneuverIndex);
-            message = VA.appendChainedFollowingManeuver(
-                message,
-                picked.threshold,
-                announcementDistances,
-                follow,
-                {
-                    getTurnDirectionText: TI.getTurnDirectionText.bind(TI),
-                    effectiveRoundaboutExitCount: (idx) => effectiveRoundaboutExitCount(idx),
-                    ordinalEnglishExit: TI.ordinalEnglishExit,
-                }
-            );
-        }
-
-        if (message) {
-            console.log(`[Voice] Announcing ${category}: ${message} (distance: ${distance.toFixed(0)}m)`);
-            speakMessage(message, 'high');
-            thresholdSet.add(picked.threshold);
-        }
+    if (tick.speak && tick.spokenMessage) {
+        if (tick.logLine) console.log(tick.logLine);
+        speakMessage(tick.spokenMessage, tick.speakPriority || 'high');
     }
 
-    const resetDistance = VA.resolveThresholdResetDistance(direction);
-    if (distance > resetDistance) {
-        if (category === 'exit') {
-            announcedExitThresholds.clear();
-        } else if (category === 'keep') {
-            announcedKeepThresholds.clear();
-        } else {
-            announcedTurnThresholds.clear();
-        }
+    if (tick.resetThresholds) {
+        if (tick.resetCategory === 'exit') announcedExitThresholds.clear();
+        else if (tick.resetCategory === 'keep') announcedKeepThresholds.clear();
+        else announcedTurnThresholds.clear();
     }
 }
 

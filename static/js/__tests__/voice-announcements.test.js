@@ -304,3 +304,131 @@ describe('voiceAnnouncementStateResetValues', () => {
         expect(patch.lastLaneVoiceKey).toBe('');
     });
 });
+
+describe('buildDestinationAnnouncementTickPlan', () => {
+    const distances = [10000, 5000, 2000, 1000, 500, 100];
+
+    test('skips when navigation voice is inactive', () => {
+        expect(VA.buildDestinationAnnouncementTickPlan({
+            routeInProgress: false,
+            voiceAnnouncementsEnabled: true,
+        }).action).toBe('skip');
+    });
+
+    test('announces at milestone with hysteresis', () => {
+        const tick = VA.buildDestinationAnnouncementTickPlan({
+            routeInProgress: true,
+            routePolylineLength: 10,
+            voiceAnnouncementsEnabled: true,
+            remainingDistanceM: 4500,
+            lastDestinationAnnouncementDistance: 5200,
+            destinationDistances: distances,
+            distanceUnit: 'km',
+        });
+        expect(tick.action).toBe('announce');
+        expect(tick.announcementDistance).toBe(5000);
+        expect(tick.spokenMessage).toBe('5 km to destination');
+        expect(tick.statePatch.lastDestinationAnnouncementDistance).toBe(4500);
+    });
+
+    test('does not re-announce within hysteresis band', () => {
+        const tick = VA.buildDestinationAnnouncementTickPlan({
+            routeInProgress: true,
+            routePolylineLength: 10,
+            voiceAnnouncementsEnabled: true,
+            remainingDistanceM: 4950,
+            lastDestinationAnnouncementDistance: 4980,
+            destinationDistances: distances,
+            distanceUnit: 'km',
+        });
+        expect(tick.action).toBe('none');
+    });
+
+    test('resets last announced distance when far from destination', () => {
+        const tick = VA.buildDestinationAnnouncementTickPlan({
+            routeInProgress: true,
+            routePolylineLength: 10,
+            voiceAnnouncementsEnabled: true,
+            remainingDistanceM: 12000,
+            lastDestinationAnnouncementDistance: 5000,
+            destinationDistances: distances,
+            distanceUnit: 'km',
+        });
+        expect(tick.action).toBe('reset');
+        expect(tick.statePatch.lastDestinationAnnouncementDistance).toBe(Infinity);
+    });
+});
+
+describe('buildTurnAnnouncementTickPlan', () => {
+    const turnDistances = [500, 200, 100, 50];
+    const exitDistances = [2000, 800, 200, 100];
+    const keepDistances = [1000, 400, 150, 50];
+
+    const baseTurn = {
+        distance: 180,
+        direction: 'left',
+        streetName: 'High Street',
+        maneuverIndex: 2,
+        valhallaType: 15,
+    };
+
+    test('skips when voice announcements disabled', () => {
+        expect(VA.buildTurnAnnouncementTickPlan({
+            turnInfo: baseTurn,
+            voiceAnnouncementsEnabled: false,
+        }).action).toBe('skip');
+    });
+
+    test('announces at unannounced threshold and patches state', () => {
+        const tick = VA.buildTurnAnnouncementTickPlan({
+            turnInfo: baseTurn,
+            voiceAnnouncementsEnabled: true,
+            distanceUnit: 'km',
+            directionText: 'turn left',
+            turnDistances,
+            exitDistances,
+            keepDistances,
+            announcedThresholdValues: [],
+            voiceAnnouncedForManeuverIndex: null,
+            voiceAnnouncedCategory: null,
+        });
+        expect(tick.action).toBe('announce');
+        expect(tick.speak).toBe(true);
+        expect(tick.spokenMessage).toContain('turn left');
+        expect(tick.announcedThresholdValues).toContain(200);
+        expect(tick.statePatch.voiceAnnouncedForManeuverIndex).toBe(2);
+    });
+
+    test('clears thresholds when maneuver index changes', () => {
+        const tick = VA.buildTurnAnnouncementTickPlan({
+            turnInfo: { ...baseTurn, maneuverIndex: 5 },
+            voiceAnnouncementsEnabled: true,
+            directionText: 'turn left',
+            turnDistances,
+            exitDistances,
+            keepDistances,
+            announcedThresholdValues: [500, 200],
+            voiceAnnouncedForManeuverIndex: 2,
+            voiceAnnouncedCategory: 'turn',
+        });
+        expect(tick.clearThresholds).toBe(true);
+        expect(tick.announcedThresholdValues).toContain(200);
+        expect(tick.statePatch.voiceAnnouncedForManeuverIndex).toBe(5);
+    });
+
+    test('requests threshold reset when distance exceeds category range', () => {
+        const tick = VA.buildTurnAnnouncementTickPlan({
+            turnInfo: { ...baseTurn, distance: 700 },
+            voiceAnnouncementsEnabled: true,
+            directionText: 'turn left',
+            turnDistances,
+            exitDistances,
+            keepDistances,
+            announcedThresholdValues: [200],
+            voiceAnnouncedForManeuverIndex: 2,
+            voiceAnnouncedCategory: 'turn',
+        });
+        expect(tick.resetThresholds).toBe(true);
+        expect(tick.resetCategory).toBe('turn');
+    });
+});
