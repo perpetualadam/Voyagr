@@ -282,4 +282,29 @@ describe('auto traffic interval dispatch plans', () => {
         expect(stop.clearInterval).toBe(true);
         expect(stop.statusMessage).toContain('stopped');
     });
+
+    test('buildCheckTrafficAndRerouteOrchestrationPlan routes reroute and simulated data', () => {
+        const none = TC.buildCheckTrafficAndRerouteOrchestrationPlan({ flow: null, lastTrafficData: null });
+        expect(none.action).toBe('no_data');
+
+        const simulated = TC.buildCheckTrafficAndRerouteOrchestrationPlan({
+            flow: { source: 'sim', congestedPoints: [], delayMin: 0 },
+            lastTrafficData: null,
+        });
+        expect(simulated.action).toBe('simulated_only');
+        expect(simulated.updateLastTrafficData).toBeTruthy();
+
+        const reroute = TC.buildCheckTrafficAndRerouteOrchestrationPlan({
+            flow: {
+                source: 'TomTom',
+                severe: true,
+                congestedPoints: [{ lat: 1, lon: 2 }],
+                delayMin: 6,
+                congestedCount: 2,
+            },
+            lastTrafficData: null,
+        });
+        expect(reroute.action).toBe('reroute');
+        expect(reroute.notifPlan.shouldReroute).toBe(true);
+    });
 });

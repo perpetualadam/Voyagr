@@ -482,6 +482,50 @@
         };
     }
 
+    /**
+     * Orchestration plan after sampling traffic ahead during navigation.
+     * @param {Object} [input]
+     * @param {Object|null} [input.flow]
+     * @param {Object|null} [input.lastTrafficData]
+     * @returns {Object}
+     */
+    function buildCheckTrafficAndRerouteOrchestrationPlan(input) {
+        input = input || {};
+        var dispatch = buildTrafficSampleResponseDispatchPlan(input.flow);
+        if (dispatch.action === 'none') {
+            return { action: 'no_data', logMessage: '[Auto-Traffic] No usable traffic data' };
+        }
+        if (dispatch.action === 'update_last_traffic_only') {
+            return {
+                action: 'simulated_only',
+                flow: dispatch.flow,
+                updateLastTrafficData: dispatch.flow,
+                logMessage: '[Auto-Traffic] Traffic data is simulated; skipping reroute decision',
+            };
+        }
+
+        var changeType = detectSignificantTrafficChange(input.lastTrafficData, dispatch.flow);
+        var notifPlan = buildTrafficChangeNotificationPlan(changeType, dispatch.flow);
+        if (notifPlan.shouldReroute) {
+            return {
+                action: 'reroute',
+                flow: dispatch.flow,
+                updateLastTrafficData: dispatch.flow,
+                changeType: changeType,
+                notifPlan: notifPlan,
+                logMessage: '[Auto-Traffic] Significant change: ' + changeType
+                    + ' (delay ~' + (dispatch.flow.delayMin || 0).toFixed(1) + ' min, '
+                    + (dispatch.flow.congestedPoints || []).length + ' avoid pts)',
+            };
+        }
+        return {
+            action: 'no_change',
+            flow: dispatch.flow,
+            updateLastTrafficData: dispatch.flow,
+            logMessage: '[Auto-Traffic] No significant traffic change',
+        };
+    }
+
     var api = {
         TRAFFIC_UPDATE_INTERVAL_MS: TRAFFIC_UPDATE_INTERVAL_MS,
         AUTO_TRAFFIC_UPDATE_STORAGE_KEY: AUTO_TRAFFIC_UPDATE_STORAGE_KEY,
@@ -494,6 +538,7 @@
         shouldAcceptTrafficReroute: shouldAcceptTrafficReroute,
         formatTrafficRerouteSaveMessage: formatTrafficRerouteSaveMessage,
         buildCheckTrafficAndReroutePreflightPlan: buildCheckTrafficAndReroutePreflightPlan,
+        buildCheckTrafficAndRerouteOrchestrationPlan: buildCheckTrafficAndRerouteOrchestrationPlan,
         buildTrafficSampleResponseDispatchPlan: buildTrafficSampleResponseDispatchPlan,
         buildTrafficChangeNotificationPlan: buildTrafficChangeNotificationPlan,
         buildTrafficReroutePreflightPlan: buildTrafficReroutePreflightPlan,

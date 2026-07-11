@@ -271,6 +271,9 @@
             iconSize: ROUTE_DRAG_MARKER_ICON_SIZE,
             iconAnchor: [10, 10],
             cursorStyle: 'grab',
+            draggable: true,
+            dragEndEvent: 'dragend',
+            dragEndAction: 'addDraggedViaPoint',
         };
     }
 
@@ -406,6 +409,26 @@
             cursorStyle: mountPlan.cursorStyle,
             originalLat: mountPlan.lat,
             originalLon: mountPlan.lon,
+            draggable: mountPlan.draggable !== false,
+            dragEndEvent: mountPlan.dragEndEvent || 'dragend',
+            dragEndAction: mountPlan.dragEndAction || 'addDraggedViaPoint',
+        };
+    }
+
+    /**
+     * Dispatch plan when a route drag marker finishes dragging.
+     * @param {number} lat
+     * @param {number} lon
+     * @returns {Object}
+     */
+    function buildRouteDragMarkerDragEndDispatchPlan(lat, lon) {
+        var parsedLat = Number(lat);
+        var parsedLon = Number(lon);
+        return {
+            shouldAddViaPoint: Number.isFinite(parsedLat) && Number.isFinite(parsedLon),
+            lat: parsedLat,
+            lon: parsedLon,
+            dragEndAction: 'addDraggedViaPoint',
         };
     }
 
@@ -1084,6 +1107,7 @@
         buildToggleRouteEditingOrchestrationPlan: buildToggleRouteEditingOrchestrationPlan,
         buildRouteEditEnableExecutePlan: buildRouteEditEnableExecutePlan,
         buildRouteDragMarkerExecutePlan: buildRouteDragMarkerExecutePlan,
+        buildRouteDragMarkerDragEndDispatchPlan: buildRouteDragMarkerDragEndDispatchPlan,
         buildClearRouteDragMarkersExecutePlan: buildClearRouteDragMarkersExecutePlan,
         ROUTE_EDIT_TOGGLE_ELEMENT_ID: ROUTE_EDIT_TOGGLE_ELEMENT_ID,
         ROUTE_EDIT_MARKER_INTERVAL_MIN: ROUTE_EDIT_MARKER_INTERVAL_MIN,

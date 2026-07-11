@@ -350,7 +350,12 @@ function createMarker(lat, lon, options = {}) {
         el.style.height = options.iconSize[1] + 'px';
     }
 
-    const marker = new maplibregl.Marker({ element: el, anchor: 'center' })
+    const markerOpts = { element: el, anchor: 'center' };
+    if (options.draggable) {
+        markerOpts.draggable = true;
+    }
+
+    const marker = new maplibregl.Marker(markerOpts)
         .setLngLat([lon, lat]);
 
     if (options.popup) {

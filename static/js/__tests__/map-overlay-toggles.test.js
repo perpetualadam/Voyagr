@@ -87,4 +87,13 @@ describe('map-overlay-toggles module', () => {
         expect(plan.shouldParseJson).toBe(false);
         expect(plan.logMessage).toContain('502');
     });
+
+    test('buildCameraLayerMapMoveHandlerPlan wires debounced fetch actions', () => {
+        const move = OT.buildCameraLayerMapMoveHandlerPlan({
+            cameraMoveDebounceMs: 500,
+            osmOverlayDebounceMs: 2000,
+        });
+        expect(move.cameraFetch.debounceMs).toBe(500);
+        expect(move.osmOverlayFetch.fetchActions).toHaveLength(2);
+    });
 });

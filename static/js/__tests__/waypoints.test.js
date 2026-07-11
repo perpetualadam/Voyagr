@@ -104,6 +104,15 @@ describe('waypoints module', () => {
         expect(mount.className).toBe('route-drag-marker');
         expect(mount.markerHtml).toContain('FF9800');
         expect(mount.routeIndex).toBe(12);
+        expect(mount.draggable).toBe(true);
+        expect(mount.dragEndAction).toBe('addDraggedViaPoint');
+    });
+
+    test('buildRouteDragMarkerDragEndDispatchPlan validates coordinates', () => {
+        const ok = W.buildRouteDragMarkerDragEndDispatchPlan(51.5, -0.1);
+        expect(ok.shouldAddViaPoint).toBe(true);
+        expect(ok.dragEndAction).toBe('addDraggedViaPoint');
+        expect(W.buildRouteDragMarkerDragEndDispatchPlan('bad', null).shouldAddViaPoint).toBe(false);
     });
 
     test('buildDraggedViaPointAddPlan prepares via point and recalc status', () => {

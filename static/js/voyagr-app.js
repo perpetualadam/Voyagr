@@ -2685,6 +2685,7 @@ function addRouteDragMarker(lat, lon, routeIndex) {
         html: execute.markerHtml,
         iconSize: execute.iconSize,
         iconAnchor: execute.iconAnchor,
+        draggable: execute.draggable,
     }).addTo(map);
 
     const el = marker.getElement();
@@ -2695,6 +2696,19 @@ function addRouteDragMarker(lat, lon, routeIndex) {
     marker.routeIndex = execute.routeIndex;
     marker.originalLat = execute.originalLat;
     marker.originalLon = execute.originalLon;
+
+    if (execute.draggable && typeof marker.on === 'function') {
+        marker.on(execute.dragEndEvent, () => {
+            const lngLat = marker.getLngLat && marker.getLngLat();
+            const dispatch = WP.buildRouteDragMarkerDragEndDispatchPlan(
+                lngLat ? lngLat.lat : null,
+                lngLat ? lngLat.lng : null
+            );
+            if (dispatch.shouldAddViaPoint && dispatch.dragEndAction === 'addDraggedViaPoint') {
+                addDraggedViaPoint(dispatch.lat, dispatch.lon);
+            }
+        });
+    }
 
     routeDragMarkers.push(marker);
 }
@@ -5913,27 +5927,23 @@ async function checkTrafficAndReroute() {
         const flow = await getRouteTrafficAhead(preflight.forceFresh);
         lastTrafficUpdateTime = Date.now();
 
-        const dispatch = TC.buildTrafficSampleResponseDispatchPlan(flow);
-        if (dispatch.action === 'none') {
-            console.log('[Auto-Traffic] No usable traffic data');
-            return;
+        const orch = TC.buildCheckTrafficAndRerouteOrchestrationPlan({
+            flow,
+            lastTrafficData,
+        });
+        if (orch.updateLastTrafficData !== undefined) {
+            lastTrafficData = orch.updateLastTrafficData;
         }
-        if (dispatch.action === 'update_last_traffic_only') {
-            console.log('[Auto-Traffic] Traffic data is simulated; skipping reroute decision');
-            lastTrafficData = dispatch.flow;
-            return;
-        }
+        if (orch.logMessage) console.log(orch.logMessage);
 
-        const changeType = TC.detectSignificantTrafficChange(lastTrafficData, dispatch.flow);
-        lastTrafficData = dispatch.flow;
-
-        const notifPlan = TC.buildTrafficChangeNotificationPlan(changeType, dispatch.flow);
-        if (notifPlan.shouldReroute) {
-            console.log(`[Auto-Traffic] Significant change: ${changeType} (delay ~${dispatch.flow.delayMin.toFixed(1)} min, ${dispatch.flow.congestedPoints.length} avoid pts)`);
+        if (orch.action === 'reroute' && orch.notifPlan) {
+            const notifPlan = orch.notifPlan;
             sendNotification(notifPlan.notificationTitle, notifPlan.notificationMessage, notifPlan.notificationType);
-            await triggerTrafficBasedReroute(notifPlan.changeType, notifPlan.avoidPoints, notifPlan.measuredDelayMin);
-        } else {
-            console.log('[Auto-Traffic] No significant traffic change');
+            await triggerTrafficBasedReroute(
+                notifPlan.changeType,
+                notifPlan.avoidPoints,
+                notifPlan.measuredDelayMin
+            );
         }
     } catch (error) {
         console.error('[Auto-Traffic] Error checking traffic:', error);
@@ -6758,17 +6768,23 @@ function initializeCameraLayer() {
         else TU.applyToggleButton(el, toggle.enabled);
     });
 
+    const movePlan = OT.buildCameraLayerMapMoveHandlerPlan({
+        mapMoveEvent: execute.mapMoveEvent,
+        cameraMoveDebounceMs: execute.cameraMoveDebounceMs,
+        osmOverlayDebounceMs: execute.osmOverlayDebounceMs,
+    });
+    let cameraFetchTimeout = null;
     let osmOverlayFetchTimeout = null;
-    map.on(execute.mapMoveEvent, () => {
+    map.on(movePlan.mapMoveEvent, () => {
         if (cameraFetchTimeout) clearTimeout(cameraFetchTimeout);
         cameraFetchTimeout = setTimeout(() => {
             fetchAndDisplayCameras();
-        }, execute.cameraMoveDebounceMs);
+        }, movePlan.cameraFetch.debounceMs);
         if (osmOverlayFetchTimeout) clearTimeout(osmOverlayFetchTimeout);
         osmOverlayFetchTimeout = setTimeout(() => {
             fetchAndDisplayOsmTrafficLights();
             fetchAndDisplayOsmRailwayCrossings();
-        }, execute.osmOverlayDebounceMs);
+        }, movePlan.osmOverlayFetch.debounceMs);
     });
 
     const initial = execute.initialFetches || {};

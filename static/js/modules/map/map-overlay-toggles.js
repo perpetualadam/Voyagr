@@ -466,6 +466,36 @@
         };
     }
 
+    /**
+     * Debounced fetch actions wired on map moveend during overlay init.
+     * @param {Object} [input]
+     * @param {string} [input.mapMoveEvent]
+     * @param {number} [input.cameraMoveDebounceMs]
+     * @param {number} [input.osmOverlayDebounceMs]
+     * @returns {Object}
+     */
+    function buildCameraLayerMapMoveHandlerPlan(input) {
+        input = input || {};
+        return {
+            mapMoveEvent: input.mapMoveEvent || 'moveend',
+            cameraFetch: {
+                debounceMs: input.cameraMoveDebounceMs != null
+                    ? input.cameraMoveDebounceMs
+                    : CAMERA_MOVE_DEBOUNCE_MS,
+                fetchAction: 'fetchAndDisplayCameras',
+            },
+            osmOverlayFetch: {
+                debounceMs: input.osmOverlayDebounceMs != null
+                    ? input.osmOverlayDebounceMs
+                    : OSM_OVERLAY_MOVE_DEBOUNCE_MS,
+                fetchActions: [
+                    'fetchAndDisplayOsmTrafficLights',
+                    'fetchAndDisplayOsmRailwayCrossings',
+                ],
+            },
+        };
+    }
+
     var api = {
         SHOW_CAMERAS_STORAGE_KEY: SHOW_CAMERAS_STORAGE_KEY,
         SHOW_CAMERAS_TOGGLE_ID: SHOW_CAMERAS_TOGGLE_ID,
@@ -505,6 +535,7 @@
         buildDisplayOsmTrafficLightMarkersCollectPlan: buildDisplayOsmTrafficLightMarkersCollectPlan,
         buildDisplayOsmRailwayCrossingMarkersCollectPlan: buildDisplayOsmRailwayCrossingMarkersCollectPlan,
         buildInitializeCameraLayerExecutePlan: buildInitializeCameraLayerExecutePlan,
+        buildCameraLayerMapMoveHandlerPlan: buildCameraLayerMapMoveHandlerPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
