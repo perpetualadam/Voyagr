@@ -74,9 +74,176 @@
         return out;
     }
 
+    /**
+     * Build a completed-trip payload from route + form/polyline inputs (pure).
+     * @param {object} params
+     * @param {object|null} params.route
+     * @param {{value?:string, lat?:string, lon?:string}|null} [params.startEl]
+     * @param {{value?:string, lat?:string, lon?:string}|null} [params.endEl]
+     * @param {Array<[number,number]>|null} [params.routePolyline]
+     * @param {string} [params.routingMode]
+     * @returns {object|null}
+     */
+    function buildCompletedTripRecord(params) {
+        var route = params && params.route;
+        if (!route) return null;
+
+        var startEl = params.startEl;
+        var endEl = params.endEl;
+        var routePolyline = params.routePolyline;
+        var routingMode = params.routingMode || 'auto';
+
+        var start_lat;
+        var start_lon;
+        var end_lat;
+        var end_lon;
+        var start_address = (startEl && startEl.value) ? String(startEl.value).trim() : '';
+        var end_address = (endEl && endEl.value) ? String(endEl.value).trim() : (route.destinationName || '');
+
+        if (startEl && startEl.lat && startEl.lon) {
+            start_lat = parseFloat(startEl.lat);
+            start_lon = parseFloat(startEl.lon);
+        } else if (route.start) {
+            var ps = parseLatLonString(route.start);
+            if (ps) {
+                start_lat = ps.lat;
+                start_lon = ps.lon;
+            }
+        }
+        if (endEl && endEl.lat && endEl.lon) {
+            end_lat = parseFloat(endEl.lat);
+            end_lon = parseFloat(endEl.lon);
+        } else if (route.destination) {
+            var pe = parseLatLonString(route.destination);
+            if (pe) {
+                end_lat = pe.lat;
+                end_lon = pe.lon;
+            }
+        }
+
+        if (
+            (start_lat == null || end_lat == null) &&
+            routePolyline &&
+            routePolyline.length > 1
+        ) {
+            if (start_lat == null || start_lon == null) {
+                start_lat = routePolyline[0][0];
+                start_lon = routePolyline[0][1];
+            }
+            var L = routePolyline[routePolyline.length - 1];
+            if (end_lat == null || end_lon == null) {
+                end_lat = L[0];
+                end_lon = L[1];
+            }
+        }
+
+        if (start_lat == null || start_lon == null || end_lat == null || end_lon == null) {
+            return null;
+        }
+
+        var distance_km = parseFloat(route.distance_km != null ? route.distance_km : route.distance) || 0;
+        var duration_minutes = parseFloat(
+            route.duration_minutes != null ? route.duration_minutes : route.time
+        ) || 0;
+
+        return {
+            start_lat: start_lat,
+            start_lon: start_lon,
+            end_lat: end_lat,
+            end_lon: end_lon,
+            start_address: start_address || (start_lat + ',' + start_lon),
+            end_address: end_address || (end_lat + ',' + end_lon),
+            distance_km: distance_km,
+            duration_minutes: duration_minutes,
+            fuel_cost: route.fuel_cost || 0,
+            toll_cost: route.toll_cost || 0,
+            caz_cost: route.caz_cost || 0,
+            routing_mode: routingMode,
+            timestamp: new Date().toISOString()
+        };
+    }
+
+    /**
+     * Format trip timestamp for the history list row.
+     * @param {*} timestamp
+     * @returns {string}
+     */
+    function formatTripListTimestamp(timestamp) {
+        var date = new Date(timestamp);
+        if (Number.isNaN(date.getTime())) return '—';
+        return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    /**
+     * Filter trips by search term (addresses + timestamp text).
+     * @param {Array<object>} trips
+     * @param {string} searchTerm - lowercased trim applied by caller
+     * @returns {Array<object>}
+     */
+    function filterTripsBySearch(trips, searchTerm) {
+        if (!searchTerm) return trips || [];
+        return (trips || []).filter(function (trip) {
+            try {
+                var start = (trip.start_address || '').toLowerCase();
+                var end = (trip.end_address || '').toLowerCase();
+                var tsText = '';
+                if (trip.timestamp != null && trip.timestamp !== '') {
+                    var d = new Date(trip.timestamp);
+                    tsText = Number.isNaN(d.getTime())
+                        ? String(trip.timestamp)
+                        : (d.toLocaleString() + ' ' + d.toDateString());
+                }
+                tsText = tsText.toLowerCase();
+                return start.includes(searchTerm) || end.includes(searchTerm) || tsText.includes(searchTerm);
+            } catch (err) {
+                return false;
+            }
+        });
+    }
+
+    var EMPTY_TRIP_LIST_HTML =
+        '<div style="text-align: center; padding: 20px; color: #999;">No trips found</div>';
+
+    /**
+     * Build one trip-history list row HTML string.
+     * @param {object} trip
+     * @param {object} display - pre-formatted/escaped display fields
+     * @returns {string}
+     */
+    function buildTripHistoryRowHtml(trip, display) {
+        var localBadge = trip._localOnly
+            ? ' <span style="font-size:11px;font-weight:500;color:#1565C0;">(this device)</span>'
+            : '';
+        return (
+            '<div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #667eea;">' +
+                '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">' +
+                    '<div>' +
+                        '<div style="font-weight: 600; color: #333; margin-bottom: 4px;">' +
+                            display.startAddr + ' → ' + display.endAddr + localBadge +
+                        '</div>' +
+                        '<div style="font-size: 12px; color: #666;">' + display.dateStr + '</div>' +
+                    '</div>' +
+                    '<button onclick="deleteTripHistory(' + trip.id + ')" style="background: #f44336; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;">Delete</button>' +
+                '</div>' +
+                '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: #666; margin-bottom: 8px;">' +
+                    '<div>📏 ' + display.distance + ' ' + display.distUnit + '</div>' +
+                    '<div>⏱️ ' + trip.duration_minutes + ' min</div>' +
+                    '<div>💰 ' + display.symbol + display.totalCost + '</div>' +
+                    '<div>🛣️ ' + trip.routing_mode + '</div>' +
+                '</div>' +
+                '<button onclick="recalculateTrip(' + trip.id + ')" style="width: 100%; background: #667eea; color: white; border: none; border-radius: 4px; padding: 8px; font-size: 12px; cursor: pointer; font-weight: 500;">Recalculate Route</button>' +
+            '</div>'
+        );
+    }
+
     var api = {
         parseLatLonString: parseLatLonString,
         mergeServerAndLocalTrips: mergeServerAndLocalTrips,
+        buildCompletedTripRecord: buildCompletedTripRecord,
+        formatTripListTimestamp: formatTripListTimestamp,
+        filterTripsBySearch: filterTripsBySearch,
+        buildTripHistoryRowHtml: buildTripHistoryRowHtml,
+        EMPTY_TRIP_LIST_HTML: EMPTY_TRIP_LIST_HTML,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -270,23 +270,15 @@ function initializeDarkMode() {
  */
 function applyTheme(theme) {
     const body = document.body;
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const useDark = VoyagrModules.theme().shouldUseDarkMode(theme, prefersDark);
 
-    if (theme === 'auto') {
-        // Use system preference
-        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-        if (prefersDark) {
-            body.classList.add('dark-mode');
-            console.log('[Dark Mode] Applied auto theme (system prefers dark)');
-        } else {
-            body.classList.remove('dark-mode');
-            console.log('[Dark Mode] Applied auto theme (system prefers light)');
-        }
-    } else if (theme === 'dark') {
+    if (useDark) {
         body.classList.add('dark-mode');
-        console.log('[Dark Mode] Applied dark theme');
+        console.log('[Dark Mode] Applied', theme === 'auto' ? 'auto theme (system prefers dark)' : 'dark theme');
     } else {
         body.classList.remove('dark-mode');
-        console.log('[Dark Mode] Applied light theme');
+        console.log('[Dark Mode] Applied', theme === 'auto' ? 'auto theme (system prefers light)' : 'light theme');
     }
 
     currentTheme = theme;
@@ -299,7 +291,7 @@ function applyTheme(theme) {
  * @returns {*} Return value description
  */
 function toggleDarkMode() {
-    const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+    const newTheme = VoyagrModules.theme().toggleBetweenLightAndDark(currentTheme);
     applyTheme(newTheme);
     showStatus(`🌙 Theme changed to ${newTheme} mode`, 'success');
 }
@@ -335,19 +327,13 @@ function updateThemeButtons() {
     const darkBtn = document.getElementById('themeDark');
     const autoBtn = document.getElementById('themeAuto');
 
-    // Remove active class from all buttons
     if (lightBtn) lightBtn.classList.remove('active');
     if (darkBtn) darkBtn.classList.remove('active');
     if (autoBtn) autoBtn.classList.remove('active');
 
-    // Add active class to current theme button
-    if (currentTheme === 'light' && lightBtn) {
-        lightBtn.classList.add('active');
-    } else if (currentTheme === 'dark' && darkBtn) {
-        darkBtn.classList.add('active');
-    } else if (currentTheme === 'auto' && autoBtn) {
-        autoBtn.classList.add('active');
-    }
+    const activeId = VoyagrModules.theme().activeThemeButtonId(currentTheme);
+    const activeBtn = activeId ? document.getElementById(activeId) : null;
+    if (activeBtn) activeBtn.classList.add('active');
 
     console.log('[Dark Mode] Theme buttons updated for theme:', currentTheme);
 }
@@ -2048,78 +2034,23 @@ function parseLatLonString(str) {
  * @returns {object|null}
  */
 function buildCompletedTripRecord(route) {
-    if (!route) return null;
     const startEl = document.getElementById('start');
     const endEl = document.getElementById('end');
-    let start_lat;
-    let start_lon;
-    let end_lat;
-    let end_lon;
-    const start_address = (startEl && startEl.value) ? startEl.value.trim() : '';
-    const end_address = (endEl && endEl.value) ? endEl.value.trim() : (route.destinationName || '');
-
-    if (startEl && startEl.dataset.lat && startEl.dataset.lon) {
-        start_lat = parseFloat(startEl.dataset.lat);
-        start_lon = parseFloat(startEl.dataset.lon);
-    } else if (route.start) {
-        const ps = parseLatLonString(route.start);
-        if (ps) {
-            start_lat = ps.lat;
-            start_lon = ps.lon;
-        }
-    }
-    if (endEl && endEl.dataset.lat && endEl.dataset.lon) {
-        end_lat = parseFloat(endEl.dataset.lat);
-        end_lon = parseFloat(endEl.dataset.lon);
-    } else if (route.destination) {
-        const pe = parseLatLonString(route.destination);
-        if (pe) {
-            end_lat = pe.lat;
-            end_lon = pe.lon;
-        }
-    }
-
-    if (
-        (start_lat == null || end_lat == null) &&
-        typeof routePolyline !== 'undefined' &&
-        routePolyline &&
-        routePolyline.length > 1
-    ) {
-        if (start_lat == null || start_lon == null) {
-            start_lat = routePolyline[0][0];
-            start_lon = routePolyline[0][1];
-        }
-        const L = routePolyline[routePolyline.length - 1];
-        if (end_lat == null || end_lon == null) {
-            end_lat = L[0];
-            end_lon = L[1];
-        }
-    }
-
-    if (start_lat == null || start_lon == null || end_lat == null || end_lon == null) {
-        return null;
-    }
-
-    const distance_km = parseFloat(route.distance_km != null ? route.distance_km : route.distance) || 0;
-    const duration_minutes = parseFloat(
-        route.duration_minutes != null ? route.duration_minutes : route.time
-    ) || 0;
-
-    return {
-        start_lat,
-        start_lon,
-        end_lat,
-        end_lon,
-        start_address: start_address || `${start_lat},${start_lon}`,
-        end_address: end_address || `${end_lat},${end_lon}`,
-        distance_km,
-        duration_minutes,
-        fuel_cost: route.fuel_cost || 0,
-        toll_cost: route.toll_cost || 0,
-        caz_cost: route.caz_cost || 0,
-        routing_mode: typeof currentRoutingMode !== 'undefined' ? currentRoutingMode : 'auto',
-        timestamp: new Date().toISOString()
-    };
+    return VoyagrModules.tripHistory().buildCompletedTripRecord({
+        route,
+        startEl: startEl ? {
+            value: startEl.value,
+            lat: startEl.dataset.lat,
+            lon: startEl.dataset.lon,
+        } : null,
+        endEl: endEl ? {
+            value: endEl.value,
+            lat: endEl.dataset.lat,
+            lon: endEl.dataset.lon,
+        } : null,
+        routePolyline: typeof routePolyline !== 'undefined' ? routePolyline : null,
+        routingMode: typeof currentRoutingMode !== 'undefined' ? currentRoutingMode : 'auto',
+    });
 }
 
 function updateLocalTripServerId(localId, serverTripId) {
@@ -2288,28 +2219,7 @@ function bindTripHistorySearch() {
             displayTripHistory(allTrips);
             return;
         }
-        const filtered = (allTrips || []).filter((trip) => {
-            try {
-                const start = (trip.start_address || '').toLowerCase();
-                const end = (trip.end_address || '').toLowerCase();
-                let tsText = '';
-                if (trip.timestamp != null && trip.timestamp !== '') {
-                    const d = new Date(trip.timestamp);
-                    tsText = Number.isNaN(d.getTime())
-                        ? String(trip.timestamp)
-                        : `${d.toLocaleString()} ${d.toDateString()}`;
-                }
-                tsText = tsText.toLowerCase();
-                return (
-                    start.includes(searchTerm) ||
-                    end.includes(searchTerm) ||
-                    tsText.includes(searchTerm)
-                );
-            } catch (err) {
-                return false;
-            }
-        });
-        displayTripHistory(filtered);
+        displayTripHistory(VoyagrModules.tripHistory().filterTripsBySearch(allTrips, searchTerm));
     };
 }
 
@@ -2317,47 +2227,29 @@ function displayTripHistory(trips) {
     const listContainer = document.getElementById('tripHistoryList');
     if (!listContainer) return;
 
+    const TH = VoyagrModules.tripHistory();
+
     if (!trips || trips.length === 0) {
-        listContainer.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No trips found</div>';
+        listContainer.innerHTML = TH.EMPTY_TRIP_LIST_HTML;
         bindTripHistorySearch();
         return;
     }
 
-    listContainer.innerHTML = trips.map((trip, index) => {
-        const date = new Date(trip.timestamp);
-        const dateStr = Number.isNaN(date.getTime())
-            ? '—'
-            : date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        const distance = convertDistance(trip.distance_km);
-        const distUnit = getDistanceUnit();
-        const totalCost = (parseFloat(trip.fuel_cost || 0) + parseFloat(trip.toll_cost || 0) + parseFloat(trip.caz_cost || 0)).toFixed(2);
-        const symbol = getCurrencySymbol();
-        const startAddr = escapeHtml(trip.start_address || 'Start');
-        const endAddr = escapeHtml(trip.end_address || 'End');
-
-        return `
-            <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid #667eea;">
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-                    <div>
-                        <div style="font-weight: 600; color: #333; margin-bottom: 4px;">
-                            ${startAddr} → ${endAddr}
-                            ${trip._localOnly ? ' <span style="font-size:11px;font-weight:500;color:#1565C0;">(this device)</span>' : ''}
-                        </div>
-                        <div style="font-size: 12px; color: #666;">
-                            ${dateStr}
-                        </div>
-                    </div>
-                    <button onclick="deleteTripHistory(${trip.id})" style="background: #f44336; color: white; border: none; border-radius: 4px; padding: 4px 8px; font-size: 12px; cursor: pointer;">Delete</button>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; color: #666; margin-bottom: 8px;">
-                    <div>📏 ${distance} ${distUnit}</div>
-                    <div>⏱️ ${trip.duration_minutes} min</div>
-                    <div>💰 ${symbol}${totalCost}</div>
-                    <div>🛣️ ${trip.routing_mode}</div>
-                </div>
-                <button onclick="recalculateTrip(${trip.id})" style="width: 100%; background: #667eea; color: white; border: none; border-radius: 4px; padding: 8px; font-size: 12px; cursor: pointer; font-weight: 500;">Recalculate Route</button>
-            </div>
-        `;
+    listContainer.innerHTML = trips.map((trip) => {
+        const totalCost = (
+            parseFloat(trip.fuel_cost || 0) +
+            parseFloat(trip.toll_cost || 0) +
+            parseFloat(trip.caz_cost || 0)
+        ).toFixed(2);
+        return TH.buildTripHistoryRowHtml(trip, {
+            startAddr: escapeHtml(trip.start_address || 'Start'),
+            endAddr: escapeHtml(trip.end_address || 'End'),
+            dateStr: TH.formatTripListTimestamp(trip.timestamp),
+            distance: convertDistance(trip.distance_km),
+            distUnit: getDistanceUnit(),
+            totalCost,
+            symbol: getCurrencySymbol(),
+        });
     }).join('');
 
     bindTripHistorySearch();
