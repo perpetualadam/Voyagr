@@ -14,7 +14,7 @@ import json
 import os
 from typing import Optional
 
-from flask import Blueprint, jsonify, render_template_string, current_app, Response, make_response
+from flask import Blueprint, jsonify, render_template, render_template_string, current_app, Response, make_response
 
 from voyagr.discoverability import block_search_indexing
 from voyagr.ga4 import template_kwargs as ga4_template_kwargs
@@ -148,8 +148,7 @@ def llms_full_txt():
 @require_admin_if_configured
 def monitoring_dashboard():
     """Monitoring dashboard for routing engines."""
-    from voyagr_web import MONITORING_DASHBOARD_HTML
-    return render_template_string(MONITORING_DASHBOARD_HTML, **ga4_template_kwargs())
+    return render_template('monitoring_dashboard.html', **ga4_template_kwargs())
 
 
 @core_bp.route('/manifest.json')
