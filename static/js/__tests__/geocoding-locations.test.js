@@ -47,4 +47,25 @@ describe('geocoding-locations module', () => {
             endName: 'End',
         });
     });
+
+    test('coordinate parsing helpers validate and build geocode results', () => {
+        expect(GL.normalizeGeocodeQuery('  ')).toBeNull();
+        expect(GL.normalizeGeocodeQuery(' Leeds ')).toBe('Leeds');
+        expect(GL.isCoordinateFormat('51.5,-0.1')).toBe(true);
+        expect(GL.isCoordinateFormat('bad')).toBe(false);
+        const coord = GL.parseCoordinateGeocodeResult('51.5,-0.1');
+        expect(coord.lat).toBe(51.5);
+        expect(coord.display_name).toContain('51.5000');
+        expect(GL.buildPlusCodeGeocodeResult('CODE', { lat: 1, lon: 2 }).display_name).toContain('Plus Code');
+        expect(GL.parseNominatimResultRow({ lat: '51', lon: '-1', display_name: 'X' })).toEqual({
+            lat: 51, lon: -1, display_name: 'X',
+        });
+    });
+
+    test('parseLatLonPairString and invalid coordinate status messages', () => {
+        expect(GL.parseLatLonPairString('51.5,-0.1')).toEqual({ valid: true, coords: [51.5, -0.1] });
+        expect(GL.parseLatLonPairString('bad')).toEqual({ valid: false });
+        expect(GL.getInvalidCoordinatesFormatStatusMessage()).toContain('format');
+        expect(GL.getInvalidCoordinatesStatusMessage()).toContain('Invalid coordinates');
+    });
 });

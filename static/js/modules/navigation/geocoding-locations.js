@@ -79,6 +79,112 @@
         };
     }
 
+    /**
+     * Trim and validate a geocode query string.
+     * @param {string} address
+     * @returns {string|null}
+     */
+    function normalizeGeocodeQuery(address) {
+        if (!address || String(address).trim() === '') {
+            return null;
+        }
+        return String(address).trim();
+    }
+
+    /**
+     * Whether input is already a valid "lat,lon" pair.
+     * @param {string} input
+     * @returns {boolean}
+     */
+    function isCoordinateFormat(input) {
+        var parts = String(input || '').trim().split(',');
+        if (parts.length !== 2) return false;
+        var lat = parseFloat(parts[0].trim());
+        var lon = parseFloat(parts[1].trim());
+        return !isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+    }
+
+    /**
+     * Build a geocode result from a coordinate string input.
+     * @param {string} trimmedAddress
+     * @returns {{ lat: number, lon: number, display_name: string, cached: boolean }|null}
+     */
+    function parseCoordinateGeocodeResult(trimmedAddress) {
+        if (!isCoordinateFormat(trimmedAddress)) return null;
+        var parts = trimmedAddress.split(',');
+        var lat = parseFloat(parts[0].trim());
+        var lon = parseFloat(parts[1].trim());
+        return {
+            lat: lat,
+            lon: lon,
+            display_name: lat.toFixed(4) + ', ' + lon.toFixed(4),
+            cached: false,
+        };
+    }
+
+    /**
+     * @param {string} code
+     * @param {{ lat: number, lon: number }} decoded
+     * @returns {{ lat: number, lon: number, display_name: string, cached: boolean }}
+     */
+    function buildPlusCodeGeocodeResult(code, decoded) {
+        decoded = decoded || {};
+        return {
+            lat: decoded.lat,
+            lon: decoded.lon,
+            display_name: 'Plus Code: ' + code,
+            cached: false,
+        };
+    }
+
+    /**
+     * @param {Object|null|undefined} row - First Nominatim result row
+     * @returns {{ lat: number, lon: number, display_name: string }|null}
+     */
+    function parseNominatimResultRow(row) {
+        if (!row) return null;
+        return {
+            lat: parseFloat(row.lat),
+            lon: parseFloat(row.lon),
+            display_name: row.display_name,
+        };
+    }
+
+    /**
+     * Parse a "lat,lon" API coordinate string into numeric coords.
+     * @param {string} coordString
+     * @returns {{ valid: boolean, coords?: [number, number] }}
+     */
+    function parseLatLonPairString(coordString) {
+        if (!coordString || typeof coordString !== 'string') {
+            return { valid: false };
+        }
+        var parts = coordString.split(',');
+        if (parts.length < 2) {
+            return { valid: false };
+        }
+        var lat = parseFloat(parts[0].trim());
+        var lon = parseFloat(parts[1].trim());
+        if (isNaN(lat) || isNaN(lon)) {
+            return { valid: false };
+        }
+        return { valid: true, coords: [lat, lon] };
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getInvalidCoordinatesFormatStatusMessage() {
+        return 'Error: Invalid coordinates format';
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getInvalidCoordinatesStatusMessage() {
+        return 'Error: Invalid coordinates';
+    }
+
     var api = {
         readStoredLocationFromDataset: readStoredLocationFromDataset,
         getGeocodeLoadingStatusMessage: getGeocodeLoadingStatusMessage,
@@ -86,6 +192,14 @@
         buildGeocodeResolvedStatusMessage: buildGeocodeResolvedStatusMessage,
         buildGeocodeErrorStatusMessage: buildGeocodeErrorStatusMessage,
         formatGeocodeApiCoords: formatGeocodeApiCoords,
+        normalizeGeocodeQuery: normalizeGeocodeQuery,
+        isCoordinateFormat: isCoordinateFormat,
+        parseCoordinateGeocodeResult: parseCoordinateGeocodeResult,
+        buildPlusCodeGeocodeResult: buildPlusCodeGeocodeResult,
+        parseNominatimResultRow: parseNominatimResultRow,
+        parseLatLonPairString: parseLatLonPairString,
+        getInvalidCoordinatesFormatStatusMessage: getInvalidCoordinatesFormatStatusMessage,
+        getInvalidCoordinatesStatusMessage: getInvalidCoordinatesStatusMessage,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

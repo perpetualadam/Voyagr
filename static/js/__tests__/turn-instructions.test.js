@@ -387,3 +387,27 @@ describe('buildNavStartTurnInstructionInit', () => {
         expect(TI.buildNavStartTurnInstructionInit([{ type: 1 }], 0, [], {})).toBeNull();
     });
 });
+
+describe('findFollowingManeuver', () => {
+    const polyline = [[51.5, -0.12], [51.51, -0.11], [51.52, -0.10]];
+    const steps = [
+        { type: 8, begin_shape_index: 0, instruction: 'Continue' },
+        { type: 10, begin_shape_index: 2, instruction: 'Turn right', street_names: ['High St'] },
+    ];
+
+    test('returns next announceable maneuver with along-route gap', () => {
+        const next = TI.findFollowingManeuver(steps, 0, polyline, {
+            cumulativeDistanceBetweenVertices: () => 120,
+            getManeuverStreetLabel: (m) => (m.street_names || [])[0] || '',
+            resolveRoadClass: () => 'primary',
+        });
+        expect(next.index).toBe(1);
+        expect(next.direction).toBe('right');
+        expect(next.gapMeters).toBe(120);
+        expect(next.streetName).toBe('High St');
+    });
+
+    test('returns null when no following maneuver', () => {
+        expect(TI.findFollowingManeuver(steps, 1, polyline, {})).toBeNull();
+    });
+});

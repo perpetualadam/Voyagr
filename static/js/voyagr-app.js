@@ -4338,19 +4338,20 @@ async function calculateRoute() {
 
                 // Parse coordinates
                 try {
-                    const startParts = geocodedStart.split(',');
-                    const endParts = geocodedEnd.split(',');
+                    const GL = VoyagrModules.geocodingLocations();
+                    const startParsed = GL.parseLatLonPairString(geocodedStart);
+                    const endParsed = GL.parseLatLonPairString(geocodedEnd);
 
-                    if (startParts.length < 2 || endParts.length < 2) {
-                        showStatus('Error: Invalid coordinates format', 'error');
+                    if (!startParsed.valid || !endParsed.valid) {
+                        showStatus(GL.getInvalidCoordinatesFormatStatusMessage(), 'error');
                         return;
                     }
 
-                    const startCoords = [parseFloat(startParts[0].trim()), parseFloat(startParts[1].trim())];
-                    const endCoords = [parseFloat(endParts[0].trim()), parseFloat(endParts[1].trim())];
+                    const startCoords = startParsed.coords;
+                    const endCoords = endParsed.coords;
 
                     if (isNaN(startCoords[0]) || isNaN(startCoords[1]) || isNaN(endCoords[0]) || isNaN(endCoords[1])) {
-                        showStatus('Error: Invalid coordinates', 'error');
+                        showStatus(GL.getInvalidCoordinatesStatusMessage(), 'error');
                         return;
                     }
 
@@ -4359,24 +4360,27 @@ async function calculateRoute() {
                     if (endMarker && typeof endMarker.remove === 'function') endMarker.remove();
                     if (routeLayer && typeof routeLayer.remove === 'function') routeLayer.remove();
 
-                    // Add markers with MapLibre
+                    const PM = VoyagrModules.previewMarker();
+                    const startMarkerOpts = PM.getRouteEndpointMarkerOptions('start');
+                    const endMarkerOpts = PM.getRouteEndpointMarkerOptions('end');
+
                     startMarker = MapLibreHelpers.createCircleMarker(startCoords[0], startCoords[1], {
-                        radius: 8,
-                        fillColor: '#00ff00',
-                        color: '#000',
-                        weight: 2,
-                        fillOpacity: 0.8
+                        radius: startMarkerOpts.radius,
+                        fillColor: startMarkerOpts.fillColor,
+                        color: startMarkerOpts.color,
+                        weight: startMarkerOpts.weight,
+                        fillOpacity: startMarkerOpts.fillOpacity,
                     }).addTo(map);
-                    startMarker.bindPopup('Start Location');
+                    startMarker.bindPopup(startMarkerOpts.popup);
 
                     endMarker = MapLibreHelpers.createCircleMarker(endCoords[0], endCoords[1], {
-                        radius: 8,
-                        fillColor: '#ff0000',
-                        color: '#000',
-                        weight: 2,
-                        fillOpacity: 0.8
+                        radius: endMarkerOpts.radius,
+                        fillColor: endMarkerOpts.fillColor,
+                        color: endMarkerOpts.color,
+                        weight: endMarkerOpts.weight,
+                        fillOpacity: endMarkerOpts.fillOpacity,
                     }).addTo(map);
-                    endMarker.bindPopup('End Location');
+                    endMarker.bindPopup(endMarkerOpts.popup);
 
                     // Draw route line
                     let routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
@@ -9490,21 +9494,13 @@ function cumulativeRouteDistanceBetween(i, j) {
  * @returns {{ direction, valhallaType, streetName, gapMeters, index, maneuver } | null}
  */
 function getFollowingManeuver(currentIndex) {
-    if (!currentRouteSteps || currentIndex == null || currentIndex < 0) return null;
-    const current = currentRouteSteps[currentIndex];
-    if (!current) return null;
-    const currentShapeIdx = current.begin_shape_index || 0;
-    for (let j = currentIndex + 1; j < currentRouteSteps.length; j++) {
-        const m = currentRouteSteps[j];
-        const type = m.type || 0;
-        const baseDir = maneuverTypeToDirectionKey(type);
-        if (!baseDir) continue;
-        const dir = refineManeuverDirectionForRoute(type, baseDir, m);
-        const gapMeters = cumulativeRouteDistanceBetween(currentShapeIdx, m.begin_shape_index || 0);
-        const streetName = getManeuverStreetLabel(m, false);
-        return { direction: dir, valhallaType: type, streetName, gapMeters, index: j, maneuver: m };
-    }
-    return null;
+    const TI = VoyagrModules.turnInstructions();
+    const RG = VoyagrModules.routeGeometry();
+    return TI.findFollowingManeuver(currentRouteSteps, currentIndex, routePolyline, {
+        cumulativeDistanceBetweenVertices: RG.cumulativeDistanceBetweenVertices,
+        getManeuverStreetLabel: getManeuverStreetLabel,
+        resolveRoadClass: (step) => step.road_class || inferRoadClassFromManeuver(step),
+    });
 }
 
 /** Valhalla stores roundabout exit count on enter and/or exit maneuver — merge for UI/lane hints. */
@@ -15497,31 +15493,20 @@ function selectAutocompleteResult(fieldId, lat, lon, name) {
  * @returns {*} Return value description
  */
 function isCoordinateFormat(input) {
-    // Check if input is already in "lat,lon" format
-    const parts = input.trim().split(',');
-    if (parts.length !== 2) return false;
-
-    const lat = parseFloat(parts[0].trim());
-    const lon = parseFloat(parts[1].trim());
-
-    // Valid latitude: -90 to 90, Valid longitude: -180 to 180
-    return !isNaN(lat) && !isNaN(lon) && lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180;
+    return VoyagrModules.geocodingLocations().isCoordinateFormat(input);
 }
 
 async function geocodeAddress(address) {
-    if (!address || address.trim() === '') {
+    const GL = VoyagrModules.geocodingLocations();
+    const trimmedAddress = GL.normalizeGeocodeQuery(address);
+    if (!trimmedAddress) {
         return null;
     }
 
-    const trimmedAddress = address.trim();
-
-    // Check if already in coordinate format
-    if (isCoordinateFormat(trimmedAddress)) {
-        const parts = trimmedAddress.split(',');
-        const lat = parseFloat(parts[0].trim());
-        const lon = parseFloat(parts[1].trim());
-        console.log('[Geocoding] Input is already coordinates:', lat, lon);
-        return { lat, lon, display_name: `${lat.toFixed(4)}, ${lon.toFixed(4)}`, cached: false };
+    const coordResult = GL.parseCoordinateGeocodeResult(trimmedAddress);
+    if (coordResult) {
+        console.log('[Geocoding] Input is already coordinates:', coordResult.lat, coordResult.lon);
+        return coordResult;
     }
 
     // Check if Plus Codes are enabled and input is a Plus Code
@@ -15533,12 +15518,7 @@ async function geocodeAddress(address) {
                 console.log('[Geocoding] Detected Plus Code:', trimmedAddress);
                 const decoded = service.decode(trimmedAddress);
                 console.log('[Geocoding] Decoded Plus Code to:', decoded.lat, decoded.lon);
-                return {
-                    lat: decoded.lat,
-                    lon: decoded.lon,
-                    display_name: `Plus Code: ${trimmedAddress}`,
-                    cached: false
-                };
+                return GL.buildPlusCodeGeocodeResult(trimmedAddress, decoded);
             }
         } catch (error) {
             console.log('[Geocoding] Plus Code decode error:', error.message);
@@ -15574,12 +15554,10 @@ async function geocodeAddress(address) {
             return null;
         }
 
-        const result = data[0];
-        const geocoded = {
-            lat: parseFloat(result.lat),
-            lon: parseFloat(result.lon),
-            display_name: result.display_name
-        };
+        const geocoded = GL.parseNominatimResultRow(data[0]);
+        if (!geocoded) {
+            return null;
+        }
 
         // Cache the result
         geocodingCache[trimmedAddress] = geocoded;
@@ -15648,9 +15626,10 @@ async function geocodeLocations(startAddress, endAddress) {
  * @param {{ resumeStepIndex?: number, fromPersistedResume?: boolean }|null} [navStartOpts] - Optional resume / offline tweaks
  */
 function startTurnByTurnNavigation(routeData, navStartOpts = null) {
+    const MC = _mapControls();
     routeData = mergeNavigationRouteFromSelected(routeData);
     if (!routeData || !routeData.geometry) {
-        showStatus('No route geometry available', 'error');
+        showStatus(MC.getNavStartNoGeometryStatusMessage(), 'error');
         return;
     }
 
@@ -15701,7 +15680,7 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
         // Validate decoded polyline
         if (!routePolyline || routePolyline.length === 0) {
             console.error('[Navigation] Failed to decode route geometry - polyline is empty');
-            showStatus('Error: Invalid route geometry', 'error');
+            showStatus(MC.getNavStartInvalidGeometryStatusMessage(), 'error');
             return;
         }
 
@@ -15712,7 +15691,7 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
         }
     } catch (e) {
         console.error('Could not decode geometry:', e);
-        showStatus('Error: Could not decode route geometry', 'error');
+        showStatus(MC.getNavStartDecodeGeometryErrorStatusMessage(), 'error');
         return;
     }
 

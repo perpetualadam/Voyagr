@@ -15,4 +15,13 @@ describe('preview-marker module', () => {
     test('getPreviewMarkerStyleCssText centers marker above anchor', () => {
         expect(PM.getPreviewMarkerStyleCssText()).toContain('translateY(-50%)');
     });
+
+    test('getRouteEndpointMarkerOptions returns start and end pin styles', () => {
+        const start = PM.getRouteEndpointMarkerOptions('start');
+        expect(start.fillColor).toBe('#00ff00');
+        expect(start.popup).toBe('Start Location');
+        const end = PM.getRouteEndpointMarkerOptions('end');
+        expect(end.fillColor).toBe('#ff0000');
+        expect(end.popup).toBe('End Location');
+    });
 });
