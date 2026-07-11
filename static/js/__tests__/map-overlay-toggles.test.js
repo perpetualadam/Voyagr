@@ -71,4 +71,20 @@ describe('map-overlay-toggles module', () => {
         expect(init.toggles.length).toBe(3);
         expect(init.initialFetches.cameras).toBe(true);
     });
+
+    test('buildClearOverlayMarkersExecutePlan targets window marker arrays', () => {
+        const clear = OT.buildClearCameraMarkersExecutePlan();
+        expect(clear.markersProperty).toBe(OT.CAMERA_MARKERS_PROPERTY);
+        expect(clear.resetMarkerArray).toBe(true);
+    });
+
+    test('buildOsmAreaOverlayResponsePlan skips non-OK HTTP responses', () => {
+        const plan = OT.buildOsmAreaOverlayResponsePlan({
+            ok: false,
+            statusCode: 502,
+            logLabel: 'OSM Traffic Lights',
+        });
+        expect(plan.shouldParseJson).toBe(false);
+        expect(plan.logMessage).toContain('502');
+    });
 });

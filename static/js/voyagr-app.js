@@ -2757,6 +2757,7 @@ function toggleRouteEditing() {
 
     if (orch.action === 'disable') {
         if (orch.clearRouteDragMarkers) clearRouteDragMarkers();
+        else if (orch.disableRouteEditing) routeEditingEnabled = false;
         showStatus(orch.statusMessage, orch.statusType);
     } else {
         enableRouteEditing();
@@ -5022,9 +5023,12 @@ function addTrafficLayer() {
     }
 
     try {
-        if (trafficLayer && map && !map.getLayer(MLT.TRAFFIC_LAYER_ID)) {
-            trafficLayer = null;
-        }
+        const stale = MLT.buildTrafficLayerStaleRefResetPlan({
+            hasTrafficLayerRef: !!trafficLayer,
+            hasMap: !!map,
+            mapHasTrafficLayer: !!(map && map.getLayer && map.getLayer(MLT.TRAFFIC_LAYER_ID)),
+        });
+        if (stale.shouldReset) trafficLayer = null;
     } catch (e) {
         /* ignore */
     }
@@ -5051,14 +5055,15 @@ function addTrafficLayer() {
             .then((r) => r.json())
             .then((data) => {
                 applySupportLinksFromConfig(data);
-                if (data[credFetch.enableProxyFlag]) {
+                const dispatch = MLT.buildTrafficCredentialsResponseDispatchPlan(data);
+                if (dispatch.action === 'retryWithProxy') {
                     window.VOYAGR_TOMTOM_TRAFFIC_PROXY = true;
                     console.log('[Traffic] Server tile proxy enabled — key stays off the client');
                     addTrafficLayer();
                     return;
                 }
-                if (data.success && data[credFetch.apiKeyField]) {
-                    window.TOMTOM_API_KEY = data[credFetch.apiKeyField];
+                if (dispatch.action === 'retryWithKey') {
+                    window.TOMTOM_API_KEY = dispatch.apiKey;
                     console.log('[Traffic] API key loaded from server, reinitializing...');
                     addTrafficLayer();
                     return;
@@ -5077,46 +5082,59 @@ function addTrafficLayer() {
     };
 
     const addTrafficLayerNow = () => {
-        if (!map || typeof map.isStyleLoaded !== 'function' || !map.isStyleLoaded()) {
-            return false;
-        }
+        const isStyleLoaded = !!(map && map.isStyleLoaded && map.isStyleLoaded());
+        const tilePlan = MLT.buildTrafficTileUrlsPlan({
+            useProxy: window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true,
+            origin: window.location.origin,
+            apiKey: window.TOMTOM_API_KEY || '',
+        });
+        let hasSource = false;
+        let hasLayer = false;
         try {
-            const tilePlan = MLT.buildTrafficTileUrlsPlan({
-                useProxy: window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true,
-                origin: window.location.origin,
-                apiKey: window.TOMTOM_API_KEY || '',
-            });
-            if (!tilePlan.hasTiles) {
-                console.log(tilePlan.noCredentialsLogMessage);
-                return true;
-            }
+            hasSource = !!(map && map.getSource && map.getSource(MLT.TRAFFIC_SOURCE_ID));
+            hasLayer = !!(map && map.getLayer && map.getLayer(MLT.TRAFFIC_LAYER_ID));
+        } catch (e) {
+            /* ignore */
+        }
 
-            if (!map.getSource(MLT.TRAFFIC_SOURCE_ID)) {
-                map.addSource(MLT.TRAFFIC_SOURCE_ID, MLT.buildTrafficRasterSourceSpec(tilePlan.tiles));
-            }
+        const execute = MLT.buildAddTrafficLayerNowExecutePlan({
+            isStyleLoaded,
+            hasTiles: tilePlan.hasTiles,
+            hasSource,
+            hasLayer,
+            tiles: tilePlan.tiles,
+            beforeLayerId: isStyleLoaded
+                ? _routeSelection().findFirstTextSymbolLayerId(map.getStyle() && map.getStyle().layers)
+                : null,
+        });
+        if (!execute.shouldAdd) {
+            if (execute.logMessage) console.log(execute.logMessage);
+            return !execute.retryLater;
+        }
 
-            if (!map.getLayer(MLT.TRAFFIC_LAYER_ID)) {
-                const style = map.getStyle();
-                const trafficBeforeId = _routeSelection()
-                    .findFirstTextSymbolLayerId(style && style.layers);
-                if (trafficBeforeId) {
-                    console.log(`[Traffic] Inserting traffic layer before symbol layer: ${trafficBeforeId}`);
-                }
-                const layerSpec = MLT.buildTrafficRasterLayerSpec({ beforeLayerId: trafficBeforeId });
+        try {
+            if (execute.beforeLayerIdLogPrefix && execute.layerSpec.beforeLayerId) {
+                console.log(execute.beforeLayerIdLogPrefix + execute.layerSpec.beforeLayerId);
+            }
+            if (execute.addSource) {
+                map.addSource(execute.sourceId, execute.sourceSpec);
+            }
+            if (execute.addLayer) {
                 map.addLayer({
-                    id: layerSpec.id,
-                    type: layerSpec.type,
-                    source: layerSpec.source,
-                    minzoom: layerSpec.minzoom,
-                    maxzoom: layerSpec.maxzoom,
-                    paint: layerSpec.paint,
-                }, layerSpec.beforeLayerId);
+                    id: execute.layerSpec.id,
+                    type: execute.layerSpec.type,
+                    source: execute.layerSpec.source,
+                    minzoom: execute.layerSpec.minzoom,
+                    maxzoom: execute.layerSpec.maxzoom,
+                    paint: execute.layerSpec.paint,
+                }, execute.layerSpec.beforeLayerId);
             }
 
-            trafficLayer = { id: MLT.TRAFFIC_LAYER_ID };
-            console.log(orch.successLog);
-
-            if (orch.bringRoutesToTop) bringRoutesToTop();
+            if (execute.setTrafficLayerRef) {
+                trafficLayer = { id: execute.trafficLayerRefId };
+            }
+            console.log(execute.successLog);
+            if (execute.bringRoutesToTop) bringRoutesToTop();
             return true;
         } catch (e) {
             console.error('[Traffic] Error adding traffic layer:', e);
@@ -5130,31 +5148,40 @@ function addTrafficLayer() {
 
     window[orch.pendingGuardProperty] = true;
 
-    if (orch.isStyleLoaded) {
+    const styleInit = MLT.buildTrafficStyleReadyInitPlan({ isStyleLoaded: orch.isStyleLoaded });
+    if (styleInit.strategy === 'immediate') {
         runOnce();
         return;
     }
 
-    console.log(orch.waitForStyleLog);
-    map.once('style.load', runOnce);
+    console.log(styleInit.waitForStyleLog);
+    map.once(styleInit.bindStyleLoadEvent, runOnce);
     let attempts = 0;
     const poll = () => {
-        if (scheduled) return;
-        if (!map) {
+        const tick = MLT.buildTrafficStylePollTickPlan({
+            scheduled,
+            hasMap: !!map,
+            isStyleLoaded: !!(map && map.isStyleLoaded && map.isStyleLoaded()),
+            attempts,
+            maxAttempts: orch.stylePollMaxAttempts,
+            intervalMs: orch.stylePollIntervalMs,
+        });
+        if (tick.action === 'stop') return;
+        if (tick.action === 'clearGuard') {
             window[orch.pendingGuardProperty] = false;
             return;
         }
-        if (map.isStyleLoaded()) {
+        if (tick.action === 'runOnce') {
             runOnce();
             return;
         }
-        attempts++;
-        if (attempts >= orch.stylePollMaxAttempts) {
-            console.warn(orch.stylePollGiveUpLog);
+        if (tick.action === 'giveUp') {
+            console.warn(tick.logMessage);
             window[orch.pendingGuardProperty] = false;
             return;
         }
-        setTimeout(poll, orch.stylePollIntervalMs);
+        attempts = tick.nextAttempts;
+        setTimeout(poll, tick.intervalMs);
     };
     setTimeout(poll, orch.stylePollIntervalMs);
 }
@@ -6424,18 +6451,26 @@ function toggleShowCameras() {
     if (execute.saveAllSettings) saveAllSettings();
 }
 
-/**
- * Clear all camera markers from the map (separate from hazard markers)
- */
-function clearCameraMarkers() {
-    if (window.cameraMarkers) {
-        window.cameraMarkers.forEach(marker => {
+function applyClearOverlayMarkersFromPlan(execute) {
+    if (!execute || !execute.shouldClear) return;
+    const markers = window[execute.markersProperty];
+    if (markers) {
+        markers.forEach((marker) => {
             if (marker && typeof marker.remove === 'function') {
                 marker.remove();
             }
         });
     }
-    window.cameraMarkers = [];
+    if (execute.resetMarkerArray) {
+        window[execute.markersProperty] = [];
+    }
+}
+
+/**
+ * Clear all camera markers from the map (separate from hazard markers)
+ */
+function clearCameraMarkers() {
+    applyClearOverlayMarkersFromPlan(_mapOverlayToggles().buildClearCameraMarkersExecutePlan());
 }
 
 /**
@@ -6523,7 +6558,7 @@ function toggleShowOsmTrafficLights() {
     if (!execute.shouldApply) return;
 
     showOsmTrafficLightsEnabled = execute.enabled;
-    localStorage.setItem(execute.storageKey, execute.storageValue);
+    TU.writeBoolPref(execute.storageKey, showOsmTrafficLightsEnabled);
     TU.applyLabeledToggleButton(document.getElementById(execute.toggleId), showOsmTrafficLightsEnabled);
 
     if (execute.mapAction === 'fetchOsmTrafficLights') {
@@ -6544,7 +6579,7 @@ function toggleShowOsmRailwayCrossings() {
     if (!execute.shouldApply) return;
 
     showOsmRailwayCrossingsEnabled = execute.enabled;
-    localStorage.setItem(execute.storageKey, execute.storageValue);
+    TU.writeBoolPref(execute.storageKey, showOsmRailwayCrossingsEnabled);
     TU.applyLabeledToggleButton(document.getElementById(execute.toggleId), showOsmRailwayCrossingsEnabled);
 
     if (execute.mapAction === 'fetchOsmRailwayCrossings') {
@@ -6556,21 +6591,11 @@ function toggleShowOsmRailwayCrossings() {
 }
 
 function clearOsmTrafficLightMarkers() {
-    if (window.osmTrafficLightMarkers) {
-        window.osmTrafficLightMarkers.forEach(m => {
-            if (m && typeof m.remove === 'function') m.remove();
-        });
-    }
-    window.osmTrafficLightMarkers = [];
+    applyClearOverlayMarkersFromPlan(_mapOverlayToggles().buildClearOsmTrafficLightMarkersExecutePlan());
 }
 
 function clearOsmRailwayCrossingMarkers() {
-    if (window.osmRailwayCrossingMarkers) {
-        window.osmRailwayCrossingMarkers.forEach(m => {
-            if (m && typeof m.remove === 'function') m.remove();
-        });
-    }
-    window.osmRailwayCrossingMarkers = [];
+    applyClearOverlayMarkersFromPlan(_mapOverlayToggles().buildClearOsmRailwayCrossingMarkersExecutePlan());
 }
 
 const OSM_OVERLAY_MAX_BBOX_DEG = MOT ? MOT.OSM_OVERLAY_MAX_BBOX_DEG : 0.35;
@@ -6586,17 +6611,27 @@ function isOsmOverlayBboxTooLarge(north, south, east, west) {
  * @returns {Promise<object|null>}
  */
 function fetchOsmAreaOverlay(url, logLabel) {
+    const OT = _mapOverlayToggles();
     return fetch(url)
         .then((response) => {
-            if (!response.ok) {
-                console.warn(`[${logLabel}] HTTP ${response.status} (overlay skipped)`);
+            const httpPlan = OT.buildOsmAreaOverlayResponsePlan({
+                ok: response.ok,
+                statusCode: response.status,
+                logLabel,
+            });
+            if (!httpPlan.shouldParseJson) {
+                console.warn(httpPlan.logMessage);
                 return null;
             }
             return response.json();
         })
         .catch((err) => {
-            console.warn(`[${logLabel}]`, err.message || err);
-            return null;
+            const errPlan = OT.buildOsmAreaOverlayFetchErrorPlan({
+                logLabel,
+                errorMessage: err.message || String(err),
+            });
+            console.warn(errPlan.logMessage);
+            return errPlan.result;
         });
 }
 

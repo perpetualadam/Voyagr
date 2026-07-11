@@ -244,12 +244,82 @@
             + '&west=' + west;
     }
 
-    function buildAreaBoundsApiUrl(north, south, east, west, apiPath) {
-        return apiPath
-            + '?north=' + north
-            + '&south=' + south
-            + '&east=' + east
-            + '&west=' + west;
+    var CAMERA_MARKERS_PROPERTY = 'cameraMarkers';
+    var OSM_TRAFFIC_LIGHT_MARKERS_PROPERTY = 'osmTrafficLightMarkers';
+    var OSM_RAILWAY_CROSSING_MARKERS_PROPERTY = 'osmRailwayCrossingMarkers';
+
+    /**
+     * Execute plan for clearing overlay markers from the map.
+     * @param {string} markersProperty
+     * @returns {Object}
+     */
+    function buildClearOverlayMarkersExecutePlan(markersProperty) {
+        return {
+            shouldClear: true,
+            markersProperty: markersProperty,
+            resetMarkerArray: true,
+        };
+    }
+
+    /**
+     * @returns {Object}
+     */
+    function buildClearCameraMarkersExecutePlan() {
+        return buildClearOverlayMarkersExecutePlan(CAMERA_MARKERS_PROPERTY);
+    }
+
+    /**
+     * @returns {Object}
+     */
+    function buildClearOsmTrafficLightMarkersExecutePlan() {
+        return buildClearOverlayMarkersExecutePlan(OSM_TRAFFIC_LIGHT_MARKERS_PROPERTY);
+    }
+
+    /**
+     * @returns {Object}
+     */
+    function buildClearOsmRailwayCrossingMarkersExecutePlan() {
+        return buildClearOverlayMarkersExecutePlan(OSM_RAILWAY_CROSSING_MARKERS_PROPERTY);
+    }
+
+    /**
+     * Pure response handling for OSM area overlay fetches (no network).
+     * @param {Object} [input]
+     * @param {boolean} [input.ok]
+     * @param {number} [input.statusCode]
+     * @param {string} [input.logLabel]
+     * @param {string} [input.errorMessage]
+     * @returns {Object}
+     */
+    function buildOsmAreaOverlayResponsePlan(input) {
+        input = input || {};
+        if (!input.ok) {
+            return {
+                shouldParseJson: false,
+                result: null,
+                logLevel: 'warn',
+                logMessage: '[' + (input.logLabel || 'OSM Overlay') + '] HTTP '
+                    + (input.statusCode != null ? input.statusCode : '?')
+                    + ' (overlay skipped)',
+            };
+        }
+        return { shouldParseJson: true, result: null };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {string} [input.logLabel]
+     * @param {string} [input.errorMessage]
+     * @returns {Object}
+     */
+    function buildOsmAreaOverlayFetchErrorPlan(input) {
+        input = input || {};
+        var message = input.errorMessage || 'fetch failed';
+        return {
+            result: null,
+            logLevel: 'warn',
+            logMessage: '[' + (input.logLabel || 'OSM Overlay') + '] ' + message,
+        };
     }
 
     var CAMERA_LAYER_INIT_FLAG = '__voyagrCameraLayerInitialized';
@@ -421,6 +491,15 @@
         buildFetchCamerasDispatchPlan: buildFetchCamerasDispatchPlan,
         buildFetchOsmOverlayDispatchPlan: buildFetchOsmOverlayDispatchPlan,
         buildAreaBoundsApiUrl: buildAreaBoundsApiUrl,
+        CAMERA_MARKERS_PROPERTY: CAMERA_MARKERS_PROPERTY,
+        OSM_TRAFFIC_LIGHT_MARKERS_PROPERTY: OSM_TRAFFIC_LIGHT_MARKERS_PROPERTY,
+        OSM_RAILWAY_CROSSING_MARKERS_PROPERTY: OSM_RAILWAY_CROSSING_MARKERS_PROPERTY,
+        buildClearOverlayMarkersExecutePlan: buildClearOverlayMarkersExecutePlan,
+        buildClearCameraMarkersExecutePlan: buildClearCameraMarkersExecutePlan,
+        buildClearOsmTrafficLightMarkersExecutePlan: buildClearOsmTrafficLightMarkersExecutePlan,
+        buildClearOsmRailwayCrossingMarkersExecutePlan: buildClearOsmRailwayCrossingMarkersExecutePlan,
+        buildOsmAreaOverlayResponsePlan: buildOsmAreaOverlayResponsePlan,
+        buildOsmAreaOverlayFetchErrorPlan: buildOsmAreaOverlayFetchErrorPlan,
         overlayLocationKey: overlayLocationKey,
         buildDisplayCameraMarkersCollectPlan: buildDisplayCameraMarkersCollectPlan,
         buildDisplayOsmTrafficLightMarkersCollectPlan: buildDisplayOsmTrafficLightMarkersCollectPlan,

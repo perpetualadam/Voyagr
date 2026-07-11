@@ -387,6 +387,127 @@
 
     /**
      * @param {Object} [input]
+     * @param {boolean} [input.hasTrafficLayerRef]
+     * @param {boolean} [input.hasMap]
+     * @param {boolean} [input.mapHasTrafficLayer]
+     * @returns {Object}
+     */
+    function buildTrafficLayerStaleRefResetPlan(input) {
+        input = input || {};
+        return {
+            shouldReset: !!(input.hasTrafficLayerRef && input.hasMap && !input.mapHasTrafficLayer),
+            layerId: TRAFFIC_LAYER_ID,
+        };
+    }
+
+    /**
+     * Dispatch plan after /api/config credentials fetch.
+     * @param {Object} [data]
+     * @returns {Object}
+     */
+    function buildTrafficCredentialsResponseDispatchPlan(data) {
+        data = data || {};
+        if (data.tomtom_traffic_tile_proxy) {
+            return { action: 'retryWithProxy', enableProxy: true };
+        }
+        if (data.success && data.tomtom_api_key) {
+            return { action: 'retryWithKey', apiKey: data.tomtom_api_key };
+        }
+        return { action: 'noCredentials' };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.isStyleLoaded]
+     * @param {boolean} [input.hasTiles]
+     * @param {boolean} [input.hasSource]
+     * @param {boolean} [input.hasLayer]
+     * @param {string|null} [input.beforeLayerId]
+     * @param {string[]} [input.tiles]
+     * @returns {Object}
+     */
+    function buildAddTrafficLayerNowExecutePlan(input) {
+        input = input || {};
+        if (!input.isStyleLoaded) {
+            return { shouldAdd: false, retryLater: true };
+        }
+        if (!input.hasTiles) {
+            return {
+                shouldAdd: false,
+                done: true,
+                logMessage: '[Traffic] No tile URL available',
+            };
+        }
+        var sourceSpec = buildTrafficRasterSourceSpec(input.tiles || []);
+        var layerSpec = buildTrafficRasterLayerSpec({ beforeLayerId: input.beforeLayerId || null });
+        return {
+            shouldAdd: true,
+            addSource: !input.hasSource,
+            addLayer: !input.hasLayer,
+            sourceId: TRAFFIC_SOURCE_ID,
+            sourceSpec: sourceSpec,
+            layerSpec: layerSpec,
+            beforeLayerIdLogPrefix: '[Traffic] Inserting traffic layer before symbol layer: ',
+            setTrafficLayerRef: true,
+            trafficLayerRefId: TRAFFIC_LAYER_ID,
+            successLog: '[Traffic] TomTom traffic layer added successfully',
+            bringRoutesToTop: true,
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.isStyleLoaded]
+     * @returns {Object}
+     */
+    function buildTrafficStyleReadyInitPlan(input) {
+        input = input || {};
+        if (input.isStyleLoaded) {
+            return { strategy: 'immediate' };
+        }
+        return {
+            strategy: 'waitAndPoll',
+            bindStyleLoadEvent: 'style.load',
+            waitForStyleLog: '[Traffic] Waiting for style to load...',
+        };
+    }
+
+    /**
+     * @param {Object} [input]
+     * @param {boolean} [input.scheduled]
+     * @param {boolean} [input.hasMap]
+     * @param {boolean} [input.isStyleLoaded]
+     * @param {number} [input.attempts]
+     * @param {number} [input.maxAttempts]
+     * @returns {Object}
+     */
+    function buildTrafficStylePollTickPlan(input) {
+        input = input || {};
+        if (input.scheduled) {
+            return { action: 'stop' };
+        }
+        if (!input.hasMap) {
+            return { action: 'clearGuard' };
+        }
+        if (input.isStyleLoaded) {
+            return { action: 'runOnce' };
+        }
+        var attempts = (input.attempts || 0) + 1;
+        if (attempts >= (input.maxAttempts || TRAFFIC_STYLE_POLL_MAX_ATTEMPTS)) {
+            return {
+                action: 'giveUp',
+                logMessage: '[Traffic] Style not loaded after polling — giving up',
+            };
+        }
+        return {
+            action: 'pollAgain',
+            nextAttempts: attempts,
+            intervalMs: input.intervalMs || TRAFFIC_STYLE_POLL_INTERVAL_MS,
+        };
+    }
+
+    /**
+     * @param {Object} [input]
      * @param {boolean} [input.hasMap]
      * @param {boolean} [input.pendingGuardSet]
      * @param {boolean} [input.isStyleLoaded]
@@ -484,6 +605,11 @@
         buildTrafficRasterSourceSpec: buildTrafficRasterSourceSpec,
         buildTrafficRasterLayerSpec: buildTrafficRasterLayerSpec,
         buildTrafficLayerCredentialsFetchPlan: buildTrafficLayerCredentialsFetchPlan,
+        buildTrafficLayerStaleRefResetPlan: buildTrafficLayerStaleRefResetPlan,
+        buildTrafficCredentialsResponseDispatchPlan: buildTrafficCredentialsResponseDispatchPlan,
+        buildAddTrafficLayerNowExecutePlan: buildAddTrafficLayerNowExecutePlan,
+        buildTrafficStyleReadyInitPlan: buildTrafficStyleReadyInitPlan,
+        buildTrafficStylePollTickPlan: buildTrafficStylePollTickPlan,
         buildAddTrafficLayerOrchestrationPlan: buildAddTrafficLayerOrchestrationPlan,
         buildRemoveTrafficLayerExecutePlan: buildRemoveTrafficLayerExecutePlan,
         buildTrafficTileErrorBackoffPlan: buildTrafficTileErrorBackoffPlan,

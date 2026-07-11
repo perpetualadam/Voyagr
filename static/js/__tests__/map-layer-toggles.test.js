@@ -99,4 +99,35 @@ describe('map-layer-toggles module', () => {
         expect(backoff.shouldBackoff).toBe(true);
         expect(backoff.removeTrafficLayer).toBe(true);
     });
+
+    test('buildTrafficCredentialsResponseDispatchPlan routes proxy, key, and fallback', () => {
+        expect(MLT.buildTrafficCredentialsResponseDispatchPlan({ tomtom_traffic_tile_proxy: true }).action)
+            .toBe('retryWithProxy');
+        expect(MLT.buildTrafficCredentialsResponseDispatchPlan({ success: true, tomtom_api_key: 'K' }).action)
+            .toBe('retryWithKey');
+        expect(MLT.buildTrafficCredentialsResponseDispatchPlan({}).action).toBe('noCredentials');
+    });
+
+    test('buildAddTrafficLayerNowExecutePlan and style poll tick', () => {
+        const add = MLT.buildAddTrafficLayerNowExecutePlan({
+            isStyleLoaded: true,
+            hasTiles: true,
+            hasSource: false,
+            hasLayer: false,
+            tiles: ['https://tiles.test/{z}/{x}/{y}.png'],
+            beforeLayerId: 'labels',
+        });
+        expect(add.shouldAdd).toBe(true);
+        expect(add.addSource).toBe(true);
+        expect(add.layerSpec.beforeLayerId).toBe('labels');
+
+        const poll = MLT.buildTrafficStylePollTickPlan({
+            scheduled: false,
+            hasMap: true,
+            isStyleLoaded: false,
+            attempts: 39,
+            maxAttempts: 40,
+        });
+        expect(poll.action).toBe('giveUp');
+    });
 });
