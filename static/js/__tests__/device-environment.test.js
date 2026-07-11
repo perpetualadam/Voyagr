@@ -57,4 +57,21 @@ describe('device-environment module', () => {
         const again = DE.buildOpenVolumeHintSchedulePlan({ alreadyShown: true });
         expect(again.shouldSchedule).toBe(false);
     });
+
+    test('buildInitDeviceEnvironmentListenersPlan skips connectivity when handled elsewhere', () => {
+        const delegated = DE.buildInitDeviceEnvironmentListenersPlan({
+            connectivityHandledElsewhere: true,
+            initiallyOffline: true,
+        });
+        expect(delegated.registerConnectivityListeners).toBe(false);
+        expect(delegated.notifyInitialOffline).toBe(false);
+        expect(delegated.registerGpsPermissionListener).toBe(true);
+
+        const standalone = DE.buildInitDeviceEnvironmentListenersPlan({
+            connectivityHandledElsewhere: false,
+            initiallyOffline: true,
+        });
+        expect(standalone.registerConnectivityListeners).toBe(true);
+        expect(standalone.notifyInitialOffline).toBe(true);
+    });
 });

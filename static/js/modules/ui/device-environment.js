@@ -163,6 +163,27 @@
         };
     }
 
+    /**
+     * Listener registration plan for device environment hints on app init.
+     * Connectivity hints are skipped when offline-navigation owns banner/status handling.
+     * @param {Object} [input]
+     * @param {boolean} [input.connectivityHandledElsewhere]
+     * @param {boolean} [input.initiallyOffline]
+     * @returns {Object}
+     */
+    function buildInitDeviceEnvironmentListenersPlan(input) {
+        input = input || {};
+        var connectivityElsewhere = !!input.connectivityHandledElsewhere;
+        return {
+            registerConnectivityListeners: !connectivityElsewhere,
+            notifyInitialOffline: !connectivityElsewhere && !!input.initiallyOffline,
+            registerGpsPermissionListener: true,
+            offlineChannel: 'offline',
+            onlineChannel: 'online',
+            gpsChannel: 'gps',
+        };
+    }
+
     var api = {
         VOLUME_HINT_BANNER_ID: VOLUME_HINT_BANNER_ID,
         ENV_HINT_MIN_MS: ENV_HINT_MIN_MS,
@@ -174,6 +195,7 @@
         buildShowVolumeHintExecutePlan: buildShowVolumeHintExecutePlan,
         buildNavStartVolumeHintSchedulePlan: buildNavStartVolumeHintSchedulePlan,
         buildOpenVolumeHintSchedulePlan: buildOpenVolumeHintSchedulePlan,
+        buildInitDeviceEnvironmentListenersPlan: buildInitDeviceEnvironmentListenersPlan,
         OPEN_VOLUME_HINT_SESSION_KEY: OPEN_VOLUME_HINT_SESSION_KEY,
     };
 

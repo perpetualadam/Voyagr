@@ -6482,7 +6482,6 @@ const MOT = typeof VoyagrMapOverlayToggles !== 'undefined' ? VoyagrMapOverlayTog
 let showCamerasEnabled = MOT
     ? MOT.resolveShowCamerasEnabledFromStorage(localStorage.getItem('showCamerasEnabled'))
     : localStorage.getItem('showCamerasEnabled') !== 'false';
-let cameraFetchTimeout = null;
 
 window.osmTrafficLightMarkers = [];
 let showOsmTrafficLightsEnabled = MOT
@@ -10797,21 +10796,24 @@ async function precacheRouteTiles(polyline) {
 
     try {
         const cacheNames = await caches.keys();
-        const tileCacheName = cacheNames.find((n) => n.startsWith(execute.tileCacheNamePrefix))
-            || execute.defaultTileCacheName;
+        const tileCacheName = OFF.resolvePrecacheTileCacheName(cacheNames, execute);
         const cache = await caches.open(tileCacheName);
         let cached = 0;
-        for (let i = 0; i < execute.urls.length; i += execute.batchSize) {
-            const batch = execute.urls.slice(i, i + execute.batchSize);
+        const batches = OFF.slicePrecacheUrlsIntoBatches(execute.urls, execute.batchSize);
+        for (const batch of batches) {
             await Promise.allSettled(
                 batch.map(async (url) => {
                     const existing = await cache.match(url);
                     if (existing) return;
                     try {
                         const resp = await fetch(url);
-                        if (resp.ok) {
+                        const outcome = OFF.buildPrecacheTileStoreOutcomePlan({
+                            hadExisting: false,
+                            responseOk: resp.ok,
+                        });
+                        if (outcome.shouldStore) {
                             await cache.put(url, resp);
-                            cached++;
+                            if (outcome.shouldIncrement) cached++;
                         }
                     } catch (_e) { /* tile missing or offline */ }
                 })
@@ -10832,40 +10834,48 @@ async function _tryResumeNavigation() {
 
         console.log(preflight.foundLogMessage);
 
+        const mount = OFF.buildTryResumeNavigationMountExecutePlan(preflight);
         const resumeBanner = document.createElement('div');
-        resumeBanner.id = preflight.bannerId;
+        resumeBanner.id = mount.bannerId;
         resumeBanner.style.cssText = OFF.getResumeNavigationBannerStyleCssText();
-        resumeBanner.innerHTML = OFF.buildResumeNavigationBannerHtml(preflight.stepCount);
+        resumeBanner.innerHTML = OFF.buildResumeNavigationBannerHtml(mount.stepCount);
         document.body.appendChild(resumeBanner);
 
-        document.getElementById(preflight.resumeYesId).onclick = () => {
+        document.getElementById(mount.resumeYesId).onclick = () => {
             resumeBanner.remove();
             const payload = buildRoutePayloadFromPersisted(saved);
-            if (payload && payload.geometry) {
+            const yesAction = OFF.buildTryResumeNavigationYesActionPlan({
+                saved,
+                preflight,
+                hasEncodableGeometry: !!(payload && payload.geometry),
+            });
+            if (yesAction.action === 'fullBootstrap') {
                 startTurnByTurnNavigation(payload, {
                     fromPersistedResume: true,
-                    resumeStepIndex: preflight.resumeStepIndex,
+                    resumeStepIndex: yesAction.resumeStepIndex,
                 });
-                console.log(preflight.resumedFullLogMessage);
+                console.log(yesAction.logMessage);
             } else {
-                routePolyline = saved.polyline;
-                currentRouteSteps = saved.steps;
-                currentStepIndex = preflight.resumeStepIndex;
+                const patch = yesAction.legacyPatch || {};
+                routePolyline = patch.polyline;
+                currentRouteSteps = patch.steps;
+                currentStepIndex = yesAction.resumeStepIndex;
                 routeInProgress = true;
-                if (saved.routeData) window.lastCalculatedRoute = saved.routeData;
-                showStatus(preflight.legacyResumeStatusMessage, preflight.legacyResumeStatusType);
+                if (patch.routeData) window.lastCalculatedRoute = patch.routeData;
+                showStatus(yesAction.statusMessage, yesAction.statusType);
                 if (typeof startGPSTracking === 'function') startGPSTracking();
-                console.log(preflight.resumedLegacyLogMessage);
+                console.log(yesAction.logMessage);
             }
         };
-        document.getElementById(preflight.resumeNoId).onclick = () => {
+        document.getElementById(mount.resumeNoId).onclick = () => {
             resumeBanner.remove();
-            clearPersistedRoute();
+            const noAction = OFF.buildTryResumeNavigationNoActionPlan();
+            if (noAction.clearPersistedRoute) clearPersistedRoute();
         };
 
         setTimeout(() => {
-            if (document.getElementById(preflight.bannerId)) resumeBanner.remove();
-        }, preflight.autoDismissMs);
+            if (document.getElementById(mount.bannerId)) resumeBanner.remove();
+        }, mount.autoDismissMs);
     } catch (e) {
         console.warn('[OfflineNav] Resume check failed:', e);
     }
@@ -16066,20 +16076,26 @@ function initDeviceEnvironmentNotifications() {
     try {
         const DE = _deviceEnvironment();
         const hints = DE.ENV_HINT_MESSAGES;
+        const listeners = DE.buildInitDeviceEnvironmentListenersPlan({
+            connectivityHandledElsewhere: true,
+            initiallyOffline: typeof navigator !== 'undefined' && !navigator.onLine,
+        });
 
         const notifyOffline = () =>
-            sendEnvironmentHint('offline', hints.offline.title, hints.offline.message, hints.offline.type);
+            sendEnvironmentHint(listeners.offlineChannel, hints.offline.title, hints.offline.message, hints.offline.type);
         const notifyOnline = () =>
-            sendEnvironmentHint('online', hints.online.title, hints.online.message, hints.online.type);
+            sendEnvironmentHint(listeners.onlineChannel, hints.online.title, hints.online.message, hints.online.type);
 
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        if (listeners.notifyInitialOffline) {
             notifyOffline();
         }
 
-        window.addEventListener('offline', notifyOffline);
-        window.addEventListener('online', notifyOnline);
+        if (listeners.registerConnectivityListeners) {
+            window.addEventListener('offline', notifyOffline);
+            window.addEventListener('online', notifyOnline);
+        }
 
-        if (navigator.permissions && typeof navigator.permissions.query === 'function') {
+        if (listeners.registerGpsPermissionListener && navigator.permissions && typeof navigator.permissions.query === 'function') {
             try {
                 navigator.permissions
                     .query({ name: 'geolocation' })

@@ -168,4 +168,47 @@ describe('tile precache planning helpers', () => {
         expect(offer.resumeStepIndex).toBe(1);
         expect(offer.resumeYesId).toBe(OFF.RESUME_NAV_YES_ID);
     });
+
+    test('slicePrecacheUrlsIntoBatches and resolvePrecacheTileCacheName', () => {
+        expect(OFF.slicePrecacheUrlsIntoBatches(['a', 'b', 'c'], 2)).toEqual([['a', 'b'], ['c']]);
+        expect(OFF.resolvePrecacheTileCacheName(['other', 'voyagr-tiles-v9'], {
+            tileCacheNamePrefix: 'voyagr-tiles-',
+            defaultTileCacheName: 'voyagr-tiles-v15',
+        })).toBe('voyagr-tiles-v9');
+    });
+
+    test('buildPrecacheTileStoreOutcomePlan skips existing and failed fetches', () => {
+        expect(OFF.buildPrecacheTileStoreOutcomePlan({ hadExisting: true }).shouldStore).toBe(false);
+        expect(OFF.buildPrecacheTileStoreOutcomePlan({ hadExisting: false, responseOk: false }).shouldStore).toBe(false);
+        const ok = OFF.buildPrecacheTileStoreOutcomePlan({ hadExisting: false, responseOk: true });
+        expect(ok.shouldStore).toBe(true);
+        expect(ok.shouldIncrement).toBe(true);
+    });
+
+    test('resume navigation mount and action plans', () => {
+        const preflight = OFF.buildTryResumeNavigationPreflightPlan({
+            polyline: [[51.5, -0.1], [51.6, -0.2]],
+            steps: [{ type: 1 }],
+            stepIndex: 0,
+        });
+        const mount = OFF.buildTryResumeNavigationMountExecutePlan(preflight);
+        expect(mount.shouldMount).toBe(true);
+        expect(mount.bannerId).toBe(OFF.RESUME_NAV_BANNER_ID);
+
+        const full = OFF.buildTryResumeNavigationYesActionPlan({
+            preflight,
+            hasEncodableGeometry: true,
+        });
+        expect(full.action).toBe('fullBootstrap');
+
+        const legacy = OFF.buildTryResumeNavigationYesActionPlan({
+            saved: { polyline: [[1, 2]], steps: [{ type: 1 }], routeData: { distance_km: 1 } },
+            preflight,
+            hasEncodableGeometry: false,
+        });
+        expect(legacy.action).toBe('legacyBootstrap');
+        expect(legacy.legacyPatch.polyline).toHaveLength(1);
+
+        expect(OFF.buildTryResumeNavigationNoActionPlan().clearPersistedRoute).toBe(true);
+    });
 });

@@ -419,6 +419,118 @@
         };
     }
 
+    /**
+     * Resolve which Cache Storage bucket to use for corridor tile precache.
+     * @param {string[]} cacheNames
+     * @param {Object} execute - from buildPrecacheRouteTilesExecutePlan
+     * @returns {string}
+     */
+    function resolvePrecacheTileCacheName(cacheNames, execute) {
+        execute = execute || {};
+        var names = cacheNames || [];
+        var match = names.find(function (n) {
+            return n.indexOf(execute.tileCacheNamePrefix || 'voyagr-tiles-') === 0;
+        });
+        return match || execute.defaultTileCacheName || 'voyagr-tiles-v15';
+    }
+
+    /**
+     * Slice tile URLs into fixed-size batches for parallel fetch.
+     * @param {string[]} urls
+     * @param {number} batchSize
+     * @returns {string[][]}
+     */
+    function slicePrecacheUrlsIntoBatches(urls, batchSize) {
+        var list = urls || [];
+        var size = batchSize > 0 ? batchSize : TILE_PRECACHE_BATCH_SIZE;
+        var batches = [];
+        for (var i = 0; i < list.length; i += size) {
+            batches.push(list.slice(i, i + size));
+        }
+        return batches;
+    }
+
+    /**
+     * Whether a fetched tile should increment the new-cache counter.
+     * @param {Object} [input]
+     * @param {boolean} [input.hadExisting]
+     * @param {boolean} [input.responseOk]
+     * @returns {{ shouldStore: boolean, shouldIncrement: boolean }}
+     */
+    function buildPrecacheTileStoreOutcomePlan(input) {
+        input = input || {};
+        if (input.hadExisting) {
+            return { shouldStore: false, shouldIncrement: false };
+        }
+        if (!input.responseOk) {
+            return { shouldStore: false, shouldIncrement: false };
+        }
+        return { shouldStore: true, shouldIncrement: true };
+    }
+
+    /**
+     * Mount execute plan for the resume-navigation banner.
+     * @param {Object} preflight - from buildTryResumeNavigationPreflightPlan
+     * @returns {Object}
+     */
+    function buildTryResumeNavigationMountExecutePlan(preflight) {
+        preflight = preflight || {};
+        return {
+            shouldMount: !!preflight.shouldOffer,
+            bannerId: preflight.bannerId,
+            resumeYesId: preflight.resumeYesId,
+            resumeNoId: preflight.resumeNoId,
+            autoDismissMs: preflight.autoDismissMs,
+            stepCount: preflight.stepCount,
+            useResumeBannerStyle: true,
+            useResumeBannerHtml: true,
+            appendToBody: true,
+        };
+    }
+
+    /**
+     * Resume action when the user accepts the persisted-route offer.
+     * @param {Object} [input]
+     * @param {Object} [input.saved]
+     * @param {Object} [input.preflight]
+     * @param {boolean} [input.hasEncodableGeometry]
+     * @returns {Object}
+     */
+    function buildTryResumeNavigationYesActionPlan(input) {
+        input = input || {};
+        var preflight = input.preflight || {};
+        if (input.hasEncodableGeometry) {
+            return {
+                action: 'fullBootstrap',
+                resumeStepIndex: preflight.resumeStepIndex,
+                logMessage: preflight.resumedFullLogMessage,
+            };
+        }
+        return {
+            action: 'legacyBootstrap',
+            resumeStepIndex: preflight.resumeStepIndex,
+            logMessage: preflight.resumedLegacyLogMessage,
+            statusMessage: preflight.legacyResumeStatusMessage,
+            statusType: preflight.legacyResumeStatusType,
+            legacyPatch: {
+                polyline: (input.saved || {}).polyline,
+                steps: (input.saved || {}).steps,
+                routeData: (input.saved || {}).routeData,
+            },
+        };
+    }
+
+    /**
+     * Dismiss action when the user declines resume or the banner auto-expires.
+     * @returns {Object}
+     */
+    function buildTryResumeNavigationNoActionPlan() {
+        return {
+            action: 'dismiss',
+            clearPersistedRoute: true,
+        };
+    }
+
     var OFFLINE_BANNER_BODY_CLASS = 'voyagr-has-offline-banner';
     var OFFLINE_BANNER_REMOVE_DELAY_MS = 350;
 
@@ -515,6 +627,12 @@
         buildRouteCorridorTileUrlPlan: buildRouteCorridorTileUrlPlan,
         buildCollectVectorTileTemplatesPreflightPlan: buildCollectVectorTileTemplatesPreflightPlan,
         buildPrecacheRouteTilesExecutePlan: buildPrecacheRouteTilesExecutePlan,
+        resolvePrecacheTileCacheName: resolvePrecacheTileCacheName,
+        slicePrecacheUrlsIntoBatches: slicePrecacheUrlsIntoBatches,
+        buildPrecacheTileStoreOutcomePlan: buildPrecacheTileStoreOutcomePlan,
+        buildTryResumeNavigationMountExecutePlan: buildTryResumeNavigationMountExecutePlan,
+        buildTryResumeNavigationYesActionPlan: buildTryResumeNavigationYesActionPlan,
+        buildTryResumeNavigationNoActionPlan: buildTryResumeNavigationNoActionPlan,
         OFFLINE_BANNER_BODY_CLASS: OFFLINE_BANNER_BODY_CLASS,
         buildMountOfflineBannerExecutePlan: buildMountOfflineBannerExecutePlan,
         buildUnmountOfflineBannerExecutePlan: buildUnmountOfflineBannerExecutePlan,
