@@ -71,5 +71,6 @@ describe('multimodal-parking module', () => {
     test('getParkingOptionItemContainerStyleCssText styles list row container', () => {
         expect(MP.getParkingOptionItemContainerStyleCssText()).toContain('border-radius: 6px');
         expect(MP.getParkingOptionItemContainerStyleCssText()).toContain('cursor: pointer');
+        expect(MP.PARKING_OPTION_ITEM_HOVER_BACKGROUND).toBe('#FFF3E0');
     });
 });
