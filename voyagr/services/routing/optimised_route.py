@@ -8,6 +8,8 @@ from typing import Any, Dict, List, Optional, Sequence, Tuple, Union
 import requests
 
 from voyagr.utils.geometry import get_distance_between_points
+from voyagr.services.hazards import build_valhalla_exclude_locations
+from voyagr.services.routing.valhalla_parsing import valhalla_trip_json_to_std_route_entry
 
 logger = logging.getLogger(__name__)
 
@@ -410,3 +412,294 @@ def prune_non_qualifying_optimised_routes(
             f'(baseline hazard_count={baseline})'
         )
     return pruned
+
+
+def ensure_optimised_camera_avoiding_route(
+    routes: List[Dict[str, Any]],
+    *,
+    url: str,
+    headers: Dict[str, str],
+    route_locations: List[Dict[str, Any]],
+    has_waypoints: bool,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    route_bbox: Dict[str, float],
+    hazards: Dict[str, List[Dict[str, Any]]],
+    enable_hazard_avoidance: bool,
+    avoid_cameras: bool,
+    graphhopper_route: Optional[Dict[str, Any]] = None,
+    cost_calculator: Any,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+) -> List[Dict[str, Any]]:
+    """
+    Ensure a ⚡ Optimised route exists that avoids cameras like Fast/Short routes.
+    Prunes Optimised entries that lack real avoidance, then adds Valhalla auto with
+    exclude_locations (no bare fallback) when no qualifying Optimised remains.
+    """
+    if not (enable_hazard_avoidance and avoid_cameras):
+        return routes
+
+    routes = prune_non_qualifying_optimised_routes(
+        routes, graphhopper_route=graphhopper_route, avoid_cameras=avoid_cameras,
+    )
+
+    if any(is_primary_optimised_route(r) for r in routes):
+        return routes
+
+    baseline = baseline_camera_hazard_count(routes)
+
+    ensure_exclude: List[Dict[str, Any]] = []
+    if hazards:
+        try:
+            ensure_exclude = build_valhalla_exclude_locations(
+                hazards, route_bbox=route_bbox, max_hazards=50,
+                start_lat=start_lat, start_lon=start_lon,
+                end_lat=end_lat, end_lon=end_lon,
+            )
+        except Exception as ex:
+            logger.warning(f'[VALHALLA] ensure Optimised: exclude build failed: {ex}')
+
+    if not ensure_exclude:
+        logger.warning('[VALHALLA] ensure Optimised: no exclude_locations available')
+        return routes
+
+    locs = route_locations if has_waypoints else [
+        {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
+    ]
+    opt_data = fetch_valhalla_auto_json(
+        url, headers, locs,
+        exclude_locations=ensure_exclude,
+        require_exclusions=True,
+    )
+    if not opt_data:
+        logger.warning('[VALHALLA] ensure Optimised: Valhalla could not route with camera exclusions')
+        return routes
+
+    next_id = len(routes) + 1
+    entry = valhalla_trip_json_to_std_route_entry(
+        '⚡ Optimised', opt_data, next_id, hazards, cost_calculator,
+        vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+        fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+        electricity_price=electricity_price, include_tolls=include_tolls,
+        include_caz=include_caz, caz_exempt=caz_exempt,
+    )
+    if entry and int(entry.get('hazard_count') or 0) <= baseline:
+        entry['camera_exclusions_applied'] = True
+        routes.append(entry)
+        logger.info(
+            f'[VALHALLA] Added Optimised route (ensure): {entry["distance_km"]:.1f}km, '
+            f'{entry.get("hazard_count", 0)} cameras (baseline {baseline})'
+        )
+    elif entry:
+        logger.warning(
+            f'[VALHALLA] ensure Optimised: excluded route still has '
+            f'{entry.get("hazard_count", 0)} cameras (baseline {baseline}) — not offered'
+        )
+    return routes
+
+
+def ensure_shortest_respects_camera_avoidance(
+    routes: List[Dict[str, Any]],
+    *,
+    url: str,
+    headers: Dict[str, str],
+    route_locations: List[Dict[str, Any]],
+    has_waypoints: bool,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    route_bbox: Dict[str, float],
+    hazards: Dict[str, List[Dict[str, Any]]],
+    enable_hazard_avoidance: bool,
+    avoid_cameras: bool,
+    cost_calculator: Any,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+) -> List[Dict[str, Any]]:
+    """
+    Re-request 📏 Shortest via Valhalla auto_shorter when it still hits cameras.
+    Optimised uses GraphHopper area avoidance; Shortest is Valhalla-only and must not
+    silently drop exclude_locations when camera avoidance is enabled.
+    """
+    if not (enable_hazard_avoidance and avoid_cameras):
+        return routes
+
+    shortest_indices = [i for i, r in enumerate(routes) if is_shortest_route(r)]
+    if not shortest_indices:
+        return routes
+
+    opt_routes = [r for r in routes if is_primary_optimised_route(r)]
+    if opt_routes:
+        target_cam = min(count_cameras_near_polyline(r, hazards) for r in opt_routes)
+    else:
+        target_cam = 0
+
+    base_exclude: List[Dict[str, Any]] = []
+    if hazards:
+        try:
+            base_exclude = build_valhalla_exclude_locations(
+                hazards, route_bbox=route_bbox, max_hazards=50,
+                start_lat=start_lat, start_lon=start_lon,
+                end_lat=end_lat, end_lon=end_lon,
+            )
+        except Exception as ex:
+            logger.warning('[VALHALLA] ensure Shortest: exclude build failed: %s', ex)
+
+    locs = route_locations if has_waypoints else [
+        {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
+    ]
+
+    for idx in reversed(shortest_indices):
+        shortest = routes[idx]
+        short_cam = count_cameras_near_polyline(shortest, hazards)
+        if short_cam <= target_cam:
+            continue
+
+        logger.info(
+            '[VALHALLA] Shortest has %d cameras near polyline (target %d from Optimised) — re-routing',
+            short_cam, target_cam,
+        )
+
+        camera_pts = cameras_near_polyline_exclude_points(shortest, hazards)
+        merged = merge_valhalla_exclude_locations(camera_pts, base_exclude, max_points=50)
+        if not merged:
+            logger.warning('[VALHALLA] ensure Shortest: no exclude_locations to retry with')
+            shortest['routing_preferences_limited'] = True
+            continue
+
+        sh_data = fetch_valhalla_auto_shorter_json(
+            url, headers, locs,
+            exclude_locations=merged,
+            require_exclusions=True,
+        )
+        if not sh_data:
+            logger.warning('[VALHALLA] ensure Shortest: no camera-aware auto_shorter route — keeping option')
+            shortest['routing_preferences_limited'] = True
+            continue
+
+        entry = valhalla_trip_json_to_std_route_entry(
+            SHORTEST_ROUTE_NAME, sh_data, shortest.get('id', idx + 1), hazards, cost_calculator,
+            vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+            fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+            electricity_price=electricity_price, include_tolls=include_tolls,
+            include_caz=include_caz, caz_exempt=caz_exempt,
+        )
+        if not entry:
+            shortest['routing_preferences_limited'] = True
+            continue
+
+        new_cam = count_cameras_near_polyline(entry, hazards)
+        if new_cam <= target_cam:
+            entry['camera_exclusions_applied'] = True
+            routes[idx] = entry
+            logger.info(
+                '[VALHALLA] Shortest re-routed with camera exclusions: %.1fkm, %d cameras (was %d)',
+                entry['distance_km'], new_cam, short_cam,
+            )
+        else:
+            logger.warning(
+                '[VALHALLA] Shortest retry still has %d cameras (target %d) — keeping with preference flag',
+                new_cam, target_cam,
+            )
+            entry['routing_preferences_limited'] = True
+            routes[idx] = entry
+
+    return routes
+
+
+def ensure_scenic_valhalla_route(
+    routes: List[Dict[str, Any]],
+    *,
+    url: str,
+    headers: Dict[str, str],
+    route_locations: List[Dict[str, Any]],
+    has_waypoints: bool,
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    route_bbox: Dict[str, float],
+    hazards: Dict[str, List[Dict[str, Any]]],
+    enable_hazard_avoidance: bool,
+    avoid_cameras: bool,
+    cost_calculator: Any,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+) -> List[Dict[str, Any]]:
+    """Add a distinct Valhalla preference route (🌿 Scenic) when primary Optimised exists."""
+    if not (enable_hazard_avoidance and avoid_cameras):
+        return routes
+    if any((r.get('name') or '').strip() == SCENIC_ROUTE_NAME for r in routes):
+        return routes
+
+    primary = next((r for r in routes if is_primary_optimised_route(r)), None)
+    if not primary:
+        return routes
+
+    exclude: List[Dict[str, Any]] = []
+    if hazards:
+        try:
+            exclude = build_valhalla_exclude_locations(
+                hazards, route_bbox=route_bbox, max_hazards=40,
+                start_lat=start_lat, start_lon=start_lon,
+                end_lat=end_lat, end_lon=end_lon,
+            )
+        except Exception as ex:
+            logger.warning('[VALHALLA] ensure Scenic: exclude build failed: %s', ex)
+    if not exclude:
+        return routes
+
+    locs = route_locations if has_waypoints else [
+        {'lat': start_lat, 'lon': start_lon}, {'lat': end_lat, 'lon': end_lon},
+    ]
+    scenic_data = fetch_valhalla_auto_json(
+        url, headers, locs,
+        exclude_locations=exclude,
+        require_exclusions=True,
+    )
+    if not scenic_data:
+        return routes
+
+    next_id = max((int(r.get('id') or 0) for r in routes), default=0) + 1
+    entry = valhalla_trip_json_to_std_route_entry(
+        SCENIC_ROUTE_NAME, scenic_data, next_id, hazards, cost_calculator,
+        vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+        fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+        electricity_price=electricity_price, include_tolls=include_tolls,
+        include_caz=include_caz, caz_exempt=caz_exempt,
+    )
+    if not entry:
+        return routes
+    if not routes_are_distinct(entry, primary):
+        logger.info('[VALHALLA] Scenic route too similar to Optimised — not offered')
+        return routes
+
+    entry['camera_exclusions_applied'] = True
+    routes.append(entry)
+    logger.info(
+        '[VALHALLA] Added Scenic preference route: %.1fkm, %d cameras near route',
+        entry['distance_km'], entry.get('cameras_near_route', entry.get('hazard_count', 0)),
+    )
+    return routes
