@@ -22,6 +22,7 @@
         routeGeometry: 'VoyagrRouteGeometry',
         turnInstructions: 'VoyagrTurnInstructions',
         eta: 'VoyagrETA',
+        liveDataRefresh: 'VoyagrLiveDataRefresh',
         voiceAnnouncements: 'VoyagrVoiceAnnouncements',
         rerouteDecision: 'VoyagrRerouteDecision',
         routingRequest: 'VoyagrRoutingRequest',

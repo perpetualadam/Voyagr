@@ -21,6 +21,7 @@ describe('VoyagrModules registry', () => {
         global.VoyagrRouteGeometry = require('../modules/navigation/route-geometry');
         global.VoyagrTurnInstructions = require('../modules/navigation/turn-instructions');
         global.VoyagrETA = require('../modules/navigation/eta');
+        global.VoyagrLiveDataRefresh = require('../modules/navigation/live-data-refresh');
         global.VoyagrVoiceAnnouncements = require('../modules/navigation/voice-announcements');
         global.VoyagrRerouteDecision = require('../modules/navigation/reroute-decision');
         global.VoyagrRoutingRequest = require('../modules/navigation/routing-request');

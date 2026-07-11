@@ -8694,6 +8694,7 @@ function _routeGeometry() { return VoyagrModules.routeGeometry(); }
 
 /** Unit-tested ETA helpers (modules/navigation/eta.js). */
 function _eta() { return VoyagrModules.eta(); }
+function _liveDataRefresh() { return VoyagrModules.liveDataRefresh(); }
 
 /** Unit-tested turn-by-turn instruction helpers (modules/navigation/turn-instructions.js). */
 function _turnInstructions() { return VoyagrModules.turnInstructions(); }
@@ -11685,16 +11686,6 @@ let etaRefreshInterval = null;
 let weatherRefreshInterval = null;
 let hazardRefreshInterval = null;
 
-const REFRESH_INTERVALS = {
-    traffic_navigation: 300000,    // 5 minutes during navigation
-    traffic_idle: 900000,          // 15 minutes when idle
-    eta: 30000,                    // 30 seconds during navigation
-    weather_navigation: 1800000,   // 30 minutes during navigation
-    weather_idle: 3600000,         // 60 minutes when idle
-    hazards_navigation: 300000,    // 5 minutes during navigation
-    hazards_idle: 600000           // 10 minutes when idle
-};
-
 // ===== PWA AUTO-RELOAD SYSTEM (PHASE 2) =====
 let updatePending = false;
 let appStateBeforeReload = null;
@@ -14047,39 +14038,35 @@ function checkRouteHazardCamerasAhead(lat, lon) {
  * @returns {*} Return value description
  */
 function startLiveDataRefresh() {
-    if (routeInProgress) {
-        stopLiveDataRefresh(); // Avoid stacked intervals if this runs more than once per session
-        // Get adaptive intervals based on battery level (Phase 3)
-        const trafficInterval = getAdaptiveRefreshInterval(REFRESH_INTERVALS.traffic_navigation);
-        const etaInterval = getAdaptiveRefreshInterval(REFRESH_INTERVALS.eta);
-        const weatherInterval = getAdaptiveRefreshInterval(REFRESH_INTERVALS.weather_navigation);
-        const hazardInterval = getAdaptiveRefreshInterval(REFRESH_INTERVALS.hazards_navigation);
+    const LDR = _liveDataRefresh();
+    const execute = LDR.buildStartLiveDataRefreshExecutePlan({
+        routeInProgress,
+        batteryLevel: currentBatteryLevel,
+        hasBatteryApi: 'getBattery' in navigator,
+    });
+    if (!execute.shouldStart) return;
 
-        // Traffic refresh every 5 minutes (or adaptive)
-        trafficRefreshInterval = setInterval(() => {
-            refreshTrafficData();
-        }, trafficInterval);
+    if (execute.stopExistingFirst) stopLiveDataRefresh();
 
-        // FIXED: ETA refresh every 30 seconds (or adaptive)
-        // Traffic-aware ETA fetches inside updateETACalculation; voice runs after refresh
-        etaRefreshInterval = setInterval(() => {
-            updateETACalculation().then(() => announceETAIfNeeded());
-        }, etaInterval);
+    trafficRefreshInterval = setInterval(() => {
+        refreshTrafficData();
+    }, execute.intervals.traffic);
 
-        // Weather refresh every 30 minutes (or adaptive)
-        weatherRefreshInterval = setInterval(() => {
-            refreshWeatherData();
-        }, weatherInterval);
+    etaRefreshInterval = setInterval(() => {
+        updateETACalculation().then(() => announceETAIfNeeded());
+    }, execute.intervals.eta);
 
-        // Hazard refresh every 5 minutes (or adaptive)
-        hazardRefreshInterval = setInterval(() => {
-            if (currentLat && currentLon) {
-                checkNearbyHazards(currentLat, currentLon);
-            }
-        }, hazardInterval);
+    weatherRefreshInterval = setInterval(() => {
+        refreshWeatherData();
+    }, execute.intervals.weather);
 
-        console.log('[Live Data] Refresh intervals started');
-    }
+    hazardRefreshInterval = setInterval(() => {
+        if (currentLat && currentLon) {
+            processNavigationHazardAlerts(currentLat, currentLon);
+        }
+    }, execute.intervals.hazard);
+
+    console.log(execute.startLogMessage);
 }
 
 /**
@@ -14088,11 +14075,14 @@ function startLiveDataRefresh() {
  * @returns {*} Return value description
  */
 function stopLiveDataRefresh() {
+    const execute = _liveDataRefresh().buildStopLiveDataRefreshExecutePlan();
+    if (!execute.shouldStop) return;
+
     clearInterval(trafficRefreshInterval);
     clearInterval(etaRefreshInterval);
     clearInterval(weatherRefreshInterval);
     clearInterval(hazardRefreshInterval);
-    console.log('[Live Data] Refresh intervals stopped');
+    console.log(execute.stopLogMessage);
 }
 
 /**
@@ -14101,21 +14091,27 @@ function stopLiveDataRefresh() {
  * @returns {*} Return value description
  */
 function refreshTrafficData() {
-    if (!routeInProgress || !currentLat || !currentLon) return;
+    const LDR = _liveDataRefresh();
+    const preflight = LDR.buildRefreshTrafficDataPreflightPlan({
+        routeInProgress,
+        lat: currentLat,
+        lon: currentLon,
+    });
+    if (!preflight.shouldFetch) return;
 
-    fetch(`/api/traffic-patterns?lat=${currentLat}&lon=${currentLon}`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.success && data.patterns && data.patterns.length > 0) {
-                const pattern = data.patterns[0];
-                if (pattern.congestion > 2) {
-                    sendNotification('🚗 Traffic Update',
-                        `Heavy traffic ahead (Congestion: ${pattern.congestion}/5)`,
-                        'warning');
-                }
+    fetch(preflight.url)
+        .then((r) => r.json())
+        .then((data) => {
+            const notify = LDR.buildRefreshTrafficDataNotificationPlan(data);
+            if (notify.shouldNotify) {
+                sendNotification(
+                    notify.notification.title,
+                    notify.notification.message,
+                    notify.notification.type
+                );
             }
         })
-        .catch(e => console.log('[Traffic] Refresh error:', e));
+        .catch((e) => console.log(preflight.errorLogPrefix, e));
 }
 
 /**
@@ -14262,23 +14258,26 @@ function clearInitialETAAnnouncement() {
  * @returns {*} Return value description
  */
 function refreshWeatherData() {
-    if (!currentLat || !currentLon) return;
+    const LDR = _liveDataRefresh();
+    const preflight = LDR.buildRefreshWeatherDataPreflightPlan({
+        lat: currentLat,
+        lon: currentLon,
+    });
+    if (!preflight.shouldFetch) return;
 
-    fetch(`/api/weather?lat=${currentLat}&lon=${currentLon}`)
-        .then(r => r.json())
-        .then(data => {
-            if (data.success) {
-                // Check for severe weather
-                if (data.description.includes('rain') ||
-                    data.description.includes('storm') ||
-                    data.description.includes('snow')) {
-                    sendNotification('⛈️ Weather Alert',
-                        `${data.description} ahead`,
-                        'warning');
-                }
+    fetch(preflight.url)
+        .then((r) => r.json())
+        .then((data) => {
+            const notify = LDR.buildRefreshWeatherDataNotificationPlan(data);
+            if (notify.shouldNotify) {
+                sendNotification(
+                    notify.notification.title,
+                    notify.notification.message,
+                    notify.notification.type
+                );
             }
         })
-        .catch(e => console.log('[Weather] Refresh error:', e));
+        .catch((e) => console.log(preflight.errorLogPrefix, e));
 }
 
 // ===== PHASE 2: PWA AUTO-RELOAD FUNCTIONS =====
@@ -14481,24 +14480,11 @@ document.addEventListener('DOMContentLoaded', displayPWAVersion);
  * @returns {*} Return value description
  */
 function getAdaptiveRefreshInterval(baseInterval) {
-    // Adjust refresh intervals based on battery level
-    if (!('getBattery' in navigator)) {
-        return baseInterval; // Use base interval if Battery API unavailable
-    }
-
-    // If battery is low, increase intervals to save power
-    if (currentBatteryLevel < 0.15) {
-        // Critical battery: increase intervals by 3x
-        return baseInterval * 3;
-    } else if (currentBatteryLevel < 0.30) {
-        // Low battery: increase intervals by 2x
-        return baseInterval * 2;
-    } else if (currentBatteryLevel < 0.50) {
-        // Medium battery: increase intervals by 1.5x
-        return baseInterval * 1.5;
-    }
-
-    return baseInterval; // Normal intervals
+    return _liveDataRefresh().buildAdaptiveRefreshIntervalPlan(
+        baseInterval,
+        currentBatteryLevel,
+        'getBattery' in navigator
+    ).intervalMs;
 }
 
 /**
