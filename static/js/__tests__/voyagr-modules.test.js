@@ -30,6 +30,8 @@ describe('VoyagrModules registry', () => {
         global.VoyagrRoutePrefs = require('../modules/navigation/route-prefs');
         global.VoyagrTheme = require('../modules/ui/theme');
         global.VoyagrRouteSelection = require('../modules/navigation/route-selection');
+        global.VoyagrNavigationDestination = require('../modules/navigation/navigation-destination');
+        global.VoyagrMovementDetection = require('../modules/navigation/movement-detection');
         jest.resetModules();
     });
 

@@ -94,3 +94,60 @@ describe('buildSharedRouteOptions', () => {
         expect(o).not.toHaveProperty('include_tolls');
     });
 });
+
+function mockStorage(map) {
+    return {
+        getItem: (k) => (Object.prototype.hasOwnProperty.call(map, k) ? map[k] : null),
+    };
+}
+
+describe('hazard avoidance helpers', () => {
+    test('isInitialRouteHazardAvoidanceEnabled defaults cameras on', () => {
+        expect(RR.isInitialRouteHazardAvoidanceEnabled(mockStorage({}))).toBe(true);
+    });
+
+    test('isInitialRouteHazardAvoidanceEnabled true when live hazard pref set', () => {
+        expect(RR.isInitialRouteHazardAvoidanceEnabled(mockStorage({
+            pref_cameras: 'false',
+            pref_caz: 'false',
+            pref_trafficLightsAvoid: 'false',
+            pref_railwayCrossingsAvoid: 'false',
+            pref_police: 'true',
+        }))).toBe(true);
+    });
+
+    test('isMultimodalLegHazardAvoidanceEnabled ignores CAZ', () => {
+        expect(RR.isMultimodalLegHazardAvoidanceEnabled(mockStorage({
+            pref_cameras: 'false',
+            pref_caz: 'true',
+            pref_trafficLightsAvoid: 'false',
+            pref_railwayCrossingsAvoid: 'false',
+        }))).toBe(false);
+    });
+
+    test('isRerouteHazardAvoidanceEnabled includes avoid tolls', () => {
+        expect(RR.isRerouteHazardAvoidanceEnabled(
+            mockStorage({
+                pref_cameras: 'false',
+                pref_trafficLightsAvoid: 'false',
+                pref_railwayCrossingsAvoid: 'false',
+                pref_caz: 'false',
+            }),
+            () => true
+        )).toBe(true);
+    });
+});
+
+describe('normalizeAvoidPoints', () => {
+    test('filters invalid points and caps at 10', () => {
+        const pts = Array.from({ length: 12 }, (_, i) => ({ lat: i, lon: i }));
+        const out = RR.normalizeAvoidPoints([{ lat: NaN, lon: 1 }, null, ...pts]);
+        expect(out).toHaveLength(10);
+        expect(out[0]).toEqual({ lat: 0, lon: 0 });
+        expect(out[9]).toEqual({ lat: 9, lon: 9 });
+    });
+
+    test('returns empty array for non-array input', () => {
+        expect(RR.normalizeAvoidPoints(null)).toEqual([]);
+    });
+});

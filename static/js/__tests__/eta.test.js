@@ -60,3 +60,56 @@ describe('formatETATime', () => {
         expect(ETA.formatETATime(d)).toBe('23:00');
     });
 });
+
+describe('traffic-aware ETA helpers', () => {
+    function mockStorage(map) {
+        return {
+            getItem: (k) => (Object.prototype.hasOwnProperty.call(map, k) ? map[k] : null),
+            setItem: (k, v) => { map[k] = v; },
+        };
+    }
+
+    test('ensureDefaultTrafficAwareRouting sets true when unset', () => {
+        const map = {};
+        const storage = mockStorage(map);
+        ETA.ensureDefaultTrafficAwareRouting(storage);
+        expect(map.pref_trafficAwareRouting).toBe('true');
+    });
+
+    test('shouldApplyTrafficAwareETA is false when pref is false', () => {
+        const storage = mockStorage({ pref_trafficAwareRouting: 'false' });
+        expect(ETA.shouldApplyTrafficAwareETA(storage, 'auto')).toBe(false);
+    });
+
+    test('shouldApplyTrafficAwareETA is false for non-auto routing mode', () => {
+        const storage = mockStorage({ pref_trafficAwareRouting: 'true' });
+        expect(ETA.shouldApplyTrafficAwareETA(storage, 'pedestrian')).toBe(false);
+    });
+
+    test('shouldApplyTrafficAwareETA is true for auto with default pref', () => {
+        const storage = mockStorage({});
+        expect(ETA.shouldApplyTrafficAwareETA(storage, 'auto')).toBe(true);
+    });
+
+    test('normalizeRouteDurationMinutes reads duration_minutes', () => {
+        expect(ETA.normalizeRouteDurationMinutes({ duration_minutes: 42 })).toBe(42);
+    });
+
+    test('normalizeRouteDurationMinutes converts seconds-like values over 1440', () => {
+        expect(ETA.normalizeRouteDurationMinutes({ time: '5400' })).toBe(90);
+    });
+
+    test('applyTrafficRatioToBaseRemaining scales by cached ratio', () => {
+        const snap = { trafficAdjustedMinutes: 30, baseAtTrafficFetch: 20, trafficFetchAt: 1000 };
+        expect(ETA.applyTrafficRatioToBaseRemaining(20, snap, 50000, true)).toBe(30);
+    });
+
+    test('applyTrafficRatioToBaseRemaining skips stale traffic snapshot', () => {
+        const snap = { trafficAdjustedMinutes: 30, baseAtTrafficFetch: 20, trafficFetchAt: 1000 };
+        expect(ETA.applyTrafficRatioToBaseRemaining(20, snap, 200000, true)).toBe(20);
+    });
+
+    test('applyTrafficRatioToBaseRemaining passes through when traffic disabled', () => {
+        expect(ETA.applyTrafficRatioToBaseRemaining(15, {}, 0, false)).toBe(15);
+    });
+});

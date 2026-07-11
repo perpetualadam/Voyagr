@@ -31,6 +31,8 @@
         routePrefs: 'VoyagrRoutePrefs',
         theme: 'VoyagrTheme',
         routeSelection: 'VoyagrRouteSelection',
+        navigationDestination: 'VoyagrNavigationDestination',
+        movementDetection: 'VoyagrMovementDetection',
     };
 
     var cache = {};
