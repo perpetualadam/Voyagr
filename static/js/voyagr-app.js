@@ -2139,7 +2139,11 @@ function saveRawLocalTrips(entries) {
     }
 }
 
+// parseLatLonString / mergeServerAndLocalTrips moved to
+// modules/navigation/trip-history.js (VoyagrTripHistory). Thin stubs delegate.
 function parseLatLonString(str) {
+    const T = (typeof VoyagrTripHistory !== 'undefined') ? VoyagrTripHistory : null;
+    if (T) return T.parseLatLonString(str);
     if (!str || typeof str !== 'string') return null;
     const p = str.split(',');
     if (p.length < 2) return null;
@@ -2292,6 +2296,8 @@ async function persistCompletedTrip(route) {
 }
 
 function mergeServerAndLocalTrips(serverTrips, rawLocal) {
+    const T = (typeof VoyagrTripHistory !== 'undefined') ? VoyagrTripHistory : null;
+    if (T) return T.mergeServerAndLocalTrips(serverTrips, rawLocal);
     const out = Array.isArray(serverTrips) ? serverTrips.slice() : [];
     const serverIds = new Set(out.map((t) => t.id));
 
