@@ -34,8 +34,7 @@ core_bp = Blueprint('core', __name__)
 @core_bp.route('/')
 def index():
     """Render the main application page."""
-    from voyagr_web import HTML_TEMPLATE
-    html = render_template_string(HTML_TEMPLATE, **build_index_template_kwargs())
+    html = render_template('index.html', **build_index_template_kwargs())
     response = make_response(html)
     # Shell HTML is server-rendered (wake/Sherpa flags, keys). Do not cache at CDN or browser.
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
