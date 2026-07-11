@@ -29,13 +29,14 @@ describe('VoyagrModules registry', () => {
         global.VoyagrDomHelpers = require('../modules/ui/dom-helpers');
         global.VoyagrRoutePrefs = require('../modules/navigation/route-prefs');
         global.VoyagrTheme = require('../modules/ui/theme');
+        global.VoyagrRouteSelection = require('../modules/navigation/route-selection');
         jest.resetModules();
     });
 
     test('registers all declared module keys when globals are present', () => {
         const VoyagrModules = require('../modules/voyagr-modules');
         expect(VoyagrModules.init()).toBe(true);
-        expect(VoyagrModules.keys().length).toBeGreaterThanOrEqual(21);
+        expect(VoyagrModules.keys().length).toBeGreaterThanOrEqual(22);
         expect(VoyagrModules.units()).toBe(VoyagrUnits);
         expect(VoyagrModules.tripHistory()).toBe(VoyagrTripHistory);
     });

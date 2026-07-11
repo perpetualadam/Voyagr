@@ -30,6 +30,7 @@
         domHelpers: 'VoyagrDomHelpers',
         routePrefs: 'VoyagrRoutePrefs',
         theme: 'VoyagrTheme',
+        routeSelection: 'VoyagrRouteSelection',
     };
 
     var cache = {};

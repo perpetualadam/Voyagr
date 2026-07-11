@@ -36,7 +36,28 @@
         return { followHeading: followHeading, tilt: tilt };
     }
 
-    const api = { decideDrivingCamera: decideDrivingCamera };
+    /**
+     * MapLibre follow padding: vehicle in lower quarter, road ahead visible.
+     * @param {number} viewportHeight
+     * @param {number} viewportWidth
+     * @returns {{top:number, bottom:number, left:number, right:number}}
+     */
+    function computeFollowPadding(viewportHeight, viewportWidth) {
+        var h = viewportHeight;
+        var w = viewportWidth;
+        var bottomUiReserve = Math.min(200, Math.max(96, h * 0.15));
+        return {
+            top: Math.round(h * 0.55),
+            bottom: Math.round(bottomUiReserve),
+            left: Math.round(Math.min(22, w * 0.03)),
+            right: Math.round(Math.min(22, w * 0.03)),
+        };
+    }
+
+    const api = {
+        decideDrivingCamera: decideDrivingCamera,
+        computeFollowPadding: computeFollowPadding,
+    };
 
     // CommonJS (Jest) export.
     if (typeof module !== 'undefined' && module.exports) {

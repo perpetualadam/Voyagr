@@ -6,7 +6,8 @@ const U = require('../modules/navigation/units.js');
 
 describe('units module surface', () => {
     const fns = ['convertDistance', 'getDistanceUnit', 'convertTemperature',
-        'getTemperatureUnit', 'getFuelEfficiencyInUnits', 'getFuelEfficiencyLabel'];
+        'getTemperatureUnit', 'getFuelEfficiencyInUnits', 'getFuelEfficiencyLabel',
+        'distanceUnitStatusLabel', 'speedUnitStatusLabel', 'temperatureUnitStatusLabel'];
     test('exposes all expected functions', () => {
         fns.forEach(fn => expect(typeof U[fn]).toBe('function'));
     });
@@ -74,5 +75,20 @@ describe('adjustCostForUnits', () => {
     test('pass-through — returns cost unchanged', () => {
         expect(U.adjustCostForUnits(3.14)).toBe(3.14);
         expect(U.adjustCostForUnits(0)).toBe(0);
+    });
+});
+
+describe('unit status labels', () => {
+    test('distanceUnitStatusLabel', () => {
+        expect(U.distanceUnitStatusLabel('mi')).toBe('miles');
+        expect(U.distanceUnitStatusLabel('km')).toBe('kilometers');
+    });
+    test('speedUnitStatusLabel', () => {
+        expect(U.speedUnitStatusLabel('mph')).toBe('mph');
+        expect(U.speedUnitStatusLabel('kmh')).toBe('km/h');
+    });
+    test('temperatureUnitStatusLabel', () => {
+        expect(U.temperatureUnitStatusLabel('fahrenheit')).toBe('Fahrenheit');
+        expect(U.temperatureUnitStatusLabel('celsius')).toBe('Celsius');
     });
 });
