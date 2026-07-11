@@ -6050,7 +6050,7 @@ function redrawNavigationVehicleMarker(reason) {
         let displayLat = lat;
         let displayLon = lon;
         if (routePolyline && routePolyline.length >= 2) {
-            const snapped = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+            const snapped = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
             displayLat = snapped.lat;
             displayLon = snapped.lon;
         }
@@ -6110,7 +6110,7 @@ function seedNavigationProgressOnNewRoute(lat, lon) {
     if (!routePolyline || routePolyline.length < 2) return;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
 
-    const snap = snapToRoutePolyline(lat, lon, routePolyline, 0);
+    const snap = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, 0);
     const idx = Math.max(0, Math.min(snap.index, routePolyline.length - 2));
     lastSnappedRouteIndex = idx;
     lastTurnDetectRouteVertexIndex = idx;
@@ -8514,6 +8514,15 @@ function _osmMapIcons() { return VoyagrModules.osmMapIcons(); }
 /** Unit-tested navigation map control icons (modules/map/map-controls.js). */
 function _mapControls() { return VoyagrModules.mapControls(); }
 
+/** Unit-tested route geometry helpers (modules/navigation/route-geometry.js). */
+function _routeGeometry() { return VoyagrModules.routeGeometry(); }
+
+/** Unit-tested ETA helpers (modules/navigation/eta.js). */
+function _eta() { return VoyagrModules.eta(); }
+
+/** Unit-tested turn-by-turn instruction helpers (modules/navigation/turn-instructions.js). */
+function _turnInstructions() { return VoyagrModules.turnInstructions(); }
+
 function applyZoomFollowButtonUi(btn, enabled) {
     if (!btn) return;
     const display = _mapControls().getZoomFollowButtonDisplay(enabled);
@@ -8689,15 +8698,7 @@ function getActiveRouteManeuverIndex(snappedIndex) {
  * @param {Object|null} step - A Valhalla maneuver object (or null).
  * @returns {string|null} Road class string, or null when nothing useful could be inferred.
  */
-// inferRoadClassFromManeuver / inferRoadClassFromStreetNames moved to
-// modules/navigation/route-geometry.js. Thin stubs keep all callers working.
-function inferRoadClassFromManeuver(step) {
-    return VoyagrModules.routeGeometry().inferRoadClassFromManeuver(step);
-}
-
-function inferRoadClassFromStreetNames(streetNames) {
-    return VoyagrModules.routeGeometry().inferRoadClassFromStreetNames(streetNames);
-}
+// inferRoadClassFromManeuver / inferRoadClassFromStreetNames — call _routeGeometry() at use sites.
 
 /**
  * Get current road type from route data or default to safe value.
@@ -8717,11 +8718,11 @@ function getCurrentRoadType(maneuverIdxOverride, gpsSpeedMph) {
 
     if (stepIndex >= 0 && currentRouteSteps && stepIndex < currentRouteSteps.length) {
         const step = currentRouteSteps[stepIndex];
-        const fromStreet = inferRoadClassFromStreetNames(
+        const fromStreet = _routeGeometry().inferRoadClassFromStreetNames(
             step.begin_street_names || step.street_names
         );
         if (fromStreet) return fromStreet;
-        const inferred = inferRoadClassFromManeuver(step);
+        const inferred = _routeGeometry().inferRoadClassFromManeuver(step);
         if (inferred) return inferred;
         if (step.road_class) return step.road_class;
     }
@@ -8910,7 +8911,7 @@ function getVehicleDisplayCoordinates() {
         Number.isFinite(lat) &&
         Number.isFinite(lon)
     ) {
-        const snapped = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+        const snapped = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
         lat = snapped.lat;
         lon = snapped.lon;
     }
@@ -8962,7 +8963,7 @@ function recenterOnVehicle() {
             ? currentUserMarker.speed
             : 0;
         const speedMph = speedMps * 2.23694;
-        const smartZoom = calculateSmartZoom(speedMph, null, 'motorway');
+        const smartZoom = _routeGeometry().calculateSmartZoom(speedMph, null, 'motorway', ZOOM_LEVELS, TURN_ZOOM_THRESHOLD);
         const pitch = shouldTiltDrivingCamera() ? 60 : 0;
         const bearing = shouldUsePitchedDrivingCamera()
             ? ((currentUserMarker && Number.isFinite(currentUserMarker.heading)) ? currentUserMarker.heading : map.getBearing())
@@ -9068,31 +9069,9 @@ function toggleJourneyOverview() {
  * Calculate distance between two coordinates in meters (Haversine formula).
  */
 function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
-    return VoyagrModules.routeGeometry().haversineDistanceMeters(lat1, lon1, lat2, lon2);
+    return _routeGeometry().haversineDistanceMeters(lat1, lon1, lat2, lon2);
 }
 
-/**
- * calculateBearing function
- * @function calculateBearing
- * @param {*} lat1 - Parameter description
- * @param {*} lon1 - Parameter description
- * @param {*} lat2 - Parameter description
- * @param {*} lon2 - Parameter description
- * @returns {*} Return value description
- */
-function calculateBearing(lat1, lon1, lat2, lon2) {
-    return VoyagrModules.routeGeometry().bearing(lat1, lon1, lat2, lon2);
-}
-/**
- * calculateTurnDirection function
- * @function calculateTurnDirection
- * @param {*} bearing1 - Parameter description
- * @param {*} bearing2 - Parameter description
- * @returns {*} Return value description
- */
-function calculateTurnDirection(bearing1, bearing2) {
-    return VoyagrModules.turnInstructions().calculateTurnDirection(bearing1, bearing2);
-}
 /**
  * Distance along the polyline from a snapped point (snapped onto segment i0) to
  * a target vertex, forward along the line only.
@@ -9101,11 +9080,6 @@ function calculateTurnDirection(bearing1, bearing2) {
  * @param {number} targetVertexIndex - Maneuver begin_shape_index (clamped to polyline)
  * @returns {number} Meters, >= 0
  */
-// distanceAlongRouteToVertexMeters: implementation lives in route-geometry.js
-// (VoyagrRouteGeometry.distanceAlongRouteToVertexMeters). Thin stub keeps all callers working.
-function distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex) {
-    return VoyagrModules.routeGeometry().distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex);
-}
 
 /**
  * Map a Valhalla maneuver type to a turn-by-turn direction key, or null when it is not
@@ -9114,14 +9088,14 @@ function distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex
  * mappings in detectUpcomingTurn / updateTurnWidgetFromPosition.
  */
 function refineManeuverDirectionForRoute(type, direction, maneuver) {
-    const roadClass = maneuver && (maneuver.road_class || inferRoadClassFromManeuver(maneuver));
-    return VoyagrModules.turnInstructions().refineManeuverDirection(type, direction, roadClass);
+    const roadClass = maneuver && (maneuver.road_class || _routeGeometry().inferRoadClassFromManeuver(maneuver));
+    return _turnInstructions().refineManeuverDirection(type, direction, roadClass);
 }
 
 /** Widget instruction line — exit/keep/roundabout phrasing over raw engine text when clearer. */
 function buildTurnDisplayInstruction(turnInfo) {
     if (!turnInfo) return 'Continue on current road';
-    return VoyagrModules.turnInstructions().buildTurnDisplayInstruction(
+    return _turnInstructions().buildTurnDisplayInstruction(
         turnInfo.direction,
         turnInfo.instruction,
         turnInfo.valhallaType,
@@ -9129,13 +9103,6 @@ function buildTurnDisplayInstruction(turnInfo) {
     );
 }
 
-/** Cumulative along-route distance (m) between two polyline vertex indices. */
-// cumulativeRouteDistanceBetween: pure version (explicit polyline arg) is in
-// route-geometry.js as cumulativeDistanceBetweenVertices. This wrapper still reads
-// the global routePolyline — it stays as orchestration glue.
-function cumulativeRouteDistanceBetween(i, j) {
-    return VoyagrModules.routeGeometry().cumulativeDistanceBetweenVertices(routePolyline, i, j);
-}
 
 /**
  * Find the first announceable maneuver AFTER the given step index, plus the along-route
@@ -9143,22 +9110,22 @@ function cumulativeRouteDistanceBetween(i, j) {
  * @returns {{ direction, valhallaType, streetName, gapMeters, index, maneuver } | null}
  */
 function getFollowingManeuver(currentIndex) {
-    const TI = VoyagrModules.turnInstructions();
-    const RG = VoyagrModules.routeGeometry();
+    const TI = _turnInstructions();
+    const RG = _routeGeometry();
     return TI.findFollowingManeuver(currentRouteSteps, currentIndex, routePolyline, {
         cumulativeDistanceBetweenVertices: RG.cumulativeDistanceBetweenVertices,
         getManeuverStreetLabel: getManeuverStreetLabel,
-        resolveRoadClass: (step) => step.road_class || inferRoadClassFromManeuver(step),
+        resolveRoadClass: (step) => step.road_class || _routeGeometry().inferRoadClassFromManeuver(step),
     });
 }
 
 /** Valhalla stores roundabout exit count on enter and/or exit maneuver — merge for UI/lane hints. */
 function effectiveRoundaboutExitCount(stepIndex) {
-    return VoyagrModules.turnInstructions().effectiveRoundaboutExitCountFromSteps(currentRouteSteps, stepIndex);
+    return _turnInstructions().effectiveRoundaboutExitCountFromSteps(currentRouteSteps, stepIndex);
 }
 
 // ordinalEnglishExit / laneOrdinalEnglish / buildTurnLaneHintHtml live in
-// modules/navigation/turn-instructions.js — call VoyagrModules.turnInstructions() directly.
+// modules/navigation/turn-instructions.js — call _turnInstructions() directly.
 
 /**
  * detectUpcomingTurn function
@@ -9172,10 +9139,10 @@ function detectUpcomingTurn(userLat, userLon) {
         return null;
     }
 
-    const TI = VoyagrModules.turnInstructions();
-    const RG = VoyagrModules.routeGeometry();
+    const TI = _turnInstructions();
+    const RG = _routeGeometry();
 
-    const turnSnap = snapToRoutePolyline(
+    const turnSnap = _routeGeometry().snapToRoutePolyline(
         userLat, userLon, routePolyline, lastTurnDetectRouteVertexIndex
     );
     const indexPlan = TI.advanceMonotonicTurnDetectIndex(turnSnap.index, lastTurnDetectRouteVertexIndex);
@@ -9191,7 +9158,7 @@ function detectUpcomingTurn(userLat, userLon) {
             {
                 distanceAlongRouteToVertexMeters: RG.distanceAlongRouteToVertexMeters,
                 getManeuverStreetLabel,
-                resolveRoadClass: (step) => step.road_class || inferRoadClassFromManeuver(step),
+                resolveRoadClass: (step) => step.road_class || _routeGeometry().inferRoadClassFromManeuver(step),
                 effectiveRoundaboutExitCountFromSteps: TI.effectiveRoundaboutExitCountFromSteps,
             }
         );
@@ -9371,35 +9338,6 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
 
 // ===== SMART ZOOM FUNCTIONALITY =====
 /**
- * calculateSmartZoom function
- * @function calculateSmartZoom
- * @param {*} speedMph - Parameter description
- * @param {*} distanceToNextTurn - Parameter description
- * @param {*} roadType - Parameter description
- * @returns {*} Return value description
- */
-// calculateSmartZoom moved to modules/navigation/route-geometry.js (VoyagrRouteGeometry).
-// Stub passes the global constants so live behaviour is unchanged.
-function calculateSmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
-    return VoyagrModules.routeGeometry().calculateSmartZoom(
-        speedMph, distanceToNextTurn, roadType, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
-    );
-}
-
-/**
- * Calculate offset center point for driver's view perspective
- * Moves the vehicle to the bottom third of the screen with more road ahead visible
- * @param {number} lat - Current latitude
- * @param {number} lon - Current longitude
- * @param {number} heading - Current heading in degrees (0 = North, 90 = East)
- * @param {number} zoomLevel - Current zoom level
- * @returns {Array} [offsetLat, offsetLon] - Offset center coordinates
- */
-// calculateDriverViewCenter moved to route-geometry.js (pure stub — MapLibre padding handles offset).
-function calculateDriverViewCenter(lat, lon, heading, zoomLevel) {
-    return VoyagrModules.routeGeometry().calculateDriverViewCenter(lat, lon, heading, zoomLevel);
-}
-/**
  * applySmartZoomWithAnimation function
  * @function applySmartZoomWithAnimation
  * @param {*} speedMph - Parameter description
@@ -9412,7 +9350,7 @@ function calculateDriverViewCenter(lat, lon, heading, zoomLevel) {
 function applySmartZoomWithAnimation(speedMph, distanceToNextTurn = null, roadType = 'urban', userLat = null, userLon = null) {
     if (!smartZoomEnabled || !routeInProgress) return;
 
-    const newZoomLevel = calculateSmartZoom(speedMph, distanceToNextTurn, roadType);
+    const newZoomLevel = _routeGeometry().calculateSmartZoom(speedMph, distanceToNextTurn, roadType, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD);
 
     // Only update if zoom level changed significantly
     if (Math.abs(newZoomLevel - lastZoomLevel) >= 1) {
@@ -11047,7 +10985,7 @@ async function toggleARMode() {
                 const step = currentRouteSteps[currentStepIndex];
                 arNavigator.updateInstruction({
                     instruction: step.instruction,
-                    direction: VoyagrModules.turnInstructions().maneuverTypeToARDirectionKey(step.type),
+                    direction: _turnInstructions().maneuverTypeToARDirectionKey(step.type),
                     distance: nextManeuverDistance
                 });
             }
@@ -11158,24 +11096,6 @@ function hideTurnInstructionWidget() {
 }
 
 /**
- * Get turn icon based on maneuver type
- * @param {number} type - Valhalla maneuver type
- * @returns {string} Unicode arrow or icon
- */
-function getTurnIcon(type) {
-    return VoyagrModules.turnInstructions().getTurnIcon(type);
-}
-
-/**
- * Format distance for display using user's preferred units
- * @param {number} distanceMeters - Distance in meters
- * @returns {string} Formatted distance string
- */
-function formatTurnDistance(distanceMeters) {
-    return VoyagrModules.turnInstructions().formatTurnDistance(distanceMeters, distanceUnit);
-}
-
-/**
  * Update the next turn display with current turn info
  * @param {Object} turnInfo - Turn information object
  */
@@ -11195,7 +11115,7 @@ function updateTurnInstructionDisplay(turnInfo) {
         // "On" when essentially at/using the current road (< 15 m or no distance).
         const isContinue = turnInfo.direction === 'straight';
         const hasCountdown = turnInfo.distance != null && turnInfo.distance >= 15;
-        const formattedDistance = formatTurnDistance(turnInfo.distance || 0);
+        const formattedDistance = _turnInstructions().formatTurnDistance(turnInfo.distance || 0, distanceUnit);
         distanceEl.textContent = hasCountdown ? `In ${formattedDistance}` : 'On';
 
         instructionEl.textContent = buildTurnDisplayInstruction(turnInfo);
@@ -11235,11 +11155,11 @@ function updateTurnInstructionDisplay(turnInfo) {
         };
         const vt = turnInfo.valhallaType;
         const iconType = typeof vt === 'number' ? vt : (directionToType[turnInfo.direction] || 8);
-        if (iconEl) iconEl.textContent = getTurnIcon(iconType);
+        if (iconEl) iconEl.textContent = _turnInstructions().getTurnIcon(iconType);
 
         if (hintEl) {
             if (turnInfo.maneuver && turnInfo.maneuverIndex != null) {
-                const TI = VoyagrModules.turnInstructions();
+                const TI = _turnInstructions();
                 const exitCt = effectiveRoundaboutExitCount(turnInfo.maneuverIndex);
                 const hintHtml = TI.buildTurnLaneHintHtml(turnInfo.maneuver, exitCt, turnInfo.distance);
                 if (hintHtml) {
@@ -11288,13 +11208,13 @@ function updateThenRow(maneuverIndex, currentDistance) {
     if (!thenEl) return;
     const iconEl = document.getElementById('nextTurnThenIcon');
     const textEl = document.getElementById('nextTurnThenText');
-    const TI = VoyagrModules.turnInstructions();
+    const TI = _turnInstructions();
 
     let show = false;
     if (maneuverIndex != null && typeof currentDistance === 'number' && currentDistance <= 700) {
         const follow = getFollowingManeuver(maneuverIndex);
         if (follow && follow.gapMeters <= 900) {
-            let label = getTurnDirectionText(follow.direction);
+            let label = _turnInstructions().getTurnDirectionText(follow.direction);
             label = label.charAt(0).toUpperCase() + label.slice(1);
             if (follow.direction === 'roundabout') {
                 const exitCt = effectiveRoundaboutExitCount(follow.index);
@@ -11303,8 +11223,8 @@ function updateThenRow(maneuverIndex, currentDistance) {
             const onto = follow.streetName ? ` onto ${follow.streetName}` : '';
             // Distance to the following maneuver, formatted in the user's selected units
             // via the same helper as the main turn row (respects the mph/km UI choice).
-            const thenDistance = formatTurnDistance(follow.gapMeters);
-            if (iconEl) iconEl.textContent = getTurnIcon(follow.valhallaType);
+            const thenDistance = _turnInstructions().formatTurnDistance(follow.gapMeters, distanceUnit);
+            if (iconEl) iconEl.textContent = _turnInstructions().getTurnIcon(follow.valhallaType);
             if (textEl) textEl.textContent = `In ${thenDistance} · ${label}${onto}`;
             show = true;
         }
@@ -11319,10 +11239,10 @@ function updateThenRow(maneuverIndex, currentDistance) {
 function populateInstructionsList() {
     const listEl = document.getElementById('instructionsList');
     const countEl = document.getElementById('instructionsCount');
-    const TI = VoyagrModules.turnInstructions();
+    const TI = _turnInstructions();
 
     const plan = TI.buildInstructionsListHtml(currentRouteSteps, currentStepIndex, {
-        getTurnIcon,
+        getTurnIcon: TI.getTurnIcon.bind(TI),
         effectiveRoundaboutExitCountFromSteps: TI.effectiveRoundaboutExitCountFromSteps,
     });
 
@@ -11465,9 +11385,9 @@ function updateTurnWidgetFromPosition(lat, lon) {
             ? currentRouteSteps[activeIdx + 1]
             : null;
         if (nextManeuver) {
-            const snap = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+            const snap = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
             const targetIdx = Math.min(nextManeuver.begin_shape_index || 0, routePolyline.length - 1);
-            const distToNext = distanceAlongRouteToVertexMeters(routePolyline, snap, targetIdx);
+            const distToNext = _routeGeometry().distanceAlongRouteToVertexMeters(routePolyline, snap, targetIdx);
             if (Number.isFinite(distToNext) && distToNext >= 15) {
                 betweenTurn.distance = distToNext;
             }
@@ -11524,25 +11444,12 @@ function startJourneySummaryUpdates() {
     journeySummaryUpdateInterval = setInterval(updateJourneySummaryBar, 5000);
 }
 
-/**
- * Format time for ETA display
- * @param {Date} date - Date object
- * @returns {string} Formatted time string
- */
-function formatETATime(date) {
-    const use24Hour = localStorage.getItem('use24HourFormat') !== 'false';
-    return VoyagrModules.eta().formatETATime(date, use24Hour);
-}
 
 /**
  * Format remaining time for display
  * @param {number} minutes - Time in minutes
  * @returns {string} Formatted time string (e.g., "45 min" or "2h 15min")
  */
-// formatRemainingTime moved to modules/navigation/eta.js (VoyagrETA).
-function formatRemainingTime(minutes) {
-    return VoyagrModules.eta().formatRemainingTime(minutes);
-}
 
 /**
  * Detect if the user has actually started moving.
@@ -11552,7 +11459,7 @@ function formatRemainingTime(minutes) {
 function hasUserStartedMoving() {
     return VoyagrModules.movementDetection().hasUserStartedMoving({
         trackingHistory: trackingHistory,
-        haversineDistanceMeters: VoyagrModules.routeGeometry().haversineDistanceMeters,
+        haversineDistanceMeters: _routeGeometry().haversineDistanceMeters,
         log: console.log.bind(console),
     });
 }
@@ -11578,11 +11485,11 @@ function updateJourneySummaryBar() {
     let remainingDistanceMeters = 0;
     if (routePolyline.length >= 2) {
         if (userHasStartedMoving && currentLat != null && currentLon != null) {
-            remainingDistanceMeters = computeRemainingDistanceAlongRoute(
+            remainingDistanceMeters = _routeGeometry().computeRemainingDistanceAlongRoute(
                 currentLat, currentLon, routePolyline, lastSnappedRouteIndex
             );
         } else {
-            remainingDistanceMeters = getTotalPolylineLengthMeters(routePolyline);
+            remainingDistanceMeters = _routeGeometry().totalPolylineLengthMeters(routePolyline);
         }
     }
 
@@ -11596,34 +11503,34 @@ function updateJourneySummaryBar() {
     // Calculate remaining time based on route data
     let remainingTimeMinutes = 0;
 
-    const routeDurationMin = getRouteOriginalDurationMinutes();
-    const journeyMinutes = VoyagrModules.eta().computeJourneyRemainingTimeMinutes({
+    const routeDurationMin = _eta().normalizeRouteDurationMinutes(window.lastCalculatedRoute);
+    const journeyMinutes = _eta().computeJourneyRemainingTimeMinutes({
         lastCalculatedRoute: window.lastCalculatedRoute,
         routeDurationMin: routeDurationMin,
         userHasStartedMoving: userHasStartedMoving,
         remainingDistanceMeters: remainingDistanceMeters,
-        polylineTotalM: getTotalPolylineLengthMeters(routePolyline),
+        polylineTotalM: _routeGeometry().totalPolylineLengthMeters(routePolyline),
     });
     if (journeyMinutes != null) {
         if (userHasStartedMoving) {
-            console.log(`[ETA] Progress-based: ${(1 - remainingDistanceMeters / getTotalPolylineLengthMeters(routePolyline)).toFixed(2)} complete, ${journeyMinutes.toFixed(1)} min remaining`);
+            console.log(`[ETA] Progress-based: ${(1 - remainingDistanceMeters / _routeGeometry().totalPolylineLengthMeters(routePolyline)).toFixed(2)} complete, ${journeyMinutes.toFixed(1)} min remaining`);
         } else {
             console.log(`[ETA] Pre-movement: Using original duration ${journeyMinutes.toFixed(1)} min`);
         }
         remainingTimeMinutes = applyTrafficRatioToBaseRemaining(journeyMinutes);
     } else {
-        remainingTimeMinutes = VoyagrModules.eta().estimateRemainingTimeFromDistance(remainingDistanceMeters);
+        remainingTimeMinutes = _eta().estimateRemainingTimeFromDistance(remainingDistanceMeters);
     }
 
     // Format remaining time
-    timeEl.textContent = formatRemainingTime(remainingTimeMinutes);
+    timeEl.textContent = _eta().formatRemainingTime(remainingTimeMinutes);
 
     // Calculate ETA
     const now = new Date();
     const eta = new Date(now.getTime() + remainingTimeMinutes * 60000);
-    etaEl.textContent = formatETATime(eta);
+    etaEl.textContent = _eta().formatETATime(eta, localStorage.getItem('use24HourFormat') !== 'false');
 
-    console.log(`[Journey Summary] Distance: ${distanceText}, Time: ${formatRemainingTime(remainingTimeMinutes)}, ETA: ${formatETATime(eta)}`);
+    console.log(`[Journey Summary] Distance: ${distanceText}, Time: ${_eta().formatRemainingTime(remainingTimeMinutes)}, ETA: ${_eta().formatETATime(eta, localStorage.getItem('use24HourFormat') !== 'false')}`);
 }
 
 // ===== NOTIFICATIONS SYSTEM =====
@@ -12427,7 +12334,7 @@ function startGPSTracking() {
             let displayLon = lon;
 
             if (routeInProgress && routePolyline && routePolyline.length >= 2) {
-                const snapped = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+                const snapped = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
                 const SGsnap = _speedGps();
                 if (SGsnap) {
                     const snapPlan = SGsnap.buildSnappedVehicleDisplayPlan({
@@ -12440,8 +12347,8 @@ function startGPSTracking() {
                         lastSnappedRouteIndex,
                         speedMph,
                         prevSnapBlendWeightState: _snapBlendWeightState,
-                        calculateBearing,
-                        blendHeadingsCircular: VoyagrModules.routeGeometry().blendHeadingsCircular,
+                        bearing: (a, b, c, d) => _routeGeometry().bearing(a, b, c, d),
+                        blendHeadingsCircular: _routeGeometry().blendHeadingsCircular,
                     });
                     displayLat = snapPlan.displayLat;
                     displayLon = snapPlan.displayLon;
@@ -12519,7 +12426,7 @@ function startGPSTracking() {
             });
 
             if (followPlan.mode === 'navigation' && map) {
-                const smartZoom = calculateSmartZoom(speedMph, null, 'motorway');
+                const smartZoom = _routeGeometry().calculateSmartZoom(speedMph, null, 'motorway', ZOOM_LEVELS, TURN_ZOOM_THRESHOLD);
                 const pitch = shouldTiltDrivingCamera() ? 60 : 0;
                 const padding = CP.computeFollowPadding(window.innerHeight, window.innerWidth);
                 const bearing = shouldUsePitchedDrivingCamera() ? (heading || map.getBearing()) : 0;
@@ -12597,7 +12504,7 @@ function startGPSTracking() {
             if (routeInProgress && currentRouteSteps.length > 0) {
                 const nextStep = currentRouteSteps[currentStepIndex];
                 const maneuverDir = nextStep
-                    ? VoyagrModules.turnInstructions().maneuverTypeToLaneDirectionKey(nextStep.type || 0)
+                    ? _turnInstructions().maneuverTypeToLaneDirectionKey(nextStep.type || 0)
                     : 'straight';
                 const exitCount = (maneuverDir === 'roundabout')
                     ? effectiveRoundaboutExitCount(currentStepIndex)
@@ -12751,45 +12658,39 @@ const ETA_MIN_INTERVAL_MS = 60000; // Minimum 1 minute between any ETA announcem
 let initialETAAnnouncementTimeoutId = null;
 let lastNavTrafficFetchAt = 0;
 /** Live nav ETA + traffic snapshot (updated during navigation). */
-window.navETASnapshot = VoyagrModules.eta().createEmptyNavETASnapshot();
+window.navETASnapshot = _eta().createEmptyNavETASnapshot();
 
 /** First-time default: traffic-aware ETA on; only explicit 'false' disables. */
 function ensureDefaultTrafficAwareRouting() {
-    VoyagrModules.eta().ensureDefaultTrafficAwareRouting(localStorage);
+    _eta().ensureDefaultTrafficAwareRouting(localStorage);
 }
 
-function shouldApplyTrafficAwareETA() {
-    return VoyagrModules.eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode);
-}
 
-function getRouteOriginalDurationMinutes() {
-    return VoyagrModules.eta().normalizeRouteDurationMinutes(window.lastCalculatedRoute);
-}
 
 /**
  * Progress-based remaining time (minutes) from GPS on polyline; same basis as server route duration.
  * @returns {{ originalDurationMinutes: number, timeRemainingMinutes: number, progressPercent: number } | null}
  */
 function computeBaseNavigationETAMinutes() {
-    return VoyagrModules.eta().computeBaseNavigationETAMinutes({
+    return _eta().computeBaseNavigationETAMinutes({
         routeInProgress: routeInProgress,
         lastCalculatedRoute: window.lastCalculatedRoute,
         polyline: routePolyline,
-        originalDurationMinutes: getRouteOriginalDurationMinutes(),
+        originalDurationMinutes: _eta().normalizeRouteDurationMinutes(window.lastCalculatedRoute),
         userHasStartedMoving: hasUserStartedMoving(),
         currentLat: currentLat,
         currentLon: currentLon,
         lastSnappedRouteIndex: lastSnappedRouteIndex,
-        routeGeometry: VoyagrModules.routeGeometry(),
+        routeGeometry: _routeGeometry(),
     });
 }
 
 function applyTrafficRatioToBaseRemaining(baseRemainingMinutes) {
-    return VoyagrModules.eta().applyTrafficRatioToBaseRemaining(
+    return _eta().applyTrafficRatioToBaseRemaining(
         baseRemainingMinutes,
         window.navETASnapshot,
         Date.now(),
-        shouldApplyTrafficAwareETA()
+        _eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode)
     );
 }
 
@@ -12797,13 +12698,13 @@ async function refreshNavTrafficETAIfDue(baseRemainingMinutes, progressPercent, 
     window.navETASnapshot.baseRemainingMinutes = baseRemainingMinutes;
     window.navETASnapshot.progressPercent = progressPercent;
 
-    if (!shouldApplyTrafficAwareETA() || !currentLat || !currentLon) {
+    if (!_eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode) || !currentLat || !currentLon) {
         window.navETASnapshot.trafficAdjustedMinutes = null;
         return;
     }
 
     const now = Date.now();
-    if (!VoyagrModules.eta().shouldRefreshNavTrafficETA(
+    if (!_eta().shouldRefreshNavTrafficETA(
         now,
         lastNavTrafficFetchAt,
         NAV_TRAFFIC_ETA_MIN_INTERVAL_MS,
@@ -12816,7 +12717,7 @@ async function refreshNavTrafficETAIfDue(baseRemainingMinutes, progressPercent, 
 
     try {
         const flow = await getRouteTrafficAhead(forceFetch);
-        const trafficUpdate = VoyagrModules.eta().buildTrafficSnapshotFromFlow(
+        const trafficUpdate = _eta().buildTrafficSnapshotFromFlow(
             baseRemainingMinutes,
             flow,
             Date.now()
@@ -12840,12 +12741,12 @@ function renderTurnInfoETAPanel(baseMinutes, adjustedMinutes, progressPercent, t
     const now = Date.now();
     const displayMins = adjustedMinutes != null ? adjustedMinutes : baseMinutes;
     const eta = new Date(now + displayMins * 60000);
-    const trafficLine = VoyagrModules.eta().buildTrafficStatusLine(
-        shouldApplyTrafficAwareETA(),
+    const trafficLine = _eta().buildTrafficStatusLine(
+        _eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode),
         trafficLevel,
         congestionPercent
     );
-    turnInfo.innerHTML = VoyagrModules.eta().buildTurnInfoETAPanelHtml(
+    turnInfo.innerHTML = _eta().buildTurnInfoETAPanelHtml(
         displayMins,
         progressPercent,
         eta.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
@@ -12853,10 +12754,6 @@ function renderTurnInfoETAPanel(baseMinutes, adjustedMinutes, progressPercent, t
     );
 }
 
-// buildETAVoiceMessage moved to modules/navigation/eta.js (VoyagrETA).
-function buildETAVoiceMessage(timeRemainingMinutes, etaDate) {
-    return VoyagrModules.eta().buildETAVoiceMessage(timeRemainingMinutes, etaDate);
-}
 
 let lastVoiceAnnouncementTime = 0;
 let VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = 10000;
@@ -12870,61 +12767,9 @@ const VOICE_FREQUENCY_THROTTLES = {
     'minimal': 30000
 };
 
-/**
- * Find the nearest point on the route polyline to the current GPS position.
- * Used for accurate ETA calculation based on actual driver progress.
- * @param {number} lat - Current latitude
- * @param {number} lon - Current longitude
- * @param {Array} polyline - Route polyline as array of [lat, lon] coordinates
- * @returns {number} Index of nearest point on route, or 0 if not found
- */
-function findNearestRouteIndex(lat, lon, polyline) {
-    return VoyagrModules.routeGeometry().findNearestPolylineVertexIndex(lat, lon, polyline);
-}
 
-/**
- * Snap a GPS position to the closest point on the route polyline.
- * Projects the position onto each line segment and returns the closest projected point.
- * This ensures the vehicle icon follows the route line smoothly instead of jumping
- * to raw GPS coordinates that may be off-road.
- *
- * @param {number} lat - GPS latitude
- * @param {number} lon - GPS longitude
- * @param {Array} polyline - Route polyline as array of [lat, lon]
- * @param {number} [searchStartIndex=0] - Start searching from this index (performance optimisation)
- * @returns {{ lat: number, lon: number, index: number, distance: number }} Snapped position info
- */
-/**
- * Project a point onto a line segment using latitude-corrected Cartesian math.
- * Raw lat/lon degrees are not equal in metres — 1° longitude is cos(lat) × 1° latitude.
- * We scale the longitude axis by cos(latitude) so the dot-product gives the true
- * perpendicular foot on the segment, producing an accurate snap.
- */
-// _projectToSegment / snapToRoutePolyline / getTotalPolylineLengthMeters /
-// computeRemainingDistanceAlongRoute moved to modules/navigation/route-geometry.js.
-// Thin stubs delegate to VoyagrRouteGeometry; all existing callers work unchanged.
 
-function _projectToSegment(lat, lon, ax, ay, bx, by, cosLat) {
-    return VoyagrModules.routeGeometry().projectToSegment(lat, lon, ax, ay, bx, by, cosLat);
-}
 
-function snapToRoutePolyline(lat, lon, polyline, searchStartIndex = 0) {
-    return VoyagrModules.routeGeometry().snapToRoutePolyline(lat, lon, polyline, searchStartIndex);
-}
-
-/**
- * Total path length along the polyline (meters).
- */
-function getTotalPolylineLengthMeters(polyline) {
-    return VoyagrModules.routeGeometry().totalPolylineLengthMeters(polyline);
-}
-
-/**
- * Remaining distance (meters) along the polyline from the snapped GPS position to the route end.
- */
-function computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex = 0) {
-    return VoyagrModules.routeGeometry().computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex);
-}
 
 /**
  * Remaining meters along the active route polyline (snapped progress). Shared by voice, ETA bar, and arrival.
@@ -12935,7 +12780,7 @@ function computeRemainingDistanceAlongRoute(lat, lon, polyline, searchStartIndex
 function getNavigationRemainingDistanceMeters(lat, lon) {
     if (!routePolyline || routePolyline.length < 2) return Infinity;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return Infinity;
-    return computeRemainingDistanceAlongRoute(lat, lon, routePolyline, lastSnappedRouteIndex);
+    return _routeGeometry().computeRemainingDistanceAlongRoute(lat, lon, routePolyline, lastSnappedRouteIndex);
 }
 
 function resetNavigationArrivalState() {
@@ -13023,7 +12868,7 @@ function primeVehicleMarkerOnRoute(lat, lon) {
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) return;
     if (!routePolyline || routePolyline.length < 2) return;
     seedNavigationProgressOnNewRoute(lat, lon);
-    const snapped = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+    const snapped = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
     _smoothDisplayLat = snapped.lat;
     _smoothDisplayLon = snapped.lon;
     _snapBlendWeightState = 1;
@@ -13034,15 +12879,6 @@ function primeVehicleMarkerOnRoute(lat, lon) {
 
 /** Alias for readability in routing math that predates corridor blending. */
 const SNAP_TO_ROUTE_MAX_DISTANCE = SNAP_TO_ROUTE_BASE_METERS;
-/**
- * getTurnDirectionText function
- * @function getTurnDirectionText
- * @param {*} direction - Parameter description
- * @returns {*} Return value description
- */
-function getTurnDirectionText(direction) {
-    return VoyagrModules.turnInstructions().getTurnDirectionText(direction);
-}
 /**
  * announceDistanceToDestination function
  * @function announceDistanceToDestination
@@ -13207,8 +13043,8 @@ function announceUpcomingTurn(turnInfo) {
     }
 
     const direction = turnInfo.direction || 'straight';
-    const TI = VoyagrModules.turnInstructions();
-    let directionText = getTurnDirectionText(direction);
+    const TI = _turnInstructions();
+    let directionText = TI.getTurnDirectionText(direction);
     if (direction === 'roundabout') {
         directionText = TI.getRoundaboutDirectionText(
             turnInfo.valhallaType,
@@ -13259,7 +13095,7 @@ function announceUpcomingTurn(turnInfo) {
                 announcementDistances,
                 follow,
                 {
-                    getTurnDirectionText,
+                    getTurnDirectionText: TI.getTurnDirectionText.bind(TI),
                     effectiveRoundaboutExitCount: (idx) => effectiveRoundaboutExitCount(idx),
                     ordinalEnglishExit: TI.ordinalEnglishExit,
                 }
@@ -13379,7 +13215,7 @@ function checkRouteDeviation(lat, lon, accuracy) {
         return;
     }
 
-    const snap = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
+    const snap = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
     const minDistance = snap.distance;
 
     const VRD = VoyagrModules.rerouteDecision();
@@ -13969,7 +13805,7 @@ async function updateETACalculation() {
     let adjusted = applyTrafficRatioToBaseRemaining(timeRemainingMinutes);
     renderTurnInfoETAPanel(
         timeRemainingMinutes,
-        shouldApplyTrafficAwareETA() ? adjusted : null,
+        _eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode) ? adjusted : null,
         progressPercent,
         window.navETASnapshot.trafficLevel,
         window.navETASnapshot.congestionPercent
@@ -13980,7 +13816,7 @@ async function updateETACalculation() {
     adjusted = applyTrafficRatioToBaseRemaining(timeRemainingMinutes);
     renderTurnInfoETAPanel(
         timeRemainingMinutes,
-        shouldApplyTrafficAwareETA() ? adjusted : null,
+        _eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode) ? adjusted : null,
         progressPercent,
         window.navETASnapshot.trafficLevel,
         window.navETASnapshot.congestionPercent
@@ -14007,7 +13843,7 @@ function announceETAIfNeeded() {
         }
         const timeRemainingMinutes = applyTrafficRatioToBaseRemaining(base.timeRemainingMinutes);
         const eta = new Date(now + timeRemainingMinutes * 60000);
-        const message = buildETAVoiceMessage(timeRemainingMinutes, eta);
+        const message = _eta().buildETAVoiceMessage(timeRemainingMinutes, eta);
         console.log(`[Voice] ETA announcement: ${message}`);
         speakMessage(message);
         lastETAAnnouncementTime = now;
@@ -14041,13 +13877,13 @@ async function speakInitialETAAnnouncement() {
 
     const base = computeBaseNavigationETAMinutes();
     if (!base) return;
-    if (shouldApplyTrafficAwareETA() && currentLat != null && currentLon != null) {
+    if (_eta().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode) && currentLat != null && currentLon != null) {
         await refreshNavTrafficETAIfDue(base.timeRemainingMinutes, base.progressPercent, true);
     }
     const now = Date.now();
     const timeRemainingMinutes = applyTrafficRatioToBaseRemaining(base.timeRemainingMinutes);
     const eta = new Date(now + timeRemainingMinutes * 60000);
-    const message = buildETAVoiceMessage(timeRemainingMinutes, eta);
+    const message = _eta().buildETAVoiceMessage(timeRemainingMinutes, eta);
     console.log(`[Voice] Initial ETA announcement: ${message}`);
     speakMessage(message);
     lastETAAnnouncementTime = now;
@@ -15014,7 +14850,7 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     lastAnnouncedETA = null;
     lastNavTrafficFetchAt = 0;
     initialETAMovementRetries = 0;
-    window.navETASnapshot = VoyagrModules.eta().createEmptyNavETASnapshot();
+    window.navETASnapshot = _eta().createEmptyNavETASnapshot();
 
     try {
         const navPrecision = Number.isFinite(routeData.geometry_precision) ? routeData.geometry_precision : 6;
@@ -15120,15 +14956,15 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     if (currentLat != null && currentLon != null) {
         updateTurnWidgetFromPosition(currentLat, currentLon);
     } else if (currentRouteSteps && currentRouteSteps.length > 0 && routePolyline && routePolyline.length > 0) {
-        const TI = VoyagrModules.turnInstructions();
-        const RG = VoyagrModules.routeGeometry();
+        const TI = _turnInstructions();
+        const RG = _routeGeometry();
         const turnInit = TI.buildNavStartTurnInstructionInit(
             currentRouteSteps,
             currentStepIndex,
             routePolyline,
             {
                 haversineDistanceMeters: RG.haversineDistanceMeters,
-                resolveRoadClass: (step) => step.road_class || inferRoadClassFromManeuver(step),
+                resolveRoadClass: (step) => step.road_class || _routeGeometry().inferRoadClassFromManeuver(step),
             }
         );
         if (turnInit) {
@@ -15320,12 +15156,12 @@ function stopTurnByTurnNavigation() {
 function updateTurnGuidance(userLat, userLon) {
     if (!routeInProgress || !routePolyline || routePolyline.length === 0) return;
 
-    const progress = VoyagrModules.routeGeometry().buildVertexDestinationProgress(userLat, userLon, routePolyline);
+    const progress = _routeGeometry().buildVertexDestinationProgress(userLat, userLon, routePolyline);
 
     const turnInfo = document.getElementById('turnInfo');
     if (turnInfo) {
         const distanceKm = progress.distanceToEndMeters / 1000;
-        turnInfo.innerHTML = VoyagrModules.eta().buildDestinationProgressPanelHtml(
+        turnInfo.innerHTML = _eta().buildDestinationProgressPanelHtml(
             convertDistance(distanceKm),
             getDistanceUnit(),
             progress.progressPercent
