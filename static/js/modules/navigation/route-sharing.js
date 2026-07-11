@@ -122,6 +122,8 @@
             toll_cost: payload.toll_cost || 0,
             caz_cost: payload.caz_cost || 0,
             geometry: payload.geometry || null,
+            destination: payload.end,
+            destinationName: payload.end,
         };
     }
 
@@ -646,6 +648,71 @@
         };
     }
 
+    /**
+     * Orchestration plan for loading a shared route from URL query params.
+     * @param {string} search
+     * @returns {Object}
+     */
+    function buildLoadSharedRouteFromUrlOrchestrationPlan(search) {
+        var encoded = extractRouteParamFromSearch(search);
+        if (!encoded) {
+            return { shouldLoad: false };
+        }
+        var payload = decodeRoutePayload(encoded);
+        if (!payload || !payload.start || !payload.end) {
+            return {
+                shouldLoad: false,
+                invalidPayloadLog: '[RouteSharing] Invalid shared route payload in URL',
+            };
+        }
+        return {
+            shouldLoad: true,
+            payload: payload,
+            startInputId: 'start',
+            endInputId: 'end',
+        };
+    }
+
+    /**
+     * Execute plan after a valid shared-route URL payload is decoded.
+     * @param {Object} orch - from buildLoadSharedRouteFromUrlOrchestrationPlan
+     * @param {string} href
+     * @returns {Object}
+     */
+    function buildLoadSharedRouteFromUrlExecutePlan(orch, href) {
+        orch = orch || {};
+        if (!orch.shouldLoad) {
+            return { shouldApply: false };
+        }
+        var lastRoute = buildLastCalculatedRouteFromSharedPayload(orch.payload);
+        return {
+            shouldApply: true,
+            startLabel: orch.payload.start,
+            endLabel: orch.payload.end,
+            startInputId: orch.startInputId || 'start',
+            endInputId: orch.endInputId || 'end',
+            lastCalculatedRoute: lastRoute,
+            cleanUrl: stripRouteParamFromUrl(href),
+            urlCleanupFailedLog: '[RouteSharing] URL cleanup failed:',
+            showRoutePreview: !!lastRoute.geometry,
+            previewSkipMapDisplay: false,
+            successStatusMessage: 'Shared route loaded',
+        };
+    }
+
+    /**
+     * Execute plan for copying the share link input to clipboard.
+     * @returns {Object}
+     */
+    function buildCopyShareLinkExecutePlan() {
+        return {
+            shouldCopy: true,
+            shareLinkInputId: 'shareLink',
+            successStatusMessage: 'Link copied to clipboard!',
+            successStatusType: 'success',
+        };
+    }
+
     var api = {
         buildShareableRoutePayload: buildShareableRoutePayload,
         encodeRoutePayload: encodeRoutePayload,
@@ -678,6 +745,9 @@
         buildQrCodeGenerateExecutePlan: buildQrCodeGenerateExecutePlan,
         buildShareViaWhatsAppPlan: buildShareViaWhatsAppPlan,
         buildShareViaEmailPlan: buildShareViaEmailPlan,
+        buildLoadSharedRouteFromUrlOrchestrationPlan: buildLoadSharedRouteFromUrlOrchestrationPlan,
+        buildLoadSharedRouteFromUrlExecutePlan: buildLoadSharedRouteFromUrlExecutePlan,
+        buildCopyShareLinkExecutePlan: buildCopyShareLinkExecutePlan,
         QR_CODE_IMAGE_SIZE_PX: QR_CODE_IMAGE_SIZE_PX,
         buildQrCodeImageUrl: buildQrCodeImageUrl,
         getQrCodeImageStyleCssText: getQrCodeImageStyleCssText,

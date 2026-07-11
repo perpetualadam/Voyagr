@@ -329,6 +329,116 @@
         return html;
     }
 
+    /**
+     * Orchestration plan for loading trip analytics from the API.
+     * @returns {Object}
+     */
+    function buildLoadRouteAnalyticsOrchestrationPlan() {
+        return {
+            apiPath: '/api/trip-analytics',
+            authRequiredStatusMessage: 'Sign in to view trip analytics',
+            authRequiredStatusType: 'info',
+            premiumFallbackStatusMessage: 'Premium access required — redeem a promo code in Settings → Account.',
+            loadFailureStatusMessage: 'Failed to load analytics',
+            loadFailureStatusType: 'error',
+            fetchErrorStatusMessage: 'Error loading analytics',
+            fetchErrorStatusType: 'error',
+            errorLogPrefix: 'Analytics error:',
+        };
+    }
+
+    /**
+     * Execute plan for a trip-analytics API response.
+     * @param {{ status?: number }} res
+     * @param {Object} data
+     * @param {Object} orch - from buildLoadRouteAnalyticsOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildLoadRouteAnalyticsResponseExecutePlan(res, data, orch) {
+        res = res || {};
+        data = data || {};
+        orch = orch || {};
+        if (res.status === 401) {
+            return {
+                shouldDisplay: false,
+                statusMessage: orch.authRequiredStatusMessage,
+                statusType: orch.authRequiredStatusType,
+            };
+        }
+        if (res.status === 403 && data.code === 'premium_required') {
+            return {
+                shouldDisplay: false,
+                statusMessage: data.error || orch.premiumFallbackStatusMessage,
+                statusType: orch.authRequiredStatusType,
+            };
+        }
+        if (data.success) {
+            return { shouldDisplay: true, data: data };
+        }
+        return {
+            shouldDisplay: false,
+            statusMessage: orch.loadFailureStatusMessage,
+            statusType: orch.loadFailureStatusType,
+        };
+    }
+
+    /**
+     * Input assembly for analytics dashboard display.
+     * @param {Object} data
+     * @param {Object} fmt
+     * @returns {Object}
+     */
+    function buildAnalyticsDisplayInputPlan(data, fmt) {
+        fmt = fmt || {};
+        var routes = (data && data.frequent_routes) || [];
+        return {
+            data: data || {},
+            currencySymbol: fmt.currencySymbol,
+            totalDistanceText: fmt.totalDistanceText,
+            speedUnit: fmt.speedUnit,
+            speedUnitLabel: fmt.speedUnitLabel,
+            distUnit: fmt.distUnit,
+            escapeHtml: fmt.escapeHtml,
+            distanceTexts: routes.map(function (route) {
+                return typeof fmt.convertDistance === 'function'
+                    ? fmt.convertDistance(route.avg_distance)
+                    : String(route.avg_distance);
+            }),
+        };
+    }
+
+    /**
+     * Execute plan for rendering analytics dashboard values.
+     * @param {Object} input - from buildAnalyticsDisplayInputPlan
+     * @returns {Object}
+     */
+    function buildAnalyticsDisplayExecutePlan(input) {
+        input = input || {};
+        var display = buildAnalyticsDisplayValues(input.data, input);
+        var routes = input.data.frequent_routes || [];
+        return {
+            shouldRender: true,
+            elementPatches: {
+                totalTrips: display.totalTrips,
+                totalDistance: display.totalDistanceText + ' ' + (input.distUnit || ''),
+                totalCost: display.totalCostText,
+                avgDuration: display.avgDurationText,
+                totalFuelCost: display.totalFuelCostText,
+                totalTollCost: display.totalTollCostText,
+                totalCAZCost: display.totalCazCostText,
+                totalTime: display.totalTimeText,
+                avgSpeed: display.avgSpeedText,
+            },
+            frequentRoutesListId: 'frequentRoutesList',
+            frequentRoutesHtml: buildFrequentRoutesListHtml(routes, {
+                escapeHtml: input.escapeHtml,
+                currencySymbol: input.currencySymbol,
+                distUnit: input.distUnit,
+                distanceTexts: input.distanceTexts,
+            }),
+        };
+    }
+
     var api = {
         parseLatLonString: parseLatLonString,
         mergeServerAndLocalTrips: mergeServerAndLocalTrips,
@@ -337,6 +447,10 @@
         filterTripsBySearch: filterTripsBySearch,
         buildTripHistoryRowHtml: buildTripHistoryRowHtml,
         buildAnalyticsDisplayValues: buildAnalyticsDisplayValues,
+        buildLoadRouteAnalyticsOrchestrationPlan: buildLoadRouteAnalyticsOrchestrationPlan,
+        buildLoadRouteAnalyticsResponseExecutePlan: buildLoadRouteAnalyticsResponseExecutePlan,
+        buildAnalyticsDisplayInputPlan: buildAnalyticsDisplayInputPlan,
+        buildAnalyticsDisplayExecutePlan: buildAnalyticsDisplayExecutePlan,
         buildFrequentRouteRowHtml: buildFrequentRouteRowHtml,
         buildFrequentRoutesListHtml: buildFrequentRoutesListHtml,
         getTripHistorySignInBannerStyleCssText: getTripHistorySignInBannerStyleCssText,

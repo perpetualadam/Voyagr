@@ -458,6 +458,19 @@
         };
     }
 
+    /**
+     * Execute plan for closing the journey summary modal.
+     * @returns {Object}
+     */
+    function buildCloseJourneySummaryExecutePlan() {
+        return {
+            shouldClose: true,
+            modalId: 'journeySummaryModal',
+            switchTab: 'navigation',
+            clearForm: true,
+        };
+    }
+
     var api = {
         formatRemainingTime: formatRemainingTime,
         buildETAVoiceMessage: buildETAVoiceMessage,
@@ -479,6 +492,7 @@
         buildTraveledJourneyRoutePatch: buildTraveledJourneyRoutePatch,
         buildJourneySummaryModalApplyPlan: buildJourneySummaryModalApplyPlan,
         buildJourneySummaryModalExecutePlan: buildJourneySummaryModalExecutePlan,
+        buildCloseJourneySummaryExecutePlan: buildCloseJourneySummaryExecutePlan,
         MAX_PLAUSIBLE_AVG_KMH: MAX_PLAUSIBLE_AVG_KMH,
         TRAFFIC_RATIO_MAX_AGE_MS: TRAFFIC_RATIO_MAX_AGE_MS,
     };

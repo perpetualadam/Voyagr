@@ -368,6 +368,50 @@
     }
 
     /**
+     * Execute plan for starting periodic traffic condition polling.
+     * @param {boolean} hasExistingInterval
+     * @returns {Object}
+     */
+    function buildStartTrafficMonitoringExecutePlan(hasExistingInterval) {
+        return {
+            shouldStart: true,
+            clearExistingInterval: !!hasExistingInterval,
+            intervalMs: TRAFFIC_UPDATE_INTERVAL_MS,
+            successStatusMessage: 'Traffic monitoring started',
+            successStatusType: 'success',
+        };
+    }
+
+    /**
+     * Tick plan for the traffic monitoring interval callback.
+     * @param {Object|null|undefined} lastCalculatedRoute
+     * @param {string} startLabel
+     * @returns {Object}
+     */
+    function buildTrafficMonitoringTickPlan(lastCalculatedRoute, startLabel) {
+        return {
+            shouldUpdate: !!(lastCalculatedRoute && startLabel),
+        };
+    }
+
+    /**
+     * Execute plan for stopping periodic traffic condition polling.
+     * @param {boolean} hasInterval
+     * @returns {Object}
+     */
+    function buildStopTrafficMonitoringExecutePlan(hasInterval) {
+        if (!hasInterval) {
+            return { shouldStop: false };
+        }
+        return {
+            shouldStop: true,
+            clearInterval: true,
+            statusMessage: 'Traffic monitoring stopped',
+            statusType: 'info',
+        };
+    }
+
+    /**
      * Toggle plan for enabling/disabling automatic traffic updates.
      * @param {boolean} currentEnabled
      * @returns {Object}
@@ -461,6 +505,9 @@
         buildUpdateTrafficConditionsOrchestrationPlan: buildUpdateTrafficConditionsOrchestrationPlan,
         parseStoredRouteDurationMinutes: parseStoredRouteDurationMinutes,
         buildDisplayTrafficUpdateExecutePlan: buildDisplayTrafficUpdateExecutePlan,
+        buildStartTrafficMonitoringExecutePlan: buildStartTrafficMonitoringExecutePlan,
+        buildTrafficMonitoringTickPlan: buildTrafficMonitoringTickPlan,
+        buildStopTrafficMonitoringExecutePlan: buildStopTrafficMonitoringExecutePlan,
         buildAutoTrafficUpdateTogglePlan: buildAutoTrafficUpdateTogglePlan,
         buildAutoRerouteOnDeviationTogglePlan: buildAutoRerouteOnDeviationTogglePlan,
         buildInitAutoTrafficRerouteTogglesPlan: buildInitAutoTrafficRerouteTogglesPlan,

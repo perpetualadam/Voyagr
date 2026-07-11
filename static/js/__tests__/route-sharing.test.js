@@ -169,4 +169,49 @@ describe('route-sharing module', () => {
         expect(RS.buildQrCodeGenerateExecutePlan(link).shouldGenerate).toBe(true);
         expect(RS.buildShareViaWhatsAppPlan(null, {}).ok).toBe(false);
     });
+
+    test('buildLastCalculatedRouteFromSharedPayload includes destination for recalculate', () => {
+        const route = RS.buildLastCalculatedRouteFromSharedPayload({
+            start: 'A',
+            end: 'B',
+            distance: 10,
+            time: '20 min',
+            geometry: 'abc',
+        });
+        expect(route.destination).toBe('B');
+        expect(route.destinationName).toBe('B');
+        expect(route.duration_minutes).toBe(20);
+    });
+
+    test('buildLoadSharedRouteFromUrl plans decode URL payload and apply route', () => {
+        const encoded = RS.encodeRoutePayload({
+            start: 'Home',
+            end: 'Work',
+            distance: 12,
+            time: '18 min',
+            geometry: 'poly',
+        });
+        const search = '?route=' + encodeURIComponent(encoded);
+        const orch = RS.buildLoadSharedRouteFromUrlOrchestrationPlan(search);
+        expect(orch.shouldLoad).toBe(true);
+        expect(orch.payload.start).toBe('Home');
+
+        const execute = RS.buildLoadSharedRouteFromUrlExecutePlan(
+            orch,
+            'https://voyagr.test' + search
+        );
+        expect(execute.shouldApply).toBe(true);
+        expect(execute.lastCalculatedRoute.destination).toBe('Work');
+        expect(execute.showRoutePreview).toBe(true);
+        expect(execute.cleanUrl).not.toContain('route=');
+
+        expect(RS.buildLoadSharedRouteFromUrlOrchestrationPlan('').shouldLoad).toBe(false);
+    });
+
+    test('buildCopyShareLinkExecutePlan targets share link input', () => {
+        const execute = RS.buildCopyShareLinkExecutePlan();
+        expect(execute.shouldCopy).toBe(true);
+        expect(execute.shareLinkInputId).toBe('shareLink');
+        expect(execute.successStatusType).toBe('success');
+    });
 });

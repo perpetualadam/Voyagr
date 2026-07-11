@@ -200,4 +200,60 @@ describe('analytics display helpers', () => {
         expect(T.buildTripHistorySignInBannerText(true)).toContain('Showing trips saved on this device');
         expect(T.buildTripHistorySignInBannerText(false)).toContain('No trips on this device yet');
     });
+
+    test('buildLoadRouteAnalyticsOrchestrationPlan exposes API path and status copy', () => {
+        const orch = T.buildLoadRouteAnalyticsOrchestrationPlan();
+        expect(orch.apiPath).toBe('/api/trip-analytics');
+        expect(orch.authRequiredStatusMessage).toContain('Sign in');
+    });
+
+    test('buildLoadRouteAnalyticsResponseExecutePlan maps auth, premium, and success', () => {
+        const orch = T.buildLoadRouteAnalyticsOrchestrationPlan();
+        expect(T.buildLoadRouteAnalyticsResponseExecutePlan({ status: 401 }, {}, orch).shouldDisplay).toBe(false);
+        expect(
+            T.buildLoadRouteAnalyticsResponseExecutePlan(
+                { status: 403 },
+                { code: 'premium_required', error: 'Premium only' },
+                orch
+            ).statusMessage
+        ).toBe('Premium only');
+        const ok = T.buildLoadRouteAnalyticsResponseExecutePlan(
+            { status: 200 },
+            { success: true, total_trips: 3 },
+            orch
+        );
+        expect(ok.shouldDisplay).toBe(true);
+        expect(ok.data.total_trips).toBe(3);
+    });
+
+    test('buildAnalyticsDisplayExecutePlan patches dashboard element ids', () => {
+        const input = T.buildAnalyticsDisplayInputPlan(
+            {
+                total_trips: 2,
+                total_distance_km: 40,
+                total_cost: 10,
+                avg_duration: 20,
+                total_fuel_cost: 6,
+                total_toll_cost: 3,
+                total_caz_cost: 1,
+                total_time_minutes: 40,
+                avg_speed: 50,
+                frequent_routes: [{ start: 'A', end: 'B', count: 2, avg_distance: 10, avg_cost: 5 }],
+            },
+            {
+                currencySymbol: '£',
+                totalDistanceText: '25',
+                speedUnit: 'mph',
+                speedUnitLabel: 'mph',
+                distUnit: 'mi',
+                escapeHtml: (s) => s,
+                convertDistance: (km) => String(km),
+            }
+        );
+        const execute = T.buildAnalyticsDisplayExecutePlan(input);
+        expect(execute.shouldRender).toBe(true);
+        expect(execute.elementPatches.totalTrips).toBe(2);
+        expect(execute.frequentRoutesListId).toBe('frequentRoutesList');
+        expect(execute.frequentRoutesHtml).toContain('A → B');
+    });
 });

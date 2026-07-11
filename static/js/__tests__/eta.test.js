@@ -323,4 +323,12 @@ describe('journey summary helpers', () => {
         expect(execute.elementIds.summaryDistance).toBe('summaryDistance');
         expect(execute.expandBottomSheet).toBe(true);
     });
+
+    test('buildCloseJourneySummaryExecutePlan closes modal and returns to navigation', () => {
+        const execute = ETA.buildCloseJourneySummaryExecutePlan();
+        expect(execute.shouldClose).toBe(true);
+        expect(execute.modalId).toBe('journeySummaryModal');
+        expect(execute.switchTab).toBe('navigation');
+        expect(execute.clearForm).toBe(true);
+    });
 });

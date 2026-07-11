@@ -3382,35 +3382,32 @@ function buildEncodedShareLinkPlan(includeGeometry) {
  * @returns {boolean} true when a shared route was applied
  */
 function loadSharedRouteFromUrl() {
-    const sharing = _routeSharing();
-    const encoded = sharing.extractRouteParamFromSearch(window.location.search);
-    if (!encoded) return false;
-
-    const payload = sharing.decodeRoutePayload(encoded);
-    if (!payload || !payload.start || !payload.end) {
-        console.warn('[RouteSharing] Invalid shared route payload in URL');
+    const RS = _routeSharing();
+    const orch = RS.buildLoadSharedRouteFromUrlOrchestrationPlan(window.location.search);
+    if (!orch.shouldLoad) {
+        if (orch.invalidPayloadLog) console.warn(orch.invalidPayloadLog);
         return false;
     }
 
-    const startEl = document.getElementById('start');
-    const endEl = document.getElementById('end');
-    if (startEl) startEl.value = payload.start;
-    if (endEl) endEl.value = payload.end;
+    const execute = RS.buildLoadSharedRouteFromUrlExecutePlan(orch, window.location.href);
+    const startEl = document.getElementById(execute.startInputId);
+    const endEl = document.getElementById(execute.endInputId);
+    if (startEl) startEl.value = execute.startLabel;
+    if (endEl) endEl.value = execute.endLabel;
 
-    window.lastCalculatedRoute = sharing.buildLastCalculatedRouteFromSharedPayload(payload);
+    window.lastCalculatedRoute = execute.lastCalculatedRoute;
     updateTripInfoFromRouteOption(window.lastCalculatedRoute);
 
     try {
-        const cleanUrl = sharing.stripRouteParamFromUrl(window.location.href);
-        window.history.replaceState({}, '', cleanUrl);
+        window.history.replaceState({}, '', execute.cleanUrl);
     } catch (e) {
-        console.warn('[RouteSharing] URL cleanup failed:', e);
+        console.warn(execute.urlCleanupFailedLog, e);
     }
 
-    if (window.lastCalculatedRoute.geometry) {
-        showRoutePreview(window.lastCalculatedRoute, false);
+    if (execute.showRoutePreview) {
+        showRoutePreview(window.lastCalculatedRoute, execute.previewSkipMapDisplay);
     } else {
-        showStatus('Shared route loaded', 'success');
+        showStatus(execute.successStatusMessage, 'success');
     }
     return true;
 }
@@ -3477,10 +3474,14 @@ function generateShareLink() {
  * @returns {*} Return value description
  */
 function copyShareLink() {
-    const shareLink = document.getElementById('shareLink');
+    const execute = _routeSharing().buildCopyShareLinkExecutePlan();
+    if (!execute.shouldCopy) return;
+
+    const shareLink = document.getElementById(execute.shareLinkInputId);
+    if (!shareLink) return;
     shareLink.select();
     document.execCommand('copy');
-    showStatus('Link copied to clipboard!', 'success');
+    showStatus(execute.successStatusMessage, execute.successStatusType);
 }
 
 /**
@@ -3591,22 +3592,21 @@ function shareViaEmail() {
  * @returns {*} Return value description
  */
 function loadRouteAnalytics() {
-    fetchJsonWithAuth('/api/trip-analytics')
+    const TH = _tripHistory();
+    const orch = TH.buildLoadRouteAnalyticsOrchestrationPlan();
+
+    fetchJsonWithAuth(orch.apiPath)
         .then(({ res, data }) => {
-            if (res.status === 401) {
-                showStatus('Sign in to view trip analytics', 'info');
+            const execute = TH.buildLoadRouteAnalyticsResponseExecutePlan(res, data, orch);
+            if (!execute.shouldDisplay) {
+                showStatus(execute.statusMessage, execute.statusType);
                 return;
             }
-            if (res.status === 403 && data && data.code === 'premium_required') {
-                showStatus(data.error || 'Premium access required — redeem a promo code in Settings → Account.', 'info');
-                return;
-            }
-            if (data.success) displayAnalytics(data);
-            else showStatus('Failed to load analytics', 'error');
+            displayAnalytics(execute.data);
         })
         .catch(error => {
-            console.error('Analytics error:', error);
-            showStatus('Error loading analytics', 'error');
+            console.error(orch.errorLogPrefix, error);
+            showStatus(orch.fetchErrorStatusMessage, orch.fetchErrorStatusType);
         });
 }
 /**
@@ -3616,35 +3616,27 @@ function loadRouteAnalytics() {
  * @returns {*} Return value description
  */
 function displayAnalytics(data) {
-    const symbol = getCurrencySymbol();
-    const distUnit = getDistanceUnit();
-    const display = _tripHistory().buildAnalyticsDisplayValues(data, {
-        currencySymbol: symbol,
-        totalDistanceText: convertDistance(data.total_distance_km || 0),
-        speedUnit: speedUnit,
-        speedUnitLabel: getSpeedUnit(),
+    const TH = _tripHistory();
+    const execute = TH.buildAnalyticsDisplayExecutePlan(
+        TH.buildAnalyticsDisplayInputPlan(data, {
+            currencySymbol: getCurrencySymbol(),
+            totalDistanceText: convertDistance(data.total_distance_km || 0),
+            speedUnit: speedUnit,
+            speedUnitLabel: getSpeedUnit(),
+            distUnit: getDistanceUnit(),
+            escapeHtml: escapeHtml,
+            convertDistance: convertDistance,
+        })
+    );
+    if (!execute.shouldRender) return;
+
+    Object.entries(execute.elementPatches).forEach(([id, text]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
     });
 
-    document.getElementById('totalTrips').textContent = display.totalTrips;
-    document.getElementById('totalDistance').textContent = `${display.totalDistanceText} ${distUnit}`;
-    document.getElementById('totalCost').textContent = display.totalCostText;
-    document.getElementById('avgDuration').textContent = display.avgDurationText;
-    document.getElementById('totalFuelCost').textContent = display.totalFuelCostText;
-    document.getElementById('totalTollCost').textContent = display.totalTollCostText;
-    document.getElementById('totalCAZCost').textContent = display.totalCazCostText;
-    document.getElementById('totalTime').textContent = display.totalTimeText;
-    document.getElementById('avgSpeed').textContent = display.avgSpeedText;
-
-    const frequentRoutesList = document.getElementById('frequentRoutesList');
-    frequentRoutesList.innerHTML = _tripHistory().buildFrequentRoutesListHtml(
-        data.frequent_routes || [],
-        {
-            escapeHtml: escapeHtml,
-            currencySymbol: symbol,
-            distUnit: distUnit,
-            distanceTexts: (data.frequent_routes || []).map((route) => convertDistance(route.avg_distance)),
-        }
-    );
+    const frequentRoutesList = document.getElementById(execute.frequentRoutesListId);
+    if (frequentRoutesList) frequentRoutesList.innerHTML = execute.frequentRoutesHtml;
 }
 
 // ===== ADVANCED ROUTE PREFERENCES FUNCTIONS =====
@@ -3999,17 +3991,25 @@ function displayTrafficUpdate(data) {
  * @returns {*} Return value description
  */
 function startTrafficMonitoring() {
-    if (window.trafficMonitoringInterval) {
+    const TC = _trafficChange();
+    const execute = TC.buildStartTrafficMonitoringExecutePlan(!!window.trafficMonitoringInterval);
+    if (!execute.shouldStart) return;
+
+    if (execute.clearExistingInterval) {
         clearInterval(window.trafficMonitoringInterval);
     }
 
     window.trafficMonitoringInterval = setInterval(() => {
-        if (window.lastCalculatedRoute && document.getElementById('start').value) {
+        const tick = TC.buildTrafficMonitoringTickPlan(
+            window.lastCalculatedRoute,
+            document.getElementById('start')?.value
+        );
+        if (tick.shouldUpdate) {
             updateTrafficConditions();
         }
-    }, 5 * 60 * 1000); // Update every 5 minutes
+    }, execute.intervalMs);
 
-    showStatus('Traffic monitoring started', 'success');
+    showStatus(execute.successStatusMessage, execute.successStatusType);
 }
 
 /**
@@ -4018,11 +4018,14 @@ function startTrafficMonitoring() {
  * @returns {*} Return value description
  */
 function stopTrafficMonitoring() {
-    if (window.trafficMonitoringInterval) {
+    const execute = _trafficChange().buildStopTrafficMonitoringExecutePlan(!!window.trafficMonitoringInterval);
+    if (!execute.shouldStop) return;
+
+    if (execute.clearInterval) {
         clearInterval(window.trafficMonitoringInterval);
         window.trafficMonitoringInterval = null;
-        showStatus('Traffic monitoring stopped', 'info');
     }
+    showStatus(execute.statusMessage, execute.statusType);
 }
 
 /**
@@ -16585,15 +16588,14 @@ function showJourneySummary(routeData) {
  * Closes the journey summary modal
  */
 function closeJourneySummary() {
-    const modal = document.getElementById('journeySummaryModal');
-    if (modal) {
-        modal.style.display = 'none';
-    }
-    // Return to navigation input
-    switchTab('navigation');
+    const execute = _eta().buildCloseJourneySummaryExecutePlan();
+    if (!execute.shouldClose) return;
 
-    // Reset view
-    clearForm();
+    const modal = document.getElementById(execute.modalId);
+    if (modal) modal.style.display = 'none';
+
+    if (execute.switchTab) switchTab(execute.switchTab);
+    if (execute.clearForm) clearForm();
 }
 
 // NOTE: toggleDriverPerspective is defined earlier in the file (around line 7711)

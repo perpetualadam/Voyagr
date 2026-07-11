@@ -258,4 +258,28 @@ describe('auto traffic interval dispatch plans', () => {
         );
         expect(same.durationChanged).toBe(false);
     });
+
+    test('buildStartTrafficMonitoringExecutePlan clears existing interval and uses default cadence', () => {
+        const start = TC.buildStartTrafficMonitoringExecutePlan(true);
+        expect(start.shouldStart).toBe(true);
+        expect(start.clearExistingInterval).toBe(true);
+        expect(start.intervalMs).toBe(TC.TRAFFIC_UPDATE_INTERVAL_MS);
+
+        const fresh = TC.buildStartTrafficMonitoringExecutePlan(false);
+        expect(fresh.clearExistingInterval).toBe(false);
+    });
+
+    test('buildTrafficMonitoringTickPlan only updates when route and start are present', () => {
+        expect(TC.buildTrafficMonitoringTickPlan(null, 'A').shouldUpdate).toBe(false);
+        expect(TC.buildTrafficMonitoringTickPlan({}, '').shouldUpdate).toBe(false);
+        expect(TC.buildTrafficMonitoringTickPlan({ distance_km: 10 }, 'Home').shouldUpdate).toBe(true);
+    });
+
+    test('buildStopTrafficMonitoringExecutePlan only stops active monitoring', () => {
+        expect(TC.buildStopTrafficMonitoringExecutePlan(false).shouldStop).toBe(false);
+        const stop = TC.buildStopTrafficMonitoringExecutePlan(true);
+        expect(stop.shouldStop).toBe(true);
+        expect(stop.clearInterval).toBe(true);
+        expect(stop.statusMessage).toContain('stopped');
+    });
 });
