@@ -351,6 +351,58 @@
     }
 
     /**
+     * Human-readable log line for skipped automatic reroute triggers.
+     * @param {string} reason
+     * @returns {string}
+     */
+    function automaticRerouteSkipLogMessage(reason) {
+        if (reason === 'in-progress') return '[Rerouting] Already in progress — skipping duplicate trigger';
+        if (reason === 'debounced') return '[Rerouting] Attempt debounced — too soon after last try';
+        return '[Rerouting] Post-reroute grace active — skipping';
+    }
+
+    /**
+     * Skip check plus guard plan for automatic reroute trigger.
+     * @param {number} now
+     * @param {Object} state
+     * @returns {Object}
+     */
+    function buildAutomaticRerouteTriggerPlan(now, state) {
+        state = state || {};
+        var skip = shouldSkipRerouteTrigger(now, state);
+        if (skip.skip) {
+            return {
+                action: 'skip',
+                reason: skip.reason,
+                logMessage: automaticRerouteSkipLogMessage(skip.reason),
+            };
+        }
+
+        var guard = buildAutomaticRerouteGuardPlan({
+            offline: state.offline,
+            destination: state.destination,
+            hasRouteContext: state.hasRouteContext,
+            startLat: state.startLat,
+            startLon: state.startLon,
+        });
+
+        var plan = {
+            action: guard.proceed ? 'fetch' : 'defer',
+            lastRerouteAttemptTime: now,
+            guard: guard,
+        };
+
+        if (!guard.proceed) {
+            plan.scheduleRetry = guard.action === 'schedule-retry';
+            plan.resetRerouteInProgress = guard.resetRerouteInProgress;
+        } else {
+            plan.rerouteInProgress = true;
+        }
+
+        return plan;
+    }
+
+    /**
      * @param {number} minDistanceMeters
      * @param {string} distanceUnit
      * @returns {string}
@@ -642,6 +694,8 @@
         REROUTE_ANNOUNCE_MIN_INTERVAL_MS: REROUTE_ANNOUNCE_MIN_INTERVAL_MS,
         buildRerouteFailureRetryPlan: buildRerouteFailureRetryPlan,
         shouldSkipRerouteTrigger: shouldSkipRerouteTrigger,
+        automaticRerouteSkipLogMessage: automaticRerouteSkipLogMessage,
+        buildAutomaticRerouteTriggerPlan: buildAutomaticRerouteTriggerPlan,
         formatDeviationDistanceDisplay: formatDeviationDistanceDisplay,
         buildDeviationRerouteNotification: buildDeviationRerouteNotification,
         shouldAnnounceRerouteVoice: shouldAnnounceRerouteVoice,

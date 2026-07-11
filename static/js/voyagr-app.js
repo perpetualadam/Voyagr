@@ -8599,31 +8599,13 @@ function updateSpeedWidgetVisibility() {
  * @returns {string} Road type (motorway, primary, residential, unknown, etc.)
  */
 function getCurrentRoadType(maneuverIdxOverride, gpsSpeedMph) {
-    let stepIndex = -1;
-    if (Number.isFinite(maneuverIdxOverride) && maneuverIdxOverride >= 0) {
-        stepIndex = maneuverIdxOverride;
-    } else if (currentRouteSteps && currentStepIndex >= 0 && currentStepIndex < currentRouteSteps.length) {
-        stepIndex = currentStepIndex;
-    }
-
-    if (stepIndex >= 0 && currentRouteSteps && stepIndex < currentRouteSteps.length) {
-        const step = currentRouteSteps[stepIndex];
-        const fromStreet = _routeGeometry().inferRoadClassFromStreetNames(
-            step.begin_street_names || step.street_names
-        );
-        if (fromStreet) return fromStreet;
-        const inferred = _routeGeometry().inferRoadClassFromManeuver(step);
-        if (inferred) return inferred;
-        if (step.road_class) return step.road_class;
-    }
-
-    if (lastDetectedRoadType) return lastDetectedRoadType;
-
-    const spd = Number(gpsSpeedMph);
-    if (Number.isFinite(spd) && spd >= 65) return 'motorway';
-    if (Number.isFinite(spd) && spd >= 45) return 'primary';
-
-    return 'unknown';
+    return _routeGeometry().resolveCurrentRoadType({
+        maneuverIdxOverride,
+        gpsSpeedMph,
+        currentRouteSteps,
+        currentStepIndex,
+        lastDetectedRoadType,
+    });
 }
 
 /**
@@ -12129,7 +12111,13 @@ function startGPSTracking() {
                     currentSpeedLimitMph,
                     lastSpeedLimitRegion,
                     lastActiveManeuverIdx: _lastActiveManeuverIdx,
-                    resolveRoadType: getCurrentRoadType,
+                    resolveRoadType: (idx, spd) => _routeGeometry().resolveCurrentRoadType({
+                        maneuverIdxOverride: idx,
+                        gpsSpeedMph: spd,
+                        currentRouteSteps,
+                        currentStepIndex,
+                        lastDetectedRoadType,
+                    }),
                     pickDisplaySpeedLimitMph: SL
                         ? (api, val, rt, region) => SL.pickDisplaySpeedLimitMph(api, val, rt, region)
                         : null,
@@ -12876,40 +12864,36 @@ function checkRouteDeviation(lat, lon, accuracy) {
 async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon) {
     const now = Date.now();
     const RD = _rerouteDecision();
-    const skip = RD.shouldSkipRerouteTrigger(now, {
+    const destination = resolveNavigationDestination();
+    const trigger = RD.buildAutomaticRerouteTriggerPlan(now, {
         rerouteInProgress,
         lastRerouteAttemptTime,
         postRerouteGraceUntil,
         debounceMs: REROUTE_DEBOUNCE_MS,
-    });
-    if (skip.skip) {
-        console.log('[Rerouting] ' + (skip.reason === 'in-progress' ? 'Already in progress — skipping duplicate trigger'
-            : skip.reason === 'debounced' ? 'Attempt debounced — too soon after last try'
-            : 'Post-reroute grace active — skipping'));
-        return;
-    }
-    lastRerouteAttemptTime = now;
-    const destination = resolveNavigationDestination();
-    const guard = RD.buildAutomaticRerouteGuardPlan({
         offline: !navigator.onLine,
         destination,
         hasRouteContext: !!window.lastCalculatedRoute,
         startLat: currentLat,
         startLon: currentLon,
     });
-    if (!guard.proceed) {
-        if (guard.logMessage) console.log(guard.logMessage);
-        if (guard.action === 'schedule-retry') {
-            scheduleAutomaticRerouteRetry();
-        }
-        if (guard.resetRerouteInProgress) {
-            rerouteInProgress = false;
-        }
+
+    if (trigger.action === 'skip') {
+        console.log(trigger.logMessage);
         return;
     }
+
+    lastRerouteAttemptTime = trigger.lastRerouteAttemptTime;
+
+    if (trigger.action === 'defer') {
+        if (trigger.guard.logMessage) console.log(trigger.guard.logMessage);
+        if (trigger.scheduleRetry) scheduleAutomaticRerouteRetry();
+        if (trigger.resetRerouteInProgress) rerouteInProgress = false;
+        return;
+    }
+
     rerouteInProgress = true;
     try {
-        console.log(guard.logMessage);
+        console.log(trigger.guard.logMessage);
 
         const routeRequest = buildRouteRequest(currentLat, currentLon, destination);
 
@@ -12981,14 +12965,10 @@ async function triggerAutomaticRerouteWithHazardHandling(currentLat, currentLon)
  * Shows user-friendly notification with hazard details
  */
 function handleUnavoidableHazards(route, hazardsList, hazardCount) {
-    console.log(`[Rerouting] Route has ${hazardCount} unavoidable hazards`);
-
-    const hazardTypes = _hazardAlerts().groupHazardsByType(hazardsList);
-    const hazardSummary = _hazardAlerts().formatHazardTypeSummary(hazardTypes);
-
-    showUnavoidableHazardsModal(hazardTypes, hazardCount);
-
-    console.log(`[Rerouting] Unavoidable hazards: ${hazardSummary}`);
+    const plan = _hazardAlerts().buildUnavoidableHazardsHandlingPlan(hazardsList, hazardCount);
+    console.log(plan.logLine);
+    showUnavoidableHazardsModal(plan.hazardTypes, plan.hazardCount);
+    console.log(plan.summaryLogLine);
 }
 
 /**

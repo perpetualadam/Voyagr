@@ -307,6 +307,46 @@
         return null;
     }
 
+    /**
+     * Resolve the current road type from route steps, cached detection, or GPS speed.
+     * @param {Object} opts
+     * @param {number} [opts.maneuverIdxOverride]
+     * @param {number} [opts.gpsSpeedMph]
+     * @param {Array<Object>} [opts.currentRouteSteps]
+     * @param {number} [opts.currentStepIndex]
+     * @param {string|null} [opts.lastDetectedRoadType]
+     * @returns {string}
+     */
+    function resolveCurrentRoadType(opts) {
+        opts = opts || {};
+        var stepIndex = -1;
+        if (Number.isFinite(opts.maneuverIdxOverride) && opts.maneuverIdxOverride >= 0) {
+            stepIndex = opts.maneuverIdxOverride;
+        } else if (opts.currentRouteSteps &&
+            Number.isFinite(opts.currentStepIndex) &&
+            opts.currentStepIndex >= 0 &&
+            opts.currentStepIndex < opts.currentRouteSteps.length) {
+            stepIndex = opts.currentStepIndex;
+        }
+
+        if (stepIndex >= 0 && opts.currentRouteSteps && stepIndex < opts.currentRouteSteps.length) {
+            var step = opts.currentRouteSteps[stepIndex];
+            var fromStreet = inferRoadClassFromStreetNames(step.begin_street_names || step.street_names);
+            if (fromStreet) return fromStreet;
+            var inferred = inferRoadClassFromManeuver(step);
+            if (inferred) return inferred;
+            if (step.road_class) return step.road_class;
+        }
+
+        if (opts.lastDetectedRoadType) return opts.lastDetectedRoadType;
+
+        var spd = Number(opts.gpsSpeedMph);
+        if (Number.isFinite(spd) && spd >= 65) return 'motorway';
+        if (Number.isFinite(spd) && spd >= 45) return 'primary';
+
+        return 'unknown';
+    }
+
     // ======================================================================
     // Smart zoom helpers — pure, constants injected so they can be overridden in tests
     // ======================================================================
@@ -369,4 +409,5 @@
     // both via CommonJS (module.exports = api, set above) and via the global.
     api.calculateSmartZoom = calculateSmartZoom;
     api.calculateDriverViewCenter = calculateDriverViewCenter;
+    api.resolveCurrentRoadType = resolveCurrentRoadType;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

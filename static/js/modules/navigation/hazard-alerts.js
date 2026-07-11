@@ -435,6 +435,24 @@
         };
     }
 
+    /**
+     * Notify/mount plan for unavoidable hazards on a rerouted path.
+     * @param {Array<Object>} hazardsList
+     * @param {number} totalCount
+     * @returns {{ hazardTypes: Object, hazardSummary: string, hazardCount: number, logLine: string, summaryLogLine: string }}
+     */
+    function buildUnavoidableHazardsHandlingPlan(hazardsList, totalCount) {
+        var hazardTypes = groupHazardsByType(hazardsList || []);
+        var hazardSummary = formatHazardTypeSummary(hazardTypes);
+        return {
+            hazardTypes: hazardTypes,
+            hazardSummary: hazardSummary,
+            hazardCount: totalCount,
+            logLine: '[Rerouting] Route has ' + totalCount + ' unavoidable hazards',
+            summaryLogLine: '[Rerouting] Unavoidable hazards: ' + hazardSummary,
+        };
+    }
+
     var api = {
         CAMERA_HAZARD_TYPES: CAMERA_HAZARD_TYPES,
         isCameraHazardType: isCameraHazardType,
@@ -454,6 +472,7 @@
         buildUnavoidableHazardsListHtml: buildUnavoidableHazardsListHtml,
         buildUnavoidableHazardsModalHtml: buildUnavoidableHazardsModalHtml,
         buildUnavoidableHazardsModalMountPlan: buildUnavoidableHazardsModalMountPlan,
+        buildUnavoidableHazardsHandlingPlan: buildUnavoidableHazardsHandlingPlan,
         UNAVOIDABLE_HAZARDS_MODAL_ID: UNAVOIDABLE_HAZARDS_MODAL_ID,
         UNAVOIDABLE_HAZARDS_BACKDROP_ID: UNAVOIDABLE_HAZARDS_BACKDROP_ID,
         HAZARD_CAMERA_PREF_SUBTYPES: HAZARD_CAMERA_PREF_SUBTYPES,

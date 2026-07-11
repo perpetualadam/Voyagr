@@ -199,6 +199,26 @@ describe('inferRoadClassFromStreetNames', () => {
     });
 });
 
+describe('resolveCurrentRoadType', () => {
+    test('prefers street-name inference for active maneuver', () => {
+        expect(RG.resolveCurrentRoadType({
+            maneuverIdxOverride: 0,
+            currentRouteSteps: [{ begin_street_names: ['M25'] }],
+        })).toBe('motorway');
+    });
+
+    test('falls back to lastDetectedRoadType then GPS speed', () => {
+        expect(RG.resolveCurrentRoadType({
+            gpsSpeedMph: 70,
+        })).toBe('motorway');
+        expect(RG.resolveCurrentRoadType({
+            lastDetectedRoadType: 'residential',
+            gpsSpeedMph: 70,
+        })).toBe('residential');
+        expect(RG.resolveCurrentRoadType({})).toBe('unknown');
+    });
+});
+
 describe('calculateSmartZoom', () => {
     const ZL = { motorway_high_speed: 14, main_road_medium_speed: 15, urban_low_speed: 16, parking_very_low_speed: 17, turn_ahead: 18 };
     const T = 500;

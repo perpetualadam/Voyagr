@@ -109,4 +109,16 @@ describe('hazard-alerts module', () => {
         expect(mount.innerHtml).toContain('2 hazards');
         expect(mount.modalStyle).toContain('z-index: 10001');
     });
+
+    test('buildUnavoidableHazardsHandlingPlan groups hazards and builds log lines', () => {
+        const plan = HA.buildUnavoidableHazardsHandlingPlan([
+            { type: 'camera' },
+            { type: 'camera' },
+            { type: 'roadworks' },
+        ], 3);
+        expect(plan.hazardTypes).toEqual({ camera: 2, roadworks: 1 });
+        expect(plan.hazardSummary).toContain('camera');
+        expect(plan.logLine).toContain('3 unavoidable hazards');
+        expect(plan.summaryLogLine).toContain('Unavoidable hazards');
+    });
 });

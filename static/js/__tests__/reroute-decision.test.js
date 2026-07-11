@@ -457,4 +457,44 @@ describe('reroute retry and notification helpers', () => {
         expect(result.log).toHaveLength(1);
         expect(JSON.parse(items.rerouteLog)).toHaveLength(1);
     });
+
+    test('buildAutomaticRerouteTriggerPlan skips duplicate in-progress triggers', () => {
+        const plan = RD.buildAutomaticRerouteTriggerPlan(1000, {
+            rerouteInProgress: true,
+        });
+        expect(plan.action).toBe('skip');
+        expect(plan.logMessage).toContain('Already in progress');
+    });
+
+    test('buildAutomaticRerouteTriggerPlan defers when offline', () => {
+        const now = 1_700_000_000_000;
+        const plan = RD.buildAutomaticRerouteTriggerPlan(now, {
+            rerouteInProgress: false,
+            lastRerouteAttemptTime: now - 60_000,
+            destination: '51,0',
+            hasRouteContext: true,
+            offline: true,
+            startLat: 51.5,
+            startLon: -0.1,
+        });
+        expect(plan.action).toBe('defer');
+        expect(plan.scheduleRetry).toBe(true);
+        expect(plan.lastRerouteAttemptTime).toBe(now);
+    });
+
+    test('buildAutomaticRerouteTriggerPlan proceeds to fetch when ready', () => {
+        const now = 1_700_000_000_000;
+        const plan = RD.buildAutomaticRerouteTriggerPlan(now, {
+            rerouteInProgress: false,
+            lastRerouteAttemptTime: now - 60_000,
+            destination: '51,0',
+            hasRouteContext: true,
+            offline: false,
+            startLat: 51.5,
+            startLon: -0.1,
+        });
+        expect(plan.action).toBe('fetch');
+        expect(plan.rerouteInProgress).toBe(true);
+        expect(plan.guard.proceed).toBe(true);
+    });
 });
