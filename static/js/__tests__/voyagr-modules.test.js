@@ -39,6 +39,7 @@ describe('VoyagrModules registry', () => {
         global.VoyagrOfflineNavigation = require('../modules/navigation/offline-navigation');
         global.VoyagrMlPredictions = require('../modules/navigation/ml-predictions');
         global.VoyagrSearchAutocomplete = require('../modules/navigation/search-autocomplete');
+        global.VoyagrGeocodingLocations = require('../modules/navigation/geocoding-locations');
         global.VoyagrDeviceEnvironment = require('../modules/ui/device-environment');
         global.VoyagrRouteProgress = require('../modules/navigation/route-progress');
         global.VoyagrPreviewMarker = require('../modules/map/preview-marker');

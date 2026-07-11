@@ -4297,32 +4297,32 @@ async function calculateRoute() {
 
                     const activeRoute = pickActiveRouteDuringNavigation(data.routes, data);
                     if (!activeRoute) {
-                        showStatus('❌ No route returned', 'error');
+                        showStatus(VoyagrModules.routeSelection().buildInNavRerouteSuccessPlan({}, {}, '', '').noRouteErrorMessage, 'error');
                         return;
                     }
                     if (activeRoute.geometry) {
                         updateRouteOnMap(activeRoute);
                     }
 
-                    // Update stored route data (preserve destination for future reroutes)
-                    const durationMinutes = activeRoute.duration_minutes || (data.time ? parseInt(data.time) : 0);
+                    const reroutePlan = VoyagrModules.routeSelection().buildInNavRerouteSuccessPlan(
+                        activeRoute,
+                        data,
+                        geocodedEnd,
+                        end,
+                        voiceAnnouncementsEnabled
+                            ? { enabled: true, convertDistance, distUnit: getDistanceUnit() }
+                            : { enabled: false }
+                    );
                     window.lastCalculatedRoute = {
                         ...window.lastCalculatedRoute,
-                        ...data,
-                        ...activeRoute,
-                        duration_minutes: durationMinutes,
-                        destination: geocodedEnd,
-                        destinationName: end
+                        ...reroutePlan.lastCalculatedRoutePatch,
                     };
 
-                    // Announce update with the CORRECT route's duration
-                    if (voiceAnnouncementsEnabled) {
-                        const distUnit = getDistanceUnit();
-                        const displayDist = convertDistance(activeRoute.distance_km || parseFloat(data.distance) || 0);
-                        speakMessage(`Route recalculated. ${displayDist} ${distUnit}, ${Math.round(durationMinutes)} minutes.`, 'high');
+                    if (reroutePlan.speakMessage) {
+                        speakMessage(reroutePlan.speakMessage, 'high');
                     }
 
-                    showStatus('✅ Route recalculated — continuing navigation', 'success');
+                    showStatus(reroutePlan.statusMessage, reroutePlan.statusType);
                     try {
                         const ep = (geocodedEnd || '').split(',');
                         if (ep.length >= 2) {
@@ -9509,17 +9509,7 @@ function getFollowingManeuver(currentIndex) {
 
 /** Valhalla stores roundabout exit count on enter and/or exit maneuver — merge for UI/lane hints. */
 function effectiveRoundaboutExitCount(stepIndex) {
-    const steps = currentRouteSteps;
-    if (!steps || stepIndex == null || stepIndex < 0 || stepIndex >= steps.length) return 0;
-    const s = steps[stepIndex];
-    let n = Number(s.roundabout_exit_count) || 0;
-    if (n > 0) return n;
-    const mt = s.type || 0;
-    if (mt === 26 && stepIndex + 1 < steps.length) {
-        const next = steps[stepIndex + 1];
-        if ((next.type || 0) === 27) return Number(next.roundabout_exit_count) || 0;
-    }
-    return 0;
+    return VoyagrModules.turnInstructions().effectiveRoundaboutExitCountFromSteps(currentRouteSteps, stepIndex);
 }
 
 // ordinalEnglishExit / laneOrdinalEnglish / buildTurnLaneHintHtml moved to
@@ -15604,70 +15594,47 @@ async function geocodeAddress(address) {
 }
 
 async function geocodeLocations(startAddress, endAddress) {
+    const GL = VoyagrModules.geocodingLocations();
     isGeocoding = true;
-    showStatus('🔍 Geocoding locations...', 'loading');
+    showStatus(GL.getGeocodeLoadingStatusMessage(), 'loading');
 
     try {
-        // Check if coordinates are already stored in data attributes
         const startInput = document.getElementById('start');
         const endInput = document.getElementById('end');
 
         let startResult, endResult;
 
-        // Check start location
-        if (startInput.dataset.lat && startInput.dataset.lon) {
-            // Use stored coordinates
-            startResult = {
-                lat: parseFloat(startInput.dataset.lat),
-                lon: parseFloat(startInput.dataset.lon),
-                display_name: startInput.dataset.displayName || startAddress,
-                cached: true
-            };
+        startResult = GL.readStoredLocationFromDataset(startInput.dataset, startAddress);
+        if (startResult) {
             console.log('[Geocoding] Using stored coordinates for start:', startResult);
         } else {
-            // Geocode start location
             startResult = await geocodeAddress(startAddress);
             if (!startResult) {
-                showStatus('❌ Could not find start location: ' + startAddress, 'error');
+                showStatus(GL.buildGeocodeNotFoundStatusMessage('start', startAddress), 'error');
                 isGeocoding = false;
                 return null;
             }
         }
 
-        // Check end location
-        if (endInput.dataset.lat && endInput.dataset.lon) {
-            // Use stored coordinates
-            endResult = {
-                lat: parseFloat(endInput.dataset.lat),
-                lon: parseFloat(endInput.dataset.lon),
-                display_name: endInput.dataset.displayName || endAddress,
-                cached: true
-            };
+        endResult = GL.readStoredLocationFromDataset(endInput.dataset, endAddress);
+        if (endResult) {
             console.log('[Geocoding] Using stored coordinates for end:', endResult);
         } else {
-            // Geocode end location
             endResult = await geocodeAddress(endAddress);
             if (!endResult) {
-                showStatus('❌ Could not find end location: ' + endAddress, 'error');
+                showStatus(GL.buildGeocodeNotFoundStatusMessage('end', endAddress), 'error');
                 isGeocoding = false;
                 return null;
             }
         }
 
-        // Show resolved locations
-        const cacheInfo = (startResult.cached ? ' (cached)' : '') + (endResult.cached ? ' (cached)' : '');
-        showStatus(`✅ Resolved: ${startResult.display_name} → ${endResult.display_name}${cacheInfo}`, 'success');
+        showStatus(GL.buildGeocodeResolvedStatusMessage(startResult, endResult), 'success');
 
         isGeocoding = false;
-        return {
-            start: `${startResult.lat},${startResult.lon}`,
-            end: `${endResult.lat},${endResult.lon}`,
-            startName: startResult.display_name,
-            endName: endResult.display_name
-        };
+        return GL.formatGeocodeApiCoords(startResult, endResult);
     } catch (error) {
         console.log('[Geocoding] Error:', error);
-        showStatus('❌ Geocoding error: ' + error.message, 'error');
+        showStatus(GL.buildGeocodeErrorStatusMessage(error.message), 'error');
         isGeocoding = false;
         return null;
     }
@@ -15801,17 +15768,17 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     }
 
     // ===== SHOW ZOOM AND FOLLOW BUTTON =====
-    mapFollowingActive = true;
+    const navStartFabPlan = _mapControls().getNavStartFabDisplayPlan();
+    mapFollowingActive = navStartFabPlan.mapFollowingActive;
     const zoomFollowBtn = document.getElementById('zoomFollowToggle');
     if (zoomFollowBtn) {
-        zoomFollowBtn.style.display = 'block';
+        zoomFollowBtn.style.display = navStartFabPlan.zoomFollowDisplay;
         applyZoomFollowButtonUi(zoomFollowBtn, zoomAndFollowEnabled);
     }
 
-    // Show journey overview button during navigation
     const journeyOverviewBtn = document.getElementById('journeyOverviewBtn');
     if (journeyOverviewBtn) {
-        journeyOverviewBtn.style.display = 'block';
+        journeyOverviewBtn.style.display = navStartFabPlan.journeyOverviewDisplay;
     }
     updateRoadReportFabVisibility();
     updateRecenterButtonVisibility();
@@ -15826,28 +15793,20 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     if (currentLat != null && currentLon != null) {
         updateTurnWidgetFromPosition(currentLat, currentLon);
     } else if (currentRouteSteps && currentRouteSteps.length > 0 && routePolyline && routePolyline.length > 0) {
-        const initIdx = Math.min(Math.max(0, currentStepIndex || 0), currentRouteSteps.length - 1);
-        const firstStep = currentRouteSteps[initIdx];
-        const type = firstStep.type || 0;
-        let direction = maneuverTypeToDirectionKey(type) || 'straight';
-        direction = refineManeuverDirectionForRoute(type, direction, firstStep);
-        const firstManeuverIndex = firstStep.begin_shape_index || 0;
-        let distanceToFirst = firstStep.distance || 0;
-        if (firstManeuverIndex > 0 && firstManeuverIndex < routePolyline.length) {
-            const startPoint = routePolyline[0];
-            const firstManeuverPoint = routePolyline[firstManeuverIndex];
-            distanceToFirst = calculateDistance(startPoint[0], startPoint[1], firstManeuverPoint[0], firstManeuverPoint[1]);
+        const TI = VoyagrModules.turnInstructions();
+        const RG = VoyagrModules.routeGeometry();
+        const turnInit = TI.buildNavStartTurnInstructionInit(
+            currentRouteSteps,
+            currentStepIndex,
+            routePolyline,
+            {
+                haversineDistanceMeters: RG.haversineDistanceMeters,
+                resolveRoadClass: (step) => step.road_class || inferRoadClassFromManeuver(step),
+            }
+        );
+        if (turnInit) {
+            updateTurnInstructionDisplay(turnInit);
         }
-        updateTurnInstructionDisplay({
-            distance: distanceToFirst,
-            direction: direction,
-            instruction: firstStep.instruction || '',
-            streetName: (firstStep.street_names || [])[0] || '',
-            maneuver: firstStep,
-            maneuverIndex: initIdx,
-            valhallaType: type,
-            roundabout_exit_count: effectiveRoundaboutExitCount(initIdx),
-        });
     }
 
     // ===== SHOW JOURNEY SUMMARY BAR during navigation =====

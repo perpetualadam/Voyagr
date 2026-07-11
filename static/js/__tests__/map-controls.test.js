@@ -101,4 +101,11 @@ describe('map-controls module', () => {
         expect(resume.speakMessage).toBeNull();
         expect(resume.statusMessage).toContain('resumed');
     });
+
+    test('nav start FAB display plan shows zoom and journey overview', () => {
+        const plan = MC.getNavStartFabDisplayPlan();
+        expect(plan.zoomFollowDisplay).toBe('block');
+        expect(plan.journeyOverviewDisplay).toBe('block');
+        expect(plan.mapFollowingActive).toBe(true);
+    });
 });

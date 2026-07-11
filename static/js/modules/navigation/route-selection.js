@@ -455,6 +455,58 @@
     }
 
     /**
+     * Apply plan after a successful in-navigation `/api/route` reroute response.
+     * @param {Object} activeRoute - Selected route option from pickActiveRouteDuringNavigation
+     * @param {Object} data - Full API response payload
+     * @param {string} geocodedEnd - Destination "lat,lon" string
+     * @param {string} destinationLabel - Human-readable end address/name
+     * @param {Object} [voiceOpts]
+     * @param {boolean} [voiceOpts.enabled]
+     * @param {function(number): number} [voiceOpts.convertDistance]
+     * @param {string} [voiceOpts.distUnit]
+     * @returns {Object}
+     */
+    function buildInNavRerouteSuccessPlan(activeRoute, data, geocodedEnd, destinationLabel, voiceOpts) {
+        activeRoute = activeRoute || {};
+        data = data || {};
+        voiceOpts = voiceOpts || {};
+        var durationMinutes = activeRoute.duration_minutes || (data.time ? parseInt(data.time, 10) : 0);
+        var lastCalculatedRoutePatch = {};
+        for (var k in data) {
+            if (Object.prototype.hasOwnProperty.call(data, k)) {
+                lastCalculatedRoutePatch[k] = data[k];
+            }
+        }
+        for (var ak in activeRoute) {
+            if (Object.prototype.hasOwnProperty.call(activeRoute, ak)) {
+                lastCalculatedRoutePatch[ak] = activeRoute[ak];
+            }
+        }
+        lastCalculatedRoutePatch.duration_minutes = durationMinutes;
+        lastCalculatedRoutePatch.destination = geocodedEnd;
+        lastCalculatedRoutePatch.destinationName = destinationLabel;
+
+        var speakMessage = null;
+        if (voiceOpts.enabled && typeof voiceOpts.convertDistance === 'function') {
+            var displayDist = voiceOpts.convertDistance(
+                activeRoute.distance_km || parseFloat(data.distance) || 0
+            );
+            var distUnit = voiceOpts.distUnit || '';
+            speakMessage = 'Route recalculated. ' + displayDist + ' ' + distUnit + ', ' +
+                Math.round(durationMinutes) + ' minutes.';
+        }
+
+        return {
+            lastCalculatedRoutePatch: lastCalculatedRoutePatch,
+            durationMinutes: durationMinutes,
+            speakMessage: speakMessage,
+            statusMessage: '✅ Route recalculated — continuing navigation',
+            statusType: 'success',
+            noRouteErrorMessage: '❌ No route returned',
+        };
+    }
+
+    /**
      * Greedy nearest-neighbour ordering of via-points and stops between start and end.
      * @param {number} startLat
      * @param {number} startLon
@@ -756,6 +808,7 @@
         shouldShowPreviewAlternativeRoutes: shouldShowPreviewAlternativeRoutes,
         buildPreviewAlternativeRouteCardMountPlan: buildPreviewAlternativeRouteCardMountPlan,
         pickActiveRouteDuringNavigation: pickActiveRouteDuringNavigation,
+        buildInNavRerouteSuccessPlan: buildInNavRerouteSuccessPlan,
         orderWaypointsGreedy: orderWaypointsGreedy,
         resolvePreviewRoute: resolvePreviewRoute,
         resolvePreviewDistanceKm: resolvePreviewDistanceKm,

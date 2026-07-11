@@ -339,6 +339,65 @@
         );
     }
 
+    /**
+     * Valhalla stores roundabout exit count on enter and/or exit maneuver — merge for UI/lane hints.
+     * @param {Array<Object>|null|undefined} steps
+     * @param {number} stepIndex
+     * @returns {number}
+     */
+    function effectiveRoundaboutExitCountFromSteps(steps, stepIndex) {
+        if (!steps || stepIndex == null || stepIndex < 0 || stepIndex >= steps.length) return 0;
+        var s = steps[stepIndex];
+        var n = Number(s.roundabout_exit_count) || 0;
+        if (n > 0) return n;
+        var mt = s.type || 0;
+        if (mt === 26 && stepIndex + 1 < steps.length) {
+            var next = steps[stepIndex + 1];
+            if ((next.type || 0) === 27) return Number(next.roundabout_exit_count) || 0;
+        }
+        return 0;
+    }
+
+    /**
+     * Initial turn-instruction widget payload when navigation starts without a live GPS fix.
+     * @param {Array<Object>} steps
+     * @param {number} stepIndex
+     * @param {Array<[number,number]>} polyline
+     * @param {Object} [opts]
+     * @param {function(number,number,number,number): number} [opts.haversineDistanceMeters]
+     * @param {function(Object): (string|null)} [opts.resolveRoadClass]
+     * @returns {Object|null}
+     */
+    function buildNavStartTurnInstructionInit(steps, stepIndex, polyline, opts) {
+        opts = opts || {};
+        if (!steps || !steps.length || !polyline || !polyline.length) return null;
+        var initIdx = Math.min(Math.max(0, stepIndex || 0), steps.length - 1);
+        var step = steps[initIdx];
+        var type = step.type || 0;
+        var direction = maneuverTypeToDirectionKey(type) || 'straight';
+        var roadClass = opts.resolveRoadClass ? opts.resolveRoadClass(step) : (step.road_class || null);
+        direction = refineManeuverDirection(type, direction, roadClass);
+        var firstManeuverIndex = step.begin_shape_index || 0;
+        var distanceToFirst = step.distance || 0;
+        if (firstManeuverIndex > 0 && firstManeuverIndex < polyline.length && opts.haversineDistanceMeters) {
+            var startPoint = polyline[0];
+            var firstManeuverPoint = polyline[firstManeuverIndex];
+            distanceToFirst = opts.haversineDistanceMeters(
+                startPoint[0], startPoint[1], firstManeuverPoint[0], firstManeuverPoint[1]
+            );
+        }
+        return {
+            distance: distanceToFirst,
+            direction: direction,
+            instruction: step.instruction || '',
+            streetName: (step.street_names || [])[0] || '',
+            maneuver: step,
+            maneuverIndex: initIdx,
+            valhallaType: type,
+            roundabout_exit_count: effectiveRoundaboutExitCountFromSteps(steps, initIdx),
+        };
+    }
+
     var api = {
         calculateTurnDirection: calculateTurnDirection,
         maneuverTypeToDirectionKey: maneuverTypeToDirectionKey,
@@ -355,6 +414,8 @@
         INSTRUCTIONS_EMPTY_HTML: INSTRUCTIONS_EMPTY_HTML,
         buildInstructionStatusHtml: buildInstructionStatusHtml,
         buildInstructionListItemHtml: buildInstructionListItemHtml,
+        effectiveRoundaboutExitCountFromSteps: effectiveRoundaboutExitCountFromSteps,
+        buildNavStartTurnInstructionInit: buildNavStartTurnInstructionInit,
         TURN_ICON_MAP: TURN_ICON_MAP,
         DIRECTION_TEXT_MAP: DIRECTION_TEXT_MAP
     };
