@@ -663,6 +663,8 @@
         resolveGpsHeadingDegrees: resolveGpsHeadingDegrees,
         computeFollowJumpMeters: computeFollowJumpMeters,
         buildSnappedVehicleDisplayPlan: buildSnappedVehicleDisplayPlan,
+        normalizeGeolocationCoordsSample: normalizeGeolocationCoordsSample,
+        buildTrackingHistoryAppendPlan: buildTrackingHistoryAppendPlan,
     };
 
     // ======================================================================
@@ -788,6 +790,44 @@
         }
 
         return finish(0);
+    }
+
+    /**
+     * Normalize a GeolocationPosition coords object into app-friendly fields.
+     * @param {Object|null|undefined} coords
+     * @returns {{ lat: number, lon: number, accuracy: number, speedMs: number, deviceHeading: (number|null) }}
+     */
+    function normalizeGeolocationCoordsSample(coords) {
+        coords = coords || {};
+        var rawCoordsSpeed = coords.speed;
+        var speedMs = (Number.isFinite(rawCoordsSpeed) && rawCoordsSpeed >= 0) ? rawCoordsSpeed : 0;
+        var deviceHeading = typeof coords.heading === 'number' && !Number.isNaN(coords.heading)
+            ? coords.heading
+            : null;
+        return {
+            lat: coords.latitude,
+            lon: coords.longitude,
+            accuracy: coords.accuracy,
+            speedMs: speedMs,
+            deviceHeading: deviceHeading,
+        };
+    }
+
+    /**
+     * Append a tracking history entry and trim to max length.
+     * @param {Array<Object>} history
+     * @param {Object} entry
+     * @param {number} [maxLen]
+     * @returns {{ history: Array<Object> }}
+     */
+    function buildTrackingHistoryAppendPlan(history, entry, maxLen) {
+        history = history || [];
+        maxLen = maxLen != null ? maxLen : 40;
+        var next = history.concat([entry]);
+        if (next.length > maxLen) {
+            next = next.slice(next.length - maxLen);
+        }
+        return { history: next };
     }
 
     if (typeof module !== 'undefined' && module.exports) {

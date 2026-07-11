@@ -5763,90 +5763,83 @@ function resetVoiceAnnouncementStateForNewRoute() {
 function updateRouteOnMap(newRoute) {
     resetVoiceAnnouncementStateForNewRoute();
 
-    // Remove old route layer
     if (routeLayer && typeof routeLayer.remove === 'function') {
         routeLayer.remove();
     }
 
-    // Decode new route geometry
-    routePolyline = decodePolyline(newRoute.geometry, 6);
+    const RD = _rerouteDecision();
+    const plan = RD.buildRouteMapUpdateStatePlan(newRoute, window.lastCalculatedRoute, {
+        now: Date.now(),
+        hasCurrentGps: currentLat != null && currentLon != null,
+        convertDistance,
+        distUnit: getDistanceUnit(),
+    });
+
+    routePolyline = decodePolyline(newRoute.geometry, plan.polylineDecodePrecision);
     console.log(`[Reroute] Route polyline decoded: ${routePolyline.length} points`);
 
-    // Bright blue + white casing so the line stays visible over TomTom traffic tiles.
-    // Zoom-scaled widths (default) keep the line/casing proportional like the rest of
-    // the app's route rendering instead of a flat width that looks thin when zoomed out.
-    routeLayer = MapLibreHelpers.addPolyline(map, routePolyline, getNavActiveRoutePolylineOptions());
+    routeLayer = MapLibreHelpers.addPolyline(
+        map,
+        routePolyline,
+        _routeSelection().buildNavActiveRoutePolylineStyle(navActiveRouteColor())
+    );
     bringNavRouteAboveTrafficEdges();
 
-    // === FIX: Update maneuvers / steps so turn-by-turn stays in sync ===
-    if (newRoute.maneuvers && newRoute.maneuvers.length > 0) {
-        currentRouteSteps = newRoute.maneuvers;
-        console.log(`[Reroute] Maneuvers updated: ${currentRouteSteps.length} steps`);
-    } else if (newRoute.legs && newRoute.legs[0] && newRoute.legs[0].maneuvers) {
-        currentRouteSteps = newRoute.legs[0].maneuvers;
-        console.log(`[Reroute] Maneuvers from legs updated: ${currentRouteSteps.length} steps`);
+    if (plan.maneuvers.steps) {
+        currentRouteSteps = plan.maneuvers.steps;
+        if (plan.maneuvers.logMessage) console.log(plan.maneuvers.logMessage);
     }
 
-    // Seed progress from current GPS on the new geometry (not index 0).
-    resetVehicleMarkerDisplayState();
-    _lastActiveManeuverIdx = -1;
-    currentSpeedLimitMph = null;
-    lastDetectedRoadType = null;
-    const slState = _getSpeedLimitFetchState();
-    if (slState) {
-        slState.lastFetchAt = 0;
-        slState.lastPosition = null;
-        slState.currentLimitMph = null;
+    if (plan.vehicleMarkerReset) {
+        resetVehicleMarkerDisplayState();
+        _lastActiveManeuverIdx = -1;
+        currentSpeedLimitMph = null;
+        lastDetectedRoadType = null;
     }
-    if (currentLat != null && currentLon != null) {
+    if (plan.speedLimitReset) {
+        const slState = _getSpeedLimitFetchState();
+        if (slState) {
+            slState.lastFetchAt = 0;
+            slState.lastPosition = null;
+            slState.currentLimitMph = null;
+        }
+    }
+    if (plan.primeVehicleMarker) {
         primeVehicleMarkerOnRoute(currentLat, currentLon);
-    } else {
-        currentStepIndex = 0;
-        lastSnappedRouteIndex = 0;
-        lastTurnDetectRouteVertexIndex = 0;
+    } else if (plan.progressResetWithoutGps) {
+        currentStepIndex = plan.progressResetWithoutGps.currentStepIndex;
+        lastSnappedRouteIndex = plan.progressResetWithoutGps.lastSnappedRouteIndex;
+        lastTurnDetectRouteVertexIndex = plan.progressResetWithoutGps.lastTurnDetectRouteVertexIndex;
     }
 
-    // Road-name bar was still showing the pre-reroute street until the 5 s throttle expired.
-    lastRoadNameFetch = 0;
-    lastRoadNamePosition = null;
-    currentRoadDisplayName = '';
+    if (plan.roadNameReset) {
+        lastRoadNameFetch = 0;
+        lastRoadNamePosition = null;
+        currentRoadDisplayName = '';
+    }
+    if (plan.navigationArrivalReset) {
+        resetNavigationArrivalState();
+    }
 
-    resetNavigationArrivalState();
+    const dev = plan.deviation;
+    deviationStartTimeCheck = dev.deviationStartTimeCheck;
+    rerouteAttemptCount = dev.rerouteAttemptCount;
+    postRerouteGraceUntil = dev.postRerouteGraceUntil;
+    routeJoinConfirmedForDeviation = dev.routeJoinConfirmedForDeviation;
+    deviationOffRouteStreak = dev.deviationOffRouteStreak;
+    lastRerouteTime = dev.lastRerouteTime;
+    lastRerouteAttemptTime = dev.lastRerouteAttemptTime;
+    rerouteInProgress = dev.rerouteInProgress;
+    if (dev.clearFailureRetries) clearRerouteFailureRetries();
 
-    // Reset deviation tracking so we don't immediately re-trigger reroute
-    deviationStartTimeCheck = null;
-    rerouteAttemptCount = 0;
-    postRerouteGraceUntil = Date.now() + POST_REROUTE_GRACE_MS;
-    routeJoinConfirmedForDeviation = false;
-    deviationOffRouteStreak = 0;
-    lastRerouteTime = Date.now();
-    lastRerouteAttemptTime = Date.now();
-    rerouteInProgress = false;
-    clearRerouteFailureRetries();
-
-    // Refresh the turn instruction widget immediately with new route data
     if (currentLat && currentLon) {
         updateTurnWidgetFromPosition(currentLat, currentLon);
         fetchRoadNameThrottled(currentLat, currentLon);
     }
 
-    // Update trip info
     updateTripInfo(newRoute.distance_km, newRoute.duration_minutes, newRoute.fuel_cost, newRoute.toll_cost);
-
-    // Store updated route with proper unit conversion
-    const displayDist = convertDistance(newRoute.distance_km);
-    const distUnit = getDistanceUnit();
-    window.lastCalculatedRoute = {
-        ...window.lastCalculatedRoute,
-        ...newRoute,
-        geometry: newRoute.geometry,
-        distance: `${displayDist} ${distUnit}`,
-        time: `${newRoute.duration_minutes} minutes`,
-        destination: window.lastCalculatedRoute.destination,
-        destinationName: window.lastCalculatedRoute.destinationName,
-    };
-
-    console.log('[Reroute] Route updated on map with fresh maneuvers and step tracking');
+    window.lastCalculatedRoute = plan.lastCalculatedRoutePatch;
+    console.log(plan.completeLog);
 }
 
 /**
@@ -5854,15 +5847,7 @@ function updateRouteOnMap(newRoute) {
  * @returns {Object} MapLibreHelpers.addPolyline options
  */
 function getNavActiveRoutePolylineOptions() {
-    return {
-        color: navActiveRouteColor(),
-        weight: 8,
-        opacity: 0.95,
-        outline: true,
-        outlineColor: '#ffffff',
-        outlineWeight: 11,
-        outlineOpacity: 0.92
-    };
+    return _routeSelection().buildNavActiveRoutePolylineStyle(navActiveRouteColor());
 }
 
 /**
@@ -11982,34 +11967,26 @@ function startGPSTracking() {
     // Watch position with high accuracy
     gpsWatchId = navigator.geolocation.watchPosition(
         (position) => {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            const accuracy = position.coords.accuracy;
-            // `coords.speed` is m/s but is `null` on some Android browsers / iOS WebViews even
-            // while moving. `pickRawSpeedMph` reconstructs speed from successive fixes in that
-            // case so the widget keeps reading correctly. Stored as m/s for downstream consumers
-            // that still expect that unit (vehicle marker, trackingHistory, etc.).
-            const rawCoordsSpeed = position.coords.speed;
-            const speed = (Number.isFinite(rawCoordsSpeed) && rawCoordsSpeed >= 0) ? rawCoordsSpeed : 0;
-            const deviceHeading = typeof position.coords.heading === 'number' && !Number.isNaN(position.coords.heading)
-                ? position.coords.heading
-                : null;
+            const SGsample = _speedGps();
+            const sample = SGsample.normalizeGeolocationCoordsSample(position.coords);
+            const lat = sample.lat;
+            const lon = sample.lon;
+            const accuracy = sample.accuracy;
+            const speed = sample.speedMs;
+            const deviceHeading = sample.deviceHeading;
 
             currentLat = lat;
             currentLon = lon;
             updateRoadReportFabVisibility();
 
-            // Add to tracking history
-            trackingHistory.push({
+            const historyPlan = SGsample.buildTrackingHistoryAppendPlan(trackingHistory, {
                 lat: lat,
                 lon: lon,
                 timestamp: new Date(),
                 speed: speed,
-                accuracy: accuracy
+                accuracy: accuracy,
             });
-            if (trackingHistory.length > 40) {
-                trackingHistory.splice(0, trackingHistory.length - 40);
-            }
+            trackingHistory = historyPlan.history;
 
             // Whole-journey odometer: sum plausible movement between raw fixes.
             if (routeInProgress) {
@@ -12718,7 +12695,6 @@ let deviationOffRouteStreak = 0;
 let rerouteAttemptCount = 0;
 let rerouteInProgress = false;
 let postRerouteGraceUntil = 0;
-const POST_REROUTE_GRACE_MS = 90000;
 let lastRerouteAnnouncementTime = 0;
 
 /** After a failed deviation reroute API call, retry with backoff (does not replace GPS deviation timing). */
@@ -12975,35 +12951,30 @@ function handleUnavoidableHazards(route, hazardsList, hazardCount) {
  */
 function showUnavoidableHazardsModal(hazardTypes, totalCount) {
     const hazardAlerts = _hazardAlerts();
-    // Check if modal already exists
-    let modal = document.getElementById(hazardAlerts.UNAVOIDABLE_HAZARDS_MODAL_ID);
+    const mount = hazardAlerts.buildUnavoidableHazardsModalMountPlan(hazardTypes, totalCount);
+
+    let modal = document.getElementById(mount.modalId);
     if (!modal) {
-        // Create modal
         modal = document.createElement('div');
-        modal.id = hazardAlerts.UNAVOIDABLE_HAZARDS_MODAL_ID;
-        modal.style.cssText = hazardAlerts.getUnavoidableHazardsModalStyleCssText();
+        modal.id = mount.modalId;
+        modal.style.cssText = mount.modalStyle;
         document.body.appendChild(modal);
     }
 
-    // Build hazard list HTML
-    const hazardListHtml = hazardAlerts.buildUnavoidableHazardsListHtml(hazardTypes);
-    modal.innerHTML = hazardAlerts.buildUnavoidableHazardsModalHtml(hazardListHtml, totalCount);
+    modal.innerHTML = mount.innerHtml;
 
-    // Add backdrop
-    let backdrop = document.getElementById(hazardAlerts.UNAVOIDABLE_HAZARDS_BACKDROP_ID);
+    let backdrop = document.getElementById(mount.backdropId);
     if (!backdrop) {
         backdrop = document.createElement('div');
-        backdrop.id = hazardAlerts.UNAVOIDABLE_HAZARDS_BACKDROP_ID;
-        backdrop.style.cssText = hazardAlerts.getUnavoidableHazardsBackdropStyleCssText();
+        backdrop.id = mount.backdropId;
+        backdrop.style.cssText = mount.backdropStyle;
         backdrop.onclick = closeUnavoidableHazardsModal;
         document.body.appendChild(backdrop);
     }
 
-    backdrop.style.display = 'block';
-    modal.style.display = 'block';
-
-    // Auto-close after 10 seconds
-    setTimeout(closeUnavoidableHazardsModal, 10000);
+    backdrop.style.display = mount.display;
+    modal.style.display = mount.display;
+    setTimeout(closeUnavoidableHazardsModal, mount.autoCloseMs);
 }
 
 /**

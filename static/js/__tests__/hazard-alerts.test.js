@@ -99,4 +99,14 @@ describe('hazard-alerts module', () => {
         expect(HA.isHazardPreferenceEnabled({ enabled: 0 })).toBe(false);
         expect(HA.HAZARD_CAMERA_PREF_SUBTYPES).toContain('camera_speed');
     });
+
+    test('buildUnavoidableHazardsModalMountPlan returns mount shell and inner html', () => {
+        const mount = HA.buildUnavoidableHazardsModalMountPlan({ camera: 2 }, 2);
+        expect(mount.modalId).toBe(HA.UNAVOIDABLE_HAZARDS_MODAL_ID);
+        expect(mount.backdropId).toBe(HA.UNAVOIDABLE_HAZARDS_BACKDROP_ID);
+        expect(mount.display).toBe('block');
+        expect(mount.autoCloseMs).toBe(10000);
+        expect(mount.innerHtml).toContain('2 hazards');
+        expect(mount.modalStyle).toContain('z-index: 10001');
+    });
 });

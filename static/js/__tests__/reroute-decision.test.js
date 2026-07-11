@@ -396,4 +396,25 @@ describe('reroute retry and notification helpers', () => {
         expect(RD.buildAutomaticRerouteErrorPlan({ rerouteFailureRetryCount: 0 }).notification).not.toBeNull();
         expect(RD.buildAutomaticRerouteErrorPlan({ rerouteFailureRetryCount: 1 }).notification).toBeNull();
     });
+
+    test('resolveRouteManeuversFromPayload prefers top-level maneuvers', () => {
+        const resolved = RD.resolveRouteManeuversFromPayload({
+            maneuvers: [{ type: 1 }],
+            legs: [{ maneuvers: [{ type: 2 }] }],
+        });
+        expect(resolved.steps).toHaveLength(1);
+        expect(resolved.source).toBe('maneuvers');
+    });
+
+    test('buildRouteMapUpdateStatePlan patches lastCalculatedRoute and deviation state', () => {
+        const plan = RD.buildRouteMapUpdateStatePlan(
+            { geometry: 'abc', distance_km: 10, duration_minutes: 20 },
+            { destination: '51,0', destinationName: 'Home' },
+            { convertDistance: (km) => km.toFixed(1), distUnit: 'km', hasCurrentGps: true, now: 1000 }
+        );
+        expect(plan.primeVehicleMarker).toBe(true);
+        expect(plan.deviation.postRerouteGraceUntil).toBe(1000 + RD.POST_REROUTE_GRACE_MS);
+        expect(plan.lastCalculatedRoutePatch.destination).toBe('51,0');
+        expect(plan.lastCalculatedRoutePatch.distance).toBe('10.0 km');
+    });
 });

@@ -416,6 +416,25 @@
         );
     }
 
+    /**
+     * Mount plan for the unavoidable-hazards modal (app creates DOM from this).
+     * @param {Object<string, number>} hazardTypes
+     * @param {number} totalCount
+     * @returns {Object}
+     */
+    function buildUnavoidableHazardsModalMountPlan(hazardTypes, totalCount) {
+        var listHtml = buildUnavoidableHazardsListHtml(hazardTypes);
+        return {
+            modalId: UNAVOIDABLE_HAZARDS_MODAL_ID,
+            backdropId: UNAVOIDABLE_HAZARDS_BACKDROP_ID,
+            modalStyle: getUnavoidableHazardsModalStyleCssText(),
+            backdropStyle: getUnavoidableHazardsBackdropStyleCssText(),
+            innerHtml: buildUnavoidableHazardsModalHtml(listHtml, totalCount),
+            autoCloseMs: 10000,
+            display: 'block',
+        };
+    }
+
     var api = {
         CAMERA_HAZARD_TYPES: CAMERA_HAZARD_TYPES,
         isCameraHazardType: isCameraHazardType,
@@ -434,6 +453,7 @@
         formatHazardTypeSummary: formatHazardTypeSummary,
         buildUnavoidableHazardsListHtml: buildUnavoidableHazardsListHtml,
         buildUnavoidableHazardsModalHtml: buildUnavoidableHazardsModalHtml,
+        buildUnavoidableHazardsModalMountPlan: buildUnavoidableHazardsModalMountPlan,
         UNAVOIDABLE_HAZARDS_MODAL_ID: UNAVOIDABLE_HAZARDS_MODAL_ID,
         UNAVOIDABLE_HAZARDS_BACKDROP_ID: UNAVOIDABLE_HAZARDS_BACKDROP_ID,
         HAZARD_CAMERA_PREF_SUBTYPES: HAZARD_CAMERA_PREF_SUBTYPES,

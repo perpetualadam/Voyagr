@@ -508,6 +508,86 @@
         };
     }
 
+    var POST_REROUTE_GRACE_MS = 90000;
+
+    /**
+     * Resolve maneuver steps from a route API payload shape.
+     * @param {Object|null|undefined} route
+     * @returns {{ steps: Array<Object>|null, source: string|null, logMessage: string|null }}
+     */
+    function resolveRouteManeuversFromPayload(route) {
+        route = route || {};
+        if (route.maneuvers && route.maneuvers.length > 0) {
+            return {
+                steps: route.maneuvers,
+                source: 'maneuvers',
+                logMessage: '[Reroute] Maneuvers updated: ' + route.maneuvers.length + ' steps',
+            };
+        }
+        if (route.legs && route.legs[0] && route.legs[0].maneuvers) {
+            return {
+                steps: route.legs[0].maneuvers,
+                source: 'legs',
+                logMessage: '[Reroute] Maneuvers from legs updated: ' + route.legs[0].maneuvers.length + ' steps',
+            };
+        }
+        return { steps: null, source: null, logMessage: null };
+    }
+
+    /**
+     * State apply plan after decoding and drawing a new route during navigation reroute.
+     * @param {Object} newRoute
+     * @param {Object|null|undefined} prevRoute
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildRouteMapUpdateStatePlan(newRoute, prevRoute, opts) {
+        opts = opts || {};
+        newRoute = newRoute || {};
+        prevRoute = prevRoute || {};
+        var now = opts.now != null ? opts.now : Date.now();
+        var graceMs = opts.postRerouteGraceMs != null ? opts.postRerouteGraceMs : POST_REROUTE_GRACE_MS;
+        var maneuvers = resolveRouteManeuversFromPayload(newRoute);
+        var displayDist = typeof opts.convertDistance === 'function'
+            ? opts.convertDistance(newRoute.distance_km)
+            : String(newRoute.distance_km);
+        var distUnit = opts.distUnit || 'km';
+
+        return {
+            maneuvers: maneuvers,
+            polylineDecodePrecision: 6,
+            vehicleMarkerReset: true,
+            speedLimitReset: true,
+            roadNameReset: true,
+            navigationArrivalReset: true,
+            primeVehicleMarker: !!opts.hasCurrentGps,
+            progressResetWithoutGps: opts.hasCurrentGps ? null : {
+                currentStepIndex: 0,
+                lastSnappedRouteIndex: 0,
+                lastTurnDetectRouteVertexIndex: 0,
+            },
+            deviation: {
+                deviationStartTimeCheck: null,
+                rerouteAttemptCount: 0,
+                postRerouteGraceUntil: now + graceMs,
+                routeJoinConfirmedForDeviation: false,
+                deviationOffRouteStreak: 0,
+                lastRerouteTime: now,
+                lastRerouteAttemptTime: now,
+                rerouteInProgress: false,
+                clearFailureRetries: true,
+            },
+            lastCalculatedRoutePatch: Object.assign({}, prevRoute, newRoute, {
+                geometry: newRoute.geometry,
+                distance: displayDist + ' ' + distUnit,
+                time: String(newRoute.duration_minutes != null ? newRoute.duration_minutes : 0) + ' minutes',
+                destination: prevRoute.destination,
+                destinationName: prevRoute.destinationName,
+            }),
+            completeLog: '[Reroute] Route updated on map with fresh maneuvers and step tracking',
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         normalizeAccuracy: normalizeAccuracy,
@@ -528,6 +608,9 @@
         buildAutomaticRerouteGuardPlan: buildAutomaticRerouteGuardPlan,
         buildAutomaticRerouteOutcomePlan: buildAutomaticRerouteOutcomePlan,
         buildAutomaticRerouteErrorPlan: buildAutomaticRerouteErrorPlan,
+        POST_REROUTE_GRACE_MS: POST_REROUTE_GRACE_MS,
+        resolveRouteManeuversFromPayload: resolveRouteManeuversFromPayload,
+        buildRouteMapUpdateStatePlan: buildRouteMapUpdateStatePlan,
     };
 
     // CommonJS (Jest) export.

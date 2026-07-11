@@ -1433,6 +1433,23 @@
         };
     }
 
+    /**
+     * MapLibre polyline style for the active navigation route line.
+     * @param {string} [color]
+     * @returns {Object}
+     */
+    function buildNavActiveRoutePolylineStyle(color) {
+        return {
+            color: color || NAV_ACTIVE_ROUTE_COLOR,
+            weight: 8,
+            opacity: 0.95,
+            outline: true,
+            outlineColor: '#ffffff',
+            outlineWeight: 11,
+            outlineOpacity: 0.92,
+        };
+    }
+
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
@@ -1499,6 +1516,7 @@
         buildInNavRerouteDispatchPlan: buildInNavRerouteDispatchPlan,
         buildRoutePreviewPanelApplyPlan: buildRoutePreviewPanelApplyPlan,
         buildAlternativeRoutesPreviewMountPlans: buildAlternativeRoutesPreviewMountPlans,
+        buildNavActiveRoutePolylineStyle: buildNavActiveRoutePolylineStyle,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,
         mergeLastCalculatedRouteFromSelection: mergeLastCalculatedRouteFromSelection,
         buildRoutePayloadFromPersisted: buildRoutePayloadFromPersisted,

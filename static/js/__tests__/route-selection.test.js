@@ -569,3 +569,12 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(mount.cardPlans[0].html).toContain('A');
     });
 });
+
+describe('navigation route polyline style', () => {
+    test('buildNavActiveRoutePolylineStyle uses nav color with outline', () => {
+        const style = RS.buildNavActiveRoutePolylineStyle('#2563EB');
+        expect(style.color).toBe('#2563EB');
+        expect(style.outline).toBe(true);
+        expect(style.weight).toBe(8);
+    });
+});

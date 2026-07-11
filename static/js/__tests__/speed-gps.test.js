@@ -403,3 +403,36 @@ describe('buildSnappedVehicleDisplayPlan', () => {
         expect(plan.snapBlendWeightState).toBeGreaterThan(0);
     });
 });
+
+describe('GPS sample normalization and tracking history', () => {
+    test('normalizeGeolocationCoordsSample maps coords and clamps invalid speed', () => {
+        const sample = SG.normalizeGeolocationCoordsSample({
+            latitude: 51.5,
+            longitude: -0.1,
+            accuracy: 12,
+            speed: 5.5,
+            heading: 180,
+        });
+        expect(sample.lat).toBe(51.5);
+        expect(sample.lon).toBe(-0.1);
+        expect(sample.speedMs).toBe(5.5);
+        expect(sample.deviceHeading).toBe(180);
+
+        const invalid = SG.normalizeGeolocationCoordsSample({
+            latitude: 51.5,
+            longitude: -0.1,
+            speed: -1,
+            heading: NaN,
+        });
+        expect(invalid.speedMs).toBe(0);
+        expect(invalid.deviceHeading).toBeNull();
+    });
+
+    test('buildTrackingHistoryAppendPlan trims to max length', () => {
+        const history = Array.from({ length: 40 }, (_, i) => ({ lat: i, lon: i }));
+        const plan = SG.buildTrackingHistoryAppendPlan(history, { lat: 99, lon: 99 }, 40);
+        expect(plan.history).toHaveLength(40);
+        expect(plan.history[39]).toEqual({ lat: 99, lon: 99 });
+        expect(plan.history[0].lat).toBe(1);
+    });
+});
