@@ -2877,6 +2877,7 @@ HTML_TEMPLATE = '''
     <script defer src="/static/js/modules/navigation/route-geometry.js?v=20260709c"></script>
     <script defer src="/static/js/modules/navigation/units.js?v=20260709a"></script>
     <script defer src="/static/js/modules/navigation/traffic-change.js?v=20260709a"></script>
+    <script defer src="/static/js/modules/navigation/eta.js?v=20260711a"></script>
     <script defer src="/static/js/modules/navigation/polyline-codec.js?v=20260709a"></script>
     <script defer src="/static/js/modules/navigation/reroute-decision.js?v=20260701b"></script>
     <script defer src="/static/js/modules/navigation/routing-request.js?v=20260709a"></script>

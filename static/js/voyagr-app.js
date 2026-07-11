@@ -13717,15 +13717,14 @@ function formatETATime(date) {
  * @param {number} minutes - Time in minutes
  * @returns {string} Formatted time string (e.g., "45 min" or "2h 15min")
  */
+// formatRemainingTime moved to modules/navigation/eta.js (VoyagrETA).
 function formatRemainingTime(minutes) {
+    const ETA = (typeof VoyagrETA !== 'undefined') ? VoyagrETA : null;
+    if (ETA) return ETA.formatRemainingTime(minutes);
     if (minutes < 1) return '<1 min';
     if (minutes < 60) return `${Math.round(minutes)} min`;
-
-    const hours = Math.floor(minutes / 60);
-    const mins = Math.round(minutes % 60);
-
-    if (mins === 0) return `${hours}h`;
-    return `${hours}h ${mins}min`;
+    const hours = Math.floor(minutes / 60), mins = Math.round(minutes % 60);
+    return mins === 0 ? `${hours}h` : `${hours}h ${mins}min`;
 }
 
 /**
@@ -15189,15 +15188,12 @@ function renderTurnInfoETAPanel(baseMinutes, adjustedMinutes, progressPercent, t
         `;
 }
 
+// buildETAVoiceMessage moved to modules/navigation/eta.js (VoyagrETA).
 function buildETAVoiceMessage(timeRemainingMinutes, etaDate) {
-    const etaHours = etaDate.getHours();
-    const etaMinutes = etaDate.getMinutes();
-    if (timeRemainingMinutes > 60) {
-        const hours = Math.floor(timeRemainingMinutes / 60);
-        const mins = timeRemainingMinutes % 60;
-        return `You will arrive in ${hours} hour${hours > 1 ? 's' : ''} and ${mins} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
-    }
-    return `You will arrive in ${timeRemainingMinutes} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
+    const ETA = (typeof VoyagrETA !== 'undefined') ? VoyagrETA : null;
+    if (ETA) return ETA.buildETAVoiceMessage(timeRemainingMinutes, etaDate);
+    const h = etaDate.getHours(), m = etaDate.getMinutes();
+    return `You will arrive in ${timeRemainingMinutes} minutes at ${h}:${String(m).padStart(2, '0')}`;
 }
 
 let lastVoiceAnnouncementTime = 0;
