@@ -1009,6 +1009,48 @@ describe('route overview and single-route display plans', () => {
         expect(plan.styleLoad.fallbackTimeoutMs).toBe(RS.DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS);
     });
 
+    test('buildDisplayAllRoutesMapOrchestrationPlan logs route count', () => {
+        const orch = RS.buildDisplayAllRoutesMapOrchestrationPlan(3);
+        expect(orch.routeCount).toBe(3);
+        expect(orch.entryLogMessage).toContain('displayAllRoutesOnMap');
+    });
+
+    test('buildDisplayAllRoutesMapExecutePlan combines pre-mount and style scheduling', () => {
+        const dispatch = RS.buildDisplayAllRoutesMapDispatchPlan([{ polyline: [[1, 2]] }]);
+        const execute = RS.buildDisplayAllRoutesMapExecutePlan(dispatch, { isStyleLoaded: false });
+        expect(execute.shouldExecute).toBe(true);
+        expect(execute.preMount.hydratePolylines).toBe(true);
+        expect(execute.stylePlan.strategy).toBe('wait');
+        expect(RS.buildDisplayAllRoutesMapExecutePlan({ valid: false }).shouldExecute).toBe(false);
+    });
+
+    test('buildRecalculateRouteWithPreferencesExecutePlan schedules delayed recalc', () => {
+        const execute = RS.buildRecalculateRouteWithPreferencesExecutePlan({
+            ok: true,
+            loadingStatusMessage: 'loading',
+            switchTab: 'navigation',
+            recalculateDelayMs: 300,
+        });
+        expect(execute.shouldRecalculate).toBe(true);
+        expect(execute.saveRoutePreferences).toBe(true);
+        expect(RS.buildRecalculateRouteWithPreferencesExecutePlan({ ok: false }).shouldRecalculate)
+            .toBe(false);
+    });
+
+    test('buildStartNavigationExecutePlan hides nav buttons and collapses sheet', () => {
+        const execute = RS.buildStartNavigationExecutePlan({ destination: 'London' });
+        expect(execute.shouldStart).toBe(true);
+        expect(execute.hideStartNavButtonIds).toContain('startNavBtn');
+        expect(execute.collapseBottomSheet).toBe(true);
+
+        const preview = RS.buildStartNavigationExecutePlan({ destination: 'London' }, {
+            syncFromSelection: true,
+            selectedRouteIndex: 1,
+        });
+        expect(preview.syncFromSelection).toBe(true);
+        expect(RS.buildStartNavigationExecutePlan(null).shouldStart).toBe(false);
+    });
+
     test('buildClearAllRouteLayersFromMapPlan lists route and polyline artifacts', () => {
         const plan = RS.buildClearAllRouteLayersFromMapPlan({
             layers: [

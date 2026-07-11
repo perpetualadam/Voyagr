@@ -329,6 +329,72 @@
     }
 
     /**
+     * Input assembly for geocodeLocations from stored dataset reads and addresses.
+     * @param {Object} o
+     * @param {Object|null} o.startStored
+     * @param {string} o.startAddress
+     * @param {Object|null} o.endStored
+     * @param {string} o.endAddress
+     * @returns {Object}
+     */
+    function buildGeocodeLocationsInputPlan(o) {
+        return buildGeocodePairPlans(o);
+    }
+
+    /**
+     * Execute plan for resolving a single geocode endpoint (stored vs fetch).
+     * @param {'start'|'end'} which
+     * @param {Object} endpointPlan - from buildGeocodeEndpointPlan
+     * @returns {Object}
+     */
+    function buildGeocodeEndpointResolveExecutePlan(which, endpointPlan) {
+        endpointPlan = endpointPlan || {};
+        if (endpointPlan.action === 'use_stored') {
+            return {
+                useStored: true,
+                storedLogPrefix: '[Geocoding] Using stored coordinates for ' + which + ':',
+                storedResult: endpointPlan.result,
+            };
+        }
+        return {
+            useStored: false,
+            fetchAddress: endpointPlan.address,
+        };
+    }
+
+    /**
+     * Execute plan when a single endpoint geocode fetch fails.
+     * @param {Object} failurePlan - from buildGeocodeEndpointFailurePlan
+     * @returns {Object}
+     */
+    function buildGeocodeEndpointFailureExecutePlan(failurePlan) {
+        failurePlan = failurePlan || {};
+        return {
+            shouldAbort: true,
+            statusMessage: failurePlan.statusMessage,
+            statusType: failurePlan.statusType,
+            clearGeocodingFlag: failurePlan.clearGeocodingFlag !== false,
+        };
+    }
+
+    /**
+     * Execute plan for geocodeLocations pair success/error outcomes.
+     * @param {Object} outcome - from buildGeocodePairSuccessOutcomePlan or buildGeocodePairErrorOutcomePlan
+     * @returns {Object}
+     */
+    function buildGeocodePairOutcomeExecutePlan(outcome) {
+        outcome = outcome || {};
+        return {
+            shouldReturnCoords: !!outcome.ok && !!outcome.coords,
+            coords: outcome.coords || null,
+            statusMessage: outcome.statusMessage,
+            statusType: outcome.statusType,
+            clearGeocodingFlag: outcome.clearGeocodingFlag !== false,
+            errorLogPrefix: outcome.ok ? null : '[Geocoding] Error:',
+        };
+    }
+
+    /**
      * Lookup plan for geocodeAddress before network fetch (coords, cache, or Nominatim).
      * @param {Object} input
      * @param {string} input.address
@@ -490,6 +556,10 @@
         buildGeocodeEndpointFailurePlan: buildGeocodeEndpointFailurePlan,
         buildGeocodePairSuccessOutcomePlan: buildGeocodePairSuccessOutcomePlan,
         buildGeocodePairErrorOutcomePlan: buildGeocodePairErrorOutcomePlan,
+        buildGeocodeLocationsInputPlan: buildGeocodeLocationsInputPlan,
+        buildGeocodeEndpointResolveExecutePlan: buildGeocodeEndpointResolveExecutePlan,
+        buildGeocodeEndpointFailureExecutePlan: buildGeocodeEndpointFailureExecutePlan,
+        buildGeocodePairOutcomeExecutePlan: buildGeocodePairOutcomeExecutePlan,
         buildGeocodeAddressLookupPlan: buildGeocodeAddressLookupPlan,
         buildGeocodeAddressFetchSuccessPlan: buildGeocodeAddressFetchSuccessPlan,
         buildGeocodeNominatimFetchRequestPlan: buildGeocodeNominatimFetchRequestPlan,

@@ -140,6 +140,51 @@ describe('geocoding-locations module', () => {
         expect(err.statusMessage).toContain('timeout');
     });
 
+    test('buildGeocodeLocationsInputPlan delegates to pair plans', () => {
+        const input = GL.buildGeocodeLocationsInputPlan({
+            startStored: { lat: 51.5, lon: -0.1, display_name: 'London' },
+            startAddress: 'London',
+            endStored: null,
+            endAddress: 'Leeds',
+        });
+        expect(input.startPlan.action).toBe('use_stored');
+        expect(input.endPlan.action).toBe('fetch');
+        expect(input.loadingStatusMessage).toContain('Geocoding');
+    });
+
+    test('buildGeocodeEndpointResolveExecutePlan distinguishes stored vs fetch', () => {
+        const stored = GL.buildGeocodeEndpointResolveExecutePlan('start', {
+            action: 'use_stored',
+            result: { lat: 1, lon: 2 },
+        });
+        expect(stored.useStored).toBe(true);
+        expect(stored.storedLogPrefix).toContain('start');
+
+        const fetch = GL.buildGeocodeEndpointResolveExecutePlan('end', {
+            action: 'fetch',
+            address: 'Leeds',
+        });
+        expect(fetch.useStored).toBe(false);
+        expect(fetch.fetchAddress).toBe('Leeds');
+    });
+
+    test('buildGeocodePairOutcomeExecutePlan wraps success and error outcomes', () => {
+        const success = GL.buildGeocodePairOutcomeExecutePlan(
+            GL.buildGeocodePairSuccessOutcomePlan(
+                { lat: 51.5, lon: -0.1, display_name: 'A' },
+                { lat: 52, lon: -1, display_name: 'B' }
+            )
+        );
+        expect(success.shouldReturnCoords).toBe(true);
+        expect(success.clearGeocodingFlag).toBe(true);
+
+        const error = GL.buildGeocodePairOutcomeExecutePlan(
+            GL.buildGeocodePairErrorOutcomePlan('timeout')
+        );
+        expect(error.shouldReturnCoords).toBe(false);
+        expect(error.errorLogPrefix).toContain('Geocoding');
+    });
+
     test('buildGeocodeAddressLookupPlan resolves coordinates and cache hits', () => {
         const coords = GL.buildGeocodeAddressLookupPlan({ address: '51.5,-0.1' });
         expect(coords.action).toBe('resolve');

@@ -322,6 +322,37 @@
         };
     }
 
+    /**
+     * Execute plan for mounting hazard markers on the map.
+     * @param {Object} displayPlan - from buildDisplayHazardMarkersPlan
+     * @returns {Object}
+     */
+    function buildDisplayHazardMarkersExecutePlan(displayPlan) {
+        displayPlan = displayPlan || {};
+        return {
+            shouldDisplay: !!displayPlan.shouldDisplay,
+            clearExisting: !!displayPlan.clearExisting,
+            markers: displayPlan.markers || [],
+            emptyLogMessage: displayPlan.emptyLogMessage,
+            successLogMessage: displayPlan.successLogMessage,
+            pushToMarkerArray: true,
+        };
+    }
+
+    /**
+     * Execute plan for clearing hazard markers from the map.
+     * @param {Object} clearPlan - from buildClearHazardMarkersPlan
+     * @returns {Object}
+     */
+    function buildClearHazardMarkersExecutePlan(clearPlan) {
+        clearPlan = clearPlan || {};
+        return {
+            shouldClear: !!clearPlan.shouldClear,
+            resetMarkerArray: clearPlan.resetMarkerArray !== false,
+            markerCount: clearPlan.markerCount || 0,
+        };
+    }
+
     var api = {
         HAZARD_MARKER_ICON_SIZE: HAZARD_MARKER_ICON_SIZE,
         DEFAULT_HAZARD_MARKER_CONFIG: DEFAULT_HAZARD_MARKER_CONFIG,
@@ -337,6 +368,8 @@
         buildDisplayAllRouteHazardsPlan: buildDisplayAllRouteHazardsPlan,
         buildDisplayHazardMarkersPlan: buildDisplayHazardMarkersPlan,
         buildClearHazardMarkersPlan: buildClearHazardMarkersPlan,
+        buildDisplayHazardMarkersExecutePlan: buildDisplayHazardMarkersExecutePlan,
+        buildClearHazardMarkersExecutePlan: buildClearHazardMarkersExecutePlan,
         buildHazardMarkersMountPlans: buildHazardMarkersMountPlans,
     };
 

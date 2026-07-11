@@ -2358,6 +2358,94 @@
     }
 
     /**
+     * Orchestration plan for displayAllRoutesOnMap entry logging.
+     * @param {number} [routeCount]
+     * @returns {Object}
+     */
+    function buildDisplayAllRoutesMapOrchestrationPlan(routeCount) {
+        var count = routeCount || 0;
+        return {
+            entryLogMessage: '[Routes] ===== displayAllRoutesOnMap called =====',
+            routeCountLogPrefix: '[Routes] routeOptions:',
+            routeCount: count,
+            noRoutesLogMessage: '[Routes] No routeOptions available!',
+            mapMissingLogMessage: '[Routes] Map not available',
+        };
+    }
+
+    /**
+     * Execute plan combining pre-mount and style-load scheduling for all routes.
+     * @param {Object} dispatch - from buildDisplayAllRoutesMapDispatchPlan
+     * @param {Object} [opts]
+     * @param {boolean} [opts.isStyleLoaded]
+     * @returns {Object}
+     */
+    function buildDisplayAllRoutesMapExecutePlan(dispatch, opts) {
+        dispatch = dispatch || {};
+        opts = opts || {};
+        if (!dispatch.valid) {
+            return { shouldExecute: false, reason: dispatch.reason || 'invalid' };
+        }
+        return {
+            shouldExecute: true,
+            preMount: buildDisplayAllRoutesMapPreMountPlan(dispatch),
+            stylePlan: buildDisplayAllRoutesMapStyleLoadExecutePlan(dispatch, {
+                isStyleLoaded: !!opts.isStyleLoaded,
+            }),
+            requireMap: !!dispatch.requireMap,
+            addLayersLogMessage: '[Routes] Adding route layers (isStyleLoaded: ' + !!opts.isStyleLoaded + ')',
+        };
+    }
+
+    /**
+     * Execute plan for recalculateRouteWithPreferences side effects.
+     * @param {Object} plan - from buildRecalculateRouteWithPreferencesPlan
+     * @returns {Object}
+     */
+    function buildRecalculateRouteWithPreferencesExecutePlan(plan) {
+        plan = plan || {};
+        if (!plan.ok) {
+            return {
+                shouldRecalculate: false,
+                errorStatusMessage: plan.errorStatusMessage,
+            };
+        }
+        return {
+            shouldRecalculate: true,
+            saveRoutePreferences: true,
+            loadingStatusMessage: plan.loadingStatusMessage,
+            switchTab: plan.switchTab,
+            recalculateDelayMs: plan.recalculateDelayMs != null ? plan.recalculateDelayMs : 300,
+        };
+    }
+
+    /**
+     * Execute plan for startNavigation / startNavigationFromPreview UI side effects.
+     * @param {Object|null|undefined} lastCalculatedRoute
+     * @param {Object} [opts]
+     * @param {string} [opts.noRouteMessage]
+     * @param {boolean} [opts.syncFromSelection]
+     * @param {number} [opts.selectedRouteIndex]
+     * @returns {Object}
+     */
+    function buildStartNavigationExecutePlan(lastCalculatedRoute, opts) {
+        opts = opts || {};
+        if (!lastCalculatedRoute) {
+            return {
+                shouldStart: false,
+                errorStatusMessage: opts.noRouteMessage || 'Please calculate a route first',
+            };
+        }
+        return {
+            shouldStart: true,
+            syncFromSelection: !!opts.syncFromSelection,
+            selectedRouteIndex: opts.selectedRouteIndex,
+            hideStartNavButtonIds: ['startNavBtn', 'startNavBtnSheet'],
+            collapseBottomSheet: true,
+        };
+    }
+
+    /**
      * Layer reorder plan to keep route lines above traffic overlays.
      * @param {Array<{ id?: string }>} layerDescriptors
      * @param {Array<Object>} [styleLayers]
@@ -2759,6 +2847,8 @@
         buildCalculateRouteIdleUiApplyPlan: buildCalculateRouteIdleUiApplyPlan,
         buildCalculateRouteIdleUiExecutePlan: buildCalculateRouteIdleUiExecutePlan,
         buildRecalculateRouteWithPreferencesPlan: buildRecalculateRouteWithPreferencesPlan,
+        buildRecalculateRouteWithPreferencesExecutePlan: buildRecalculateRouteWithPreferencesExecutePlan,
+        buildStartNavigationExecutePlan: buildStartNavigationExecutePlan,
         buildRoutePreviewPanelApplyPlan: buildRoutePreviewPanelApplyPlan,
         buildRoutePreviewPanelDomApplyPlan: buildRoutePreviewPanelDomApplyPlan,
         buildRoutePreviewPanelDomExecutePlan: buildRoutePreviewPanelDomExecutePlan,
@@ -2777,6 +2867,8 @@
         buildDisplayAllRoutesMapStyleLoadExecutePlan: buildDisplayAllRoutesMapStyleLoadExecutePlan,
         buildDoAddRouteLayersPostMountExecutePlan: buildDoAddRouteLayersPostMountExecutePlan,
         buildDisplayAllRoutesMapDispatchPlan: buildDisplayAllRoutesMapDispatchPlan,
+        buildDisplayAllRoutesMapOrchestrationPlan: buildDisplayAllRoutesMapOrchestrationPlan,
+        buildDisplayAllRoutesMapExecutePlan: buildDisplayAllRoutesMapExecutePlan,
         buildBringRoutesToTopDispatchPlan: buildBringRoutesToTopDispatchPlan,
         buildBringRoutesToTopExecutePlan: buildBringRoutesToTopExecutePlan,
         buildRouteLayerMapLibreApplyPlan: buildRouteLayerMapLibreApplyPlan,
