@@ -206,6 +206,65 @@
         );
     }
 
+    /**
+     * @param {Object} route
+     * @returns {number}
+     */
+    function computeSavedRouteTotalCost(route) {
+        route = route || {};
+        return parseFloat(route.fuel_cost || 0) +
+            parseFloat(route.toll_cost || 0) +
+            parseFloat(route.caz_cost || 0);
+    }
+
+    /**
+     * @param {Object} route
+     * @param {Object} opts
+     * @returns {string}
+     */
+    function buildSavedRouteRowHtml(route, opts) {
+        route = route || {};
+        opts = opts || {};
+        var totalCost = computeSavedRouteTotalCost(route).toFixed(2);
+        return (
+            '<div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 4px solid #E91E63;">' +
+                '<div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">' +
+                    '<div>' +
+                        '<div style="font-weight: 500; font-size: 14px;">' + route.name + '</div>' +
+                        '<div style="font-size: 12px; color: #666; margin-top: 4px;">📍 ' + route.start + ' → ' + route.end + '</div>' +
+                    '</div>' +
+                    '<button onclick="deleteSavedRoute(' + route.id + ')" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;">✕</button>' +
+                '</div>' +
+                '<div style="font-size: 12px; color: #666; margin-bottom: 8px;">' +
+                    '📏 ' + opts.distanceText + ' ' + opts.distUnit + ' | ⏱️ ' + route.duration_minutes +
+                    ' | 💰 ' + opts.currencySymbol + totalCost +
+                '</div>' +
+                '<button onclick="useSavedRoute(' + route.id + ')" style="width: 100%; background: #E91E63; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">🚀 Use This Route</button>' +
+            '</div>'
+        );
+    }
+
+    /**
+     * @param {Array<Object>} routes
+     * @param {Object} opts
+     * @returns {string}
+     */
+    function buildSavedRoutesListHtml(routes, opts) {
+        if (!routes || routes.length === 0) {
+            return '<div style="text-align: center; padding: 20px; color: #999;">No saved routes yet</div>';
+        }
+        opts = opts || {};
+        var html = '';
+        for (var i = 0; i < routes.length; i++) {
+            html += buildSavedRouteRowHtml(routes[i], {
+                currencySymbol: opts.currencySymbol,
+                distUnit: opts.distUnit,
+                distanceText: opts.distanceTexts ? opts.distanceTexts[i] : opts.distanceText,
+            });
+        }
+        return html;
+    }
+
     var api = {
         buildShareableRoutePayload: buildShareableRoutePayload,
         encodeRoutePayload: encodeRoutePayload,
@@ -219,6 +278,9 @@
         buildShareWhatsAppMessage: buildShareWhatsAppMessage,
         buildShareEmailSubject: buildShareEmailSubject,
         buildShareEmailBody: buildShareEmailBody,
+        computeSavedRouteTotalCost: computeSavedRouteTotalCost,
+        buildSavedRouteRowHtml: buildSavedRouteRowHtml,
+        buildSavedRoutesListHtml: buildSavedRoutesListHtml,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -3904,30 +3904,11 @@ function saveCurrentRoute() {
 function loadSavedRoutes() {
     const savedRoutes = JSON.parse(localStorage.getItem('savedRoutes') || '[]');
     const savedRoutesList = document.getElementById('savedRoutesList');
-
-    if (savedRoutes.length === 0) {
-        savedRoutesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No saved routes yet</div>';
-        return;
-    }
-
-    const symbol = getCurrencySymbol();
-    const distUnit = getDistanceUnit();
-
-    savedRoutesList.innerHTML = savedRoutes.map(route => `
-        <div style="background: white; padding: 12px; border-radius: 6px; margin-bottom: 10px; border-left: 4px solid #E91E63;">
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-                <div>
-                    <div style="font-weight: 500; font-size: 14px;">${route.name}</div>
-                    <div style="font-size: 12px; color: #666; margin-top: 4px;">📍 ${route.start} → ${route.end}</div>
-                </div>
-                <button onclick="deleteSavedRoute(${route.id})" style="background: #f44336; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 12px;">✕</button>
-            </div>
-            <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
-                📏 ${convertDistance(route.distance_km)} ${distUnit} | ⏱️ ${route.duration_minutes} | 💰 ${symbol}${(parseFloat(route.fuel_cost || 0) + parseFloat(route.toll_cost || 0) + parseFloat(route.caz_cost || 0)).toFixed(2)}
-            </div>
-            <button onclick="useSavedRoute(${route.id})" style="width: 100%; background: #E91E63; color: white; border: none; padding: 8px; border-radius: 4px; cursor: pointer; font-weight: 500; font-size: 13px;">🚀 Use This Route</button>
-        </div>
-    `).join('');
+    savedRoutesList.innerHTML = VoyagrModules.routeSharing().buildSavedRoutesListHtml(savedRoutes, {
+        currencySymbol: getCurrencySymbol(),
+        distUnit: getDistanceUnit(),
+        distanceTexts: savedRoutes.map((route) => convertDistance(route.distance_km)),
+    });
 }
 /**
  * useSavedRoute function
@@ -16749,15 +16730,12 @@ function updateTurnGuidance(userLat, userLon) {
     const turnInfo = document.getElementById('turnInfo');
     if (turnInfo) {
         const distanceKm = distanceToEnd / 1000;
-        const displayDistance = convertDistance(distanceKm);
-        const distUnit = getDistanceUnit();
-        turnInfo.innerHTML = `
-            <div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">
-                <div style="font-size: 14px; color: #666;">Distance to destination</div>
-                <div style="font-size: 24px; font-weight: bold; color: #333;">${displayDistance} ${distUnit}</div>
-                <div style="font-size: 12px; color: #999; margin-top: 5px;">Route progress: ${((closestIndex / routePolyline.length) * 100).toFixed(0)}%</div>
-            </div>
-        `;
+        const progressPercent = (closestIndex / routePolyline.length) * 100;
+        turnInfo.innerHTML = VoyagrModules.eta().buildDestinationProgressPanelHtml(
+            convertDistance(distanceKm),
+            getDistanceUnit(),
+            progressPercent
+        );
     }
 
     // REMOVED: Redundant generic "Turn ahead" announcement
@@ -16846,79 +16824,12 @@ function quickSearch(type) {
  * @param {number} userLon - User's longitude
  */
 function displayPOIResults(results, type, userLat, userLon) {
-    const icons = {
-        'fuel': '⛽',
-        'food': '🍽️',
-        'parking': '🅿️',
-        'charging': '🔌',
-        'hospital': '🏥',
-        'pharmacy': '💊',
-        'groceries': '🛒'
-    };
-    const icon = icons[type] || '📍';
-
-    // Create modal content
-    let modalHTML = `
-        <div id="poiModal" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px;">
-            <div style="background: white; border-radius: 12px; max-width: 400px; width: 100%; max-height: 80vh; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-                <div style="padding: 16px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
-                    <div style="display: flex; justify-content: space-between; align-items: center;">
-                        <h3 style="margin: 0; font-size: 18px;">${icon} Nearby ${type === 'groceries' ? 'Groceries' : (type.charAt(0).toUpperCase() + type.slice(1))}</h3>
-                        <button onclick="closePOIModal()" style="background: none; border: none; color: white; font-size: 24px; cursor: pointer; padding: 0;">✕</button>
-                    </div>
-                    <p style="margin: 4px 0 0 0; font-size: 12px; opacity: 0.9;">Found ${results.length} locations</p>
-                </div>
-                <div style="max-height: 50vh; overflow-y: auto; padding: 12px;">
-    `;
-
-    results.forEach((poi, index) => {
-        // Convert POI distance based on user's unit preference
-        let distance;
-        if (distanceUnit === 'mi') {
-            // Convert meters to feet/miles
-            const distanceFeet = poi.distance_m * 3.28084;
-            if (distanceFeet < 5280) {
-                distance = `${Math.round(distanceFeet)} ft`;
-            } else {
-                distance = `${(poi.distance_m / 1609.344).toFixed(1)} mi`;
-            }
-        } else {
-            // Metric: meters/km
-            if (poi.distance_m < 1000) {
-                distance = `${Math.round(poi.distance_m)} m`;
-            } else {
-                distance = `${(poi.distance_m / 1000).toFixed(1)} km`;
-            }
-        }
-        const brand = poi.brand ? `<span style="color: #667eea; font-weight: 500;">${poi.brand}</span> - ` : '';
-
-        modalHTML += `
-            <div style="padding: 12px; margin-bottom: 8px; background: #f8f9fa; border-radius: 8px; border-left: 4px solid #667eea;">
-                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
-                    <div style="font-weight: 600; color: #333; font-size: 14px;">${icon} ${brand}${poi.name}</div>
-                    <div style="font-size: 12px; color: #667eea; font-weight: 500;">${distance}</div>
-                </div>
-                ${poi.address ? `<div style="font-size: 11px; color: #666; margin-bottom: 6px;">${poi.address}</div>` : ''}
-                ${poi.opening_hours ? `<div style="font-size: 11px; color: #888;">🕒 ${poi.opening_hours}</div>` : ''}
-                <button onclick="selectPOI(${poi.lat}, ${poi.lon}, '${poi.name.replace(/'/g, "\\'")}', ${userLat}, ${userLon})"
-                    style="width: 100%; margin-top: 8px; background: #667eea; color: white; border: none; border-radius: 6px; padding: 10px; cursor: pointer; font-weight: 500; font-size: 13px;">
-                    🚗 Navigate Here
-                </button>
-            </div>
-        `;
-    });
-
-    modalHTML += `
-                </div>
-            </div>
-        </div>
-    `;
-
-    // Remove existing modal if any
     closePOIModal();
-
-    // Add modal to page
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    document.body.insertAdjacentHTML('beforeend', VoyagrModules.poiSearch().buildPoiResultsModalHtml(results, type, {
+        userLat: userLat,
+        userLon: userLon,
+        distanceTexts: results.map((poi) => VoyagrModules.units().formatPoiDistanceMeters(poi.distance_m, distanceUnit)),
+    }));
 }
 
 /**

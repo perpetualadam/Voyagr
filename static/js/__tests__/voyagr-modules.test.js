@@ -35,6 +35,7 @@ describe('VoyagrModules registry', () => {
         global.VoyagrMultimodalParking = require('../modules/navigation/multimodal-parking');
         global.VoyagrRouteSharing = require('../modules/navigation/route-sharing');
         global.VoyagrWaypoints = require('../modules/navigation/waypoints');
+        global.VoyagrPoiSearch = require('../modules/navigation/poi-search');
         jest.resetModules();
     });
 

@@ -130,6 +130,23 @@
             : km.toFixed(1) + ' km';
     }
 
+    /**
+     * Format POI distance from metres for quick-search results.
+     * @param {number} distanceM
+     * @param {string} distanceUnit - 'mi' or 'km'
+     * @returns {string}
+     */
+    function formatPoiDistanceMeters(distanceM, distanceUnit) {
+        distanceM = distanceM || 0;
+        if (distanceUnit === 'mi') {
+            var distanceFeet = distanceM * 3.28084;
+            if (distanceFeet < 5280) return Math.round(distanceFeet) + ' ft';
+            return (distanceM / 1609.344).toFixed(1) + ' mi';
+        }
+        if (distanceM < 1000) return Math.round(distanceM) + ' m';
+        return (distanceM / 1000).toFixed(1) + ' km';
+    }
+
     var api = {
         convertDistance: convertDistance,
         getDistanceUnit: getDistanceUnit,
@@ -143,6 +160,7 @@
         speedUnitStatusLabel: speedUnitStatusLabel,
         temperatureUnitStatusLabel: temperatureUnitStatusLabel,
         formatRemainingDistanceText: formatRemainingDistanceText,
+        formatPoiDistanceMeters: formatPoiDistanceMeters,
         CURRENCY_SYMBOLS: CURRENCY_SYMBOLS,
     };
 

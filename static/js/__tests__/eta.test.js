@@ -223,4 +223,11 @@ describe('journey and traffic panel helpers', () => {
         expect(html).toContain('15 min remaining (40% complete)');
         expect(html).toContain('Traffic: Light');
     });
+
+    test('buildDestinationProgressPanelHtml shows distance and progress', () => {
+        const html = ETA.buildDestinationProgressPanelHtml('3.2', 'mi', 62.4);
+        expect(html).toContain('Distance to destination');
+        expect(html).toContain('3.2 mi');
+        expect(html).toContain('Route progress: 62%');
+    });
 });

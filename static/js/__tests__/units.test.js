@@ -8,7 +8,7 @@ describe('units module surface', () => {
     const fns = ['convertDistance', 'getDistanceUnit', 'convertTemperature',
         'getTemperatureUnit', 'getFuelEfficiencyInUnits', 'getFuelEfficiencyLabel',
         'distanceUnitStatusLabel', 'speedUnitStatusLabel', 'temperatureUnitStatusLabel',
-        'formatRemainingDistanceText'];
+        'formatRemainingDistanceText', 'formatPoiDistanceMeters'];
     test('exposes all expected functions', () => {
         fns.forEach(fn => expect(typeof U[fn]).toBe('function'));
     });
@@ -109,5 +109,17 @@ describe('formatRemainingDistanceText', () => {
 
     test('imperial short distance shows feet', () => {
         expect(U.formatRemainingDistanceText(50, 'mi')).toBe('164 ft');
+    });
+});
+
+describe('formatPoiDistanceMeters', () => {
+    test('metric formats metres and kilometres', () => {
+        expect(U.formatPoiDistanceMeters(450, 'km')).toBe('450 m');
+        expect(U.formatPoiDistanceMeters(1500, 'km')).toBe('1.5 km');
+    });
+
+    test('imperial formats feet and miles', () => {
+        expect(U.formatPoiDistanceMeters(400, 'mi')).toMatch(/ft$/);
+        expect(U.formatPoiDistanceMeters(2000, 'mi')).toMatch(/mi$/);
     });
 });

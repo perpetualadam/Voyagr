@@ -93,4 +93,15 @@ describe('route-sharing module', () => {
         expect(route.geometry).toBe('abc');
         expect(RS.parseSharedRouteDurationMinutes('18 min')).toBe(18);
     });
+
+    test('buildSavedRoutesListHtml renders rows or empty state', () => {
+        expect(RS.buildSavedRoutesListHtml([], {})).toContain('No saved routes yet');
+        const html = RS.buildSavedRoutesListHtml(
+            [{ id: 1, name: 'Commute', start: 'A', end: 'B', distance_km: 10, duration_minutes: '20 min', fuel_cost: 5, toll_cost: 1, caz_cost: 0 }],
+            { currencySymbol: '£', distUnit: 'mi', distanceTexts: ['6.21'] }
+        );
+        expect(html).toContain('Commute');
+        expect(html).toContain('useSavedRoute(1)');
+        expect(RS.computeSavedRouteTotalCost({ fuel_cost: 5, toll_cost: 1, caz_cost: 0.5 })).toBe(6.5);
+    });
 });
