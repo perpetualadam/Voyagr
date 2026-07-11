@@ -122,6 +122,23 @@
     }
 
     /**
+     * All symbol layer ids with text fields (for label z-order fixes).
+     * @param {Array<Object>} styleLayers
+     * @returns {string[]}
+     */
+    function collectTextSymbolLayerIds(styleLayers) {
+        if (!styleLayers || !styleLayers.length) return [];
+        var ids = [];
+        for (var i = 0; i < styleLayers.length; i++) {
+            var layer = styleLayers[i];
+            if (layer.type === 'symbol' && layer.layout && layer.layout['text-field']) {
+                ids.push(layer.id);
+            }
+        }
+        return ids;
+    }
+
+    /**
      * Mount plan for one route line layer (pure; app performs map.addSource/addLayer).
      * @param {Object} route
      * @param {number} index
@@ -1156,6 +1173,7 @@
         latLonPolylineToLngLatCoords: latLonPolylineToLngLatCoords,
         buildRouteLineGeoJsonFeature: buildRouteLineGeoJsonFeature,
         findFirstTextSymbolLayerId: findFirstTextSymbolLayerId,
+        collectTextSymbolLayerIds: collectTextSymbolLayerIds,
         buildRouteLayerMountPlan: buildRouteLayerMountPlan,
         buildTripInfoDisplayValues: buildTripInfoDisplayValues,
         buildTripInfoApplyPlan: buildTripInfoApplyPlan,

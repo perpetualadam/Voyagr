@@ -368,3 +368,38 @@ describe('computeFollowJumpMeters', () => {
         expect(jump).toBeGreaterThan(1000);
     });
 });
+
+describe('buildSnappedVehicleDisplayPlan', () => {
+    const bearing = (_lat1, _lon1, lat2, _lon2) => (lat2 > 51.5 ? 90 : 0);
+
+    test('returns raw position when snap result missing', () => {
+        const plan = SG.buildSnappedVehicleDisplayPlan({
+            lat: 51.5,
+            lon: -0.1,
+            gpsHeadingForBlend: 45,
+            lastSnappedRouteIndex: 0,
+            speedMph: 30,
+        });
+        expect(plan.displayLat).toBe(51.5);
+        expect(plan.heading).toBe(45);
+    });
+
+    test('blends toward snapped point and advances route index when near route', () => {
+        const plan = SG.buildSnappedVehicleDisplayPlan({
+            lat: 51.5001,
+            lon: -0.1001,
+            accuracy: 10,
+            snapped: { lat: 51.5002, lon: -0.1002, index: 2, distance: 20 },
+            routePolyline: [[51.5, -0.1], [51.501, -0.101], [51.502, -0.102]],
+            gpsHeadingForBlend: 10,
+            lastSnappedRouteIndex: 1,
+            speedMph: 30,
+            prevSnapBlendWeightState: 0,
+            calculateBearing: bearing,
+            blendHeadingsCircular: (gps, route, blend) => gps + (route - gps) * blend,
+        });
+        expect(plan.displayLat).toBeGreaterThan(51.5001);
+        expect(plan.lastSnappedRouteIndex).toBeGreaterThanOrEqual(2);
+        expect(plan.snapBlendWeightState).toBeGreaterThan(0);
+    });
+});

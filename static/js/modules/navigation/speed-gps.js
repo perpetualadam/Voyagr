@@ -31,7 +31,9 @@
         DISPLACEMENT_NOISE_FLOOR_MOVING: 4,
         DISPLACEMENT_NOISE_ACC_SCALE_MOVING: 0.35,
         DISPLACEMENT_NOISE_FLOOR_PARKED: 8,
-        REVERSE_INDEX_MAX_SPEED_MPH: 2
+        REVERSE_INDEX_MAX_SPEED_MPH: 2,
+        SNAP_NEAR_ROUTE_FORCE_METERS: 130,
+        SNAP_LOCK_ACC_SCALE: 1.5,
     };
 
     var TYPICAL_MPH_LIMITS = [20, 30, 40, 50, 60, 70];
@@ -542,6 +544,96 @@
         return followJumpM;
     }
 
+    /**
+     * Display position/heading after route snap blend (pure; caller supplies snap result).
+     * @param {Object} opts
+     * @param {number} opts.lat
+     * @param {number} opts.lon
+     * @param {number|null} [opts.accuracy]
+     * @param {Object} opts.snapped - { lat, lon, index, distance }
+     * @param {Array<[number,number]>} opts.routePolyline
+     * @param {number} opts.gpsHeadingForBlend
+     * @param {number} opts.lastSnappedRouteIndex
+     * @param {number} opts.speedMph
+     * @param {number} [opts.prevSnapBlendWeightState]
+     * @param {function(number,number,number,number): number} [opts.calculateBearing]
+     * @param {function(number,number,number): number} [opts.blendHeadingsCircular]
+     * @param {Object} [opts.constants]
+     * @returns {{ displayLat: number, displayLon: number, heading: number, snapBlendWeightState: number, lastSnappedRouteIndex: number }}
+     */
+    function buildSnappedVehicleDisplayPlan(opts) {
+        opts = opts || {};
+        var c = opts.constants || DEFAULTS;
+        var lat = opts.lat;
+        var lon = opts.lon;
+        var snapped = opts.snapped;
+        var routePolyline = opts.routePolyline || [];
+        var gpsHeadingForBlend = opts.gpsHeadingForBlend || 0;
+        var lastSnappedRouteIndex = opts.lastSnappedRouteIndex || 0;
+        var speedMph = opts.speedMph || 0;
+        var snapBlendWeightState = Number.isFinite(opts.prevSnapBlendWeightState)
+            ? opts.prevSnapBlendWeightState
+            : 0;
+
+        var displayLat = lat;
+        var displayLon = lon;
+        var heading = gpsHeadingForBlend;
+
+        if (!snapped || routePolyline.length < 2) {
+            return {
+                displayLat: displayLat,
+                displayLon: displayLon,
+                heading: heading,
+                snapBlendWeightState: snapBlendWeightState,
+                lastSnappedRouteIndex: lastSnappedRouteIndex,
+            };
+        }
+
+        var routeBearing = gpsHeadingForBlend;
+        if (snapped.index < routePolyline.length - 1 && typeof opts.calculateBearing === 'function') {
+            var rA = routePolyline[snapped.index];
+            var rB = routePolyline[snapped.index + 1];
+            routeBearing = opts.calculateBearing(rA[0], rA[1], rB[0], rB[1]);
+        }
+
+        var accuracy = opts.accuracy;
+        var horizAcc = typeof accuracy === 'number' && accuracy > 1 && accuracy < 520 ? accuracy : null;
+        var snapLockMeters = Math.max(
+            c.SNAP_NEAR_ROUTE_FORCE_METERS,
+            horizAcc != null ? horizAcc * c.SNAP_LOCK_ACC_SCALE : 0
+        );
+
+        var snapBlend = computeSnapBlendWeight({
+            distSnap: snapped.distance,
+            snapLockMeters: snapLockMeters,
+            prevWeightState: snapBlendWeightState,
+            constants: c,
+        });
+        snapBlendWeightState = snapBlend.weightState;
+        var effectiveBlend = snapBlend.effectiveBlend;
+
+        displayLat = lat + (snapped.lat - lat) * effectiveBlend;
+        displayLon = lon + (snapped.lon - lon) * effectiveBlend;
+        if (typeof opts.blendHeadingsCircular === 'function') {
+            heading = opts.blendHeadingsCircular(gpsHeadingForBlend, routeBearing, effectiveBlend);
+        }
+
+        var nextSnappedRouteIndex = advanceSnappedRouteIndex(
+            snapped.index,
+            lastSnappedRouteIndex,
+            speedMph,
+            c
+        );
+
+        return {
+            displayLat: displayLat,
+            displayLon: displayLon,
+            heading: heading,
+            snapBlendWeightState: snapBlendWeightState,
+            lastSnappedRouteIndex: nextSnappedRouteIndex,
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         KMH_TO_MPH: KMH_TO_MPH,
@@ -570,6 +662,7 @@
         accumulateNavOdometerSegment: accumulateNavOdometerSegment,
         resolveGpsHeadingDegrees: resolveGpsHeadingDegrees,
         computeFollowJumpMeters: computeFollowJumpMeters,
+        buildSnappedVehicleDisplayPlan: buildSnappedVehicleDisplayPlan,
     };
 
     // ======================================================================

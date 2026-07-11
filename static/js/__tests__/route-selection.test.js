@@ -179,6 +179,14 @@ describe('route comparison and selection helpers', () => {
             { id: 'labels', type: 'symbol', layout: { 'text-field': '{name}' } },
         ])).toBe('labels');
     });
+
+    test('collectTextSymbolLayerIds returns all label layer ids in order', () => {
+        expect(RS.collectTextSymbolLayerIds([
+            { id: 'roads', type: 'line' },
+            { id: 'a-labels', type: 'symbol', layout: { 'text-field': '{name}' } },
+            { id: 'b-labels', type: 'symbol', layout: { 'text-field': '{ref}' } },
+        ])).toEqual(['a-labels', 'b-labels']);
+    });
 });
 
 describe('route preview helpers', () => {

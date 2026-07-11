@@ -4988,18 +4988,11 @@ function addTrafficLayer() {
             if (!map.getLayer('traffic-layer')) {
                 // Find the first symbol layer (road labels) to insert traffic BELOW it
                 // This ensures: base map → traffic → routes → road labels
-                let trafficBeforeId = undefined;
                 const style = map.getStyle();
-                if (style && style.layers) {
-                    const firstSymbolLayer = style.layers.find(l =>
-                        l.type === 'symbol' &&
-                        l.layout &&
-                        l.layout['text-field']
-                    );
-                    if (firstSymbolLayer) {
-                        trafficBeforeId = firstSymbolLayer.id;
-                        console.log(`[Traffic] Inserting traffic layer before symbol layer: ${trafficBeforeId}`);
-                    }
+                const trafficBeforeId = VoyagrModules.routeSelection()
+                    .findFirstTextSymbolLayerId(style && style.layers);
+                if (trafficBeforeId) {
+                    console.log(`[Traffic] Inserting traffic layer before symbol layer: ${trafficBeforeId}`);
                 }
 
                 map.addLayer({
@@ -5442,17 +5435,7 @@ function bringNavRouteAboveTrafficEdges() {
 
     try {
         const style = map.getStyle();
-        let beforeId = undefined;
-        if (style && style.layers) {
-            const symbolLayer = style.layers.find(l =>
-                l.type === 'symbol' &&
-                l.layout &&
-                l.layout['text-field']
-            );
-            if (symbolLayer) {
-                beforeId = symbolLayer.id;
-            }
-        }
+        const beforeId = VoyagrModules.routeSelection().findFirstTextSymbolLayerId(style && style.layers);
 
         const routeLineIds = [];
         if (routeLayer && routeLayer.id) {
@@ -5501,30 +5484,23 @@ function ensureLabelsOnTop() {
             const style = map.getStyle();
             if (!style || !style.layers) return;
 
-            // Find all label/symbol layers with text content
-            const labelLayers = style.layers.filter(layer =>
-                layer.type === 'symbol' &&
-                layer.layout &&
-                layer.layout['text-field']
-            );
-
-            if (labelLayers.length === 0) {
+            const labelLayerIds = VoyagrModules.routeSelection().collectTextSymbolLayerIds(style.layers);
+            if (labelLayerIds.length === 0) {
                 console.log('[Labels] No label layers found');
                 return;
             }
 
-            // Move each label layer to the top
-            labelLayers.forEach(layer => {
+            labelLayerIds.forEach((layerId) => {
                 try {
-                    if (map.getLayer(layer.id)) {
-                        map.moveLayer(layer.id);
+                    if (map.getLayer(layerId)) {
+                        map.moveLayer(layerId);
                     }
                 } catch (e) {
                     // Silently skip layers that can't be moved
                 }
             });
 
-            console.log(`[Labels] Moved ${labelLayers.length} label layers to top`);
+            console.log(`[Labels] Moved ${labelLayerIds.length} label layers to top`);
         } catch (e) {
             console.log('[Labels] Error ensuring labels on top:', e.message);
         }
@@ -9176,11 +9152,6 @@ function distanceAlongRouteToVertexMeters(routePolyline, snap, targetVertexIndex
  * Shared by the advance "Then" maneuver (widget + voice). Kept in sync with the inline
  * mappings in detectUpcomingTurn / updateTurnWidgetFromPosition.
  */
-function maneuverTypeToDirectionKey(type) {
-    return VoyagrModules.turnInstructions().maneuverTypeToDirectionKey(type);
-}
-
-/** Promote ramp/turn to exit phrasing when leaving motorway/trunk. */
 function refineManeuverDirectionForRoute(type, direction, maneuver) {
     const roadClass = maneuver && (maneuver.road_class || inferRoadClassFromManeuver(maneuver));
     return VoyagrModules.turnInstructions().refineManeuverDirection(type, direction, roadClass);
@@ -12496,50 +12467,27 @@ function startGPSTracking() {
 
             if (routeInProgress && routePolyline && routePolyline.length >= 2) {
                 const snapped = snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex);
-
-                let routeBearing = gpsHeadingForBlend;
-                if (snapped.index < routePolyline.length - 1) {
-                    const rA = routePolyline[snapped.index];
-                    const rB = routePolyline[snapped.index + 1];
-                    routeBearing = calculateBearing(rA[0], rA[1], rB[0], rB[1]);
-                }
-
-                const horizAcc =
-                    typeof accuracy === 'number' && accuracy > 1 && accuracy < 520 ? accuracy : null;
-
-                // Lock the vehicle icon to the route whenever we are plausibly near it.
-                // Within `snapLockMeters` the marker snaps fully (weight 1) so it rides the
-                // polyline like Google/Waze instead of oscillating between the snapped point
-                // and noisy raw GPS (the "jumping" that also spammed false reroutes). The lock
-                // radius widens with poor GPS accuracy. Past a short release band we fall back
-                // to raw GPS, because that far off the line is a genuine deviation.
-                const distSnap = snapped.distance;
-                const snapLockMeters = Math.max(
-                    SNAP_NEAR_ROUTE_FORCE_METERS,
-                    horizAcc != null ? horizAcc * SNAP_LOCK_ACC_SCALE : 0
-                );
                 const SGsnap = _speedGps();
-                let effectiveBlend = 0;
                 if (SGsnap) {
-                    const snapBlend = SGsnap.computeSnapBlendWeight({
-                        distSnap: distSnap,
-                        snapLockMeters: snapLockMeters,
-                        prevWeightState: _snapBlendWeightState
+                    const snapPlan = SGsnap.buildSnappedVehicleDisplayPlan({
+                        lat,
+                        lon,
+                        accuracy,
+                        snapped,
+                        routePolyline,
+                        gpsHeadingForBlend,
+                        lastSnappedRouteIndex,
+                        speedMph,
+                        prevSnapBlendWeightState: _snapBlendWeightState,
+                        calculateBearing,
+                        blendHeadingsCircular: VoyagrModules.routeGeometry().blendHeadingsCircular,
                     });
-                    _snapBlendWeightState = snapBlend.weightState;
-                    effectiveBlend = snapBlend.effectiveBlend;
+                    displayLat = snapPlan.displayLat;
+                    displayLon = snapPlan.displayLon;
+                    heading = snapPlan.heading;
+                    _snapBlendWeightState = snapPlan.snapBlendWeightState;
+                    lastSnappedRouteIndex = snapPlan.lastSnappedRouteIndex;
                 }
-
-                displayLat = lat + (snapped.lat - lat) * effectiveBlend;
-                displayLon = lon + (snapped.lon - lon) * effectiveBlend;
-                heading = blendHeadingsCircular(gpsHeadingForBlend, routeBearing, effectiveBlend);
-
-                // Advance along-route index when moving forward. Never jump backwards while
-                // driving — that made the marker hop to an earlier polyline vertex each tick.
-                const SGidx = _speedGps();
-                lastSnappedRouteIndex = SGidx
-                    ? SGidx.advanceSnappedRouteIndex(snapped.index, lastSnappedRouteIndex, speedMph)
-                    : Math.max(lastSnappedRouteIndex, snapped.index);
             }
 
             // Smooth the displayed position so raw↔snap blend changes don't jerk the icon.
@@ -12970,16 +12918,6 @@ function findNearestRouteIndex(lat, lon, polyline) {
 }
 
 /**
- * Interpolate clockwise from GPS-derived heading toward route-aligned bearing [0°,360°).
- * @param {number} gpsHeadingDegrees
- * @param {number} routeHeadingDegrees
- * @param {number} blendTowardRoute 0 GPS only, 1 route only
- */
-function blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowardRoute) {
-    return VoyagrModules.routeGeometry().blendHeadingsCircular(gpsHeadingDegrees, routeHeadingDegrees, blendTowardRoute);
-}
-
-/**
  * Snap a GPS position to the closest point on the route polyline.
  * Projects the position onto each line segment and returns the closest projected point.
  * This ensures the vehicle icon follows the route line smoothly instead of jumping
@@ -13093,11 +13031,7 @@ const SNAP_TO_ROUTE_BASE_METERS = 50;
 const SNAP_ROUTE_ACC_SCALE = 0.72;
 const SNAP_ROUTE_ACC_EXTRA_CAP_METERS = 48;
 
-// Active-navigation snap lock: keep the vehicle marker glued to the polyline while it
-// is plausibly near the route, so GPS noise can't make it jump off the line (which also
-// triggered phantom reroutes). Lock radius scales up with poor GPS accuracy.
-const SNAP_NEAR_ROUTE_FORCE_METERS = 130;
-const SNAP_LOCK_ACC_SCALE = 1.5;
+// Active-navigation snap lock constants live in speed-gps.js (DEFAULTS).
 let _smoothDisplayLat = null;
 let _smoothDisplayLon = null;
 let _snapBlendWeightState = 0;
