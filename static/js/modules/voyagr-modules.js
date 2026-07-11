@@ -29,6 +29,7 @@
         recentDestinations: 'VoyagrRecentDestinations',
         domHelpers: 'VoyagrDomHelpers',
         routePrefs: 'VoyagrRoutePrefs',
+        theme: 'VoyagrTheme',
     };
 
     var cache = {};
