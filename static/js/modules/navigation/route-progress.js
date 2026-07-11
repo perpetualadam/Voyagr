@@ -80,6 +80,54 @@
         };
     }
 
+    /**
+     * Resolve maneuver step index from a snapped polyline vertex index.
+     * @param {Array<Object>|null|undefined} steps
+     * @param {number} snapIndex
+     * @returns {number}
+     */
+    function resolveStepIndexFromSnapIndex(steps, snapIndex) {
+        if (!steps || steps.length === 0) return 0;
+        var stepIdx = 0;
+        for (var i = 0; i < steps.length; i++) {
+            var begin = steps[i].begin_shape_index || 0;
+            if (begin <= snapIndex + 5) {
+                stepIdx = i;
+            } else {
+                break;
+            }
+        }
+        for (var j = stepIdx; j < steps.length; j++) {
+            var beginJ = steps[j].begin_shape_index || 0;
+            if (beginJ >= snapIndex - 5) {
+                return j;
+            }
+        }
+        return stepIdx;
+    }
+
+    /**
+     * Seed plan for navigation progress indices after reroute (values only; app assigns globals).
+     * @param {number} snapIndex - Clamped snap index on route polyline
+     * @param {number} snapDistance - Off-route distance in metres
+     * @param {Array<Object>|null|undefined} steps
+     * @param {number} routeJoinGateMeters
+     * @returns {Object}
+     */
+    function buildNavigationProgressSeedPlan(snapIndex, snapDistance, steps, routeJoinGateMeters) {
+        var idx = Math.max(0, snapIndex);
+        var stepIndex = resolveStepIndexFromSnapIndex(steps, idx);
+        var offRoute = Number.isFinite(snapDistance) ? snapDistance : 0;
+        return {
+            lastSnappedRouteIndex: idx,
+            lastTurnDetectRouteVertexIndex: idx,
+            currentStepIndex: stepIndex,
+            routeJoinConfirmedForDeviation: offRoute <= routeJoinGateMeters,
+            logMessage: '[Reroute] Seeded progress: snapIdx=' + idx + ', step=' + stepIndex +
+                ', offRoute=' + offRoute.toFixed(0) + 'm',
+        };
+    }
+
     var api = {
         ROUTE_PROGRESS_CONTAINER_ID: ROUTE_PROGRESS_CONTAINER_ID,
         ROUTE_PROGRESS_BAR_ID: ROUTE_PROGRESS_BAR_ID,
@@ -90,6 +138,8 @@
         buildRouteProgressBarInnerHtml: buildRouteProgressBarInnerHtml,
         getRouteProgressAnimationKeyframes: getRouteProgressAnimationKeyframes,
         buildRouteProgressMountPlan: buildRouteProgressMountPlan,
+        resolveStepIndexFromSnapIndex: resolveStepIndexFromSnapIndex,
+        buildNavigationProgressSeedPlan: buildNavigationProgressSeedPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

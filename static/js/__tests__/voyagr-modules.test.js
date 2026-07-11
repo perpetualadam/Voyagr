@@ -43,6 +43,7 @@ describe('VoyagrModules registry', () => {
         global.VoyagrGeocodingLocations = require('../modules/navigation/geocoding-locations');
         global.VoyagrDeviceEnvironment = require('../modules/ui/device-environment');
         global.VoyagrRouteProgress = require('../modules/navigation/route-progress');
+        global.VoyagrSettingsSnapshot = require('../modules/navigation/settings-snapshot');
         global.VoyagrPreviewMarker = require('../modules/map/preview-marker');
         global.VoyagrFavorites = require('../modules/navigation/favorites');
         global.VoyagrCazInfo = require('../modules/navigation/caz-info');

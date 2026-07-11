@@ -36,3 +36,32 @@ describe('route-progress module', () => {
         expect(plan.animationKeyframes).toContain('progressGradient');
     });
 });
+
+describe('navigation progress seed helpers', () => {
+    const steps = [
+        { begin_shape_index: 0, type: 1 },
+        { begin_shape_index: 20, type: 15 },
+        { begin_shape_index: 55, type: 10 },
+    ];
+
+    test('resolveStepIndexFromSnapIndex picks step near snap vertex', () => {
+        expect(RP.resolveStepIndexFromSnapIndex(steps, 0)).toBe(0);
+        expect(RP.resolveStepIndexFromSnapIndex(steps, 22)).toBe(1);
+        expect(RP.resolveStepIndexFromSnapIndex(steps, 58)).toBe(2);
+        expect(RP.resolveStepIndexFromSnapIndex(null, 10)).toBe(0);
+    });
+
+    test('buildNavigationProgressSeedPlan seeds indices and join gate', () => {
+        const plan = RP.buildNavigationProgressSeedPlan(22, 40, steps, 85);
+        expect(plan.lastSnappedRouteIndex).toBe(22);
+        expect(plan.lastTurnDetectRouteVertexIndex).toBe(22);
+        expect(plan.currentStepIndex).toBe(1);
+        expect(plan.routeJoinConfirmedForDeviation).toBe(true);
+        expect(plan.logMessage).toContain('snapIdx=22');
+    });
+
+    test('buildNavigationProgressSeedPlan does not confirm join when off-route', () => {
+        const plan = RP.buildNavigationProgressSeedPlan(10, 120, steps, 85);
+        expect(plan.routeJoinConfirmedForDeviation).toBe(false);
+    });
+});

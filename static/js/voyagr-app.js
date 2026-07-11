@@ -1419,75 +1419,58 @@ window.redeemPromoCode = redeemPromoCode;
  * @returns {*} Return value description
  */
 function saveAllSettings() {
-    const allSettings = {
-        // Unit preferences
-        unit_distance: distanceUnit,
-        unit_currency: currencyUnit,
-        unit_speed: speedUnit,
-        unit_temperature: temperatureUnit,
-
-        // Vehicle and routing
+    const SS = _settingsSnapshot();
+    const allSettings = SS.buildSettingsSnapshot({
+        distanceUnit,
+        currencyUnit,
+        speedUnit,
+        temperatureUnit,
         vehicleType: currentVehicleType,
         routingMode: currentRoutingMode,
-
-        // Route preferences
         routePreferences: {
             avoidHighways: document.getElementById('avoidHighways')?.checked || false,
             preferScenic: document.getElementById('preferScenic')?.checked || false,
             avoidTolls: isAvoidTollsEnabled(),
-            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
+            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
             preferQuiet: document.getElementById('preferQuiet')?.checked || false,
             avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
             routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
-            maxDetour: parseInt(document.getElementById('maxDetour')?.value || 20)
+            maxDetour: parseInt(document.getElementById('maxDetour')?.value || 20),
         },
-
-        // Hazard avoidance
         hazardPreferences: {
-            avoidTolls: isAvoidTollsEnabled(),  // now sourced from Route Preferences
-            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',      // Default: true
-            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',  // Default: true (avoid cameras)
+            avoidTolls: isAvoidTollsEnabled(),
+            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
+            avoidCameras: localStorage.getItem('pref_cameras') !== 'false',
             avoidTrafficLights: localStorage.getItem('pref_trafficLightsAvoid') !== 'false',
-            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false'
+            avoidRailwayCrossings: localStorage.getItem('pref_railwayCrossingsAvoid') !== 'false',
         },
-
-        // Display preferences
         mapTheme: localStorage.getItem('mapTheme') || 'standard',
-        smartZoomEnabled: smartZoomEnabled,
-        showCamerasEnabled: showCamerasEnabled,
-        showOsmTrafficLightsEnabled: showOsmTrafficLightsEnabled,
-        showOsmRailwayCrossingsEnabled: showOsmRailwayCrossingsEnabled,
-        showTrafficEnabled: showTrafficEnabled,
-
-        // Navigation automation
-        autoTrafficUpdateEnabled: autoTrafficUpdateEnabled,
-        autoRerouteOnDeviationEnabled: autoRerouteOnDeviationEnabled,
-        speedWidgetEnabled: speedWidgetEnabled,
-
-        // Parking preferences
+        smartZoomEnabled,
+        showCamerasEnabled,
+        showOsmTrafficLightsEnabled,
+        showOsmRailwayCrossingsEnabled,
+        showTrafficEnabled,
+        autoTrafficUpdateEnabled,
+        autoRerouteOnDeviationEnabled,
+        speedWidgetEnabled,
         parkingPreferences: {
             maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance')?.value || '10',
             preferredType: document.getElementById('parkingPreferredType')?.value || 'any',
-            pricePreference: document.getElementById('parkingPricePreference')?.value || 'any'
+            pricePreference: document.getElementById('parkingPricePreference')?.value || 'any',
         },
-
-        // Multi-drop preferences
         multiDropPreferences: {
             optimizeStopOrder: localStorage.getItem('pref_optimizeStopOrder') !== 'false',
             roundTrip: localStorage.getItem('pref_roundTrip') === 'true',
             trafficAwareRouting: localStorage.getItem('pref_trafficAwareRouting') !== 'false',
             avoidRoadClosures: localStorage.getItem('pref_avoidRoadClosures') !== 'false',
             avoidIncidents: localStorage.getItem('pref_avoidIncidents') !== 'false',
-            departureTime: localStorage.getItem('pref_departureTime') || ''
+            departureTime: localStorage.getItem('pref_departureTime') || '',
         },
+    });
 
-        lastSaved: new Date().toISOString()
-    };
-
-    localStorage.setItem('voyagr_all_settings', JSON.stringify(allSettings));
+    localStorage.setItem(SS.SETTINGS_STORAGE_KEY, JSON.stringify(allSettings));
     console.log('[Settings] All settings saved to localStorage', allSettings);
 
-    // Persist this snapshot to the active profile store
     persistActiveProfile();
 }
 
@@ -1497,113 +1480,45 @@ function saveAllSettings() {
  * @returns {*} Return value description
  */
 function loadAllSettings() {
+    const SS = _settingsSnapshot();
     try {
-        const saved = localStorage.getItem('voyagr_all_settings');
-        if (saved) {
-            const settings = JSON.parse(saved);
-            console.log('[Settings] Loaded settings from localStorage', settings);
-
-            // Restore unit preferences
-            if (settings.unit_distance) {
-                distanceUnit = settings.unit_distance;
-                localStorage.setItem('unit_distance', distanceUnit);
-            }
-            if (settings.unit_currency) {
-                currencyUnit = settings.unit_currency;
-                localStorage.setItem('unit_currency', currencyUnit);
-            }
-            if (settings.unit_speed) {
-                speedUnit = settings.unit_speed;
-                localStorage.setItem('unit_speed', speedUnit);
-            }
-            if (settings.unit_temperature) {
-                temperatureUnit = settings.unit_temperature;
-                localStorage.setItem('unit_temperature', temperatureUnit);
-            }
-
-            // Restore vehicle type and routing mode
-            if (settings.vehicleType) {
-                currentVehicleType = settings.vehicleType;
-                localStorage.setItem('vehicleType', currentVehicleType);
-            }
-            if (settings.routingMode) {
-                currentRoutingMode = settings.routingMode;
-                localStorage.setItem('routingMode', currentRoutingMode);
-            }
-
-            // Restore route preferences
-            if (settings.routePreferences) {
-                localStorage.setItem('routePreferences', JSON.stringify(settings.routePreferences));
-            }
-
-            // Restore hazard preferences
-            if (settings.hazardPreferences) {
-                // 'avoidTolls' from server-side settings is now stored under the canonical
-                // Route Preferences key. Legacy 'pref_tolls' is also written so older app
-                // builds rolling back don't lose user intent.
-                const tollVal = settings.hazardPreferences.avoidTolls ? 'true' : 'false';
-                localStorage.setItem('pref_avoid_tollRoads', tollVal);
-                localStorage.setItem('pref_tolls', tollVal);
-                localStorage.setItem('pref_caz', settings.hazardPreferences.avoidCAZ ? 'true' : 'false');
-                localStorage.setItem('pref_cameras', settings.hazardPreferences.avoidCameras ? 'true' : 'false');
-                if (settings.hazardPreferences.avoidTrafficLights !== undefined) {
-                    localStorage.setItem('pref_trafficLightsAvoid', settings.hazardPreferences.avoidTrafficLights ? 'true' : 'false');
-                }
-                if (settings.hazardPreferences.avoidRailwayCrossings !== undefined) {
-                    localStorage.setItem('pref_railwayCrossingsAvoid', settings.hazardPreferences.avoidRailwayCrossings ? 'true' : 'false');
-                }
-            }
-
-            // Restore display preferences
-            if (settings.mapTheme) {
-                localStorage.setItem('mapTheme', settings.mapTheme);
-            }
-            if (settings.smartZoomEnabled !== undefined) {
-                smartZoomEnabled = settings.smartZoomEnabled;
-                localStorage.setItem('smartZoomEnabled', smartZoomEnabled ? '1' : '0');
-            }
-            if (settings.showCamerasEnabled !== undefined) {
-                showCamerasEnabled = settings.showCamerasEnabled;
-                localStorage.setItem('showCamerasEnabled', showCamerasEnabled ? 'true' : 'false');
-            }
-            if (settings.showOsmTrafficLightsEnabled !== undefined) {
-                showOsmTrafficLightsEnabled = settings.showOsmTrafficLightsEnabled;
-                localStorage.setItem('showOsmTrafficLightsOnMap', showOsmTrafficLightsEnabled ? 'true' : 'false');
-            }
-            if (settings.showOsmRailwayCrossingsEnabled !== undefined) {
-                showOsmRailwayCrossingsEnabled = settings.showOsmRailwayCrossingsEnabled;
-                localStorage.setItem('showOsmRailwayCrossingsOnMap', showOsmRailwayCrossingsEnabled ? 'true' : 'false');
-            }
-            if (settings.showTrafficEnabled !== undefined) {
-                showTrafficEnabled = settings.showTrafficEnabled;
-                localStorage.setItem('showTrafficEnabled', showTrafficEnabled ? 'true' : 'false');
-            }
-
-            // Restore navigation automation settings
-            if (settings.autoTrafficUpdateEnabled !== undefined) {
-                autoTrafficUpdateEnabled = settings.autoTrafficUpdateEnabled;
-                localStorage.setItem('autoTrafficUpdate', autoTrafficUpdateEnabled ? 'true' : 'false');
-            }
-            if (settings.autoRerouteOnDeviationEnabled !== undefined) {
-                autoRerouteOnDeviationEnabled = settings.autoRerouteOnDeviationEnabled;
-                localStorage.setItem('autoRerouteOnDeviation', autoRerouteOnDeviationEnabled ? 'true' : 'false');
-            }
-            if (settings.speedWidgetEnabled !== undefined) {
-                speedWidgetEnabled = !!settings.speedWidgetEnabled;
-                localStorage.setItem('speedWidgetEnabled', speedWidgetEnabled ? 'true' : 'false');
-            }
-
-            // Restore parking preferences
-            if (settings.parkingPreferences) {
-                localStorage.setItem('parkingPreferences', JSON.stringify(settings.parkingPreferences));
-            }
-
-            console.log('[Settings] All settings restored successfully');
-            return true;
-        } else {
+        const saved = localStorage.getItem(SS.SETTINGS_STORAGE_KEY);
+        if (!saved) {
             console.log('[Settings] No saved settings found, using defaults');
             return false;
         }
+
+        const settings = JSON.parse(saved);
+        console.log('[Settings] Loaded settings from localStorage', settings);
+        const plan = SS.buildSettingsRestorePlan(settings);
+        if (!plan.found) {
+            return false;
+        }
+
+        Object.entries(plan.localStorage || {}).forEach(([key, value]) => {
+            if (value !== undefined) {
+                localStorage.setItem(key, value);
+            }
+        });
+
+        const rt = plan.runtime || {};
+        if (rt.distanceUnit) distanceUnit = rt.distanceUnit;
+        if (rt.currencyUnit) currencyUnit = rt.currencyUnit;
+        if (rt.speedUnit) speedUnit = rt.speedUnit;
+        if (rt.temperatureUnit) temperatureUnit = rt.temperatureUnit;
+        if (rt.currentVehicleType) currentVehicleType = rt.currentVehicleType;
+        if (rt.currentRoutingMode) currentRoutingMode = rt.currentRoutingMode;
+        if (rt.smartZoomEnabled !== undefined) smartZoomEnabled = rt.smartZoomEnabled;
+        if (rt.showCamerasEnabled !== undefined) showCamerasEnabled = rt.showCamerasEnabled;
+        if (rt.showOsmTrafficLightsEnabled !== undefined) showOsmTrafficLightsEnabled = rt.showOsmTrafficLightsEnabled;
+        if (rt.showOsmRailwayCrossingsEnabled !== undefined) showOsmRailwayCrossingsEnabled = rt.showOsmRailwayCrossingsEnabled;
+        if (rt.showTrafficEnabled !== undefined) showTrafficEnabled = rt.showTrafficEnabled;
+        if (rt.autoTrafficUpdateEnabled !== undefined) autoTrafficUpdateEnabled = rt.autoTrafficUpdateEnabled;
+        if (rt.autoRerouteOnDeviationEnabled !== undefined) autoRerouteOnDeviationEnabled = rt.autoRerouteOnDeviationEnabled;
+        if (rt.speedWidgetEnabled !== undefined) speedWidgetEnabled = rt.speedWidgetEnabled;
+
+        console.log('[Settings] All settings restored successfully');
+        return true;
     } catch (error) {
         console.error('[Settings] Error loading settings:', error);
         return false;
@@ -6045,38 +5960,21 @@ function seedNavigationProgressOnNewRoute(lat, lon) {
 
     const snap = _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, 0);
     const idx = Math.max(0, Math.min(snap.index, routePolyline.length - 2));
-    lastSnappedRouteIndex = idx;
-    lastTurnDetectRouteVertexIndex = idx;
+    const plan = _routeProgress().buildNavigationProgressSeedPlan(
+        idx,
+        snap.distance,
+        currentRouteSteps,
+        ROUTE_JOIN_GATE_METERS
+    );
 
-    if (currentRouteSteps && currentRouteSteps.length > 0) {
-        let stepIdx = 0;
-        for (let i = 0; i < currentRouteSteps.length; i++) {
-            const begin = currentRouteSteps[i].begin_shape_index || 0;
-            if (begin <= idx + 5) {
-                stepIdx = i;
-            } else {
-                break;
-            }
-        }
-        for (let i = stepIdx; i < currentRouteSteps.length; i++) {
-            const begin = currentRouteSteps[i].begin_shape_index || 0;
-            if (begin >= idx - 5) {
-                currentStepIndex = i;
-                break;
-            }
-        }
-    } else {
-        currentStepIndex = 0;
-    }
-
-    if (snap.distance <= ROUTE_JOIN_GATE_METERS) {
+    lastSnappedRouteIndex = plan.lastSnappedRouteIndex;
+    lastTurnDetectRouteVertexIndex = plan.lastTurnDetectRouteVertexIndex;
+    currentStepIndex = plan.currentStepIndex;
+    if (plan.routeJoinConfirmedForDeviation) {
         routeJoinConfirmedForDeviation = true;
     }
 
-    console.log(
-        `[Reroute] Seeded progress: snapIdx=${idx}, step=${currentStepIndex}, ` +
-        `offRoute=${snap.distance.toFixed(0)}m`
-    );
+    console.log(plan.logMessage);
 }
 
 /**
@@ -8391,6 +8289,7 @@ function _deviceEnvironment() { return VoyagrModules.deviceEnvironment(); }
 
 /** Unit-tested route calculation progress bar HTML (modules/navigation/route-progress.js). */
 function _routeProgress() { return VoyagrModules.routeProgress(); }
+function _settingsSnapshot() { return VoyagrModules.settingsSnapshot(); }
 
 /** Unit-tested map preview marker HTML (modules/map/preview-marker.js). */
 function _previewMarker() { return VoyagrModules.previewMarker(); }
@@ -12742,119 +12641,6 @@ function announceDistanceToDestination(currentLat, currentLon) {
     // Reset announcement when destination is reached
     if (remainingDistance > 11000) {
         lastDestinationAnnouncementDistance = Infinity;
-    }
-}
-/**
- * announceETAUpdate function
- * @function announceETAUpdate
- * @param {*} currentLat - Parameter description
- * @param {*} currentLon - Parameter description
- * @returns {*} Return value description
- * @deprecated Use announceETAIfNeeded() instead - this function is no longer called from GPS callback
- */
-function announceETAUpdate(currentLat, currentLon) {
-    // FIXED: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
-    if (!routeInProgress || !routePolyline || routePolyline.length === 0 || !voiceAnnouncementsEnabled) return;
-
-    const now = Date.now();
-
-    // Calculate remaining distance
-    let remainingDistance = 0;
-    let closestIndex = 0;
-    let closestDistance = Infinity;
-
-    // Find closest point on route
-    for (let i = 0; i < routePolyline.length; i++) {
-        const point = routePolyline[i];
-        const distance = calculateDistanceMeters(currentLat, currentLon, point[0], point[1]);
-        if (distance < closestDistance) {
-            closestDistance = distance;
-            closestIndex = i;
-        }
-    }
-
-    // Calculate remaining distance from closest point to destination
-    for (let i = closestIndex; i < routePolyline.length - 1; i++) {
-        remainingDistance += calculateDistanceMeters(
-            routePolyline[i][0], routePolyline[i][1],
-            routePolyline[i + 1][0], routePolyline[i + 1][1]
-        );
-    }
-
-    // Get average speed from recent tracking history with proper validation
-    let avgSpeed = 40; // Default 40 km/h
-    if (trackingHistory && trackingHistory.length > 5) {
-        try {
-            const recentSpeeds = trackingHistory.slice(-5)
-                .map(t => {
-                    // Handle both m/s and km/h formats
-                    let speed = t.speed || 0;
-                    // If speed is very small (< 1), assume it's in m/s, convert to km/h
-                    if (speed < 1 && speed > 0) {
-                        speed = speed * 3.6;
-                    }
-                    return speed;
-                })
-                .filter(s => s > 0 && s < 200); // Filter out invalid speeds (0 or > 200 km/h)
-
-            if (recentSpeeds.length > 0) {
-                avgSpeed = recentSpeeds.reduce((a, b) => a + b) / recentSpeeds.length;
-                // Ensure avgSpeed is reasonable (5-200 km/h)
-                avgSpeed = Math.max(5, Math.min(200, avgSpeed));
-            }
-        } catch (e) {
-            console.warn('[Voice] Error calculating average speed:', e);
-            avgSpeed = 40; // Fall back to default
-        }
-    }
-
-    // FIXED: Correct ETA calculation with validation
-    // Formula: time (hours) = distance (km) / speed (km/h)
-    // Then convert to milliseconds
-    const remainingDistanceKm = remainingDistance / 1000;
-
-    // Prevent division by zero
-    if (avgSpeed <= 0) {
-        console.warn('[Voice] Invalid average speed:', avgSpeed, 'using default 40 km/h');
-        avgSpeed = 40;
-    }
-
-    const timeRemainingHours = remainingDistanceKm / avgSpeed;
-    const timeRemainingMs = timeRemainingHours * 3600000; // Convert hours to milliseconds
-
-    // Sanity check: ETA should be reasonable (< 24 hours)
-    if (timeRemainingMs > 86400000) {
-        console.warn('[Voice] ETA exceeds 24 hours, skipping announcement');
-        return;
-    }
-
-    const etaTime = new Date(now + timeRemainingMs);
-
-    // Check if we should announce
-    const timeSinceLastAnnouncement = now - lastETAAnnouncementTime;
-    const etaChanged = lastAnnouncedETA && Math.abs(etaTime.getTime() - lastAnnouncedETA.getTime()) > ETA_CHANGE_THRESHOLD_MS;
-
-    // FIXED: Enforce minimum interval (1 minute) to prevent excessive announcements
-    // Only announce if: (1) 10 minutes have passed, OR (2) ETA changed by >5 minutes AND at least 1 minute has passed
-    if ((timeSinceLastAnnouncement > ETA_ANNOUNCEMENT_INTERVAL_MS) ||
-        (etaChanged && timeSinceLastAnnouncement > ETA_MIN_INTERVAL_MS)) {
-        const etaHours = etaTime.getHours();
-        const etaMinutes = etaTime.getMinutes();
-        const timeRemainingMinutes = Math.round(timeRemainingMs / 60000);
-
-        let message = '';
-        if (timeRemainingMinutes > 60) {
-            const hours = Math.floor(timeRemainingMinutes / 60);
-            const minutes = timeRemainingMinutes % 60;
-            message = `You will arrive in ${hours} hour${hours > 1 ? 's' : ''} and ${minutes} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
-        } else {
-            message = `You will arrive in ${timeRemainingMinutes} minutes at ${etaHours}:${String(etaMinutes).padStart(2, '0')}`;
-        }
-
-        console.log(`[Voice] ETA announcement: ${message} (remaining: ${remainingDistanceKm.toFixed(1)}km, avg speed: ${avgSpeed.toFixed(1)}km/h, time: ${timeRemainingMinutes}min)`);
-        speakMessage(message);
-        lastETAAnnouncementTime = now;
-        lastAnnouncedETA = etaTime;
     }
 }
 /**

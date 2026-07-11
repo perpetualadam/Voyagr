@@ -44,6 +44,7 @@
         geocodingLocations: 'VoyagrGeocodingLocations',
         deviceEnvironment: 'VoyagrDeviceEnvironment',
         routeProgress: 'VoyagrRouteProgress',
+        settingsSnapshot: 'VoyagrSettingsSnapshot',
         previewMarker: 'VoyagrPreviewMarker',
         favorites: 'VoyagrFavorites',
         cazInfo: 'VoyagrCazInfo',
