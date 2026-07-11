@@ -222,6 +222,36 @@
     }
 
     /**
+     * Apply plan for navigation zoom coordination on one GPS tick.
+     * @param {Object|null|undefined} zoomTick - from buildNavigationZoomTickPlan
+     * @param {Object} [ctx]
+     * @param {number} [ctx.speedMph]
+     * @param {number|null} [ctx.distanceToNextTurn]
+     * @param {string} [ctx.roadType]
+     * @param {number} [ctx.lat]
+     * @param {number} [ctx.lon]
+     * @returns {Object}
+     */
+    function buildNavigationZoomApplyPlan(zoomTick, ctx) {
+        ctx = ctx || {};
+        if (!zoomTick) return { action: 'skip' };
+        var apply = { action: 'apply' };
+        if (zoomTick.syncLastZoomLevel != null) {
+            apply.syncLastZoomLevel = zoomTick.syncLastZoomLevel;
+        }
+        if (zoomTick.applySmartZoom) {
+            apply.applySmartZoom = {
+                speedMph: ctx.speedMph,
+                distanceToNextTurn: ctx.distanceToNextTurn,
+                roadType: ctx.roadType || 'unknown',
+                lat: ctx.lat,
+                lon: ctx.lon,
+            };
+        }
+        return apply;
+    }
+
+    /**
      * Apply plan for navigation/browsing follow camera on a GPS tick.
      * @param {Object} opts
      * @returns {Object}
@@ -329,6 +359,7 @@
         buildSmartZoomEasePlan: buildSmartZoomEasePlan,
         buildSmartZoomApplyPlan: buildSmartZoomApplyPlan,
         buildNavigationZoomTickPlan: buildNavigationZoomTickPlan,
+        buildNavigationZoomApplyPlan: buildNavigationZoomApplyPlan,
     };
 
     // CommonJS (Jest) export.

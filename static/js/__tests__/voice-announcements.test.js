@@ -432,3 +432,30 @@ describe('buildTurnAnnouncementTickPlan', () => {
         expect(tick.resetCategory).toBe('turn');
     });
 });
+
+describe('buildTurnAnnouncementStateApplyPlan', () => {
+    test('skips when tick is missing or skipped', () => {
+        expect(VA.buildTurnAnnouncementStateApplyPlan(null).action).toBe('skip');
+        expect(VA.buildTurnAnnouncementStateApplyPlan({ action: 'skip', warnLine: 'bad' }).warnLine)
+            .toBe('bad');
+    });
+
+    test('maps announce tick to apply plan', () => {
+        const apply = VA.buildTurnAnnouncementStateApplyPlan({
+            action: 'announce',
+            category: 'turn',
+            clearThresholds: true,
+            statePatch: { voiceAnnouncedForManeuverIndex: 2, voiceAnnouncedCategory: 'turn' },
+            announcedThresholdValues: [200],
+            speak: true,
+            spokenMessage: 'In 200 metres turn left',
+            logLine: '[Voice] Announcing',
+            resetThresholds: true,
+            resetCategory: 'turn',
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.speak).toBe(true);
+        expect(apply.announcedThresholdValues).toEqual([200]);
+        expect(apply.resetThresholds).toBe(true);
+    });
+});

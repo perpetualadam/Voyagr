@@ -668,3 +668,34 @@ describe('buildRouteDeviationApplyPlan', () => {
         }
     });
 });
+
+describe('buildRouteDeviationStateApplyPlan', () => {
+    const now = 1_700_000_000_000;
+
+    test('skips when apply plan skipped', () => {
+        expect(RD.buildRouteDeviationStateApplyPlan({ action: 'skip', reason: 'grace' }).action)
+            .toBe('skip');
+    });
+
+    test('normalizes reroute apply hints for state mutation', () => {
+        const tick = RD.buildRouteDeviationTickPlan({
+            autoRerouteEnabled: true,
+            hasRoute: true,
+            remainingToDest: 5000,
+            accuracy: 10,
+            minDistance: 120,
+            routeJoinConfirmed: true,
+            deviationStartTime: now - 12_000,
+            lastRerouteAttemptTime: 0,
+            offRouteStreak: 5,
+            now,
+            distanceUnit: 'km',
+        });
+        const apply = RD.buildRouteDeviationApplyPlan(tick, { rerouteAttemptCount: 1 });
+        const stateApply = RD.buildRouteDeviationStateApplyPlan(apply);
+        expect(stateApply.action).toBe('apply');
+        expect(stateApply.triggerReroute).toBe(true);
+        expect(stateApply.incrementRerouteAttemptCount).toBe(true);
+        expect(stateApply.logDeviationLine).toContain('attempt #2');
+    });
+});

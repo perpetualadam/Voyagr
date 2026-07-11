@@ -12018,6 +12018,33 @@ function applyGpsVehicleMarkerTick(markerLat, markerLon, heading, speed, accurac
 }
 
 /**
+ * Turn detection, voice, and widget side-effects for one GPS tick.
+ * @param {number} lat
+ * @param {number} lon
+ * @param {Object} turnPlan - from buildGpsNavigationSideEffectsTickPlan.turn
+ * @returns {{ distanceToNextTurn: (number|null), turnInfoThisTick: (Object|null) }}
+ */
+function applyGpsTurnSideEffectsTick(lat, lon, turnPlan) {
+    let distanceToNextTurn = null;
+    let turnInfoThisTick = null;
+
+    if (turnPlan.detect) {
+        turnInfoThisTick = detectUpcomingTurn(lat, lon);
+    }
+
+    if (turnPlan.announce && turnInfoThisTick) {
+        distanceToNextTurn = turnInfoThisTick.distance;
+        announceUpcomingTurn(turnInfoThisTick);
+    }
+
+    if (turnPlan.updateWidget) {
+        updateTurnWidgetFromPosition(lat, lon, turnInfoThisTick);
+    }
+
+    return { distanceToNextTurn, turnInfoThisTick };
+}
+
+/**
  * Navigation side-effects for one GPS tick (deviation, voice, zoom, lane, speed).
  * @param {Object} ctx
  * @returns {{ distanceToNextTurn: (number|null) }}
@@ -12047,19 +12074,10 @@ function applyGpsNavigationSideEffectsTick(ctx) {
     }
 
     let distanceToNextTurn = null;
-    let turnInfoThisTick = null;
 
-    if (tickPlan.turn.detect) {
-        turnInfoThisTick = detectUpcomingTurn(lat, lon);
-    }
-
-    if (tickPlan.turn.announce && turnInfoThisTick) {
-        distanceToNextTurn = turnInfoThisTick.distance;
-        announceUpcomingTurn(turnInfoThisTick);
-    }
-
-    if (tickPlan.turn.updateWidget) {
-        updateTurnWidgetFromPosition(lat, lon, turnInfoThisTick);
+    if (tickPlan.turn.detect || tickPlan.turn.announce || tickPlan.turn.updateWidget) {
+        const turnResult = applyGpsTurnSideEffectsTick(lat, lon, tickPlan.turn);
+        distanceToNextTurn = turnResult.distanceToNextTurn;
     }
 
     if (tickPlan.announceDestination) {
@@ -12071,23 +12089,33 @@ function applyGpsNavigationSideEffectsTick(ctx) {
     }
 
     if (tickPlan.applyZoom) {
-        const zoomTick = _cameraPitch().buildNavigationZoomTickPlan({
+        const CP = _cameraPitch();
+        const zoomTick = CP.buildNavigationZoomTickPlan({
             smartZoomEnabled,
             routeInProgress,
             navigationFollowEaseApplied,
             followZoom: navigationFollowZoom,
         });
-        if (zoomTick.syncLastZoomLevel != null) {
-            lastZoomLevel = zoomTick.syncLastZoomLevel;
-        }
-        if (zoomTick.applySmartZoom) {
-            applySmartZoomWithAnimation(
-                speedMph,
-                distanceToNextTurn,
-                speedLimitPlan.roadType || 'unknown',
-                lat,
-                lon
-            );
+        const zoomApply = CP.buildNavigationZoomApplyPlan(zoomTick, {
+            speedMph,
+            distanceToNextTurn,
+            roadType: speedLimitPlan.roadType || 'unknown',
+            lat,
+            lon,
+        });
+        if (zoomApply.action === 'apply') {
+            if (zoomApply.syncLastZoomLevel != null) {
+                lastZoomLevel = zoomApply.syncLastZoomLevel;
+            }
+            if (zoomApply.applySmartZoom) {
+                applySmartZoomWithAnimation(
+                    zoomApply.applySmartZoom.speedMph,
+                    zoomApply.applySmartZoom.distanceToNextTurn,
+                    zoomApply.applySmartZoom.roadType,
+                    zoomApply.applySmartZoom.lat,
+                    zoomApply.applySmartZoom.lon
+                );
+            }
         }
     }
 
@@ -12735,26 +12763,32 @@ function announceUpcomingTurn(turnInfo) {
         return;
     }
 
-    if (tick.clearThresholds) thresholdSet.clear();
-    if (tick.statePatch.voiceAnnouncedForManeuverIndex != null) {
-        _voiceAnnouncedForManeuverIndex = tick.statePatch.voiceAnnouncedForManeuverIndex;
+    const apply = VA.buildTurnAnnouncementStateApplyPlan(tick);
+    if (apply.action === 'skip') {
+        if (apply.warnLine) console.warn(apply.warnLine);
+        return;
     }
-    if (tick.statePatch.voiceAnnouncedCategory != null) {
-        _voiceAnnouncedCategory = tick.statePatch.voiceAnnouncedCategory;
+
+    if (apply.clearThresholds) thresholdSet.clear();
+    if (apply.statePatch.voiceAnnouncedForManeuverIndex != null) {
+        _voiceAnnouncedForManeuverIndex = apply.statePatch.voiceAnnouncedForManeuverIndex;
     }
-    if (tick.announcedThresholdValues) {
+    if (apply.statePatch.voiceAnnouncedCategory != null) {
+        _voiceAnnouncedCategory = apply.statePatch.voiceAnnouncedCategory;
+    }
+    if (apply.announcedThresholdValues) {
         thresholdSet.clear();
-        tick.announcedThresholdValues.forEach((d) => thresholdSet.add(d));
+        apply.announcedThresholdValues.forEach((d) => thresholdSet.add(d));
     }
 
-    if (tick.speak && tick.spokenMessage) {
-        if (tick.logLine) console.log(tick.logLine);
-        speakMessage(tick.spokenMessage, tick.speakPriority || 'high');
+    if (apply.speak && apply.spokenMessage) {
+        if (apply.logLine) console.log(apply.logLine);
+        speakMessage(apply.spokenMessage, apply.speakPriority || 'high');
     }
 
-    if (tick.resetThresholds) {
-        if (tick.resetCategory === 'exit') announcedExitThresholds.clear();
-        else if (tick.resetCategory === 'keep') announcedKeepThresholds.clear();
+    if (apply.resetThresholds) {
+        if (apply.resetCategory === 'exit') announcedExitThresholds.clear();
+        else if (apply.resetCategory === 'keep') announcedKeepThresholds.clear();
         else announcedTurnThresholds.clear();
     }
 }
@@ -12821,6 +12855,40 @@ function scheduleAutomaticRerouteRetry() {
 }
 
 /**
+ * Apply route deviation state patches and optional reroute trigger.
+ * @param {Object} stateApply - from buildRouteDeviationStateApplyPlan
+ * @param {number} lat
+ * @param {number} lon
+ */
+function applyRouteDeviationFromApplyPlan(stateApply, lat, lon) {
+    if (!stateApply || stateApply.action !== 'apply') return;
+
+    routeJoinConfirmedForDeviation = stateApply.statePatch.routeJoinConfirmedForDeviation;
+    deviationStartTimeCheck = stateApply.statePatch.deviationStartTimeCheck;
+    deviationOffRouteStreak = stateApply.statePatch.deviationOffRouteStreak;
+    if (stateApply.statePatch.lastRerouteAttemptTime != null) {
+        lastRerouteAttemptTime = stateApply.statePatch.lastRerouteAttemptTime;
+    }
+
+    if (stateApply.logJoinLine) console.log(stateApply.logJoinLine);
+
+    if (stateApply.triggerReroute) {
+        if (stateApply.incrementRerouteAttemptCount) rerouteAttemptCount++;
+        if (stateApply.logDeviationLine) console.log(stateApply.logDeviationLine);
+        sendNotification(
+            stateApply.notification.title,
+            stateApply.notification.body,
+            stateApply.notification.type
+        );
+        triggerAutomaticRerouteWithHazardHandling(lat, lon);
+    }
+
+    if (stateApply.updateLastRerouteDeviation) {
+        lastRerouteDeviation = stateApply.lastRerouteDeviation;
+    }
+}
+
+/**
  * checkRouteDeviation function - Enhanced with time-based detection
  * Only triggers reroute if user is >50m off-route for >10 seconds
  * Respects auto-reroute toggle setting
@@ -12858,26 +12926,8 @@ function checkRouteDeviation(lat, lon, accuracy) {
     if (tick.action === 'skip') return;
 
     const apply = VRD.buildRouteDeviationApplyPlan(tick, { rerouteAttemptCount });
-
-    routeJoinConfirmedForDeviation = apply.statePatch.routeJoinConfirmedForDeviation;
-    deviationStartTimeCheck = apply.statePatch.deviationStartTimeCheck;
-    deviationOffRouteStreak = apply.statePatch.deviationOffRouteStreak;
-    if (apply.statePatch.lastRerouteAttemptTime != null) {
-        lastRerouteAttemptTime = apply.statePatch.lastRerouteAttemptTime;
-    }
-
-    if (apply.logJoinLine) console.log(apply.logJoinLine);
-
-    if (apply.triggerReroute) {
-        rerouteAttemptCount++;
-        if (apply.logDeviationLine) console.log(apply.logDeviationLine);
-        sendNotification(apply.notification.title, apply.notification.body, apply.notification.type);
-        triggerAutomaticRerouteWithHazardHandling(lat, lon);
-    }
-
-    if (apply.updateLastRerouteDeviation) {
-        lastRerouteDeviation = apply.lastRerouteDeviation;
-    }
+    const stateApply = VRD.buildRouteDeviationStateApplyPlan(apply);
+    applyRouteDeviationFromApplyPlan(stateApply, lat, lon);
 }
 
 /**

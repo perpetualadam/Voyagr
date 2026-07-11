@@ -330,6 +330,28 @@
     }
 
     /**
+     * Normalized state apply plan from a route deviation apply result.
+     * @param {Object|null|undefined} apply - from buildRouteDeviationApplyPlan
+     * @returns {Object}
+     */
+    function buildRouteDeviationStateApplyPlan(apply) {
+        if (!apply || apply.action === 'skip') {
+            return { action: 'skip', reason: apply && apply.reason };
+        }
+        return {
+            action: 'apply',
+            statePatch: apply.statePatch || {},
+            incrementRerouteAttemptCount: !!apply.rerouteAttemptIncrement,
+            updateLastRerouteDeviation: !!apply.updateLastRerouteDeviation,
+            lastRerouteDeviation: apply.lastRerouteDeviation,
+            logJoinLine: apply.logJoinLine || null,
+            logDeviationLine: apply.logDeviationLine || null,
+            triggerReroute: !!apply.triggerReroute,
+            notification: apply.notification || null,
+        };
+    }
+
+    /**
      * Build a reroute analytics/debug event object.
      * @param {Object} o
      * @param {string} o.timestampIso
@@ -867,6 +889,7 @@
         buildRouteDeviationTickInputsPlan: buildRouteDeviationTickInputsPlan,
         buildRouteDeviationTickPlan: buildRouteDeviationTickPlan,
         buildRouteDeviationApplyPlan: buildRouteDeviationApplyPlan,
+        buildRouteDeviationStateApplyPlan: buildRouteDeviationStateApplyPlan,
         buildRerouteLogEvent: buildRerouteLogEvent,
         appendRerouteLogEntry: appendRerouteLogEntry,
         buildRerouteLogSettingsSnapshot: buildRerouteLogSettingsSnapshot,

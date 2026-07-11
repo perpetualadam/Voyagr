@@ -241,6 +241,41 @@ describe('buildNavigationZoomTickPlan', () => {
     });
 });
 
+describe('buildNavigationZoomApplyPlan', () => {
+    const { buildNavigationZoomTickPlan, buildNavigationZoomApplyPlan } =
+        require('../modules/navigation/camera-pitch.js');
+
+    test('maps tick to zoom apply hints', () => {
+        const tick = buildNavigationZoomTickPlan({
+            smartZoomEnabled: true,
+            routeInProgress: true,
+            navigationFollowEaseApplied: false,
+        });
+        const apply = buildNavigationZoomApplyPlan(tick, {
+            speedMph: 45,
+            distanceToNextTurn: 120,
+            roadType: 'primary',
+            lat: 51.5,
+            lon: -0.1,
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.applySmartZoom.speedMph).toBe(45);
+        expect(apply.applySmartZoom.roadType).toBe('primary');
+    });
+
+    test('syncs last zoom when follow eased', () => {
+        const tick = buildNavigationZoomTickPlan({
+            smartZoomEnabled: true,
+            routeInProgress: true,
+            navigationFollowEaseApplied: true,
+            followZoom: 16,
+        });
+        const apply = buildNavigationZoomApplyPlan(tick, {});
+        expect(apply.syncLastZoomLevel).toBe(16);
+        expect(apply.applySmartZoom).toBeUndefined();
+    });
+});
+
 describe('buildNavigationFollowApplyPlan', () => {
     const {
         buildNavigationFollowEasePlan,

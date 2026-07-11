@@ -459,11 +459,39 @@
         return plan;
     }
 
+    /**
+     * Apply plan for turn voice announcement state patches and speech.
+     * @param {Object|null|undefined} tick - from buildTurnAnnouncementTickPlan
+     * @returns {Object}
+     */
+    function buildTurnAnnouncementStateApplyPlan(tick) {
+        if (!tick || tick.action === 'skip') {
+            return {
+                action: 'skip',
+                warnLine: tick && tick.warnLine,
+            };
+        }
+        return {
+            action: 'apply',
+            category: tick.category,
+            clearThresholds: !!tick.clearThresholds,
+            statePatch: tick.statePatch || {},
+            announcedThresholdValues: tick.announcedThresholdValues || null,
+            speak: !!(tick.speak && tick.spokenMessage),
+            spokenMessage: tick.spokenMessage || null,
+            speakPriority: tick.speakPriority || 'high',
+            logLine: tick.logLine || null,
+            resetThresholds: !!tick.resetThresholds,
+            resetCategory: tick.resetCategory || null,
+        };
+    }
+
     var api = {
         DESTINATION_ANNOUNCEMENT_HYSTERESIS_M: DESTINATION_ANNOUNCEMENT_HYSTERESIS_M,
         DESTINATION_ANNOUNCEMENT_RESET_M: DESTINATION_ANNOUNCEMENT_RESET_M,
         buildDestinationAnnouncementTickPlan: buildDestinationAnnouncementTickPlan,
         buildTurnAnnouncementTickPlan: buildTurnAnnouncementTickPlan,
+        buildTurnAnnouncementStateApplyPlan: buildTurnAnnouncementStateApplyPlan,
         isExitDirection: isExitDirection,
         isKeepDirection: isKeepDirection,
         buildTurnAnnouncement: buildTurnAnnouncement,
