@@ -180,6 +180,16 @@ describe('route comparison modal helpers', () => {
         expect(style).toContain('cursor: pointer');
     });
 
+    test('preview alternative route card hover and rest styles', () => {
+        const hover = RS.getPreviewAlternativeRouteCardHoverStyle('#2563EB');
+        expect(hover.borderColor).toBe('#2563EB');
+        expect(hover.background).toBe('#f0f4ff');
+        expect(RS.getPreviewAlternativeRouteCardRestStyle()).toEqual({
+            borderColor: '#ddd',
+            background: 'white',
+        });
+    });
+
     test('route comparison modal overlay exposes id and fullscreen style', () => {
         expect(RS.ROUTE_COMPARISON_MODAL_ID).toBe('routeComparisonModal');
         expect(RS.getRouteComparisonModalOverlayStyleCssText()).toContain('z-index: 10000');

@@ -294,6 +294,23 @@
     }
 
     /**
+     * Hover style for a preview alternative-route card.
+     * @param {string} routeColor
+     * @returns {{ borderColor: string, background: string }}
+     */
+    function getPreviewAlternativeRouteCardHoverStyle(routeColor) {
+        return { borderColor: routeColor, background: '#f0f4ff' };
+    }
+
+    /**
+     * Rest style after hover for a preview alternative-route card.
+     * @returns {{ borderColor: string, background: string }}
+     */
+    function getPreviewAlternativeRouteCardRestStyle() {
+        return { borderColor: '#ddd', background: 'white' };
+    }
+
+    /**
      * Inner HTML for a preview alternative-route row.
      * @param {Object} route
      * @param {number} index
@@ -625,6 +642,8 @@
         buildRouteComparisonReportHtml: buildRouteComparisonReportHtml,
         buildRouteComparisonModalHtml: buildRouteComparisonModalHtml,
         getPreviewAlternativeRouteCardContainerStyleCssText: getPreviewAlternativeRouteCardContainerStyleCssText,
+        getPreviewAlternativeRouteCardHoverStyle: getPreviewAlternativeRouteCardHoverStyle,
+        getPreviewAlternativeRouteCardRestStyle: getPreviewAlternativeRouteCardRestStyle,
         buildPreviewAlternativeRouteCardHtml: buildPreviewAlternativeRouteCardHtml,
         pickActiveRouteDuringNavigation: pickActiveRouteDuringNavigation,
         orderWaypointsGreedy: orderWaypointsGreedy,

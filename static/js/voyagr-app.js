@@ -4920,9 +4920,7 @@ function toggle3DBuildings() {
     localStorage.setItem('buildings3DEnabled', buildings3DEnabled ? 'true' : 'false');
 
     const toggle = document.getElementById('buildings3DToggle');
-    if (toggle) {
-        toggle.classList.toggle('active', buildings3DEnabled);
-    }
+    VoyagrModules.toggleUI().applyToggleButton(toggle, buildings3DEnabled);
 
     if (buildings3DEnabled) {
         MapLibreHelpers.add3DBuildings(map, {
@@ -7288,8 +7286,17 @@ function showAlternativeRoutesInPreview() {
             distanceText: convertDistance(route.distance_km),
             fuelUnit: fuelUnit,
         });
-        div.onmouseover = () => { div.style.borderColor = routeColor; div.style.background = '#f0f4ff'; };
-        div.onmouseout = () => { div.style.borderColor = '#ddd'; div.style.background = 'white'; };
+        const RS = VoyagrModules.routeSelection();
+        div.onmouseover = () => {
+            const hover = RS.getPreviewAlternativeRouteCardHoverStyle(routeColor);
+            div.style.borderColor = hover.borderColor;
+            div.style.background = hover.background;
+        };
+        div.onmouseout = () => {
+            const rest = RS.getPreviewAlternativeRouteCardRestStyle();
+            div.style.borderColor = rest.borderColor;
+            div.style.background = rest.background;
+        };
         div.onclick = () => {
             selectRoute(index);
             useRoute(index);
@@ -8091,7 +8098,7 @@ function displayParkingOptions(parkingList, destinationCoords) {
         });
         item.addEventListener('click', () => selectParking(parking, destinationCoords));
 
-        item.onmouseover = () => item.style.background = '#FFF3E0';
+        item.onmouseover = () => { item.style.background = parkingModule.PARKING_OPTION_ITEM_HOVER_BACKGROUND; };
         item.onmouseout = () => item.style.background = 'white';
 
         parkingListDiv.appendChild(item);
@@ -8965,6 +8972,22 @@ function _osmMapIcons() { return VoyagrModules.osmMapIcons(); }
 /** Unit-tested navigation map control icons (modules/map/map-controls.js). */
 function _mapControls() { return VoyagrModules.mapControls(); }
 
+function applyZoomFollowButtonUi(btn, enabled) {
+    if (!btn) return;
+    const display = _mapControls().getZoomFollowButtonDisplay(enabled);
+    btn.classList.toggle('active', display.active);
+    btn.style.background = display.background;
+    btn.innerHTML = display.innerHtml;
+}
+
+function applyJourneyOverviewButtonUi(btn, overviewActive) {
+    if (!btn) return;
+    const display = _mapControls().getJourneyOverviewButtonDisplay(overviewActive);
+    btn.style.background = display.background;
+    btn.innerHTML = display.innerHtml;
+    btn.title = display.title;
+}
+
 /** Unit-tested camera map marker HTML (modules/map/camera-map-markers.js). */
 function _cameraMapMarkers() { return VoyagrModules.cameraMapMarkers(); }
 
@@ -9323,18 +9346,7 @@ function toggleSpeedWidget() {
  */
 function toggleZoomAndFollow() {
     zoomAndFollowEnabled = !zoomAndFollowEnabled;
-    const btn = document.getElementById('zoomFollowToggle');
-    const MC = _mapControls();
-    if (btn) {
-        btn.classList.toggle('active', zoomAndFollowEnabled);
-        if (zoomAndFollowEnabled) {
-            btn.style.background = '#FF9800';
-            btn.innerHTML = MC.ZOOM_FOLLOW_ENABLED_ICON;
-        } else {
-            btn.style.background = '#9E9E9E';
-            btn.innerHTML = MC.ZOOM_FOLLOW_DISABLED_ICON;
-        }
-    }
+    applyZoomFollowButtonUi(document.getElementById('zoomFollowToggle'), zoomAndFollowEnabled);
     localStorage.setItem('zoomAndFollowEnabled', zoomAndFollowEnabled ? 'true' : 'false');
 
     if (zoomAndFollowEnabled) {
@@ -9411,12 +9423,7 @@ function recenterOnVehicle() {
     if (journeyOverviewActive) {
         journeyOverviewActive = false;
         const journeyBtn = document.getElementById('journeyOverviewBtn');
-        const MC = _mapControls();
-        if (journeyBtn) {
-            journeyBtn.style.background = '#9C27B0';
-            journeyBtn.innerHTML = MC.JOURNEY_OVERVIEW_ICON;
-            journeyBtn.title = 'Journey Overview';
-        }
+        applyJourneyOverviewButtonUi(journeyBtn, false);
         savedMapState = null;
     }
 
@@ -9475,7 +9482,6 @@ function toggleJourneyOverview() {
     }
 
     const btn = document.getElementById('journeyOverviewBtn');
-    const MC = _mapControls();
 
     if (!journeyOverviewActive) {
         // Save current map state
@@ -9498,11 +9504,7 @@ function toggleJourneyOverview() {
         }
 
         journeyOverviewActive = true;
-        if (btn) {
-            btn.style.background = MC.JOURNEY_OVERVIEW_ACTIVE_BACKGROUND;
-            btn.innerHTML = MC.JOURNEY_RETURN_ICON;
-            btn.title = 'Return to Navigation View';
-        }
+        applyJourneyOverviewButtonUi(btn, true);
         showStatus('🗺️ Journey Overview - Tap again to return', 'info');
         console.log('[Navigation] Journey overview activated');
         updateRecenterButtonVisibility();
@@ -9527,11 +9529,7 @@ function toggleJourneyOverview() {
             savedMapState = null;
         }
 
-        if (btn) {
-            btn.style.background = MC.JOURNEY_OVERVIEW_INACTIVE_BACKGROUND;
-            btn.innerHTML = MC.JOURNEY_OVERVIEW_ICON;
-            btn.title = 'Journey Overview';
-        }
+        applyJourneyOverviewButtonUi(btn, false);
         showStatus('📍 Returned to navigation view', 'success');
         console.log('[Navigation] Journey overview deactivated');
         updateRecenterButtonVisibility();
@@ -11534,20 +11532,17 @@ let mapView3DEnabled = (localStorage.getItem('mapView3DEnabled') !== null)
 
 /** Reflect the current 2D/3D state on the master toggle and the two granular toggles. */
 function syncMapView3DToggleUI() {
+    const TU = VoyagrModules.toggleUI();
     const master = document.getElementById('mapView3DToggle');
     if (master) {
-        master.classList.toggle('active', mapView3DEnabled);
-        master.style.background = mapView3DEnabled ? '#4CAF50' : '';
-        master.style.borderColor = mapView3DEnabled ? '#4CAF50' : '';
+        TU.applyToggleButton(master, mapView3DEnabled);
+        if (!mapView3DEnabled) {
+            master.style.background = '';
+            master.style.borderColor = '';
+        }
     }
-    const driverBtn = document.getElementById('driverPerspectiveToggle');
-    if (driverBtn) driverBtn.classList.toggle('active', driverPerspectiveEnabled);
-    const buildingsBtn = document.getElementById('buildings3DToggle');
-    if (buildingsBtn) {
-        buildingsBtn.classList.toggle('active', buildings3DEnabled);
-        buildingsBtn.style.background = buildings3DEnabled ? '#4CAF50' : '#ddd';
-        buildingsBtn.style.borderColor = buildings3DEnabled ? '#4CAF50' : '#999';
-    }
+    TU.applyToggleButton(document.getElementById('driverPerspectiveToggle'), driverPerspectiveEnabled);
+    TU.applyToggleButton(document.getElementById('buildings3DToggle'), buildings3DEnabled);
 }
 
 /** Apply a 2D/3D scene preset by driving the existing tilt + buildings machinery. */
@@ -15297,12 +15292,13 @@ function swapStartAndDestination() {
     // Visual feedback on the button
     const swapBtn = document.getElementById('swapLocationsBtn');
     if (swapBtn) {
-        swapBtn.style.background = '#e3f2fd';
-        swapBtn.style.borderColor = '#2196F3';
+        const DH = VoyagrModules.domHelpers();
+        swapBtn.style.background = DH.SWAP_LOCATIONS_FLASH_STYLE.background;
+        swapBtn.style.borderColor = DH.SWAP_LOCATIONS_FLASH_STYLE.borderColor;
         setTimeout(() => {
-            swapBtn.style.background = '#f5f5f5';
-            swapBtn.style.borderColor = '#ddd';
-        }, 300);
+            swapBtn.style.background = DH.SWAP_LOCATIONS_REST_STYLE.background;
+            swapBtn.style.borderColor = DH.SWAP_LOCATIONS_REST_STYLE.borderColor;
+        }, DH.SWAP_LOCATIONS_FLASH_MS);
     }
 
     showStatus('🔄 Start and destination swapped', 'success');
@@ -15950,17 +15946,9 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     // ===== SHOW ZOOM AND FOLLOW BUTTON =====
     mapFollowingActive = true;
     const zoomFollowBtn = document.getElementById('zoomFollowToggle');
-    const MC = _mapControls();
     if (zoomFollowBtn) {
         zoomFollowBtn.style.display = 'block';
-        zoomFollowBtn.classList.toggle('active', zoomAndFollowEnabled);
-        if (zoomAndFollowEnabled) {
-            zoomFollowBtn.style.background = '#FF9800';
-            zoomFollowBtn.innerHTML = MC.ZOOM_FOLLOW_ENABLED_ICON;
-        } else {
-            zoomFollowBtn.style.background = '#9E9E9E';
-            zoomFollowBtn.innerHTML = MC.ZOOM_FOLLOW_DISABLED_ICON;
-        }
+        applyZoomFollowButtonUi(zoomFollowBtn, zoomAndFollowEnabled);
     }
 
     // Show journey overview button during navigation

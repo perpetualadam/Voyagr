@@ -31,4 +31,10 @@ describe('dom-helpers', () => {
         document.body.appendChild(outer);
         expect(Dom.closest(text, '.waypoint-item')).toBe(outer);
     });
+
+    test('swap locations flash style constants', () => {
+        expect(Dom.SWAP_LOCATIONS_FLASH_STYLE.background).toBe('#e3f2fd');
+        expect(Dom.SWAP_LOCATIONS_REST_STYLE.borderColor).toBe('#ddd');
+        expect(Dom.SWAP_LOCATIONS_FLASH_MS).toBe(300);
+    });
 });

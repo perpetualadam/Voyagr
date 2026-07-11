@@ -91,6 +91,8 @@
         return 'background: white; padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; transition: all 0.2s;';
     }
 
+    var PARKING_OPTION_ITEM_HOVER_BACKGROUND = '#FFF3E0';
+
     /**
      * HTML for one parking option row in the parking search list.
      * @param {Object} parking
@@ -165,6 +167,7 @@
         buildParkingBreakdownHtml: buildParkingBreakdownHtml,
         computeWalkingMinutesFromMeters: computeWalkingMinutesFromMeters,
         getParkingOptionItemContainerStyleCssText: getParkingOptionItemContainerStyleCssText,
+        PARKING_OPTION_ITEM_HOVER_BACKGROUND: PARKING_OPTION_ITEM_HOVER_BACKGROUND,
         buildParkingOptionItemHtml: buildParkingOptionItemHtml,
         buildParkingEmptyStateHtml: buildParkingEmptyStateHtml,
         buildParkingPreviewRouteHtml: buildParkingPreviewRouteHtml,

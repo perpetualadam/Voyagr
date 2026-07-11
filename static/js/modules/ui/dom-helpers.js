@@ -31,9 +31,16 @@
         return el && typeof el.closest === 'function' ? el.closest(selector) : null;
     }
 
+    var SWAP_LOCATIONS_FLASH_STYLE = { background: '#e3f2fd', borderColor: '#2196F3' };
+    var SWAP_LOCATIONS_REST_STYLE = { background: '#f5f5f5', borderColor: '#ddd' };
+    var SWAP_LOCATIONS_FLASH_MS = 300;
+
     var api = {
         eventTargetElement: eventTargetElement,
         closest: closest,
+        SWAP_LOCATIONS_FLASH_STYLE: SWAP_LOCATIONS_FLASH_STYLE,
+        SWAP_LOCATIONS_REST_STYLE: SWAP_LOCATIONS_REST_STYLE,
+        SWAP_LOCATIONS_FLASH_MS: SWAP_LOCATIONS_FLASH_MS,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
