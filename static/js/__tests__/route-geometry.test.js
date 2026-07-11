@@ -87,6 +87,36 @@ describe('snapToRoutePolyline', () => {
     });
 });
 
+describe('buildGpsRouteSnapTickPlan', () => {
+    const polyline = [
+        [51.50, -0.12],
+        [51.51, -0.11],
+        [51.52, -0.10],
+    ];
+
+    test('skips when route is not active', () => {
+        expect(RG.buildGpsRouteSnapTickPlan({
+            lat: 51.5,
+            lon: -0.12,
+            routeInProgress: false,
+            routePolyline: polyline,
+        })).toEqual({ action: 'skip', snapped: null });
+    });
+
+    test('snaps when navigation polyline is active', () => {
+        const plan = RG.buildGpsRouteSnapTickPlan({
+            lat: 51.505,
+            lon: -0.12,
+            routeInProgress: true,
+            routePolyline: polyline,
+            lastSnappedRouteIndex: 0,
+        });
+        expect(plan.action).toBe('snap');
+        expect(plan.snapped.index).toBe(0);
+        expect(plan.snapped.distance).toBeLessThan(500);
+    });
+});
+
 describe('distanceAlongRouteToVertexMeters', () => {
     const polyline = [
         [51.50, -0.12],

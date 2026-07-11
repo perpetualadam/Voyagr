@@ -314,6 +314,155 @@
         };
     }
 
+    /**
+     * Speed-limit fetch tick plan: throttle or API fetch.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildSpeedLimitFetchTickPlan(opts) {
+        opts = opts || {};
+        var state = opts.fetchState;
+        if (!state) {
+            return { action: 'skip', reason: 'no-state' };
+        }
+        var now = opts.now != null ? opts.now : Date.now();
+        if (!shouldFetchSpeedLimit(state, opts.lat, opts.lon, now, opts.calculateDistance)) {
+            return { action: 'skip', reason: 'throttle' };
+        }
+        var nextSeq = (state.seq || 0) + 1;
+        return {
+            action: 'fetch',
+            url: buildSpeedLimitApiUrl(
+                opts.lat,
+                opts.lon,
+                opts.roadType,
+                opts.valhallaSpeedLimit,
+                opts.headingDeg
+            ),
+            seq: nextSeq,
+            statePatch: {
+                inFlight: true,
+                lastFetchAt: now,
+                lastPosition: { lat: opts.lat, lon: opts.lon },
+                seq: nextSeq,
+            },
+            context: {
+                lat: opts.lat,
+                lon: opts.lon,
+                roadType: opts.roadType || 'unknown',
+                valhallaSpeedLimit: opts.valhallaSpeedLimit,
+                currentSpeedMph: opts.currentSpeedMph,
+                currentGpsSpeedMph: opts.currentGpsSpeedMph,
+                lastDetectedRoadType: opts.lastDetectedRoadType,
+                lastSpeedLimitRegion: opts.lastSpeedLimitRegion,
+            },
+        };
+    }
+
+    /**
+     * Apply plan for speed-limit fetch tick state patches and fetch action.
+     * @param {Object|null|undefined} tick - from buildSpeedLimitFetchTickPlan
+     * @returns {Object}
+     */
+    function buildSpeedLimitFetchStateApplyPlan(tick) {
+        if (!tick || tick.action === 'skip') {
+            return { action: 'skip', reason: tick && tick.reason };
+        }
+        return {
+            action: 'apply',
+            fetch: { url: tick.url, seq: tick.seq },
+            statePatch: tick.statePatch || {},
+            context: tick.context || {},
+        };
+    }
+
+    /**
+     * Apply plan after a successful speed-limit API response.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildSpeedLimitApiSuccessApplyPlan(opts) {
+        opts = opts || {};
+        var parsed = parseSpeedLimitApiResponse(
+            opts.data,
+            opts.roadType,
+            opts.currentSpeedMph,
+            opts.speedGpsModule
+        );
+        var region = parsed.region || opts.lastSpeedLimitRegion;
+        var roadType = parsed.roadType || opts.roadType;
+        var displayLimit = pickDisplaySpeedLimitMph(
+            parsed.limitMph,
+            opts.valhallaSpeedLimit,
+            roadType,
+            region,
+            { allowRoadTypeFallback: parsed.limitMph == null }
+        );
+        var statePatch = {};
+        if (parsed.roadType) statePatch.lastDetectedRoadType = parsed.roadType;
+        if (parsed.region) statePatch.lastSpeedLimitRegion = parsed.region;
+        if (parsed.limitMph != null) {
+            statePatch.currentLimitMph = parsed.limitMph;
+            statePatch.currentSpeedLimitMph = parsed.limitMph;
+        }
+        return {
+            action: 'apply',
+            statePatch: statePatch,
+            widgetUpdate: {
+                displaySpeedMph: opts.currentGpsSpeedMph,
+                shownLimit: displayLimit,
+            },
+            cacheHint: parsed.limitMph != null ? {
+                lat: opts.lat,
+                lon: opts.lon,
+                limitMph: parsed.limitMph,
+                source: parsed.source || 'api',
+            } : null,
+        };
+    }
+
+    /**
+     * Apply plan for offline/Valhalla/road-type speed-limit fallback.
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildSpeedLimitFetchFallbackApplyPlan(opts) {
+        opts = opts || {};
+        var fallbackLimit = null;
+        if (opts.cachedLimitMph != null) {
+            fallbackLimit = opts.cachedLimitMph;
+        } else if (Number.isFinite(opts.valhallaSpeedLimit) && opts.valhallaSpeedLimit > 0) {
+            fallbackLimit = opts.valhallaSpeedLimit;
+        } else {
+            var rt = opts.lastDetectedRoadType || (opts.roadType !== 'unknown' ? opts.roadType : null);
+            if (rt) {
+                fallbackLimit = inferRoadTypeDefaultLimitMph(rt, opts.lastSpeedLimitRegion);
+            }
+        }
+        if (fallbackLimit == null) {
+            return { action: 'skip' };
+        }
+        var displayLimit = pickDisplaySpeedLimitMph(
+            fallbackLimit,
+            opts.valhallaSpeedLimit,
+            opts.roadType,
+            opts.lastSpeedLimitRegion,
+            { allowRoadTypeFallback: false }
+        );
+        return {
+            action: 'apply',
+            statePatch: {
+                lastDetectedRoadType: opts.roadType,
+                currentLimitMph: fallbackLimit,
+                currentSpeedLimitMph: fallbackLimit,
+            },
+            widgetUpdate: {
+                displaySpeedMph: opts.currentGpsSpeedMph,
+                shownLimit: displayLimit,
+            },
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         createFetchState: createFetchState,
@@ -328,7 +477,11 @@
         speedLimitCacheKey: speedLimitCacheKey,
         readCachedLimitMph: readCachedLimitMph,
         buildSpeedWidgetApplyPlan: buildSpeedWidgetApplyPlan,
-        buildSpeedLimitFetchResetApplyPlan: buildSpeedLimitFetchResetApplyPlan
+        buildSpeedLimitFetchResetApplyPlan: buildSpeedLimitFetchResetApplyPlan,
+        buildSpeedLimitFetchTickPlan: buildSpeedLimitFetchTickPlan,
+        buildSpeedLimitFetchStateApplyPlan: buildSpeedLimitFetchStateApplyPlan,
+        buildSpeedLimitApiSuccessApplyPlan: buildSpeedLimitApiSuccessApplyPlan,
+        buildSpeedLimitFetchFallbackApplyPlan: buildSpeedLimitFetchFallbackApplyPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

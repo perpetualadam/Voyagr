@@ -8591,6 +8591,42 @@ function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
 }
 
 /**
+ * Apply speed-limit fetch outcome state and widget updates from a pure apply plan.
+ * @param {Object} outcomeApply
+ */
+function applySpeedLimitFetchOutcomeFromPlan(outcomeApply) {
+    if (!outcomeApply || outcomeApply.action !== 'apply') return;
+
+    const patch = outcomeApply.statePatch || {};
+    if (patch.lastDetectedRoadType) lastDetectedRoadType = patch.lastDetectedRoadType;
+    if (patch.lastSpeedLimitRegion) lastSpeedLimitRegion = patch.lastSpeedLimitRegion;
+
+    const state = _getSpeedLimitFetchState();
+    if (patch.currentLimitMph != null && state) {
+        state.currentLimitMph = patch.currentLimitMph;
+    }
+    if (patch.currentSpeedLimitMph != null) {
+        currentSpeedLimitMph = patch.currentSpeedLimitMph;
+    }
+
+    if (outcomeApply.widgetUpdate) {
+        updateSpeedWidget(
+            outcomeApply.widgetUpdate.displaySpeedMph,
+            outcomeApply.widgetUpdate.shownLimit
+        );
+    }
+
+    if (outcomeApply.cacheHint) {
+        void cacheSpeedLimit(
+            outcomeApply.cacheHint.lat,
+            outcomeApply.cacheHint.lon,
+            outcomeApply.cacheHint.limitMph,
+            outcomeApply.cacheHint.source || 'api'
+        );
+    }
+}
+
+/**
  * Fetch posted speed limit for current GPS position (throttled, offline cache fallback).
  */
 function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residential', valhallaSpeedLimit = null, headingDeg = null) {
@@ -8599,74 +8635,73 @@ function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType = 'residen
     const state = _getSpeedLimitFetchState();
     if (!SL || !state) return;
 
-    const now = Date.now();
-    if (!SL.shouldFetchSpeedLimit(state, lat, lon, now, calculateDistanceMeters)) {
-        return;
-    }
+    const tick = SL.buildSpeedLimitFetchTickPlan({
+        lat,
+        lon,
+        roadType,
+        valhallaSpeedLimit,
+        headingDeg,
+        now: Date.now(),
+        fetchState: state,
+        calculateDistance: calculateDistanceMeters,
+        currentSpeedMph,
+        currentGpsSpeedMph: currentGpsSpeedMph,
+        lastDetectedRoadType,
+        lastSpeedLimitRegion,
+    });
+    if (tick.action === 'skip') return;
 
-    state.inFlight = true;
-    state.lastFetchAt = now;
-    state.lastPosition = { lat, lon };
-    const mySeq = ++state.seq;
+    const apply = SL.buildSpeedLimitFetchStateApplyPlan(tick);
+    if (apply.action === 'skip') return;
 
-    const acceptIfFresh = (apply) => {
+    state.inFlight = apply.statePatch.inFlight;
+    state.lastFetchAt = apply.statePatch.lastFetchAt;
+    state.lastPosition = apply.statePatch.lastPosition;
+    state.seq = apply.statePatch.seq;
+    const mySeq = apply.fetch.seq;
+    const ctx = apply.context;
+
+    const acceptIfFresh = (outcomeApply) => {
+        if (!outcomeApply || outcomeApply.action !== 'apply') return;
         if (mySeq < state.appliedSeq) return;
         state.appliedSeq = mySeq;
-        apply();
+        applySpeedLimitFetchOutcomeFromPlan(outcomeApply);
     };
 
-    const applyLimit = (limitMph, detectedRoadType, region) => {
-        if (detectedRoadType) lastDetectedRoadType = detectedRoadType;
-        if (region) lastSpeedLimitRegion = region;
-        const displayLimit = SL.pickDisplaySpeedLimitMph(
-            limitMph, valhallaSpeedLimit,
-            detectedRoadType || roadType, lastSpeedLimitRegion,
-            { allowRoadTypeFallback: limitMph == null }
-        );
-        if (limitMph != null) {
-            state.currentLimitMph = limitMph;
-            currentSpeedLimitMph = limitMph;
-        }
-        updateSpeedWidget(currentGpsSpeedMph, displayLimit);
-    };
-
-    const url = SL.buildSpeedLimitApiUrl(lat, lon, roadType, valhallaSpeedLimit, headingDeg);
-    fetch(url)
+    fetch(apply.fetch.url)
         .then((response) => {
             if (!response.ok) throw new Error(`HTTP ${response.status}`);
             return response.json();
         })
         .then((data) => {
-            acceptIfFresh(() => {
-                const parsed = SL.parseSpeedLimitApiResponse(data, roadType, currentSpeedMph, SG);
-                if (parsed.roadType) lastDetectedRoadType = parsed.roadType;
-                if (parsed.region) lastSpeedLimitRegion = parsed.region;
-                if (parsed.limitMph != null) {
-                    void cacheSpeedLimit(lat, lon, parsed.limitMph, parsed.source || 'api');
-                }
-                applyLimit(parsed.limitMph, parsed.roadType, parsed.region);
-            });
+            acceptIfFresh(SL.buildSpeedLimitApiSuccessApplyPlan({
+                data,
+                lat: ctx.lat,
+                lon: ctx.lon,
+                roadType: ctx.roadType,
+                valhallaSpeedLimit: ctx.valhallaSpeedLimit,
+                currentSpeedMph: ctx.currentSpeedMph,
+                currentGpsSpeedMph: ctx.currentGpsSpeedMph,
+                lastSpeedLimitRegion: ctx.lastSpeedLimitRegion,
+                speedGpsModule: SG,
+            }));
         })
         .catch(async () => {
-            let fallbackLimit = null;
+            let cachedLimitMph = null;
             if (_voyagrIsOffline || !navigator.onLine) {
                 try {
                     const cached = await getCachedSpeedLimit(lat, lon);
-                    fallbackLimit = SL.readCachedLimitMph(cached, now);
+                    cachedLimitMph = SL.readCachedLimitMph(cached, Date.now());
                 } catch (_) { /* ignore */ }
             }
-            if (fallbackLimit == null && Number.isFinite(valhallaSpeedLimit) && valhallaSpeedLimit > 0) {
-                fallbackLimit = valhallaSpeedLimit;
-            }
-            if (fallbackLimit == null) {
-                const rt = lastDetectedRoadType || (roadType !== 'unknown' ? roadType : null);
-                if (rt) {
-                    fallbackLimit = SL.inferRoadTypeDefaultLimitMph(rt, lastSpeedLimitRegion);
-                }
-            }
-            if (fallbackLimit != null) {
-                acceptIfFresh(() => applyLimit(fallbackLimit, roadType, lastSpeedLimitRegion));
-            }
+            acceptIfFresh(SL.buildSpeedLimitFetchFallbackApplyPlan({
+                cachedLimitMph,
+                valhallaSpeedLimit: ctx.valhallaSpeedLimit,
+                roadType: ctx.roadType,
+                lastDetectedRoadType: ctx.lastDetectedRoadType,
+                lastSpeedLimitRegion: ctx.lastSpeedLimitRegion,
+                currentGpsSpeedMph: ctx.currentGpsSpeedMph,
+            }));
         })
         .finally(() => {
             state.inFlight = false;
@@ -8728,6 +8763,24 @@ function toggleZoomAndFollow() {
 
 const RECENTER_MIN_DISTANCE_M = 70;
 
+/**
+ * Snap GPS position to the active route polyline when navigation is in progress.
+ * @param {number} lat
+ * @param {number} lon
+ * @returns {Object|null}
+ */
+function resolveGpsRouteSnapForTick(lat, lon) {
+    const RG = _routeGeometry();
+    const plan = RG.buildGpsRouteSnapTickPlan({
+        lat,
+        lon,
+        routeInProgress,
+        routePolyline,
+        lastSnappedRouteIndex,
+    });
+    return plan.snapped;
+}
+
 /** Lat/lon for the vehicle icon (snapped to route during navigation). */
 function getVehicleDisplayCoordinates() {
     const lat = currentLat;
@@ -8736,9 +8789,7 @@ function getVehicleDisplayCoordinates() {
         return { lat, lon };
     }
     const SG = _speedGps();
-    const snapped = (routeInProgress && routePolyline && routePolyline.length >= 2)
-        ? _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex)
-        : null;
+    const snapped = resolveGpsRouteSnapForTick(lat, lon);
     const posPlan = SG.buildNavigationVehicleMarkerPositionPlan({
         lat,
         lon,
@@ -12412,9 +12463,7 @@ function applyGpsPositionTick(sample) {
 
     const SGhead = _speedGps();
     const SGpos = _speedGps();
-    const snapped = (routeInProgress && routePolyline && routePolyline.length >= 2)
-        ? _routeGeometry().snapToRoutePolyline(lat, lon, routePolyline, lastSnappedRouteIndex)
-        : null;
+    const snapped = resolveGpsRouteSnapForTick(lat, lon);
     const SL = _speedLimitWidget();
     const plans = SGpos
         ? SGpos.buildGpsPositionTickPlan({

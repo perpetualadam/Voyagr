@@ -126,4 +126,62 @@ describe('speed-limit-widget module', () => {
         expect(plan.newLastActiveManeuverIdx).toBe(3);
         expect(plan.resetCurrentLimitMph).toBeFalsy();
     });
+
+    test('buildSpeedLimitFetchTickPlan throttles in-flight and due fetches', () => {
+        const state = SL.createFetchState({ inFlight: true });
+        expect(SL.buildSpeedLimitFetchTickPlan({
+            lat: 51.5,
+            lon: -0.1,
+            fetchState: state,
+            calculateDistance: () => 100,
+        }).action).toBe('skip');
+
+        const tick = SL.buildSpeedLimitFetchTickPlan({
+            lat: 51.5,
+            lon: -0.1,
+            roadType: 'primary',
+            valhallaSpeedLimit: 50,
+            fetchState: SL.createFetchState({ seq: 2 }),
+            now: 10000,
+            calculateDistance: () => 100,
+            currentSpeedMph: 45,
+            currentGpsSpeedMph: 44,
+        });
+        expect(tick.action).toBe('fetch');
+        expect(tick.seq).toBe(3);
+        expect(tick.statePatch.inFlight).toBe(true);
+        expect(tick.url).toContain('/api/speed-limit');
+    });
+
+    test('buildSpeedLimitApiSuccessApplyPlan maps API payload to widget update', () => {
+        const apply = SL.buildSpeedLimitApiSuccessApplyPlan({
+            data: {
+                success: true,
+                data: { speed_limit_mph: 70, road_type: 'motorway', source: 'osm' },
+            },
+            lat: 51.5,
+            lon: -0.1,
+            roadType: 'motorway',
+            valhallaSpeedLimit: 70,
+            currentSpeedMph: 65,
+            currentGpsSpeedMph: 64,
+            speedGpsModule: SG,
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.statePatch.currentSpeedLimitMph).toBe(70);
+        expect(apply.widgetUpdate.shownLimit).toBe(70);
+        expect(apply.cacheHint.limitMph).toBe(70);
+    });
+
+    test('buildSpeedLimitFetchFallbackApplyPlan prefers cached limit', () => {
+        const apply = SL.buildSpeedLimitFetchFallbackApplyPlan({
+            cachedLimitMph: 40,
+            valhallaSpeedLimit: 50,
+            roadType: 'primary',
+            currentGpsSpeedMph: 38,
+        });
+        expect(apply.action).toBe('apply');
+        expect(apply.statePatch.currentSpeedLimitMph).toBe(40);
+        expect(apply.widgetUpdate.shownLimit).toBe(40);
+    });
 });

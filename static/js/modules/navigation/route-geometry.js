@@ -122,6 +122,32 @@
     }
 
     /**
+     * Route snap plan for one GPS tick when navigation has an active polyline.
+     * @param {Object} opts
+     * @param {number} opts.lat
+     * @param {number} opts.lon
+     * @param {boolean} [opts.routeInProgress]
+     * @param {Array<[number,number]>} [opts.routePolyline]
+     * @param {number} [opts.lastSnappedRouteIndex]
+     * @returns {{ action: string, snapped: (Object|null) }}
+     */
+    function buildGpsRouteSnapTickPlan(opts) {
+        opts = opts || {};
+        if (!opts.routeInProgress || !opts.routePolyline || opts.routePolyline.length < 2) {
+            return { action: 'skip', snapped: null };
+        }
+        return {
+            action: 'snap',
+            snapped: snapToRoutePolyline(
+                opts.lat,
+                opts.lon,
+                opts.routePolyline,
+                opts.lastSnappedRouteIndex
+            ),
+        };
+    }
+
+    /**
      * Along-route distance (metres) from a snapped position forward to a polyline vertex.
      * @param {Array<[number,number]>} polyline
      * @param {{ index: number, t: number }} snap - Result of snapToRoutePolyline
@@ -236,6 +262,7 @@
         blendHeadingsCircular: blendHeadingsCircular,
         projectToSegment: projectToSegment,
         snapToRoutePolyline: snapToRoutePolyline,
+        buildGpsRouteSnapTickPlan: buildGpsRouteSnapTickPlan,
         distanceAlongRouteToVertexMeters: distanceAlongRouteToVertexMeters,
         totalPolylineLengthMeters: totalPolylineLengthMeters,
         computeRemainingDistanceAlongRoute: computeRemainingDistanceAlongRoute,
