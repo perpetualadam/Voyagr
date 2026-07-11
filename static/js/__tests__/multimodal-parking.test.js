@@ -50,4 +50,10 @@ describe('multimodal-parking module', () => {
         expect(html).toContain('parking-set-dest-btn');
         expect(html).toContain('0.26 mi');
     });
+
+    test('buildParkingEmptyStateHtml wraps message text', () => {
+        const html = MP.buildParkingEmptyStateHtml('No parking found nearby.');
+        expect(html).toContain('No parking found nearby.');
+        expect(html).toContain('font-size:13px');
+    });
 });

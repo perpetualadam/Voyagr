@@ -78,6 +78,10 @@ function initializeApp() {
         // Restore app state if available
         restoreAppState();
         console.log('[App] App state restored');
+
+        if (typeof loadSharedRouteFromUrl === 'function') {
+            loadSharedRouteFromUrl();
+        }
         
         console.log('[App] Voyagr Navigation App initialized successfully!');
     } catch (error) {

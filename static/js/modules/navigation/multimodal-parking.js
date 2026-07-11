@@ -114,12 +114,22 @@
         );
     }
 
+    /**
+     * Empty-state HTML for the parking search list.
+     * @param {string} message
+     * @returns {string}
+     */
+    function buildParkingEmptyStateHtml(message) {
+        return '<div style="font-size:13px;color:#666;line-height:1.5;padding:4px 0;">' + message + '</div>';
+    }
+
     var api = {
         computeMultimodalLegTotals: computeMultimodalLegTotals,
         buildParkingRouteLabel: buildParkingRouteLabel,
         buildParkingBreakdownHtml: buildParkingBreakdownHtml,
         computeWalkingMinutesFromMeters: computeWalkingMinutesFromMeters,
         buildParkingOptionItemHtml: buildParkingOptionItemHtml,
+        buildParkingEmptyStateHtml: buildParkingEmptyStateHtml,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
