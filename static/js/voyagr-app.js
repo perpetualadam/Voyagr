@@ -5752,17 +5752,23 @@ function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
 
     if (plan.vehicleMarkerReset) {
         resetVehicleMarkerDisplayState();
-        _lastActiveManeuverIdx = -1;
-        currentSpeedLimitMph = null;
-        lastDetectedRoadType = null;
+        if (!plan.speedLimitReset) {
+            const SL = _speedLimitWidget();
+            const resetPlan = SL
+                ? SL.buildSpeedLimitFetchResetApplyPlan({
+                    kind: 'maneuver-change',
+                    newLastActiveManeuverIdx: -1,
+                    resetCurrentSpeedLimitMph: true,
+                    resetDetectedRoadType: true,
+                })
+                : null;
+            if (resetPlan) applySpeedLimitFetchResetFromPlan(resetPlan);
+        }
     }
     if (plan.speedLimitReset) {
-        const slState = _getSpeedLimitFetchState();
-        if (slState) {
-            slState.lastFetchAt = 0;
-            slState.lastPosition = null;
-            slState.currentLimitMph = null;
-        }
+        const SL = _speedLimitWidget();
+        const resetPlan = SL ? SL.buildSpeedLimitFetchResetApplyPlan({ kind: 'full-reroute' }) : null;
+        if (resetPlan) applySpeedLimitFetchResetFromPlan(resetPlan);
     }
     if (plan.primeVehicleMarker) {
         primeVehicleMarkerOnRoute(currentLat, currentLon);
@@ -12046,6 +12052,38 @@ function applyGpsPositionStateFromPlan(apply) {
 }
 
 /**
+ * Apply speed-limit fetch state reset from buildSpeedLimitFetchResetApplyPlan.
+ * @param {Object} resetPlan
+ */
+function applySpeedLimitFetchResetFromPlan(resetPlan) {
+    if (!resetPlan || resetPlan.action !== 'apply') return;
+
+    if (resetPlan.newLastActiveManeuverIdx != null) {
+        _lastActiveManeuverIdx = resetPlan.newLastActiveManeuverIdx;
+    }
+
+    const state = _getSpeedLimitFetchState();
+    if (state) {
+        if (resetPlan.resetFetchTimestamps) {
+            state.lastFetchAt = 0;
+        }
+        if (resetPlan.resetLastPosition) {
+            state.lastPosition = null;
+        }
+        if (resetPlan.resetCurrentLimitMph) {
+            state.currentLimitMph = null;
+        }
+    }
+
+    if (resetPlan.resetCurrentSpeedLimitMph) {
+        currentSpeedLimitMph = null;
+    }
+    if (resetPlan.resetDetectedRoadType) {
+        lastDetectedRoadType = null;
+    }
+}
+
+/**
  * Apply speed widget update from buildSpeedWidgetApplyPlan result.
  * @param {Object} swPlan
  */
@@ -12053,12 +12091,14 @@ function applySpeedWidgetFromApplyPlan(swPlan) {
     if (!swPlan || swPlan.action !== 'apply') return;
 
     if (swPlan.resetFetchState) {
-        _lastActiveManeuverIdx = swPlan.newLastActiveManeuverIdx;
-        const state = _getSpeedLimitFetchState();
-        if (state) {
-            state.lastFetchAt = 0;
-            state.lastPosition = null;
-        }
+        const SL = _speedLimitWidget();
+        const resetPlan = SL
+            ? SL.buildSpeedLimitFetchResetApplyPlan({
+                kind: 'maneuver-change',
+                newLastActiveManeuverIdx: swPlan.newLastActiveManeuverIdx,
+            })
+            : null;
+        if (resetPlan) applySpeedLimitFetchResetFromPlan(resetPlan);
     }
     updateSpeedWidget(swPlan.updateWidget.displaySpeedMph, swPlan.updateWidget.shownLimit);
     if (swPlan.fetchHint) {
@@ -12300,6 +12340,36 @@ function applyGpsNavigationSideEffectsTick(ctx) {
 }
 
 /**
+ * Marker, follow camera, and navigation side-effects after a position tick.
+ * @param {Object} pos - from applyGpsPositionTick
+ */
+function applyGpsTrackingSideEffectsFromPosition(pos) {
+    applyGpsVehicleMarkerTick(pos.markerLat, pos.markerLon, pos.heading, pos.speed, pos.accuracy);
+
+    const followState = applyGpsFollowCameraTick(
+        pos.markerLat,
+        pos.markerLon,
+        pos.followJumpM,
+        pos.speedMph,
+        pos.heading,
+        pos.speedLimitPlan.roadType || 'unknown'
+    );
+
+    applyGpsNavigationSideEffectsTick({
+        lat: pos.lat,
+        lon: pos.lon,
+        speed: pos.speed,
+        accuracy: pos.accuracy,
+        heading: pos.heading,
+        speedMph: pos.speedMph,
+        sideEffects: pos.sideEffects,
+        speedLimitPlan: pos.speedLimitPlan,
+        navigationFollowEaseApplied: followState.navigationFollowEaseApplied,
+        navigationFollowZoom: followState.navigationFollowZoom,
+    });
+}
+
+/**
  * Position, odometer, speed-limit, and side-effects setup for one GPS tick.
  * @param {Object} sample - from normalizeGeolocationCoordsSample
  * @returns {Object}
@@ -12455,30 +12525,7 @@ function applyGpsTrackingTick(position) {
     const SGsample = _speedGps();
     const sample = SGsample.normalizeGeolocationCoordsSample(position.coords);
     const pos = applyGpsPositionTick(sample);
-
-    applyGpsVehicleMarkerTick(pos.markerLat, pos.markerLon, pos.heading, pos.speed, pos.accuracy);
-
-    const followState = applyGpsFollowCameraTick(
-        pos.markerLat,
-        pos.markerLon,
-        pos.followJumpM,
-        pos.speedMph,
-        pos.heading,
-        pos.speedLimitPlan.roadType || 'unknown'
-    );
-
-    applyGpsNavigationSideEffectsTick({
-        lat: pos.lat,
-        lon: pos.lon,
-        speed: pos.speed,
-        accuracy: pos.accuracy,
-        heading: pos.heading,
-        speedMph: pos.speedMph,
-        sideEffects: pos.sideEffects,
-        speedLimitPlan: pos.speedLimitPlan,
-        navigationFollowEaseApplied: followState.navigationFollowEaseApplied,
-        navigationFollowZoom: followState.navigationFollowZoom,
-    });
+    applyGpsTrackingSideEffectsFromPosition(pos);
 }
 
 /**

@@ -281,6 +281,39 @@
         };
     }
 
+    /**
+     * Apply plan for resetting speed-limit fetch state.
+     * @param {Object} [opts]
+     * @param {'maneuver-change'|'full-reroute'} [opts.kind]
+     * @param {number} [opts.newLastActiveManeuverIdx]
+     * @returns {Object}
+     */
+    function buildSpeedLimitFetchResetApplyPlan(opts) {
+        opts = opts || {};
+        var kind = opts.kind || 'maneuver-change';
+        if (kind === 'full-reroute') {
+            return {
+                action: 'apply',
+                kind: kind,
+                newLastActiveManeuverIdx: -1,
+                resetFetchTimestamps: true,
+                resetLastPosition: true,
+                resetCurrentLimitMph: true,
+                resetCurrentSpeedLimitMph: true,
+                resetDetectedRoadType: true,
+            };
+        }
+        return {
+            action: 'apply',
+            kind: kind,
+            newLastActiveManeuverIdx: opts.newLastActiveManeuverIdx,
+            resetFetchTimestamps: true,
+            resetLastPosition: true,
+            resetCurrentSpeedLimitMph: !!opts.resetCurrentSpeedLimitMph,
+            resetDetectedRoadType: !!opts.resetDetectedRoadType,
+        };
+    }
+
     var api = {
         DEFAULTS: DEFAULTS,
         createFetchState: createFetchState,
@@ -294,7 +327,8 @@
         formatSpeedForWidget: formatSpeedForWidget,
         speedLimitCacheKey: speedLimitCacheKey,
         readCachedLimitMph: readCachedLimitMph,
-        buildSpeedWidgetApplyPlan: buildSpeedWidgetApplyPlan
+        buildSpeedWidgetApplyPlan: buildSpeedWidgetApplyPlan,
+        buildSpeedLimitFetchResetApplyPlan: buildSpeedLimitFetchResetApplyPlan
     };
 
     if (typeof module !== 'undefined' && module.exports) {

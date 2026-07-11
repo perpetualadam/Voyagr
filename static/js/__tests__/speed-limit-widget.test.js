@@ -108,4 +108,22 @@ describe('speed-limit-widget module', () => {
         });
         expect(plan.fetchHint).toBeNull();
     });
+
+    test('buildSpeedLimitFetchResetApplyPlan full reroute clears fetch and hints', () => {
+        const plan = SL.buildSpeedLimitFetchResetApplyPlan({ kind: 'full-reroute' });
+        expect(plan.action).toBe('apply');
+        expect(plan.newLastActiveManeuverIdx).toBe(-1);
+        expect(plan.resetCurrentLimitMph).toBe(true);
+        expect(plan.resetCurrentSpeedLimitMph).toBe(true);
+        expect(plan.resetDetectedRoadType).toBe(true);
+    });
+
+    test('buildSpeedLimitFetchResetApplyPlan maneuver change resets fetch cadence', () => {
+        const plan = SL.buildSpeedLimitFetchResetApplyPlan({
+            kind: 'maneuver-change',
+            newLastActiveManeuverIdx: 3,
+        });
+        expect(plan.newLastActiveManeuverIdx).toBe(3);
+        expect(plan.resetCurrentLimitMph).toBeFalsy();
+    });
 });
