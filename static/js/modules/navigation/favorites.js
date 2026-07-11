@@ -42,6 +42,72 @@
         return '🗑️';
     }
 
+    /**
+     * Whether the favorites section should be shown after loading.
+     * @param {boolean} isUnauthorized
+     * @param {number} favoritesCount
+     * @returns {boolean}
+     */
+    function shouldShowFavoritesSection(isUnauthorized, favoritesCount) {
+        return !isUnauthorized && favoritesCount > 0;
+    }
+
+    /**
+     * @param {string} name
+     * @returns {string}
+     */
+    function getFavoriteSelectStatusMessage(name) {
+        return '📍 Destination set to ' + name;
+    }
+
+    /**
+     * @param {string} name
+     * @returns {string}
+     */
+    function getFavoriteUpdatedStatusMessage(name) {
+        return '✅ Updated ' + name;
+    }
+
+    /**
+     * @param {string} name
+     * @returns {string}
+     */
+    function getFavoriteRemovedStatusMessage(name) {
+        return '🗑️ Removed ' + name;
+    }
+
+    /**
+     * DOM-neutral spec for one favorites grid row (styles + inner HTML).
+     * @param {Object} fav
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildFavoriteGridItemSpec(fav, opts) {
+        fav = fav || {};
+        opts = opts || {};
+        return {
+            container: {
+                className: 'favorite-item',
+                style: FAVORITE_ITEM_CONTAINER_STYLE,
+            },
+            mainButton: {
+                className: 'favorite-btn',
+                style: FAVORITE_BTN_STYLE,
+                html: buildFavoriteMainButtonHtml(fav, opts),
+            },
+            editButton: {
+                title: 'Edit',
+                style: FAVORITE_EDIT_BTN_STYLE,
+                html: buildFavoriteEditButtonHtml(),
+            },
+            deleteButton: {
+                title: 'Delete',
+                style: FAVORITE_DELETE_BTN_STYLE,
+                html: buildFavoriteDeleteButtonHtml(),
+            },
+        };
+    }
+
     var api = {
         FAVORITE_ITEM_CONTAINER_STYLE: FAVORITE_ITEM_CONTAINER_STYLE,
         FAVORITE_BTN_STYLE: FAVORITE_BTN_STYLE,
@@ -50,6 +116,11 @@
         buildFavoriteMainButtonHtml: buildFavoriteMainButtonHtml,
         buildFavoriteEditButtonHtml: buildFavoriteEditButtonHtml,
         buildFavoriteDeleteButtonHtml: buildFavoriteDeleteButtonHtml,
+        shouldShowFavoritesSection: shouldShowFavoritesSection,
+        getFavoriteSelectStatusMessage: getFavoriteSelectStatusMessage,
+        getFavoriteUpdatedStatusMessage: getFavoriteUpdatedStatusMessage,
+        getFavoriteRemovedStatusMessage: getFavoriteRemovedStatusMessage,
+        buildFavoriteGridItemSpec: buildFavoriteGridItemSpec,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
