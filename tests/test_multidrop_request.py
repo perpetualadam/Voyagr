@@ -10,7 +10,11 @@ never-raise error behaviour.
 from unittest.mock import patch
 
 from voyagr.services.routing import multidrop
-from voyagr.services.routing.multidrop import build_multidrop_route_from_request
+from voyagr.services.routing.multidrop import (
+    build_multidrop_route_from_request,
+    build_route_multidrop_response,
+)
+from voyagr.services.routing.request_params import parse_route_request
 
 
 def test_requires_at_least_one_stop():
@@ -82,3 +86,59 @@ def test_waypoint_strings_are_parsed_into_stops():
     # The string waypoint must have been parsed into the stops passed to the core.
     passed_stops = m.call_args.kwargs['stops']
     assert any(abs(s['lat'] - 51.55) < 1e-6 and abs(s['lon'] - -0.11) < 1e-6 for s in passed_stops)
+
+
+# ---------------------------------------------------------------------------
+# build_route_multidrop_response: the /api/route multi-drop branch
+# ---------------------------------------------------------------------------
+
+def _params(**overrides):
+    data = {'start': '51.5,-0.12', 'end': '51.6,-0.10'}
+    data.update(overrides)
+    return parse_route_request(data)
+
+
+def test_route_multidrop_returns_none_when_optimize_off():
+    p = _params(optimize_stop_order=False,
+                via_points=[{'lat': 51.55, 'lon': -0.11}, {'lat': 51.56, 'lon': -0.12}])
+    assert build_route_multidrop_response(p) is None
+
+
+def test_route_multidrop_returns_none_with_fewer_than_two_intermediates():
+    p = _params(optimize_stop_order=True, via_points=[{'lat': 51.55, 'lon': -0.11}])
+    assert build_route_multidrop_response(p) is None
+
+
+def test_route_multidrop_returns_none_when_core_fails():
+    p = _params(optimize_stop_order=True,
+                via_points=[{'lat': 51.55, 'lon': -0.11}, {'lat': 51.56, 'lon': -0.12}])
+    with patch.object(multidrop, 'build_multidrop_route', return_value={'success': False}):
+        assert build_route_multidrop_response(p) is None
+
+
+def test_route_multidrop_success_formats_full_response():
+    p = _params(optimize_stop_order=True, enable_hazard_avoidance=False,
+                via_points=[{'lat': 51.55, 'lon': -0.11}, {'lat': 51.56, 'lon': -0.12}])
+    fake = {
+        'success': True,
+        'total_distance_km': 12.5,
+        'total_duration_minutes': 30.0,
+        'optimized': True,
+        'legs': [{'geometry_precision': 6}],
+        'all_geometry': ['abc'],
+        'all_maneuvers': [{'instruction': 'Go'}],
+    }
+    with patch.object(multidrop, 'build_multidrop_route', return_value=fake):
+        result = build_route_multidrop_response(p)
+    assert result is not None
+    assert result['multi_drop'] is True
+    assert result['cached'] is False
+    assert result['source'] == 'Voyagr Multi-Drop'
+    assert result['distance'] == '12.50 km'
+    assert result['time'] == '30 minutes'
+    assert result['geometry'] == 'abc'
+    assert result['geometry_precision'] == 6
+    assert result['maneuvers'] == [{'instruction': 'Go'}]
+    assert len(result['routes']) == 1
+    assert result['routes'][0]['name'] == 'Multi-Drop (Optimized)'
+    assert result['start_lat'] == p.start_lat and result['end_lon'] == p.end_lon

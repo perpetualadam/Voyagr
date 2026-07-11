@@ -865,3 +865,168 @@ def build_multidrop_route_from_request(data: Dict[str, Any]) -> Tuple[Dict[str, 
     except Exception as e:
         logger.error(f"[MULTI-DROP] Error: {e}")
         return {'success': False, 'error': str(e)}, 200
+
+
+def build_route_multidrop_response(params: Any) -> Optional[Dict[str, Any]]:
+    """
+    Multi-drop branch of the /api/route handler.
+
+    When ``optimize_stop_order`` is set and there are >= 2 intermediate points
+    (via_points + stops), run the multi-drop engine and return the fully-formatted
+    response dict (ready to jsonify). Returns ``None`` to signal that the caller
+    should fall through to standard single-route calculation (either the branch
+    doesn't apply or the optimisation failed).
+
+    ``params`` is a voyagr.services.routing.request_params.RouteRequestParams.
+    Behaviour mirrors the previous inline block in voyagr_web.calculate_route.
+    """
+    via_points = params.via_points
+    stops = params.stops
+    start_lat, start_lon = params.start_lat, params.start_lon
+    end_lat, end_lon = params.end_lat, params.end_lon
+    enable_hazard_avoidance = params.enable_hazard_avoidance
+    routing_mode = params.routing_mode
+
+    all_intermediate = list(via_points) + list(stops)
+    if not (params.optimize_stop_order and len(all_intermediate) >= 2):
+        return None
+
+    logger.info(f"[ROUTE] Multi-drop optimization requested with {len(all_intermediate)} stops")
+
+    md_stops = []
+    for item in all_intermediate:
+        md_stops.append({
+            'lat': float(item.get('lat', 0)),
+            'lon': float(item.get('lon', 0)),
+            'name': item.get('name', 'Stop'),
+            'duration': item.get('duration', 0),
+            'type': item.get('type', 'via'),
+        })
+
+    md_exclude = []
+    md_tl_for_gh = None
+    md_rx_for_gh = None
+    bbox_md = None
+    if enable_hazard_avoidance:
+        try:
+            import voyagr_web as vw
+            from voyagr.services.hazards import (
+                fetch_hazards_for_route,
+                build_valhalla_exclude_locations,
+                get_caz_valhalla_exclude_points,
+            )
+            all_lats = [start_lat, end_lat] + [s['lat'] for s in md_stops]
+            all_lons = [start_lon, end_lon] + [s['lon'] for s in md_stops]
+            hazards_md = fetch_hazards_for_route(min(all_lats), min(all_lons), max(all_lats), max(all_lons))
+            if not params.avoid_cameras:
+                vw.clear_camera_hazard_buckets(hazards_md)
+            else:
+                vw.filter_camera_hazards_by_preferences(hazards_md)
+            bbox_md = {
+                'min_lat': min(all_lats), 'max_lat': max(all_lats),
+                'min_lon': min(all_lons), 'max_lon': max(all_lons),
+            }
+            if params.avoid_traffic_lights:
+                from voyagr.services.hazards import fetch_traffic_lights_osm_bbox
+                hazards_md['traffic_light'] = fetch_traffic_lights_osm_bbox(
+                    bbox_md['min_lat'], bbox_md['max_lat'], bbox_md['min_lon'], bbox_md['max_lon'])
+                md_tl_for_gh = hazards_md.get('traffic_light')
+            else:
+                hazards_md['traffic_light'] = []
+            if params.avoid_railway_crossings:
+                from voyagr.services.hazards import fetch_railway_crossings_osm_bbox
+                hazards_md['railway_crossing'] = fetch_railway_crossings_osm_bbox(
+                    bbox_md['min_lat'], bbox_md['max_lat'], bbox_md['min_lon'], bbox_md['max_lon'])
+                md_rx_for_gh = hazards_md.get('railway_crossing')
+            else:
+                hazards_md['railway_crossing'] = []
+            md_caz_pts = get_caz_valhalla_exclude_points(bbox_md, max_points=10) if params.apply_caz_routing_avoidance else []
+            md_cap = max(50 - len(md_caz_pts), 8)
+            md_exclude = build_valhalla_exclude_locations(hazards_md, route_bbox=bbox_md, max_hazards=md_cap)
+            if md_caz_pts:
+                md_exclude = (md_caz_pts + md_exclude)[:50]
+        except Exception as e:
+            logger.warning(f"[MULTI-DROP] Hazard fetch failed: {e}")
+
+    tw_dict = None
+    if params.time_windows and isinstance(params.time_windows, dict):
+        tw_dict = {int(k): v for k, v in params.time_windows.items()}
+
+    # Use GraphHopper camera avoidance on multi-drop legs when optimised routing is on
+    use_gh = enable_hazard_avoidance and routing_mode == 'auto'
+    md_bbox = bbox_md if enable_hazard_avoidance else None
+
+    md_result = build_multidrop_route(
+        start={'lat': start_lat, 'lon': start_lon},
+        end={'lat': end_lat, 'lon': end_lon},
+        stops=md_stops,
+        optimize_order=True,
+        round_trip=params.round_trip,
+        routing_mode=routing_mode,
+        enable_hazard_avoidance=enable_hazard_avoidance,
+        departure_time=params.departure_time,
+        time_windows=tw_dict,
+        exclude_locations=md_exclude if md_exclude else None,
+        use_graphhopper_avoidance=use_gh,
+        route_bbox=md_bbox,
+        avoid_tolls=params.avoid_tolls,
+        avoid_motorways=params.avoid_motorways,
+        avoid_ferries=params.avoid_ferries,
+        prefer_scenic=params.prefer_scenic,
+        prefer_quiet=params.prefer_quiet,
+        avoid_unpaved=params.avoid_unpaved,
+        route_optimization=params.route_optimization,
+        traffic_light_hazards=md_tl_for_gh,
+        railway_crossing_hazards=md_rx_for_gh,
+        avoid_caz_zones=params.apply_caz_routing_avoidance,
+    )
+
+    if not md_result.get('success'):
+        logger.warning("[MULTI-DROP] Optimization failed, falling through to standard routing")
+        return None
+
+    md_result['distance'] = f"{md_result['total_distance_km']:.2f} km"
+    md_result['time'] = f"{md_result['total_duration_minutes']:.0f} minutes"
+    md_result['total_time_with_stops'] = f"{md_result['total_duration_minutes']:.0f} minutes"
+    md_result['total_stop_time'] = md_result.get('total_stop_time_minutes', 0)
+    md_result['via_points_count'] = len(via_points)
+    md_result['stops_count'] = len(stops)
+    md_result['source'] = 'Voyagr Multi-Drop'
+    md_result['start_lat'] = start_lat
+    md_result['start_lon'] = start_lon
+    md_result['end_lat'] = end_lat
+    md_result['end_lon'] = end_lon
+    md_result['cached'] = False
+    md_result['multi_drop'] = True
+
+    geometry = md_result.get('all_geometry', [])
+    first_geom = geometry[0] if geometry else None
+    first_precision = md_result['legs'][0].get('geometry_precision', 6) if md_result.get('legs') else 6
+
+    if first_geom:
+        md_result['geometry'] = first_geom
+        md_result['geometry_precision'] = first_precision
+
+    maneuvers = md_result.get('all_maneuvers', [])
+    if maneuvers:
+        md_result['maneuvers'] = maneuvers
+
+    # Build a routes array for compatibility with route comparison UI
+    md_result['routes'] = [{
+        'id': 1,
+        'name': 'Multi-Drop' + (' (Optimized)' if md_result.get('optimized') else ''),
+        'distance_km': md_result['total_distance_km'],
+        'duration_minutes': md_result['total_duration_minutes'],
+        'fuel_cost': 0,
+        'fuel_litres': 0,
+        'toll_cost': 0,
+        'caz_cost': 0,
+        'hazard_count': 0,
+        'hazard_penalty_seconds': 0,
+        'geometry': first_geom,
+        'geometry_precision': first_precision,
+        'maneuvers': maneuvers,
+        'source': 'Voyagr Multi-Drop',
+    }]
+
+    return md_result
