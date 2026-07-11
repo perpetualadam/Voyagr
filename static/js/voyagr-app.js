@@ -12075,68 +12075,65 @@ function processVoiceCommand(command) {
  * @param {*} data - Parameter description
  * @returns {*} Return value description
  */
-function handleVoiceAction(data) {
-    const action = data.action;
+function applyVoiceActionFromPlan(plan) {
+    if (!plan || !plan.shouldApply) return;
 
-    switch (action) {
-        case 'navigate':
-            document.getElementById('end').value = data.location;
-            calculateRoute();
-            break;
-
-        case 'search':
-            document.getElementById('end').value = data.search_term;
-            calculateRoute();
-            break;
-
-        case 'set_preference':
-            console.log('[Voice] Setting preference:', data.preference, '=', data.value);
-            // Store preference in localStorage
-            localStorage.setItem('voice_pref_' + data.preference, JSON.stringify(data.value));
-            break;
-
-        case 'get_info':
-            console.log('[Voice] Getting info:', data.info_type);
-            // This would be handled by the app based on current route
-            break;
-
-        case 'report_hazard':
-            console.log('[Voice] Reporting hazard:', data.hazard_type);
-            // Report hazard to backend
-            fetch('/api/hazards/report', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    lat: currentLat,
-                    lon: currentLon,
-                    hazard_type: data.hazard_type,
-                    description: data.description || '',
-                    severity: 'medium'
-                })
-            })
-                .then(r => r.json())
-                .then((r) => {
-                    console.log('[Voice] Hazard reported:', r);
-                    if (!r.success && r.error) {
-                        showStatus('Voice report: ' + r.error, 'warning');
-                    }
-                })
-                .catch((e) => console.warn('[Voice] Hazard report failed:', e));
-            break;
-
-        case 'reroute':
-            console.log('[Voice] Rerouting from current location');
-            if (routeInProgress && currentLat && currentLon) {
-                // Trigger automatic reroute from current position
-                triggerAutomaticReroute(currentLat, currentLon);
-                speakMessage('Recalculating route from your current location');
-            } else {
-                speakMessage('No active route to recalculate');
-            }
-            break;
+    if (plan.logMessage) {
+        if (plan.logArgs && plan.logArgs.length) {
+            console.log(plan.logMessage, ...plan.logArgs);
+        } else {
+            console.log(plan.logMessage);
+        }
     }
+
+    if (plan.endInputId && plan.endValue != null) {
+        const endEl = document.getElementById(plan.endInputId);
+        if (endEl) endEl.value = plan.endValue;
+    }
+    if (plan.scheduleCalculateRoute) {
+        calculateRoute();
+    }
+    if (plan.writeStorage) {
+        localStorage.setItem(plan.storageKey, plan.storageValue);
+    }
+    if (plan.fetchHazardReport) {
+        fetch(plan.apiPath, {
+            method: plan.method,
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(plan.body)
+        })
+            .then(r => r.json())
+            .then((responseData) => {
+                const VC = _voiceControl();
+                const execute = VC.buildVoiceHazardReportResponseExecutePlan(responseData);
+                if (execute.logMessage) {
+                    console.log(execute.logMessage, ...(execute.logArgs || []));
+                }
+                if (execute.shouldShowStatus) {
+                    showStatus(execute.statusMessage, execute.statusType);
+                }
+            })
+            .catch((error) => {
+                const errExecute = _voiceControl().buildVoiceHazardReportErrorExecutePlan(error);
+                console.warn(errExecute.warnLogPrefix, ...(errExecute.warnLogArgs || []));
+            });
+    }
+    if (plan.triggerAutomaticReroute) {
+        triggerAutomaticReroute(plan.rerouteLat, plan.rerouteLon);
+    }
+    if (plan.speakMessage) {
+        speakMessage(plan.speakMessage);
+    }
+}
+
+function handleVoiceAction(data) {
+    applyVoiceActionFromPlan(_voiceControl().buildVoiceActionDispatchPlan(data, {
+        currentLat,
+        currentLon,
+        routeInProgress,
+    }));
 }
 
 /**
@@ -14443,49 +14440,36 @@ function restoreUiStateAfterReload() {
  * @function saveAppState
  * @returns {*} Return value description
  */
+function applyRestoreAppStateFromPlan(apply, orch) {
+    if (!apply || !apply.shouldApply) return;
+
+    (apply.storagePatches || []).forEach(({ key, value }) => {
+        localStorage.setItem(key, value);
+    });
+    if (apply.pendingUiRestore) {
+        window[apply.pendingUiRestoreProperty] = apply.pendingUiRestore;
+    }
+    localStorage.removeItem(apply.removeAppStateKey);
+    console.log(apply.restoredLogMessage);
+}
+
 function saveAppState() {
     const AS = _appState();
     try {
-        const savePlan = AS.buildSaveAppStatePlan({
-            preferences: {
-                tolls: isAvoidTollsEnabled() ? 'true' : 'false',
-                caz: localStorage.getItem('pref_caz'),
-                cameras: localStorage.getItem('pref_cameras'),
-                policeRadars: localStorage.getItem('pref_policeRadars'),
-                roadworks: localStorage.getItem('pref_roadworks'),
-                accidents: localStorage.getItem('pref_accidents'),
-                railwayCrossings: localStorage.getItem('pref_railwayCrossings'),
-                railwayCrossingsAvoid: localStorage.getItem('pref_railwayCrossingsAvoid'),
-                potholes: localStorage.getItem('pref_potholes'),
-                debris: localStorage.getItem('pref_debris'),
-                gestureControl: localStorage.getItem('gestureEnabled'),
-                batterySaving: localStorage.getItem('pref_batterySaving'),
-                mapTheme: localStorage.getItem('mapTheme'),
-                mlPredictions: localStorage.getItem('mlPredictionsEnabled'),
-                optimizeStopOrder: localStorage.getItem('pref_optimizeStopOrder'),
-                roundTrip: localStorage.getItem('pref_roundTrip'),
-                trafficAwareRouting: localStorage.getItem('pref_trafficAwareRouting'),
-                avoidRoadClosures: localStorage.getItem('pref_avoidRoadClosures'),
-                avoidIncidents: localStorage.getItem('pref_avoidIncidents'),
-            },
-            ui: {
-                activeTab: typeof getCurrentVisibleTab === 'function' ? getCurrentVisibleTab() : 'navigation',
-                bottomSheetExpanded: typeof bottomSheetIsExpanded !== 'undefined' ? bottomSheetIsExpanded : true,
-            },
+        const execute = AS.buildSaveAppStateExecutePlan({
+            avoidTolls: isAvoidTollsEnabled(),
+            getStorageItem: (key) => localStorage.getItem(key),
+            activeTab: typeof getCurrentVisibleTab === 'function' ? getCurrentVisibleTab() : 'navigation',
+            bottomSheetExpanded: typeof bottomSheetIsExpanded !== 'undefined' ? bottomSheetIsExpanded : true,
         });
-        if (!savePlan.shouldSave) return;
-        localStorage.setItem(savePlan.storageKey, JSON.stringify(savePlan.state));
-        console.log(savePlan.logMessage);
+        if (!execute.shouldSave) return;
+        localStorage.setItem(execute.storageKey, execute.storageValue);
+        console.log(execute.logMessage);
     } catch (e) {
-        console.log(AS.buildSaveAppStatePlan().errorLogPrefix, e);
+        console.log(AS.buildSaveAppStateExecutePlan().errorLogPrefix, e);
     }
 }
 
-/**
- * restoreAppState function
- * @function restoreAppState
- * @returns {*} Return value description
- */
 function restoreAppState() {
     const AS = _appState();
     const orch = AS.buildRestoreAppStateOrchestrationPlan();
@@ -14500,16 +14484,7 @@ function restoreAppState() {
 
         const state = JSON.parse(saved);
         const execute = AS.buildRestoreAppStateExecutePlan(state);
-        if (!execute.shouldRestore) return;
-
-        (execute.storagePatches || []).forEach(({ key, value }) => {
-            localStorage.setItem(key, value);
-        });
-        if (execute.pendingUiRestore) {
-            window[orch.pendingUiRestoreProperty] = execute.pendingUiRestore;
-        }
-        localStorage.removeItem(execute.removeAppStateKey);
-        console.log(execute.restoredLogMessage);
+        applyRestoreAppStateFromPlan(AS.buildRestoreAppStateApplyPlan(execute, orch), orch);
     } catch (e) {
         console.log(AS.buildRestoreAppStateExecutePlan().errorLogPrefix, e);
     }

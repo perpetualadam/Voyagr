@@ -70,6 +70,87 @@
     }
 
     /**
+     * Collect preference snapshot values from runtime/storage reads.
+     * @param {Object} [input]
+     * @param {boolean} [input.avoidTolls]
+     * @param {function(string): string|null|undefined} [input.getStorageItem]
+     * @returns {Object}
+     */
+    function buildSaveAppStatePreferencesCollectPlan(input) {
+        input = input || {};
+        var get = input.getStorageItem || function () { return null; };
+        var preferences = {
+            tolls: input.avoidTolls ? 'true' : 'false',
+        };
+
+        PREF_SNAPSHOT_KEYS.forEach(function (snapshotKey) {
+            preferences[snapshotKey] = get(resolvePreferenceStorageKey(snapshotKey));
+        });
+
+        Object.keys(DIRECT_SNAPSHOT_STORAGE_KEYS).forEach(function (snapshotKey) {
+            preferences[snapshotKey] = get(resolvePreferenceStorageKey(snapshotKey));
+        });
+
+        return preferences;
+    }
+
+    /**
+     * Collect UI snapshot values for app-state persistence.
+     * @param {Object} [input]
+     * @param {string} [input.activeTab]
+     * @param {boolean} [input.bottomSheetExpanded]
+     * @returns {Object}
+     */
+    function buildSaveAppStateUiCollectPlan(input) {
+        input = input || {};
+        return {
+            activeTab: input.activeTab != null ? input.activeTab : 'navigation',
+            bottomSheetExpanded: input.bottomSheetExpanded !== false,
+        };
+    }
+
+    /**
+     * Execute plan for persisting app state to localStorage.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildSaveAppStateExecutePlan(input) {
+        input = input || {};
+        var savePlan = buildSaveAppStatePlan({
+            preferences: input.preferences || buildSaveAppStatePreferencesCollectPlan(input),
+            ui: input.ui || buildSaveAppStateUiCollectPlan(input),
+            now: input.now,
+        });
+        return {
+            shouldSave: savePlan.shouldSave,
+            storageKey: savePlan.storageKey,
+            storageValue: JSON.stringify(savePlan.state),
+            logMessage: savePlan.logMessage,
+            errorLogPrefix: savePlan.errorLogPrefix,
+        };
+    }
+
+    /**
+     * Apply plan for restoring persisted app state from localStorage.
+     * @param {Object} execute - from buildRestoreAppStateExecutePlan
+     * @param {Object} [orch] - from buildRestoreAppStateOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildRestoreAppStateApplyPlan(execute, orch) {
+        execute = execute || {};
+        orch = orch || {};
+        return {
+            shouldApply: !!execute.shouldRestore,
+            storagePatches: execute.storagePatches || [],
+            pendingUiRestoreProperty: orch.pendingUiRestoreProperty || PENDING_UI_RESTORE_PROPERTY,
+            pendingUiRestore: execute.pendingUiRestore || null,
+            removeAppStateKey: execute.removeAppStateKey || APP_STATE_STORAGE_KEY,
+            restoredLogMessage: execute.restoredLogMessage,
+            errorLogPrefix: execute.errorLogPrefix,
+        };
+    }
+
+    /**
      * @param {Object} [parsedState]
      * @returns {Object}
      */
@@ -131,8 +212,12 @@
         DIRECT_SNAPSHOT_STORAGE_KEYS: DIRECT_SNAPSHOT_STORAGE_KEYS,
         resolvePreferenceStorageKey: resolvePreferenceStorageKey,
         buildSaveAppStatePlan: buildSaveAppStatePlan,
+        buildSaveAppStatePreferencesCollectPlan: buildSaveAppStatePreferencesCollectPlan,
+        buildSaveAppStateUiCollectPlan: buildSaveAppStateUiCollectPlan,
+        buildSaveAppStateExecutePlan: buildSaveAppStateExecutePlan,
         buildRestoreAppStateExecutePlan: buildRestoreAppStateExecutePlan,
         buildRestoreAppStateOrchestrationPlan: buildRestoreAppStateOrchestrationPlan,
+        buildRestoreAppStateApplyPlan: buildRestoreAppStateApplyPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

@@ -301,6 +301,132 @@
         return buildVoiceCommandProcessOrchestrationPlan(transcript);
     }
 
+    /**
+     * Execute plan for handling a voice command action payload.
+     * @param {Object} data
+     * @param {Object} [runtime]
+     * @param {number} [runtime.currentLat]
+     * @param {number} [runtime.currentLon]
+     * @param {boolean} [runtime.routeInProgress]
+     * @returns {Object}
+     */
+    function buildVoiceActionDispatchPlan(data, runtime) {
+        data = data || {};
+        runtime = runtime || {};
+        var action = data.action;
+
+        if (action === 'navigate') {
+            return {
+                action: action,
+                shouldApply: true,
+                endInputId: 'end',
+                endValue: data.location,
+                scheduleCalculateRoute: true,
+            };
+        }
+        if (action === 'search') {
+            return {
+                action: action,
+                shouldApply: true,
+                endInputId: 'end',
+                endValue: data.search_term,
+                scheduleCalculateRoute: true,
+            };
+        }
+        if (action === 'set_preference') {
+            return {
+                action: action,
+                shouldApply: true,
+                writeStorage: true,
+                storageKey: 'voice_pref_' + data.preference,
+                storageValue: JSON.stringify(data.value),
+                logMessage: '[Voice] Setting preference:',
+                logArgs: [data.preference, data.value],
+            };
+        }
+        if (action === 'get_info') {
+            return {
+                action: action,
+                shouldApply: true,
+                logOnly: true,
+                logMessage: '[Voice] Getting info:',
+                logArgs: [data.info_type],
+            };
+        }
+        if (action === 'report_hazard') {
+            return {
+                action: action,
+                shouldApply: true,
+                fetchHazardReport: true,
+                apiPath: '/api/hazards/report',
+                method: 'POST',
+                body: {
+                    lat: runtime.currentLat,
+                    lon: runtime.currentLon,
+                    hazard_type: data.hazard_type,
+                    description: data.description || '',
+                    severity: 'medium',
+                },
+                logMessage: '[Voice] Reporting hazard:',
+                logArgs: [data.hazard_type],
+            };
+        }
+        if (action === 'reroute') {
+            var canReroute = !!(runtime.routeInProgress && runtime.currentLat && runtime.currentLon);
+            return {
+                action: action,
+                shouldApply: true,
+                triggerAutomaticReroute: canReroute,
+                rerouteLat: runtime.currentLat,
+                rerouteLon: runtime.currentLon,
+                speakMessage: canReroute
+                    ? 'Recalculating route from your current location'
+                    : 'No active route to recalculate',
+                logMessage: '[Voice] Rerouting from current location',
+            };
+        }
+        return {
+            action: action || 'unknown',
+            shouldApply: false,
+        };
+    }
+
+    /**
+     * Execute plan for a voice hazard-report API response.
+     * @param {Object} data
+     * @returns {Object}
+     */
+    function buildVoiceHazardReportResponseExecutePlan(data) {
+        data = data || {};
+        if (data.success) {
+            return {
+                shouldShowStatus: false,
+                logMessage: '[Voice] Hazard reported:',
+                logArgs: [data],
+            };
+        }
+        return {
+            shouldShowStatus: !!data.error,
+            statusMessage: data.error ? 'Voice report: ' + data.error : '',
+            statusType: 'warning',
+            logMessage: '[Voice] Hazard reported:',
+            logArgs: [data],
+        };
+    }
+
+    /**
+     * Execute plan when voice hazard-report fetch fails.
+     * @param {Error|Object} error
+     * @returns {Object}
+     */
+    function buildVoiceHazardReportErrorExecutePlan(error) {
+        error = error || {};
+        return {
+            warnLogPrefix: '[Voice] Hazard report failed:',
+            warnLogArgs: [error],
+        };
+    }
+
     var api = {
         VOICE_STATUS_ELEMENT_ID: VOICE_STATUS_ELEMENT_ID,
         VOICE_BTN_ELEMENT_ID: VOICE_BTN_ELEMENT_ID,
@@ -321,6 +447,9 @@
         buildVoiceCommandResultExecutePlan: buildVoiceCommandResultExecutePlan,
         buildVoiceCommandErrorExecutePlan: buildVoiceCommandErrorExecutePlan,
         buildVoiceCommandEndProcessingPlan: buildVoiceCommandEndProcessingPlan,
+        buildVoiceActionDispatchPlan: buildVoiceActionDispatchPlan,
+        buildVoiceHazardReportResponseExecutePlan: buildVoiceHazardReportResponseExecutePlan,
+        buildVoiceHazardReportErrorExecutePlan: buildVoiceHazardReportErrorExecutePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

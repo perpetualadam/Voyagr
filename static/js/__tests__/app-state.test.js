@@ -45,4 +45,41 @@ describe('app-state module', () => {
         ]));
         expect(execute.pendingUiRestore).toEqual({ activeTab: 'navigation' });
     });
+
+    test('buildSaveAppStatePreferencesCollectPlan reads canonical storage keys', () => {
+        const prefs = AS.buildSaveAppStatePreferencesCollectPlan({
+            avoidTolls: true,
+            getStorageItem: (key) => (key === 'mapTheme' ? 'dark' : key === 'pref_caz' ? 'false' : null),
+        });
+        expect(prefs.tolls).toBe('true');
+        expect(prefs.mapTheme).toBe('dark');
+        expect(prefs.caz).toBe('false');
+    });
+
+    test('buildSaveAppStateExecutePlan serialises collect input', () => {
+        const execute = AS.buildSaveAppStateExecutePlan({
+            avoidTolls: false,
+            getStorageItem: () => null,
+            activeTab: 'settings',
+            bottomSheetExpanded: false,
+        });
+        expect(execute.shouldSave).toBe(true);
+        expect(execute.storageKey).toBe(AS.APP_STATE_STORAGE_KEY);
+        const parsed = JSON.parse(execute.storageValue);
+        expect(parsed.ui.activeTab).toBe('settings');
+        expect(parsed.ui.bottomSheetExpanded).toBe(false);
+        expect(parsed.preferences.tolls).toBe('false');
+    });
+
+    test('buildRestoreAppStateApplyPlan bundles storage patches and pending UI', () => {
+        const orch = AS.buildRestoreAppStateOrchestrationPlan();
+        const execute = AS.buildRestoreAppStateExecutePlan({
+            preferences: { caz: 'true' },
+            ui: { activeTab: 'history' },
+        });
+        const apply = AS.buildRestoreAppStateApplyPlan(execute, orch);
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.pendingUiRestoreProperty).toBe(orch.pendingUiRestoreProperty);
+        expect(apply.pendingUiRestore.activeTab).toBe('history');
+    });
 });

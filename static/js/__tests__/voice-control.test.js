@@ -133,3 +133,44 @@ describe('buildSpeakTextPreflightPlan', () => {
         expect(plan.onEndStatus).toBe('Ready');
     });
 });
+
+describe('buildVoiceActionDispatchPlan', () => {
+    test('navigate action fills destination and schedules route calc', () => {
+        const plan = VC.buildVoiceActionDispatchPlan(
+            { action: 'navigate', location: 'London' },
+            {}
+        );
+        expect(plan.shouldApply).toBe(true);
+        expect(plan.endValue).toBe('London');
+        expect(plan.scheduleCalculateRoute).toBe(true);
+    });
+
+    test('reroute action triggers only when navigation is active', () => {
+        const active = VC.buildVoiceActionDispatchPlan(
+            { action: 'reroute' },
+            { routeInProgress: true, currentLat: 51.5, currentLon: -0.1 }
+        );
+        expect(active.triggerAutomaticReroute).toBe(true);
+        expect(active.speakMessage).toContain('Recalculating');
+
+        const idle = VC.buildVoiceActionDispatchPlan({ action: 'reroute' }, {});
+        expect(idle.triggerAutomaticReroute).toBe(false);
+        expect(idle.speakMessage).toContain('No active route');
+    });
+
+    test('report_hazard action builds API body from runtime position', () => {
+        const plan = VC.buildVoiceActionDispatchPlan(
+            { action: 'report_hazard', hazard_type: 'debris' },
+            { currentLat: 1, currentLon: 2 }
+        );
+        expect(plan.fetchHazardReport).toBe(true);
+        expect(plan.body.hazard_type).toBe('debris');
+        expect(plan.body.lat).toBe(1);
+    });
+
+    test('buildVoiceHazardReportResponseExecutePlan warns on API error', () => {
+        const execute = VC.buildVoiceHazardReportResponseExecutePlan({ success: false, error: 'too far' });
+        expect(execute.shouldShowStatus).toBe(true);
+        expect(execute.statusMessage).toContain('too far');
+    });
+});
