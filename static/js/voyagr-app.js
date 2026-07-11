@@ -3065,55 +3065,7 @@ function clearAllWaypoints() {
 function updateWaypointsList() {
     const container = document.getElementById('waypointsList');
     if (!container) return;
-
-    const allItems = [
-        ...viaPoints.map((p, i) => ({...p, _type: 'via', _idx: i})),
-        ...stops.map((s, i) => ({...s, _type: 'stop', _idx: i}))
-    ];
-
-    if (allItems.length === 0) {
-        container.innerHTML = '<div class="waypoints-empty">No waypoints yet. Add via-points or stops above.</div>';
-        return;
-    }
-
-    let html = '';
-
-    viaPoints.forEach((point, idx) => {
-        html += `
-            <div class="waypoint-item" draggable="true" data-type="via" data-index="${idx}"
-                 ondragstart="onWaypointDragStart(event)" ondragover="onWaypointDragOver(event)" ondrop="onWaypointDrop(event)"
-                 style="display: flex; align-items: center; padding: 8px; background: #FFF3E0; border-radius: 6px; margin-bottom: 6px; cursor: grab; transition: opacity 0.2s;">
-                <span style="margin-right: 6px; color: #999; font-size: 14px; cursor: grab;">⠿</span>
-                <span style="background: #FF9800; color: white; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 8px;">${idx + 1}</span>
-                <span style="flex: 1; font-size: 13px;">${point.name}</span>
-                <button onclick="moveWaypoint('via', ${idx}, -1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" title="Move up">▲</button>
-                <button onclick="moveWaypoint('via', ${idx}, 1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" title="Move down">▼</button>
-                <button onclick="removeViaPoint(${idx})" style="background: none; border: none; color: #f44336; cursor: pointer; font-size: 16px;">✕</button>
-            </div>
-        `;
-    });
-
-    stops.forEach((stop, idx) => {
-        html += `
-            <div class="waypoint-item" draggable="true" data-type="stop" data-index="${idx}"
-                 ondragstart="onWaypointDragStart(event)" ondragover="onWaypointDragOver(event)" ondrop="onWaypointDrop(event)"
-                 style="display: flex; align-items: center; padding: 8px; background: #FCE4EC; border-radius: 6px; margin-bottom: 6px; cursor: grab; transition: opacity 0.2s;">
-                <span style="margin-right: 6px; color: #999; font-size: 14px; cursor: grab;">⠿</span>
-                <span style="background: #E91E63; color: white; border-radius: 4px; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; margin-right: 8px;">${idx + 1}</span>
-                <span style="flex: 1; font-size: 13px;">${stop.name} (${stop.duration} min)</span>
-                <button onclick="moveWaypoint('stop', ${idx}, -1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" title="Move up">▲</button>
-                <button onclick="moveWaypoint('stop', ${idx}, 1)" style="background: none; border: none; cursor: pointer; font-size: 12px; padding: 2px;" title="Move down">▼</button>
-                <button onclick="removeStop(${idx})" style="background: none; border: none; color: #f44336; cursor: pointer; font-size: 16px;">✕</button>
-            </div>
-        `;
-    });
-
-    const totalStopTime = stops.reduce((sum, s) => sum + s.duration, 0);
-    if (totalStopTime > 0) {
-        html += `<div style="font-size: 12px; color: #666; margin-top: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px;">Total stop time: <strong>${totalStopTime} min</strong></div>`;
-    }
-
-    container.innerHTML = html;
+    container.innerHTML = VoyagrModules.waypoints().buildWaypointsListHtml(viaPoints, stops);
 }
 
 let _draggedWaypoint = null;
@@ -3168,60 +3120,12 @@ function displayMultiDropLegs(data) {
     const container = document.getElementById('waypointsList');
     if (!container || !data.legs) return;
 
-    const distUnit = getDistanceUnit();
-    let html = '<div style="margin-top: 10px;">';
-    html += '<div style="font-weight: 600; font-size: 13px; margin-bottom: 8px; color: #333;">Route Itinerary' +
-            (data.optimized ? ' (Optimized)' : '') + '</div>';
-
-    data.legs.forEach((leg, idx) => {
-        const legDist = convertDistance(leg.distance_km || 0);
-        const legTime = Math.round(leg.duration_minutes || 0);
-        const eta = leg.eta ? new Date(leg.eta).toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'}) : '';
-        const stopInfo = leg.stop;
-
-        const bgColor = idx % 2 === 0 ? '#f8f9fa' : '#ffffff';
-        const borderColor = stopInfo && !stopInfo.time_window_ok ? '#f44336' : '#4CAF50';
-
-        html += `<div style="padding: 10px; background: ${bgColor}; border-left: 3px solid ${borderColor}; border-radius: 4px; margin-bottom: 4px;">`;
-        html += `<div style="display: flex; justify-content: space-between; align-items: center;">`;
-        html += `<span style="font-weight: 500; font-size: 13px;">Leg ${idx + 1}</span>`;
-        html += `<span style="font-size: 12px; color: #666;">${legDist} ${distUnit} | ${legTime} min</span>`;
-        html += `</div>`;
-
-        if (stopInfo) {
-            html += `<div style="margin-top: 4px; font-size: 12px;">`;
-            html += `<span style="color: #E91E63; font-weight: 500;">${stopInfo.name}</span>`;
-            if (stopInfo.duration_minutes > 0) {
-                html += ` <span style="color: #999;">(${stopInfo.duration_minutes} min stop)</span>`;
-            }
-            if (eta) {
-                html += ` <span style="color: #2196F3;">ETA: ${eta}</span>`;
-            }
-            if (!stopInfo.time_window_ok) {
-                html += ' <span style="color: #f44336; font-weight: 600;">Outside time window</span>';
-            }
-            html += `</div>`;
-        } else if (eta) {
-            html += `<div style="margin-top: 4px; font-size: 12px; color: #2196F3;">ETA: ${eta}</div>`;
-        }
-        html += `</div>`;
+    container.innerHTML += VoyagrModules.waypoints().buildMultiDropItineraryHtml(data, {
+        distUnit: getDistanceUnit(),
+        totalDistanceText: convertDistance(data.total_distance_km),
+        legDistanceTexts: data.legs.map((leg) => convertDistance(leg.distance_km || 0)),
+        formatEtaClock: (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
-
-    html += `<div style="padding: 8px; background: #E8F5E9; border-radius: 4px; margin-top: 8px;">`;
-    html += `<div style="font-weight: 600; font-size: 13px; color: #2E7D32;">`;
-    html += `Total: ${convertDistance(data.total_distance_km)} ${distUnit} | `;
-    html += `${Math.round(data.total_duration_minutes)} min`;
-    if (data.total_stop_time_minutes > 0) {
-        html += ` (incl. ${data.total_stop_time_minutes} min stops)`;
-    }
-    html += `</div>`;
-    if (data.round_trip) {
-        html += `<div style="font-size: 11px; color: #666; margin-top: 2px;">Round trip - returns to start</div>`;
-    }
-    html += `</div>`;
-
-    html += '</div>';
-    container.innerHTML += html;
 
     // Draw multi-drop leg geometries on map with different colors
     if (data.all_geometry && data.all_geometry.length > 0) {
@@ -3235,8 +3139,7 @@ function displayMultiDropLegs(data) {
 function drawMultiDropLegsOnMap(data) {
     if (!map || !data.all_geometry) return;
 
-    const legColors = ['#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0',
-                       '#00BCD4', '#FF5722', '#795548', '#607D8B', '#3F51B5'];
+    const legColors = VoyagrModules.waypoints().MULTIDROP_LEG_COLORS;
 
     data.all_geometry.forEach((geom, idx) => {
         if (!geom) return;
@@ -3500,6 +3403,25 @@ function useRoute(index) {
 
 // ===== ROUTE SHARING FUNCTIONS =====
 /**
+ * Build encoded share URL from current route (optionally omit geometry for QR).
+ * @param {boolean} [includeGeometry=true]
+ * @returns {{ shareLink: string, encodedRoute: string }|null}
+ */
+function buildEncodedShareLink(includeGeometry) {
+    if (!window.lastCalculatedRoute) return null;
+    const route = window.lastCalculatedRoute;
+    const startInput = document.getElementById('start').value;
+    const endInput = document.getElementById('end').value;
+    const sharing = VoyagrModules.routeSharing();
+    const payload = sharing.buildShareableRoutePayload(route, startInput, endInput, includeGeometry);
+    const encodedRoute = sharing.encodeRoutePayload(payload);
+    return {
+        shareLink: sharing.buildShareUrl(window.location.origin, encodedRoute),
+        encodedRoute: encodedRoute,
+    };
+}
+
+/**
  * prepareRouteSharing function
  * @function prepareRouteSharing
  * @returns {*} Return value description
@@ -3514,23 +3436,23 @@ function prepareRouteSharing() {
     const startInput = document.getElementById('start').value;
     const endInput = document.getElementById('end').value;
     const symbol = getCurrencySymbol();
-    const distUnit = getDistanceUnit();
+    const summary = VoyagrModules.routeSharing().buildRouteShareSummaryValues(route, {
+        startLabel: startInput,
+        endLabel: endInput,
+        distanceText: convertDistance(route.distance_km || 0),
+        distUnit: getDistanceUnit(),
+        currencySymbol: symbol,
+    });
 
-    // Update route summary with unit-adjusted costs
-    document.getElementById('shareStart').textContent = `Start: ${startInput}`;
-    document.getElementById('shareEnd').textContent = `End: ${endInput}`;
-    document.getElementById('shareDistance').textContent = `Distance: ${convertDistance(route.distance_km || 0)} ${distUnit}`;
-    document.getElementById('shareTime').textContent = `Duration: ${route.time || 'N/A'}`;
-
-    const fuelCost = parseFloat(route.fuel_cost || 0);
-    const tollCost = parseFloat(route.toll_cost || 0);
-    const cazCost = parseFloat(route.caz_cost || 0);
-    const totalCost = (fuelCost + tollCost + cazCost).toFixed(2);
-    document.getElementById('shareCost').textContent = `Total Cost: ${symbol}${totalCost}`;
+    document.getElementById('shareStart').textContent = `Start: ${summary.startLabel}`;
+    document.getElementById('shareEnd').textContent = `End: ${summary.endLabel}`;
+    document.getElementById('shareDistance').textContent = `Distance: ${summary.distanceText} ${summary.distUnit}`;
+    document.getElementById('shareTime').textContent = `Duration: ${summary.durationText}`;
+    document.getElementById('shareCost').textContent = `Total Cost: ${summary.totalCostText}`;
 
     console.log('[Cost] Route sharing prepared with costs:', {
         distanceUnit: distanceUnit,
-        totalCost: totalCost
+        totalCost: summary.totalCost.toFixed(2),
     });
 }
 
@@ -3540,33 +3462,13 @@ function prepareRouteSharing() {
  * @returns {*} Return value description
  */
 function generateShareLink() {
-    if (!window.lastCalculatedRoute) {
+    const built = buildEncodedShareLink(true);
+    if (!built) {
         showStatus('No route calculated yet', 'error');
         return;
     }
 
-    const route = window.lastCalculatedRoute;
-    const startInput = document.getElementById('start').value;
-    const endInput = document.getElementById('end').value;
-
-    // Create shareable link with route data
-    const routeData = {
-        start: startInput,
-        end: endInput,
-        distance: route.distance_km,
-        time: route.time,
-        fuel_cost: route.fuel_cost,
-        toll_cost: route.toll_cost,
-        caz_cost: route.caz_cost,
-        geometry: route.geometry
-    };
-
-    // Encode route data as base64
-    const encodedRoute = btoa(JSON.stringify(routeData));
-    const shareLink = `${window.location.origin}?route=${encodedRoute}`;
-
-    // Display share link
-    document.getElementById('shareLink').value = shareLink;
+    document.getElementById('shareLink').value = built.shareLink;
     document.getElementById('shareLinkContainer').style.display = 'block';
     document.getElementById('qrCodeContainer').style.display = 'none';
 
@@ -3591,28 +3493,13 @@ function copyShareLink() {
  * @returns {*} Return value description
  */
 function generateQRCode() {
-    if (!window.lastCalculatedRoute) {
+    const built = buildEncodedShareLink(false);
+    if (!built) {
         showStatus('No route calculated yet', 'error');
         return;
     }
 
-    // Generate share link first
-    const route = window.lastCalculatedRoute;
-    const startInput = document.getElementById('start').value;
-    const endInput = document.getElementById('end').value;
-
-    const routeData = {
-        start: startInput,
-        end: endInput,
-        distance: route.distance_km,
-        time: route.time,
-        fuel_cost: route.fuel_cost,
-        toll_cost: route.toll_cost,
-        caz_cost: route.caz_cost
-    };
-
-    const encodedRoute = btoa(JSON.stringify(routeData));
-    const shareLink = `${window.location.origin}?route=${encodedRoute}`;
+    const shareLink = built.shareLink;
 
     // Clear previous QR code
     const qrContainer = document.getElementById('qrCode');
@@ -3740,43 +3627,33 @@ function loadRouteAnalytics() {
 function displayAnalytics(data) {
     const symbol = getCurrencySymbol();
     const distUnit = getDistanceUnit();
+    const display = VoyagrModules.tripHistory().buildAnalyticsDisplayValues(data, {
+        currencySymbol: symbol,
+        totalDistanceText: convertDistance(data.total_distance_km || 0),
+        speedUnit: speedUnit,
+        speedUnitLabel: getSpeedUnit(),
+    });
 
-    // Update summary stats
-    document.getElementById('totalTrips').textContent = data.total_trips || 0;
-    document.getElementById('totalDistance').textContent = `${convertDistance(data.total_distance_km || 0)} ${distUnit}`;
-    document.getElementById('totalCost').textContent = `${symbol}${(data.total_cost || 0).toFixed(2)}`;
-    document.getElementById('avgDuration').textContent = `${data.avg_duration || 0} min`;
+    document.getElementById('totalTrips').textContent = display.totalTrips;
+    document.getElementById('totalDistance').textContent = `${display.totalDistanceText} ${distUnit}`;
+    document.getElementById('totalCost').textContent = display.totalCostText;
+    document.getElementById('avgDuration').textContent = display.avgDurationText;
+    document.getElementById('totalFuelCost').textContent = display.totalFuelCostText;
+    document.getElementById('totalTollCost').textContent = display.totalTollCostText;
+    document.getElementById('totalCAZCost').textContent = display.totalCazCostText;
+    document.getElementById('totalTime').textContent = display.totalTimeText;
+    document.getElementById('avgSpeed').textContent = display.avgSpeedText;
 
-    // Update cost breakdown
-    document.getElementById('totalFuelCost').textContent = `${symbol}${(data.total_fuel_cost || 0).toFixed(2)}`;
-    document.getElementById('totalTollCost').textContent = `${symbol}${(data.total_toll_cost || 0).toFixed(2)}`;
-    document.getElementById('totalCAZCost').textContent = `${symbol}${(data.total_caz_cost || 0).toFixed(2)}`;
-
-    // Update time statistics
-    const totalHours = Math.floor((data.total_time_minutes || 0) / 60);
-    const totalMinutes = (data.total_time_minutes || 0) % 60;
-    document.getElementById('totalTime').textContent = `${totalHours}h ${totalMinutes}m`;
-    // avg_speed from backend is in km/h - convert based on user's speed preference
-    const avgSpeedKmh = data.avg_speed || 0;
-    const displayAvgSpeed = speedUnit === 'mph' ? (avgSpeedKmh * 0.621371) : avgSpeedKmh;
-    document.getElementById('avgSpeed').textContent = `${displayAvgSpeed.toFixed(1)} ${getSpeedUnit()}`;
-
-    // Display most frequent routes
     const frequentRoutesList = document.getElementById('frequentRoutesList');
-    if (data.frequent_routes && data.frequent_routes.length > 0) {
-        frequentRoutesList.innerHTML = data.frequent_routes.map((route, idx) => `
-            <div style="background: white; padding: 10px; border-radius: 4px; margin-bottom: 8px; border-left: 4px solid #FF5722;">
-                <div style="font-weight: 500; font-size: 13px; margin-bottom: 4px;">${idx + 1}. ${escapeHtml(route.start)} → ${escapeHtml(route.end)}</div>
-                <div style="font-size: 12px; color: #666;">
-                    <span>🔄 ${route.count} trips</span> |
-                    <span>📏 ${convertDistance(route.avg_distance)} ${distUnit}</span> |
-                    <span>💰 ${symbol}${route.avg_cost.toFixed(2)}</span>
-                </div>
-            </div>
-        `).join('');
-    } else {
-        frequentRoutesList.innerHTML = '<div style="text-align: center; padding: 20px; color: #999;">No trip history yet</div>';
-    }
+    frequentRoutesList.innerHTML = VoyagrModules.tripHistory().buildFrequentRoutesListHtml(
+        data.frequent_routes || [],
+        {
+            escapeHtml: escapeHtml,
+            currencySymbol: symbol,
+            distUnit: distUnit,
+            distanceTexts: (data.frequent_routes || []).map((route) => convertDistance(route.avg_distance)),
+        }
+    );
 }
 
 // ===== ADVANCED ROUTE PREFERENCES FUNCTIONS =====
@@ -7503,12 +7380,7 @@ function applyRouteUpdateDuringNavigation(routeData) {
  * @returns {Object}
  */
 function resolvePreviewRoute(routeData) {
-    if (!routeData) return {};
-    if (routeData.routes && routeData.routes.length > 0) {
-        const idx = Math.max(0, Math.min(Number(selectedRouteIndex) || 0, routeData.routes.length - 1));
-        return routeData.routes[idx];
-    }
-    return routeData;
+    return VoyagrModules.routeSelection().resolvePreviewRoute(routeData, selectedRouteIndex);
 }
 
 /**
@@ -7535,45 +7407,31 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     const symbol = getCurrencySymbol();
     const distUnit = getDistanceUnit();
     const speedUnit = getSpeedUnit();
+    const selection = VoyagrModules.routeSelection();
 
     console.log('[Route Preview] Currency:', symbol, 'Distance Unit:', distUnit);
 
-    // Update route preview information (selected alternative when available)
     const previewRouteSlice = resolvePreviewRoute(routeData);
-    let distanceKm = previewRouteSlice.distance_km || 0;
-    if (!distanceKm && routeData.routes && routeData.routes.length > 0) {
-        distanceKm = routeData.routes[0].distance_km || 0;
-    } else if (!distanceKm && routeData.distance_km) {
-        distanceKm = routeData.distance_km;
-    } else if (!distanceKm && routeData.distance) {
-        distanceKm = parseFloat(routeData.distance) || 0;
-    }
+    const distanceKm = selection.resolvePreviewDistanceKm(routeData, previewRouteSlice);
 
-    // Store distance_km in data attribute for unit conversion updates
     const previewDistanceEl = document.getElementById('previewDistance');
     if (previewDistanceEl) {
         previewDistanceEl.dataset.km = distanceKm;
         previewDistanceEl.textContent = convertDistance(distanceKm) + ' ' + distUnit;
     }
+    const previewCosts = selection.buildPreviewCostValues(previewRouteSlice, routeData);
     document.getElementById('previewDuration').textContent =
-        (previewRouteSlice.duration_minutes ?? routeData.time ?? routeData.duration_minutes ?? 0) + ' min';
+        (previewCosts.durationMinutes ?? 0) + ' min';
 
-    // Build route description
     const startInput = document.getElementById('start').value;
     const endInput = document.getElementById('end').value;
     document.getElementById('previewRoute').textContent = `${startInput} → ${endInput}`;
 
-    // Update cost breakdown
-    // NOTE: Costs are already calculated by backend based on actual distance in km
-    // They should NOT be adjusted based on distance unit preference (km vs miles)
-    // The distance unit is just for display - the actual cost is the same regardless
-    // Get costs - check top-level first, then routes[0] fallback
-    const primaryRoute = previewRouteSlice;
-    const fuelCost = parseFloat(previewRouteSlice.fuel_cost ?? routeData.fuel_cost ?? 0);
-    const fuelLitres = parseFloat(previewRouteSlice.fuel_litres ?? routeData.fuel_litres ?? 0);
-    const tollCost = parseFloat(previewRouteSlice.toll_cost ?? routeData.toll_cost ?? 0);
-    const cazCost = parseFloat(previewRouteSlice.caz_cost ?? routeData.caz_cost ?? 0);
-    const totalCost = fuelCost + tollCost + cazCost;
+    const fuelCost = previewCosts.fuelCost;
+    const fuelLitres = previewCosts.fuelLitres;
+    const tollCost = previewCosts.tollCost;
+    const cazCost = previewCosts.cazCost;
+    const totalCost = previewCosts.totalCost;
 
     document.getElementById('previewFuelCost').textContent = symbol + fuelCost.toFixed(2);
     // Show fuel amount - litres for petrol/diesel/hybrid, kWh for electric
@@ -7598,21 +7456,9 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     const cazDetails = primaryRouteForCaz.caz_details || routeData.caz_details || {};
 
     if (cazStatusContainer) {
-        const zonesCrossed = (cazDetails.zones_crossed && cazDetails.zones_crossed.length > 0);
-        if (zonesCrossed) {
-            let cazStatusHtml = '';
-            if (cazDetails.is_exempt) {
-                cazStatusHtml = `<div style="color: #4caf50; font-size: 12px;">✅ CAZ Exempt (${cazDetails.exemption_reason || 'Electric Vehicle'})</div>`;
-            } else if (cazDetails.pass_covers) {
-                cazStatusHtml = `<div style="color: #2196f3; font-size: 12px;">🎫 CAZ covered by ${cazDetails.pass_type || 'Pass'}</div>`;
-            } else {
-                const zoneNames = cazDetails.zones_crossed.join(', ');
-                cazStatusHtml = `<div style="color: #ff9800; font-size: 12px;">⚠️ Passes through: ${zoneNames}</div>`;
-            }
-            cazStatusContainer.innerHTML = cazStatusHtml;
-            cazStatusContainer.style.display = 'block';
-        } else if (cazCost > 0) {
-            cazStatusContainer.innerHTML = `<div style="color: #ff9800; font-size: 12px;">⚠️ CAZ charge included in total (${symbol}${cazCost.toFixed(2)}). Zone names unavailable for this route.</div>`;
+        const cazStatus = selection.buildCazStatusHtml(cazDetails, cazCost, symbol);
+        if (cazStatus.visible) {
+            cazStatusContainer.innerHTML = cazStatus.html;
             cazStatusContainer.style.display = 'block';
         } else {
             cazStatusContainer.style.display = 'none';
@@ -7640,28 +7486,24 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
     const penaltyRow = hazardContainer ? hazardContainer.querySelector('#previewHazardPenalty')?.closest('div') : null;
 
     if (hazardContainer) {
+        const hazardState = selection.getHazardPreviewPanelState({
+            preferencesApplied: preferencesApplied,
+            camerasNearRoute: camerasNearRoute,
+            hazardCount: hazardCount,
+            hazardPenaltySeconds: hazardPenaltySeconds,
+        });
         const countEl = document.getElementById('previewHazardCount');
         const penaltyEl = document.getElementById('previewHazardPenalty');
-        if (preferencesApplied && countEl) {
-            countEl.textContent = String(camerasNearRoute);
-            if (hazardCountLabel) hazardCountLabel.textContent = 'Route score:';
-            if (hazardTitleEl) hazardTitleEl.textContent = '✓ Route preferences applied';
-            if (penaltyRow) penaltyRow.style.display = hazardPenaltySeconds > 0 ? 'flex' : 'none';
-            if (penaltyEl && hazardPenaltySeconds > 0) {
-                penaltyEl.textContent = Math.round(hazardPenaltySeconds / 60) + ' min';
+        if (hazardState.visible && countEl) {
+            countEl.textContent = hazardState.count;
+            if (hazardCountLabel) hazardCountLabel.textContent = hazardState.countLabel;
+            if (hazardTitleEl) hazardTitleEl.textContent = hazardState.title;
+            if (penaltyRow) penaltyRow.style.display = hazardState.showPenalty ? 'flex' : 'none';
+            if (penaltyEl && hazardState.showPenalty) {
+                penaltyEl.textContent = hazardState.penaltyMinutes + ' min';
             }
-            hazardContainer.style.background = camerasNearRoute === 0 ? '#E8F5E9' : '#FFF3E0';
-            hazardContainer.style.borderLeftColor = camerasNearRoute === 0 ? '#4CAF50' : '#FF9800';
-            hazardContainer.style.display = 'block';
-        } else if (hazardCount > 0 && hazardPenaltySeconds > 0 && countEl && penaltyEl) {
-            const hazardPenaltyMinutes = Math.round(hazardPenaltySeconds / 60);
-            countEl.textContent = hazardCount;
-            if (hazardCountLabel) hazardCountLabel.textContent = 'Route score:';
-            penaltyEl.textContent = hazardPenaltyMinutes + ' min';
-            if (hazardTitleEl) hazardTitleEl.textContent = '⚠️ Route alerts';
-            if (penaltyRow) penaltyRow.style.display = 'flex';
-            hazardContainer.style.background = '#FFF3E0';
-            hazardContainer.style.borderLeftColor = '#FF9800';
+            hazardContainer.style.background = hazardState.background;
+            hazardContainer.style.borderLeftColor = hazardState.borderLeftColor;
             hazardContainer.style.display = 'block';
         } else {
             hazardContainer.style.display = 'none';

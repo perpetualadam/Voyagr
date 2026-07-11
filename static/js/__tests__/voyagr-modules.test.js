@@ -33,6 +33,8 @@ describe('VoyagrModules registry', () => {
         global.VoyagrNavigationDestination = require('../modules/navigation/navigation-destination');
         global.VoyagrMovementDetection = require('../modules/navigation/movement-detection');
         global.VoyagrMultimodalParking = require('../modules/navigation/multimodal-parking');
+        global.VoyagrRouteSharing = require('../modules/navigation/route-sharing');
+        global.VoyagrWaypoints = require('../modules/navigation/waypoints');
         jest.resetModules();
     });
 

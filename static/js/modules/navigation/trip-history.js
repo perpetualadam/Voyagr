@@ -236,6 +236,77 @@
         );
     }
 
+    /**
+     * Display values for the analytics dashboard summary.
+     * @param {Object} data
+     * @param {Object} fmt
+     * @returns {Object}
+     */
+    function buildAnalyticsDisplayValues(data, fmt) {
+        data = data || {};
+        fmt = fmt || {};
+        var totalHours = Math.floor((data.total_time_minutes || 0) / 60);
+        var totalMinutes = (data.total_time_minutes || 0) % 60;
+        var avgSpeedKmh = data.avg_speed || 0;
+        var displayAvgSpeed = fmt.speedUnit === 'mph' ? (avgSpeedKmh * 0.621371) : avgSpeedKmh;
+        return {
+            totalTrips: data.total_trips || 0,
+            totalDistanceText: fmt.totalDistanceText,
+            totalCostText: fmt.currencySymbol + (data.total_cost || 0).toFixed(2),
+            avgDurationText: (data.avg_duration || 0) + ' min',
+            totalFuelCostText: fmt.currencySymbol + (data.total_fuel_cost || 0).toFixed(2),
+            totalTollCostText: fmt.currencySymbol + (data.total_toll_cost || 0).toFixed(2),
+            totalCazCostText: fmt.currencySymbol + (data.total_caz_cost || 0).toFixed(2),
+            totalTimeText: totalHours + 'h ' + totalMinutes + 'm',
+            avgSpeedText: displayAvgSpeed.toFixed(1) + ' ' + fmt.speedUnitLabel,
+        };
+    }
+
+    /**
+     * @param {Object} route
+     * @param {number} index
+     * @param {Object} opts
+     * @returns {string}
+     */
+    function buildFrequentRouteRowHtml(route, index, opts) {
+        opts = opts || {};
+        var escape = opts.escapeHtml || function (s) { return String(s); };
+        return (
+            '<div style="background: white; padding: 10px; border-radius: 4px; margin-bottom: 8px; border-left: 4px solid #FF5722;">' +
+                '<div style="font-weight: 500; font-size: 13px; margin-bottom: 4px;">' +
+                    (index + 1) + '. ' + escape(route.start) + ' → ' + escape(route.end) +
+                '</div>' +
+                '<div style="font-size: 12px; color: #666;">' +
+                    '<span>🔄 ' + route.count + ' trips</span> | ' +
+                    '<span>📏 ' + opts.distanceText + ' ' + opts.distUnit + '</span> | ' +
+                    '<span>💰 ' + opts.currencySymbol + route.avg_cost.toFixed(2) + '</span>' +
+                '</div>' +
+            '</div>'
+        );
+    }
+
+    /**
+     * @param {Array<Object>} routes
+     * @param {Object} opts
+     * @returns {string}
+     */
+    function buildFrequentRoutesListHtml(routes, opts) {
+        if (!routes || routes.length === 0) {
+            return '<div style="text-align: center; padding: 20px; color: #999;">No trip history yet</div>';
+        }
+        opts = opts || {};
+        var html = '';
+        for (var i = 0; i < routes.length; i++) {
+            html += buildFrequentRouteRowHtml(routes[i], i, {
+                escapeHtml: opts.escapeHtml,
+                distanceText: opts.distanceTexts ? opts.distanceTexts[i] : opts.distanceText,
+                distUnit: opts.distUnit,
+                currencySymbol: opts.currencySymbol,
+            });
+        }
+        return html;
+    }
+
     var api = {
         parseLatLonString: parseLatLonString,
         mergeServerAndLocalTrips: mergeServerAndLocalTrips,
@@ -243,6 +314,9 @@
         formatTripListTimestamp: formatTripListTimestamp,
         filterTripsBySearch: filterTripsBySearch,
         buildTripHistoryRowHtml: buildTripHistoryRowHtml,
+        buildAnalyticsDisplayValues: buildAnalyticsDisplayValues,
+        buildFrequentRouteRowHtml: buildFrequentRouteRowHtml,
+        buildFrequentRoutesListHtml: buildFrequentRoutesListHtml,
         EMPTY_TRIP_LIST_HTML: EMPTY_TRIP_LIST_HTML,
     };
 
