@@ -59,4 +59,17 @@ describe('map-controls module', () => {
         MC.applyARModeToggleButton(btn, false, TU);
         expect(btn.classList.contains('active')).toBe(false);
     });
+
+    test('getARFabVisibilityDisplay and applyARModeButtonState', () => {
+        const on = MC.getARFabVisibilityDisplay(true, true, false);
+        expect(on.visible).toBe(true);
+        expect(on.display).toBe('flex');
+        expect(on.textContent).toBe(MC.AR_FAB_VISIBLE_ICON);
+        const off = MC.getARFabVisibilityDisplay(false, true, true);
+        expect(off.visible).toBe(false);
+        const btn = document.createElement('button');
+        MC.applyARModeButtonState(btn, 'active');
+        expect(btn.classList.contains('active')).toBe(true);
+        expect(btn.innerHTML).toBe(MC.AR_ACTIVE_LABEL);
+    });
 });

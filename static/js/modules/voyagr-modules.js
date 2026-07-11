@@ -52,6 +52,7 @@
         hazardMapMarkers: 'VoyagrHazardMapMarkers',
         pwaInstall: 'VoyagrPwaInstall',
         bestTimeLeave: 'VoyagrBestTimeLeave',
+        roadNameDisplay: 'VoyagrRoadNameDisplay',
     };
 
     var cache = {};

@@ -92,6 +92,8 @@
     }
 
     var PARKING_OPTION_ITEM_HOVER_BACKGROUND = '#FFF3E0';
+    var PARKING_OPTION_ITEM_REST_BACKGROUND = 'white';
+    var PARKING_OPTIONS_DISPLAY_LIMIT = 5;
     var PARKING_DRIVING_ROUTE_POLYLINE = { color: '#2196F3', weight: 5, opacity: 0.8 };
     var PARKING_WALKING_ROUTE_POLYLINE = { color: '#4CAF50', weight: 4, opacity: 0.7 };
 
@@ -163,6 +165,42 @@
         return '<strong>' + (name || '') + '</strong><br>Distance: ' + distanceDisplay + ' ' + distUnit;
     }
 
+    /**
+     * @param {Array<Object>} parkingList
+     * @returns {Array<Object>}
+     */
+    function sortParkingOptionsByDistance(parkingList) {
+        return (parkingList || []).slice().sort(function (a, b) {
+            return (a.distance_m || 0) - (b.distance_m || 0);
+        });
+    }
+
+    /**
+     * @param {Array<Object>} parkingList
+     * @param {number} [limit]
+     * @returns {Array<Object>}
+     */
+    function getParkingOptionsDisplaySlice(parkingList, limit) {
+        var max = limit == null ? PARKING_OPTIONS_DISPLAY_LIMIT : limit;
+        return sortParkingOptionsByDistance(parkingList).slice(0, max);
+    }
+
+    /**
+     * Mount plan for one parking option list row.
+     * @param {Object} parking
+     * @param {number} index
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildParkingOptionItemMountPlan(parking, index, opts) {
+        return {
+            containerStyle: getParkingOptionItemContainerStyleCssText(),
+            html: buildParkingOptionItemHtml(parking, index, opts),
+            hoverBackground: PARKING_OPTION_ITEM_HOVER_BACKGROUND,
+            restBackground: PARKING_OPTION_ITEM_REST_BACKGROUND,
+        };
+    }
+
     var api = {
         computeMultimodalLegTotals: computeMultimodalLegTotals,
         buildParkingRouteLabel: buildParkingRouteLabel,
@@ -170,8 +208,13 @@
         computeWalkingMinutesFromMeters: computeWalkingMinutesFromMeters,
         getParkingOptionItemContainerStyleCssText: getParkingOptionItemContainerStyleCssText,
         PARKING_OPTION_ITEM_HOVER_BACKGROUND: PARKING_OPTION_ITEM_HOVER_BACKGROUND,
+        PARKING_OPTION_ITEM_REST_BACKGROUND: PARKING_OPTION_ITEM_REST_BACKGROUND,
+        PARKING_OPTIONS_DISPLAY_LIMIT: PARKING_OPTIONS_DISPLAY_LIMIT,
         PARKING_DRIVING_ROUTE_POLYLINE: PARKING_DRIVING_ROUTE_POLYLINE,
         PARKING_WALKING_ROUTE_POLYLINE: PARKING_WALKING_ROUTE_POLYLINE,
+        sortParkingOptionsByDistance: sortParkingOptionsByDistance,
+        getParkingOptionsDisplaySlice: getParkingOptionsDisplaySlice,
+        buildParkingOptionItemMountPlan: buildParkingOptionItemMountPlan,
         buildParkingOptionItemHtml: buildParkingOptionItemHtml,
         buildParkingEmptyStateHtml: buildParkingEmptyStateHtml,
         buildParkingPreviewRouteHtml: buildParkingPreviewRouteHtml,

@@ -284,6 +284,58 @@
     }
 
     /**
+     * @param {number} routeCount
+     * @returns {boolean}
+     */
+    function hasRoutesForComparison(routeCount) {
+        return routeCount >= 1;
+    }
+
+    /**
+     * @param {Object} comparison
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildRouteComparisonModalMountPlan(comparison, opts) {
+        opts = opts || {};
+        var reportHtml = buildRouteComparisonReportHtml(comparison, opts);
+        return {
+            modalId: ROUTE_COMPARISON_MODAL_ID,
+            overlayStyle: getRouteComparisonModalOverlayStyleCssText(),
+            innerHtml: buildRouteComparisonModalHtml(reportHtml),
+        };
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getRouteComparisonNoRoutesMessage() {
+        return 'No routes available. Calculate a route first.';
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getRouteComparisonSingleRouteMessage() {
+        return 'Only 1 route available';
+    }
+
+    /**
+     * @returns {string}
+     */
+    function getRouteComparisonSuccessMessage() {
+        return '📊 Route comparison displayed';
+    }
+
+    /**
+     * @param {string} error
+     * @returns {string}
+     */
+    function getRouteComparisonApiErrorMessage(error) {
+        return 'Error comparing routes: ' + (error || 'Unknown error');
+    }
+
+    /**
      * Container style for a preview alternative-route card.
      * @param {string} routeColor
      * @returns {string}
@@ -691,6 +743,12 @@
         buildRouteComparisonRecommendationsHtml: buildRouteComparisonRecommendationsHtml,
         buildRouteComparisonReportHtml: buildRouteComparisonReportHtml,
         buildRouteComparisonModalHtml: buildRouteComparisonModalHtml,
+        hasRoutesForComparison: hasRoutesForComparison,
+        buildRouteComparisonModalMountPlan: buildRouteComparisonModalMountPlan,
+        getRouteComparisonNoRoutesMessage: getRouteComparisonNoRoutesMessage,
+        getRouteComparisonSingleRouteMessage: getRouteComparisonSingleRouteMessage,
+        getRouteComparisonSuccessMessage: getRouteComparisonSuccessMessage,
+        getRouteComparisonApiErrorMessage: getRouteComparisonApiErrorMessage,
         getPreviewAlternativeRouteCardContainerStyleCssText: getPreviewAlternativeRouteCardContainerStyleCssText,
         getPreviewAlternativeRouteCardHoverStyle: getPreviewAlternativeRouteCardHoverStyle,
         getPreviewAlternativeRouteCardRestStyle: getPreviewAlternativeRouteCardRestStyle,

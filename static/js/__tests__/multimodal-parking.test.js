@@ -79,4 +79,27 @@ describe('multimodal-parking module', () => {
         expect(MP.PARKING_WALKING_ROUTE_POLYLINE.color).toBe('#4CAF50');
         expect(MP.PARKING_WALKING_ROUTE_POLYLINE.weight).toBe(4);
     });
+
+    test('getParkingOptionsDisplaySlice sorts and limits options', () => {
+        const slice = MP.getParkingOptionsDisplaySlice([
+            { name: 'Far', distance_m: 900 },
+            { name: 'Near', distance_m: 100 },
+            { name: 'Mid', distance_m: 500 },
+        ], 2);
+        expect(slice).toHaveLength(2);
+        expect(slice[0].name).toBe('Near');
+        expect(slice[1].name).toBe('Mid');
+    });
+
+    test('buildParkingOptionItemMountPlan includes hover and rest backgrounds', () => {
+        const plan = MP.buildParkingOptionItemMountPlan(
+            { name: 'City Park', distance_m: 420 },
+            0,
+            { distanceText: '0.26', distUnit: 'mi' }
+        );
+        expect(plan.containerStyle).toContain('border-radius: 6px');
+        expect(plan.html).toContain('City Park');
+        expect(plan.hoverBackground).toBe('#FFF3E0');
+        expect(plan.restBackground).toBe('white');
+    });
 });

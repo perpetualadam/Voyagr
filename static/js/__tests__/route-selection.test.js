@@ -227,4 +227,17 @@ describe('route comparison modal helpers', () => {
         expect(RS.getRouteComparisonModalOverlayStyleCssText()).toContain('z-index: 10000');
         expect(RS.getRouteComparisonModalOverlayStyleCssText()).toContain('rgba(0,0,0,0.5)');
     });
+
+    test('route comparison modal mount plan and status messages', () => {
+        expect(RS.hasRoutesForComparison(1)).toBe(true);
+        expect(RS.hasRoutesForComparison(0)).toBe(false);
+        const plan = RS.buildRouteComparisonModalMountPlan(
+            { routes: [{ route_id: 1, distance_km: 10, duration_minutes: 20, total_cost: 8, cost_per_km: 0.8 }] },
+            { currencySymbol: '£', distUnit: 'mi', distanceTexts: ['6.2'] }
+        );
+        expect(plan.modalId).toBe('routeComparisonModal');
+        expect(plan.innerHtml).toContain('Route Comparison');
+        expect(RS.getRouteComparisonNoRoutesMessage()).toContain('Calculate a route');
+        expect(RS.getRouteComparisonSuccessMessage()).toContain('comparison');
+    });
 });

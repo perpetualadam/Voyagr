@@ -51,6 +51,7 @@ describe('VoyagrModules registry', () => {
         global.VoyagrHazardMapMarkers = require('../modules/map/hazard-map-markers');
         global.VoyagrPwaInstall = require('../modules/ui/pwa-install');
         global.VoyagrBestTimeLeave = require('../modules/navigation/best-time-leave');
+        global.VoyagrRoadNameDisplay = require('../modules/navigation/road-name-display');
         jest.resetModules();
     });
 

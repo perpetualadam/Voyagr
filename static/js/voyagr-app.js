@@ -7313,20 +7313,20 @@ async function showRouteComparison() {
     console.log('[RouteComparison] routeOptions:', routeOptions);
     console.log('[RouteComparison] routeOptions length:', routeOptions ? routeOptions.length : 0);
 
-    if (!routeOptions || routeOptions.length < 1) {
-        console.error('[RouteComparison] No routes available:', routeOptions ? routeOptions.length : 0);
-        showStatus('No routes available. Calculate a route first.', 'error');
+    const selection = VoyagrModules.routeSelection();
+    const routeCount = routeOptions ? routeOptions.length : 0;
+    if (!selection.hasRoutesForComparison(routeCount)) {
+        console.error('[RouteComparison] No routes available:', routeCount);
+        showStatus(selection.getRouteComparisonNoRoutesMessage(), 'error');
         return;
     }
 
-    // If only 1 route, show it anyway
-    if (routeOptions.length < 2) {
+    if (routeCount < 2) {
         console.warn('[RouteComparison] Only 1 route available, showing it anyway');
-        showStatus('Only 1 route available', 'info');
+        showStatus(selection.getRouteComparisonSingleRouteMessage(), 'info');
     }
 
     try {
-        const selection = VoyagrModules.routeSelection();
         const routesForComparison = selection.buildRouteComparisonRequestRoutes(routeOptions);
 
         console.log('[RouteComparison] Sending routes to API:', routesForComparison);
@@ -7342,25 +7342,24 @@ async function showRouteComparison() {
 
         if (!data.success) {
             console.error('[RouteComparison] API error:', data.error);
-            showStatus('Error comparing routes: ' + data.error, 'error');
+            showStatus(selection.getRouteComparisonApiErrorMessage(data.error), 'error');
             return;
         }
 
         const comparison = data.comparison;
         const symbol = getCurrencySymbol();
         const distUnit = getDistanceUnit();
-        const comparisonHTML = selection.buildRouteComparisonReportHtml(comparison, {
+        const mountPlan = selection.buildRouteComparisonModalMountPlan(comparison, {
             currencySymbol: symbol,
             distUnit: distUnit,
             distanceTexts: comparison.routes.map((route) => convertDistance(route.distance_km)),
         });
 
         const modal = document.createElement('div');
-        modal.id = selection.ROUTE_COMPARISON_MODAL_ID;
-        modal.style.cssText = selection.getRouteComparisonModalOverlayStyleCssText();
-        modal.innerHTML = selection.buildRouteComparisonModalHtml(comparisonHTML);
+        modal.id = mountPlan.modalId;
+        modal.style.cssText = mountPlan.overlayStyle;
+        modal.innerHTML = mountPlan.innerHtml;
 
-        // Close modal when clicking outside the white box
         modal.addEventListener('click', (e) => {
             if (e.target === modal) {
                 modal.remove();
@@ -7368,7 +7367,7 @@ async function showRouteComparison() {
         });
 
         document.body.appendChild(modal);
-        showStatus('📊 Route comparison displayed', 'success');
+        showStatus(selection.getRouteComparisonSuccessMessage(), 'success');
     } catch (error) {
         showStatus('Error: ' + error.message, 'error');
         console.error('[Comparison] Error:', error);
@@ -8057,15 +8056,17 @@ function displayParkingOptions(parkingList, destinationCoords) {
 
     parkingListDiv.innerHTML = '';
 
-    // Sort by distance
-    parkingList.sort((a, b) => a.distance_m - b.distance_m);
-    console.log('[Parking] Displaying top 5 parking options');
-
-    // Display top 5 parking options
     const parkingModule = VoyagrModules.multimodalParking();
-    parkingList.slice(0, 5).forEach((parking, index) => {
+    const topParkingOptions = parkingModule.getParkingOptionsDisplaySlice(parkingList);
+    console.log('[Parking] Displaying top', topParkingOptions.length, 'parking options');
+
+    topParkingOptions.forEach((parking, index) => {
         const parkingDisplayDist = convertDistance(parking.distance_m / 1000);
         const parkingDistUnit = getDistanceUnit();
+        const cardOpts = {
+            distanceText: parkingDisplayDist,
+            distUnit: parkingDistUnit,
+        };
 
         try {
             const marker = MapLibreHelpers.createMarker(parking.lat, parking.lon, {
@@ -8082,12 +8083,10 @@ function displayParkingOptions(parkingList, destinationCoords) {
             console.warn('[Parking] Marker error:', markerErr);
         }
 
+        const plan = parkingModule.buildParkingOptionItemMountPlan(parking, index, cardOpts);
         const item = document.createElement('div');
-        item.style.cssText = parkingModule.getParkingOptionItemContainerStyleCssText();
-        item.innerHTML = parkingModule.buildParkingOptionItemHtml(parking, index, {
-            distanceText: parkingDisplayDist,
-            distUnit: parkingDistUnit,
-        });
+        item.style.cssText = plan.containerStyle;
+        item.innerHTML = plan.html;
 
         item.querySelector('.parking-show-route-btn').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -8099,14 +8098,14 @@ function displayParkingOptions(parkingList, destinationCoords) {
         });
         item.addEventListener('click', () => selectParking(parking, destinationCoords));
 
-        item.onmouseover = () => { item.style.background = parkingModule.PARKING_OPTION_ITEM_HOVER_BACKGROUND; };
-        item.onmouseout = () => item.style.background = 'white';
+        item.onmouseover = () => { item.style.background = plan.hoverBackground; };
+        item.onmouseout = () => { item.style.background = plan.restBackground; };
 
         parkingListDiv.appendChild(item);
     });
 
     parkingSection.style.display = 'block';
-    console.log('[Parking] Parking section displayed with', parkingList.slice(0, 5).length, 'options');
+    console.log('[Parking] Parking section displayed with', topParkingOptions.length, 'options');
 }
 
 async function selectParking(parking, destinationCoords) {
@@ -8957,6 +8956,9 @@ function _previewMarker() { return VoyagrModules.previewMarker(); }
 
 /** Unit-tested favorites list HTML (modules/navigation/favorites.js). */
 function _favorites() { return VoyagrModules.favorites(); }
+
+/** Unit-tested road name bar throttle/display helpers (modules/navigation/road-name-display.js). */
+function _roadNameDisplay() { return VoyagrModules.roadNameDisplay(); }
 
 /** Unit-tested CAZ zones settings panel HTML (modules/navigation/caz-info.js). */
 function _cazInfo() { return VoyagrModules.cazInfo(); }
@@ -11613,17 +11615,15 @@ function toggleARSetting() {
  * Update AR FAB Visibility based on settings and route state
  */
 function updateARButtonVisibility() {
+    const MC = _mapControls();
     const arFab = document.getElementById('arModeBtn');
     if (!arFab) return;
 
-    // improved logic: Only show if enabled AND (route calculated OR navigation active)
     const hasRoute = window.lastCalculatedRoute !== null;
-
-    if (isAREnabled && (hasRoute || routeInProgress)) {
-        arFab.style.display = 'flex';
-        arFab.textContent = '👓'; // Use Glasses icon as requested
-    } else {
-        arFab.style.display = 'none';
+    const display = MC.getARFabVisibilityDisplay(isAREnabled, hasRoute, routeInProgress);
+    arFab.style.display = display.display;
+    if (display.textContent != null) {
+        arFab.textContent = display.textContent;
     }
 }
 
@@ -11706,17 +11706,7 @@ async function stopARMode() {
  * Update AR button visual state
  */
 function updateARButtonState(status) {
-    const MC = _mapControls();
-    const btn = document.getElementById('arModeBtn');
-    if (!btn) return;
-
-    const display = MC.getARModeButtonDisplay(status);
-    if (display.active) {
-        btn.classList.add('active');
-    } else {
-        btn.classList.remove('active');
-    }
-    btn.innerHTML = display.innerHtml;
+    _mapControls().applyARModeButtonState(document.getElementById('arModeBtn'), status);
 }
 
 /**
@@ -16366,35 +16356,40 @@ function loadAvoidancePreferences() {
 // ===== ROAD NAME DISPLAY (TomTom Reverse Geocoding) =====
 
 let lastRoadNameFetch = 0;
-const ROAD_NAME_FETCH_INTERVAL = 5000;
 let lastRoadNamePosition = null;
-const ROAD_NAME_DISTANCE_THRESHOLD = 50;
 let currentRoadDisplayName = '';
 
 function fetchRoadNameThrottled(lat, lon) {
+    const RN = _roadNameDisplay();
     const now = Date.now();
-    if (now - lastRoadNameFetch < ROAD_NAME_FETCH_INTERVAL) return;
-
     let distanceMoved = 999;
     if (lastRoadNamePosition) {
         distanceMoved = calculateDistanceMeters(lat, lon, lastRoadNamePosition.lat, lastRoadNamePosition.lon);
     }
 
-    if (distanceMoved < ROAD_NAME_DISTANCE_THRESHOLD && lastRoadNameFetch > 0) return;
+    if (!RN.shouldFetchRoadName({
+        now: now,
+        lastFetch: lastRoadNameFetch,
+        lastPosition: lastRoadNamePosition,
+        distanceMovedMeters: distanceMoved,
+    })) {
+        return;
+    }
 
     lastRoadNameFetch = now;
     lastRoadNamePosition = { lat, lon };
 
-    fetch(`/api/road-info?lat=${lat}&lon=${lon}`)
+    fetch(RN.buildRoadInfoApiUrl(lat, lon))
         .then(r => r.json())
         .then(data => {
             if (data.success && data.road_name) {
-                currentRoadDisplayName = data.road_name;
+                const plan = RN.getRoadNameBarShowPlan(data.road_name);
+                currentRoadDisplayName = plan.roadName;
                 const bar = document.getElementById('roadNameBar');
                 const label = document.getElementById('currentRoadName');
                 if (bar && label) {
-                    label.textContent = data.road_name;
-                    bar.style.display = 'block';
+                    label.textContent = plan.roadName;
+                    bar.style.display = plan.barDisplay;
                 }
             }
         })
@@ -16404,9 +16399,10 @@ function fetchRoadNameThrottled(lat, lon) {
 }
 
 function hideRoadNameBar() {
+    const plan = _roadNameDisplay().getRoadNameBarHidePlan();
     const bar = document.getElementById('roadNameBar');
-    if (bar) bar.style.display = 'none';
-    currentRoadDisplayName = '';
+    if (bar) bar.style.display = plan.barDisplay;
+    currentRoadDisplayName = plan.roadName;
 }
 
 
