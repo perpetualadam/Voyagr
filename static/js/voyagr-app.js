@@ -8389,12 +8389,11 @@ function displayParkingOptions(parkingList, destinationCoords) {
     console.log('[Parking] Displaying top 5 parking options');
 
     // Display top 5 parking options
+    const parkingModule = VoyagrModules.multimodalParking();
     parkingList.slice(0, 5).forEach((parking, index) => {
-        // Convert distance to display units
-        const parkingDisplayDist = convertDistance(parking.distance_m / 1000); // Convert m to km first
+        const parkingDisplayDist = convertDistance(parking.distance_m / 1000);
         const parkingDistUnit = getDistanceUnit();
 
-        // Add marker to map with MapLibre
         try {
             const marker = MapLibreHelpers.createMarker(parking.lat, parking.lon, {
                 html: `<div style="background: #FF9800; color: white; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">🅿️</div>`,
@@ -8410,30 +8409,12 @@ function displayParkingOptions(parkingList, destinationCoords) {
             console.warn('[Parking] Marker error:', markerErr);
         }
 
-        // Add to list
-        const walkingTime = Math.round(parking.distance_m / 1.4); // 1.4 m/s walking speed
-        const walkingMinutes = Math.max(1, Math.round(walkingTime / 60));
-
         const item = document.createElement('div');
         item.style.cssText = 'background: white; padding: 10px; margin-bottom: 8px; border-radius: 6px; border: 1px solid #ddd; cursor: pointer; transition: all 0.2s;';
-        item.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 6px;">
-                <strong style="font-size: 13px;">${parking.name}</strong>
-                <span style="background: #FF9800; color: white; padding: 2px 6px; border-radius: 3px; font-size: 11px; font-weight: bold;">${index + 1}</span>
-            </div>
-            <div style="font-size: 12px; color: #666;">
-                📍 ${parkingDisplayDist} ${parkingDistUnit} away
-                <br>🚶 ${walkingMinutes} min walk
-            </div>
-            <div style="display: flex; gap: 6px; margin-top: 8px;">
-                <button type="button" class="parking-show-route-btn" style="flex: 1; background: #2196F3; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer;">
-                    🗺️ Show Route
-                </button>
-                <button type="button" class="parking-set-dest-btn" style="flex: 1; background: #4CAF50; color: white; border: none; padding: 6px; border-radius: 4px; font-size: 11px; cursor: pointer;">
-                    📍 Set as Destination
-                </button>
-            </div>
-        `;
+        item.innerHTML = parkingModule.buildParkingOptionItemHtml(parking, index, {
+            distanceText: parkingDisplayDist,
+            distUnit: parkingDistUnit,
+        });
 
         item.querySelector('.parking-show-route-btn').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -14814,26 +14795,9 @@ function showUnavoidableHazardsModal(hazardTypes, totalCount) {
     }
 
     // Build hazard list HTML
-    const hazardListHtml = VoyagrModules.hazardAlerts().buildUnavoidableHazardsListHtml(hazardTypes);
-
-    modal.innerHTML = `
-        <div style="font-size: 40px; margin-bottom: 10px;">⚠️</div>
-        <h3 style="margin: 0 0 10px 0; color: #e65100;">Unavoidable Hazards</h3>
-        <p style="font-size: 13px; color: #666; margin-bottom: 15px;">
-            ${totalCount} hazard${totalCount > 1 ? 's' : ''} on all routes to destination
-        </p>
-        <div style="margin-bottom: 15px;">
-            ${hazardListHtml}
-        </div>
-        <div style="display: flex; gap: 10px;">
-            <button onclick="closeUnavoidableHazardsModal()" style="flex: 1; padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">
-                Continue Anyway
-            </button>
-            <button onclick="openHazardSettings()" style="flex: 1; padding: 12px; background: #2196F3; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">
-                Adjust Settings
-            </button>
-        </div>
-    `;
+    const hazardAlerts = VoyagrModules.hazardAlerts();
+    const hazardListHtml = hazardAlerts.buildUnavoidableHazardsListHtml(hazardTypes);
+    modal.innerHTML = hazardAlerts.buildUnavoidableHazardsModalHtml(hazardListHtml, totalCount);
 
     // Add backdrop
     let backdrop = document.getElementById('unavoidableHazardsBackdrop');

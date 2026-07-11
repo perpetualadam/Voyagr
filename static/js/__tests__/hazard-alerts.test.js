@@ -75,4 +75,15 @@ describe('hazard-alerts module', () => {
         expect(html).toContain('camera');
         expect(html).toContain('2');
     });
+
+    test('buildUnavoidableHazardsModalHtml pluralizes hazard count and keeps actions', () => {
+        const html = HA.buildUnavoidableHazardsModalHtml('<p>list</p>', 2);
+        expect(html).toContain('2 hazards');
+        expect(html).toContain('list');
+        expect(html).toContain('closeUnavoidableHazardsModal');
+        expect(html).toContain('openHazardSettings');
+
+        const singular = HA.buildUnavoidableHazardsModalHtml('', 1);
+        expect(singular).toContain('1 hazard on all routes');
+    });
 });

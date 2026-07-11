@@ -33,4 +33,21 @@ describe('multimodal-parking module', () => {
         expect(html).toContain('🚶 Walking');
         expect(html).toContain('6 min');
     });
+
+    test('computeWalkingMinutesFromMeters estimates at least one minute', () => {
+        expect(MP.computeWalkingMinutesFromMeters(0)).toBe(1);
+        expect(MP.computeWalkingMinutesFromMeters(420)).toBe(5);
+    });
+
+    test('buildParkingOptionItemHtml includes distance and action buttons', () => {
+        const html = MP.buildParkingOptionItemHtml(
+            { name: 'City Car Park', distance_m: 420 },
+            0,
+            { distanceText: '0.26', distUnit: 'mi' }
+        );
+        expect(html).toContain('City Car Park');
+        expect(html).toContain('parking-show-route-btn');
+        expect(html).toContain('parking-set-dest-btn');
+        expect(html).toContain('0.26 mi');
+    });
 });

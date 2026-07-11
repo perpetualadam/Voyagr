@@ -334,6 +334,33 @@
         return html;
     }
 
+    /**
+     * Modal body HTML for unavoidable hazards warning.
+     * @param {string} hazardListHtml
+     * @param {number} totalCount
+     * @returns {string}
+     */
+    function buildUnavoidableHazardsModalHtml(hazardListHtml, totalCount) {
+        totalCount = totalCount || 0;
+        var hazardWord = totalCount > 1 ? 'hazards' : 'hazard';
+        return (
+            '<div style="font-size: 40px; margin-bottom: 10px;">⚠️</div>' +
+            '<h3 style="margin: 0 0 10px 0; color: #e65100;">Unavoidable Hazards</h3>' +
+            '<p style="font-size: 13px; color: #666; margin-bottom: 15px;">' +
+                totalCount + ' ' + hazardWord + ' on all routes to destination' +
+            '</p>' +
+            '<div style="margin-bottom: 15px;">' + hazardListHtml + '</div>' +
+            '<div style="display: flex; gap: 10px;">' +
+                '<button onclick="closeUnavoidableHazardsModal()" style="flex: 1; padding: 12px; background: #4CAF50; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">' +
+                    'Continue Anyway' +
+                '</button>' +
+                '<button onclick="openHazardSettings()" style="flex: 1; padding: 12px; background: #2196F3; color: white; border: none; border-radius: 8px; font-weight: bold; cursor: pointer;">' +
+                    'Adjust Settings' +
+                '</button>' +
+            '</div>'
+        );
+    }
+
     var api = {
         CAMERA_HAZARD_TYPES: CAMERA_HAZARD_TYPES,
         isCameraHazardType: isCameraHazardType,
@@ -351,6 +378,7 @@
         groupHazardsByType: groupHazardsByType,
         formatHazardTypeSummary: formatHazardTypeSummary,
         buildUnavoidableHazardsListHtml: buildUnavoidableHazardsListHtml,
+        buildUnavoidableHazardsModalHtml: buildUnavoidableHazardsModalHtml,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
