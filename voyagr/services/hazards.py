@@ -1032,3 +1032,82 @@ def get_caz_valhalla_exclude_points(
     if out:
         logger.info(f"[VALHALLA] CAZ exclude sample points: {len(out)}")
     return out[:max_points]
+
+
+def build_prioritised_valhalla_exclude_locations(
+    hazards: Dict[str, List[Dict[str, Any]]],
+    *,
+    route_bbox: Dict[str, float],
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    apply_caz_routing_avoidance: bool,
+) -> List[Dict[str, float]]:
+    """
+    Assemble the Valhalla ``exclude_locations`` list for the primary /api/route
+    request, respecting Valhalla's hard cap of 50 avoid locations.
+
+    Priority order (highest first): explicit ``avoid_point`` reroute markers, road
+    closures, CAZ sample points, then general hazards (cameras/etc.). Returns [] on
+    any failure so routing still proceeds. Extracted verbatim from
+    voyagr_web.calculate_route.
+    """
+    exclude_locations: List[Dict[str, float]] = []
+    try:
+        # Reserve slots for road closures (higher priority than cameras)
+        road_closures = hazards.get('road_closed', [])
+        closure_excludes = [{"lat": c["lat"], "lon": c["lon"]}
+                            for c in road_closures[:15]
+                            if "lat" in c and "lon" in c]
+        # Explicit avoid_points (reroute around congestion/closures) take the
+        # very top priority — reserve their slots before cameras/CAZ.
+        avoid_point_hazards = hazards.get('avoid_point', [])
+        avoid_excludes = [{"lat": c["lat"], "lon": c["lon"]}
+                          for c in avoid_point_hazards[:10]
+                          if "lat" in c and "lon" in c]
+        remaining_slots = 50 - len(closure_excludes) - len(avoid_excludes)
+
+        caz_excludes = get_caz_valhalla_exclude_points(
+            route_bbox, max_points=min(12, max(4, remaining_slots // 4))
+        ) if apply_caz_routing_avoidance else []
+        remaining_slots = max(remaining_slots - len(caz_excludes), 0)
+
+        exclude_locations = build_valhalla_exclude_locations(
+            hazards,
+            route_bbox=route_bbox,
+            max_hazards=max(remaining_slots, 8),
+            start_lat=start_lat,
+            start_lon=start_lon,
+            end_lat=end_lat,
+            end_lon=end_lon
+        )
+        if caz_excludes:
+            exclude_locations = caz_excludes + [
+                loc for loc in exclude_locations
+                if loc not in caz_excludes
+            ]
+            exclude_locations = exclude_locations[:50]
+            logger.info(f"[VALHALLA] Added {len(caz_excludes)} CAZ sample points to exclude_locations")
+        if closure_excludes:
+            exclude_locations = closure_excludes + [
+                loc for loc in exclude_locations
+                if loc not in closure_excludes
+            ]
+            exclude_locations = exclude_locations[:50]
+            logger.info(f"[VALHALLA] Added {len(closure_excludes)} road closures to exclude_locations")
+        if avoid_excludes:
+            exclude_locations = avoid_excludes + [
+                loc for loc in exclude_locations
+                if loc not in avoid_excludes
+            ]
+            exclude_locations = exclude_locations[:50]
+            logger.info(f"[VALHALLA] Added {len(avoid_excludes)} explicit avoid_points to exclude_locations")
+        if exclude_locations:
+            logger.info(f"[VALHALLA] Using {len(exclude_locations)} exclude_locations for hazard avoidance")
+        else:
+            logger.warning("[VALHALLA] No exclude_locations generated, using standard routing")
+    except Exception as e:
+        logger.warning(f"[VALHALLA] Failed to build exclude_locations: {e}")
+        exclude_locations = []
+    return exclude_locations
