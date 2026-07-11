@@ -571,6 +571,33 @@
         return '⚠️ Basic route only (Valhalla/GraphHopper offline). No camera avoidance.';
     }
 
+    /**
+     * Normalise a successful or failed `/api/route` JSON payload for app dispatch.
+     * @param {Object} data
+     * @returns {{ success: boolean, routingDegraded: boolean, degradedLogWarning: ({ warning: *, engines: * }|null), errorMessage: (string|null), responseLogMeta: Object }}
+     */
+    function buildRouteApiResultPlan(data) {
+        data = data || {};
+        return {
+            success: !!data.success,
+            routingDegraded: !!data.routing_degraded,
+            degradedLogWarning: data.routing_degraded ? {
+                warning: data.routing_warning || data.source,
+                engines: data.engines_failed || {},
+            } : null,
+            errorMessage: data.success ? null : ('Error: ' + (data.error || 'Unknown error')),
+            responseLogMeta: {
+                success: data.success,
+                source: data.source,
+                hasGeometry: !!data.geometry,
+                geometryLength: data.geometry ? data.geometry.length : 0,
+                distance: data.distance,
+                time: data.time,
+                routesCount: data.routes ? data.routes.length : 0,
+            },
+        };
+    }
+
     var api = {
         buildSharedRouteOptions: buildSharedRouteOptions,
         isInitialRouteHazardAvoidanceEnabled: isInitialRouteHazardAvoidanceEnabled,
@@ -598,6 +625,7 @@
         parseRouteApiErrorMessage: parseRouteApiErrorMessage,
         isRouteApiJsonContentType: isRouteApiJsonContentType,
         getDegradedRoutingStatusMessage: getDegradedRoutingStatusMessage,
+        buildRouteApiResultPlan: buildRouteApiResultPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

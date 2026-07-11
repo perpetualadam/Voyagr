@@ -890,6 +890,135 @@
     }
 
     /**
+     * Validate geocoded start/end strings for route preview marker placement.
+     * @param {string} geocodedStart
+     * @param {string} geocodedEnd
+     * @param {function(string): { valid: boolean, coords?: [number, number] }} parseLatLonPair
+     * @param {{ invalidFormat?: string, invalidCoords?: string }} [msgs]
+     * @returns {{ ok: true, startCoords: [number, number], endCoords: [number, number] }|{ ok: false, errorStatusMessage: string }}
+     */
+    function buildPreviewRouteCoordsPlan(geocodedStart, geocodedEnd, parseLatLonPair, msgs) {
+        msgs = msgs || {};
+        if (typeof parseLatLonPair !== 'function') {
+            return { ok: false, errorStatusMessage: msgs.invalidFormat || 'Error: Invalid coordinates format' };
+        }
+        var startParsed = parseLatLonPair(geocodedStart);
+        var endParsed = parseLatLonPair(geocodedEnd);
+        if (!startParsed || !startParsed.valid || !endParsed || !endParsed.valid) {
+            return { ok: false, errorStatusMessage: msgs.invalidFormat || 'Error: Invalid coordinates format' };
+        }
+        var startCoords = startParsed.coords;
+        var endCoords = endParsed.coords;
+        if (!startCoords || !endCoords ||
+            isNaN(startCoords[0]) || isNaN(startCoords[1]) ||
+            isNaN(endCoords[0]) || isNaN(endCoords[1])) {
+            return { ok: false, errorStatusMessage: msgs.invalidCoords || 'Error: Invalid coordinates' };
+        }
+        return { ok: true, startCoords: startCoords, endCoords: endCoords };
+    }
+
+    /**
+     * @param {string} label
+     * @returns {boolean}
+     */
+    function isCurrentLocationPlaceholder(label) {
+        return /^\s*current location\s*$/i.test(String(label || ''));
+    }
+
+    /**
+     * Apply plan for a successful calculateRoute preview (non-navigation) response.
+     * @param {Object} o
+     * @param {string} o.geocodedStart
+     * @param {string} o.geocodedEnd
+     * @param {string} o.startLabel
+     * @param {string} o.endLabel
+     * @param {Object} o.data
+     * @param {function(string): { valid: boolean, coords?: [number, number] }} o.parseLatLonPair
+     * @param {string} [o.invalidFormatMessage]
+     * @param {string} [o.invalidCoordsMessage]
+     * @param {function(string, number): Array<[number,number]>} o.decodePolyline
+     * @param {{ distanceText: string, distUnit: string, currencySymbol: string, notificationDistanceText?: string }} o.fmt
+     * @param {function(*): number} o.parseDurationMinutes
+     * @returns {Object}
+     */
+    function buildRoutePreviewSuccessPlan(o) {
+        o = o || {};
+        var data = o.data || {};
+        var fmt = o.fmt || {};
+        var coordsPlan = buildPreviewRouteCoordsPlan(
+            o.geocodedStart,
+            o.geocodedEnd,
+            o.parseLatLonPair,
+            {
+                invalidFormat: o.invalidFormatMessage,
+                invalidCoords: o.invalidCoordsMessage,
+            }
+        );
+        if (!coordsPlan.ok) {
+            return coordsPlan;
+        }
+        var pathPlan = resolvePreviewRoutePath(
+            coordsPlan.startCoords,
+            coordsPlan.endCoords,
+            data,
+            o.decodePolyline
+        );
+        var displayTime = resolveRouteDisplayTime(data);
+        var tripInfoApplyPlan = buildTripInfoApplyPlan(
+            data.distance,
+            displayTime,
+            data.fuel_cost || '-',
+            data.toll_cost || '-',
+            {
+                distanceText: fmt.distanceText,
+                distUnit: fmt.distUnit,
+                currencySymbol: fmt.currencySymbol,
+            },
+            o.parseDurationMinutes
+        );
+        var notificationDist = fmt.notificationDistanceText != null
+            ? fmt.notificationDistanceText
+            : fmt.distanceText;
+        var recentDestinations = [{
+            label: o.endLabel,
+            lat: coordsPlan.endCoords[0],
+            lon: coordsPlan.endCoords[1],
+            kind: 'route',
+        }];
+        if (o.startLabel && !isCurrentLocationPlaceholder(o.startLabel)) {
+            recentDestinations.push({
+                label: o.startLabel,
+                lat: coordsPlan.startCoords[0],
+                lon: coordsPlan.startCoords[1],
+                kind: 'route',
+            });
+        }
+        return {
+            ok: true,
+            startCoords: coordsPlan.startCoords,
+            endCoords: coordsPlan.endCoords,
+            pathPlan: pathPlan,
+            tripInfoApplyPlan: tripInfoApplyPlan,
+            statusMessage: buildRouteCalculatedStatusMessage(data),
+            lastCalculatedRoutePatch: buildLastCalculatedRoutePatch(data, o.geocodedEnd, o.endLabel),
+            durationMinutes: resolveInitialRouteDurationMinutes(data),
+            displayTime: displayTime,
+            notification: {
+                title: 'Route Ready',
+                message: notificationDist + ' ' + (fmt.distUnit || '') + ' in ' + data.time + '. Ready to navigate?',
+                type: 'success',
+            },
+            recentDestinations: recentDestinations,
+            showMultiDropLegs: !!(data.multi_drop && data.legs && data.legs.length > 0),
+            primaryHazards: (data.routes && data.routes[0] && data.routes[0].hazards) || null,
+            routeSource: data.source || 'Unknown',
+            defaultPrecision: resolveRouteGeometryPrecision(data),
+            routesCount: data.routes ? data.routes.length : 0,
+            routePath: pathPlan.routePath,
+        };
+    }
+
+    /**
      * Greedy nearest-neighbour ordering of via-points and stops between start and end.
      * @param {number} startLat
      * @param {number} startLon
@@ -1211,6 +1340,9 @@
         resolveRouteDisplayTime: resolveRouteDisplayTime,
         resolveInitialRouteDurationMinutes: resolveInitialRouteDurationMinutes,
         buildLastCalculatedRoutePatch: buildLastCalculatedRoutePatch,
+        buildPreviewRouteCoordsPlan: buildPreviewRouteCoordsPlan,
+        buildRoutePreviewSuccessPlan: buildRoutePreviewSuccessPlan,
+        isCurrentLocationPlaceholder: isCurrentLocationPlaceholder,
         orderWaypointsGreedy: orderWaypointsGreedy,
         resolvePreviewRoute: resolvePreviewRoute,
         resolvePreviewDistanceKm: resolvePreviewDistanceKm,

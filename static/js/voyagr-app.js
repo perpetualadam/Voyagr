@@ -4137,232 +4137,203 @@ async function calculateRoute() {
             return response.json();
         })
         .then(data => {
-            console.log('[Route API] Response received:', {
-                success: data.success,
-                source: data.source,
-                hasGeometry: !!data.geometry,
-                geometryLength: data.geometry ? data.geometry.length : 0,
-                distance: data.distance,
-                time: data.time,
-                routesCount: data.routes ? data.routes.length : 0
-            });
+            const RR = _routingRequest();
+            const apiPlan = RR.buildRouteApiResultPlan(data);
+            console.log('[Route API] Response received:', apiPlan.responseLogMeta);
 
-            if (data.routing_degraded) {
+            if (apiPlan.routingDegraded && apiPlan.degradedLogWarning) {
                 console.warn(
                     '[Route API] Degraded routing — local engines failed:',
-                    data.routing_warning || data.source,
-                    data.engines_failed || {}
+                    apiPlan.degradedLogWarning.warning,
+                    apiPlan.degradedLogWarning.engines
                 );
-                showStatus(_routingRequest().getDegradedRoutingStatusMessage(), 'warning');
+                showStatus(RR.getDegradedRoutingStatusMessage(), 'warning');
             }
 
-            if (data.success) {
-                // ===== FIX: If navigation is in progress, take a streamlined reroute path =====
-                // This avoids clearing markers, fitting bounds, or switching to the route preview tab.
-                if (routeInProgress) {
-                    console.log('[calculateRoute] Navigation active — using in-nav reroute path');
-                    hideRouteProgressBar();
+            if (!apiPlan.success) {
+                showStatus(apiPlan.errorMessage, 'error');
+                hideRouteProgressBar();
+                return;
+            }
 
-                    const activeRoute = pickActiveRouteDuringNavigation(data.routes, data);
-                    if (!activeRoute) {
-                        showStatus(_routeSelection().buildInNavRerouteSuccessPlan({}, {}, '', '').noRouteErrorMessage, 'error');
-                        return;
-                    }
-                    if (activeRoute.geometry) {
-                        updateRouteOnMap(activeRoute);
-                    }
+            // ===== FIX: If navigation is in progress, take a streamlined reroute path =====
+            // This avoids clearing markers, fitting bounds, or switching to the route preview tab.
+            if (routeInProgress) {
+                console.log('[calculateRoute] Navigation active — using in-nav reroute path');
+                hideRouteProgressBar();
 
-                    const reroutePlan = _routeSelection().buildInNavRerouteSuccessPlan(
-                        activeRoute,
-                        data,
-                        geocodedEnd,
-                        end,
-                        voiceAnnouncementsEnabled
-                            ? { enabled: true, convertDistance, distUnit: getDistanceUnit() }
-                            : { enabled: false }
-                    );
-                    window.lastCalculatedRoute = {
-                        ...window.lastCalculatedRoute,
-                        ...reroutePlan.lastCalculatedRoutePatch,
-                    };
+                const activeRoute = pickActiveRouteDuringNavigation(data.routes, data);
+                if (!activeRoute) {
+                    showStatus(_routeSelection().buildInNavRerouteSuccessPlan({}, {}, '', '').noRouteErrorMessage, 'error');
+                    return;
+                }
+                if (activeRoute.geometry) {
+                    updateRouteOnMap(activeRoute);
+                }
 
-                    if (reroutePlan.speakMessage) {
-                        speakMessage(reroutePlan.speakMessage, 'high');
-                    }
+                const reroutePlan = _routeSelection().buildInNavRerouteSuccessPlan(
+                    activeRoute,
+                    data,
+                    geocodedEnd,
+                    end,
+                    voiceAnnouncementsEnabled
+                        ? { enabled: true, convertDistance, distUnit: getDistanceUnit() }
+                        : { enabled: false }
+                );
+                window.lastCalculatedRoute = {
+                    ...window.lastCalculatedRoute,
+                    ...reroutePlan.lastCalculatedRoutePatch,
+                };
 
-                    showStatus(reroutePlan.statusMessage, reroutePlan.statusType);
-                    try {
-                        const ep = (geocodedEnd || '').split(',');
-                        if (ep.length >= 2) {
-                            const elat = parseFloat(ep[0].trim());
-                            const elon = parseFloat(ep[1].trim());
-                            if (Number.isFinite(elat) && Number.isFinite(elon)) {
-                                recordRecentDestination(end, elat, elon, 'route');
-                            }
+                if (reroutePlan.speakMessage) {
+                    speakMessage(reroutePlan.speakMessage, 'high');
+                }
+
+                showStatus(reroutePlan.statusMessage, reroutePlan.statusType);
+                try {
+                    const ep = (geocodedEnd || '').split(',');
+                    if (ep.length >= 2) {
+                        const elat = parseFloat(ep[0].trim());
+                        const elon = parseFloat(ep[1].trim());
+                        if (Number.isFinite(elat) && Number.isFinite(elon)) {
+                            recordRecentDestination(end, elat, elon, 'route');
                         }
-                    } catch (_) { /* ignore */ }
+                    }
+                } catch (_) { /* ignore */ }
+                return;
+            }
+
+            try {
+                const GL = _geocodingLocations();
+                const RS = _routeSelection();
+                const distanceKm = parseFloat(data.distance_km || data.distance) || 0;
+                const previewPlan = RS.buildRoutePreviewSuccessPlan({
+                    geocodedStart,
+                    geocodedEnd,
+                    startLabel: start,
+                    endLabel: end,
+                    data,
+                    parseLatLonPair: GL.parseLatLonPairString.bind(GL),
+                    invalidFormatMessage: GL.getInvalidCoordinatesFormatStatusMessage(),
+                    invalidCoordsMessage: GL.getInvalidCoordinatesStatusMessage(),
+                    decodePolyline,
+                    fmt: {
+                        distanceText: convertDistance(distanceKm),
+                        distUnit: getDistanceUnit(),
+                        currencySymbol: getCurrencySymbol(),
+                        notificationDistanceText: convertDistance(distanceKm),
+                    },
+                    parseDurationMinutes: _routeSharing().parseSharedRouteDurationMinutes,
+                });
+
+                if (!previewPlan.ok) {
+                    showStatus(previewPlan.errorStatusMessage, 'error');
+                    hideRouteProgressBar();
                     return;
                 }
 
-                // Parse coordinates
-                try {
-                    const GL = _geocodingLocations();
-                    const startParsed = GL.parseLatLonPairString(geocodedStart);
-                    const endParsed = GL.parseLatLonPairString(geocodedEnd);
+                const { startCoords, endCoords, pathPlan, routePath } = previewPlan;
 
-                    if (!startParsed.valid || !endParsed.valid) {
-                        showStatus(GL.getInvalidCoordinatesFormatStatusMessage(), 'error');
-                        return;
-                    }
+                if (startMarker && typeof startMarker.remove === 'function') startMarker.remove();
+                if (endMarker && typeof endMarker.remove === 'function') endMarker.remove();
+                if (routeLayer && typeof routeLayer.remove === 'function') routeLayer.remove();
 
-                    const startCoords = startParsed.coords;
-                    const endCoords = endParsed.coords;
+                const PM = _previewMarker();
+                const startMarkerOpts = PM.getRouteEndpointMarkerOptions('start');
+                const endMarkerOpts = PM.getRouteEndpointMarkerOptions('end');
 
-                    if (isNaN(startCoords[0]) || isNaN(startCoords[1]) || isNaN(endCoords[0]) || isNaN(endCoords[1])) {
-                        showStatus(GL.getInvalidCoordinatesStatusMessage(), 'error');
-                        return;
-                    }
+                startMarker = MapLibreHelpers.createCircleMarker(startCoords[0], startCoords[1], {
+                    radius: startMarkerOpts.radius,
+                    fillColor: startMarkerOpts.fillColor,
+                    color: startMarkerOpts.color,
+                    weight: startMarkerOpts.weight,
+                    fillOpacity: startMarkerOpts.fillOpacity,
+                }).addTo(map);
+                startMarker.bindPopup(startMarkerOpts.popup);
 
-                    // Clear previous markers and route
-                    if (startMarker && typeof startMarker.remove === 'function') startMarker.remove();
-                    if (endMarker && typeof endMarker.remove === 'function') endMarker.remove();
-                    if (routeLayer && typeof routeLayer.remove === 'function') routeLayer.remove();
+                endMarker = MapLibreHelpers.createCircleMarker(endCoords[0], endCoords[1], {
+                    radius: endMarkerOpts.radius,
+                    fillColor: endMarkerOpts.fillColor,
+                    color: endMarkerOpts.color,
+                    weight: endMarkerOpts.weight,
+                    fillOpacity: endMarkerOpts.fillOpacity,
+                }).addTo(map);
+                endMarker.bindPopup(endMarkerOpts.popup);
 
-                    const PM = _previewMarker();
-                    const startMarkerOpts = PM.getRouteEndpointMarkerOptions('start');
-                    const endMarkerOpts = PM.getRouteEndpointMarkerOptions('end');
-
-                    startMarker = MapLibreHelpers.createCircleMarker(startCoords[0], startCoords[1], {
-                        radius: startMarkerOpts.radius,
-                        fillColor: startMarkerOpts.fillColor,
-                        color: startMarkerOpts.color,
-                        weight: startMarkerOpts.weight,
-                        fillOpacity: startMarkerOpts.fillOpacity,
-                    }).addTo(map);
-                    startMarker.bindPopup(startMarkerOpts.popup);
-
-                    endMarker = MapLibreHelpers.createCircleMarker(endCoords[0], endCoords[1], {
-                        radius: endMarkerOpts.radius,
-                        fillColor: endMarkerOpts.fillColor,
-                        color: endMarkerOpts.color,
-                        weight: endMarkerOpts.weight,
-                        fillOpacity: endMarkerOpts.fillOpacity,
-                    }).addTo(map);
-                    endMarker.bindPopup(endMarkerOpts.popup);
-
-                    const RS = _routeSelection();
-                    const pathPlan = RS.resolvePreviewRoutePath(startCoords, endCoords, data, decodePolyline);
-                    let routePath = pathPlan.routePath;
-                    if (pathPlan.usedFallback && data.geometry) {
-                        if (!pathPlan.precision) {
-                            console.error('[Route] Decoded polyline is empty, using straight line');
-                        } else {
-                            console.error('[Route] Invalid decoded coordinates, using straight line');
-                        }
-                    } else if (!pathPlan.usedFallback && pathPlan.precision != null) {
-                        console.log(`Route path decoded: ${routePath.length} points with precision ${pathPlan.precision} (source: ${data.source})`);
-                    }
-
-                    if (!map) {
-                        console.error('[Route] Map not initialized');
-                        showStatus('Error: Map not initialized', 'error');
-                        return;
-                    }
-
-                    // NOTE: Don't draw route here - displayAllRoutesOnMap() in showRoutePreview() will handle it
-                    // This prevents duplicate routes and ensures consistent multi-route display
-
-                    // Fit map to route with smooth animation
-                    MapLibreHelpers.fitMapBounds(map, routePath, { padding: 50 });
-
-                    lastZoomLevel = map.getZoom();
-
-                    const displayTime = RS.resolveRouteDisplayTime(data);
-                    if (data.total_stop_time && data.total_stop_time > 0) {
-                        console.log(`[Route] Total time with ${data.stops_count} stops: ${displayTime}`);
-                    }
-                    updateTripInfo(data.distance, displayTime, data.fuel_cost || '-', data.toll_cost || '-');
-
-                    showStatus(RS.buildRouteCalculatedStatusMessage(data), 'success');
-
-                    // Display multi-drop leg breakdown if available
-                    if (data.multi_drop && data.legs && data.legs.length > 0) {
-                        displayMultiDropLegs(data);
-                    }
-
-                    const durationMinutes = RS.resolveInitialRouteDurationMinutes(data);
-
-                    window.lastRouteApiResponse = data;
-                    window.lastCalculatedRoute = RS.buildLastCalculatedRoutePatch(data, geocodedEnd, end);
-
-                    console.log(`[Route] Stored route with duration_minutes: ${durationMinutes}`);
-
-                    // Display hazard markers for cameras/hazards on the primary route only
-                    const primaryHazards = data.routes?.[0]?.hazards;
-                    if (primaryHazards && primaryHazards.length > 0) {
-                        displayHazardMarkers(primaryHazards);
-                    }
-
-                    // IMPORTANT: Populate routeOptions BEFORE showing route preview
-                    // so that displayAllRoutesOnMap() has routes to display
-                    if (data.routes && data.routes.length > 0) {
-                        const routeSource = data.source || 'Unknown';
-                        const defaultPrecision = RS.resolveRouteGeometryPrecision(data);
-                        console.log(`[Route API] Received ${data.routes.length} routes from ${routeSource}, default polyline precision ${defaultPrecision}`);
-                        routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routePath);
-                        console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}:`, routeOptions.map(r => r.name));
+                if (pathPlan.usedFallback && data.geometry) {
+                    if (!pathPlan.precision) {
+                        console.error('[Route] Decoded polyline is empty, using straight line');
                     } else {
-                        routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routePath);
-                        console.log('[Route Comparison] Using single route (fallback)');
+                        console.error('[Route] Invalid decoded coordinates, using straight line');
                     }
-
-                    // Routes are already sorted by hazard count from backend
-                    // NOTE: Don't display routes here - showRoutePreview() will handle it
-                    // This prevents double-drawing and ensures consistent display
-
-                    // Show route preview AFTER routeOptions is populated
-                    setTimeout(() => {
-                        showRoutePreview(data);
-                        // Make sure AR button visibility is updated
-                        updateARButtonVisibility();
-                    }, 300);
-
-                    // Hide progress bar on success
-                    hideRouteProgressBar();
-
-                    // Show start navigation buttons (both in FAB and in bottom sheet)
-                    const startNavBtn = document.getElementById('startNavBtn');
-                    const startNavBtnSheet = document.getElementById('startNavBtnSheet');
-                    if (startNavBtn) {
-                        startNavBtn.style.display = 'block';
-                    }
-                    if (startNavBtnSheet) {
-                        startNavBtnSheet.style.display = 'block';
-                    }
-                    updateRoadReportFabVisibility();
-                    const distanceKm = parseFloat(data.distance_km || data.distance) || 0;
-                    const distUnit = getDistanceUnit();
-                    const displayDistance = convertDistance(distanceKm);
-                    const notificationMessage = `${displayDistance} ${distUnit} in ${data.time}. Ready to navigate?`;
-                    console.log('[Route] Route ready notification:', notificationMessage);
-                    sendNotification('Route Ready', notificationMessage, 'success');
-
-                    try {
-                        recordRecentDestination(end, endCoords[0], endCoords[1], 'route');
-                        // Save the start location too, so it appears in the recent-locations
-                        // list for both fields. Skip the live-GPS placeholder ("Current
-                        // Location"), which is not a re-pickable named place.
-                        if (start && !/^\s*current location\s*$/i.test(start)) {
-                            recordRecentDestination(start, startCoords[0], startCoords[1], 'route');
-                        }
-                    } catch (_) { /* ignore */ }
-                } catch (e) {
-                    showStatus('Error parsing coordinates: ' + e.message, 'error');
-                    console.error('Coordinate parsing error:', e);
-                    hideRouteProgressBar();
+                } else if (!pathPlan.usedFallback && pathPlan.precision != null) {
+                    console.log(`Route path decoded: ${routePath.length} points with precision ${pathPlan.precision} (source: ${data.source})`);
                 }
-            } else {
-                showStatus('Error: ' + data.error, 'error');
+
+                if (!map) {
+                    console.error('[Route] Map not initialized');
+                    showStatus('Error: Map not initialized', 'error');
+                    return;
+                }
+
+                MapLibreHelpers.fitMapBounds(map, routePath, { padding: 50 });
+                lastZoomLevel = map.getZoom();
+
+                if (data.total_stop_time && data.total_stop_time > 0) {
+                    console.log(`[Route] Total time with ${data.stops_count} stops: ${previewPlan.displayTime}`);
+                }
+                updateTripInfo(data.distance, previewPlan.displayTime, data.fuel_cost || '-', data.toll_cost || '-');
+                showStatus(previewPlan.statusMessage, 'success');
+
+                if (previewPlan.showMultiDropLegs) {
+                    displayMultiDropLegs(data);
+                }
+
+                window.lastRouteApiResponse = data;
+                window.lastCalculatedRoute = previewPlan.lastCalculatedRoutePatch;
+                console.log(`[Route] Stored route with duration_minutes: ${previewPlan.durationMinutes}`);
+
+                if (previewPlan.primaryHazards && previewPlan.primaryHazards.length > 0) {
+                    displayHazardMarkers(previewPlan.primaryHazards);
+                }
+
+                if (previewPlan.routesCount > 0) {
+                    console.log(`[Route API] Received ${previewPlan.routesCount} routes from ${previewPlan.routeSource}, default polyline precision ${previewPlan.defaultPrecision}`);
+                    routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routePath);
+                    console.log(`[Route Comparison] Loaded ${routeOptions.length} real routes from ${data.source}:`, routeOptions.map(r => r.name));
+                } else {
+                    routeOptions = RS.buildRouteOptionsFromApiResponse(data, decodePolyline, routePath);
+                    console.log('[Route Comparison] Using single route (fallback)');
+                }
+
+                setTimeout(() => {
+                    showRoutePreview(data);
+                    updateARButtonVisibility();
+                }, 300);
+
+                hideRouteProgressBar();
+
+                const startNavBtn = document.getElementById('startNavBtn');
+                const startNavBtnSheet = document.getElementById('startNavBtnSheet');
+                if (startNavBtn) startNavBtn.style.display = 'block';
+                if (startNavBtnSheet) startNavBtnSheet.style.display = 'block';
+                updateRoadReportFabVisibility();
+
+                console.log('[Route] Route ready notification:', previewPlan.notification.message);
+                sendNotification(
+                    previewPlan.notification.title,
+                    previewPlan.notification.message,
+                    previewPlan.notification.type
+                );
+
+                try {
+                    previewPlan.recentDestinations.forEach((dest) => {
+                        recordRecentDestination(dest.label, dest.lat, dest.lon, dest.kind);
+                    });
+                } catch (_) { /* ignore */ }
+            } catch (e) {
+                showStatus('Error parsing coordinates: ' + e.message, 'error');
+                console.error('Coordinate parsing error:', e);
                 hideRouteProgressBar();
             }
         })

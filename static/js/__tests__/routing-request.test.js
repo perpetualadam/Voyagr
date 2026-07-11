@@ -388,3 +388,32 @@ describe('buildCalculateRouteApiPlan', () => {
         expect(plan.requestBody.start).toBe('51.5,-0.1');
     });
 });
+
+describe('buildRouteApiResultPlan', () => {
+    test('maps success, degraded routing, and error payloads', () => {
+        const ok = RR.buildRouteApiResultPlan({
+            success: true,
+            source: 'valhalla',
+            geometry: 'abc',
+            distance: '12 km',
+            time: '20 min',
+            routes: [{}, {}],
+        });
+        expect(ok.success).toBe(true);
+        expect(ok.routingDegraded).toBe(false);
+        expect(ok.errorMessage).toBeNull();
+        expect(ok.responseLogMeta.routesCount).toBe(2);
+
+        const degraded = RR.buildRouteApiResultPlan({
+            success: true,
+            routing_degraded: true,
+            routing_warning: 'fallback',
+            engines_failed: { valhalla: true },
+        });
+        expect(degraded.routingDegraded).toBe(true);
+        expect(degraded.degradedLogWarning.warning).toBe('fallback');
+
+        const fail = RR.buildRouteApiResultPlan({ success: false, error: 'bad coords' });
+        expect(fail.errorMessage).toBe('Error: bad coords');
+    });
+});

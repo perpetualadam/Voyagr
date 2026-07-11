@@ -251,6 +251,57 @@ describe('route preview helpers', () => {
         expect(plan.containerBackground).toBe('#FFF3E0');
         expect(RS.buildHazardPreviewPanelApplyPlan({ visible: false }).containerDisplay).toBe('none');
     });
+
+    test('buildPreviewRouteCoordsPlan validates coordinate strings', () => {
+        const parse = (s) => {
+            const parts = String(s).split(',');
+            if (parts.length < 2) return { valid: false };
+            const lat = parseFloat(parts[0]);
+            const lon = parseFloat(parts[1]);
+            if (isNaN(lat) || isNaN(lon)) return { valid: false };
+            return { valid: true, coords: [lat, lon] };
+        };
+        expect(RS.buildPreviewRouteCoordsPlan('51.5,-0.1', '52,-1', parse, {}).ok).toBe(true);
+        expect(RS.buildPreviewRouteCoordsPlan('bad', '52,-1', parse, { invalidFormat: 'fmt' }).errorStatusMessage).toBe('fmt');
+    });
+
+    test('buildRoutePreviewSuccessPlan assembles preview apply metadata', () => {
+        const plan = RS.buildRoutePreviewSuccessPlan({
+            geocodedStart: '51.5,-0.1',
+            geocodedEnd: '52,-1',
+            startLabel: 'Start',
+            endLabel: 'End',
+            data: {
+                success: true,
+                distance: '12',
+                time: '20 min',
+                fuel_cost: 5,
+                toll_cost: 1,
+                geometry: 'enc',
+                routes: [{ hazards: [{ id: 1 }] }],
+                source: 'valhalla',
+            },
+            parseLatLonPair: (s) => {
+                const p = String(s).split(',');
+                return { valid: true, coords: [parseFloat(p[0]), parseFloat(p[1])] };
+            },
+            decodePolyline: () => [[51.5, -0.1], [52, -1]],
+            fmt: { distanceText: '7.5', distUnit: 'mi', currencySymbol: '£' },
+            parseDurationMinutes: () => 20,
+        });
+        expect(plan.ok).toBe(true);
+        expect(plan.statusMessage).toContain('Route calculated successfully');
+        expect(plan.notification.message).toContain('Ready to navigate?');
+        expect(plan.recentDestinations).toHaveLength(2);
+        expect(plan.primaryHazards).toHaveLength(1);
+        expect(plan.routesCount).toBe(1);
+    });
+
+    test('isCurrentLocationPlaceholder matches live GPS label only', () => {
+        expect(RS.isCurrentLocationPlaceholder('Current Location')).toBe(true);
+        expect(RS.isCurrentLocationPlaceholder('  current location  ')).toBe(true);
+        expect(RS.isCurrentLocationPlaceholder('Leeds')).toBe(false);
+    });
 });
 
 describe('route comparison modal helpers', () => {
