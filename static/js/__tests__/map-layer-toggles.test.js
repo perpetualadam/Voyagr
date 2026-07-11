@@ -40,6 +40,7 @@ describe('map-layer-toggles module', () => {
         const execute = MLT.buildToggleRoadLabelsExecutePlan({ enabled: true });
         expect(execute.mapAction).toBe('toggleRoadLabels');
         expect(execute.toggleInactiveStyles.inactiveBackground).toBe('#ccc');
+        expect(execute.useWriteBoolPref).toBe(true);
         expect(execute.statusMessage).toContain('enabled');
     });
 

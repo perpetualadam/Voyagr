@@ -159,6 +159,7 @@
                 inactiveBorder: '#ccc',
             },
             saveAllSettings: true,
+            useWriteBoolPref: true,
             statusMessage: enabled ? '🛣️ Road labels enabled' : '🛣️ Road labels disabled',
             statusType: 'info',
             logMessage: '[Road Labels] ' + (enabled ? 'Enabled' : 'Disabled'),

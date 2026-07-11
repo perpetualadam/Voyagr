@@ -332,4 +332,17 @@ describe('auto traffic interval dispatch plans', () => {
         });
         expect(reject.action).toBe('reject');
     });
+
+    test('buildUpdateTrafficConditionsResponseDispatchPlan and monitoring runtime collect', () => {
+        const orch = TC.buildUpdateTrafficConditionsOrchestrationPlan({}, 'A', 'B');
+        const ok = TC.buildUpdateTrafficConditionsResponseDispatchPlan({ success: true }, orch);
+        expect(ok.action).toBe('display');
+
+        const fail = TC.buildUpdateTrafficConditionsResponseDispatchPlan({ success: false }, orch);
+        expect(fail.action).toBe('failure');
+
+        const runtime = TC.buildTrafficMonitoringRuntimeCollectPlan();
+        expect(runtime.intervalProperty).toBe(TC.TRAFFIC_MONITORING_INTERVAL_PROPERTY);
+        expect(runtime.startElementId).toBe('start');
+    });
 });

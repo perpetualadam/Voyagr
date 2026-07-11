@@ -4015,10 +4015,13 @@ function deleteSavedRoute(routeId) {
  */
 function updateTrafficConditions() {
     const TC = _trafficChange();
+    const runtime = TC.buildTrafficMonitoringRuntimeCollectPlan();
+    const startEl = document.getElementById(runtime.startElementId);
+    const endEl = document.getElementById(runtime.endElementId);
     const orch = TC.buildUpdateTrafficConditionsOrchestrationPlan(
         window.lastCalculatedRoute,
-        document.getElementById('start')?.value,
-        document.getElementById('end')?.value
+        startEl ? startEl.value : '',
+        endEl ? endEl.value : ''
     );
     if (!orch.shouldFetch) {
         showStatus(orch.errorStatusMessage, 'error');
@@ -4034,15 +4037,17 @@ function updateTrafficConditions() {
     })
         .then(response => response.json())
         .then(data => {
-            if (data.success) {
-                displayTrafficUpdate(data);
+            const dispatch = TC.buildUpdateTrafficConditionsResponseDispatchPlan(data, orch);
+            if (dispatch.action === 'display') {
+                displayTrafficUpdate(dispatch.data);
             } else {
-                showStatus(orch.apiFailureStatusMessage, 'error');
+                showStatus(dispatch.statusMessage, dispatch.statusType);
             }
         })
         .catch(error => {
-            console.error('Traffic update error:', error);
-            showStatus(orch.fetchErrorStatusMessage, 'error');
+            const err = TC.buildUpdateTrafficConditionsFetchErrorPlan(orch);
+            console.error(err.logPrefix, error);
+            showStatus(err.statusMessage, err.statusType);
         });
 }
 /**
@@ -4089,17 +4094,21 @@ function displayTrafficUpdate(data) {
  */
 function startTrafficMonitoring() {
     const TC = _trafficChange();
-    const execute = TC.buildStartTrafficMonitoringExecutePlan(!!window.trafficMonitoringInterval);
+    const runtime = TC.buildTrafficMonitoringRuntimeCollectPlan();
+    const execute = TC.buildStartTrafficMonitoringExecutePlan(
+        !!window[runtime.intervalProperty]
+    );
     if (!execute.shouldStart) return;
 
     if (execute.clearExistingInterval) {
-        clearInterval(window.trafficMonitoringInterval);
+        clearInterval(window[runtime.intervalProperty]);
     }
 
-    window.trafficMonitoringInterval = setInterval(() => {
+    window[runtime.intervalProperty] = setInterval(() => {
+        const startEl = document.getElementById(runtime.startElementId);
         const tick = TC.buildTrafficMonitoringTickPlan(
             window.lastCalculatedRoute,
-            document.getElementById('start')?.value
+            startEl ? startEl.value : ''
         );
         if (tick.shouldUpdate) {
             updateTrafficConditions();
@@ -4115,12 +4124,16 @@ function startTrafficMonitoring() {
  * @returns {*} Return value description
  */
 function stopTrafficMonitoring() {
-    const execute = _trafficChange().buildStopTrafficMonitoringExecutePlan(!!window.trafficMonitoringInterval);
+    const TC = _trafficChange();
+    const runtime = TC.buildTrafficMonitoringRuntimeCollectPlan();
+    const execute = TC.buildStopTrafficMonitoringExecutePlan(
+        !!window[runtime.intervalProperty]
+    );
     if (!execute.shouldStop) return;
 
     if (execute.clearInterval) {
-        clearInterval(window.trafficMonitoringInterval);
-        window.trafficMonitoringInterval = null;
+        clearInterval(window[runtime.intervalProperty]);
+        window[runtime.intervalProperty] = null;
     }
     showStatus(execute.statusMessage, execute.statusType);
 }
@@ -4910,7 +4923,11 @@ function toggleRoadLabels() {
     if (!execute.shouldApply) return;
 
     roadLabelsEnabled = execute.enabled;
-    localStorage.setItem(execute.storageKey, execute.storageValue);
+    if (execute.useWriteBoolPref) {
+        TU.writeBoolPref(execute.storageKey, roadLabelsEnabled);
+    } else {
+        localStorage.setItem(execute.storageKey, execute.storageValue);
+    }
     TU.applyToggleButton(
         document.getElementById(execute.toggleId),
         roadLabelsEnabled,
@@ -6030,17 +6047,15 @@ async function manualTrafficUpdate() {
  * Destination as "lat,lon" for reroute APIs — must survive useRoute() replacing lastCalculatedRoute with a bare route option.
  */
 function resolveNavigationDestination() {
-    const lr = window.lastCalculatedRoute;
-    let polylineEnd = null;
-    if (typeof routePolyline !== 'undefined' && routePolyline && routePolyline.length > 0) {
-        const last = routePolyline[routePolyline.length - 1];
-        polylineEnd = { lat: last[0], lon: last[1] };
-    }
     const ND = _navigationDestination();
+    const collect = ND.buildResolveNavigationDestinationCollectPlan({
+        lastCalculatedRoute: window.lastCalculatedRoute,
+        routePolyline: typeof routePolyline !== 'undefined' ? routePolyline : null,
+    });
     const sources = ND.readNavigationDestinationSources({
-        lastRouteDestination: lr && typeof lr.destination === 'string' ? lr.destination : null,
-        endElement: document.getElementById('end'),
-        polylineEnd,
+        lastRouteDestination: collect.lastRouteDestination,
+        endElement: document.getElementById(collect.endElementId),
+        polylineEnd: collect.polylineEnd,
     });
     return ND.resolveDestinationLatLon(sources);
 }
@@ -10418,18 +10433,24 @@ let _swUpdateInFlight = false;
 let _swUpdateBackoffUntil = 0;
 
 async function safeServiceWorkerUpdate(registration, reason) {
-    if (!registration || !('serviceWorker' in navigator)) return;
-    if (!navigator.onLine) return;
-    if (_swUpdateInFlight || Date.now() < _swUpdateBackoffUntil) return;
-    if (registration.installing) return;
+    const PWA = _pwaInstall();
+    const preflight = PWA.buildServiceWorkerUpdatePreflightPlan({
+        hasRegistration: !!registration,
+        hasServiceWorker: 'serviceWorker' in navigator,
+        isOnline: navigator.onLine,
+        updateInFlight: _swUpdateInFlight,
+        backoffUntil: _swUpdateBackoffUntil,
+        installing: !!(registration && registration.installing),
+    });
+    if (!preflight.shouldUpdate) return;
 
     _swUpdateInFlight = true;
     try {
         await registration.update();
     } catch (e) {
-        // InvalidStateError / NotFound are common when offline or mid-install.
-        _swUpdateBackoffUntil = Date.now() + (5 * 60 * 1000);
-        console.debug('[PWA] Service worker update skipped:', e && e.name, reason || '');
+        const apply = PWA.buildServiceWorkerUpdateErrorApplyPlan();
+        _swUpdateBackoffUntil = apply.backoffUntil;
+        console.debug(apply.logPrefix, e && e.name, reason || '');
     } finally {
         _swUpdateInFlight = false;
     }
@@ -10437,14 +10458,15 @@ async function safeServiceWorkerUpdate(registration, reason) {
 
 if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js')
+        const PWA = _pwaInstall();
+        const regPlan = PWA.buildServiceWorkerRegistrationExecutePlan();
+        navigator.serviceWorker.register(regPlan.scriptPath)
             .then(registration => {
-                console.log('[PWA] Service Worker registered:', registration);
+                console.log(regPlan.successLogPrefix, registration);
 
-                // Check for updates periodically (avoid aggressive polling — it spams InvalidStateError).
                 setInterval(() => {
                     void safeServiceWorkerUpdate(registration, 'periodic');
-                }, 30 * 60 * 1000);
+                }, regPlan.periodicUpdateIntervalMs);
 
                 document.addEventListener('visibilitychange', () => {
                     if (document.visibilityState === 'visible') {
@@ -10452,37 +10474,31 @@ if ('serviceWorker' in navigator) {
                     }
                 });
 
-                // Kick off Picovoice vendor cache warm-up 8s after load (idle).
-                // Prefer requestIdleCallback when available so we don't compete
-                // with first-paint work; fall back to setTimeout on Safari.
                 const scheduleWarm = (cb) => {
-                    if (typeof requestIdleCallback === 'function') {
-                        requestIdleCallback(cb, { timeout: 12000 });
+                    if (regPlan.preferIdleCallback && typeof requestIdleCallback === 'function') {
+                        requestIdleCallback(cb, { timeout: regPlan.picovoiceIdleTimeoutMs });
                     } else {
-                        setTimeout(cb, 8000);
+                        setTimeout(cb, regPlan.picovoiceWarmDelayMs);
                     }
                 };
                 scheduleWarm(warmPicovoiceStaticCache);
             })
             .catch(error => {
-                console.log('[PWA] Service Worker registration failed:', error);
+                console.log(regPlan.failureLogPrefix, error);
             });
     });
 
-    // ===== PHASE 2: Handle service worker updates with smart reload =====
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-        console.log('[PWA] New service worker activated');
+        const change = _pwaInstall().buildServiceWorkerControllerChangePlan({ routeInProgress });
+        console.log(change.logMessage);
 
-        // Check if navigation is in progress
-        if (routeInProgress) {
-            // Queue update for after navigation
-            updatePending = true;
-            showStatus('✅ Update available. Will apply after navigation.', 'info');
-        } else {
-            // Safe to reload immediately
-            showStatus('🔄 Applying app update...', 'success');
-            saveAppState();
-            scheduleAppReload('service-worker-update', 1000);
+        if (change.action === 'defer') {
+            if (change.setUpdatePending) updatePending = true;
+            showStatus(change.statusMessage, change.statusType);
+        } else if (change.action === 'reload') {
+            showStatus(change.statusMessage, change.statusType);
+            if (change.saveAppState) saveAppState();
+            scheduleAppReload(change.reloadReason, change.reloadDelayMs);
         }
     });
 }

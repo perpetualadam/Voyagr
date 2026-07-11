@@ -66,9 +66,40 @@
         };
     }
 
+    var END_DESTINATION_ELEMENT_ID = 'end';
+
+    /**
+     * Collect plan for resolving navigation destination from route/runtime state.
+     * @param {Object} [input]
+     * @param {Object|null} [input.lastCalculatedRoute]
+     * @param {Array<[number,number]>|null} [input.routePolyline]
+     * @param {string} [input.endElementId]
+     * @returns {Object}
+     */
+    function buildResolveNavigationDestinationCollectPlan(input) {
+        input = input || {};
+        var polylineEnd = null;
+        var polyline = input.routePolyline;
+        if (Array.isArray(polyline) && polyline.length > 0) {
+            var last = polyline[polyline.length - 1];
+            if (last && last.length >= 2) {
+                polylineEnd = { lat: last[0], lon: last[1] };
+            }
+        }
+        var lr = input.lastCalculatedRoute;
+        var destination = lr && typeof lr.destination === 'string' ? lr.destination : null;
+        return {
+            lastRouteDestination: destination,
+            polylineEnd: polylineEnd,
+            endElementId: input.endElementId || END_DESTINATION_ELEMENT_ID,
+        };
+    }
+
     var api = {
+        END_DESTINATION_ELEMENT_ID: END_DESTINATION_ELEMENT_ID,
         resolveDestinationLatLon: resolveDestinationLatLon,
         readNavigationDestinationSources: readNavigationDestinationSources,
+        buildResolveNavigationDestinationCollectPlan: buildResolveNavigationDestinationCollectPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

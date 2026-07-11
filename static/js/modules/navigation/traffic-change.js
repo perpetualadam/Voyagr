@@ -302,6 +302,54 @@
     }
 
     /**
+     * Dispatch plan after /api/traffic-conditions returns.
+     * @param {Object|null} data
+     * @param {Object} [orch]
+     * @returns {Object}
+     */
+    function buildUpdateTrafficConditionsResponseDispatchPlan(data, orch) {
+        orch = orch || {};
+        if (data && data.success) {
+            return { action: 'display', data: data };
+        }
+        return {
+            action: 'failure',
+            statusMessage: orch.apiFailureStatusMessage || 'Could not fetch traffic data',
+            statusType: 'error',
+        };
+    }
+
+    /**
+     * Error plan when updateTrafficConditions fetch throws.
+     * @param {Object} [orch]
+     * @returns {Object}
+     */
+    function buildUpdateTrafficConditionsFetchErrorPlan(orch) {
+        orch = orch || {};
+        return {
+            statusMessage: orch.fetchErrorStatusMessage || 'Error updating traffic conditions',
+            statusType: 'error',
+            logPrefix: 'Traffic update error:',
+        };
+    }
+
+    var TRAFFIC_MONITORING_INTERVAL_PROPERTY = 'trafficMonitoringInterval';
+    var TRAFFIC_CONDITIONS_START_ELEMENT_ID = 'start';
+    var TRAFFIC_CONDITIONS_END_ELEMENT_ID = 'end';
+
+    /**
+     * Runtime collect plan for traffic monitoring and conditions updates.
+     * @returns {Object}
+     */
+    function buildTrafficMonitoringRuntimeCollectPlan() {
+        return {
+            intervalProperty: TRAFFIC_MONITORING_INTERVAL_PROPERTY,
+            startElementId: TRAFFIC_CONDITIONS_START_ELEMENT_ID,
+            endElementId: TRAFFIC_CONDITIONS_END_ELEMENT_ID,
+        };
+    }
+
+    /**
      * Parse stored route duration minutes from mixed time fields.
      * @param {{ duration_minutes?: number, time?: string|number }|null|undefined} route
      * @returns {number}
@@ -619,6 +667,12 @@
         buildStopAutoTrafficUpdatesDispatchPlan: buildStopAutoTrafficUpdatesDispatchPlan,
         buildManualTrafficUpdateStatusPlan: buildManualTrafficUpdateStatusPlan,
         buildUpdateTrafficConditionsOrchestrationPlan: buildUpdateTrafficConditionsOrchestrationPlan,
+        buildUpdateTrafficConditionsResponseDispatchPlan: buildUpdateTrafficConditionsResponseDispatchPlan,
+        buildUpdateTrafficConditionsFetchErrorPlan: buildUpdateTrafficConditionsFetchErrorPlan,
+        TRAFFIC_MONITORING_INTERVAL_PROPERTY: TRAFFIC_MONITORING_INTERVAL_PROPERTY,
+        TRAFFIC_CONDITIONS_START_ELEMENT_ID: TRAFFIC_CONDITIONS_START_ELEMENT_ID,
+        TRAFFIC_CONDITIONS_END_ELEMENT_ID: TRAFFIC_CONDITIONS_END_ELEMENT_ID,
+        buildTrafficMonitoringRuntimeCollectPlan: buildTrafficMonitoringRuntimeCollectPlan,
         parseStoredRouteDurationMinutes: parseStoredRouteDurationMinutes,
         buildDisplayTrafficUpdateExecutePlan: buildDisplayTrafficUpdateExecutePlan,
         buildStartTrafficMonitoringExecutePlan: buildStartTrafficMonitoringExecutePlan,

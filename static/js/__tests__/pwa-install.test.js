@@ -15,4 +15,32 @@ describe('pwa-install module', () => {
         expect(PWA.getPwaDismissButtonStyleCssText()).toContain('transparent');
         expect(PWA.getPwaPrimaryButtonStyleCssText()).toContain('#7c4dff');
     });
+
+    test('buildServiceWorkerUpdatePreflightPlan throttles offline and in-flight updates', () => {
+        expect(PWA.buildServiceWorkerUpdatePreflightPlan({
+            hasRegistration: true,
+            hasServiceWorker: true,
+            isOnline: false,
+        }).shouldUpdate).toBe(false);
+
+        const ok = PWA.buildServiceWorkerUpdatePreflightPlan({
+            hasRegistration: true,
+            hasServiceWorker: true,
+            isOnline: true,
+            updateInFlight: false,
+            backoffUntil: 0,
+            installing: false,
+        });
+        expect(ok.shouldUpdate).toBe(true);
+    });
+
+    test('buildServiceWorkerControllerChangePlan defers reload during navigation', () => {
+        const defer = PWA.buildServiceWorkerControllerChangePlan({ routeInProgress: true });
+        expect(defer.action).toBe('defer');
+        expect(defer.setUpdatePending).toBe(true);
+
+        const reload = PWA.buildServiceWorkerControllerChangePlan({ routeInProgress: false });
+        expect(reload.action).toBe('reload');
+        expect(reload.saveAppState).toBe(true);
+    });
 });

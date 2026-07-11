@@ -6,6 +6,99 @@
     'use strict';
 
     var PWA_BANNER_ID = 'voyagr-add-homescreen-banner';
+    var SW_REGISTRATION_PATH = '/service-worker.js';
+    var SW_UPDATE_BACKOFF_MS = 5 * 60 * 1000;
+    var SW_PERIODIC_UPDATE_INTERVAL_MS = 30 * 60 * 1000;
+    var SW_CONTROLLER_RELOAD_DELAY_MS = 1000;
+    var SW_PICOVOICE_WARM_DELAY_MS = 8000;
+    var SW_PICOVOICE_IDLE_TIMEOUT_MS = 12000;
+
+    /**
+     * Preflight plan before calling registration.update().
+     * @param {Object} [input]
+     * @param {boolean} [input.hasRegistration]
+     * @param {boolean} [input.hasServiceWorker]
+     * @param {boolean} [input.isOnline]
+     * @param {boolean} [input.updateInFlight]
+     * @param {number} [input.backoffUntil]
+     * @param {boolean} [input.installing]
+     * @param {number} [input.now]
+     * @returns {Object}
+     */
+    function buildServiceWorkerUpdatePreflightPlan(input) {
+        input = input || {};
+        if (!input.hasRegistration || !input.hasServiceWorker) {
+            return { shouldUpdate: false, reason: 'no_sw' };
+        }
+        if (!input.isOnline) {
+            return { shouldUpdate: false, reason: 'offline' };
+        }
+        var now = input.now != null ? input.now : Date.now();
+        if (input.updateInFlight || (input.backoffUntil && now < input.backoffUntil)) {
+            return { shouldUpdate: false, reason: 'throttled' };
+        }
+        if (input.installing) {
+            return { shouldUpdate: false, reason: 'installing' };
+        }
+        return { shouldUpdate: true, setUpdateInFlight: true };
+    }
+
+    /**
+     * Apply plan after a failed service worker update attempt.
+     * @param {number} [now]
+     * @returns {Object}
+     */
+    function buildServiceWorkerUpdateErrorApplyPlan(now) {
+        var stamp = now != null ? now : Date.now();
+        return {
+            backoffUntil: stamp + SW_UPDATE_BACKOFF_MS,
+            logPrefix: '[PWA] Service worker update skipped:',
+        };
+    }
+
+    /**
+     * Plan when a new service worker controller takes over.
+     * @param {Object} [input]
+     * @param {boolean} [input.routeInProgress]
+     * @returns {Object}
+     */
+    function buildServiceWorkerControllerChangePlan(input) {
+        input = input || {};
+        if (input.routeInProgress) {
+            return {
+                action: 'defer',
+                setUpdatePending: true,
+                statusMessage: '✅ Update available. Will apply after navigation.',
+                statusType: 'info',
+                logMessage: '[PWA] New service worker activated',
+            };
+        }
+        return {
+            action: 'reload',
+            saveAppState: true,
+            statusMessage: '🔄 Applying app update...',
+            statusType: 'success',
+            reloadReason: 'service-worker-update',
+            reloadDelayMs: SW_CONTROLLER_RELOAD_DELAY_MS,
+            logMessage: '[PWA] New service worker activated',
+        };
+    }
+
+    /**
+     * Execute plan for service worker registration on window load.
+     * @returns {Object}
+     */
+    function buildServiceWorkerRegistrationExecutePlan() {
+        return {
+            scriptPath: SW_REGISTRATION_PATH,
+            periodicUpdateIntervalMs: SW_PERIODIC_UPDATE_INTERVAL_MS,
+            picovoiceWarmDelayMs: SW_PICOVOICE_WARM_DELAY_MS,
+            picovoiceIdleTimeoutMs: SW_PICOVOICE_IDLE_TIMEOUT_MS,
+            preferIdleCallback: true,
+            successLogPrefix: '[PWA] Service Worker registered:',
+            failureLogPrefix: '[PWA] Service Worker registration failed:',
+        };
+    }
 
     /**
      * @returns {string}
@@ -69,6 +162,13 @@
 
     var api = {
         PWA_BANNER_ID: PWA_BANNER_ID,
+        SW_REGISTRATION_PATH: SW_REGISTRATION_PATH,
+        SW_UPDATE_BACKOFF_MS: SW_UPDATE_BACKOFF_MS,
+        SW_PERIODIC_UPDATE_INTERVAL_MS: SW_PERIODIC_UPDATE_INTERVAL_MS,
+        buildServiceWorkerUpdatePreflightPlan: buildServiceWorkerUpdatePreflightPlan,
+        buildServiceWorkerUpdateErrorApplyPlan: buildServiceWorkerUpdateErrorApplyPlan,
+        buildServiceWorkerControllerChangePlan: buildServiceWorkerControllerChangePlan,
+        buildServiceWorkerRegistrationExecutePlan: buildServiceWorkerRegistrationExecutePlan,
         getPwaInstallBannerStyleCssText: getPwaInstallBannerStyleCssText,
         getPwaDismissButtonStyleCssText: getPwaDismissButtonStyleCssText,
         getPwaPrimaryButtonStyleCssText: getPwaPrimaryButtonStyleCssText,

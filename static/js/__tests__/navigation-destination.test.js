@@ -60,4 +60,14 @@ describe('readNavigationDestinationSources', () => {
         });
         expect(sources.endCoords).toBeNull();
     });
+
+    test('buildResolveNavigationDestinationCollectPlan extracts polyline end and destination', () => {
+        const collect = NavDest.buildResolveNavigationDestinationCollectPlan({
+            lastCalculatedRoute: { destination: '51.5,-0.1' },
+            routePolyline: [[51.4, -0.2], [51.6, -0.3]],
+        });
+        expect(collect.lastRouteDestination).toBe('51.5,-0.1');
+        expect(collect.polylineEnd).toEqual({ lat: 51.6, lon: -0.3 });
+        expect(collect.endElementId).toBe(NavDest.END_DESTINATION_ELEMENT_ID);
+    });
 });
