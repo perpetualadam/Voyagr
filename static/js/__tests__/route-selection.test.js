@@ -426,6 +426,21 @@ describe('route comparison modal helpers', () => {
         expect(dom.showContainer).toBe(false);
         expect(dom.containerDisplay).toBe('none');
     });
+
+    test('buildRouteComparisonListDomApplyPlan maps routes to list container HTML', () => {
+        const dom = RS.buildRouteComparisonListDomApplyPlan({
+            routes: [{ name: 'Fast', distance_km: 10, duration_minutes: 20, fuel_cost: 4, toll_cost: 0, caz_cost: 0 }],
+            listOpts: {
+                selectedIndex: 0,
+                routeColors: ['#f00'],
+                currencySymbol: '£',
+                distUnit: 'mi',
+                distanceTexts: ['6.2'],
+            },
+        });
+        expect(dom.containerId).toBe('routeComparisonList');
+        expect(dom.innerHtml).toContain('Show All 1 Routes');
+    });
 });
 
 describe('buildInNavRerouteSuccessPlan', () => {

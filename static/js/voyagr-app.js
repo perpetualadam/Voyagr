@@ -1526,131 +1526,121 @@ function loadAllSettings() {
 }
 
 /**
+ * Apply settings form controls from a pure UI apply plan.
+ * @param {Object} plan - from buildSettingsUiApplyPlan
+ */
+function applySettingsUiFromPlan(plan) {
+    if (!plan) return;
+
+    const selects = plan.selects || {};
+    const setSelect = (id, value) => {
+        const el = document.getElementById(id);
+        if (el && value != null) el.value = value;
+    };
+    setSelect('distanceUnit', selects.distanceUnit);
+    setSelect('currencyUnit', selects.currencyUnit);
+    setSelect('speedUnit', selects.speedUnit);
+    setSelect('temperatureUnit', selects.temperatureUnit);
+    setSelect('vehicleType', selects.vehicleType);
+
+    if (plan.routingMode) {
+        setRoutingMode(plan.routingMode);
+    }
+
+    const routeChecks = plan.routePreferenceChecks || {};
+    const setChecked = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.checked = !!value;
+    };
+    setChecked('avoidHighways', routeChecks.avoidHighways);
+    setChecked('preferScenic', routeChecks.preferScenic);
+    setChecked('preferQuiet', routeChecks.preferQuiet);
+    setChecked('avoidUnpaved', routeChecks.avoidUnpaved);
+    setSelect('routeOptimization', routeChecks.routeOptimization);
+    const maxDetourEl = document.getElementById('maxDetour');
+    if (maxDetourEl && routeChecks.maxDetour != null) {
+        maxDetourEl.value = routeChecks.maxDetour;
+    }
+
+    const parking = plan.parkingSelects || {};
+    setSelect('parkingMaxWalkingDistance', parking.maxWalkingDistance);
+    setSelect('parkingPreferredType', parking.preferredType);
+    setSelect('parkingPricePreference', parking.pricePreference);
+
+    const side = plan.sideEffects || {};
+    if (side.loadPreferences) loadPreferences();
+
+    if (side.setMapTheme) {
+        setMapTheme(plan.mapTheme || 'standard');
+    }
+
+    const TU = _toggleUI();
+    const toggles = plan.toggleButtons || {};
+    const smartZoomToggle = document.getElementById('smartZoomToggle');
+    if (smartZoomToggle) TU.applyToggleButton(smartZoomToggle, toggles.smartZoom);
+    const autoTrafficToggle = document.getElementById('autoTrafficUpdateToggle');
+    if (autoTrafficToggle) TU.applyToggleButton(autoTrafficToggle, toggles.autoTrafficUpdate);
+    const autoRerouteToggle = document.getElementById('autoRerouteDeviationToggle');
+    if (autoRerouteToggle) TU.applyToggleButton(autoRerouteToggle, toggles.autoRerouteOnDeviation);
+
+    const labeled = plan.labeledToggleButtons || {};
+    const mlToggle = document.getElementById('mlPredictionsEnabled');
+    if (mlToggle) TU.applyLabeledToggleButton(mlToggle, labeled.mlPredictions);
+    const voiceToggle = document.getElementById('voiceAnnouncementsEnabled');
+    if (voiceToggle) TU.applyLabeledToggleButton(voiceToggle, labeled.voiceAnnouncements);
+    const batteryToggle = document.getElementById('batterySavingMode');
+    if (batteryToggle) TU.applyLabeledToggleButton(batteryToggle, labeled.batterySaving);
+    const gestureToggle = document.getElementById('gestureEnabled');
+    if (gestureToggle) TU.applyLabeledToggleButton(gestureToggle, labeled.gestureControl);
+
+    if (side.initializeDarkMode) initializeDarkMode();
+    if (side.updateThemeButtons) updateThemeButtons();
+    if (side.updateDetourLabel) updateDetourLabel();
+    if (side.applySpeedWidgetToggleUi) applySpeedWidgetToggleUi();
+}
+
+/**
  * applySettingsToUI function
  * @function applySettingsToUI
  * @returns {*} Return value description
  */
 function applySettingsToUI() {
     try {
-        // Apply unit preferences
-        const distanceUnitEl = document.getElementById('distanceUnit');
-        if (distanceUnitEl) distanceUnitEl.value = distanceUnit;
-
-        const currencyUnitEl = document.getElementById('currencyUnit');
-        if (currencyUnitEl) currencyUnitEl.value = currencyUnit;
-
-        const speedUnitEl = document.getElementById('speedUnit');
-        if (speedUnitEl) speedUnitEl.value = speedUnit;
-
-        const temperatureUnitEl = document.getElementById('temperatureUnit');
-        if (temperatureUnitEl) temperatureUnitEl.value = temperatureUnit;
-
-        // Apply vehicle type
-        const vehicleTypeEl = document.getElementById('vehicleType');
-        if (vehicleTypeEl) vehicleTypeEl.value = currentVehicleType;
-
-        // Apply routing mode
-        setRoutingMode(currentRoutingMode);
-
-        // Apply route preferences
-        const saved = localStorage.getItem('routePreferences');
-        if (saved) {
-            const prefs = JSON.parse(saved);
-            const avoidHighwaysEl = document.getElementById('avoidHighways');
-            if (avoidHighwaysEl) avoidHighwaysEl.checked = prefs.avoidHighways || false;
-
-            const preferScenicEl = document.getElementById('preferScenic');
-            if (preferScenicEl) preferScenicEl.checked = prefs.preferScenic || false;
-
-            const preferQuietEl = document.getElementById('preferQuiet');
-            if (preferQuietEl) preferQuietEl.checked = prefs.preferQuiet || false;
-
-            const avoidUnpavedEl = document.getElementById('avoidUnpaved');
-            if (avoidUnpavedEl) avoidUnpavedEl.checked = prefs.avoidUnpaved || false;
-
-            const routeOptimizationEl = document.getElementById('routeOptimization');
-            if (routeOptimizationEl) routeOptimizationEl.value = prefs.routeOptimization || 'fastest';
-
-            const maxDetourEl = document.getElementById('maxDetour');
-            if (maxDetourEl) {
-                maxDetourEl.value = prefs.maxDetour || 20;
-                updateDetourLabel();
-            }
+        let routePrefs = {};
+        const savedRoutePrefs = localStorage.getItem('routePreferences');
+        if (savedRoutePrefs) {
+            routePrefs = JSON.parse(savedRoutePrefs);
         }
 
-        // Apply hazard preferences
-        loadPreferences();
-
-        // Apply parking preferences
-        const parkingMaxWalkingEl = document.getElementById('parkingMaxWalkingDistance');
-        const parkingTypeEl = document.getElementById('parkingPreferredType');
-        const parkingPriceEl = document.getElementById('parkingPricePreference');
+        let parkingPrefs = {};
         const savedParking = localStorage.getItem('parkingPreferences');
         if (savedParking) {
             try {
-                const parkingPrefs = JSON.parse(savedParking);
-                if (parkingMaxWalkingEl) parkingMaxWalkingEl.value = parkingPrefs.maxWalkingDistance || '10';
-                if (parkingTypeEl) parkingTypeEl.value = parkingPrefs.preferredType || 'any';
-                if (parkingPriceEl) parkingPriceEl.value = parkingPrefs.pricePreference || 'any';
+                parkingPrefs = JSON.parse(savedParking);
             } catch (e) {
-                console.log('[Settings] Error applying parking preferences:', e);
+                console.log('[Settings] Error parsing parking preferences:', e);
             }
         }
 
-        // Apply display preferences
-        const mapTheme = localStorage.getItem('mapTheme') || 'standard';
-        setMapTheme(mapTheme);
-
-        const smartZoomToggle = document.getElementById('smartZoomToggle');
-        if (smartZoomToggle) {
-            _toggleUI().applyToggleButton(smartZoomToggle, smartZoomEnabled);
-        }
-
-        // Apply ML predictions toggle state
-        const mlPredictionsEnabled = localStorage.getItem('mlPredictionsEnabled') === 'true';
-        const mlToggle = document.getElementById('mlPredictionsEnabled');
-        if (mlToggle) {
-            _toggleUI().applyLabeledToggleButton(mlToggle, mlPredictionsEnabled);
-        }
-
-        // Apply voice announcements toggle state
-        const voiceAnnouncementsEnabled = localStorage.getItem('voiceAnnouncementsEnabled') === 'true';
-        const voiceToggle = document.getElementById('voiceAnnouncementsEnabled');
-        if (voiceToggle) {
-            _toggleUI().applyLabeledToggleButton(voiceToggle, voiceAnnouncementsEnabled);
-        }
-
-        // Apply battery saving mode toggle state
-        const batterySavingEnabled = localStorage.getItem('pref_batterySaving') === 'true';
-        const batteryToggle = document.getElementById('batterySavingMode');
-        if (batteryToggle) {
-            _toggleUI().applyLabeledToggleButton(batteryToggle, batterySavingEnabled);
-        }
-
-        // Apply gesture control toggle state
-        const gestureControlEnabled = localStorage.getItem('gestureEnabled') === 'true';
-        const gestureToggle = document.getElementById('gestureEnabled');
-        if (gestureToggle) {
-            _toggleUI().applyLabeledToggleButton(gestureToggle, gestureControlEnabled);
-        }
-
-        // Apply UI theme preference
-        initializeDarkMode();
-        updateThemeButtons();
-
-        // Apply auto-traffic update toggle state
-        const autoTrafficToggle = document.getElementById('autoTrafficUpdateToggle');
-        if (autoTrafficToggle) {
-            _toggleUI().applyToggleButton(autoTrafficToggle, autoTrafficUpdateEnabled);
-        }
-
-        // Apply auto-reroute on deviation toggle state
-        const autoRerouteToggle = document.getElementById('autoRerouteDeviationToggle');
-        if (autoRerouteToggle) {
-            _toggleUI().applyToggleButton(autoRerouteToggle, autoRerouteOnDeviationEnabled);
-        }
-
-        applySpeedWidgetToggleUi();
+        const plan = _settingsSnapshot().buildSettingsUiApplyPlan({
+            distanceUnit,
+            currencyUnit,
+            speedUnit,
+            temperatureUnit,
+            vehicleType: currentVehicleType,
+            routingMode: currentRoutingMode,
+            routePreferences: routePrefs,
+            parkingPreferences: parkingPrefs,
+            mapTheme: localStorage.getItem('mapTheme') || 'standard',
+            smartZoomEnabled,
+            autoTrafficUpdateEnabled,
+            autoRerouteOnDeviationEnabled,
+            mlPredictionsEnabled: localStorage.getItem('mlPredictionsEnabled') === 'true',
+            voiceAnnouncementsEnabled: localStorage.getItem('voiceAnnouncementsEnabled') === 'true',
+            batterySavingEnabled: localStorage.getItem('pref_batterySaving') === 'true',
+            gestureControlEnabled: localStorage.getItem('gestureEnabled') === 'true',
+        });
+        applySettingsUiFromPlan(plan);
 
         console.log('[Settings] All settings applied to UI');
     } catch (error) {
@@ -2560,24 +2550,35 @@ function toggleRouteEditing() {
 }
 
 /**
+ * Apply route comparison tab list HTML from a pure DOM apply plan.
+ * @param {Object} domPlan - from buildRouteComparisonListDomApplyPlan
+ */
+function applyRouteComparisonListDomFromPlan(domPlan) {
+    if (!domPlan) return;
+    const listContainer = document.getElementById(domPlan.containerId || 'routeComparisonList');
+    if (!listContainer) return;
+    listContainer.innerHTML = domPlan.innerHtml;
+}
+
+/**
  * displayRouteComparison function - Shows distinct route types with hazard counts
  * @function displayRouteComparison
  * @returns {void}
  */
 function displayRouteComparison() {
-    const listContainer = document.getElementById('routeComparisonList');
-    if (!routeOptions || routeOptions.length === 0) {
-        listContainer.innerHTML = _routeSelection().buildRouteComparisonListHtml([], {});
-        return;
-    }
-
-    listContainer.innerHTML = _routeSelection().buildRouteComparisonListHtml(routeOptions, {
-        selectedIndex: selectedRouteIndex,
-        routeColors: routeColors(),
-        currencySymbol: getCurrencySymbol(),
-        distUnit: getDistanceUnit(),
-        distanceTexts: routeOptions.map((route) => convertDistance(route.distance_km)),
+    const selection = _routeSelection();
+    const routes = routeOptions || [];
+    const domPlan = selection.buildRouteComparisonListDomApplyPlan({
+        routes,
+        listOpts: routes.length > 0 ? {
+            selectedIndex: selectedRouteIndex,
+            routeColors: routeColors(),
+            currencySymbol: getCurrencySymbol(),
+            distUnit: getDistanceUnit(),
+            distanceTexts: routes.map((route) => convertDistance(route.distance_km)),
+        } : {},
     });
+    applyRouteComparisonListDomFromPlan(domPlan);
 }
 
 // ===== VIA-POINTS AND STOPS FUNCTIONALITY =====

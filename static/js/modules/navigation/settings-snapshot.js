@@ -161,10 +161,79 @@
         };
     }
 
+    /**
+     * DOM apply plan for settings form controls (values only; app writes DOM).
+     * @param {Object} input
+     * @returns {Object}
+     */
+    function buildSettingsUiApplyPlan(input) {
+        input = input || {};
+        var routePrefs = input.routePreferences || {};
+        if (typeof routePrefs === 'string') {
+            try {
+                routePrefs = JSON.parse(routePrefs);
+            } catch (_) {
+                routePrefs = {};
+            }
+        }
+        var parkingPrefs = input.parkingPreferences || {};
+        if (typeof parkingPrefs === 'string') {
+            try {
+                parkingPrefs = JSON.parse(parkingPrefs);
+            } catch (_) {
+                parkingPrefs = {};
+            }
+        }
+        return {
+            selects: {
+                distanceUnit: input.distanceUnit,
+                currencyUnit: input.currencyUnit,
+                speedUnit: input.speedUnit,
+                temperatureUnit: input.temperatureUnit,
+                vehicleType: input.vehicleType,
+            },
+            routingMode: input.routingMode,
+            routePreferenceChecks: {
+                avoidHighways: !!routePrefs.avoidHighways,
+                preferScenic: !!routePrefs.preferScenic,
+                preferQuiet: !!routePrefs.preferQuiet,
+                avoidUnpaved: !!routePrefs.avoidUnpaved,
+                routeOptimization: routePrefs.routeOptimization || 'fastest',
+                maxDetour: routePrefs.maxDetour != null ? routePrefs.maxDetour : 20,
+            },
+            parkingSelects: {
+                maxWalkingDistance: parkingPrefs.maxWalkingDistance || '10',
+                preferredType: parkingPrefs.preferredType || 'any',
+                pricePreference: parkingPrefs.pricePreference || 'any',
+            },
+            mapTheme: input.mapTheme || 'standard',
+            toggleButtons: {
+                smartZoom: !!input.smartZoomEnabled,
+                autoTrafficUpdate: !!input.autoTrafficUpdateEnabled,
+                autoRerouteOnDeviation: !!input.autoRerouteOnDeviationEnabled,
+            },
+            labeledToggleButtons: {
+                mlPredictions: !!input.mlPredictionsEnabled,
+                voiceAnnouncements: !!input.voiceAnnouncementsEnabled,
+                batterySaving: !!input.batterySavingEnabled,
+                gestureControl: !!input.gestureControlEnabled,
+            },
+            sideEffects: {
+                loadPreferences: true,
+                setMapTheme: true,
+                initializeDarkMode: true,
+                updateThemeButtons: true,
+                applySpeedWidgetToggleUi: true,
+                updateDetourLabel: true,
+            },
+        };
+    }
+
     var api = {
         SETTINGS_STORAGE_KEY: SETTINGS_STORAGE_KEY,
         buildSettingsSnapshot: buildSettingsSnapshot,
         buildSettingsRestorePlan: buildSettingsRestorePlan,
+        buildSettingsUiApplyPlan: buildSettingsUiApplyPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

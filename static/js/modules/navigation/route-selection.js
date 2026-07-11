@@ -292,6 +292,22 @@
     }
 
     /**
+     * DOM apply plan for the route comparison tab list panel.
+     * @param {Object} opts
+     * @param {Array<Object>} [opts.routes]
+     * @param {Object} [opts.listOpts] - passed to buildRouteComparisonListHtml
+     * @returns {Object}
+     */
+    function buildRouteComparisonListDomApplyPlan(opts) {
+        opts = opts || {};
+        var routes = opts.routes || [];
+        return {
+            containerId: 'routeComparisonList',
+            innerHtml: buildRouteComparisonListHtml(routes, opts.listOpts || {}),
+        };
+    }
+
+    /**
      * Normalize route options for POST /api/route-comparison.
      * @param {Array<Object>} routes
      * @returns {Array<Object>}
@@ -1597,6 +1613,7 @@
         buildTripInfoApplyPlan: buildTripInfoApplyPlan,
         buildRouteComparisonCardHtml: buildRouteComparisonCardHtml,
         buildRouteComparisonListHtml: buildRouteComparisonListHtml,
+        buildRouteComparisonListDomApplyPlan: buildRouteComparisonListDomApplyPlan,
         buildRouteComparisonRequestRoutes: buildRouteComparisonRequestRoutes,
         buildRouteComparisonTableRowHtml: buildRouteComparisonTableRowHtml,
         buildRouteComparisonTableHtml: buildRouteComparisonTableHtml,

@@ -77,4 +77,32 @@ describe('settings-snapshot module', () => {
     test('buildSettingsRestorePlan returns found false for missing settings', () => {
         expect(SS.buildSettingsRestorePlan(null)).toEqual({ found: false });
     });
+
+    test('buildSettingsUiApplyPlan maps runtime values to form control patches', () => {
+        const plan = SS.buildSettingsUiApplyPlan({
+            distanceUnit: 'mi',
+            currencyUnit: 'GBP',
+            speedUnit: 'mph',
+            temperatureUnit: 'f',
+            vehicleType: 'electric',
+            routingMode: 'shortest',
+            routePreferences: { avoidHighways: true, maxDetour: 15 },
+            parkingPreferences: { maxWalkingDistance: '5', preferredType: 'street' },
+            mapTheme: 'dark',
+            smartZoomEnabled: true,
+            autoTrafficUpdateEnabled: false,
+            autoRerouteOnDeviationEnabled: true,
+            mlPredictionsEnabled: true,
+            voiceAnnouncementsEnabled: false,
+            batterySavingEnabled: true,
+            gestureControlEnabled: false,
+        });
+        expect(plan.selects.distanceUnit).toBe('mi');
+        expect(plan.routePreferenceChecks.avoidHighways).toBe(true);
+        expect(plan.routePreferenceChecks.maxDetour).toBe(15);
+        expect(plan.parkingSelects.maxWalkingDistance).toBe('5');
+        expect(plan.toggleButtons.smartZoom).toBe(true);
+        expect(plan.labeledToggleButtons.mlPredictions).toBe(true);
+        expect(plan.sideEffects.applySpeedWidgetToggleUi).toBe(true);
+    });
 });
