@@ -57,6 +57,30 @@ describe('route comparison and selection helpers', () => {
         expect(d.durationMinutes).toBe(25);
     });
 
+    test('buildTripInfoApplyPlan hides panel when distance or time missing', () => {
+        expect(RS.buildTripInfoApplyPlan(null, 30, 5, 2, {}, () => 30)).toEqual({ visible: false });
+        expect(RS.buildTripInfoApplyPlan(10, null, 5, 2, {}, () => 30)).toEqual({ visible: false });
+    });
+
+    test('buildTripInfoApplyPlan returns display and dash flags for calculateRoute payload', () => {
+        const plan = RS.buildTripInfoApplyPlan(
+            12.5,
+            '45 min',
+            '-',
+            3.5,
+            { distanceText: '7.77', distUnit: 'mi', currencySymbol: '£' },
+            (t) => (t === '45 min' ? 45 : 0)
+        );
+        expect(plan.visible).toBe(true);
+        expect(plan.dashFuel).toBe(true);
+        expect(plan.dashToll).toBe(false);
+        expect(plan.showAlongRouteSearch).toBe(true);
+        expect(plan.display.distanceText).toBe('7.77');
+        expect(plan.display.durationMinutes).toBe(45);
+        expect(plan.display.fuelCost).toBe(0);
+        expect(plan.display.tollCost).toBe(3.5);
+    });
+
     test('buildRouteComparisonListHtml includes show-all button and route card', () => {
         const html = RS.buildRouteComparisonListHtml(
             [{ name: 'Fast', distance_km: 10, duration_minutes: 20, hazard_count: 1, fuel_cost: 5, toll_cost: 0 }],

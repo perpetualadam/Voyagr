@@ -172,6 +172,98 @@
     }
 
     /**
+     * Voice category for threshold-set selection.
+     * @param {string} direction
+     * @returns {'exit'|'keep'|'turn'}
+     */
+    function resolveTurnAnnouncementCategory(direction) {
+        if (isExitDirection(direction)) return 'exit';
+        if (isKeepDirection(direction)) return 'keep';
+        return 'turn';
+    }
+
+    /**
+     * Distance thresholds for an upcoming maneuver direction.
+     * @param {string} direction
+     * @param {number[]} turnDistances
+     * @param {number[]} exitDistances
+     * @param {number[]} keepDistances
+     * @returns {number[]}
+     */
+    function resolveAnnouncementDistancesForDirection(direction, turnDistances, exitDistances, keepDistances) {
+        if (isExitDirection(direction)) return exitDistances;
+        if (isKeepDirection(direction)) return keepDistances;
+        return turnDistances;
+    }
+
+    /**
+     * Distance past which announced thresholds reset for a maneuver category.
+     * @param {string} direction
+     * @returns {number}
+     */
+    function resolveThresholdResetDistance(direction) {
+        if (isExitDirection(direction)) return 2500;
+        if (isKeepDirection(direction)) return 1500;
+        return 600;
+    }
+
+    /**
+     * Pick the most-urgent unannounced threshold at the current distance.
+     * @param {number} distanceMeters
+     * @param {number[]} announcementDistances
+     * @param {Set<number>} announcedSet
+     * @returns {{ threshold: number, markPassed: number[] }|null}
+     */
+    function pickTurnAnnouncementThreshold(distanceMeters, announcementDistances, announcedSet) {
+        if (!announcementDistances || !announcedSet) return null;
+        var announcementDistance = null;
+        for (var i = 0; i < announcementDistances.length; i++) {
+            var d = announcementDistances[i];
+            if (distanceMeters <= d && !announcedSet.has(d)) {
+                announcementDistance = d;
+            }
+        }
+        if (announcementDistance === null) return null;
+        var markPassed = [];
+        for (var j = 0; j < announcementDistances.length; j++) {
+            var dd = announcementDistances[j];
+            if (dd > announcementDistance && distanceMeters <= dd) {
+                markPassed.push(dd);
+            }
+        }
+        return { threshold: announcementDistance, markPassed: markPassed };
+    }
+
+    /**
+     * Append chained "then …" phrasing at the most-imminent threshold.
+     * @param {string} message
+     * @param {number} announcementDistance
+     * @param {number[]} announcementDistances
+     * @param {Object|null} follow
+     * @param {Object} [opts]
+     * @param {function(string): string} [opts.getTurnDirectionText]
+     * @param {function(number): number} [opts.effectiveRoundaboutExitCount]
+     * @param {function(number): string} [opts.ordinalEnglishExit]
+     * @returns {string}
+     */
+    function appendChainedFollowingManeuver(message, announcementDistance, announcementDistances, follow, opts) {
+        if (!message || !follow || follow.gapMeters > 900) return message;
+        if (!announcementDistances || announcementDistances.length === 0) return message;
+        var isImminent = announcementDistance === announcementDistances[announcementDistances.length - 1];
+        if (!isImminent) return message;
+        opts = opts || {};
+        var getText = opts.getTurnDirectionText || function () { return 'continue'; };
+        var followText = getText(follow.direction);
+        if (follow.direction === 'roundabout' && opts.effectiveRoundaboutExitCount && opts.ordinalEnglishExit) {
+            var exitCt = opts.effectiveRoundaboutExitCount(follow.index);
+            if (exitCt > 0) {
+                followText = 'at the roundabout take the ' + opts.ordinalEnglishExit(exitCt) + ' exit';
+            }
+        }
+        return message + ', then ' + followText;
+    }
+
+    /**
      * Build the spoken phrase for a distance-to-destination milestone.
      * @param {number} announcementDistance - The milestone (m) being announced.
      * @param {string} [distanceUnit] - 'mi' => imperial wording, else the unit label (e.g. 'km').
@@ -222,6 +314,11 @@
         isExitDirection: isExitDirection,
         isKeepDirection: isKeepDirection,
         buildTurnAnnouncement: buildTurnAnnouncement,
+        resolveTurnAnnouncementCategory: resolveTurnAnnouncementCategory,
+        resolveAnnouncementDistancesForDirection: resolveAnnouncementDistancesForDirection,
+        resolveThresholdResetDistance: resolveThresholdResetDistance,
+        pickTurnAnnouncementThreshold: pickTurnAnnouncementThreshold,
+        appendChainedFollowingManeuver: appendChainedFollowingManeuver,
         buildDestinationAnnouncement: buildDestinationAnnouncement,
         voiceAnnouncementStateResetValues: voiceAnnouncementStateResetValues,
     };

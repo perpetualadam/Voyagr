@@ -399,6 +399,58 @@
     }
 
     /**
+     * Full instructions-list HTML for the expanded turn-by-turn panel.
+     * @param {Array<Object>} steps
+     * @param {number} currentStepIndex
+     * @param {Object} [opts]
+     * @param {function(number): string} [opts.getTurnIcon]
+     * @param {function(Array, number): number} [opts.effectiveRoundaboutExitCountFromSteps]
+     * @returns {{ html: string, countText: string }}
+     */
+    function buildInstructionsListHtml(steps, currentStepIndex, opts) {
+        opts = opts || {};
+        if (!steps || !steps.length) {
+            return { html: INSTRUCTIONS_EMPTY_HTML, countText: '0 steps' };
+        }
+        var getTurnIcon = opts.getTurnIcon || function () { return ''; };
+        var roundaboutExit = opts.effectiveRoundaboutExitCountFromSteps || effectiveRoundaboutExitCountFromSteps;
+        var html = '';
+        for (var i = 0; i < steps.length; i++) {
+            var step = steps[i];
+            var isCurrent = i === currentStepIndex;
+            var isPassed = i < currentStepIndex;
+            var type = step.type || 0;
+            var icon = getTurnIcon(type);
+            var instruction = step.instruction || 'Continue';
+            var streetNames = step.street_names || [];
+            var streetName = streetNames.length > 0 ? streetNames.join(', ') : '';
+            var shapeIndex = step.begin_shape_index || 0;
+            var itemClass = 'instruction-item';
+            if (isCurrent) itemClass += ' current';
+            if (isPassed) itemClass += ' passed';
+            var exitCt = roundaboutExit(steps, i);
+            var exitBadge = ((type === 26 || type === 27) && exitCt > 0)
+                ? ' <span class="lane-hint-chip" style="font-size:11px;vertical-align:middle;">' +
+                    ordinalEnglishExit(exitCt) + ' exit</span>'
+                : '';
+            html += buildInstructionListItemHtml({
+                itemClass: itemClass,
+                stepIndex: i,
+                shapeIndex: shapeIndex,
+                icon: icon,
+                instruction: instruction,
+                exitBadge: exitBadge,
+                streetName: streetName,
+                statusHtml: buildInstructionStatusHtml(isPassed, isCurrent),
+            });
+        }
+        return {
+            html: html,
+            countText: (steps.length - currentStepIndex) + ' of ' + steps.length + ' steps remaining',
+        };
+    }
+
+    /**
      * First announceable maneuver after the current step, with along-route gap (m).
      * @param {Array<Object>} steps
      * @param {number} currentIndex
@@ -623,6 +675,7 @@
         buildInstructionListItemHtml: buildInstructionListItemHtml,
         effectiveRoundaboutExitCountFromSteps: effectiveRoundaboutExitCountFromSteps,
         buildNavStartTurnInstructionInit: buildNavStartTurnInstructionInit,
+        buildInstructionsListHtml: buildInstructionsListHtml,
         findFollowingManeuver: findFollowingManeuver,
         getTurnDetectionMaxDistanceMeters: getTurnDetectionMaxDistanceMeters,
         advanceMonotonicTurnDetectIndex: advanceMonotonicTurnDetectIndex,

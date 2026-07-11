@@ -87,6 +87,38 @@
     }
 
     /**
+     * Apply plan for the trip-info panel after calculateRoute or similar.
+     * @param {*} distance - km number or string
+     * @param {*} time - duration string/number
+     * @param {*} fuelCost
+     * @param {*} tollCost
+     * @param {Object} fmt - { distanceText, distUnit, currencySymbol }
+     * @param {function(*): number} parseDurationMinutes
+     * @returns {{ visible: boolean, display?: Object, dashFuel?: boolean, dashToll?: boolean, showAlongRouteSearch?: boolean }}
+     */
+    function buildTripInfoApplyPlan(distance, time, fuelCost, tollCost, fmt, parseDurationMinutes) {
+        if (!distance || !time) return { visible: false };
+        var distanceKm = parseFloat(distance) || 0;
+        var durationMinutes = typeof parseDurationMinutes === 'function'
+            ? parseDurationMinutes(time)
+            : (parseInt(time, 10) || 0);
+        var display = buildTripInfoDisplayValues({
+            distance_km: distanceKm,
+            duration_minutes: durationMinutes,
+            fuel_cost: fuelCost === '-' ? 0 : fuelCost,
+            toll_cost: tollCost === '-' ? 0 : tollCost,
+        }, fmt);
+        if (!display) return { visible: false };
+        return {
+            visible: true,
+            display: display,
+            dashFuel: fuelCost === '-',
+            dashToll: tollCost === '-',
+            showAlongRouteSearch: true,
+        };
+    }
+
+    /**
      * HTML for one route-comparison list card.
      * @param {Object} route
      * @param {number} index
@@ -920,6 +952,7 @@
         computeRouteTotalCost: computeRouteTotalCost,
         resolveRouteColor: resolveRouteColor,
         buildTripInfoDisplayValues: buildTripInfoDisplayValues,
+        buildTripInfoApplyPlan: buildTripInfoApplyPlan,
         buildRouteComparisonCardHtml: buildRouteComparisonCardHtml,
         buildRouteComparisonListHtml: buildRouteComparisonListHtml,
         buildRouteComparisonRequestRoutes: buildRouteComparisonRequestRoutes,

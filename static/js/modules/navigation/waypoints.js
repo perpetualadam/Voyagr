@@ -156,6 +156,38 @@
         return html;
     }
 
+    /**
+     * Mount plan for multi-drop itinerary HTML appended to the waypoints list.
+     * @param {Object} data
+     * @param {Object} fmt
+     * @param {string} fmt.distUnit
+     * @param {function(number): string} [fmt.convertDistance]
+     * @param {string} [fmt.totalDistanceText]
+     * @param {Array<string>} [fmt.legDistanceTexts]
+     * @param {function(Date): string} [fmt.formatEtaClock]
+     * @returns {{ appendHtml: string, shouldDrawLegs: boolean }|null}
+     */
+    function buildMultiDropItineraryMountPlan(data, fmt) {
+        if (!data || !data.legs) return null;
+        fmt = fmt || {};
+        var legDistanceTexts = fmt.legDistanceTexts;
+        if (!legDistanceTexts && fmt.convertDistance) {
+            legDistanceTexts = data.legs.map(function (leg) {
+                return fmt.convertDistance(leg.distance_km || 0);
+            });
+        }
+        return {
+            appendHtml: buildMultiDropItineraryHtml(data, {
+                distUnit: fmt.distUnit,
+                totalDistanceText: fmt.totalDistanceText ||
+                    (fmt.convertDistance ? fmt.convertDistance(data.total_distance_km) : ''),
+                legDistanceTexts: legDistanceTexts,
+                formatEtaClock: fmt.formatEtaClock,
+            }),
+            shouldDrawLegs: !!(data.all_geometry && data.all_geometry.length > 0),
+        };
+    }
+
     var ROUTE_DRAG_MARKER_ICON_SIZE = [20, 20];
     var WAYPOINT_MARKER_ICON_SIZE = [28, 28];
 
@@ -271,6 +303,7 @@
         buildMultiDropLegHtml: buildMultiDropLegHtml,
         buildMultiDropItineraryHtml: buildMultiDropItineraryHtml,
         buildMultiDropLegLayerDescriptor: buildMultiDropLegLayerDescriptor,
+        buildMultiDropItineraryMountPlan: buildMultiDropItineraryMountPlan,
         ROUTE_DRAG_MARKER_ICON_SIZE: ROUTE_DRAG_MARKER_ICON_SIZE,
         WAYPOINT_MARKER_ICON_SIZE: WAYPOINT_MARKER_ICON_SIZE,
         buildRouteDragMarkerHtml: buildRouteDragMarkerHtml,

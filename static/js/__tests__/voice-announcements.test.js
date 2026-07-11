@@ -231,6 +231,69 @@ describe('buildDestinationAnnouncement', () => {
     });
 });
 
+describe('turn announcement threshold helpers', () => {
+    const turnDistances = [500, 200, 100, 50];
+    const exitDistances = [2000, 800, 200, 100];
+    const keepDistances = [1000, 400, 150, 50];
+
+    test('resolveTurnAnnouncementCategory maps direction families', () => {
+        expect(VA.resolveTurnAnnouncementCategory('exit_right')).toBe('exit');
+        expect(VA.resolveTurnAnnouncementCategory('slight_left')).toBe('keep');
+        expect(VA.resolveTurnAnnouncementCategory('left')).toBe('turn');
+    });
+
+    test('resolveAnnouncementDistancesForDirection picks the right array', () => {
+        expect(VA.resolveAnnouncementDistancesForDirection('exit_left', turnDistances, exitDistances, keepDistances))
+            .toBe(exitDistances);
+        expect(VA.resolveAnnouncementDistancesForDirection('slight_right', turnDistances, exitDistances, keepDistances))
+            .toBe(keepDistances);
+        expect(VA.resolveAnnouncementDistancesForDirection('right', turnDistances, exitDistances, keepDistances))
+            .toBe(turnDistances);
+    });
+
+    test('resolveThresholdResetDistance matches maneuver category', () => {
+        expect(VA.resolveThresholdResetDistance('exit_right')).toBe(2500);
+        expect(VA.resolveThresholdResetDistance('slight_left')).toBe(1500);
+        expect(VA.resolveThresholdResetDistance('left')).toBe(600);
+    });
+
+    test('pickTurnAnnouncementThreshold picks most urgent unannounced threshold', () => {
+        const announced = new Set();
+        const picked = VA.pickTurnAnnouncementThreshold(180, turnDistances, announced);
+        expect(picked).toEqual({ threshold: 200, markPassed: [500] });
+
+        announced.add(200);
+        announced.add(500);
+        const picked2 = VA.pickTurnAnnouncementThreshold(95, turnDistances, announced);
+        expect(picked2).toEqual({ threshold: 100, markPassed: [500, 200] });
+    });
+
+    test('pickTurnAnnouncementThreshold marks farther thresholds passed when closer one fires', () => {
+        const announced = new Set();
+        const picked = VA.pickTurnAnnouncementThreshold(450, turnDistances, announced);
+        expect(picked.threshold).toBe(500);
+        expect(picked.markPassed).toEqual([]);
+    });
+
+    test('appendChainedFollowingManeuver adds then-clause only at imminent threshold', () => {
+        const follow = { direction: 'right', gapMeters: 200, index: 2 };
+        const msg = 'turn left onto High Street';
+        expect(VA.appendChainedFollowingManeuver(msg, 500, turnDistances, follow, {
+            getTurnDirectionText: (d) => (d === 'right' ? 'turn right' : d),
+        })).toBe(msg);
+        expect(VA.appendChainedFollowingManeuver(msg, 50, turnDistances, follow, {
+            getTurnDirectionText: (d) => (d === 'right' ? 'turn right' : d),
+        })).toBe('turn left onto High Street, then turn right');
+    });
+
+    test('appendChainedFollowingManeuver skips when follow gap exceeds 900 m', () => {
+        const msg = 'turn left';
+        expect(VA.appendChainedFollowingManeuver(msg, 50, turnDistances, {
+            direction: 'right', gapMeters: 950, index: 1,
+        }, { getTurnDirectionText: () => 'turn right' })).toBe(msg);
+    });
+});
+
 describe('voiceAnnouncementStateResetValues', () => {
     test('returns scalar reset fields for new route geometry', () => {
         const patch = VA.voiceAnnouncementStateResetValues(12345);

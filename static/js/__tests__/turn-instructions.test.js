@@ -344,6 +344,26 @@ describe('instructions panel HTML helpers', () => {
         expect(html).toContain('High St');
         expect(html).toContain('→ Next');
     });
+
+    test('buildInstructionsListHtml returns empty state when no steps', () => {
+        const plan = TI.buildInstructionsListHtml([], 0, { getTurnIcon: TI.getTurnIcon });
+        expect(plan.html).toBe(TI.INSTRUCTIONS_EMPTY_HTML);
+        expect(plan.countText).toBe('0 steps');
+    });
+
+    test('buildInstructionsListHtml marks current and passed steps with remaining count', () => {
+        const steps = [
+            { type: 8, instruction: 'Continue', street_names: ['A Road'], begin_shape_index: 0 },
+            { type: 10, instruction: 'Turn right', street_names: ['B Lane'], begin_shape_index: 12 },
+            { type: 8, instruction: 'Continue', street_names: [], begin_shape_index: 20 },
+        ];
+        const plan = TI.buildInstructionsListHtml(steps, 1, { getTurnIcon: TI.getTurnIcon });
+        expect(plan.countText).toBe('2 of 3 steps remaining');
+        expect(plan.html).toContain('instruction-item passed');
+        expect(plan.html).toContain('instruction-item current');
+        expect(plan.html).toContain('Turn right');
+        expect(plan.html).toContain('previewInstructionOnMap(1, 12)');
+    });
 });
 
 describe('effectiveRoundaboutExitCountFromSteps', () => {

@@ -61,6 +61,27 @@ describe('waypoints module', () => {
         expect(W.buildStopPopupHtml('Coffee', 15, 'removeStop(0)')).toContain('15 min');
     });
 
+    test('buildMultiDropItineraryMountPlan returns null without legs', () => {
+        expect(W.buildMultiDropItineraryMountPlan(null, {})).toBeNull();
+        expect(W.buildMultiDropItineraryMountPlan({ legs: null }, {})).toBeNull();
+    });
+
+    test('buildMultiDropItineraryMountPlan builds append HTML and draw flag', () => {
+        const plan = W.buildMultiDropItineraryMountPlan(
+            {
+                legs: [{ distance_km: 4, duration_minutes: 10 }],
+                total_distance_km: 4,
+                all_geometry: ['geom1'],
+            },
+            {
+                distUnit: 'mi',
+                convertDistance: (km) => (km * 0.621371).toFixed(2),
+            }
+        );
+        expect(plan.appendHtml).toContain('Leg 1');
+        expect(plan.shouldDrawLegs).toBe(true);
+    });
+
     test('buildMultiDropLegLayerDescriptor decodes geometry for map layers', () => {
         const decode = jest.fn(() => [[51.5, -0.1], [51.6, -0.2]]);
         const desc = W.buildMultiDropLegLayerDescriptor('encoded', 1, { geometry_precision: 6 }, decode);

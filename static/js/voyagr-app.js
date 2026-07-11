@@ -3055,17 +3055,16 @@ function moveWaypoint(type, index, direction) {
  */
 function displayMultiDropLegs(data) {
     const container = document.getElementById('waypointsList');
-    if (!container || !data.legs) return;
-
-    container.innerHTML += VoyagrModules.waypoints().buildMultiDropItineraryHtml(data, {
+    const plan = VoyagrModules.waypoints().buildMultiDropItineraryMountPlan(data, {
         distUnit: getDistanceUnit(),
-        totalDistanceText: convertDistance(data.total_distance_km),
-        legDistanceTexts: data.legs.map((leg) => convertDistance(leg.distance_km || 0)),
+        convertDistance,
         formatEtaClock: (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     });
+    if (!container || !plan) return;
 
-    // Draw multi-drop leg geometries on map with different colors
-    if (data.all_geometry && data.all_geometry.length > 0) {
+    container.innerHTML += plan.appendHtml;
+
+    if (plan.shouldDrawLegs) {
         drawMultiDropLegsOnMap(data);
     }
 }
@@ -11639,55 +11638,18 @@ function updateThenRow(maneuverIndex, currentDistance) {
 function populateInstructionsList() {
     const listEl = document.getElementById('instructionsList');
     const countEl = document.getElementById('instructionsCount');
-
-    if (!listEl || !currentRouteSteps || currentRouteSteps.length === 0) {
-        if (listEl) listEl.innerHTML = VoyagrModules.turnInstructions().INSTRUCTIONS_EMPTY_HTML;
-        if (countEl) countEl.textContent = '0 steps';
-        return;
-    }
-
-    // Calculate remaining steps from current position
-    const remainingSteps = currentRouteSteps.length - currentStepIndex;
-    if (countEl) countEl.textContent = `${remainingSteps} of ${currentRouteSteps.length} steps remaining`;
-
-    let html = '';
     const TI = VoyagrModules.turnInstructions();
 
-    for (let i = 0; i < currentRouteSteps.length; i++) {
-        const step = currentRouteSteps[i];
-        const isCurrent = i === currentStepIndex;
-        const isPassed = i < currentStepIndex;
-        const type = step.type || 0;
-        const icon = getTurnIcon(type);
-        const instruction = step.instruction || 'Continue';
-        const streetNames = step.street_names || [];
-        const streetName = streetNames.length > 0 ? streetNames.join(', ') : '';
-        const shapeIndex = step.begin_shape_index || 0;
+    const plan = TI.buildInstructionsListHtml(currentRouteSteps, currentStepIndex, {
+        getTurnIcon,
+        effectiveRoundaboutExitCountFromSteps: TI.effectiveRoundaboutExitCountFromSteps,
+    });
 
-        let itemClass = 'instruction-item';
-        if (isCurrent) itemClass += ' current';
-        if (isPassed) itemClass += ' passed';
+    if (countEl) countEl.textContent = plan.countText;
+    if (!listEl) return;
 
-        const exitCt = effectiveRoundaboutExitCount(i);
-        const exitBadge = ((type === 26 || type === 27) && exitCt > 0)
-            ? ` <span class="lane-hint-chip" style="font-size:11px;vertical-align:middle;">${TI.ordinalEnglishExit(exitCt)} exit</span>`
-            : '';
+    listEl.innerHTML = plan.html;
 
-        html += TI.buildInstructionListItemHtml({
-            itemClass,
-            stepIndex: i,
-            shapeIndex,
-            icon,
-            instruction,
-            exitBadge,
-            streetName,
-            statusHtml: TI.buildInstructionStatusHtml(isPassed, isCurrent),
-        });
-    }
-
-    listEl.innerHTML = html;
-
-    // Scroll to current instruction
     const currentItem = listEl.querySelector('.instruction-item.current');
     if (currentItem) {
         currentItem.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -13628,107 +13590,86 @@ function announceETAUpdate(currentLat, currentLon) {
  * @returns {*} Return value description
  */
 function announceUpcomingTurn(turnInfo) {
-    // FIXED: Use voiceAnnouncementsEnabled boolean flag instead of voiceRecognition object
     if (!turnInfo || !voiceAnnouncementsEnabled) return;
 
     const distance = turnInfo.distance;
-
-    // FIXED: Validate distance is a valid number
     if (typeof distance !== 'number' || isNaN(distance) || distance < 0) {
         console.warn('[Voice] Invalid turn distance:', distance);
         return;
     }
 
     const direction = turnInfo.direction || 'straight';
+    const TI = VoyagrModules.turnInstructions();
     let directionText = getTurnDirectionText(direction);
     if (direction === 'roundabout') {
-        directionText = VoyagrModules.turnInstructions().getRoundaboutDirectionText(
+        directionText = TI.getRoundaboutDirectionText(
             turnInfo.valhallaType,
             turnInfo.roundabout_exit_count
         );
     }
-    const streetName = turnInfo.streetName || '';
-    const verbalAlert = (turnInfo.verbal_transition_alert_instruction || '').trim();
-    const verbalPre = (turnInfo.verbal_pre_transition_instruction || '').trim();
     const VA = VoyagrModules.voiceAnnouncements();
-    const isExit = VA.isExitDirection(direction);
-    const isKeep = VA.isKeepDirection(direction);
-
-    // Exits and keep-right/left on motorways need earlier warnings at highway speeds
-    const announcementDistances = isExit ? EXIT_ANNOUNCEMENT_DISTANCES
-        : isKeep ? KEEP_ANNOUNCEMENT_DISTANCES
-        : TURN_ANNOUNCEMENT_DISTANCES;
-    const thresholdSet = isExit ? announcedExitThresholds
-        : isKeep ? announcedKeepThresholds
+    const announcementDistances = VA.resolveAnnouncementDistancesForDirection(
+        direction,
+        TURN_ANNOUNCEMENT_DISTANCES,
+        EXIT_ANNOUNCEMENT_DISTANCES,
+        KEEP_ANNOUNCEMENT_DISTANCES
+    );
+    const category = VA.resolveTurnAnnouncementCategory(direction);
+    const thresholdSet = category === 'exit' ? announcedExitThresholds
+        : category === 'keep' ? announcedKeepThresholds
         : announcedTurnThresholds;
-    const category = isExit ? 'exit' : isKeep ? 'keep' : 'turn';
     const maneuverIdx = turnInfo.maneuverIndex;
     if (maneuverIdx != null && (maneuverIdx !== _voiceAnnouncedForManeuverIndex || category !== _voiceAnnouncedCategory)) {
         thresholdSet.clear();
         _voiceAnnouncedForManeuverIndex = maneuverIdx;
         _voiceAnnouncedCategory = category;
     }
-    const resetDistance = isExit ? 2500 : isKeep ? 1500 : 600;
 
-    // Pick the most-urgent (smallest) threshold we've reached and not yet announced, then
-    // suppress any larger thresholds we've already driven past. Announcing only this one
-    // means a GPS tick that overshoots a window (common at motorway speed, where one fix
-    // can jump 30-40 m) can no longer silently drop the earlier call — you still hear the
-    // relevant, nearer announcement instead of nothing until the next threshold.
-    let announcementDistance = null;
-    for (const d of announcementDistances) {
-        if (distance <= d && !thresholdSet.has(d)) {
-            announcementDistance = d;
-        }
-    }
-    if (announcementDistance !== null) {
-        // Mark larger thresholds we've already passed as done so they don't fire late.
-        for (const d of announcementDistances) {
-            if (d > announcementDistance && distance <= d) {
-                thresholdSet.add(d);
-            }
+    const picked = VA.pickTurnAnnouncementThreshold(distance, announcementDistances, thresholdSet);
+    if (picked) {
+        for (const d of picked.markPassed) {
+            thresholdSet.add(d);
         }
 
         let message = VA.buildTurnAnnouncement({
-            announcementDistance: announcementDistance,
-            direction: direction,
-            distanceUnit: distanceUnit,
-            streetName: streetName,
-            directionText: directionText,
-            verbalAlert: verbalAlert,
-            verbalPre: verbalPre,
+            announcementDistance: picked.threshold,
+            direction,
+            distanceUnit,
+            streetName: turnInfo.streetName || '',
+            directionText,
+            verbalAlert: (turnInfo.verbal_transition_alert_instruction || '').trim(),
+            verbalPre: (turnInfo.verbal_pre_transition_instruction || '').trim(),
             valhallaType: turnInfo.valhallaType,
-            roundaboutExitCount: turnInfo.roundabout_exit_count
+            roundaboutExitCount: turnInfo.roundabout_exit_count,
         });
 
-            // At the most-imminent threshold, chain the very next maneuver if it follows
-            // immediately (e.g. "Turn left, then turn right") so the driver hears it in advance.
-            const isImminentThreshold = announcementDistance === announcementDistances[announcementDistances.length - 1];
-            if (message && isImminentThreshold && turnInfo.maneuverIndex != null) {
-                const follow = getFollowingManeuver(turnInfo.maneuverIndex);
-                if (follow && follow.gapMeters <= 900) {
-                    let followText = getTurnDirectionText(follow.direction);
-                    if (follow.direction === 'roundabout') {
-                        const exitCt = effectiveRoundaboutExitCount(follow.index);
-                        if (exitCt > 0) followText = `at the roundabout take the ${VoyagrModules.turnInstructions().ordinalEnglishExit(exitCt)} exit`;
-                    }
-                    message += `, then ${followText}`;
+        if (message && turnInfo.maneuverIndex != null) {
+            const follow = getFollowingManeuver(turnInfo.maneuverIndex);
+            message = VA.appendChainedFollowingManeuver(
+                message,
+                picked.threshold,
+                announcementDistances,
+                follow,
+                {
+                    getTurnDirectionText,
+                    effectiveRoundaboutExitCount: (idx) => effectiveRoundaboutExitCount(idx),
+                    ordinalEnglishExit: TI.ordinalEnglishExit,
                 }
-            }
+            );
+        }
 
-            if (message) {
-                const announceType = isExit ? 'exit' : isKeep ? 'keep' : 'turn';
-                console.log(`[Voice] Announcing ${announceType}: ${message} (distance: ${distance.toFixed(0)}m)`);
-                speakMessage(message, 'high');
-                thresholdSet.add(announcementDistance);
-            }
+        if (message) {
+            console.log(`[Voice] Announcing ${category}: ${message} (distance: ${distance.toFixed(0)}m)`);
+            speakMessage(message, 'high');
+            thresholdSet.add(picked.threshold);
+        }
     }
 
-    // Reset when turn/exit/keep is completely passed
+    const resetDistance = VA.resolveThresholdResetDistance(direction);
     if (distance > resetDistance) {
-        if (isExit) {
+        if (category === 'exit') {
             announcedExitThresholds.clear();
-        } else if (isKeep) {
+        } else if (category === 'keep') {
             announcedKeepThresholds.clear();
         } else {
             announcedTurnThresholds.clear();
@@ -16648,37 +16589,34 @@ function loadPreferences() {
  */
 function updateTripInfo(distance, time, fuelCost, tollCost) {
     const tripInfo = document.getElementById('tripInfo');
-    if (!distance || !time) return;
-
-    const distanceKm = parseFloat(distance) || 0;
-    const durationMinutes = VoyagrModules.routeSharing().parseSharedRouteDurationMinutes(time);
-    const display = VoyagrModules.routeSelection().buildTripInfoDisplayValues(
+    const plan = VoyagrModules.routeSelection().buildTripInfoApplyPlan(
+        distance,
+        time,
+        fuelCost,
+        tollCost,
         {
-            distance_km: distanceKm,
-            duration_minutes: durationMinutes,
-            fuel_cost: fuelCost === '-' ? 0 : fuelCost,
-            toll_cost: tollCost === '-' ? 0 : tollCost,
-        },
-        {
-            distanceText: convertDistance(distanceKm),
+            distanceText: convertDistance(parseFloat(distance) || 0),
             distUnit: getDistanceUnit(),
             currencySymbol: getCurrencySymbol(),
-        }
+        },
+        VoyagrModules.routeSharing().parseSharedRouteDurationMinutes
     );
-    if (!display) return;
+    if (!plan.visible || !tripInfo) return;
 
-    applyTripInfoDisplayValues(display);
-    if (fuelCost === '-') {
+    applyTripInfoDisplayValues(plan.display);
+    if (plan.dashFuel) {
         const fuelEl = document.getElementById('fuelCost');
         if (fuelEl) fuelEl.textContent = '-';
     }
-    if (tollCost === '-') {
+    if (plan.dashToll) {
         const tollEl = document.getElementById('tollCost');
         if (tollEl) tollEl.textContent = '-';
     }
     tripInfo.classList.add('show');
-    const alongRouteBtn = document.getElementById('alongRouteSearch');
-    if (alongRouteBtn) alongRouteBtn.style.display = 'block';
+    if (plan.showAlongRouteSearch) {
+        const alongRouteBtn = document.getElementById('alongRouteSearch');
+        if (alongRouteBtn) alongRouteBtn.style.display = 'block';
+    }
 }
 
 // Update clearForm to also hide trip info
