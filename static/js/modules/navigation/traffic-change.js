@@ -10,6 +10,8 @@
     'use strict';
 
     var TRAFFIC_UPDATE_INTERVAL_MS = 5 * 60 * 1000;
+    var AUTO_TRAFFIC_UPDATE_STORAGE_KEY = 'autoTrafficUpdate';
+    var AUTO_TRAFFIC_UPDATE_TOGGLE_ID = 'autoTrafficUpdateToggle';
 
     /**
      * Decide whether a traffic snapshot represents a significant change that
@@ -272,8 +274,32 @@
         return { statusMessage: '🚦 Traffic updated', statusType: 'success' };
     }
 
+    /**
+     * Toggle plan for enabling/disabling automatic traffic updates.
+     * @param {boolean} currentEnabled
+     * @returns {Object}
+     */
+    function buildAutoTrafficUpdateTogglePlan(currentEnabled) {
+        var next = !currentEnabled;
+        return {
+            nextEnabled: next,
+            storageKey: AUTO_TRAFFIC_UPDATE_STORAGE_KEY,
+            storageValue: next ? 'true' : 'false',
+            toggleElementId: AUTO_TRAFFIC_UPDATE_TOGGLE_ID,
+            saveAllSettings: true,
+            startUpdatesIfRouteInProgress: next,
+            stopUpdates: !next,
+            statusMessage: next
+                ? '🚦 Auto-traffic updates enabled'
+                : '🚦 Auto-traffic updates disabled',
+            statusType: next ? 'success' : 'info',
+        };
+    }
+
     var api = {
         TRAFFIC_UPDATE_INTERVAL_MS: TRAFFIC_UPDATE_INTERVAL_MS,
+        AUTO_TRAFFIC_UPDATE_STORAGE_KEY: AUTO_TRAFFIC_UPDATE_STORAGE_KEY,
+        AUTO_TRAFFIC_UPDATE_TOGGLE_ID: AUTO_TRAFFIC_UPDATE_TOGGLE_ID,
         detectSignificantTrafficChange: detectSignificantTrafficChange,
         computeEffectiveRouteMinutes: computeEffectiveRouteMinutes,
         computeTrafficRerouteTimeSaved: computeTrafficRerouteTimeSaved,
@@ -288,6 +314,7 @@
         buildAutoTrafficIntervalTickPlan: buildAutoTrafficIntervalTickPlan,
         buildStopAutoTrafficUpdatesDispatchPlan: buildStopAutoTrafficUpdatesDispatchPlan,
         buildManualTrafficUpdateStatusPlan: buildManualTrafficUpdateStatusPlan,
+        buildAutoTrafficUpdateTogglePlan: buildAutoTrafficUpdateTogglePlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

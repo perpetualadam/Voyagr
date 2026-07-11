@@ -260,6 +260,10 @@
     var STOP_ADDRESS_INPUT_ID = 'stopAddress';
     var ADD_VIA_POINT_BTN_ID = 'addViaPointBtn';
     var ADD_STOP_BTN_ID = 'addStopBtn';
+    var WAYPOINTS_LIST_CONTAINER_ID = 'waypointsList';
+    var MULTIDROP_LEG_CLEAR_MAX = 25;
+    var MULTIDROP_LEG_LINE_WIDTH = 5;
+    var MULTIDROP_LEG_LINE_OPACITY = 0.85;
 
     /**
      * Apply plan for adding a via-point from route drag.
@@ -727,6 +731,97 @@
     }
 
     /**
+     * DOM apply plan for the waypoints list container.
+     * @param {Array<Object>} viaPoints
+     * @param {Array<Object>} stops
+     * @returns {Object}
+     */
+    function buildWaypointsListDomApplyPlan(viaPoints, stops) {
+        return {
+            containerId: WAYPOINTS_LIST_CONTAINER_ID,
+            innerHtml: buildWaypointsListHtml(viaPoints, stops),
+        };
+    }
+
+    /**
+     * Drag-start plan for reordering waypoints in the list.
+     * @param {string} type
+     * @param {number} index
+     * @returns {Object}
+     */
+    function buildWaypointDragStartPlan(type, index) {
+        if (!type || isNaN(index)) {
+            return { shouldDrag: false };
+        }
+        return {
+            shouldDrag: true,
+            dragState: { type: type, index: index },
+            itemOpacity: '0.5',
+            dataTransferEffect: 'move',
+        };
+    }
+
+    /**
+     * Reset plan for waypoint item opacity after drag ends.
+     * @returns {Object}
+     */
+    function buildWaypointDragOpacityResetPlan() {
+        return {
+            selector: '.waypoint-item',
+            opacity: '1',
+        };
+    }
+
+    /**
+     * Map apply plan for drawing all multi-drop leg geometries.
+     * @param {Object} data
+     * @param {function(string, number): Array<[number,number]>} decodePolyline
+     * @returns {Object}
+     */
+    function buildMultiDropLegsMapApplyPlan(data, decodePolyline) {
+        if (!data || !data.all_geometry) {
+            return { shouldDraw: false, layers: [] };
+        }
+        var layers = [];
+        for (var idx = 0; idx < data.all_geometry.length; idx++) {
+            var geom = data.all_geometry[idx];
+            var leg = data.legs && data.legs[idx];
+            var descriptor = buildMultiDropLegLayerDescriptor(geom, idx, leg, decodePolyline);
+            if (descriptor) {
+                layers.push({
+                    layerId: descriptor.layerId,
+                    sourceId: descriptor.sourceId,
+                    coordinates: descriptor.coordinates,
+                    lineColor: descriptor.lineColor,
+                    lineWidth: MULTIDROP_LEG_LINE_WIDTH,
+                    lineOpacity: MULTIDROP_LEG_LINE_OPACITY,
+                });
+            }
+        }
+        return {
+            shouldDraw: layers.length > 0,
+            layers: layers,
+        };
+    }
+
+    /**
+     * Clear plan for multi-drop leg map layers.
+     * @param {number} [maxLegs]
+     * @returns {Object}
+     */
+    function buildClearMultiDropLayersPlan(maxLegs) {
+        var limit = maxLegs != null ? maxLegs : MULTIDROP_LEG_CLEAR_MAX;
+        var layerSpecs = [];
+        for (var i = 0; i < limit; i++) {
+            layerSpecs.push({
+                layerId: 'multidrop-leg-' + i,
+                sourceId: 'multidrop-leg-source-' + i,
+            });
+        }
+        return { layerSpecs: layerSpecs };
+    }
+
+    /**
      * MapLibre layer descriptor for one multi-drop leg geometry string.
      * @param {string} geom - Encoded polyline
      * @param {number} idx - Leg index
@@ -795,6 +890,13 @@
         STOP_ADDRESS_INPUT_ID: STOP_ADDRESS_INPUT_ID,
         ADD_VIA_POINT_BTN_ID: ADD_VIA_POINT_BTN_ID,
         ADD_STOP_BTN_ID: ADD_STOP_BTN_ID,
+        WAYPOINTS_LIST_CONTAINER_ID: WAYPOINTS_LIST_CONTAINER_ID,
+        MULTIDROP_LEG_CLEAR_MAX: MULTIDROP_LEG_CLEAR_MAX,
+        buildWaypointsListDomApplyPlan: buildWaypointsListDomApplyPlan,
+        buildWaypointDragStartPlan: buildWaypointDragStartPlan,
+        buildWaypointDragOpacityResetPlan: buildWaypointDragOpacityResetPlan,
+        buildMultiDropLegsMapApplyPlan: buildMultiDropLegsMapApplyPlan,
+        buildClearMultiDropLayersPlan: buildClearMultiDropLayersPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

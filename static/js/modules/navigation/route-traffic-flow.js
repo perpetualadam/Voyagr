@@ -195,6 +195,8 @@
     }
 
     var ROUTE_TRAFFIC_POLYLINE_SAMPLE_DIVISOR = 20;
+    var ROUTE_TRAFFIC_UPDATE_INTERVAL_MS = 2 * 60 * 1000;
+    var ROUTE_TRAFFIC_FIRST_UPDATE_DELAY_MS = 500;
 
     /**
      * Dispatch plan for fetching along-route traffic flow data.
@@ -397,6 +399,61 @@
         };
     }
 
+    /**
+     * Dispatch plan for starting periodic route-traffic edge updates during navigation.
+     * @param {Object} [opts]
+     * @param {*} [opts.routeTrafficUpdateInterval]
+     * @param {boolean} [opts.routeTrafficEnabled]
+     * @param {Array<[number,number]>} [opts.routePolyline]
+     * @returns {Object}
+     */
+    function buildStartRouteTrafficUpdatesDispatchPlan(opts) {
+        opts = opts || {};
+        var polyline = opts.routePolyline || [];
+        var hasPolyline = polyline.length > 0;
+        return {
+            shouldRestart: true,
+            clearExistingInterval: !!opts.routeTrafficUpdateInterval,
+            immediateUpdate: !!(opts.routeTrafficEnabled && hasPolyline),
+            immediateDelayMs: ROUTE_TRAFFIC_FIRST_UPDATE_DELAY_MS,
+            intervalMs: ROUTE_TRAFFIC_UPDATE_INTERVAL_MS,
+            startLogMessage: '[Route Traffic] Starting updates - enabled: ' + !!opts.routeTrafficEnabled +
+                ' polyline: ' + polyline.length,
+            logMessage: '[Route Traffic] Started automatic updates every ' +
+                (ROUTE_TRAFFIC_UPDATE_INTERVAL_MS / 1000) + ' seconds',
+        };
+    }
+
+    /**
+     * Tick plan for the route-traffic edge update interval.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.routeInProgress]
+     * @param {boolean} [opts.routeTrafficEnabled]
+     * @param {Array<[number,number]>} [opts.routePolyline]
+     * @returns {Object}
+     */
+    function buildRouteTrafficIntervalTickPlan(opts) {
+        opts = opts || {};
+        var polyline = opts.routePolyline || [];
+        return {
+            shouldFetch: !!(opts.routeInProgress && opts.routeTrafficEnabled && polyline.length > 0),
+            tickLogMessage: '[Route Traffic] Periodic update triggered',
+        };
+    }
+
+    /**
+     * Dispatch plan for stopping route-traffic edge updates.
+     * @param {*} [routeTrafficUpdateInterval]
+     * @returns {Object}
+     */
+    function buildStopRouteTrafficUpdatesDispatchPlan(routeTrafficUpdateInterval) {
+        return {
+            shouldStopInterval: !!routeTrafficUpdateInterval,
+            clearTrafficLayers: true,
+            logMessage: '[Route Traffic] Stopped automatic updates',
+        };
+    }
+
     var api = {
         TRAFFIC_COLORS: TRAFFIC_COLORS,
         findForwardPolylineIndex: findForwardPolylineIndex,
@@ -413,6 +470,11 @@
         buildRouteTrafficFlowResponsePlan: buildRouteTrafficFlowResponsePlan,
         buildRouteTrafficFlowParseFailurePlan: buildRouteTrafficFlowParseFailurePlan,
         buildRouteTrafficFlowBackoffUpdatePlan: buildRouteTrafficFlowBackoffUpdatePlan,
+        buildStartRouteTrafficUpdatesDispatchPlan: buildStartRouteTrafficUpdatesDispatchPlan,
+        buildRouteTrafficIntervalTickPlan: buildRouteTrafficIntervalTickPlan,
+        buildStopRouteTrafficUpdatesDispatchPlan: buildStopRouteTrafficUpdatesDispatchPlan,
+        ROUTE_TRAFFIC_UPDATE_INTERVAL_MS: ROUTE_TRAFFIC_UPDATE_INTERVAL_MS,
+        ROUTE_TRAFFIC_FIRST_UPDATE_DELAY_MS: ROUTE_TRAFFIC_FIRST_UPDATE_DELAY_MS,
         ROUTE_TRAFFIC_SAMPLE_TTL_MS: ROUTE_TRAFFIC_SAMPLE_TTL_MS,
         ROUTE_TRAFFIC_AHEAD_SAMPLE_SEGMENT_COUNT: ROUTE_TRAFFIC_AHEAD_SAMPLE_SEGMENT_COUNT,
         buildSampleRouteTrafficAheadDispatchPlan: buildSampleRouteTrafficAheadDispatchPlan,

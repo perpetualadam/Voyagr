@@ -2858,17 +2858,22 @@ function clearAllWaypoints() {
  * Update the waypoints list display with drag-to-reorder
  */
 function updateWaypointsList() {
-    const container = document.getElementById('waypointsList');
+    const WP = _waypoints();
+    const domPlan = WP.buildWaypointsListDomApplyPlan(viaPoints, stops);
+    const container = document.getElementById(domPlan.containerId);
     if (!container) return;
-    container.innerHTML = _waypoints().buildWaypointsListHtml(viaPoints, stops);
+    container.innerHTML = domPlan.innerHtml;
 }
 
 let _draggedWaypoint = null;
 
 function onWaypointDragStart(e) {
-    _draggedWaypoint = { type: e.target.dataset.type, index: parseInt(e.target.dataset.index) };
-    e.target.style.opacity = '0.5';
-    e.dataTransfer.effectAllowed = 'move';
+    const WP = _waypoints();
+    const plan = WP.buildWaypointDragStartPlan(e.target.dataset.type, parseInt(e.target.dataset.index));
+    if (!plan.shouldDrag) return;
+    _draggedWaypoint = plan.dragState;
+    e.target.style.opacity = plan.itemOpacity;
+    e.dataTransfer.effectAllowed = plan.dataTransferEffect;
 }
 
 function onWaypointDragOver(e) {
@@ -2900,7 +2905,8 @@ function onWaypointDrop(e) {
         }
     }
     _draggedWaypoint = null;
-    document.querySelectorAll('.waypoint-item').forEach(el => el.style.opacity = '1');
+    const resetPlan = _waypoints().buildWaypointDragOpacityResetPlan();
+    document.querySelectorAll(resetPlan.selector).forEach(el => el.style.opacity = resetPlan.opacity);
 }
 
 function moveWaypoint(type, index, direction) {
@@ -2940,16 +2946,15 @@ function displayMultiDropLegs(data) {
  * Draw multi-drop route legs on the map with distinct colors per leg
  */
 function drawMultiDropLegsOnMap(data) {
-    if (!map || !data.all_geometry) return;
+    if (!map) return;
 
     const WP = _waypoints();
-    data.all_geometry.forEach((geom, idx) => {
-        const leg = data.legs && data.legs[idx];
-        const descriptor = WP.buildMultiDropLegLayerDescriptor(geom, idx, leg, decodePolyline);
-        if (!descriptor) return;
+    const applyPlan = WP.buildMultiDropLegsMapApplyPlan(data, decodePolyline);
+    if (!applyPlan.shouldDraw) return;
 
+    applyPlan.layers.forEach((layerPlan, idx) => {
         try {
-            const { layerId, sourceId, coordinates, lineColor } = descriptor;
+            const { layerId, sourceId, coordinates, lineColor } = layerPlan;
             if (map.getLayer(layerId)) map.removeLayer(layerId);
             if (map.getSource(sourceId)) map.removeSource(sourceId);
 
@@ -2968,8 +2973,8 @@ function drawMultiDropLegsOnMap(data) {
                 layout: { 'line-join': 'round', 'line-cap': 'round' },
                 paint: {
                     'line-color': lineColor,
-                    'line-width': MapLibreHelpers.buildZoomScaledLineWidth(5),
-                    'line-opacity': 0.85
+                    'line-width': MapLibreHelpers.buildZoomScaledLineWidth(layerPlan.lineWidth),
+                    'line-opacity': layerPlan.lineOpacity
                 }
             });
         } catch (e) {
@@ -2983,12 +2988,12 @@ function drawMultiDropLegsOnMap(data) {
  */
 function clearMultiDropLayers() {
     if (!map) return;
-    for (let i = 0; i < 25; i++) {
-        const layerId = `multidrop-leg-${i}`;
-        const sourceId = `multidrop-leg-source-${i}`;
-        if (map.getLayer(layerId)) map.removeLayer(layerId);
-        if (map.getSource(sourceId)) map.removeSource(sourceId);
-    }
+    const WP = _waypoints();
+    const plan = WP.buildClearMultiDropLayersPlan();
+    plan.layerSpecs.forEach((spec) => {
+        if (map.getLayer(spec.layerId)) map.removeLayer(spec.layerId);
+        if (map.getSource(spec.sourceId)) map.removeSource(spec.sourceId);
+    });
 }
 
 /**
@@ -5224,7 +5229,6 @@ function initWeatherLayer() {
 let routeTrafficLayers = []; // Array of polylines for traffic segments
 let routeTrafficEnabled = localStorage.getItem('routeTrafficEnabled') !== 'false'; // Default: enabled
 let routeTrafficUpdateInterval = null;
-const ROUTE_TRAFFIC_UPDATE_INTERVAL_MS = 2 * 60 * 1000; // 2 minutes
 
 // Traffic level colors moved to route-traffic-flow.js (TRAFFIC_COLORS).
 
@@ -5441,41 +5445,53 @@ function ensureLabelsOnTop() {
  * Start automatic route traffic updates during navigation
  */
 function startRouteTrafficUpdates() {
-    if (routeTrafficUpdateInterval) {
+    const RTF = _routeTrafficFlow();
+    const plan = RTF.buildStartRouteTrafficUpdatesDispatchPlan({
+        routeTrafficUpdateInterval,
+        routeTrafficEnabled,
+        routePolyline,
+    });
+
+    if (plan.clearExistingInterval && routeTrafficUpdateInterval) {
         clearInterval(routeTrafficUpdateInterval);
     }
 
-    console.log('[Route Traffic] Starting updates - enabled:', routeTrafficEnabled, 'polyline:', routePolyline ? routePolyline.length : 0);
+    console.log(plan.startLogMessage);
 
-    // Immediate first update with slight delay to ensure route is drawn first
-    if (routeTrafficEnabled && routePolyline && routePolyline.length > 0) {
+    if (plan.immediateUpdate) {
         setTimeout(() => {
             console.log('[Route Traffic] Executing first traffic update');
             fetchAndDisplayRouteTraffic();
-        }, 500);
+        }, plan.immediateDelayMs);
     }
 
-    // Set up periodic updates
     routeTrafficUpdateInterval = setInterval(() => {
-        if (routeInProgress && routeTrafficEnabled && routePolyline && routePolyline.length > 0) {
-            console.log('[Route Traffic] Periodic update triggered');
+        const tick = RTF.buildRouteTrafficIntervalTickPlan({
+            routeInProgress,
+            routeTrafficEnabled,
+            routePolyline,
+        });
+        if (tick.shouldFetch) {
+            console.log(tick.tickLogMessage);
             fetchAndDisplayRouteTraffic();
         }
-    }, ROUTE_TRAFFIC_UPDATE_INTERVAL_MS);
+    }, plan.intervalMs);
 
-    console.log('[Route Traffic] Started automatic updates every', ROUTE_TRAFFIC_UPDATE_INTERVAL_MS / 1000, 'seconds');
+    console.log(plan.logMessage);
 }
 
 /**
  * Stop automatic route traffic updates
  */
 function stopRouteTrafficUpdates() {
-    if (routeTrafficUpdateInterval) {
+    const RTF = _routeTrafficFlow();
+    const plan = RTF.buildStopRouteTrafficUpdatesDispatchPlan(routeTrafficUpdateInterval);
+    if (plan.shouldStopInterval) {
         clearInterval(routeTrafficUpdateInterval);
         routeTrafficUpdateInterval = null;
     }
-    clearRouteTrafficLayers();
-    console.log('[Route Traffic] Stopped automatic updates');
+    if (plan.clearTrafficLayers) clearRouteTrafficLayers();
+    console.log(plan.logMessage);
 }
 
 // ===== AUTO-TRAFFIC UPDATE & AUTO-REROUTE SYSTEM =====
@@ -5526,23 +5542,21 @@ function pickActiveRouteDuringNavigation(routeList, singleRoutePayload) {
  * Toggle auto-traffic update on/off
  */
 function toggleAutoTrafficUpdate() {
-    autoTrafficUpdateEnabled = !autoTrafficUpdateEnabled;
-    localStorage.setItem('autoTrafficUpdate', autoTrafficUpdateEnabled ? 'true' : 'false');
+    const TC = _trafficChange();
+    const plan = TC.buildAutoTrafficUpdateTogglePlan(autoTrafficUpdateEnabled);
+    autoTrafficUpdateEnabled = plan.nextEnabled;
+    localStorage.setItem(plan.storageKey, plan.storageValue);
 
-    const toggle = document.getElementById('autoTrafficUpdateToggle');
-    _toggleUI().applyToggleButton(toggle, autoTrafficUpdateEnabled);
+    _toggleUI().applyToggleButton(document.getElementById(plan.toggleElementId), autoTrafficUpdateEnabled);
 
-    if (autoTrafficUpdateEnabled) {
-        showStatus('🚦 Auto-traffic updates enabled', 'success');
-        if (routeInProgress) {
-            startAutoTrafficUpdates();
-        }
-    } else {
-        showStatus('🚦 Auto-traffic updates disabled', 'info');
+    showStatus(plan.statusMessage, plan.statusType);
+    if (plan.startUpdatesIfRouteInProgress && routeInProgress) {
+        startAutoTrafficUpdates();
+    } else if (plan.stopUpdates) {
         stopAutoTrafficUpdates();
     }
 
-    saveAllSettings();
+    if (plan.saveAllSettings) saveAllSettings();
 }
 
 /**

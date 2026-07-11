@@ -201,4 +201,34 @@ describe('waypoints module', () => {
         expect(W.buildMapClickWaypointDispatchPlan({ addingStop: true, lat: 1, lon: 2 }).action)
             .toBe('add_stop');
     });
+
+    test('buildWaypointsListDomApplyPlan targets list container', () => {
+        const plan = W.buildWaypointsListDomApplyPlan([{ name: 'Via' }], []);
+        expect(plan.containerId).toBe(W.WAYPOINTS_LIST_CONTAINER_ID);
+        expect(plan.innerHtml).toContain('Via');
+    });
+
+    test('buildWaypointDragStartPlan captures drag state and opacity', () => {
+        const plan = W.buildWaypointDragStartPlan('via', 1);
+        expect(plan.shouldDrag).toBe(true);
+        expect(plan.dragState).toEqual({ type: 'via', index: 1 });
+        expect(W.buildWaypointDragStartPlan('', NaN).shouldDrag).toBe(false);
+    });
+
+    test('buildMultiDropLegsMapApplyPlan builds layer specs from geometry', () => {
+        const decode = jest.fn(() => [[51.5, -0.1], [51.6, -0.2]]);
+        const plan = W.buildMultiDropLegsMapApplyPlan({
+            all_geometry: ['geom'],
+            legs: [{ geometry_precision: 6 }],
+        }, decode);
+        expect(plan.shouldDraw).toBe(true);
+        expect(plan.layers[0].layerId).toBe('multidrop-leg-0');
+        expect(plan.layers[0].lineOpacity).toBe(0.85);
+    });
+
+    test('buildClearMultiDropLayersPlan enumerates leg layer ids', () => {
+        const plan = W.buildClearMultiDropLayersPlan(3);
+        expect(plan.layerSpecs).toHaveLength(3);
+        expect(plan.layerSpecs[2].sourceId).toBe('multidrop-leg-source-2');
+    });
 });

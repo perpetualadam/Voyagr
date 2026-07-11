@@ -192,4 +192,17 @@ describe('auto traffic interval dispatch plans', () => {
         expect(TC.buildManualTrafficUpdateStatusPlan('start').statusMessage).toContain('Updating');
         expect(TC.buildManualTrafficUpdateStatusPlan('complete').statusType).toBe('success');
     });
+
+    test('buildAutoTrafficUpdateTogglePlan flips state and maps storage/toggle ids', () => {
+        const plan = TC.buildAutoTrafficUpdateTogglePlan(true);
+        expect(plan.nextEnabled).toBe(false);
+        expect(plan.storageKey).toBe(TC.AUTO_TRAFFIC_UPDATE_STORAGE_KEY);
+        expect(plan.toggleElementId).toBe(TC.AUTO_TRAFFIC_UPDATE_TOGGLE_ID);
+        expect(plan.stopUpdates).toBe(true);
+
+        const enable = TC.buildAutoTrafficUpdateTogglePlan(false);
+        expect(enable.nextEnabled).toBe(true);
+        expect(enable.startUpdatesIfRouteInProgress).toBe(true);
+        expect(enable.statusType).toBe('success');
+    });
 });

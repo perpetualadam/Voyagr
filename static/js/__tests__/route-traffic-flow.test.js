@@ -213,4 +213,35 @@ describe('route traffic ahead sampling and cache plans', () => {
         expect(backoff.backoffUntil).toBe(now + fail.setBackoffMs);
         expect(backoff.logMessage).toContain('network');
     });
+
+    test('buildStartRouteTrafficUpdatesDispatchPlan schedules immediate and periodic updates', () => {
+        const plan = RTF.buildStartRouteTrafficUpdatesDispatchPlan({
+            routeTrafficUpdateInterval: null,
+            routeTrafficEnabled: true,
+            routePolyline: [[51.5, -0.1], [51.6, -0.2]],
+        });
+        expect(plan.immediateUpdate).toBe(true);
+        expect(plan.intervalMs).toBe(RTF.ROUTE_TRAFFIC_UPDATE_INTERVAL_MS);
+        expect(plan.immediateDelayMs).toBe(RTF.ROUTE_TRAFFIC_FIRST_UPDATE_DELAY_MS);
+    });
+
+    test('buildRouteTrafficIntervalTickPlan requires active route and polyline', () => {
+        expect(RTF.buildRouteTrafficIntervalTickPlan({
+            routeInProgress: true,
+            routeTrafficEnabled: true,
+            routePolyline: [[1, 2], [3, 4]],
+        }).shouldFetch).toBe(true);
+        expect(RTF.buildRouteTrafficIntervalTickPlan({
+            routeInProgress: false,
+            routeTrafficEnabled: true,
+            routePolyline: [[1, 2]],
+        }).shouldFetch).toBe(false);
+    });
+
+    test('buildStopRouteTrafficUpdatesDispatchPlan always clears traffic layers', () => {
+        const stopped = RTF.buildStopRouteTrafficUpdatesDispatchPlan(null);
+        expect(stopped.shouldStopInterval).toBe(false);
+        expect(stopped.clearTrafficLayers).toBe(true);
+        expect(RTF.buildStopRouteTrafficUpdatesDispatchPlan({}).shouldStopInterval).toBe(true);
+    });
 });
