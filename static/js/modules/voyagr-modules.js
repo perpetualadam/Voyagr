@@ -36,6 +36,7 @@
         multimodalParking: 'VoyagrMultimodalParking',
         routeSharing: 'VoyagrRouteSharing',
         waypoints: 'VoyagrWaypoints',
+        poiSearch: 'VoyagrPoiSearch',
     };
 
     var cache = {};

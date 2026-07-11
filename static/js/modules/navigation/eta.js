@@ -275,6 +275,23 @@
         );
     }
 
+    /**
+     * HTML for destination-remaining progress in the turn-info panel.
+     * @param {string} displayDistance
+     * @param {string} distUnit
+     * @param {number} progressPercent
+     * @returns {string}
+     */
+    function buildDestinationProgressPanelHtml(displayDistance, distUnit, progressPercent) {
+        return (
+            '<div style="padding: 10px; background: #f0f0f0; border-radius: 8px;">' +
+                '<div style="font-size: 14px; color: #666;">Distance to destination</div>' +
+                '<div style="font-size: 24px; font-weight: bold; color: #333;">' + displayDistance + ' ' + distUnit + '</div>' +
+                '<div style="font-size: 12px; color: #999; margin-top: 5px;">Route progress: ' + progressPercent.toFixed(0) + '%</div>' +
+            '</div>'
+        );
+    }
+
     var api = {
         formatRemainingTime: formatRemainingTime,
         buildETAVoiceMessage: buildETAVoiceMessage,
@@ -290,6 +307,7 @@
         buildTrafficSnapshotFromFlow: buildTrafficSnapshotFromFlow,
         buildTrafficStatusLine: buildTrafficStatusLine,
         buildTurnInfoETAPanelHtml: buildTurnInfoETAPanelHtml,
+        buildDestinationProgressPanelHtml: buildDestinationProgressPanelHtml,
         TRAFFIC_RATIO_MAX_AGE_MS: TRAFFIC_RATIO_MAX_AGE_MS,
     };
 
