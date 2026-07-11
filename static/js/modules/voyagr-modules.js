@@ -58,12 +58,14 @@
         vehicleMarker: 'VoyagrVehicleMarker',
         osmMapIcons: 'VoyagrOsmMapIcons',
         mapControls: 'VoyagrMapControls',
+        mapLayerToggles: 'VoyagrMapLayerToggles',
         mapTheme: 'VoyagrMapTheme',
         cameraMapMarkers: 'VoyagrCameraMapMarkers',
         hazardMapMarkers: 'VoyagrHazardMapMarkers',
         pwaInstall: 'VoyagrPwaInstall',
         bestTimeLeave: 'VoyagrBestTimeLeave',
         roadNameDisplay: 'VoyagrRoadNameDisplay',
+        roadReport: 'VoyagrRoadReport',
     };
 
     var cache = {};

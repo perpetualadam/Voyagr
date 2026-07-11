@@ -57,12 +57,14 @@ describe('VoyagrModules registry', () => {
         global.VoyagrVehicleMarker = require('../modules/map/vehicle-marker');
         global.VoyagrOsmMapIcons = require('../modules/map/osm-map-icons');
         global.VoyagrMapControls = require('../modules/map/map-controls');
+        global.VoyagrMapLayerToggles = require('../modules/map/map-layer-toggles');
         global.VoyagrMapTheme = require('../modules/map/map-theme');
         global.VoyagrCameraMapMarkers = require('../modules/map/camera-map-markers');
         global.VoyagrHazardMapMarkers = require('../modules/map/hazard-map-markers');
         global.VoyagrPwaInstall = require('../modules/ui/pwa-install');
         global.VoyagrBestTimeLeave = require('../modules/navigation/best-time-leave');
         global.VoyagrRoadNameDisplay = require('../modules/navigation/road-name-display');
+        global.VoyagrRoadReport = require('../modules/navigation/road-report');
         jest.resetModules();
     });
 

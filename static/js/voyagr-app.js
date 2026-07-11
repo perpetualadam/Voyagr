@@ -4757,80 +4757,6 @@ function displayAllRouteHazards() {
 // ===== BOTTOM SHEET CONTROL =====
 
 /**
- * Initialize bottom sheet interactions (drag, toggle, scroll)
- */
-function initBottomSheetLogic() {
-    const DH = _domHelpers();
-    const bottomSheet = document.getElementById('bottomSheet');
-    const handle = document.querySelector('.bottom-sheet-handle');
-    const header = document.querySelector('.bottom-sheet-header');
-    const initPlan = DH.buildBottomSheetInitOrchestrationPlan(!!bottomSheet, !!handle);
-
-    if (!initPlan.shouldInit) {
-        console.warn(initPlan.missingElementsLogMessage);
-        return;
-    }
-
-    let startY = 0;
-    let currentY = 0;
-    let isDragging = false;
-    const DRAG_THRESHOLD = initPlan.dragThresholdPx;
-
-    const onDragStart = (e) => {
-        const allow = DH.buildBottomSheetDragStartAllowedPlan(
-            !!DH.closest(e.target, initPlan.handleSelector),
-            !!DH.closest(e.target, initPlan.headerSelector)
-        );
-        if (!allow.allowDrag) return;
-
-        isDragging = true;
-        startY = e.touches ? e.touches[0].clientY : e.clientY;
-        bottomSheet.style.transition = 'none';
-    };
-
-    const onDragMove = (e) => {
-        if (!isDragging) return;
-
-        const y = e.touches ? e.touches[0].clientY : e.clientY;
-        const deltaY = y - startY;
-        currentY = deltaY;
-    };
-
-    const onDragEnd = () => {
-        if (!isDragging) return;
-        isDragging = false;
-        bottomSheet.style.transition = '';
-
-        const snap = DH.buildBottomSheetDragSnapPlan(currentY, bottomSheetIsExpanded, DRAG_THRESHOLD);
-        if (snap.action === 'expand') {
-            expandBottomSheet();
-        } else {
-            collapseBottomSheet();
-        }
-        currentY = 0;
-    };
-
-    // Touch events
-    try {
-        handle.addEventListener('touchstart', onDragStart, { passive: true });
-        if (header) header.addEventListener('touchstart', onDragStart, { passive: true });
-        document.addEventListener('touchmove', onDragMove, { passive: true });
-        document.addEventListener('touchend', onDragEnd);
-
-        // Mouse events for testing
-        handle.addEventListener('mousedown', onDragStart);
-        if (header) header.addEventListener('mousedown', onDragStart);
-        document.addEventListener('mousemove', onDragMove);
-        document.addEventListener('mouseup', onDragEnd);
-
-        // Click to toggle
-        handle.addEventListener('click', toggleBottomSheet);
-    } catch (err) {
-        console.error('Error initializing bottom sheet listeners:', err);
-    }
-}
-
-/**
  * Toggle bottom sheet state
  */
 function toggleBottomSheet() {
@@ -4847,49 +4773,84 @@ let showTrafficEnabled = localStorage.getItem('showTrafficEnabled') !== 'false';
 
 // ===== 3D BUILDINGS TOGGLE =====
 // Controls fill-extrusion 3D building visibility
-let buildings3DEnabled = localStorage.getItem('buildings3DEnabled') !== 'false'; // Default: enabled
-let buildings3DHeightMultiplier = parseFloat(localStorage.getItem('buildings3DHeight')) || 1.0; // Height exaggeration
-let buildings3DOpacity = parseFloat(localStorage.getItem('buildings3DOpacity')) || 0.6; // Transparency
+const MLT = typeof VoyagrMapLayerToggles !== 'undefined' ? VoyagrMapLayerToggles : null;
+let buildings3DEnabled = MLT
+    ? MLT.resolveBuildings3DEnabledFromStorage(localStorage.getItem('buildings3DEnabled'))
+    : localStorage.getItem('buildings3DEnabled') !== 'false';
+let buildings3DHeightMultiplier = MLT
+    ? MLT.parseBuildings3DHeightMultiplier(localStorage.getItem('buildings3DHeight'))
+    : (parseFloat(localStorage.getItem('buildings3DHeight')) || 1.0);
+let buildings3DOpacity = MLT
+    ? MLT.parseBuildings3DOpacity(localStorage.getItem('buildings3DOpacity'))
+    : (parseFloat(localStorage.getItem('buildings3DOpacity')) || 0.6);
 
 /**
  * Toggle 3D buildings layer on/off
  * @function toggle3DBuildings
  */
 function toggle3DBuildings() {
-    buildings3DEnabled = !buildings3DEnabled;
-    localStorage.setItem('buildings3DEnabled', buildings3DEnabled ? 'true' : 'false');
+    const layerToggles = _mapLayerToggles();
+    const TU = _toggleUI();
+    const collected = layerToggles.buildToggle3DBuildingsCollectPlan({ currentlyEnabled: buildings3DEnabled });
+    const execute = layerToggles.buildToggle3DBuildingsExecutePlan({
+        enabled: collected.enabled,
+        heightMultiplier: buildings3DHeightMultiplier,
+        opacity: buildings3DOpacity,
+    });
+    if (!execute.shouldApply) return;
 
-    const toggle = document.getElementById('buildings3DToggle');
-    _toggleUI().applyToggleButton(toggle, buildings3DEnabled);
+    buildings3DEnabled = execute.enabled;
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    TU.applyToggleButton(document.getElementById(execute.toggleId), buildings3DEnabled);
 
-    if (buildings3DEnabled) {
-        MapLibreHelpers.add3DBuildings(map, {
-            heightMultiplier: buildings3DHeightMultiplier,
-            opacity: buildings3DOpacity
-        });
-        showStatus('🏢 3D Buildings enabled', 'success');
-        console.log('[3D Buildings] Enabled');
-    } else {
-        MapLibreHelpers.remove3DBuildings(map);
-        showStatus('🏢 3D Buildings disabled', 'info');
-        console.log('[3D Buildings] Disabled');
+    if (map) {
+        if (execute.mapAction === 'add3DBuildings') {
+            MapLibreHelpers.add3DBuildings(map, {
+                heightMultiplier: execute.heightMultiplier,
+                opacity: execute.opacity,
+            });
+        } else {
+            MapLibreHelpers.remove3DBuildings(map);
+        }
     }
 
-    if (typeof _recomputeMapView3DFromGranular === 'function') _recomputeMapView3DFromGranular();
-    saveAllSettings();
+    showStatus(execute.statusMessage, execute.statusType);
+    console.log(execute.logMessage);
+
+    if (execute.recomputeMapView3D && typeof _recomputeMapView3DFromGranular === 'function') {
+        _recomputeMapView3DFromGranular();
+    }
+    if (execute.saveAllSettings) saveAllSettings();
 }
 
 // ===== ROAD LABELS TOGGLE =====
 // Controls road name label visibility on the map
-let roadLabelsEnabled = localStorage.getItem('roadLabelsEnabled') !== 'false'; // Default: enabled
+let roadLabelsEnabled = MLT
+    ? MLT.resolveRoadLabelsEnabledFromStorage(localStorage.getItem('roadLabelsEnabled'))
+    : localStorage.getItem('roadLabelsEnabled') !== 'false';
 
 // After async style load replaces voyagr-bootstrap, re-apply saved label visibility (initializeRoadLabels may have run on empty bootstrap).
 if (typeof window !== 'undefined') {
     window.addEventListener('voyagr-vector-style-ready', () => {
+        const layerToggles = typeof VoyagrMapLayerToggles !== 'undefined' ? VoyagrMapLayerToggles : null;
+        const reconcile = layerToggles
+            ? layerToggles.buildVectorStyleReadyReconcilePlan({
+                hasMap: !!map,
+                hasMapLibreHelpers: !!window.MapLibreHelpers,
+                roadLabelsStorageValue: localStorage.getItem('roadLabelsEnabled'),
+                showTrafficEnabled: showTrafficEnabled,
+                showWeatherEnabled: showWeatherEnabled,
+                hasTrafficLayerRef: !!trafficLayer,
+                mapHasTrafficLayer: !!(map && map.getLayer && map.getLayer('traffic-layer')),
+                hasWeatherLayerRef: !!weatherLayer,
+                mapHasWeatherLayer: !!(map && map.getLayer && map.getLayer('weather-layer')),
+            })
+            : null;
+
         try {
-            if (!map || !window.MapLibreHelpers) return;
-            const on = localStorage.getItem('roadLabelsEnabled') !== 'false';
-            MapLibreHelpers.toggleRoadLabels(map, on);
+            if (reconcile && reconcile.shouldRun && reconcile.reapplyRoadLabels) {
+                MapLibreHelpers.toggleRoadLabels(map, reconcile.roadLabelsEnabled);
+            }
         } catch (e) {
             /* ignore */
         }
@@ -4898,17 +4859,17 @@ if (typeof window !== 'undefined') {
         }
         // setStyle() removes raster overlays; JS handles still pointed at removed layers.
         try {
-            if (!map) return;
-            if (trafficLayer && !map.getLayer('traffic-layer')) {
+            if (!map || !reconcile) return;
+            if (reconcile.resetTrafficLayerRef) {
                 trafficLayer = null;
             }
-            if (weatherLayer && !map.getLayer('weather-layer')) {
+            if (reconcile.resetWeatherLayerRef) {
                 weatherLayer = null;
             }
-            if (showTrafficEnabled) {
+            if (reconcile.addTrafficLayer) {
                 addTrafficLayer();
             }
-            if (showWeatherEnabled) {
+            if (reconcile.addWeatherLayer) {
                 addWeatherLayer();
             }
         } catch (e) {
@@ -4922,22 +4883,27 @@ if (typeof window !== 'undefined') {
  * @function toggleRoadLabels
  */
 function toggleRoadLabels() {
-    roadLabelsEnabled = !roadLabelsEnabled;
-    localStorage.setItem('roadLabelsEnabled', roadLabelsEnabled ? 'true' : 'false');
+    const layerToggles = _mapLayerToggles();
+    const TU = _toggleUI();
+    const collected = layerToggles.buildToggleRoadLabelsCollectPlan({ currentlyEnabled: roadLabelsEnabled });
+    const execute = layerToggles.buildToggleRoadLabelsExecutePlan({ enabled: collected.enabled });
+    if (!execute.shouldApply) return;
 
-    const toggle = document.getElementById('roadLabelsToggle');
-    _toggleUI().applyToggleButton(toggle, roadLabelsEnabled, {
-        inactiveBackground: '#ccc',
-        inactiveBorder: '#ccc',
-    });
+    roadLabelsEnabled = execute.enabled;
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    TU.applyToggleButton(
+        document.getElementById(execute.toggleId),
+        roadLabelsEnabled,
+        execute.toggleInactiveStyles
+    );
 
     if (map) {
         MapLibreHelpers.toggleRoadLabels(map, roadLabelsEnabled);
-        showStatus(roadLabelsEnabled ? '🛣️ Road labels enabled' : '🛣️ Road labels disabled', 'info');
-        console.log(`[Road Labels] ${roadLabelsEnabled ? 'Enabled' : 'Disabled'}`);
+        showStatus(execute.statusMessage, execute.statusType);
+        console.log(execute.logMessage);
     }
 
-    saveAllSettings();
+    if (execute.saveAllSettings) saveAllSettings();
 }
 
 // ===== GOOGLE PLUS CODES TOGGLE =====
@@ -4970,10 +4936,12 @@ function toggleGooglePlusCodes() {
  * @param {number} multiplier - Height multiplier (1.0 = normal, 2.0 = double height)
  */
 function set3DBuildingHeight(multiplier) {
-    buildings3DHeightMultiplier = Math.max(0.5, Math.min(3.0, multiplier));
-    localStorage.setItem('buildings3DHeight', buildings3DHeightMultiplier.toString());
-    MapLibreHelpers.set3DBuildingHeight(map, buildings3DHeightMultiplier);
-    console.log(`[3D Buildings] Height multiplier set to ${buildings3DHeightMultiplier}`);
+    const execute = _mapLayerToggles().buildSet3DBuildingHeightExecutePlan(multiplier);
+    if (!execute.shouldApply) return;
+    buildings3DHeightMultiplier = execute.heightMultiplier;
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    if (map) MapLibreHelpers.set3DBuildingHeight(map, execute.heightMultiplier);
+    console.log(execute.logMessage);
 }
 
 /**
@@ -4982,10 +4950,12 @@ function set3DBuildingHeight(multiplier) {
  * @param {number} opacity - Opacity value (0.0 = transparent, 1.0 = opaque)
  */
 function set3DBuildingOpacity(opacity) {
-    buildings3DOpacity = Math.max(0.1, Math.min(1.0, opacity));
-    localStorage.setItem('buildings3DOpacity', buildings3DOpacity.toString());
-    MapLibreHelpers.set3DBuildingOpacity(map, buildings3DOpacity);
-    console.log(`[3D Buildings] Opacity set to ${buildings3DOpacity}`);
+    const execute = _mapLayerToggles().buildSet3DBuildingOpacityExecutePlan(opacity);
+    if (!execute.shouldApply) return;
+    buildings3DOpacity = execute.opacity;
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    if (map) MapLibreHelpers.set3DBuildingOpacity(map, execute.opacity);
+    console.log(execute.logMessage);
 }
 
 /**
@@ -8559,6 +8529,7 @@ function _favorites() { return VoyagrModules.favorites(); }
 
 /** Unit-tested road name bar throttle/display helpers (modules/navigation/road-name-display.js). */
 function _roadNameDisplay() { return VoyagrModules.roadNameDisplay(); }
+function _roadReport() { return VoyagrModules.roadReport(); }
 
 /** Unit-tested CAZ zones settings panel HTML (modules/navigation/caz-info.js). */
 function _cazInfo() { return VoyagrModules.cazInfo(); }
@@ -8571,6 +8542,7 @@ function _osmMapIcons() { return VoyagrModules.osmMapIcons(); }
 
 /** Unit-tested navigation map control icons (modules/map/map-controls.js). */
 function _mapControls() { return VoyagrModules.mapControls(); }
+function _mapLayerToggles() { return VoyagrModules.mapLayerToggles(); }
 function _mapTheme() { return VoyagrModules.mapTheme(); }
 
 /** Unit-tested route geometry helpers (modules/navigation/route-geometry.js). */
@@ -10310,49 +10282,60 @@ function voyagrBindFabLongPressHint(el, initPlan) {
 }
 
 function openRoadReportModal() {
-    const m = document.getElementById('roadReportModal');
+    const execute = _roadReport().buildOpenRoadReportModalExecutePlan();
+    if (!execute.shouldOpen) return;
+    const m = document.getElementById(execute.modalId);
     if (!m) return;
-    const notes = document.getElementById('roadReportNotes');
-    if (notes) notes.value = '';
-    m.style.display = 'block';
+    const notes = document.getElementById(execute.notesId);
+    if (notes && execute.clearNotes) notes.value = '';
+    m.style.display = execute.modalDisplay;
 }
 
 function closeRoadReportModal() {
-    const m = document.getElementById('roadReportModal');
-    if (m) m.style.display = 'none';
+    const execute = _roadReport().buildCloseRoadReportModalExecutePlan();
+    if (!execute.shouldClose) return;
+    const m = document.getElementById(execute.modalId);
+    if (m) m.style.display = execute.modalDisplay;
 }
 
 async function submitRoadReport() {
-    const lat = typeof currentLat !== 'undefined' ? currentLat : null;
-    const lon = typeof currentLon !== 'undefined' ? currentLon : null;
-    if (lat == null || lon == null || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-        showStatus('Turn on GPS or wait for a position fix before reporting.', 'warning');
+    const RR = _roadReport();
+    const collected = RR.buildSubmitRoadReportCollectPlan({
+        lat: typeof currentLat !== 'undefined' ? currentLat : null,
+        lon: typeof currentLon !== 'undefined' ? currentLon : null,
+    });
+    if (!collected.hasGpsFix) {
+        const fetchPlan = RR.buildSubmitRoadReportFetchPlan();
+        showStatus(fetchPlan.gpsRequiredStatusMessage, fetchPlan.gpsRequiredStatusType);
         return;
     }
-    const typeEl = document.getElementById('roadReportType');
+
+    const typeEl = document.getElementById(RR.ROAD_REPORT_TYPE_ID);
     const hazard_type = typeEl ? typeEl.value : 'other';
-    const description = (document.getElementById('roadReportNotes') && document.getElementById('roadReportNotes').value) || '';
+    const description = (document.getElementById(RR.ROAD_REPORT_NOTES_ID)
+        && document.getElementById(RR.ROAD_REPORT_NOTES_ID).value) || '';
+    const fetchPlan = RR.buildSubmitRoadReportFetchPlan({
+        lat: collected.lat,
+        lon: collected.lon,
+        hazardType: hazard_type,
+        description,
+    });
+
     try {
-        const r = await fetch('/api/hazards/report', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                hazard_type,
-                lat,
-                lon,
-                description,
-                severity: hazard_type === 'accident' ? 'high' : 'medium',
-            }),
+        const r = await fetch(fetchPlan.url, {
+            method: fetchPlan.method,
+            headers: fetchPlan.headers,
+            body: JSON.stringify(fetchPlan.body),
         });
         const data = await r.json();
         if (data.success) {
-            showStatus('Thanks — report received.', 'success');
-            closeRoadReportModal();
+            showStatus(fetchPlan.successStatusMessage, fetchPlan.successStatusType);
+            if (fetchPlan.closeModalOnSuccess) closeRoadReportModal();
         } else {
-            showStatus(data.error || 'Report failed', 'error');
+            showStatus(data.error || fetchPlan.errorStatusPrefix, 'error');
         }
     } catch (e) {
-        showStatus('Report failed: ' + e.message, 'error');
+        showStatus(fetchPlan.errorStatusPrefix + ': ' + e.message, 'error');
     }
 }
 
