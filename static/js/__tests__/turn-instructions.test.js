@@ -411,3 +411,39 @@ describe('findFollowingManeuver', () => {
         expect(TI.findFollowingManeuver(steps, 1, polyline, {})).toBeNull();
     });
 });
+
+describe('turn detection helpers', () => {
+    test('getTurnDetectionMaxDistanceMeters scales by maneuver type', () => {
+        expect(TI.getTurnDetectionMaxDistanceMeters('exit')).toBe(2500);
+        expect(TI.getTurnDetectionMaxDistanceMeters('slight_right')).toBe(1500);
+        expect(TI.getTurnDetectionMaxDistanceMeters('roundabout')).toBe(900);
+        expect(TI.getTurnDetectionMaxDistanceMeters('right')).toBe(750);
+    });
+
+    test('advanceMonotonicTurnDetectIndex never moves backward', () => {
+        expect(TI.advanceMonotonicTurnDetectIndex(10, 15)).toEqual({
+            userRouteIndex: 15,
+            lastTurnDetectRouteVertexIndex: 15,
+        });
+        expect(TI.advanceMonotonicTurnDetectIndex(20, 15)).toEqual({
+            userRouteIndex: 20,
+            lastTurnDetectRouteVertexIndex: 20,
+        });
+    });
+
+    test('findUpcomingManeuverTurn returns in-range maneuver', () => {
+        const steps = [
+            { type: 8, begin_shape_index: 0 },
+            { type: 10, begin_shape_index: 1, instruction: 'Turn right', street_names: ['High St'] },
+        ];
+        const polyline = [[51.5, -0.1], [51.51, -0.09]];
+        const turn = TI.findUpcomingManeuverTurn(steps, 0, polyline, { index: 0, t: 0 }, {
+            distanceAlongRouteToVertexMeters: () => 200,
+            getManeuverStreetLabel: (m) => (m.street_names || [])[0] || '',
+            resolveRoadClass: () => 'primary',
+        });
+        expect(turn.direction).toBe('right');
+        expect(turn.maneuverIndex).toBe(1);
+        expect(turn.distance).toBe(200);
+    });
+});

@@ -507,6 +507,92 @@
     }
 
     /**
+     * Resolve polyline decode precision from API payload (OSRM uses 5, default 6).
+     * @param {Object} data
+     * @returns {number}
+     */
+    function resolveRouteGeometryPrecision(data) {
+        data = data || {};
+        if (Number.isFinite(data.geometry_precision)) {
+            return data.geometry_precision;
+        }
+        var sourceLower = String(data.source || '').toLowerCase();
+        return sourceLower.indexOf('osrm') >= 0 ? 5 : 6;
+    }
+
+    /**
+     * @param {[number,number]|null|undefined} point
+     * @returns {boolean}
+     */
+    function isValidDecodedRoutePoint(point) {
+        if (!point || isNaN(point[0]) || isNaN(point[1])) return false;
+        if (point[0] === 0 && point[1] === 0) return false;
+        return true;
+    }
+
+    /**
+     * @param {[number,number]} startCoords
+     * @param {[number,number]} endCoords
+     * @returns {Array<[number,number]>}
+     */
+    function buildStraightLineRoutePath(startCoords, endCoords) {
+        return [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
+    }
+
+    /**
+     * Decode route geometry for map preview, falling back to a straight line when invalid.
+     * @param {[number,number]} startCoords
+     * @param {[number,number]} endCoords
+     * @param {Object} data
+     * @param {function(string, number): Array<[number,number]>} decodePolyline
+     * @returns {{ routePath: Array<[number,number]>, precision: (number|null), usedFallback: boolean }}
+     */
+    function resolvePreviewRoutePath(startCoords, endCoords, data, decodePolyline) {
+        var fallback = buildStraightLineRoutePath(startCoords, endCoords);
+        data = data || {};
+        if (!data.geometry || typeof decodePolyline !== 'function') {
+            return { routePath: fallback, precision: null, usedFallback: true };
+        }
+        try {
+            var precision = resolveRouteGeometryPrecision(data);
+            var routePath = decodePolyline(data.geometry, precision);
+            if (!routePath || routePath.length === 0 || !isValidDecodedRoutePoint(routePath[0])) {
+                return { routePath: fallback, precision: precision, usedFallback: true };
+            }
+            return { routePath: routePath, precision: precision, usedFallback: false };
+        } catch (_e) {
+            return {
+                routePath: fallback,
+                precision: resolveRouteGeometryPrecision(data),
+                usedFallback: true,
+            };
+        }
+    }
+
+    /**
+     * Success status banner after calculateRoute returns a valid route.
+     * @param {Object} data
+     * @returns {string}
+     */
+    function buildRouteCalculatedStatusMessage(data) {
+        data = data || {};
+        var statusMsg = 'Route calculated successfully!';
+        if (data.response_time_ms) {
+            statusMsg += ' (' + Math.round(data.response_time_ms) + 'ms)';
+        }
+        if (data.source && String(data.source).indexOf('Custom Router') >= 0) {
+            statusMsg += ' ⚡ Ultra-fast!';
+        }
+        if (data.via_points_count > 0 || data.stops_count > 0) {
+            statusMsg += ' 📍 ' + (data.via_points_count || 0) + ' via-points, ' + (data.stops_count || 0) + ' stops';
+        }
+        if (data.multi_drop && data.optimized) {
+            statusMsg += ' (optimized order)';
+        }
+        return statusMsg;
+    }
+
+    /**
      * Greedy nearest-neighbour ordering of via-points and stops between start and end.
      * @param {number} startLat
      * @param {number} startLon
@@ -809,6 +895,11 @@
         buildPreviewAlternativeRouteCardMountPlan: buildPreviewAlternativeRouteCardMountPlan,
         pickActiveRouteDuringNavigation: pickActiveRouteDuringNavigation,
         buildInNavRerouteSuccessPlan: buildInNavRerouteSuccessPlan,
+        resolveRouteGeometryPrecision: resolveRouteGeometryPrecision,
+        isValidDecodedRoutePoint: isValidDecodedRoutePoint,
+        buildStraightLineRoutePath: buildStraightLineRoutePath,
+        resolvePreviewRoutePath: resolvePreviewRoutePath,
+        buildRouteCalculatedStatusMessage: buildRouteCalculatedStatusMessage,
         orderWaypointsGreedy: orderWaypointsGreedy,
         resolvePreviewRoute: resolvePreviewRoute,
         resolvePreviewDistanceKm: resolvePreviewDistanceKm,

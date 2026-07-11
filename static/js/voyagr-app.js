@@ -4382,38 +4382,17 @@ async function calculateRoute() {
                     }).addTo(map);
                     endMarker.bindPopup(endMarkerOpts.popup);
 
-                    // Draw route line
-                    let routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
-
-                    // If we have geometry from the routing service, use it
-                    if (data.geometry) {
-                        try {
-                            // Decode polyline geometry (precision is provided by API when available)
-                            const sourceLower = (data.source || '').toLowerCase();
-                            const precision =
-                                Number.isFinite(data.geometry_precision)
-                                    ? data.geometry_precision
-                                    : (sourceLower.includes('osrm') ? 5 : 6);
-                            routePath = decodePolyline(data.geometry, precision);
-                            console.log(`Route path decoded: ${routePath.length} points with precision ${precision} (source: ${data.source})`);
-
-                            // Validate decoded coordinates
-                            if (routePath.length === 0) {
-                                console.error('[Route] Decoded polyline is empty, using straight line');
-                                routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
-                            } else {
-                                // Check if coordinates are valid (not [0,0] or NaN)
-                                const firstPoint = routePath[0];
-                                if (!firstPoint || isNaN(firstPoint[0]) || isNaN(firstPoint[1]) ||
-                                    (firstPoint[0] === 0 && firstPoint[1] === 0)) {
-                                    console.error('[Route] Invalid decoded coordinates, using straight line');
-                                    routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
-                                }
-                            }
-                        } catch (e) {
-                            console.error('Could not decode geometry, using straight line:', e);
-                            routePath = [[startCoords[0], startCoords[1]], [endCoords[0], endCoords[1]]];
+                    const RS = VoyagrModules.routeSelection();
+                    const pathPlan = RS.resolvePreviewRoutePath(startCoords, endCoords, data, decodePolyline);
+                    let routePath = pathPlan.routePath;
+                    if (pathPlan.usedFallback && data.geometry) {
+                        if (!pathPlan.precision) {
+                            console.error('[Route] Decoded polyline is empty, using straight line');
+                        } else {
+                            console.error('[Route] Invalid decoded coordinates, using straight line');
                         }
+                    } else if (!pathPlan.usedFallback && pathPlan.precision != null) {
+                        console.log(`Route path decoded: ${routePath.length} points with precision ${pathPlan.precision} (source: ${data.source})`);
                     }
 
                     if (!map) {
@@ -4438,21 +4417,7 @@ async function calculateRoute() {
                     }
                     updateTripInfo(data.distance, displayTime, data.fuel_cost || '-', data.toll_cost || '-');
 
-                    // Do not surface backend routing engine names in user-facing UI
-                    let statusMsg = 'Route calculated successfully!';
-                    if (data.response_time_ms) {
-                        statusMsg += ` (${data.response_time_ms.toFixed(0)}ms)`;
-                    }
-                    if (data.source && data.source.includes('Custom Router')) {
-                        statusMsg += ' ⚡ Ultra-fast!';
-                    }
-                    if (data.via_points_count > 0 || data.stops_count > 0) {
-                        statusMsg += ` 📍 ${data.via_points_count || 0} via-points, ${data.stops_count || 0} stops`;
-                    }
-                    if (data.multi_drop && data.optimized) {
-                        statusMsg += ' (optimized order)';
-                    }
-                    showStatus(statusMsg, 'success');
+                    showStatus(RS.buildRouteCalculatedStatusMessage(data), 'success');
 
                     // Display multi-drop leg breakdown if available
                     if (data.multi_drop && data.legs && data.legs.length > 0) {
@@ -9508,26 +9473,11 @@ function effectiveRoundaboutExitCount(stepIndex) {
     return VoyagrModules.turnInstructions().effectiveRoundaboutExitCountFromSteps(currentRouteSteps, stepIndex);
 }
 
-// ordinalEnglishExit / laneOrdinalEnglish / buildTurnLaneHintHtml moved to
-// modules/navigation/turn-instructions.js. Thin stubs keep all callers working.
-
-function ordinalEnglishExit(n) {
-    return VoyagrModules.turnInstructions().ordinalEnglishExit(n);
-}
+// ordinalEnglishExit / laneOrdinalEnglish / buildTurnLaneHintHtml live in
+// modules/navigation/turn-instructions.js — call VoyagrModules.turnInstructions() directly.
 
 function laneOrdinalEnglish(n) {
     return VoyagrModules.turnInstructions().laneOrdinalEnglish(n);
-}
-
-// buildTurnLaneHintHtml: the module version takes an explicit exitCount instead of a
-// maneuverIndex, so callers resolve the count and pass it. The stub signature keeps
-// the original (maneuverIndex) for backward compatibility and resolves the count here.
-function buildTurnLaneHintHtml(maneuver, maneuverIndex, distanceMeters) {
-    const TI = VoyagrModules.turnInstructions();
-    const exitCt = maneuverIndex != null
-        ? effectiveRoundaboutExitCount(maneuverIndex)
-        : (maneuver && maneuver.roundabout_exit_count) || 0;
-    return TI.buildTurnLaneHintHtml(maneuver, exitCt, distanceMeters);
 }
 
 /**
@@ -9542,76 +9492,34 @@ function detectUpcomingTurn(userLat, userLon) {
         return null;
     }
 
-    // Snap the GPS position onto the route, then "lock" progress forward. Using the
-    // nearest *vertex* alone makes distances jump on tight curves/roundabouts when the
-    // closest vertex toggles to an earlier one frame-to-frame (e.g. 1600m → 2000m).
+    const TI = VoyagrModules.turnInstructions();
+    const RG = VoyagrModules.routeGeometry();
+
     const turnSnap = snapToRoutePolyline(
         userLat, userLon, routePolyline, lastTurnDetectRouteVertexIndex
     );
-    let userRouteIndex = turnSnap.index;
-    if (userRouteIndex < lastTurnDetectRouteVertexIndex) {
-        userRouteIndex = lastTurnDetectRouteVertexIndex;
-    } else {
-        lastTurnDetectRouteVertexIndex = userRouteIndex;
-    }
+    const indexPlan = TI.advanceMonotonicTurnDetectIndex(turnSnap.index, lastTurnDetectRouteVertexIndex);
+    const userRouteIndex = indexPlan.userRouteIndex;
+    lastTurnDetectRouteVertexIndex = indexPlan.lastTurnDetectRouteVertexIndex;
 
-    // If we have maneuvers from Valhalla, use them for accurate turn instructions
     if (currentRouteSteps && currentRouteSteps.length > 0) {
-        // Find the next ACTUAL turn maneuver ahead of user's position
-        for (let i = 0; i < currentRouteSteps.length; i++) {
-            const maneuver = currentRouteSteps[i];
-            const maneuverShapeIndex = maneuver.begin_shape_index || 0;
-
-            // Skip maneuvers that are behind the user
-            if (maneuverShapeIndex < userRouteIndex - 5) {
-                continue;
+        const detected = TI.findUpcomingManeuverTurn(
+            currentRouteSteps,
+            userRouteIndex,
+            routePolyline,
+            turnSnap,
+            {
+                distanceAlongRouteToVertexMeters: RG.distanceAlongRouteToVertexMeters,
+                getManeuverStreetLabel,
+                resolveRoadClass: (step) => step.road_class || inferRoadClassFromManeuver(step),
+                effectiveRoundaboutExitCountFromSteps: TI.effectiveRoundaboutExitCountFromSteps,
             }
-
-            // Map Valhalla maneuver types to direction keys (shared with voice + "Then" row).
-            const type = maneuver.type || 0;
-            let direction = maneuverTypeToDirectionKey(type);
-            if (direction === null) continue;
-            direction = refineManeuverDirectionForRoute(type, direction, maneuver);
-
-            const targetIndex = Math.min(maneuverShapeIndex, routePolyline.length - 1);
-
-            // True along-route distance from snapped position to maneuver vertex
-            const distanceToManeuver = distanceAlongRouteToVertexMeters(
-                routePolyline, turnSnap, targetIndex
-            );
-
-            // Extend detection range for exits (2.5km) and keep/fork (1.5km)
-            const isExitDir = direction === 'exit' || direction === 'exit_right' || direction === 'exit_left';
-            const isKeepDir = direction === 'slight_right' || direction === 'slight_left';
-            const isRb = direction === 'roundabout';
-            // Detection range gives the first announcement room to fire before the turn.
-            // Turns bumped 600 -> 750 m so the 500 m call still has runway at motorway speed.
-            const maxDetectionDistance = isExitDir ? 2500 : isKeepDir ? 1500 : isRb ? 900 : 750;
-
-            // Only return turns within detection range
-            if (distanceToManeuver <= maxDetectionDistance) {
-                currentStepIndex = i;
-                schedulePersistRoute();
-
-                console.log(`[Turn] Detected: ${direction} in ${distanceToManeuver.toFixed(0)}m (type=${type}, step=${i}, shapeIdx=${maneuverShapeIndex})`);
-
-                return {
-                    distance: distanceToManeuver,
-                    direction: direction,
-                    streetName: getManeuverStreetLabel(maneuver, false),
-                    instruction: maneuver.instruction || maneuver.verbal_pre_transition_instruction || '',
-                    verbal_transition_alert_instruction: maneuver.verbal_transition_alert_instruction || '',
-                    verbal_pre_transition_instruction: maneuver.verbal_pre_transition_instruction || '',
-                    verbal_post_transition_instruction: maneuver.verbal_post_transition_instruction || '',
-                    roundabout_exit_count: effectiveRoundaboutExitCount(i),
-                    maneuver: maneuver,
-                    maneuverIndex: i,
-                    valhallaType: type,
-                };
-            }
-
-            // Stop searching if this maneuver is too far ahead
-            if (distanceToManeuver > maxDetectionDistance) break;
+        );
+        if (detected) {
+            currentStepIndex = detected.stepIndex;
+            schedulePersistRoute();
+            console.log(`[Turn] Detected: ${detected.direction} in ${detected.distance.toFixed(0)}m (type=${detected.valhallaType}, step=${detected.stepIndex}, shapeIdx=${detected.maneuver.begin_shape_index || 0})`);
+            return detected;
         }
     }
 
@@ -11734,7 +11642,9 @@ function updateTurnInstructionDisplay(turnInfo) {
 
         if (hintEl) {
             if (turnInfo.maneuver && turnInfo.maneuverIndex != null) {
-                const hintHtml = buildTurnLaneHintHtml(turnInfo.maneuver, turnInfo.maneuverIndex, turnInfo.distance);
+                const TI = VoyagrModules.turnInstructions();
+                const exitCt = effectiveRoundaboutExitCount(turnInfo.maneuverIndex);
+                const hintHtml = TI.buildTurnLaneHintHtml(turnInfo.maneuver, exitCt, turnInfo.distance);
                 if (hintHtml) {
                     hintEl.innerHTML = hintHtml;
                     hintEl.style.display = 'block';
@@ -11781,6 +11691,7 @@ function updateThenRow(maneuverIndex, currentDistance) {
     if (!thenEl) return;
     const iconEl = document.getElementById('nextTurnThenIcon');
     const textEl = document.getElementById('nextTurnThenText');
+    const TI = VoyagrModules.turnInstructions();
 
     let show = false;
     if (maneuverIndex != null && typeof currentDistance === 'number' && currentDistance <= 700) {
@@ -11790,7 +11701,7 @@ function updateThenRow(maneuverIndex, currentDistance) {
             label = label.charAt(0).toUpperCase() + label.slice(1);
             if (follow.direction === 'roundabout') {
                 const exitCt = effectiveRoundaboutExitCount(follow.index);
-                if (exitCt > 0) label = `Roundabout, ${ordinalEnglishExit(exitCt)} exit`;
+                if (exitCt > 0) label = `Roundabout, ${TI.ordinalEnglishExit(exitCt)} exit`;
             }
             const onto = follow.streetName ? ` onto ${follow.streetName}` : '';
             // Distance to the following maneuver, formatted in the user's selected units
@@ -11842,7 +11753,7 @@ function populateInstructionsList() {
 
         const exitCt = effectiveRoundaboutExitCount(i);
         const exitBadge = ((type === 26 || type === 27) && exitCt > 0)
-            ? ` <span class="lane-hint-chip" style="font-size:11px;vertical-align:middle;">${ordinalEnglishExit(exitCt)} exit</span>`
+            ? ` <span class="lane-hint-chip" style="font-size:11px;vertical-align:middle;">${TI.ordinalEnglishExit(exitCt)} exit</span>`
             : '';
 
         html += TI.buildInstructionListItemHtml({
@@ -13339,15 +13250,7 @@ const ETA_MIN_INTERVAL_MS = 60000; // Minimum 1 minute between any ETA announcem
 let initialETAAnnouncementTimeoutId = null;
 let lastNavTrafficFetchAt = 0;
 /** Live nav ETA + traffic snapshot (updated during navigation). */
-window.navETASnapshot = {
-    baseRemainingMinutes: 0,
-    trafficAdjustedMinutes: null,
-    trafficLevel: null,
-    congestionPercent: null,
-    progressPercent: 0,
-    trafficFetchAt: 0,
-    baseAtTrafficFetch: 0
-};
+window.navETASnapshot = VoyagrModules.eta().createEmptyNavETASnapshot();
 
 /** First-time default: traffic-aware ETA on; only explicit 'false' disables. */
 function ensureDefaultTrafficAwareRouting() {
@@ -13890,7 +13793,7 @@ function announceUpcomingTurn(turnInfo) {
                     let followText = getTurnDirectionText(follow.direction);
                     if (follow.direction === 'roundabout') {
                         const exitCt = effectiveRoundaboutExitCount(follow.index);
-                        if (exitCt > 0) followText = `at the roundabout take the ${ordinalEnglishExit(exitCt)} exit`;
+                        if (exitCt > 0) followText = `at the roundabout take the ${VoyagrModules.turnInstructions().ordinalEnglishExit(exitCt)} exit`;
                     }
                     message += `, then ${followText}`;
                 }
@@ -15658,15 +15561,7 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     lastAnnouncedETA = null;
     lastNavTrafficFetchAt = 0;
     initialETAMovementRetries = 0;
-    window.navETASnapshot = {
-        baseRemainingMinutes: 0,
-        trafficAdjustedMinutes: null,
-        trafficLevel: null,
-        congestionPercent: null,
-        progressPercent: 0,
-        trafficFetchAt: 0,
-        baseAtTrafficFetch: 0
-    };
+    window.navETASnapshot = VoyagrModules.eta().createEmptyNavETASnapshot();
 
     try {
         const navPrecision = Number.isFinite(routeData.geometry_precision) ? routeData.geometry_precision : 6;
