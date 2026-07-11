@@ -8134,29 +8134,37 @@ function updateLaneGuidance(lat, lon, heading, maneuver, roundaboutExitCount) {
     const timeoutId = controller ? setTimeout(() => controller.abort(), tick.timeoutMs) : null;
 
     const useFallback = (reason) => {
-        const fb = LG.buildDeterministicLaneGuidance(
-            tick.maneuver,
-            tick.distToManeuver,
-            tick.roundaboutExitCount,
-            tick.roadType
-        );
-        _laneGuidanceCache.set(tick.cacheKey, { data: fb, ts: Date.now(), fallback: true });
+        const outcome = LG.buildLaneGuidanceFetchOutcomePlan({
+            apiSuccess: false,
+            errorReason: reason,
+            maneuver: tick.maneuver,
+            distToManeuver: tick.distToManeuver,
+            roundaboutExitCount: tick.roundaboutExitCount,
+            roadType: tick.roadType,
+        });
+        _laneGuidanceCache.set(tick.cacheKey, outcome.cacheEntry);
         _pruneLaneGuidanceCache();
-        console.warn('[Lane Guidance] using deterministic fallback:', reason);
-        renderLaneGuidanceUI(fb);
+        if (outcome.warnLine) console.warn(outcome.warnLine);
+        renderLaneGuidanceUI(outcome.renderData);
     };
 
     fetch(tick.url, controller ? { signal: controller.signal } : undefined)
         .then((response) => response.json())
         .then((data) => {
             if (timeoutId) clearTimeout(timeoutId);
-            if (data && data.success) {
-                _laneGuidanceCache.set(tick.cacheKey, { data, ts: Date.now(), fallback: false });
-                _pruneLaneGuidanceCache();
-                renderLaneGuidanceUI(data);
-            } else {
-                useFallback('no data');
-            }
+            const outcome = LG.buildLaneGuidanceFetchOutcomePlan({
+                apiSuccess: !!(data && data.success),
+                apiData: data,
+                maneuver: tick.maneuver,
+                distToManeuver: tick.distToManeuver,
+                roundaboutExitCount: tick.roundaboutExitCount,
+                roadType: tick.roadType,
+                errorReason: 'no data',
+            });
+            _laneGuidanceCache.set(tick.cacheKey, outcome.cacheEntry);
+            _pruneLaneGuidanceCache();
+            if (outcome.warnLine) console.warn(outcome.warnLine);
+            renderLaneGuidanceUI(outcome.renderData);
         })
         .catch((error) => {
             if (timeoutId) clearTimeout(timeoutId);
@@ -12012,28 +12020,42 @@ function applyGpsTrackingTick(position) {
     });
 
     // Update user marker on map with vehicle icon and heading
-    if (currentUserMarker && typeof currentUserMarker.setLngLat === 'function') {
-        currentUserMarker.setLngLat([markerLon, markerLat]);
+    const markerTick = SGpos
+        ? SGpos.buildVehicleMarkerTickPlan({
+            hasMarker: !!currentUserMarker,
+            canSetLngLat: !!(currentUserMarker && typeof currentUserMarker.setLngLat === 'function'),
+            markerLat,
+            markerLon,
+            heading,
+            speed,
+            accuracy,
+            mapBearing: map && typeof map.getBearing === 'function' ? map.getBearing() : 0,
+        })
+        : { action: 'create', lat: markerLat, lon: markerLon, speed, accuracy, heading };
 
+    if (markerTick.action === 'update') {
+        currentUserMarker.setLngLat(markerTick.lngLat);
         const markerEl = currentUserMarker.getElement ? currentUserMarker.getElement() : null;
         if (markerEl) {
             const inner = markerEl.querySelector('div');
             if (inner) {
-                const mapBr = map && typeof map.getBearing === 'function' ? map.getBearing() : 0;
-                const rot = SGpos
-                    ? SGpos.computeVehicleMarkerRotationDeg(heading, mapBr)
-                    : (((heading - mapBr) % 360 + 360) % 360);
-                inner.style.transform = `rotate(${rot}deg)`;
+                inner.style.transform = `rotate(${markerTick.rotationDeg}deg)`;
             }
         }
-        currentUserMarker.heading = heading;
-        currentUserMarker.speed = speed;
-        currentUserMarker.accuracy = accuracy;
+        currentUserMarker.heading = markerTick.heading;
+        currentUserMarker.speed = markerTick.speed;
+        currentUserMarker.accuracy = markerTick.accuracy;
     } else {
         if (currentUserMarker && typeof currentUserMarker.remove === 'function') {
             currentUserMarker.remove();
         }
-        currentUserMarker = createVehicleMarker(markerLat, markerLon, speed, accuracy, heading);
+        currentUserMarker = createVehicleMarker(
+            markerTick.lat,
+            markerTick.lon,
+            markerTick.speed,
+            markerTick.accuracy,
+            markerTick.heading
+        );
         currentUserMarker.addTo(map);
     }
 
@@ -12717,26 +12739,26 @@ function checkRouteDeviation(lat, lon, accuracy) {
 
     if (tick.action === 'skip') return;
 
-    routeJoinConfirmedForDeviation = tick.statePatch.routeJoinConfirmedForDeviation;
-    deviationStartTimeCheck = tick.statePatch.deviationStartTimeCheck;
-    deviationOffRouteStreak = tick.statePatch.deviationOffRouteStreak;
-    if (tick.statePatch.lastRerouteAttemptTime != null) {
-        lastRerouteAttemptTime = tick.statePatch.lastRerouteAttemptTime;
+    const apply = VRD.buildRouteDeviationApplyPlan(tick, { rerouteAttemptCount });
+
+    routeJoinConfirmedForDeviation = apply.statePatch.routeJoinConfirmedForDeviation;
+    deviationStartTimeCheck = apply.statePatch.deviationStartTimeCheck;
+    deviationOffRouteStreak = apply.statePatch.deviationOffRouteStreak;
+    if (apply.statePatch.lastRerouteAttemptTime != null) {
+        lastRerouteAttemptTime = apply.statePatch.lastRerouteAttemptTime;
     }
 
-    if (tick.logJoinDetected) {
-        console.log('[Rerouting] Route join detected — deviation monitoring active');
-    }
+    if (apply.logJoinLine) console.log(apply.logJoinLine);
 
-    if (tick.triggerReroute) {
+    if (apply.triggerReroute) {
         rerouteAttemptCount++;
-        console.log(`[Rerouting] Deviation confirmed: ${tick.logDeviation.minDistance.toFixed(0)}m for ${(tick.logDeviation.deviationDuration / 1000).toFixed(1)}s (attempt #${rerouteAttemptCount})`);
-        sendNotification(tick.notification.title, tick.notification.body, tick.notification.type);
+        if (apply.logDeviationLine) console.log(apply.logDeviationLine);
+        sendNotification(apply.notification.title, apply.notification.body, apply.notification.type);
         triggerAutomaticRerouteWithHazardHandling(lat, lon);
     }
 
-    if (tick.trackDeviation || tick.triggerReroute) {
-        lastRerouteDeviation = tick.lastRerouteDeviation;
+    if (apply.updateLastRerouteDeviation) {
+        lastRerouteDeviation = apply.lastRerouteDeviation;
     }
 }
 

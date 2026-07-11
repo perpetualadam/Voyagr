@@ -524,3 +524,35 @@ describe('buildGpsTrackingPositionTickPlan', () => {
         expect(tick.statePatch.lastSnappedRouteIndex).toBeGreaterThanOrEqual(0);
     });
 });
+
+describe('buildVehicleMarkerTickPlan', () => {
+    test('updates existing marker with rotation and lngLat', () => {
+        const plan = SG.buildVehicleMarkerTickPlan({
+            hasMarker: true,
+            canSetLngLat: true,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            heading: 90,
+            speed: 5,
+            accuracy: 10,
+            mapBearing: 45,
+        });
+        expect(plan.action).toBe('update');
+        expect(plan.lngLat).toEqual([-0.1, 51.5]);
+        expect(plan.rotationDeg).toBe(45);
+    });
+
+    test('creates marker when none exists', () => {
+        const plan = SG.buildVehicleMarkerTickPlan({
+            hasMarker: false,
+            markerLat: 51.5,
+            markerLon: -0.1,
+            heading: 180,
+            speed: 0,
+            accuracy: 15,
+        });
+        expect(plan.action).toBe('create');
+        expect(plan.lat).toBe(51.5);
+        expect(plan.lon).toBe(-0.1);
+    });
+});

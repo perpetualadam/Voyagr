@@ -552,3 +552,53 @@ describe('buildRouteDeviationTickPlan', () => {
         expect(plan.lastRerouteDeviation).toBe(80);
     });
 });
+
+describe('buildRouteDeviationApplyPlan', () => {
+    const now = 1_700_000_000_000;
+
+    test('skips when tick plan skipped', () => {
+        expect(RD.buildRouteDeviationApplyPlan({ action: 'skip', reason: 'grace' }).action).toBe('skip');
+    });
+
+    test('builds reroute apply hints with log line and notification', () => {
+        const tick = RD.buildRouteDeviationTickPlan({
+            autoRerouteEnabled: true,
+            hasRoute: true,
+            remainingToDest: 5000,
+            accuracy: 10,
+            minDistance: 120,
+            routeJoinConfirmed: true,
+            deviationStartTime: now - 12_000,
+            lastRerouteAttemptTime: 0,
+            offRouteStreak: 5,
+            now,
+            distanceUnit: 'km',
+        });
+        const apply = RD.buildRouteDeviationApplyPlan(tick, { rerouteAttemptCount: 2 });
+        expect(apply.action).toBe('apply');
+        expect(apply.triggerReroute).toBe(true);
+        expect(apply.logDeviationLine).toContain('attempt #3');
+        expect(apply.notification.title).toContain('Deviation');
+        expect(apply.updateLastRerouteDeviation).toBe(true);
+    });
+
+    test('logs route join without reroute trigger', () => {
+        const tick = RD.buildRouteDeviationTickPlan({
+            autoRerouteEnabled: true,
+            hasRoute: true,
+            remainingToDest: 5000,
+            accuracy: 10,
+            minDistance: 30,
+            routeJoinConfirmed: false,
+            deviationStartTime: null,
+            offRouteStreak: 0,
+            now,
+            distanceUnit: 'km',
+        });
+        const apply = RD.buildRouteDeviationApplyPlan(tick);
+        expect(apply.triggerReroute).toBeFalsy();
+        if (apply.logJoinLine) {
+            expect(apply.logJoinLine).toContain('Route join detected');
+        }
+    });
+});

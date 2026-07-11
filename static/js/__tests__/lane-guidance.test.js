@@ -357,6 +357,34 @@ describe('lane guidance fetch tick plan', () => {
     });
 });
 
+describe('buildLaneGuidanceFetchOutcomePlan', () => {
+    test('caches successful API data for render', () => {
+        const data = { success: true, total_lanes: 3, recommended_lane: 2, urgency: 'soon' };
+        const outcome = LG.buildLaneGuidanceFetchOutcomePlan({
+            apiSuccess: true,
+            apiData: data,
+            now: 10_000,
+        });
+        expect(outcome.action).toBe('cache-and-render');
+        expect(outcome.renderData).toBe(data);
+        expect(outcome.cacheEntry.fallback).toBe(false);
+    });
+
+    test('falls back to deterministic guidance on failure', () => {
+        const outcome = LG.buildLaneGuidanceFetchOutcomePlan({
+            apiSuccess: false,
+            errorReason: 'timeout',
+            maneuver: 'left',
+            distToManeuver: 80,
+            roadType: 'primary',
+        });
+        expect(outcome.action).toBe('fallback');
+        expect(outcome.warnLine).toContain('timeout');
+        expect(outcome.renderData.total_lanes).toBeGreaterThan(0);
+        expect(outcome.cacheEntry.fallback).toBe(true);
+    });
+});
+
 describe('lane guidance UI and voice apply plans', () => {
     test('buildLaneGuidanceUiApplyPlan hides single-lane guidance', () => {
         expect(LG.buildLaneGuidanceUiApplyPlan({ total_lanes: 1, urgency: 'none' }).visible).toBe(false);

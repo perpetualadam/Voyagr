@@ -259,6 +259,44 @@
     }
 
     /**
+     * Apply plan for a route deviation tick (state patch, logs, reroute trigger hints).
+     * @param {Object} tick - Result of buildRouteDeviationTickPlan
+     * @param {Object} [opts]
+     * @param {number} [opts.rerouteAttemptCount] - Current attempt count before increment
+     * @returns {Object}
+     */
+    function buildRouteDeviationApplyPlan(tick, opts) {
+        opts = opts || {};
+        if (!tick || tick.action === 'skip') {
+            return { action: 'skip', reason: tick && tick.reason };
+        }
+
+        var apply = {
+            action: 'apply',
+            statePatch: tick.statePatch || {},
+            updateLastRerouteDeviation: !!(tick.trackDeviation || tick.triggerReroute),
+            lastRerouteDeviation: tick.lastRerouteDeviation,
+        };
+
+        if (tick.logJoinDetected) {
+            apply.logJoinLine = '[Rerouting] Route join detected — deviation monitoring active';
+        }
+
+        if (tick.triggerReroute && tick.logDeviation) {
+            var nextAttempt = (opts.rerouteAttemptCount != null ? opts.rerouteAttemptCount : 0) + 1;
+            apply.triggerReroute = true;
+            apply.rerouteAttemptIncrement = true;
+            apply.notification = tick.notification;
+            apply.logDeviationLine = '[Rerouting] Deviation confirmed: ' +
+                tick.logDeviation.minDistance.toFixed(0) + 'm for ' +
+                (tick.logDeviation.deviationDuration / 1000).toFixed(1) + 's (attempt #' +
+                nextAttempt + ')';
+        }
+
+        return apply;
+    }
+
+    /**
      * Build a reroute analytics/debug event object.
      * @param {Object} o
      * @param {string} o.timestampIso
@@ -757,6 +795,7 @@
         effectiveDeviationThreshold: effectiveDeviationThreshold,
         decideRouteDeviation: decideRouteDeviation,
         buildRouteDeviationTickPlan: buildRouteDeviationTickPlan,
+        buildRouteDeviationApplyPlan: buildRouteDeviationApplyPlan,
         buildRerouteLogEvent: buildRerouteLogEvent,
         appendRerouteLogEntry: appendRerouteLogEntry,
         buildRerouteLogSettingsSnapshot: buildRerouteLogSettingsSnapshot,

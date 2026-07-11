@@ -443,7 +443,39 @@
             return null;
         }
 
-        return { announceKey: announceKey, message: laneMsg, priority: priority };
+        return { announceKey: announceKey, message: laneMsg, priority: priority         };
+    }
+
+    /**
+     * Outcome plan after lane-guidance API response or error (cache + render payload).
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildLaneGuidanceFetchOutcomePlan(opts) {
+        opts = opts || {};
+        var now = opts.now != null ? opts.now : Date.now();
+
+        if (opts.apiSuccess && opts.apiData) {
+            return {
+                action: 'cache-and-render',
+                cacheEntry: { data: opts.apiData, ts: now, fallback: false },
+                renderData: opts.apiData,
+            };
+        }
+
+        var reason = opts.errorReason || 'no data';
+        var fb = buildDeterministicLaneGuidance(
+            opts.maneuver,
+            opts.distToManeuver,
+            opts.roundaboutExitCount || 0,
+            opts.roadType || 'unknown'
+        );
+        return {
+            action: 'fallback',
+            cacheEntry: { data: fb, ts: now, fallback: true },
+            renderData: fb,
+            warnLine: '[Lane Guidance] using deterministic fallback: ' + reason,
+        };
     }
 
     var api = {
@@ -468,6 +500,7 @@
         shouldSkipLaneGuidanceFetch: shouldSkipLaneGuidanceFetch,
         computeDistanceToManeuverMeters: computeDistanceToManeuverMeters,
         buildLaneGuidanceFetchTickPlan: buildLaneGuidanceFetchTickPlan,
+        buildLaneGuidanceFetchOutcomePlan: buildLaneGuidanceFetchOutcomePlan,
         buildLaneGuidanceCacheKey: buildLaneGuidanceCacheKey,
         buildLaneGuidanceApiUrl: buildLaneGuidanceApiUrl,
         getLaneGuidanceCacheTtlMs: getLaneGuidanceCacheTtlMs,

@@ -737,6 +737,38 @@
     }
 
     /**
+     * Vehicle marker update plan for one GPS tick (reuse marker vs create fresh).
+     * @param {Object} opts
+     * @returns {Object}
+     */
+    function buildVehicleMarkerTickPlan(opts) {
+        opts = opts || {};
+        var hasExisting = !!(opts.hasMarker && opts.canSetLngLat);
+        var mapBearing = Number.isFinite(opts.mapBearing) ? opts.mapBearing : 0;
+        var rotationDeg = computeVehicleMarkerRotationDeg(opts.heading, mapBearing);
+
+        if (hasExisting) {
+            return {
+                action: 'update',
+                lngLat: [opts.markerLon, opts.markerLat],
+                rotationDeg: rotationDeg,
+                heading: opts.heading,
+                speed: opts.speed,
+                accuracy: opts.accuracy,
+            };
+        }
+
+        return {
+            action: 'create',
+            lat: opts.markerLat,
+            lon: opts.markerLon,
+            speed: opts.speed,
+            accuracy: opts.accuracy,
+            heading: opts.heading,
+        };
+    }
+
+    /**
      * Position/heading/smooth-state plan for one GPS tracking tick.
      * @param {Object} opts
      * @returns {Object}
@@ -822,6 +854,7 @@
         computeFollowJumpMeters: computeFollowJumpMeters,
         buildSnappedVehicleDisplayPlan: buildSnappedVehicleDisplayPlan,
         buildNavigationVehicleMarkerPositionPlan: buildNavigationVehicleMarkerPositionPlan,
+        buildVehicleMarkerTickPlan: buildVehicleMarkerTickPlan,
         buildGpsTrackingPositionTickPlan: buildGpsTrackingPositionTickPlan,
         computeVehicleMarkerRotationDeg: computeVehicleMarkerRotationDeg,
         normalizeGeolocationCoordsSample: normalizeGeolocationCoordsSample,
