@@ -6,6 +6,7 @@
     'use strict';
 
     var runtime = null;
+    var lifecycleListenersRegistered = false;
 
     function rt() {
         if (!runtime) {
@@ -50,7 +51,28 @@
         })();
     }
 
-    function initOnWindowLoad() {
+    function scheduleOpenVolumeHint() {
+        try {
+            const DE = rt().deviceEnvironment();
+            const openHint = DE.buildOpenVolumeHintSchedulePlan({
+                alreadyShown: sessionStorage.getItem(DE.OPEN_VOLUME_HINT_SESSION_KEY) === 'true',
+            });
+            if (openHint.shouldSchedule) {
+                sessionStorage.setItem(openHint.sessionStorageKey, openHint.sessionStorageValue);
+                setTimeout(() => {
+                    try {
+                        rt().call.showVolumeHintForNavigation();
+                    } catch (e) {
+                        console.warn(openHint.errorLogPrefix, e);
+                    }
+                }, openHint.delayMs);
+            }
+        } catch (e) {
+            console.warn(rt().deviceEnvironment().buildOpenVolumeHintSchedulePlan().scheduleErrorLogPrefix, e);
+        }
+    }
+
+    function initCoreOnWindowLoad() {
         const call = rt().call;
 
         console.log('[Voice] Initializing voice system');
@@ -92,6 +114,51 @@
         console.log('[Init] All settings loaded and applied successfully');
     }
 
+    /**
+     * Full window load pipeline (order preserved from legacy scattered listeners).
+     */
+    function onWindowLoad() {
+        const call = rt().call;
+
+        call.loadFavorites();
+        call.initPhase3Features();
+
+        call.restoreAppState();
+        void call.initSupabaseAuth();
+        call.tryResumeNavigation();
+        call.initDeviceEnvironmentNotifications();
+        scheduleOpenVolumeHint();
+
+        initCoreOnWindowLoad();
+
+        call.initMobilePwaOnPageLoad();
+    }
+
+    function handleViewportResize() {
+        console.log('[Viewport] Window resized; follow padding recomputed on next frame');
+        if (typeof window.__voyagrMapResizeAndRepaint === 'function') {
+            window.__voyagrMapResizeAndRepaint();
+            return;
+        }
+
+        const map = rt().getMap();
+        if (map && typeof map.resize === 'function') {
+            map.resize();
+        }
+    }
+
+    function registerPageLifecycleListeners() {
+        if (lifecycleListenersRegistered || typeof window === 'undefined') return;
+        lifecycleListenersRegistered = true;
+        window.addEventListener('resize', handleViewportResize);
+        window.addEventListener('load', onWindowLoad);
+    }
+
+    /** @deprecated Use onWindowLoad via registerPageLifecycleListeners */
+    function initOnWindowLoad() {
+        initCoreOnWindowLoad();
+    }
+
     function bind(nextRuntime) {
         runtime = nextRuntime;
     }
@@ -99,6 +166,8 @@
     var api = {
         bind: bind,
         initOnWindowLoad: initOnWindowLoad,
+        onWindowLoad: onWindowLoad,
+        registerPageLifecycleListeners: registerPageLifecycleListeners,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

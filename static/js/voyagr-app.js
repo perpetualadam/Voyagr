@@ -92,16 +92,6 @@ let smartZoomEnabled = (typeof VoyagrSmartZoom !== 'undefined'
 // These are now initialized in voyagr-core.js to prevent redeclaration errors
 // let zoomAndFollowEnabled = ...;
 // let mapFollowingActive = ...;
-let navigationActive = false;
-
-window.addEventListener('resize', () => {
-    console.log('[Viewport] Window resized; follow padding recomputed on next frame');
-    if (typeof window.__voyagrMapResizeAndRepaint === 'function') {
-        window.__voyagrMapResizeAndRepaint();
-    } else if (typeof map !== 'undefined' && map && typeof map.resize === 'function') {
-        map.resize();
-    }
-});
 
 // ===== DARK MODE ORCHESTRATION =====
 // Orchestration lives in static/js/app/dark-mode-orchestration.js (bound at file end).
@@ -2123,12 +2113,6 @@ function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban')
     return VoyagrSmartZoomOrchestration.applySmartZoom(speedMph, distanceToNextTurn, roadType);
 }
 
-// Initialize Phase 2 features on page load
-window.addEventListener('load', () => {
-    loadFavorites();
-    initPhase3Features();
-});
-
 // ===== PHASE 3 FEATURES ORCHESTRATION =====
 // Orchestration lives in static/js/app/phase3-features-orchestration.js (bound at file end).
 
@@ -2349,32 +2333,6 @@ function precacheRouteTiles(polyline) {
 function _tryResumeNavigation() {
     return VoyagrOfflineNavigationOrchestration.tryResumeNavigation();
 }
-
-// ===== PHASE 2: Restore app state on page load =====
-window.addEventListener('load', () => {
-    restoreAppState();
-    void initSupabaseAuth();
-    _tryResumeNavigation();
-    initDeviceEnvironmentNotifications();
-    // Show a volume reminder on app open (once per tab session).
-    try {
-        const openHint = _deviceEnvironment().buildOpenVolumeHintSchedulePlan({
-            alreadyShown: sessionStorage.getItem(_deviceEnvironment().OPEN_VOLUME_HINT_SESSION_KEY) === 'true',
-        });
-        if (openHint.shouldSchedule) {
-            sessionStorage.setItem(openHint.sessionStorageKey, openHint.sessionStorageValue);
-            setTimeout(() => {
-                try {
-                    showVolumeHintForNavigation();
-                } catch (e) {
-                    console.warn(openHint.errorLogPrefix, e);
-                }
-            }, openHint.delayMs);
-        }
-    } catch (e) {
-        console.warn(_deviceEnvironment().buildOpenVolumeHintSchedulePlan().scheduleErrorLogPrefix, e);
-    }
-});
 
 // ===== PHASE 3: Initialize battery monitoring (bound at file end) =====
 
@@ -2673,11 +2631,6 @@ function setupMapMoveHandler() {
 function setupMapExploreHandlers() {
     VoyagrMapExploreOrchestration.setupMapExploreHandlers();
 }
-
-// Initialize voice recognition on page load
-window.addEventListener('load', () => {
-    VoyagrPageInitOrchestration.initOnWindowLoad();
-});
 
 // Turn announcement variables
 let announcedTurnThresholds = new Set();  // FIXED: Track each threshold independently
@@ -3256,6 +3209,7 @@ function loadPreferences() {
 function getPageInitOrchestrationRuntime() {
     return {
         porcupineWake: () => _porcupineWake(),
+        deviceEnvironment: () => _deviceEnvironment(),
         getMap: () => map,
         getCurrentVehicleType: () => currentVehicleType,
         getCurrentRoutingMode: () => currentRoutingMode,
@@ -3276,6 +3230,14 @@ function getPageInitOrchestrationRuntime() {
             initTrafficLayer,
             initWeatherLayer,
             initializeRoadLabels,
+            loadFavorites,
+            initPhase3Features,
+            restoreAppState,
+            initSupabaseAuth,
+            tryResumeNavigation: _tryResumeNavigation,
+            initDeviceEnvironmentNotifications,
+            showVolumeHintForNavigation,
+            initMobilePwaOnPageLoad: () => VoyagrMobilePwaOrchestration.initOnPageLoad(),
         },
     };
 }
@@ -3296,10 +3258,6 @@ function getMobilePwaOrchestrationRuntime() {
         },
     };
 }
-
-window.addEventListener('load', () => {
-    VoyagrMobilePwaOrchestration.initOnPageLoad();
-});
 
 // ===== JOURNEY SUMMARY & SETTINGS CONSOLIDATION =====
 function getJourneySummaryOrchestrationRuntime() {
@@ -3399,6 +3357,7 @@ VoyagrVehicleRoutingOrchestration.bind(getVehicleRoutingOrchestrationRuntime());
 VoyagrAutoGpsOrchestration.bind(getAutoGpsOrchestrationRuntime());
 VoyagrLocationOrchestration.bind(getLocationOrchestrationRuntime());
 VoyagrPageInitOrchestration.bind(getPageInitOrchestrationRuntime());
+VoyagrPageInitOrchestration.registerPageLifecycleListeners();
 VoyagrRoutePreviewOrchestration.bind(getRoutePreviewOrchestrationRuntime());
 VoyagrLegacyPreferencesOrchestration.bind(getLegacyPreferencesOrchestrationRuntime());
 VoyagrMapLayersOrchestration.bind(getMapLayersOrchestrationRuntime());
