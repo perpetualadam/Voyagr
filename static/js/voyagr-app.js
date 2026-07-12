@@ -10963,134 +10963,38 @@ function updateTurnGuidance(userLat, userLon) {
     // Turn announcements are now handled properly by announceUpcomingTurn() with specific directions
 }
 
-// ===== QUICK SEARCH FUNCTIONS =====
-/**
- * quickSearch function - searches for POIs near current location
- * @function quickSearch
- * @param {string} type - Type of POI to search for (parking, fuel, food)
- */
-function quickSearch(type) {
-    if (!navigator.geolocation) {
-        showStatus('Geolocation not supported', 'error');
-        return;
-    }
+// ===== POI SEARCH ORCHESTRATION =====
+// Orchestration lives in static/js/app/poi-search-orchestration.js (bound at file end).
 
-    console.log(`[QuickSearch] Starting search for ${type}`);
-    showStatus(`🔍 Searching for ${type}...`, 'info');
-
-    // Use cached position if available, otherwise get current position
-    const searchWithPosition = async (lat, lon) => {
-        console.log(`[QuickSearch] Searching at position: ${lat}, ${lon}`);
-        try {
-            // Use the POI search API
-            const response = await fetch('/api/poi-search', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    lat: lat,
-                    lon: lon,
-                    type: type,
-                    radius: 3000  // 3km radius
-                })
-            });
-
-            const data = await response.json();
-            console.log(`[QuickSearch] Response:`, data);
-
-            if (!data.success || !data.results || data.results.length === 0) {
-                showStatus(`No ${type} found nearby. Try a different location.`, 'warning');
-                return;
-            }
-
-            // Display POI results in a modal or list
-            console.log(`[QuickSearch] Displaying ${data.results.length} results`);
-            displayPOIResults(data.results, type, lat, lon);
-            showStatus(`✅ Found ${data.results.length} ${type} options`, 'success');
-
-        } catch (error) {
-            console.error('[QuickSearch] Error:', error);
-            showStatus('Error searching for ' + type + ': ' + error.message, 'error');
-        }
+function getPoiSearchOrchestrationRuntime() {
+    return {
+        poiSearch: () => _poiSearch(),
+        getCurrentLat: () => currentLat,
+        getCurrentLon: () => currentLon,
+        getRoutePolyline: () => routePolyline,
+        s: (key, val) => {
+            if (key === 'currentLat') currentLat = val;
+            else if (key === 'currentLon') currentLon = val;
+        },
+        call: {
+            showStatus,
+            calculateRoute,
+            formatPoiDistance: (distanceM) => _units().formatPoiDistanceMeters(distanceM, distanceUnit),
+        },
     };
-
-    // If we have a cached current position, use it immediately
-    if (currentLat && currentLon) {
-        console.log('[QuickSearch] Using cached position');
-        searchWithPosition(currentLat, currentLon);
-        return;
-    }
-
-    // Otherwise get a fresh position
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            currentLat = lat;
-            currentLon = lon;
-            searchWithPosition(lat, lon);
-        },
-        (error) => {
-            console.error('[QuickSearch] GPS Error:', error);
-            showStatus('Error getting location: ' + error.message, 'error');
-        },
-        { enableHighAccuracy: true, timeout: 30000, maximumAge: 60000 }  // 30s timeout, allow 1min cached position
-    );
 }
 
-/**
- * Display POI search results in a modal
- * @param {Array} results - Array of POI results
- * @param {string} type - Type of POI
- * @param {number} userLat - User's latitude
- * @param {number} userLon - User's longitude
- */
+function quickSearch(type) { VoyagrPoiSearchOrchestration.quickSearch(type); }
 function displayPOIResults(results, type, userLat, userLon) {
-    const POI = _poiSearch();
-    closePOIModal();
-    document.body.insertAdjacentHTML('beforeend', POI.buildPoiResultsModalHtml(results, type,
-        POI.buildPoiResultsModalDisplayOpts(
-            results,
-            type,
-            userLat,
-            userLon,
-            (distanceM) => _units().formatPoiDistanceMeters(distanceM, distanceUnit)
-        )
-    ));
+    VoyagrPoiSearchOrchestration.displayPOIResults(results, type, userLat, userLon);
 }
-
-/**
- * Close the POI results modal
- */
-function closePOIModal() {
-    const POI = _poiSearch();
-    const modal = document.getElementById(POI.POI_MODAL_ID);
-    if (modal) {
-        modal.remove();
-    }
-}
-
-/**
- * Select a POI and set it as destination
- * @param {number} poiLat - POI latitude
- * @param {number} poiLon - POI longitude
- * @param {string} poiName - POI name
- * @param {number} userLat - User's current latitude
- * @param {number} userLon - User's current longitude
- */
+function closePOIModal() { VoyagrPoiSearchOrchestration.closePOIModal(); }
 function selectPOI(poiLat, poiLon, poiName, userLat, userLon) {
-    closePOIModal();
-
-    // Set start to current location
-    document.getElementById('start').value = `${userLat},${userLon}`;
-
-    // Set end to POI location
-    document.getElementById('end').value = `${poiLat},${poiLon}`;
-
-    showStatus(_poiSearch().getPoiSelectDestinationStatusMessage(poiName), 'success');
-
-    // Automatically calculate route
-    calculateRoute();
+    VoyagrPoiSearchOrchestration.selectPOI(poiLat, poiLon, poiName, userLat, userLon);
 }
+function searchAlongRoute() { VoyagrPoiSearchOrchestration.searchAlongRoute(); }
+function searchAlongRouteByType(type) { VoyagrPoiSearchOrchestration.searchAlongRouteByType(type); }
+function clearPOIMarkers() { VoyagrPoiSearchOrchestration.clearPOIMarkers(); }
 
 // ===== ROUTE AVOIDANCE PREFERENCES =====
 function applyRouteLegAvoidanceToggleFromPlan(dispatch) {
@@ -11185,181 +11089,24 @@ function hideRoadNameBar() {
 }
 
 
-// ===== SEARCH ALONG ROUTE =====
+// ===== BEST TIME TO LEAVE ORCHESTRATION =====
+// Orchestration lives in static/js/app/best-time-leave-orchestration.js (bound at file end).
 
-function searchAlongRoute() {
-    const POI = _poiSearch();
-    const cats = document.getElementById('alongRouteCategories');
-    if (cats) {
-        cats.style.display = POI.toggleAlongRouteCategoriesDisplay(cats.style.display);
-    }
+function getBestTimeLeaveOrchestrationRuntime() {
+    return {
+        bestTimeLeave: () => _bestTimeLeave(),
+        call: {
+            showStatus,
+        },
+    };
 }
-
-function searchAlongRouteByType(type) {
-    const POI = _poiSearch();
-    if (!POI.canSearchAlongRoute(routePolyline ? routePolyline.length : 0)) {
-        showStatus(POI.getAlongRouteNoRouteMessage(), 'error');
-        return;
-    }
-
-    showStatus(POI.getAlongRouteSearchingMessage(type), 'info');
-
-    const routePoints = routePolyline.map(p => [p[0], p[1]]);
-
-    fetch('/api/poi-along-route', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(POI.buildAlongRouteSearchBody(routePoints, type)),
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success && data.results && data.results.length > 0) {
-            displayPOIResults(data.results, type, currentLat || 51.5074, currentLon || -0.1278);
-            addPOIMarkersToMap(data.results, type);
-            showStatus(POI.getAlongRouteResultsMessage(type, data.results.length), 'success');
-        } else {
-            showStatus(POI.getAlongRouteNoResultsMessage(type), 'info');
-        }
-    })
-    .catch(err => {
-        console.error('[AlongRoute] Error:', err);
-        showStatus(POI.getAlongRouteSearchFailedMessage(), 'error');
-    });
-}
-
-function addPOIMarkersToMap(pois, type) {
-    clearPOIMarkers();
-
-    const POI = _poiSearch();
-    const icon = POI.getPoiMapMarkerIcon(type);
-
-    pois.forEach((poi, idx) => {
-        if (!window.map) return;
-
-        const el = document.createElement('div');
-        el.className = 'poi-marker';
-        el.style.cssText = POI.getPoiMapMarkerStyleCssText();
-        el.textContent = icon;
-        el.title = poi.name;
-
-        const marker = new maplibregl.Marker({ element: el })
-            .setLngLat([poi.lon, poi.lat])
-            .setPopup(new maplibregl.Popup({ offset: 25 }).setHTML(POI.buildPoiMapMarkerPopupHtml(poi)))
-            .addTo(window.map);
-
-        if (!window._poiMarkers) window._poiMarkers = [];
-        window._poiMarkers.push(marker);
-    });
-}
-
-function clearPOIMarkers() {
-    if (window._poiMarkers) {
-        window._poiMarkers.forEach(m => m.remove());
-        window._poiMarkers = [];
-    }
-}
-
-
-// ===== BEST TIME TO LEAVE =====
 
 function analysebestTimeToLeave() {
-    const startInput = document.getElementById('start');
-    const endInput = document.getElementById('end');
-
-    if (!startInput || !endInput || !startInput.value || !endInput.value) {
-        showStatus('Enter start and end locations first', 'error');
-        return;
-    }
-
-    const startVal = startInput.value.trim();
-    const endVal = endInput.value.trim();
-
-    let startLat, startLon, endLat, endLon;
-
-    const startDataLat = startInput.getAttribute('data-lat');
-    const startDataLon = startInput.getAttribute('data-lon');
-    const endDataLat = endInput.getAttribute('data-lat');
-    const endDataLon = endInput.getAttribute('data-lon');
-
-    if (startDataLat && startDataLon) {
-        startLat = parseFloat(startDataLat);
-        startLon = parseFloat(startDataLon);
-    } else {
-        const parts = startVal.split(',');
-        if (parts.length === 2) {
-            startLat = parseFloat(parts[0]);
-            startLon = parseFloat(parts[1]);
-        }
-    }
-
-    if (endDataLat && endDataLon) {
-        endLat = parseFloat(endDataLat);
-        endLon = parseFloat(endDataLon);
-    } else {
-        const parts = endVal.split(',');
-        if (parts.length === 2) {
-            endLat = parseFloat(parts[0]);
-            endLon = parseFloat(parts[1]);
-        }
-    }
-
-    if (!startLat || !endLat) {
-        showStatus('Geocode locations first (calculate a route)', 'error');
-        return;
-    }
-
-    showStatus('Analysing traffic patterns...', 'loading');
-
-    fetch('/api/best-time-to-leave', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            start_lat: startLat, start_lon: startLon,
-            end_lat: endLat, end_lon: endLon,
-        })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            const container = document.getElementById('bestTimeResult');
-            const slotsDiv = document.getElementById('bestTimeSlots');
-            if (!container || !slotsDiv) return;
-
-            const sortedSlots = data.all_slots.slice().sort((a, b) => {
-                const timeA = a.time.split(':').map(Number);
-                const timeB = b.time.split(':').map(Number);
-                return (timeA[0] * 60 + timeA[1]) - (timeB[0] * 60 + timeB[1]);
-            });
-
-            slotsDiv.innerHTML = _bestTimeLeave().buildBestTimeSlotsPanelHtml(sortedSlots, data.best_time, {
-                source: data.source,
-                analysed_at: data.analysed_at,
-            });
-            container.style.display = 'block';
-            showStatus('Traffic analysis complete', 'success');
-        } else {
-            showStatus(data.error || 'Analysis failed', 'error');
-        }
-    })
-    .catch(err => {
-        console.error('[BestTime] Error:', err);
-        showStatus('Analysis failed', 'error');
-    });
+    VoyagrBestTimeLeaveOrchestration.analysebestTimeToLeave();
 }
-
 function applyBestDepartureTime(timeStr) {
-    const today = new Date();
-    const [hours, minutes] = timeStr.split(':');
-    today.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-    const dtInput = document.getElementById('departureTime');
-    if (dtInput) {
-        const formatted = today.toISOString().slice(0, 16);
-        dtInput.value = formatted;
-        localStorage.setItem('pref_departureTime', formatted);
-        showStatus(`Departure time set to ${timeStr}`, 'success');
-    }
+    VoyagrBestTimeLeaveOrchestration.applyBestDepartureTime(timeStr);
 }
-
 
 // ===== NOTIFICATIONS ORCHESTRATION =====
 // Orchestration lives in static/js/app/notifications-orchestration.js (bound at file end).
@@ -12137,6 +11884,8 @@ VoyagrNotificationsOrchestration.bind(getNotificationsOrchestrationRuntime());
 VoyagrRoutePreferencesOrchestration.bind(getRoutePreferencesOrchestrationRuntime());
 VoyagrOfflineNavigationOrchestration.bind(getOfflineNavigationOrchestrationRuntime());
 VoyagrSearchFavoritesOrchestration.bind(getSearchFavoritesOrchestrationRuntime());
+VoyagrPoiSearchOrchestration.bind(getPoiSearchOrchestrationRuntime());
+VoyagrBestTimeLeaveOrchestration.bind(getBestTimeLeaveOrchestrationRuntime());
 
 
 
