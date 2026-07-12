@@ -81,6 +81,60 @@
     }
 
     /**
+     * Apply plan for showing the route calculation progress bar.
+     * @param {Object} [mount] - from buildRouteProgressMountPlan
+     * @returns {Object}
+     */
+    function buildRouteProgressShowApplyPlan(mount) {
+        mount = mount || {};
+        return {
+            shouldShow: true,
+            containerId: mount.containerId || ROUTE_PROGRESS_CONTAINER_ID,
+            containerStyleCssText: mount.containerStyleCssText,
+            innerHtml: mount.innerHtml,
+            animationStyleId: mount.animationStyleId || ROUTE_PROGRESS_ANIMATION_STYLE_ID,
+            animationKeyframes: mount.animationKeyframes,
+            mountIfMissing: true,
+            showLogMessage: '[Route Progress] Showing progress bar',
+        };
+    }
+
+    /**
+     * Apply plan for hiding the route calculation progress bar.
+     * @returns {Object}
+     */
+    function buildRouteProgressHideApplyPlan() {
+        return {
+            shouldHide: true,
+            containerId: ROUTE_PROGRESS_CONTAINER_ID,
+            hideLogMessage: '[Route Progress] Hiding progress bar',
+        };
+    }
+
+    /**
+     * Orchestration plan for showRouteProgressBar entry.
+     * @param {string} [progressText]
+     * @returns {Object}
+     */
+    function buildRouteProgressShowOrchestrationPlan(progressText) {
+        var mount = buildRouteProgressMountPlan(progressText);
+        return {
+            mount: mount,
+            apply: buildRouteProgressShowApplyPlan(mount),
+        };
+    }
+
+    /**
+     * Orchestration plan for hideRouteProgressBar entry.
+     * @returns {Object}
+     */
+    function buildRouteProgressHideOrchestrationPlan() {
+        return {
+            apply: buildRouteProgressHideApplyPlan(),
+        };
+    }
+
+    /**
      * Resolve maneuver step index from a snapped polyline vertex index.
      * @param {Array<Object>|null|undefined} steps
      * @param {number} snapIndex
@@ -322,6 +376,10 @@
         buildRouteProgressBarInnerHtml: buildRouteProgressBarInnerHtml,
         getRouteProgressAnimationKeyframes: getRouteProgressAnimationKeyframes,
         buildRouteProgressMountPlan: buildRouteProgressMountPlan,
+        buildRouteProgressShowApplyPlan: buildRouteProgressShowApplyPlan,
+        buildRouteProgressHideApplyPlan: buildRouteProgressHideApplyPlan,
+        buildRouteProgressShowOrchestrationPlan: buildRouteProgressShowOrchestrationPlan,
+        buildRouteProgressHideOrchestrationPlan: buildRouteProgressHideOrchestrationPlan,
         resolveStepIndexFromSnapIndex: resolveStepIndexFromSnapIndex,
         buildNavigationProgressSeedPlan: buildNavigationProgressSeedPlan,
         NAV_ARRIVAL_DEFAULTS: NAV_ARRIVAL_DEFAULTS,

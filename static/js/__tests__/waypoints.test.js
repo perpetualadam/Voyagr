@@ -214,6 +214,20 @@ describe('waypoints module', () => {
         });
         expect(disable.shouldApply).toBe(true);
         expect(W.buildToggleRouteEditingDisableApplyPlan({ action: 'enable' }).shouldApply).toBe(false);
+
+        const entryDisable = W.buildToggleRouteEditingEntryApplyPlan({
+            action: 'disable',
+            clearRouteDragMarkers: true,
+            statusMessage: 'disabled',
+            statusType: 'info',
+        });
+        expect(entryDisable.shouldToggle).toBe(true);
+        expect(entryDisable.action).toBe('disable');
+        expect(entryDisable.disableApply.shouldApply).toBe(true);
+
+        const entryEnable = W.buildToggleRouteEditingEntryApplyPlan({ action: 'enable' });
+        expect(entryEnable.action).toBe('enable');
+        expect(entryEnable.updateToggleDom).toBe(true);
     });
 
     test('buildDraggedViaPointApplyPlan includes shouldApply flag', () => {

@@ -357,6 +357,18 @@
     }
 
     /**
+     * Entry orchestration plan for displayRouteComparison handler.
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildDisplayRouteComparisonEntryOrchestrationPlan(opts) {
+        var orch = buildDisplayRouteComparisonOrchestrationPlan(opts);
+        return {
+            apply: buildDisplayRouteComparisonApplyPlan(orch),
+        };
+    }
+
+    /**
      * Orchestration plan for selecting a route from the comparison list.
      * @param {number} index
      * @param {Array<Object>} routeOptions
@@ -863,6 +875,18 @@
             displayAllRoutes: !!orch.displayAllRoutes,
             statusMessage: orch.statusMessage,
             statusType: orch.statusType,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for showAllRoutes handler.
+     * @param {number} [routeCount]
+     * @returns {Object}
+     */
+    function buildShowAllRoutesEntryOrchestrationPlan(routeCount) {
+        var orch = buildShowAllRoutesOrchestrationPlan(routeCount);
+        return {
+            apply: orch.apply,
         };
     }
 
@@ -2788,6 +2812,48 @@
     }
 
     /**
+     * Orchestration plan for overviewRoute entry validation and map fit.
+     * @param {Object|null|undefined} lastCalculatedRoute
+     * @param {function(string, number): Array<[number,number]>} decodePolyline
+     * @returns {Object}
+     */
+    function buildRouteOverviewOrchestrationPlan(lastCalculatedRoute, decodePolyline) {
+        var dispatch = buildRouteOverviewDispatchPlan(lastCalculatedRoute, decodePolyline);
+        return {
+            dispatch: dispatch,
+            errorLogMessage: dispatch.ok ? null : '[Route] No route available for overview',
+        };
+    }
+
+    /**
+     * Apply plan for overviewRoute handler side effects.
+     * @param {Object} [orch] - from buildRouteOverviewOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildRouteOverviewApplyPlan(orch) {
+        orch = orch || {};
+        var dispatch = orch.dispatch || {};
+        if (!dispatch.ok) {
+            return {
+                shouldApply: false,
+                statusMessage: dispatch.statusMessage,
+                statusType: dispatch.statusType,
+                errorLogMessage: orch.errorLogMessage,
+            };
+        }
+        return {
+            shouldApply: true,
+            routePath: dispatch.routePath,
+            fitBounds: dispatch.fitBounds,
+            statusMessage: dispatch.statusMessage,
+            statusType: dispatch.statusType,
+            successLogPrefix: '[Route] Overview fitted bounds for',
+            catchErrorStatusPrefix: 'Error displaying route overview: ',
+            catchErrorLogPrefix: '[Route] Overview error:',
+        };
+    }
+
+    /**
      * Map display plan for showing a single selected route (comparison / preview).
      * @param {Object|null|undefined} route
      * @param {number} index
@@ -3193,6 +3259,42 @@
             selectedRouteIndex: opts.selectedRouteIndex,
             hideStartNavButtonIds: ['startNavBtn', 'startNavBtnSheet'],
             collapseBottomSheet: true,
+        };
+    }
+
+    /**
+     * Orchestration plan for startNavigationFromPreview entry.
+     * @param {Object|null|undefined} lastCalculatedRoute
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildStartNavigationOrchestrationPlan(lastCalculatedRoute, opts) {
+        var execute = buildStartNavigationExecutePlan(lastCalculatedRoute, opts);
+        return {
+            execute: execute,
+            apply: buildStartNavigationApplyPlan(execute),
+        };
+    }
+
+    /**
+     * Apply plan for startNavigationFromPreview handler side effects.
+     * @param {Object} [execute] - from buildStartNavigationExecutePlan
+     * @returns {Object}
+     */
+    function buildStartNavigationApplyPlan(execute) {
+        execute = execute || {};
+        if (!execute.shouldStart) {
+            return {
+                shouldApply: false,
+                errorStatusMessage: execute.errorStatusMessage,
+            };
+        }
+        return {
+            shouldApply: true,
+            syncFromSelection: !!execute.syncFromSelection,
+            selectedRouteIndex: execute.selectedRouteIndex,
+            hideStartNavButtonIds: execute.hideStartNavButtonIds || [],
+            collapseBottomSheet: !!execute.collapseBottomSheet,
         };
     }
 
@@ -3970,6 +4072,7 @@
         buildRouteComparisonListDomApplyPlan: buildRouteComparisonListDomApplyPlan,
         buildDisplayRouteComparisonOrchestrationPlan: buildDisplayRouteComparisonOrchestrationPlan,
         buildDisplayRouteComparisonApplyPlan: buildDisplayRouteComparisonApplyPlan,
+        buildDisplayRouteComparisonEntryOrchestrationPlan: buildDisplayRouteComparisonEntryOrchestrationPlan,
         buildUseRouteOrchestrationPlan: buildUseRouteOrchestrationPlan,
         buildUseRouteApplyPlan: buildUseRouteApplyPlan,
         buildRouteComparisonRequestRoutes: buildRouteComparisonRequestRoutes,
@@ -3993,6 +4096,7 @@
         buildShowRouteComparisonFetchHttpResponsePlan: buildShowRouteComparisonFetchHttpResponsePlan,
         buildShowAllRoutesOrchestrationPlan: buildShowAllRoutesOrchestrationPlan,
         buildShowAllRoutesApplyPlan: buildShowAllRoutesApplyPlan,
+        buildShowAllRoutesEntryOrchestrationPlan: buildShowAllRoutesEntryOrchestrationPlan,
         buildSelectRouteDispatchPlan: buildSelectRouteDispatchPlan,
         buildSelectRoutePreviewPayloadPlan: buildSelectRoutePreviewPayloadPlan,
         buildSelectRouteOrchestrationPlan: buildSelectRouteOrchestrationPlan,
@@ -4063,6 +4167,8 @@
         buildRecalculateRouteWithPreferencesPlan: buildRecalculateRouteWithPreferencesPlan,
         buildRecalculateRouteWithPreferencesExecutePlan: buildRecalculateRouteWithPreferencesExecutePlan,
         buildStartNavigationExecutePlan: buildStartNavigationExecutePlan,
+        buildStartNavigationOrchestrationPlan: buildStartNavigationOrchestrationPlan,
+        buildStartNavigationApplyPlan: buildStartNavigationApplyPlan,
         buildRoutePreviewPanelApplyPlan: buildRoutePreviewPanelApplyPlan,
         buildRoutePreviewPanelDomApplyPlan: buildRoutePreviewPanelDomApplyPlan,
         buildRoutePreviewPanelDomExecutePlan: buildRoutePreviewPanelDomExecutePlan,
@@ -4073,6 +4179,8 @@
         buildNavActiveRouteLayerMountPlan: buildNavActiveRouteLayerMountPlan,
         routeHazardsIncludeOsmTrafficLights: routeHazardsIncludeOsmTrafficLights,
         buildRouteOverviewDispatchPlan: buildRouteOverviewDispatchPlan,
+        buildRouteOverviewOrchestrationPlan: buildRouteOverviewOrchestrationPlan,
+        buildRouteOverviewApplyPlan: buildRouteOverviewApplyPlan,
         buildSingleRouteMapDisplayPlan: buildSingleRouteMapDisplayPlan,
         buildSingleRouteMapDisplayExecutePlan: buildSingleRouteMapDisplayExecutePlan,
         buildAllRoutesMapSideEffectsPlan: buildAllRoutesMapSideEffectsPlan,

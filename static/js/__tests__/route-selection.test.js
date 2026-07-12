@@ -556,6 +556,17 @@ describe('route comparison modal helpers', () => {
         expect(orch.shouldDisplay).toBe(true);
         expect(orch.domPlan.containerId).toBe('routeComparisonList');
         expect(orch.domPlan.innerHtml).toContain('Show All 1 Routes');
+
+        const entry = RS.buildDisplayRouteComparisonEntryOrchestrationPlan({
+            routes: [{ distance_km: 5, duration_minutes: 10 }],
+            selectedRouteIndex: 0,
+            routeColors: ['#00f'],
+            currencySymbol: '$',
+            distUnit: 'km',
+            distanceTexts: ['5.0'],
+        });
+        expect(entry.apply.shouldApply).toBe(true);
+        expect(entry.apply.domPlan.innerHtml).toContain('Show All 1 Routes');
     });
 
     test('buildDisplayRouteComparisonApplyPlan wraps orchestration dom plan', () => {
@@ -602,6 +613,10 @@ describe('route comparison modal helpers', () => {
         expect(orch.statusMessage).toContain('3 routes');
         expect(orch.apply.shouldApply).toBe(true);
         expect(orch.apply.displayAllRoutes).toBe(true);
+
+        const entry = RS.buildShowAllRoutesEntryOrchestrationPlan(3);
+        expect(entry.apply.shouldApply).toBe(true);
+        expect(RS.buildShowAllRoutesEntryOrchestrationPlan(0).apply.shouldApply).toBe(false);
     });
 
     test('buildUseRouteApplyPlan and buildShowAllRoutesApplyPlan gate invalid input', () => {
@@ -1321,6 +1336,22 @@ describe('route overview and single-route display plans', () => {
         expect(RS.buildRouteOverviewDispatchPlan({ geometry: 'x' }, () => []).ok).toBe(false);
     });
 
+    test('buildRouteOverviewOrchestrationPlan and apply plan gate missing routes', () => {
+        const orch = RS.buildRouteOverviewOrchestrationPlan(null, decode);
+        const blocked = RS.buildRouteOverviewApplyPlan(orch);
+        expect(blocked.shouldApply).toBe(false);
+        expect(blocked.errorLogMessage).toContain('No route available');
+
+        const okOrch = RS.buildRouteOverviewOrchestrationPlan(
+            { geometry: 'abc', precision: 5 },
+            decode
+        );
+        const ok = RS.buildRouteOverviewApplyPlan(okOrch);
+        expect(ok.shouldApply).toBe(true);
+        expect(ok.routePath.length).toBeGreaterThan(0);
+        expect(ok.fitBounds.padding).toBe(50);
+    });
+
     test('routeHazardsIncludeOsmTrafficLights detects OSM signal types', () => {
         expect(RS.routeHazardsIncludeOsmTrafficLights([{ type: 'camera' }])).toBe(false);
         expect(RS.routeHazardsIncludeOsmTrafficLights([{ type: 'traffic_signals' }])).toBe(true);
@@ -1525,6 +1556,22 @@ describe('route overview and single-route display plans', () => {
         });
         expect(preview.syncFromSelection).toBe(true);
         expect(RS.buildStartNavigationExecutePlan(null).shouldStart).toBe(false);
+    });
+
+    test('buildStartNavigationOrchestrationPlan and apply plan bundle preview entry', () => {
+        const orch = RS.buildStartNavigationOrchestrationPlan({ destination: 'London' }, {
+            syncFromSelection: true,
+            selectedRouteIndex: 2,
+        });
+        expect(orch.apply.shouldApply).toBe(true);
+        expect(orch.apply.syncFromSelection).toBe(true);
+        expect(orch.apply.hideStartNavButtonIds).toContain('startNavBtnSheet');
+
+        const blocked = RS.buildStartNavigationOrchestrationPlan(null, {
+            noRouteMessage: 'No route available',
+        });
+        expect(blocked.apply.shouldApply).toBe(false);
+        expect(blocked.apply.errorStatusMessage).toBe('No route available');
     });
 
     test('buildClearAllRouteLayersFromMapPlan lists route and polyline artifacts', () => {

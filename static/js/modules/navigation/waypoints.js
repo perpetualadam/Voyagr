@@ -493,6 +493,28 @@
     }
 
     /**
+     * Entry apply plan for toggleRouteEditing handler.
+     * @param {Object} [orch] - from buildToggleRouteEditingOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildToggleRouteEditingEntryApplyPlan(orch) {
+        orch = orch || {};
+        if (orch.action === 'disable') {
+            return {
+                shouldToggle: true,
+                action: 'disable',
+                disableApply: buildToggleRouteEditingDisableApplyPlan(orch),
+                updateToggleDom: true,
+            };
+        }
+        return {
+            shouldToggle: true,
+            action: 'enable',
+            updateToggleDom: true,
+        };
+    }
+
+    /**
      * Execute plan for mounting one route drag marker.
      * @param {Object} mountPlan - from buildRouteDragMarkerMountPlan
      * @returns {Object}
@@ -1808,6 +1830,7 @@
         buildRouteEditEnableRuntimeApplyPlan: buildRouteEditEnableRuntimeApplyPlan,
         buildRouteEditEnableOrchestrationPlan: buildRouteEditEnableOrchestrationPlan,
         buildToggleRouteEditingDisableApplyPlan: buildToggleRouteEditingDisableApplyPlan,
+        buildToggleRouteEditingEntryApplyPlan: buildToggleRouteEditingEntryApplyPlan,
         buildRouteDragMarkerExecutePlan: buildRouteDragMarkerExecutePlan,
         buildRouteDragMarkerApplyPlan: buildRouteDragMarkerApplyPlan,
         buildRouteDragMarkerEntryOrchestrationPlan: buildRouteDragMarkerEntryOrchestrationPlan,
