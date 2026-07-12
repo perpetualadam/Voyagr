@@ -601,6 +601,45 @@
     }
 
     /**
+     * Apply plan for starting periodic route-traffic edge updates.
+     * @param {Object} [plan] - from buildStartRouteTrafficUpdatesDispatchPlan
+     * @returns {Object}
+     */
+    function buildStartRouteTrafficUpdatesApplyPlan(plan) {
+        plan = plan || {};
+        if (!plan.shouldRestart) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            clearExistingInterval: plan.clearExistingInterval,
+            immediateUpdate: plan.immediateUpdate,
+            immediateDelayMs: plan.immediateDelayMs,
+            intervalMs: plan.intervalMs,
+            startLogMessage: plan.startLogMessage,
+            logMessage: plan.logMessage,
+        };
+    }
+
+    /**
+     * Apply plan for stopping route-traffic edge updates.
+     * @param {Object} [plan] - from buildStopRouteTrafficUpdatesDispatchPlan
+     * @returns {Object}
+     */
+    function buildStopRouteTrafficUpdatesApplyPlan(plan) {
+        plan = plan || {};
+        if (!plan.shouldStopInterval && !plan.clearTrafficLayers) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            shouldStopInterval: plan.shouldStopInterval,
+            clearTrafficLayers: plan.clearTrafficLayers,
+            logMessage: plan.logMessage,
+        };
+    }
+
+    /**
      * Toggle plan for enabling/disabling route-traffic edge display.
      * @param {boolean} currentEnabled
      * @returns {Object}
@@ -749,8 +788,10 @@
         buildRouteTrafficFlowFailedFetchApplyPlan: buildRouteTrafficFlowFailedFetchApplyPlan,
         buildRouteTrafficAheadCacheUpdatePlan: buildRouteTrafficAheadCacheUpdatePlan,
         buildStartRouteTrafficUpdatesDispatchPlan: buildStartRouteTrafficUpdatesDispatchPlan,
+        buildStartRouteTrafficUpdatesApplyPlan: buildStartRouteTrafficUpdatesApplyPlan,
         buildRouteTrafficIntervalTickPlan: buildRouteTrafficIntervalTickPlan,
         buildStopRouteTrafficUpdatesDispatchPlan: buildStopRouteTrafficUpdatesDispatchPlan,
+        buildStopRouteTrafficUpdatesApplyPlan: buildStopRouteTrafficUpdatesApplyPlan,
         buildRouteTrafficTogglePlan: buildRouteTrafficTogglePlan,
         buildRouteTrafficToggleExecutePlan: buildRouteTrafficToggleExecutePlan,
         buildClearRouteTrafficLayersApplyPlan: buildClearRouteTrafficLayersApplyPlan,

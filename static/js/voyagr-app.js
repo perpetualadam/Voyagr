@@ -2583,24 +2583,19 @@ function applySingleRouteMapDisplayFromPlan(plan) {
  */
 function displayAllRoutesOnMap() {
     const RS = _routeSelection();
-    const routeCount = routeOptions ? routeOptions.length : 0;
-    const orch = RS.buildDisplayAllRoutesMapOrchestrationPlan(routeCount);
-    const dispatch = RS.buildDisplayAllRoutesMapDispatchPlan(routeOptions);
+    const entry = RS.buildDisplayAllRoutesMapEntryOrchestrationPlan(routeOptions, {
+        isStyleLoaded: map?.isStyleLoaded(),
+    });
 
-    console.log(orch.entryLogMessage);
-    console.log(orch.routeCountLogPrefix, routeCount, 'routes');
+    console.log(entry.orch.entryLogMessage);
+    console.log(entry.orch.routeCountLogPrefix, entry.routeCount, 'routes');
 
-    if (!dispatch.valid) {
-        console.warn(orch.noRoutesLogMessage);
+    if (!entry.shouldDisplay) {
+        if (entry.noRoutesLogMessage) console.warn(entry.noRoutesLogMessage);
         return;
     }
 
-    const execute = RS.buildDisplayAllRoutesMapExecutePlan(dispatch, {
-        isStyleLoaded: map?.isStyleLoaded(),
-    });
-    const mount = RS.buildDisplayAllRoutesMapMountApplyPlan(execute, orch);
-    if (!mount.shouldMount) return;
-
+    const mount = entry.mount;
     applyDisplayAllRoutesPreMountFromPlan(mount.preMount);
 
     if (mount.requireMap && !map) {
@@ -4282,6 +4277,33 @@ function stopTrafficMonitoring() {
  * @function setupMapClickHandler
  * @returns {void}
  */
+function applyMapClickLocationPickerFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+
+    const inputEl = document.getElementById(apply.inputId);
+    if (inputEl) inputEl.value = apply.inputValue;
+
+    if (apply.removeExistingMarker) {
+        if (apply.markerTarget === 'start' && startMarker && typeof startMarker.remove === 'function') {
+            startMarker.remove();
+        }
+        if (apply.markerTarget === 'end' && endMarker && typeof endMarker.remove === 'function') {
+            endMarker.remove();
+        }
+    }
+
+    const marker = MapLibreHelpers.createCircleMarker(apply.lat, apply.lon, apply.markerOptions).addTo(map);
+    if (apply.markerTarget === 'start') {
+        startMarker = marker;
+    } else {
+        endMarker = marker;
+    }
+
+    if (apply.clearMapPickerMode) mapPickerMode = null;
+    if (apply.collapseBottomSheet) collapseBottomSheet();
+    showStatus(apply.successStatusMessage, apply.successStatusType);
+}
+
 function setupMapClickHandler() {
     if (!map) {
         console.log('[Map] Map not initialized yet, deferring click handler setup');
@@ -4290,14 +4312,12 @@ function setupMapClickHandler() {
 
     const GL = _geocodingLocations();
     map.on('click', (e) => {
-        const lat = e.lngLat.lat;
-        const lon = e.lngLat.lng;
         const dispatch = GL.buildMapClickDispatchPlan({
             addingViaPoint,
             addingStop,
             mapPickerMode,
-            lat,
-            lon,
+            lat: e.lngLat.lat,
+            lon: e.lngLat.lng,
         });
 
         if (dispatch.action === 'waypoint') {
@@ -4306,31 +4326,9 @@ function setupMapClickHandler() {
         }
 
         if (dispatch.action === 'location_picker') {
-            const execute = GL.buildMapClickLocationPickerExecutePlan(dispatch);
-            if (!execute.shouldApply) return;
-
-            const inputEl = document.getElementById(execute.inputId);
-            if (inputEl) inputEl.value = execute.inputValue;
-
-            if (execute.removeExistingMarker) {
-                if (execute.markerTarget === 'start' && startMarker && typeof startMarker.remove === 'function') {
-                    startMarker.remove();
-                }
-                if (execute.markerTarget === 'end' && endMarker && typeof endMarker.remove === 'function') {
-                    endMarker.remove();
-                }
-            }
-
-            const marker = MapLibreHelpers.createCircleMarker(lat, lon, execute.markerOptions).addTo(map);
-            if (execute.markerTarget === 'start') {
-                startMarker = marker;
-            } else {
-                endMarker = marker;
-            }
-
-            if (execute.clearMapPickerMode) mapPickerMode = null;
-            if (execute.collapseBottomSheet) collapseBottomSheet();
-            showStatus(execute.successStatusMessage, execute.successStatusType);
+            applyMapClickLocationPickerFromPlan(
+                GL.buildMapClickLocationPickerApplyPlan(dispatch)
+            );
         }
     });
 }
@@ -5833,27 +5831,23 @@ function ensureLabelsOnTop() {
 /**
  * Start automatic route traffic updates during navigation
  */
-function startRouteTrafficUpdates() {
-    const RTF = _routeTrafficFlow();
-    const plan = RTF.buildStartRouteTrafficUpdatesDispatchPlan({
-        routeTrafficUpdateInterval,
-        routeTrafficEnabled,
-        routePolyline,
-    });
+function applyStartRouteTrafficUpdatesFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
 
-    if (plan.clearExistingInterval && routeTrafficUpdateInterval) {
+    if (apply.clearExistingInterval && routeTrafficUpdateInterval) {
         clearInterval(routeTrafficUpdateInterval);
     }
 
-    console.log(plan.startLogMessage);
+    if (apply.startLogMessage) console.log(apply.startLogMessage);
 
-    if (plan.immediateUpdate) {
+    if (apply.immediateUpdate) {
         setTimeout(() => {
             console.log('[Route Traffic] Executing first traffic update');
             fetchAndDisplayRouteTraffic();
-        }, plan.immediateDelayMs);
+        }, apply.immediateDelayMs);
     }
 
+    const RTF = _routeTrafficFlow();
     routeTrafficUpdateInterval = setInterval(() => {
         const tick = RTF.buildRouteTrafficIntervalTickPlan({
             routeInProgress,
@@ -5864,23 +5858,42 @@ function startRouteTrafficUpdates() {
             console.log(tick.tickLogMessage);
             fetchAndDisplayRouteTraffic();
         }
-    }, plan.intervalMs);
+    }, apply.intervalMs);
 
-    console.log(plan.logMessage);
+    if (apply.logMessage) console.log(apply.logMessage);
 }
 
-/**
- * Stop automatic route traffic updates
- */
-function stopRouteTrafficUpdates() {
-    const RTF = _routeTrafficFlow();
-    const plan = RTF.buildStopRouteTrafficUpdatesDispatchPlan(routeTrafficUpdateInterval);
-    if (plan.shouldStopInterval) {
+function applyStopRouteTrafficUpdatesFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+
+    if (apply.shouldStopInterval) {
         clearInterval(routeTrafficUpdateInterval);
         routeTrafficUpdateInterval = null;
     }
-    if (plan.clearTrafficLayers) clearRouteTrafficLayers();
-    console.log(plan.logMessage);
+    if (apply.clearTrafficLayers) clearRouteTrafficLayers();
+    if (apply.logMessage) console.log(apply.logMessage);
+}
+
+function startRouteTrafficUpdates() {
+    const RTF = _routeTrafficFlow();
+    applyStartRouteTrafficUpdatesFromPlan(
+        RTF.buildStartRouteTrafficUpdatesApplyPlan(
+            RTF.buildStartRouteTrafficUpdatesDispatchPlan({
+                routeTrafficUpdateInterval,
+                routeTrafficEnabled,
+                routePolyline,
+            })
+        )
+    );
+}
+
+function stopRouteTrafficUpdates() {
+    const RTF = _routeTrafficFlow();
+    applyStopRouteTrafficUpdatesFromPlan(
+        RTF.buildStopRouteTrafficUpdatesApplyPlan(
+            RTF.buildStopRouteTrafficUpdatesDispatchPlan(routeTrafficUpdateInterval)
+        )
+    );
 }
 
 // ===== AUTO-TRAFFIC UPDATE & AUTO-REROUTE SYSTEM =====
@@ -5975,39 +5988,49 @@ function toggleAutoRerouteOnDeviation() {
 /**
  * Start automatic traffic updates during navigation
  */
-function startAutoTrafficUpdates() {
+function applyStartAutoTrafficUpdatesFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+
+    console.log(apply.logMessage);
+    if (apply.immediateCheck) checkTrafficAndReroute();
+
     const TC = _trafficChange();
-    const orch = TC.buildStartAutoTrafficUpdatesOrchestrationPlan({
-        autoTrafficUpdateEnabled,
-        trafficUpdateInterval,
-    });
-    if (!orch.shouldStart) return;
-
-    const dispatch = orch.dispatch;
-    console.log(dispatch.logMessage);
-
-    if (dispatch.immediateCheck) checkTrafficAndReroute();
-
     trafficUpdateInterval = setInterval(() => {
         const tick = TC.buildAutoTrafficIntervalTickPlan({
             routeInProgress,
             autoTrafficUpdateEnabled,
         });
         if (tick.shouldCheck) checkTrafficAndReroute();
-    }, dispatch.intervalMs);
+    }, apply.intervalMs);
 }
 
-/**
- * Stop automatic traffic updates
- */
+function applyStopAutoTrafficUpdatesFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+
+    if (apply.clearInterval) clearInterval(trafficUpdateInterval);
+    if (apply.resetIntervalHandle) trafficUpdateInterval = null;
+    if (apply.logMessage) console.log(apply.logMessage);
+}
+
+function startAutoTrafficUpdates() {
+    const TC = _trafficChange();
+    applyStartAutoTrafficUpdatesFromPlan(
+        TC.buildStartAutoTrafficUpdatesApplyPlan(
+            TC.buildStartAutoTrafficUpdatesOrchestrationPlan({
+                autoTrafficUpdateEnabled,
+                trafficUpdateInterval,
+            })
+        )
+    );
+}
+
 function stopAutoTrafficUpdates() {
     const TC = _trafficChange();
-    const orch = TC.buildStopAutoTrafficUpdatesOrchestrationPlan(trafficUpdateInterval);
-    if (!orch.shouldStop) return;
-
-    if (orch.clearInterval) clearInterval(trafficUpdateInterval);
-    if (orch.resetIntervalHandle) trafficUpdateInterval = null;
-    console.log(orch.dispatch.logMessage);
+    applyStopAutoTrafficUpdatesFromPlan(
+        TC.buildStopAutoTrafficUpdatesApplyPlan(
+            TC.buildStopAutoTrafficUpdatesOrchestrationPlan(trafficUpdateInterval)
+        )
+    );
 }
 
 // Shared along-route traffic sampler (Levers A + B). Samples live TomTom flow on the

@@ -296,6 +296,43 @@
     }
 
     /**
+     * Apply plan for starting automatic traffic updates during navigation.
+     * @param {Object} [orch] - from buildStartAutoTrafficUpdatesOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildStartAutoTrafficUpdatesApplyPlan(orch) {
+        orch = orch || {};
+        if (!orch.shouldStart || !orch.dispatch) {
+            return { shouldApply: false };
+        }
+        var dispatch = orch.dispatch;
+        return {
+            shouldApply: true,
+            intervalMs: dispatch.intervalMs,
+            immediateCheck: dispatch.immediateCheck,
+            logMessage: dispatch.logMessage,
+        };
+    }
+
+    /**
+     * Apply plan for stopping automatic traffic updates during navigation.
+     * @param {Object} [orch] - from buildStopAutoTrafficUpdatesOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildStopAutoTrafficUpdatesApplyPlan(orch) {
+        orch = orch || {};
+        if (!orch.shouldStop) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            clearInterval: orch.clearInterval,
+            resetIntervalHandle: orch.resetIntervalHandle,
+            logMessage: orch.dispatch && orch.dispatch.logMessage,
+        };
+    }
+
+    /**
      * Status plan for manual traffic update button handler.
      * @param {string} phase - 'start' | 'complete'
      * @returns {Object}
@@ -972,9 +1009,11 @@
         buildTrafficRerouteAcceptancePlan: buildTrafficRerouteAcceptancePlan,
         buildStartAutoTrafficUpdatesDispatchPlan: buildStartAutoTrafficUpdatesDispatchPlan,
         buildStartAutoTrafficUpdatesOrchestrationPlan: buildStartAutoTrafficUpdatesOrchestrationPlan,
+        buildStartAutoTrafficUpdatesApplyPlan: buildStartAutoTrafficUpdatesApplyPlan,
         buildAutoTrafficIntervalTickPlan: buildAutoTrafficIntervalTickPlan,
         buildStopAutoTrafficUpdatesDispatchPlan: buildStopAutoTrafficUpdatesDispatchPlan,
         buildStopAutoTrafficUpdatesOrchestrationPlan: buildStopAutoTrafficUpdatesOrchestrationPlan,
+        buildStopAutoTrafficUpdatesApplyPlan: buildStopAutoTrafficUpdatesApplyPlan,
         buildManualTrafficUpdateStatusPlan: buildManualTrafficUpdateStatusPlan,
         buildUpdateTrafficConditionsOrchestrationPlan: buildUpdateTrafficConditionsOrchestrationPlan,
         buildUpdateTrafficConditionsResponseDispatchPlan: buildUpdateTrafficConditionsResponseDispatchPlan,

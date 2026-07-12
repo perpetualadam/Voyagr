@@ -2664,6 +2664,39 @@
     }
 
     /**
+     * Entry orchestration plan for displayAllRoutesOnMap.
+     * @param {Array<Object>} [routeOptions]
+     * @param {Object} [opts]
+     * @param {boolean} [opts.isStyleLoaded]
+     * @returns {Object}
+     */
+    function buildDisplayAllRoutesMapEntryOrchestrationPlan(routeOptions, opts) {
+        opts = opts || {};
+        var routes = routeOptions || [];
+        var routeCount = routes.length;
+        var orch = buildDisplayAllRoutesMapOrchestrationPlan(routeCount);
+        var dispatch = buildDisplayAllRoutesMapDispatchPlan(routes);
+        if (!dispatch.valid) {
+            return {
+                shouldDisplay: false,
+                orch: orch,
+                routeCount: routeCount,
+                noRoutesLogMessage: orch.noRoutesLogMessage,
+            };
+        }
+        var execute = buildDisplayAllRoutesMapExecutePlan(dispatch, {
+            isStyleLoaded: !!opts.isStyleLoaded,
+        });
+        var mount = buildDisplayAllRoutesMapMountApplyPlan(execute, orch);
+        return {
+            shouldDisplay: mount.shouldMount,
+            orch: orch,
+            routeCount: routeCount,
+            mount: mount,
+        };
+    }
+
+    /**
      * Execute plan for recalculateRouteWithPreferences side effects.
      * @param {Object} plan - from buildRecalculateRouteWithPreferencesPlan
      * @returns {Object}
@@ -3454,6 +3487,7 @@
         buildDisplayAllRoutesMapOrchestrationPlan: buildDisplayAllRoutesMapOrchestrationPlan,
         buildDisplayAllRoutesMapExecutePlan: buildDisplayAllRoutesMapExecutePlan,
         buildDisplayAllRoutesMapMountApplyPlan: buildDisplayAllRoutesMapMountApplyPlan,
+        buildDisplayAllRoutesMapEntryOrchestrationPlan: buildDisplayAllRoutesMapEntryOrchestrationPlan,
         buildBringRoutesToTopDispatchPlan: buildBringRoutesToTopDispatchPlan,
         buildBringRoutesToTopExecutePlan: buildBringRoutesToTopExecutePlan,
         buildRouteLayerMapLibreApplyPlan: buildRouteLayerMapLibreApplyPlan,

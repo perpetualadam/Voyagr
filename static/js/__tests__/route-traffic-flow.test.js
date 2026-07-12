@@ -245,6 +245,24 @@ describe('route traffic ahead sampling and cache plans', () => {
         expect(RTF.buildStopRouteTrafficUpdatesDispatchPlan({}).shouldStopInterval).toBe(true);
     });
 
+    test('buildStartRouteTrafficUpdatesApplyPlan and buildStopRouteTrafficUpdatesApplyPlan expose side effects', () => {
+        const start = RTF.buildStartRouteTrafficUpdatesApplyPlan(
+            RTF.buildStartRouteTrafficUpdatesDispatchPlan({
+                routeTrafficUpdateInterval: null,
+                routeTrafficEnabled: true,
+                routePolyline: [[1, 2], [3, 4]],
+            })
+        );
+        expect(start.shouldApply).toBe(true);
+        expect(start.immediateUpdate).toBe(true);
+
+        const stop = RTF.buildStopRouteTrafficUpdatesApplyPlan(
+            RTF.buildStopRouteTrafficUpdatesDispatchPlan({})
+        );
+        expect(stop.shouldApply).toBe(true);
+        expect(stop.clearTrafficLayers).toBe(true);
+    });
+
     test('buildRouteTrafficTogglePlan flips enabled state and side effects', () => {
         const disable = RTF.buildRouteTrafficTogglePlan(true);
         expect(disable.nextEnabled).toBe(false);

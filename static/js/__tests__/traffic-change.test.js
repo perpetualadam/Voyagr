@@ -209,6 +209,23 @@ describe('auto traffic interval dispatch plans', () => {
         expect(orch.resetIntervalHandle).toBe(true);
     });
 
+    test('buildStartAutoTrafficUpdatesApplyPlan and buildStopAutoTrafficUpdatesApplyPlan expose side effects', () => {
+        const start = TC.buildStartAutoTrafficUpdatesApplyPlan(
+            TC.buildStartAutoTrafficUpdatesOrchestrationPlan({
+                autoTrafficUpdateEnabled: true,
+                trafficUpdateInterval: null,
+            })
+        );
+        expect(start.shouldApply).toBe(true);
+        expect(start.immediateCheck).toBe(true);
+
+        const stop = TC.buildStopAutoTrafficUpdatesApplyPlan(
+            TC.buildStopAutoTrafficUpdatesOrchestrationPlan({})
+        );
+        expect(stop.shouldApply).toBe(true);
+        expect(stop.resetIntervalHandle).toBe(true);
+    });
+
     test('buildManualTrafficUpdateStatusPlan maps start and complete phases', () => {
         expect(TC.buildManualTrafficUpdateStatusPlan('start').statusMessage).toContain('Updating');
         expect(TC.buildManualTrafficUpdateStatusPlan('complete').statusType).toBe('success');

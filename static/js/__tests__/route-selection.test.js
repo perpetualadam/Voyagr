@@ -1152,6 +1152,20 @@ describe('route overview and single-route display plans', () => {
         expect(mount.mapMissingLogMessage).toContain('Map not available');
     });
 
+    test('buildDisplayAllRoutesMapEntryOrchestrationPlan gates empty routes and bundles mount', () => {
+        const empty = RS.buildDisplayAllRoutesMapEntryOrchestrationPlan([], { isStyleLoaded: true });
+        expect(empty.shouldDisplay).toBe(false);
+        expect(empty.noRoutesLogMessage).toContain('No routeOptions');
+
+        const entry = RS.buildDisplayAllRoutesMapEntryOrchestrationPlan(
+            [{ polyline: [[1, 2]] }],
+            { isStyleLoaded: false }
+        );
+        expect(entry.shouldDisplay).toBe(true);
+        expect(entry.mount.shouldMount).toBe(true);
+        expect(entry.routeCount).toBe(1);
+    });
+
     test('buildDoAddRouteLayersExecutePlan bundles batch and post-mount plans', () => {
         const execute = RS.buildDoAddRouteLayersExecutePlan(
             RS.buildDoAddRouteLayersOrchestrationPlan({

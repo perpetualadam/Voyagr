@@ -785,6 +785,23 @@
         };
     }
 
+    /**
+     * DOM apply plan for map click location-pick mode.
+     * @param {Object} [dispatch] - from buildMapClickDispatchPlan when action is location_picker
+     * @returns {Object}
+     */
+    function buildMapClickLocationPickerApplyPlan(dispatch) {
+        dispatch = dispatch || {};
+        var execute = buildMapClickLocationPickerExecutePlan(dispatch);
+        if (!execute.shouldApply) {
+            return { shouldApply: false };
+        }
+        return Object.assign({}, execute, {
+            lat: dispatch.lat,
+            lon: dispatch.lon,
+        });
+    }
+
     var api = {
         readStoredLocationFromDataset: readStoredLocationFromDataset,
         getGeocodeLoadingStatusMessage: getGeocodeLoadingStatusMessage,
@@ -833,6 +850,7 @@
         buildPickLocationFromMapExecutePlan: buildPickLocationFromMapExecutePlan,
         buildMapClickDispatchPlan: buildMapClickDispatchPlan,
         buildMapClickLocationPickerExecutePlan: buildMapClickLocationPickerExecutePlan,
+        buildMapClickLocationPickerApplyPlan: buildMapClickLocationPickerApplyPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

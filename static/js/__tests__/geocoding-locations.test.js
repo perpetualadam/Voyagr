@@ -368,4 +368,17 @@ describe('geocoding-locations module', () => {
         expect(execute.markerOptions.fillColor).toBe('#00ff00');
         expect(GL.buildMapClickLocationPickerExecutePlan({ mapPickerMode: 'end', lat: 1, lon: 2 }).markerOptions.fillColor).toBe('#ff0000');
     });
+
+    test('buildMapClickLocationPickerApplyPlan carries lat/lon from dispatch', () => {
+        const apply = GL.buildMapClickLocationPickerApplyPlan({
+            action: 'location_picker',
+            mapPickerMode: 'start',
+            lat: 51.5,
+            lon: -0.12,
+        });
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.lat).toBe(51.5);
+        expect(apply.lon).toBe(-0.12);
+        expect(apply.inputId).toBe('start');
+    });
 });
