@@ -5292,9 +5292,9 @@ function getPhase3FeaturesOrchestrationRuntime() {
         gestureControl: () => _gestureControl(),
         mapControls: () => _mapControls(),
         toggleUI: () => _toggleUI(),
-        setGestureEnabled: (val) => { gestureEnabled = val; },
-        setGestureSensitivity: (val) => { gestureSensitivity = val; },
-        setGestureAction: (val) => { gestureAction = val; },
+        setGestureEnabled: (val) => VoyagrGestureControlOrchestration.setGestureEnabled(val),
+        setGestureSensitivity: (val) => VoyagrGestureControlOrchestration.setGestureSensitivity(val),
+        setGestureAction: (val) => VoyagrGestureControlOrchestration.setGestureAction(val),
         setIsAREnabled: (val) => { isAREnabled = val; },
         call: {
             updateBatteryStatus,
@@ -5308,235 +5308,47 @@ function initPhase3Features() {
     VoyagrPhase3FeaturesOrchestration.initPhase3Features();
 }
 
-// ===== PHASE 3 FEATURES: GESTURE CONTROL =====
+// ===== GESTURE CONTROL ORCHESTRATION =====
+// Orchestration lives in static/js/app/gesture-control-orchestration.js (bound at file end).
 
-let lastAcceleration = { x: 0, y: 0, z: 0 };
-let shakeCount = 0;
-let lastShakeTime = 0;
-let gestureEnabled = true;
-let gestureSensitivity = 'medium';
-let gestureAction = 'recalculate';
-
-/**
- * handleDeviceMotion function
- * @function handleDeviceMotion
- * @param {*} event - Parameter description
- * @returns {*} Return value description
- */
-function handleDeviceMotion(event) {
-    if (!gestureEnabled) return;
-
-    const GC = _gestureControl();
-    const accel = event.acceleration;
-    if (!accel) return;
-
-    const magnitude = Math.sqrt(accel.x ** 2 + accel.y ** 2 + accel.z ** 2);
-    const detection = GC.buildGestureShakeDetectionPlan({
-        magnitude,
-        sensitivity: gestureSensitivity,
-        lastShakeTime,
-        shakeCount,
-        now: Date.now(),
-    });
-    shakeCount = detection.shakeCount;
-    lastShakeTime = detection.lastShakeTime;
-    if (detection.shouldTrigger) {
-        triggerGestureAction();
-    }
+function getGestureControlOrchestrationRuntime() {
+    return {
+        gestureControl: () => _gestureControl(),
+        toggleUI: () => _toggleUI(),
+        call: {
+            showStatus,
+            calculateRoute,
+            clearForm,
+        },
+    };
 }
 
-/**
- * triggerGestureAction function
- * @function triggerGestureAction
- * @returns {*} Return value description
- */
-function triggerGestureAction() {
-    const GC = _gestureControl();
-    const execute = GC.buildGestureActionExecutePlan({ action: gestureAction });
-    if (!execute.shouldApply) return;
+function handleDeviceMotion(event) { VoyagrGestureControlOrchestration.handleDeviceMotion(event); }
+function triggerGestureAction() { VoyagrGestureControlOrchestration.triggerGestureAction(); }
+function toggleGestureControl() { VoyagrGestureControlOrchestration.toggleGestureControl(); }
+function updateGestureSensitivity() { VoyagrGestureControlOrchestration.updateGestureSensitivity(); }
+function updateGestureAction() { VoyagrGestureControlOrchestration.updateGestureAction(); }
 
-    const indicator = document.getElementById(execute.indicator.id);
-    if (indicator) {
-        indicator.classList.add(execute.indicator.showClass);
-        setTimeout(() => indicator.classList.remove(execute.indicator.showClass), execute.indicator.hideAfterMs);
-    }
+// ===== BATTERY SAVING ORCHESTRATION =====
+// Orchestration lives in static/js/app/battery-saving-orchestration.js (bound at file end).
 
-    if ('vibrate' in navigator) {
-        navigator.vibrate(execute.vibrateMs);
-    }
-
-    fetch('/api/gesture-event', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(execute.logApiBody),
-    }).catch((error) => console.error('Error logging gesture:', error));
-
-    if (execute.triggerRecalculate) {
-        showStatus(execute.statusMessage, execute.statusType);
-        calculateRoute();
-    } else if (execute.triggerClear) {
-        showStatus(execute.statusMessage, execute.statusType);
-        clearForm();
-    } else {
-        showStatus(execute.statusMessage, execute.statusType);
-    }
+function getBatterySavingOrchestrationRuntime() {
+    return {
+        batterySaving: () => _batterySaving(),
+        toggleUI: () => _toggleUI(),
+        call: {
+            showStatus,
+        },
+    };
 }
 
-/**
- * toggleGestureControl function
- * @function toggleGestureControl
- * @returns {*} Return value description
- */
-function toggleGestureControl() {
-    const GC = _gestureControl();
-    const TU = _toggleUI();
-    const collected = GC.buildToggleGestureControlCollectPlan({ currentlyEnabled: gestureEnabled });
-    const execute = GC.buildToggleGestureControlExecutePlan({
-        enabled: collected.enabled,
-        hasDeviceMotion: 'DeviceMotionEvent' in window,
-    });
-    if (!execute.shouldApply) return;
-
-    gestureEnabled = execute.enabled;
-    TU.applyToggleButton(document.getElementById(execute.toggle.id), execute.toggle.enabled);
-
-    const settingsPanel = document.getElementById(execute.settingsPanel.id);
-    if (settingsPanel) settingsPanel.style.display = execute.settingsPanel.display;
-
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-
-    fetch('/api/app-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(execute.persistApiBody),
-    }).catch((error) => console.error('Error updating gesture setting:', error));
-
-    if (execute.addDeviceMotionListener) {
-        window.addEventListener('devicemotion', handleDeviceMotion);
-    }
-    if (execute.removeDeviceMotionListener) {
-        window.removeEventListener('devicemotion', handleDeviceMotion);
-    }
-    showStatus(execute.statusMessage, execute.statusType);
-}
-
-/**
- * updateGestureSensitivity function
- * @function updateGestureSensitivity
- * @returns {*} Return value description
- */
-function updateGestureSensitivity() {
-    const GC = _gestureControl();
-    const execute = GC.buildUpdateGestureSensitivityExecutePlan({
-        value: document.getElementById(GC.GESTURE_SENSITIVITY_ID).value,
-    });
-    if (!execute.shouldApply) return;
-    gestureSensitivity = execute.sensitivity;
-    fetch('/api/app-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(execute.persistApiBody),
-    }).catch((error) => console.error(execute.errorLogPrefix, error));
-}
-
-/**
- * updateGestureAction function
- * @function updateGestureAction
- * @returns {*} Return value description
- */
-function updateGestureAction() {
-    const GC = _gestureControl();
-    const execute = GC.buildUpdateGestureActionExecutePlan({
-        value: document.getElementById(GC.GESTURE_ACTION_ID).value,
-    });
-    if (!execute.shouldApply) return;
-    gestureAction = execute.action;
-    fetch('/api/app-settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(execute.persistApiBody),
-    }).catch((error) => console.error(execute.errorLogPrefix, error));
-}
-
-// ===== PHASE 3 FEATURES: BATTERY SAVING MODE =====
-
-let batterySavingMode = false;
-let originalGPSFrequency = 1000; // ms
-/**
- * updateBatteryStatus function
- * @function updateBatteryStatus
- * @param {*} battery - Parameter description
- * @returns {*} Return value description
- */
-function updateBatteryStatus(battery) {
-    const BS = _batterySaving();
-    const level = Math.round(battery.level * 100);
-
-    VoyagrBatteryMonitoringOrchestration.setCurrentBatteryLevel(battery.level);
-
-    const autoEnable = BS.buildBatteryAutoEnablePlan({
-        levelPercent: level,
-        currentlyEnabled: batterySavingMode,
-    });
-    if (autoEnable.shouldEnable) {
-        enableBatterySavingMode();
-    }
-}
-
-/**
- * toggleBatterySavingMode function
- * @function toggleBatterySavingMode
- * @returns {*} Return value description
- */
-function toggleBatterySavingMode() {
-    applyBatterySavingModeFromPlan(
-        _batterySaving().buildToggleBatterySavingExecutePlan(batterySavingMode)
-    );
-}
-
-/**
- * enableBatterySavingMode function
- * @function enableBatterySavingMode
- * @returns {*} Return value description
- */
+function updateBatteryStatus(battery) { VoyagrBatterySavingOrchestration.updateBatteryStatus(battery); }
 function applyBatterySavingModeFromPlan(execute) {
-    if (!execute || !execute.shouldApply) return;
-    const TU = _toggleUI();
-    if (execute.setBatterySavingMode) batterySavingMode = execute.batterySavingMode;
-    if (execute.toggle) {
-        TU.applyToggleButton(document.getElementById(execute.toggle.id), execute.toggle.enabled);
-    }
-    if (execute.disableBodyAnimation) document.body.style.animation = 'none';
-    if (execute.disableElementAnimations) {
-        document.querySelectorAll('[style*="animation"]').forEach((el) => {
-            el.style.animation = 'none';
-        });
-    }
-    if (execute.restoreBodyAnimation) document.body.style.animation = '';
-    if (execute.storageKey) localStorage.setItem(execute.storageKey, execute.storageValue);
-    if (execute.persistApiBody) {
-        fetch('/api/app-settings', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(execute.persistApiBody),
-        }).catch((error) => console.error('Error updating battery mode:', error));
-    }
-    if (execute.statusMessage) showStatus(execute.statusMessage, execute.statusType);
-    if (execute.restoreLogMessage) console.log(execute.restoreLogMessage);
+    VoyagrBatterySavingOrchestration.applyBatterySavingModeFromPlan(execute);
 }
-
-function enableBatterySavingMode() {
-    applyBatterySavingModeFromPlan(_batterySaving().buildEnableBatterySavingExecutePlan());
-}
-
-/**
- * disableBatterySavingMode function
- * @function disableBatterySavingMode
- * @returns {*} Return value description
- */
-function disableBatterySavingMode() {
-    applyBatterySavingModeFromPlan(_batterySaving().buildDisableBatterySavingExecutePlan());
-}
+function toggleBatterySavingMode() { VoyagrBatterySavingOrchestration.toggleBatterySavingMode(); }
+function enableBatterySavingMode() { VoyagrBatterySavingOrchestration.enableBatterySavingMode(); }
+function disableBatterySavingMode() { VoyagrBatterySavingOrchestration.disableBatterySavingMode(); }
 
 // ===== PHASE 3 FEATURES: MAP THEMES =====
 
@@ -7261,84 +7073,28 @@ function initBatteryMonitoring() {
     VoyagrBatteryMonitoringOrchestration.initBatteryMonitoring();
 }
 
-// ===== LOCATION FUNCTIONS =====
-/**
- * getCurrentLocation function
- * @function getCurrentLocation
- * @returns {*} Return value description
- */
-function getCurrentLocation() {
-    if (!navigator.geolocation) {
-        showStatus('Geolocation not supported', 'error');
-        return;
-    }
+// ===== LOCATION ORCHESTRATION =====
+// Orchestration lives in static/js/app/location-orchestration.js (bound at file end).
 
-    showStatus('Getting location...', 'loading');
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            currentLat = lat;
-            currentLon = lon;
-
-            // Center map on current location with smooth animation
-            map.flyTo([lat, lon], 15, {
-                duration: ZOOM_ANIMATION_DURATION,
-                easeLinearity: 0.25
-            });
-
-            // Add marker with MapLibre
-            if (startMarker && typeof startMarker.remove === 'function') startMarker.remove();
-            startMarker = MapLibreHelpers.createCircleMarker(lat, lon, {
-                radius: 8,
-                fillColor: '#667eea',
-                color: '#fff',
-                weight: 2,
-                fillOpacity: 0.8
-            }).addTo(map);
-            startMarker.bindPopup('Current Location');
-
-            showStatus('Location found!', 'success');
+function getLocationOrchestrationRuntime() {
+    return {
+        getMap: () => map,
+        getMapLibreHelpers: () => MapLibreHelpers,
+        getStartMarker: () => startMarker,
+        setStartMarker: (val) => { startMarker = val; },
+        getCurrentLat: () => currentLat,
+        setCurrentLat: (val) => { currentLat = val; },
+        getCurrentLon: () => currentLon,
+        setCurrentLon: (val) => { currentLon = val; },
+        getZoomAnimationDuration: () => ZOOM_ANIMATION_DURATION,
+        call: {
+            showStatus,
         },
-        (error) => {
-            showStatus('Error: ' + error.message, 'error');
-        }
-    );
+    };
 }
-/**
- * setCurrentLocation function
- * @function setCurrentLocation
- * @param {*} field - Parameter description
- * @returns {*} Return value description
- */
-function setCurrentLocation(field) {
-    if (!navigator.geolocation) {
-        showStatus('Geolocation not supported', 'error');
-        return;
-    }
 
-    showStatus('Getting location...', 'loading');
-    navigator.geolocation.getCurrentPosition(
-        (position) => {
-            const lat = position.coords.latitude;
-            const lon = position.coords.longitude;
-            const input = document.getElementById(field);
-
-            // Display "Current Location" instead of coordinates
-            input.value = 'Current Location';
-            input.dataset.lat = lat;
-            input.dataset.lon = lon;
-            input.dataset.displayName = 'Current Location';
-
-            currentLat = lat;
-            currentLon = lon;
-            showStatus('Location set!', 'success');
-        },
-        (error) => {
-            showStatus('Error: ' + error.message, 'error');
-        }
-    );
-}
+function getCurrentLocation() { VoyagrLocationOrchestration.getCurrentLocation(); }
+function setCurrentLocation(field) { VoyagrLocationOrchestration.setCurrentLocation(field); }
 
 /**
  * Swap start and destination locations
@@ -8159,7 +7915,7 @@ function getLegacyPreferencesOrchestrationRuntime() {
         gestureControl: () => _gestureControl(),
         legacyPrefsRestore: () => _legacyPrefsRestore(),
         batterySaving: () => _batterySaving(),
-        setGestureEnabled: (val) => { gestureEnabled = val; },
+        setGestureEnabled: (val) => VoyagrGestureControlOrchestration.setGestureEnabled(val),
         setAutoGpsEnabled: (val) => { autoGpsEnabled = val; },
         call: {
             loadHazardCameraTogglesFromApi,
@@ -8315,6 +8071,9 @@ VoyagrVoiceControlOrchestration.bind(getVoiceControlOrchestrationRuntime());
 VoyagrMapExploreOrchestration.bind(getMapExploreOrchestrationRuntime());
 VoyagrBatteryMonitoringOrchestration.bind(getBatteryMonitoringOrchestrationRuntime());
 VoyagrPhase3FeaturesOrchestration.bind(getPhase3FeaturesOrchestrationRuntime());
+VoyagrGestureControlOrchestration.bind(getGestureControlOrchestrationRuntime());
+VoyagrBatterySavingOrchestration.bind(getBatterySavingOrchestrationRuntime());
+VoyagrLocationOrchestration.bind(getLocationOrchestrationRuntime());
 VoyagrPageInitOrchestration.bind(getPageInitOrchestrationRuntime());
 VoyagrRoutePreviewOrchestration.bind(getRoutePreviewOrchestrationRuntime());
 VoyagrLegacyPreferencesOrchestration.bind(getLegacyPreferencesOrchestrationRuntime());
