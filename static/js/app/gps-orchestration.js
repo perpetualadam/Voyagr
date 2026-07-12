@@ -7,6 +7,17 @@
 
     var runtime = null;
 
+    var snapBlendWeightState = 0;
+    var smoothDisplayLat = null;
+    var smoothDisplayLon = null;
+
+    function getSnapBlendWeightState() { return snapBlendWeightState; }
+    function setSnapBlendWeightState(val) { snapBlendWeightState = val; }
+    function getSmoothDisplayLat() { return smoothDisplayLat; }
+    function setSmoothDisplayLat(val) { smoothDisplayLat = val; }
+    function getSmoothDisplayLon() { return smoothDisplayLon; }
+    function setSmoothDisplayLon(val) { smoothDisplayLon = val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[GPS] Orchestration runtime not bound');
@@ -58,10 +69,10 @@
             routePolyline: rt().g('routePolyline'),
             snapped: resolveGpsRouteSnapForTick(currentLat, currentLon),
             lastSnappedRouteIndex: rt().g('lastSnappedRouteIndex'),
-            prevSnapBlendWeightState: rt().g('_snapBlendWeightState'),
-            smoothDisplayLat: rt().g('_smoothDisplayLat'),
-            smoothDisplayLon: rt().g('_smoothDisplayLon'),
-            useSmoothCoordsOnly: rt().g('_smoothDisplayLat') != null && rt().g('_smoothDisplayLon') != null,
+            prevSnapBlendWeightState: getSnapBlendWeightState(),
+            smoothDisplayLat: getSmoothDisplayLat(),
+            smoothDisplayLon: getSmoothDisplayLon(),
+            useSmoothCoordsOnly: getSmoothDisplayLat() != null && getSmoothDisplayLon() != null,
             calculateBearing: (a, b, c, d) => RG.bearing(a, b, c, d),
             blendHeadingsCircular: RG.blendHeadingsCircular,
         });
@@ -207,16 +218,16 @@
         if (!apply || apply.action !== 'apply') return;
         const patch = apply.statePatch || {};
         if (patch.snapBlendWeightState != null) {
-            rt().s('_snapBlendWeightState',  patch.snapBlendWeightState);
+            setSnapBlendWeightState(patch.snapBlendWeightState);
         }
         if (patch.lastSnappedRouteIndex != null) {
             rt().s('lastSnappedRouteIndex',  patch.lastSnappedRouteIndex);
         }
         if (patch.smoothDisplayLat != null) {
-            rt().s('_smoothDisplayLat',  patch.smoothDisplayLat);
+            setSmoothDisplayLat(patch.smoothDisplayLat);
         }
         if (patch.smoothDisplayLon != null) {
-            rt().s('_smoothDisplayLon',  patch.smoothDisplayLon);
+            setSmoothDisplayLon(patch.smoothDisplayLon);
         }
     }
 
@@ -614,10 +625,10 @@
             routePolyline: rt().g('routePolyline'),
             snapped: resolveGpsRouteSnapForTick(coord.lat, coord.lon),
             lastSnappedRouteIndex: rt().g('lastSnappedRouteIndex'),
-            prevSnapBlendWeightState: rt().g('_snapBlendWeightState'),
+            prevSnapBlendWeightState: getSnapBlendWeightState(),
             speedMph: coord.speedMph,
-            smoothDisplayLat: rt().g('_smoothDisplayLat'),
-            smoothDisplayLon: rt().g('_smoothDisplayLon'),
+            smoothDisplayLat: getSmoothDisplayLat(),
+            smoothDisplayLon: getSmoothDisplayLon(),
             lastFollowCenterGeo: window.__voyagrLastFollowCenterGeo,
             calculateDistanceMeters: calculateDistanceMeters,
             calculateBearing: (a, b, c, d) => rgModule().bearing(a, b, c, d),
@@ -935,9 +946,9 @@
     function initializeGpsModuleState() {
         rt().s('lastSnappedRouteIndex', 0);
         rt().s('lastTurnDetectRouteVertexIndex', 0);
-        rt().s('_smoothDisplayLat', null);
-        rt().s('_smoothDisplayLon', null);
-        rt().s('_snapBlendWeightState', 0);
+        setSmoothDisplayLat(null);
+        setSmoothDisplayLon(null);
+        setSnapBlendWeightState(0);
         rt().s('lastRerouteTime', 0);
         rt().s('lastRerouteAttemptTime', 0);
         rt().s('lastRerouteDeviation', 0);
@@ -956,9 +967,9 @@
      * and the icon jumps while the smoother catches up.
      */
     function resetVehicleMarkerDisplayState() {
-        rt().s('_smoothDisplayLat',  null);
-        rt().s('_smoothDisplayLon',  null);
-        rt().s('_snapBlendWeightState',  0);
+        setSmoothDisplayLat(null);
+        setSmoothDisplayLon(null);
+        setSnapBlendWeightState(0);
         window.__voyagrLastFollowCenterGeo = null;
         window.__voyagrLastFollowEaseAt = 0;
     }
@@ -971,13 +982,13 @@
         if (!apply || apply.action !== 'apply') return;
         const patch = apply.statePatch || {};
         if (patch.smoothDisplayLat != null) {
-            rt().s('_smoothDisplayLat',  patch.smoothDisplayLat);
+            setSmoothDisplayLat(patch.smoothDisplayLat);
         }
         if (patch.smoothDisplayLon != null) {
-            rt().s('_smoothDisplayLon',  patch.smoothDisplayLon);
+            setSmoothDisplayLon(patch.smoothDisplayLon);
         }
         if (patch.snapBlendWeightState != null) {
-            rt().s('_snapBlendWeightState',  patch.snapBlendWeightState);
+            setSnapBlendWeightState(patch.snapBlendWeightState);
         }
         if (apply.markerLngLat && rt().g('currentUserMarker') && typeof rt().g('currentUserMarker').setLngLat === 'function') {
             rt().g('currentUserMarker').setLngLat(apply.markerLngLat);
@@ -1658,6 +1669,12 @@
         loadCameraAlertPreferences: loadCameraAlertPreferences,
         triggerAutomaticRerouteWithHazardHandling: triggerAutomaticRerouteWithHazardHandling,
         triggerAutomaticReroute: triggerAutomaticReroute,
+        getSnapBlendWeightState: getSnapBlendWeightState,
+        setSnapBlendWeightState: setSnapBlendWeightState,
+        getSmoothDisplayLat: getSmoothDisplayLat,
+        setSmoothDisplayLat: setSmoothDisplayLat,
+        getSmoothDisplayLon: getSmoothDisplayLon,
+        setSmoothDisplayLon: setSmoothDisplayLon,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

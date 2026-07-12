@@ -896,9 +896,9 @@ function getRerouteMapOrchestrationRuntime() {
         getCurrentRoutingMode: () => currentRoutingMode,
         getCurrentVehicleType: () => currentVehicleType,
         getCurrentUserMarker: () => currentUserMarker,
-        getSnapBlendWeightState: () => _snapBlendWeightState,
-        getSmoothDisplayLat: () => _smoothDisplayLat,
-        getSmoothDisplayLon: () => _smoothDisplayLon,
+        getSnapBlendWeightState: () => VoyagrGpsOrchestration.getSnapBlendWeightState(),
+        getSmoothDisplayLat: () => VoyagrGpsOrchestration.getSmoothDisplayLat(),
+        getSmoothDisplayLon: () => VoyagrGpsOrchestration.getSmoothDisplayLon(),
         getAnnouncedTurnThresholds: () => VoyagrVoiceAnnouncementsOrchestration.getAnnouncedTurnThresholds(),
         getAnnouncedExitThresholds: () => VoyagrVoiceAnnouncementsOrchestration.getAnnouncedExitThresholds(),
         getAnnouncedKeepThresholds: () => VoyagrVoiceAnnouncementsOrchestration.getAnnouncedKeepThresholds(),
@@ -1335,9 +1335,9 @@ function getGpsOrchestrationRuntime() {
             case 'zoomAndFollowEnabled': return zoomAndFollowEnabled;
             case 'mapFollowingActive': return mapFollowingActive;
             case 'driverPerspectiveEnabled': return driverPerspectiveEnabled;
-            case '_snapBlendWeightState': return _snapBlendWeightState;
-            case '_smoothDisplayLat': return _smoothDisplayLat;
-            case '_smoothDisplayLon': return _smoothDisplayLon;
+            case '_snapBlendWeightState': return VoyagrGpsOrchestration.getSnapBlendWeightState();
+            case '_smoothDisplayLat': return VoyagrGpsOrchestration.getSmoothDisplayLat();
+            case '_smoothDisplayLon': return VoyagrGpsOrchestration.getSmoothDisplayLon();
             case 'currentSpeedLimitMph': return VoyagrSpeedWidgetOrchestration.getCurrentSpeedLimitMph();
             case 'lastSpeedLimitRegion': return VoyagrSpeedWidgetOrchestration.getLastSpeedLimitRegion();
             case 'lastDetectedRoadType': return VoyagrSpeedWidgetOrchestration.getLastDetectedRoadType();
@@ -1401,9 +1401,9 @@ function getGpsOrchestrationRuntime() {
             case 'zoomAndFollowEnabled': zoomAndFollowEnabled = val; break;
             case 'mapFollowingActive': mapFollowingActive = val; break;
             case 'driverPerspectiveEnabled': driverPerspectiveEnabled = val; break;
-            case '_snapBlendWeightState': _snapBlendWeightState = val; break;
-            case '_smoothDisplayLat': _smoothDisplayLat = val; break;
-            case '_smoothDisplayLon': _smoothDisplayLon = val; break;
+            case '_snapBlendWeightState': VoyagrGpsOrchestration.setSnapBlendWeightState(val); break;
+            case '_smoothDisplayLat': VoyagrGpsOrchestration.setSmoothDisplayLat(val); break;
+            case '_smoothDisplayLon': VoyagrGpsOrchestration.setSmoothDisplayLon(val); break;
             case 'currentSpeedLimitMph': VoyagrSpeedWidgetOrchestration.setCurrentSpeedLimitMph(val); break;
             case 'lastSpeedLimitRegion': VoyagrSpeedWidgetOrchestration.setLastSpeedLimitRegion(val); break;
             case 'lastDetectedRoadType': VoyagrSpeedWidgetOrchestration.setLastDetectedRoadType(val); break;
