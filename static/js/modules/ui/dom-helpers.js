@@ -469,6 +469,19 @@
         };
     }
 
+    /**
+     * Update the global status banner (#status).
+     * @param {string} message
+     * @param {string} type
+     */
+    function showStatus(message, type) {
+        if (typeof document === 'undefined') return;
+        var status = document.getElementById('status');
+        if (!status) return;
+        status.textContent = message;
+        status.className = 'status ' + type;
+    }
+
     var api = {
         eventTargetElement: eventTargetElement,
         closest: closest,
@@ -505,6 +518,7 @@
         buildCollapseBottomSheetForRoutePreviewApplyPlan: buildCollapseBottomSheetForRoutePreviewApplyPlan,
         buildCollapseBottomSheetForRoutePreviewOrchestrationPlan:
             buildCollapseBottomSheetForRoutePreviewOrchestrationPlan,
+        showStatus: showStatus,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

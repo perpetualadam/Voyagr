@@ -32,6 +32,20 @@ describe('dom-helpers', () => {
         expect(Dom.closest(text, '.waypoint-item')).toBe(outer);
     });
 
+    test('showStatus updates #status text and class', () => {
+        const status = document.createElement('div');
+        status.id = 'status';
+        document.body.appendChild(status);
+
+        Dom.showStatus('Ready', 'success');
+        expect(status.textContent).toBe('Ready');
+        expect(status.className).toBe('status success');
+    });
+
+    test('showStatus no-ops when #status is missing', () => {
+        expect(() => Dom.showStatus('x', 'info')).not.toThrow();
+    });
+
     test('swap locations flash style constants', () => {
         expect(Dom.SWAP_LOCATIONS_FLASH_STYLE.background).toBe('#e3f2fd');
         expect(Dom.SWAP_LOCATIONS_REST_STYLE.borderColor).toBe('#ddd');

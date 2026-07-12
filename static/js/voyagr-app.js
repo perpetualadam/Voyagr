@@ -55,52 +55,8 @@ function recordRecentDestination(label, lat, lon, kind) {
     return VoyagrRecentDestinationsOrchestration.recordRecentDestination(label, lat, lon, kind);
 }
 
-// ===== DEBUG SCROLL FUNCTION =====
-window.debugScrollIssue = function() {
-    const bsc = document.querySelector('.bottom-sheet-content');
-    const rpt = document.getElementById('routePreviewTab');
-    const navTab = document.getElementById('navigationTab');
-    const settingsTab = document.getElementById('settingsTab');
-
-    console.log('=== SCROLL DEBUG ===');
-    console.log('bottom-sheet-content:', bsc ? {
-        scrollHeight: bsc.scrollHeight,
-        clientHeight: bsc.clientHeight,
-        scrollTop: bsc.scrollTop,
-        offsetHeight: bsc.offsetHeight,
-        overflowY: getComputedStyle(bsc).overflowY,
-        maxHeight: getComputedStyle(bsc).maxHeight,
-        display: getComputedStyle(bsc).display
-    } : 'NOT FOUND');
-
-    console.log('routePreviewTab:', rpt ? {
-        scrollHeight: rpt.scrollHeight,
-        clientHeight: rpt.clientHeight,
-        display: rpt.style.display,
-        computedDisplay: getComputedStyle(rpt).display,
-        overflow: getComputedStyle(rpt).overflow
-    } : 'NOT FOUND');
-
-    console.log('navigationTab:', navTab ? {
-        display: navTab.style.display,
-        computedDisplay: getComputedStyle(navTab).display
-    } : 'NOT FOUND');
-
-    console.log('settingsTab:', settingsTab ? {
-        display: settingsTab.style.display,
-        computedDisplay: getComputedStyle(settingsTab).display
-    } : 'NOT FOUND');
-
-    // Check all tabs
-    const allTabs = document.querySelectorAll('.bottom-sheet-content > div[id$="Tab"]');
-    console.log('All tabs:', Array.from(allTabs).map(t => ({
-        id: t.id,
-        display: t.style.display,
-        computedDisplay: getComputedStyle(t).display,
-        height: t.offsetHeight
-    })));
-
-    return 'Debug info logged above';
+window.debugScrollIssue = function () {
+    return VoyagrBottomSheetOrchestration.debugScrollIssue();
 };
 
 // ===== UNIT CONVERSION ORCHESTRATION =====
@@ -704,17 +660,8 @@ function decodePolyline(encoded, precision = 6) {
     return VoyagrCalculateRouteOrchestration.decodePolyline(encoded, precision);
 }
 
-/**
- * showStatus function
- * @function showStatus
- * @param {*} message - Parameter description
- * @param {*} type - Parameter description
- * @returns {*} Return value description
- */
 function showStatus(message, type) {
-    const status = document.getElementById('status');
-    status.textContent = message;
-    status.className = 'status ' + type;
+    return _domHelpers().showStatus(message, type);
 }
 
 function collectSettingsFormState() {
