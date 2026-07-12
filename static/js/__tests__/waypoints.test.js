@@ -140,6 +140,12 @@ describe('waypoints module', () => {
         expect(apply.recalculateRoute).toBe(true);
     });
 
+    test('buildDraggedViaPointOrchestrationPlan wraps apply plan', () => {
+        const orch = W.buildDraggedViaPointOrchestrationPlan(51.5, -0.1, 0);
+        expect(orch.apply.viaPoint.name).toBe('Drag point 1');
+        expect(orch.apply.recalculateRoute).toBe(true);
+    });
+
     test('buildRouteEditingToggleDomApplyPlan maps edit button label', () => {
         const dom = W.buildRouteEditingToggleDomApplyPlan(true);
         expect(dom.elementId).toBe(W.ROUTE_EDIT_TOGGLE_ELEMENT_ID);

@@ -3488,6 +3488,57 @@
         };
     }
 
+    /**
+     * Entry orchestration plan for bringTrafficEdgesToTop with reorder apply.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildBringTrafficEdgesToTopEntryOrchestrationPlan(input) {
+        var orch = buildBringTrafficEdgesToTopOrchestrationPlan(input);
+        if (!orch.shouldRun) {
+            return { shouldReorder: false };
+        }
+        return {
+            shouldReorder: true,
+            reorderApply: buildMapLayerReorderApplyPlan(
+                buildBringTrafficEdgesToTopExecutePlan(orch.trafficLayers, orch.styleLayers)
+            ),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for bringNavRouteAboveTrafficEdges with reorder apply.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildBringNavRouteAboveTrafficEdgesEntryOrchestrationPlan(input) {
+        var orch = buildBringNavRouteAboveTrafficEdgesOrchestrationPlan(input);
+        if (!orch.shouldRun) {
+            return { shouldReorder: false };
+        }
+        return {
+            shouldReorder: true,
+            reorderApply: buildMapLayerReorderApplyPlan(
+                buildBringNavRouteAboveTrafficEdgesExecutePlan(
+                    orch.routeLayer,
+                    orch.allRouteLayers,
+                    orch.styleLayers
+                )
+            ),
+        };
+    }
+
+    /**
+     * Orchestration plan wrapping idle calculateRoute post-preview UI execute.
+     * @param {Object} [idleUiPlan] - from buildCalculateRouteIdleUiApplyPlan
+     * @returns {Object}
+     */
+    function buildCalculateRouteIdleUiOrchestrationPlan(idleUiPlan) {
+        return {
+            execute: buildCalculateRouteIdleUiExecutePlan(idleUiPlan),
+        };
+    }
+
     var api = {
         ROUTE_COLORS: ROUTE_COLORS,
         NAV_ACTIVE_ROUTE_COLOR: NAV_ACTIVE_ROUTE_COLOR,
@@ -3585,6 +3636,7 @@
         buildInNavRerouteOutcomeExecutePlan: buildInNavRerouteOutcomeExecutePlan,
         buildCalculateRouteIdleUiApplyPlan: buildCalculateRouteIdleUiApplyPlan,
         buildCalculateRouteIdleUiExecutePlan: buildCalculateRouteIdleUiExecutePlan,
+        buildCalculateRouteIdleUiOrchestrationPlan: buildCalculateRouteIdleUiOrchestrationPlan,
         buildRecalculateRouteWithPreferencesPlan: buildRecalculateRouteWithPreferencesPlan,
         buildRecalculateRouteWithPreferencesExecutePlan: buildRecalculateRouteWithPreferencesExecutePlan,
         buildStartNavigationExecutePlan: buildStartNavigationExecutePlan,
@@ -3637,8 +3689,11 @@
         buildBringNavRouteAboveTrafficEdgesExecutePlan: buildBringNavRouteAboveTrafficEdgesExecutePlan,
         buildMapLayerReorderApplyPlan: buildMapLayerReorderApplyPlan,
         buildBringTrafficEdgesToTopOrchestrationPlan: buildBringTrafficEdgesToTopOrchestrationPlan,
+        buildBringTrafficEdgesToTopEntryOrchestrationPlan: buildBringTrafficEdgesToTopEntryOrchestrationPlan,
         buildBringNavRouteAboveTrafficEdgesOrchestrationPlan:
             buildBringNavRouteAboveTrafficEdgesOrchestrationPlan,
+        buildBringNavRouteAboveTrafficEdgesEntryOrchestrationPlan:
+            buildBringNavRouteAboveTrafficEdgesEntryOrchestrationPlan,
         ENSURE_LABELS_ON_TOP_DEBOUNCE_MS: ENSURE_LABELS_ON_TOP_DEBOUNCE_MS,
         DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS: DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,

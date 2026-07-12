@@ -347,6 +347,19 @@
     }
 
     /**
+     * Orchestration plan for adding a via-point from route drag.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {number} viaPointsCount
+     * @returns {Object}
+     */
+    function buildDraggedViaPointOrchestrationPlan(lat, lon, viaPointsCount) {
+        return {
+            apply: buildDraggedViaPointApplyPlan(lat, lon, viaPointsCount),
+        };
+    }
+
+    /**
      * DOM apply plan for the route editing toggle button.
      * @param {boolean} routeEditingEnabled
      * @returns {Object}
@@ -1639,6 +1652,7 @@
         buildRouteDragMarkerMountPlan: buildRouteDragMarkerMountPlan,
         buildDraggedViaPointAddPlan: buildDraggedViaPointAddPlan,
         buildDraggedViaPointApplyPlan: buildDraggedViaPointApplyPlan,
+        buildDraggedViaPointOrchestrationPlan: buildDraggedViaPointOrchestrationPlan,
         buildRouteEditingToggleDomApplyPlan: buildRouteEditingToggleDomApplyPlan,
         buildRouteEditingDisablePlan: buildRouteEditingDisablePlan,
         buildToggleRouteEditingOrchestrationPlan: buildToggleRouteEditingOrchestrationPlan,

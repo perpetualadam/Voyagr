@@ -236,6 +236,66 @@ describe('map-controls module', () => {
         expect(unsupported.unsupportedLog).toBe('unsupported');
     });
 
+    test('buildNavStartEntryOrchestrationPlan bundles preflight and state init', () => {
+        expect(MC.buildNavStartEntryOrchestrationPlan(null).shouldStart).toBe(false);
+        const entry = MC.buildNavStartEntryOrchestrationPlan(
+            { geometry: 'abc', maneuvers: [{ type: 1 }] },
+            { resumeStepIndex: 1 }
+        );
+        expect(entry.shouldStart).toBe(true);
+        expect(entry.mergeLastCalculatedRoute).toBe(true);
+        expect(entry.stateInit.currentStepIndex).toBe(1);
+        expect(entry.stateInit.maneuvers).toHaveLength(1);
+    });
+
+    test('buildNavStartRuntimeApplyPlan resets session counters and ETA snapshot', () => {
+        const stateInit = MC.buildNavStartStateInitPlan(
+            { geometry: 'abc', maneuvers: [] },
+            null
+        );
+        const apply = MC.buildNavStartRuntimeApplyPlan(stateInit);
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.routeInProgress).toBe(true);
+        expect(apply.resetSessionCounters).toBe(true);
+        expect(apply.createEmptyEtaSnapshot).toBe(true);
+        expect(apply.resetVoiceOnStart).toBe(true);
+    });
+
+    test('buildNavStartPolylineInitExecutePlan carries decode and error messages', () => {
+        const stateInit = MC.buildNavStartStateInitPlan({ geometry: 'abc', maneuvers: [] }, null);
+        const execute = MC.buildNavStartPolylineInitExecutePlan(stateInit);
+        expect(execute.shouldInit).toBe(true);
+        expect(execute.geometry).toBe('abc');
+        expect(execute.primeVehicleWhenPositionKnown).toBe(true);
+        expect(execute.invalidGeometryStatusMessage).toContain('Invalid');
+        expect(execute.decodeGeometryErrorStatusMessage).toContain('decode');
+    });
+
+    test('buildNavStartServicesOrchestrationPlan bundles lifecycle, FAB, and feedback', () => {
+        const stateInit = MC.buildNavStartStateInitPlan(
+            { geometry: 'abc', maneuvers: [] },
+            { fromPersistedResume: true }
+        );
+        const services = MC.buildNavStartServicesOrchestrationPlan({
+            stateInit,
+            isTrackingActive: true,
+            autoTrafficUpdateEnabled: false,
+            routeTrafficEnabled: true,
+            hasMap: true,
+            hasPosition: true,
+            zoomAndFollowEnabled: true,
+            mapFollowingActive: true,
+            driverPerspectiveActive: false,
+            wakeLockApiAvailable: true,
+        });
+        expect(services.lifecycle.startGpsIfInactive).toBe(false);
+        expect(services.lifecycle.startRouteTraffic).toBe(true);
+        expect(services.driverViewSchedule.shouldSchedule).toBe(true);
+        expect(services.fabExecute.shouldApply).toBe(true);
+        expect(services.userFeedback.notificationTitle).toBe('Navigation resumed');
+        expect(services.volumeHintDelayMs).toBe(stateInit.volumeHintDelayMs);
+    });
+
     test('buildShowMapHintToastExecutePlan and touch hint environment detection', () => {
         expect(MC.buildShowMapHintToastExecutePlan('').shouldShow).toBe(false);
         const show = MC.buildShowMapHintToastExecutePlan('Recenter map');

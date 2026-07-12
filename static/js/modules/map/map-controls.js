@@ -773,6 +773,115 @@
     }
 
     /**
+     * Entry orchestration plan for startTurnByTurnNavigation after route merge.
+     * @param {Object|null|undefined} mergedRouteData
+     * @param {Object|null|undefined} navStartOpts
+     * @returns {Object}
+     */
+    function buildNavStartEntryOrchestrationPlan(mergedRouteData, navStartOpts) {
+        var preflight = buildNavStartPreflightPlan(mergedRouteData, navStartOpts);
+        if (!preflight.ok) {
+            return {
+                shouldStart: false,
+                errorStatusMessage: preflight.errorStatusMessage,
+            };
+        }
+        var routeData = preflight.routeData;
+        return {
+            shouldStart: true,
+            routeData: routeData,
+            stateInit: buildNavStartStateInitPlan(routeData, navStartOpts),
+            mergeLastCalculatedRoute: true,
+        };
+    }
+
+    /**
+     * Runtime apply plan for navigation session variables at start.
+     * @param {Object} [stateInit] - from buildNavStartStateInitPlan
+     * @returns {Object}
+     */
+    function buildNavStartRuntimeApplyPlan(stateInit) {
+        stateInit = stateInit || {};
+        return {
+            shouldApply: true,
+            routeInProgress: stateInit.routeInProgress,
+            currentStepIndex: stateInit.currentStepIndex,
+            maneuvers: stateInit.maneuvers || [],
+            resetSessionCounters: true,
+            resetVoiceOnStart: !!stateInit.resetVoiceOnStart,
+            createEmptyEtaSnapshot: true,
+        };
+    }
+
+    /**
+     * Execute plan for polyline decode and persistence at navigation start.
+     * @param {Object} [stateInit] - from buildNavStartStateInitPlan
+     * @returns {Object}
+     */
+    function buildNavStartPolylineInitExecutePlan(stateInit) {
+        stateInit = stateInit || {};
+        return {
+            shouldInit: true,
+            usePersistedPolyline: !!stateInit.usePersistedPolyline,
+            persistedPolyline: stateInit.persistedPolyline,
+            geometry: stateInit.geometry,
+            navPrecision: stateInit.navPrecision,
+            persistActiveRoute: !!stateInit.persistActiveRoute,
+            precacheTiles: !!stateInit.precacheTiles,
+            polylineDecodeLogPrefix: stateInit.polylineDecodeLogPrefix,
+            maneuversLogPrefix: stateInit.maneuversLogPrefix,
+            emptyPolylineErrorLog: stateInit.emptyPolylineErrorLog,
+            decodeGeometryErrorLogPrefix: stateInit.decodeGeometryErrorLogPrefix,
+            persistedPolylineLogSuffix: 'points (persisted polyline)',
+            primeVehicleWhenPositionKnown: true,
+            resetSnappedIndexWhenNoPosition: true,
+            invalidGeometryStatusMessage: getNavStartInvalidGeometryStatusMessage(),
+            decodeGeometryErrorStatusMessage: getNavStartDecodeGeometryErrorStatusMessage(),
+        };
+    }
+
+    /**
+     * Services orchestration plan for post-geometry navigation start side effects.
+     * @param {Object} [opts]
+     * @param {Object} [opts.stateInit]
+     * @param {boolean} [opts.isTrackingActive]
+     * @param {boolean} [opts.autoTrafficUpdateEnabled]
+     * @param {boolean} [opts.routeTrafficEnabled]
+     * @param {boolean} [opts.hasMap]
+     * @param {boolean} [opts.hasPosition]
+     * @param {boolean} [opts.zoomAndFollowEnabled]
+     * @param {boolean} [opts.mapFollowingActive]
+     * @param {boolean} [opts.driverPerspectiveActive]
+     * @param {boolean} [opts.wakeLockApiAvailable]
+     * @returns {Object}
+     */
+    function buildNavStartServicesOrchestrationPlan(opts) {
+        opts = opts || {};
+        var stateInit = opts.stateInit || {};
+        return {
+            lifecycle: buildNavStartLifecycleExecutePlan({
+                isTrackingActive: opts.isTrackingActive,
+                autoTrafficUpdateEnabled: opts.autoTrafficUpdateEnabled,
+                routeTrafficEnabled: opts.routeTrafficEnabled,
+            }),
+            driverViewSchedule: buildNavStartDriverViewSchedulePlan({
+                delayMs: stateInit.driverViewDelayMs,
+                hasMap: !!opts.hasMap,
+                hasPosition: !!opts.hasPosition,
+                zoomAndFollowEnabled: !!opts.zoomAndFollowEnabled,
+                mapFollowingActive: !!opts.mapFollowingActive,
+            }),
+            fabExecute: buildNavStartFabDomExecutePlan({
+                driverPerspectiveActive: !!opts.driverPerspectiveActive,
+            }),
+            userFeedback: buildNavStartUserFeedbackPlan(!!stateInit.isQuietResume),
+            volumeHintDelayMs: stateInit.volumeHintDelayMs,
+            wakeLockApiAvailable: !!opts.wakeLockApiAvailable,
+            stateInit: stateInit,
+        };
+    }
+
+    /**
      * DOM execute plan for map FABs shown when navigation starts.
      * @param {Object} [o]
      * @param {boolean} [o.driverPerspectiveActive]
@@ -1312,7 +1421,11 @@
         getNavStartInvalidGeometryStatusMessage: getNavStartInvalidGeometryStatusMessage,
         getNavStartDecodeGeometryErrorStatusMessage: getNavStartDecodeGeometryErrorStatusMessage,
         buildNavStartPreflightPlan: buildNavStartPreflightPlan,
+        buildNavStartEntryOrchestrationPlan: buildNavStartEntryOrchestrationPlan,
         buildNavStartStateInitPlan: buildNavStartStateInitPlan,
+        buildNavStartRuntimeApplyPlan: buildNavStartRuntimeApplyPlan,
+        buildNavStartPolylineInitExecutePlan: buildNavStartPolylineInitExecutePlan,
+        buildNavStartServicesOrchestrationPlan: buildNavStartServicesOrchestrationPlan,
         buildNavStartLifecycleExecutePlan: buildNavStartLifecycleExecutePlan,
         buildNavStartFabDomExecutePlan: buildNavStartFabDomExecutePlan,
         buildNavStartDriverViewSchedulePlan: buildNavStartDriverViewSchedulePlan,

@@ -729,6 +729,15 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(execute.notification.title).toBe('Ready');
     });
 
+    test('buildCalculateRouteIdleUiOrchestrationPlan wraps execute plan', () => {
+        const apply = RS.buildCalculateRouteIdleUiApplyPlan({
+            notification: { title: 'Ready', message: 'Go', type: 'success' },
+        });
+        const orch = RS.buildCalculateRouteIdleUiOrchestrationPlan(apply);
+        expect(orch.execute.shouldExecute).toBe(true);
+        expect(orch.execute.notification.title).toBe('Ready');
+    });
+
     test('buildInNavRerouteOutcomeExecutePlan gates on active route', () => {
         const dispatch = RS.buildInNavRerouteDispatchPlan(
             { name: 'Fastest', duration_minutes: 20 },
@@ -1570,6 +1579,36 @@ describe('route overview and single-route display plans', () => {
         });
         expect(orch.shouldRun).toBe(true);
         expect(orch.routeLayer.id).toBe('nav-route');
+    });
+
+    test('buildBringTrafficEdgesToTopEntryOrchestrationPlan wraps reorder apply', () => {
+        expect(RS.buildBringTrafficEdgesToTopEntryOrchestrationPlan({
+            hasMap: false,
+            trafficLayers: [{ id: 'traffic-edge-0' }],
+        }).shouldReorder).toBe(false);
+        const entry = RS.buildBringTrafficEdgesToTopEntryOrchestrationPlan({
+            hasMap: true,
+            trafficLayers: [{ id: 'traffic-edge-0' }],
+            styleLayers: [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }],
+        });
+        expect(entry.shouldReorder).toBe(true);
+        expect(entry.reorderApply.shouldApply).toBe(true);
+        expect(entry.reorderApply.layerIds).toEqual(['traffic-edge-0']);
+    });
+
+    test('buildBringNavRouteAboveTrafficEdgesEntryOrchestrationPlan wraps reorder apply', () => {
+        expect(RS.buildBringNavRouteAboveTrafficEdgesEntryOrchestrationPlan({
+            hasMap: false,
+        }).shouldReorder).toBe(false);
+        const entry = RS.buildBringNavRouteAboveTrafficEdgesEntryOrchestrationPlan({
+            hasMap: true,
+            routeLayer: { id: 'nav-route' },
+            allRouteLayers: [{ id: 'route-layer-0' }],
+            styleLayers: [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }],
+        });
+        expect(entry.shouldReorder).toBe(true);
+        expect(entry.reorderApply.shouldApply).toBe(true);
+        expect(entry.reorderApply.layerIds).toContain('nav-route');
     });
 
     test('buildMapLayerReorderApplyPlan wraps execute plan with missing-layer logging', () => {

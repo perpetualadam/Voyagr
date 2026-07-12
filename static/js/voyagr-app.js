@@ -2803,8 +2803,7 @@ function addRouteDragMarker(lat, lon, routeIndex) {
  * Add a via-point from route dragging and recalculate
  */
 async function addDraggedViaPoint(lat, lon) {
-    const WP = _waypoints();
-    const apply = WP.buildDraggedViaPointApplyPlan(lat, lon, viaPoints.length);
+    const apply = _waypoints().buildDraggedViaPointOrchestrationPlan(lat, lon, viaPoints.length).apply;
     viaPoints.push(apply.viaPoint);
 
     const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
@@ -4409,7 +4408,9 @@ function collectSettingsFormState() {
  */
 function applyCalculateRouteInNavRerouteFromPlan(plan) {
     if (!plan || !plan.shouldApply) {
-        showStatus(plan.noRouteErrorMessage, 'error');
+        if (plan && plan.noRouteErrorMessage) {
+            showStatus(plan.noRouteErrorMessage, 'error');
+        }
         return;
     }
 
@@ -4458,7 +4459,7 @@ function applyCalculateRouteInNavRerouteOutcome(data, geocodedEnd, end) {
  * @param {Object} data - route API response
  */
 function applyCalculateRouteIdleUiFromPlan(idleUiPlan, data) {
-    const plan = _routeSelection().buildCalculateRouteIdleUiExecutePlan(idleUiPlan);
+    const plan = _routeSelection().buildCalculateRouteIdleUiOrchestrationPlan(idleUiPlan).execute;
     if (!plan.shouldExecute) return;
 
     const delayMs = plan.delayedPreview?.delayMs ?? 300;
@@ -5739,45 +5740,29 @@ function displayRouteTrafficEdges(segments) {
 /**
  * Bring traffic edge layers to top of map rendering order
  */
-function bringTrafficEdgesToTop() {
-    const RS = _routeSelection();
-    const orch = RS.buildBringTrafficEdgesToTopOrchestrationPlan({
-        hasMap: !!map,
-        trafficLayers: routeTrafficLayers,
-        styleLayers: map && map.getStyle && map.getStyle().layers,
-    });
-    if (!orch.shouldRun) return;
+function applyMapLayerReorderEntryFromPlan(entry) {
+    if (!entry || !entry.shouldReorder) return;
+    applyMapLayerReorderFromPlan(entry.reorderApply);
+}
 
-    applyMapLayerReorderFromPlan(
-        RS.buildMapLayerReorderApplyPlan(
-            RS.buildBringTrafficEdgesToTopExecutePlan(orch.trafficLayers, orch.styleLayers)
-        )
+function bringTrafficEdgesToTop() {
+    applyMapLayerReorderEntryFromPlan(
+        _routeSelection().buildBringTrafficEdgesToTopEntryOrchestrationPlan({
+            hasMap: !!map,
+            trafficLayers: routeTrafficLayers,
+            styleLayers: map && map.getStyle && map.getStyle().layers,
+        })
     );
 }
 
-/**
- * Keep the active navigation route (and multi-route preview lines) above route-traffic
- * edge overlays but below road labels. routeLayer is not in allRouteLayers, so reroutes
- * were previously drawn under green/orange traffic polylines.
- */
 function bringNavRouteAboveTrafficEdges() {
-    const RS = _routeSelection();
-    const orch = RS.buildBringNavRouteAboveTrafficEdgesOrchestrationPlan({
-        hasMap: !!map,
-        routeLayer,
-        allRouteLayers,
-        styleLayers: map && map.getStyle && map.getStyle().layers,
-    });
-    if (!orch.shouldRun) return;
-
-    applyMapLayerReorderFromPlan(
-        RS.buildMapLayerReorderApplyPlan(
-            RS.buildBringNavRouteAboveTrafficEdgesExecutePlan(
-                orch.routeLayer,
-                orch.allRouteLayers,
-                orch.styleLayers
-            )
-        )
+    applyMapLayerReorderEntryFromPlan(
+        _routeSelection().buildBringNavRouteAboveTrafficEdgesEntryOrchestrationPlan({
+            hasMap: !!map,
+            routeLayer,
+            allRouteLayers,
+            styleLayers: map && map.getStyle && map.getStyle().layers,
+        })
     );
 }
 
@@ -15494,119 +15479,131 @@ function applyGeocodePairOutcomeFromPlan(apply) {
 }
 
 // ===== TURN-BY-TURN NAVIGATION FUNCTIONS =====
-/**
- * startTurnByTurnNavigation function
- * @function startTurnByTurnNavigation
- * @param {*} routeData - Route payload (`geometry`, `maneuvers`, …)
- * @param {{ resumeStepIndex?: number, fromPersistedResume?: boolean }|null} [navStartOpts] - Optional resume / offline tweaks
- */
-function startTurnByTurnNavigation(routeData, navStartOpts = null) {
-    const MC = _mapControls();
-    const mergedRoute = _routeSelection().mergeNavigationRouteFromSelected(
-        routeData, routeOptions, selectedRouteIndex
-    );
-    const preflight = MC.buildNavStartPreflightPlan(mergedRoute, navStartOpts);
-    if (!preflight.ok) {
-        showStatus(preflight.errorStatusMessage, 'error');
-        return;
-    }
-    routeData = preflight.routeData;
+function applyNavStartRuntimeFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
 
-    window.lastCalculatedRoute = Object.assign({}, window.lastCalculatedRoute || {}, routeData);
-
-    const stateInit = MC.buildNavStartStateInitPlan(routeData, navStartOpts);
-    if (stateInit.resetVoiceOnStart) {
+    if (apply.resetVoiceOnStart) {
         resetVoiceAnnouncementStateForNewRoute();
     }
 
-    routeInProgress = stateInit.routeInProgress;
-    currentStepIndex = stateInit.currentStepIndex;
-    currentRouteSteps = stateInit.maneuvers;
-    lastTurnDetectRouteVertexIndex = 0;
-    routeJoinConfirmedForDeviation = false;
-    resetVehicleMarkerDisplayState();
-    resetNavigationArrivalState();
-    _navTraveledMeters = 0;
-    _navOdometerLastGeo = null;
-    _navStartedAt = Date.now();
-    lastETAAnnouncementTime = Date.now();
-    lastAnnouncedETA = null;
-    lastNavTrafficFetchAt = 0;
-    initialETAMovementRetries = 0;
-    window.navETASnapshot = _eta().createEmptyNavETASnapshot();
+    routeInProgress = apply.routeInProgress;
+    currentStepIndex = apply.currentStepIndex;
+    currentRouteSteps = apply.maneuvers;
+
+    if (apply.resetSessionCounters) {
+        lastTurnDetectRouteVertexIndex = 0;
+        routeJoinConfirmedForDeviation = false;
+        resetVehicleMarkerDisplayState();
+        resetNavigationArrivalState();
+        _navTraveledMeters = 0;
+        _navOdometerLastGeo = null;
+        _navStartedAt = Date.now();
+        lastETAAnnouncementTime = Date.now();
+        lastAnnouncedETA = null;
+        lastNavTrafficFetchAt = 0;
+        initialETAMovementRetries = 0;
+    }
+
+    if (apply.createEmptyEtaSnapshot) {
+        window.navETASnapshot = _eta().createEmptyNavETASnapshot();
+    }
+}
+
+function applyNavStartPolylineFromPlan(execute, stateInit) {
+    if (!execute || !execute.shouldInit) return false;
 
     try {
-        if (stateInit.usePersistedPolyline && stateInit.persistedPolyline) {
-            routePolyline = stateInit.persistedPolyline;
+        if (execute.usePersistedPolyline && execute.persistedPolyline) {
+            routePolyline = execute.persistedPolyline;
             console.log(
-                stateInit.polylineDecodeLogPrefix,
+                execute.polylineDecodeLogPrefix,
                 routePolyline.length,
-                'points (persisted polyline)'
+                execute.persistedPolylineLogSuffix
             );
         } else {
-            routePolyline = decodePolyline(stateInit.geometry, stateInit.navPrecision);
-            console.log(stateInit.polylineDecodeLogPrefix, routePolyline.length, 'points', `(precision ${stateInit.navPrecision})`);
+            routePolyline = decodePolyline(execute.geometry, execute.navPrecision);
+            console.log(
+                execute.polylineDecodeLogPrefix,
+                routePolyline.length,
+                'points',
+                `(precision ${execute.navPrecision})`
+            );
         }
         console.log(stateInit.maneuversLogPrefix, currentRouteSteps.length, 'steps');
 
-        if (stateInit.persistActiveRoute) persistActiveRoute();
-        if (stateInit.precacheTiles) precacheRouteTiles(routePolyline);
+        if (execute.persistActiveRoute) persistActiveRoute();
+        if (execute.precacheTiles) precacheRouteTiles(routePolyline);
 
         if (!routePolyline || routePolyline.length === 0) {
-            console.error(stateInit.emptyPolylineErrorLog);
-            showStatus(MC.getNavStartInvalidGeometryStatusMessage(), 'error');
-            return;
+            console.error(execute.emptyPolylineErrorLog);
+            showStatus(execute.invalidGeometryStatusMessage, 'error');
+            return false;
         }
 
-        if (currentLat != null && currentLon != null) {
+        if (execute.primeVehicleWhenPositionKnown && currentLat != null && currentLon != null) {
             primeVehicleMarkerOnRoute(currentLat, currentLon);
-        } else {
+        } else if (execute.resetSnappedIndexWhenNoPosition) {
             lastSnappedRouteIndex = 0;
         }
+        return true;
     } catch (e) {
-        console.error(stateInit.decodeGeometryErrorLogPrefix, e);
-        showStatus(MC.getNavStartDecodeGeometryErrorStatusMessage(), 'error');
+        console.error(execute.decodeGeometryErrorLogPrefix, e);
+        showStatus(execute.decodeGeometryErrorStatusMessage, 'error');
+        return false;
+    }
+}
+
+function applyNavStartWakeLockFromPlan(MC, stateInit, wakeLockApiAvailable) {
+    const wakeLockExecute = MC.buildNavStartWakeLockExecutePlan(!!wakeLockApiAvailable, stateInit);
+    if (!wakeLockExecute.shouldRequest) {
+        if (wakeLockExecute.unsupportedLog) console.log(wakeLockExecute.unsupportedLog);
         return;
     }
 
-    if ('wakeLock' in navigator) {
-        const wakeLockExecute = MC.buildNavStartWakeLockExecutePlan(true, stateInit);
-        navigator.wakeLock.request(wakeLockExecute.lockType)
-            .then((wakeLock) => {
-                window[wakeLockExecute.windowProperty] = wakeLock;
-                console.log(wakeLockExecute.acquireLog);
-                showStatus(wakeLockExecute.successStatusMessage, wakeLockExecute.successStatusType);
+    navigator.wakeLock.request(wakeLockExecute.lockType)
+        .then((wakeLock) => {
+            window[wakeLockExecute.windowProperty] = wakeLock;
+            console.log(wakeLockExecute.acquireLog);
+            showStatus(wakeLockExecute.successStatusMessage, wakeLockExecute.successStatusType);
 
-                wakeLock.addEventListener('release', () => {
-                    console.log(wakeLockExecute.releaseLog);
-                });
-            })
-            .catch((err) => {
-                console.log(wakeLockExecute.failureLogPrefix, err.name, err.message);
+            wakeLock.addEventListener('release', () => {
+                console.log(wakeLockExecute.releaseLog);
             });
-    } else {
-        const wakeLockExecute = MC.buildNavStartWakeLockExecutePlan(false, stateInit);
-        console.log(wakeLockExecute.unsupportedLog);
-    }
+        })
+        .catch((err) => {
+            console.log(wakeLockExecute.failureLogPrefix, err.name, err.message);
+        });
+}
 
-    const lifecycle = MC.buildNavStartLifecycleExecutePlan({
-        isTrackingActive,
-        autoTrafficUpdateEnabled,
-        routeTrafficEnabled,
+function applyNavStartFabDomFromPlan(fabExecute) {
+    if (!fabExecute || !fabExecute.shouldApply) return;
+
+    mapFollowingActive = fabExecute.mapFollowingActive;
+    (fabExecute.elementDisplays || []).forEach(({ id, display }) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = display;
     });
-
-    if (lifecycle.startGpsIfInactive) {
-        startGPSTracking();
+    const zoomFollowBtn = document.getElementById('zoomFollowToggle');
+    if (zoomFollowBtn && fabExecute.applyZoomFollowButton) {
+        applyZoomFollowButtonUi(zoomFollowBtn, zoomAndFollowEnabled);
     }
+    const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
+    if (driverPerspectiveBtn && fabExecute.applyDriverPerspectiveToggle) {
+        _toggleUI().applyToggleButton(driverPerspectiveBtn, fabExecute.applyDriverPerspectiveToggle);
+    }
+    if (fabExecute.updateRoadReportFab) updateRoadReportFabVisibility();
+    if (fabExecute.updateRecenterButton) updateRecenterButtonVisibility();
+    if (fabExecute.updateSpeedWidget) updateSpeedWidgetVisibility();
+}
 
-    const driverViewSchedule = MC.buildNavStartDriverViewSchedulePlan({
-        delayMs: stateInit.driverViewDelayMs,
-        hasMap: !!map,
-        hasPosition: currentLat != null && currentLon != null,
-        zoomAndFollowEnabled,
-        mapFollowingActive,
-    });
-    if (driverViewSchedule.shouldSchedule) {
+function applyNavStartServicesFromPlan(services) {
+    if (!services) return;
+
+    const lifecycle = services.lifecycle || {};
+    if (lifecycle.startGpsIfInactive) startGPSTracking();
+
+    const driverViewSchedule = services.driverViewSchedule;
+    if (driverViewSchedule && driverViewSchedule.shouldSchedule) {
         setTimeout(() => {
             const when = driverViewSchedule.applyWhenReady;
             if (!when.hasMap || !when.hasPosition) return;
@@ -15624,34 +15621,12 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
         startAutoTrafficUpdates();
         console.log(lifecycle.autoTrafficLogMessage);
     }
-
     if (lifecycle.startRouteTraffic) {
         startRouteTrafficUpdates();
         console.log(lifecycle.routeTrafficLogMessage);
     }
 
-    // ===== SHOW ZOOM AND FOLLOW BUTTON =====
-    const fabExecute = MC.buildNavStartFabDomExecutePlan({
-        driverPerspectiveActive: shouldUsePitchedDrivingCamera(),
-    });
-    if (fabExecute.shouldApply) {
-        mapFollowingActive = fabExecute.mapFollowingActive;
-        (fabExecute.elementDisplays || []).forEach(({ id, display }) => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = display;
-        });
-        const zoomFollowBtn = document.getElementById('zoomFollowToggle');
-        if (zoomFollowBtn && fabExecute.applyZoomFollowButton) {
-            applyZoomFollowButtonUi(zoomFollowBtn, zoomAndFollowEnabled);
-        }
-        const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
-        if (driverPerspectiveBtn && fabExecute.applyDriverPerspectiveToggle) {
-            _toggleUI().applyToggleButton(driverPerspectiveBtn, fabExecute.applyDriverPerspectiveToggle);
-        }
-        if (fabExecute.updateRoadReportFab) updateRoadReportFabVisibility();
-        if (fabExecute.updateRecenterButton) updateRecenterButtonVisibility();
-        if (fabExecute.updateSpeedWidget) updateSpeedWidgetVisibility();
-    }
+    applyNavStartFabDomFromPlan(services.fabExecute);
 
     if (lifecycle.showTurnWidget) {
         const turnExecute = _turnInstructions().buildNavStartTurnWidgetExecutePlan({
@@ -15684,31 +15659,29 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
         }
     }
 
-    if (lifecycle.showJourneySummaryBar) {
-        showJourneySummaryBar();
-    }
-
-    if (lifecycle.updateNavFabVisibility) {
-        updateNavigationFabVisibility();
-    }
+    if (lifecycle.showJourneySummaryBar) showJourneySummaryBar();
+    if (lifecycle.updateNavFabVisibility) updateNavigationFabVisibility();
     try {
         voyagrShowMapIconHint(lifecycle.showMapIconHint);
     } catch (_hintErr) {
         /* ignore */
     }
 
-    const navStartFeedback = MC.buildNavStartUserFeedbackPlan(stateInit.isQuietResume);
-    sendNotification(
-        navStartFeedback.notificationTitle,
-        navStartFeedback.notificationBody,
-        'success'
-    );
-    if (navStartFeedback.speakMessage) {
-        speakMessage(navStartFeedback.speakMessage);
+    const navStartFeedback = services.userFeedback;
+    if (navStartFeedback) {
+        sendNotification(
+            navStartFeedback.notificationTitle,
+            navStartFeedback.notificationBody,
+            'success'
+        );
+        if (navStartFeedback.speakMessage) {
+            speakMessage(navStartFeedback.speakMessage);
+        }
+        showStatus(navStartFeedback.statusMessage, navStartFeedback.statusType);
     }
-    showStatus(navStartFeedback.statusMessage, navStartFeedback.statusType);
+
     const volumeHintSchedule = _deviceEnvironment().buildNavStartVolumeHintSchedulePlan({
-        delayMs: stateInit.volumeHintDelayMs,
+        delayMs: services.volumeHintDelayMs,
     });
     try {
         if (volumeHintSchedule.shouldSchedule) {
@@ -15723,6 +15696,53 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
     } catch (e) {
         console.warn(volumeHintSchedule.scheduleErrorLogPrefix, e);
     }
+}
+
+/**
+ * startTurnByTurnNavigation function
+ * @function startTurnByTurnNavigation
+ * @param {*} routeData - Route payload (`geometry`, `maneuvers`, …)
+ * @param {{ resumeStepIndex?: number, fromPersistedResume?: boolean }|null} [navStartOpts] - Optional resume / offline tweaks
+ */
+function startTurnByTurnNavigation(routeData, navStartOpts = null) {
+    const MC = _mapControls();
+    const mergedRoute = _routeSelection().mergeNavigationRouteFromSelected(
+        routeData, routeOptions, selectedRouteIndex
+    );
+    const entry = MC.buildNavStartEntryOrchestrationPlan(mergedRoute, navStartOpts);
+    if (!entry.shouldStart) {
+        showStatus(entry.errorStatusMessage, 'error');
+        return;
+    }
+    routeData = entry.routeData;
+
+    if (entry.mergeLastCalculatedRoute) {
+        window.lastCalculatedRoute = Object.assign({}, window.lastCalculatedRoute || {}, routeData);
+    }
+
+    const stateInit = entry.stateInit;
+    applyNavStartRuntimeFromPlan(MC.buildNavStartRuntimeApplyPlan(stateInit));
+
+    const polylineOk = applyNavStartPolylineFromPlan(
+        MC.buildNavStartPolylineInitExecutePlan(stateInit),
+        stateInit
+    );
+    if (!polylineOk) return;
+
+    applyNavStartWakeLockFromPlan(MC, stateInit, 'wakeLock' in navigator);
+
+    applyNavStartServicesFromPlan(MC.buildNavStartServicesOrchestrationPlan({
+        stateInit,
+        isTrackingActive,
+        autoTrafficUpdateEnabled,
+        routeTrafficEnabled,
+        hasMap: !!map,
+        hasPosition: currentLat != null && currentLon != null,
+        zoomAndFollowEnabled,
+        mapFollowingActive,
+        driverPerspectiveActive: shouldUsePitchedDrivingCamera(),
+        wakeLockApiAvailable: 'wakeLock' in navigator,
+    }));
 }
 
 /**
