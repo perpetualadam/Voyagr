@@ -665,6 +665,30 @@
     }
 
     /**
+     * Apply plan for removing a via-point and updating markers.
+     * @param {number} index
+     * @param {number} [viaPointsCount]
+     * @returns {Object}
+     */
+    function buildViaPointRemoveApplyPlan(index, viaPointsCount) {
+        var plan = buildViaPointRemovePlan(index, viaPointsCount);
+        if (!plan.shouldRemove) {
+            return { shouldRemove: false };
+        }
+        return {
+            shouldRemove: true,
+            index: plan.index,
+            removeSingleMarker: !plan.refreshMarkers,
+            removeMarkerAtIndex: plan.refreshMarkers ? null : plan.removeMarkerAtIndex,
+            spliceMarkerArray: !plan.refreshMarkers,
+            updateWaypointsList: plan.updateWaypointsList,
+            refreshMarkers: plan.refreshMarkers,
+            statusMessage: plan.statusMessage,
+            statusType: plan.statusType,
+        };
+    }
+
+    /**
      * Rebuild plan for all via-point markers after list mutation.
      * @param {Array<Object>} viaPoints
      * @returns {Object}
@@ -682,6 +706,31 @@
                     iconAnchor: [14, 14],
                     removeOnclick: 'removeViaPoint(' + idx + ')',
                     popupName: point.name,
+                };
+            }),
+        };
+    }
+
+    /**
+     * Apply plan for rebuilding all via-point markers with fresh labels.
+     * @param {Array<Object>} viaPoints
+     * @returns {Object}
+     */
+    function buildViaPointMarkersRefreshApplyPlan(viaPoints) {
+        var plan = buildViaPointMarkersRefreshPlan(viaPoints);
+        return {
+            shouldRefresh: true,
+            removeAllExistingMarkers: true,
+            resetMarkerArray: true,
+            markers: plan.markers.map(function (spec) {
+                return {
+                    lat: spec.lat,
+                    lon: spec.lon,
+                    className: spec.className,
+                    markerHtml: buildViaPointMarkerHtml(spec.label),
+                    iconSize: spec.iconSize,
+                    iconAnchor: spec.iconAnchor,
+                    popupHtml: buildViaPointPopupHtml(spec.popupName, spec.removeOnclick),
                 };
             }),
         };
@@ -766,6 +815,29 @@
     }
 
     /**
+     * Apply plan for removing a stop marker and list entry.
+     * @param {number} index
+     * @param {number} [stopsCount]
+     * @returns {Object}
+     */
+    function buildStopRemoveApplyPlan(index, stopsCount) {
+        var plan = buildStopRemovePlan(index, stopsCount);
+        if (!plan.shouldRemove) {
+            return { shouldRemove: false };
+        }
+        return {
+            shouldRemove: true,
+            index: plan.index,
+            removeSingleMarker: true,
+            removeMarkerAtIndex: plan.removeMarkerAtIndex,
+            spliceMarkerArray: true,
+            updateWaypointsList: plan.updateWaypointsList,
+            statusMessage: plan.statusMessage,
+            statusType: plan.statusType,
+        };
+    }
+
+    /**
      * Clear plan for all via-points and stops.
      * @returns {Object}
      */
@@ -778,6 +850,26 @@
             updateWaypointsList: true,
             statusMessage: 'All waypoints cleared',
             statusType: 'info',
+        };
+    }
+
+    /**
+     * Apply plan for clearing all via-points, stops, and map markers.
+     * @returns {Object}
+     */
+    function buildClearAllWaypointsApplyPlan() {
+        var plan = buildClearAllWaypointsPlan();
+        return {
+            shouldClear: true,
+            clearViaPoints: plan.clearViaPoints,
+            clearStops: plan.clearStops,
+            removeAllMarkers: plan.removeAllMarkers,
+            resetViaMarkerArray: true,
+            resetStopMarkerArray: true,
+            clearMultiDropLayers: plan.clearMultiDropLayers,
+            updateWaypointsList: plan.updateWaypointsList,
+            statusMessage: plan.statusMessage,
+            statusType: plan.statusType,
         };
     }
 
@@ -1251,11 +1343,15 @@
         buildViaPointAddPlan: buildViaPointAddPlan,
         buildViaPointApplyPlan: buildViaPointApplyPlan,
         buildViaPointRemovePlan: buildViaPointRemovePlan,
+        buildViaPointRemoveApplyPlan: buildViaPointRemoveApplyPlan,
         buildViaPointMarkersRefreshPlan: buildViaPointMarkersRefreshPlan,
+        buildViaPointMarkersRefreshApplyPlan: buildViaPointMarkersRefreshApplyPlan,
         buildStopAddPlan: buildStopAddPlan,
         buildStopApplyPlan: buildStopApplyPlan,
         buildStopRemovePlan: buildStopRemovePlan,
+        buildStopRemoveApplyPlan: buildStopRemoveApplyPlan,
         buildClearAllWaypointsPlan: buildClearAllWaypointsPlan,
+        buildClearAllWaypointsApplyPlan: buildClearAllWaypointsApplyPlan,
         buildWaypointMovePlan: buildWaypointMovePlan,
         buildWaypointReorderPlan: buildWaypointReorderPlan,
         buildWaypointAddressAddDispatchPlan: buildWaypointAddressAddDispatchPlan,

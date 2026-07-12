@@ -191,6 +191,15 @@ describe('waypoints module', () => {
         expect(plan.refreshMarkers).toBe(true);
     });
 
+    test('buildViaPointRemoveApplyPlan skips single marker removal when refreshing', () => {
+        const apply = W.buildViaPointRemoveApplyPlan(0, 2);
+        expect(apply.shouldRemove).toBe(true);
+        expect(apply.removeSingleMarker).toBe(false);
+        expect(apply.removeMarkerAtIndex).toBeNull();
+        expect(apply.refreshMarkers).toBe(true);
+        expect(W.buildViaPointRemoveApplyPlan(-1, 2).shouldRemove).toBe(false);
+    });
+
     test('buildViaPointMarkersRefreshPlan renumbers markers after removal', () => {
         const plan = W.buildViaPointMarkersRefreshPlan([
             { lat: 51.5, lon: -0.1, name: 'Via A' },
@@ -199,6 +208,16 @@ describe('waypoints module', () => {
         expect(plan.markers).toHaveLength(2);
         expect(plan.markers[1].label).toBe(2);
         expect(plan.markers[1].removeOnclick).toBe('removeViaPoint(1)');
+    });
+
+    test('buildViaPointMarkersRefreshApplyPlan prebuilds marker html and popup', () => {
+        const apply = W.buildViaPointMarkersRefreshApplyPlan([
+            { lat: 51.5, lon: -0.1, name: 'Via A' },
+        ]);
+        expect(apply.shouldRefresh).toBe(true);
+        expect(apply.removeAllExistingMarkers).toBe(true);
+        expect(apply.markers[0].markerHtml).toContain('1');
+        expect(apply.markers[0].popupHtml).toContain('Via A');
     });
 
     test('buildStopAddPlan and buildStopRemovePlan mirror via-point patterns', () => {
@@ -218,11 +237,27 @@ describe('waypoints module', () => {
         expect(apply.markerMount.popupHtml).toContain('20 min');
     });
 
+    test('buildStopRemoveApplyPlan removes marker and splices marker array', () => {
+        const apply = W.buildStopRemoveApplyPlan(1, 3);
+        expect(apply.shouldRemove).toBe(true);
+        expect(apply.removeSingleMarker).toBe(true);
+        expect(apply.spliceMarkerArray).toBe(true);
+        expect(W.buildStopRemoveApplyPlan(5, 2).shouldRemove).toBe(false);
+    });
+
     test('buildClearAllWaypointsPlan clears markers and multidrop layers', () => {
         const plan = W.buildClearAllWaypointsPlan();
         expect(plan.removeAllMarkers).toBe(true);
         expect(plan.clearMultiDropLayers).toBe(true);
         expect(plan.statusMessage).toContain('cleared');
+    });
+
+    test('buildClearAllWaypointsApplyPlan resets marker arrays', () => {
+        const apply = W.buildClearAllWaypointsApplyPlan();
+        expect(apply.shouldClear).toBe(true);
+        expect(apply.resetViaMarkerArray).toBe(true);
+        expect(apply.resetStopMarkerArray).toBe(true);
+        expect(apply.clearMultiDropLayers).toBe(true);
     });
 
     test('buildWaypointMovePlan and buildWaypointReorderPlan refresh via markers', () => {

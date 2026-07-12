@@ -3087,58 +3087,66 @@ function addStop(lat, lon, name = null, duration = 15) {
  * Remove a via-point
  */
 function removeViaPoint(index) {
-    const WP = _waypoints();
-    const plan = WP.buildViaPointRemovePlan(index, viaPoints.length);
-    if (!plan.shouldRemove) return;
+    const apply = _waypoints().buildViaPointRemoveApplyPlan(index, viaPoints.length);
+    if (!apply.shouldRemove) return;
 
-    viaPoints.splice(plan.index, 1);
-    if (viaPointMarkers[plan.removeMarkerAtIndex] && typeof viaPointMarkers[plan.removeMarkerAtIndex].remove === 'function') {
-        viaPointMarkers[plan.removeMarkerAtIndex].remove();
+    viaPoints.splice(apply.index, 1);
+    if (apply.removeSingleMarker && apply.removeMarkerAtIndex != null) {
+        const marker = viaPointMarkers[apply.removeMarkerAtIndex];
+        if (marker && typeof marker.remove === 'function') {
+            marker.remove();
+        }
+        viaPointMarkers.splice(apply.removeMarkerAtIndex, 1);
     }
-    viaPointMarkers.splice(plan.removeMarkerAtIndex, 1);
-    if (plan.updateWaypointsList) updateWaypointsList();
-    if (plan.refreshMarkers) refreshViaPointMarkers();
-    showStatus(plan.statusMessage, plan.statusType);
+    if (apply.updateWaypointsList) updateWaypointsList();
+    if (apply.refreshMarkers) refreshViaPointMarkers();
+    showStatus(apply.statusMessage, apply.statusType);
 }
 
 /**
  * Remove a stop
  */
 function removeStop(index) {
-    const WP = _waypoints();
-    const plan = WP.buildStopRemovePlan(index, stops.length);
-    if (!plan.shouldRemove) return;
+    const apply = _waypoints().buildStopRemoveApplyPlan(index, stops.length);
+    if (!apply.shouldRemove) return;
 
-    stops.splice(plan.index, 1);
-    if (stopMarkers[plan.removeMarkerAtIndex] && typeof stopMarkers[plan.removeMarkerAtIndex].remove === 'function') {
-        stopMarkers[plan.removeMarkerAtIndex].remove();
+    stops.splice(apply.index, 1);
+    if (apply.removeSingleMarker && apply.removeMarkerAtIndex != null) {
+        const marker = stopMarkers[apply.removeMarkerAtIndex];
+        if (marker && typeof marker.remove === 'function') {
+            marker.remove();
+        }
+        if (apply.spliceMarkerArray) {
+            stopMarkers.splice(apply.removeMarkerAtIndex, 1);
+        }
     }
-    stopMarkers.splice(plan.removeMarkerAtIndex, 1);
-    if (plan.updateWaypointsList) updateWaypointsList();
-    showStatus(plan.statusMessage, plan.statusType);
+    if (apply.updateWaypointsList) updateWaypointsList();
+    showStatus(apply.statusMessage, apply.statusType);
 }
 
 /**
  * Refresh via-point markers (update numbers after removal)
  */
 function refreshViaPointMarkers() {
-    const WP = _waypoints();
-    const plan = WP.buildViaPointMarkersRefreshPlan(viaPoints);
+    const apply = _waypoints().buildViaPointMarkersRefreshApplyPlan(viaPoints);
+    if (!apply.shouldRefresh) return;
 
-    viaPointMarkers.forEach((marker) => {
-        if (marker && typeof marker.remove === 'function') {
-            marker.remove();
-        }
-    });
-    viaPointMarkers = [];
+    if (apply.removeAllExistingMarkers) {
+        viaPointMarkers.forEach((marker) => {
+            if (marker && typeof marker.remove === 'function') {
+                marker.remove();
+            }
+        });
+    }
+    if (apply.resetMarkerArray) viaPointMarkers = [];
 
-    plan.markers.forEach((spec) => {
+    apply.markers.forEach((spec) => {
         const marker = MapLibreHelpers.createMarker(spec.lat, spec.lon, {
             className: spec.className,
-            html: WP.buildViaPointMarkerHtml(spec.label),
+            html: spec.markerHtml,
             iconSize: spec.iconSize,
             iconAnchor: spec.iconAnchor,
-            popup: WP.buildViaPointPopupHtml(spec.popupName, spec.removeOnclick)
+            popup: spec.popupHtml,
         }).addTo(map);
 
         viaPointMarkers.push(marker);
@@ -3149,19 +3157,20 @@ function refreshViaPointMarkers() {
  * Clear all via-points and stops
  */
 function clearAllWaypoints() {
-    const WP = _waypoints();
-    const plan = WP.buildClearAllWaypointsPlan();
-    viaPoints = [];
-    stops = [];
-    if (plan.removeAllMarkers) {
+    const apply = _waypoints().buildClearAllWaypointsApplyPlan();
+    if (!apply.shouldClear) return;
+
+    if (apply.clearViaPoints) viaPoints = [];
+    if (apply.clearStops) stops = [];
+    if (apply.removeAllMarkers) {
         viaPointMarkers.forEach(m => { if (m && typeof m.remove === 'function') m.remove(); });
         stopMarkers.forEach(m => { if (m && typeof m.remove === 'function') m.remove(); });
     }
-    viaPointMarkers = [];
-    stopMarkers = [];
-    if (plan.clearMultiDropLayers) clearMultiDropLayers();
-    if (plan.updateWaypointsList) updateWaypointsList();
-    showStatus(plan.statusMessage, plan.statusType);
+    if (apply.resetViaMarkerArray) viaPointMarkers = [];
+    if (apply.resetStopMarkerArray) stopMarkers = [];
+    if (apply.clearMultiDropLayers) clearMultiDropLayers();
+    if (apply.updateWaypointsList) updateWaypointsList();
+    showStatus(apply.statusMessage, apply.statusType);
 }
 
 /**
