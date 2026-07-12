@@ -13,7 +13,7 @@ if (typeof window !== 'undefined' && window.ethereum) {
 
 // Note: All global variables are declared in voyagr-core.js
 // This file contains all the application logic and functions
-// Variables: map, routeLayer, startMarker, endMarker, mapPickerMode
+// Variables: map, routeLayer, startMarker, endMarker
 // Unit variables: distanceUnit, currencyUnit, speedUnit, temperatureUnit
 // Currency symbols: currencySymbols
 //
@@ -667,14 +667,14 @@ function getCalculateRouteOrchestrationRuntime() {
         setStartMarker: (val) => { startMarker = val; },
         getEndMarker: () => endMarker,
         setEndMarker: (val) => { endMarker = val; },
-        getMapPickerMode: () => mapPickerMode,
-        setMapPickerMode: (val) => { mapPickerMode = val; },
+        getMapPickerMode: () => VoyagrGeocodingOrchestration.getMapPickerMode(),
+        setMapPickerMode: (val) => VoyagrGeocodingOrchestration.setMapPickerMode(val),
         getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
         setRouteOptions: (val) => VoyagrRouteComparisonOrchestration.setRouteOptions(val),
         getRouteLayer: () => routeLayer,
         setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
         getRouteInProgress: () => routeInProgress,
-        getIsGeocoding: () => isGeocoding,
+        getIsGeocoding: () => VoyagrGeocodingOrchestration.getIsGeocoding(),
         getCurrentRoutingMode: () => currentRoutingMode,
         getCurrentVehicleType: () => currentVehicleType,
         getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
@@ -2348,8 +2348,6 @@ const ZOOM_LEVELS = {
 const TURN_ZOOM_THRESHOLD = 500;    // Zoom in when within 500m of turn
 const ZOOM_ANIMATION_DURATION = 0.5; // 500ms smooth animation
 
-let isGeocoding = false;
-
 // ===== MAP EXPLORE ORCHESTRATION =====
 // Orchestration lives in static/js/app/map-explore-orchestration.js (bound at file end).
 
@@ -2566,15 +2564,15 @@ function getGeocodingOrchestrationRuntime() {
         getAutoGpsEnabled: () => VoyagrAutoGpsOrchestration.getAutoGpsEnabled(),
         g: (key) => {
             switch (key) {
-            case 'mapPickerMode': return mapPickerMode;
-            case 'isGeocoding': return isGeocoding;
+            case 'mapPickerMode': return VoyagrGeocodingOrchestration.getMapPickerMode();
+            case 'isGeocoding': return VoyagrGeocodingOrchestration.getIsGeocoding();
             default: return undefined;
             }
         },
         s: (key, val) => {
             switch (key) {
-            case 'mapPickerMode': mapPickerMode = val; break;
-            case 'isGeocoding': isGeocoding = val; break;
+            case 'mapPickerMode': VoyagrGeocodingOrchestration.setMapPickerMode(val); break;
+            case 'isGeocoding': VoyagrGeocodingOrchestration.setIsGeocoding(val); break;
             default: break;
             }
         },

@@ -11,7 +11,7 @@ let _mapRenderHeartbeatId = null;
 let routeLayer = null;
 let startMarker = null;
 let endMarker = null;
-let mapPickerMode = null; // 'start' or 'end' when picking location from map
+// mapPickerMode lives in static/js/app/geocoding-orchestration.js (bound at file end).
 
 // ===== ZOOM AND FOLLOW VARIABLES =====
 let zoomAndFollowEnabled = (typeof VoyagrMapControls !== 'undefined'

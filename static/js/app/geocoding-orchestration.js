@@ -11,6 +11,13 @@
     var NOMINATIM_API = '/api/geocode';
     var autocompleteTimeout = null;
     var autocompleteCache = {};
+    var mapPickerMode = null;
+    var isGeocoding = false;
+
+    function getMapPickerMode() { return mapPickerMode; }
+    function setMapPickerMode(val) { mapPickerMode = val; }
+    function getIsGeocoding() { return isGeocoding; }
+    function setIsGeocoding(val) { isGeocoding = !!val; }
 
     function rt() {
         if (!runtime) {
@@ -358,7 +365,7 @@ async function resolveGeocodeEndpoint(GL, endpointPlan, which, fallbackAddress) 
 async function geocodeLocations(startAddress, endAddress) {
     const gl = GL();
     const orch = gl.buildGeocodeLocationsOrchestrationPlan();
-    if (orch.setGeocodingFlag) rt().s('isGeocoding', true);
+    if (orch.setGeocodingFlag) setIsGeocoding(true);
 
     const startInput = document.getElementById(orch.startInputId);
     const endInput = document.getElementById(orch.endInputId);
@@ -410,14 +417,14 @@ async function geocodeLocations(startAddress, endAddress) {
 function applyGeocodeEndpointFailureFromPlan(apply) {
     if (!apply || !apply.shouldApply) return null;
     rt().call.showStatus(apply.statusMessage, apply.statusType);
-    if (apply.clearGeocodingFlag) rt().s('isGeocoding', false);
+    if (apply.clearGeocodingFlag) setIsGeocoding(false);
     return apply.returnValue;
 }
 
 function applyGeocodePairOutcomeFromPlan(apply) {
     if (!apply || !apply.shouldApply) return null;
     rt().call.showStatus(apply.statusMessage, apply.statusType);
-    if (apply.clearGeocodingFlag) rt().s('isGeocoding', false);
+    if (apply.clearGeocodingFlag) setIsGeocoding(false);
     return apply.returnValue;
 }
 
@@ -425,7 +432,7 @@ function applyGeocodePairOutcomeFromPlan(apply) {
         const execute = GL().buildPickLocationFromMapExecutePlan(field);
         if (!execute.shouldPick) return;
 
-        rt().s('mapPickerMode', execute.mapPickerMode);
+        setMapPickerMode(execute.mapPickerMode);
         if (execute.collapseBottomSheet) rt().call.collapseBottomSheet();
         rt().call.showStatus(execute.statusMessage, execute.statusType);
     }
@@ -508,6 +515,10 @@ function showSearchHistory() {
         renderEndDestinationSuggestions: renderEndDestinationSuggestions,
         showSearchHistory: showSearchHistory,
         getAutocompleteDropdown: getAutocompleteDropdown,
+        getMapPickerMode: getMapPickerMode,
+        setMapPickerMode: setMapPickerMode,
+        getIsGeocoding: getIsGeocoding,
+        setIsGeocoding: setIsGeocoding,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
