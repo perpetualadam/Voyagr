@@ -15,6 +15,52 @@
     }
 
     function U() { return rt().units(); }
+    function SG() { return rt().speedGps(); }
+
+    function convertDistance(km) {
+        return U().convertDistance(km, rt().getDistanceUnit());
+    }
+
+    function getDistanceUnit() {
+        return U().getDistanceUnit(rt().getDistanceUnit());
+    }
+
+    function convertSpeed(kmh) {
+        const n = Number(kmh);
+        if (!Number.isFinite(n)) return '0.0';
+        const mph = SG().kmhToMph(n);
+        const display = SG().mphToDisplaySpeed(mph, rt().getSpeedUnit());
+        return display.toFixed(1);
+    }
+
+    function getSpeedUnit() {
+        return SG().speedUnitLabel(rt().getSpeedUnit());
+    }
+
+    function convertTemperature(celsius) {
+        return U().convertTemperature(celsius, rt().getTemperatureUnit());
+    }
+
+    function getTemperatureUnit() {
+        return U().getTemperatureUnit(rt().getTemperatureUnit());
+    }
+
+    function getCurrencySymbol() {
+        return U().getCurrencySymbol(rt().getCurrencyUnit());
+    }
+
+    function adjustCostForUnits(cost, costType) {
+        if (costType === undefined) costType = 'fuel';
+        return U().adjustCostForUnits(cost);
+    }
+
+    function getFuelEfficiencyInUnits(liters_per_100km) {
+        return U().getFuelEfficiencyInUnits(liters_per_100km, rt().getDistanceUnit());
+    }
+
+    function getFuelEfficiencyLabel() {
+        return U().getFuelEfficiencyLabel(rt().getDistanceUnit());
+    }
 
     function saveUnitSettingsToBackend() {
         const request = U().buildSaveUnitSettingsBackendRequestPlan({
@@ -94,6 +140,16 @@
 
     var api = {
         bind: bind,
+        convertDistance: convertDistance,
+        getDistanceUnit: getDistanceUnit,
+        convertSpeed: convertSpeed,
+        getSpeedUnit: getSpeedUnit,
+        convertTemperature: convertTemperature,
+        getTemperatureUnit: getTemperatureUnit,
+        getCurrencySymbol: getCurrencySymbol,
+        adjustCostForUnits: adjustCostForUnits,
+        getFuelEfficiencyInUnits: getFuelEfficiencyInUnits,
+        getFuelEfficiencyLabel: getFuelEfficiencyLabel,
         saveUnitSettingsToBackend: saveUnitSettingsToBackend,
         updateDistanceUnit: updateDistanceUnit,
         updateCurrencyUnit: updateCurrencyUnit,

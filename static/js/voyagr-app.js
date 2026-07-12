@@ -97,109 +97,23 @@ window.debugScrollIssue = function() {
     return 'Debug info logged above';
 };
 
-// ===== UNIT CONVERSION FUNCTIONS =====
-/**
- * convertDistance function
- * @function convertDistance
- * @param {*} km - Parameter description
- * @returns {*} Return value description
- */
-// convertDistance / getDistanceUnit / convertTemperature / getTemperatureUnit /
-// getFuelEfficiencyInUnits / getFuelEfficiencyLabel moved to modules/navigation/units.js
-// (VoyagrUnits). App wrappers pass the global setting as an explicit arg.
-function convertDistance(km) {
-    return _units().convertDistance(km, distanceUnit);
-}
+// ===== UNIT CONVERSION ORCHESTRATION =====
+// Wrappers delegate to static/js/app/units-preferences-orchestration.js (bound at file end).
 
-/**
- * getDistanceUnit function
- * @function getDistanceUnit
- * @returns {*} Return value description
- */
-function getDistanceUnit() {
-    return _units().getDistanceUnit(distanceUnit);
-}
-
-/**
- * convertSpeed function
- * @function convertSpeed
- * @param {*} kmh - Parameter description
- * @returns {*} Return value description
- */
-function convertSpeed(kmh) {
-    const SG = _speedGps();
-    const n = Number(kmh);
-    if (!Number.isFinite(n)) return '0.0';
-    const mph = SG.kmhToMph(n);
-    const display = SG.mphToDisplaySpeed(mph, speedUnit);
-    return display.toFixed(1);
-}
-
-/**
- * getSpeedUnit function
- * @function getSpeedUnit
- * @returns {*} Return value description
- */
-function getSpeedUnit() {
-    return _speedGps().speedUnitLabel(speedUnit);
-}
-
-/**
- * convertTemperature function
- * @function convertTemperature
- * @param {*} celsius - Parameter description
- * @returns {*} Return value description
- */
-function convertTemperature(celsius) {
-    return _units().convertTemperature(celsius, temperatureUnit);
-}
-
-/**
- * getTemperatureUnit function
- * @function getTemperatureUnit
- * @returns {*} Return value description
- */
-function getTemperatureUnit() {
-    return _units().getTemperatureUnit(temperatureUnit);
-}
-
-/**
- * getCurrencySymbol function
- * @function getCurrencySymbol
- * @returns {*} Return value description
- */
-// getCurrencySymbol / adjustCostForUnits moved to modules/navigation/units.js (VoyagrUnits).
-function getCurrencySymbol() {
-    return _units().getCurrencySymbol(currencyUnit);
-}
-/**
- * adjustCostForUnits function
- * @function adjustCostForUnits
- * @param {*} cost - Parameter description
- * @param {*} costType - Parameter description
- * @returns {*} Return value description
- */
+function convertDistance(km) { return VoyagrUnitsPreferencesOrchestration.convertDistance(km); }
+function getDistanceUnit() { return VoyagrUnitsPreferencesOrchestration.getDistanceUnit(); }
+function convertSpeed(kmh) { return VoyagrUnitsPreferencesOrchestration.convertSpeed(kmh); }
+function getSpeedUnit() { return VoyagrUnitsPreferencesOrchestration.getSpeedUnit(); }
+function convertTemperature(celsius) { return VoyagrUnitsPreferencesOrchestration.convertTemperature(celsius); }
+function getTemperatureUnit() { return VoyagrUnitsPreferencesOrchestration.getTemperatureUnit(); }
+function getCurrencySymbol() { return VoyagrUnitsPreferencesOrchestration.getCurrencySymbol(); }
 function adjustCostForUnits(cost, costType = 'fuel') {
-    return _units().adjustCostForUnits(cost);
+    return VoyagrUnitsPreferencesOrchestration.adjustCostForUnits(cost, costType);
 }
-/**
- * getFuelEfficiencyInUnits function
- * @function getFuelEfficiencyInUnits
- * @param {*} liters_per_100km - Parameter description
- * @returns {*} Return value description
- */
 function getFuelEfficiencyInUnits(liters_per_100km) {
-    return _units().getFuelEfficiencyInUnits(liters_per_100km, distanceUnit);
+    return VoyagrUnitsPreferencesOrchestration.getFuelEfficiencyInUnits(liters_per_100km);
 }
-
-/**
- * getFuelEfficiencyLabel function
- * @function getFuelEfficiencyLabel
- * @returns {*} Return value description
- */
-function getFuelEfficiencyLabel() {
-    return _units().getFuelEfficiencyLabel(distanceUnit);
-}
+function getFuelEfficiencyLabel() { return VoyagrUnitsPreferencesOrchestration.getFuelEfficiencyLabel(); }
 
 // ===== NAVIGATION VARIABLES =====
 let isTrackingActive = false;
@@ -246,150 +160,41 @@ function toggleDarkMode() { VoyagrDarkModeOrchestration.toggleDarkMode(); }
 function setTheme(theme) { VoyagrDarkModeOrchestration.setTheme(theme); }
 function updateThemeButtons() { VoyagrDarkModeOrchestration.updateThemeButtons(); }
 
-// Track previous tab for back navigation
-let previousTab = 'navigation';
+// Track previous tab for back navigation (state lives in tab-navigation-orchestration.js)
 
-// Tab switching function
-/**
- * switchTab function
- * @function switchTab
- * @param {*} tab - Parameter description
- * @returns {*} Return value description
- */
-function switchTab(tab) {
-    const navigationTab = document.getElementById('navigationTab');
-    const settingsTab = document.getElementById('settingsTab');
-    const tripHistoryTab = document.getElementById('tripHistoryTab');
-    const routeComparisonTab = document.getElementById('routeComparisonTab');
-    const routeSharingTab = document.getElementById('routeSharingTab');
-    const routeAnalyticsTab = document.getElementById('routeAnalyticsTab');
-    const savedRoutesTab = document.getElementById('savedRoutesTab');
-    const routePreviewTab = document.getElementById('routePreviewTab');
-    const dashcamTab = document.getElementById('dashcamTab');
-    const sheetTitle = document.getElementById('sheetTitle');
-    const bottomSheetContent = document.querySelector('.bottom-sheet-content');
+// ===== TAB NAVIGATION ORCHESTRATION =====
+// Orchestration lives in static/js/app/tab-navigation-orchestration.js (bound at file end).
 
-    console.log('[SwitchTab] Switching to tab:', tab);
-
-    // Store current visible tab as previous tab (before switching)
-    const currentTab = getCurrentVisibleTab();
-    if (currentTab && currentTab !== tab) {
-        previousTab = currentTab;
-        console.log('[SwitchTab] Previous tab stored:', previousTab);
-    }
-
-    // Scroll to top when switching tabs to prevent scroll position issues
-    if (bottomSheetContent) {
-        bottomSheetContent.scrollTop = 0;
-    }
-
-    // Hide all tabs
-    if (navigationTab) navigationTab.style.display = 'none';
-    if (settingsTab) settingsTab.style.display = 'none';
-    if (tripHistoryTab) tripHistoryTab.style.display = 'none';
-    if (routeComparisonTab) routeComparisonTab.style.display = 'none';
-    if (routeSharingTab) routeSharingTab.style.display = 'none';
-    if (routeAnalyticsTab) routeAnalyticsTab.style.display = 'none';
-    if (savedRoutesTab) savedRoutesTab.style.display = 'none';
-    if (routePreviewTab) routePreviewTab.style.display = 'none';
-    if (dashcamTab) dashcamTab.style.display = 'none';
-
-    if (tab === 'settings') {
-        settingsTab.style.display = 'block';
-        sheetTitle.textContent = '⚙️ Settings';
-        loadUnitPreferences();
-        loadRoutePreferences();
-        loadMultiDropPreferences();
-        loadVoicePreferences();
-        loadPorcupineWakeUi();
-        loadCameraAlertPreferences();
-        loadAvoidancePreferences();
-        loadHazardCameraTogglesFromApi();
-        loadPromoEntitlementStatus();
-    } else if (tab === 'tripHistory') {
-        tripHistoryTab.style.display = 'block';
-        sheetTitle.textContent = '📋 Trip History';
-        loadTripHistory();
-    } else if (tab === 'routePreview') {
-        console.log('[SwitchTab] Switching to routePreview tab, element:', routePreviewTab);
-        if (routePreviewTab) {
-            routePreviewTab.style.display = 'block';
-            sheetTitle.textContent = '📍 Route Preview';
-            console.log('[SwitchTab] routePreviewTab displayed successfully');
-        } else {
-            console.error('[SwitchTab] routePreviewTab element not found!');
-        }
-    } else if (tab === 'routeComparison') {
-        routeComparisonTab.style.display = 'block';
-        sheetTitle.textContent = '🛣️ Route Options';
-        displayRouteComparison();
-    } else if (tab === 'routeSharing') {
-        routeSharingTab.style.display = 'block';
-        sheetTitle.textContent = '🔗 Share Route';
-        prepareRouteSharing();
-    } else if (tab === 'routeAnalytics') {
-        routeAnalyticsTab.style.display = 'block';
-        sheetTitle.textContent = '📊 Analytics';
-        loadRouteAnalytics();
-    } else if (tab === 'savedRoutes') {
-        savedRoutesTab.style.display = 'block';
-        sheetTitle.textContent = '⭐ Saved Routes';
-        loadSavedRoutes();
-    } else if (tab === 'dashcam') {
-        if (dashcamTab) dashcamTab.style.display = 'block';
-        sheetTitle.textContent = '📹 Dashcam';
-    } else if (tab === 'navigation') {
-        if (navigationTab) navigationTab.style.display = 'block';
-        sheetTitle.textContent = '🗺️ Navigation';
-    } else {
-        // Default to navigation tab
-        if (navigationTab) navigationTab.style.display = 'block';
-        sheetTitle.textContent = '🗺️ Navigation';
-    }
+function getTabNavigationOrchestrationRuntime() {
+    return {
+        units: () => _units(),
+        getDistanceUnit: () => distanceUnit,
+        getCurrencyUnit: () => currencyUnit,
+        getSpeedUnit: () => speedUnit,
+        getTemperatureUnit: () => temperatureUnit,
+        call: {
+            applyDomSelectsFromPlan,
+            loadRoutePreferences,
+            loadMultiDropPreferences,
+            loadVoicePreferences,
+            loadPorcupineWakeUi,
+            loadCameraAlertPreferences,
+            loadAvoidancePreferences,
+            loadHazardCameraTogglesFromApi,
+            loadPromoEntitlementStatus,
+            loadTripHistory,
+            displayRouteComparison,
+            prepareRouteSharing,
+            loadRouteAnalytics,
+            loadSavedRoutes,
+        },
+    };
 }
 
-/**
- * Get the currently visible tab
- * @returns {string} The ID of the currently visible tab
- */
-function getCurrentVisibleTab() {
-    const tabs = ['navigationTab', 'settingsTab', 'tripHistoryTab', 'routeComparisonTab',
-                  'routeSharingTab', 'routeAnalyticsTab', 'savedRoutesTab', 'routePreviewTab', 'dashcamTab'];
-
-    for (const tabId of tabs) {
-        const tab = document.getElementById(tabId);
-        if (tab && tab.style.display !== 'none') {
-            // Return the tab name without 'Tab' suffix
-            return tabId.replace('Tab', '');
-        }
-    }
-    return 'navigation'; // Default
-}
-
-/**
- * Go back to the previous tab
- */
-function goBackToPreviousTab() {
-    console.log('[GoBack] Returning to previous tab:', previousTab);
-    switchTab(previousTab);
-}
-
-// Load unit preferences from localStorage
-/**
- * loadUnitPreferences function
- * @function loadUnitPreferences
- * @returns {*} Return value description
- */
-function loadUnitPreferences() {
-    const execute = _units().buildLoadUnitPreferencesDomApplyPlan({
-        distanceUnit,
-        currencyUnit,
-        speedUnit,
-        temperatureUnit,
-    });
-    if (!execute.shouldApply) return;
-    applyDomSelectsFromPlan(execute.selects);
-}
+function switchTab(tab) { VoyagrTabNavigationOrchestration.switchTab(tab); }
+function getCurrentVisibleTab() { return VoyagrTabNavigationOrchestration.getCurrentVisibleTab(); }
+function goBackToPreviousTab() { VoyagrTabNavigationOrchestration.goBackToPreviousTab(); }
+function loadUnitPreferences() { VoyagrTabNavigationOrchestration.loadUnitPreferences(); }
 
 // ===== UNITS PREFERENCES ORCHESTRATION =====
 // Orchestration lives in static/js/app/units-preferences-orchestration.js (bound at file end).
@@ -397,6 +202,7 @@ function loadUnitPreferences() {
 function getUnitsPreferencesOrchestrationRuntime() {
     return {
         units: () => _units(),
+        speedGps: () => _speedGps(),
         getDistanceUnit: () => distanceUnit,
         setDistanceUnit: (val) => { distanceUnit = val; },
         getCurrencyUnit: () => currencyUnit,
@@ -5227,139 +5033,39 @@ let routePolyline = null;
 // Preference when browsing. During turn-by-turn with zoom-and-follow, 60° is always used regardless.
 let driverPerspectiveEnabled = localStorage.getItem('driverPerspectiveEnabled') === 'true';  // Default false (opt-in)
 
-function isActiveNavigationFollow() {
-    return !!(routeInProgress && zoomAndFollowEnabled && mapFollowingActive);
-}
+// ===== DRIVER CAMERA ORCHESTRATION =====
+// Orchestration lives in static/js/app/driver-camera-orchestration.js (bound at file end).
 
-/**
- * True when the user has explicitly chosen the flat 2D map view (Settings → 3D Map View off).
- * Read from localStorage so it is safe to call before the in-memory flag initialises and so it
- * stays correct across the whole camera pipeline. Default (no saved value) is treated as 3D.
- */
-function userPrefersFlat2D() {
-    return localStorage.getItem('mapView3DEnabled') === 'false';
-}
-
-/**
- * Single source of truth for the follow/tilt decision, delegated to the pure, unit-tested
- * camera-pitch helper (static/js/modules/navigation/camera-pitch.js). The inline fallback only
- * runs if that helper script failed to load, and mirrors the same logic.
- * @returns {{ followHeading: boolean, tilt: boolean }}
- */
-function decideDrivingCameraState() {
-    const state = {
-        activeNavFollow: isActiveNavigationFollow(),
-        driverPerspectiveEnabled: driverPerspectiveEnabled,
-        prefersFlat2D: userPrefersFlat2D(),
+function getDriverCameraOrchestrationRuntime() {
+    return {
+        cameraPitch: () => _cameraPitch(),
+        mapView3D: () => _mapView3D(),
+        toggleUI: () => _toggleUI(),
+        getMap: () => map,
+        getRouteInProgress: () => routeInProgress,
+        getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
+        getMapFollowingActive: () => mapFollowingActive,
+        getDriverPerspectiveEnabled: () => driverPerspectiveEnabled,
+        setDriverPerspectiveEnabled: (val) => { driverPerspectiveEnabled = val; },
+        getCurrentLat: () => currentLat,
+        getCurrentLon: () => currentLon,
+        getCurrentUserMarker: () => currentUserMarker,
+        call: {
+            showStatus,
+            saveAllSettings,
+            recomputeMapView3DFromGranular: _recomputeMapView3DFromGranular,
+        },
     };
-    const CP = _cameraPitch();
-    if (CP && typeof CP.decideDrivingCamera === 'function') {
-        return CP.decideDrivingCamera(state);
-    }
-    if (typeof decideDrivingCamera === 'function') {
-        return decideDrivingCamera(state);
-    }
-    const followHeading = state.activeNavFollow || state.driverPerspectiveEnabled;
-    return { followHeading: followHeading, tilt: followHeading && !state.prefersFlat2D };
 }
 
-/** Heading-up follow camera: active nav follow, or user enabled driver view while browsing */
-function shouldUsePitchedDrivingCamera() {
-    return decideDrivingCameraState().followHeading;
-}
-
-/**
- * Whether the follow camera should be tilted (3D pitch). This is the heading-up follow decision
- * minus an explicit 2D preference — so 2D navigation still follows/rotates with heading but stays
- * flat (pitch 0) instead of tilted (pitch 60).
- */
-function shouldTiltDrivingCamera() {
-    return decideDrivingCameraState().tilt;
-}
-
-/** One-shot camera after nav start or when forcing driver framing */
-function applyLiveNavigationCamera() {
-    if (!map || currentLat == null || currentLon == null) return;
-    const heading = (typeof currentUserMarker?.heading === 'number')
-        ? currentUserMarker.heading
-        : map.getBearing();
-    map.easeTo({
-        duration: 1000,
-        pitch: shouldTiltDrivingCamera() ? 60 : 0,
-        bearing: heading,
-        center: [currentLon, currentLat],
-        padding: _cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth),
-    });
-    console.log(`[Driver View] ${shouldTiltDrivingCamera() ? '60°' : 'flat 2D'} navigation camera (follow padding)`);
-}
-
-/**
- * Toggle driver's perspective preference (when not navigating, or after this trip ends).
- * During active navigation with zoom-and-follow, the map stays at 60° either way.
- */
-function toggleDriverPerspective() {
-    const MV = _mapView3D();
-    const TU = _toggleUI();
-    const collected = MV.buildToggleDriverPerspectiveCollectPlan({
-        currentlyEnabled: driverPerspectiveEnabled,
-    });
-    const execute = MV.buildToggleDriverPerspectiveExecutePlan({
-        enabled: collected.enabled,
-        activeNavFollow: isActiveNavigationFollow(),
-    });
-    if (!execute.shouldApply) return;
-
-    driverPerspectiveEnabled = execute.enabled;
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-
-    const btn = document.getElementById(execute.toggleId);
-    if (execute.applyToggleWithPitchedState) {
-        TU.applyToggleButton(btn, shouldUsePitchedDrivingCamera());
-    }
-
-    if (map && execute.applyDriverPerspective) {
-        applyDriverPerspective();
-    }
-
-    showStatus(execute.statusMessage, execute.statusType);
-    if (execute.recomputeMapView3D && typeof _recomputeMapView3DFromGranular === 'function') {
-        _recomputeMapView3DFromGranular();
-    }
-    if (execute.saveAllSettings) saveAllSettings();
-}
-
-/**
- * Apply camera from shouldUsePitchedDrivingCamera() (nav follow or user preference).
- */
-function applyDriverPerspective() {
-    if (!map) return;
-
-    const heading = (typeof currentUserMarker?.heading === 'number')
-        ? currentUserMarker.heading
-        : ((currentUserMarker && currentUserMarker.heading) || 0);
-
-    const easeOptions = {
-        duration: 1000
-    };
-
-    if (shouldUsePitchedDrivingCamera()) {
-        easeOptions.pitch = shouldTiltDrivingCamera() ? 60 : 0;
-        easeOptions.bearing = heading;
-        easeOptions.padding = _cameraPitch().computeFollowPadding(window.innerHeight, window.innerWidth);
-        if (currentLat != null && currentLon != null) {
-            easeOptions.center = [currentLon, currentLat];
-        }
-        map.easeTo(easeOptions);
-        console.log(`[Driver View] ${shouldTiltDrivingCamera() ? '60°' : 'flat 2D heading-up'} (navigation follow or preference)`);
-    } else {
-        easeOptions.pitch = 0;
-        easeOptions.bearing = 0;
-        easeOptions.padding = { top: 50, bottom: 200, left: 50, right: 50 };
-        easeOptions.duration = 500;
-        map.easeTo(easeOptions);
-        console.log('[Driver View] Standard top-down');
-    }
-}
+function isActiveNavigationFollow() { return VoyagrDriverCameraOrchestration.isActiveNavigationFollow(); }
+function userPrefersFlat2D() { return VoyagrDriverCameraOrchestration.userPrefersFlat2D(); }
+function decideDrivingCameraState() { return VoyagrDriverCameraOrchestration.decideDrivingCameraState(); }
+function shouldUsePitchedDrivingCamera() { return VoyagrDriverCameraOrchestration.shouldUsePitchedDrivingCamera(); }
+function shouldTiltDrivingCamera() { return VoyagrDriverCameraOrchestration.shouldTiltDrivingCamera(); }
+function applyLiveNavigationCamera() { VoyagrDriverCameraOrchestration.applyLiveNavigationCamera(); }
+function toggleDriverPerspective() { VoyagrDriverCameraOrchestration.toggleDriverPerspective(); }
+function applyDriverPerspective() { VoyagrDriverCameraOrchestration.applyDriverPerspective(); }
 
 // ===== 2D / 3D MAP VIEW (scene preset) =====
 // One user-facing switch that bundles the existing camera-tilt + 3D-building controls:
@@ -7020,6 +6726,8 @@ VoyagrFormClearOrchestration.bind(getFormClearOrchestrationRuntime());
 VoyagrMapHintsOrchestration.bind(getMapHintsOrchestrationRuntime());
 VoyagrDarkModeOrchestration.bind(getDarkModeOrchestrationRuntime());
 VoyagrRoadReportOrchestration.bind(getRoadReportOrchestrationRuntime());
+VoyagrTabNavigationOrchestration.bind(getTabNavigationOrchestrationRuntime());
+VoyagrDriverCameraOrchestration.bind(getDriverCameraOrchestrationRuntime());
 VoyagrPwaLifecycleOrchestration.bind(getPwaLifecycleOrchestrationRuntime());
 VoyagrServiceWorkerOrchestration.bind(getServiceWorkerOrchestrationRuntime());
 VoyagrMlPredictionsOrchestration.bind(getMlPredictionsOrchestrationRuntime());
