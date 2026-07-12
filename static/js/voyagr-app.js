@@ -11023,73 +11023,31 @@ function sendETANotification(eta, distance) {
 function sendArrivalNotification() {
     VoyagrNotificationsOrchestration.sendArrivalNotification();
 }
-// ===== PREFERENCE FUNCTIONS =====
-function applyHazardToggleStyles(button, enabled) {
-    _toggleUI().applyLabeledToggleButton(button, enabled);
+// ===== HAZARD PREFERENCES ORCHESTRATION =====
+// Orchestration lives in static/js/app/hazard-preferences-orchestration.js (bound at file end).
+
+function getHazardPreferencesOrchestrationRuntime() {
+    return {
+        hazardAlerts: () => _hazardAlerts(),
+        toggleUI: () => _toggleUI(),
+        call: {
+            showStatus,
+            saveAllSettings,
+        },
+    };
 }
 
 async function loadHazardCameraTogglesFromApi() {
-    const HA = _hazardAlerts();
-    const applyTogglePlan = (items) => {
-        items.forEach((item) => {
-            const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${item.hazardType}"]`);
-            if (btn) applyHazardToggleStyles(btn, item.enabled);
-        });
-    };
-
-    try {
-        const res = await fetch('/api/hazard-preferences');
-        const data = await res.json();
-        const prefsList = data.success && data.preferences ? data.preferences : [];
-        applyTogglePlan(HA.buildHazardCameraTogglesApplyPlan(prefsList));
-    } catch (e) {
-        console.warn('[HAZARDS] Could not load camera hazard preferences:', e);
-        applyTogglePlan(HA.buildHazardCameraTogglesFallbackApplyPlan());
-    }
+    return VoyagrHazardPreferencesOrchestration.loadHazardCameraTogglesFromApi();
 }
-
 async function toggleHazardPreferenceApi(hazardType, ev) {
-    if (ev) ev.preventDefault();
-    const HA = _hazardAlerts();
-    try {
-        const res = await fetch('/api/hazard-preferences');
-        const data = await res.json();
-        if (!data.success || !data.preferences) {
-            showStatus('Could not load hazard preferences', 'error');
-            return;
-        }
-        const pref = data.preferences.find(p => p.hazard_type === hazardType);
-        const newEnabled = !HA.isHazardPreferenceEnabled(pref);
-        const payload = HA.buildHazardPreferenceTogglePayload(hazardType, pref, newEnabled);
-
-        const upd = await fetch('/api/hazard-preferences', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const out = await upd.json();
-        if (!out.success) {
-            showStatus(out.error || 'Update failed', 'error');
-            return;
-        }
-        const btn = document.querySelector(`button.hazard-pref-toggle[data-hazard-type="${hazardType}"]`);
-        applyHazardToggleStyles(btn, newEnabled);
-        showStatus(HA.buildHazardPreferenceToggleStatusMessage(hazardType, newEnabled), 'info');
-        saveAllSettings();
-    } catch (e) {
-        console.error('[HAZARDS] toggle:', e);
-        showStatus('Could not update hazard preference', 'error');
-    }
+    return VoyagrHazardPreferencesOrchestration.toggleHazardPreferenceApi(hazardType, ev);
 }
 
 window.toggleHazardPreferenceApi = toggleHazardPreferenceApi;
 window.loadHazardCameraTogglesFromApi = loadHazardCameraTogglesFromApi;
 
-/**
- * loadPreferences function
- * @function loadPreferences
- * @returns {*} Return value description
- */
+// ===== PREFERENCE FUNCTIONS =====
 function loadPreferences() {
     const RP = _routePrefs();
     const TU = _toggleUI();
@@ -11332,6 +11290,8 @@ VoyagrBestTimeLeaveOrchestration.bind(getBestTimeLeaveOrchestrationRuntime());
 VoyagrCazOrchestration.bind(getCazOrchestrationRuntime());
 VoyagrRouteAvoidanceOrchestration.bind(getRouteAvoidanceOrchestrationRuntime());
 VoyagrRoadNameOrchestration.bind(getRoadNameOrchestrationRuntime());
+VoyagrMobilePwaOrchestration.bind(getMobilePwaOrchestrationRuntime());
+VoyagrHazardPreferencesOrchestration.bind(getHazardPreferencesOrchestrationRuntime());
 
 
 
