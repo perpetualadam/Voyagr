@@ -3015,16 +3015,15 @@ function toggleBottomSheet() {
     );
 }
 
-// ===== TOMTOM TRAFFIC FLOW LAYER =====
-// Real-time traffic visualization overlay
+// ===== MAP LAYER STATE (orchestration in map-layers-orchestration.js) =====
+const MLT = typeof VoyagrMapLayerToggles !== 'undefined' ? VoyagrMapLayerToggles : null;
+const GPC = typeof VoyagrGooglePlusCodesPrefs !== 'undefined' ? VoyagrGooglePlusCodesPrefs : null;
+const WL_INIT = typeof VoyagrWeatherLayer !== 'undefined' ? VoyagrWeatherLayer : null;
+
 let trafficLayer = null;
 let showTrafficEnabled = MLT
     ? MLT.resolveShowTrafficEnabledFromStorage(localStorage.getItem('showTrafficEnabled'))
     : localStorage.getItem('showTrafficEnabled') !== 'false';
-
-// ===== 3D BUILDINGS TOGGLE =====
-// Controls fill-extrusion 3D building visibility
-const MLT = typeof VoyagrMapLayerToggles !== 'undefined' ? VoyagrMapLayerToggles : null;
 let buildings3DEnabled = MLT
     ? MLT.resolveBuildings3DEnabledFromStorage(localStorage.getItem('buildings3DEnabled'))
     : localStorage.getItem('buildings3DEnabled') !== 'false';
@@ -3034,483 +3033,13 @@ let buildings3DHeightMultiplier = MLT
 let buildings3DOpacity = MLT
     ? MLT.parseBuildings3DOpacity(localStorage.getItem('buildings3DOpacity'))
     : (parseFloat(localStorage.getItem('buildings3DOpacity')) || 0.6);
-
-/**
- * Toggle 3D buildings layer on/off
- * @function toggle3DBuildings
- */
-function toggle3DBuildings() {
-    const layerToggles = _mapLayerToggles();
-    const TU = _toggleUI();
-    const collected = layerToggles.buildToggle3DBuildingsCollectPlan({ currentlyEnabled: buildings3DEnabled });
-    const execute = layerToggles.buildToggle3DBuildingsExecutePlan({
-        enabled: collected.enabled,
-        heightMultiplier: buildings3DHeightMultiplier,
-        opacity: buildings3DOpacity,
-    });
-    if (!execute.shouldApply) return;
-
-    buildings3DEnabled = execute.enabled;
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    TU.applyToggleButton(document.getElementById(execute.toggleId), buildings3DEnabled);
-
-    if (map) {
-        if (execute.mapAction === 'add3DBuildings') {
-            MapLibreHelpers.add3DBuildings(map, {
-                heightMultiplier: execute.heightMultiplier,
-                opacity: execute.opacity,
-            });
-        } else {
-            MapLibreHelpers.remove3DBuildings(map);
-        }
-    }
-
-    showStatus(execute.statusMessage, execute.statusType);
-    console.log(execute.logMessage);
-
-    if (execute.recomputeMapView3D && typeof _recomputeMapView3DFromGranular === 'function') {
-        _recomputeMapView3DFromGranular();
-    }
-    if (execute.saveAllSettings) saveAllSettings();
-}
-
-// ===== ROAD LABELS TOGGLE =====
-// Controls road name label visibility on the map
 let roadLabelsEnabled = MLT
     ? MLT.resolveRoadLabelsEnabledFromStorage(localStorage.getItem('roadLabelsEnabled'))
     : localStorage.getItem('roadLabelsEnabled') !== 'false';
-
-// After async style load replaces voyagr-bootstrap, re-apply saved label visibility (initializeRoadLabels may have run on empty bootstrap).
-if (typeof window !== 'undefined') {
-    window.addEventListener('voyagr-vector-style-ready', () => {
-        const layerToggles = typeof VoyagrMapLayerToggles !== 'undefined' ? VoyagrMapLayerToggles : null;
-        const reconcile = layerToggles
-            ? layerToggles.buildVectorStyleReadyReconcilePlan({
-                hasMap: !!map,
-                hasMapLibreHelpers: !!window.MapLibreHelpers,
-                roadLabelsStorageValue: localStorage.getItem('roadLabelsEnabled'),
-                showTrafficEnabled: showTrafficEnabled,
-                showWeatherEnabled: showWeatherEnabled,
-                hasTrafficLayerRef: !!trafficLayer,
-                mapHasTrafficLayer: !!(map && map.getLayer && map.getLayer('traffic-layer')),
-                hasWeatherLayerRef: !!weatherLayer,
-                mapHasWeatherLayer: !!(map && map.getLayer && map.getLayer('weather-layer')),
-            })
-            : null;
-
-        try {
-            if (reconcile && reconcile.shouldRun && reconcile.reapplyRoadLabels) {
-                MapLibreHelpers.toggleRoadLabels(map, reconcile.roadLabelsEnabled);
-            }
-        } catch (e) {
-            /* ignore */
-        }
-        if (typeof scheduleMapRepaintAfterUiChange === 'function') {
-            scheduleMapRepaintAfterUiChange();
-        }
-        // setStyle() removes raster overlays; JS handles still pointed at removed layers.
-        try {
-            if (!map || !reconcile) return;
-            if (reconcile.resetTrafficLayerRef) {
-                trafficLayer = null;
-            }
-            if (reconcile.resetWeatherLayerRef) {
-                weatherLayer = null;
-            }
-            if (reconcile.addTrafficLayer) {
-                addTrafficLayer();
-            }
-            if (reconcile.addWeatherLayer) {
-                addWeatherLayer();
-            }
-        } catch (e) {
-            /* ignore */
-        }
-    });
-}
-
-/**
- * Toggle road name labels on/off
- * @function toggleRoadLabels
- */
-function toggleRoadLabels() {
-    const layerToggles = _mapLayerToggles();
-    const TU = _toggleUI();
-    const collected = layerToggles.buildToggleRoadLabelsCollectPlan({ currentlyEnabled: roadLabelsEnabled });
-    const execute = layerToggles.buildToggleRoadLabelsExecutePlan({ enabled: collected.enabled });
-    if (!execute.shouldApply) return;
-
-    roadLabelsEnabled = execute.enabled;
-    if (execute.useWriteBoolPref) {
-        TU.writeBoolPref(execute.storageKey, roadLabelsEnabled);
-    } else {
-        localStorage.setItem(execute.storageKey, execute.storageValue);
-    }
-    TU.applyToggleButton(
-        document.getElementById(execute.toggleId),
-        roadLabelsEnabled,
-        execute.toggleInactiveStyles
-    );
-
-    if (map) {
-        MapLibreHelpers.toggleRoadLabels(map, roadLabelsEnabled);
-        showStatus(execute.statusMessage, execute.statusType);
-        console.log(execute.logMessage);
-    }
-
-    if (execute.saveAllSettings) saveAllSettings();
-}
-
-// ===== GOOGLE PLUS CODES TOGGLE =====
-// Controls Google Plus Codes input for destination search
-const GPC = typeof VoyagrGooglePlusCodesPrefs !== 'undefined' ? VoyagrGooglePlusCodesPrefs : null;
 let googlePlusCodesEnabled = GPC
     ? GPC.resolveGooglePlusCodesEnabledFromStorage(localStorage.getItem('googlePlusCodesEnabled'))
     : localStorage.getItem('googlePlusCodesEnabled') === 'true';
-
-/**
- * Toggle Google Plus Codes input on/off
- * @function toggleGooglePlusCodes
- */
-function toggleGooglePlusCodes() {
-    const prefs = _googlePlusCodesPrefs();
-    const TU = _toggleUI();
-    const collected = prefs.buildToggleGooglePlusCodesCollectPlan({ currentlyEnabled: googlePlusCodesEnabled });
-    const execute = prefs.buildToggleGooglePlusCodesExecutePlan({ enabled: collected.enabled });
-    if (!execute.shouldApply) return;
-
-    googlePlusCodesEnabled = execute.enabled;
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    TU.applyToggleButton(
-        document.getElementById(execute.toggleId),
-        googlePlusCodesEnabled,
-        execute.toggleInactiveStyles
-    );
-    showStatus(execute.statusMessage, execute.statusType);
-    console.log(execute.logMessage);
-    if (execute.saveAllSettings) saveAllSettings();
-}
-
-/**
- * Set 3D building height exaggeration
- * @function set3DBuildingHeight
- * @param {number} multiplier - Height multiplier (1.0 = normal, 2.0 = double height)
- */
-function set3DBuildingHeight(multiplier) {
-    const execute = _mapLayerToggles().buildSet3DBuildingHeightExecutePlan(multiplier);
-    if (!execute.shouldApply) return;
-    buildings3DHeightMultiplier = execute.heightMultiplier;
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    if (map) MapLibreHelpers.set3DBuildingHeight(map, execute.heightMultiplier);
-    console.log(execute.logMessage);
-}
-
-/**
- * Set 3D building opacity/transparency
- * @function set3DBuildingOpacity
- * @param {number} opacity - Opacity value (0.0 = transparent, 1.0 = opaque)
- */
-function set3DBuildingOpacity(opacity) {
-    const execute = _mapLayerToggles().buildSet3DBuildingOpacityExecutePlan(opacity);
-    if (!execute.shouldApply) return;
-    buildings3DOpacity = execute.opacity;
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    if (map) MapLibreHelpers.set3DBuildingOpacity(map, execute.opacity);
-    console.log(execute.logMessage);
-}
-
-/**
- * Toggle TomTom traffic flow layer on/off
- */
-function toggleTrafficLayer() {
-    const layerToggles = _mapLayerToggles();
-    const TU = _toggleUI();
-    const collected = layerToggles.buildToggleTrafficLayerCollectPlan({ currentlyEnabled: showTrafficEnabled });
-    const execute = layerToggles.buildToggleTrafficLayerExecutePlan({ enabled: collected.enabled });
-    if (!execute.shouldApply) return;
-
-    showTrafficEnabled = execute.enabled;
-    TU.writeBoolPref(execute.storageKey, showTrafficEnabled);
-    TU.applyToggleButton(document.getElementById(execute.toggleId), showTrafficEnabled);
-
-    if (execute.mapAction === 'addTrafficLayer') {
-        addTrafficLayer();
-    } else {
-        removeTrafficLayer();
-    }
-    showStatus(execute.statusMessage, execute.statusType);
-    console.log(execute.logMessage);
-    if (execute.saveAllSettings) saveAllSettings();
-}
-
-/**
- * Add TomTom traffic flow tile layer to map.
- *
- * Notes on race-condition handling:
- *   - The basemap style is fetched asynchronously (see voyagr-core.js: bootstrap
- *     style → setStyle(realStyle)). Until the real style is loaded, calling
- *     `map.addSource()` throws "Style is not done loading."
- *   - We previously handled this with `map.once('style.load')` *plus* a 1 s
- *     `setTimeout` fallback. On slow first paints the setTimeout fired before
- *     the style was ready (the error you're seeing in the console) and on the
- *     style.load path it then fired a second time, which is why the success
- *     line appeared 2-3 times.
- *   - This version uses a module-level reentry guard, polls `isStyleLoaded()`
- *     instead of blindly trying, and re-checks `isStyleLoaded()` inside the
- *     add path so the `style.load` listener cannot fire it in an unsafe state.
- */
-function addTrafficLayer() {
-    const MLT = _mapLayerToggles();
-    const orch = MLT.buildAddTrafficLayerOrchestrationPlan({
-        hasMap: !!map,
-        pendingGuardSet: !!window[MLT.TRAFFIC_PENDING_GUARD_PROPERTY],
-        isStyleLoaded: !!(map && map.isStyleLoaded && map.isStyleLoaded()),
-    });
-    if (!orch.shouldProceed) {
-        if (orch.mapNotReadyLog) console.log(orch.mapNotReadyLog);
-        return;
-    }
-
-    try {
-        const stale = MLT.buildTrafficLayerStaleRefResetPlan({
-            hasTrafficLayerRef: !!trafficLayer,
-            hasMap: !!map,
-            mapHasTrafficLayer: !!(map && map.getLayer && map.getLayer(MLT.TRAFFIC_LAYER_ID)),
-        });
-        if (stale.shouldReset) trafficLayer = null;
-    } catch (e) {
-        /* ignore */
-    }
-
-    removeTrafficLayer();
-
-    const useProxy = window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true;
-    const tomtomApiKey = window.TOMTOM_API_KEY || '';
-
-    console.log('[Traffic] API key / proxy check:', {
-        useServerProxy: useProxy,
-        windowKey: typeof window.TOMTOM_API_KEY,
-        keyLength: tomtomApiKey ? tomtomApiKey.length : 0,
-        hasKey: !!tomtomApiKey,
-    });
-
-    const credFetch = MLT.buildTrafficLayerCredentialsFetchPlan({
-        useProxy,
-        hasApiKey: !!tomtomApiKey,
-    });
-    if (credFetch.shouldFetch) {
-        console.log(credFetch.fetchLogMessage);
-        fetch(credFetch.url)
-            .then((r) => r.json())
-            .then((data) => {
-                applySupportLinksFromConfig(data);
-                const dispatch = MLT.buildTrafficCredentialsResponseDispatchPlan(data);
-                if (dispatch.action === 'retryWithProxy') {
-                    window.VOYAGR_TOMTOM_TRAFFIC_PROXY = true;
-                    console.log('[Traffic] Server tile proxy enabled — key stays off the client');
-                    addTrafficLayer();
-                    return;
-                }
-                if (dispatch.action === 'retryWithKey') {
-                    window.TOMTOM_API_KEY = dispatch.apiKey;
-                    console.log('[Traffic] API key loaded from server, reinitializing...');
-                    addTrafficLayer();
-                    return;
-                }
-                console.log(credFetch.noKeyLogMessage);
-            })
-            .catch((err) => console.log(credFetch.errorLogPrefix, err));
-        return;
-    }
-
-    let scheduled = false;
-    const scheduleOnce = (fn) => {
-        if (scheduled) return;
-        scheduled = true;
-        fn();
-    };
-
-    const addTrafficLayerNow = () => {
-        const isStyleLoaded = !!(map && map.isStyleLoaded && map.isStyleLoaded());
-        const tilePlan = MLT.buildTrafficTileUrlsPlan({
-            useProxy: window.VOYAGR_TOMTOM_TRAFFIC_PROXY === true,
-            origin: window.location.origin,
-            apiKey: window.TOMTOM_API_KEY || '',
-        });
-        let hasSource = false;
-        let hasLayer = false;
-        try {
-            hasSource = !!(map && map.getSource && map.getSource(MLT.TRAFFIC_SOURCE_ID));
-            hasLayer = !!(map && map.getLayer && map.getLayer(MLT.TRAFFIC_LAYER_ID));
-        } catch (e) {
-            /* ignore */
-        }
-
-        const execute = MLT.buildAddTrafficLayerNowExecutePlan({
-            isStyleLoaded,
-            hasTiles: tilePlan.hasTiles,
-            hasSource,
-            hasLayer,
-            tiles: tilePlan.tiles,
-            beforeLayerId: isStyleLoaded
-                ? _routeSelection().findFirstTextSymbolLayerId(map.getStyle() && map.getStyle().layers)
-                : null,
-        });
-        if (!execute.shouldAdd) {
-            if (execute.logMessage) console.log(execute.logMessage);
-            return !execute.retryLater;
-        }
-
-        try {
-            if (execute.beforeLayerIdLogPrefix && execute.layerSpec.beforeLayerId) {
-                console.log(execute.beforeLayerIdLogPrefix + execute.layerSpec.beforeLayerId);
-            }
-            if (execute.addSource) {
-                map.addSource(execute.sourceId, execute.sourceSpec);
-            }
-            if (execute.addLayer) {
-                map.addLayer({
-                    id: execute.layerSpec.id,
-                    type: execute.layerSpec.type,
-                    source: execute.layerSpec.source,
-                    minzoom: execute.layerSpec.minzoom,
-                    maxzoom: execute.layerSpec.maxzoom,
-                    paint: execute.layerSpec.paint,
-                }, execute.layerSpec.beforeLayerId);
-            }
-
-            if (execute.setTrafficLayerRef) {
-                trafficLayer = { id: execute.trafficLayerRefId };
-            }
-            console.log(execute.successLog);
-            if (execute.bringRoutesToTop) bringRoutesToTop();
-            return true;
-        } catch (e) {
-            console.error('[Traffic] Error adding traffic layer:', e);
-            return true;
-        }
-    };
-
-    const runOnce = () => scheduleOnce(() => {
-        try { addTrafficLayerNow(); } finally { window[orch.pendingGuardProperty] = false; }
-    });
-
-    window[orch.pendingGuardProperty] = true;
-
-    const styleInit = MLT.buildTrafficStyleReadyInitPlan({ isStyleLoaded: orch.isStyleLoaded });
-    if (styleInit.strategy === 'immediate') {
-        runOnce();
-        return;
-    }
-
-    console.log(styleInit.waitForStyleLog);
-    map.once(styleInit.bindStyleLoadEvent, runOnce);
-    let attempts = 0;
-    const poll = () => {
-        const tick = MLT.buildTrafficStylePollTickPlan({
-            scheduled,
-            hasMap: !!map,
-            isStyleLoaded: !!(map && map.isStyleLoaded && map.isStyleLoaded()),
-            attempts,
-            maxAttempts: orch.stylePollMaxAttempts,
-            intervalMs: orch.stylePollIntervalMs,
-        });
-        if (tick.action === 'stop') return;
-        if (tick.action === 'clearGuard') {
-            window[orch.pendingGuardProperty] = false;
-            return;
-        }
-        if (tick.action === 'runOnce') {
-            runOnce();
-            return;
-        }
-        if (tick.action === 'giveUp') {
-            console.warn(tick.logMessage);
-            window[orch.pendingGuardProperty] = false;
-            return;
-        }
-        attempts = tick.nextAttempts;
-        setTimeout(poll, tick.intervalMs);
-    };
-    setTimeout(poll, orch.stylePollIntervalMs);
-}
-
-/**
- * Remove traffic layer from map
- */
-function removeTrafficLayer() {
-    const MLT = _mapLayerToggles();
-    const execute = MLT.buildRemoveTrafficLayerExecutePlan({
-        hasTrafficLayerRef: !!trafficLayer,
-        hasMap: !!map,
-    });
-    if (!execute.shouldRemove) return;
-
-    if (map.getLayer(execute.layerId)) {
-        map.removeLayer(execute.layerId);
-    }
-    if (map.getSource(execute.sourceId)) {
-        map.removeSource(execute.sourceId);
-    }
-    if (execute.clearTrafficLayerRef) trafficLayer = null;
-    console.log(execute.logMessage);
-}
-
-let _trafficTileErrorStreak = 0;
-let _trafficLayerPausedUntil = 0;
-
-/**
- * Back off TomTom raster traffic when the tile proxy errors (rate limit / upstream).
- * Called from voyagr-core map error handler.
- * @param {number} statusCode
- */
-function voyagrOnTrafficTileLoadError(statusCode) {
-    const backoff = _mapLayerToggles().buildTrafficTileErrorBackoffPlan({
-        statusCode,
-        errorStreak: _trafficTileErrorStreak,
-        pausedUntil: _trafficLayerPausedUntil,
-    });
-    if (backoff.incrementStreak) {
-        _trafficTileErrorStreak = backoff.nextStreak;
-        return;
-    }
-    if (!backoff.shouldBackoff) return;
-
-    _trafficLayerPausedUntil = backoff.pauseUntil;
-    if (backoff.resetStreak) _trafficTileErrorStreak = 0;
-    if (backoff.removeTrafficLayer) removeTrafficLayer();
-    console.warn(backoff.logMessage);
-}
-if (typeof window !== 'undefined') {
-    window.voyagrOnTrafficTileLoadError = voyagrOnTrafficTileLoadError;
-}
-
-/**
- * Initialize traffic layer based on saved preference
- */
-function initTrafficLayer() {
-    const execute = _mapLayerToggles().buildInitTrafficLayerExecutePlan({ enabled: showTrafficEnabled });
-    if (!execute.shouldApply) return;
-
-    _toggleUI().applyToggleButton(document.getElementById(execute.toggleId), execute.enabled);
-
-    if (!execute.addTrafficLayer || !map) return;
-    try {
-        const st = map.getStyle && map.getStyle();
-        if (execute.deferOnBootstrapStyle && st && st.name === execute.bootstrapStyleName) {
-            console.log(execute.deferLogMessage);
-            return;
-        }
-    } catch (e) {
-        /* ignore */
-    }
-    addTrafficLayer();
-}
-
-// ===== WEATHER LAYER (OpenWeatherMap Tiles) =====
-// Real-time weather visualization overlay showing precipitation/clouds/temperature
 let weatherLayer = null;
-const WL_INIT = typeof VoyagrWeatherLayer !== 'undefined' ? VoyagrWeatherLayer : null;
 let showWeatherEnabled = WL_INIT
     ? WL_INIT.resolveShowWeatherEnabledFromStorage(localStorage.getItem('showWeatherEnabled'))
     : localStorage.getItem('showWeatherEnabled') === 'true';
@@ -3518,165 +3047,59 @@ let weatherLayerType = WL_INIT
     ? WL_INIT.resolveWeatherLayerTypeFromStorage(localStorage.getItem('weatherLayerType'))
     : (localStorage.getItem('weatherLayerType') || 'precipitation_new');
 
-/**
- * Toggle weather layer on/off
- */
-function toggleWeatherLayer() {
-    const WL = _weatherLayer();
-    const TU = _toggleUI();
-    const collected = WL.buildToggleWeatherLayerCollectPlan({ currentlyEnabled: showWeatherEnabled });
-    const execute = WL.buildToggleWeatherLayerExecutePlan({ enabled: collected.enabled });
-    if (!execute.shouldApply) return;
+function toggle3DBuildings() { VoyagrMapLayersOrchestration.toggle3DBuildings(); }
+function toggleRoadLabels() { VoyagrMapLayersOrchestration.toggleRoadLabels(); }
+function toggleGooglePlusCodes() { VoyagrMapLayersOrchestration.toggleGooglePlusCodes(); }
+function set3DBuildingHeight(multiplier) { VoyagrMapLayersOrchestration.set3DBuildingHeight(multiplier); }
+function set3DBuildingOpacity(opacity) { VoyagrMapLayersOrchestration.set3DBuildingOpacity(opacity); }
+function toggleTrafficLayer() { VoyagrMapLayersOrchestration.toggleTrafficLayer(); }
+function addTrafficLayer() { VoyagrMapLayersOrchestration.addTrafficLayer(); }
+function removeTrafficLayer() { VoyagrMapLayersOrchestration.removeTrafficLayer(); }
+function initTrafficLayer() { VoyagrMapLayersOrchestration.initTrafficLayer(); }
+function toggleWeatherLayer() { VoyagrMapLayersOrchestration.toggleWeatherLayer(); }
+function setWeatherLayerType(type) { VoyagrMapLayersOrchestration.setWeatherLayerType(type); }
+function addWeatherLayer() { VoyagrMapLayersOrchestration.addWeatherLayer(); }
+function removeWeatherLayer() { VoyagrMapLayersOrchestration.removeWeatherLayer(); }
+function initWeatherLayer() { VoyagrMapLayersOrchestration.initWeatherLayer(); }
 
-    showWeatherEnabled = execute.enabled;
-    TU.writeBoolPref(execute.storageKey, showWeatherEnabled);
-    TU.applyToggleButton(document.getElementById(execute.toggleId), showWeatherEnabled);
-
-    if (execute.mapAction === 'addWeatherLayer') {
-        addWeatherLayer();
-    } else {
-        removeWeatherLayer();
-    }
-    showStatus(execute.statusMessage, execute.statusType);
-    console.log(execute.logMessage);
-    if (execute.saveAllSettings) saveAllSettings();
-}
-
-/**
- * Set weather layer type (precipitation, clouds, temperature)
- * @param {string} type - Layer type: 'precipitation_new', 'clouds_new', 'temp_new', 'wind_new'
- */
-function setWeatherLayerType(type) {
-    const execute = _weatherLayer().buildSetWeatherLayerTypeExecutePlan(type);
-    if (!execute.shouldApply) return;
-
-    weatherLayerType = execute.layerType;
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-
-    if (execute.refreshLayerWhenEnabled && showWeatherEnabled && map) {
-        removeWeatherLayer();
-        addWeatherLayer();
-    }
-
-    showStatus(execute.statusMessage, execute.statusType);
-}
-
-/**
- * Add OpenWeatherMap weather tile layer to map
- * Uses OpenWeatherMap's free weather tile API
- */
-function addWeatherLayer() {
-    const WL = _weatherLayer();
-    const orch = WL.buildAddWeatherLayerOrchestrationPlan({
-        hasMap: !!map,
-        isStyleLoaded: !!(map && map.isStyleLoaded && map.isStyleLoaded()),
-    });
-    if (!orch.shouldProceed) {
-        if (orch.mapNotReadyLog) console.log(orch.mapNotReadyLog);
-        return;
-    }
-
-    try {
-        if (weatherLayer && map && !map.getLayer(WL.WEATHER_LAYER_ID)) {
-            weatherLayer = null;
-        }
-    } catch (e) {
-        /* ignore */
-    }
-
-    removeWeatherLayer();
-
-    let owmApiKey = window.OPENWEATHERMAP_API_KEY || '';
-    const credFetch = WL.buildWeatherCredentialsFetchPlan({ hasApiKey: !!owmApiKey });
-    if (credFetch.shouldFetch) {
-        console.log(credFetch.fetchLogMessage);
-        fetch(credFetch.url)
-            .then((r) => r.json())
-            .then((data) => {
-                applySupportLinksFromConfig(data);
-                if (data.success && data[credFetch.apiKeyField]) {
-                    window.OPENWEATHERMAP_API_KEY = data[credFetch.apiKeyField];
-                    console.log(credFetch.retryLogMessage);
-                    addWeatherLayer();
-                } else {
-                    console.log(credFetch.noKeyLogMessage);
-                    showStatus(credFetch.noKeyStatusMessage, credFetch.noKeyStatusType);
-                }
-            })
-            .catch((err) => console.log(credFetch.errorLogPrefix, err));
-        return;
-    }
-
-    const addWeatherLayerNow = () => {
-        try {
-            const tileUrl = WL.buildWeatherTileUrl(weatherLayerType, owmApiKey);
-
-            if (!map.getSource(orch.sourceId)) {
-                map.addSource(orch.sourceId, WL.buildWeatherSourceSpec(tileUrl));
-            }
-
-            if (!map.getLayer(orch.layerId)) {
-                map.addLayer(WL.buildWeatherLayerSpec());
-            }
-
-            weatherLayer = { id: orch.layerId };
-            console.log(orch.successLogMessage);
-
-            if (orch.bringRoutesToTop) bringRoutesToTop();
-        } catch (e) {
-            console.error('[Weather] Error adding weather layer:', e);
-        }
+function getMapLayersOrchestrationRuntime() {
+    return {
+        mapLayerToggles: () => _mapLayerToggles(),
+        weatherLayer: () => _weatherLayer(),
+        toggleUI: () => _toggleUI(),
+        googlePlusCodesPrefs: () => _googlePlusCodesPrefs(),
+        routeSelection: () => _routeSelection(),
+        getMap: () => map,
+        getMapLibreHelpers: () => MapLibreHelpers,
+        getBuildings3DEnabled: () => buildings3DEnabled,
+        setBuildings3DEnabled: (val) => { buildings3DEnabled = val; },
+        getBuildings3DHeightMultiplier: () => buildings3DHeightMultiplier,
+        setBuildings3DHeightMultiplier: (val) => { buildings3DHeightMultiplier = val; },
+        getBuildings3DOpacity: () => buildings3DOpacity,
+        setBuildings3DOpacity: (val) => { buildings3DOpacity = val; },
+        getRoadLabelsEnabled: () => roadLabelsEnabled,
+        setRoadLabelsEnabled: (val) => { roadLabelsEnabled = val; },
+        getGooglePlusCodesEnabled: () => googlePlusCodesEnabled,
+        setGooglePlusCodesEnabled: (val) => { googlePlusCodesEnabled = val; },
+        getShowTrafficEnabled: () => showTrafficEnabled,
+        setShowTrafficEnabled: (val) => { showTrafficEnabled = val; },
+        getTrafficLayer: () => trafficLayer,
+        setTrafficLayer: (val) => { trafficLayer = val; },
+        getShowWeatherEnabled: () => showWeatherEnabled,
+        setShowWeatherEnabled: (val) => { showWeatherEnabled = val; },
+        getWeatherLayer: () => weatherLayer,
+        setWeatherLayer: (val) => { weatherLayer = val; },
+        getWeatherLayerType: () => weatherLayerType,
+        setWeatherLayerType: (val) => { weatherLayerType = val; },
+        call: {
+            showStatus,
+            saveAllSettings,
+            applySupportLinksFromConfig,
+            bringRoutesToTop,
+            recomputeMapView3DFromGranular: _recomputeMapView3DFromGranular,
+            scheduleMapRepaintAfterUiChange: typeof scheduleMapRepaintAfterUiChange === 'function' ? scheduleMapRepaintAfterUiChange : null,
+        },
     };
-
-    if (orch.isStyleLoaded) {
-        addWeatherLayerNow();
-    } else {
-        console.log(orch.waitForStyleLog);
-        map.once('style.load', addWeatherLayerNow);
-        setTimeout(addWeatherLayerNow, orch.styleFallbackMs);
-    }
-}
-
-/**
- * Remove weather layer from map
- */
-function removeWeatherLayer() {
-    const execute = _weatherLayer().buildRemoveWeatherLayerExecutePlan({
-        hasWeatherLayerRef: !!weatherLayer,
-        hasMap: !!map,
-    });
-    if (!execute.shouldRemove) return;
-
-    if (map.getLayer(execute.layerId)) {
-        map.removeLayer(execute.layerId);
-    }
-    if (map.getSource(execute.sourceId)) {
-        map.removeSource(execute.sourceId);
-    }
-    if (execute.clearWeatherLayerRef) weatherLayer = null;
-    console.log(execute.logMessage);
-}
-
-/**
- * Initialize weather layer based on saved preference
- */
-function initWeatherLayer() {
-    const execute = _weatherLayer().buildInitWeatherLayerExecutePlan({ enabled: showWeatherEnabled });
-    if (!execute.shouldApply) return;
-
-    _toggleUI().applyToggleButton(document.getElementById(execute.toggleId), execute.enabled);
-
-    if (!execute.addWeatherLayer || !map) return;
-    try {
-        const st = map.getStyle && map.getStyle();
-        if (execute.deferOnBootstrapStyle && st && st.name === execute.bootstrapStyleName) {
-            console.log(execute.deferLogMessage);
-            return;
-        }
-    } catch (e) {
-        /* ignore */
-    }
-    addWeatherLayer();
 }
 
 
@@ -10525,6 +9948,7 @@ VoyagrRouteAvoidanceOrchestration.bind(getRouteAvoidanceOrchestrationRuntime());
 VoyagrRoadNameOrchestration.bind(getRoadNameOrchestrationRuntime());
 VoyagrMobilePwaOrchestration.bind(getMobilePwaOrchestrationRuntime());
 VoyagrHazardPreferencesOrchestration.bind(getHazardPreferencesOrchestrationRuntime());
+VoyagrMapLayersOrchestration.bind(getMapLayersOrchestrationRuntime());
 VoyagrRouteComparisonOrchestration.bind(getRouteComparisonOrchestrationRuntime());
 VoyagrJourneySummaryOrchestration.bind(getJourneySummaryOrchestrationRuntime());
 
