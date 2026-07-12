@@ -245,6 +245,7 @@ function recalculateRouteWithPreferences() {
         collectRoutePreferencesFormState: collectRoutePreferencesFormState,
         collectRoutePreferencesDomInput: collectRoutePreferencesDomInput,
         updateDetourLabel: updateDetourLabel,
+        applyDetourLabelFromPlan: applyDetourLabelFromPlan,
         recalculateRouteWithPreferences: recalculateRouteWithPreferences,
         saveMultiDropPreferences: saveMultiDropPreferences,
         loadMultiDropPreferences: loadMultiDropPreferences,

@@ -1444,474 +1444,69 @@ window.authSignInProvider = authSignInProvider;
 window.authSignOut = authSignOut;
 window.redeemPromoCode = redeemPromoCode;
 
-/**
- * saveAllSettings function
- * @function saveAllSettings
- * @returns {*} Return value description
- */
-function collectSettingsSnapshotRuntimeState() {
-    const traffic = VoyagrTrafficOrchestration.getTrafficSettingsSnapshot();
+// ===== SETTINGS ORCHESTRATION =====
+// Orchestration lives in static/js/app/settings-orchestration.js (bound at file end).
+
+function getSettingsOrchestrationRuntime() {
     return {
-        distanceUnit,
-        currencyUnit,
-        speedUnit,
-        temperatureUnit,
-        vehicleType: currentVehicleType,
-        routingMode: currentRoutingMode,
-        smartZoomEnabled,
-        showCamerasEnabled,
-        showOsmTrafficLightsEnabled,
-        showOsmRailwayCrossingsEnabled,
-        showTrafficEnabled,
-        autoTrafficUpdateEnabled: traffic.autoTrafficUpdateEnabled,
-        autoRerouteOnDeviationEnabled: traffic.autoRerouteOnDeviationEnabled,
-        routeTrafficEnabled: traffic.routeTrafficEnabled,
-        speedWidgetEnabled,
+        settingsSnapshot: () => _settingsSnapshot(),
+        routeSelection: () => _routeSelection(),
+        toggleUI: () => _toggleUI(),
+        routePrefs: () => _routePrefs(),
+        getMap: () => map,
+        getRouteInProgress: () => routeInProgress,
+        getDistanceUnit: () => distanceUnit,
+        setDistanceUnit: (val) => { distanceUnit = val; },
+        getCurrencyUnit: () => currencyUnit,
+        setCurrencyUnit: (val) => { currencyUnit = val; },
+        getSpeedUnit: () => speedUnit,
+        setSpeedUnit: (val) => { speedUnit = val; },
+        getTemperatureUnit: () => temperatureUnit,
+        setTemperatureUnit: (val) => { temperatureUnit = val; },
+        getCurrentVehicleType: () => currentVehicleType,
+        setCurrentVehicleType: (val) => { currentVehicleType = val; },
+        getCurrentRoutingMode: () => currentRoutingMode,
+        setCurrentRoutingMode: (val) => { currentRoutingMode = val; },
+        getSmartZoomEnabled: () => smartZoomEnabled,
+        setSmartZoomEnabled: (val) => { smartZoomEnabled = val; },
+        getShowCamerasEnabled: () => showCamerasEnabled,
+        setShowCamerasEnabled: (val) => { showCamerasEnabled = val; },
+        getShowOsmTrafficLightsEnabled: () => showOsmTrafficLightsEnabled,
+        setShowOsmTrafficLightsEnabled: (val) => { showOsmTrafficLightsEnabled = val; },
+        getShowOsmRailwayCrossingsEnabled: () => showOsmRailwayCrossingsEnabled,
+        setShowOsmRailwayCrossingsEnabled: (val) => { showOsmRailwayCrossingsEnabled = val; },
+        getShowTrafficEnabled: () => showTrafficEnabled,
+        setShowTrafficEnabled: (val) => { showTrafficEnabled = val; },
+        getSpeedWidgetEnabled: () => speedWidgetEnabled,
+        setSpeedWidgetEnabled: (val) => { speedWidgetEnabled = val; },
+        call: {
+            persistActiveProfile,
+            loadPreferences,
+            setRoutingMode,
+            setMapTheme,
+            initializeDarkMode,
+            updateThemeButtons,
+            applySpeedWidgetToggleUi,
+            stopRouteTrafficUpdates,
+            startRouteTrafficUpdates,
+            stopAutoTrafficUpdates,
+            startAutoTrafficUpdates,
+            ensureLabelsOnTop,
+            showStatus,
+            collectSettingsFormState,
+        },
     };
 }
 
-function applySaveAllSettingsFromPlan(execute) {
-    if (!execute || !execute.shouldSave) return;
-
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    console.log(execute.logMessage, execute.snapshot);
-
-    if (execute.persistActiveProfile) persistActiveProfile();
-}
-
-function saveAllSettings() {
-    const SS = _settingsSnapshot();
-    applySaveAllSettingsFromPlan(
-        SS.buildSaveAllSettingsEntryOrchestrationPlan(
-            SS.buildCollectSaveAllSettingsInputPlan(
-                collectSettingsSnapshotRuntimeState(),
-                collectSettingsFormState()
-            )
-        ).execute
-    );
-}
-
-/**
- * loadAllSettings function
- * @function loadAllSettings
- * @returns {*} Return value description
- */
-function applySettingsRestoreFromPlan(plan) {
-    const SS = _settingsSnapshot();
-    const execute = SS.buildApplySettingsRestoreExecutePlan(plan);
-    if (!execute.shouldRestore) return false;
-
-    (execute.localStoragePatches || []).forEach(({ key, value }) => {
-        localStorage.setItem(key, value);
-    });
-
-    applySettingsResetRuntimeFromPlan(execute.runtimeExecute);
-    return true;
-}
-
-function loadAllSettings() {
-    const SS = _settingsSnapshot();
-    const entry = SS.buildLoadAllSettingsEntryOrchestrationPlan();
-    const orch = entry.orch;
-    try {
-        const saved = localStorage.getItem(orch.storageKey);
-        if (!saved) {
-            console.log(orch.noSavedLog);
-            return false;
-        }
-
-        const settings = JSON.parse(saved);
-        console.log(orch.loadedLogPrefix, settings);
-        const restoreEntry = SS.buildLoadAllSettingsRestoreEntryOrchestrationPlan(settings, {
-            routeInProgress,
-        });
-        if (!applySettingsRestoreFromPlan(restoreEntry.restorePlan)) {
-            return false;
-        }
-        applySettingsRestorePostEffectsFromPlan(restoreEntry.postEffects);
-
-        console.log(orch.successLog);
-        return true;
-    } catch (error) {
-        console.error(orch.errorLogPrefix, error);
-        return false;
-    }
-}
-
-/**
- * Apply post-restore traffic service side effects from a pure execute plan.
- * @param {Object} plan - from buildApplySettingsRestorePostEffectsExecutePlan
- */
-function applySettingsRestorePostEffectsFromPlan(plan) {
-    if (!plan || !plan.shouldDispatch) return;
-    (plan.effects || []).forEach((effect) => {
-        if (effect === 'stopRouteTrafficUpdates') stopRouteTrafficUpdates();
-        else if (effect === 'startRouteTrafficUpdates') startRouteTrafficUpdates();
-        else if (effect === 'stopAutoTrafficUpdates') stopAutoTrafficUpdates();
-        else if (effect === 'startAutoTrafficUpdates') startAutoTrafficUpdates();
-    });
-}
-
-/**
- * Apply select element values from a DOM apply patch list.
- * @param {Array<{ id: string, value: * }>} selects
- */
-function applyDomSelectsFromPlan(selects) {
-    (selects || []).forEach(({ id, value }) => {
-        const el = document.getElementById(id);
-        if (el && value != null) el.value = value;
-    });
-}
-
-/**
- * Apply checkbox states from a DOM apply patch list.
- * @param {Array<{ id: string, checked: boolean }>} checks
- */
-function applyDomChecksFromPlan(checks) {
-    (checks || []).forEach(({ id, checked }) => {
-        const el = document.getElementById(id);
-        if (el) el.checked = !!checked;
-    });
-}
-
-/**
- * Apply standard toggle buttons from a DOM apply patch list.
- * @param {Array<{ id: string, enabled: boolean }>} toggles
- * @param {Object} TU - toggle UI module
- */
-function applyStandardTogglesFromPlan(toggles, TU) {
-    (toggles || []).forEach(({ id, enabled }) => {
-        const el = document.getElementById(id);
-        if (el) TU.applyToggleButton(el, enabled);
-    });
-}
-
-/**
- * Apply labeled toggle buttons from a DOM apply patch list.
- * @param {Array<{ id: string, enabled: boolean }>} toggles
- * @param {Object} TU - toggle UI module
- */
-function applyLabeledTogglesFromPlan(toggles, TU) {
-    (toggles || []).forEach(({ id, enabled }) => {
-        const el = document.getElementById(id);
-        if (el) TU.applyLabeledToggleButton(el, enabled);
-    });
-}
-
-/**
- * Apply map layer reorder instructions from a pure execute plan.
- * @param {Object} plan
- * @returns {boolean}
- */
-function applyMapLayerReorderFromPlan(plan) {
-    if (!plan || !plan.shouldApply || !map) return false;
-    const RS = _routeSelection();
-
-    try {
-        const presentById = {};
-        plan.layerIds.forEach((layerId) => {
-            presentById[layerId] = !!map.getLayer(layerId);
-        });
-
-        plan.layerIds.forEach((layerId) => {
-            if (!presentById[layerId]) {
-                if (plan.logMissingLayers) {
-                    const moveLog = RS.buildBringRoutesToTopLayerMoveLogPlan(
-                        layerId,
-                        plan.beforeId,
-                        false
-                    );
-                    if (moveLog.notFoundLogMessage) console.log(moveLog.notFoundLogMessage);
-                }
-                return;
-            }
-            map.moveLayer(layerId, plan.beforeId);
-            if (plan.logMissingLayers) {
-                const moveLog = RS.buildBringRoutesToTopLayerMoveLogPlan(
-                    layerId,
-                    plan.beforeId,
-                    true
-                );
-                if (moveLog.movedLogMessage) console.log(moveLog.movedLogMessage);
-            }
-        });
-
-        if (plan.ensureLabelsOnTop) ensureLabelsOnTop();
-        if (plan.successLogMessage) console.log(plan.successLogMessage);
-        return true;
-    } catch (e) {
-        const prefix = plan.errorLogPrefix || '[Map] Layer reorder error:';
-        if (plan.useWarnOnError) {
-            console.warn(prefix, e.message);
-        } else {
-            console.log(prefix, e.message);
-        }
-        return false;
-    }
-}
-
-
-/**
- * Apply settings form controls from a pure UI apply plan.
- * @param {Object} plan - from buildSettingsUiApplyPlan
- */
-function applySettingsUiFromPlan(plan) {
-    if (!plan) return;
-
-    const domPlan = _settingsSnapshot().buildSettingsUiDomApplyPlan(plan);
-    applyDomSelectsFromPlan(domPlan.unitSelects);
-
-    if (domPlan.routingMode) {
-        setRoutingMode(domPlan.routingMode);
-    }
-
-    applyDomChecksFromPlan(domPlan.routeChecks);
-    applyDomSelectsFromPlan(domPlan.routeSelects);
-    applyDomSelectsFromPlan(domPlan.parkingSelects);
-
-    const side = domPlan.sideEffects || {};
-    if (side.loadPreferences) loadPreferences();
-
-    if (side.setMapTheme) {
-        setMapTheme(domPlan.mapTheme || 'standard');
-    }
-
-    const TU = _toggleUI();
-    applyStandardTogglesFromPlan(domPlan.standardToggles, TU);
-    applyLabeledTogglesFromPlan(domPlan.labeledToggles, TU);
-
-    if (side.initializeDarkMode) initializeDarkMode();
-    if (side.updateThemeButtons) updateThemeButtons();
-    if (domPlan.detourLabel) applyDetourLabelFromPlan(domPlan.detourLabel);
-    if (side.applySpeedWidgetToggleUi) applySpeedWidgetToggleUi();
-}
-
-/**
- * Collect runtime globals for settings UI apply.
- * @returns {Object}
- */
-function collectSettingsUiRuntimeState() {
-    const SS = _settingsSnapshot();
-    const extras = SS.buildCollectSettingsUiRuntimeStateInputPlan({
-        mlPredictionsEnabled: localStorage.getItem('mlPredictionsEnabled') === 'true',
-        voiceAnnouncementsEnabled: localStorage.getItem('voiceAnnouncementsEnabled') === 'true',
-        batterySavingEnabled: localStorage.getItem('pref_batterySaving') === 'true',
-        gestureControlEnabled: localStorage.getItem('gestureEnabled') === 'true',
-    });
-    return {
-        ...collectSettingsSnapshotRuntimeState(),
-        ...extras,
-    };
-}
-
-/**
- * Collect stored preferences for settings UI apply.
- * @returns {Object}
- */
-function collectSettingsUiStoredState() {
-    const SS = _settingsSnapshot();
-    const savedParking = localStorage.getItem('parkingPreferences');
-    let parkingPrefs = {};
-    if (savedParking) {
-        try {
-            parkingPrefs = JSON.parse(savedParking);
-        } catch (e) {
-            console.log(SS.buildCollectSettingsUiStoredStatePlan({}).parkingParseErrorLog, e);
-        }
-    }
-
-    return SS.buildCollectSettingsUiStoredStatePlan({
-        routePreferences: _routePrefs().getRoutePreferences(localStorage),
-        parkingPreferences: parkingPrefs,
-        mapTheme: localStorage.getItem('mapTheme') || 'standard',
-    });
-}
-
-/**
- * applySettingsToUI function
- * @function applySettingsToUI
- * @returns {*} Return value description
- */
-function applySettingsToUI() {
-    const SS = _settingsSnapshot();
-    const orch = SS.buildApplySettingsToUiOrchestrationPlan();
-    try {
-        const execute = SS.buildApplySettingsUiExecutePlan(
-            SS.buildSettingsUiApplyPlan(
-                SS.buildSettingsUiInputPlan(
-                    collectSettingsUiRuntimeState(),
-                    collectSettingsUiStoredState()
-                )
-            )
-        );
-        if (execute.shouldApply) {
-            applySettingsUiFromPlan(execute.uiPlan);
-        }
-
-        console.log(orch.successLog);
-    } catch (error) {
-        console.error(orch.errorLogPrefix, error);
-    }
-}
-
-/**
- * Apply runtime default globals from a settings reset execute plan.
- * @param {Object} execute - from buildApplySettingsResetRuntimeExecutePlan
- */
-function applySettingsResetRuntimeFromPlan(execute) {
-    if (!execute || !execute.shouldApply) return;
-
-    (execute.runtimePatches || []).forEach(({ key, value }) => {
-        switch (key) {
-            case 'distanceUnit': distanceUnit = value; break;
-            case 'currencyUnit': currencyUnit = value; break;
-            case 'speedUnit': speedUnit = value; break;
-            case 'temperatureUnit': temperatureUnit = value; break;
-            case 'currentVehicleType': currentVehicleType = value; break;
-            case 'currentRoutingMode': currentRoutingMode = value; break;
-            case 'smartZoomEnabled': smartZoomEnabled = value; break;
-            case 'autoTrafficUpdateEnabled':
-                VoyagrTrafficOrchestration.applyTrafficSettingsPatch('autoTrafficUpdateEnabled', value);
-                break;
-            case 'autoRerouteOnDeviationEnabled':
-                VoyagrTrafficOrchestration.applyTrafficSettingsPatch('autoRerouteOnDeviationEnabled', value);
-                break;
-            case 'routeTrafficEnabled':
-                VoyagrTrafficOrchestration.applyTrafficSettingsPatch('routeTrafficEnabled', value);
-                break;
-            case 'showCamerasEnabled': showCamerasEnabled = value; break;
-            case 'showOsmTrafficLightsEnabled': showOsmTrafficLightsEnabled = value; break;
-            case 'showOsmRailwayCrossingsEnabled': showOsmRailwayCrossingsEnabled = value; break;
-            case 'showTrafficEnabled': showTrafficEnabled = value; break;
-            case 'speedWidgetEnabled': speedWidgetEnabled = value; break;
-            default: break;
-        }
-    });
-}
-
-/**
- * Apply settings reset from a pure reset execute plan.
- * @param {Object} execute - from buildResetAllSettingsExecutePlan
- * @returns {boolean} true when reset was confirmed and applied
- */
-function applyResetAllSettingsFromPlan(execute) {
-    if (!execute || !execute.shouldReset) return false;
-    if (!confirm(execute.confirmMessage)) return false;
-
-    (execute.localStorageKeys || []).forEach((key) => {
-        localStorage.removeItem(key);
-    });
-
-    applySettingsResetRuntimeFromPlan(
-        _settingsSnapshot().buildApplySettingsResetRuntimeExecutePlan(execute.runtimeDefaults)
-    );
-
-    if (execute.reloadAfterReset) {
-        location.reload();
-    }
-    return true;
-}
-
-/**
- * resetAllSettings function
- * @function resetAllSettings
- * @returns {*} Return value description
- */
-function resetAllSettings() {
-    applyResetAllSettingsFromPlan(
-        _settingsSnapshot().buildResetAllSettingsEntryOrchestrationPlan().execute
-    );
-}
-
-function collectExportSettingsInput() {
-    const SS = _settingsSnapshot();
-    return {
-        rawSnapshot: localStorage.getItem(SS.SETTINGS_STORAGE_KEY),
-        dateStamp: new Date().toISOString().split('T')[0],
-    };
-}
-
-/**
- * exportSettings function
- * @function exportSettings
- * @returns {*} Return value description
- */
-function exportSettings() {
-    const SS = _settingsSnapshot();
-    const input = collectExportSettingsInput();
-    applyExportSettingsDownloadFromPlan(
-        SS.buildExportSettingsEntryOrchestrationPlan(input.rawSnapshot, input.dateStamp).execute
-    );
-}
-
-/**
- * Trigger a settings JSON download from an export execute plan.
- * @param {Object} execute - from buildExportSettingsDomExecutePlan
- */
-function applyExportSettingsDownloadFromPlan(execute) {
-    if (!execute || !execute.shouldExport) {
-        if (execute) showStatus(execute.statusMessage, execute.statusType);
-        return;
-    }
-    const dataBlob = new Blob([execute.blobContent], { type: execute.mimeType });
-    const url = URL.createObjectURL(dataBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = execute.downloadFilename;
-    link.click();
-    URL.revokeObjectURL(url);
-    showStatus(execute.statusMessage, execute.statusType);
-}
-
-/**
- * Apply a settings import orchestration plan.
- * @param {Object} plan - from buildSettingsImportOrchestrationPlan
- * @returns {boolean}
- */
-function applySettingsImportFromOrchestrationPlan(plan) {
-    if (!plan || !plan.shouldApply) return false;
-
-    if (plan.writeStorage) {
-        localStorage.setItem(plan.storageKey, plan.storageValue);
-    }
-    if (plan.restoreSettings) loadAllSettings();
-    if (plan.applySettingsUi) applySettingsToUI();
-    showStatus(plan.statusMessage, plan.statusType);
-    return true;
-}
-
-/**
- * importSettings function
- * @function importSettings
- * @returns {*} Return value description
- */
-function importSettings() {
-    const SS = _settingsSnapshot();
-    const picker = SS.buildImportSettingsEntryOrchestrationPlan().picker;
-    const input = document.createElement('input');
-    input.type = picker.inputType;
-    input.accept = picker.accept;
-    input.onchange = (e) => {
-        const fileOrch = SS.buildImportSettingsFileSelectedOrchestrationPlan(e.target.files[0]);
-        if (!fileOrch.shouldReadFile) return;
-        const reader = new FileReader();
-        reader.onload = (event) => applySettingsImportFileContent(event.target.result);
-        reader[fileOrch.readMethod](e.target.files[0]);
-    };
-    input.click();
-}
-
-/**
- * Parse and apply settings JSON from an imported file.
- * @param {string} rawText
- */
-function applySettingsImportFileContent(rawText) {
-    const SS = _settingsSnapshot();
-    const entry = SS.buildImportSettingsFileContentEntryOrchestrationPlan(rawText, { routeInProgress });
-    if (!applySettingsImportFromOrchestrationPlan(entry.importOrch)) {
-        showStatus(entry.parsePlan.statusMessage, entry.parsePlan.statusType);
-    }
-}
+function saveAllSettings() { VoyagrSettingsOrchestration.saveAllSettings(); }
+function loadAllSettings() { return VoyagrSettingsOrchestration.loadAllSettings(); }
+function applyDomSelectsFromPlan(selects) { VoyagrSettingsOrchestration.applyDomSelectsFromPlan(selects); }
+function applyDomChecksFromPlan(checks) { VoyagrSettingsOrchestration.applyDomChecksFromPlan(checks); }
+function applyMapLayerReorderFromPlan(plan) { return VoyagrSettingsOrchestration.applyMapLayerReorderFromPlan(plan); }
+function applySettingsToUI() { VoyagrSettingsOrchestration.applySettingsToUI(); }
+function resetAllSettings() { VoyagrSettingsOrchestration.resetAllSettings(); }
+function exportSettings() { VoyagrSettingsOrchestration.exportSettings(); }
+function importSettings() { VoyagrSettingsOrchestration.importSettings(); }
 
 // Update all distance displays
 /**
@@ -9198,6 +8793,7 @@ VoyagrRoadNameOrchestration.bind(getRoadNameOrchestrationRuntime());
 VoyagrMobilePwaOrchestration.bind(getMobilePwaOrchestrationRuntime());
 VoyagrHazardPreferencesOrchestration.bind(getHazardPreferencesOrchestrationRuntime());
 VoyagrBottomSheetOrchestration.bind(getBottomSheetOrchestrationRuntime());
+VoyagrSettingsOrchestration.bind(getSettingsOrchestrationRuntime());
 VoyagrRoutePreviewOrchestration.bind(getRoutePreviewOrchestrationRuntime());
 VoyagrLegacyPreferencesOrchestration.bind(getLegacyPreferencesOrchestrationRuntime());
 VoyagrMapLayersOrchestration.bind(getMapLayersOrchestrationRuntime());
