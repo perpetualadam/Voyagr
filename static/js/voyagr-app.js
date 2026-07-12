@@ -1650,65 +1650,6 @@ function applyMapLayerReorderFromPlan(plan) {
     }
 }
 
-/**
- * Apply bringRoutesToTop retry loop from a pure execute plan.
- * @param {Object} plan - from buildBringRoutesToTopExecutePlan
- */
-function applyBringRoutesToTopFromPlan(plan) {
-    if (!plan || !plan.shouldExecute || !map) return;
-
-    const RS = _routeSelection();
-
-    const moveLayersToTop = (retryCount = 0) => {
-        const presentById = {};
-        plan.layerIds.forEach((layerId) => {
-            presentById[layerId] = !!map.getLayer(layerId);
-        });
-
-        const step = RS.buildBringRoutesToTopRetryStepApplyPlan(plan, retryCount, presentById);
-        console.log(step.attemptLog.attemptLogMessage, step.attemptLog.layerIds);
-
-        try {
-            step.layerMoves.forEach((spec) => {
-                if (spec.moveLog.found) {
-                    map.moveLayer(spec.layerId, plan.beforeId);
-                    if (spec.moveLog.movedLogMessage) console.log(spec.moveLog.movedLogMessage);
-                } else if (spec.moveLog.notFoundLogMessage) {
-                    console.log(spec.moveLog.notFoundLogMessage);
-                }
-            });
-
-            const outcome = step.outcome;
-            if (outcome.action === 'retry') {
-                setTimeout(() => moveLayersToTop(outcome.nextRetryCount), outcome.retryDelayMs);
-            } else if (outcome.action === 'success') {
-                if (outcome.logSuccess && step.successLogMessage) console.log(step.successLogMessage);
-                if (outcome.ensureLabelsOnTop) ensureLabelsOnTop();
-            } else if (outcome.logPartialFailure && step.partialFailureLogMessage) {
-                console.warn(step.partialFailureLogMessage);
-            }
-        } catch (e) {
-            const prefix = step.errorLogPrefix || '[Routes] Error bringing routes to top:';
-            console.warn(prefix, e);
-        }
-    };
-
-    const schedule = RS.buildBringRoutesToTopStartupScheduleApplyPlan(plan, {
-        isStyleLoaded: map.isStyleLoaded(),
-    });
-    if (!schedule.shouldSchedule) return;
-
-    setTimeout(() => {
-        if (schedule.startup.action === 'immediate') {
-            moveLayersToTop(0);
-        } else if (schedule.startup.action === 'wait_idle') {
-            if (schedule.startup.waitForIdleLogMessage) {
-                console.log(schedule.startup.waitForIdleLogMessage);
-            }
-            map.once('idle', () => moveLayersToTop(0));
-        }
-    }, schedule.startup.initialDelayMs);
-}
 
 /**
  * Apply settings form controls from a pure UI apply plan.
@@ -2125,7 +2066,6 @@ async function fetchJsonWithAuth(url, options = {}) {
 // ===== ROUTE COMPARISON FUNCTIONS =====
 let routeOptions = [];
 let selectedRouteIndex = 0;
-let allRouteLayers = []; // Store all route polylines for multi-route display
 
 // Route colors for multi-route display (via route-selection accessor)
 function routeColors() {
@@ -2136,404 +2076,72 @@ function navActiveRouteColor() {
     return _routeSelection().NAV_ACTIVE_ROUTE_COLOR;
 }
 
-/**
- * Clear ALL route layers from the map (including any orphaned layers)
- * This ensures no route artifacts remain when switching between routes
- */
-function clearAllRouteLayersFromMap() {
-    if (!map) return;
-
-    try {
-        const style = map.getStyle();
-        const plan = _routeSelection().buildClearAllRouteLayersFromMapPlan(style);
-        if (!plan.hasArtifacts) return;
-
-        plan.layerIds.forEach((layerId) => {
-            try {
-                if (map.getLayer(layerId)) {
-                    map.removeLayer(layerId);
-                }
-            } catch (e) {
-                console.warn(`${plan.layerErrorLogPrefix}${layerId}:`, e.message);
-            }
-        });
-
-        plan.sourceIds.forEach((sourceId) => {
-            try {
-                if (map.getSource(sourceId)) {
-                    map.removeSource(sourceId);
-                }
-            } catch (e) {
-                console.warn(`${plan.sourceErrorLogPrefix}${sourceId}:`, e.message);
-            }
-        });
-
-        if (plan.successLogMessage) console.log(plan.successLogMessage);
-    } catch (e) {
-        console.error('[Routes] Error clearing route layers:', e);
-    }
+function applyBringRoutesToTopFromPlan(plan) {
+    return VoyagrRouteComparisonOrchestration.applyBringRoutesToTopFromPlan(plan);
 }
-
-/**
- * Clear in-memory route layer handles from a pre-mount plan.
- * @param {Object} plan - from buildDisplayAllRoutesMapPreMountPlan
- */
-function clearRouteLayerHandlesFromPlan(plan) {
-    if (!plan) return;
-    if (plan.clearRouteLayerHandle && routeLayer && typeof routeLayer.remove === 'function') {
-        routeLayer.remove();
-        routeLayer = null;
-    }
-    if (plan.clearAllRouteLayerHandles) {
-        allRouteLayers.forEach((layer) => {
-            if (layer && typeof layer.remove === 'function') {
-                layer.remove();
-            }
-        });
-        allRouteLayers = [];
-    }
-}
-
-/**
- * Mount one MapLibre line layer from a mount execute plan.
- * @param {Object} mountPlan
- * @param {Object} [opts]
- * @returns {boolean}
- */
+function clearAllRouteLayersFromMap() { VoyagrRouteComparisonOrchestration.clearAllRouteLayersFromMap(); }
+function clearRouteLayerHandlesFromPlan(plan) { VoyagrRouteComparisonOrchestration.clearRouteLayerHandlesFromPlan(plan); }
 function applyMapLibreLineLayerFromMountPlan(mountPlan, opts) {
-    opts = opts || {};
-    if (!mountPlan || !mountPlan.shouldMount || !map) return false;
-
-    try {
-        const { layerId, sourceId } = mountPlan;
-        if (map.getLayer(layerId)) map.removeLayer(layerId);
-        if (map.getSource(sourceId)) map.removeSource(sourceId);
-
-        map.addSource(sourceId, {
-            type: 'geojson',
-            data: mountPlan.geoJsonFeature,
-        });
-
-        const lineWidth = mountPlan.paint.lineWeight != null
-            ? mountPlan.paint.lineWeight
-            : mountPlan.paint.lineWidth;
-
-        map.addLayer({
-            id: layerId,
-            type: 'line',
-            source: sourceId,
-            layout: mountPlan.layerLayout,
-            paint: {
-                'line-color': mountPlan.paint.lineColor,
-                'line-width': MapLibreHelpers.buildZoomScaledLineWidth(lineWidth),
-                'line-opacity': mountPlan.paint.lineOpacity,
-            },
-        }, mountPlan.beforeId);
-
-        if (mountPlan.registerLayerHandle) {
-            allRouteLayers.unshift({
-                id: layerId,
-                remove: () => {
-                    if (map.getLayer(layerId)) map.removeLayer(layerId);
-                    if (map.getSource(sourceId)) map.removeSource(sourceId);
-                },
-            });
-        }
-        return true;
-    } catch (e) {
-        if (mountPlan.errorLogMessage) {
-            console.error(mountPlan.errorLogMessage, e);
-        } else {
-            const prefix = mountPlan.errorLogPrefix || '[Map] Failed to draw line layer ';
-            const suffix = mountPlan.legIndex != null ? mountPlan.legIndex : '';
-            console.warn(`${prefix}${suffix}:`, e);
-        }
-        return false;
-    }
+    return VoyagrRouteComparisonOrchestration.applyMapLibreLineLayerFromMountPlan(mountPlan, opts);
+}
+function applyDisplayAllRoutesStyleLoadScheduleFromPlan(schedule, fn) {
+    VoyagrRouteComparisonOrchestration.applyDisplayAllRoutesStyleLoadScheduleFromPlan(schedule, fn);
+}
+function applyDoAddRouteLayersPostMountFromPlan(plan) { VoyagrRouteComparisonOrchestration.applyDoAddRouteLayersPostMountFromPlan(plan); }
+function applySingleRouteMapDisplayFromPlan(plan) { VoyagrRouteComparisonOrchestration.applySingleRouteMapDisplayFromPlan(plan); }
+function displayAllRoutesOnMap() { VoyagrRouteComparisonOrchestration.displayAllRoutesOnMap(); }
+function applyDisplayAllRoutesOnMapFromPlan(apply) { VoyagrRouteComparisonOrchestration.applyDisplayAllRoutesOnMapFromPlan(apply); }
+function applyDisplayAllRoutesPreMountFromPlan(apply) { VoyagrRouteComparisonOrchestration.applyDisplayAllRoutesPreMountFromPlan(apply); }
+function applyRouteLayerFromMapLibrePlan(applyPlan) { return VoyagrRouteComparisonOrchestration.applyRouteLayerFromMapLibrePlan(applyPlan); }
+function applyDoAddRouteLayersBatchFromPlan(executePlan) { VoyagrRouteComparisonOrchestration.applyDoAddRouteLayersBatchFromPlan(executePlan); }
+function applyDoAddRouteLayersFromPlan(apply) { VoyagrRouteComparisonOrchestration.applyDoAddRouteLayersFromPlan(apply); }
+function doAddRouteLayers() { VoyagrRouteComparisonOrchestration.doAddRouteLayers(); }
+function bringRoutesToTop() { VoyagrRouteComparisonOrchestration.bringRoutesToTop(); }
+function applyRouteComparisonListDomFromPlan(domPlan) { VoyagrRouteComparisonOrchestration.applyRouteComparisonListDomFromPlan(domPlan); }
+function applyDisplayRouteComparisonFromPlan(apply) { VoyagrRouteComparisonOrchestration.applyDisplayRouteComparisonFromPlan(apply); }
+function displayRouteComparison() { VoyagrRouteComparisonOrchestration.displayRouteComparison(); }
+function selectRoute(index) { VoyagrRouteComparisonOrchestration.selectRoute(index); }
+function applyTripInfoDomFromPlan(apply) { VoyagrRouteComparisonOrchestration.applyTripInfoDomFromPlan(apply); }
+function updateTripInfoFromRouteOption(route) { VoyagrRouteComparisonOrchestration.updateTripInfoFromRouteOption(route); }
+function displaySingleRoute(index) { VoyagrRouteComparisonOrchestration.displaySingleRoute(index); }
+function showAllRoutes() { VoyagrRouteComparisonOrchestration.showAllRoutes(); }
+function useRoute(index) { VoyagrRouteComparisonOrchestration.useRoute(index); }
+function syncLastCalculatedRouteFromSelection(index) {
+    VoyagrRouteComparisonOrchestration.syncLastCalculatedRouteFromSelection(index);
 }
 
-/**
- * Schedule route layer mounting based on a style-load schedule apply plan.
- * @param {Object} schedule - from buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan
- * @param {Function} addRouteLayersFn
- */
-function applyDisplayAllRoutesStyleLoadScheduleFromPlan(schedule, addRouteLayersFn) {
-    if (!schedule || !schedule.shouldApply || schedule.strategy === 'immediate') {
-        addRouteLayersFn();
-        return;
-    }
-
-    if (schedule.waitLogMessage) console.log(schedule.waitLogMessage);
-    map.once('style.load', addRouteLayersFn);
-    setTimeout(() => {
-        if (schedule.runFallbackOnlyIfNoLayers && allRouteLayers.length === 0) {
-            if (schedule.fallbackLogMessage) console.log(schedule.fallbackLogMessage);
-            addRouteLayersFn();
-        }
-    }, schedule.fallbackTimeoutMs);
-}
-
-/**
- * Apply post-mount side effects after doAddRouteLayers.
- * @param {Object} plan - from buildDoAddRouteLayersPostMountExecutePlan
- */
-function applyDoAddRouteLayersPostMountFromPlan(plan) {
-    if (!plan) return;
-
-    if (plan.fitBounds) {
-        MapLibreHelpers.fitMapBounds(
-            map,
-            plan.fitBounds.coords,
-            { padding: plan.fitBounds.padding }
-        );
-    }
-
-    if (plan.displayAllRouteHazards) {
-        displayAllRouteHazards();
-    }
-
-    if (plan.ensureTomTomTrafficLayer) {
-        addTrafficLayer();
-    }
-
-    if (plan.bringRoutesToTop) {
-        bringRoutesToTop();
-    }
-
-    if (plan.debugInspectRouteLayers) {
-        setTimeout(() => {
-            const style = map.getStyle();
-            if (style && style.layers) {
-                const routeLayers = style.layers.filter((l) => l.id.startsWith('route-layer-'));
-                console.log(plan.debugLogPrefix,
-                    routeLayers.map((l) => ({ id: l.id, color: l.paint?.['line-color'] })));
-            }
-        }, plan.debugInspectDelayMs);
-    }
-
-    if (plan.completionLogMessage) console.log(plan.completionLogMessage);
-}
-
-/**
- * Apply displaySingleRoute side effects from a pure execute plan.
- * @param {Object} plan - from buildSingleRouteMapDisplayExecutePlan
- */
-function applySingleRouteMapDisplayFromPlan(plan) {
-    if (!plan || !plan.shouldExecute) return;
-
-    if (plan.clearAllRouteLayers) {
-        clearAllRouteLayersFromMap();
-    }
-
-    const polylinePoints = plan.polyline.points || [];
-    if (polylinePoints.length > 0) {
-        const layer = MapLibreHelpers.addPolyline(map, polylinePoints, {
-            color: plan.polyline.color,
-            weight: plan.polyline.weight,
-            opacity: plan.polyline.opacity,
-        });
-
-        allRouteLayers.push(layer);
-        MapLibreHelpers.fitMapBounds(map, polylinePoints, { padding: plan.polyline.fitBoundsPadding });
-    }
-
-    if (plan.hazards.action === 'show') {
-        displayHazardMarkers(plan.hazards.list);
-    } else {
-        clearHazardMarkers();
-    }
-
-    if (plan.ensureTomTomTrafficLayer) {
-        addTrafficLayer();
-    }
-
-    if (plan.routeTraffic.enabled) {
-        routePolyline = plan.routeTraffic.polylinePoints;
-        fetchAndDisplayRouteTraffic();
-    }
-
-    const tl = plan.trafficLights;
-    if (tl.polylinePoints.length > 0) {
-        const plotRouteTrafficLights =
-            (typeof window !== 'undefined' &&
-             window.TrafficLights &&
-             typeof window.TrafficLights.plotTrafficLightsOnRoute === 'function')
-                ? window.TrafficLights.plotTrafficLightsOnRoute
-                : (typeof plotTrafficLightsOnRoute === 'function' ? plotTrafficLightsOnRoute : null);
-
-        if (window.TrafficLights && typeof window.TrafficLights.clearAllTrafficLights === 'function') {
-            if (tl.action === 'clear') {
-                window.TrafficLights.clearAllTrafficLights();
-            }
-        }
-
-        if (tl.action === 'plot' && plotRouteTrafficLights) {
-            console.log(plan.plotTrafficLightsLogMessage);
-            plotRouteTrafficLights(tl.polylinePoints);
-        } else if (tl.hasOsmTlsInHazards) {
-            console.log(plan.skipDuplicatePlotLogMessage);
-        } else if (!plotRouteTrafficLights) {
-            console.warn(plan.moduleUnavailableLogMessage);
-        }
-    }
-
-    if (plan.logLine) console.log(plan.logLine);
-}
-
-/**
- * Display all routes on map with different colors
- * @function displayAllRoutesOnMap
- * @returns {void}
- */
-function collectDisplayAllRoutesOnMapInput() {
+function getRouteComparisonOrchestrationRuntime() {
     return {
-        routeOptions,
-        isStyleLoaded: map?.isStyleLoaded(),
+        routeSelection: () => _routeSelection(),
+        getMap: () => map,
+        getMapLibreHelpers: () => MapLibreHelpers,
+        getRouteOptions: () => routeOptions,
+        setRouteOptions: (val) => { routeOptions = val; },
+        getSelectedRouteIndex: () => selectedRouteIndex,
+        setSelectedRouteIndex: (val) => { selectedRouteIndex = val; },
+        getRouteLayer: () => routeLayer,
+        setRouteLayer: (val) => { routeLayer = val; },
+        getRoutePolyline: () => routePolyline,
+        setRoutePolyline: (val) => { routePolyline = val; },
+        getShowTrafficEnabled: () => showTrafficEnabled,
+        getTrafficLayer: () => trafficLayer,
+        call: {
+            decodePolyline,
+            displayAllRouteHazards,
+            addTrafficLayer,
+            displayHazardMarkers,
+            clearHazardMarkers,
+            fetchAndDisplayRouteTraffic,
+            showRoutePreview,
+            showStatus,
+            convertDistance,
+            getDistanceUnit,
+            getCurrencySymbol,
+            routeColors,
+            ensureLabelsOnTop,
+            getTrafficSettingsSnapshot: () => VoyagrTrafficOrchestration.getTrafficSettingsSnapshot(),
+        },
     };
-}
-
-function displayAllRoutesOnMap() {
-    const input = collectDisplayAllRoutesOnMapInput();
-    const entry = _routeSelection().buildDisplayAllRoutesMapEntryOrchestrationPlan(
-        input.routeOptions,
-        { isStyleLoaded: input.isStyleLoaded }
-    );
-    applyDisplayAllRoutesOnMapFromPlan(entry.apply);
-}
-
-function applyDisplayAllRoutesOnMapFromPlan(apply) {
-    if (!apply || !apply.shouldApply) {
-        if (apply && apply.noRoutesLogMessage) console.warn(apply.noRoutesLogMessage);
-        if (apply && apply.entryLogMessage) {
-            console.log(apply.entryLogMessage);
-            console.log(apply.routeCountLogPrefix, apply.routeCount, 'routes');
-        }
-        return;
-    }
-
-    console.log(apply.entryLogMessage);
-    console.log(apply.routeCountLogPrefix, apply.routeCount, 'routes');
-
-    const mount = apply.mount;
-    applyDisplayAllRoutesPreMountFromPlan(mount.preMountApply);
-
-    if (mount.requireMap && !map) {
-        console.error(mount.mapMissingLogMessage);
-        return;
-    }
-
-    applyDisplayAllRoutesStyleLoadScheduleFromPlan(mount.styleSchedule, () => {
-        if (mount.addLayersLogMessage) console.log(mount.addLayersLogMessage);
-        doAddRouteLayers();
-    });
-}
-
-function applyDisplayAllRoutesPreMountFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-    clearRouteLayerHandlesFromPlan(apply);
-    if (apply.clearMapRouteLayers) {
-        clearAllRouteLayersFromMap();
-    }
-    if (apply.hydratePolylines) {
-        _routeSelection().hydrateRouteOptionPolylines(routeOptions, decodePolyline);
-    }
-}
-
-/**
- * Actually add route layers to the map (called after style is loaded)
- */
-/**
- * Apply one route line layer from a MapLibre apply plan.
- * @param {Object} applyPlan
- * @returns {boolean}
- */
-function applyRouteLayerFromMapLibrePlan(applyPlan) {
-    return applyMapLibreLineLayerFromMountPlan(
-        _routeSelection().buildRouteLayerMapLibreMountExecutePlan(applyPlan)
-    );
-}
-
-/**
- * Apply a doAddRouteLayers batch execute plan.
- * @param {Object} executePlan - from buildDoAddRouteLayersBatchExecutePlan
- */
-function applyDoAddRouteLayersBatchFromPlan(executePlan) {
-    if (!executePlan) return;
-
-    (executePlan.layerSteps || []).forEach((step) => {
-        if (step.startLogMessage) console.log(step.startLogMessage);
-        if (!step.valid) {
-            if (step.invalidLogMessage) console.error(step.invalidLogMessage);
-            return;
-        }
-        if (step.drawLogMessage) console.log(step.drawLogMessage);
-        if (applyRouteLayerFromMapLibrePlan(step.applyPlan) && step.successLogMessage) {
-            console.log(step.successLogMessage);
-        }
-    });
-}
-
-function applyDoAddRouteLayersFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-    applyDoAddRouteLayersBatchFromPlan(apply.batchExecute);
-    applyDoAddRouteLayersPostMountFromPlan(apply.postMount);
-}
-
-function collectDoAddRouteLayersInput() {
-    const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
-    return {
-        routeOptions,
-        selectedRouteIndex,
-        styleLayers: style && style.layers ? style.layers : [],
-        showTrafficEnabled,
-        hasTrafficLayer: !!trafficLayer,
-        mountedLayerCount: allRouteLayers.length,
-    };
-}
-
-function doAddRouteLayers() {
-    applyDoAddRouteLayersFromPlan(
-        _routeSelection().buildDoAddRouteLayersEntryOrchestrationPlan(
-            collectDoAddRouteLayersInput()
-        ).apply
-    );
-}
-
-function applyBringRoutesToTopEntryFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-    if (apply.entryLogPrefix != null) {
-        console.log(apply.entryLogPrefix, apply.layerCount);
-    }
-    if (apply.requiresMap && !map) {
-        if (apply.mapMissingLogMessage) console.warn(apply.mapMissingLogMessage);
-        return;
-    }
-    applyBringRoutesToTopFromPlan(apply.execute);
-}
-
-function collectBringRoutesToTopInput() {
-    const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
-    return {
-        layerCount: allRouteLayers?.length || 0,
-        layerDescriptors: allRouteLayers,
-        styleLayers: style && style.layers ? style.layers : null,
-    };
-}
-
-/**
- * Bring all route layers to the top of the map rendering order
- * This ensures routes are visible above traffic edges and other overlays
- * NOTE: Routes are now inserted before symbol layers by default (via beforeId parameter),
- * so this function primarily ensures routes are above traffic/weather layers
- */
-function bringRoutesToTop() {
-    const RS = _routeSelection();
-    const input = collectBringRoutesToTopInput();
-    applyBringRoutesToTopEntryFromPlan(
-        RS.buildBringRoutesToTopEntryApplyPlan(
-            RS.buildBringRoutesToTopEntryOrchestrationPlan(input)
-        )
-    );
 }
 
 // ===== WAYPOINTS ORCHESTRATION =====
@@ -2579,222 +2187,6 @@ function displayMultiDropLegs(data) { VoyagrWaypointsOrchestration.displayMultiD
 function clearMultiDropLayers() { VoyagrWaypointsOrchestration.clearMultiDropLayers(); }
 function getOrderedWaypoints(startLat, startLon, endLat, endLon) {
     return VoyagrWaypointsOrchestration.getOrderedWaypoints(startLat, startLon, endLat, endLon);
-}
-function applyRouteComparisonListDomFromPlan(domPlan) {
-    if (!domPlan) return;
-    const listContainer = document.getElementById(domPlan.containerId || 'routeComparisonList');
-    if (!listContainer) return;
-    listContainer.innerHTML = domPlan.innerHtml;
-}
-
-function applyDisplayRouteComparisonFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-    applyRouteComparisonListDomFromPlan(apply.domPlan);
-}
-
-function collectDisplayRouteComparisonInput() {
-    const routes = routeOptions || [];
-    return {
-        routes,
-        selectedRouteIndex,
-        routeColors: routeColors(),
-        currencySymbol: getCurrencySymbol(),
-        distUnit: getDistanceUnit(),
-        distanceTexts: routes.map((route) => convertDistance(route.distance_km)),
-    };
-}
-
-/**
- * displayRouteComparison function - Shows distinct route types with hazard counts
- * @function displayRouteComparison
- * @returns {void}
- */
-function displayRouteComparison() {
-    applyDisplayRouteComparisonFromPlan(
-        _routeSelection().buildDisplayRouteComparisonEntryOrchestrationPlan(
-            collectDisplayRouteComparisonInput()
-        ).apply
-    );
-}
-
-function applySelectRouteFromPlan(apply, index) {
-    if (!apply || !apply.shouldApply) return;
-
-    selectedRouteIndex = apply.selectedRouteIndex;
-
-    if (apply.displaySingleRoute) displaySingleRoute(index);
-    if (apply.displayRouteComparison) displayRouteComparison();
-
-    if (apply.syncLastCalculatedRoute) syncLastCalculatedRouteFromSelection(index);
-    console.log(
-        `${apply.logPrefix} "${apply.routeName}" with ${apply.maneuverCount} maneuvers`
-    );
-
-    if (apply.updateTripInfo) updateTripInfoFromRouteOption(apply.selectedRoute);
-
-    if (apply.showRoutePreview && apply.preview && apply.preview.shouldPreview) {
-        showRoutePreview(apply.preview.previewPayload, true);
-    }
-}
-
-function collectSelectRouteInput(index) {
-    return {
-        index,
-        routeOptions,
-        lastRouteApiResponse: window.lastRouteApiResponse,
-    };
-}
-
-/**
- * selectRoute function - shows only the selected route and hides others
- * @function selectRoute
- * @param {number} index - Route index to select
- */
-function selectRoute(index) {
-    const orch = _routeSelection().buildSelectRouteEntryOrchestrationPlan(
-        collectSelectRouteInput(index)
-    );
-    applySelectRouteFromPlan(orch.apply, index);
-}
-
-/**
- * Apply formatted trip info values to the navigation panel DOM.
- * @param {Object} display
- */
-function applyTripInfoDomFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    const distanceEl = document.getElementById(apply.distanceId);
-    const timeEl = document.getElementById(apply.timeId);
-    const fuelEl = document.getElementById(apply.fuelCostId);
-    const tollEl = document.getElementById(apply.tollCostId);
-    if (distanceEl) {
-        distanceEl.textContent = apply.distanceText;
-        distanceEl.dataset.km = apply.distanceKm;
-    }
-    if (timeEl) timeEl.textContent = apply.durationMinutes + ' min';
-    if (fuelEl) {
-        fuelEl.textContent = apply.fuelCostText;
-        fuelEl.dataset.value = apply.fuelCost;
-    }
-    if (tollEl) {
-        tollEl.textContent = apply.tollCostText;
-        tollEl.dataset.value = apply.tollCost;
-    }
-    if (apply.costLogMessage && apply.costLogPayload) {
-        console.log(apply.costLogMessage, apply.costLogPayload);
-    }
-}
-
-/**
- * Update navigation tab distance/time/cost from a route option object.
- * @param {Object} route
- */
-function updateTripInfoFromRouteOption(route) {
-    if (!route) return;
-    const orch = _routeSelection().buildTripInfoUpdateFromRouteOrchestrationPlan(route, {
-        distanceText: convertDistance(route.distance_km),
-        distUnit: getDistanceUnit(),
-        currencySymbol: getCurrencySymbol(),
-    });
-    if (!orch.shouldUpdate) return;
-    applyTripInfoDomFromPlan(orch.apply);
-}
-
-function collectUseRouteInput(index) {
-    const traffic = VoyagrTrafficOrchestration.getTrafficSettingsSnapshot();
-    return {
-        index,
-        routeOptions,
-        routeTrafficEnabled: traffic.routeTrafficEnabled,
-    };
-}
-
-function collectDisplaySingleRouteRuntime() {
-    const traffic = VoyagrTrafficOrchestration.getTrafficSettingsSnapshot();
-    return {
-        displayOpts: {
-            routeColors: routeColors(),
-            showTrafficEnabled,
-            routeTrafficEnabled: traffic.routeTrafficEnabled,
-            hasTrafficLayer: !!trafficLayer,
-            trafficLightsEnabled: window.TrafficLights && typeof window.TrafficLights.isEnabled === 'function' && window.TrafficLights.isEnabled(),
-            trafficLightsPlotAvailable: (window.TrafficLights && typeof window.TrafficLights.plotTrafficLightsOnRoute === 'function')
-                || typeof plotTrafficLightsOnRoute === 'function',
-        },
-    };
-}
-
-function applyDisplaySingleRouteFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    console.log(apply.entryLogMessage);
-    clearRouteLayerHandlesFromPlan(apply.preClear);
-    applySingleRouteMapDisplayFromPlan(apply.execute);
-}
-
-function collectDisplaySingleRouteInput(index) {
-    return {
-        index,
-        routeOptions,
-        runtime: collectDisplaySingleRouteRuntime(),
-    };
-}
-
-/**
- * Display only a single route on the map
- * @param {number} index - Route index to display
- */
-function displaySingleRoute(index) {
-    const orch = _routeSelection().buildDisplaySingleRouteEntryOrchestrationPlan(
-        collectDisplaySingleRouteInput(index)
-    );
-    applyDisplaySingleRouteFromPlan(orch.apply);
-}
-
-/**
- * Show all routes on the map (called by "Show All Routes" button)
- */
-function applyShowAllRoutesFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-    if (apply.displayAllRoutes) displayAllRoutesOnMap();
-    showStatus(apply.statusMessage, apply.statusType);
-}
-
-function showAllRoutes() {
-    applyShowAllRoutesFromPlan(
-        _routeSelection().buildShowAllRoutesEntryOrchestrationPlan(
-            routeOptions ? routeOptions.length : 0
-        ).apply
-    );
-}
-
-function applyUseRouteFromPlan(apply, index) {
-    if (!apply || !apply.shouldApply) return;
-
-    selectedRouteIndex = apply.selectedRouteIndex;
-    if (apply.syncLastCalculatedRoute) syncLastCalculatedRouteFromSelection(index);
-    if (apply.updateTripInfo) updateTripInfoFromRouteOption(apply.route);
-
-    if (apply.previewTraffic) {
-        routePolyline = apply.previewPolyline;
-        fetchAndDisplayRouteTraffic();
-    }
-
-    showStatus(apply.statusMessage, apply.statusType);
-}
-
-/**
- * useRoute function
- * @function useRoute
- * @param {*} index - Parameter description
- * @returns {*} Return value description
- */
-function useRoute(index) {
-    const orch = _routeSelection().buildUseRouteEntryOrchestrationPlan(
-        collectUseRouteInput(index)
-    );
-    applyUseRouteFromPlan(orch.apply, index);
 }
 
 // ===== ROUTE SHARING ORCHESTRATION =====
@@ -2987,16 +2379,6 @@ function buildRoutePayloadFromPersisted(saved) {
     );
 }
 
-/**
- * Apply selected route option fields to window.lastCalculatedRoute (geometry + maneuvers for TBT).
- */
-function syncLastCalculatedRouteFromSelection(index) {
-    if (!routeOptions || !routeOptions[index]) return;
-    window.lastCalculatedRoute = _routeSelection().mergeLastCalculatedRouteFromSelection(
-        window.lastCalculatedRoute,
-        routeOptions[index]
-    );
-}
 
 /**
  * showStatus function
@@ -5599,7 +4981,7 @@ function getTrafficOrchestrationRuntime() {
         getCurrentLon: () => currentLon,
         getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
         getRouteLayer: () => routeLayer,
-        getAllRouteLayers: () => allRouteLayers,
+        getAllRouteLayers: () => VoyagrRouteComparisonOrchestration.getAllRouteLayers(),
         getVoiceAnnouncementsEnabled: () => voiceAnnouncementsEnabled,
         showStatus,
         saveAllSettings,
@@ -6828,7 +6210,7 @@ function toggleJourneyOverview() {
         const activate = MC.buildToggleJourneyOverviewActivatePlan({
             mapCenter: map.getCenter(),
             mapZoom: map.getZoom(),
-            useMultiRouteCoords: allRouteLayers.length > 0
+            useMultiRouteCoords: VoyagrRouteComparisonOrchestration.getAllRouteLayers().length > 0
                 && routeOptions
                 && routeOptions[0]
                 && routeOptions[0].polyline,
@@ -11143,6 +10525,7 @@ VoyagrRouteAvoidanceOrchestration.bind(getRouteAvoidanceOrchestrationRuntime());
 VoyagrRoadNameOrchestration.bind(getRoadNameOrchestrationRuntime());
 VoyagrMobilePwaOrchestration.bind(getMobilePwaOrchestrationRuntime());
 VoyagrHazardPreferencesOrchestration.bind(getHazardPreferencesOrchestrationRuntime());
+VoyagrRouteComparisonOrchestration.bind(getRouteComparisonOrchestrationRuntime());
 VoyagrJourneySummaryOrchestration.bind(getJourneySummaryOrchestrationRuntime());
 
 
