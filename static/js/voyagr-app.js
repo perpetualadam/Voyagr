@@ -24,13 +24,12 @@ if (typeof window !== 'undefined' && window.ethereum) {
 // Toll pref migration runs in modules/navigation/route-prefs.js on module load.
 
 function isAvoidTollsEnabled() {
-    return _routePrefs().isAvoidTollsEnabled(localStorage);
+    return VoyagrRoutePreferencesOrchestration.isAvoidTollsEnabled();
 }
 window.isAvoidTollsEnabled = isAvoidTollsEnabled;
 
 function getRouteCostParams(vehicleType) {
-    const vt = vehicleType || (typeof currentVehicleType !== 'undefined' ? currentVehicleType : null);
-    return _routePrefs().getRouteCostParams(vt, localStorage);
+    return VoyagrRoutePreferencesOrchestration.getRouteCostParams(vehicleType);
 }
 window.getRouteCostParams = getRouteCostParams;
 
@@ -560,11 +559,11 @@ let selectedRouteIndex = 0;
 
 // Route colors for multi-route display (via route-selection accessor)
 function routeColors() {
-    return _routeSelection().ROUTE_COLORS;
+    return VoyagrRouteComparisonOrchestration.routeColors();
 }
 /** Active navigation / reroute line — matches primary route color. */
 function navActiveRouteColor() {
-    return _routeSelection().NAV_ACTIVE_ROUTE_COLOR;
+    return VoyagrRouteComparisonOrchestration.navActiveRouteColor();
 }
 
 function applyBringRoutesToTopFromPlan(plan) {
@@ -718,6 +717,7 @@ function getRoutePreferencesOrchestrationRuntime() {
         routePrefs: () => _routePrefs(),
         settingsSnapshot: () => _settingsSnapshot(),
         routeSelection: () => _routeSelection(),
+        getCurrentVehicleType: () => currentVehicleType,
         call: {
             showStatus,
             saveAllSettings,
@@ -726,7 +726,6 @@ function getRoutePreferencesOrchestrationRuntime() {
             ensureDefaultTrafficAwareRouting,
             calculateRoute,
             switchTab,
-            isAvoidTollsEnabled,
         },
     };
 }
@@ -1692,6 +1691,9 @@ function getGpsOrchestrationRuntime() {
 }
 
 function startGPSTracking() { VoyagrGpsOrchestration.startGPSTracking(); }
+function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+    return VoyagrGpsOrchestration.calculateDistanceMeters(lat1, lon1, lat2, lon2);
+}
 function resolveGpsRouteSnapForTick(lat, lon) {
     return VoyagrGpsOrchestration.resolveGpsRouteSnapForTick(lat, lon);
 }
@@ -2301,23 +2303,6 @@ function getJourneyOverviewOrchestrationRuntime() {
 function toggleJourneyOverview() { VoyagrJourneyOverviewOrchestration.toggleJourneyOverview(); }
 
 // ===== DISTANCE CALCULATION & TURN DETECTION =====
-/**
- * Calculate distance between two coordinates in meters (Haversine formula).
- */
-function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
-    return _routeGeometry().haversineDistanceMeters(lat1, lon1, lat2, lon2);
-}
-
-/**
- * Distance along the polyline from a snapped point (snapped onto segment i0) to
- * a target vertex, forward along the line only.
- * @param {Array} routePolyline - [lat, lon] polyline
- * @param {Object} snap - Result of snapToRoutePolyline (index, t, …)
- * @param {number} targetVertexIndex - Maneuver begin_shape_index (clamped to polyline)
- * @returns {number} Meters, >= 0
- */
-
-/**
  * Map a Valhalla maneuver type to a turn-by-turn direction key, or null when it is not
  * an announceable maneuver (start / continue / straight / ramp-straight / stay-straight).
  * Shared by the advance "Then" maneuver (widget + voice). Kept in sync with the inline

@@ -17,6 +17,14 @@
 
     function RS() { return rt().routeSelection(); }
 
+    function routeColors() {
+        return RS().ROUTE_COLORS;
+    }
+
+    function navActiveRouteColor() {
+        return RS().NAV_ACTIVE_ROUTE_COLOR;
+    }
+
 function applyBringRoutesToTopFromPlan(plan) {
     const map = rt().getMap();
     if (!plan || !plan.shouldExecute || !map) return;
@@ -496,7 +504,7 @@ function collectDisplayRouteComparisonInput() {
     return {
         routes,
         selectedRouteIndex: rt().getSelectedRouteIndex(),
-        routeColors: rt().call.routeColors(),
+        routeColors: routeColors(),
         currencySymbol: rt().call.getCurrencySymbol(),
         distUnit: rt().call.getDistanceUnit(),
         distanceTexts: routes.map((route) => rt().call.convertDistance(route.distance_km)),
@@ -613,7 +621,7 @@ function collectDisplaySingleRouteRuntime() {
     const traffic = rt().call.getTrafficSettingsSnapshot();
     return {
         displayOpts: {
-            routeColors: rt().call.routeColors(),
+            routeColors: routeColors(),
             showTrafficEnabled: rt().getShowTrafficEnabled(),
             routeTrafficEnabled: traffic.routeTrafficEnabled,
             hasTrafficLayer: !!rt().getTrafficLayer(),
@@ -712,6 +720,8 @@ function syncLastCalculatedRouteFromSelection(index) {
 
     var api = {
         bind: bind,
+        routeColors: routeColors,
+        navActiveRouteColor: navActiveRouteColor,
         getAllRouteLayers: getAllRouteLayers,
         applyBringRoutesToTopFromPlan: applyBringRoutesToTopFromPlan,
         clearAllRouteLayersFromMap: clearAllRouteLayersFromMap,

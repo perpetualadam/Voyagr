@@ -30,6 +30,10 @@
     function ndModule() { return rt().m.navigationDestination(); }
     function rrModule() { return rt().m.routingRequest(); }
 
+    function calculateDistanceMeters(lat1, lon1, lat2, lon2) {
+        return rgModule().haversineDistanceMeters(lat1, lon1, lat2, lon2);
+    }
+
     function resolveGpsRouteSnapForTick(lat, lon) {
         const RG = rgModule();
         const plan = RG.buildGpsRouteSnapTickPlan({
@@ -551,7 +555,7 @@
             routeInProgress: rt().g('routeInProgress'),
             odometerState: { lastGeo: rt().g('_navOdometerLastGeo'), traveledMeters: rt().g('_navTraveledMeters') },
             nowMs: Date.now(),
-            calculateDistanceMeters: rt().call.calculateDistanceMeters,
+            calculateDistanceMeters: calculateDistanceMeters,
         });
         const apply = SG.buildGpsCoordSampleStateApplyPlan(tick);
         if (apply.action !== 'apply') {
@@ -613,7 +617,7 @@
             smoothDisplayLat: rt().g('_smoothDisplayLat'),
             smoothDisplayLon: rt().g('_smoothDisplayLon'),
             lastFollowCenterGeo: window.__voyagrLastFollowCenterGeo,
-            calculateDistanceMeters: rt().call.calculateDistanceMeters,
+            calculateDistanceMeters: calculateDistanceMeters,
             calculateBearing: (a, b, c, d) => rgModule().bearing(a, b, c, d),
             blendHeadingsCircular: rgModule().blendHeadingsCircular,
             resolveGpsHeading: () => (SGhead
@@ -621,7 +625,7 @@
                     deviceHeading: coord.deviceHeading,
                     speed: coord.speed,
                     trackingHistory: rt().g('trackingHistory'),
-                    calculateDistanceMeters: rt().call.calculateDistanceMeters,
+                    calculateDistanceMeters: calculateDistanceMeters,
                 })
                 : 0),
             isTrackingActive: rt().g('isTrackingActive'),
@@ -1584,7 +1588,7 @@
             snappedRouteIndex: rt().g('lastSnappedRouteIndex'),
             cameraAlertDistanceM: cameraAlertDistance,
             generalHazardDistanceM: rt().consts.HAZARD_WARNING_DISTANCE,
-            calculateDistance: rt().call.calculateDistanceMeters,
+            calculateDistance: calculateDistanceMeters,
         });
         const alerts = HA.collectHazardsToAnnounce(params);
 
@@ -1642,6 +1646,7 @@
 
     var api = {
         bind: bind,
+        calculateDistanceMeters: calculateDistanceMeters,
         resolveGpsRouteSnapForTick: resolveGpsRouteSnapForTick,
         getVehicleDisplayCoordinates: getVehicleDisplayCoordinates,
         startGPSTracking: startGPSTracking,

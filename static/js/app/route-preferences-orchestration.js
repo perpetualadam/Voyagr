@@ -18,11 +18,20 @@
     function SS() { return rt().settingsSnapshot(); }
     function RS() { return rt().routeSelection(); }
 
+    function isAvoidTollsEnabled() {
+        return RP().isAvoidTollsEnabled(localStorage);
+    }
+
+    function getRouteCostParams(vehicleType) {
+        var vt = vehicleType || rt().getCurrentVehicleType();
+        return RP().getRouteCostParams(vt, localStorage);
+    }
+
 function collectRoutePreferencesDomInput() {
     return {
         avoidHighways: document.getElementById('avoidHighways')?.checked || false,
         preferScenic: document.getElementById('preferScenic')?.checked || false,
-        avoidTolls: rt().call.isAvoidTollsEnabled(),
+        avoidTolls: isAvoidTollsEnabled(),
         avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
         preferQuiet: document.getElementById('preferQuiet')?.checked || false,
         avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
@@ -239,6 +248,8 @@ function recalculateRouteWithPreferences() {
 
     var api = {
         bind: bind,
+        isAvoidTollsEnabled: isAvoidTollsEnabled,
+        getRouteCostParams: getRouteCostParams,
         saveRoutePreferences: saveRoutePreferences,
         loadRoutePreferences: loadRoutePreferences,
         getRoutePreferences: getRoutePreferences,
