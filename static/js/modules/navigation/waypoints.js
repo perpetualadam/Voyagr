@@ -898,6 +898,31 @@
     }
 
     /**
+     * Apply plan for swapping waypoint list entries up or down.
+     * @param {string} type - 'via' | 'stop'
+     * @param {number} index
+     * @param {number} direction
+     * @param {number} [count]
+     * @returns {Object}
+     */
+    function buildWaypointMoveApplyPlan(type, index, direction, count) {
+        var plan = buildWaypointMovePlan(type, index, direction, count);
+        if (!plan.shouldMove) {
+            return { shouldMove: false };
+        }
+        return {
+            shouldMove: true,
+            type: plan.type,
+            fromIndex: plan.fromIndex,
+            toIndex: plan.toIndex,
+            swapData: true,
+            swapMarkers: !plan.refreshViaMarkers,
+            updateWaypointsList: plan.updateWaypointsList,
+            refreshViaMarkers: plan.refreshViaMarkers,
+        };
+    }
+
+    /**
      * Reorder plan for drag-and-drop waypoint list changes.
      * @param {string} type - 'via' | 'stop'
      * @param {number} dragIndex
@@ -921,6 +946,31 @@
             updateWaypointsList: true,
             refreshViaMarkers: type === 'via',
             resetDragOpacity: true,
+        };
+    }
+
+    /**
+     * Apply plan for drag-and-drop waypoint reordering.
+     * @param {string} type - 'via' | 'stop'
+     * @param {number} dragIndex
+     * @param {number} targetIndex
+     * @param {number} [count]
+     * @returns {Object}
+     */
+    function buildWaypointReorderApplyPlan(type, dragIndex, targetIndex, count) {
+        var plan = buildWaypointReorderPlan(type, dragIndex, targetIndex, count);
+        if (!plan.shouldReorder) {
+            return { shouldReorder: false };
+        }
+        return {
+            shouldReorder: true,
+            type: plan.type,
+            fromIndex: plan.fromIndex,
+            toIndex: plan.toIndex,
+            spliceData: true,
+            spliceMarkers: !plan.refreshViaMarkers,
+            updateWaypointsList: plan.updateWaypointsList,
+            refreshViaMarkers: plan.refreshViaMarkers,
         };
     }
 
@@ -1001,6 +1051,53 @@
         return {
             statusMessage: '❌ Could not find that address',
             statusType: 'error',
+        };
+    }
+
+    /**
+     * DOM apply plan after resolving a waypoint address from input dataset.
+     * @param {Object} dispatch - from buildWaypointAddressAddDispatchPlan
+     * @returns {Object}
+     */
+    function buildWaypointAddressResolvedDomApplyPlan(dispatch) {
+        dispatch = dispatch || {};
+        return {
+            inputId: dispatch.inputId,
+            clearInput: !!dispatch.clearInput,
+            clearDatasetKeys: ['lat', 'lon', 'displayName'],
+            hideAutocomplete: !!dispatch.hideAutocomplete,
+        };
+    }
+
+    /**
+     * Outcome apply plan after geocoding a waypoint address query.
+     * @param {string} waypointKind - 'via' | 'stop'
+     * @param {Object|null} geocodeResult
+     * @param {string} [query]
+     * @returns {Object}
+     */
+    function buildWaypointAddressGeocodeOutcomeApplyPlan(waypointKind, geocodeResult, query) {
+        if (geocodeResult) {
+            var success = buildWaypointAddressGeocodeSuccessPlan(
+                waypointKind,
+                geocodeResult.display_name || query
+            );
+            return {
+                shouldAdd: true,
+                waypointKind: waypointKind,
+                lat: geocodeResult.lat,
+                lon: geocodeResult.lon,
+                name: geocodeResult.display_name || query,
+                clearInput: success.clearInput,
+                statusMessage: success.statusMessage,
+                statusType: success.statusType,
+            };
+        }
+        var failure = buildWaypointAddressGeocodeFailurePlan();
+        return {
+            shouldAdd: false,
+            statusMessage: failure.statusMessage,
+            statusType: failure.statusType,
         };
     }
 
@@ -1170,6 +1267,44 @@
             reorderPlan: reorderPlan,
             clearDragState: true,
             resetOpacity: true,
+        };
+    }
+
+    /**
+     * Apply plan for drag-and-drop waypoint list mutations.
+     * @param {Object|null} draggedWaypoint
+     * @param {string|null} targetType
+     * @param {number} targetIndex
+     * @param {number} [viaCount]
+     * @param {number} [stopsCount]
+     * @returns {Object}
+     */
+    function buildWaypointDropApplyPlan(draggedWaypoint, targetType, targetIndex, viaCount, stopsCount) {
+        var dispatch = buildWaypointDropDispatchPlan(
+            draggedWaypoint,
+            targetType,
+            targetIndex,
+            viaCount,
+            stopsCount
+        );
+        if (dispatch.action !== 'reorder') {
+            return {
+                action: dispatch.action,
+                clearDragState: dispatch.clearDragState,
+                resetOpacity: dispatch.resetOpacity,
+            };
+        }
+        var reorder = buildWaypointReorderApplyPlan(
+            dispatch.reorderPlan.type,
+            dispatch.reorderPlan.fromIndex,
+            dispatch.reorderPlan.toIndex,
+            dispatch.reorderPlan.type === 'via' ? (viaCount || 0) : (stopsCount || 0)
+        );
+        return {
+            action: 'reorder',
+            reorder: reorder,
+            clearDragState: dispatch.clearDragState,
+            resetOpacity: dispatch.resetOpacity,
         };
     }
 
@@ -1353,10 +1488,14 @@
         buildClearAllWaypointsPlan: buildClearAllWaypointsPlan,
         buildClearAllWaypointsApplyPlan: buildClearAllWaypointsApplyPlan,
         buildWaypointMovePlan: buildWaypointMovePlan,
+        buildWaypointMoveApplyPlan: buildWaypointMoveApplyPlan,
         buildWaypointReorderPlan: buildWaypointReorderPlan,
+        buildWaypointReorderApplyPlan: buildWaypointReorderApplyPlan,
         buildWaypointAddressAddDispatchPlan: buildWaypointAddressAddDispatchPlan,
         buildWaypointAddressGeocodeSuccessPlan: buildWaypointAddressGeocodeSuccessPlan,
         buildWaypointAddressGeocodeFailurePlan: buildWaypointAddressGeocodeFailurePlan,
+        buildWaypointAddressResolvedDomApplyPlan: buildWaypointAddressResolvedDomApplyPlan,
+        buildWaypointAddressGeocodeOutcomeApplyPlan: buildWaypointAddressGeocodeOutcomeApplyPlan,
         buildAddViaPointTogglePlan: buildAddViaPointTogglePlan,
         buildAddStopTogglePlan: buildAddStopTogglePlan,
         buildMapClickWaypointDispatchPlan: buildMapClickWaypointDispatchPlan,
@@ -1371,6 +1510,7 @@
         buildWaypointDragEventContextPlan: buildWaypointDragEventContextPlan,
         buildWaypointDragOverPlan: buildWaypointDragOverPlan,
         buildWaypointDropDispatchPlan: buildWaypointDropDispatchPlan,
+        buildWaypointDropApplyPlan: buildWaypointDropApplyPlan,
         buildWaypointDragOpacityResetPlan: buildWaypointDragOpacityResetPlan,
         buildMultiDropLegsMapApplyPlan: buildMultiDropLegsMapApplyPlan,
         buildMultiDropLegLayerMapLibreApplyPlan: buildMultiDropLegLayerMapLibreApplyPlan,

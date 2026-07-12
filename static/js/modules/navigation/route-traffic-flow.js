@@ -321,6 +321,50 @@
         };
     }
 
+    /**
+     * Orchestration plan for displaying route-traffic edge polylines on the map.
+     * @param {Object} [input]
+     * @param {Array<Object>} [input.segments]
+     * @param {Array<[number,number]>} [input.polyline]
+     * @param {boolean} [input.hasMap]
+     * @param {number} [input.layersBeforeMount]
+     * @returns {Object}
+     */
+    function buildRouteTrafficEdgesDisplayOrchestrationPlan(input) {
+        input = input || {};
+        var displayPlan = buildRouteTrafficEdgesDisplayPlan(
+            input.segments,
+            input.polyline,
+            { hasMap: input.hasMap !== false }
+        );
+        if (!displayPlan.shouldDisplay) {
+            return {
+                shouldDisplay: false,
+                cannotDisplayLog: displayPlan.cannotDisplayLog,
+            };
+        }
+        var mountComplete = buildRouteTrafficEdgesMountCompletePlan(
+            input.layersBeforeMount || 0,
+            displayPlan.polylineMountCount
+        );
+        return {
+            shouldDisplay: true,
+            levelCounts: displayPlan.levelCounts,
+            mountApply: {
+                polylines: (displayPlan.polylines || []).map(function (polylinePlan) {
+                    return {
+                        points: polylinePlan.points,
+                        color: polylinePlan.color,
+                        weight: polylinePlan.weight,
+                        opacity: polylinePlan.opacity,
+                        registerInRouteTrafficLayers: true,
+                    };
+                }),
+            },
+            postDisplay: buildRouteTrafficEdgesPostDisplayPlan(displayPlan, mountComplete),
+        };
+    }
+
     var ROUTE_TRAFFIC_SAMPLE_TTL_MS = 60 * 1000;
     var ROUTE_TRAFFIC_AHEAD_SAMPLE_SEGMENT_COUNT = 8;
 
@@ -666,6 +710,7 @@
         buildRouteTrafficEdgesDisplayPlan: buildRouteTrafficEdgesDisplayPlan,
         buildRouteTrafficEdgesMountCompletePlan: buildRouteTrafficEdgesMountCompletePlan,
         buildRouteTrafficEdgesPostDisplayPlan: buildRouteTrafficEdgesPostDisplayPlan,
+        buildRouteTrafficEdgesDisplayOrchestrationPlan: buildRouteTrafficEdgesDisplayOrchestrationPlan,
         buildRouteTrafficFlowPreflightPlan: buildRouteTrafficFlowPreflightPlan,
         buildRouteTrafficFlowFetchRequestPlan: buildRouteTrafficFlowFetchRequestPlan,
         buildRouteTrafficFlowResponsePlan: buildRouteTrafficFlowResponsePlan,

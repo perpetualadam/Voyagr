@@ -271,6 +271,23 @@ describe('waypoints module', () => {
         expect(W.buildWaypointReorderPlan('via', 1, 1, 2).shouldReorder).toBe(false);
     });
 
+    test('buildWaypointMoveApplyPlan skips marker swap when refreshing via markers', () => {
+        const viaMove = W.buildWaypointMoveApplyPlan('via', 0, 1, 2);
+        expect(viaMove.shouldMove).toBe(true);
+        expect(viaMove.swapMarkers).toBe(false);
+        expect(viaMove.refreshViaMarkers).toBe(true);
+        const stopMove = W.buildWaypointMoveApplyPlan('stop', 0, 1, 2);
+        expect(stopMove.swapMarkers).toBe(true);
+    });
+
+    test('buildWaypointReorderApplyPlan splices stop markers but refreshes via markers', () => {
+        const viaReorder = W.buildWaypointReorderApplyPlan('via', 0, 1, 2);
+        expect(viaReorder.spliceMarkers).toBe(false);
+        expect(viaReorder.refreshViaMarkers).toBe(true);
+        const stopReorder = W.buildWaypointReorderApplyPlan('stop', 0, 1, 2);
+        expect(stopReorder.spliceMarkers).toBe(true);
+    });
+
     test('buildWaypointAddressAddDispatchPlan resolves coords or geocodes query', () => {
         const resolved = W.buildWaypointAddressAddDispatchPlan({
             lat: '51.5',
@@ -288,6 +305,29 @@ describe('waypoints module', () => {
     test('buildWaypointAddressGeocodeSuccessPlan and failure plan set status', () => {
         expect(W.buildWaypointAddressGeocodeSuccessPlan('via', 'A').statusMessage).toContain('Via-point');
         expect(W.buildWaypointAddressGeocodeFailurePlan().statusType).toBe('error');
+    });
+
+    test('buildWaypointAddressResolvedDomApplyPlan clears dataset keys', () => {
+        const dom = W.buildWaypointAddressResolvedDomApplyPlan({
+            inputId: W.VIA_POINT_ADDRESS_INPUT_ID,
+            clearInput: true,
+            hideAutocomplete: true,
+        });
+        expect(dom.clearDatasetKeys).toEqual(['lat', 'lon', 'displayName']);
+        expect(dom.hideAutocomplete).toBe(true);
+    });
+
+    test('buildWaypointAddressGeocodeOutcomeApplyPlan maps success and failure', () => {
+        const success = W.buildWaypointAddressGeocodeOutcomeApplyPlan('via', {
+            lat: 51.5,
+            lon: -0.1,
+            display_name: 'London',
+        }, 'London');
+        expect(success.shouldAdd).toBe(true);
+        expect(success.name).toBe('London');
+        const failure = W.buildWaypointAddressGeocodeOutcomeApplyPlan('stop', null, 'Nowhere');
+        expect(failure.shouldAdd).toBe(false);
+        expect(failure.statusType).toBe('error');
     });
 
     test('buildAddViaPointTogglePlan and map click dispatch toggle modes', () => {
@@ -345,6 +385,20 @@ describe('waypoints module', () => {
 
         expect(W.buildWaypointDropDispatchPlan({ type: 'via', index: 0 }, 'stop', 0, 2, 1).action)
             .toBe('none');
+    });
+
+    test('buildWaypointDropApplyPlan wraps reorder apply for drag-and-drop', () => {
+        const apply = W.buildWaypointDropApplyPlan(
+            { type: 'via', index: 0 },
+            'via',
+            1,
+            2,
+            0
+        );
+        expect(apply.action).toBe('reorder');
+        expect(apply.reorder.shouldReorder).toBe(true);
+        expect(apply.reorder.spliceMarkers).toBe(false);
+        expect(W.buildWaypointDropApplyPlan(null, 'via', 0, 2, 1).resetOpacity).toBe(true);
     });
 
     test('buildMultiDropLegsMapApplyPlan builds layer specs from geometry', () => {

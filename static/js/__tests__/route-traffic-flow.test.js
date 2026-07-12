@@ -327,6 +327,27 @@ describe('route traffic ahead sampling and cache plans', () => {
             .toBe(false);
     });
 
+    test('buildRouteTrafficEdgesDisplayOrchestrationPlan combines mount and post-display', () => {
+        const segments = [
+            { traffic_level: 'orange', start: [51.51, -0.11], end: [51.53, -0.13] },
+        ];
+        const orch = RTF.buildRouteTrafficEdgesDisplayOrchestrationPlan({
+            segments,
+            polyline,
+            hasMap: true,
+            layersBeforeMount: 0,
+        });
+        expect(orch.shouldDisplay).toBe(true);
+        expect(orch.mountApply.polylines.length).toBeGreaterThan(0);
+        expect(orch.mountApply.polylines[0].registerInRouteTrafficLayers).toBe(true);
+        expect(orch.postDisplay.bringTrafficEdgesToTop).toBe(true);
+        expect(RTF.buildRouteTrafficEdgesDisplayOrchestrationPlan({
+            segments: [],
+            polyline,
+            hasMap: true,
+        }).shouldDisplay).toBe(false);
+    });
+
     test('buildRouteTrafficFlowFailedFetchApplyPlan and cache update plans', () => {
         const fail = RTF.buildRouteTrafficFlowFailedFetchApplyPlan(
             RTF.buildRouteTrafficFlowResponsePlan({ errorKind: 'network' }),

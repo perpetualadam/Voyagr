@@ -2958,51 +2958,40 @@ function handleMapClickForWaypoints(e) {
 }
 
 async function addViaPointFromAddress() {
-    const WP = _waypoints();
-    const input = document.getElementById(WP.VIA_POINT_ADDRESS_INPUT_ID);
-    if (!input) return;
-
-    const dispatch = WP.buildWaypointAddressAddDispatchPlan({
-        lat: input.dataset.lat,
-        lon: input.dataset.lon,
-        displayName: input.dataset.displayName,
-        query: input.value,
-    }, 'via');
-
-    if (dispatch.action === 'prompt') {
-        showStatus(dispatch.statusMessage, dispatch.statusType);
-        return;
-    }
-
-    if (dispatch.action === 'add_resolved') {
-        addViaPoint(dispatch.lat, dispatch.lon, dispatch.name);
-        input.value = '';
-        delete input.dataset.lat;
-        delete input.dataset.lon;
-        delete input.dataset.displayName;
-        if (dispatch.hideAutocomplete) {
-            const dd = getAutocompleteDropdown(dispatch.inputId);
-            if (dd) dd.classList.remove('show');
-        }
-        return;
-    }
-
-    showStatus(dispatch.loadingMessage, 'loading');
-    const result = await geocodeAddress(dispatch.query);
-    if (result) {
-        addViaPoint(result.lat, result.lon, result.display_name || dispatch.query);
-        const success = WP.buildWaypointAddressGeocodeSuccessPlan('via', result.display_name || dispatch.query);
-        input.value = '';
-        showStatus(success.statusMessage, success.statusType);
-    } else {
-        const fail = WP.buildWaypointAddressGeocodeFailurePlan();
-        showStatus(fail.statusMessage, fail.statusType);
-    }
+    await addWaypointFromAddress('via');
 }
 
 async function addStopFromAddress() {
+    await addWaypointFromAddress('stop');
+}
+
+/**
+ * Apply resolved waypoint address input DOM changes from a pure plan.
+ * @param {Object} domPlan - from buildWaypointAddressResolvedDomApplyPlan
+ * @param {HTMLInputElement} input
+ */
+function applyWaypointAddressResolvedDomFromPlan(domPlan, input) {
+    if (!domPlan || !input) return;
+    if (domPlan.clearInput) input.value = '';
+    (domPlan.clearDatasetKeys || []).forEach((key) => {
+        delete input.dataset[key];
+    });
+    if (domPlan.hideAutocomplete) {
+        const dd = getAutocompleteDropdown(domPlan.inputId);
+        if (dd) dd.classList.remove('show');
+    }
+}
+
+/**
+ * Add a via-point or stop from an address input field.
+ * @param {'via'|'stop'} waypointKind
+ */
+async function addWaypointFromAddress(waypointKind) {
     const WP = _waypoints();
-    const input = document.getElementById(WP.STOP_ADDRESS_INPUT_ID);
+    const inputId = waypointKind === 'via'
+        ? WP.VIA_POINT_ADDRESS_INPUT_ID
+        : WP.STOP_ADDRESS_INPUT_ID;
+    const input = document.getElementById(inputId);
     if (!input) return;
 
     const dispatch = WP.buildWaypointAddressAddDispatchPlan({
@@ -3010,7 +2999,7 @@ async function addStopFromAddress() {
         lon: input.dataset.lon,
         displayName: input.dataset.displayName,
         query: input.value,
-    }, 'stop');
+    }, waypointKind);
 
     if (dispatch.action === 'prompt') {
         showStatus(dispatch.statusMessage, dispatch.statusType);
@@ -3018,29 +3007,28 @@ async function addStopFromAddress() {
     }
 
     if (dispatch.action === 'add_resolved') {
-        addStop(dispatch.lat, dispatch.lon, dispatch.name);
-        input.value = '';
-        delete input.dataset.lat;
-        delete input.dataset.lon;
-        delete input.dataset.displayName;
-        if (dispatch.hideAutocomplete) {
-            const dd = getAutocompleteDropdown(dispatch.inputId);
-            if (dd) dd.classList.remove('show');
-        }
+        if (waypointKind === 'via') addViaPoint(dispatch.lat, dispatch.lon, dispatch.name);
+        else addStop(dispatch.lat, dispatch.lon, dispatch.name);
+        applyWaypointAddressResolvedDomFromPlan(
+            WP.buildWaypointAddressResolvedDomApplyPlan(dispatch),
+            input
+        );
         return;
     }
 
     showStatus(dispatch.loadingMessage, 'loading');
     const result = await geocodeAddress(dispatch.query);
-    if (result) {
-        addStop(result.lat, result.lon, result.display_name || dispatch.query);
-        const success = WP.buildWaypointAddressGeocodeSuccessPlan('stop', result.display_name || dispatch.query);
-        input.value = '';
-        showStatus(success.statusMessage, success.statusType);
-    } else {
-        const fail = WP.buildWaypointAddressGeocodeFailurePlan();
-        showStatus(fail.statusMessage, fail.statusType);
+    const outcome = WP.buildWaypointAddressGeocodeOutcomeApplyPlan(
+        waypointKind,
+        result,
+        dispatch.query
+    );
+    if (outcome.shouldAdd) {
+        if (waypointKind === 'via') addViaPoint(outcome.lat, outcome.lon, outcome.name);
+        else addStop(outcome.lat, outcome.lon, outcome.name);
+        if (outcome.clearInput) input.value = '';
     }
+    showStatus(outcome.statusMessage, outcome.statusType);
 }
 
 /**
@@ -3206,7 +3194,7 @@ function onWaypointDrop(e) {
     e.preventDefault();
     const target = _domHelpers().closest(e.target, '.waypoint-item');
     const WP = _waypoints();
-    const dispatch = WP.buildWaypointDropDispatchPlan(
+    const apply = WP.buildWaypointDropApplyPlan(
         _draggedWaypoint,
         target ? target.dataset.type : null,
         target ? parseInt(target.dataset.index) : NaN,
@@ -3214,37 +3202,47 @@ function onWaypointDrop(e) {
         stops.length
     );
 
-    if (dispatch.action === 'reorder') {
-        const plan = dispatch.reorderPlan;
-        const arr = plan.type === 'via' ? viaPoints : stops;
-        const markerArr = plan.type === 'via' ? viaPointMarkers : stopMarkers;
-        const item = arr.splice(plan.fromIndex, 1)[0];
-        const marker = markerArr.splice(plan.fromIndex, 1)[0];
-        arr.splice(plan.toIndex, 0, item);
-        markerArr.splice(plan.toIndex, 0, marker);
-        if (plan.updateWaypointsList) updateWaypointsList();
-        if (plan.refreshViaMarkers) refreshViaPointMarkers();
+    if (apply.action === 'reorder' && apply.reorder && apply.reorder.shouldReorder) {
+        const reorder = apply.reorder;
+        const arr = reorder.type === 'via' ? viaPoints : stops;
+        const markerArr = reorder.type === 'via' ? viaPointMarkers : stopMarkers;
+        const item = arr.splice(reorder.fromIndex, 1)[0];
+        if (reorder.spliceMarkers) {
+            const marker = markerArr.splice(reorder.fromIndex, 1)[0];
+            arr.splice(reorder.toIndex, 0, item);
+            markerArr.splice(reorder.toIndex, 0, marker);
+        } else {
+            arr.splice(reorder.toIndex, 0, item);
+        }
+        if (reorder.updateWaypointsList) updateWaypointsList();
+        if (reorder.refreshViaMarkers) refreshViaPointMarkers();
     }
 
-    if (dispatch.clearDragState) _draggedWaypoint = null;
-    if (dispatch.resetOpacity) {
+    if (apply.clearDragState) _draggedWaypoint = null;
+    if (apply.resetOpacity) {
         const resetPlan = WP.buildWaypointDragOpacityResetPlan();
         document.querySelectorAll(resetPlan.selector).forEach(el => el.style.opacity = resetPlan.opacity);
     }
 }
 
 function moveWaypoint(type, index, direction) {
-    const WP = _waypoints();
-    const count = type === 'via' ? viaPoints.length : stops.length;
-    const plan = WP.buildWaypointMovePlan(type, index, direction, count);
-    if (!plan.shouldMove) return;
+    const apply = _waypoints().buildWaypointMoveApplyPlan(
+        type,
+        index,
+        direction,
+        type === 'via' ? viaPoints.length : stops.length
+    );
+    if (!apply.shouldMove) return;
 
-    const arr = type === 'via' ? viaPoints : stops;
-    const markerArr = type === 'via' ? viaPointMarkers : stopMarkers;
-    [arr[plan.fromIndex], arr[plan.toIndex]] = [arr[plan.toIndex], arr[plan.fromIndex]];
-    [markerArr[plan.fromIndex], markerArr[plan.toIndex]] = [markerArr[plan.toIndex], markerArr[plan.fromIndex]];
-    if (plan.updateWaypointsList) updateWaypointsList();
-    if (plan.refreshViaMarkers) refreshViaPointMarkers();
+    const arr = apply.type === 'via' ? viaPoints : stops;
+    const markerArr = apply.type === 'via' ? viaPointMarkers : stopMarkers;
+    [arr[apply.fromIndex], arr[apply.toIndex]] = [arr[apply.toIndex], arr[apply.fromIndex]];
+    if (apply.swapMarkers) {
+        [markerArr[apply.fromIndex], markerArr[apply.toIndex]] =
+            [markerArr[apply.toIndex], markerArr[apply.fromIndex]];
+    }
+    if (apply.updateWaypointsList) updateWaypointsList();
+    if (apply.refreshViaMarkers) refreshViaPointMarkers();
 }
 
 /**
@@ -5659,30 +5657,32 @@ function displayRouteTrafficEdges(segments) {
     clearRouteTrafficLayers();
 
     const RTF = _routeTrafficFlow();
-    const displayPlan = RTF.buildRouteTrafficEdgesDisplayPlan(segments, routePolyline, { hasMap: !!map });
-    if (!displayPlan.shouldDisplay) {
-        const log = displayPlan.cannotDisplayLog || {};
+    const orch = RTF.buildRouteTrafficEdgesDisplayOrchestrationPlan({
+        segments,
+        polyline: routePolyline,
+        hasMap: !!map,
+        layersBeforeMount: routeTrafficLayers.length,
+    });
+    if (!orch.shouldDisplay) {
+        const log = orch.cannotDisplayLog || {};
         console.log('[Route Traffic] Cannot display - map:', log.map, 'segments:', log.segmentCount, 'routePolyline:', log.polylineLength);
         return;
     }
 
-    console.log('[Route Traffic] Segment levels:', displayPlan.levelCounts);
+    console.log('[Route Traffic] Segment levels:', orch.levelCounts);
 
-    const layersBeforeMount = routeTrafficLayers.length;
-    displayPlan.polylines.forEach((polylinePlan) => {
+    orch.mountApply.polylines.forEach((polylinePlan) => {
         const trafficLine = MapLibreHelpers.addPolyline(map, polylinePlan.points, {
             color: polylinePlan.color,
             weight: polylinePlan.weight,
             opacity: polylinePlan.opacity,
         });
-        routeTrafficLayers.push(trafficLine);
+        if (polylinePlan.registerInRouteTrafficLayers) {
+            routeTrafficLayers.push(trafficLine);
+        }
     });
 
-    const mountComplete = RTF.buildRouteTrafficEdgesMountCompletePlan(
-        layersBeforeMount,
-        displayPlan.polylineMountCount
-    );
-    const postDisplay = RTF.buildRouteTrafficEdgesPostDisplayPlan(displayPlan, mountComplete);
+    const postDisplay = orch.postDisplay || {};
     if (postDisplay.logMessage) console.log(postDisplay.logMessage);
 
     if (postDisplay.bringTrafficEdgesToTop) {
