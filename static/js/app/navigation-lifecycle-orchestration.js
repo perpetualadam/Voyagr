@@ -7,6 +7,31 @@
 
     var runtime = null;
 
+    var lastTurnDetectRouteVertexIndex = 0;
+    var navigationArrivalTriggered = false;
+    var navigationArrivalZoneSince = 0;
+    var navTraveledMeters = 0;
+    var navOdometerLastGeo = null;
+    var navStartedAt = 0;
+
+    function getLastTurnDetectRouteVertexIndex() { return lastTurnDetectRouteVertexIndex; }
+    function setLastTurnDetectRouteVertexIndex(val) { lastTurnDetectRouteVertexIndex = val; }
+    function getNavigationArrivalTriggered() { return navigationArrivalTriggered; }
+    function setNavigationArrivalTriggered(val) { navigationArrivalTriggered = !!val; }
+    function getNavigationArrivalZoneSince() { return navigationArrivalZoneSince; }
+    function setNavigationArrivalZoneSince(val) { navigationArrivalZoneSince = val; }
+    function getNavTraveledMeters() { return navTraveledMeters; }
+    function setNavTraveledMeters(val) { navTraveledMeters = val; }
+    function getNavOdometerLastGeo() { return navOdometerLastGeo; }
+    function setNavOdometerLastGeo(val) { navOdometerLastGeo = val; }
+    function getNavStartedAt() { return navStartedAt; }
+    function setNavStartedAt(val) { navStartedAt = val; }
+
+    function resetNavigationArrivalState() {
+        setNavigationArrivalTriggered(false);
+        setNavigationArrivalZoneSince(0);
+    }
+
     function rt() {
         if (!runtime) {
             throw new Error('[NavigationLifecycle] Orchestration runtime not bound');
@@ -28,13 +53,13 @@
         rt().setCurrentRouteSteps(apply.maneuvers);
 
         if (apply.resetSessionCounters) {
-            rt().setLastTurnDetectRouteVertexIndex(0);
+            setLastTurnDetectRouteVertexIndex(0);
             rt().setRouteJoinConfirmedForDeviation(false);
             rt().call.resetVehicleMarkerDisplayState();
-            rt().call.resetNavigationArrivalState();
-            rt().setNavTraveledMeters(0);
-            rt().setNavOdometerLastGeo(null);
-            rt().setNavStartedAt(Date.now());
+            resetNavigationArrivalState();
+            setNavTraveledMeters(0);
+            setNavOdometerLastGeo(null);
+            setNavStartedAt(Date.now());
             rt().setLastETAAnnouncementTime(Date.now());
             rt().setLastAnnouncedETA(null);
             rt().setLastNavTrafficFetchAt(0);
@@ -285,7 +310,7 @@
         if (!services) return false;
 
         const lifecycle = services.lifecycle || {};
-        if (lifecycle.resetNavigationArrival) rt().call.resetNavigationArrivalState();
+        if (lifecycle.resetNavigationArrival) resetNavigationArrivalState();
 
         const traveled = services.traveledSummary;
         if (traveled && traveled.shouldBuild && window.lastCalculatedRoute && wasRouteInProgress) {
@@ -434,6 +459,19 @@
         startTurnByTurnNavigation: startTurnByTurnNavigation,
         stopTurnByTurnNavigation: stopTurnByTurnNavigation,
         updateTurnGuidance: updateTurnGuidance,
+        getLastTurnDetectRouteVertexIndex: getLastTurnDetectRouteVertexIndex,
+        setLastTurnDetectRouteVertexIndex: setLastTurnDetectRouteVertexIndex,
+        getNavigationArrivalTriggered: getNavigationArrivalTriggered,
+        setNavigationArrivalTriggered: setNavigationArrivalTriggered,
+        getNavigationArrivalZoneSince: getNavigationArrivalZoneSince,
+        setNavigationArrivalZoneSince: setNavigationArrivalZoneSince,
+        getNavTraveledMeters: getNavTraveledMeters,
+        setNavTraveledMeters: setNavTraveledMeters,
+        getNavOdometerLastGeo: getNavOdometerLastGeo,
+        setNavOdometerLastGeo: setNavOdometerLastGeo,
+        getNavStartedAt: getNavStartedAt,
+        setNavStartedAt: setNavStartedAt,
+        resetNavigationArrivalState: resetNavigationArrivalState,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

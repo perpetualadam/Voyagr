@@ -894,8 +894,8 @@ function getRerouteMapOrchestrationRuntime() {
         setCurrentStepIndex: (val) => { currentStepIndex = val; },
         getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
         setLastSnappedRouteIndex: (val) => { lastSnappedRouteIndex = val; },
-        getLastTurnDetectRouteVertexIndex: () => lastTurnDetectRouteVertexIndex,
-        setLastTurnDetectRouteVertexIndex: (val) => { lastTurnDetectRouteVertexIndex = val; },
+        getLastTurnDetectRouteVertexIndex: () => VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex(),
+        setLastTurnDetectRouteVertexIndex: (val) => VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val),
         getRouteJoinConfirmedForDeviation: () => routeJoinConfirmedForDeviation,
         setRouteJoinConfirmedForDeviation: (val) => { routeJoinConfirmedForDeviation = val; },
         getPreferPrimaryRouteOnNextNavUpdate: () => _preferPrimaryRouteOnNextNavUpdate,
@@ -1374,11 +1374,11 @@ function getGpsOrchestrationRuntime() {
             case '_voiceAnnouncedCategory': return VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncedCategory();
             case '_lastLaneVoiceKey': return VoyagrLaneGuidanceOrchestration.getLastLaneVoiceKey();
             case 'lastDestinationAnnouncementDistance': return VoyagrVoiceAnnouncementsOrchestration.getLastDestinationAnnouncementDistance();
-            case '_navigationArrivalTriggered': return _navigationArrivalTriggered;
-            case '_navigationArrivalZoneSince': return _navigationArrivalZoneSince;
-            case '_navTraveledMeters': return _navTraveledMeters;
-            case '_navOdometerLastGeo': return _navOdometerLastGeo;
-            case '_navStartedAt': return _navStartedAt;
+            case '_navigationArrivalTriggered': return VoyagrNavigationLifecycleOrchestration.getNavigationArrivalTriggered();
+            case '_navigationArrivalZoneSince': return VoyagrNavigationLifecycleOrchestration.getNavigationArrivalZoneSince();
+            case '_navTraveledMeters': return VoyagrNavigationLifecycleOrchestration.getNavTraveledMeters();
+            case '_navOdometerLastGeo': return VoyagrNavigationLifecycleOrchestration.getNavOdometerLastGeo();
+            case '_navStartedAt': return VoyagrNavigationLifecycleOrchestration.getNavStartedAt();
             case 'lastETAAnnouncementTime': return VoyagrLiveDataRefreshOrchestration.getLastETAAnnouncementTime();
             case 'lastAnnouncedETA': return VoyagrLiveDataRefreshOrchestration.getLastAnnouncedETA();
             case 'initialETAMovementRetries': return VoyagrLiveDataRefreshOrchestration.getInitialETAMovementRetries();
@@ -1396,7 +1396,7 @@ function getGpsOrchestrationRuntime() {
             case 'rerouteFailureRetryTimer': return rerouteFailureRetryTimer;
             case 'rerouteFailureRetryCount': return rerouteFailureRetryCount;
             case '_preferPrimaryRouteOnNextNavUpdate': return _preferPrimaryRouteOnNextNavUpdate;
-            case 'lastTurnDetectRouteVertexIndex': return lastTurnDetectRouteVertexIndex;
+            case 'lastTurnDetectRouteVertexIndex': return VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex();
             case 'voiceAnnouncementsEnabled': return VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled();
             case 'voiceFrequencyMode': return VoyagrVoiceAnnouncementsOrchestration.getVoiceFrequencyMode();
             case 'speedWidgetEnabled': return speedWidgetEnabled;
@@ -1440,11 +1440,11 @@ function getGpsOrchestrationRuntime() {
             case '_voiceAnnouncedCategory': VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncedCategory(val); break;
             case '_lastLaneVoiceKey': VoyagrLaneGuidanceOrchestration.setLastLaneVoiceKey(val); break;
             case 'lastDestinationAnnouncementDistance': VoyagrVoiceAnnouncementsOrchestration.setLastDestinationAnnouncementDistance(val); break;
-            case '_navigationArrivalTriggered': _navigationArrivalTriggered = val; break;
-            case '_navigationArrivalZoneSince': _navigationArrivalZoneSince = val; break;
-            case '_navTraveledMeters': _navTraveledMeters = val; break;
-            case '_navOdometerLastGeo': _navOdometerLastGeo = val; break;
-            case '_navStartedAt': _navStartedAt = val; break;
+            case '_navigationArrivalTriggered': VoyagrNavigationLifecycleOrchestration.setNavigationArrivalTriggered(val); break;
+            case '_navigationArrivalZoneSince': VoyagrNavigationLifecycleOrchestration.setNavigationArrivalZoneSince(val); break;
+            case '_navTraveledMeters': VoyagrNavigationLifecycleOrchestration.setNavTraveledMeters(val); break;
+            case '_navOdometerLastGeo': VoyagrNavigationLifecycleOrchestration.setNavOdometerLastGeo(val); break;
+            case '_navStartedAt': VoyagrNavigationLifecycleOrchestration.setNavStartedAt(val); break;
             case 'lastETAAnnouncementTime': VoyagrLiveDataRefreshOrchestration.setLastETAAnnouncementTime(val); break;
             case 'lastAnnouncedETA': VoyagrLiveDataRefreshOrchestration.setLastAnnouncedETA(val); break;
             case 'initialETAMovementRetries': VoyagrLiveDataRefreshOrchestration.setInitialETAMovementRetries(val); break;
@@ -1462,7 +1462,7 @@ function getGpsOrchestrationRuntime() {
             case 'rerouteFailureRetryTimer': rerouteFailureRetryTimer = val; break;
             case 'rerouteFailureRetryCount': rerouteFailureRetryCount = val; break;
             case '_preferPrimaryRouteOnNextNavUpdate': _preferPrimaryRouteOnNextNavUpdate = val; break;
-            case 'lastTurnDetectRouteVertexIndex': lastTurnDetectRouteVertexIndex = val; break;
+            case 'lastTurnDetectRouteVertexIndex': VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val); break;
             case 'voiceAnnouncementsEnabled': VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncementsEnabled(val); break;
             case 'voiceFrequencyMode': VoyagrVoiceAnnouncementsOrchestration.setVoiceFrequencyMode(val); break;
             case 'speedWidgetEnabled': speedWidgetEnabled = val; break;
@@ -2328,8 +2328,8 @@ function getTurnInstructionWidgetOrchestrationRuntime() {
         setCurrentStepIndex: (val) => { currentStepIndex = val; },
         getRoutePolyline: () => routePolyline,
         getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
-        getLastTurnDetectRouteVertexIndex: () => lastTurnDetectRouteVertexIndex,
-        setLastTurnDetectRouteVertexIndex: (val) => { lastTurnDetectRouteVertexIndex = val; },
+        getLastTurnDetectRouteVertexIndex: () => VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex(),
+        setLastTurnDetectRouteVertexIndex: (val) => VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val),
         getMap: () => map,
         getMapFollowingActive: () => mapFollowingActive,
         setMapFollowingActive: (val) => { mapFollowingActive = val; },
@@ -2481,19 +2481,7 @@ function setupMapExploreHandlers() {
     VoyagrMapExploreOrchestration.setupMapExploreHandlers();
 }
 
-// Turn announcement state lives in voice-announcements-orchestration.js.
-
-let lastTurnDetectRouteVertexIndex = 0;
-
-let _navigationArrivalTriggered = false;
-let _navigationArrivalZoneSince = 0;
-
-// Odometer for the whole journey actually driven. Accumulated from GPS fixes so the
-// end-of-trip summary reflects real distance travelled (including reroutes/detours),
-// not just the final route leg stored in window.lastCalculatedRoute.
-let _navTraveledMeters = 0;
-let _navOdometerLastGeo = null;
-let _navStartedAt = 0;
+// Navigation session state lives in navigation-lifecycle-orchestration.js.
 
 // ETA announcement state lives in live-data-refresh-orchestration.js.
 
@@ -2738,8 +2726,8 @@ function getNavigationLifecycleOrchestrationRuntime() {
         setRoutePolyline: (val) => { routePolyline = val; },
         getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
         setLastSnappedRouteIndex: (val) => { lastSnappedRouteIndex = val; },
-        getLastTurnDetectRouteVertexIndex: () => lastTurnDetectRouteVertexIndex,
-        setLastTurnDetectRouteVertexIndex: (val) => { lastTurnDetectRouteVertexIndex = val; },
+        getLastTurnDetectRouteVertexIndex: () => VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex(),
+        setLastTurnDetectRouteVertexIndex: (val) => VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val),
         getMap: () => map,
         getCurrentLat: () => currentLat,
         getCurrentLon: () => currentLon,
@@ -2754,9 +2742,9 @@ function getNavigationLifecycleOrchestrationRuntime() {
         getArModeActive: () => arModeActive,
         getDriverPerspectiveEnabled: () => driverPerspectiveEnabled,
         getUpdatePending: () => updatePending,
-        setNavTraveledMeters: (val) => { _navTraveledMeters = val; },
-        setNavOdometerLastGeo: (val) => { _navOdometerLastGeo = val; },
-        setNavStartedAt: (val) => { _navStartedAt = val; },
+        setNavTraveledMeters: (val) => VoyagrNavigationLifecycleOrchestration.setNavTraveledMeters(val),
+        setNavOdometerLastGeo: (val) => VoyagrNavigationLifecycleOrchestration.setNavOdometerLastGeo(val),
+        setNavStartedAt: (val) => VoyagrNavigationLifecycleOrchestration.setNavStartedAt(val),
         setLastETAAnnouncementTime: (val) => VoyagrLiveDataRefreshOrchestration.setLastETAAnnouncementTime(val),
         setLastAnnouncedETA: (val) => VoyagrLiveDataRefreshOrchestration.setLastAnnouncedETA(val),
         setLastNavTrafficFetchAt: (val) => VoyagrLiveDataRefreshOrchestration.setLastNavTrafficFetchAt(val),
@@ -2927,9 +2915,9 @@ function getNotificationsOrchestrationRuntime() {
         deviceEnvironment: () => _deviceEnvironment(),
         getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
         getRouteInProgress: () => routeInProgress,
-        getNavigationArrivalTriggered: () => _navigationArrivalTriggered,
+        getNavigationArrivalTriggered: () => VoyagrNavigationLifecycleOrchestration.getNavigationArrivalTriggered(),
         s: (key, val) => {
-            if (key === 'navigationArrivalTriggered') _navigationArrivalTriggered = val;
+            if (key === 'navigationArrivalTriggered') VoyagrNavigationLifecycleOrchestration.setNavigationArrivalTriggered(val);
         },
         call: {
             speakMessage,
@@ -3077,8 +3065,8 @@ function getJourneySummaryOrchestrationRuntime() {
         getCurrentLon: () => currentLon,
         getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
         getDistanceUnit: () => distanceUnit,
-        getNavTraveledMeters: () => _navTraveledMeters,
-        getNavStartedAt: () => _navStartedAt,
+        getNavTraveledMeters: () => VoyagrNavigationLifecycleOrchestration.getNavTraveledMeters(),
+        getNavStartedAt: () => VoyagrNavigationLifecycleOrchestration.getNavStartedAt(),
         call: {
             applyTrafficRatioToBaseRemaining,
             convertDistance,

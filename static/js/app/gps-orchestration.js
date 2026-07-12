@@ -884,8 +884,7 @@
     }
 
     function resetNavigationArrivalState() {
-        rt().s('_navigationArrivalTriggered',  false);
-        rt().s('_navigationArrivalZoneSince',  0);
+        root.VoyagrNavigationLifecycleOrchestration.resetNavigationArrivalState();
     }
 
     /**
@@ -897,12 +896,13 @@
     function checkNavigationArrival(lat, lon, speedMs) {
         const remainingM = getNavigationRemainingDistanceMeters(lat, lon);
         const RP = rpModule();
+        const NL = root.VoyagrNavigationLifecycleOrchestration;
         const tick = RP.buildNavigationArrivalTickPlan({
             routeInProgress: rt().g('routeInProgress'),
-            arrivalTriggered: rt().g('_navigationArrivalTriggered'),
+            arrivalTriggered: NL.getNavigationArrivalTriggered(),
             remainingM,
             speedMs,
-            arrivalZoneSince: rt().g('_navigationArrivalZoneSince'),
+            arrivalZoneSince: NL.getNavigationArrivalZoneSince(),
             now: Date.now(),
         });
         if (tick.action === 'skip') return;
@@ -911,7 +911,7 @@
         if (apply.action === 'skip') return;
 
         if (apply.statePatch.arrivalZoneSince != null) {
-            rt().s('_navigationArrivalZoneSince',  apply.statePatch.arrivalZoneSince);
+            NL.setNavigationArrivalZoneSince(apply.statePatch.arrivalZoneSince);
         }
 
         if (apply.endNavigation) {
