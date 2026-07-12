@@ -13,7 +13,7 @@ if (typeof window !== 'undefined' && window.ethereum) {
 
 // Note: All global variables are declared in voyagr-core.js
 // This file contains all the application logic and functions
-// Variables: map, routeLayer, startMarker, endMarker
+// Variables: map (routeLayer, startMarker, endMarker in calculate-route orchestration)
 // Unit variables live in static/js/app/units-preferences-orchestration.js (bound at file end).
 //
 // VoyagrModules (modules/voyagr-modules.js) is the central registry for extracted
@@ -472,8 +472,8 @@ function getRouteComparisonOrchestrationRuntime() {
         setRouteOptions: (val) => VoyagrRouteComparisonOrchestration.setRouteOptions(val),
         getSelectedRouteIndex: () => VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),
         setSelectedRouteIndex: (val) => VoyagrRouteComparisonOrchestration.setSelectedRouteIndex(val),
-        getRouteLayer: () => routeLayer,
-        setRouteLayer: (val) => { routeLayer = val; },
+        getRouteLayer: () => VoyagrCalculateRouteOrchestration.getRouteLayer(),
+        setRouteLayer: (val) => VoyagrCalculateRouteOrchestration.setRouteLayer(val),
         getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         setRoutePolyline: (val) => VoyagrNavigationLifecycleOrchestration.setRoutePolyline(val),
         getShowTrafficEnabled: () => VoyagrMapLayersOrchestration.getShowTrafficEnabled(),
@@ -659,15 +659,15 @@ function getCalculateRouteOrchestrationRuntime() {
         previewMarker: () => _previewMarker(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
-        getStartMarker: () => startMarker,
-        setStartMarker: (val) => { startMarker = val; },
-        getEndMarker: () => endMarker,
-        setEndMarker: (val) => { endMarker = val; },
+        getStartMarker: () => VoyagrCalculateRouteOrchestration.getStartMarker(),
+        setStartMarker: (val) => VoyagrCalculateRouteOrchestration.setStartMarker(val),
+        getEndMarker: () => VoyagrCalculateRouteOrchestration.getEndMarker(),
+        setEndMarker: (val) => VoyagrCalculateRouteOrchestration.setEndMarker(val),
         getMapPickerMode: () => VoyagrGeocodingOrchestration.getMapPickerMode(),
         setMapPickerMode: (val) => VoyagrGeocodingOrchestration.setMapPickerMode(val),
         getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
         setRouteOptions: (val) => VoyagrRouteComparisonOrchestration.setRouteOptions(val),
-        getRouteLayer: () => routeLayer,
+        getRouteLayer: () => VoyagrCalculateRouteOrchestration.getRouteLayer(),
         setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
         getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getIsGeocoding: () => VoyagrGeocodingOrchestration.getIsGeocoding(),
@@ -838,8 +838,8 @@ function getRerouteMapOrchestrationRuntime() {
         setLastCalculatedRoute: (val) => { window.lastCalculatedRoute = val; },
         getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         setRoutePolyline: (val) => VoyagrNavigationLifecycleOrchestration.setRoutePolyline(val),
-        getRouteLayer: () => routeLayer,
-        setRouteLayer: (val) => { routeLayer = val; },
+        getRouteLayer: () => VoyagrCalculateRouteOrchestration.getRouteLayer(),
+        setRouteLayer: (val) => VoyagrCalculateRouteOrchestration.setRouteLayer(val),
         getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
@@ -1140,7 +1140,7 @@ function getTrafficOrchestrationRuntime() {
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
         getLastSnappedRouteIndex: () => VoyagrNavigationLifecycleOrchestration.getLastSnappedRouteIndex(),
-        getRouteLayer: () => routeLayer,
+        getRouteLayer: () => VoyagrCalculateRouteOrchestration.getRouteLayer(),
         getAllRouteLayers: () => VoyagrRouteComparisonOrchestration.getAllRouteLayers(),
         getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
         showStatus,
@@ -1552,9 +1552,9 @@ function toggleVoiceAnnouncements() { VoyagrVoiceAnnouncementsOrchestration.togg
 function getFormClearOrchestrationRuntime() {
     return {
         getMap: () => map,
-        getStartMarker: () => startMarker,
-        getEndMarker: () => endMarker,
-        getRouteLayer: () => routeLayer,
+        getStartMarker: () => VoyagrCalculateRouteOrchestration.getStartMarker(),
+        getEndMarker: () => VoyagrCalculateRouteOrchestration.getEndMarker(),
+        getRouteLayer: () => VoyagrCalculateRouteOrchestration.getRouteLayer(),
         getZoomAnimationDurationMs: () => ZOOM_ANIMATION_DURATION * 1000,
         setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
         call: {
@@ -2485,10 +2485,10 @@ function getLocationOrchestrationRuntime() {
         domHelpers: () => _domHelpers(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
-        getStartMarker: () => startMarker,
-        setStartMarker: (val) => { startMarker = val; },
-        getEndMarker: () => endMarker,
-        getRouteLayer: () => routeLayer,
+        getStartMarker: () => VoyagrCalculateRouteOrchestration.getStartMarker(),
+        setStartMarker: (val) => VoyagrCalculateRouteOrchestration.setStartMarker(val),
+        getEndMarker: () => VoyagrCalculateRouteOrchestration.getEndMarker(),
+        getRouteLayer: () => VoyagrCalculateRouteOrchestration.getRouteLayer(),
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         setCurrentLat: (val) => VoyagrLocationOrchestration.setCurrentLat(val),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),

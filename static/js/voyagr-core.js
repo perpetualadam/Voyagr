@@ -8,9 +8,8 @@
 let map = null;
 /** @type {ReturnType<typeof setInterval> | null} */
 let _mapRenderHeartbeatId = null;
-let routeLayer = null;
-let startMarker = null;
-let endMarker = null;
+// routeLayer, startMarker, endMarker live in
+// static/js/app/calculate-route-orchestration.js (bound at file end).
 // mapPickerMode lives in static/js/app/geocoding-orchestration.js (bound at file end).
 
 // ===== ZOOM AND FOLLOW VARIABLES =====

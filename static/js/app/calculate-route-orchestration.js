@@ -7,6 +7,17 @@
 
     var runtime = null;
 
+    var routeLayer = null;
+    var startMarker = null;
+    var endMarker = null;
+
+    function getRouteLayer() { return routeLayer; }
+    function setRouteLayer(val) { routeLayer = val; }
+    function getStartMarker() { return startMarker; }
+    function setStartMarker(val) { startMarker = val; }
+    function getEndMarker() { return endMarker; }
+    function setEndMarker(val) { endMarker = val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[CalculateRoute] Orchestration runtime not bound');
@@ -545,6 +556,12 @@
 
     var api = {
         bind: bind,
+        getRouteLayer: getRouteLayer,
+        setRouteLayer: setRouteLayer,
+        getStartMarker: getStartMarker,
+        setStartMarker: setStartMarker,
+        getEndMarker: getEndMarker,
+        setEndMarker: setEndMarker,
         decodePolyline: decodePolyline,
         setupMapClickHandler: setupMapClickHandler,
         calculateRoute: calculateRoute,
