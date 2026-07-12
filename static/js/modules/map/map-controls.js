@@ -617,6 +617,125 @@
     }
 
     /**
+     * Entry orchestration plan for stopTurnByTurnNavigation.
+     * @param {Object} [input]
+     * @param {boolean} [input.routeInProgress]
+     * @param {boolean} [input.isTrackingActive]
+     * @param {Object|null|undefined} [input.lastCalculatedRoute]
+     * @param {boolean} [input.hasWakeLock]
+     * @param {boolean} [input.arModeActive]
+     * @param {boolean} [input.driverPerspectiveEnabled]
+     * @param {boolean} [input.updatePending]
+     * @returns {Object}
+     */
+    function buildNavStopEntryOrchestrationPlan(input) {
+        input = input || {};
+        var preflight = buildNavStopPreflightPlan(!!input.routeInProgress, !!input.isTrackingActive);
+        if (!preflight.shouldStop) {
+            return {
+                shouldStop: false,
+                updateNavFabOnly: !!preflight.updateNavFabOnly,
+            };
+        }
+        return {
+            shouldStop: true,
+            wasRouteInProgress: !!input.routeInProgress,
+            stateReset: buildNavStopStateResetPlan(),
+            services: buildNavStopServicesOrchestrationPlan(input),
+        };
+    }
+
+    /**
+     * Runtime apply plan for navigation session reset at stop.
+     * @param {Object} [reset] - from buildNavStopStateResetPlan
+     * @returns {Object}
+     */
+    function buildNavStopRuntimeApplyPlan(reset) {
+        reset = reset || buildNavStopStateResetPlan();
+        return {
+            shouldApply: true,
+            routeInProgress: reset.routeInProgress,
+            routeJoinConfirmedForDeviation: reset.routeJoinConfirmedForDeviation,
+            currentStepIndex: reset.currentStepIndex,
+            clearRouteSteps: !!reset.clearRouteSteps,
+            clearPersistedRoute: !!reset.clearPersistedRoute,
+            clearRerouteFailureRetries: !!reset.clearRerouteFailureRetries,
+            mapFollowingActive: reset.mapFollowingActive,
+            journeyOverviewActive: reset.journeyOverviewActive,
+            savedMapState: reset.savedMapState,
+            initialETAMovementRetries: reset.initialETAMovementRetries,
+            resetVehicleMarker: true,
+        };
+    }
+
+    /**
+     * DOM execute plan for map FABs hidden when navigation stops.
+     * @returns {Object}
+     */
+    function buildNavStopFabDomExecutePlan() {
+        var fabPlan = getNavStopFabHidePlan();
+        return {
+            shouldApply: true,
+            elementDisplays: [
+                { id: 'zoomFollowToggle', display: fabPlan.zoomFollowDisplay },
+                { id: 'recenterVehicleFab', display: fabPlan.recenterDisplay },
+                { id: 'journeyOverviewBtn', display: fabPlan.journeyOverviewDisplay },
+                { id: 'arModeBtn', display: fabPlan.arModeBtnDisplay },
+                { id: 'driverPerspectiveToggle', display: fabPlan.driverPerspectiveDisplay },
+            ],
+            updateRoadReportFab: true,
+            updateNavFabVisibility: true,
+            updateSpeedWidget: true,
+            hideTurnWidget: true,
+            hideJourneySummaryBar: true,
+        };
+    }
+
+    /**
+     * Services orchestration plan for post-reset navigation stop side effects.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildNavStopServicesOrchestrationPlan(input) {
+        input = input || {};
+        var lifecycle = buildNavStopLifecycleExecutePlan({
+            routeInProgress: !!input.routeInProgress,
+            lastCalculatedRoute: input.lastCalculatedRoute,
+            hasWakeLock: !!input.hasWakeLock,
+            arModeActive: !!input.arModeActive,
+            driverPerspectiveEnabled: !!input.driverPerspectiveEnabled,
+            updatePending: !!input.updatePending,
+        });
+        var wasNavigating = !!(input.lastCalculatedRoute && input.routeInProgress);
+        return {
+            lifecycle: lifecycle,
+            fabExecute: buildNavStopFabDomExecutePlan(),
+            traveledSummary: {
+                shouldBuild: wasNavigating && lifecycle.buildTraveledSummary,
+                persistCompletedTrip: lifecycle.persistCompletedTrip,
+                showJourneySummary: lifecycle.showJourneySummary,
+            },
+            mapPitchReset: lifecycle.applyMapPitchReset ? {
+                shouldApply: true,
+                driverPerspectiveEnabled: lifecycle.driverPerspectiveEnabled,
+                pitch: 0,
+                bearing: 0,
+                durationMs: 500,
+            } : null,
+            pwaUpdate: lifecycle.applyPendingPwaUpdate && input.updatePending ? {
+                shouldApply: true,
+                statusMessage: lifecycle.pwaUpdateStatusMessage,
+                reloadDelayMs: lifecycle.pwaReloadDelayMs,
+            } : null,
+            userFeedback: {
+                statusMessage: getNavStopStatusMessage(),
+                notification: getNavStopNotification(),
+                statusType: 'info',
+            },
+        };
+    }
+
+    /**
      * Status message shown when screen wake lock is acquired at nav start.
      * @returns {string}
      */
@@ -1415,6 +1534,10 @@
         buildNavStopPreflightPlan: buildNavStopPreflightPlan,
         buildNavStopStateResetPlan: buildNavStopStateResetPlan,
         buildNavStopLifecycleExecutePlan: buildNavStopLifecycleExecutePlan,
+        buildNavStopEntryOrchestrationPlan: buildNavStopEntryOrchestrationPlan,
+        buildNavStopRuntimeApplyPlan: buildNavStopRuntimeApplyPlan,
+        buildNavStopFabDomExecutePlan: buildNavStopFabDomExecutePlan,
+        buildNavStopServicesOrchestrationPlan: buildNavStopServicesOrchestrationPlan,
         getWakeLockAcquiredStatusMessage: getWakeLockAcquiredStatusMessage,
         buildNavStartUserFeedbackPlan: buildNavStartUserFeedbackPlan,
         getNavStartNoGeometryStatusMessage: getNavStartNoGeometryStatusMessage,

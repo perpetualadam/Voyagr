@@ -15698,6 +15698,114 @@ function applyNavStartServicesFromPlan(services) {
     }
 }
 
+function applyNavStopRuntimeFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+
+    routeInProgress = apply.routeInProgress;
+    routeJoinConfirmedForDeviation = apply.routeJoinConfirmedForDeviation;
+    if (apply.clearRerouteFailureRetries) clearRerouteFailureRetries();
+    currentStepIndex = apply.currentStepIndex;
+    if (apply.clearRouteSteps) currentRouteSteps = [];
+    if (apply.resetVehicleMarker) resetVehicleMarkerDisplayState();
+    if (apply.clearPersistedRoute) clearPersistedRoute();
+    mapFollowingActive = apply.mapFollowingActive;
+    journeyOverviewActive = apply.journeyOverviewActive;
+    savedMapState = apply.savedMapState;
+    initialETAMovementRetries = apply.initialETAMovementRetries;
+}
+
+function applyNavStopWakeLockReleaseFromPlan(lifecycle) {
+    if (!lifecycle || !lifecycle.releaseWakeLock || !window.screenWakeLock) return;
+
+    window.screenWakeLock.release()
+        .then(() => {
+            console.log(lifecycle.wakeLockReleaseLog);
+            window.screenWakeLock = null;
+        })
+        .catch((err) => {
+            console.log(lifecycle.wakeLockReleaseErrorLogPrefix, err);
+        });
+}
+
+function applyNavStopFabDomFromPlan(fabExecute) {
+    if (!fabExecute || !fabExecute.shouldApply) return;
+
+    (fabExecute.elementDisplays || []).forEach(({ id, display }) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = display;
+    });
+    if (fabExecute.updateRoadReportFab) updateRoadReportFabVisibility();
+    if (fabExecute.updateNavFabVisibility) updateNavigationFabVisibility();
+    if (fabExecute.updateSpeedWidget) updateSpeedWidgetVisibility();
+    if (fabExecute.hideTurnWidget) hideTurnInstructionWidget();
+    if (fabExecute.hideJourneySummaryBar) hideJourneySummaryBar();
+}
+
+function applyNavStopServicesFromPlan(services, wasRouteInProgress) {
+    if (!services) return false;
+
+    const lifecycle = services.lifecycle || {};
+    if (lifecycle.resetNavigationArrival) resetNavigationArrivalState();
+
+    const traveled = services.traveledSummary;
+    if (traveled && traveled.shouldBuild && window.lastCalculatedRoute && wasRouteInProgress) {
+        const summaryRoute = buildTraveledJourneyRoute(window.lastCalculatedRoute);
+        if (traveled.persistCompletedTrip) void persistCompletedTrip(summaryRoute);
+        if (traveled.showJourneySummary) showJourneySummary(summaryRoute);
+    }
+
+    if (lifecycle.stopGpsTracking) stopGPSTracking();
+    if (lifecycle.hideRoadNameBar) hideRoadNameBar();
+
+    applyNavStopWakeLockReleaseFromPlan(lifecycle);
+
+    if (lifecycle.stopLiveDataRefresh) stopLiveDataRefresh();
+    if (lifecycle.clearInitialEtaAnnouncement) clearInitialETAAnnouncement();
+
+    if (lifecycle.stopAutoTraffic) {
+        stopAutoTrafficUpdates();
+        console.log(lifecycle.autoTrafficStopLog);
+    }
+    if (lifecycle.stopRouteTraffic) {
+        stopRouteTrafficUpdates();
+        console.log(lifecycle.routeTrafficStopLog);
+    }
+
+    applyNavStopFabDomFromPlan(services.fabExecute);
+
+    if (lifecycle.stopArModeIfActive && arModeActive) {
+        stopARMode();
+    }
+
+    const pitch = services.mapPitchReset;
+    if (pitch && pitch.shouldApply && map) {
+        if (pitch.driverPerspectiveEnabled) {
+            applyDriverPerspective();
+        } else {
+            map.easeTo({ pitch: pitch.pitch, bearing: pitch.bearing, duration: pitch.durationMs });
+        }
+    }
+
+    const pwa = services.pwaUpdate;
+    if (pwa && pwa.shouldApply && updatePending) {
+        showStatus(pwa.statusMessage, 'success');
+        saveAppState();
+        setTimeout(() => {
+            window.location.reload();
+        }, pwa.reloadDelayMs);
+        return true;
+    }
+
+    const feedback = services.userFeedback;
+    if (feedback) {
+        showStatus(feedback.statusMessage, feedback.statusType || 'info');
+        if (feedback.notification) {
+            sendNotification(feedback.notification.title, feedback.notification.body, 'info');
+        }
+    }
+    return false;
+}
+
 /**
  * startTurnByTurnNavigation function
  * @function startTurnByTurnNavigation
@@ -15752,116 +15860,22 @@ function startTurnByTurnNavigation(routeData, navStartOpts = null) {
  */
 function stopTurnByTurnNavigation() {
     const MC = _mapControls();
-    const preflight = MC.buildNavStopPreflightPlan(routeInProgress, isTrackingActive);
-    if (!preflight.shouldStop) {
-        if (preflight.updateNavFabOnly) updateNavigationFabVisibility();
-        return;
-    }
-
-    const wasRouteInProgress = routeInProgress;
-    const lifecycle = MC.buildNavStopLifecycleExecutePlan({
-        routeInProgress: wasRouteInProgress,
+    const entry = MC.buildNavStopEntryOrchestrationPlan({
+        routeInProgress,
+        isTrackingActive,
         lastCalculatedRoute: window.lastCalculatedRoute,
         hasWakeLock: !!window.screenWakeLock,
-        arModeActive: arModeActive,
-        driverPerspectiveEnabled: driverPerspectiveEnabled,
-        updatePending: updatePending,
+        arModeActive,
+        driverPerspectiveEnabled,
+        updatePending,
     });
-
-    if (lifecycle.resetNavigationArrival) resetNavigationArrivalState();
-
-    if (lifecycle.buildTraveledSummary && window.lastCalculatedRoute && wasRouteInProgress) {
-        const summaryRoute = buildTraveledJourneyRoute(window.lastCalculatedRoute);
-        if (lifecycle.persistCompletedTrip) void persistCompletedTrip(summaryRoute);
-        if (lifecycle.showJourneySummary) showJourneySummary(summaryRoute);
-    }
-
-    const reset = MC.buildNavStopStateResetPlan();
-    routeInProgress = reset.routeInProgress;
-    routeJoinConfirmedForDeviation = reset.routeJoinConfirmedForDeviation;
-    clearRerouteFailureRetries();
-    currentStepIndex = reset.currentStepIndex;
-    if (reset.clearRouteSteps) currentRouteSteps = [];
-    resetVehicleMarkerDisplayState();
-    if (reset.clearPersistedRoute) clearPersistedRoute();
-    if (lifecycle.stopGpsTracking) stopGPSTracking();
-    if (lifecycle.hideRoadNameBar) hideRoadNameBar();
-
-    if (lifecycle.releaseWakeLock && window.screenWakeLock) {
-        window.screenWakeLock.release()
-            .then(() => {
-                console.log(lifecycle.wakeLockReleaseLog);
-                window.screenWakeLock = null;
-            })
-            .catch(err => {
-                console.log(lifecycle.wakeLockReleaseErrorLogPrefix, err);
-            });
-    }
-
-    if (lifecycle.stopLiveDataRefresh) stopLiveDataRefresh();
-    if (lifecycle.clearInitialEtaAnnouncement) clearInitialETAAnnouncement();
-    initialETAMovementRetries = reset.initialETAMovementRetries;
-
-    if (lifecycle.stopAutoTraffic) {
-        stopAutoTrafficUpdates();
-        console.log(lifecycle.autoTrafficStopLog);
-    }
-    if (lifecycle.stopRouteTraffic) {
-        stopRouteTrafficUpdates();
-        console.log(lifecycle.routeTrafficStopLog);
-    }
-
-    mapFollowingActive = reset.mapFollowingActive;
-    if (lifecycle.applyFabHidePlan) {
-        const navStopFabPlan = MC.getNavStopFabHidePlan();
-        const zoomFollowBtn = document.getElementById('zoomFollowToggle');
-        if (zoomFollowBtn) zoomFollowBtn.style.display = navStopFabPlan.zoomFollowDisplay;
-
-        const recenterBtn = document.getElementById('recenterVehicleFab');
-        if (recenterBtn) recenterBtn.style.display = navStopFabPlan.recenterDisplay;
-
-        const journeyOverviewBtn = document.getElementById('journeyOverviewBtn');
-        if (journeyOverviewBtn) journeyOverviewBtn.style.display = navStopFabPlan.journeyOverviewDisplay;
-
-        const arModeBtn = document.getElementById('arModeBtn');
-        if (arModeBtn) arModeBtn.style.display = navStopFabPlan.arModeBtnDisplay;
-
-        const driverPerspectiveBtn = document.getElementById('driverPerspectiveToggle');
-        if (driverPerspectiveBtn) driverPerspectiveBtn.style.display = navStopFabPlan.driverPerspectiveDisplay;
-    }
-    journeyOverviewActive = reset.journeyOverviewActive;
-
-    if (lifecycle.updateRoadReportFab) updateRoadReportFabVisibility();
-    if (lifecycle.updateNavFabVisibility) updateNavigationFabVisibility();
-    if (lifecycle.updateSpeedWidget) updateSpeedWidgetVisibility();
-    if (lifecycle.hideTurnWidget) hideTurnInstructionWidget();
-    if (lifecycle.hideJourneySummaryBar) hideJourneySummaryBar();
-
-    if (lifecycle.stopArModeIfActive && arModeActive) {
-        stopARMode();
-    }
-    if (lifecycle.applyMapPitchReset && map) {
-        if (lifecycle.driverPerspectiveEnabled) {
-            applyDriverPerspective();
-        } else {
-            map.easeTo({ pitch: 0, bearing: 0, duration: 500 });
-        }
-    }
-
-    savedMapState = reset.savedMapState;
-
-    if (lifecycle.applyPendingPwaUpdate && updatePending) {
-        showStatus(lifecycle.pwaUpdateStatusMessage, 'success');
-        saveAppState();
-        setTimeout(() => {
-            window.location.reload();
-        }, lifecycle.pwaReloadDelayMs);
+    if (!entry.shouldStop) {
+        if (entry.updateNavFabOnly) updateNavigationFabVisibility();
         return;
     }
 
-    showStatus(MC.getNavStopStatusMessage(), 'info');
-    const navStopNote = MC.getNavStopNotification();
-    sendNotification(navStopNote.title, navStopNote.body, 'info');
+    applyNavStopRuntimeFromPlan(MC.buildNavStopRuntimeApplyPlan(entry.stateReset));
+    if (applyNavStopServicesFromPlan(entry.services, entry.wasRouteInProgress)) return;
 }
 /**
  * updateTurnGuidance function

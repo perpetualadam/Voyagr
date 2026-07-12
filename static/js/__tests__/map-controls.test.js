@@ -321,6 +321,60 @@ describe('map-controls module', () => {
         expect(MC.buildNavStopStateResetPlan().routeInProgress).toBe(false);
     });
 
+    test('buildNavStopEntryOrchestrationPlan bundles preflight and services', () => {
+        expect(MC.buildNavStopEntryOrchestrationPlan({
+            routeInProgress: false,
+            isTrackingActive: false,
+        }).shouldStop).toBe(false);
+
+        const entry = MC.buildNavStopEntryOrchestrationPlan({
+            routeInProgress: true,
+            isTrackingActive: false,
+            lastCalculatedRoute: { distance_km: 12 },
+            hasWakeLock: true,
+            arModeActive: false,
+            updatePending: false,
+        });
+        expect(entry.shouldStop).toBe(true);
+        expect(entry.wasRouteInProgress).toBe(true);
+        expect(entry.stateReset.routeInProgress).toBe(false);
+        expect(entry.services.traveledSummary.shouldBuild).toBe(true);
+        expect(entry.services.fabExecute.shouldApply).toBe(true);
+    });
+
+    test('buildNavStopRuntimeApplyPlan maps state reset fields', () => {
+        const reset = MC.buildNavStopStateResetPlan();
+        const apply = MC.buildNavStopRuntimeApplyPlan(reset);
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.routeInProgress).toBe(false);
+        expect(apply.clearRouteSteps).toBe(true);
+        expect(apply.clearRerouteFailureRetries).toBe(true);
+        expect(apply.resetVehicleMarker).toBe(true);
+    });
+
+    test('buildNavStopFabDomExecutePlan hides nav FAB elements', () => {
+        const execute = MC.buildNavStopFabDomExecutePlan();
+        expect(execute.shouldApply).toBe(true);
+        expect(execute.elementDisplays.find((item) => item.id === 'zoomFollowToggle').display).toBe('none');
+        expect(execute.hideTurnWidget).toBe(true);
+        expect(execute.updateNavFabVisibility).toBe(true);
+    });
+
+    test('buildNavStopServicesOrchestrationPlan schedules PWA reload when update pending', () => {
+        const services = MC.buildNavStopServicesOrchestrationPlan({
+            routeInProgress: true,
+            lastCalculatedRoute: { distance_km: 5 },
+            hasWakeLock: false,
+            arModeActive: true,
+            driverPerspectiveEnabled: false,
+            updatePending: true,
+        });
+        expect(services.lifecycle.stopArModeIfActive).toBe(true);
+        expect(services.pwaUpdate.shouldApply).toBe(true);
+        expect(services.pwaUpdate.reloadDelayMs).toBeGreaterThan(0);
+        expect(services.userFeedback.notification.title).toBe('Navigation Ended');
+    });
+
     test('map explore handler plans gate binding and follow pause', () => {
         expect(MC.buildMapMoveHandlerSetupPlan({ hasMap: false }).shouldBind).toBe(false);
         expect(MC.buildMapMoveHandlerSetupPlan({ hasMap: true }).eventName).toBe('move');
