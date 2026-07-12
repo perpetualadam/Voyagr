@@ -2206,30 +2206,23 @@ async function fetchJsonWithAuth(url, options = {}) {
 
 async function loadTripHistory() {
     const TH = _tripHistory();
-    const orch = TH.buildLoadTripHistoryOrchestrationPlan();
+    const entry = TH.buildLoadTripHistoryEntryOrchestrationPlan();
+    const orch = entry.orch;
     try {
         const { res, data } = await fetchJsonWithAuth(orch.apiPath);
         const response = TH.buildLoadTripHistoryResponseExecutePlan(res, data);
 
         if (response.action === 'auth') {
-            allTrips = TH.mergeServerAndLocalTrips([], loadRawLocalTrips());
-            displayTripHistory(allTrips);
-            const auth = TH.buildLoadTripHistoryAuthExecutePlan(allTrips);
-            applyTripHistoryAuthBannerFromPlan(auth, orch);
-            if (auth.bindSearch) bindTripHistorySearch();
+            applyLoadTripHistoryAuthOutcomeFromPlan(orch);
             return;
         }
 
-        const serverTrips = response.serverTrips || [];
-        allTrips = TH.mergeServerAndLocalTrips(serverTrips, loadRawLocalTrips());
-        displayTripHistory(allTrips);
+        applyLoadTripHistorySuccessOutcomeFromPlan(response.serverTrips);
     } catch (error) {
-        console.error(orch.errorLogPrefix, error);
-        const execute = TH.buildLoadTripHistoryErrorExecutePlan();
-        const dom = TH.buildLoadTripHistoryErrorDomExecutePlan(execute, orch);
-        if (dom.clearAllTrips) allTrips = [];
-        applyTripHistoryErrorListFromPlan(dom);
-        if (dom.bindSearch) bindTripHistorySearch();
+        applyLoadTripHistoryFetchErrorFromPlan(
+            TH.buildLoadTripHistoryFetchErrorExecutePlan(orch),
+            error
+        );
     }
 }
 
@@ -2251,12 +2244,64 @@ function applyTripHistoryErrorListFromPlan(dom) {
     const list = document.getElementById(dom.listContainerId);
     if (list) list.innerHTML = dom.listInnerHtml;
 }
-/**
- * displayTripHistory function
- * @function displayTripHistory
- * @param {*} trips - Parameter description
- * @returns {*} Return value description
- */
+
+function collectDisplayTripHistoryFmt() {
+    return {
+        escapeHtml: _html().escapeHtml,
+        convertDistance: convertDistance,
+        distUnit: getDistanceUnit(),
+        currencySymbol: getCurrencySymbol(),
+    };
+}
+
+function applyDisplayTripHistoryFromPlan(execute) {
+    if (!execute || !execute.shouldRender) return;
+
+    const listContainer = document.getElementById('tripHistoryList');
+    if (!listContainer) return;
+
+    const TH = _tripHistory();
+    if (execute.listInnerHtml) {
+        listContainer.innerHTML = execute.listInnerHtml;
+    } else if (execute.rows) {
+        listContainer.innerHTML = execute.rows.map((row) =>
+            TH.buildTripHistoryRowHtml(row.trip, row.display)
+        ).join('');
+    }
+
+    if (execute.bindSearch) bindTripHistorySearch();
+}
+
+function applyLoadTripHistoryAuthOutcomeFromPlan(orch) {
+    const TH = _tripHistory();
+    allTrips = TH.mergeServerAndLocalTrips([], loadRawLocalTrips());
+    displayTripHistory(allTrips);
+    const auth = TH.buildLoadTripHistoryAuthExecutePlan(allTrips);
+    applyTripHistoryAuthBannerFromPlan(auth, orch);
+    if (auth.bindSearch) bindTripHistorySearch();
+}
+
+function applyLoadTripHistorySuccessOutcomeFromPlan(serverTrips) {
+    const TH = _tripHistory();
+    allTrips = TH.mergeServerAndLocalTrips(serverTrips || [], loadRawLocalTrips());
+    displayTripHistory(allTrips);
+}
+
+function applyLoadTripHistoryErrorOutcomeFromPlan(errorEntry) {
+    if (!errorEntry || !errorEntry.dom) return;
+    const dom = errorEntry.dom;
+    if (dom.clearAllTrips) allTrips = [];
+    applyTripHistoryErrorListFromPlan(dom);
+    if (dom.bindSearch) bindTripHistorySearch();
+}
+
+function applyLoadTripHistoryFetchErrorFromPlan(errorExecute, error) {
+    if (errorExecute && errorExecute.errorLogPrefix) {
+        console.error(errorExecute.errorLogPrefix, error);
+    }
+    applyLoadTripHistoryErrorOutcomeFromPlan(errorExecute && errorExecute.errorEntry);
+}
+
 /**
  * Filter trips list when user types in trip search (safe for numeric/string timestamps).
  */
@@ -2278,30 +2323,19 @@ function bindTripHistorySearch() {
     };
 }
 
+/**
+ * displayTripHistory function
+ * @function displayTripHistory
+ * @param {*} trips - Parameter description
+ * @returns {*} Return value description
+ */
 function displayTripHistory(trips) {
-    const TH = _tripHistory();
-    const execute = TH.buildDisplayTripHistoryExecutePlan(
-        TH.buildDisplayTripHistoryInputPlan(trips, {
-            escapeHtml: _html().escapeHtml,
-            convertDistance: convertDistance,
-            distUnit: getDistanceUnit(),
-            currencySymbol: getCurrencySymbol(),
-        })
+    applyDisplayTripHistoryFromPlan(
+        _tripHistory().buildDisplayTripHistoryEntryOrchestrationPlan(
+            trips,
+            collectDisplayTripHistoryFmt()
+        ).execute
     );
-    if (!execute.shouldRender) return;
-
-    const listContainer = document.getElementById('tripHistoryList');
-    if (!listContainer) return;
-
-    if (execute.listInnerHtml) {
-        listContainer.innerHTML = execute.listInnerHtml;
-    } else if (execute.rows) {
-        listContainer.innerHTML = execute.rows.map((row) =>
-            TH.buildTripHistoryRowHtml(row.trip, row.display)
-        ).join('');
-    }
-
-    if (execute.bindSearch) bindTripHistorySearch();
 }
 
 function applyRecalculateTripDomFromPlan(dom) {
@@ -12892,6 +12926,35 @@ window.addEventListener('load', () => {
     console.log('[Init] All settings loaded and applied successfully');
 });
 
+function applyBottomSheetDragVisualFromPlan(feedback, bottomSheetEl) {
+    if (!feedback || !feedback.shouldApplyTransform || !bottomSheetEl) return;
+    bottomSheetEl.style.transform = `translateY(${feedback.transformTranslateY}px)`;
+}
+
+function applyBottomSheetDragFinishFromPlan(entry) {
+    if (!entry) return;
+
+    const bottomSheet = document.getElementById('bottomSheet');
+    if (!bottomSheet) return;
+
+    (entry.clearInlineStyles || []).forEach((prop) => {
+        bottomSheet.style[prop] = '';
+    });
+
+    if (entry.shouldCollapse) {
+        collapseBottomSheet();
+        if (entry.collapseLogMessage) console.log(entry.collapseLogMessage);
+    } else if (entry.shouldExpand) {
+        expandBottomSheet();
+        if (entry.expandLogMessage) console.log(entry.expandLogMessage);
+    }
+}
+
+function applyBottomSheetDragStartFromPlan(execute, bottomSheetEl) {
+    if (!execute || !execute.shouldDisableTransition || !bottomSheetEl) return;
+    bottomSheetEl.style.transition = execute.transitionValue;
+}
+
 // ===== BOTTOM SHEET FUNCTIONALITY =====
 /**
  * initBottomSheet function
@@ -12914,27 +12977,24 @@ function initBottomSheet() {
     }
 
     const applyDragVisual = (diff) => {
-        const feedback = DH.buildBottomSheetDragVisualFeedbackPlan({
-            diff,
-            isExpanded: bottomSheetIsExpanded,
-            previewMaxPx: initPlan.dragCollapsePreviewMaxPx,
-        });
-        if (feedback.shouldApplyTransform) {
-            bottomSheet.style.transform = `translateY(${feedback.transformTranslateY}px)`;
-        }
+        applyBottomSheetDragVisualFromPlan(
+            DH.buildBottomSheetDragVisualEntryOrchestrationPlan({
+                diff,
+                isExpanded: bottomSheetIsExpanded,
+                previewMaxPx: initPlan.dragCollapsePreviewMaxPx,
+            }).feedback,
+            bottomSheet
+        );
     };
 
     const finishDrag = (diff) => {
-        bottomSheet.style.transition = '';
-        bottomSheet.style.transform = '';
-        const snap = DH.buildBottomSheetDragSnapPlan(diff, bottomSheetIsExpanded, initPlan.dragThresholdPx);
-        if (snap.action === 'collapse') {
-            collapseBottomSheet();
-            console.log(initPlan.collapseSwipeLogMessage);
-        } else if (snap.action === 'expand') {
-            expandBottomSheet();
-            console.log(initPlan.expandSwipeLogMessage);
-        }
+        applyBottomSheetDragFinishFromPlan(
+            DH.buildBottomSheetDragFinishEntryOrchestrationPlan(diff, bottomSheetIsExpanded, {
+                thresholdPx: initPlan.dragThresholdPx,
+                collapseSwipeLogMessage: initPlan.collapseSwipeLogMessage,
+                expandSwipeLogMessage: initPlan.expandSwipeLogMessage,
+            })
+        );
     };
 
     handle.addEventListener('click', (e) => {
@@ -12970,7 +13030,7 @@ function initBottomSheet() {
         isDragging = true;
         bottomSheetStartY = e.touches[0].clientY;
         bottomSheetCurrentY = bottomSheetStartY;
-        bottomSheet.style.transition = 'none';
+        applyBottomSheetDragStartFromPlan(DH.buildBottomSheetDragStartExecutePlan(), bottomSheet);
     }, { passive: true });
 
     handle.addEventListener('touchmove', (e) => {
@@ -12989,7 +13049,7 @@ function initBottomSheet() {
         isDragging = true;
         bottomSheetStartY = e.clientY;
         bottomSheetCurrentY = bottomSheetStartY;
-        bottomSheet.style.transition = 'none';
+        applyBottomSheetDragStartFromPlan(DH.buildBottomSheetDragStartExecutePlan(), bottomSheet);
     });
 
     document.addEventListener('mousemove', (e) => {

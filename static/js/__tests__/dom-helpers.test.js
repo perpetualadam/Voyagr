@@ -121,4 +121,25 @@ describe('dom-helpers', () => {
         expect(toggleCollapse.collected.collapse).toBe(true);
         expect(toggleCollapse.execute.setExpandedState).toBe(false);
     });
+
+    test('buildBottomSheetDragVisualEntryOrchestrationPlan and drag finish entry plan', () => {
+        const visual = Dom.buildBottomSheetDragVisualEntryOrchestrationPlan({
+            diff: 30,
+            isExpanded: true,
+        });
+        expect(visual.feedback.shouldApplyTransform).toBe(true);
+        expect(visual.feedback.transformTranslateY).toBe(30);
+
+        const finish = Dom.buildBottomSheetDragFinishEntryOrchestrationPlan(60, true, {
+            thresholdPx: 50,
+            collapseSwipeLogMessage: 'collapsed',
+            expandSwipeLogMessage: 'expanded',
+        });
+        expect(finish.shouldCollapse).toBe(true);
+        expect(finish.collapseLogMessage).toBe('collapsed');
+
+        const start = Dom.buildBottomSheetDragStartExecutePlan();
+        expect(start.shouldDisableTransition).toBe(true);
+        expect(start.transitionValue).toBe('none');
+    });
 });
