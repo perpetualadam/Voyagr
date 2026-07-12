@@ -422,7 +422,7 @@
             hasWakeLock: !!window.screenWakeLock,
             arModeActive: rt().getArModeActive(),
             driverPerspectiveEnabled: rt().getDriverPerspectiveEnabled(),
-            updatePending: rt().getUpdatePending(),
+            updatePending: root.VoyagrServiceWorkerOrchestration.getUpdatePending(),
         });
         if (!entry.shouldStop) {
             if (entry.updateNavFabOnly) rt().call.updateNavigationFabVisibility();

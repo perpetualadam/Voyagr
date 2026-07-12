@@ -9,6 +9,10 @@
     var swUpdateInFlight = false;
     var swUpdateBackoffUntil = 0;
     var serviceWorkerInitBound = false;
+    var updatePending = false;
+
+    function getUpdatePending() { return updatePending; }
+    function setUpdatePending(val) { updatePending = !!val; }
 
     function rt() {
         if (!runtime) {
@@ -97,7 +101,7 @@
             console.log(change.logMessage);
 
             if (change.action === 'defer') {
-                if (change.setUpdatePending) rt().setUpdatePending(true);
+                if (change.setUpdatePending) setUpdatePending(true);
                 rt().call.showStatus(change.statusMessage, change.statusType);
             } else if (change.action === 'reload') {
                 rt().call.showStatus(change.statusMessage, change.statusType);
@@ -118,6 +122,8 @@
     var api = {
         bind: bind,
         safeServiceWorkerUpdate: safeServiceWorkerUpdate,
+        getUpdatePending: getUpdatePending,
+        setUpdatePending: setUpdatePending,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

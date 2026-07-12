@@ -81,7 +81,6 @@ function getFuelEfficiencyLabel() { return VoyagrUnitsPreferencesOrchestration.g
 let isTrackingActive = false;
 let gpsWatchId = null;
 let currentUserMarker = null;
-let trackingHistory = [];
 let lastZoomLevel = 13;
 let smartZoomEnabled = (typeof VoyagrSmartZoom !== 'undefined'
     ? VoyagrSmartZoom.resolveSmartZoomEnabledFromStorage(localStorage.getItem('smartZoomEnabled'))
@@ -688,7 +687,7 @@ function getCalculateRouteOrchestrationRuntime() {
         getCurrentVehicleType: () => currentVehicleType,
         getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
         getIsTrackingActive: () => isTrackingActive,
-        getTrackingHistory: () => trackingHistory,
+        getTrackingHistory: () => VoyagrGpsOrchestration.getTrackingHistory(),
         getCurrentLat: () => currentLat,
         getCurrentLon: () => currentLon,
         call: {
@@ -1331,7 +1330,7 @@ function getGpsOrchestrationRuntime() {
             case 'isTrackingActive': return isTrackingActive;
             case 'gpsWatchId': return gpsWatchId;
             case 'currentUserMarker': return currentUserMarker;
-            case 'trackingHistory': return trackingHistory;
+            case 'trackingHistory': return VoyagrGpsOrchestration.getTrackingHistory();
             case 'zoomAndFollowEnabled': return zoomAndFollowEnabled;
             case 'mapFollowingActive': return mapFollowingActive;
             case 'driverPerspectiveEnabled': return driverPerspectiveEnabled;
@@ -1379,7 +1378,7 @@ function getGpsOrchestrationRuntime() {
             case 'voiceAnnouncementsEnabled': return VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled();
             case 'voiceFrequencyMode': return VoyagrVoiceAnnouncementsOrchestration.getVoiceFrequencyMode();
             case 'speedWidgetEnabled': return VoyagrSpeedWidgetOrchestration.getSpeedWidgetEnabled();
-            case 'userHasStartedMoving': return userHasStartedMoving;
+            case 'userHasStartedMoving': break;
                 default: return undefined;
             }
         },
@@ -1397,7 +1396,7 @@ function getGpsOrchestrationRuntime() {
             case 'isTrackingActive': isTrackingActive = val; break;
             case 'gpsWatchId': gpsWatchId = val; break;
             case 'currentUserMarker': currentUserMarker = val; break;
-            case 'trackingHistory': trackingHistory = val; break;
+            case 'trackingHistory': VoyagrGpsOrchestration.setTrackingHistory(val); break;
             case 'zoomAndFollowEnabled': zoomAndFollowEnabled = val; break;
             case 'mapFollowingActive': mapFollowingActive = val; break;
             case 'driverPerspectiveEnabled': driverPerspectiveEnabled = val; break;
@@ -1445,7 +1444,7 @@ function getGpsOrchestrationRuntime() {
             case 'voiceAnnouncementsEnabled': VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncementsEnabled(val); break;
             case 'voiceFrequencyMode': VoyagrVoiceAnnouncementsOrchestration.setVoiceFrequencyMode(val); break;
             case 'speedWidgetEnabled': VoyagrSpeedWidgetOrchestration.setSpeedWidgetEnabled(val); break;
-            case 'userHasStartedMoving': userHasStartedMoving = val; break;
+            case 'userHasStartedMoving': break;
                 default: break;
             }
         },
@@ -2063,8 +2062,6 @@ function getServiceWorkerOrchestrationRuntime() {
     return {
         pwaInstall: () => _pwaInstall(),
         getRouteInProgress: () => routeInProgress,
-        getUpdatePending: () => updatePending,
-        setUpdatePending: (val) => { updatePending = val; },
         call: {
             showStatus,
             saveAppState,
@@ -2311,8 +2308,7 @@ function startJourneySummaryUpdates() { VoyagrJourneySummaryOrchestration.startJ
 function updateJourneySummaryBar() { VoyagrJourneySummaryOrchestration.updateJourneySummaryBar(); }
 
 // ===== PWA AUTO-RELOAD SYSTEM (PHASE 2) =====
-let updatePending = false;
-let appStateBeforeReload = null;
+// updatePending lives in service-worker-orchestration.js.
 
 // ===== BATTERY-AWARE REFRESH (PHASE 3) =====
 
@@ -2678,7 +2674,7 @@ function getNavigationLifecycleOrchestrationRuntime() {
         setSavedMapState: (val) => VoyagrJourneyOverviewOrchestration.setSavedMapState(val),
         getArModeActive: () => arModeActive,
         getDriverPerspectiveEnabled: () => driverPerspectiveEnabled,
-        getUpdatePending: () => updatePending,
+        getUpdatePending: () => VoyagrServiceWorkerOrchestration.getUpdatePending(),
         setNavTraveledMeters: (val) => VoyagrNavigationLifecycleOrchestration.setNavTraveledMeters(val),
         setNavOdometerLastGeo: (val) => VoyagrNavigationLifecycleOrchestration.setNavOdometerLastGeo(val),
         setNavStartedAt: (val) => VoyagrNavigationLifecycleOrchestration.setNavStartedAt(val),
@@ -2995,7 +2991,7 @@ function getJourneySummaryOrchestrationRuntime() {
         routeGeometry: () => _routeGeometry(),
         movementDetection: () => _movementDetection(),
         units: () => _units(),
-        getTrackingHistory: () => trackingHistory,
+        getTrackingHistory: () => VoyagrGpsOrchestration.getTrackingHistory(),
         getRouteInProgress: () => routeInProgress,
         getRoutePolyline: () => routePolyline,
         getCurrentLat: () => currentLat,

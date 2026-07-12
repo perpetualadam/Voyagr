@@ -10,6 +10,10 @@
     var snapBlendWeightState = 0;
     var smoothDisplayLat = null;
     var smoothDisplayLon = null;
+    var trackingHistory = [];
+
+    function getTrackingHistory() { return trackingHistory; }
+    function setTrackingHistory(val) { trackingHistory = val; }
 
     function getSnapBlendWeightState() { return snapBlendWeightState; }
     function setSnapBlendWeightState(val) { snapBlendWeightState = val; }
@@ -560,7 +564,7 @@
         const SG = sgModule();
         const tick = SG.buildGpsCoordSampleTickPlan({
             sample,
-            trackingHistory: rt().g('trackingHistory'),
+            trackingHistory: getTrackingHistory(),
             pickRawSpeedState: {
                 lastGoodRawPickMph: rt().g('_lastGoodRawPickMph'),
                 consecutiveDisplacementMoves: rt().g('_consecutiveDisplacementMoves'),
@@ -588,7 +592,7 @@
 
         const patch = apply.statePatch;
         if (patch.trackingHistory) {
-            rt().s('trackingHistory',  patch.trackingHistory);
+            setTrackingHistory(patch.trackingHistory);
         }
         if (patch.pickRawSpeedState) {
             rt().s('_lastGoodRawPickMph',  patch.pickRawSpeedState.lastGoodRawPickMph);
@@ -637,7 +641,7 @@
                 ? SGhead.resolveGpsHeadingDegrees({
                     deviceHeading: coord.deviceHeading,
                     speed: coord.speed,
-                    trackingHistory: rt().g('trackingHistory'),
+                    trackingHistory: getTrackingHistory(),
                     calculateDistanceMeters: calculateDistanceMeters,
                 })
                 : 0),
@@ -730,7 +734,7 @@
         }
 
         rt().s('isTrackingActive',  true);
-        rt().s('trackingHistory',  []);
+        setTrackingHistory([]);
         rt().s('_lastGoodRawPickMph',  0);
         rt().s('_consecutiveDisplacementMoves',  0);
         rt().s('_smoothedSpeedMph',  0);
@@ -1675,6 +1679,8 @@
         setSmoothDisplayLat: setSmoothDisplayLat,
         getSmoothDisplayLon: getSmoothDisplayLon,
         setSmoothDisplayLon: setSmoothDisplayLon,
+        getTrackingHistory: getTrackingHistory,
+        setTrackingHistory: setTrackingHistory,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
