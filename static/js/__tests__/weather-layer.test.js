@@ -109,7 +109,20 @@ describe('weather-layer module (real implementation)', () => {
             expect(execute.statusMessage).toContain('Precipitation');
         });
 
+        test('resolveWeatherLayerTypeFromStorage and toggle collect plan', () => {
+            expect(WL.resolveWeatherLayerTypeFromStorage('temp_new')).toBe('temp_new');
+            expect(WL.resolveWeatherLayerTypeFromStorage('bogus')).toBe(WL.DEFAULT_WEATHER_LAYER_TYPE);
+            expect(WL.buildToggleWeatherLayerCollectPlan({ currentlyEnabled: true }).enabled).toBe(false);
+        });
+
+        test('buildWeatherCredentialsFetchPlan skips fetch when api key present', () => {
+            expect(WL.buildWeatherCredentialsFetchPlan({ hasApiKey: true }).shouldFetch).toBe(false);
+            expect(WL.buildWeatherCredentialsFetchPlan({ hasApiKey: false }).url).toBe(WL.WEATHER_CONFIG_API_PATH);
+        });
+
         test('weather add/remove/init orchestration plans', () => {
+            expect(WL.buildAddWeatherLayerOrchestrationPlan({ hasMap: false }).shouldProceed).toBe(false);
+
             const add = WL.buildAddWeatherLayerOrchestrationPlan({ hasMap: true, isStyleLoaded: false });
             expect(add.shouldProceed).toBe(true);
             expect(add.sourceId).toBe(WL.WEATHER_SOURCE_ID);

@@ -7972,78 +7972,55 @@ function startNavigationFromPreview() {
 }
 
 // ===== PARKING INTEGRATION FEATURE =====
+// Orchestration lives in static/js/app/parking-orchestration.js (bound at file end).
 
-let parkingMarkers = [];
-let selectedParking = null;
-let parkingWalkingRoute = null;
-let parkingDrivingRoute = null;
-
-/**
- * Collect parking preference values from settings form controls.
- * @returns {Object}
- */
-function collectParkingPreferencesDomInput() {
+function getParkingOrchestrationRuntime() {
     return {
-        maxWalkingDistance: document.getElementById('parkingMaxWalkingDistance')?.value,
-        preferredType: document.getElementById('parkingPreferredType')?.value,
-        pricePreference: document.getElementById('parkingPricePreference')?.value,
+        multimodalParking: () => _multimodalParking(),
+        routingRequest: () => _routingRequest(),
+        getMap: () => map,
+        getRouteOptionsLength: () => (routeOptions && routeOptions.length) || 0,
+        getSelectedRouteIndex: () => selectedRouteIndex,
+        getRouteOptionAt: (idx) => (routeOptions && routeOptions[idx]) || null,
+        getLastCalculatedRoute: () => window.lastCalculatedRoute,
+        getCurrentVehicleType: () => currentVehicleType,
+        getRouteCostParams,
+        isAvoidTollsEnabled,
+        decodePolyline,
+        convertDistance,
+        getDistanceUnit,
+        showStatus,
+        saveAllSettings,
+        applyDomSelectsFromPlan,
+        expandBottomSheet,
+        showRoutePreview,
+        calculateRoute,
+        geocodeLocations,
     };
 }
 
 function collectParkingPreferencesFormState() {
-    const MP = _multimodalParking();
-    return MP.buildParkingPreferencesCollectPlan(
-        MP.buildCollectParkingPreferencesInputPlan(collectParkingPreferencesDomInput())
-    );
+    return VoyagrParkingOrchestration.collectParkingPreferencesFormState();
 }
 
-function applySaveParkingPreferencesFromPlan(execute) {
-    if (!execute || !execute.shouldSave) return;
-
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    if (execute.saveAllSettings) saveAllSettings();
-    console.log(execute.logMessage, execute.prefs);
-}
-
-/**
- * saveParkingPreferences function
- * @function saveParkingPreferences
- * @returns {*} Return value description
- */
 function saveParkingPreferences() {
-    const MP = _multimodalParking();
-    applySaveParkingPreferencesFromPlan(
-        MP.buildSaveParkingPreferencesEntryOrchestrationPlan(
-            MP.buildCollectParkingPreferencesInputPlan(collectParkingPreferencesDomInput())
-        ).execute
-    );
+    VoyagrParkingOrchestration.saveParkingPreferences();
 }
 
-function applyLoadParkingPreferencesFromPlan(execute) {
-    if (!execute || !execute.shouldApply) return;
-
-    applyDomSelectsFromPlan(execute.domPlan.selects);
-    console.log(execute.logMessage, execute.prefs);
-}
-
-/**
- * loadParkingPreferences function
- * @function loadParkingPreferences
- * @returns {*} Return value description
- */
 function loadParkingPreferences() {
-    const MP = _multimodalParking();
-    const entry = MP.buildLoadParkingPreferencesEntryOrchestrationPlan();
-    try {
-        const saved = localStorage.getItem(entry.orch.storageKey);
-        if (!saved) return;
+    VoyagrParkingOrchestration.loadParkingPreferences();
+}
 
-        applyLoadParkingPreferencesFromPlan(
-            MP.buildLoadParkingPreferencesResponseEntryOrchestrationPlan(JSON.parse(saved)).execute
-        );
-    } catch (e) {
-        console.log(entry.orch.errorLogPrefix, e);
-    }
+function findParkingNearDestination() {
+    return VoyagrParkingOrchestration.findParkingNearDestination();
+}
+
+function clearParkingSelection() {
+    VoyagrParkingOrchestration.clearParkingSelection();
+}
+
+function setParkingAsDestination(parking) {
+    return VoyagrParkingOrchestration.setParkingAsDestination(parking);
 }
 
 /**
@@ -8457,469 +8434,6 @@ function toggleVoiceAnnouncements() {
         ).execute,
         button
     );
-}
-
-function collectResolveParkingDestinationInput(lastRoute, endInput) {
-    const MP = _multimodalParking();
-    const idx = MP.buildResolveParkingDestinationSelectedRouteIndexPlan(
-        routeOptions && routeOptions.length,
-        selectedRouteIndex
-    );
-    const endEl = document.getElementById('end');
-    let endElementCoords = null;
-    if (endEl && endEl.dataset.lat && endEl.dataset.lon) {
-        const lat = parseFloat(endEl.dataset.lat);
-        const lon = parseFloat(endEl.dataset.lon);
-        if (!isNaN(lat) && !isNaN(lon)) {
-            endElementCoords = { lat, lon };
-        }
-    }
-
-    return MP.buildCollectResolveParkingDestinationInputPlan({
-        lastRoute: lastRoute || {},
-        selectedRouteOption: routeOptions && routeOptions[idx],
-        endElementCoords,
-        endInput,
-    });
-}
-
-async function resolveParkingDestinationCoords(lastRoute, endInput) {
-    const MP = _multimodalParking();
-    const sources = collectResolveParkingDestinationInput(lastRoute, endInput);
-
-    let resolved = MP.resolveParkingDestinationCoordsFromSources(sources, decodePolyline);
-
-    if (resolved.needsGeocode && endInput && typeof geocodeLocations === 'function') {
-        const geocoded = await geocodeLocations('', endInput);
-        resolved = MP.resolveParkingDestinationCoordsFromSources(
-            MP.buildCollectResolveParkingDestinationInputPlan({
-                ...sources,
-                geocodedEnd: geocoded && geocoded.end,
-            }),
-            decodePolyline
-        );
-    }
-
-    return resolved.coords || null;
-}
-
-async function fetchParkingSearch(params) {
-    const response = await fetch('/api/parking-search', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(params)
-    });
-    return response.json();
-}
-
-function scrollParkingResultsIntoView() {
-    const parkingSection = document.getElementById('parkingSection');
-    const content = document.querySelector('.bottom-sheet-content');
-    if (!parkingSection || !content) return;
-    if (typeof expandBottomSheet === 'function') expandBottomSheet();
-    requestAnimationFrame(() => {
-        content.scrollTop = Math.max(0, parkingSection.offsetTop - 12);
-    });
-}
-
-function showParkingEmptyState(message) {
-    const parkingSection = document.getElementById('parkingSection');
-    const parkingListDiv = document.getElementById('parkingList');
-    if (!parkingSection || !parkingListDiv) return;
-    parkingListDiv.innerHTML = _multimodalParking().buildParkingEmptyStateHtml(message);
-    parkingSection.style.display = 'block';
-    scrollParkingResultsIntoView();
-}
-
-function collectFindParkingNearDestinationInput() {
-    return {
-        lastRoute: window.lastCalculatedRoute,
-        endInput: document.getElementById('end')?.value || '',
-    };
-}
-
-async function findParkingNearDestination() {
-    console.log('[Parking] findParkingNearDestination called');
-    console.log('[Parking] lastCalculatedRoute:', window.lastCalculatedRoute);
-
-    const MP = _multimodalParking();
-    const input = collectFindParkingNearDestinationInput();
-    const entry = MP.buildFindParkingNearDestinationEntryOrchestrationPlan(
-        input.lastRoute,
-        input.endInput
-    );
-    if (!entry.preflight.ok) {
-        console.error('[Parking]', entry.preflight.errorStatusMessage);
-        showStatus(entry.preflight.errorStatusMessage, entry.preflight.errorStatusType);
-        return;
-    }
-
-    showStatus(entry.preflight.loadingStatusMessage, entry.preflight.loadingStatusType);
-
-    try {
-        const endCoords = await resolveParkingDestinationCoords(input.lastRoute, input.endInput);
-        console.log('[Parking] End coordinates:', endCoords);
-
-        if (!endCoords || isNaN(endCoords.lat) || isNaN(endCoords.lon)) {
-            console.error('[Parking] Could not determine destination coordinates');
-            showStatus('Could not determine destination coordinates', 'error');
-            return;
-        }
-
-        const parkingPrefs = collectParkingPreferencesFormState();
-        const searchPlan = _multimodalParking().buildParkingSearchDispatchPlan({
-            lat: endCoords.lat,
-            lon: endCoords.lon,
-            maxWalkingDist: parseInt(parkingPrefs.maxWalkingDistance, 10),
-            parkingType: parkingPrefs.preferredType,
-            pricePref: parkingPrefs.pricePreference,
-        });
-
-        let searchParams = searchPlan.initialSearch;
-        console.log('[Parking] Search parameters:', searchParams);
-        let data = await fetchParkingSearch(searchParams);
-        console.log('[Parking] Response data:', data);
-
-        if (!data.success) {
-            showStatus('Parking search failed: ' + (data.error || 'Unknown error'), 'error');
-            return;
-        }
-
-        if (!data.parking || data.parking.length === 0) {
-            const widen = searchPlan.widenSearchWhenEmpty;
-            if (widen.enabled) {
-                showStatus(widen.statusMessage, 'info');
-                searchParams = widen.params;
-                data = await fetchParkingSearch(searchParams);
-            }
-        }
-
-        if (!data.parking || data.parking.length === 0) {
-            showParkingEmptyState(searchPlan.emptyStateMessage);
-            showStatus(searchPlan.noResultsStatusMessage, 'warning');
-            return;
-        }
-
-        console.log('[Parking] Found', data.parking.length, 'parking options');
-        displayParkingOptions(data.parking, endCoords);
-        showStatus(`✅ Found ${data.parking.length} parking options — scroll down to choose`, 'success');
-        scrollParkingResultsIntoView();
-
-        if (data.parking && data.parking.length > 0) {
-            fitMapToParkingResults(data.parking, endCoords);
-        }
-
-    } catch (error) {
-        console.error('[Parking] Error:', error);
-        showStatus('Error searching for parking: ' + error.message, 'error');
-    }
-}
-function fitMapToParkingResults(parkingList, destinationCoords) {
-    if (!map || !parkingList || parkingList.length === 0) return;
-    try {
-        const coords = parkingList.slice(0, 5).map(p => [p.lat, p.lon]);
-        if (destinationCoords) coords.push([destinationCoords.lat, destinationCoords.lon]);
-        if (typeof MapLibreHelpers !== 'undefined' && MapLibreHelpers.fitMapBounds) {
-            MapLibreHelpers.fitMapBounds(map, coords, { padding: 60, maxZoom: 16 });
-        }
-    } catch (e) {
-        console.warn('[Parking] fitMapToParkingResults:', e);
-    }
-}
-
-/**
- * displayParkingOptions function
- * @function displayParkingOptions
- * @param {*} parkingList - Parameter description
- * @param {*} destinationCoords - Parameter description
- * @returns {*} Return value description
- */
-function displayParkingOptions(parkingList, destinationCoords) {
-    console.log('[Parking] displayParkingOptions called with', parkingList.length, 'parking options');
-
-    // Clear previous markers
-    parkingMarkers.forEach(marker => { if (marker && typeof marker.remove === 'function') marker.remove(); });
-    parkingMarkers = [];
-
-    const parkingSection = document.getElementById('parkingSection');
-    const parkingListDiv = document.getElementById('parkingList');
-
-    if (!parkingSection || !parkingListDiv) {
-        console.error('[Parking] parkingSection or parkingListDiv not found!');
-        return;
-    }
-
-    parkingListDiv.innerHTML = '';
-
-    const parkingModule = _multimodalParking();
-    const topParkingOptions = parkingModule.getParkingOptionsDisplaySlice(parkingList);
-    console.log('[Parking] Displaying top', topParkingOptions.length, 'parking options');
-
-    topParkingOptions.forEach((parking, index) => {
-        const parkingDisplayDist = convertDistance(parking.distance_m / 1000);
-        const parkingDistUnit = getDistanceUnit();
-        const cardOpts = {
-            distanceText: parkingDisplayDist,
-            distUnit: parkingDistUnit,
-        };
-
-        try {
-            const marker = MapLibreHelpers.createMarker(parking.lat, parking.lon, {
-                html: parkingModule.buildParkingMapMarkerHtml(),
-                iconSize: [32, 32],
-                className: 'parking-marker',
-                popup: parkingModule.buildParkingMapMarkerPopupHtml(parking.name, parkingDisplayDist, parkingDistUnit)
-            }).addTo(map);
-
-            marker.parkingData = parking;
-            marker.on('click', () => selectParking(parking, destinationCoords));
-            parkingMarkers.push(marker);
-        } catch (markerErr) {
-            console.warn('[Parking] Marker error:', markerErr);
-        }
-
-        const plan = parkingModule.buildParkingOptionItemMountPlan(parking, index, cardOpts);
-        const item = document.createElement('div');
-        item.style.cssText = plan.containerStyle;
-        item.innerHTML = plan.html;
-
-        item.querySelector('.parking-show-route-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            selectParking(parking, destinationCoords);
-        });
-        item.querySelector('.parking-set-dest-btn').addEventListener('click', (e) => {
-            e.stopPropagation();
-            setParkingAsDestination(parking);
-        });
-        item.addEventListener('click', () => selectParking(parking, destinationCoords));
-
-        item.onmouseover = () => { item.style.background = plan.hoverBackground; };
-        item.onmouseout = () => { item.style.background = plan.restBackground; };
-
-        parkingListDiv.appendChild(item);
-    });
-
-    parkingSection.style.display = 'block';
-    console.log('[Parking] Parking section displayed with', topParkingOptions.length, 'options');
-}
-
-async function selectParking(parking, destinationCoords) {
-    const MP = _multimodalParking();
-    const RR = _routingRequest();
-    selectedParking = parking;
-    showStatus(MP.getParkingSelectLoadingMessage(), 'loading');
-
-    try {
-        const startCoords = MP.resolveParkingStartCoordsFromRoute(window.lastCalculatedRoute);
-        if (!startCoords) {
-            showStatus(MP.getParkingSelectNoStartMessage(), 'error');
-            return;
-        }
-
-        const legPrefs = RR.readMultimodalLegAvoidancePrefs(localStorage);
-        const drivingExtras = RR.readMultimodalDrivingLegStoragePrefs(localStorage, isAvoidTollsEnabled());
-        const drivingBody = RR.buildMultimodalDrivingLegBody({
-            startLat: startCoords.lat,
-            startLon: startCoords.lon,
-            endLat: parking.lat,
-            endLon: parking.lon,
-            vehicleType: currentVehicleType,
-            costParams: getRouteCostParams(currentVehicleType),
-            includeTolls: drivingExtras.includeTolls,
-            avoidTolls: drivingExtras.avoidTolls,
-            avoidCaz: drivingExtras.avoidCaz,
-            enableHazardAvoidance: legPrefs.enableHazardAvoidance,
-            avoidCameras: legPrefs.avoidCameras,
-            avoidTrafficLights: legPrefs.avoidTrafficLights,
-            avoidRailwayCrossings: legPrefs.avoidRailwayCrossings,
-        });
-
-        const drivingResponse = await fetch('/api/route', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(drivingBody)
-        });
-
-        const drivingData = await drivingResponse.json();
-        if (!drivingData.success) {
-            showStatus(MP.getParkingSelectLegErrorMessage('driving'), 'error');
-            return;
-        }
-
-        const walkingBody = RR.buildMultimodalWalkingLegBody({
-            startLat: parking.lat,
-            startLon: parking.lon,
-            endLat: destinationCoords.lat,
-            endLon: destinationCoords.lon,
-            enableHazardAvoidance: legPrefs.enableHazardAvoidance,
-            avoidCameras: legPrefs.avoidCameras,
-            avoidTrafficLights: legPrefs.avoidTrafficLights,
-            avoidRailwayCrossings: legPrefs.avoidRailwayCrossings,
-        });
-
-        const walkingResponse = await fetch('/api/route', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(walkingBody)
-        });
-
-        const walkingData = await walkingResponse.json();
-        if (!walkingData.success) {
-            showStatus(MP.getParkingSelectLegErrorMessage('walking'), 'error');
-            return;
-        }
-
-        displayParkingRoutes(drivingData, walkingData, parking, destinationCoords);
-        updateParkingPreview(drivingData, walkingData, parking);
-        showStatus(MP.getParkingSelectSuccessMessage(), 'success');
-
-    } catch (error) {
-        console.error('[Parking] Error selecting parking:', error);
-        showStatus('Error: ' + error.message, 'error');
-    }
-}
-/**
- * displayParkingRoutes function
- * @function displayParkingRoutes
- * @param {*} drivingData - Parameter description
- * @param {*} walkingData - Parameter description
- * @param {*} parking - Parameter description
- * @param {*} destination - Parameter description
- * @returns {*} Return value description
- */
-function displayParkingRoutes(drivingData, walkingData, parking, destination) {
-    console.log('[Parking] displayParkingRoutes called');
-    console.log('[Parking] drivingData:', drivingData);
-    console.log('[Parking] walkingData:', walkingData);
-
-    const parkingModule = _multimodalParking();
-
-    // Remove previous parking routes
-    if (parkingDrivingRoute && typeof parkingDrivingRoute.remove === 'function') parkingDrivingRoute.remove();
-    if (parkingWalkingRoute && typeof parkingWalkingRoute.remove === 'function') parkingWalkingRoute.remove();
-
-    // Decode and display driving route (blue) with MapLibre
-    if (drivingData && drivingData.geometry) {
-        console.log('[Parking] Decoding driving route geometry');
-        // Use precision 5 for OSRM/GraphHopper
-        const drivingCoords = decodePolyline(drivingData.geometry, 5);
-        console.log('[Parking] Driving route has', drivingCoords.length, 'points');
-        parkingDrivingRoute = MapLibreHelpers.addPolyline(map, drivingCoords, parkingModule.PARKING_DRIVING_ROUTE_POLYLINE);
-    }
-
-    // Decode and display walking route (green) with MapLibre
-    if (walkingData && walkingData.geometry) {
-        console.log('[Parking] Decoding walking route geometry');
-        const walkingCoords = decodePolyline(walkingData.geometry, 5);
-        console.log('[Parking] Walking route has', walkingCoords.length, 'points');
-        parkingWalkingRoute = MapLibreHelpers.addPolyline(map, walkingCoords, parkingModule.PARKING_WALKING_ROUTE_POLYLINE);
-    }
-
-    // Fit map to show both routes
-    const allCoords = [];
-    if (drivingData && drivingData.geometry) {
-        allCoords.push(...decodePolyline(drivingData.geometry, 5));
-    }
-    if (walkingData && walkingData.geometry) {
-        allCoords.push(...decodePolyline(walkingData.geometry, 5));
-    }
-    if (allCoords.length > 0) {
-        console.log('[Parking] Fitting map to', allCoords.length, 'total points');
-        MapLibreHelpers.fitMapBounds(map, allCoords, { padding: 50 });
-    }
-}
-/**
- * updateParkingPreview function
- * @function updateParkingPreview
- * @param {*} drivingData - Parameter description
- * @param {*} walkingData - Parameter description
- * @param {*} parking - Parameter description
- * @returns {*} Return value description
- */
-function updateParkingPreview(drivingData, walkingData, parking) {
-    const totals = _multimodalParking().computeMultimodalLegTotals(drivingData, walkingData);
-    const distUnit = getDistanceUnit();
-    const convertedDist = convertDistance(totals.totalDistKm);
-    const startLabel = document.getElementById('start').value;
-    const endLabel = document.getElementById('end').value;
-    const routeLabel = _multimodalParking().buildParkingRouteLabel(
-        startLabel,
-        parking.name,
-        endLabel
-    );
-    const breakdown = _multimodalParking().buildParkingBreakdownHtml({
-        drivingDistDisplay: convertDistance(totals.drivingDistKm),
-        drivingTimeMin: totals.drivingTimeMin,
-        walkingDistDisplay: convertDistance(totals.walkingDistKm),
-        walkingTimeMin: totals.walkingTimeMin,
-        distUnit: distUnit,
-    });
-
-    document.getElementById('previewDistance').textContent = convertedDist + ' ' + distUnit;
-    document.getElementById('previewDuration').textContent = Math.round(totals.totalTimeMin) + ' min';
-    document.getElementById('previewRoute').innerHTML = _multimodalParking().buildParkingPreviewRouteHtml(routeLabel, breakdown);
-}
-
-/**
- * clearParkingSelection function
- * @function clearParkingSelection
- * @returns {*} Return value description
- */
-function clearParkingSelection() {
-    selectedParking = null;
-    if (parkingDrivingRoute && typeof parkingDrivingRoute.remove === 'function') parkingDrivingRoute.remove();
-    if (parkingWalkingRoute && typeof parkingWalkingRoute.remove === 'function') parkingWalkingRoute.remove();
-    parkingMarkers.forEach(marker => { if (marker && typeof marker.remove === 'function') marker.remove(); });
-    parkingMarkers = [];
-
-    document.getElementById('parkingSection').style.display = 'none';
-    document.getElementById('parkingList').innerHTML = '';
-
-    // Restore original route preview
-    if (window.lastCalculatedRoute) {
-        showRoutePreview(window.lastCalculatedRoute);
-    }
-
-    showStatus('🗺️ Parking selection cleared', 'info');
-}
-
-/**
- * Set a parking location as the new destination and recalculate route
- * @param {Object} parking - Parking location data
- */
-async function setParkingAsDestination(parking) {
-    console.log('[Parking] Setting parking as destination:', parking);
-
-    try {
-        // Set the destination input to the parking coordinates
-        const endInput = document.getElementById('end');
-        if (!endInput) {
-            showStatus('Error: Destination input not found', 'error');
-            return;
-        }
-
-        // Set destination to parking name and coordinates
-        endInput.value = `${parking.name}`;
-
-        // CRITICAL: Store coordinates in dataset for geocoding to use
-        endInput.dataset.lat = parking.lat;
-        endInput.dataset.lon = parking.lon;
-        endInput.dataset.displayName = parking.name;
-
-        showStatus('🅿️ Recalculating route to parking...', 'loading');
-
-        // Clear parking selection
-        clearParkingSelection();
-
-        // Recalculate route to the parking location
-        await calculateRoute();
-
-        showStatus(`✅ Route calculated to ${parking.name}`, 'success');
-
-    } catch (error) {
-        console.error('[Parking] Error setting parking as destination:', error);
-        showStatus('Error: ' + error.message, 'error');
-    }
 }
 
 /**
@@ -17998,6 +17512,8 @@ function closeJourneySummary() {
     if (execute.switchTab) switchTab(execute.switchTab);
     if (execute.clearForm) clearForm();
 }
+
+VoyagrParkingOrchestration.bind(getParkingOrchestrationRuntime());
 
 // NOTE: toggleDriverPerspective is defined earlier in the file (around line 7711)
 // This duplicate was removed to fix the driver's perspective mode conflict

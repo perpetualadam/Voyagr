@@ -159,19 +159,6 @@
         };
     }
 
-    function buildSetWeatherLayerTypeExecutePlan(type) {
-        const safeType = isValidWeatherLayerType(type) ? type : DEFAULT_WEATHER_LAYER_TYPE;
-        return {
-            shouldApply: true,
-            layerType: safeType,
-            storageKey: WEATHER_LAYER_TYPE_STORAGE_KEY,
-            storageValue: safeType,
-            refreshLayerWhenEnabled: true,
-            statusMessage: '🌧️ Weather layer: ' + weatherLayerDisplayName(safeType),
-            statusType: 'info',
-        };
-    }
-
     /**
      * @param {Object} [input]
      * @param {boolean} [input.hasApiKey]
