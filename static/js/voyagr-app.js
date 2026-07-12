@@ -171,8 +171,8 @@ function getUnitsPreferencesOrchestrationRuntime() {
         call: {
             saveAllSettings,
             showStatus,
-            updateSpeedWidget,
-            getCurrentRoadType,
+            updateSpeedWidget: (speed, limit) => VoyagrSpeedWidgetOrchestration.updateSpeedWidget(speed, limit),
+            getCurrentRoadType: (idx, mph) => VoyagrSpeedWidgetOrchestration.getCurrentRoadType(idx, mph),
         },
     };
 }
@@ -358,7 +358,7 @@ function getSettingsOrchestrationRuntime() {
             setMapTheme,
             initializeDarkMode,
             updateThemeButtons,
-            applySpeedWidgetToggleUi,
+            applySpeedWidgetToggleUi: () => VoyagrSpeedWidgetOrchestration.applySpeedWidgetToggleUi(),
             stopRouteTrafficUpdates,
             startRouteTrafficUpdates,
             stopAutoTrafficUpdates,
@@ -1500,7 +1500,7 @@ function getGpsOrchestrationRuntime() {
         },
         getIsOffline: () => VoyagrOfflineNavigationOrchestration.getIsOffline(),
         call: {
-            smoothGpsSpeedMph,
+            smoothGpsSpeedMph: (rawMph) => VoyagrSpeedWidgetOrchestration.smoothGpsSpeedMph(rawMph),
             updateRecenterButtonVisibility,
             updateTurnWidgetFromPosition,
             fetchRoadNameThrottled: (lat, lon) => VoyagrRoadNameOrchestration.fetchRoadNameThrottled(lat, lon),
@@ -1517,12 +1517,15 @@ function getGpsOrchestrationRuntime() {
             shouldTiltDrivingCamera,
             shouldUsePitchedDrivingCamera,
             applySmartZoomWithAnimation,
-            getCurrentRoadType,
+            getCurrentRoadType: (idx, mph) => VoyagrSpeedWidgetOrchestration.getCurrentRoadType(idx, mph),
             createVehicleMarker,
             calculateDistanceMeters,
             convertDistance,
             getDistanceUnit,
-            updateSpeedWidgetVisibility,
+            updateSpeedWidget: (speed, limit) => VoyagrSpeedWidgetOrchestration.updateSpeedWidget(speed, limit),
+            updateSpeedWidgetVisibility: () => VoyagrSpeedWidgetOrchestration.updateSpeedWidgetVisibility(),
+            fetchSpeedLimitThrottled: (lat, lon, speed, road, limit, heading) =>
+                VoyagrSpeedWidgetOrchestration.fetchSpeedLimitThrottled(lat, lon, speed, road, limit, heading),
             updateRoadReportFabVisibility,
             hasUserStartedMoving,
             getSpeedLimitFetchState: () => VoyagrSpeedWidgetOrchestration.getSpeedLimitFetchState(),
@@ -1699,7 +1702,7 @@ function getLaneGuidanceOrchestrationRuntime() {
         getRoutePolyline: () => routePolyline,
         call: {
             calculateDistanceMeters,
-            getCurrentRoadType,
+            getCurrentRoadType: (idx, mph) => VoyagrSpeedWidgetOrchestration.getCurrentRoadType(idx, mph),
             speakMessage,
         },
     };
@@ -1847,29 +1850,6 @@ function getSpeedWidgetOrchestrationRuntime() {
     };
 }
 
-function smoothGpsSpeedMph(rawMph) { return VoyagrSpeedWidgetOrchestration.smoothGpsSpeedMph(rawMph); }
-function updateSpeedWidget(currentSpeedInMph, speedLimitInMph) {
-    return VoyagrSpeedWidgetOrchestration.updateSpeedWidget(currentSpeedInMph, speedLimitInMph);
-}
-function updateSpeedWidgetVisibility() { VoyagrSpeedWidgetOrchestration.updateSpeedWidgetVisibility(); }
-function getCurrentRoadType(maneuverIdxOverride, gpsSpeedMph) {
-    return VoyagrSpeedWidgetOrchestration.getCurrentRoadType(maneuverIdxOverride, gpsSpeedMph);
-}
-function getManeuverStreetLabel(maneuver, preferCurrentRoad) {
-    return VoyagrSpeedWidgetOrchestration.getManeuverStreetLabel(maneuver, preferCurrentRoad);
-}
-function normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph) {
-    return VoyagrSpeedWidgetOrchestration.normalizeManeuverSpeedLimitMph(rawSl, roadClass, gpsSpeedMph);
-}
-function applySpeedLimitFetchOutcomeFromPlan(outcomeApply) {
-    VoyagrSpeedWidgetOrchestration.applySpeedLimitFetchOutcomeFromPlan(outcomeApply);
-}
-function fetchSpeedLimitThrottled(lat, lon, currentSpeedMph, roadType, valhallaSpeedLimit, headingDeg) {
-    return VoyagrSpeedWidgetOrchestration.fetchSpeedLimitThrottled(
-        lat, lon, currentSpeedMph, roadType, valhallaSpeedLimit, headingDeg
-    );
-}
-function applySpeedWidgetToggleUi() { VoyagrSpeedWidgetOrchestration.applySpeedWidgetToggleUi(); }
 function toggleSpeedWidget() { VoyagrSpeedWidgetOrchestration.toggleSpeedWidget(); }
 
 // ===== MAP RECENTER ORCHESTRATION =====
@@ -1897,7 +1877,7 @@ function getMapRecenterOrchestrationRuntime() {
             showStatus,
             getVehicleDisplayCoordinates,
             calculateDistanceMeters,
-            getCurrentRoadType,
+            getCurrentRoadType: (idx, mph) => VoyagrSpeedWidgetOrchestration.getCurrentRoadType(idx, mph),
             shouldTiltDrivingCamera,
             shouldUsePitchedDrivingCamera,
             exitJourneyOverviewForRecenter: () => VoyagrJourneyOverviewOrchestration.exitJourneyOverviewForRecenter(),
@@ -2392,7 +2372,8 @@ function getTurnInstructionWidgetOrchestrationRuntime() {
             showStatus,
             schedulePersistRoute,
             getCurrentRoadDisplayName: () => VoyagrRoadNameOrchestration.getCurrentRoadDisplayName(),
-            getManeuverStreetLabel,
+            getManeuverStreetLabel: (maneuver, preferCurrentRoad) =>
+                VoyagrSpeedWidgetOrchestration.getManeuverStreetLabel(maneuver, preferCurrentRoad),
         },
     };
 }
@@ -2870,7 +2851,7 @@ function getNavigationLifecycleOrchestrationRuntime() {
             applyZoomFollowButtonUi,
             updateRoadReportFabVisibility,
             updateRecenterButtonVisibility,
-            updateSpeedWidgetVisibility,
+            updateSpeedWidgetVisibility: () => VoyagrSpeedWidgetOrchestration.updateSpeedWidgetVisibility(),
             startGPSTracking,
             applyLiveNavigationCamera,
             startLiveDataRefresh,
@@ -3095,7 +3076,7 @@ function getLegacyPreferencesOrchestrationRuntime() {
             handleDeviceMotion,
             startAutoGpsLocation,
             applyBatterySavingModeFromPlan,
-            applySpeedWidgetToggleUi,
+            applySpeedWidgetToggleUi: () => VoyagrSpeedWidgetOrchestration.applySpeedWidgetToggleUi(),
         },
     };
 }

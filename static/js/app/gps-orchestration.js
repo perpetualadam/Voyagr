@@ -269,9 +269,11 @@
                 : null;
             if (resetPlan) applySpeedLimitFetchResetFromPlan(resetPlan);
         }
-        updateSpeedWidget(swPlan.updateWidget.displaySpeedMph, swPlan.updateWidget.shownLimit);
+        if (swPlan.updateWidget) {
+            rt().call.updateSpeedWidget(swPlan.updateWidget.displaySpeedMph, swPlan.updateWidget.shownLimit);
+        }
         if (swPlan.fetchHint) {
-            fetchSpeedLimitThrottled(
+            rt().call.fetchSpeedLimitThrottled(
                 swPlan.fetchHint.lat,
                 swPlan.fetchHint.lon,
                 swPlan.fetchHint.displaySpeedMph,
