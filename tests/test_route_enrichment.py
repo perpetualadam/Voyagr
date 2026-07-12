@@ -8,6 +8,7 @@ import voyagr_web as vw
 from voyagr.services.routing.enrichment import (
     RouteEnrichmentContext,
     _ensure_kwargs,
+    _variety_kwargs,
     apply_valhalla_route_enrichment,
     merge_graphhopper_optimised_route,
 )
@@ -65,11 +66,15 @@ class TestEnsureKwargsCompatibility(unittest.TestCase):
         scenic_params = set(inspect.signature(vw.ensure_scenic_valhalla_route).parameters)
         shortest_params = set(inspect.signature(vw.ensure_shortest_respects_camera_avoidance).parameters)
         optimised_params = set(inspect.signature(vw.ensure_optimised_camera_avoiding_route).parameters)
+        variety_params = set(inspect.signature(vw.ensure_costing_preference_variety_routes).parameters)
+        variety_kw = _variety_kwargs(ctx)
 
         for key in shared:
             self.assertIn(key, scenic_params, f'{key} not accepted by ensure_scenic')
             self.assertIn(key, shortest_params, f'{key} not accepted by ensure_shortest')
             self.assertIn(key, optimised_params, f'{key} not accepted by ensure_optimised')
+        for key in variety_kw:
+            self.assertIn(key, variety_params, f'{key} not accepted by ensure_costing_preference_variety')
 
         # graphhopper_route must NOT be in shared kwargs (optimised gets it explicitly)
         self.assertNotIn('graphhopper_route', shared)
@@ -81,14 +86,16 @@ class TestEnsureKwargsCompatibility(unittest.TestCase):
 
         with patch.object(vw, 'ensure_optimised_camera_avoiding_route', side_effect=lambda r, **kw: r) as m_opt, \
              patch.object(vw, 'ensure_scenic_valhalla_route', side_effect=lambda r, **kw: r) as m_sce, \
+             patch.object(vw, 'ensure_costing_preference_variety_routes', side_effect=lambda r, **kw: r) as m_var, \
              patch.object(vw, 'ensure_shortest_respects_camera_avoidance', side_effect=lambda r, **kw: r) as m_sho, \
              patch('voyagr.services.routing.enrichment.annotate_routes_camera_proximity', side_effect=lambda r, h: r):
             out = apply_valhalla_route_enrichment(routes, ctx, merge_graphhopper=False)
 
         self.assertEqual(len(out), 1)
-        # optimised got graphhopper_route; scenic/shortest did not
+        # optimised got graphhopper_route; scenic/shortest/variety did not
         self.assertIn('graphhopper_route', m_opt.call_args.kwargs)
         self.assertNotIn('graphhopper_route', m_sce.call_args.kwargs)
+        self.assertNotIn('graphhopper_route', m_var.call_args.kwargs)
         self.assertNotIn('graphhopper_route', m_sho.call_args.kwargs)
 
 

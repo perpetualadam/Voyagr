@@ -51,6 +51,14 @@ class RouteEnrichmentContext:
     caz_exempt: bool
     traffic_multiplier: float = 1.0
     max_detour: int = 20
+    valhalla_costing: str = 'auto'
+    prefer_scenic: bool = False
+    prefer_quiet: bool = False
+    avoid_tolls: bool = False
+    avoid_motorways: bool = False
+    avoid_ferries: bool = False
+    avoid_unpaved: bool = False
+    route_optimization: str = 'fastest'
 
 
 def _ensure_kwargs(ctx: RouteEnrichmentContext) -> Dict[str, Any]:
@@ -81,6 +89,21 @@ def _ensure_kwargs(ctx: RouteEnrichmentContext) -> Dict[str, Any]:
         'include_tolls': ctx.include_tolls,
         'include_caz': ctx.include_caz,
         'caz_exempt': ctx.caz_exempt,
+    }
+
+
+def _variety_kwargs(ctx: RouteEnrichmentContext) -> Dict[str, Any]:
+    """Kwargs for ensure_costing_preference_variety_routes (extends shared ensure kwargs)."""
+    return {
+        **_ensure_kwargs(ctx),
+        'valhalla_costing': ctx.valhalla_costing,
+        'prefer_scenic': ctx.prefer_scenic,
+        'prefer_quiet': ctx.prefer_quiet,
+        'avoid_tolls': ctx.avoid_tolls,
+        'avoid_motorways': ctx.avoid_motorways,
+        'avoid_ferries': ctx.avoid_ferries,
+        'avoid_unpaved': ctx.avoid_unpaved,
+        'route_optimization': ctx.route_optimization,
     }
 
 
@@ -186,6 +209,7 @@ def apply_valhalla_route_enrichment(
         routes, graphhopper_route=ctx.graphhopper_route, **ensure_kw
     )
     routes = vw.ensure_scenic_valhalla_route(routes, **ensure_kw)
+    routes = vw.ensure_costing_preference_variety_routes(routes, **_variety_kwargs(ctx))
     routes = vw.ensure_shortest_respects_camera_avoidance(routes, **ensure_kw)
     routes = annotate_routes_camera_proximity(routes, ctx.hazards)
 

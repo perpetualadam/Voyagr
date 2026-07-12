@@ -985,6 +985,7 @@ from voyagr.services.hazards import (
 from voyagr.services.routing.optimised_route import (
     ensure_optimised_camera_avoiding_route,  # noqa: F401 - re-exported for enrichment.py vw.* calls
     ensure_scenic_valhalla_route,  # noqa: F401 - re-exported for enrichment.py vw.* calls
+    ensure_costing_preference_variety_routes,  # noqa: F401 - re-exported for enrichment.py vw.* calls
     ensure_shortest_respects_camera_avoidance,  # noqa: F401 - re-exported for enrichment.py vw.* calls
     graphhopper_qualifies_as_optimised,
 )
@@ -1295,6 +1296,14 @@ def calculate_route():
                 electricity_price=electricity_price, include_tolls=include_tolls,
                 include_caz=include_caz, caz_exempt=caz_exempt,
                 max_detour=max_detour,
+                valhalla_costing=valhalla_costing,
+                prefer_scenic=prefer_scenic,
+                prefer_quiet=prefer_quiet,
+                avoid_tolls=avoid_tolls,
+                avoid_motorways=avoid_motorways,
+                avoid_ferries=avoid_ferries,
+                avoid_unpaved=avoid_unpaved,
+                route_optimization=route_optimization,
             )
 
             # Valhalla allows at most 50 exclude_locations (error 157). Segmented
@@ -1660,6 +1669,14 @@ def calculate_route():
                                     include_caz=include_caz, caz_exempt=caz_exempt,
                                     traffic_multiplier=traffic_multiplier,
                                     max_detour=max_detour,
+                                    valhalla_costing=valhalla_costing,
+                                    prefer_scenic=prefer_scenic,
+                                    prefer_quiet=prefer_quiet,
+                                    avoid_tolls=avoid_tolls,
+                                    avoid_motorways=avoid_motorways,
+                                    avoid_ferries=avoid_ferries,
+                                    avoid_unpaved=avoid_unpaved,
+                                    route_optimization=route_optimization,
                                 )
                                 routes = apply_valhalla_route_enrichment(
                                     routes, retry_enrich, log_label='retry',
@@ -1850,6 +1867,14 @@ def calculate_route():
                             electricity_price=electricity_price, include_tolls=include_tolls,
                             include_caz=include_caz, caz_exempt=caz_exempt,
                             max_detour=max_detour,
+                            valhalla_costing=valhalla_costing,
+                            prefer_scenic=prefer_scenic,
+                            prefer_quiet=prefer_quiet,
+                            avoid_tolls=avoid_tolls,
+                            avoid_motorways=avoid_motorways,
+                            avoid_ferries=avoid_ferries,
+                            avoid_unpaved=avoid_unpaved,
+                            route_optimization=route_optimization,
                         )
                         routes_out = apply_valhalla_route_enrichment(
                             routes_out, recovery_enrich, merge_graphhopper=False, log_label='recovery',
