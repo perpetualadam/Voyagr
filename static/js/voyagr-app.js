@@ -318,7 +318,7 @@ function getSettingsOrchestrationRuntime() {
         toggleUI: () => _toggleUI(),
         routePrefs: () => _routePrefs(),
         getMap: () => map,
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getDistanceUnit: () => distanceUnit,
         setDistanceUnit: (val) => { distanceUnit = val; },
         getCurrencyUnit: () => currencyUnit,
@@ -383,7 +383,7 @@ function getTripHistoryOrchestrationRuntime() {
     return {
         tripHistory: () => _tripHistory(),
         html: () => _html(),
-        getRoutePolyline: () => routePolyline,
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         getCurrentRoutingMode: () => VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode(),
         getSpeedUnit: () => speedUnit,
         call: {
@@ -478,8 +478,8 @@ function getRouteComparisonOrchestrationRuntime() {
         setSelectedRouteIndex: (val) => VoyagrRouteComparisonOrchestration.setSelectedRouteIndex(val),
         getRouteLayer: () => routeLayer,
         setRouteLayer: (val) => { routeLayer = val; },
-        getRoutePolyline: () => routePolyline,
-        setRoutePolyline: (val) => { routePolyline = val; },
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
+        setRoutePolyline: (val) => VoyagrNavigationLifecycleOrchestration.setRoutePolyline(val),
         getShowTrafficEnabled: () => VoyagrMapLayersOrchestration.getShowTrafficEnabled(),
         getTrafficLayer: () => VoyagrMapLayersOrchestration.getTrafficLayer(),
         call: {
@@ -511,7 +511,7 @@ function getWaypointsOrchestrationRuntime() {
         routeSelection: () => _routeSelection(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
-        getRoutePolyline: () => routePolyline,
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         call: {
             showStatus,
             geocodeAddress,
@@ -673,7 +673,7 @@ function getCalculateRouteOrchestrationRuntime() {
         setRouteOptions: (val) => VoyagrRouteComparisonOrchestration.setRouteOptions(val),
         getRouteLayer: () => routeLayer,
         setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getIsGeocoding: () => VoyagrGeocodingOrchestration.getIsGeocoding(),
         getCurrentRoutingMode: () => VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode(),
         getCurrentVehicleType: () => VoyagrVehicleRoutingOrchestration.getCurrentVehicleType(),
@@ -757,7 +757,7 @@ function getBottomSheetOrchestrationRuntime() {
         setBottomSheetCurrentY: (val) => VoyagrBottomSheetOrchestration.setBottomSheetCurrentY(val),
         getBottomSheetIsExpanded: () => VoyagrBottomSheetOrchestration.getBottomSheetIsExpanded(),
         setBottomSheetIsExpanded: (val) => VoyagrBottomSheetOrchestration.setBottomSheetIsExpanded(val),
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
     };
 }
 
@@ -840,17 +840,17 @@ function getRerouteMapOrchestrationRuntime() {
         getMapLibreHelpers: () => MapLibreHelpers,
         getLastCalculatedRoute: () => window.lastCalculatedRoute,
         setLastCalculatedRoute: (val) => { window.lastCalculatedRoute = val; },
-        getRoutePolyline: () => routePolyline,
-        setRoutePolyline: (val) => { routePolyline = val; },
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
+        setRoutePolyline: (val) => VoyagrNavigationLifecycleOrchestration.setRoutePolyline(val),
         getRouteLayer: () => routeLayer,
         setRouteLayer: (val) => { routeLayer = val; },
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
-        getCurrentRouteSteps: () => currentRouteSteps,
-        setCurrentRouteSteps: (val) => { currentRouteSteps = val; },
-        getCurrentStepIndex: () => currentStepIndex,
-        setCurrentStepIndex: (val) => { currentStepIndex = val; },
+        getCurrentRouteSteps: () => VoyagrNavigationLifecycleOrchestration.getCurrentRouteSteps(),
+        setCurrentRouteSteps: (val) => VoyagrNavigationLifecycleOrchestration.setCurrentRouteSteps(val),
+        getCurrentStepIndex: () => VoyagrNavigationLifecycleOrchestration.getCurrentStepIndex(),
+        setCurrentStepIndex: (val) => VoyagrNavigationLifecycleOrchestration.setCurrentStepIndex(val),
         getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
         setLastSnappedRouteIndex: (val) => { lastSnappedRouteIndex = val; },
         getLastTurnDetectRouteVertexIndex: () => VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex(),
@@ -1036,9 +1036,9 @@ function getRoutePreviewOrchestrationRuntime() {
         setRouteOptions: (val) => VoyagrRouteComparisonOrchestration.setRouteOptions(val),
         getSelectedRouteIndex: () => VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),
         setSelectedRouteIndex: (val) => VoyagrRouteComparisonOrchestration.setSelectedRouteIndex(val),
-        getRoutePolyline: () => routePolyline,
-        setRoutePolyline: (val) => { routePolyline = val; },
-        getRouteInProgress: () => routeInProgress,
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
+        setRoutePolyline: (val) => VoyagrNavigationLifecycleOrchestration.setRoutePolyline(val),
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getCurrentRoutingMode: () => VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode(),
         getCurrentVehicleType: () => VoyagrVehicleRoutingOrchestration.getCurrentVehicleType(),
         getDistanceUnitValue: () => distanceUnit,
@@ -1139,8 +1139,8 @@ function getTrafficOrchestrationRuntime() {
         routeSelection: () => _routeSelection(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
-        getRoutePolyline: () => routePolyline,
-        getRouteInProgress: () => routeInProgress,
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
         getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
@@ -1288,14 +1288,14 @@ function getGpsOrchestrationRuntime() {
         g: (key) => {
             switch (key) {
             case 'map': return map;
-            case 'routeInProgress': return routeInProgress;
-            case 'routePolyline': return routePolyline;
-            case 'routeStarted': return routeStarted;
+            case 'routeInProgress': return VoyagrNavigationLifecycleOrchestration.getRouteInProgress();
+            case 'routePolyline': return VoyagrNavigationLifecycleOrchestration.getRoutePolyline();
+            case 'routeStarted': return VoyagrNavigationLifecycleOrchestration.getRouteStarted();
             case 'currentLat': return VoyagrLocationOrchestration.getCurrentLat();
             case 'currentLon': return VoyagrLocationOrchestration.getCurrentLon();
-            case 'currentStepIndex': return currentStepIndex;
+            case 'currentStepIndex': return VoyagrNavigationLifecycleOrchestration.getCurrentStepIndex();
             case 'lastSnappedRouteIndex': return lastSnappedRouteIndex;
-            case 'currentRouteSteps': return currentRouteSteps;
+            case 'currentRouteSteps': return VoyagrNavigationLifecycleOrchestration.getCurrentRouteSteps();
             case 'isTrackingActive': return VoyagrGpsOrchestration.getIsTrackingActive();
             case 'gpsWatchId': return VoyagrGpsOrchestration.getGpsWatchId();
             case 'currentUserMarker': return VoyagrGpsOrchestration.getCurrentUserMarker();
@@ -1354,14 +1354,14 @@ function getGpsOrchestrationRuntime() {
         s: (key, val) => {
             switch (key) {
             case 'map': map = val; break;
-            case 'routeInProgress': routeInProgress = val; break;
-            case 'routePolyline': routePolyline = val; break;
-            case 'routeStarted': routeStarted = val; break;
+            case 'routeInProgress': VoyagrNavigationLifecycleOrchestration.setRouteInProgress(val); break;
+            case 'routePolyline': VoyagrNavigationLifecycleOrchestration.setRoutePolyline(val); break;
+            case 'routeStarted': VoyagrNavigationLifecycleOrchestration.setRouteStarted(val); break;
             case 'currentLat': VoyagrLocationOrchestration.setCurrentLat(val); break;
             case 'currentLon': VoyagrLocationOrchestration.setCurrentLon(val); break;
-            case 'currentStepIndex': currentStepIndex = val; break;
+            case 'currentStepIndex': VoyagrNavigationLifecycleOrchestration.setCurrentStepIndex(val); break;
             case 'lastSnappedRouteIndex': lastSnappedRouteIndex = val; break;
-            case 'currentRouteSteps': currentRouteSteps = val; break;
+            case 'currentRouteSteps': VoyagrNavigationLifecycleOrchestration.setCurrentRouteSteps(val); break;
             case 'isTrackingActive': VoyagrGpsOrchestration.setIsTrackingActive(val); break;
             case 'gpsWatchId': VoyagrGpsOrchestration.setGpsWatchId(val); break;
             case 'currentUserMarker': VoyagrGpsOrchestration.setCurrentUserMarker(val); break;
@@ -1619,9 +1619,9 @@ function getLaneGuidanceOrchestrationRuntime() {
     return {
         laneGuidance: () => _laneGuidance(),
         getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
-        getCurrentRouteSteps: () => currentRouteSteps,
-        getCurrentStepIndex: () => currentStepIndex,
-        getRoutePolyline: () => routePolyline,
+        getCurrentRouteSteps: () => VoyagrNavigationLifecycleOrchestration.getCurrentRouteSteps(),
+        getCurrentStepIndex: () => VoyagrNavigationLifecycleOrchestration.getCurrentStepIndex(),
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         call: {
             calculateDistanceMeters,
             getCurrentRoadType: (idx, mph) => VoyagrSpeedWidgetOrchestration.getCurrentRoadType(idx, mph),
@@ -1716,9 +1716,9 @@ function getSpeedWidgetOrchestrationRuntime() {
         toggleUI: () => _toggleUI(),
         getSpeedUnit: () => speedUnit,
         getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
-        getRouteInProgress: () => routeInProgress,
-        getCurrentRouteSteps: () => currentRouteSteps,
-        getCurrentStepIndex: () => currentStepIndex,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
+        getCurrentRouteSteps: () => VoyagrNavigationLifecycleOrchestration.getCurrentRouteSteps(),
+        getCurrentStepIndex: () => VoyagrNavigationLifecycleOrchestration.getCurrentStepIndex(),
         getIsOffline: () => VoyagrOfflineNavigationOrchestration.getIsOffline(),
         call: {
             getSpeedUnit,
@@ -1743,7 +1743,7 @@ function getMapRecenterOrchestrationRuntime() {
         getMap: () => map,
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
         getJourneyOverviewActive: () => VoyagrJourneyOverviewOrchestration.getJourneyOverviewActive(),
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
@@ -1780,8 +1780,8 @@ function getJourneyOverviewOrchestrationRuntime() {
         mapControls: () => _mapControls(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
-        getRouteInProgress: () => routeInProgress,
-        getRoutePolyline: () => routePolyline,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
         getMapFollowingActive: () => mapFollowingActive,
@@ -1838,7 +1838,7 @@ function getSmartZoomOrchestrationRuntime() {
         routeGeometry: () => _routeGeometry(),
         getSmartZoomEnabled: () => VoyagrSmartZoomOrchestration.getSmartZoomEnabled(),
         setSmartZoomEnabled: (val) => VoyagrSmartZoomOrchestration.setSmartZoomEnabled(val),
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getLastZoomLevel: () => VoyagrSmartZoomOrchestration.getLastZoomLevel(),
         setLastZoomLevel: (val) => VoyagrSmartZoomOrchestration.setLastZoomLevel(val),
         getLastTurnZoomApplied: () => VoyagrSmartZoomOrchestration.getLastTurnZoomApplied(),
@@ -2030,7 +2030,7 @@ async function submitRoadReport() { return VoyagrRoadReportOrchestration.submitR
 function getServiceWorkerOrchestrationRuntime() {
     return {
         pwaInstall: () => _pwaInstall(),
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         call: {
             showStatus,
             saveAppState,
@@ -2054,10 +2054,10 @@ function getOfflineNavigationOrchestrationRuntime() {
         routeSelection: () => _routeSelection(),
         polylineCodec: () => _polylineCodec(),
         getMap: () => map,
-        getRouteInProgress: () => routeInProgress,
-        getRoutePolyline: () => routePolyline,
-        getCurrentRouteSteps: () => currentRouteSteps,
-        getCurrentStepIndex: () => currentStepIndex,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
+        getCurrentRouteSteps: () => VoyagrNavigationLifecycleOrchestration.getCurrentRouteSteps(),
+        getCurrentStepIndex: () => VoyagrNavigationLifecycleOrchestration.getCurrentStepIndex(),
         getLastCalculatedRoute: () => window.lastCalculatedRoute,
         call: {
             showStatus,
@@ -2092,17 +2092,13 @@ function _tryResumeNavigation() {
 
 // ===== GPS TRACKING SYSTEM =====
 // Variables initialized at the top level
-let routeStarted = false;
-let routeInProgress = false;
 
 // ===== SCREEN WAKE LOCK (keeps screen on during navigation) =====
 window.screenWakeLock = null;
 
 // ===== TURN-BY-TURN NAVIGATION =====
-let currentRouteSteps = [];
-let currentStepIndex = 0;
-let nextManeuverDistance = 0;
-let routePolyline = null;
+// Session state (routeInProgress, routePolyline, steps) lives in
+// static/js/app/navigation-lifecycle-orchestration.js (bound at file end).
 
 // ===== DRIVER'S PERSPECTIVE =====
 // Preference lives in static/js/app/driver-camera-orchestration.js (bound at file end).
@@ -2116,7 +2112,7 @@ function getDriverCameraOrchestrationRuntime() {
         mapView3D: () => _mapView3D(),
         toggleUI: () => _toggleUI(),
         getMap: () => map,
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
         getMapFollowingActive: () => mapFollowingActive,
         getDriverPerspectiveEnabled: () => VoyagrDriverCameraOrchestration.getDriverPerspectiveEnabled(),
@@ -2185,10 +2181,10 @@ function getArNavigationOrchestrationRuntime() {
         setIsAREnabled: (val) => VoyagrArNavigationOrchestration.setIsAREnabled(val),
         getArModeActive: () => VoyagrArNavigationOrchestration.getArModeActive(),
         setArModeActive: (val) => VoyagrArNavigationOrchestration.setArModeActive(val),
-        getRouteInProgress: () => routeInProgress,
-        getCurrentRouteSteps: () => currentRouteSteps,
-        getCurrentStepIndex: () => currentStepIndex,
-        getNextManeuverDistance: () => nextManeuverDistance,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
+        getCurrentRouteSteps: () => VoyagrNavigationLifecycleOrchestration.getCurrentRouteSteps(),
+        getCurrentStepIndex: () => VoyagrNavigationLifecycleOrchestration.getCurrentStepIndex(),
+        getNextManeuverDistance: () => VoyagrNavigationLifecycleOrchestration.getNextManeuverDistance(),
         call: {
             showStatus,
         },
@@ -2212,11 +2208,11 @@ function getTurnInstructionWidgetOrchestrationRuntime() {
         speedGps: () => _speedGps(),
         previewMarker: () => _previewMarker(),
         getDistanceUnit: () => distanceUnit,
-        getRouteInProgress: () => routeInProgress,
-        getCurrentRouteSteps: () => currentRouteSteps,
-        getCurrentStepIndex: () => currentStepIndex,
-        setCurrentStepIndex: (val) => { currentStepIndex = val; },
-        getRoutePolyline: () => routePolyline,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
+        getCurrentRouteSteps: () => VoyagrNavigationLifecycleOrchestration.getCurrentRouteSteps(),
+        getCurrentStepIndex: () => VoyagrNavigationLifecycleOrchestration.getCurrentStepIndex(),
+        setCurrentStepIndex: (val) => VoyagrNavigationLifecycleOrchestration.setCurrentStepIndex(val),
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
         getLastTurnDetectRouteVertexIndex: () => VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex(),
         setLastTurnDetectRouteVertexIndex: (val) => VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val),
@@ -2276,7 +2272,7 @@ function getVoiceControlOrchestrationRuntime() {
         voiceControl: () => _voiceControl(),
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         call: {
             maybeResumePorcupineWakeAfterVoice,
             stopPorcupineWakePipeline,
@@ -2338,7 +2334,7 @@ function getMapExploreOrchestrationRuntime() {
     return {
         mapControls: () => _mapControls(),
         getMap: () => map,
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getIsTrackingActive: () => VoyagrGpsOrchestration.getIsTrackingActive(),
         getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
         setZoomAndFollowEnabled: (val) => { zoomAndFollowEnabled = val; },
@@ -2378,12 +2374,12 @@ function getLiveDataRefreshOrchestrationRuntime() {
     return {
         liveDataRefresh: () => _liveDataRefresh(),
         eta: () => _eta(),
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getCurrentBatteryLevel: () => VoyagrBatteryMonitoringOrchestration.getCurrentBatteryLevel(),
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
         getLastCalculatedRoute: () => window.lastCalculatedRoute,
-        getRoutePolyline: () => routePolyline,
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         getCurrentRoutingMode: () => VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode(),
         getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
         call: {
@@ -2474,7 +2470,7 @@ function getAdaptiveRefreshInterval(baseInterval) {
 
 function getBatteryMonitoringOrchestrationRuntime() {
     return {
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         call: {
             sendNotification,
         },
@@ -2595,16 +2591,16 @@ function getNavigationLifecycleOrchestrationRuntime() {
         deviceEnvironment: () => _deviceEnvironment(),
         getRouteOptions: () => VoyagrRouteComparisonOrchestration.getRouteOptions(),
         getSelectedRouteIndex: () => VoyagrRouteComparisonOrchestration.getSelectedRouteIndex(),
-        getRouteInProgress: () => routeInProgress,
-        setRouteInProgress: (val) => { routeInProgress = val; },
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
+        setRouteInProgress: (val) => VoyagrNavigationLifecycleOrchestration.setRouteInProgress(val),
         getRouteJoinConfirmedForDeviation: () => VoyagrRerouteMapOrchestration.getRouteJoinConfirmedForDeviation(),
         setRouteJoinConfirmedForDeviation: (val) => VoyagrRerouteMapOrchestration.setRouteJoinConfirmedForDeviation(val),
-        getCurrentStepIndex: () => currentStepIndex,
-        setCurrentStepIndex: (val) => { currentStepIndex = val; },
-        getCurrentRouteSteps: () => currentRouteSteps,
-        setCurrentRouteSteps: (val) => { currentRouteSteps = val; },
-        getRoutePolyline: () => routePolyline,
-        setRoutePolyline: (val) => { routePolyline = val; },
+        getCurrentStepIndex: () => VoyagrNavigationLifecycleOrchestration.getCurrentStepIndex(),
+        setCurrentStepIndex: (val) => VoyagrNavigationLifecycleOrchestration.setCurrentStepIndex(val),
+        getCurrentRouteSteps: () => VoyagrNavigationLifecycleOrchestration.getCurrentRouteSteps(),
+        setCurrentRouteSteps: (val) => VoyagrNavigationLifecycleOrchestration.setCurrentRouteSteps(val),
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
+        setRoutePolyline: (val) => VoyagrNavigationLifecycleOrchestration.setRoutePolyline(val),
         getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
         setLastSnappedRouteIndex: (val) => { lastSnappedRouteIndex = val; },
         getLastTurnDetectRouteVertexIndex: () => VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex(),
@@ -2701,7 +2697,7 @@ function getPoiSearchOrchestrationRuntime() {
         poiSearch: () => _poiSearch(),
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
-        getRoutePolyline: () => routePolyline,
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         s: (key, val) => {
             if (key === 'currentLat') VoyagrLocationOrchestration.setCurrentLat(val);
             else if (key === 'currentLon') VoyagrLocationOrchestration.setCurrentLon(val);
@@ -2795,7 +2791,7 @@ function getNotificationsOrchestrationRuntime() {
     return {
         deviceEnvironment: () => _deviceEnvironment(),
         getVoiceAnnouncementsEnabled: () => VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled(),
-        getRouteInProgress: () => routeInProgress,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
         getNavigationArrivalTriggered: () => VoyagrNavigationLifecycleOrchestration.getNavigationArrivalTriggered(),
         s: (key, val) => {
             if (key === 'navigationArrivalTriggered') VoyagrNavigationLifecycleOrchestration.setNavigationArrivalTriggered(val);
@@ -2940,8 +2936,8 @@ function getJourneySummaryOrchestrationRuntime() {
         movementDetection: () => _movementDetection(),
         units: () => _units(),
         getTrackingHistory: () => VoyagrGpsOrchestration.getTrackingHistory(),
-        getRouteInProgress: () => routeInProgress,
-        getRoutePolyline: () => routePolyline,
+        getRouteInProgress: () => VoyagrNavigationLifecycleOrchestration.getRouteInProgress(),
+        getRoutePolyline: () => VoyagrNavigationLifecycleOrchestration.getRoutePolyline(),
         getCurrentLat: () => VoyagrLocationOrchestration.getCurrentLat(),
         getCurrentLon: () => VoyagrLocationOrchestration.getCurrentLon(),
         getLastSnappedRouteIndex: () => lastSnappedRouteIndex,

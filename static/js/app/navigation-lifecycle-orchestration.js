@@ -7,12 +7,32 @@
 
     var runtime = null;
 
+    var routeStarted = false;
+    var routeInProgress = false;
+    var currentRouteSteps = [];
+    var currentStepIndex = 0;
+    var nextManeuverDistance = 0;
+    var routePolyline = null;
+
     var lastTurnDetectRouteVertexIndex = 0;
     var navigationArrivalTriggered = false;
     var navigationArrivalZoneSince = 0;
     var navTraveledMeters = 0;
     var navOdometerLastGeo = null;
     var navStartedAt = 0;
+
+    function getRouteStarted() { return routeStarted; }
+    function setRouteStarted(val) { routeStarted = !!val; }
+    function getRouteInProgress() { return routeInProgress; }
+    function setRouteInProgress(val) { routeInProgress = !!val; }
+    function getCurrentRouteSteps() { return currentRouteSteps; }
+    function setCurrentRouteSteps(val) { currentRouteSteps = val; }
+    function getCurrentStepIndex() { return currentStepIndex; }
+    function setCurrentStepIndex(val) { currentStepIndex = val; }
+    function getNextManeuverDistance() { return nextManeuverDistance; }
+    function setNextManeuverDistance(val) { nextManeuverDistance = val; }
+    function getRoutePolyline() { return routePolyline; }
+    function setRoutePolyline(val) { routePolyline = val; }
 
     function getLastTurnDetectRouteVertexIndex() { return lastTurnDetectRouteVertexIndex; }
     function setLastTurnDetectRouteVertexIndex(val) { lastTurnDetectRouteVertexIndex = val; }
@@ -48,9 +68,9 @@
             rt().call.resetVoiceAnnouncementStateForNewRoute();
         }
 
-        rt().setRouteInProgress(apply.routeInProgress);
-        rt().setCurrentStepIndex(apply.currentStepIndex);
-        rt().setCurrentRouteSteps(apply.maneuvers);
+        setRouteInProgress(apply.routeInProgress);
+        setCurrentStepIndex(apply.currentStepIndex);
+        setCurrentRouteSteps(apply.maneuvers);
 
         if (apply.resetSessionCounters) {
             setLastTurnDetectRouteVertexIndex(0);
@@ -76,28 +96,28 @@
 
         try {
             if (execute.usePersistedPolyline && execute.persistedPolyline) {
-                rt().setRoutePolyline(execute.persistedPolyline);
+                setRoutePolyline(execute.persistedPolyline);
                 console.log(
                     execute.polylineDecodeLogPrefix,
-                    rt().getRoutePolyline().length,
+                    getRoutePolyline().length,
                     execute.persistedPolylineLogSuffix
                 );
             } else {
-                rt().setRoutePolyline(rt().call.decodePolyline(execute.geometry, execute.navPrecision));
+                setRoutePolyline(rt().call.decodePolyline(execute.geometry, execute.navPrecision));
                 console.log(
                     execute.polylineDecodeLogPrefix,
-                    rt().getRoutePolyline().length,
+                    getRoutePolyline().length,
                     'points',
                     '(precision ' + execute.navPrecision + ')'
                 );
             }
-            console.log(stateInit.maneuversLogPrefix, rt().getCurrentRouteSteps().length, 'steps');
+            console.log(stateInit.maneuversLogPrefix, getCurrentRouteSteps().length, 'steps');
 
             if (execute.persistActiveRoute) rt().call.persistActiveRoute();
-            if (execute.precacheTiles) rt().call.precacheRouteTiles(rt().getRoutePolyline());
+            if (execute.precacheTiles) rt().call.precacheRouteTiles(getRoutePolyline());
 
-            const routePolyline = rt().getRoutePolyline();
-            if (!routePolyline || routePolyline.length === 0) {
+            const activeRoutePolyline = getRoutePolyline();
+            if (!activeRoutePolyline || activeRoutePolyline.length === 0) {
                 console.error(execute.emptyPolylineErrorLog);
                 rt().call.showStatus(execute.invalidGeometryStatusMessage, 'error');
                 return false;
@@ -197,9 +217,9 @@
             const turnExecute = TI.buildNavStartTurnWidgetExecutePlan({
                 currentLat: rt().getCurrentLat(),
                 currentLon: rt().getCurrentLon(),
-                steps: rt().getCurrentRouteSteps(),
-                stepIndex: rt().getCurrentStepIndex(),
-                polyline: rt().getRoutePolyline(),
+                steps: getCurrentRouteSteps(),
+                stepIndex: getCurrentStepIndex(),
+                polyline: getRoutePolyline(),
                 haversineDistanceMeters: RG.haversineDistanceMeters,
                 resolveRoadClass: (step) => step.road_class || RG.inferRoadClassFromManeuver(step),
             });
@@ -266,11 +286,11 @@
     function applyNavStopRuntimeFromPlan(apply) {
         if (!apply || !apply.shouldApply) return;
 
-        rt().setRouteInProgress(apply.routeInProgress);
+        setRouteInProgress(apply.routeInProgress);
         VoyagrRerouteMapOrchestration.setRouteJoinConfirmedForDeviation(apply.routeJoinConfirmedForDeviation);
         if (apply.clearRerouteFailureRetries) rt().call.clearRerouteFailureRetries();
-        rt().setCurrentStepIndex(apply.currentStepIndex);
-        if (apply.clearRouteSteps) rt().setCurrentRouteSteps([]);
+        setCurrentStepIndex(apply.currentStepIndex);
+        if (apply.clearRouteSteps) setCurrentRouteSteps([]);
         if (apply.resetVehicleMarker) rt().call.resetVehicleMarkerDisplayState();
         if (apply.clearPersistedRoute) rt().call.clearPersistedRoute();
         rt().setMapFollowingActive(apply.mapFollowingActive);
@@ -416,7 +436,7 @@
 
     function stopTurnByTurnNavigation() {
         const entry = MC().buildNavStopEntryOrchestrationPlan({
-            routeInProgress: rt().getRouteInProgress(),
+            routeInProgress: getRouteInProgress(),
             isTrackingActive: rt().getIsTrackingActive(),
             lastCalculatedRoute: window.lastCalculatedRoute,
             hasWakeLock: !!window.screenWakeLock,
@@ -434,10 +454,10 @@
     }
 
     function updateTurnGuidance(userLat, userLon) {
-        const routePolyline = rt().getRoutePolyline();
-        if (!rt().getRouteInProgress() || !routePolyline || routePolyline.length === 0) return;
+        const activeRoutePolyline = getRoutePolyline();
+        if (!getRouteInProgress() || !activeRoutePolyline || activeRoutePolyline.length === 0) return;
 
-        const progress = rt().routeGeometry().buildVertexDestinationProgress(userLat, userLon, routePolyline);
+        const progress = rt().routeGeometry().buildVertexDestinationProgress(userLat, userLon, activeRoutePolyline);
 
         const turnInfo = document.getElementById('turnInfo');
         if (turnInfo) {
@@ -459,6 +479,18 @@
         startTurnByTurnNavigation: startTurnByTurnNavigation,
         stopTurnByTurnNavigation: stopTurnByTurnNavigation,
         updateTurnGuidance: updateTurnGuidance,
+        getRouteStarted: getRouteStarted,
+        setRouteStarted: setRouteStarted,
+        getRouteInProgress: getRouteInProgress,
+        setRouteInProgress: setRouteInProgress,
+        getCurrentRouteSteps: getCurrentRouteSteps,
+        setCurrentRouteSteps: setCurrentRouteSteps,
+        getCurrentStepIndex: getCurrentStepIndex,
+        setCurrentStepIndex: setCurrentStepIndex,
+        getNextManeuverDistance: getNextManeuverDistance,
+        setNextManeuverDistance: setNextManeuverDistance,
+        getRoutePolyline: getRoutePolyline,
+        setRoutePolyline: setRoutePolyline,
         getLastTurnDetectRouteVertexIndex: getLastTurnDetectRouteVertexIndex,
         setLastTurnDetectRouteVertexIndex: setLastTurnDetectRouteVertexIndex,
         getNavigationArrivalTriggered: getNavigationArrivalTriggered,
