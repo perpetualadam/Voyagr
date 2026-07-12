@@ -691,6 +691,12 @@ function clearMultiDropLayers() {
     if (!entry.requiresMap || !rt().getMap()) return;
     applyClearMultiDropLayersFromPlan(entry.apply);
 }
+    function getOrderedWaypoints(startLat, startLon, endLat, endLon) {
+        return RS().orderWaypointsGreedy(
+            startLat, startLon, endLat, endLon, viaPoints, stops
+        );
+    }
+
     function getViaPoints() { return viaPoints; }
     function getStops() { return stops; }
     function getAddingViaPoint() { return addingViaPoint; }

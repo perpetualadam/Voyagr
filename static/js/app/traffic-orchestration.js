@@ -481,9 +481,9 @@
         const RTF = rtfModule();
         routeTrafficUpdateInterval = setInterval(() => {
             const tick = RTF.buildRouteTrafficIntervalTickPlan({
-                rt().getRouteInProgress(),
-                routeTrafficEnabled,
-                rt().getRoutePolyline(),
+                routeInProgress: rt().getRouteInProgress(),
+                routeTrafficEnabled: routeTrafficEnabled,
+                routePolyline: rt().getRoutePolyline(),
             });
             if (tick.shouldFetch) {
                 console.log(tick.tickLogMessage);
@@ -510,9 +510,9 @@
         applyStartRouteTrafficUpdatesFromPlan(
             RTF.buildStartRouteTrafficUpdatesApplyPlan(
                 RTF.buildStartRouteTrafficUpdatesDispatchPlan({
-                    routeTrafficUpdateInterval,
-                    routeTrafficEnabled,
-                    rt().getRoutePolyline(),
+                    routeTrafficUpdateInterval: routeTrafficUpdateInterval,
+                    routeTrafficEnabled: routeTrafficEnabled,
+                    routePolyline: rt().getRoutePolyline(),
                 })
             )
         );
@@ -594,8 +594,8 @@
         const TC = tcModule();
         trafficUpdateInterval = setInterval(() => {
             const tick = TC.buildAutoTrafficIntervalTickPlan({
-                rt().getRouteInProgress(),
-                autoTrafficUpdateEnabled,
+                routeInProgress: rt().getRouteInProgress(),
+                autoTrafficUpdateEnabled: autoTrafficUpdateEnabled,
             });
             if (tick.shouldCheck) checkTrafficAndReroute();
         }, apply.intervalMs);
@@ -727,9 +727,9 @@
     async function checkTrafficAndReroute() {
         const TC = tcModule();
         const entry = TC.buildCheckTrafficAndRerouteEntryOrchestrationPlan({
-            rt().getRouteInProgress(),
-            rt().getCurrentLat(),
-            rt().getCurrentLon(),
+            routeInProgress: rt().getRouteInProgress(),
+            currentLat: rt().getCurrentLat(),
+            currentLon: rt().getCurrentLon(),
         });
         if (!entry.preflight.shouldCheck) return;
 
