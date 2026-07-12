@@ -529,6 +529,29 @@ describe('settings-snapshot module', () => {
         expect(reset.reloadAfterReset).toBe(true);
     });
 
+    test('settings reset, export, and import entry orchestration plans', () => {
+        const resetEntry = SS.buildResetAllSettingsEntryOrchestrationPlan();
+        expect(resetEntry.execute.shouldReset).toBe(true);
+        expect(resetEntry.execute.confirmMessage).toContain('reset');
+
+        const exportEntry = SS.buildExportSettingsEntryOrchestrationPlan(
+            JSON.stringify({ unit_distance: 'km' }),
+            '2026-07-12'
+        );
+        expect(exportEntry.execute.shouldExport).toBe(true);
+        expect(exportEntry.execute.downloadFilename).toContain('voyagr-settings');
+
+        const importEntry = SS.buildImportSettingsEntryOrchestrationPlan();
+        expect(importEntry.picker.accept).toBe('.json');
+
+        const contentEntry = SS.buildImportSettingsFileContentEntryOrchestrationPlan(
+            JSON.stringify({ unit_distance: 'mi', unit_currency: 'GBP' }),
+            { routeInProgress: false }
+        );
+        expect(contentEntry.importOrch.shouldApply).toBe(true);
+        expect(contentEntry.parsePlan.ok).toBe(true);
+    });
+
     test('buildCollectSettingsFormStateInputPlan assembles settings fragments', () => {
         const input = SS.buildCollectSettingsFormStateInputPlan({
             routePreferences: { preferScenic: true },

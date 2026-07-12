@@ -429,6 +429,17 @@ describe('auto traffic interval dispatch plans', () => {
         expect(orch.execute.trafficStatusText).toContain('moderate');
     });
 
+    test('buildDisplayTrafficUpdateEntryOrchestrationPlan mirrors orchestration plan', () => {
+        const entry = TC.buildDisplayTrafficUpdateEntryOrchestrationPlan(
+            { traffic_level: 'heavy', updated_duration_minutes: 45 },
+            { time: 30 },
+            { convertDistance: (km) => String(km), distUnit: 'km' },
+            '13:00'
+        );
+        expect(entry.shouldApply).toBe(true);
+        expect(entry.execute.durationChanged).toBe(true);
+    });
+
     test('buildStartTrafficMonitoringOrchestrationPlan bundles runtime and execute', () => {
         const orch = TC.buildStartTrafficMonitoringOrchestrationPlan(true);
         expect(orch.shouldStart).toBe(true);

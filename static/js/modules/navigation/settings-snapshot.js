@@ -796,6 +796,55 @@
     }
 
     /**
+     * Entry orchestration plan for resetAllSettings handler.
+     * @returns {Object}
+     */
+    function buildResetAllSettingsEntryOrchestrationPlan() {
+        return {
+            execute: buildResetAllSettingsExecutePlan(buildSettingsResetPlan()),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for exportSettings handler.
+     * @param {string|null|undefined} rawSnapshot
+     * @param {string} dateStamp
+     * @returns {Object}
+     */
+    function buildExportSettingsEntryOrchestrationPlan(rawSnapshot, dateStamp) {
+        return {
+            execute: buildExportSettingsDomExecutePlan(
+                buildSettingsExportPlan(rawSnapshot, dateStamp)
+            ),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for importSettings file picker.
+     * @returns {Object}
+     */
+    function buildImportSettingsEntryOrchestrationPlan() {
+        return {
+            picker: buildImportSettingsFilePickerOrchestrationPlan(),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for parsing and applying imported settings JSON.
+     * @param {string} rawText
+     * @param {Object} [opts]
+     * @param {boolean} [opts.routeInProgress]
+     * @returns {Object}
+     */
+    function buildImportSettingsFileContentEntryOrchestrationPlan(rawText, opts) {
+        var parsePlan = buildSettingsImportParsePlan(rawText);
+        return {
+            parsePlan: parsePlan,
+            importOrch: buildSettingsImportOrchestrationPlan(parsePlan, opts),
+        };
+    }
+
+    /**
      * Build runtime global patches from a settings restore or reset object.
      * @param {Object} [runtime]
      * @returns {Object}
@@ -1207,6 +1256,11 @@
         buildClearDepartureTimeEntryOrchestrationPlan: buildClearDepartureTimeEntryOrchestrationPlan,
         buildSettingsResetPlan: buildSettingsResetPlan,
         buildResetAllSettingsExecutePlan: buildResetAllSettingsExecutePlan,
+        buildResetAllSettingsEntryOrchestrationPlan: buildResetAllSettingsEntryOrchestrationPlan,
+        buildExportSettingsEntryOrchestrationPlan: buildExportSettingsEntryOrchestrationPlan,
+        buildImportSettingsEntryOrchestrationPlan: buildImportSettingsEntryOrchestrationPlan,
+        buildImportSettingsFileContentEntryOrchestrationPlan:
+            buildImportSettingsFileContentEntryOrchestrationPlan,
         buildApplySettingsResetRuntimeExecutePlan: buildApplySettingsResetRuntimeExecutePlan,
         buildApplySettingsToUiOrchestrationPlan: buildApplySettingsToUiOrchestrationPlan,
         buildApplySettingsUiExecutePlan: buildApplySettingsUiExecutePlan,

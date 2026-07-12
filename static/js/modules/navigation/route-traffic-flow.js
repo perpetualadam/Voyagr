@@ -795,6 +795,19 @@
     }
 
     /**
+     * Entry orchestration plan for fetchAndDisplayRouteTraffic handler.
+     * @param {Object} [opts]
+     * @param {boolean} [opts.routeTrafficEnabled]
+     * @param {Array<[number,number]>} [opts.routePolyline]
+     * @returns {Object}
+     */
+    function buildFetchAndDisplayRouteTrafficEntryOrchestrationPlan(opts) {
+        return {
+            orchestration: buildFetchAndDisplayRouteTrafficOrchestrationPlan(opts),
+        };
+    }
+
+    /**
      * Apply plan for mounting displayed route-traffic edge polylines.
      * @param {Object} [orch] - from buildRouteTrafficEdgesDisplayOrchestrationPlan
      * @returns {Object}
@@ -851,6 +864,8 @@
         buildFetchAndDisplayRouteTrafficResponsePlan: buildFetchAndDisplayRouteTrafficResponsePlan,
         buildFetchAndDisplayRouteTrafficResultApplyPlan: buildFetchAndDisplayRouteTrafficResultApplyPlan,
         buildFetchAndDisplayRouteTrafficResultPipelinePlan: buildFetchAndDisplayRouteTrafficResultPipelinePlan,
+        buildFetchAndDisplayRouteTrafficEntryOrchestrationPlan:
+            buildFetchAndDisplayRouteTrafficEntryOrchestrationPlan,
         buildDisplayRouteTrafficEdgesMountApplyPlan: buildDisplayRouteTrafficEdgesMountApplyPlan,
         ROUTE_TRAFFIC_ENABLED_STORAGE_KEY: ROUTE_TRAFFIC_ENABLED_STORAGE_KEY,
         ROUTE_TRAFFIC_TOGGLE_ID: ROUTE_TRAFFIC_TOGGLE_ID,
