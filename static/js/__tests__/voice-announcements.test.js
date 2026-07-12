@@ -550,6 +550,27 @@ describe('voice preferences plans', () => {
         expect(VA.buildLoadVoicePreferencesDefaultsExecutePlan().useDefaults).toBe(true);
     });
 
+    test('voice preferences entry orchestration plans bundle execute plans', () => {
+        const prefs = {
+            turnDistance1: 400,
+            turnDistance2: 150,
+            turnDistance3: 80,
+            hazardDistance: 600,
+            voiceFrequencyMode: 'minimal',
+            announcementsEnabled: true,
+        };
+        const saveEntry = VA.buildSaveVoicePreferencesEntryOrchestrationPlan(prefs);
+        expect(saveEntry.execute.shouldSave).toBe(true);
+
+        const savedEntry = VA.buildLoadVoicePreferencesSavedEntryOrchestrationPlan(prefs);
+        expect(savedEntry.execute.shouldApply).toBe(true);
+        expect(savedEntry.orch.storageKey).toBe(VA.VOICE_PREFS_STORAGE_KEY);
+
+        const defaultsEntry = VA.buildLoadVoicePreferencesDefaultsEntryOrchestrationPlan();
+        expect(defaultsEntry.defaults.useDefaults).toBe(true);
+        expect(defaultsEntry.orch.defaultsLogMessage).toContain('defaults');
+    });
+
     test('buildToggleVoiceAnnouncementsExecutePlan persists enabled state', () => {
         const collected = VA.buildToggleVoiceAnnouncementsCollectPlan({ currentEnabled: false });
         expect(collected.enabled).toBe(true);

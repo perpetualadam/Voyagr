@@ -159,6 +159,58 @@
     }
 
     /**
+     * Input assembly for saveAllSettings handler.
+     * @param {Object} runtimeState
+     * @param {Object} formState
+     * @returns {Object}
+     */
+    function buildCollectSaveAllSettingsInputPlan(runtimeState, formState) {
+        return buildSettingsSnapshotInputPlan(runtimeState, formState);
+    }
+
+    /**
+     * Entry orchestration plan for saveAllSettings handler.
+     * @param {Object} snapshotInput - from buildCollectSaveAllSettingsInputPlan
+     * @returns {Object}
+     */
+    function buildSaveAllSettingsEntryOrchestrationPlan(snapshotInput) {
+        var savePlan = buildSettingsSavePlan(snapshotInput);
+        return {
+            savePlan: savePlan,
+            execute: buildSaveAllSettingsExecutePlan(savePlan),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for loadAllSettings handler.
+     * @returns {Object}
+     */
+    function buildLoadAllSettingsEntryOrchestrationPlan() {
+        return {
+            orch: buildLoadAllSettingsOrchestrationPlan(),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for restoring a parsed settings snapshot.
+     * @param {Object} settings
+     * @param {Object} [opts]
+     * @param {boolean} [opts.routeInProgress]
+     * @returns {Object}
+     */
+    function buildLoadAllSettingsRestoreEntryOrchestrationPlan(settings, opts) {
+        opts = opts || {};
+        var restorePlan = buildSettingsRestorePlan(settings);
+        var postEffects = buildApplySettingsRestorePostEffectsExecutePlan(
+            buildSettingsRestorePostApplyPlan(restorePlan.runtime || {}, opts)
+        );
+        return {
+            restorePlan: restorePlan,
+            postEffects: postEffects,
+        };
+    }
+
+    /**
      * Hazard preference values for settings snapshot from storage reads.
      * @param {Object} [opts]
      * @param {boolean} [opts.avoidTolls]
@@ -1122,6 +1174,10 @@
         buildSettingsSavePlan: buildSettingsSavePlan,
         buildSaveAllSettingsExecutePlan: buildSaveAllSettingsExecutePlan,
         buildLoadAllSettingsOrchestrationPlan: buildLoadAllSettingsOrchestrationPlan,
+        buildCollectSaveAllSettingsInputPlan: buildCollectSaveAllSettingsInputPlan,
+        buildSaveAllSettingsEntryOrchestrationPlan: buildSaveAllSettingsEntryOrchestrationPlan,
+        buildLoadAllSettingsEntryOrchestrationPlan: buildLoadAllSettingsEntryOrchestrationPlan,
+        buildLoadAllSettingsRestoreEntryOrchestrationPlan: buildLoadAllSettingsRestoreEntryOrchestrationPlan,
         buildSettingsHazardPreferencesPlan: buildSettingsHazardPreferencesPlan,
         buildSettingsFormStateInputPlan: buildSettingsFormStateInputPlan,
         buildSettingsRestorePlan: buildSettingsRestorePlan,

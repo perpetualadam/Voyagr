@@ -480,6 +480,67 @@
     }
 
     /**
+     * Input assembly for saveCurrentRoute handler.
+     * @param {Object} o
+     * @returns {Object}
+     */
+    function buildCollectSaveCurrentRouteInputPlan(o) {
+        return o || {};
+    }
+
+    /**
+     * Entry orchestration plan for saveCurrentRoute handler.
+     * @param {Object} input - from buildCollectSaveCurrentRouteInputPlan
+     * @returns {Object}
+     */
+    function buildSaveCurrentRouteEntryOrchestrationPlan(input) {
+        var plan = buildSaveCurrentRoutePlan(input);
+        return {
+            execute: buildSaveCurrentRouteExecutePlan(plan),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for loadSavedRoutes handler.
+     * @param {Array<Object>} savedRoutes
+     * @param {Object} fmt
+     * @returns {Object}
+     */
+    function buildLoadSavedRoutesEntryOrchestrationPlan(savedRoutes, fmt) {
+        return {
+            execute: buildLoadSavedRoutesExecutePlan(
+                buildLoadSavedRoutesListInputPlan(savedRoutes, fmt)
+            ),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for useSavedRoute handler.
+     * @param {number|string} routeId
+     * @param {Array<Object>} savedRoutes
+     * @returns {Object}
+     */
+    function buildUseSavedRouteEntryOrchestrationPlan(routeId, savedRoutes) {
+        return {
+            plan: buildUseSavedRoutePlan(routeId, savedRoutes),
+        };
+    }
+
+    /**
+     * Entry orchestration plan for deleteSavedRoute handler.
+     * @param {number|string} routeId
+     * @param {Array<Object>} savedRoutes
+     * @returns {Object}
+     */
+    function buildDeleteSavedRouteEntryOrchestrationPlan(routeId, savedRoutes) {
+        var deletePlan = buildDeleteSavedRoutePlan(routeId);
+        return {
+            deletePlan: deletePlan,
+            execute: buildDeleteSavedRouteExecutePlan(deletePlan, savedRoutes),
+        };
+    }
+
+    /**
      * Input assembly for prepareRouteSharing summary values.
      * @param {Object} o
      * @returns {Object}
@@ -1007,6 +1068,11 @@
         buildUseSavedRoutePlan: buildUseSavedRoutePlan,
         buildDeleteSavedRoutePlan: buildDeleteSavedRoutePlan,
         buildDeleteSavedRouteExecutePlan: buildDeleteSavedRouteExecutePlan,
+        buildCollectSaveCurrentRouteInputPlan: buildCollectSaveCurrentRouteInputPlan,
+        buildSaveCurrentRouteEntryOrchestrationPlan: buildSaveCurrentRouteEntryOrchestrationPlan,
+        buildLoadSavedRoutesEntryOrchestrationPlan: buildLoadSavedRoutesEntryOrchestrationPlan,
+        buildUseSavedRouteEntryOrchestrationPlan: buildUseSavedRouteEntryOrchestrationPlan,
+        buildDeleteSavedRouteEntryOrchestrationPlan: buildDeleteSavedRouteEntryOrchestrationPlan,
         buildPrepareRouteSharingInputPlan: buildPrepareRouteSharingInputPlan,
         buildPrepareRouteSharingExecutePlan: buildPrepareRouteSharingExecutePlan,
         buildPrepareRouteSharingApplyPlan: buildPrepareRouteSharingApplyPlan,
