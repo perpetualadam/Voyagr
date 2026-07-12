@@ -5974,6 +5974,7 @@ function getGpsOrchestrationRuntime() {
             ETA_MIN_INTERVAL_MS,
             HAZARD_WARNING_DISTANCE,
         },
+        getIsOffline: () => VoyagrOfflineNavigationOrchestration.getIsOffline(),
         call: {
             resolveGpsRouteSnapForTick,
             smoothGpsSpeedMph,
@@ -6813,7 +6814,7 @@ function getSpeedWidgetOrchestrationRuntime() {
         getRouteInProgress: () => routeInProgress,
         getCurrentRouteSteps: () => currentRouteSteps,
         getCurrentStepIndex: () => currentStepIndex,
-        getIsOffline: () => _voyagrIsOffline,
+        getIsOffline: () => VoyagrOfflineNavigationOrchestration.getIsOffline(),
         g: (key) => {
             switch (key) {
             case 'speedWidgetEnabled': return speedWidgetEnabled;
@@ -8345,148 +8346,47 @@ if (navigator.storage && navigator.storage.persist) {
     });
 }
 
-// ===== OFFLINE DETECTION & UI =====
-let _voyagrIsOffline = !navigator.onLine;
+// ===== OFFLINE NAVIGATION ORCHESTRATION =====
+// Orchestration lives in static/js/app/offline-navigation-orchestration.js (bound at file end).
 
-function _createOfflineBanner() {
-    const OFF = _offlineNavigation();
-    const execute = OFF.buildMountOfflineBannerExecutePlan();
-    if (!execute.shouldMount) return;
-    if (execute.skipIfExists && document.getElementById(execute.bannerId)) return;
-
-    const banner = document.createElement('div');
-    banner.id = execute.bannerId;
-    if (execute.useOfflineBannerStyle) {
-        banner.style.cssText = OFF.getOfflineBannerStyleCssText();
-    }
-    if (execute.useOfflineBannerInnerHtml) {
-        banner.innerHTML = OFF.buildOfflineBannerInnerHtml();
-    }
-    if (execute.prependToBody) {
-        document.body.prepend(banner);
-    }
-    if (execute.bodyClass) {
-        document.body.classList.add(execute.bodyClass);
-    }
+function getOfflineNavigationOrchestrationRuntime() {
+    return {
+        offlineNavigation: () => _offlineNavigation(),
+        speedLimitWidget: () => _speedLimitWidget(),
+        getMap: () => map,
+        getRouteInProgress: () => routeInProgress,
+        getRoutePolyline: () => routePolyline,
+        getCurrentRouteSteps: () => currentRouteSteps,
+        getCurrentStepIndex: () => currentStepIndex,
+        getLastCalculatedRoute: () => window.lastCalculatedRoute,
+        call: {
+            showStatus,
+            buildRoutePayloadFromPersisted,
+            startTurnByTurnNavigation,
+        },
+    };
 }
 
-function _removeOfflineBanner() {
-    const OFF = _offlineNavigation();
-    const execute = OFF.buildUnmountOfflineBannerExecutePlan();
-    if (!execute.shouldUnmount) return;
-
-    const banner = document.getElementById(execute.bannerId);
-    if (banner) {
-        banner.style.transform = execute.hideTransform;
-        setTimeout(() => banner.remove(), execute.removeDelayMs);
-    }
-    if (execute.removeBodyClass) {
-        document.body.classList.remove(execute.removeBodyClass);
-    }
+function cacheSpeedLimit(lat, lon, speedLimit, source) {
+    return VoyagrOfflineNavigationOrchestration.cacheSpeedLimit(lat, lon, speedLimit, source);
 }
-
-function _handleOffline() {
-    const event = _offlineNavigation().buildOfflineConnectivityEventPlan(true);
-    if (event.setOfflineFlag) _voyagrIsOffline = true;
-    console.log(event.logMessage);
-    if (event.mountBanner) _createOfflineBanner();
-    if (typeof showStatus === 'function' && event.statusMessage) {
-        showStatus(event.statusMessage, event.statusType);
-    }
+function getCachedSpeedLimit(lat, lon) {
+    return VoyagrOfflineNavigationOrchestration.getCachedSpeedLimit(lat, lon);
 }
-
-function _handleOnline() {
-    const event = _offlineNavigation().buildOfflineConnectivityEventPlan(false);
-    if (event.setOfflineFlag === false) _voyagrIsOffline = false;
-    console.log(event.logMessage);
-    if (event.unmountBanner) _removeOfflineBanner();
-    if (typeof showStatus === 'function' && event.statusMessage) {
-        showStatus(event.statusMessage, event.statusType);
-    }
-    if (event.recoverMap && typeof window.__voyagrMapRecoverAfterNetworkEvent === 'function') {
-        window.__voyagrMapRecoverAfterNetworkEvent(event.recoverMapReason);
-    }
+function persistActiveRoute() {
+    return VoyagrOfflineNavigationOrchestration.persistActiveRoute();
 }
-
-window.addEventListener('offline', _handleOffline);
-window.addEventListener('online', _handleOnline);
-if (!navigator.onLine) {
-    window.addEventListener('load', _handleOffline);
+function clearPersistedRoute() {
+    return VoyagrOfflineNavigationOrchestration.clearPersistedRoute();
 }
-
-// ===== OFFLINE ROUTE PERSISTENCE (IndexedDB) =====
-async function cacheSpeedLimit(lat, lon, speedLimit, source) {
-    const SL = _speedLimitWidget();
-    const OFF = _offlineNavigation();
-    if (!SL || !OFF) return;
-    try {
-        const key = SL.speedLimitCacheKey(lat, lon);
-        await OFF.putSpeedLimitCacheEntry(indexedDB, key, speedLimit, source);
-    } catch (e) { /* ignore */ }
-}
-
-async function getCachedSpeedLimit(lat, lon) {
-    const SL = _speedLimitWidget();
-    const OFF = _offlineNavigation();
-    if (!SL || !OFF) return null;
-    try {
-        const key = SL.speedLimitCacheKey(lat, lon);
-        return await OFF.getSpeedLimitCacheEntry(indexedDB, key);
-    } catch (e) {
-        return null;
-    }
-}
-
-async function persistActiveRoute() {
-    const OFF = _offlineNavigation();
-    if (!OFF || !routeInProgress || !routePolyline) return;
-    try {
-        await OFF.persistActiveRouteRecord(indexedDB, OFF.buildActiveRoutePersistRecord({
-            polyline: routePolyline,
-            steps: currentRouteSteps,
-            stepIndex: currentStepIndex,
-            destination: window.lastCalculatedRoute?.destination || null,
-            routeData: window.lastCalculatedRoute || null,
-        }));
-    } catch (e) {
-        console.warn('[OfflineNav] Failed to persist route:', e);
-    }
-}
-
-async function loadPersistedRoute() {
-    const OFF = _offlineNavigation();
-    if (!OFF) return null;
-    try {
-        const result = await OFF.loadActiveRouteRecord(indexedDB);
-        if (!result) return null;
-        if (OFF.isPersistedRouteExpired(result.savedAt)) {
-            await clearPersistedRoute();
-            return null;
-        }
-        return result;
-    } catch (e) {
-        console.warn('[OfflineNav] Failed to load persisted route:', e);
-        return null;
-    }
-}
-
-async function clearPersistedRoute() {
-    const OFF = _offlineNavigation();
-    if (!OFF) return;
-    try {
-        await OFF.clearActiveRouteRecord(indexedDB);
-    } catch (e) {
-        console.warn('[OfflineNav] Failed to clear persisted route:', e);
-    }
-}
-
-let _persistRouteTimer = null;
 function schedulePersistRoute() {
-    if (_persistRouteTimer) return;
-    _persistRouteTimer = setTimeout(() => {
-        _persistRouteTimer = null;
-        persistActiveRoute();
-    }, 5000);
+    VoyagrOfflineNavigationOrchestration.schedulePersistRoute();
+}
+function precacheRouteTiles(polyline) {
+    return VoyagrOfflineNavigationOrchestration.precacheRouteTiles(polyline);
+}
+function _tryResumeNavigation() {
+    return VoyagrOfflineNavigationOrchestration.tryResumeNavigation();
 }
 
 // ===== PHASE 2: Restore app state on page load =====
@@ -8514,140 +8414,6 @@ window.addEventListener('load', () => {
         console.warn(_deviceEnvironment().buildOpenVolumeHintSchedulePlan().scheduleErrorLogPrefix, e);
     }
 });
-
-// ===== TILE PRE-CACHING FOR ROUTE CORRIDORS =====
-/**
- * Read vector tile URL templates plus each source minzoom/maxzoom from the active MapLibre style.
- */
-function collectVectorTileTemplatesFromMap() {
-    const OFF = _offlineNavigation();
-    const preflight = OFF.buildCollectVectorTileTemplatesPreflightPlan({
-        hasOfflineModule: !!OFF,
-        hasMap: typeof map !== 'undefined' && map !== null,
-        styleLoaded: typeof map !== 'undefined' && map !== null && typeof map.isStyleLoaded === 'function'
-            ? map.isStyleLoaded()
-            : true,
-    });
-    if (!preflight.canCollect) return [];
-    try {
-        return OFF.parseVectorTileSourcesFromStyle(map.getStyle());
-    } catch (e) {
-        console.warn(preflight.errorLogPrefix, e);
-        return [];
-    }
-}
-
-async function precacheRouteTiles(polyline) {
-    const OFF = _offlineNavigation();
-    if (!OFF || !polyline || polyline.length < 2) return;
-    if (!('caches' in window)) return;
-
-    const templates = collectVectorTileTemplatesFromMap();
-    const urlPlan = templates.length > 0
-        ? OFF.buildRouteCorridorTileUrlPlan(polyline, templates, {
-            origin: window.location.origin,
-            maxUrls: OFF.TILE_PRECACHE_MAX_URLS,
-            zoomLevels: OFF.TILE_PRECACHE_ZOOM_LEVELS,
-        })
-        : { urls: [], originalCount: 0, capped: false };
-
-    const execute = OFF.buildPrecacheRouteTilesExecutePlan({
-        polylineLength: polyline.length,
-        hasCaches: true,
-        urls: urlPlan.urls,
-        capped: urlPlan.capped,
-        originalCount: urlPlan.originalCount,
-        templateCount: templates.length,
-    });
-
-    if (!execute.hasTemplates) {
-        console.log(execute.skipNoTemplatesLog);
-        return;
-    }
-    if (!execute.shouldPrecache) return;
-
-    if (execute.capped) {
-        console.log(`${execute.cappedLogPrefix} ${execute.originalCount} → ${execute.urlCount} URLs`);
-    }
-
-    console.log(`${execute.startLogPrefix} ${execute.urlCount} tiles (${execute.templateCount} source template(s)) along route corridor`);
-
-    try {
-        const cacheNames = await caches.keys();
-        const tileCacheName = OFF.resolvePrecacheTileCacheName(cacheNames, execute);
-        const cache = await caches.open(tileCacheName);
-        let cached = 0;
-        const batches = OFF.slicePrecacheUrlsIntoBatches(execute.urls, execute.batchSize);
-        for (const batch of batches) {
-            await Promise.allSettled(
-                batch.map(async (url) => {
-                    const existing = await cache.match(url);
-                    if (existing) return;
-                    try {
-                        const resp = await fetch(url);
-                        const outcome = OFF.buildPrecacheTileStoreOutcomePlan({
-                            hadExisting: false,
-                            responseOk: resp.ok,
-                        });
-                        if (outcome.shouldStore) {
-                            await cache.put(url, resp);
-                            if (outcome.shouldIncrement) cached++;
-                        }
-                    } catch (_e) { /* tile missing or offline */ }
-                })
-            );
-        }
-        console.log(`${execute.completeLogPrefix} ${cached} new tiles`);
-    } catch (e) {
-        console.warn(execute.errorLogPrefix, e);
-    }
-}
-
-async function _tryResumeNavigation() {
-    const OFF = _offlineNavigation();
-    try {
-        const saved = await loadPersistedRoute();
-        const preflight = OFF.buildTryResumeNavigationPreflightPlan(saved);
-        if (!preflight.shouldOffer) return;
-
-        console.log(preflight.foundLogMessage);
-
-        const mount = OFF.buildTryResumeNavigationMountExecutePlan(preflight);
-        const resumeBanner = document.createElement('div');
-        resumeBanner.id = mount.bannerId;
-        resumeBanner.style.cssText = OFF.getResumeNavigationBannerStyleCssText();
-        resumeBanner.innerHTML = OFF.buildResumeNavigationBannerHtml(mount.stepCount);
-        document.body.appendChild(resumeBanner);
-
-        document.getElementById(mount.resumeYesId).onclick = () => {
-            resumeBanner.remove();
-            const payload = buildRoutePayloadFromPersisted(saved);
-            const yesAction = OFF.buildTryResumeNavigationYesActionPlan({
-                saved,
-                preflight,
-                payload,
-            });
-            if (yesAction.action === 'fullBootstrap' || yesAction.action === 'polylineResume') {
-                startTurnByTurnNavigation(yesAction.payload, yesAction.navStartOpts);
-                console.log(yesAction.logMessage);
-            } else {
-                showStatus(yesAction.statusMessage, yesAction.statusType);
-                console.warn(yesAction.logMessage);
-            }
-        };
-        document.getElementById(mount.resumeNoId).onclick = () => {
-            resumeBanner.remove();
-            const noAction = OFF.buildTryResumeNavigationNoActionPlan();
-            if (noAction.clearPersistedRoute) clearPersistedRoute();
-        };
-
-        setTimeout(() => {
-            if (document.getElementById(mount.bannerId)) resumeBanner.remove();
-        }, mount.autoDismissMs);
-    } catch (e) {
-        console.warn('[OfflineNav] Resume check failed:', e);
-    }
-}
 
 // ===== PHASE 3: Initialize battery monitoring =====
 initBatteryMonitoring();
@@ -12550,6 +12316,7 @@ VoyagrWaypointsOrchestration.bind(getWaypointsOrchestrationRuntime());
 VoyagrRouteSharingOrchestration.bind(getRouteSharingOrchestrationRuntime());
 VoyagrNotificationsOrchestration.bind(getNotificationsOrchestrationRuntime());
 VoyagrRoutePreferencesOrchestration.bind(getRoutePreferencesOrchestrationRuntime());
+VoyagrOfflineNavigationOrchestration.bind(getOfflineNavigationOrchestrationRuntime());
 
 
 

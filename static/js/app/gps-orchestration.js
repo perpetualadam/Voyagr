@@ -1568,7 +1568,7 @@
         const tick = HA.buildNavigationHazardAlertsTickPlan({
             routeInProgress: rt().g('routeInProgress'),
             isTrackingActive: rt().g('isTrackingActive'),
-            isOffline: _voyagrIsOffline,
+            isOffline: rt().getIsOffline(),
             navigatorOnLine: navigator.onLine,
             lat,
             lon,
