@@ -1500,7 +1500,19 @@ describe('route overview and single-route display plans', () => {
         const mount = RS.buildDisplayAllRoutesMapMountApplyPlan(execute, orch);
         expect(mount.shouldMount).toBe(true);
         expect(mount.preMount.hydratePolylines).toBe(true);
+        expect(mount.preMountApply.shouldApply).toBe(true);
+        expect(mount.preMountApply.hydratePolylines).toBe(true);
         expect(mount.mapMissingLogMessage).toContain('Map not available');
+    });
+
+    test('buildDisplayAllRoutesPreMountEntryApplyPlan gates empty pre-mount', () => {
+        expect(RS.buildDisplayAllRoutesPreMountEntryApplyPlan({}).shouldApply).toBe(false);
+        const apply = RS.buildDisplayAllRoutesPreMountEntryApplyPlan({
+            clearRouteLayerHandle: true,
+            hydratePolylines: true,
+        });
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.clearRouteLayerHandle).toBe(true);
     });
 
     test('buildDisplayAllRoutesMapEntryOrchestrationPlan gates empty routes and bundles mount', () => {
@@ -1906,6 +1918,15 @@ describe('route overview and single-route display plans', () => {
             hasMap: true,
             styleLayers: [],
         }).noLabelsLogMessage).toContain('No label layers');
+    });
+
+    test('buildEnsureLabelsOnTopEntryOrchestrationPlan bundles apply plan', () => {
+        const entry = RS.buildEnsureLabelsOnTopEntryOrchestrationPlan({
+            hasMap: true,
+            styleLayers: [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }],
+        });
+        expect(entry.apply.shouldApply).toBe(true);
+        expect(entry.apply.labelLayerIds).toEqual(['labels']);
     });
 
     test('buildBringTrafficEdgesToTopOrchestrationPlan guards map and empty layers', () => {

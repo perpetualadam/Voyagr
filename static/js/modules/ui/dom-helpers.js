@@ -455,6 +455,20 @@
         };
     }
 
+    /**
+     * Binding plan for expanding the sheet when route inputs receive focus.
+     * @param {Array<string>} [inputIds]
+     * @returns {Object}
+     */
+    function buildBottomSheetFocusExpandBindingPlan(inputIds) {
+        var ids = Array.isArray(inputIds) ? inputIds.slice() : [];
+        return {
+            shouldBind: ids.length > 0,
+            inputIds: ids,
+            action: 'expand',
+        };
+    }
+
     var api = {
         eventTargetElement: eventTargetElement,
         closest: closest,
@@ -486,6 +500,7 @@
         buildBottomSheetHandleClickEntryOrchestrationPlan: buildBottomSheetHandleClickEntryOrchestrationPlan,
         buildBottomSheetHeaderClickEntryOrchestrationPlan: buildBottomSheetHeaderClickEntryOrchestrationPlan,
         buildBottomSheetBodyClickEntryOrchestrationPlan: buildBottomSheetBodyClickEntryOrchestrationPlan,
+        buildBottomSheetFocusExpandBindingPlan: buildBottomSheetFocusExpandBindingPlan,
         buildCollapseBottomSheetForRoutePreviewExecutePlan: buildCollapseBottomSheetForRoutePreviewExecutePlan,
         buildCollapseBottomSheetForRoutePreviewApplyPlan: buildCollapseBottomSheetForRoutePreviewApplyPlan,
         buildCollapseBottomSheetForRoutePreviewOrchestrationPlan:

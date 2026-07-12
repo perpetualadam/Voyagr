@@ -2708,7 +2708,7 @@ function applyDisplayAllRoutesOnMapFromPlan(apply) {
     console.log(apply.routeCountLogPrefix, apply.routeCount, 'routes');
 
     const mount = apply.mount;
-    applyDisplayAllRoutesPreMountFromPlan(mount.preMount);
+    applyDisplayAllRoutesPreMountFromPlan(mount.preMountApply);
 
     if (mount.requireMap && !map) {
         console.error(mount.mapMissingLogMessage);
@@ -2721,13 +2721,13 @@ function applyDisplayAllRoutesOnMapFromPlan(apply) {
     });
 }
 
-function applyDisplayAllRoutesPreMountFromPlan(preMount) {
-    if (!preMount) return;
-    clearRouteLayerHandlesFromPlan(preMount);
-    if (preMount.clearMapRouteLayers) {
+function applyDisplayAllRoutesPreMountFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+    clearRouteLayerHandlesFromPlan(apply);
+    if (apply.clearMapRouteLayers) {
         clearAllRouteLayersFromMap();
     }
-    if (preMount.hydratePolylines) {
+    if (apply.hydratePolylines) {
         _routeSelection().hydrateRouteOptionPolylines(routeOptions, decodePolyline);
     }
 }
@@ -2804,6 +2804,15 @@ function applyBringRoutesToTopEntryFromPlan(apply) {
     applyBringRoutesToTopFromPlan(apply.execute);
 }
 
+function collectBringRoutesToTopInput() {
+    const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
+    return {
+        layerCount: allRouteLayers?.length || 0,
+        layerDescriptors: allRouteLayers,
+        styleLayers: style && style.layers ? style.layers : null,
+    };
+}
+
 /**
  * Bring all route layers to the top of the map rendering order
  * This ensures routes are visible above traffic edges and other overlays
@@ -2812,13 +2821,10 @@ function applyBringRoutesToTopEntryFromPlan(apply) {
  */
 function bringRoutesToTop() {
     const RS = _routeSelection();
+    const input = collectBringRoutesToTopInput();
     applyBringRoutesToTopEntryFromPlan(
         RS.buildBringRoutesToTopEntryApplyPlan(
-            RS.buildBringRoutesToTopEntryOrchestrationPlan({
-                layerCount: allRouteLayers?.length || 0,
-                layerDescriptors: allRouteLayers,
-                styleLayers: map && map.getStyle ? map.getStyle().layers : null,
-            })
+            RS.buildBringRoutesToTopEntryOrchestrationPlan(input)
         )
     );
 }
@@ -4106,27 +4112,21 @@ function displayAnalytics(data) {
 }
 
 // ===== ADVANCED ROUTE PREFERENCES FUNCTIONS =====
-/**
- * saveRoutePreferences function
- * @function saveRoutePreferences
- * @returns {*} Return value description
- */
-function saveRoutePreferences() {
-    const RP = _routePrefs();
-    const preferences = RP.buildRoutePreferencesFormStatePlan(
-        RP.buildCollectRoutePreferencesInputPlan({
-            avoidHighways: document.getElementById('avoidHighways')?.checked || false,
-            preferScenic: document.getElementById('preferScenic')?.checked || false,
-            avoidTolls: isAvoidTollsEnabled(),
-            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
-            preferQuiet: document.getElementById('preferQuiet')?.checked || false,
-            avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
-            routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
-            maxDetour: document.getElementById('maxDetour')?.value || 20,
-        })
-    );
-    const execute = RP.buildSaveRoutePreferencesExecutePlan(preferences);
-    if (!execute.shouldSave) return;
+function collectRoutePreferencesDomInput() {
+    return {
+        avoidHighways: document.getElementById('avoidHighways')?.checked || false,
+        preferScenic: document.getElementById('preferScenic')?.checked || false,
+        avoidTolls: isAvoidTollsEnabled(),
+        avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
+        preferQuiet: document.getElementById('preferQuiet')?.checked || false,
+        avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
+        routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
+        maxDetour: document.getElementById('maxDetour')?.value || 20,
+    };
+}
+
+function applySaveRoutePreferencesFromPlan(execute) {
+    if (!execute || !execute.shouldSave) return;
 
     localStorage.setItem(execute.storageKey, JSON.stringify(execute.preferences));
     if (execute.saveAllSettings) saveAllSettings();
@@ -4134,22 +4134,26 @@ function saveRoutePreferences() {
 }
 
 /**
+ * saveRoutePreferences function
+ * @function saveRoutePreferences
+ * @returns {*} Return value description
+ */
+function saveRoutePreferences() {
+    const RP = _routePrefs();
+    applySaveRoutePreferencesFromPlan(
+        RP.buildSaveRoutePreferencesEntryOrchestrationPlan(
+            RP.buildCollectRoutePreferencesInputPlan(collectRoutePreferencesDomInput())
+        ).execute
+    );
+}
+
+/**
  * Read route preference controls from the DOM (source of truth for save).
  * @returns {Object}
  */
 function collectRoutePreferencesFormState() {
-    const RP = _routePrefs();
-    return RP.buildRoutePreferencesFormStatePlan(
-        RP.buildCollectRoutePreferencesInputPlan({
-            avoidHighways: document.getElementById('avoidHighways')?.checked || false,
-            preferScenic: document.getElementById('preferScenic')?.checked || false,
-            avoidTolls: isAvoidTollsEnabled(),
-            avoidCAZ: localStorage.getItem('pref_caz') !== 'false',
-            preferQuiet: document.getElementById('preferQuiet')?.checked || false,
-            avoidUnpaved: document.getElementById('avoidUnpaved')?.checked || false,
-            routeOptimization: document.getElementById('routeOptimization')?.value || 'fastest',
-            maxDetour: document.getElementById('maxDetour')?.value || 20,
-        })
+    return _routePrefs().buildRoutePreferencesFormStatePlan(
+        _routePrefs().buildCollectRoutePreferencesInputPlan(collectRoutePreferencesDomInput())
     );
 }
 
@@ -4241,12 +4245,9 @@ function applyClearDepartureTimeFromPlan(plan) {
  * @returns {*} Return value description
  */
 function loadRoutePreferences() {
-    const execute = _routePrefs().buildLoadRoutePreferencesExecutePlan();
-    if (!execute.shouldLoad) return;
-
-    applyRoutePreferencesUiFromPlan(
-        _routePrefs().buildRoutePreferencesUiApplyPlan(localStorage)
-    );
+    const entry = _routePrefs().buildLoadRoutePreferencesEntryOrchestrationPlan(localStorage);
+    if (!entry.execute.shouldLoad) return;
+    applyRoutePreferencesUiFromPlan(entry.uiApply);
 }
 
 /**
@@ -6202,22 +6203,29 @@ function applyEnsureLabelsOnTopFromPlan(plan) {
     return true;
 }
 
+function collectEnsureLabelsOnTopInput() {
+    const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
+    return {
+        hasMap: !!map,
+        styleLayers: style && style.layers ? style.layers : null,
+    };
+}
+
 /**
  * Ensure road labels are always rendered above route and traffic layers
  * This function moves all symbol layers with text-field to the top of the layer stack
  * Debounced to prevent excessive calls during rapid layer additions
  */
 function ensureLabelsOnTop() {
-    const apply = _routeSelection().buildEnsureLabelsOnTopApplyPlan({
-        hasMap: !!map,
-        styleLayers: map && map.getStyle && map.getStyle().layers,
-    });
-    if (!apply.shouldApply) {
-        if (apply.noLabelsLogMessage) console.log(apply.noLabelsLogMessage);
+    const entry = _routeSelection().buildEnsureLabelsOnTopEntryOrchestrationPlan(
+        collectEnsureLabelsOnTopInput()
+    );
+    if (!entry.apply.shouldApply) {
+        if (entry.apply.noLabelsLogMessage) console.log(entry.apply.noLabelsLogMessage);
         return;
     }
 
-    applyEnsureLabelsOnTopFromPlan(apply);
+    applyEnsureLabelsOnTopFromPlan(entry.apply);
 }
 
 /**
@@ -12963,6 +12971,15 @@ function applyBottomSheetBodyClickExpandFromPlan(entry) {
     expandBottomSheet();
 }
 
+function applyBottomSheetFocusExpandBindingFromPlan(binding) {
+    if (!binding || !binding.shouldBind) return;
+
+    binding.inputIds.forEach((inputId) => {
+        const input = document.getElementById(inputId);
+        if (input) input.addEventListener('focus', expandBottomSheet);
+    });
+}
+
 // ===== BOTTOM SHEET FUNCTIONALITY =====
 /**
  * initBottomSheet function
@@ -13074,10 +13091,9 @@ function initBottomSheet() {
         finishDrag(bottomSheetCurrentY - bottomSheetStartY);
     });
 
-    (initPlan.focusExpandInputIds || []).forEach((inputId) => {
-        const input = document.getElementById(inputId);
-        if (input) input.addEventListener('focus', expandBottomSheet);
-    });
+    applyBottomSheetFocusExpandBindingFromPlan(
+        DH.buildBottomSheetFocusExpandBindingPlan(initPlan.focusExpandInputIds)
+    );
 
     syncBottomSheetOverlapFabs();
 }
