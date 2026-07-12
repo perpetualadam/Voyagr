@@ -50,6 +50,7 @@ class RouteEnrichmentContext:
     include_caz: bool
     caz_exempt: bool
     traffic_multiplier: float = 1.0
+    max_detour: int = 20
 
 
 def _ensure_kwargs(ctx: RouteEnrichmentContext) -> Dict[str, Any]:
@@ -172,6 +173,7 @@ def apply_valhalla_route_enrichment(
     Full post-Valhalla enrichment: optional GH Optimised, ensure Optimised/Scenic/Shortest,
     camera proximity scores, hazard-penalty reorder + id renumber.
     """
+    from voyagr.services.routing.route_variety import finalize_route_variety
     import voyagr_web as vw
 
     ensure_kw = _ensure_kwargs(ctx)
@@ -203,4 +205,5 @@ def apply_valhalla_route_enrichment(
         for idx, route in enumerate(routes):
             route['id'] = idx + 1
 
+    routes = finalize_route_variety(routes, max_detour_percent=ctx.max_detour)
     return routes

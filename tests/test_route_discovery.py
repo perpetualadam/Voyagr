@@ -1,6 +1,6 @@
 """Tests for append_distinct_valhalla_route_types.
 
-Covers the guard (only runs for auto + hazard avoidance + <3 routes) and the
+Covers the guard (auto + hazard avoidance + missing distinct variety) and the
 📏 Shortest append path. Only the network wrapper (fetch_shortest_route_json) is
 mocked; the real valhalla_trip_json_to_std_route_entry builds the entry from a
 real encoded polyline + a stub cost calculator, so the wiring is exercised for
@@ -49,11 +49,31 @@ def test_guard_skips_when_avoidance_disabled():
     assert out == routes
 
 
-def test_guard_skips_when_three_routes_present():
-    routes = [{'id': 1}, {'id': 2}, {'id': 3}]
+def test_guard_skips_when_three_distinct_routes_and_shortest_present():
+    shape_b = polyline.encode([(51.5074, -0.2278), (51.5085, -0.2265)], precision=6)
+    shape_c = polyline.encode([(51.6074, -0.3278), (51.6085, -0.3265)], precision=6)
+    routes = [
+        {'id': 1, 'name': 'Fastest', 'geometry': SHAPE, 'geometry_precision': 6, 'distance_km': 10.0},
+        {'id': 2, 'name': 'Alternate', 'geometry': shape_b, 'geometry_precision': 6, 'distance_km': 12.0},
+        {'id': 3, 'name': 'Balanced', 'geometry': shape_c, 'geometry_precision': 6, 'distance_km': 11.0},
+        {'id': 4, 'name': '📏 Shortest', 'geometry': shape_b, 'geometry_precision': 6, 'distance_km': 9.0},
+    ]
     out = append_distinct_valhalla_route_types(
         list(routes), valhalla_costing='auto', enable_hazard_avoidance=True, **BASE)
-    assert len(out) == 3
+    assert len(out) == 4
+
+
+def test_runs_when_three_routes_are_similar_copies():
+    routes = [
+        {'id': 1, 'name': 'Fastest', 'geometry': SHAPE, 'geometry_precision': 6, 'distance_km': 10.0},
+        {'id': 2, 'name': 'Alternate', 'geometry': SHAPE, 'geometry_precision': 6, 'distance_km': 10.1},
+        {'id': 3, 'name': 'Balanced', 'geometry': SHAPE, 'geometry_precision': 6, 'distance_km': 10.2},
+    ]
+    trip_json = {'trip': {'legs': [{'shape': SHAPE}], 'summary': {'length': 9.0, 'time': 540}}}
+    with patch('voyagr_web.fetch_shortest_route_json', return_value=(trip_json, True)):
+        out = append_distinct_valhalla_route_types(
+            routes, valhalla_costing='auto', enable_hazard_avoidance=True, **BASE)
+    assert any(r.get('name') == '📏 Shortest' for r in out)
 
 
 def test_appends_shortest_route_when_wrapper_returns_data():

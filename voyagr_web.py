@@ -943,6 +943,7 @@ from voyagr.services.routing.costing import (
 )
 from voyagr.services.routing.request_params import parse_route_request
 from voyagr.services.routing.enrichment import RouteEnrichmentContext, apply_valhalla_route_enrichment
+from voyagr.services.routing.route_variety import dedupe_similar_routes
 from voyagr.services.routing.hazard_prep import HazardPrefs, prepare_route_hazards
 from voyagr.services.routing.orchestrator import (
     build_valhalla_baseline_request_payload,
@@ -1293,6 +1294,7 @@ def calculate_route():
                 fuel_price=fuel_price, energy_efficiency=energy_efficiency,
                 electricity_price=electricity_price, include_tolls=include_tolls,
                 include_caz=include_caz, caz_exempt=caz_exempt,
+                max_detour=max_detour,
             )
 
             # Valhalla allows at most 50 exclude_locations (error 157). Segmented
@@ -1407,6 +1409,8 @@ def calculate_route():
                                     electricity_price=electricity_price, include_tolls=include_tolls,
                                     include_caz=include_caz, caz_exempt=caz_exempt,
                                 ))
+
+                    routes = dedupe_similar_routes(routes)
 
                     # ================================================================
                     # REQUEST ADDITIONAL DISTINCT ROUTE TYPES (Shortest, Optimised)
@@ -1655,6 +1659,7 @@ def calculate_route():
                                     electricity_price=electricity_price, include_tolls=include_tolls,
                                     include_caz=include_caz, caz_exempt=caz_exempt,
                                     traffic_multiplier=traffic_multiplier,
+                                    max_detour=max_detour,
                                 )
                                 routes = apply_valhalla_route_enrichment(
                                     routes, retry_enrich, log_label='retry',
@@ -1844,6 +1849,7 @@ def calculate_route():
                             fuel_price=fuel_price, energy_efficiency=energy_efficiency,
                             electricity_price=electricity_price, include_tolls=include_tolls,
                             include_caz=include_caz, caz_exempt=caz_exempt,
+                            max_detour=max_detour,
                         )
                         routes_out = apply_valhalla_route_enrichment(
                             routes_out, recovery_enrich, merge_graphhopper=False, log_label='recovery',

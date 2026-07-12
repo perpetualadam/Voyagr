@@ -646,7 +646,7 @@ def ensure_scenic_valhalla_route(
     if any((r.get('name') or '').strip() == SCENIC_ROUTE_NAME for r in routes):
         return routes
 
-    primary = next((r for r in routes if is_primary_optimised_route(r)), None)
+    primary = routes[0] if routes else None
     if not primary:
         return routes
 

@@ -27,7 +27,9 @@ from voyagr.services.routing.orchestrator import (
     find_baseline_cameras_on_route,
 )
 from voyagr.services.routing.route_entries import build_valhalla_route_entry
+from voyagr.services.routing.route_variety import should_append_distinct_valhalla_route_types
 from voyagr.services.routing.valhalla_parsing import valhalla_trip_json_to_std_route_entry
+from voyagr.services.routing.optimised_route import routes_are_distinct
 
 logger = logging.getLogger('voyagr_web')
 
@@ -61,7 +63,11 @@ def append_distinct_valhalla_route_types(
     caz_exempt: bool,
 ) -> List[Dict[str, Any]]:
     """Add 📏 Shortest and ⚡ Optimised Discovery routes (auto mode, hazard avoidance)."""
-    if not (valhalla_costing == 'auto' and enable_hazard_avoidance and len(routes) < 3):
+    if not should_append_distinct_valhalla_route_types(
+        routes,
+        valhalla_costing=valhalla_costing,
+        enable_hazard_avoidance=enable_hazard_avoidance,
+    ):
         return routes
 
     logger.info(f"[VALHALLA] Standard routing: Adding distinct route types ({len(routes)} routes so far)")
@@ -105,9 +111,12 @@ def append_distinct_valhalla_route_types(
             if entry:
                 if sh_exclusions_applied:
                     entry['camera_exclusions_applied'] = True
-                routes.append(entry)
-                next_route_id += 1
-                logger.info(f"[VALHALLA] Added Shortest route: {entry['distance_km']:.1f}km")
+                if all(routes_are_distinct(entry, existing) for existing in routes):
+                    routes.append(entry)
+                    next_route_id += 1
+                    logger.info(f"[VALHALLA] Added Shortest route: {entry['distance_km']:.1f}km")
+                else:
+                    logger.info('[VALHALLA] Shortest route too similar to existing options — skipped')
     except Exception as e:
         logger.warning(f"[VALHALLA] Shortest route failed: {e}")
 
@@ -149,8 +158,11 @@ def append_distinct_valhalla_route_types(
                         )
                         if route_entry['hazard_count'] < hazard_count:
                             route_entry['camera_exclusions_applied'] = True
-                            routes.append(route_entry)
-                            logger.info(f"[VALHALLA] Added Optimised Discovery route: {disc_dist:.1f}km, {route_entry['hazard_count']} cameras")
+                            if all(routes_are_distinct(route_entry, existing) for existing in routes):
+                                routes.append(route_entry)
+                                logger.info(f"[VALHALLA] Added Optimised Discovery route: {disc_dist:.1f}km, {route_entry['hazard_count']} cameras")
+                            else:
+                                logger.info('[VALHALLA] Optimised Discovery too similar to existing options — skipped')
     except Exception as e:
         logger.warning(f"[VALHALLA] Optimised route failed: {e}")
 
