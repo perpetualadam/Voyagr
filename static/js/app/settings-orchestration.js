@@ -19,6 +19,13 @@
     function TU() { return rt().toggleUI(); }
     function RP() { return rt().routePrefs(); }
 
+    function storedMapTheme() {
+        var MT = root.VoyagrMapTheme;
+        return MT && typeof MT.readStoredMapTheme === 'function'
+            ? MT.readStoredMapTheme()
+            : (typeof localStorage !== 'undefined' ? localStorage.getItem('mapTheme') || 'standard' : 'standard');
+    }
+
     function collectSettingsFormState() {
         var settingsSnapshot = SS();
         return settingsSnapshot.buildSettingsFormStateInputPlan(
@@ -30,7 +37,7 @@
                 }),
                 parkingPreferences: rt().call.collectParkingPreferencesFormState(),
                 multiDropPreferences: rt().call.collectMultiDropFormState(),
-                mapTheme: localStorage.getItem('mapTheme') || 'standard',
+                mapTheme: storedMapTheme(),
                 uiTheme: localStorage.getItem('ui_theme') || 'light',
             })
         );
@@ -302,7 +309,7 @@
         return settingsSnapshot.buildCollectSettingsUiStoredStatePlan({
             routePreferences: RP().getRoutePreferences(localStorage),
             parkingPreferences: parkingPrefs,
-            mapTheme: localStorage.getItem('mapTheme') || 'standard',
+            mapTheme: storedMapTheme(),
             uiTheme: localStorage.getItem('ui_theme') || 'light',
         });
     }

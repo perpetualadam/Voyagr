@@ -52,4 +52,47 @@ describe('map-theme module', () => {
         expect(execute.storageKey).toBe(MT.MAP_THEME_STORAGE_KEY);
         expect(execute.persistApiBody).toEqual({ map_theme: 'standard' });
     });
+
+    test('readStoredMapTheme reads storage key and defaults to standard', () => {
+        expect(MT.readStoredMapTheme({ theme: 'dark' })).toBe('dark');
+        expect(MT.readStoredMapTheme({
+            storage: { getItem: (key) => (key === MT.MAP_THEME_STORAGE_KEY ? 'satellite' : null) },
+        })).toBe('satellite');
+        expect(MT.readStoredMapTheme({
+            storage: { getItem: () => null },
+        })).toBe(MT.DEFAULT_MAP_THEME);
+    });
+
+    test('buildBasemapMarkerContext flags dark basemap only for dark theme', () => {
+        expect(MT.buildBasemapMarkerContext('standard')).toEqual({
+            mapTheme: 'standard',
+            darkBasemap: false,
+        });
+        expect(MT.buildBasemapMarkerContext('dark')).toEqual({
+            mapTheme: 'dark',
+            darkBasemap: true,
+        });
+    });
+
+    test('buildMapBootstrapPlan picks style path and splash background per theme', () => {
+        const dark = MT.buildMapBootstrapPlan('dark');
+        expect(dark.mapTheme).toBe('dark');
+        expect(dark.stylePath).toBe('/static/map/styles/dark/style.json');
+        expect(dark.backgroundColor).toBe(MT.MAP_BOOTSTRAP_BACKGROUND_COLORS.dark);
+
+        const standard = MT.buildMapBootstrapPlan('standard');
+        expect(standard.stylePath).toBe('/map/styles/liberty/style.json');
+        expect(standard.backgroundColor).toBe(MT.MAP_BOOTSTRAP_BACKGROUND_COLORS.standard);
+    });
+
+    test('resolveRouteColorsForTheme swaps palette on dark basemap only', () => {
+        const fallback = ['#111111', '#222222'];
+        expect(MT.resolveRouteColorsForTheme('standard', fallback)).toBe(fallback);
+        expect(MT.resolveRouteColorsForTheme('dark', fallback)).toEqual(MT.DARK_MAP_ROUTE_COLORS);
+    });
+
+    test('resolveNavRouteColorForTheme swaps nav colour on dark basemap only', () => {
+        expect(MT.resolveNavRouteColorForTheme('standard', '#3366cc')).toBe('#3366cc');
+        expect(MT.resolveNavRouteColorForTheme('dark', '#3366cc')).toBe(MT.DARK_MAP_NAV_ROUTE_COLOR);
+    });
 });

@@ -26,6 +26,91 @@
 
     var DARK_MAP_NAV_ROUTE_COLOR = '#5B9EFF';
 
+    var MAP_BOOTSTRAP_BACKGROUND_COLORS = {
+        standard: '#d4dbe8',
+        satellite: '#0d1114',
+        dark: '#0c0c0c',
+    };
+
+    /**
+     * Read persisted map theme from storage (defaults to standard).
+     * @param {Object} [opts]
+     * @param {string} [opts.theme] - explicit override (tests / callers)
+     * @param {{ getItem: function(string): (string|null|undefined) }} [opts.storage]
+     * @returns {string}
+     */
+    function readStoredMapTheme(opts) {
+        opts = opts || {};
+        if (opts.theme != null) {
+            return resolveMapThemeName(opts.theme);
+        }
+        var storage = opts.storage;
+        if (!storage && typeof localStorage !== 'undefined') {
+            storage = localStorage;
+        }
+        if (storage && typeof storage.getItem === 'function') {
+            return resolveMapThemeName(storage.getItem(MAP_THEME_STORAGE_KEY));
+        }
+        return DEFAULT_MAP_THEME;
+    }
+
+    /**
+     * Marker / overlay context shared by camera and hazard map layers.
+     * @param {string} [mapTheme]
+     * @returns {{ mapTheme: string, darkBasemap: boolean }}
+     */
+    function buildBasemapMarkerContext(mapTheme) {
+        mapTheme = resolveMapThemeName(mapTheme != null ? mapTheme : readStoredMapTheme());
+        return {
+            mapTheme: mapTheme,
+            darkBasemap: isDarkMapTheme(mapTheme),
+        };
+    }
+
+    /**
+     * Bootstrap style plan for voyagr-core map init (splash background + vector style path).
+     * @param {string} [mapTheme]
+     * @returns {{ mapTheme: string, backgroundColor: string, stylePath: string }}
+     */
+    function buildMapBootstrapPlan(mapTheme) {
+        mapTheme = resolveMapThemeName(mapTheme != null ? mapTheme : readStoredMapTheme());
+        var stylePlan = buildMapThemeStyleUrlsPlan({ theme: mapTheme });
+        return {
+            mapTheme: mapTheme,
+            backgroundColor: MAP_BOOTSTRAP_BACKGROUND_COLORS[mapTheme]
+                || MAP_BOOTSTRAP_BACKGROUND_COLORS.standard,
+            stylePath: stylePlan.chosenPath,
+        };
+    }
+
+    /**
+     * Route comparison colours for the active basemap theme.
+     * @param {string} mapTheme
+     * @param {Array<string>} fallbackRouteColors
+     * @returns {Array<string>}
+     */
+    function resolveRouteColorsForTheme(mapTheme, fallbackRouteColors) {
+        var contrast = buildRouteDisplayContrastPlan(mapTheme);
+        if (contrast.darkBasemap && contrast.routeColors) {
+            return contrast.routeColors;
+        }
+        return fallbackRouteColors;
+    }
+
+    /**
+     * Active navigation route colour for the active basemap theme.
+     * @param {string} mapTheme
+     * @param {string} fallbackNavColor
+     * @returns {string}
+     */
+    function resolveNavRouteColorForTheme(mapTheme, fallbackNavColor) {
+        var contrast = buildRouteDisplayContrastPlan(mapTheme);
+        if (contrast.darkBasemap && contrast.navRouteColor) {
+            return contrast.navRouteColor;
+        }
+        return fallbackNavColor;
+    }
+
     /**
      * @param {string} [theme]
      * @returns {boolean}
@@ -173,7 +258,13 @@
         MAP_THEME_STYLE_PATHS: MAP_THEME_STYLE_PATHS,
         DARK_MAP_ROUTE_COLORS: DARK_MAP_ROUTE_COLORS,
         DARK_MAP_NAV_ROUTE_COLOR: DARK_MAP_NAV_ROUTE_COLOR,
+        MAP_BOOTSTRAP_BACKGROUND_COLORS: MAP_BOOTSTRAP_BACKGROUND_COLORS,
         isDarkMapTheme: isDarkMapTheme,
+        readStoredMapTheme: readStoredMapTheme,
+        buildBasemapMarkerContext: buildBasemapMarkerContext,
+        buildMapBootstrapPlan: buildMapBootstrapPlan,
+        resolveRouteColorsForTheme: resolveRouteColorsForTheme,
+        resolveNavRouteColorForTheme: resolveNavRouteColorForTheme,
         buildRoadLabelPaintPlan: buildRoadLabelPaintPlan,
         buildRouteDisplayContrastPlan: buildRouteDisplayContrastPlan,
         resolveMapThemeName: resolveMapThemeName,

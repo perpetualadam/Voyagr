@@ -76,11 +76,10 @@
         var HM = rt().hazardMapMarkers();
         var styleMap = HM.getHazardMarkerStyleMap();
         var CAM = rt().cameraMapMarkers();
-        var mapTheme = typeof localStorage !== 'undefined'
-            ? localStorage.getItem('mapTheme') || 'standard'
-            : 'standard';
         var MT = root.VoyagrMapTheme;
-        var darkBasemap = !!(MT && typeof MT.isDarkMapTheme === 'function' && MT.isDarkMapTheme(mapTheme));
+        var markerCtx = MT && typeof MT.buildBasemapMarkerContext === 'function'
+            ? MT.buildBasemapMarkerContext()
+            : { darkBasemap: false };
         var specs = CAM.buildCameraMarkersMountSpecs(collect.items, styleMap, {
             normalizeBucket: function (bucket) { return HM.normalizeCameraHazardTypeForMarker(bucket); },
             markerClassName: collect.markerClassName,
@@ -88,7 +87,7 @@
             popupSvgSize: collect.popupSvgSize,
             iconSize: collect.iconSize,
             iconAnchor: collect.iconAnchor,
-            darkBasemap: darkBasemap,
+            darkBasemap: markerCtx.darkBasemap,
         });
 
         specs.forEach(function (spec) {
@@ -375,10 +374,10 @@
     function configureRoadLabelsForMapTheme() {
         var map = rt().getMap();
         if (!map || !rt().getMapLibreHelpers()) return;
-        var mapTheme = typeof localStorage !== 'undefined'
-            ? localStorage.getItem('mapTheme') || 'standard'
-            : 'standard';
         var MT = root.VoyagrMapTheme;
+        var mapTheme = MT && typeof MT.readStoredMapTheme === 'function'
+            ? MT.readStoredMapTheme()
+            : 'standard';
         var labelPaint = MT && typeof MT.buildRoadLabelPaintPlan === 'function'
             ? MT.buildRoadLabelPaintPlan(mapTheme)
             : { textColor: '#1a1a1a', textHaloColor: '#ffffff', textHaloWidth: 1.5, textSize: 12 };

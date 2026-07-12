@@ -24,30 +24,30 @@
 
     function RS() { return rt().routeSelection(); }
 
-    function routeColors() {
-        var mapTheme = typeof localStorage !== 'undefined'
-            ? localStorage.getItem('mapTheme') || 'standard'
+    function MT() { return root.VoyagrMapTheme; }
+
+    function storedMapTheme() {
+        var mod = MT();
+        return mod && typeof mod.readStoredMapTheme === 'function'
+            ? mod.readStoredMapTheme()
             : 'standard';
-        var MT = root.VoyagrMapTheme;
-        if (MT && typeof MT.buildRouteDisplayContrastPlan === 'function') {
-            var contrast = MT.buildRouteDisplayContrastPlan(mapTheme);
-            if (contrast.darkBasemap && contrast.routeColors) {
-                return contrast.routeColors;
-            }
+    }
+
+    function routeColors() {
+        var mod = MT();
+        if (mod && typeof mod.resolveRouteColorsForTheme === 'function') {
+            return mod.resolveRouteColorsForTheme(storedMapTheme(), RS().ROUTE_COLORS);
         }
         return RS().ROUTE_COLORS;
     }
 
     function navActiveRouteColor() {
-        var mapTheme = typeof localStorage !== 'undefined'
-            ? localStorage.getItem('mapTheme') || 'standard'
-            : 'standard';
-        var MT = root.VoyagrMapTheme;
-        if (MT && typeof MT.buildRouteDisplayContrastPlan === 'function') {
-            var contrast = MT.buildRouteDisplayContrastPlan(mapTheme);
-            if (contrast.darkBasemap && contrast.navRouteColor) {
-                return contrast.navRouteColor;
-            }
+        var mod = MT();
+        if (mod && typeof mod.resolveNavRouteColorForTheme === 'function') {
+            return mod.resolveNavRouteColorForTheme(
+                storedMapTheme(),
+                RS().NAV_ACTIVE_ROUTE_COLOR
+            );
         }
         return RS().NAV_ACTIVE_ROUTE_COLOR;
     }
@@ -458,9 +458,7 @@ function applyDoAddRouteLayersFromPlan(apply) {
 function collectDoAddRouteLayersInput() {
     const map = rt().getMap();
     const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
-    const mapTheme = typeof localStorage !== 'undefined'
-        ? localStorage.getItem('mapTheme') || 'standard'
-        : 'standard';
+    const mapTheme = storedMapTheme();
     return {
         routeOptions: getRouteOptions(),
         selectedRouteIndex: getSelectedRouteIndex(),

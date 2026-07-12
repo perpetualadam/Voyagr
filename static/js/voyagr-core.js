@@ -237,12 +237,15 @@ function initializeMap() {
     // Minimal style so `new Map` returns immediately (map non-null after initializeMap).
     // Real vector/raster style is fetched asynchronously and applied via setStyle — avoids
     // blocking the main thread on a synchronous XHR.
-    const mapTheme =
-        typeof localStorage !== 'undefined'
-            ? localStorage.getItem('mapTheme') || 'standard'
-            : 'standard';
-    const bootstrapBackgroundColor =
-        mapTheme === 'dark' ? '#0c0c0c' : mapTheme === 'satellite' ? '#0d1114' : '#d4dbe8';
+    const mapBootstrap = (typeof VoyagrMapTheme !== 'undefined' && VoyagrMapTheme.buildMapBootstrapPlan)
+        ? VoyagrMapTheme.buildMapBootstrapPlan()
+        : {
+            mapTheme: (typeof localStorage !== 'undefined' && localStorage.getItem('mapTheme')) || 'standard',
+            backgroundColor: '#d4dbe8',
+            stylePath: '/map/styles/liberty/style.json',
+        };
+    const mapTheme = mapBootstrap.mapTheme;
+    const bootstrapBackgroundColor = mapBootstrap.backgroundColor;
     const VOYAGR_BOOTSTRAP_STYLE = {
         version: 8,
         name: 'voyagr-bootstrap',
@@ -256,14 +259,7 @@ function initializeMap() {
         ]
     };
 
-    let VECTOR_STYLE_PATH;
-    if (mapTheme === 'satellite') {
-        VECTOR_STYLE_PATH = '/static/map/styles/satellite/style.json';
-    } else if (mapTheme === 'dark') {
-        VECTOR_STYLE_PATH = '/static/map/styles/dark/style.json';
-    } else {
-        VECTOR_STYLE_PATH = '/map/styles/liberty/style.json';
-    }
+    const VECTOR_STYLE_PATH = mapBootstrap.stylePath;
     const vectorStyleUrlAbs = toAbsoluteOriginUrl(VECTOR_STYLE_PATH);
 
     map = new maplibregl.Map({
@@ -503,9 +499,11 @@ function initializeMap() {
             }
 
             if (window.MapLibreHelpers) {
-                var mapTheme = typeof localStorage !== 'undefined'
-                    ? localStorage.getItem('mapTheme') || 'standard'
-                    : 'standard';
+                var mapTheme = (typeof VoyagrMapTheme !== 'undefined' && VoyagrMapTheme.readStoredMapTheme)
+                    ? VoyagrMapTheme.readStoredMapTheme()
+                    : (typeof localStorage !== 'undefined'
+                        ? localStorage.getItem('mapTheme') || 'standard'
+                        : 'standard');
                 var labelPaint = (typeof VoyagrMapTheme !== 'undefined' && VoyagrMapTheme.buildRoadLabelPaintPlan)
                     ? VoyagrMapTheme.buildRoadLabelPaintPlan(mapTheme)
                     : { textColor: '#1a1a1a', textHaloColor: '#ffffff', textHaloWidth: 1.5, textSize: 12 };

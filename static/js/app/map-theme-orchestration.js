@@ -7,7 +7,9 @@
 
     var runtime = null;
     var currentMapTheme =
-        typeof localStorage !== 'undefined' ? localStorage.getItem('mapTheme') || 'standard' : 'standard';
+        (root.VoyagrMapTheme && typeof root.VoyagrMapTheme.readStoredMapTheme === 'function')
+            ? root.VoyagrMapTheme.readStoredMapTheme()
+            : (typeof localStorage !== 'undefined' ? localStorage.getItem('mapTheme') || 'standard' : 'standard');
 
     function rt() {
         if (!runtime) {

@@ -18,18 +18,17 @@
     function collectDisplayHazardMarkersInput(hazards) {
         var OSM = rt().osmMapIcons();
         var pillHtml = rt().call.getOsmTrafficLightMarkerPillHTML();
-        var mapTheme = typeof localStorage !== 'undefined'
-            ? localStorage.getItem('mapTheme') || 'standard'
-            : 'standard';
         var MT = root.VoyagrMapTheme;
-        var darkBasemap = !!(MT && typeof MT.isDarkMapTheme === 'function' && MT.isDarkMapTheme(mapTheme));
+        var markerCtx = MT && typeof MT.buildBasemapMarkerContext === 'function'
+            ? MT.buildBasemapMarkerContext()
+            : { darkBasemap: false };
         return {
             hazards: hazards,
             markerOpts: {
                 osmTrafficLightPillHtml: pillHtml,
                 osmTrafficLightIconSize: OSM.OSM_TRAFFIC_LIGHT_MARKER_ICON_SIZE,
                 osmTrafficLightPopupIcon: OSM.buildOsmTrafficLightPopupIconWrapperHtml(pillHtml),
-                darkBasemap: darkBasemap,
+                darkBasemap: markerCtx.darkBasemap,
             },
         };
     }
