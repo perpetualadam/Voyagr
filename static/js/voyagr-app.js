@@ -2200,14 +2200,6 @@ function applyZoomFollowButtonUi(btn, enabled) {
     btn.innerHTML = plan.innerHtml;
 }
 
-function applyJourneyOverviewButtonUi(btn, overviewActive) {
-    const plan = _mapControls().buildJourneyOverviewButtonUiExecutePlan(overviewActive);
-    if (!btn || !plan.shouldApply) return;
-    btn.style.background = plan.background;
-    btn.innerHTML = plan.innerHtml;
-    btn.title = plan.title;
-}
-
 /** Unit-tested camera map marker HTML (modules/map/camera-map-markers.js). */
 function _cameraMapMarkers() { return VoyagrModules.cameraMapMarkers(); }
 
@@ -2422,10 +2414,7 @@ function recenterOnVehicle() {
     }
 
     if (preflight.exitJourneyOverview) {
-        const exit = MC.buildRecenterJourneyOverviewExitPlan();
-        journeyOverviewActive = exit.journeyOverviewActive;
-        applyJourneyOverviewButtonUi(document.getElementById(exit.journeyBtnId), false);
-        if (exit.clearSavedMapState) savedMapState = null;
+        VoyagrJourneyOverviewOrchestration.exitJourneyOverviewForRecenter();
     }
 
     if (preflight.routeInProgress) {
@@ -2485,73 +2474,32 @@ function recenterOnVehicle() {
 let journeyOverviewActive = false;
 let savedMapState = null;
 
-/**
- * Toggle journey overview mode during navigation
- * Shows entire route zoomed out, then returns to following view
- */
-function toggleJourneyOverview() {
-    const MC = _mapControls();
-    const preflight = MC.buildToggleJourneyOverviewPreflightPlan({
-        routeInProgress,
-        routePolylineLength: routePolyline ? routePolyline.length : 0,
-        journeyOverviewActive,
-    });
-    if (!preflight.shouldToggle) {
-        showStatus(preflight.statusMessage, preflight.statusType);
-        return;
-    }
+// ===== JOURNEY OVERVIEW ORCHESTRATION =====
+// Orchestration lives in static/js/app/journey-overview-orchestration.js (bound at file end).
 
-    const btn = document.getElementById(preflight.journeyBtnId);
-
-    if (!preflight.currentlyActive) {
-        const activate = MC.buildToggleJourneyOverviewActivatePlan({
-            mapCenter: map.getCenter(),
-            mapZoom: map.getZoom(),
-            useMultiRouteCoords: VoyagrRouteComparisonOrchestration.getAllRouteLayers().length > 0
-                && routeOptions
-                && routeOptions[0]
-                && routeOptions[0].polyline,
-            allRouteCoords: (routeOptions || []).flatMap((r) => r.polyline || []),
-            routePolylineLength: routePolyline.length,
-            routePolyline,
-        });
-
-        savedMapState = activate.saveMapState;
-        mapFollowingActive = activate.mapFollowingActive;
-        if (activate.fitBounds) {
-            MapLibreHelpers.fitMapBounds(
-                map,
-                activate.fitBounds.coords,
-                { padding: activate.fitBounds.padding }
-            );
-        }
-        journeyOverviewActive = activate.journeyOverviewActive;
-        applyJourneyOverviewButtonUi(btn, activate.overviewButtonActive);
-        showStatus(activate.statusMessage, activate.statusType);
-        console.log(activate.logMessage);
-        if (activate.updateRecenterVisibility) updateRecenterButtonVisibility();
-        return;
-    }
-
-    const deactivate = MC.buildToggleJourneyOverviewDeactivatePlan({
-        zoomAndFollowEnabled,
-        savedMapState,
-    });
-    journeyOverviewActive = deactivate.journeyOverviewActive;
-    if (deactivate.restoreMapFollowing) {
-        mapFollowingActive = true;
-    }
-    if (deactivate.flyTo) {
-        map.flyTo(deactivate.flyTo);
-    }
-    if (deactivate.clearSavedMapState) {
-        savedMapState = null;
-    }
-    applyJourneyOverviewButtonUi(btn, deactivate.overviewButtonActive);
-    showStatus(deactivate.statusMessage, deactivate.statusType);
-    console.log(deactivate.logMessage);
-    if (deactivate.updateRecenterVisibility) updateRecenterButtonVisibility();
+function getJourneyOverviewOrchestrationRuntime() {
+    return {
+        mapControls: () => _mapControls(),
+        getMap: () => map,
+        getMapLibreHelpers: () => MapLibreHelpers,
+        getRouteInProgress: () => routeInProgress,
+        getRoutePolyline: () => routePolyline,
+        getRouteOptions: () => routeOptions,
+        getJourneyOverviewActive: () => journeyOverviewActive,
+        setJourneyOverviewActive: (val) => { journeyOverviewActive = val; },
+        getSavedMapState: () => savedMapState,
+        setSavedMapState: (val) => { savedMapState = val; },
+        getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
+        getMapFollowingActive: () => mapFollowingActive,
+        setMapFollowingActive: (val) => { mapFollowingActive = val; },
+        call: {
+            showStatus,
+            updateRecenterButtonVisibility,
+        },
+    };
 }
+
+function toggleJourneyOverview() { VoyagrJourneyOverviewOrchestration.toggleJourneyOverview(); }
 
 // ===== DISTANCE CALCULATION & TURN DETECTION =====
 /**
@@ -3946,6 +3894,7 @@ VoyagrMapOverlayOrchestration.bind(getMapOverlayOrchestrationRuntime());
 VoyagrHazardMapOrchestration.bind(getHazardMapOrchestrationRuntime());
 VoyagrCalculateRouteOrchestration.bind(getCalculateRouteOrchestrationRuntime());
 VoyagrRouteComparisonOrchestration.bind(getRouteComparisonOrchestrationRuntime());
+VoyagrJourneyOverviewOrchestration.bind(getJourneyOverviewOrchestrationRuntime());
 VoyagrJourneySummaryOrchestration.bind(getJourneySummaryOrchestrationRuntime());
 
 VoyagrBatteryMonitoringOrchestration.initBatteryMonitoring();
