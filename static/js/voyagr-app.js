@@ -2581,10 +2581,19 @@ function applySingleRouteMapDisplayFromPlan(plan) {
  * @function displayAllRoutesOnMap
  * @returns {void}
  */
-function displayAllRoutesOnMap() {
-    const entry = _routeSelection().buildDisplayAllRoutesMapEntryOrchestrationPlan(routeOptions, {
+function collectDisplayAllRoutesOnMapInput() {
+    return {
+        routeOptions,
         isStyleLoaded: map?.isStyleLoaded(),
-    });
+    };
+}
+
+function displayAllRoutesOnMap() {
+    const input = collectDisplayAllRoutesOnMapInput();
+    const entry = _routeSelection().buildDisplayAllRoutesMapEntryOrchestrationPlan(
+        input.routeOptions,
+        { isStyleLoaded: input.isStyleLoaded }
+    );
     applyDisplayAllRoutesOnMapFromPlan(entry.apply);
 }
 
@@ -2707,16 +2716,24 @@ function applyDoAddRouteLayersFromPlan(apply) {
     applyDoAddRouteLayersPostMountFromPlan(apply.postMount);
 }
 
-function doAddRouteLayers() {
-    const execute = _routeSelection().buildDoAddRouteLayersEntryOrchestrationPlan({
+function collectDoAddRouteLayersInput() {
+    const style = map && typeof map.getStyle === 'function' ? map.getStyle() : null;
+    return {
         routeOptions,
         selectedRouteIndex,
-        styleLayers: map.getStyle().layers,
+        styleLayers: style && style.layers ? style.layers : [],
         showTrafficEnabled,
         hasTrafficLayer: !!trafficLayer,
         mountedLayerCount: allRouteLayers.length,
-    });
-    applyDoAddRouteLayersFromPlan(execute.apply);
+    };
+}
+
+function doAddRouteLayers() {
+    applyDoAddRouteLayersFromPlan(
+        _routeSelection().buildDoAddRouteLayersEntryOrchestrationPlan(
+            collectDoAddRouteLayersInput()
+        ).apply
+    );
 }
 
 function applyBringRoutesToTopEntryFromPlan(apply) {
@@ -3425,33 +3442,34 @@ function displayMultiDropLegs(data) {
  * @returns {boolean}
  */
 function applyMultiDropLegLayerFromMapLibrePlan(applyPlan) {
-    if (!applyPlan || !applyPlan.valid) return false;
+    const mountPlan = _waypoints().buildMultiDropLegLayerMountExecutePlan(applyPlan);
+    if (!mountPlan.shouldMount) return false;
 
     try {
-        const { layerId, sourceId } = applyPlan;
+        const { layerId, sourceId } = mountPlan;
         if (map.getLayer(layerId)) map.removeLayer(layerId);
         if (map.getSource(sourceId)) map.removeSource(sourceId);
 
         map.addSource(sourceId, {
             type: 'geojson',
-            data: applyPlan.geoJsonFeature,
+            data: mountPlan.geoJsonFeature,
         });
 
         map.addLayer({
             id: layerId,
             type: 'line',
             source: sourceId,
-            layout: applyPlan.layerLayout,
+            layout: mountPlan.layerLayout,
             paint: {
-                'line-color': applyPlan.paint.lineColor,
-                'line-width': MapLibreHelpers.buildZoomScaledLineWidth(applyPlan.paint.lineWidth),
-                'line-opacity': applyPlan.paint.lineOpacity,
+                'line-color': mountPlan.paint.lineColor,
+                'line-width': MapLibreHelpers.buildZoomScaledLineWidth(mountPlan.paint.lineWidth),
+                'line-opacity': mountPlan.paint.lineOpacity,
             },
         });
         return true;
     } catch (e) {
-        const prefix = applyPlan.errorLogPrefix || '[MultiDrop] Failed to draw leg ';
-        console.warn(`${prefix}${applyPlan.legIndex}:`, e);
+        const prefix = mountPlan.errorLogPrefix || '[MultiDrop] Failed to draw leg ';
+        console.warn(`${prefix}${mountPlan.legIndex}:`, e);
         return false;
     }
 }
@@ -3979,6 +3997,47 @@ function shareViaEmail() {
 }
 
 // ===== ROUTE ANALYTICS FUNCTIONS =====
+function collectAnalyticsDisplayFmt(data) {
+    return {
+        currencySymbol: getCurrencySymbol(),
+        totalDistanceText: convertDistance(data.total_distance_km || 0),
+        speedUnit: speedUnit,
+        speedUnitLabel: getSpeedUnit(),
+        distUnit: getDistanceUnit(),
+        escapeHtml: escapeHtml,
+        convertDistance: convertDistance,
+    };
+}
+
+function applyAnalyticsDisplayFromPlan(execute) {
+    if (!execute || !execute.shouldRender) return;
+
+    Object.entries(execute.elementPatches).forEach(([id, text]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    });
+
+    const frequentRoutesList = document.getElementById(execute.frequentRoutesListId);
+    if (frequentRoutesList) frequentRoutesList.innerHTML = execute.frequentRoutesHtml;
+}
+
+function applyLoadRouteAnalyticsResponseFromPlan(execute) {
+    if (!execute || !execute.shouldDisplay) {
+        if (execute && execute.statusMessage) showStatus(execute.statusMessage, execute.statusType);
+        return;
+    }
+    displayAnalytics(execute.data);
+}
+
+function applyLoadRouteAnalyticsFetchErrorFromPlan(errorExecute, error) {
+    if (errorExecute && errorExecute.errorLogPrefix) {
+        console.error(errorExecute.errorLogPrefix, error);
+    }
+    if (errorExecute && errorExecute.statusMessage) {
+        showStatus(errorExecute.statusMessage, errorExecute.statusType);
+    }
+}
+
 /**
  * loadRouteAnalytics function
  * @function loadRouteAnalytics
@@ -3986,20 +4045,20 @@ function shareViaEmail() {
  */
 function loadRouteAnalytics() {
     const TH = _tripHistory();
-    const orch = TH.buildLoadRouteAnalyticsOrchestrationPlan();
+    const entry = TH.buildLoadRouteAnalyticsEntryOrchestrationPlan();
+    const orch = entry.orch;
 
     fetchJsonWithAuth(orch.apiPath)
         .then(({ res, data }) => {
-            const execute = TH.buildLoadRouteAnalyticsResponseExecutePlan(res, data, orch);
-            if (!execute.shouldDisplay) {
-                showStatus(execute.statusMessage, execute.statusType);
-                return;
-            }
-            displayAnalytics(execute.data);
+            applyLoadRouteAnalyticsResponseFromPlan(
+                TH.buildLoadRouteAnalyticsResponseExecutePlan(res, data, orch)
+            );
         })
-        .catch(error => {
-            console.error(orch.errorLogPrefix, error);
-            showStatus(orch.fetchErrorStatusMessage, orch.fetchErrorStatusType);
+        .catch((error) => {
+            applyLoadRouteAnalyticsFetchErrorFromPlan(
+                TH.buildLoadRouteAnalyticsFetchErrorExecutePlan(orch),
+                error
+            );
         });
 }
 /**
@@ -4009,27 +4068,12 @@ function loadRouteAnalytics() {
  * @returns {*} Return value description
  */
 function displayAnalytics(data) {
-    const TH = _tripHistory();
-    const execute = TH.buildAnalyticsDisplayExecutePlan(
-        TH.buildAnalyticsDisplayInputPlan(data, {
-            currencySymbol: getCurrencySymbol(),
-            totalDistanceText: convertDistance(data.total_distance_km || 0),
-            speedUnit: speedUnit,
-            speedUnitLabel: getSpeedUnit(),
-            distUnit: getDistanceUnit(),
-            escapeHtml: escapeHtml,
-            convertDistance: convertDistance,
-        })
+    applyAnalyticsDisplayFromPlan(
+        _tripHistory().buildAnalyticsDisplayEntryOrchestrationPlan(
+            data,
+            collectAnalyticsDisplayFmt(data)
+        ).execute
     );
-    if (!execute.shouldRender) return;
-
-    Object.entries(execute.elementPatches).forEach(([id, text]) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = text;
-    });
-
-    const frequentRoutesList = document.getElementById(execute.frequentRoutesListId);
-    if (frequentRoutesList) frequentRoutesList.innerHTML = execute.frequentRoutesHtml;
 }
 
 // ===== ADVANCED ROUTE PREFERENCES FUNCTIONS =====

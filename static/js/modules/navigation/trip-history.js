@@ -787,6 +787,43 @@
         };
     }
 
+    /**
+     * Entry orchestration plan for loadRouteAnalytics handler.
+     * @returns {Object}
+     */
+    function buildLoadRouteAnalyticsEntryOrchestrationPlan() {
+        return {
+            orch: buildLoadRouteAnalyticsOrchestrationPlan(),
+        };
+    }
+
+    /**
+     * Execute plan when trip-analytics fetch fails.
+     * @param {Object} [orch] - from buildLoadRouteAnalyticsOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildLoadRouteAnalyticsFetchErrorExecutePlan(orch) {
+        orch = orch || buildLoadRouteAnalyticsOrchestrationPlan();
+        return {
+            shouldDisplay: false,
+            statusMessage: orch.fetchErrorStatusMessage,
+            statusType: orch.fetchErrorStatusType,
+            errorLogPrefix: orch.errorLogPrefix,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for displayAnalytics handler.
+     * @param {Object} data
+     * @param {Object} fmt
+     * @returns {Object}
+     */
+    function buildAnalyticsDisplayEntryOrchestrationPlan(data, fmt) {
+        return {
+            execute: buildAnalyticsDisplayExecutePlan(buildAnalyticsDisplayInputPlan(data, fmt)),
+        };
+    }
+
     var api = {
         parseLatLonString: parseLatLonString,
         mergeServerAndLocalTrips: mergeServerAndLocalTrips,
@@ -816,8 +853,11 @@
         buildTripHistorySearchFilterPlan: buildTripHistorySearchFilterPlan,
         buildLoadRouteAnalyticsOrchestrationPlan: buildLoadRouteAnalyticsOrchestrationPlan,
         buildLoadRouteAnalyticsResponseExecutePlan: buildLoadRouteAnalyticsResponseExecutePlan,
+        buildLoadRouteAnalyticsEntryOrchestrationPlan: buildLoadRouteAnalyticsEntryOrchestrationPlan,
+        buildLoadRouteAnalyticsFetchErrorExecutePlan: buildLoadRouteAnalyticsFetchErrorExecutePlan,
         buildAnalyticsDisplayInputPlan: buildAnalyticsDisplayInputPlan,
         buildAnalyticsDisplayExecutePlan: buildAnalyticsDisplayExecutePlan,
+        buildAnalyticsDisplayEntryOrchestrationPlan: buildAnalyticsDisplayEntryOrchestrationPlan,
         buildFrequentRouteRowHtml: buildFrequentRouteRowHtml,
         buildFrequentRoutesListHtml: buildFrequentRoutesListHtml,
         getTripHistorySignInBannerStyleCssText: getTripHistorySignInBannerStyleCssText,

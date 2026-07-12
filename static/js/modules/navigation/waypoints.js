@@ -1771,6 +1771,28 @@
     }
 
     /**
+     * Mount execute plan for one multi-drop leg MapLibre line layer.
+     * @param {Object} applyPlan - from buildMultiDropLegLayerMapLibreApplyPlan
+     * @returns {Object}
+     */
+    function buildMultiDropLegLayerMountExecutePlan(applyPlan) {
+        applyPlan = applyPlan || {};
+        if (!applyPlan.valid) {
+            return { shouldMount: false };
+        }
+        return {
+            shouldMount: true,
+            layerId: applyPlan.layerId,
+            sourceId: applyPlan.sourceId,
+            geoJsonFeature: applyPlan.geoJsonFeature,
+            layerLayout: applyPlan.layerLayout,
+            paint: applyPlan.paint,
+            legIndex: applyPlan.legIndex,
+            errorLogPrefix: applyPlan.errorLogPrefix || '[MultiDrop] Failed to draw leg ',
+        };
+    }
+
+    /**
      * Execute plan for drawing all multi-drop leg layers on the map.
      * @param {Object} applyPlan - from buildMultiDropLegsMapApplyPlan
      * @returns {Object}
@@ -1994,6 +2016,7 @@
         buildWaypointDragOpacityResetApplyPlan: buildWaypointDragOpacityResetApplyPlan,
         buildMultiDropLegsMapApplyPlan: buildMultiDropLegsMapApplyPlan,
         buildMultiDropLegLayerMapLibreApplyPlan: buildMultiDropLegLayerMapLibreApplyPlan,
+        buildMultiDropLegLayerMountExecutePlan: buildMultiDropLegLayerMountExecutePlan,
         buildMultiDropLegsMapExecutePlan: buildMultiDropLegsMapExecutePlan,
         buildDrawMultiDropLegsOrchestrationPlan: buildDrawMultiDropLegsOrchestrationPlan,
         buildDrawMultiDropLegsEntryOrchestrationPlan: buildDrawMultiDropLegsEntryOrchestrationPlan,

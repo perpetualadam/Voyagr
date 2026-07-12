@@ -91,6 +91,23 @@ describe('waypoints module', () => {
         expect(W.buildMultiDropLegLayerDescriptor('', 0, null, decode)).toBeNull();
     });
 
+    test('buildMultiDropLegLayerMountExecutePlan gates invalid apply plans', () => {
+        expect(W.buildMultiDropLegLayerMountExecutePlan({ valid: false }).shouldMount).toBe(false);
+
+        const apply = W.buildMultiDropLegLayerMapLibreApplyPlan({
+            layerId: 'multidrop-leg-0',
+            sourceId: 'multidrop-leg-source-0',
+            coordinates: [[-0.1, 51.5], [-0.2, 51.6]],
+            lineColor: '#3366ff',
+            lineWidth: 4,
+            lineOpacity: 0.8,
+        });
+        const mount = W.buildMultiDropLegLayerMountExecutePlan(apply);
+        expect(mount.shouldMount).toBe(true);
+        expect(mount.layerId).toBe('multidrop-leg-0');
+        expect(mount.geoJsonFeature.geometry.coordinates).toHaveLength(2);
+    });
+
     test('buildRouteEditMarkersPlan spaces markers along route path', () => {
         const routePath = Array.from({ length: 40 }, (_, i) => [51.5 + i * 0.001, -0.1]);
         const plan = W.buildRouteEditMarkersPlan(routePath);

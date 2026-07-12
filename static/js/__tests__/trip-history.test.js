@@ -226,6 +226,33 @@ describe('analytics display helpers', () => {
         expect(ok.data.total_trips).toBe(3);
     });
 
+    test('buildLoadRouteAnalyticsEntryOrchestrationPlan and fetch error execute plan', () => {
+        const entry = T.buildLoadRouteAnalyticsEntryOrchestrationPlan();
+        expect(entry.orch.apiPath).toBe('/api/trip-analytics');
+
+        const fetchErr = T.buildLoadRouteAnalyticsFetchErrorExecutePlan(entry.orch);
+        expect(fetchErr.shouldDisplay).toBe(false);
+        expect(fetchErr.statusType).toBe('error');
+        expect(fetchErr.errorLogPrefix).toBe(entry.orch.errorLogPrefix);
+    });
+
+    test('buildAnalyticsDisplayEntryOrchestrationPlan bundles execute plan', () => {
+        const entry = T.buildAnalyticsDisplayEntryOrchestrationPlan(
+            { total_trips: 1, frequent_routes: [] },
+            {
+                currencySymbol: '£',
+                totalDistanceText: '10',
+                speedUnit: 'mph',
+                speedUnitLabel: 'mph',
+                distUnit: 'mi',
+                escapeHtml: (s) => s,
+                convertDistance: (km) => String(km),
+            }
+        );
+        expect(entry.execute.shouldRender).toBe(true);
+        expect(entry.execute.elementPatches.totalTrips).toBe(1);
+    });
+
     test('buildAnalyticsDisplayExecutePlan patches dashboard element ids', () => {
         const input = T.buildAnalyticsDisplayInputPlan(
             {
