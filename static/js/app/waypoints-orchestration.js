@@ -166,9 +166,9 @@ function applyToggleRouteEditingDisableFromPlan(disableApply) {
 }
 
 function toggleRouteEditing() {
-    const WP = WP();
-    const entryApply = WP.buildToggleRouteEditingEntryApplyPlan(
-        WP.buildToggleRouteEditingOrchestrationPlan({ currentlyEnabled: routeEditingEnabled })
+    const wp = WP();
+    const entryApply = wp.buildToggleRouteEditingEntryApplyPlan(
+        wp.buildToggleRouteEditingOrchestrationPlan({ currentlyEnabled: routeEditingEnabled })
     );
     if (!entryApply.shouldToggle) return;
 
@@ -180,7 +180,7 @@ function toggleRouteEditing() {
 
     if (entryApply.updateToggleDom) {
         applyRouteEditingToggleDomFromPlan(
-            WP.buildRouteEditingToggleDomApplyPlan(routeEditingEnabled)
+            wp.buildRouteEditingToggleDomApplyPlan(routeEditingEnabled)
         );
     }
 }
@@ -285,10 +285,10 @@ function applyWaypointAddressResolvedDomFromPlan(domPlan, input) {
  * @param {'via'|'stop'} waypointKind
  */
 async function addWaypointFromAddress(waypointKind) {
-    const WP = WP();
+    const wp = WP();
     const inputId = waypointKind === 'via'
-        ? WP.VIA_POINT_ADDRESS_INPUT_ID
-        : WP.STOP_ADDRESS_INPUT_ID;
+        ? wp.VIA_POINT_ADDRESS_INPUT_ID
+        : wp.STOP_ADDRESS_INPUT_ID;
     const input = document.getElementById(inputId);
     if (!input) return;
 

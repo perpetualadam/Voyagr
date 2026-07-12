@@ -47,8 +47,7 @@ function buildEncodedShareLink(includeGeometry) {
 }
 
 function buildRouteShareFormatInput() {
-    const RS = RS();
-    return RS.buildRouteShareFormatInputPlan({
+    return RS().buildRouteShareFormatInputPlan({
         startLabel: document.getElementById('start')?.value,
         endLabel: document.getElementById('end')?.value,
         distanceText: rt().call.convertDistance(window.lastCalculatedRoute?.distance_km || 0),
@@ -122,7 +121,7 @@ function applyPrepareRouteSharingFromPlan(apply) {
 
     if (apply.costLogMessage != null) {
         console.log(apply.costLogMessage, {
-            distanceUnit,
+            distanceUnit: rt().call.getDistanceUnit(),
             totalCost: apply.costLogTotalCost.toFixed(2),
         });
     }

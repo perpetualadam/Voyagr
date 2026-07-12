@@ -1097,7 +1097,7 @@
         const tick = VA.buildTurnAnnouncementTickPlan({
             turnInfo,
             voiceAnnouncementsEnabled: rt().g('voiceAnnouncementsEnabled'),
-            distanceUnit,
+            distanceUnit: rt().call.getDistanceUnit(),
             directionText,
             turnDistances: rt().consts.TURN_ANNOUNCEMENT_DISTANCES,
             exitDistances: rt().consts.EXIT_ANNOUNCEMENT_DISTANCES,
@@ -1264,7 +1264,7 @@
             now,
             postRerouteGraceUntil: rt().g('postRerouteGraceUntil'),
             rerouteInProgress: rt().g('rerouteInProgress'),
-            distanceUnit,
+            distanceUnit: rt().call.getDistanceUnit(),
         });
 
         if (tick.action === 'skip') return;
@@ -1569,7 +1569,7 @@
             unavoidableRouteCamera,
             cameraAlertType,
             voiceAnnouncementsEnabled: rt().g('voiceAnnouncementsEnabled'),
-            distanceUnit,
+            distanceUnit: rt().call.getDistanceUnit(),
             debounceMs: HA.HAZARD_ANNOUNCEMENT_DEBOUNCE_MS,
             lastAnnounceAt: hazardAnnouncementDebounce[debounceKey] || 0,
             now: Date.now(),
