@@ -296,6 +296,10 @@ async function redeemPromoCode() {
     return VoyagrSupabaseAuthOrchestration.redeemPromoCode();
 }
 
+async function loadPromoEntitlementStatus() {
+    return VoyagrSupabaseAuthOrchestration.loadPromoEntitlementStatus();
+}
+
 async function getSupabaseAccessToken() {
     return VoyagrSupabaseAuthOrchestration.getSupabaseAccessToken();
 }

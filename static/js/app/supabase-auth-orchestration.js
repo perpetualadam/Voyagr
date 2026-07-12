@@ -705,6 +705,7 @@
         authSignInProvider: authSignInProvider,
         authSignOut: authSignOut,
         redeemPromoCode: redeemPromoCode,
+        loadPromoEntitlementStatus: loadPromoEntitlementStatus,
         getSupabaseAccessToken: getSupabaseAccessToken,
         fetchJsonWithAuth: fetchJsonWithAuth,
         getSupabaseClient: getSupabaseClient,
