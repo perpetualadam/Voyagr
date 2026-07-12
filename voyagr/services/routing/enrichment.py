@@ -65,7 +65,7 @@ def _ensure_kwargs(ctx: RouteEnrichmentContext) -> Dict[str, Any]:
     """Common kwargs shared by all three ensure_* helpers.
 
     Note: ``graphhopper_route`` is intentionally NOT included — only
-    ``ensure_optimised_camera_avoiding_route`` accepts it (scenic/shortest do not).
+    ``ensure_optimised_camera_avoiding_route`` accepts it (scenic/quiet do not).
     """
     return {
         'url': ctx.url,
@@ -193,8 +193,9 @@ def apply_valhalla_route_enrichment(
     log_label: str = 'primary',
 ) -> List[Dict[str, Any]]:
     """
-    Full post-Valhalla enrichment: optional GH Optimised, ensure Optimised/Scenic/Shortest,
-    camera proximity scores, hazard-penalty reorder + id renumber.
+    Full post-Valhalla enrichment: optional GH Optimised, ensure Optimised,
+    ensure Scenic/Quiet preference routes, camera proximity scores,
+    hazard-penalty reorder + id renumber.
     """
     from voyagr.services.routing.route_variety import finalize_route_variety, pin_optimised_route_first
     import voyagr_web as vw
@@ -204,13 +205,11 @@ def apply_valhalla_route_enrichment(
     if merge_graphhopper:
         routes = merge_graphhopper_optimised_route(routes, ctx, log_label=log_label)
 
-    # Only ensure_optimised_* takes graphhopper_route; scenic/shortest do not.
+    # Only ensure_optimised_* takes graphhopper_route.
     routes = vw.ensure_optimised_camera_avoiding_route(
         routes, graphhopper_route=ctx.graphhopper_route, **ensure_kw
     )
-    routes = vw.ensure_scenic_valhalla_route(routes, **ensure_kw)
     routes = vw.ensure_costing_preference_variety_routes(routes, **_variety_kwargs(ctx))
-    routes = vw.ensure_shortest_respects_camera_avoidance(routes, **ensure_kw)
     routes = annotate_routes_camera_proximity(routes, ctx.hazards)
 
     if ctx.enable_hazard_avoidance and ctx.hazards:

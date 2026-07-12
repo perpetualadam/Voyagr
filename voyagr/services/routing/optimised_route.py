@@ -336,21 +336,12 @@ def ensure_costing_preference_variety_routes(
     min_distinct: int = MIN_PREFERENCE_VARIETY_DISTINCT,
 ) -> List[Dict[str, Any]]:
     """
-    Add 🛤️ Quiet / 🌿 Scenic costing-preference routes when options are too similar.
+    Ensure 🛤️ Quiet and 🌿 Scenic costing-preference routes are offered when possible.
 
-    Fetches only for simple auto A→B routes with fewer than ``min_distinct``
-    geometrically distinct paths after Valhalla alternates and discovery.
+    Replaces the former 📏 Shortest option. Each preference route is fetched only
+    when missing and geometrically distinct from existing options.
     """
     if has_waypoints or valhalla_costing != 'auto' or not routes:
-        return routes
-
-    distinct_count = 0
-    distinct_kept: List[Dict[str, Any]] = []
-    for route in routes:
-        if all(routes_are_distinct(route, existing) for existing in distinct_kept):
-            distinct_kept.append(route)
-    distinct_count = len(distinct_kept)
-    if distinct_count >= min_distinct:
         return routes
 
     locs = [
@@ -366,56 +357,105 @@ def ensure_costing_preference_variety_routes(
                 end_lat=end_lat, end_lon=end_lon,
             )
         except Exception as ex:
-            logger.warning('[VALHALLA] preference variety: exclude build failed: %s', ex)
+            logger.warning('[VALHALLA] scenic/quiet: exclude build failed: %s', ex)
 
     for name, p_scenic, p_quiet in _preference_variety_fetch_order(
         user_prefer_scenic=prefer_scenic,
         user_prefer_quiet=prefer_quiet,
     ):
-        if any((r.get('name') or '').strip() == name for r in routes):
-            continue
-        distinct_count = len([
-            r for i, r in enumerate(routes)
-            if all(routes_are_distinct(r, routes[j]) for j in range(i))
-        ])
-        if distinct_count >= min_distinct:
-            break
-
-        pref_data = fetch_valhalla_auto_costing_preference_json(
-            url, headers, locs,
+        routes = _append_preference_route_if_distinct(
+            routes,
+            name=name,
             prefer_scenic=p_scenic,
             prefer_quiet=p_quiet,
+            url=url,
+            headers=headers,
+            locs=locs,
+            exclude=exclude,
+            enable_hazard_avoidance=enable_hazard_avoidance,
             avoid_tolls=avoid_tolls,
             avoid_motorways=avoid_motorways,
             avoid_ferries=avoid_ferries,
             avoid_unpaved=avoid_unpaved,
-            route_optimization='balanced',
-            exclude_locations=exclude if exclude else None,
-        )
-        if not pref_data:
-            continue
-
-        next_id = max((int(r.get('id') or 0) for r in routes), default=0) + 1
-        entry = valhalla_trip_json_to_std_route_entry(
-            name, pref_data, next_id, hazards, cost_calculator,
-            vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
-            fuel_price=fuel_price, energy_efficiency=energy_efficiency,
-            electricity_price=electricity_price, include_tolls=include_tolls,
-            include_caz=include_caz, caz_exempt=caz_exempt,
-        )
-        if not entry:
-            continue
-        if not _route_distinct_from_all(entry, routes):
-            logger.info('[VALHALLA] %s preference route too similar — skipped', name)
-            continue
-        if exclude and enable_hazard_avoidance:
-            entry['camera_exclusions_applied'] = True
-        routes.append(entry)
-        logger.info(
-            '[VALHALLA] Added %s preference variety route: %.1fkm',
-            name, entry['distance_km'],
+            hazards=hazards,
+            cost_calculator=cost_calculator,
+            vehicle_type=vehicle_type,
+            fuel_efficiency=fuel_efficiency,
+            fuel_price=fuel_price,
+            energy_efficiency=energy_efficiency,
+            electricity_price=electricity_price,
+            include_tolls=include_tolls,
+            include_caz=include_caz,
+            caz_exempt=caz_exempt,
         )
 
+    return routes
+
+
+def _append_preference_route_if_distinct(
+    routes: List[Dict[str, Any]],
+    *,
+    name: str,
+    prefer_scenic: bool,
+    prefer_quiet: bool,
+    url: str,
+    headers: Dict[str, str],
+    locs: List[Dict[str, Any]],
+    exclude: List[Dict[str, Any]],
+    enable_hazard_avoidance: bool,
+    avoid_tolls: bool,
+    avoid_motorways: bool,
+    avoid_ferries: bool,
+    avoid_unpaved: bool,
+    hazards: Dict[str, List[Dict[str, Any]]],
+    cost_calculator: Any,
+    vehicle_type: str,
+    fuel_efficiency: float,
+    fuel_price: float,
+    energy_efficiency: float,
+    electricity_price: float,
+    include_tolls: bool,
+    include_caz: bool,
+    caz_exempt: bool,
+) -> List[Dict[str, Any]]:
+    """Fetch one Scenic/Quiet route and append when distinct from existing options."""
+    if any((r.get('name') or '').strip() == name for r in routes):
+        return routes
+
+    pref_data = fetch_valhalla_auto_costing_preference_json(
+        url, headers, locs,
+        prefer_scenic=prefer_scenic,
+        prefer_quiet=prefer_quiet,
+        avoid_tolls=avoid_tolls,
+        avoid_motorways=avoid_motorways,
+        avoid_ferries=avoid_ferries,
+        avoid_unpaved=avoid_unpaved,
+        route_optimization='balanced',
+        exclude_locations=exclude if exclude else None,
+    )
+    if not pref_data:
+        return routes
+
+    next_id = max((int(r.get('id') or 0) for r in routes), default=0) + 1
+    entry = valhalla_trip_json_to_std_route_entry(
+        name, pref_data, next_id, hazards, cost_calculator,
+        vehicle_type=vehicle_type, fuel_efficiency=fuel_efficiency,
+        fuel_price=fuel_price, energy_efficiency=energy_efficiency,
+        electricity_price=electricity_price, include_tolls=include_tolls,
+        include_caz=include_caz, caz_exempt=caz_exempt,
+    )
+    if not entry:
+        return routes
+    if not _route_distinct_from_all(entry, routes):
+        logger.info('[VALHALLA] %s preference route too similar — skipped', name)
+        return routes
+    if exclude and enable_hazard_avoidance:
+        entry['camera_exclusions_applied'] = True
+    routes.append(entry)
+    logger.info(
+        '[VALHALLA] Added %s preference route: %.1fkm',
+        name, entry['distance_km'],
+    )
     return routes
 
 

@@ -367,13 +367,15 @@ describe('route comparison modal helpers', () => {
             recommendations: {
                 cheapest: { route_id: 1, reason: 'Lowest fuel' },
                 fastest: { route_id: 2, reason: 'Shortest time' },
-                shortest: { route_id: 3, reason: 'Fewest km' },
+                scenic: { route_id: 3, reason: 'Scenic roads' },
+                quiet: { route_id: 4, reason: 'Quieter roads' },
             },
         }, { currencySymbol: '£', distUnit: 'mi', distanceTexts: ['6.21'] });
         expect(html).toContain('Route 1');
         expect(html).toContain('Cheapest');
         expect(html).toContain('Fastest');
-        expect(html).toContain('Shortest');
+        expect(html).toContain('Scenic');
+        expect(html).toContain('Quiet');
     });
 
     test('buildRouteComparisonModalHtml wraps report with close controls', () => {

@@ -114,31 +114,33 @@ class TestRouteVariety(unittest.TestCase):
             routes, valhalla_costing='auto', enable_hazard_avoidance=True,
         ))
 
-    def test_should_still_append_when_shortest_present_but_few_distinct(self):
+    def test_should_still_append_when_scenic_quiet_present_but_few_distinct(self):
         routes = [
             _route('Fastest', SHAPE_A, route_id=1),
             _route('Alternate', SHAPE_B, route_id=2, distance=7.0),
             _route('Balanced', SHAPE_B, route_id=3, distance=7.0),
-            _route('📏 Shortest', SHAPE_B, route_id=4, distance=7.0),
+            _route('🌿 Scenic', SHAPE_B, route_id=4, distance=7.0),
+            _route('🛤️ Quiet', SHAPE_B, route_id=5, distance=7.0),
         ]
         self.assertEqual(count_distinct_routes(routes), 2)
         self.assertTrue(should_append_distinct_valhalla_route_types(
             routes, valhalla_costing='auto', enable_hazard_avoidance=True,
         ))
 
-    def test_should_not_append_when_shortest_and_three_distinct_geometries(self):
+    def test_should_not_append_when_scenic_quiet_and_three_distinct_geometries(self):
         routes = [
             _route('Fastest', SHAPE_A, route_id=1),
             _route('Alternate', SHAPE_B, route_id=2, distance=7.0),
             _route('Balanced', SHAPE_C, route_id=3, distance=8.0),
-            _route('📏 Shortest', SHAPE_B, route_id=4, distance=6.5),
+            _route('🌿 Scenic', SHAPE_B, route_id=4, distance=6.5),
+            _route('🛤️ Quiet', SHAPE_C, route_id=5, distance=6.8),
         ]
         self.assertGreaterEqual(count_distinct_routes(routes), 3)
         self.assertFalse(should_append_distinct_valhalla_route_types(
             routes, valhalla_costing='auto', enable_hazard_avoidance=True,
         ))
 
-    def test_should_append_when_shortest_missing_despite_three_routes(self):
+    def test_should_append_when_scenic_or_quiet_missing(self):
         routes = [
             _route('Fastest', SHAPE_A, route_id=1),
             _route('Alternate', SHAPE_A, route_id=2),

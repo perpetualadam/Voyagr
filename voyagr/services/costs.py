@@ -386,27 +386,32 @@ class CostCalculator:
 
         cheapest = min(comparisons, key=lambda x: x['total_cost'])
         fastest = min(comparisons, key=lambda x: x['duration_minutes'])
-        shortest = min(comparisons, key=lambda x: x['distance_km'])
+
+        recommendations: Dict[str, Any] = {
+            'cheapest': {
+                'route_id': cheapest['route_id'],
+                'savings': round(max(c['total_cost'] for c in comparisons) - cheapest['total_cost'], 2),
+                'reason': f"Saves £{round(max(c['total_cost'] for c in comparisons) - cheapest['total_cost'], 2)} compared to most expensive"
+            },
+            'fastest': {
+                'route_id': fastest['route_id'],
+                'time_saved': round(max(c['duration_minutes'] for c in comparisons) - fastest['duration_minutes'], 0),
+                'reason': f"Saves {round(max(c['duration_minutes'] for c in comparisons) - fastest['duration_minutes'], 0)} minutes compared to slowest"
+            },
+        }
+
+        for key, label in (('scenic', '🌿 Scenic'), ('quiet', '🛤️ Quiet')):
+            for idx, route in enumerate(routes_data):
+                if (route.get('name') or '').strip() == label:
+                    recommendations[key] = {
+                        'route_id': idx + 1,
+                        'reason': f'{label} preference route',
+                    }
+                    break
 
         return {
             'routes': comparisons,
-            'recommendations': {
-                'cheapest': {
-                    'route_id': cheapest['route_id'],
-                    'savings': round(max(c['total_cost'] for c in comparisons) - cheapest['total_cost'], 2),
-                    'reason': f"Saves £{round(max(c['total_cost'] for c in comparisons) - cheapest['total_cost'], 2)} compared to most expensive"
-                },
-                'fastest': {
-                    'route_id': fastest['route_id'],
-                    'time_saved': round(max(c['duration_minutes'] for c in comparisons) - fastest['duration_minutes'], 0),
-                    'reason': f"Saves {round(max(c['duration_minutes'] for c in comparisons) - fastest['duration_minutes'], 0)} minutes compared to slowest"
-                },
-                'shortest': {
-                    'route_id': shortest['route_id'],
-                    'distance_saved': round(max(c['distance_km'] for c in comparisons) - shortest['distance_km'], 2),
-                    'reason': f"Saves {round(max(c['distance_km'] for c in comparisons) - shortest['distance_km'], 2)} km compared to longest"
-                }
-            }
+            'recommendations': recommendations,
         }
 
     def cache_route_to_db(self, start_lat: float, start_lon: float, end_lat: float, end_lon: float,

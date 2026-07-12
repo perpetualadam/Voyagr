@@ -70,13 +70,13 @@ describe('buildSharedRouteOptions', () => {
         const o = RR.buildSharedRouteOptions(baseOpts({
             routePrefs: {
                 preferScenic: true, preferQuiet: true, avoidUnpaved: true,
-                routeOptimization: 'shortest', maxDetour: 35,
+                routeOptimization: 'scenic', maxDetour: 35,
             },
         }));
         expect(o.prefer_scenic).toBe(true);
         expect(o.prefer_quiet).toBe(true);
         expect(o.avoid_unpaved).toBe(true);
-        expect(o.route_optimization).toBe('shortest');
+        expect(o.route_optimization).toBe('scenic');
         expect(o.max_detour).toBe(35);
     });
 
@@ -346,7 +346,7 @@ describe('buildCalculateRouteApiPlan', () => {
             vehicleType: 'petrol_diesel',
             costParams: { fuel_efficiency: 6, fuel_price: 1.5 },
             avoidTolls: false,
-            routePrefs: { routeOptimization: 'shortest' },
+            routePrefs: { routeOptimization: 'quiet' },
             routeInProgress: true,
             isTrackingActive: true,
             trackingHistory: [{ lat: 51.51, lon: -0.11 }],
@@ -360,7 +360,7 @@ describe('buildCalculateRouteApiPlan', () => {
         expect(plan.requestBody.round_trip).toBe(true);
         expect(plan.requestBody.departure_time).toBe('08:30');
         expect(plan.requestBody.routing_mode).toBe('auto');
-        expect(plan.requestBody.route_optimization).toBe('shortest');
+        expect(plan.requestBody.route_optimization).toBe('quiet');
         expect(plan.viaPointsCount).toBe(1);
         expect(plan.stopsCount).toBe(1);
         expect(plan.totalStopTimeMinutes).toBe(10);

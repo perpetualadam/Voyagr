@@ -3,7 +3,7 @@ Post-process /api/route option lists for meaningful variety.
 
 Valhalla ``alternates`` often return near-identical paths (especially with heavy
 ``exclude_locations``). This module deduplicates those copies, decides when to
-fetch genuinely distinct costing modes (📏 Shortest), and applies the user's
+fetch genuinely distinct costing modes (🌿 Scenic / 🛤️ Quiet), and applies the user's
 ``max_detour`` preference to secondary options.
 """
 
@@ -12,7 +12,8 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from voyagr.services.routing.optimised_route import (
-    SHORTEST_ROUTE_NAME,
+    QUIET_ROUTE_NAME,
+    SCENIC_ROUTE_NAME,
     is_primary_optimised_route,
     routes_are_distinct,
 )
@@ -43,19 +44,20 @@ def should_append_distinct_valhalla_route_types(
     min_distinct: int = 3,
 ) -> bool:
     """
-    Whether to run the discovery block (📏 Shortest + ⚡ Optimised Discovery).
+    Whether to run the discovery block (🌿 Scenic / 🛤️ Quiet + ⚡ Optimised Discovery).
 
-    Runs when auto hazard avoidance is on and we still lack a true Shortest
-    option or fewer than ``min_distinct`` geometrically distinct paths — even
+    Runs when auto hazard avoidance is on and we still lack Scenic or Quiet
+    options or fewer than ``min_distinct`` geometrically distinct paths — even
     if Valhalla already returned three near-copy alternates.
     """
     if valhalla_costing != 'auto' or not enable_hazard_avoidance:
         return False
     distinct = count_distinct_routes(routes)
-    has_shortest = has_named_route(routes, SHORTEST_ROUTE_NAME)
-    if distinct >= min_distinct and has_shortest:
+    has_scenic = has_named_route(routes, SCENIC_ROUTE_NAME)
+    has_quiet = has_named_route(routes, QUIET_ROUTE_NAME)
+    if distinct >= min_distinct and has_scenic and has_quiet:
         return False
-    if not has_shortest:
+    if not has_scenic or not has_quiet:
         return True
     return distinct < min_distinct
 

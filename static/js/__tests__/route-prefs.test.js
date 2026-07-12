@@ -97,12 +97,12 @@ describe('route-prefs module', () => {
         test('buildRoutePreferencesUiApplyPlan maps storage to form patches', () => {
             localStorage.setItem('routePreferences', JSON.stringify({
                 preferScenic: true,
-                routeOptimization: 'shortest',
+                routeOptimization: 'scenic',
                 maxDetour: 30,
             }));
             const plan = RoutePrefs.buildRoutePreferencesUiApplyPlan(localStorage);
             expect(plan.checks.preferScenic).toBe(true);
-            expect(plan.selects.routeOptimization).toBe('shortest');
+            expect(plan.selects.routeOptimization).toBe('scenic');
             expect(plan.selects.maxDetour).toBe(30);
             expect(plan.elementIds.maxDetour).toBe('maxDetour');
             expect(plan.detourLabel.text).toBe('30%');

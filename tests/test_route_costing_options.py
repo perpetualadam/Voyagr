@@ -26,7 +26,10 @@ class TestDefaults:
         assert build_auto_costing_options(route_optimization='does_not_exist') == {}
 
     def test_case_insensitive_optimization(self):
-        assert build_auto_costing_options(route_optimization='SHORTEST') == {'shortest': True}
+        assert build_auto_costing_options(route_optimization='SCENIC') == {'use_highways': 0.2}
+
+    def test_legacy_shortest_maps_to_fastest(self):
+        assert build_auto_costing_options(route_optimization='SHORTEST') == {}
 
 
 class TestHardAvoidances:
@@ -72,8 +75,13 @@ class TestSoftPreferences:
 
 
 class TestOptimizationPresets:
-    def test_shortest_sets_shortest_flag(self):
-        assert build_auto_costing_options(route_optimization='shortest') == {'shortest': True}
+    def test_scenic_downweights_highways(self):
+        assert build_auto_costing_options(route_optimization='scenic') == {'use_highways': 0.2}
+
+    def test_quiet_favours_living_streets(self):
+        opts = build_auto_costing_options(route_optimization='quiet')
+        assert opts['use_living_streets'] == 0.8
+        assert opts['use_highways'] == 0.3
 
     def test_cheapest_avoids_tolls_and_downweights_highways(self):
         opts = build_auto_costing_options(route_optimization='cheapest')
@@ -102,7 +110,8 @@ class TestOptimizationPresets:
 class TestValidOptimizationsRegistry:
     def test_valid_optimizations_contains_all_expected_values(self):
         assert 'fastest' in VALID_ROUTE_OPTIMIZATIONS
-        assert 'shortest' in VALID_ROUTE_OPTIMIZATIONS
+        assert 'scenic' in VALID_ROUTE_OPTIMIZATIONS
+        assert 'quiet' in VALID_ROUTE_OPTIMIZATIONS
         assert 'cheapest' in VALID_ROUTE_OPTIMIZATIONS
         assert 'eco' in VALID_ROUTE_OPTIMIZATIONS
         assert 'balanced' in VALID_ROUTE_OPTIMIZATIONS

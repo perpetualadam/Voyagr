@@ -68,9 +68,12 @@ def test_fetch_costing_preference_includes_costing_options(mock_post):
     assert payload['costing_options']['auto']['use_living_streets'] == 0.8
 
 
+TRIP_C = {'trip': {'legs': [{'shape': polyline.encode([(51.50, -0.12), (51.55, -0.05), (51.60, 0.02)], precision=6)}], 'summary': {'length': 12.0, 'time': 800}}}
+
+
 @patch('voyagr.services.routing.optimised_route.fetch_valhalla_auto_costing_preference_json')
-def test_ensure_adds_quiet_when_only_one_distinct_route(mock_fetch):
-    mock_fetch.side_effect = [TRIP_B, None]
+def test_ensure_adds_both_scenic_and_quiet_when_missing(mock_fetch):
+    mock_fetch.side_effect = [TRIP_B, TRIP_C]
     routes = [{
         'id': 1, 'name': 'Fastest', 'geometry': SHAPE_A,
         'geometry_precision': 6, 'distance_km': 10.0, 'duration_minutes': 10,
@@ -78,16 +81,19 @@ def test_ensure_adds_quiet_when_only_one_distinct_route(mock_fetch):
     out = ensure_costing_preference_variety_routes(routes, **BASE_KW)
     names = [r['name'] for r in out]
     assert QUIET_ROUTE_NAME in names
-    assert len(out) == 2
+    assert SCENIC_ROUTE_NAME in names
+    assert len(out) == 3
 
 
 @patch('voyagr.services.routing.optimised_route.fetch_valhalla_auto_costing_preference_json')
-def test_ensure_skips_when_two_distinct_routes_already(mock_fetch):
+def test_ensure_skips_existing_scenic_and_quiet(mock_fetch):
     routes = [
         {'id': 1, 'name': 'Fastest', 'geometry': SHAPE_A, 'geometry_precision': 6,
          'distance_km': 10.0, 'duration_minutes': 10},
-        {'id': 2, 'name': 'Alternate', 'geometry': SHAPE_B, 'geometry_precision': 6,
+        {'id': 2, 'name': SCENIC_ROUTE_NAME, 'geometry': SHAPE_B, 'geometry_precision': 6,
          'distance_km': 12.0, 'duration_minutes': 12},
+        {'id': 3, 'name': QUIET_ROUTE_NAME, 'geometry': SHAPE_B, 'geometry_precision': 6,
+         'distance_km': 11.0, 'duration_minutes': 11},
     ]
     out = ensure_costing_preference_variety_routes(routes, **BASE_KW)
     assert out == routes

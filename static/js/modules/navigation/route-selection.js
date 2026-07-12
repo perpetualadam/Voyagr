@@ -597,9 +597,13 @@
             html += '<div style="margin-bottom: 6px;">⚡ <strong>Fastest:</strong> Route ' +
                 recommendations.fastest.route_id + ' - ' + recommendations.fastest.reason + '</div>';
         }
-        if (recommendations.shortest) {
-            html += '<div>📍 <strong>Shortest:</strong> Route ' +
-                recommendations.shortest.route_id + ' - ' + recommendations.shortest.reason + '</div>';
+        if (recommendations.scenic) {
+            html += '<div style="margin-bottom: 6px;">🌿 <strong>Scenic:</strong> Route ' +
+                recommendations.scenic.route_id + ' - ' + recommendations.scenic.reason + '</div>';
+        }
+        if (recommendations.quiet) {
+            html += '<div>🛤️ <strong>Quiet:</strong> Route ' +
+                recommendations.quiet.route_id + ' - ' + recommendations.quiet.reason + '</div>';
         }
         html += '</div></div>';
         return html;

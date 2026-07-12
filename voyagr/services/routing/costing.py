@@ -10,7 +10,7 @@ from typing import Any, Dict, Tuple
 
 
 VALID_ROUTE_OPTIMIZATIONS: Tuple[str, ...] = (
-    'fastest', 'shortest', 'cheapest', 'eco', 'balanced',
+    'fastest', 'scenic', 'quiet', 'cheapest', 'eco', 'balanced',
 )
 
 
@@ -31,7 +31,8 @@ def build_auto_costing_options(
     presets are additive: they only fill in slots left unset by the hard toggles.
 
       * fastest/balanced  — no overrides (Valhalla defaults)
-      * shortest          — sets `shortest: true` so distance dominates over time
+      * scenic            — down-weights highways (more scenic roads)
+      * quiet             — favours living streets, avoids motorways
       * cheapest          — avoids tolls and down-weights highways
       * eco               — caps speed and down-weights highways (reduces fuel burn)
 
@@ -57,10 +58,17 @@ def build_auto_costing_options(
             opts["use_highways"] = 0.3
 
     ro = (route_optimization or 'fastest').lower()
+    if ro == 'shortest':
+        ro = 'fastest'
     if ro not in VALID_ROUTE_OPTIMIZATIONS:
         ro = 'fastest'
-    if ro == 'shortest':
-        opts["shortest"] = True
+    if ro == 'scenic':
+        if "use_highways" not in opts:
+            opts["use_highways"] = 0.2
+    elif ro == 'quiet':
+        opts["use_living_streets"] = 0.8
+        if "use_highways" not in opts:
+            opts["use_highways"] = 0.3
     elif ro == 'cheapest':
         if "use_tolls" not in opts:
             opts["use_tolls"] = 0
