@@ -772,6 +772,19 @@
         };
     }
 
+    /**
+     * Entry orchestration plan for toggleVoiceAnnouncements handler.
+     * @param {boolean} currentEnabled
+     * @returns {Object}
+     */
+    function buildToggleVoiceAnnouncementsEntryOrchestrationPlan(currentEnabled) {
+        var collected = buildToggleVoiceAnnouncementsCollectPlan({ currentEnabled: currentEnabled });
+        return {
+            collected: collected,
+            execute: buildToggleVoiceAnnouncementsExecutePlan({ enabled: collected.enabled }),
+        };
+    }
+
     var api = {
         DESTINATION_ANNOUNCEMENT_HYSTERESIS_M: DESTINATION_ANNOUNCEMENT_HYSTERESIS_M,
         DESTINATION_ANNOUNCEMENT_RESET_M: DESTINATION_ANNOUNCEMENT_RESET_M,
@@ -812,6 +825,8 @@
         buildLoadVoicePreferencesDefaultsEntryOrchestrationPlan: buildLoadVoicePreferencesDefaultsEntryOrchestrationPlan,
         buildToggleVoiceAnnouncementsCollectPlan: buildToggleVoiceAnnouncementsCollectPlan,
         buildToggleVoiceAnnouncementsExecutePlan: buildToggleVoiceAnnouncementsExecutePlan,
+        buildToggleVoiceAnnouncementsEntryOrchestrationPlan:
+            buildToggleVoiceAnnouncementsEntryOrchestrationPlan,
     };
 
     // CommonJS (Jest) export.

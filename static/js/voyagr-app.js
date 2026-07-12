@@ -1842,23 +1842,23 @@ function applySettingsResetRuntimeFromPlan(execute) {
 }
 
 /**
- * Apply settings reset from a pure reset plan.
- * @param {Object} plan - from buildSettingsResetPlan
+ * Apply settings reset from a pure reset execute plan.
+ * @param {Object} execute - from buildResetAllSettingsExecutePlan
  * @returns {boolean} true when reset was confirmed and applied
  */
-function applySettingsResetFromPlan(plan) {
-    if (!plan) return false;
-    if (!confirm(plan.confirmMessage)) return false;
+function applyResetAllSettingsFromPlan(execute) {
+    if (!execute || !execute.shouldReset) return false;
+    if (!confirm(execute.confirmMessage)) return false;
 
-    (plan.localStorageKeys || []).forEach((key) => {
+    (execute.localStorageKeys || []).forEach((key) => {
         localStorage.removeItem(key);
     });
 
     applySettingsResetRuntimeFromPlan(
-        _settingsSnapshot().buildApplySettingsResetRuntimeExecutePlan(plan.runtimeDefaults)
+        _settingsSnapshot().buildApplySettingsResetRuntimeExecutePlan(execute.runtimeDefaults)
     );
 
-    if (plan.reloadAfterReset) {
+    if (execute.reloadAfterReset) {
         location.reload();
     }
     return true;
@@ -1870,11 +1870,17 @@ function applySettingsResetFromPlan(plan) {
  * @returns {*} Return value description
  */
 function resetAllSettings() {
-    applySettingsResetFromPlan(
-        _settingsSnapshot().buildResetAllSettingsExecutePlan(
-            _settingsSnapshot().buildSettingsResetPlan()
-        )
+    applyResetAllSettingsFromPlan(
+        _settingsSnapshot().buildResetAllSettingsEntryOrchestrationPlan().execute
     );
+}
+
+function collectExportSettingsInput() {
+    const SS = _settingsSnapshot();
+    return {
+        rawSnapshot: localStorage.getItem(SS.SETTINGS_STORAGE_KEY),
+        dateStamp: new Date().toISOString().split('T')[0],
+    };
 }
 
 /**
@@ -1884,13 +1890,10 @@ function resetAllSettings() {
  */
 function exportSettings() {
     const SS = _settingsSnapshot();
-    const execute = SS.buildExportSettingsDomExecutePlan(
-        SS.buildSettingsExportPlan(
-            localStorage.getItem(SS.SETTINGS_STORAGE_KEY),
-            new Date().toISOString().split('T')[0]
-        )
+    const input = collectExportSettingsInput();
+    applyExportSettingsDownloadFromPlan(
+        SS.buildExportSettingsEntryOrchestrationPlan(input.rawSnapshot, input.dateStamp).execute
     );
-    applyExportSettingsDownloadFromPlan(execute);
 }
 
 /**
@@ -1936,7 +1939,7 @@ function applySettingsImportFromOrchestrationPlan(plan) {
  */
 function importSettings() {
     const SS = _settingsSnapshot();
-    const picker = SS.buildImportSettingsFilePickerOrchestrationPlan();
+    const picker = SS.buildImportSettingsEntryOrchestrationPlan().picker;
     const input = document.createElement('input');
     input.type = picker.inputType;
     input.accept = picker.accept;
@@ -1956,10 +1959,9 @@ function importSettings() {
  */
 function applySettingsImportFileContent(rawText) {
     const SS = _settingsSnapshot();
-    const parsePlan = SS.buildSettingsImportParsePlan(rawText);
-    const importOrch = SS.buildSettingsImportOrchestrationPlan(parsePlan, { routeInProgress });
-    if (!applySettingsImportFromOrchestrationPlan(importOrch)) {
-        showStatus(parsePlan.statusMessage, parsePlan.statusType);
+    const entry = SS.buildImportSettingsFileContentEntryOrchestrationPlan(rawText, { routeInProgress });
+    if (!applySettingsImportFromOrchestrationPlan(entry.importOrch)) {
+        showStatus(entry.parsePlan.statusMessage, entry.parsePlan.statusType);
     }
 }
 
@@ -4437,6 +4439,17 @@ function deleteSavedRoute(routeId) {
 }
 
 // ===== REAL-TIME TRAFFIC UPDATE FUNCTIONS =====
+function collectUpdateTrafficConditionsInput() {
+    const TC = _trafficChange();
+    const startEl = document.getElementById(TC.TRAFFIC_CONDITIONS_START_ELEMENT_ID);
+    const endEl = document.getElementById(TC.TRAFFIC_CONDITIONS_END_ELEMENT_ID);
+    return {
+        lastCalculatedRoute: window.lastCalculatedRoute,
+        startLabel: startEl ? startEl.value : '',
+        endLabel: endEl ? endEl.value : '',
+    };
+}
+
 /**
  * updateTrafficConditions function
  * @function updateTrafficConditions
@@ -4444,13 +4457,9 @@ function deleteSavedRoute(routeId) {
  */
 function updateTrafficConditions() {
     const TC = _trafficChange();
-    const startEl = document.getElementById(TC.TRAFFIC_CONDITIONS_START_ELEMENT_ID);
-    const endEl = document.getElementById(TC.TRAFFIC_CONDITIONS_END_ELEMENT_ID);
-    const orch = TC.buildUpdateTrafficConditionsEntryOrchestrationPlan({
-        lastCalculatedRoute: window.lastCalculatedRoute,
-        startLabel: startEl ? startEl.value : '',
-        endLabel: endEl ? endEl.value : '',
-    });
+    const orch = TC.buildUpdateTrafficConditionsEntryOrchestrationPlan(
+        collectUpdateTrafficConditionsInput()
+    );
     if (!orch.shouldFetch) {
         showStatus(orch.errorStatusMessage, 'error');
         return;
@@ -4517,18 +4526,22 @@ function applyDisplayTrafficUpdateFromPlan(execute) {
     console.log(execute.detailsLogPrefix, execute.detailsLogMessage);
 }
 
+function collectDisplayTrafficUpdateFmt() {
+    return {
+        convertDistance,
+        distUnit: getDistanceUnit(),
+    };
+}
+
 function displayTrafficUpdate(data) {
-    const orch = _trafficChange().buildDisplayTrafficUpdateOrchestrationPlan(
+    const entry = _trafficChange().buildDisplayTrafficUpdateEntryOrchestrationPlan(
         data,
         window.lastCalculatedRoute,
-        {
-            convertDistance,
-            distUnit: getDistanceUnit(),
-        },
+        collectDisplayTrafficUpdateFmt(),
         new Date().toLocaleTimeString()
     );
-    if (!orch.shouldApply) return;
-    applyDisplayTrafficUpdateFromPlan(orch.execute);
+    if (!entry.shouldApply) return;
+    applyDisplayTrafficUpdateFromPlan(entry.execute);
 }
 
 // Auto-update traffic every 5 minutes during navigation
@@ -6089,15 +6102,22 @@ function applyFetchAndDisplayRouteTrafficResultFromPlan(result) {
     }
 }
 
+function collectFetchAndDisplayRouteTrafficInput() {
+    return {
+        routeTrafficEnabled,
+        routePolyline,
+    };
+}
+
 /**
  * Fetch traffic data for route and display colored edges
  */
 async function fetchAndDisplayRouteTraffic() {
     const RTF = _routeTrafficFlow();
-    const orchestration = RTF.buildFetchAndDisplayRouteTrafficOrchestrationPlan({
-        routeTrafficEnabled,
-        routePolyline,
-    });
+    const entry = RTF.buildFetchAndDisplayRouteTrafficEntryOrchestrationPlan(
+        collectFetchAndDisplayRouteTrafficInput()
+    );
+    const orchestration = entry.orchestration;
     if (!orchestration.shouldFetch) {
         console.log(orchestration.logMessage);
         return;
@@ -8378,6 +8398,17 @@ async function onPorcupineWakeHotword() {
     }
 }
 
+function applyToggleVoiceAnnouncementsFromPlan(execute, button) {
+    if (!execute || !execute.shouldApply || !button) return;
+
+    _toggleUI().applyLabeledToggleButton(button, execute.toggle.enabled);
+    localStorage.setItem(execute.storageKey, execute.storageValue);
+    if (execute.updateRuntimeFlag) voiceAnnouncementsEnabled = execute.enabled;
+    if (execute.saveVoicePreferences) saveVoicePreferences();
+    showStatus(execute.statusMessage, execute.statusType);
+    if (execute.saveAllSettings) saveAllSettings();
+}
+
 /**
  * toggleVoiceAnnouncements function
  * @function toggleVoiceAnnouncements
@@ -8385,22 +8416,15 @@ async function onPorcupineWakeHotword() {
  */
 function toggleVoiceAnnouncements() {
     const VA = _voiceAnnouncements();
-    const TU = _toggleUI();
     const button = document.getElementById(VA.VOICE_PREFS_ELEMENT_IDS.announcementsEnabled);
     if (!button) return;
 
-    const collected = VA.buildToggleVoiceAnnouncementsCollectPlan({
-        currentEnabled: button.classList.contains('active'),
-    });
-    const execute = VA.buildToggleVoiceAnnouncementsExecutePlan({ enabled: collected.enabled });
-    if (!execute.shouldApply) return;
-
-    TU.applyLabeledToggleButton(button, execute.toggle.enabled);
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    if (execute.updateRuntimeFlag) voiceAnnouncementsEnabled = execute.enabled;
-    if (execute.saveVoicePreferences) saveVoicePreferences();
-    showStatus(execute.statusMessage, execute.statusType);
-    if (execute.saveAllSettings) saveAllSettings();
+    applyToggleVoiceAnnouncementsFromPlan(
+        VA.buildToggleVoiceAnnouncementsEntryOrchestrationPlan(
+            button.classList.contains('active')
+        ).execute,
+        button
+    );
 }
 
 async function resolveParkingDestinationCoords(lastRoute, endInput) {

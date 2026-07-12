@@ -550,6 +550,18 @@
     }
 
     /**
+     * Entry orchestration plan for displayTrafficUpdate handler.
+     * @param {Object} data
+     * @param {Object} lastCalculatedRoute
+     * @param {Object} fmt
+     * @param {string} [timeStr]
+     * @returns {Object}
+     */
+    function buildDisplayTrafficUpdateEntryOrchestrationPlan(data, lastCalculatedRoute, fmt, timeStr) {
+        return buildDisplayTrafficUpdateOrchestrationPlan(data, lastCalculatedRoute, fmt, timeStr);
+    }
+
+    /**
      * Orchestration plan for starting periodic traffic condition polling.
      * @param {boolean} hasExistingInterval
      * @returns {Object}
@@ -1025,6 +1037,7 @@
         parseStoredRouteDurationMinutes: parseStoredRouteDurationMinutes,
         buildDisplayTrafficUpdateExecutePlan: buildDisplayTrafficUpdateExecutePlan,
         buildDisplayTrafficUpdateOrchestrationPlan: buildDisplayTrafficUpdateOrchestrationPlan,
+        buildDisplayTrafficUpdateEntryOrchestrationPlan: buildDisplayTrafficUpdateEntryOrchestrationPlan,
         buildStartTrafficMonitoringExecutePlan: buildStartTrafficMonitoringExecutePlan,
         buildStartTrafficMonitoringOrchestrationPlan: buildStartTrafficMonitoringOrchestrationPlan,
         buildStartTrafficMonitoringApplyPlan: buildStartTrafficMonitoringApplyPlan,

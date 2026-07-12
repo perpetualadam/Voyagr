@@ -579,4 +579,15 @@ describe('voice preferences plans', () => {
         expect(execute.saveVoicePreferences).toBe(true);
         expect(execute.statusMessage).toContain('enabled');
     });
+
+    test('buildToggleVoiceAnnouncementsEntryOrchestrationPlan bundles collect and execute', () => {
+        const entry = VA.buildToggleVoiceAnnouncementsEntryOrchestrationPlan(false);
+        expect(entry.collected.enabled).toBe(true);
+        expect(entry.execute.shouldApply).toBe(true);
+        expect(entry.execute.saveAllSettings).toBe(true);
+
+        const disableEntry = VA.buildToggleVoiceAnnouncementsEntryOrchestrationPlan(true);
+        expect(disableEntry.collected.enabled).toBe(false);
+        expect(disableEntry.execute.statusMessage).toContain('disabled');
+    });
 });

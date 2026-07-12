@@ -331,6 +331,13 @@ describe('route traffic ahead sampling and cache plans', () => {
         expect(pipeline.resultApply.shouldDisplay).toBe(true);
         expect(pipeline.response.action).toBe('display');
 
+        const entry = RTF.buildFetchAndDisplayRouteTrafficEntryOrchestrationPlan({
+            routeTrafficEnabled: true,
+            routePolyline: polyline,
+        });
+        expect(entry.orchestration.shouldFetch).toBe(true);
+        expect(entry.orchestration.sampleInterval).toBeGreaterThan(0);
+
         const orch = RTF.buildRouteTrafficEdgesDisplayOrchestrationPlan({
             segments: [{ traffic_level: 'orange', start: [51.51, -0.11], end: [51.53, -0.13] }],
             polyline,
