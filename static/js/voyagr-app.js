@@ -2533,172 +2533,50 @@ function bringRoutesToTop() {
     );
 }
 
-// ===== DRAGGABLE ROUTE EDITING =====
-let routeDragMarkers = [];  // Markers for dragging route points
-let routeEditingEnabled = false;
+// ===== WAYPOINTS ORCHESTRATION =====
+// Orchestration lives in static/js/app/waypoints-orchestration.js (bound at file end).
 
-/**
- * Enable route editing by adding draggable waypoints along the route
- */
-function applyRouteEditEnableFromPlan(runtimeApply) {
-    if (!runtimeApply || !runtimeApply.shouldApply) {
-        if (runtimeApply && runtimeApply.errorStatusMessage) {
-            showStatus(runtimeApply.errorStatusMessage, runtimeApply.statusType);
-        }
-        return;
-    }
-
-    routeEditingEnabled = runtimeApply.routeEditingEnabled;
-    if (runtimeApply.clearMarkersBeforeMount) clearRouteDragMarkers();
-
-    (runtimeApply.markers || []).forEach((markerPlan) => {
-        addRouteDragMarker(markerPlan.lat, markerPlan.lon, markerPlan.routeIndex);
-    });
-
-    showStatus(runtimeApply.statusMessage, runtimeApply.statusType);
-    console.log(runtimeApply.addedLogPrefix + routeDragMarkers.length + runtimeApply.addedLogSuffix);
+function getWaypointsOrchestrationRuntime() {
+    return {
+        waypoints: () => _waypoints(),
+        domHelpers: () => _domHelpers(),
+        routeSelection: () => _routeSelection(),
+        getMap: () => map,
+        getMapLibreHelpers: () => MapLibreHelpers,
+        getRoutePolyline: () => routePolyline,
+        call: {
+            showStatus,
+            geocodeAddress,
+            getAutocompleteDropdown,
+            decodePolyline,
+            calculateRoute,
+            applyMapLibreLineLayerFromMountPlan,
+            convertDistance,
+            getDistanceUnit,
+        },
+    };
 }
 
-function enableRouteEditing() {
-    const orch = _waypoints().buildRouteEditEnableOrchestrationPlan(routePath);
-    applyRouteEditEnableFromPlan(orch.runtimeApply);
+function toggleRouteEditing() { VoyagrWaypointsOrchestration.toggleRouteEditing(); }
+function toggleAddViaPoint() { VoyagrWaypointsOrchestration.toggleAddViaPoint(); }
+function toggleAddStop() { VoyagrWaypointsOrchestration.toggleAddStop(); }
+function handleMapClickForWaypoints(e) { VoyagrWaypointsOrchestration.handleMapClickForWaypoints(e); }
+async function addViaPointFromAddress() { return VoyagrWaypointsOrchestration.addViaPointFromAddress(); }
+async function addStopFromAddress() { return VoyagrWaypointsOrchestration.addStopFromAddress(); }
+function addViaPoint(lat, lon, name) { return VoyagrWaypointsOrchestration.addViaPoint(lat, lon, name); }
+function addStop(lat, lon, name, duration) { return VoyagrWaypointsOrchestration.addStop(lat, lon, name, duration); }
+function removeViaPoint(index) { VoyagrWaypointsOrchestration.removeViaPoint(index); }
+function removeStop(index) { VoyagrWaypointsOrchestration.removeStop(index); }
+function clearAllWaypoints() { VoyagrWaypointsOrchestration.clearAllWaypoints(); }
+function onWaypointDragStart(e) { VoyagrWaypointsOrchestration.onWaypointDragStart(e); }
+function onWaypointDragOver(e) { VoyagrWaypointsOrchestration.onWaypointDragOver(e); }
+function onWaypointDrop(e) { VoyagrWaypointsOrchestration.onWaypointDrop(e); }
+function moveWaypoint(type, index, direction) { VoyagrWaypointsOrchestration.moveWaypoint(type, index, direction); }
+function displayMultiDropLegs(data) { VoyagrWaypointsOrchestration.displayMultiDropLegs(data); }
+function clearMultiDropLayers() { VoyagrWaypointsOrchestration.clearMultiDropLayers(); }
+function getOrderedWaypoints(startLat, startLon, endLat, endLon) {
+    return VoyagrWaypointsOrchestration.getOrderedWaypoints(startLat, startLon, endLat, endLon);
 }
-
-/**
- * Add a draggable marker for route editing
- */
-function applyRouteDragMarkerFromPlan(apply) {
-    if (!apply || !apply.shouldMount) return;
-
-    const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
-        className: apply.markerMount.className,
-        html: apply.markerMount.markerHtml,
-        iconSize: apply.markerMount.iconSize,
-        iconAnchor: apply.markerMount.iconAnchor,
-        draggable: apply.markerMount.draggable,
-    }).addTo(map);
-
-    const el = marker.getElement();
-    if (el && apply.cursorStyle) {
-        el.style.cursor = apply.cursorStyle;
-    }
-
-    marker.routeIndex = apply.routeIndex;
-    marker.originalLat = apply.originalLat;
-    marker.originalLon = apply.originalLon;
-
-    if (apply.markerMount.draggable && typeof marker.on === 'function') {
-        marker.on(apply.dragEndEvent, () => {
-            const lngLat = marker.getLngLat && marker.getLngLat();
-            const dispatch = _waypoints().buildRouteDragMarkerDragEndDispatchPlan(
-                lngLat ? lngLat.lat : null,
-                lngLat ? lngLat.lng : null
-            );
-            if (dispatch.shouldAddViaPoint && dispatch.dragEndAction === apply.dragEndAction) {
-                addDraggedViaPoint(dispatch.lat, dispatch.lon);
-            }
-        });
-    }
-
-    if (apply.registerInRouteDragMarkers) routeDragMarkers.push(marker);
-}
-
-function addRouteDragMarker(lat, lon, routeIndex) {
-    applyRouteDragMarkerFromPlan(
-        _waypoints().buildRouteDragMarkerEntryOrchestrationPlan(lat, lon, routeIndex).apply
-    );
-}
-
-/**
- * Add a via-point from route dragging and recalculate
- */
-async function applyDraggedViaPointFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    viaPoints.push(apply.viaPoint);
-
-    const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
-        className: apply.markerMount.className,
-        html: apply.markerMount.markerHtml,
-        iconSize: apply.markerMount.iconSize,
-        iconAnchor: apply.markerMount.iconAnchor,
-        popup: apply.markerMount.popupHtml,
-    }).addTo(map);
-
-    viaPointMarkers.push(marker);
-    if (apply.updateWaypointsList) updateWaypointsList();
-    if (apply.clearRouteDragMarkers) clearRouteDragMarkers();
-    showStatus(apply.statusMessage, apply.statusType);
-    if (apply.recalculateRoute) await calculateRoute();
-}
-
-async function addDraggedViaPoint(lat, lon) {
-    await applyDraggedViaPointFromPlan(
-        _waypoints().buildDraggedViaPointOrchestrationPlan(lat, lon, viaPoints.length).apply
-    );
-}
-
-/**
- * Clear all route drag markers
- */
-function clearRouteDragMarkers() {
-    const apply = _waypoints().buildClearRouteDragMarkersApplyPlan();
-    if (!apply.shouldClear) return;
-
-    if (apply.removeAllMarkers) {
-        routeDragMarkers.forEach(marker => {
-            if (marker && typeof marker.remove === 'function') {
-                marker.remove();
-            }
-        });
-        routeDragMarkers = [];
-    }
-    if (apply.disableRouteEditing) routeEditingEnabled = false;
-}
-
-/**
- * Toggle route editing mode
- */
-function applyRouteEditingToggleDomFromPlan(domPlan) {
-    if (!domPlan) return;
-    const btn = document.getElementById(domPlan.elementId);
-    if (!btn) return;
-    btn.classList.toggle('active', domPlan.active);
-    btn.textContent = domPlan.text;
-}
-
-function applyToggleRouteEditingDisableFromPlan(disableApply) {
-    if (!disableApply || !disableApply.shouldApply) return;
-
-    if (disableApply.clearRouteDragMarkers) clearRouteDragMarkers();
-    else if (disableApply.disableRouteEditing) routeEditingEnabled = false;
-    showStatus(disableApply.statusMessage, disableApply.statusType);
-}
-
-function toggleRouteEditing() {
-    const WP = _waypoints();
-    const entryApply = WP.buildToggleRouteEditingEntryApplyPlan(
-        WP.buildToggleRouteEditingOrchestrationPlan({ currentlyEnabled: routeEditingEnabled })
-    );
-    if (!entryApply.shouldToggle) return;
-
-    if (entryApply.action === 'disable') {
-        applyToggleRouteEditingDisableFromPlan(entryApply.disableApply);
-    } else {
-        enableRouteEditing();
-    }
-
-    if (entryApply.updateToggleDom) {
-        applyRouteEditingToggleDomFromPlan(
-            WP.buildRouteEditingToggleDomApplyPlan(routeEditingEnabled)
-        );
-    }
-}
-
-/**
- * Apply route comparison tab list HTML from a pure DOM apply plan.
- * @param {Object} domPlan - from buildRouteComparisonListDomApplyPlan
- */
 function applyRouteComparisonListDomFromPlan(domPlan) {
     if (!domPlan) return;
     const listContainer = document.getElementById(domPlan.containerId || 'routeComparisonList');
@@ -2733,531 +2611,6 @@ function displayRouteComparison() {
         _routeSelection().buildDisplayRouteComparisonEntryOrchestrationPlan(
             collectDisplayRouteComparisonInput()
         ).apply
-    );
-}
-
-// ===== VIA-POINTS AND STOPS FUNCTIONALITY =====
-let viaPoints = [];  // Array of {lat, lon, name, type: 'via'}
-let stops = [];      // Array of {lat, lon, name, type: 'stop', duration: 15}
-let viaPointMarkers = [];
-let stopMarkers = [];
-let addingViaPoint = false;
-let addingStop = false;
-
-/**
- * Apply waypoint map-pick toggle UI from a pure apply plan.
- * @param {Object} apply - from buildAddViaPointToggleApplyPlan or buildAddStopToggleApplyPlan
- */
-function applyWaypointMapPickToggleFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    addingViaPoint = apply.addingViaPoint;
-    addingStop = apply.addingStop;
-
-    const btn = document.getElementById(apply.buttonDom.elementId);
-    if (btn) {
-        btn.classList.toggle('active', apply.buttonDom.active);
-        btn.textContent = apply.buttonDom.text;
-    }
-
-    if (apply.statusMessage) {
-        showStatus(apply.statusMessage, apply.statusType);
-    }
-
-    if (apply.requireMapForCursor && map && typeof map.getContainer === 'function') {
-        map.getContainer().style.cursor = apply.mapCursor;
-    }
-}
-
-/**
- * Toggle via-point adding mode
- */
-function toggleAddViaPoint() {
-    applyWaypointMapPickToggleFromPlan(
-        _waypoints().buildAddViaPointToggleApplyPlan(!addingViaPoint)
-    );
-}
-
-/**
- * Toggle stop adding mode
- */
-function toggleAddStop() {
-    applyWaypointMapPickToggleFromPlan(
-        _waypoints().buildAddStopToggleApplyPlan(!addingStop)
-    );
-}
-
-/**
- * Handle map click for adding via-points or stops
- */
-function applyMapClickWaypointFromPlan(apply) {
-    if (!apply || apply.action === 'none') return;
-
-    if (apply.action === 'add_via') {
-        addViaPoint(apply.lat, apply.lon);
-        if (apply.toggleOffVia) toggleAddViaPoint();
-    } else if (apply.action === 'add_stop') {
-        addStop(apply.lat, apply.lon);
-        if (apply.toggleOffStop) toggleAddStop();
-    }
-}
-
-function handleMapClickForWaypoints(e) {
-    applyMapClickWaypointFromPlan(
-        _waypoints().buildMapClickWaypointEntryOrchestrationPlan({
-            addingViaPoint,
-            addingStop,
-            lat: e.lngLat.lat,
-            lon: e.lngLat.lng,
-        }).apply
-    );
-}
-
-async function addViaPointFromAddress() {
-    await addWaypointFromAddress('via');
-}
-
-async function addStopFromAddress() {
-    await addWaypointFromAddress('stop');
-}
-
-/**
- * Apply resolved waypoint address input DOM changes from a pure plan.
- * @param {Object} domPlan - from buildWaypointAddressResolvedDomApplyPlan
- * @param {HTMLInputElement} input
- */
-function applyWaypointAddressResolvedDomFromPlan(domPlan, input) {
-    if (!domPlan || !input) return;
-    if (domPlan.clearInput) input.value = '';
-    (domPlan.clearDatasetKeys || []).forEach((key) => {
-        delete input.dataset[key];
-    });
-    if (domPlan.hideAutocomplete) {
-        const dd = getAutocompleteDropdown(domPlan.inputId);
-        if (dd) dd.classList.remove('show');
-    }
-}
-
-/**
- * Add a via-point or stop from an address input field.
- * @param {'via'|'stop'} waypointKind
- */
-async function addWaypointFromAddress(waypointKind) {
-    const WP = _waypoints();
-    const inputId = waypointKind === 'via'
-        ? WP.VIA_POINT_ADDRESS_INPUT_ID
-        : WP.STOP_ADDRESS_INPUT_ID;
-    const input = document.getElementById(inputId);
-    if (!input) return;
-
-    const dispatch = WP.buildWaypointAddressAddDispatchPlan({
-        lat: input.dataset.lat,
-        lon: input.dataset.lon,
-        displayName: input.dataset.displayName,
-        query: input.value,
-    }, waypointKind);
-
-    if (dispatch.action === 'prompt') {
-        showStatus(dispatch.statusMessage, dispatch.statusType);
-        return;
-    }
-
-    if (dispatch.action === 'add_resolved') {
-        if (waypointKind === 'via') addViaPoint(dispatch.lat, dispatch.lon, dispatch.name);
-        else addStop(dispatch.lat, dispatch.lon, dispatch.name);
-        applyWaypointAddressResolvedDomFromPlan(
-            WP.buildWaypointAddressResolvedDomApplyPlan(dispatch),
-            input
-        );
-        return;
-    }
-
-    showStatus(dispatch.loadingMessage, 'loading');
-    const result = await geocodeAddress(dispatch.query);
-    const outcome = WP.buildWaypointAddressGeocodeOutcomeApplyPlan(
-        waypointKind,
-        result,
-        dispatch.query
-    );
-    if (outcome.shouldAdd) {
-        if (waypointKind === 'via') addViaPoint(outcome.lat, outcome.lon, outcome.name);
-        else addStop(outcome.lat, outcome.lon, outcome.name);
-        if (outcome.clearInput) input.value = '';
-    }
-    showStatus(outcome.statusMessage, outcome.statusType);
-}
-
-/**
- * Add a via-point at given coordinates
- */
-function applyViaPointFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    viaPoints.push(apply.viaPoint);
-
-    const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
-        className: apply.markerMount.className,
-        html: apply.markerMount.markerHtml,
-        iconSize: apply.markerMount.iconSize,
-        iconAnchor: apply.markerMount.iconAnchor,
-        popup: apply.markerMount.popupHtml,
-    }).addTo(map);
-
-    viaPointMarkers.push(marker);
-    if (apply.updateWaypointsList) updateWaypointsList();
-    showStatus(apply.statusMessage, apply.statusType);
-}
-
-function addViaPoint(lat, lon, name = null) {
-    applyViaPointFromPlan(
-        _waypoints().buildViaPointEntryOrchestrationPlan(lat, lon, name, viaPoints.length).apply
-    );
-}
-
-/**
- * Add a stop at given coordinates
- */
-function applyStopFromPlan(apply) {
-    if (!apply || !apply.shouldApply) return;
-
-    stops.push(apply.stop);
-
-    const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
-        className: apply.markerMount.className,
-        html: apply.markerMount.markerHtml,
-        iconSize: apply.markerMount.iconSize,
-        iconAnchor: apply.markerMount.iconAnchor,
-        popup: apply.markerMount.popupHtml,
-    }).addTo(map);
-
-    stopMarkers.push(marker);
-    if (apply.updateWaypointsList) updateWaypointsList();
-    showStatus(apply.statusMessage, apply.statusType);
-}
-
-function addStop(lat, lon, name = null, duration = 15) {
-    applyStopFromPlan(
-        _waypoints().buildStopEntryOrchestrationPlan(lat, lon, name, duration, stops.length).apply
-    );
-}
-
-/**
- * Remove a via-point
- */
-function applyViaPointRemoveFromPlan(apply) {
-    if (!apply || !apply.shouldRemove) return;
-
-    viaPoints.splice(apply.index, 1);
-    if (apply.removeSingleMarker && apply.removeMarkerAtIndex != null) {
-        const marker = viaPointMarkers[apply.removeMarkerAtIndex];
-        if (marker && typeof marker.remove === 'function') {
-            marker.remove();
-        }
-        viaPointMarkers.splice(apply.removeMarkerAtIndex, 1);
-    }
-    if (apply.updateWaypointsList) updateWaypointsList();
-    if (apply.refreshMarkers) refreshViaPointMarkers();
-    showStatus(apply.statusMessage, apply.statusType);
-}
-
-function removeViaPoint(index) {
-    applyViaPointRemoveFromPlan(
-        _waypoints().buildViaPointRemoveEntryOrchestrationPlan(index, viaPoints.length).apply
-    );
-}
-
-/**
- * Remove a stop
- */
-function applyStopRemoveFromPlan(apply) {
-    if (!apply || !apply.shouldRemove) return;
-
-    stops.splice(apply.index, 1);
-    if (apply.removeSingleMarker && apply.removeMarkerAtIndex != null) {
-        const marker = stopMarkers[apply.removeMarkerAtIndex];
-        if (marker && typeof marker.remove === 'function') {
-            marker.remove();
-        }
-        if (apply.spliceMarkerArray) {
-            stopMarkers.splice(apply.removeMarkerAtIndex, 1);
-        }
-    }
-    if (apply.updateWaypointsList) updateWaypointsList();
-    showStatus(apply.statusMessage, apply.statusType);
-}
-
-function removeStop(index) {
-    applyStopRemoveFromPlan(
-        _waypoints().buildStopRemoveEntryOrchestrationPlan(index, stops.length).apply
-    );
-}
-
-/**
- * Refresh via-point markers (update numbers after removal)
- */
-function applyViaPointMarkersRefreshFromPlan(apply) {
-    if (!apply || !apply.shouldRefresh) return;
-
-    if (apply.removeAllExistingMarkers) {
-        viaPointMarkers.forEach((marker) => {
-            if (marker && typeof marker.remove === 'function') {
-                marker.remove();
-            }
-        });
-    }
-    if (apply.resetMarkerArray) viaPointMarkers = [];
-
-    apply.markers.forEach((spec) => {
-        const marker = MapLibreHelpers.createMarker(spec.lat, spec.lon, {
-            className: spec.className,
-            html: spec.markerHtml,
-            iconSize: spec.iconSize,
-            iconAnchor: spec.iconAnchor,
-            popup: spec.popupHtml,
-        }).addTo(map);
-
-        viaPointMarkers.push(marker);
-    });
-}
-
-function refreshViaPointMarkers() {
-    applyViaPointMarkersRefreshFromPlan(
-        _waypoints().buildViaPointMarkersRefreshEntryOrchestrationPlan(viaPoints).apply
-    );
-}
-
-/**
- * Clear all via-points and stops
- */
-function applyClearAllWaypointsFromPlan(apply) {
-    if (!apply || !apply.shouldClear) return;
-
-    if (apply.clearViaPoints) viaPoints = [];
-    if (apply.clearStops) stops = [];
-    if (apply.removeAllMarkers) {
-        viaPointMarkers.forEach(m => { if (m && typeof m.remove === 'function') m.remove(); });
-        stopMarkers.forEach(m => { if (m && typeof m.remove === 'function') m.remove(); });
-    }
-    if (apply.resetViaMarkerArray) viaPointMarkers = [];
-    if (apply.resetStopMarkerArray) stopMarkers = [];
-    if (apply.clearMultiDropLayers) clearMultiDropLayers();
-    if (apply.updateWaypointsList) updateWaypointsList();
-    showStatus(apply.statusMessage, apply.statusType);
-}
-
-function clearAllWaypoints() {
-    applyClearAllWaypointsFromPlan(
-        _waypoints().buildClearAllWaypointsEntryOrchestrationPlan().apply
-    );
-}
-
-/**
- * Update the waypoints list display with drag-to-reorder
- */
-function applyWaypointsListDomFromPlan(apply) {
-    if (!apply || !apply.shouldUpdate) return;
-    const container = document.getElementById(apply.containerId);
-    if (!container) return;
-    container.innerHTML = apply.innerHtml;
-}
-
-function updateWaypointsList() {
-    applyWaypointsListDomFromPlan(
-        _waypoints().buildWaypointsListUpdateApplyPlan(viaPoints, stops)
-    );
-}
-
-let _draggedWaypoint = null;
-
-function applyWaypointDragStartFromPlan(apply, event) {
-    if (!apply || !apply.shouldDrag || !event) return;
-
-    _draggedWaypoint = apply.dragState;
-    if (event.target) event.target.style.opacity = apply.itemOpacity;
-    if (event.dataTransfer) event.dataTransfer.effectAllowed = apply.dataTransferEffect;
-}
-
-function onWaypointDragStart(e) {
-    applyWaypointDragStartFromPlan(
-        _waypoints().buildWaypointDragStartEntryOrchestrationPlan(e.target).apply,
-        e
-    );
-}
-
-function applyWaypointDragOverFromPlan(apply, event) {
-    if (!apply || !apply.shouldHandle || !event) return;
-    if (apply.preventDefault) event.preventDefault();
-    if (event.dataTransfer) event.dataTransfer.dropEffect = apply.dropEffect;
-}
-
-function onWaypointDragOver(e) {
-    applyWaypointDragOverFromPlan(
-        _waypoints().buildWaypointDragOverEntryOrchestrationPlan().apply,
-        e
-    );
-}
-
-function onWaypointDrop(e) {
-    e.preventDefault();
-    const target = _domHelpers().closest(e.target, '.waypoint-item');
-    applyWaypointDropFromPlan(
-        _waypoints().buildWaypointDropEntryOrchestrationPlan({
-            draggedWaypoint: _draggedWaypoint,
-            targetType: target ? target.dataset.type : null,
-            targetIndex: target ? parseInt(target.dataset.index, 10) : NaN,
-            viaCount: viaPoints.length,
-            stopsCount: stops.length,
-        }).apply
-    );
-}
-
-function applyWaypointReorderFromPlan(reorder) {
-    if (!reorder || !reorder.shouldReorder) return;
-
-    const arr = reorder.type === 'via' ? viaPoints : stops;
-    const markerArr = reorder.type === 'via' ? viaPointMarkers : stopMarkers;
-    const item = arr.splice(reorder.fromIndex, 1)[0];
-    if (reorder.spliceMarkers) {
-        const marker = markerArr.splice(reorder.fromIndex, 1)[0];
-        arr.splice(reorder.toIndex, 0, item);
-        markerArr.splice(reorder.toIndex, 0, marker);
-    } else {
-        arr.splice(reorder.toIndex, 0, item);
-    }
-    if (reorder.updateWaypointsList) updateWaypointsList();
-    if (reorder.refreshViaMarkers) refreshViaPointMarkers();
-}
-
-function applyWaypointDropFromPlan(apply) {
-    if (!apply) return;
-
-    if (apply.action === 'reorder' && apply.reorder) {
-        applyWaypointReorderFromPlan(apply.reorder);
-    }
-
-    if (apply.clearDragState) _draggedWaypoint = null;
-    if (apply.resetOpacity) {
-        const resetApply = _waypoints().buildWaypointDragOpacityResetApplyPlan();
-        document.querySelectorAll(resetApply.selector).forEach(
-            (el) => { el.style.opacity = resetApply.opacity; }
-        );
-    }
-}
-
-function applyWaypointMoveFromPlan(apply) {
-    if (!apply || !apply.shouldMove) return;
-
-    const arr = apply.type === 'via' ? viaPoints : stops;
-    const markerArr = apply.type === 'via' ? viaPointMarkers : stopMarkers;
-    [arr[apply.fromIndex], arr[apply.toIndex]] = [arr[apply.toIndex], arr[apply.fromIndex]];
-    if (apply.swapMarkers) {
-        [markerArr[apply.fromIndex], markerArr[apply.toIndex]] =
-            [markerArr[apply.toIndex], markerArr[apply.fromIndex]];
-    }
-    if (apply.updateWaypointsList) updateWaypointsList();
-    if (apply.refreshViaMarkers) refreshViaPointMarkers();
-}
-
-function moveWaypoint(type, index, direction) {
-    applyWaypointMoveFromPlan(
-        _waypoints().buildWaypointMoveEntryOrchestrationPlan(
-            type,
-            index,
-            direction,
-            type === 'via' ? viaPoints.length : stops.length
-        ).apply
-    );
-}
-
-function collectMultiDropLegsDisplayInput(data) {
-    return {
-        data,
-        fmt: {
-            distUnit: getDistanceUnit(),
-            convertDistance,
-            formatEtaClock: (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-    };
-}
-
-function applyMultiDropLegsDisplayFromPlan(apply, data) {
-    if (!apply || !apply.shouldDisplay) return;
-
-    const container = document.getElementById(apply.containerId);
-    if (!container) return;
-
-    container.innerHTML += apply.appendHtml;
-
-    if (apply.shouldDrawLegs) drawMultiDropLegsOnMap(data);
-}
-
-/**
- * Display multi-drop route leg breakdown in the waypoints area
- */
-function displayMultiDropLegs(data) {
-    const input = collectMultiDropLegsDisplayInput(data);
-    applyMultiDropLegsDisplayFromPlan(
-        _waypoints().buildMultiDropLegsDisplayEntryOrchestrationPlan(input.data, input.fmt).apply,
-        data
-    );
-}
-
-/**
- * Apply one multi-drop leg layer from a MapLibre apply plan.
- * @param {Object} applyPlan
- * @returns {boolean}
- */
-function applyMultiDropLegLayerFromMapLibrePlan(applyPlan) {
-    return applyMapLibreLineLayerFromMountPlan(
-        _waypoints().buildMultiDropLegLayerMountExecutePlan(applyPlan)
-    );
-}
-
-function applyDrawMultiDropLegsFromPlan(orch) {
-    if (!orch || !orch.shouldDraw) return;
-
-    orch.execute.layers.forEach((layerPlan) => {
-        applyMultiDropLegLayerFromMapLibrePlan(layerPlan);
-    });
-}
-
-/**
- * Draw multi-drop route legs on the map with distinct colors per leg
- */
-function drawMultiDropLegsOnMap(data) {
-    applyDrawMultiDropLegsFromPlan(
-        _waypoints().buildDrawMultiDropLegsEntryOrchestrationPlan({
-            hasMap: !!map,
-            data,
-            decodePolyline,
-        })
-    );
-}
-
-function applyClearMultiDropLayersFromPlan(apply) {
-    if (!apply || !apply.shouldClear || !map) return;
-
-    apply.layerSpecs.forEach((spec) => {
-        if (map.getLayer(spec.layerId)) map.removeLayer(spec.layerId);
-        if (map.getSource(spec.sourceId)) map.removeSource(spec.sourceId);
-    });
-}
-
-/**
- * Clear multi-drop leg layers from map
- */
-function clearMultiDropLayers() {
-    const entry = _waypoints().buildClearMultiDropLayersEntryOrchestrationPlan();
-    if (!entry.requiresMap || !map) return;
-    applyClearMultiDropLayersFromPlan(entry.apply);
-}
-
-/**
- * Get all waypoints for route calculation (start + viaPoints + stops + end)
- */
-function getOrderedWaypoints(startLat, startLon, endLat, endLon) {
-    return _routeSelection().orderWaypointsGreedy(
-        startLat, startLon, endLat, endLon, viaPoints, stops
     );
 }
 
@@ -3441,302 +2794,31 @@ function useRoute(index) {
     applyUseRouteFromPlan(orch.apply, index);
 }
 
-// ===== ROUTE SHARING FUNCTIONS =====
-function collectEncodedShareLinkInput(includeGeometry) {
-    return _routeSharing().buildEncodedShareLinkInputPlan({
-        route: window.lastCalculatedRoute,
-        startLabel: document.getElementById('start')?.value,
-        endLabel: document.getElementById('end')?.value,
-        origin: window.location.origin,
-        includeGeometry,
-    });
-}
+// ===== ROUTE SHARING ORCHESTRATION =====
+// Orchestration lives in static/js/app/route-sharing-orchestration.js (bound at file end).
 
-/**
- * Build encoded share URL from current route (optionally omit geometry for QR).
- * @param {boolean} [includeGeometry=true]
- * @returns {{ ok: boolean, shareLink?: string, encodedRoute?: string, errorStatusMessage?: string }}
- */
-function buildEncodedShareLinkPlan(includeGeometry) {
-    return _routeSharing().buildEncodedShareLinkOrchestrationPlan(
-        collectEncodedShareLinkInput(includeGeometry)
-    ).plan;
-}
-
-function buildEncodedShareLink(includeGeometry) {
-    const plan = buildEncodedShareLinkPlan(includeGeometry);
-    if (!plan.ok) return null;
+function getRouteSharingOrchestrationRuntime() {
     return {
-        shareLink: plan.shareLink,
-        encodedRoute: plan.encodedRoute,
+        routeSharing: () => _routeSharing(),
+        call: {
+            showStatus,
+            convertDistance,
+            getDistanceUnit,
+            getCurrencySymbol,
+            updateTripInfoFromRouteOption,
+            showRoutePreview,
+        },
     };
 }
 
-function buildRouteShareFormatInput() {
-    const RS = _routeSharing();
-    return RS.buildRouteShareFormatInputPlan({
-        startLabel: document.getElementById('start')?.value,
-        endLabel: document.getElementById('end')?.value,
-        distanceText: convertDistance(window.lastCalculatedRoute?.distance_km || 0),
-        distUnit: getDistanceUnit(),
-        currencySymbol: getCurrencySymbol(),
-    });
-}
-
-function applyLoadSharedRouteFromUrlFromPlan(entry) {
-    if (!entry || !entry.shouldLoad) {
-        if (entry && entry.invalidPayloadLog) console.warn(entry.invalidPayloadLog);
-        return false;
-    }
-
-    const execute = entry.execute;
-    if (!execute || !execute.shouldApply) return false;
-
-    const startEl = document.getElementById(execute.startInputId);
-    const endEl = document.getElementById(execute.endInputId);
-    if (startEl) startEl.value = execute.startLabel;
-    if (endEl) endEl.value = execute.endLabel;
-
-    window.lastCalculatedRoute = execute.lastCalculatedRoute;
-    updateTripInfoFromRouteOption(window.lastCalculatedRoute);
-
-    try {
-        window.history.replaceState({}, '', execute.cleanUrl);
-    } catch (e) {
-        console.warn(execute.urlCleanupFailedLog, e);
-    }
-
-    if (execute.showRoutePreview) {
-        showRoutePreview(window.lastCalculatedRoute, execute.previewSkipMapDisplay);
-    } else {
-        showStatus(execute.successStatusMessage, 'success');
-    }
-    return true;
-}
-
-/**
- * Load a shared route from the `?route=` URL query param when present.
- * @returns {boolean} true when a shared route was applied
- */
-function loadSharedRouteFromUrl() {
-    return applyLoadSharedRouteFromUrlFromPlan(
-        _routeSharing().buildLoadSharedRouteFromUrlEntryOrchestrationPlan(
-            window.location.search,
-            window.location.href
-        )
-    );
-}
-
-function collectPrepareRouteSharingInput() {
-    const fmt = buildRouteShareFormatInput();
-    return _routeSharing().buildPrepareRouteSharingInputPlan({
-        route: window.lastCalculatedRoute,
-        ...fmt,
-    });
-}
-
-function applyPrepareRouteSharingFromPlan(apply) {
-    if (!apply || !apply.shouldApply) {
-        if (apply && apply.errorStatusMessage) showStatus(apply.errorStatusMessage, 'error');
-        return;
-    }
-
-    Object.entries(apply.elementPatches).forEach(([id, text]) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = text;
-    });
-
-    if (apply.costLogMessage != null) {
-        console.log(apply.costLogMessage, {
-            distanceUnit,
-            totalCost: apply.costLogTotalCost.toFixed(2),
-        });
-    }
-}
-
-/**
- * prepareRouteSharing function
- * @function prepareRouteSharing
- * @returns {*} Return value description
- */
-function prepareRouteSharing() {
-    const orch = _routeSharing().buildPrepareRouteSharingOrchestrationPlan(
-        collectPrepareRouteSharingInput()
-    );
-    applyPrepareRouteSharingFromPlan(orch.apply);
-}
-
-function applyGenerateShareLinkFromPlan(execute) {
-    if (!execute || !execute.shouldGenerate) {
-        if (execute && execute.errorStatusMessage) showStatus(execute.errorStatusMessage, 'error');
-        return;
-    }
-
-    const shareLinkInput = document.getElementById(execute.shareLinkInputId);
-    if (shareLinkInput) shareLinkInput.value = execute.shareLink;
-    const linkContainer = document.getElementById(execute.showContainerId);
-    if (linkContainer) linkContainer.style.display = execute.showContainerDisplay;
-    const qrContainer = document.getElementById(execute.hideContainerId);
-    if (qrContainer) qrContainer.style.display = execute.hideContainerDisplay;
-
-    showStatus(execute.successStatusMessage, execute.successStatusType);
-}
-
-/**
- * generateShareLink function
- * @function generateShareLink
- * @returns {*} Return value description
- */
-function generateShareLink() {
-    applyGenerateShareLinkFromPlan(
-        _routeSharing().buildGenerateShareLinkEntryOrchestrationPlan(
-            buildEncodedShareLinkPlan(true)
-        ).execute
-    );
-}
-
-function applyGenerateQrCodeFromPlan(execute) {
-    if (!execute || !execute.shouldGenerate) {
-        if (execute && execute.errorStatusMessage) showStatus(execute.errorStatusMessage, 'error');
-        return;
-    }
-
-    const qrContainer = document.getElementById(execute.qrContainerId);
-    if (!qrContainer) return;
-    if (execute.clearQrContainer) qrContainer.innerHTML = '';
-
-    const qrImage = document.createElement('img');
-    qrImage.src = execute.qrImageUrl;
-    qrImage.alt = execute.imageAlt;
-    qrImage.style.cssText = execute.imageStyleCssText;
-    qrContainer.appendChild(qrImage);
-
-    if (execute.storeQrImageUrl) window.qrImageUrl = execute.qrImageUrl;
-
-    const qrCodeContainer = document.getElementById(execute.qrCodeContainerId);
-    if (qrCodeContainer && execute.showQrCodeContainer) qrCodeContainer.style.display = 'block';
-    const shareLinkContainer = document.getElementById(execute.shareLinkContainerId);
-    if (shareLinkContainer && execute.hideShareLinkContainer) shareLinkContainer.style.display = 'none';
-
-    showStatus(execute.successStatusMessage, execute.successStatusType);
-}
-
-/**
- * generateQRCode function
- * @function generateQRCode
- * @returns {*} Return value description
- */
-function generateQRCode() {
-    applyGenerateQrCodeFromPlan(
-        _routeSharing().buildGenerateQrCodeEntryOrchestrationPlan(
-            buildEncodedShareLinkPlan(false)
-        ).execute
-    );
-}
-
-function collectShareChannelInput() {
-    return {
-        route: window.lastCalculatedRoute,
-        fmt: buildRouteShareFormatInput(),
-    };
-}
-
-function applyCopyShareLinkFromPlan(execute) {
-    if (!execute || !execute.shouldCopy) return;
-
-    const shareLink = document.getElementById(execute.shareLinkInputId);
-    if (!shareLink) return;
-    shareLink.select();
-    document.execCommand('copy');
-    showStatus(execute.successStatusMessage, execute.successStatusType);
-}
-
-/**
- * copyShareLink function
- * @function copyShareLink
- * @returns {*} Return value description
- */
-function copyShareLink() {
-    applyCopyShareLinkFromPlan(
-        _routeSharing().buildCopyShareLinkEntryOrchestrationPlan().execute
-    );
-}
-
-function applyDownloadQrCodeFromPlan(execute) {
-    if (!execute || !execute.shouldDownload) {
-        if (execute && execute.errorStatusMessage) {
-            showStatus(execute.errorStatusMessage, execute.errorStatusType);
-        }
-        return;
-    }
-
-    const link = document.createElement('a');
-    link.href = execute.imageUrl;
-    link.download = execute.downloadFileName;
-    link.click();
-
-    showStatus(execute.successStatusMessage, execute.successStatusType);
-}
-
-/**
- * downloadQRCode function
- * @function downloadQRCode
- * @returns {*} Return value description
- */
-function downloadQRCode() {
-    applyDownloadQrCodeFromPlan(
-        _routeSharing().buildDownloadQrCodeEntryOrchestrationPlan(window.qrImageUrl).execute
-    );
-}
-
-function applyShareViaWhatsAppFromPlan(execute) {
-    if (!execute || !execute.shouldShare) {
-        if (execute && execute.errorStatusMessage) {
-            showStatus(execute.errorStatusMessage, execute.errorStatusType);
-        }
-        return;
-    }
-
-    window.open(execute.openUrl, execute.openInNewTab ? '_blank' : '_self');
-    showStatus(execute.statusMessage, execute.statusType);
-}
-
-/**
- * shareViaWhatsApp function
- * @function shareViaWhatsApp
- * @returns {*} Return value description
- */
-function shareViaWhatsApp() {
-    const input = collectShareChannelInput();
-    applyShareViaWhatsAppFromPlan(
-        _routeSharing().buildShareViaWhatsAppEntryOrchestrationPlan(input.route, input.fmt).execute
-    );
-}
-
-function applyShareViaEmailFromPlan(execute) {
-    if (!execute || !execute.shouldShare) {
-        if (execute && execute.errorStatusMessage) {
-            showStatus(execute.errorStatusMessage, execute.errorStatusType);
-        }
-        return;
-    }
-
-    window.location.href = execute.mailtoUrl;
-    showStatus(execute.statusMessage, execute.statusType);
-}
-
-/**
- * shareViaEmail function
- * @function shareViaEmail
- * @returns {*} Return value description
- */
-function shareViaEmail() {
-    const input = collectShareChannelInput();
-    applyShareViaEmailFromPlan(
-        _routeSharing().buildShareViaEmailEntryOrchestrationPlan(input.route, input.fmt).execute
-    );
-}
-
+function loadSharedRouteFromUrl() { return VoyagrRouteSharingOrchestration.loadSharedRouteFromUrl(); }
+function prepareRouteSharing() { VoyagrRouteSharingOrchestration.prepareRouteSharing(); }
+function generateShareLink() { VoyagrRouteSharingOrchestration.generateShareLink(); }
+function generateQRCode() { VoyagrRouteSharingOrchestration.generateQRCode(); }
+function copyShareLink() { VoyagrRouteSharingOrchestration.copyShareLink(); }
+function downloadQRCode() { VoyagrRouteSharingOrchestration.downloadQRCode(); }
+function shareViaWhatsApp() { VoyagrRouteSharingOrchestration.shareViaWhatsApp(); }
+function shareViaEmail() { VoyagrRouteSharingOrchestration.shareViaEmail(); }
 // ===== ROUTE ANALYTICS FUNCTIONS =====
 function collectAnalyticsDisplayFmt(data) {
     return {
@@ -4098,8 +3180,8 @@ function setupMapClickHandler() {
     const GL = _geocodingLocations();
     map.on('click', (e) => {
         const dispatch = GL.buildMapClickDispatchPlan({
-            addingViaPoint,
-            addingStop,
+            addingViaPoint: VoyagrWaypointsOrchestration.getAddingViaPoint(),
+            addingStop: VoyagrWaypointsOrchestration.getAddingStop(),
             mapPickerMode,
             lat: e.lngLat.lat,
             lon: e.lngLat.lng,
@@ -4536,8 +3618,8 @@ function collectCalculateRouteApiInput(geocodedStart, geocodedEnd) {
         storage: localStorage,
         geocodedStart,
         geocodedEnd,
-        viaPoints,
-        stops,
+        viaPoints: VoyagrWaypointsOrchestration.getViaPoints(),
+        stops: VoyagrWaypointsOrchestration.getStops(),
         routingMode: currentRoutingMode,
         vehicleType: currentVehicleType,
         costParams: getRouteCostParams(currentVehicleType),
@@ -13957,6 +13039,9 @@ VoyagrTripHistoryOrchestration.bind(getTripHistoryOrchestrationRuntime());
 VoyagrRouteSavingOrchestration.bind(getRouteSavingOrchestrationRuntime());
 VoyagrGeocodingOrchestration.bind(getGeocodingOrchestrationRuntime());
 VoyagrSpeedWidgetOrchestration.bind(getSpeedWidgetOrchestrationRuntime());
+VoyagrWaypointsOrchestration.bind(getWaypointsOrchestrationRuntime());
+VoyagrRouteSharingOrchestration.bind(getRouteSharingOrchestrationRuntime());
+
 
 // NOTE: toggleDriverPerspective is defined earlier in the file (around line 7711)
 // This duplicate was removed to fix the driver's perspective mode conflict
