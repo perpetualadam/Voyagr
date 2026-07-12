@@ -202,6 +202,35 @@
     }
 
     /**
+     * Apply plan for displayAllRouteHazards handler side effects.
+     * @param {Object} [plan] - from buildDisplayAllRouteHazardsPlan
+     * @returns {Object}
+     */
+    function buildDisplayAllRouteHazardsApplyPlan(plan) {
+        plan = plan || {};
+        if (!plan.shouldDisplay) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            hazards: plan.hazards || [],
+            logMessage: plan.logMessage,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for displayAllRouteHazards handler.
+     * @param {Array<Object>} [routeOptions]
+     * @returns {Object}
+     */
+    function buildDisplayAllRouteHazardsEntryOrchestrationPlan(routeOptions) {
+        var plan = buildDisplayAllRouteHazardsPlan(routeOptions);
+        return {
+            apply: buildDisplayAllRouteHazardsApplyPlan(plan),
+        };
+    }
+
+    /**
      * Build marker mount specs for route hazards (no MapLibre calls).
      * @param {Array<Object>} hazards
      * @param {Object} [opts]
@@ -393,6 +422,8 @@
         buildHazardMarkerPopupHtml: buildHazardMarkerPopupHtml,
         buildAllRoutesHazardsList: buildAllRoutesHazardsList,
         buildDisplayAllRouteHazardsPlan: buildDisplayAllRouteHazardsPlan,
+        buildDisplayAllRouteHazardsApplyPlan: buildDisplayAllRouteHazardsApplyPlan,
+        buildDisplayAllRouteHazardsEntryOrchestrationPlan: buildDisplayAllRouteHazardsEntryOrchestrationPlan,
         buildDisplayHazardMarkersPlan: buildDisplayHazardMarkersPlan,
         buildClearHazardMarkersPlan: buildClearHazardMarkersPlan,
         buildDisplayHazardMarkersExecutePlan: buildDisplayHazardMarkersExecutePlan,

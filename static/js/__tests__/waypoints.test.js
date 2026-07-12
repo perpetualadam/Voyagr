@@ -602,6 +602,13 @@ describe('waypoints module', () => {
         expect(apply.layerSpecs).toHaveLength(2);
     });
 
+    test('buildClearMultiDropLayersEntryOrchestrationPlan wraps apply and requires map', () => {
+        const entry = W.buildClearMultiDropLayersEntryOrchestrationPlan(3);
+        expect(entry.apply.shouldClear).toBe(true);
+        expect(entry.requiresMap).toBe(true);
+        expect(entry.apply.layerSpecs[0].layerId).toBe('multidrop-leg-0');
+    });
+
     test('buildDrawMultiDropLegsOrchestrationPlan guards missing map', () => {
         const decode = jest.fn(() => [[51.5, -0.1], [51.6, -0.2]]);
         expect(W.buildDrawMultiDropLegsOrchestrationPlan({

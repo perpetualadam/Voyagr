@@ -78,6 +78,17 @@ describe('hazard-map-markers module', () => {
         expect(HM.buildDisplayAllRouteHazardsPlan([{ hazards: [] }]).shouldDisplay).toBe(false);
     });
 
+    test('buildDisplayAllRouteHazardsEntryOrchestrationPlan wraps apply plan', () => {
+        const entry = HM.buildDisplayAllRouteHazardsEntryOrchestrationPlan([
+            { hazards: [{ lat: 51.5, lon: -0.1, type: 'speed_camera' }] },
+        ]);
+        expect(entry.apply.shouldApply).toBe(true);
+        expect(entry.apply.hazards).toHaveLength(1);
+
+        const empty = HM.buildDisplayAllRouteHazardsEntryOrchestrationPlan([]);
+        expect(empty.apply.shouldApply).toBe(false);
+    });
+
     test('buildDisplayHazardMarkersPlan orchestrates marker mount specs', () => {
         const plan = HM.buildDisplayHazardMarkersPlan([
             { lat: 51.5, lon: -0.1, type: 'camera', description: 'Speed' },
