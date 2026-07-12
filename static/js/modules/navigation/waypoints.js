@@ -1214,6 +1214,32 @@
     }
 
     /**
+     * Apply plan for map clicks while adding via-points or stops.
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildMapClickWaypointApplyPlan(opts) {
+        var dispatch = buildMapClickWaypointDispatchPlan(opts);
+        if (dispatch.action === 'add_via') {
+            return {
+                action: 'add_via',
+                lat: dispatch.lat,
+                lon: dispatch.lon,
+                toggleOffVia: dispatch.toggleOffVia,
+            };
+        }
+        if (dispatch.action === 'add_stop') {
+            return {
+                action: 'add_stop',
+                lat: dispatch.lat,
+                lon: dispatch.lon,
+                toggleOffStop: dispatch.toggleOffStop,
+            };
+        }
+        return { action: 'none' };
+    }
+
+    /**
      * DOM apply plan for the waypoints list container.
      * @param {Array<Object>} viaPoints
      * @param {Array<Object>} stops
@@ -1223,6 +1249,21 @@
         return {
             containerId: WAYPOINTS_LIST_CONTAINER_ID,
             innerHtml: buildWaypointsListHtml(viaPoints, stops),
+        };
+    }
+
+    /**
+     * Apply plan for refreshing the waypoints list container HTML.
+     * @param {Array<Object>} viaPoints
+     * @param {Array<Object>} stops
+     * @returns {Object}
+     */
+    function buildWaypointsListUpdateApplyPlan(viaPoints, stops) {
+        var dom = buildWaypointsListDomApplyPlan(viaPoints, stops);
+        return {
+            shouldUpdate: true,
+            containerId: dom.containerId,
+            innerHtml: dom.innerHtml,
         };
     }
 
@@ -1584,6 +1625,7 @@
         buildAddStopTogglePlan: buildAddStopTogglePlan,
         buildAddStopToggleApplyPlan: buildAddStopToggleApplyPlan,
         buildMapClickWaypointDispatchPlan: buildMapClickWaypointDispatchPlan,
+        buildMapClickWaypointApplyPlan: buildMapClickWaypointApplyPlan,
         VIA_POINT_ADDRESS_INPUT_ID: VIA_POINT_ADDRESS_INPUT_ID,
         STOP_ADDRESS_INPUT_ID: STOP_ADDRESS_INPUT_ID,
         ADD_VIA_POINT_BTN_ID: ADD_VIA_POINT_BTN_ID,
@@ -1591,6 +1633,7 @@
         WAYPOINTS_LIST_CONTAINER_ID: WAYPOINTS_LIST_CONTAINER_ID,
         MULTIDROP_LEG_CLEAR_MAX: MULTIDROP_LEG_CLEAR_MAX,
         buildWaypointsListDomApplyPlan: buildWaypointsListDomApplyPlan,
+        buildWaypointsListUpdateApplyPlan: buildWaypointsListUpdateApplyPlan,
         buildWaypointDragStartPlan: buildWaypointDragStartPlan,
         buildWaypointDragEventContextPlan: buildWaypointDragEventContextPlan,
         buildWaypointDragOverPlan: buildWaypointDragOverPlan,

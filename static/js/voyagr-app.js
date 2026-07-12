@@ -1600,13 +1600,38 @@ function applyLabeledTogglesFromPlan(toggles, TU) {
  * @returns {boolean}
  */
 function applyMapLayerReorderFromPlan(plan) {
-    if (!plan || !plan.shouldExecute || !map) return false;
+    if (!plan || !plan.shouldApply || !map) return false;
+    const RS = _routeSelection();
+
     try {
+        const presentById = {};
         plan.layerIds.forEach((layerId) => {
-            if (map.getLayer(layerId)) {
-                map.moveLayer(layerId, plan.beforeId);
+            presentById[layerId] = !!map.getLayer(layerId);
+        });
+
+        plan.layerIds.forEach((layerId) => {
+            if (!presentById[layerId]) {
+                if (plan.logMissingLayers) {
+                    const moveLog = RS.buildBringRoutesToTopLayerMoveLogPlan(
+                        layerId,
+                        plan.beforeId,
+                        false
+                    );
+                    if (moveLog.notFoundLogMessage) console.log(moveLog.notFoundLogMessage);
+                }
+                return;
+            }
+            map.moveLayer(layerId, plan.beforeId);
+            if (plan.logMissingLayers) {
+                const moveLog = RS.buildBringRoutesToTopLayerMoveLogPlan(
+                    layerId,
+                    plan.beforeId,
+                    true
+                );
+                if (moveLog.movedLogMessage) console.log(moveLog.movedLogMessage);
             }
         });
+
         if (plan.ensureLabelsOnTop) ensureLabelsOnTop();
         if (plan.successLogMessage) console.log(plan.successLogMessage);
         return true;
@@ -2942,19 +2967,18 @@ function toggleAddStop() {
  * Handle map click for adding via-points or stops
  */
 function handleMapClickForWaypoints(e) {
-    const WP = _waypoints();
-    const dispatch = WP.buildMapClickWaypointDispatchPlan({
+    const apply = _waypoints().buildMapClickWaypointApplyPlan({
         addingViaPoint,
         addingStop,
         lat: e.lngLat.lat,
         lon: e.lngLat.lng,
     });
-    if (dispatch.action === 'add_via') {
-        addViaPoint(dispatch.lat, dispatch.lon);
-        toggleAddViaPoint();
-    } else if (dispatch.action === 'add_stop') {
-        addStop(dispatch.lat, dispatch.lon);
-        toggleAddStop();
+    if (apply.action === 'add_via') {
+        addViaPoint(apply.lat, apply.lon);
+        if (apply.toggleOffVia) toggleAddViaPoint();
+    } else if (apply.action === 'add_stop') {
+        addStop(apply.lat, apply.lon);
+        if (apply.toggleOffStop) toggleAddStop();
     }
 }
 
@@ -3165,12 +3189,17 @@ function clearAllWaypoints() {
 /**
  * Update the waypoints list display with drag-to-reorder
  */
-function updateWaypointsList() {
-    const WP = _waypoints();
-    const domPlan = WP.buildWaypointsListDomApplyPlan(viaPoints, stops);
-    const container = document.getElementById(domPlan.containerId);
+function applyWaypointsListDomFromPlan(apply) {
+    if (!apply || !apply.shouldUpdate) return;
+    const container = document.getElementById(apply.containerId);
     if (!container) return;
-    container.innerHTML = domPlan.innerHtml;
+    container.innerHTML = apply.innerHtml;
+}
+
+function updateWaypointsList() {
+    applyWaypointsListDomFromPlan(
+        _waypoints().buildWaypointsListUpdateApplyPlan(viaPoints, stops)
+    );
 }
 
 let _draggedWaypoint = null;
@@ -5711,7 +5740,9 @@ function bringTrafficEdgesToTop() {
     if (!orch.shouldRun) return;
 
     applyMapLayerReorderFromPlan(
-        RS.buildBringTrafficEdgesToTopExecutePlan(orch.trafficLayers, orch.styleLayers)
+        RS.buildMapLayerReorderApplyPlan(
+            RS.buildBringTrafficEdgesToTopExecutePlan(orch.trafficLayers, orch.styleLayers)
+        )
     );
 }
 
@@ -5731,10 +5762,12 @@ function bringNavRouteAboveTrafficEdges() {
     if (!orch.shouldRun) return;
 
     applyMapLayerReorderFromPlan(
-        RS.buildBringNavRouteAboveTrafficEdgesExecutePlan(
-            orch.routeLayer,
-            orch.allRouteLayers,
-            orch.styleLayers
+        RS.buildMapLayerReorderApplyPlan(
+            RS.buildBringNavRouteAboveTrafficEdgesExecutePlan(
+                orch.routeLayer,
+                orch.allRouteLayers,
+                orch.styleLayers
+            )
         )
     );
 }
@@ -5879,43 +5912,49 @@ function pickActiveRouteDuringNavigation(routeList, singleRoutePayload) {
     return activeRoute;
 }
 
+function applyAutoTrafficUpdateToggleFromPlan(execute) {
+    if (!execute || !execute.shouldApply) return;
+    const TU = _toggleUI();
+    autoTrafficUpdateEnabled = execute.nextEnabled;
+    TU.writeBoolPref(execute.storageKey, autoTrafficUpdateEnabled);
+    TU.applyToggleButton(document.getElementById(execute.toggle.id), execute.toggle.enabled);
+    showStatus(execute.statusMessage, execute.statusType);
+    if (execute.startAutoTrafficUpdates) startAutoTrafficUpdates();
+    else if (execute.stopAutoTrafficUpdates) stopAutoTrafficUpdates();
+    if (execute.saveAllSettings) saveAllSettings();
+}
+
+function applyAutoRerouteOnDeviationToggleFromPlan(execute) {
+    if (!execute || !execute.shouldApply) return;
+    const TU = _toggleUI();
+    autoRerouteOnDeviationEnabled = execute.nextEnabled;
+    TU.writeBoolPref(execute.storageKey, autoRerouteOnDeviationEnabled);
+    TU.applyToggleButton(document.getElementById(execute.toggle.id), execute.toggle.enabled);
+    showStatus(execute.statusMessage, execute.statusType);
+    if (execute.saveAllSettings) saveAllSettings();
+}
+
 /**
  * Toggle auto-traffic update on/off
  */
 function toggleAutoTrafficUpdate() {
-    const TC = _trafficChange();
-    const TU = _toggleUI();
-    const plan = TC.buildAutoTrafficUpdateTogglePlan(autoTrafficUpdateEnabled);
-    autoTrafficUpdateEnabled = plan.nextEnabled;
-    TU.writeBoolPref(plan.storageKey, autoTrafficUpdateEnabled);
-
-    TU.applyToggleButton(document.getElementById(plan.toggleElementId), autoTrafficUpdateEnabled);
-
-    showStatus(plan.statusMessage, plan.statusType);
-    if (plan.startUpdatesIfRouteInProgress && routeInProgress) {
-        startAutoTrafficUpdates();
-    } else if (plan.stopUpdates) {
-        stopAutoTrafficUpdates();
-    }
-
-    if (plan.saveAllSettings) saveAllSettings();
+    applyAutoTrafficUpdateToggleFromPlan(
+        _trafficChange().buildAutoTrafficUpdateToggleExecutePlan(
+            autoTrafficUpdateEnabled,
+            routeInProgress
+        )
+    );
 }
 
 /**
  * Toggle auto-reroute on deviation on/off
  */
 function toggleAutoRerouteOnDeviation() {
-    const TC = _trafficChange();
-    const TU = _toggleUI();
-    const plan = TC.buildAutoRerouteOnDeviationTogglePlan(autoRerouteOnDeviationEnabled);
-    autoRerouteOnDeviationEnabled = plan.nextEnabled;
-    TU.writeBoolPref(plan.storageKey, autoRerouteOnDeviationEnabled);
-
-    TU.applyToggleButton(document.getElementById(plan.toggleElementId), autoRerouteOnDeviationEnabled);
-
-    showStatus(plan.statusMessage, plan.statusType);
-
-    if (plan.saveAllSettings) saveAllSettings();
+    applyAutoRerouteOnDeviationToggleFromPlan(
+        _trafficChange().buildAutoRerouteOnDeviationToggleExecutePlan(
+            autoRerouteOnDeviationEnabled
+        )
+    );
 }
 
 /**

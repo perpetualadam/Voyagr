@@ -354,6 +354,21 @@ describe('waypoints module', () => {
         expect(plan.innerHtml).toContain('Via');
     });
 
+    test('buildWaypointsListUpdateApplyPlan wraps list DOM apply', () => {
+        const apply = W.buildWaypointsListUpdateApplyPlan([{ name: 'Via A' }], [{ name: 'Stop B' }]);
+        expect(apply.shouldUpdate).toBe(true);
+        expect(apply.containerId).toBe(W.WAYPOINTS_LIST_CONTAINER_ID);
+        expect(apply.innerHtml).toContain('Stop B');
+    });
+
+    test('buildMapClickWaypointApplyPlan maps click actions', () => {
+        const via = W.buildMapClickWaypointApplyPlan({ addingViaPoint: true, lat: 1, lon: 2 });
+        expect(via.action).toBe('add_via');
+        expect(via.toggleOffVia).toBe(true);
+        expect(W.buildMapClickWaypointApplyPlan({ addingViaPoint: false, addingStop: false }).action)
+            .toBe('none');
+    });
+
     test('buildWaypointDragStartPlan captures drag state and opacity', () => {
         const plan = W.buildWaypointDragStartPlan('via', 1);
         expect(plan.shouldDrag).toBe(true);

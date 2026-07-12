@@ -1394,4 +1394,16 @@ describe('route overview and single-route display plans', () => {
         expect(orch.shouldRun).toBe(true);
         expect(orch.routeLayer.id).toBe('nav-route');
     });
+
+    test('buildMapLayerReorderApplyPlan wraps execute plan with missing-layer logging', () => {
+        const apply = RS.buildMapLayerReorderApplyPlan({
+            shouldExecute: true,
+            layerIds: ['traffic-edge-0'],
+            beforeId: 'labels',
+            ensureLabelsOnTop: true,
+        });
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.logMissingLayers).toBe(true);
+        expect(RS.buildMapLayerReorderApplyPlan({ shouldExecute: false }).shouldApply).toBe(false);
+    });
 });

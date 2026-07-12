@@ -3111,6 +3111,28 @@
     }
 
     /**
+     * Apply plan for immediate map layer reorder instructions.
+     * @param {Object} [executePlan]
+     * @returns {Object}
+     */
+    function buildMapLayerReorderApplyPlan(executePlan) {
+        executePlan = executePlan || {};
+        if (!executePlan.shouldExecute) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            layerIds: executePlan.layerIds || [],
+            beforeId: executePlan.beforeId,
+            ensureLabelsOnTop: executePlan.ensureLabelsOnTop,
+            successLogMessage: executePlan.successLogMessage,
+            errorLogPrefix: executePlan.errorLogPrefix,
+            useWarnOnError: executePlan.useWarnOnError,
+            logMissingLayers: true,
+        };
+    }
+
+    /**
      * Orchestration plan for bringTrafficEdgesToTop entry guards.
      * @param {Object} [input]
      * @returns {Object}
@@ -3282,6 +3304,7 @@
         buildBringNavRouteAboveTrafficEdgesDispatchPlan: buildBringNavRouteAboveTrafficEdgesDispatchPlan,
         buildBringTrafficEdgesToTopExecutePlan: buildBringTrafficEdgesToTopExecutePlan,
         buildBringNavRouteAboveTrafficEdgesExecutePlan: buildBringNavRouteAboveTrafficEdgesExecutePlan,
+        buildMapLayerReorderApplyPlan: buildMapLayerReorderApplyPlan,
         buildBringTrafficEdgesToTopOrchestrationPlan: buildBringTrafficEdgesToTopOrchestrationPlan,
         buildBringNavRouteAboveTrafficEdgesOrchestrationPlan:
             buildBringNavRouteAboveTrafficEdgesOrchestrationPlan,

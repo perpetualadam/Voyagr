@@ -219,6 +219,23 @@ describe('auto traffic interval dispatch plans', () => {
         expect(enable.statusType).toBe('success');
     });
 
+    test('buildAutoTrafficUpdateToggleExecutePlan gates start updates on route progress', () => {
+        const enable = TC.buildAutoTrafficUpdateToggleExecutePlan(false, true);
+        expect(enable.shouldApply).toBe(true);
+        expect(enable.startAutoTrafficUpdates).toBe(true);
+        expect(TC.buildAutoTrafficUpdateToggleExecutePlan(false, false).startAutoTrafficUpdates)
+            .toBe(false);
+        const disable = TC.buildAutoTrafficUpdateToggleExecutePlan(true, true);
+        expect(disable.stopAutoTrafficUpdates).toBe(true);
+    });
+
+    test('buildAutoRerouteOnDeviationToggleExecutePlan wraps toggle apply spec', () => {
+        const execute = TC.buildAutoRerouteOnDeviationToggleExecutePlan(false);
+        expect(execute.shouldApply).toBe(true);
+        expect(execute.toggle.enabled).toBe(true);
+        expect(execute.saveAllSettings).toBe(true);
+    });
+
     test('buildInitAutoTrafficRerouteTogglesPlan lists all three traffic toggles', () => {
         const plan = TC.buildInitAutoTrafficRerouteTogglesPlan({
             autoTrafficUpdateEnabled: true,

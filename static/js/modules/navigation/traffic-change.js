@@ -551,6 +551,53 @@
     }
 
     /**
+     * Execute plan for toggling automatic traffic updates during navigation.
+     * @param {boolean} currentEnabled
+     * @param {boolean} [routeInProgress]
+     * @returns {Object}
+     */
+    function buildAutoTrafficUpdateToggleExecutePlan(currentEnabled, routeInProgress) {
+        var plan = buildAutoTrafficUpdateTogglePlan(currentEnabled);
+        return {
+            shouldApply: true,
+            nextEnabled: plan.nextEnabled,
+            storageKey: plan.storageKey,
+            storageValue: plan.storageValue,
+            toggle: {
+                id: plan.toggleElementId,
+                enabled: plan.nextEnabled,
+            },
+            saveAllSettings: plan.saveAllSettings,
+            startAutoTrafficUpdates: plan.startUpdatesIfRouteInProgress && !!routeInProgress,
+            stopAutoTrafficUpdates: plan.stopUpdates,
+            statusMessage: plan.statusMessage,
+            statusType: plan.statusType,
+        };
+    }
+
+    /**
+     * Execute plan for toggling automatic reroute on GPS deviation.
+     * @param {boolean} currentEnabled
+     * @returns {Object}
+     */
+    function buildAutoRerouteOnDeviationToggleExecutePlan(currentEnabled) {
+        var plan = buildAutoRerouteOnDeviationTogglePlan(currentEnabled);
+        return {
+            shouldApply: true,
+            nextEnabled: plan.nextEnabled,
+            storageKey: plan.storageKey,
+            storageValue: plan.storageValue,
+            toggle: {
+                id: plan.toggleElementId,
+                enabled: plan.nextEnabled,
+            },
+            saveAllSettings: plan.saveAllSettings,
+            statusMessage: plan.statusMessage,
+            statusType: plan.statusType,
+        };
+    }
+
+    /**
      * Init plan for auto-traffic, deviation reroute, and route-traffic toggles.
      * @param {Object} [opts]
      * @param {boolean} [opts.autoTrafficUpdateEnabled]
@@ -731,7 +778,9 @@
         buildStopTrafficMonitoringExecutePlan: buildStopTrafficMonitoringExecutePlan,
         buildStopTrafficMonitoringOrchestrationPlan: buildStopTrafficMonitoringOrchestrationPlan,
         buildAutoTrafficUpdateTogglePlan: buildAutoTrafficUpdateTogglePlan,
+        buildAutoTrafficUpdateToggleExecutePlan: buildAutoTrafficUpdateToggleExecutePlan,
         buildAutoRerouteOnDeviationTogglePlan: buildAutoRerouteOnDeviationTogglePlan,
+        buildAutoRerouteOnDeviationToggleExecutePlan: buildAutoRerouteOnDeviationToggleExecutePlan,
         buildInitAutoTrafficRerouteTogglesPlan: buildInitAutoTrafficRerouteTogglesPlan,
     };
 
