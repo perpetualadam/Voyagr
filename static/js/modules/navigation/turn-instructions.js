@@ -201,6 +201,24 @@
         return direction;
     }
 
+    /**
+     * UK left-hand default for lane guidance: slight keep hints on 2-lane non-motorway
+     * roads are treated as straight (left lane) unless markings say otherwise.
+     * @param {string} maneuverDir
+     * @param {string|null} roadClass
+     * @param {number} [totalLanes]
+     * @returns {string}
+     */
+    function refineLaneManeuverForUK(maneuverDir, roadClass, totalLanes) {
+        if (maneuverDir === 'through') return 'straight';
+        if (isMotorwayRoadClass(roadClass)) return maneuverDir;
+        var lanes = totalLanes != null ? totalLanes : 2;
+        if (lanes <= 2 && (maneuverDir === 'slight_right' || maneuverDir === 'slight_left')) {
+            return 'straight';
+        }
+        return maneuverDir;
+    }
+
     function ordinalExit(n) {
         var j = n % 10;
         var k = n % 100;
@@ -1048,6 +1066,9 @@
         }
 
         var maneuverDir = maneuverTypeToLaneDirectionKey(nextStep.type || 0);
+        if (opts.roadClass) {
+            maneuverDir = refineLaneManeuverForUK(maneuverDir, opts.roadClass);
+        }
         var exitCount = 0;
         if (maneuverDir === 'roundabout') {
             exitCount = effectiveRoundaboutExitCountFromSteps(opts.routeSteps, stepIndex);
@@ -1093,6 +1114,7 @@
         getTurnDirectionText: getTurnDirectionText,
         isMotorwayRoadClass: isMotorwayRoadClass,
         refineManeuverDirection: refineManeuverDirection,
+        refineLaneManeuverForUK: refineLaneManeuverForUK,
         getRoundaboutDirectionText: getRoundaboutDirectionText,
         buildTurnDisplayInstruction: buildTurnDisplayInstruction,
         ordinalEnglishExit: ordinalEnglishExit,

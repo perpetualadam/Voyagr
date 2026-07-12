@@ -424,8 +424,29 @@ describe('buildLaneGuidanceTickPlan', () => {
             routeSteps: [{ type: 8 }],
             currentStepIndex: 0,
         });
+        expect(plan.action).toBe('update');
         expect(plan.maneuverDir).toBe('straight');
         expect(plan.roundaboutExitCount).toBe(0);
+    });
+
+    test('slight_right on 2-lane primary becomes straight for lane guidance', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [{ type: 9 }],
+            currentStepIndex: 0,
+            roadClass: 'primary',
+        });
+        expect(plan.maneuverDir).toBe('straight');
+    });
+
+    test('slight_right on motorway stays slight_right', () => {
+        const plan = TI.buildLaneGuidanceTickPlan({
+            routeInProgress: true,
+            routeSteps: [{ type: 9 }],
+            currentStepIndex: 0,
+            roadClass: 'motorway',
+        });
+        expect(plan.maneuverDir).toBe('slight_right');
     });
 });
 

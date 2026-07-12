@@ -446,6 +446,7 @@
                 routeInProgress: rt().g('routeInProgress'),
                 routeSteps: rt().g('currentRouteSteps'),
                 currentStepIndex: rt().g('currentStepIndex'),
+                roadClass: rt().call.getCurrentRoadType() || 'unknown',
             });
             const laneApply = TI.buildLaneGuidanceTickApplyPlan(laneTick);
             if (laneApply.action === 'apply') {

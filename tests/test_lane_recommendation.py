@@ -18,6 +18,7 @@ from voyagr.api.navigation import (
     _parse_turn_lanes,
     _recommend_lane_from_turn_lanes,
     _get_recommended_lane_simple,
+    _normalize_lane_maneuver_for_uk,
     _descriptive_lane_name,
 )
 
@@ -51,6 +52,33 @@ class TestSimpleLaneFallback(unittest.TestCase):
     def test_roundabout_third_plus_exit_uses_right_lane(self):
         self.assertEqual(_get_recommended_lane_simple('roundabout', 3, 3), 3)
         self.assertEqual(_get_recommended_lane_simple('roundabout', 4, 4), 4)
+
+    def test_slight_right_two_lane_primary_defaults_left(self):
+        # Valhalla "keep right" on a 2-lane A-road should stay left (UK default).
+        normalized = _normalize_lane_maneuver_for_uk('slight_right', 2, 'primary')
+        self.assertEqual(normalized, 'straight')
+        self.assertEqual(_get_recommended_lane_simple(normalized, 2), 1)
+
+    def test_slight_right_motorway_still_uses_right_lane(self):
+        normalized = _normalize_lane_maneuver_for_uk('slight_right', 3, 'motorway')
+        self.assertEqual(normalized, 'slight_right')
+        self.assertEqual(_get_recommended_lane_simple(normalized, 3), 3)
+
+
+class TestNormalizeLaneManeuverForUK(unittest.TestCase):
+    def test_through_alias_to_straight(self):
+        self.assertEqual(_normalize_lane_maneuver_for_uk('through', 2, 'primary'), 'straight')
+
+    def test_slight_hints_on_two_lane_non_motorway_become_straight(self):
+        for m in ('slight_right', 'slight_left'):
+            self.assertEqual(_normalize_lane_maneuver_for_uk(m, 2, 'primary'), 'straight')
+            self.assertEqual(_normalize_lane_maneuver_for_uk(m, 2, 'secondary'), 'straight')
+
+    def test_slight_hints_preserved_on_motorway(self):
+        self.assertEqual(_normalize_lane_maneuver_for_uk('slight_right', 3, 'motorway'), 'slight_right')
+
+    def test_slight_hints_preserved_on_three_lane_primary(self):
+        self.assertEqual(_normalize_lane_maneuver_for_uk('slight_right', 3, 'primary'), 'slight_right')
 
 
 class TestParseTurnLanes(unittest.TestCase):

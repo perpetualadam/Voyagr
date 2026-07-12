@@ -25,6 +25,29 @@
         tertiary: 1, residential: 1, unclassified: 1
     };
 
+    /** True for motorway/trunk (and link) road classes. */
+    function isMotorwayRoadType(roadType) {
+        if (roadType == null || roadType === '') return false;
+        var rc = String(roadType).toLowerCase();
+        return rc === 'motorway' || rc === 'motorway_link' || rc === 'trunk' || rc === 'trunk_link';
+    }
+
+    /**
+     * UK left-hand default: on 2-lane non-motorway roads, slight keep hints are lane-neutral.
+     * @param {string} maneuver
+     * @param {string} roadType
+     * @param {number} totalLanes
+     * @returns {string}
+     */
+    function normalizeLaneManeuverForUK(maneuver, roadType, totalLanes) {
+        if (maneuver === 'through') return 'straight';
+        if (isMotorwayRoadType(roadType)) return maneuver;
+        if (totalLanes <= 2 && (maneuver === 'slight_right' || maneuver === 'slight_left')) {
+            return 'straight';
+        }
+        return maneuver;
+    }
+
     /** English ordinal for a positive integer (1 -> "1st", 2 -> "2nd", ...). */
     function ordinal(n) {
         var s = ['th', 'st', 'nd', 'rd'];
@@ -76,6 +99,8 @@
     function buildDeterministicLaneGuidance(maneuver, distance, exitCount, roadType) {
         var totalLanes = LANE_DEFAULTS[roadType] || 2;
         if (totalLanes < 1) totalLanes = 1;
+
+        maneuver = normalizeLaneManeuverForUK(maneuver, roadType, totalLanes);
 
         var lane;
         var dir = 'through';
@@ -244,6 +269,13 @@
         opts = opts || {};
         var now = opts.now != null ? opts.now : Date.now();
         var roundaboutExitCount = opts.roundaboutExitCount || 0;
+        var roadType = opts.roadType || 'unknown';
+        var estimatedLanes = LANE_DEFAULTS[roadType] || 2;
+        var maneuver = normalizeLaneManeuverForUK(
+            opts.maneuver,
+            roadType,
+            estimatedLanes
+        );
 
         var distanceMovedMeters = 999;
         if (opts.lastPosition && typeof opts.calculateDistance === 'function') {
@@ -260,7 +292,7 @@
             lastFetch: opts.lastFetch,
             lastPosition: opts.lastPosition,
             distanceMovedMeters: distanceMovedMeters,
-            maneuver: opts.maneuver,
+            maneuver: maneuver,
             lastManeuver: opts.lastManeuver,
         })) {
             return { action: 'skip', reason: 'throttle' };
@@ -274,16 +306,15 @@
             opts.routePolyline,
             opts.calculateDistance
         );
-        var roadType = opts.roadType || 'unknown';
 
         var statePatch = {
             lastFetch: now,
-            lastManeuver: opts.maneuver,
+            lastManeuver: maneuver,
             lastPosition: { lat: opts.lat, lon: opts.lon },
         };
 
         var cacheKey = buildLaneGuidanceCacheKey(
-            opts.maneuver,
+            maneuver,
             roundaboutExitCount,
             roadType,
             opts.lat,
@@ -305,7 +336,7 @@
                 renderPayload: Object.assign(
                     {},
                     cacheEntry.data,
-                    laneUrgencyFields(distToManeuver, lanePos, opts.maneuver, roundaboutExitCount)
+                    laneUrgencyFields(distToManeuver, lanePos, maneuver, roundaboutExitCount)
                 ),
             };
         }
@@ -318,7 +349,7 @@
                 lat: opts.lat,
                 lon: opts.lon,
                 heading: opts.heading,
-                maneuver: opts.maneuver,
+                maneuver: maneuver,
                 distance: distToManeuver,
                 roadType: roadType,
                 roundaboutExitCount: roundaboutExitCount,
@@ -327,7 +358,7 @@
             distToManeuver: distToManeuver,
             roadType: roadType,
             roundaboutExitCount: roundaboutExitCount,
-            maneuver: opts.maneuver,
+            maneuver: maneuver,
         };
     }
 
@@ -576,6 +607,8 @@
     var api = {
         ARROW: ARROW,
         LANE_DEFAULTS: LANE_DEFAULTS,
+        isMotorwayRoadType: isMotorwayRoadType,
+        normalizeLaneManeuverForUK: normalizeLaneManeuverForUK,
         ordinal: ordinal,
         laneNameFor: laneNameFor,
         laneUrgencyFields: laneUrgencyFields,

@@ -8,8 +8,24 @@ const LG = require('../modules/navigation/lane-guidance.js');
 describe('lane-guidance module surface', () => {
     test('exposes the expected pure functions', () => {
         ['ordinal', 'laneNameFor', 'laneUrgencyFields', 'buildDeterministicLaneGuidance',
+            'normalizeLaneManeuverForUK', 'isMotorwayRoadType',
             'shouldShow', 'badge', 'urgencyClass', 'displayText', 'laneIndicators', 'buildLaneIndicatorHtml']
             .forEach((fn) => expect(typeof LG[fn]).toBe('function'));
+    });
+});
+
+describe('normalizeLaneManeuverForUK', () => {
+    test('slight keep hints on 2-lane primary become straight', () => {
+        expect(LG.normalizeLaneManeuverForUK('slight_right', 'primary', 2)).toBe('straight');
+        expect(LG.normalizeLaneManeuverForUK('slight_left', 'secondary', 2)).toBe('straight');
+    });
+
+    test('slight keep hints stay on motorways', () => {
+        expect(LG.normalizeLaneManeuverForUK('slight_right', 'motorway', 3)).toBe('slight_right');
+    });
+
+    test('through alias maps to straight', () => {
+        expect(LG.normalizeLaneManeuverForUK('through', 'primary', 2)).toBe('straight');
     });
 });
 
@@ -96,10 +112,16 @@ describe('buildDeterministicLaneGuidance', () => {
         expect(g.lane_arrows[2].arrow).toBe('→');
     });
 
-    test('slight turns keep the slight direction/arrow', () => {
+    test('slight turns keep the slight direction/arrow on motorways', () => {
         const g = LG.buildDeterministicLaneGuidance('slight_right', 200, 0, 'motorway');
         expect(g.lane_arrows[2].primary).toBe('slight_right');
         expect(g.lane_arrows[2].arrow).toBe('↗');
+    });
+
+    test('slight_right on 2-lane primary defaults to left lane (UK)', () => {
+        const g = LG.buildDeterministicLaneGuidance('slight_right', 200, 0, 'primary');
+        expect(g.recommended_lane).toBe(1);
+        expect(g.lane_arrows[0].primary).toBe('through');
     });
 
     test('through maneuvers recommend the central-ish lane', () => {
@@ -354,6 +376,28 @@ describe('lane guidance fetch tick plan', () => {
         });
         expect(tick.action).toBe('render-cached');
         expect(tick.renderPayload.total_lanes).toBe(data.total_lanes);
+    });
+
+    test('buildLaneGuidanceFetchTickPlan normalizes slight_right on primary to straight in API URL', () => {
+        const tick = LG.buildLaneGuidanceFetchTickPlan({
+            lat: 51.5,
+            lon: -0.1,
+            heading: 90,
+            maneuver: 'slight_right',
+            now: 10_000,
+            lastFetch: 0,
+            lastPosition: null,
+            lastManeuver: '',
+            routeSteps: steps,
+            currentStepIndex: 0,
+            routePolyline: polyline,
+            roadType: 'primary',
+            calculateDistance: () => 120,
+            cacheLookup: () => null,
+        });
+        expect(tick.action).toBe('fetch');
+        expect(tick.url).toContain('maneuver=straight');
+        expect(tick.statePatch.lastManeuver).toBe('straight');
     });
 });
 

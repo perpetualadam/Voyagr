@@ -122,6 +122,30 @@ def _fetch_osm_lane_data(lat, lon):
         return None
 
 
+def _is_motorway_highway(highway_type):
+    """True for motorway/trunk (and link) road classes."""
+    if not highway_type:
+        return False
+    rc = str(highway_type).lower()
+    return rc in ('motorway', 'motorway_link', 'trunk', 'trunk_link')
+
+
+def _normalize_lane_maneuver_for_uk(maneuver, total_lanes, highway_type):
+    """On UK non-motorway two-lane roads, slight keep hints are lane-neutral.
+
+    Valhalla often emits slight_right/slight_left for gentle bearing changes on
+    A-roads where the Highway Code default is still the left lane unless markings
+    say otherwise. Treat those as straight for lane selection only.
+    """
+    if maneuver in ('through',):
+        return 'straight'
+    if _is_motorway_highway(highway_type):
+        return maneuver
+    if total_lanes <= 2 and maneuver in ('slight_right', 'slight_left'):
+        return 'straight'
+    return maneuver
+
+
 def _parse_turn_lanes(turn_lanes_str, total_lanes):
     """Parse OSM turn:lanes tag into per-lane allowed directions.
     Example: 'left|through|through;right' → [['left'], ['through'], ['through','right']]
@@ -250,6 +274,11 @@ def get_lane_guidance():
         # Ensure at least 1 lane
         total_lanes = max(1, total_lanes)
 
+        # UK left-hand default: slight keep hints on 2-lane non-motorway => straight
+        lane_maneuver = _normalize_lane_maneuver_for_uk(
+            next_maneuver, total_lanes, highway_type
+        )
+
         # Parse turn:lanes data if available
         parsed_lanes = _parse_turn_lanes(turn_lanes_str, total_lanes)
 
@@ -278,12 +307,12 @@ def get_lane_guidance():
         recommended_lane = None
         if parsed_lanes:
             recommended_lane = _recommend_lane_from_turn_lanes(
-                parsed_lanes, next_maneuver, roundabout_exit_count
+                parsed_lanes, lane_maneuver, roundabout_exit_count
             )
 
         if recommended_lane is None:
             recommended_lane = _get_recommended_lane_simple(
-                next_maneuver, total_lanes, roundabout_exit_count
+                lane_maneuver, total_lanes, roundabout_exit_count
             )
 
         lane_name = _descriptive_lane_name(recommended_lane, total_lanes)
