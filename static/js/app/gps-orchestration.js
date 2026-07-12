@@ -294,7 +294,7 @@
         let turnInfoThisTick = null;
 
         if (turnPlan.detect) {
-            turnInfoThisTick = detectUpcomingTurn(lat, lon);
+            turnInfoThisTick = rt().call.detectUpcomingTurn(lat, lon);
         }
 
         if (turnPlan.announce && turnInfoThisTick) {
@@ -865,17 +865,6 @@
         applyTurnInfoETAPanelFromPlan(render);
     }
 
-
-    let lastVoiceAnnouncementTime = 0;
-    let VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = 10000;
-
-    rt().s('voiceAnnouncementsEnabled',  true);
-    rt().s('voiceFrequencyMode',  localStorage.getItem('voiceFrequencyMode') || 'all');
-
-
-
-
-
     /**
      * Remaining meters along the active route polyline (snapped progress). Shared by voice, ETA bar, and arrival.
      * @param {number} lat
@@ -941,15 +930,23 @@
         rt().call.updateRecenterButtonVisibility();
     }
 
-    // Track the last snapped route index for efficient searching
-    rt().s('lastSnappedRouteIndex',  0);
-    /** For turn detection only: monotonic polyline vertex index (never goes backwards). */
-    rt().s('lastTurnDetectRouteVertexIndex',  0);
-
-    // Active-navigation snap lock constants live in speed-gps.js (DEFAULTS).
-    rt().s('_smoothDisplayLat',  null);
-    rt().s('_smoothDisplayLon',  null);
-    rt().s('_snapBlendWeightState',  0);
+    function initializeGpsModuleState() {
+        rt().s('lastSnappedRouteIndex', 0);
+        rt().s('lastTurnDetectRouteVertexIndex', 0);
+        rt().s('_smoothDisplayLat', null);
+        rt().s('_smoothDisplayLon', null);
+        rt().s('_snapBlendWeightState', 0);
+        rt().s('lastRerouteTime', 0);
+        rt().s('lastRerouteAttemptTime', 0);
+        rt().s('lastRerouteDeviation', 0);
+        rt().s('deviationStartTimeCheck', null);
+        rt().s('deviationOffRouteStreak', 0);
+        rt().s('rerouteAttemptCount', 0);
+        rt().s('rerouteInProgress', false);
+        rt().s('postRerouteGraceUntil', 0);
+        rt().s('rerouteFailureRetryTimer', null);
+        rt().s('rerouteFailureRetryCount', 0);
+    }
 
     /**
      * Clear EMA-smoothed marker position and follow-camera bookkeeping.
@@ -1080,11 +1077,11 @@
             voiceAnnouncedForManeuverIndex: rt().g('_voiceAnnouncedForManeuverIndex'),
             voiceAnnouncedCategory: rt().g('_voiceAnnouncedCategory'),
             followingManeuver: turnInfo?.maneuverIndex != null
-                ? getFollowingManeuver(turnInfo.maneuverIndex)
+                ? rt().call.getFollowingManeuver(turnInfo.maneuverIndex)
                 : null,
             chainAppendOpts: {
                 getTurnDirectionText: TI.getTurnDirectionText.bind(TI),
-                effectiveRoundaboutExitCount: (idx) => effectiveRoundaboutExitCount(idx),
+                effectiveRoundaboutExitCount: (idx) => rt().call.effectiveRoundaboutExitCount(idx),
                 ordinalEnglishExit: TI.ordinalEnglishExit,
             },
         });
@@ -1124,21 +1121,8 @@
         }
     }
 
-    // Rerouting debounce variables
-    rt().s('lastRerouteTime',  0);
-    rt().s('lastRerouteAttemptTime',  0);
     const REROUTE_DEBOUNCE_MS = 30000;
-    rt().s('lastRerouteDeviation',  0);
-    rt().s('deviationStartTimeCheck',  null);
-    rt().s('deviationOffRouteStreak',  0);
-    rt().s('rerouteAttemptCount',  0);
-    rt().s('rerouteInProgress',  false);
-    rt().s('postRerouteGraceUntil',  0);
     let lastRerouteAnnouncementTime = 0;
-
-    /** After a failed deviation reroute API call, retry with backoff (does not replace GPS deviation timing). */
-    rt().s('rerouteFailureRetryTimer',  null);
-    rt().s('rerouteFailureRetryCount',  0);
 
     function clearRerouteFailureRetries() {
         if (rt().g('rerouteFailureRetryTimer')) {
@@ -1646,6 +1630,7 @@
 
     var api = {
         bind: bind,
+        initializeGpsModuleState: initializeGpsModuleState,
         calculateDistanceMeters: calculateDistanceMeters,
         resolveGpsRouteSnapForTick: resolveGpsRouteSnapForTick,
         getVehicleDisplayCoordinates: getVehicleDisplayCoordinates,

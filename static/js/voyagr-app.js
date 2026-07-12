@@ -1589,6 +1589,9 @@ function getGpsOrchestrationRuntime() {
             updateRoadReportFabVisibility,
             hasUserStartedMoving,
             getSpeedLimitFetchState: () => VoyagrSpeedWidgetOrchestration.getSpeedLimitFetchState(),
+            detectUpcomingTurn: (lat, lon) => VoyagrTurnInstructionWidgetOrchestration.detectUpcomingTurn(lat, lon),
+            getFollowingManeuver: (idx) => VoyagrTurnInstructionWidgetOrchestration.getFollowingManeuver(idx),
+            effectiveRoundaboutExitCount: (idx) => VoyagrTurnInstructionWidgetOrchestration.effectiveRoundaboutExitCount(idx),
         },
     };
 }
@@ -1637,156 +1640,53 @@ function triggerAutomaticReroute(currentLat, currentLon) {
     return VoyagrGpsOrchestration.triggerAutomaticReroute(currentLat, currentLon);
 }
 
-/**
- * Collect voice preference values from settings form controls.
- * @returns {Object}
- */
-function collectVoicePreferencesDomInput() {
+// ===== VOICE ANNOUNCEMENTS ORCHESTRATION =====
+// Orchestration lives in static/js/app/voice-announcements-orchestration.js (bound at file end).
+
+function speakMessage(message, priority = 'normal') {
+    return VoyagrVoiceAnnouncementsOrchestration.speakMessage(message, priority);
+}
+
+function getVoiceAnnouncementsOrchestrationRuntime() {
     return {
-        turnDistance1: document.getElementById('voiceTurnDistance1')?.value,
-        turnDistance2: document.getElementById('voiceTurnDistance2')?.value,
-        turnDistance3: document.getElementById('voiceTurnDistance3')?.value,
-        hazardDistance: document.getElementById('voiceHazardDistance')?.value,
-        voiceFrequencyMode: document.getElementById('voiceFrequencyMode')?.value,
-        announcementsEnabled: typeof voiceAnnouncementsEnabled === 'boolean'
-            ? voiceAnnouncementsEnabled
-            : (localStorage.getItem('voiceAnnouncementsEnabled') === 'true'),
+        voiceAnnouncements: () => _voiceAnnouncements(),
+        toggleUI: () => _toggleUI(),
+        g: (key) => {
+            switch (key) {
+            case 'voiceAnnouncementsEnabled': return voiceAnnouncementsEnabled;
+            case 'voiceFrequencyMode': return voiceFrequencyMode;
+            case 'voiceAnnouncementMinIntervalMs': return VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS;
+            default: return undefined;
+            }
+        },
+        s: (key, val) => {
+            switch (key) {
+            case 'voiceAnnouncementsEnabled': voiceAnnouncementsEnabled = val; break;
+            default: break;
+            }
+        },
+        applyVoiceRuntimeFromPlan: (plan) => {
+            if (!plan) return;
+            TURN_ANNOUNCEMENT_DISTANCES.length = 0;
+            TURN_ANNOUNCEMENT_DISTANCES.push(...plan.turnAnnouncementDistances);
+            DESTINATION_ANNOUNCEMENT_DISTANCES.length = 0;
+            DESTINATION_ANNOUNCEMENT_DISTANCES.push(...plan.destinationAnnouncementDistances);
+            HAZARD_WARNING_DISTANCE = plan.hazardWarningDistance;
+            voiceAnnouncementsEnabled = plan.voiceAnnouncementsEnabled;
+            voiceFrequencyMode = plan.voiceFrequencyMode;
+            VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = plan.voiceAnnouncementMinIntervalMs;
+        },
+        call: {
+            showStatus,
+            saveAllSettings,
+            applyDomSelectsFromPlan,
+        },
     };
 }
 
-function collectVoicePreferencesFormState() {
-    const VA = _voiceAnnouncements();
-    return VA.buildVoicePreferencesCollectPlan(
-        VA.buildCollectVoicePreferencesDomInputPlan(collectVoicePreferencesDomInput())
-    );
-}
-
-/**
- * Apply voice preference runtime globals from a pure runtime apply plan.
- * @param {Object} plan
- */
-function applyVoicePreferencesRuntimeFromPlan(plan) {
-    if (!plan) return;
-    TURN_ANNOUNCEMENT_DISTANCES.length = 0;
-    TURN_ANNOUNCEMENT_DISTANCES.push(...plan.turnAnnouncementDistances);
-    DESTINATION_ANNOUNCEMENT_DISTANCES.length = 0;
-    DESTINATION_ANNOUNCEMENT_DISTANCES.push(...plan.destinationAnnouncementDistances);
-    HAZARD_WARNING_DISTANCE = plan.hazardWarningDistance;
-    voiceAnnouncementsEnabled = plan.voiceAnnouncementsEnabled;
-    voiceFrequencyMode = plan.voiceFrequencyMode;
-    VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = plan.voiceAnnouncementMinIntervalMs;
-}
-
-function applySaveVoicePreferencesFromPlan(execute) {
-    if (!execute || !execute.shouldSave) return;
-
-    (execute.storagePatches || []).forEach(({ key, value }) => {
-        localStorage.setItem(key, value);
-    });
-    if (execute.applyRuntime) {
-        applyVoicePreferencesRuntimeFromPlan(execute.runtimePlan);
-    }
-
-    console.log(execute.logMessage, execute.prefs);
-    showStatus(execute.successStatusMessage, execute.successStatusType);
-}
-
-/**
- * saveVoicePreferences function
- * @function saveVoicePreferences
- * @returns {*} Return value description
- */
-function saveVoicePreferences() {
-    const VA = _voiceAnnouncements();
-    applySaveVoicePreferencesFromPlan(
-        VA.buildSaveVoicePreferencesEntryOrchestrationPlan(
-            collectVoicePreferencesFormState()
-        ).execute
-    );
-}
-
-function applyLoadVoicePreferencesSavedFromPlan(entry) {
-    const execute = entry.execute;
-    if (!execute || !execute.shouldApply) return;
-
-    applyDomSelectsFromPlan(execute.domPlan.selects);
-    _toggleUI().applyLabeledToggleButton(
-        document.getElementById(execute.domPlan.labeledToggle.id),
-        execute.domPlan.labeledToggle.enabled
-    );
-    applyVoicePreferencesRuntimeFromPlan(execute.runtimePlan);
-    console.log(entry.orch.loadedLogMessage, execute.prefs);
-}
-
-function applyLoadVoicePreferencesDefaultsFromPlan(entry) {
-    const defaults = entry.defaults;
-    if (!defaults || !defaults.shouldApply) return;
-
-    const toggleButton = document.getElementById(defaults.domPlan.labeledToggle.id);
-    if (toggleButton) {
-        _toggleUI().applyLabeledToggleButton(toggleButton, defaults.domPlan.labeledToggle.enabled);
-        if (defaults.setAnnouncementsEnabledFromToggle) {
-            voiceAnnouncementsEnabled = defaults.domPlan.labeledToggle.enabled;
-        }
-    }
-    console.log(entry.orch.defaultsLogMessage);
-}
-
-/**
- * loadVoicePreferences function
- * @function loadVoicePreferences
- * @returns {*} Return value description
- */
-function loadVoicePreferences() {
-    const VA = _voiceAnnouncements();
-    const orch = VA.buildLoadVoicePreferencesOrchestrationPlan();
-    try {
-        const saved = localStorage.getItem(orch.storageKey);
-        if (saved) {
-            const prefs = JSON.parse(saved);
-            applyLoadVoicePreferencesSavedFromPlan(
-                VA.buildLoadVoicePreferencesSavedEntryOrchestrationPlan(prefs)
-            );
-            return;
-        }
-
-        applyLoadVoicePreferencesDefaultsFromPlan(
-            VA.buildLoadVoicePreferencesDefaultsEntryOrchestrationPlan()
-        );
-    } catch (e) {
-        console.log(orch.errorLogPrefix, e);
-    }
-}
-
-
-function applyToggleVoiceAnnouncementsFromPlan(execute, button) {
-    if (!execute || !execute.shouldApply || !button) return;
-
-    _toggleUI().applyLabeledToggleButton(button, execute.toggle.enabled);
-    localStorage.setItem(execute.storageKey, execute.storageValue);
-    if (execute.updateRuntimeFlag) voiceAnnouncementsEnabled = execute.enabled;
-    if (execute.saveVoicePreferences) saveVoicePreferences();
-    showStatus(execute.statusMessage, execute.statusType);
-    if (execute.saveAllSettings) saveAllSettings();
-}
-
-/**
- * toggleVoiceAnnouncements function
- * @function toggleVoiceAnnouncements
- * @returns {*} Return value description
- */
-function toggleVoiceAnnouncements() {
-    const VA = _voiceAnnouncements();
-    const button = document.getElementById(VA.VOICE_PREFS_ELEMENT_IDS.announcementsEnabled);
-    if (!button) return;
-
-    applyToggleVoiceAnnouncementsFromPlan(
-        VA.buildToggleVoiceAnnouncementsEntryOrchestrationPlan(
-            button.classList.contains('active')
-        ).execute,
-        button
-    );
-}
+function saveVoicePreferences() { VoyagrVoiceAnnouncementsOrchestration.saveVoicePreferences(); }
+function loadVoicePreferences() { VoyagrVoiceAnnouncementsOrchestration.loadVoicePreferences(); }
+function toggleVoiceAnnouncements() { VoyagrVoiceAnnouncementsOrchestration.toggleVoiceAnnouncements(); }
 
 // ===== FORM CLEAR ORCHESTRATION =====
 // Orchestration lives in static/js/app/form-clear-orchestration.js (bound at file end).
@@ -2201,36 +2101,6 @@ function getJourneyOverviewOrchestrationRuntime() {
 }
 
 function toggleJourneyOverview() { VoyagrJourneyOverviewOrchestration.toggleJourneyOverview(); }
-
-// ===== DISTANCE CALCULATION & TURN DETECTION =====
-/**
- * Map a Valhalla maneuver type to a turn-by-turn direction key, or null when it is not
- * an announceable maneuver (start / continue / straight / ramp-straight / stay-straight).
- * Shared by the advance "Then" maneuver (widget + voice). Kept in sync with the inline
- * mappings in detectUpcomingTurn / updateTurnWidgetFromPosition.
- */
-function refineManeuverDirectionForRoute(type, direction, maneuver) {
-    return VoyagrTurnInstructionWidgetOrchestration.refineManeuverDirectionForRoute(type, direction, maneuver);
-}
-
-function getFollowingManeuver(currentIndex) {
-    return VoyagrTurnInstructionWidgetOrchestration.getFollowingManeuver(currentIndex);
-}
-
-function effectiveRoundaboutExitCount(stepIndex) {
-    return VoyagrTurnInstructionWidgetOrchestration.effectiveRoundaboutExitCount(stepIndex);
-}
-
-// ordinalEnglishExit / laneOrdinalEnglish / buildTurnLaneHintHtml live in
-// modules/navigation/turn-instructions.js — call _turnInstructions() directly.
-
-function buildTurnDisplayInstruction(turnInfo) {
-    return VoyagrTurnInstructionWidgetOrchestration.buildTurnDisplayInstruction(turnInfo);
-}
-
-function detectUpcomingTurn(userLat, userLon) {
-    return VoyagrTurnInstructionWidgetOrchestration.detectUpcomingTurn(userLat, userLon);
-}
 
 // ===== VEHICLE ROUTING ORCHESTRATION =====
 // Orchestration lives in static/js/app/vehicle-routing-orchestration.js (bound at file end).
@@ -2711,7 +2581,7 @@ function getTurnInstructionWidgetOrchestrationRuntime() {
         getMapFollowingActive: () => mapFollowingActive,
         setMapFollowingActive: (val) => { mapFollowingActive = val; },
         call: {
-            detectUpcomingTurn,
+            detectUpcomingTurn: (lat, lon) => VoyagrTurnInstructionWidgetOrchestration.detectUpcomingTurn(lat, lon),
             updateARInstruction,
             showStatus,
             schedulePersistRoute,
@@ -2878,6 +2748,8 @@ let _voiceAnnouncedForManeuverIndex = null;
 let _voiceAnnouncedCategory = null;
 let lastTurnDetectRouteVertexIndex = 0;
 let voiceFrequencyMode = localStorage.getItem('voiceFrequencyMode') || 'all';
+let voiceAnnouncementsEnabled = localStorage.getItem('voiceAnnouncementsEnabled') === 'true';
+let VOICE_ANNOUNCEMENT_MIN_INTERVAL_MS = 10000;
 let HAZARD_WARNING_DISTANCE = 500;
 
 // Distance-to-destination announcement variables
@@ -3528,6 +3400,7 @@ VoyagrRerouteMapOrchestration.bind(getRerouteMapOrchestrationRuntime());
 VoyagrTrafficOrchestration.bind(getTrafficOrchestrationRuntime());
 VoyagrPorcupineOrchestration.bind(getPorcupineOrchestrationRuntime());
 VoyagrGpsOrchestration.bind(getGpsOrchestrationRuntime());
+VoyagrGpsOrchestration.initializeGpsModuleState();
 VoyagrLiveDataRefreshOrchestration.bind(getLiveDataRefreshOrchestrationRuntime());
 VoyagrTripHistoryOrchestration.bind(getTripHistoryOrchestrationRuntime());
 VoyagrRouteSavingOrchestration.bind(getRouteSavingOrchestrationRuntime());
@@ -3550,6 +3423,7 @@ VoyagrBottomSheetOrchestration.bind(getBottomSheetOrchestrationRuntime());
 VoyagrSupabaseAuthOrchestration.bind(getSupabaseAuthOrchestrationRuntime());
 VoyagrProfileStoreOrchestration.bind(getProfileStoreOrchestrationRuntime());
 VoyagrSettingsOrchestration.bind(getSettingsOrchestrationRuntime());
+VoyagrVoiceAnnouncementsOrchestration.bind(getVoiceAnnouncementsOrchestrationRuntime());
 VoyagrVoiceControlOrchestration.bind(getVoiceControlOrchestrationRuntime());
 VoyagrMapExploreOrchestration.bind(getMapExploreOrchestrationRuntime());
 VoyagrBatteryMonitoringOrchestration.bind(getBatteryMonitoringOrchestrationRuntime());
