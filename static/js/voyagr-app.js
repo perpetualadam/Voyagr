@@ -4448,9 +4448,7 @@ function applyRouteMapUpdateStateFromPlan(plan, newRoute) {
     }
 
     if (execute.roadNameReset) {
-        lastRoadNameFetch = 0;
-        lastRoadNamePosition = null;
-        currentRoadDisplayName = '';
+        VoyagrRoadNameOrchestration.resetRoadNameState();
     }
     if (execute.navigationArrivalReset) {
         resetNavigationArrivalState();
@@ -5803,9 +5801,6 @@ function getGpsOrchestrationRuntime() {
             case 'voiceAnnouncementsEnabled': return voiceAnnouncementsEnabled;
             case 'voiceFrequencyMode': return voiceFrequencyMode;
             case 'speedWidgetEnabled': return speedWidgetEnabled;
-            case 'lastRoadNameFetch': return lastRoadNameFetch;
-            case 'lastRoadNamePosition': return lastRoadNamePosition;
-            case 'currentRoadDisplayName': return currentRoadDisplayName;
             case 'userHasStartedMoving': return userHasStartedMoving;
                 default: return undefined;
             }
@@ -5872,9 +5867,6 @@ function getGpsOrchestrationRuntime() {
             case 'voiceAnnouncementsEnabled': voiceAnnouncementsEnabled = val; break;
             case 'voiceFrequencyMode': voiceFrequencyMode = val; break;
             case 'speedWidgetEnabled': speedWidgetEnabled = val; break;
-            case 'lastRoadNameFetch': lastRoadNameFetch = val; break;
-            case 'lastRoadNamePosition': lastRoadNamePosition = val; break;
-            case 'currentRoadDisplayName': currentRoadDisplayName = val; break;
             case 'userHasStartedMoving': userHasStartedMoving = val; break;
                 default: break;
             }
@@ -5913,7 +5905,7 @@ function getGpsOrchestrationRuntime() {
             smoothGpsSpeedMph,
             updateRecenterButtonVisibility,
             updateTurnWidgetFromPosition,
-            fetchRoadNameThrottled,
+            fetchRoadNameThrottled: (lat, lon) => VoyagrRoadNameOrchestration.fetchRoadNameThrottled(lat, lon),
             showStatus,
             sendNotification,
             speakMessage,
@@ -8829,7 +8821,7 @@ function updateTurnWidgetFromPosition(lat, lon, turnInfo) {
         lat,
         lon,
         lastSnappedRouteIndex,
-        currentRoadDisplayName,
+        currentRoadDisplayName: VoyagrRoadNameOrchestration.getCurrentRoadDisplayName(),
         turnInfo: resolvedTurnInfo,
         getActiveRouteManeuverIndex: SG ? SG.getActiveRouteManeuverIndex.bind(SG) : null,
         buildBetweenTurnDisplay: SG ? SG.buildBetweenTurnDisplay.bind(SG) : null,
@@ -10953,55 +10945,24 @@ function togglePreference(pref) {
     VoyagrRouteAvoidanceOrchestration.togglePreference(pref);
 }
 
-// ===== ROAD NAME DISPLAY (TomTom Reverse Geocoding) =====
+// ===== ROAD NAME ORCHESTRATION =====
+// Orchestration lives in static/js/app/road-name-orchestration.js (bound at file end).
 
-let lastRoadNameFetch = 0;
-let lastRoadNamePosition = null;
-let currentRoadDisplayName = '';
+function getRoadNameOrchestrationRuntime() {
+    return {
+        roadNameDisplay: () => _roadNameDisplay(),
+        call: {
+            calculateDistanceMeters,
+        },
+    };
+}
 
 function fetchRoadNameThrottled(lat, lon) {
-    const RN = _roadNameDisplay();
-    const tick = RN.buildRoadNameFetchTickPlan({
-        lat,
-        lon,
-        now: Date.now(),
-        lastFetch: lastRoadNameFetch,
-        lastPosition: lastRoadNamePosition,
-        calculateDistance: calculateDistanceMeters,
-    });
-    if (tick.action === 'skip') return;
-
-    const apply = RN.buildRoadNameFetchStateApplyPlan(tick);
-    if (apply.action === 'skip') return;
-
-    lastRoadNameFetch = apply.statePatch.lastFetch;
-    lastRoadNamePosition = apply.statePatch.lastPosition;
-
-    fetch(apply.fetch.url)
-        .then(r => r.json())
-        .then(data => {
-            const domApply = RN.buildRoadNameApiResponseDomApplyPlan(data);
-            if (domApply.action !== 'apply') return;
-            currentRoadDisplayName = domApply.statePatch.currentRoadDisplayName;
-            const bar = document.getElementById('roadNameBar');
-            const label = document.getElementById('currentRoadName');
-            if (bar && label) {
-                label.textContent = domApply.roadName;
-                bar.style.display = domApply.barDisplay;
-            }
-        })
-        .catch(err => {
-            console.debug('[RoadName] Fetch error:', err);
-        });
+    VoyagrRoadNameOrchestration.fetchRoadNameThrottled(lat, lon);
 }
-
 function hideRoadNameBar() {
-    const plan = _roadNameDisplay().getRoadNameBarHidePlan();
-    const bar = document.getElementById('roadNameBar');
-    if (bar) bar.style.display = plan.barDisplay;
-    currentRoadDisplayName = plan.roadName;
+    VoyagrRoadNameOrchestration.hideRoadNameBar();
 }
-
 
 // ===== BEST TIME TO LEAVE ORCHESTRATION =====
 // Orchestration lives in static/js/app/best-time-leave-orchestration.js (bound at file end).
@@ -11755,6 +11716,7 @@ VoyagrPoiSearchOrchestration.bind(getPoiSearchOrchestrationRuntime());
 VoyagrBestTimeLeaveOrchestration.bind(getBestTimeLeaveOrchestrationRuntime());
 VoyagrCazOrchestration.bind(getCazOrchestrationRuntime());
 VoyagrRouteAvoidanceOrchestration.bind(getRouteAvoidanceOrchestrationRuntime());
+VoyagrRoadNameOrchestration.bind(getRoadNameOrchestrationRuntime());
 
 
 
