@@ -2853,6 +2853,8 @@ function getPageInitOrchestrationRuntime() {
             ensureDefaultTrafficAwareRouting,
             loadAllSettings,
             applySettingsToUI,
+            initializeDarkMode,
+            updateThemeButtons,
             loadParkingPreferences,
             loadVoicePreferences,
             loadPorcupineWakeUi,

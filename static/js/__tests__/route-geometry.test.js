@@ -132,6 +132,30 @@ describe('buildGpsRouteSnapTickPlan', () => {
         expect(plan.action).toBe('snap');
         expect(plan.snapped.index).toBeGreaterThanOrEqual(0);
     });
+
+    test('stationary mode widens backward snap search', () => {
+        const polyline = [];
+        for (var i = 0; i < 40; i++) {
+            polyline.push([51.50 + i * 0.001, -0.12 + i * 0.001]);
+        }
+        const moving = RG.buildGpsRouteSnapTickPlan({
+            lat: polyline[5][0],
+            lon: polyline[5][1],
+            routeInProgress: true,
+            routePolyline: polyline,
+            lastSnappedRouteIndex: 20,
+            stationary: false,
+        });
+        const stopped = RG.buildGpsRouteSnapTickPlan({
+            lat: polyline[5][0],
+            lon: polyline[5][1],
+            routeInProgress: true,
+            routePolyline: polyline,
+            lastSnappedRouteIndex: 20,
+            stationary: true,
+        });
+        expect(stopped.snapped.index).toBeLessThan(moving.snapped.index);
+    });
 });
 
 describe('distanceAlongRouteToVertexMeters', () => {

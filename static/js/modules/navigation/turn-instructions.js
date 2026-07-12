@@ -307,15 +307,31 @@
     var KEEP_RIGHT_TYPES = [9, 18, 20, 23, 35];  // slight/ramp/exit/stay/merge RIGHT
 
     /**
+     * Whether a keep-left/right chip should show for UK left-hand traffic.
+     * @param {number} maneuverType - Valhalla maneuver type
+     * @param {string} keepSide - 'left' | 'right'
+     * @param {string|null} [roadClass]
+     * @returns {boolean}
+     */
+    function shouldShowUkKeepLaneHint(maneuverType, keepSide, roadClass) {
+        if (!roadClass) return true;
+        if (KEEP_LEFT_TYPES.indexOf(maneuverType) >= 0) keepSide = 'left';
+        if (KEEP_RIGHT_TYPES.indexOf(maneuverType) >= 0) keepSide = 'right';
+        var maneuverDir = keepSide === 'right' ? 'slight_right' : 'slight_left';
+        return refineLaneManeuverForUK(maneuverDir, roadClass) !== 'straight';
+    }
+
+    /**
      * Build the lane-hint chip HTML for the next-turn widget (exit count badge, lane
      * position badge, and "Keep left/right" fallback when within 900 m).
      *
      * @param {object|null} maneuver - Valhalla maneuver object
      * @param {number} exitCount - Result of the caller's effectiveRoundaboutExitCount()
      * @param {number|null} distanceMeters - Current distance to this maneuver
+     * @param {string|null} [roadClass] - Valhalla road_class for UK keep-hint rules
      * @returns {string} HTML fragment (may be empty)
      */
-    function buildTurnLaneHintHtml(maneuver, exitCount, distanceMeters) {
+    function buildTurnLaneHintHtml(maneuver, exitCount, distanceMeters, roadClass) {
         if (!maneuver) return '';
         var mt = maneuver.type || 0;
         var chips = [];
@@ -344,9 +360,11 @@
         // "keep left" being shown alongside a "Turn left" instruction).
         var isKeep = KEEP_LEFT_TYPES.indexOf(mt) >= 0 || KEEP_RIGHT_TYPES.indexOf(mt) >= 0;
         if (isKeep && chips.length === 0 && typeof distanceMeters === 'number' && distanceMeters < 900) {
-            if (KEEP_LEFT_TYPES.indexOf(mt) >= 0) {
+            if (KEEP_LEFT_TYPES.indexOf(mt) >= 0 &&
+                shouldShowUkKeepLaneHint(mt, 'left', roadClass)) {
                 chips.push('<span class="lane-hint-chip">Keep left</span>');
-            } else {
+            } else if (KEEP_RIGHT_TYPES.indexOf(mt) >= 0 &&
+                shouldShowUkKeepLaneHint(mt, 'right', roadClass)) {
                 chips.push('<span class="lane-hint-chip">Keep right</span>');
             }
         }
@@ -639,7 +657,12 @@
         var hintVisible = false;
         if (turnInfo.maneuver && turnInfo.maneuverIndex != null) {
             var exitCt = opts.roundaboutExitCount != null ? opts.roundaboutExitCount : 0;
-            hintHtml = buildTurnLaneHintHtml(turnInfo.maneuver, exitCt, turnInfo.distance);
+            hintHtml = buildTurnLaneHintHtml(
+                turnInfo.maneuver,
+                exitCt,
+                turnInfo.distance,
+                opts.roadClass || null
+            );
             hintVisible = !!hintHtml;
         }
 
@@ -1120,6 +1143,7 @@
         ordinalEnglishExit: ordinalEnglishExit,
         laneOrdinalEnglish: laneOrdinalEnglish,
         buildTurnLaneHintHtml: buildTurnLaneHintHtml,
+        shouldShowUkKeepLaneHint: shouldShowUkKeepLaneHint,
         INSTRUCTIONS_EMPTY_HTML: INSTRUCTIONS_EMPTY_HTML,
         buildInstructionStatusHtml: buildInstructionStatusHtml,
         buildInstructionListItemHtml: buildInstructionListItemHtml,

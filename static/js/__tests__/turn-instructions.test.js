@@ -303,9 +303,20 @@ describe('buildTurnLaneHintHtml', () => {
         expect(TI.buildTurnLaneHintHtml(null, 0, 500)).toBe('');
     });
 
-    test('keep-right chip for slight-right type within 900m', () => {
-        const html = TI.buildTurnLaneHintHtml({ type: 9, lanes: null }, 0, 400);
+    test('keep-right chip for slight-right type within 900m on motorways', () => {
+        const html = TI.buildTurnLaneHintHtml({ type: 9, lanes: null }, 0, 400, 'motorway');
         expect(html).toContain('Keep right');
+    });
+
+    test('no keep-right chip on 2-lane primary (UK left-hand default)', () => {
+        const html = TI.buildTurnLaneHintHtml({ type: 9, lanes: null }, 0, 400, 'primary');
+        expect(html).not.toContain('Keep right');
+        expect(html).not.toContain('Keep left');
+    });
+
+    test('shouldShowUkKeepLaneHint suppresses slight keeps on 2-lane A-roads', () => {
+        expect(TI.shouldShowUkKeepLaneHint(9, 'right', 'primary')).toBe(false);
+        expect(TI.shouldShowUkKeepLaneHint(9, 'right', 'motorway')).toBe(true);
     });
 
     test('active lane indicator shows lane ordinal chip', () => {

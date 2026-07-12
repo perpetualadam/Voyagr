@@ -275,6 +275,16 @@ describe('stepPickRawSpeedMph', () => {
         expect(r.state.consecutiveDisplacementMoves).toBeGreaterThanOrEqual(1);
     });
 
+    test('null coords.speed treats small GPS jitter as stationary', () => {
+        const now = Date.now();
+        const hist = [
+            { lat: 51.5000, lon: -0.1000, timestamp: now - 700, accuracy: 12 },
+            { lat: 51.50001, lon: -0.10001, timestamp: now, accuracy: 12 },
+        ];
+        const r = SG.stepPickRawSpeedMph(emptyState(), null, hist, 12);
+        expect(r.value).toBe(0);
+    });
+
     test('caps at MAX_DISPLAY_GPS_SPEED_MPH', () => {
         // Unrealistically fast coords.speed (1000 m/s → 2237 mph) must be capped
         const r = SG.stepPickRawSpeedMph(emptyState(), 1000, [], null);

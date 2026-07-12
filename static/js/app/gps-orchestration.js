@@ -61,14 +61,16 @@
         return rgModule().haversineDistanceMeters(lat1, lon1, lat2, lon2);
     }
 
-    function resolveGpsRouteSnapForTick(lat, lon) {
+    function resolveGpsRouteSnapForTick(lat, lon, speedMph) {
         const RG = rgModule();
+        const stationary = !Number.isFinite(speedMph) || speedMph < 2;
         const plan = RG.buildGpsRouteSnapTickPlan({
             lat: lat,
             lon: lon,
             routeInProgress: rt().g('routeInProgress'),
             routePolyline: rt().g('routePolyline'),
             lastSnappedRouteIndex: rt().g('lastSnappedRouteIndex'),
+            stationary: stationary,
         });
         return plan.snapped;
     }
@@ -83,7 +85,7 @@
             lon: currentLon,
             routeInProgress: rt().g('routeInProgress'),
             routePolyline: rt().g('routePolyline'),
-            snapped: resolveGpsRouteSnapForTick(currentLat, currentLon),
+            snapped: resolveGpsRouteSnapForTick(currentLat, currentLon, rt().g('_lastGoodRawPickMph') || 0),
             lastSnappedRouteIndex: rt().g('lastSnappedRouteIndex'),
             prevSnapBlendWeightState: getSnapBlendWeightState(),
             smoothDisplayLat: getSmoothDisplayLat(),
@@ -640,7 +642,7 @@
             accuracy: coord.accuracy,
             routeInProgress: rt().g('routeInProgress'),
             routePolyline: rt().g('routePolyline'),
-            snapped: resolveGpsRouteSnapForTick(coord.lat, coord.lon),
+            snapped: resolveGpsRouteSnapForTick(coord.lat, coord.lon, coord.speedMph),
             lastSnappedRouteIndex: rt().g('lastSnappedRouteIndex'),
             prevSnapBlendWeightState: getSnapBlendWeightState(),
             speedMph: coord.speedMph,
@@ -1026,7 +1028,7 @@
             lat,
             lon,
             routePolyline: rt().g('routePolyline'),
-            snapped: resolveGpsRouteSnapForTick(lat, lon),
+            snapped: resolveGpsRouteSnapForTick(lat, lon, 0),
             lastSnappedRouteIndex: rt().g('lastSnappedRouteIndex'),
             calculateBearing: (a, b, c, d) => rgModule().bearing(a, b, c, d),
             blendHeadingsCircular: rgModule().blendHeadingsCircular,

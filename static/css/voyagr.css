@@ -376,7 +376,7 @@ body {
     background: #1976D2;
 }
 
-body.dark-mode .fab.fab-recenter {
+html.dark-mode, body.dark-mode .fab.fab-recenter {
     background: #42A5F5;
     color: #0d1b2a;
 }
@@ -413,7 +413,7 @@ body.dark-mode .fab.fab-recenter {
     bottom: 0;
     left: 0;
     right: 0;
-    background: rgba(255, 255, 255, 0.98);
+    background: var(--voyagr-surface, rgba(255, 255, 255, 0.98));
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
     border-radius: 28px 28px 0 0;
@@ -1899,7 +1899,7 @@ h1 {
 }
 
 /* ===== DARK MODE STYLES ===== */
-/* Dark mode is applied via html/body.dark-mode class */
+/* Dark mode is applied via html/body .dark-mode class */
 
 html.dark-mode,
 body.dark-mode {
@@ -1911,229 +1911,225 @@ body.dark-mode {
     color: #e0e0e0;
 }
 
-body.dark-mode {
+html.dark-mode body {
     background: #141820;
     color: #e0e0e0;
 }
 
-html.dark-mode {
-    background: #141820;
-}
-
 /* Bottom Sheet Dark Mode */
-body.dark-mode .bottom-sheet {
+html.dark-mode, body.dark-mode .bottom-sheet {
     background: #2d2d2d;
     box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.5);
 }
 
-body.dark-mode .bottom-sheet-handle::before {
+html.dark-mode, body.dark-mode .bottom-sheet-handle::before {
     background: #555;
 }
 
-body.dark-mode .bottom-sheet-header {
+html.dark-mode, body.dark-mode .bottom-sheet-header {
     border-bottom-color: #444;
 }
 
-body.dark-mode .bottom-sheet-header h2 {
+html.dark-mode, body.dark-mode .bottom-sheet-header h2 {
     color: #e0e0e0;
 }
 
-body.dark-mode .bottom-sheet-content {
+html.dark-mode, body.dark-mode .bottom-sheet-content {
     background: #2d2d2d;
     color: #e0e0e0;
 }
 
-body.dark-mode .bottom-sheet-content::-webkit-scrollbar-track {
+html.dark-mode, body.dark-mode .bottom-sheet-content::-webkit-scrollbar-track {
     background: #1a1a1a;
 }
 
-body.dark-mode .bottom-sheet-content::-webkit-scrollbar-thumb {
+html.dark-mode, body.dark-mode .bottom-sheet-content::-webkit-scrollbar-thumb {
     background: #555;
 }
 
-body.dark-mode .bottom-sheet-content::-webkit-scrollbar-thumb:hover {
+html.dark-mode, body.dark-mode .bottom-sheet-content::-webkit-scrollbar-thumb:hover {
     background: #777;
 }
 
 /* Form Elements Dark Mode */
-body.dark-mode label {
+html.dark-mode, body.dark-mode label {
     color: #b0b0b0;
 }
 
-body.dark-mode input,
-body.dark-mode select,
-body.dark-mode textarea {
+html.dark-mode, body.dark-mode input,
+html.dark-mode, body.dark-mode select,
+html.dark-mode, body.dark-mode textarea {
     background: #3a3a3a;
     color: #e0e0e0;
     border-color: #555;
 }
 
-body.dark-mode input:focus,
-body.dark-mode select:focus,
-body.dark-mode textarea:focus {
+html.dark-mode, body.dark-mode input:focus,
+html.dark-mode, body.dark-mode select:focus,
+html.dark-mode, body.dark-mode textarea:focus {
     border-color: #667eea;
     background: #3a3a3a;
     color: #e0e0e0;
 }
 
-body.dark-mode input::placeholder,
-body.dark-mode textarea::placeholder {
+html.dark-mode, body.dark-mode input::placeholder,
+html.dark-mode, body.dark-mode textarea::placeholder {
     color: #888;
 }
 
 /* Button Dark Mode */
-body.dark-mode .btn-calculate {
+html.dark-mode, body.dark-mode .btn-calculate {
     background: #667eea;
     color: white;
 }
 
-body.dark-mode .btn-calculate:hover {
+html.dark-mode, body.dark-mode .btn-calculate:hover {
     background: #5568d3;
 }
 
-body.dark-mode .btn-clear {
+html.dark-mode, body.dark-mode .btn-clear {
     background: #3a3a3a;
     color: #e0e0e0;
     border: 1px solid #555;
 }
 
-body.dark-mode .btn-clear:hover {
+html.dark-mode, body.dark-mode .btn-clear:hover {
     background: #4a4a4a;
 }
 
 /* Routing Mode Buttons Dark Mode */
-body.dark-mode .routing-mode-btn {
+html.dark-mode, body.dark-mode .routing-mode-btn {
     background: #3a3a3a;
     border-color: #555;
     color: #b0b0b0;
 }
 
-body.dark-mode .routing-mode-btn:hover {
+html.dark-mode, body.dark-mode .routing-mode-btn:hover {
     border-color: #667eea;
     background: #3a3a3a;
 }
 
-body.dark-mode .routing-mode-btn.active {
+html.dark-mode, body.dark-mode .routing-mode-btn.active {
     background: #667eea;
     border-color: #667eea;
     color: white;
 }
 
 /* FAB Dark Mode */
-body.dark-mode .fab {
+html.dark-mode, body.dark-mode .fab {
     background: #3a3a3a;
     color: #e0e0e0;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-body.dark-mode .fab:hover {
+html.dark-mode, body.dark-mode .fab:hover {
     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.5);
 }
 
-body.dark-mode .fab.fab--listening {
+html.dark-mode, body.dark-mode .fab.fab--listening {
     background: linear-gradient(135deg, #40c057 0%, #2b8a3e 100%);
     color: #fff;
     box-shadow: 0 0 0 3px rgba(64, 192, 87, 0.35), 0 4px 12px rgba(0, 0, 0, 0.45);
 }
 
 /* Status Messages Dark Mode */
-body.dark-mode .status.loading {
+html.dark-mode, body.dark-mode .status.loading {
     background: #4a3a1a;
     color: #ffd700;
 }
 
-body.dark-mode .status.success {
+html.dark-mode, body.dark-mode .status.success {
     background: #1a3a1a;
     color: #51cf66;
 }
 
-body.dark-mode .status.error {
+html.dark-mode, body.dark-mode .status.error {
     background: #3a1a1a;
     color: #ff6b6b;
 }
 
-body.dark-mode .status.info {
+html.dark-mode, body.dark-mode .status.info {
     background: #1a2a3a;
     color: #74c0fc;
 }
 
 /* Result Container Dark Mode */
-body.dark-mode .result {
+html.dark-mode, body.dark-mode .result {
     background: #3a3a3a;
     border: 1px solid #555;
 }
 
 /* Preference Items Dark Mode */
-body.dark-mode .preference-item {
+html.dark-mode, body.dark-mode .preference-item {
     background: #3a3a3a;
     border-color: #555;
     color: #e0e0e0;
 }
 
-body.dark-mode .preference-label {
+html.dark-mode, body.dark-mode .preference-label {
     color: #b0b0b0;
 }
 
-body.dark-mode .settings-osm-traffic-light-pill {
+html.dark-mode, body.dark-mode .settings-osm-traffic-light-pill {
     background: #1b3d1f;
     border-color: #66bb6a;
 }
 
 /* Toggle Switch Dark Mode */
-body.dark-mode .toggle-switch {
+html.dark-mode, body.dark-mode .toggle-switch {
     background: #3a3a3a;
     border-color: #555;
 }
 
-body.dark-mode .toggle-switch.active {
+html.dark-mode, body.dark-mode .toggle-switch.active {
     background: #4CAF50;
     border-color: #4CAF50;
 }
 
 /* Theme Option Dark Mode */
-body.dark-mode .theme-option {
+html.dark-mode, body.dark-mode .theme-option {
     background: #3a3a3a;
     border-color: #555;
     color: #e0e0e0;
 }
 
-body.dark-mode .theme-option:hover {
+html.dark-mode, body.dark-mode .theme-option:hover {
     border-color: #667eea;
     background: #4a4a4a;
 }
 
-body.dark-mode .theme-option.active {
+html.dark-mode, body.dark-mode .theme-option.active {
     background: #667eea;
     color: white;
     border-color: #667eea;
 }
 
 /* Preferences Section Dark Mode */
-body.dark-mode .preferences-section {
+html.dark-mode, body.dark-mode .preferences-section {
     background: #3a3a3a;
     border-color: #555;
     color: #e0e0e0;
 }
 
-body.dark-mode .preferences-section h3 {
+html.dark-mode, body.dark-mode .preferences-section h3 {
     color: #e0e0e0;
 }
 
 /* Tabs Dark Mode */
-body.dark-mode .tab-button {
+html.dark-mode, body.dark-mode .tab-button {
     background: #3a3a3a;
     color: #b0b0b0;
     border-color: #555;
 }
 
-body.dark-mode .tab-button.active {
+html.dark-mode, body.dark-mode .tab-button.active {
     background: #667eea;
     color: white;
     border-color: #667eea;
 }
 
 /* Tab Content Dark Mode */
-body.dark-mode .tab-content {
+html.dark-mode, body.dark-mode .tab-content {
     background: #2d2d2d;
     color: #e0e0e0;
 }
@@ -2141,200 +2137,200 @@ body.dark-mode .tab-content {
 /* Battery indicator dark mode styles removed - widget removed */
 
 /* Slider Dark Mode */
-body.dark-mode .preference-slider {
+html.dark-mode, body.dark-mode .preference-slider {
     background: #555;
 }
 
-body.dark-mode .preference-slider::-webkit-slider-thumb {
+html.dark-mode, body.dark-mode .preference-slider::-webkit-slider-thumb {
     background: #667eea;
 }
 
-body.dark-mode .preference-slider::-moz-range-thumb {
+html.dark-mode, body.dark-mode .preference-slider::-moz-range-thumb {
     background: #667eea;
 }
 
 /* Location Input Group Dark Mode */
-body.dark-mode .location-input-group {
+html.dark-mode, body.dark-mode .location-input-group {
     background: #3a3a3a;
 }
 
-body.dark-mode .location-btn {
+html.dark-mode, body.dark-mode .location-btn {
     background: #4a4a4a;
     border-color: #666;
     color: #e0e0e0;
 }
 
-body.dark-mode .location-btn:hover {
+html.dark-mode, body.dark-mode .location-btn:hover {
     background: #555;
 }
 
-body.dark-mode .location-btn:active {
+html.dark-mode, body.dark-mode .location-btn:active {
     background: #666;
 }
 
 /* Autocomplete Dropdown Dark Mode */
-body.dark-mode .autocomplete-dropdown,
-body.dark-mode .search-history-dropdown {
+html.dark-mode, body.dark-mode .autocomplete-dropdown,
+html.dark-mode, body.dark-mode .search-history-dropdown {
     background: #3a3a3a;
     border-color: #555;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-body.dark-mode .autocomplete-item,
-body.dark-mode .history-item {
+html.dark-mode, body.dark-mode .autocomplete-item,
+html.dark-mode, body.dark-mode .history-item {
     background: #3a3a3a;
     color: #e0e0e0;
     border-color: #555;
 }
 
-body.dark-mode .autocomplete-item:hover,
-body.dark-mode .history-item:hover {
+html.dark-mode, body.dark-mode .autocomplete-item:hover,
+html.dark-mode, body.dark-mode .history-item:hover {
     background: #4a4a4a;
 }
 
 /* Route Preview Dark Mode */
-body.dark-mode .route-preview-container {
+html.dark-mode, body.dark-mode .route-preview-container {
     background: #3a3a3a;
     border-color: #555;
     color: #e0e0e0;
 }
 
-body.dark-mode .route-preview-item {
+html.dark-mode, body.dark-mode .route-preview-item {
     background: #2d2d2d;
     border-color: #555;
     color: #e0e0e0;
 }
 
 /* Route Comparison Dark Mode */
-body.dark-mode .route-comparison-item {
+html.dark-mode, body.dark-mode .route-comparison-item {
     background: #3a3a3a;
     border-color: #555;
     color: #e0e0e0;
 }
 
-body.dark-mode .route-comparison-item:hover {
+html.dark-mode, body.dark-mode .route-comparison-item:hover {
     background: #4a4a4a;
 }
 
 /* Trip History Dark Mode */
-body.dark-mode .trip-history-item {
+html.dark-mode, body.dark-mode .trip-history-item {
     background: #3a3a3a;
     border-color: #555;
     color: #e0e0e0;
 }
 
-body.dark-mode .trip-history-item:hover {
+html.dark-mode, body.dark-mode .trip-history-item:hover {
     background: #4a4a4a;
 }
 
 /* In-App Notification Dark Mode */
-body.dark-mode .in-app-notification {
+html.dark-mode, body.dark-mode .in-app-notification {
     background: #3a3a3a;
     border-color: #555;
     color: #e0e0e0;
 }
 
-body.dark-mode .in-app-notification.success {
+html.dark-mode, body.dark-mode .in-app-notification.success {
     background: #1a3a1a;
     border-color: #51cf66;
     color: #51cf66;
 }
 
-body.dark-mode .in-app-notification.error {
+html.dark-mode, body.dark-mode .in-app-notification.error {
     background: #3a1a1a;
     border-color: #ff6b6b;
     color: #ff6b6b;
 }
 
-body.dark-mode .in-app-notification.info {
+html.dark-mode, body.dark-mode .in-app-notification.info {
     background: #1a2a3a;
     border-color: #74c0fc;
     color: #74c0fc;
 }
 
 /* Voice Section Dark Mode */
-body.dark-mode .voice-section {
+html.dark-mode, body.dark-mode .voice-section {
     background: linear-gradient(165deg, rgba(30, 32, 48, 0.98), rgba(22, 24, 38, 0.99));
     border-color: rgba(102, 126, 234, 0.35);
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
 }
 
-body.dark-mode .voice-card__head {
+html.dark-mode, body.dark-mode .voice-card__head {
     border-bottom-color: rgba(148, 163, 184, 0.2);
     background: linear-gradient(135deg, rgba(102, 126, 234, 0.18), rgba(118, 75, 162, 0.12));
 }
 
-body.dark-mode .voice-card__title {
+html.dark-mode, body.dark-mode .voice-card__title {
     color: #e8eaf6;
 }
 
-body.dark-mode .voice-card__hint {
+html.dark-mode, body.dark-mode .voice-card__hint {
     color: #aeb8d6;
 }
 
-body.dark-mode .voice-status,
-body.dark-mode .voice-transcript,
-body.dark-mode .voice-commands {
+html.dark-mode, body.dark-mode .voice-status,
+html.dark-mode, body.dark-mode .voice-transcript,
+html.dark-mode, body.dark-mode .voice-commands {
     background: rgba(15, 17, 26, 0.75);
     border-color: rgba(148, 163, 184, 0.22);
     color: #dce3f0;
 }
 
-body.dark-mode .voice-transcript {
+html.dark-mode, body.dark-mode .voice-transcript {
     background: rgba(15, 17, 26, 0.55);
 }
 
-body.dark-mode .voice-examples {
+html.dark-mode, body.dark-mode .voice-examples {
     color: #9aa5c4;
 }
 
-body.dark-mode .voice-examples summary {
+html.dark-mode, body.dark-mode .voice-examples summary {
     color: #9fa8da;
 }
 
-body.dark-mode .btn-voice-secondary {
+html.dark-mode, body.dark-mode .btn-voice-secondary {
     background: rgba(40, 44, 62, 0.9);
     color: #e0e4f0;
     border-color: rgba(148, 163, 184, 0.35);
 }
 
-body.dark-mode .btn-voice-secondary:hover {
+html.dark-mode, body.dark-mode .btn-voice-secondary:hover {
     background: rgba(50, 54, 74, 0.95);
     border-color: rgba(159, 168, 218, 0.45);
 }
 
 /* ML Predictions Dark Mode */
-body.dark-mode .ml-predictions-section {
+html.dark-mode, body.dark-mode .ml-predictions-section {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
 }
 
-body.dark-mode .ml-prediction-item {
+html.dark-mode, body.dark-mode .ml-prediction-item {
     background: rgba(0, 0, 0, 0.2);
     border-left-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Gesture Indicator Dark Mode */
-body.dark-mode .gesture-indicator {
+html.dark-mode, body.dark-mode .gesture-indicator {
     background: rgba(102, 126, 234, 0.9);
 }
 
 /* Headings Dark Mode */
-body.dark-mode h1,
-body.dark-mode h2,
-body.dark-mode h3,
-body.dark-mode h4,
-body.dark-mode h5,
-body.dark-mode h6 {
+html.dark-mode, body.dark-mode h1,
+html.dark-mode, body.dark-mode h2,
+html.dark-mode, body.dark-mode h3,
+html.dark-mode, body.dark-mode h4,
+html.dark-mode, body.dark-mode h5,
+html.dark-mode, body.dark-mode h6 {
     color: #e0e0e0;
 }
 
 /* Form Group Dark Mode */
-body.dark-mode .form-group {
+html.dark-mode, body.dark-mode .form-group {
     background: transparent;
 }
 
-body.dark-mode .form-group[style*="background: #f5f5f5"] {
+html.dark-mode, body.dark-mode .form-group[style*="background: #f5f5f5"] {
     background: #3a3a3a !important;
 }
 
@@ -2387,7 +2383,7 @@ body.dark-mode .form-group[style*="background: #f5f5f5"] {
     text-overflow: ellipsis;
 }
 
-body.dark-mode .next-turn-then {
+html.dark-mode, body.dark-mode .next-turn-then {
     /* Match the primary next-turn display's dark-mode gradient. */
     background: linear-gradient(135deg, #0D47A1 0%, #1565C0 100%);
 }
@@ -2518,19 +2514,19 @@ body.dark-mode .next-turn-then {
     z-index: 1;
 }
 
-body.dark-mode .road-report-modal-panel {
+html.dark-mode, body.dark-mode .road-report-modal-panel {
     background: #2b2b2b;
     color: #eee;
 }
 
-body.dark-mode .road-report-modal-panel label {
+html.dark-mode, body.dark-mode .road-report-modal-panel label {
     color: #ccc !important;
 }
 
-body.dark-mode #roadReportType,
-body.dark-mode #roadReportSpeedValue,
-body.dark-mode #roadReportSpeedUnit,
-body.dark-mode #roadReportNotes {
+html.dark-mode, body.dark-mode #roadReportType,
+html.dark-mode, body.dark-mode #roadReportSpeedValue,
+html.dark-mode, body.dark-mode #roadReportSpeedUnit,
+html.dark-mode, body.dark-mode #roadReportNotes {
     background: #3a3a3a !important;
     color: #eee !important;
     border-color: #555 !important;
@@ -2730,49 +2726,49 @@ body.dark-mode #roadReportNotes {
 }
 
 /* Dark Mode Support */
-body.dark-mode .next-turn-display {
+html.dark-mode, body.dark-mode .next-turn-display {
     background: linear-gradient(135deg, #0D47A1 0%, #1565C0 100%);
 }
 
-body.dark-mode .instructions-panel {
+html.dark-mode, body.dark-mode .instructions-panel {
     background: rgba(30, 30, 30, 0.98);
 }
 
-body.dark-mode .instructions-header {
+html.dark-mode, body.dark-mode .instructions-header {
     background: #2a2a2a;
     border-color: #444;
     color: #fff;
 }
 
-body.dark-mode .instructions-count {
+html.dark-mode, body.dark-mode .instructions-count {
     color: #aaa;
 }
 
-body.dark-mode .instruction-item {
+html.dark-mode, body.dark-mode .instruction-item {
     border-color: #333;
 }
 
-body.dark-mode .instruction-item:hover {
+html.dark-mode, body.dark-mode .instruction-item:hover {
     background: #333;
 }
 
-body.dark-mode .instruction-item.current {
+html.dark-mode, body.dark-mode .instruction-item.current {
     background: #1a3a5c;
 }
 
-body.dark-mode .instruction-item-icon {
+html.dark-mode, body.dark-mode .instruction-item-icon {
     background: #444;
 }
 
-body.dark-mode .instruction-item-text {
+html.dark-mode, body.dark-mode .instruction-item-text {
     color: #e0e0e0;
 }
 
-body.dark-mode .instruction-item-street {
+html.dark-mode, body.dark-mode .instruction-item-street {
     color: #aaa;
 }
 
-body.dark-mode .instruction-item-status.current-status {
+html.dark-mode, body.dark-mode .instruction-item-status.current-status {
     color: #64B5F6;
 }
 
@@ -2870,7 +2866,7 @@ body.dark-mode .instruction-item-status.current-status {
 }
 
 /* Dark Mode Support */
-body.dark-mode .journey-summary-bar {
+html.dark-mode, body.dark-mode .journey-summary-bar {
     background: linear-gradient(135deg, #0D47A1 0%, #1565C0 100%);
 }
 
@@ -3048,12 +3044,12 @@ body.voyagr-has-offline-banner #speedWidget {
 /* ============================================
    Dark Mode Support for Mobile Layout
    ============================================ */
-body.dark-mode .speed-widget {
+html.dark-mode, body.dark-mode .speed-widget {
     background: rgba(30, 30, 30, 0.95) !important;
     border-left-color: #64B5F6 !important;
 }
 
-body.dark-mode .speed-widget #speedValue {
+html.dark-mode, body.dark-mode .speed-widget #speedValue {
     color: #e0e0e0 !important;
 }
 
@@ -3130,27 +3126,27 @@ textarea:focus {
     border-radius: var(--voyagr-radius);
 }
 
-body.dark-mode .bottom-sheet {
+html.dark-mode, body.dark-mode .bottom-sheet {
     background: rgba(24, 24, 27, 0.98);
     border-color: rgba(255, 255, 255, 0.08);
     box-shadow: 0 -10px 44px rgba(0, 0, 0, 0.45);
 }
 
-body.dark-mode .bottom-sheet-header h2 {
+html.dark-mode, body.dark-mode .bottom-sheet-header h2 {
     color: #f4f4f5;
 }
 
-body.dark-mode input:not([type="checkbox"]):not([type="radio"]),
-body.dark-mode select,
-body.dark-mode textarea {
+html.dark-mode, body.dark-mode input:not([type="checkbox"]):not([type="radio"]),
+html.dark-mode, body.dark-mode select,
+html.dark-mode, body.dark-mode textarea {
     background: #27272a;
     border-color: rgba(255, 255, 255, 0.1);
     color: #f4f4f5;
 }
 
-body.dark-mode input:not([type="checkbox"]):not([type="radio"]):focus,
-body.dark-mode select:focus,
-body.dark-mode textarea:focus {
+html.dark-mode, body.dark-mode input:not([type="checkbox"]):not([type="radio"]):focus,
+html.dark-mode, body.dark-mode select:focus,
+html.dark-mode, body.dark-mode textarea:focus {
     border-color: #818cf8;
     box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2);
 }
@@ -3481,74 +3477,74 @@ body.dark-mode textarea:focus {
     margin: 10px 0 0;
 }
 
-body.dark-mode .sheet-icon-btn {
+html.dark-mode, body.dark-mode .sheet-icon-btn {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
-body.dark-mode .btn-swap {
+html.dark-mode, body.dark-mode .btn-swap {
     background: #27272a;
     border-color: rgba(255, 255, 255, 0.1);
     color: #a1a1aa;
 }
 
-body.dark-mode .card-waypoints {
+html.dark-mode, body.dark-mode .card-waypoints {
     background: linear-gradient(180deg, #292524 0%, #1c1917 100%);
     border-color: rgba(245, 158, 11, 0.25);
 }
 
-body.dark-mode .card-waypoints-title {
+html.dark-mode, body.dark-mode .card-waypoints-title {
     color: #fcd34d;
 }
 
-body.dark-mode .input-waypoint--via {
+html.dark-mode, body.dark-mode .input-waypoint--via {
     background: #1c1917 !important;
     border-color: rgba(251, 146, 60, 0.4) !important;
     color: #f4f4f5 !important;
 }
 
-body.dark-mode .input-waypoint--stop {
+html.dark-mode, body.dark-mode .input-waypoint--stop {
     background: #1c1917 !important;
     border-color: rgba(244, 114, 182, 0.4) !important;
     color: #f4f4f5 !important;
 }
 
-body.dark-mode .btn-waypoint-map {
+html.dark-mode, body.dark-mode .btn-waypoint-map {
     background: #27272a;
 }
 
-body.dark-mode .btn-waypoint-map:hover {
+html.dark-mode, body.dark-mode .btn-waypoint-map:hover {
     background: #3f3f46;
 }
 
-body.dark-mode .btn-waypoint-clear {
+html.dark-mode, body.dark-mode .btn-waypoint-clear {
     background: #27272a;
     border-color: rgba(255, 255, 255, 0.1);
     color: #a1a1aa;
 }
 
-body.dark-mode .btn-edit-route {
+html.dark-mode, body.dark-mode .btn-edit-route {
     background: #14532d;
     border-color: #22c55e;
     color: #bbf7d0;
 }
 
-body.dark-mode .waypoints-hint {
+html.dark-mode, body.dark-mode .waypoints-hint {
     color: #a8a29e;
 }
 
-body.dark-mode .waypoints-hint strong {
+html.dark-mode, body.dark-mode .waypoints-hint strong {
     color: #d6d3d1;
 }
 
-body.dark-mode .card-settings-inline {
+html.dark-mode, body.dark-mode .card-settings-inline {
     background: #27272a;
     border-color: rgba(255, 255, 255, 0.08);
 }
 
-body.dark-mode .settings-inline-label {
+html.dark-mode, body.dark-mode .settings-inline-label {
     color: #f4f4f5 !important;
 }
 
-body.dark-mode .settings-inline-help {
+html.dark-mode, body.dark-mode .settings-inline-help {
     color: #a1a1aa;
 }

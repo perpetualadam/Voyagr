@@ -84,6 +84,8 @@
         call.ensureDefaultTrafficAwareRouting();
         call.loadAllSettings();
         call.applySettingsToUI();
+        call.initializeDarkMode();
+        call.updateThemeButtons();
 
         console.log('[Parking] Loading parking preferences...');
         call.loadParkingPreferences();

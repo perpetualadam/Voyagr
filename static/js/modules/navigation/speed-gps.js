@@ -1096,7 +1096,7 @@
             };
         }
 
-        var deviceReportsStopped = Number.isFinite(coordsSpeed) && coordsSpeed === 0;
+        var deviceReportsStopped = !Number.isFinite(coordsSpeed) || coordsSpeed <= 0;
 
         if (Number.isFinite(coordsSpeed) && coordsSpeed > 0) {
             var derivedHint = null;
@@ -1156,8 +1156,8 @@
                     return finish(0);
                 }
 
-                if (deviceReportsStopped) {
-                    var noiseFloor = displacementNoiseFloorMeters(deviceReportsStopped, consecutiveDisplacementMoves, accAvg);
+                if (deviceReportsStopped || !Number.isFinite(coordsSpeed)) {
+                    var noiseFloor = displacementNoiseFloorMeters(true, consecutiveDisplacementMoves, accAvg);
                     if (distM2 < noiseFloor) {
                         return finish(0);
                     }

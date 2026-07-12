@@ -99,10 +99,14 @@
 
         if (!distanceEl || !instructionEl) return;
 
+        const roadClass = turnInfo && turnInfo.maneuver
+            ? (turnInfo.maneuver.road_class || rt().routeGeometry().inferRoadClassFromManeuver(turnInfo.maneuver))
+            : null;
         const plan = TI().buildTurnWidgetRowDisplayPlan(turnInfo, rt().getDistanceUnit(), {
             roundaboutExitCount: turnInfo && turnInfo.maneuverIndex != null
                 ? effectiveRoundaboutExitCount(turnInfo.maneuverIndex)
                 : 0,
+            roadClass: roadClass,
         });
 
         distanceEl.textContent = plan.distanceText;

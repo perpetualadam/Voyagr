@@ -88,11 +88,15 @@
      * @param {number} [searchStartIndex=0]
      * @returns {{ lat, lon, index, distance, t }}
      */
-    function snapToRoutePolyline(lat, lon, polyline, searchStartIndex) {
+    function snapToRoutePolyline(lat, lon, polyline, searchStartIndex, snapOpts) {
         searchStartIndex = searchStartIndex || 0;
+        snapOpts = snapOpts || {};
         if (!polyline || polyline.length < 2) {
             return { lat: lat, lon: lon, index: 0, distance: 0, t: 0 };
         }
+        var backwardWindow = snapOpts.backwardWindow != null ? snapOpts.backwardWindow : 15;
+        var forwardWindow = snapOpts.forwardWindow != null ? snapOpts.forwardWindow : 250;
+        var fullScanThresholdM = snapOpts.fullScanThresholdM != null ? snapOpts.fullScanThresholdM : 60;
         var cosLat = Math.cos(lat * Math.PI / 180);
         var bestLat = polyline[0][0], bestLon = polyline[0][1];
         var bestDist = Infinity, bestIndex = 0, bestT = 0;
@@ -108,11 +112,11 @@
             }
         };
 
-        var searchStart = Math.max(0, searchStartIndex - 15);
-        var searchEnd = Math.min(polyline.length - 1, searchStartIndex + 250);
+        var searchStart = Math.max(0, searchStartIndex - backwardWindow);
+        var searchEnd = Math.min(polyline.length - 1, searchStartIndex + forwardWindow);
         for (var i = searchStart; i < searchEnd; i++) testSeg(i);
 
-        if (bestDist > 60 && (searchStart > 0 || searchEnd < polyline.length - 1)) {
+        if (bestDist > fullScanThresholdM && (searchStart > 0 || searchEnd < polyline.length - 1)) {
             for (var j = 0; j < polyline.length - 1; j++) {
                 if (j >= searchStart && j < searchEnd) continue;
                 testSeg(j);
@@ -136,13 +140,21 @@
         if (!opts.routeInProgress || !opts.routePolyline || opts.routePolyline.length < 2) {
             return { action: 'skip', snapped: null };
         }
+        var searchStartIndex = opts.searchStartIndex != null
+            ? opts.searchStartIndex
+            : (opts.lastSnappedRouteIndex || 0);
+        var stationary = !!opts.stationary;
+        var snapOpts = stationary
+            ? { backwardWindow: 80, fullScanThresholdM: 25 }
+            : null;
         return {
             action: 'snap',
             snapped: snapToRoutePolyline(
                 opts.lat,
                 opts.lon,
                 opts.routePolyline,
-                opts.searchStartIndex != null ? opts.searchStartIndex : (opts.lastSnappedRouteIndex || 0)
+                searchStartIndex,
+                snapOpts
             ),
         };
     }
