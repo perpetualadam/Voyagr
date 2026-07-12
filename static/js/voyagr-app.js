@@ -3760,10 +3760,10 @@ function getPorcupineOrchestrationRuntime() {
         saveAllSettings,
         speakMessage,
         initVoiceRecognition,
-        getVoiceRecognition: () => voiceRecognition,
-        getIsListening: () => isListening,
-        setIsListening: (v) => { isListening = !!v; },
-        setVoiceFinalTranscript: (v) => { _voiceFinalTranscript = v; },
+        getVoiceRecognition: () => VoyagrVoiceControlOrchestration.getVoiceRecognition(),
+        getIsListening: () => VoyagrVoiceControlOrchestration.getIsListening(),
+        setIsListening: (v) => VoyagrVoiceControlOrchestration.setIsListening(v),
+        setVoiceFinalTranscript: (v) => VoyagrVoiceControlOrchestration.setVoiceFinalTranscript(v),
     };
 }
 
@@ -4457,6 +4457,7 @@ function _settingsSnapshot() { return VoyagrModules.settingsSnapshot(); }
 function _appState() { return VoyagrModules.appState(); }
 function _gestureControl() { return VoyagrModules.gestureControl(); }
 function _legacyPrefsRestore() { return VoyagrModules.legacyPrefsRestore(); }
+function _voiceControl() { return VoyagrModules.voiceControl(); }
 function _smartZoom() { return VoyagrModules.smartZoom(); }
 function _phase3Features() { return VoyagrModules.phase3Features(); }
 
@@ -6888,50 +6889,33 @@ let appStateBeforeReload = null;
 let currentBatteryLevel = 1.0;
 let batteryStatusMonitor = null;
 
-// ===== VOICE CONTROL SYSTEM =====
-let voiceRecognition = null;
-let isListening = false;
-/** Latest finalized speech-to-text (interim lines are shown separately in the UI). */
-let _voiceFinalTranscript = '';
+// ===== VOICE CONTROL ORCHESTRATION =====
+// Orchestration lives in static/js/app/voice-control-orchestration.js (bound at file end).
 
-function _voiceControl() { return VoyagrModules.voiceControl(); }
-
-function applyVoiceStatusFromPlan(plan) {
-    if (!plan || !plan.shouldUpdate) return;
-    const el = document.getElementById(plan.elementId);
-    if (el) el.textContent = plan.text;
+function getVoiceControlOrchestrationRuntime() {
+    return {
+        voiceControl: () => _voiceControl(),
+        getCurrentLat: () => currentLat,
+        getCurrentLon: () => currentLon,
+        getRouteInProgress: () => routeInProgress,
+        call: {
+            maybeResumePorcupineWakeAfterVoice,
+            stopPorcupineWakePipeline,
+            calculateRoute,
+            showStatus,
+            speakMessage,
+            triggerAutomaticReroute,
+        },
+    };
 }
 
-function applyVoiceListeningUiFromPlan(plan) {
-    if (!plan || !plan.shouldUpdate) return;
-    const btnText = document.getElementById(plan.elementIds.btnText);
-    const btn = document.getElementById(plan.elementIds.btn);
-    const fab = document.getElementById(plan.elementIds.fab);
-    if (btnText) btnText.textContent = plan.btnText;
-    if (btn) {
-        btn.classList.toggle('active', !!plan.btnActive);
-        btn.setAttribute('aria-pressed', plan.btnAriaPressed);
-    }
-    if (fab) {
-        fab.classList.toggle('fab--listening', !!plan.fabListeningClass);
-        fab.setAttribute('aria-pressed', plan.fabAriaPressed);
-        fab.title = plan.fabTitle;
-    }
-}
+function initVoiceRecognition() { return VoyagrVoiceControlOrchestration.initVoiceRecognition(); }
+function toggleVoiceInput() { return VoyagrVoiceControlOrchestration.toggleVoiceInput(); }
+function speakText(text) { VoyagrVoiceControlOrchestration.speakText(text); }
+function setupVoiceCommandProcessing() { VoyagrVoiceControlOrchestration.setupVoiceCommandProcessing(); }
+function processVoiceCommand(command) { VoyagrVoiceControlOrchestration.processVoiceCommand(command); }
+function handleVoiceAction(data) { VoyagrVoiceControlOrchestration.handleVoiceAction(data); }
 
-function applyVoiceTranscriptFromPlan(plan) {
-    if (!plan || !plan.shouldUpdate) return;
-    const el = document.getElementById(plan.elementId);
-    if (el) el.textContent = plan.text;
-}
-
-function voyagrVoiceSetStatus(message) {
-    applyVoiceStatusFromPlan(_voiceControl().buildVoiceSetStatusExecutePlan(message));
-}
-
-function voyagrVoiceSetListeningUi(listening) {
-    applyVoiceListeningUiFromPlan(_voiceControl().buildVoiceSetListeningUiExecutePlan(listening));
-}
 let currentLat = 51.5074;
 let currentLon = -0.1278;
 
@@ -6980,308 +6964,6 @@ const TURN_ZOOM_THRESHOLD = 500;    // Zoom in when within 500m of turn
 const ZOOM_ANIMATION_DURATION = 0.5; // 500ms smooth animation
 
 let isGeocoding = false;
-
-// Initialize Web Speech API
-/**
- * initVoiceRecognition function
- * @function initVoiceRecognition
- * @returns {*} Return value description
- */
-function initVoiceRecognition() {
-    const VC = _voiceControl();
-    const preflight = VC.buildVoiceRecognitionInitPreflightPlan({
-        alreadyInitialized: !!window.__voyagrVoiceInitialized,
-        hasRecognitionInstance: !!voiceRecognition,
-        hasSpeechRecognition: !!(window.SpeechRecognition || window.webkitSpeechRecognition),
-    });
-    if (preflight.action === 'ready') {
-        return true;
-    }
-    if (preflight.action === 'unsupported') {
-        console.log(preflight.logMessage);
-        voyagrVoiceSetStatus(preflight.statusMessage);
-        voyagrVoiceSetListeningUi(preflight.setListeningUi);
-        return false;
-    }
-
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    voiceRecognition = new SpeechRecognition();
-    if (preflight.markInitialized) {
-        window.__voyagrVoiceInitialized = true;
-    }
-    const cfg = preflight.recognitionConfig;
-    voiceRecognition.continuous = cfg.continuous;
-    voiceRecognition.interimResults = cfg.interimResults;
-    voiceRecognition.lang = cfg.lang;
-
-    voiceRecognition.onstart = () => {
-        const startPlan = VC.buildVoiceOnStartExecutePlan();
-        console.log(startPlan.logMessage);
-        if (startPlan.clearFinalTranscript) {
-            _voiceFinalTranscript = '';
-        }
-        voyagrVoiceSetStatus(startPlan.statusMessage);
-        voyagrVoiceSetListeningUi(startPlan.setListeningUi);
-    };
-
-    voiceRecognition.onresult = (event) => {
-        const resultPlan = VC.buildVoiceTranscriptCollectPlan(event, _voiceFinalTranscript);
-        _voiceFinalTranscript = resultPlan.nextFinalTranscript;
-        applyVoiceTranscriptFromPlan(VC.buildVoiceTranscriptUpdateExecutePlan(resultPlan.shown));
-        console.log(resultPlan.logMessage, resultPlan.shown);
-    };
-
-    voiceRecognition.onerror = (event) => {
-        const errPlan = VC.buildVoiceOnErrorExecutePlan(event.error);
-        console.log(errPlan.logMessage);
-        voyagrVoiceSetStatus(errPlan.statusMessage);
-        voyagrVoiceSetListeningUi(errPlan.setListeningUi);
-        isListening = errPlan.isListening;
-        if (errPlan.resumePorcupineWake) {
-            maybeResumePorcupineWakeAfterVoice();
-        }
-    };
-
-    voiceRecognition.onend = () => {
-        const endPlan = VC.buildVoiceOnEndExecutePlan();
-        console.log(endPlan.logMessage);
-        voyagrVoiceSetStatus(endPlan.statusMessage);
-        voyagrVoiceSetListeningUi(endPlan.setListeningUi);
-        isListening = endPlan.isListening;
-    };
-
-    return true;
-}
-
-/**
- * toggleVoiceInput function
- * @function toggleVoiceInput
- * @returns {*} Return value description
- */
-async function toggleVoiceInput() {
-    const VC = _voiceControl();
-    if (!voiceRecognition) {
-        if (!initVoiceRecognition()) {
-            return;
-        }
-    }
-
-    const orch = VC.buildToggleVoiceInputOrchestrationPlan({
-        isListening,
-        porcupineWakePipelineRunning: VoyagrPorcupineOrchestration.isPipelineRunning(),
-    });
-
-    if (orch.action === 'stop') {
-        voiceRecognition.stop();
-        isListening = orch.isListening;
-        return;
-    }
-
-    if (orch.pausePorcupineWake) {
-        VoyagrPorcupineOrchestration.setResumeAfterVoice(true);
-        await stopPorcupineWakePipeline();
-    }
-    if (orch.clearTranscript) {
-        applyVoiceTranscriptFromPlan(VC.buildVoiceTranscriptUpdateExecutePlan(''));
-    }
-    if (orch.clearFinalTranscript) {
-        _voiceFinalTranscript = '';
-    }
-    voiceRecognition.start();
-    isListening = orch.isListening;
-}
-/**
- * speakText function
- * @function speakText
- * @param {*} text - Parameter description
- * @returns {*} Return value description
- */
-function speakText(text) {
-    const VC = _voiceControl();
-    const preflight = VC.buildSpeakTextPreflightPlan({
-        hasSpeechSynthesis: 'speechSynthesis' in window,
-        text,
-    });
-    if (!preflight.shouldSpeak) {
-        console.log(preflight.logMessage);
-        return;
-    }
-
-    if (preflight.cancelExisting) {
-        window.speechSynthesis.cancel();
-    }
-
-    const utterance = new SpeechSynthesisUtterance(preflight.utterance.text);
-    utterance.rate = preflight.utterance.rate;
-    utterance.pitch = preflight.utterance.pitch;
-    utterance.volume = preflight.utterance.volume;
-
-    utterance.onstart = () => {
-        console.log(preflight.logStartPrefix, text);
-        voyagrVoiceSetStatus(preflight.onStartStatus);
-    };
-
-    utterance.onend = () => {
-        console.log(preflight.logEndMessage);
-        voyagrVoiceSetStatus(preflight.onEndStatus);
-    };
-
-    utterance.onerror = (event) => {
-        console.log(preflight.logErrorPrefix, event.error);
-        voyagrVoiceSetStatus(preflight.onErrorStatusPrefix + event.error);
-    };
-
-    window.speechSynthesis.speak(utterance);
-}
-
-// Override voice recognition onend to process command
-/**
- * setupVoiceCommandProcessing function
- * @function setupVoiceCommandProcessing
- * @returns {*} Return value description
- */
-function setupVoiceCommandProcessing() {
-    if (!voiceRecognition) return;
-
-    const VC = _voiceControl();
-    const originalOnEnd = voiceRecognition.onend;
-    voiceRecognition.onend = function () {
-        originalOnEnd.call(this);
-
-        const tr = document.getElementById(VC.VOICE_TRANSCRIPT_ELEMENT_ID);
-        const endPlan = VC.buildVoiceCommandEndProcessingPlan({
-            finalTranscript: _voiceFinalTranscript,
-            fallbackTranscript: tr && tr.textContent ? tr.textContent : '',
-        });
-        if (!endPlan.shouldProcess) {
-            voyagrVoiceSetStatus(endPlan.statusMessage);
-            if (endPlan.resumePorcupineWake) {
-                maybeResumePorcupineWakeAfterVoice();
-            }
-            return;
-        }
-        processVoiceCommand(endPlan.transcript);
-    };
-}
-/**
- * processVoiceCommand function
- * @function processVoiceCommand
- * @param {*} command - Parameter description
- * @returns {*} Return value description
- */
-function processVoiceCommand(command) {
-    const VC = _voiceControl();
-    const orch = VC.buildVoiceCommandProcessOrchestrationPlan(command);
-    if (!orch.shouldProcess) {
-        if (orch.resumePorcupineWake) {
-            maybeResumePorcupineWakeAfterVoice();
-        }
-        return;
-    }
-
-    console.log(orch.logMessage, orch.transcript);
-    voyagrVoiceSetStatus(orch.statusMessage);
-
-    fetch(orch.apiPath, {
-        method: orch.method,
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-            command: orch.transcript,
-            lat: currentLat,
-            lon: currentLon
-        })
-    })
-        .then(response => response.json())
-        .then(data => {
-            console.log('[Voice] Command result:', data);
-            const execute = VC.buildVoiceCommandResultExecutePlan(data);
-
-            if (execute.shouldHandleAction) {
-                handleVoiceAction(execute.payload);
-                speakText(execute.speakMessage);
-            } else {
-                speakText(execute.speakMessage);
-                voyagrVoiceSetStatus(execute.statusMessage);
-            }
-        })
-        .catch(error => {
-            const errExecute = VC.buildVoiceCommandErrorExecutePlan(error);
-            console.log(errExecute.logMessage, error);
-            speakText(errExecute.speakMessage);
-            voyagrVoiceSetStatus(errExecute.statusMessage);
-        })
-        .finally(() => {
-            maybeResumePorcupineWakeAfterVoice();
-        });
-}
-/**
- * handleVoiceAction function
- * @function handleVoiceAction
- * @param {*} data - Parameter description
- * @returns {*} Return value description
- */
-function applyVoiceActionFromPlan(plan) {
-    if (!plan || !plan.shouldApply) return;
-
-    if (plan.logMessage) {
-        if (plan.logArgs && plan.logArgs.length) {
-            console.log(plan.logMessage, ...plan.logArgs);
-        } else {
-            console.log(plan.logMessage);
-        }
-    }
-
-    if (plan.endInputId && plan.endValue != null) {
-        const endEl = document.getElementById(plan.endInputId);
-        if (endEl) endEl.value = plan.endValue;
-    }
-    if (plan.scheduleCalculateRoute) {
-        calculateRoute();
-    }
-    if (plan.writeStorage) {
-        localStorage.setItem(plan.storageKey, plan.storageValue);
-    }
-    if (plan.fetchHazardReport) {
-        fetch(plan.apiPath, {
-            method: plan.method,
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(plan.body)
-        })
-            .then(r => r.json())
-            .then((responseData) => {
-                const VC = _voiceControl();
-                const execute = VC.buildVoiceHazardReportResponseExecutePlan(responseData);
-                if (execute.logMessage) {
-                    console.log(execute.logMessage, ...(execute.logArgs || []));
-                }
-                if (execute.shouldShowStatus) {
-                    showStatus(execute.statusMessage, execute.statusType);
-                }
-            })
-            .catch((error) => {
-                const errExecute = _voiceControl().buildVoiceHazardReportErrorExecutePlan(error);
-                console.warn(errExecute.warnLogPrefix, ...(errExecute.warnLogArgs || []));
-            });
-    }
-    if (plan.triggerAutomaticReroute) {
-        triggerAutomaticReroute(plan.rerouteLat, plan.rerouteLon);
-    }
-    if (plan.speakMessage) {
-        speakMessage(plan.speakMessage);
-    }
-}
-
-function handleVoiceAction(data) {
-    applyVoiceActionFromPlan(_voiceControl().buildVoiceActionDispatchPlan(data, {
-        currentLat,
-        currentLon,
-        routeInProgress,
-    }));
-}
 
 /**
  * setupMapMoveHandler function
@@ -7352,70 +7034,7 @@ function setupMapExploreHandlers() {
 
 // Initialize voice recognition on page load
 window.addEventListener('load', () => {
-    console.log('[Voice] Initializing voice system');
-    initVoiceRecognition();
-    setupVoiceCommandProcessing();
-    // Note: initBottomSheet() is already called from app.js
-    initGeocodeCache();
-
-    // Load all persistent settings from localStorage
-    console.log('[Settings] Loading all persistent settings...');
-    ensureDefaultTrafficAwareRouting();
-    loadAllSettings();
-    applySettingsToUI();
-
-    // Load parking preferences
-    console.log('[Parking] Loading parking preferences...');
-    loadParkingPreferences();
-
-    // Load voice preferences (FIXED: was missing)
-    console.log('[Voice] Loading voice preferences...');
-    loadVoicePreferences();
-    loadPorcupineWakeUi();
-
-    void (async () => {
-        const PW = _porcupineWake();
-        const autoStart = PW.buildPorcupineInitAutoStartPlan({
-            storageEnabled: localStorage.getItem(PW.VOYAGR_PORCUPINE_WAKE_STORAGE_KEY) === 'true',
-            configured: picovoiceClientConfigured(),
-        });
-        if (autoStart.shouldStart) {
-            await startPorcupineWakePipeline();
-        }
-    })();
-
-    // Legacy preference loading (for backward compatibility)
-    loadPreferences();
-
-    // Initialize traffic layer based on saved preference
-    console.log('[Traffic] Initializing traffic layer...');
-    initTrafficLayer();
-
-    // Initialize weather layer based on saved preference
-    console.log('[Weather] Initializing weather layer...');
-    initWeatherLayer();
-
-    // Initialize road labels after map is ready
-    console.log('[Road Labels] Initializing road labels...');
-    if (typeof map !== 'undefined' && map) {
-        if (map.isStyleLoaded()) {
-            initializeRoadLabels();
-        } else {
-            map.once('style.load', () => {
-                initializeRoadLabels();
-            });
-        }
-    } else {
-        // Map not ready yet, wait a bit and try again
-        setTimeout(() => {
-            if (typeof map !== 'undefined' && map) {
-                initializeRoadLabels();
-            }
-        }, 1000);
-    }
-
-    console.log('[Init] Vehicle Type:', currentVehicleType, 'Routing Mode:', currentRoutingMode, 'Smart Zoom:', smartZoomEnabled);
-    console.log('[Init] All settings loaded and applied successfully');
+    VoyagrPageInitOrchestration.initOnWindowLoad();
 });
 
 // Turn announcement variables
@@ -8708,6 +8327,36 @@ calculateRoute = function (...args) {
     return originalCalculateRoute.apply(this, args);
 }
 
+// ===== PAGE INIT ORCHESTRATION =====
+// Orchestration lives in static/js/app/page-init-orchestration.js (bound at file end).
+
+function getPageInitOrchestrationRuntime() {
+    return {
+        porcupineWake: () => _porcupineWake(),
+        getMap: () => map,
+        getCurrentVehicleType: () => currentVehicleType,
+        getCurrentRoutingMode: () => currentRoutingMode,
+        getSmartZoomEnabled: () => smartZoomEnabled,
+        call: {
+            initVoiceRecognition,
+            setupVoiceCommandProcessing,
+            initGeocodeCache,
+            ensureDefaultTrafficAwareRouting,
+            loadAllSettings,
+            applySettingsToUI,
+            loadParkingPreferences,
+            loadVoicePreferences,
+            loadPorcupineWakeUi,
+            picovoiceClientConfigured,
+            startPorcupineWakePipeline,
+            loadPreferences,
+            initTrafficLayer,
+            initWeatherLayer,
+            initializeRoadLabels,
+        },
+    };
+}
+
 // ===== MOBILE PWA ORCHESTRATION =====
 // Orchestration lives in static/js/app/mobile-pwa-orchestration.js (bound at file end).
 
@@ -8794,6 +8443,8 @@ VoyagrMobilePwaOrchestration.bind(getMobilePwaOrchestrationRuntime());
 VoyagrHazardPreferencesOrchestration.bind(getHazardPreferencesOrchestrationRuntime());
 VoyagrBottomSheetOrchestration.bind(getBottomSheetOrchestrationRuntime());
 VoyagrSettingsOrchestration.bind(getSettingsOrchestrationRuntime());
+VoyagrVoiceControlOrchestration.bind(getVoiceControlOrchestrationRuntime());
+VoyagrPageInitOrchestration.bind(getPageInitOrchestrationRuntime());
 VoyagrRoutePreviewOrchestration.bind(getRoutePreviewOrchestrationRuntime());
 VoyagrLegacyPreferencesOrchestration.bind(getLegacyPreferencesOrchestrationRuntime());
 VoyagrMapLayersOrchestration.bind(getMapLayersOrchestrationRuntime());
