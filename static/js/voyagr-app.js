@@ -2582,20 +2582,26 @@ function applySingleRouteMapDisplayFromPlan(plan) {
  * @returns {void}
  */
 function displayAllRoutesOnMap() {
-    const RS = _routeSelection();
-    const entry = RS.buildDisplayAllRoutesMapEntryOrchestrationPlan(routeOptions, {
+    const entry = _routeSelection().buildDisplayAllRoutesMapEntryOrchestrationPlan(routeOptions, {
         isStyleLoaded: map?.isStyleLoaded(),
     });
+    applyDisplayAllRoutesOnMapFromPlan(entry.apply);
+}
 
-    console.log(entry.orch.entryLogMessage);
-    console.log(entry.orch.routeCountLogPrefix, entry.routeCount, 'routes');
-
-    if (!entry.shouldDisplay) {
-        if (entry.noRoutesLogMessage) console.warn(entry.noRoutesLogMessage);
+function applyDisplayAllRoutesOnMapFromPlan(apply) {
+    if (!apply || !apply.shouldApply) {
+        if (apply && apply.noRoutesLogMessage) console.warn(apply.noRoutesLogMessage);
+        if (apply && apply.entryLogMessage) {
+            console.log(apply.entryLogMessage);
+            console.log(apply.routeCountLogPrefix, apply.routeCount, 'routes');
+        }
         return;
     }
 
-    const mount = entry.mount;
+    console.log(apply.entryLogMessage);
+    console.log(apply.routeCountLogPrefix, apply.routeCount, 'routes');
+
+    const mount = apply.mount;
     applyDisplayAllRoutesPreMountFromPlan(mount.preMount);
 
     if (mount.requireMap && !map) {
@@ -2695,6 +2701,12 @@ function applyDoAddRouteLayersBatchFromPlan(executePlan) {
     });
 }
 
+function applyDoAddRouteLayersFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+    applyDoAddRouteLayersBatchFromPlan(apply.batchExecute);
+    applyDoAddRouteLayersPostMountFromPlan(apply.postMount);
+}
+
 function doAddRouteLayers() {
     const execute = _routeSelection().buildDoAddRouteLayersEntryOrchestrationPlan({
         routeOptions,
@@ -2704,10 +2716,7 @@ function doAddRouteLayers() {
         hasTrafficLayer: !!trafficLayer,
         mountedLayerCount: allRouteLayers.length,
     });
-    if (!execute.shouldExecute) return;
-
-    applyDoAddRouteLayersBatchFromPlan(execute.batchExecute);
-    applyDoAddRouteLayersPostMountFromPlan(execute.postMount);
+    applyDoAddRouteLayersFromPlan(execute.apply);
 }
 
 /**
@@ -3135,9 +3144,8 @@ function addStop(lat, lon, name = null, duration = 15) {
 /**
  * Remove a via-point
  */
-function removeViaPoint(index) {
-    const apply = _waypoints().buildViaPointRemoveApplyPlan(index, viaPoints.length);
-    if (!apply.shouldRemove) return;
+function applyViaPointRemoveFromPlan(apply) {
+    if (!apply || !apply.shouldRemove) return;
 
     viaPoints.splice(apply.index, 1);
     if (apply.removeSingleMarker && apply.removeMarkerAtIndex != null) {
@@ -3152,12 +3160,17 @@ function removeViaPoint(index) {
     showStatus(apply.statusMessage, apply.statusType);
 }
 
+function removeViaPoint(index) {
+    applyViaPointRemoveFromPlan(
+        _waypoints().buildViaPointRemoveEntryOrchestrationPlan(index, viaPoints.length).apply
+    );
+}
+
 /**
  * Remove a stop
  */
-function removeStop(index) {
-    const apply = _waypoints().buildStopRemoveApplyPlan(index, stops.length);
-    if (!apply.shouldRemove) return;
+function applyStopRemoveFromPlan(apply) {
+    if (!apply || !apply.shouldRemove) return;
 
     stops.splice(apply.index, 1);
     if (apply.removeSingleMarker && apply.removeMarkerAtIndex != null) {
@@ -3171,6 +3184,12 @@ function removeStop(index) {
     }
     if (apply.updateWaypointsList) updateWaypointsList();
     showStatus(apply.statusMessage, apply.statusType);
+}
+
+function removeStop(index) {
+    applyStopRemoveFromPlan(
+        _waypoints().buildStopRemoveEntryOrchestrationPlan(index, stops.length).apply
+    );
 }
 
 /**
@@ -4773,6 +4792,38 @@ function applyCalculateRouteLoadingFromPlan(loadingApply) {
     if (loadingApply.showRouteProgressBar) showRouteProgressBar();
 }
 
+async function applyCalculateRouteFetchHttpResponse(response, fetchPlan) {
+    const RR = _routingRequest();
+    const plan = RR.buildCalculateRouteFetchHttpResponsePlan({
+        status: response.status,
+        ok: response.ok,
+        contentType: response.headers.get('content-type'),
+    }, fetchPlan);
+
+    console.log(plan.statusLogPrefix, response.status);
+
+    if (plan.action === 'reject_non_json') {
+        const text = await response.text();
+        console.error(plan.nonJsonErrorLogPrefix, plan.contentType);
+        console.error(plan.responseTextLogPrefix, text.substring(0, 200));
+        throw new Error(RR.buildNonJsonRouteApiErrorMessage(plan.status, text));
+    }
+
+    if (plan.action === 'reject_http_error') {
+        const text = await response.text();
+        throw new Error(RR.parseRouteApiErrorMessage(plan.status, text));
+    }
+
+    return response.json();
+}
+
+function applyCalculateRouteFetchErrorFromPlan(errApply, error) {
+    if (!errApply) return;
+    showStatus(errApply.statusMessage, errApply.statusType);
+    console.error(errApply.logPrefix, error);
+    if (errApply.hideRouteProgressBar) hideRouteProgressBar();
+}
+
 async function calculateRoute() {
     const RR = _routingRequest();
     const startInput = document.getElementById('start');
@@ -4830,28 +4881,8 @@ async function calculateRoute() {
         headers: fetchPlan.headers,
         body: JSON.stringify(fetchPlan.body),
     })
-        .then(response => {
-            console.log(fetchPlan.responseStatusLogPrefix, response.status);
-
-            const contentType = response.headers.get('content-type');
-            if (!RR.isRouteApiJsonContentType(contentType)) {
-                console.error(fetchPlan.nonJsonErrorLogPrefix, contentType);
-                return response.text().then(text => {
-                    console.error(fetchPlan.responseTextLogPrefix, text.substring(0, 200));
-                    throw new Error(RR.buildNonJsonRouteApiErrorMessage(response.status, text));
-                });
-            }
-
-            if (!response.ok) {
-                return response.text().then(text => {
-                    throw new Error(RR.parseRouteApiErrorMessage(response.status, text));
-                });
-            }
-
-            return response.json();
-        })
+        .then((response) => applyCalculateRouteFetchHttpResponse(response, fetchPlan))
         .then(data => {
-            const RR = _routingRequest();
             applyCalculateRouteResponseFromPlan(
                 RR.buildCalculateRouteResponseApplyPlan(
                     RR.buildCalculateRouteResponseExecutePlan(data, routeInProgress)
@@ -4861,10 +4892,10 @@ async function calculateRoute() {
             );
         })
         .catch(error => {
-            const errApply = RR.buildCalculateRouteFetchErrorApplyPlan(error);
-            showStatus(errApply.statusMessage, errApply.statusType);
-            console.error(errApply.logPrefix, error);
-            if (errApply.hideRouteProgressBar) hideRouteProgressBar();
+            applyCalculateRouteFetchErrorFromPlan(
+                RR.buildCalculateRouteFetchErrorApplyPlan(error),
+                error
+            );
         });
 }
 
@@ -7312,17 +7343,10 @@ function applyRoutePreviewAfterDisplayFromPlan(afterPlan) {
     }
 }
 
-/**
- * showRoutePreview function
- * @function showRoutePreview
- * @param {*} routeData - Route data to display in preview
- * @param {boolean} skipMapDisplay - If true, skip displayAllRoutesOnMap (used when selecting a specific route)
- * @returns {*} Return value description
- */
-function showRoutePreview(routeData, skipMapDisplay = false) {
+function collectShowRoutePreviewInput(routeData, skipMapDisplay) {
     const RS = _routeSelection();
     const previewRoute = RS.resolvePreviewRoute(routeData, selectedRouteIndex);
-    const orch = RS.buildShowRoutePreviewOrchestrationPlan({
+    return {
         routeData,
         skipMapDisplay,
         routeInProgress,
@@ -7340,43 +7364,62 @@ function showRoutePreview(routeData, skipMapDisplay = false) {
         showTrafficEnabled,
         hasTrafficLayer: !!trafficLayer,
         routeTrafficEnabled,
-    });
+    };
+}
 
-    if (!orch.shouldShow) {
-        if (orch.delegateToNavUpdate) {
+function applyShowRoutePreviewFromPlan(apply, routeData, skipMapDisplay) {
+    if (!apply || !apply.shouldApply) {
+        if (apply && apply.delegateToNavUpdate) {
             applyRouteUpdateDuringNavigation(routeData);
             return;
         }
-        showStatus(orch.errorStatusMessage, 'error');
-        if (orch.errorLogMessage) console.error(orch.errorLogMessage);
+        if (apply && apply.errorStatusMessage) {
+            showStatus(apply.errorStatusMessage, 'error');
+        }
+        if (apply && apply.errorLogMessage) console.error(apply.errorLogMessage);
         return;
     }
 
-    if (orch.entryLogMessage) {
-        console.log(orch.entryLogMessage, routeData, 'skipMapDisplay:', skipMapDisplay);
+    const RS = _routeSelection();
+    if (apply.entryLogMessage) {
+        console.log(apply.entryLogMessage, routeData, 'skipMapDisplay:', skipMapDisplay);
     }
-    console.log('[Route Preview] Currency:', orch.panelInput.currencySymbol, 'Distance Unit:', getDistanceUnit());
+    console.log('[Route Preview] Currency:', apply.panelInput.currencySymbol, 'Distance Unit:', getDistanceUnit());
 
-    const panelPlan = RS.buildRoutePreviewPanelApplyPlan(orch.panelInput);
+    const panelPlan = RS.buildRoutePreviewPanelApplyPlan(apply.panelInput);
     const domPlan = RS.buildRoutePreviewPanelDomApplyPlan(panelPlan);
     applyRoutePreviewPanelDomFromPlan(domPlan);
     console.log('[Cost] Route preview costs:', domPlan.costLog);
 
-    if (orch.showAlternativeRoutesWhenMultiple && domPlan.previewAlternativeRoutesContainer.showAlternativeRoutes) {
+    if (apply.showAlternativeRoutesWhenMultiple && domPlan.previewAlternativeRoutesContainer.showAlternativeRoutes) {
         showAlternativeRoutesInPreview();
-        if (orch.alternativeRoutesLogMessage) console.log(orch.alternativeRoutesLogMessage);
+        if (apply.alternativeRoutesLogMessage) console.log(apply.alternativeRoutesLogMessage);
     }
 
-    if (orch.showMapRoutes && domPlan.showMapRoutes) {
+    if (apply.showMapRoutes && domPlan.showMapRoutes) {
         displayAllRoutesOnMap();
-        if (orch.mapRoutesLogMessage) console.log(orch.mapRoutesLogMessage);
+        if (apply.mapRoutesLogMessage) console.log(apply.mapRoutesLogMessage);
     }
 
-    if (orch.switchTabLogMessage) console.log(orch.switchTabLogMessage);
-    applyRoutePreviewAfterDisplayFromPlan(RS.buildRoutePreviewAfterDisplayPlan(orch.afterDisplayInput));
+    if (apply.switchTabLogMessage) console.log(apply.switchTabLogMessage);
+    applyRoutePreviewAfterDisplayFromPlan(RS.buildRoutePreviewAfterDisplayPlan(apply.afterDisplayInput));
 
-    if (orch.successLogMessage) console.log(orch.successLogMessage);
+    if (apply.successLogMessage) console.log(apply.successLogMessage);
     showStatus(domPlan.statusMessage, 'success');
+}
+
+/**
+ * showRoutePreview function
+ * @function showRoutePreview
+ * @param {*} routeData - Route data to display in preview
+ * @param {boolean} skipMapDisplay - If true, skip displayAllRoutesOnMap (used when selecting a specific route)
+ * @returns {*} Return value description
+ */
+function showRoutePreview(routeData, skipMapDisplay = false) {
+    const orch = _routeSelection().buildShowRoutePreviewOrchestrationPlan(
+        collectShowRoutePreviewInput(routeData, skipMapDisplay)
+    );
+    applyShowRoutePreviewFromPlan(orch.apply, routeData, skipMapDisplay);
 }
 
 /**

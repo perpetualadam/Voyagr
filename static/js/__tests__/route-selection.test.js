@@ -466,6 +466,21 @@ describe('route comparison modal helpers', () => {
         expect(orch.shouldShow).toBe(true);
         expect(orch.showAlternativeRoutesWhenMultiple).toBe(true);
         expect(orch.panelInput.currencySymbol).toBe('£');
+        expect(orch.apply.shouldApply).toBe(true);
+        expect(orch.apply.showAlternativeRoutesWhenMultiple).toBe(true);
+    });
+
+    test('buildShowRoutePreviewApplyPlan gates nav delegate and missing data', () => {
+        expect(RS.buildShowRoutePreviewApplyPlan({
+            shouldShow: false,
+            delegateToNavUpdate: true,
+        }).delegateToNavUpdate).toBe(true);
+        const fail = RS.buildShowRoutePreviewApplyPlan({
+            shouldShow: false,
+            errorStatusMessage: 'No route data available',
+        });
+        expect(fail.shouldApply).toBe(false);
+        expect(fail.errorStatusMessage).toContain('No route');
     });
 
     test('buildAlternativeRoutesPreviewDomApplyPlan maps mount to DOM apply', () => {
@@ -1337,6 +1352,18 @@ describe('route overview and single-route display plans', () => {
         expect(entry.shouldDisplay).toBe(true);
         expect(entry.mount.shouldMount).toBe(true);
         expect(entry.routeCount).toBe(1);
+        expect(entry.apply.shouldApply).toBe(true);
+    });
+
+    test('buildDisplayAllRoutesMapEntryApplyPlan gates empty entry', () => {
+        const apply = RS.buildDisplayAllRoutesMapEntryApplyPlan({
+            shouldDisplay: false,
+            orch: { entryLogMessage: 'log', routeCountLogPrefix: 'count:' },
+            routeCount: 0,
+            noRoutesLogMessage: 'none',
+        });
+        expect(apply.shouldApply).toBe(false);
+        expect(apply.noRoutesLogMessage).toBe('none');
     });
 
     test('buildDoAddRouteLayersExecutePlan bundles batch and post-mount plans', () => {
@@ -1353,7 +1380,20 @@ describe('route overview and single-route display plans', () => {
         expect(execute.shouldExecute).toBe(true);
         expect(execute.batchExecute.layerSteps.length).toBeGreaterThan(0);
         expect(execute.postMount.bringRoutesToTop).toBe(true);
+        expect(execute.apply.shouldApply).toBe(true);
+        expect(execute.apply.batchExecute.layerSteps.length).toBeGreaterThan(0);
         expect(RS.buildBringRoutesToTopOrchestrationPlan(2).layerCount).toBe(2);
+    });
+
+    test('buildDoAddRouteLayersEntryApplyPlan gates when execute is empty', () => {
+        expect(RS.buildDoAddRouteLayersEntryApplyPlan({ shouldExecute: false }).shouldApply).toBe(false);
+        const apply = RS.buildDoAddRouteLayersEntryApplyPlan({
+            shouldExecute: true,
+            batchExecute: { layerSteps: [] },
+            postMount: { bringRoutesToTop: true },
+        });
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.postMount.bringRoutesToTop).toBe(true);
     });
 
     test('buildDoAddRouteLayersEntryOrchestrationPlan and buildBringRoutesToTopEntryOrchestrationPlan', () => {
@@ -1366,6 +1406,7 @@ describe('route overview and single-route display plans', () => {
             mountedLayerCount: 0,
         });
         expect(layers.shouldExecute).toBe(true);
+        expect(layers.apply.shouldApply).toBe(true);
 
         const bringTop = RS.buildBringRoutesToTopEntryOrchestrationPlan({
             layerCount: 2,

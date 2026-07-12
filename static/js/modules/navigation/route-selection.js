@@ -1005,7 +1005,7 @@
             };
         }
         var routeOptionsCount = opts.routeOptionsCount || 0;
-        return {
+        var orch = {
             shouldShow: true,
             entryLogMessage: '[Route Preview] showRoutePreview called with data:',
             panelInput: {
@@ -1035,6 +1035,37 @@
             mapRoutesLogMessage: '[Route Preview] Displayed ' + routeOptionsCount + ' route(s) on map',
             alternativeRoutesLogMessage: '[Route Preview] Showing alternative routes panel',
             successLogMessage: '[Route Preview] Route preview displayed successfully',
+        };
+        orch.apply = buildShowRoutePreviewApplyPlan(orch);
+        return orch;
+    }
+
+    /**
+     * Apply plan for showRoutePreview handler side effects.
+     * @param {Object} [orch] - from buildShowRoutePreviewOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildShowRoutePreviewApplyPlan(orch) {
+        orch = orch || {};
+        if (!orch.shouldShow) {
+            return {
+                shouldApply: false,
+                delegateToNavUpdate: !!orch.delegateToNavUpdate,
+                errorStatusMessage: orch.errorStatusMessage,
+                errorLogMessage: orch.errorLogMessage,
+            };
+        }
+        return {
+            shouldApply: true,
+            entryLogMessage: orch.entryLogMessage,
+            panelInput: orch.panelInput,
+            showAlternativeRoutesWhenMultiple: !!orch.showAlternativeRoutesWhenMultiple,
+            showMapRoutes: !!orch.showMapRoutes,
+            afterDisplayInput: orch.afterDisplayInput,
+            switchTabLogMessage: orch.switchTabLogMessage,
+            mapRoutesLogMessage: orch.mapRoutesLogMessage,
+            alternativeRoutesLogMessage: orch.alternativeRoutesLogMessage,
+            successLogMessage: orch.successLogMessage,
         };
     }
 
@@ -2960,11 +2991,38 @@
             isStyleLoaded: !!opts.isStyleLoaded,
         });
         var mount = buildDisplayAllRoutesMapMountApplyPlan(execute, orch);
-        return {
+        var entry = {
             shouldDisplay: mount.shouldMount,
             orch: orch,
             routeCount: routeCount,
             mount: mount,
+        };
+        entry.apply = buildDisplayAllRoutesMapEntryApplyPlan(entry);
+        return entry;
+    }
+
+    /**
+     * Apply plan for displayAllRoutesOnMap entry orchestration.
+     * @param {Object} [entry] - from buildDisplayAllRoutesMapEntryOrchestrationPlan
+     * @returns {Object}
+     */
+    function buildDisplayAllRoutesMapEntryApplyPlan(entry) {
+        entry = entry || {};
+        if (!entry.shouldDisplay) {
+            return {
+                shouldApply: false,
+                entryLogMessage: entry.orch && entry.orch.entryLogMessage,
+                routeCountLogPrefix: entry.orch && entry.orch.routeCountLogPrefix,
+                routeCount: entry.routeCount,
+                noRoutesLogMessage: entry.noRoutesLogMessage,
+            };
+        }
+        return {
+            shouldApply: true,
+            entryLogMessage: entry.orch.entryLogMessage,
+            routeCountLogPrefix: entry.orch.routeCountLogPrefix,
+            routeCount: entry.routeCount,
+            mount: entry.mount,
         };
     }
 
@@ -3222,12 +3280,33 @@
             showTrafficEnabled: orch.showTrafficEnabled,
             hasTrafficLayer: orch.hasTrafficLayer,
         });
-        return {
+        var batchExecute = buildDoAddRouteLayersBatchExecutePlan(batch);
+        var postMount = buildDoAddRouteLayersPostMountExecutePlan(sideEffects, {
+            mountedLayerCount: orch.mountedLayerCount,
+        });
+        var execute = {
             shouldExecute: true,
-            batchExecute: buildDoAddRouteLayersBatchExecutePlan(batch),
-            postMount: buildDoAddRouteLayersPostMountExecutePlan(sideEffects, {
-                mountedLayerCount: orch.mountedLayerCount,
-            }),
+            batchExecute: batchExecute,
+            postMount: postMount,
+        };
+        execute.apply = buildDoAddRouteLayersEntryApplyPlan(execute);
+        return execute;
+    }
+
+    /**
+     * Apply plan for doAddRouteLayers entry orchestration.
+     * @param {Object} [execute] - from buildDoAddRouteLayersExecutePlan
+     * @returns {Object}
+     */
+    function buildDoAddRouteLayersEntryApplyPlan(execute) {
+        execute = execute || {};
+        if (!execute.shouldExecute) {
+            return { shouldApply: false };
+        }
+        return {
+            shouldApply: true,
+            batchExecute: execute.batchExecute,
+            postMount: execute.postMount,
         };
     }
 
@@ -3780,6 +3859,7 @@
         buildRoutePreviewAfterDisplayPlan: buildRoutePreviewAfterDisplayPlan,
         buildRoutePreviewAfterDisplayExecutePlan: buildRoutePreviewAfterDisplayExecutePlan,
         buildShowRoutePreviewOrchestrationPlan: buildShowRoutePreviewOrchestrationPlan,
+        buildShowRoutePreviewApplyPlan: buildShowRoutePreviewApplyPlan,
         buildAlternativeRoutesPreviewDomApplyPlan: buildAlternativeRoutesPreviewDomApplyPlan,
         buildAlternativeRoutesPreviewDomExecutePlan: buildAlternativeRoutesPreviewDomExecutePlan,
         buildShowAlternativeRoutesPreviewOrchestrationPlan: buildShowAlternativeRoutesPreviewOrchestrationPlan,
@@ -3860,6 +3940,7 @@
         buildDisplayAllRoutesMapExecutePlan: buildDisplayAllRoutesMapExecutePlan,
         buildDisplayAllRoutesMapMountApplyPlan: buildDisplayAllRoutesMapMountApplyPlan,
         buildDisplayAllRoutesMapEntryOrchestrationPlan: buildDisplayAllRoutesMapEntryOrchestrationPlan,
+        buildDisplayAllRoutesMapEntryApplyPlan: buildDisplayAllRoutesMapEntryApplyPlan,
         buildBringRoutesToTopDispatchPlan: buildBringRoutesToTopDispatchPlan,
         buildBringRoutesToTopExecutePlan: buildBringRoutesToTopExecutePlan,
         buildRouteLayerMapLibreApplyPlan: buildRouteLayerMapLibreApplyPlan,
@@ -3868,6 +3949,7 @@
         buildDoAddRouteLayersBatchExecutePlan: buildDoAddRouteLayersBatchExecutePlan,
         buildDoAddRouteLayersOrchestrationPlan: buildDoAddRouteLayersOrchestrationPlan,
         buildDoAddRouteLayersExecutePlan: buildDoAddRouteLayersExecutePlan,
+        buildDoAddRouteLayersEntryApplyPlan: buildDoAddRouteLayersEntryApplyPlan,
         buildDoAddRouteLayersEntryOrchestrationPlan: buildDoAddRouteLayersEntryOrchestrationPlan,
         buildBringRoutesToTopOrchestrationPlan: buildBringRoutesToTopOrchestrationPlan,
         buildBringRoutesToTopEntryOrchestrationPlan: buildBringRoutesToTopEntryOrchestrationPlan,

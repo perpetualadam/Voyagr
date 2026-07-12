@@ -273,6 +273,16 @@ describe('waypoints module', () => {
         expect(W.buildViaPointRemoveApplyPlan(-1, 2).shouldRemove).toBe(false);
     });
 
+    test('buildViaPointRemoveEntryOrchestrationPlan and stop remove entry wrap apply', () => {
+        const via = W.buildViaPointRemoveEntryOrchestrationPlan(0, 2);
+        expect(via.apply.shouldRemove).toBe(true);
+        expect(via.apply.refreshMarkers).toBe(true);
+
+        const stop = W.buildStopRemoveEntryOrchestrationPlan(1, 3);
+        expect(stop.apply.shouldRemove).toBe(true);
+        expect(stop.apply.spliceMarkerArray).toBe(true);
+    });
+
     test('buildViaPointMarkersRefreshPlan renumbers markers after removal', () => {
         const plan = W.buildViaPointMarkersRefreshPlan([
             { lat: 51.5, lon: -0.1, name: 'Via A' },

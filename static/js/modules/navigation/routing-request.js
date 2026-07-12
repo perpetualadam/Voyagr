@@ -857,6 +857,45 @@
     }
 
     /**
+     * Dispatch plan for parsing calculateRoute HTTP fetch responses.
+     * @param {Object} [input]
+     * @param {number} [input.status]
+     * @param {boolean} [input.ok]
+     * @param {string|null|undefined} [input.contentType]
+     * @param {Object} [fetchPlan] - from buildCalculateRouteFetchPlan
+     * @returns {Object}
+     */
+    function buildCalculateRouteFetchHttpResponsePlan(input, fetchPlan) {
+        input = input || {};
+        fetchPlan = fetchPlan || {};
+        var isJson = isRouteApiJsonContentType(input.contentType);
+        if (!isJson) {
+            return {
+                shouldParse: false,
+                action: 'reject_non_json',
+                status: input.status,
+                statusLogPrefix: fetchPlan.responseStatusLogPrefix,
+                nonJsonErrorLogPrefix: fetchPlan.nonJsonErrorLogPrefix,
+                responseTextLogPrefix: fetchPlan.responseTextLogPrefix,
+                contentType: input.contentType,
+            };
+        }
+        if (!input.ok) {
+            return {
+                shouldParse: false,
+                action: 'reject_http_error',
+                status: input.status,
+                statusLogPrefix: fetchPlan.responseStatusLogPrefix,
+            };
+        }
+        return {
+            shouldParse: true,
+            action: 'parse_json',
+            statusLogPrefix: fetchPlan.responseStatusLogPrefix,
+        };
+    }
+
+    /**
      * Execute plan for calculateRoute preflight logging and status side effects.
      * @param {Object} preflight - from buildCalculateRoutePreflightPlan
      * @returns {Object}
@@ -978,6 +1017,7 @@
         buildCalculateRouteLoadingExecutePlan: buildCalculateRouteLoadingExecutePlan,
         buildCalculateRouteLoadingApplyPlan: buildCalculateRouteLoadingApplyPlan,
         buildCalculateRouteFetchPlan: buildCalculateRouteFetchPlan,
+        buildCalculateRouteFetchHttpResponsePlan: buildCalculateRouteFetchHttpResponsePlan,
         buildCalculateRouteFetchErrorApplyPlan: buildCalculateRouteFetchErrorApplyPlan,
         buildCalculateRoutePreflightExecutePlan: buildCalculateRoutePreflightExecutePlan,
         buildCalculateRouteApiRequestLogPlan: buildCalculateRouteApiRequestLogPlan,

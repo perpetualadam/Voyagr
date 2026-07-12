@@ -777,6 +777,18 @@
     }
 
     /**
+     * Entry orchestration plan for removing a via-point.
+     * @param {number} index
+     * @param {number} [viaPointsCount]
+     * @returns {Object}
+     */
+    function buildViaPointRemoveEntryOrchestrationPlan(index, viaPointsCount) {
+        return {
+            apply: buildViaPointRemoveApplyPlan(index, viaPointsCount),
+        };
+    }
+
+    /**
      * Rebuild plan for all via-point markers after list mutation.
      * @param {Array<Object>} viaPoints
      * @returns {Object}
@@ -923,6 +935,18 @@
             updateWaypointsList: plan.updateWaypointsList,
             statusMessage: plan.statusMessage,
             statusType: plan.statusType,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for removing a stop.
+     * @param {number} index
+     * @param {number} [stopsCount]
+     * @returns {Object}
+     */
+    function buildStopRemoveEntryOrchestrationPlan(index, stopsCount) {
+        return {
+            apply: buildStopRemoveApplyPlan(index, stopsCount),
         };
     }
 
@@ -1782,6 +1806,7 @@
         buildViaPointEntryOrchestrationPlan: buildViaPointEntryOrchestrationPlan,
         buildViaPointRemovePlan: buildViaPointRemovePlan,
         buildViaPointRemoveApplyPlan: buildViaPointRemoveApplyPlan,
+        buildViaPointRemoveEntryOrchestrationPlan: buildViaPointRemoveEntryOrchestrationPlan,
         buildViaPointMarkersRefreshPlan: buildViaPointMarkersRefreshPlan,
         buildViaPointMarkersRefreshApplyPlan: buildViaPointMarkersRefreshApplyPlan,
         buildStopAddPlan: buildStopAddPlan,
@@ -1789,6 +1814,7 @@
         buildStopEntryOrchestrationPlan: buildStopEntryOrchestrationPlan,
         buildStopRemovePlan: buildStopRemovePlan,
         buildStopRemoveApplyPlan: buildStopRemoveApplyPlan,
+        buildStopRemoveEntryOrchestrationPlan: buildStopRemoveEntryOrchestrationPlan,
         buildClearAllWaypointsPlan: buildClearAllWaypointsPlan,
         buildClearAllWaypointsApplyPlan: buildClearAllWaypointsApplyPlan,
         buildWaypointMovePlan: buildWaypointMovePlan,

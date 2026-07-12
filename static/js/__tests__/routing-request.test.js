@@ -599,6 +599,32 @@ describe('buildCalculateRoute entry orchestration helpers', () => {
         expect(err.hideRouteProgressBar).toBe(true);
     });
 
+    test('buildCalculateRouteFetchHttpResponsePlan dispatches json and error branches', () => {
+        const fetchPlan = RR.buildCalculateRouteFetchPlan({
+            requestBody: { start: '1,2', end: '3,4' },
+        });
+        const ok = RR.buildCalculateRouteFetchHttpResponsePlan({
+            status: 200,
+            ok: true,
+            contentType: 'application/json',
+        }, fetchPlan);
+        expect(ok.action).toBe('parse_json');
+
+        const nonJson = RR.buildCalculateRouteFetchHttpResponsePlan({
+            status: 500,
+            ok: false,
+            contentType: 'text/html',
+        }, fetchPlan);
+        expect(nonJson.action).toBe('reject_non_json');
+
+        const httpErr = RR.buildCalculateRouteFetchHttpResponsePlan({
+            status: 400,
+            ok: false,
+            contentType: 'application/json',
+        }, fetchPlan);
+        expect(httpErr.action).toBe('reject_http_error');
+    });
+
     test('buildCalculateRouteLoadingExecutePlan shows loading UI', () => {
         const loading = RR.buildCalculateRouteLoadingExecutePlan();
         expect(loading.showRouteProgressBar).toBe(true);
