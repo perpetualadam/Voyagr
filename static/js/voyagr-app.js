@@ -244,7 +244,7 @@ function saveUnitSettingsToBackend() { VoyagrUnitsPreferencesOrchestration.saveU
 
 function getProfileStoreOrchestrationRuntime() {
     return {
-        getSupabaseClient: () => supabaseClient,
+        getSupabaseClient: () => VoyagrSupabaseAuthOrchestration.getSupabaseClient(),
         call: {
             loadAllSettings,
             applySettingsToUI,
@@ -278,665 +278,91 @@ async function pullProfileSnapshotFromSupabase(profileId) {
 }
 
 // =============================================================================
-// Support: Stripe subscription (link or Checkout) + BMC/Patreon tips from /api/config
+// Support + Supabase auth orchestration in static/js/app/supabase-auth-orchestration.js
 // =============================================================================
+
+function getSupabaseAuthOrchestrationRuntime() {
+    return {
+        call: {
+            expandBottomSheet,
+            switchTab,
+            showStatus,
+            ensureProfileExists,
+            getProfileStore,
+            switchActiveProfile,
+            scheduleSupabaseProfileSync,
+            pullProfileSnapshotFromSupabase,
+        },
+    };
+}
+
 function openVoyagerPremiumSection() {
-    try {
-        if (typeof expandBottomSheet === 'function') {
-            expandBottomSheet();
-        }
-        switchTab('settings');
-        setTimeout(() => {
-            const el = document.getElementById('supportVoyagrSection');
-            if (!el) return;
-            if (el.style.display === 'none') {
-                showStatus('Voyager Premium is not configured on this server yet (add Stripe or tip URLs in .env).', 'info');
-                return;
-            }
-            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 80);
-    } catch (e) {
-        console.warn('[Voyager Premium] open section failed', e);
-    }
+    VoyagrSupabaseAuthOrchestration.openVoyagerPremiumSection();
 }
 
 function applySupportLinksFromConfig(cfg) {
-    const section = document.getElementById('supportVoyagrSection');
-    if (!section || !cfg) return;
-
-    const pl = (cfg.stripe_payment_link_url || '').trim();
-    const bmc = (cfg.buy_me_a_coffee_url || '').trim();
-    const pat = (cfg.patreon_url || '').trim();
-    const checkout = !!(cfg.stripe_subscription_checkout_available || cfg.stripe_checkout_available);
-
-    const btnStripe = document.getElementById('supportStripePremiumBtn');
-    const btnBmc = document.getElementById('supportBmcBtn');
-    const btnPat = document.getElementById('supportPatreonBtn');
-
-    const regionNote = (cfg.service_region_note || '').trim();
-
-    const stripePremium = !!(pl || checkout);
-    const show = !!(stripePremium || bmc || pat || regionNote);
-    section.style.display = show ? 'block' : 'none';
-
-    const regionEl = document.getElementById('serviceRegionNote');
-    if (regionEl) {
-        if (regionNote) {
-            regionEl.style.display = 'block';
-            regionEl.textContent = regionNote;
-        } else {
-            regionEl.style.display = 'none';
-            regionEl.textContent = '';
-        }
-    }
-
-    const trialNote = document.getElementById('supportStripeTrialNote');
-    const trialDays = parseInt(cfg.stripe_subscription_trial_days, 10);
-    const usesCheckout = !pl && checkout;
-    if (trialNote) {
-        if (Number.isFinite(trialDays) && trialDays > 0 && usesCheckout) {
-            trialNote.style.display = 'block';
-            trialNote.textContent =
-                `Voyager Premium checkout includes a ${trialDays}-day free trial; billing starts after that. Set STRIPE_SUCCESS_URL to your public site (domain B) if you want users to land there after checkout.`;
-        } else {
-            trialNote.style.display = 'none';
-            trialNote.textContent = '';
-        }
-    }
-
-    if (btnStripe) {
-        btnStripe.style.display = stripePremium ? 'block' : 'none';
-        if (pl) {
-            btnStripe.onclick = () => { window.open(pl, '_blank', 'noopener,noreferrer'); };
-        } else if (checkout) {
-            btnStripe.onclick = () => { void startStripeSubscriptionCheckout(); };
-        } else {
-            btnStripe.onclick = null;
-        }
-    }
-    if (btnBmc) {
-        btnBmc.style.display = bmc ? 'block' : 'none';
-        btnBmc.onclick = bmc ? () => { window.open(bmc, '_blank', 'noopener,noreferrer'); } : null;
-    }
-    if (btnPat) {
-        btnPat.style.display = pat ? 'block' : 'none';
-        btnPat.onclick = pat ? () => { window.open(pat, '_blank', 'noopener,noreferrer'); } : null;
-    }
+    VoyagrSupabaseAuthOrchestration.applySupportLinksFromConfig(cfg);
 }
 
 async function startStripeSubscriptionCheckout(sessionOpt) {
-    try {
-        showStatus('Opening subscription checkout…', 'info');
-        const origin = window.location.origin;
-        let session = sessionOpt;
-        if (session == null && supabaseClient) {
-            const { data } = await supabaseClient.auth.getSession();
-            session = data?.session || null;
-        }
-        const body = {
-            success_url: `${origin}/?subscribe=success`,
-            cancel_url: `${origin}/?subscribe=cancelled`,
-        };
-        if (session?.user?.email) body.customer_email = session.user.email;
-        if (session?.user?.id) body.supabase_user_id = session.user.id;
-        const res = await fetch('/api/support/stripe-checkout', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(body),
-        });
-        const data = await res.json();
-        if (!res.ok || !data.success || !data.url) {
-            showStatus(data.error || 'Subscription checkout unavailable', 'error');
-            return;
-        }
-        window.location.href = data.url;
-    } catch (e) {
-        console.error('[Support] Stripe subscription checkout failed', e);
-        showStatus('Could not start subscription checkout', 'error');
-    }
-}
-
-// =============================================================================
-// Supabase Auth (optional) — Option C: map first; soft banner invites sign-in.
-// =============================================================================
-
-const _SOFT_AUTH_BANNER_DISMISS_KEY = 'voyagr_soft_auth_banner_dismissed';
-
-/** Soft banner only on public production hosts (not staging, localhost, or raw IPs). */
-function voyagrSoftAuthBannerAllowedHost() {
-    try {
-        const h = String(window.location.hostname || '').toLowerCase();
-        return h === 'vibevoyager.org' || h === 'www.vibevoyager.org';
-    } catch (e) {
-        return false;
-    }
+    return VoyagrSupabaseAuthOrchestration.startStripeSubscriptionCheckout(sessionOpt);
 }
 
 function voyagrDismissSoftAuthBanner() {
-    try {
-        sessionStorage.setItem(_SOFT_AUTH_BANNER_DISMISS_KEY, 'true');
-    } catch (e) { /* ignore */ }
-    syncSoftAuthBannerVisibility(false);
+    VoyagrSupabaseAuthOrchestration.voyagrDismissSoftAuthBanner();
 }
 
 function voyagrOpenSignInFromBanner() {
-    try {
-        if (typeof expandBottomSheet === 'function') {
-            expandBottomSheet();
-        }
-        switchTab('settings');
-        setTimeout(() => {
-            const el = document.getElementById('accountSection');
-            if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 120);
-    } catch (e) {
-        console.warn('[Auth] Open sign-in from banner failed:', e);
-    }
-}
-
-/** Show when Supabase is configured and user is signed out; hide if dismissed this tab session. */
-function syncSoftAuthBannerVisibility(wantGuestPrompt) {
-    const el = document.getElementById('softAuthBanner');
-    if (!el) return;
-    if (!wantGuestPrompt) {
-        el.style.display = 'none';
-        return;
-    }
-    if (!voyagrSoftAuthBannerAllowedHost()) {
-        el.style.display = 'none';
-        return;
-    }
-    try {
-        if (sessionStorage.getItem(_SOFT_AUTH_BANNER_DISMISS_KEY) === 'true') {
-            el.style.display = 'none';
-            return;
-        }
-    } catch (e) { /* ignore */ }
-    el.style.display = 'flex';
-}
-
-let supabaseClient = null;
-let supabasePublicConfig = null;
-let _authGateStripeOffer = null;
-
-const _STRIPE_ONBOARD_SKIP_PREFIX = 'voyagr_skip_stripe_onboard:';
-
-function _stripeOnboardSkipKey(userId) {
-    return userId ? `${_STRIPE_ONBOARD_SKIP_PREFIX}${userId}` : null;
-}
-
-/** Subscription offer for post-auth gate (trial length from STRIPE_SUBSCRIPTION_TRIAL_DAYS /api/config). */
-function getStripeOnboardingOffer(cfg) {
-    if (!cfg) return null;
-    const pl = (cfg.stripe_payment_link_url || '').trim();
-    const checkout = !!(cfg.stripe_subscription_checkout_available || cfg.stripe_checkout_available);
-    const trialDays = parseInt(cfg.stripe_subscription_trial_days, 10);
-    const hasTrial = Number.isFinite(trialDays) && trialDays > 0;
-    if (checkout && !pl) {
-        return { kind: 'checkout', trialDays: hasTrial ? trialDays : 0 };
-    }
-    if (pl) {
-        return { kind: 'payment_link', trialDays: hasTrial ? trialDays : 0, url: pl };
-    }
-    return null;
-}
-
-function consumeStripeReturnQueryForUser(userId) {
-    try {
-        const qs = new URLSearchParams(window.location.search || '');
-        const sub = qs.get('subscribe');
-        if (sub === 'success' && userId) {
-            const k = _stripeOnboardSkipKey(userId);
-            if (k) localStorage.setItem(k, '1');
-        }
-        if (sub === 'success' || sub === 'cancelled') {
-            const url = new URL(window.location.href);
-            url.searchParams.delete('subscribe');
-            url.searchParams.delete('session_id');
-            window.history.replaceState({}, '', url.pathname + url.search + url.hash);
-        }
-    } catch (e) {
-        console.warn('[Stripe gate] URL cleanup:', e);
-    }
-}
-
-async function showPostAuthStripeGateIfNeeded(session) {
-    const uid = session?.user?.id;
-    if (!uid || !supabasePublicConfig) {
-        syncAuthRequiredGate('off');
-        return;
-    }
-    consumeStripeReturnQueryForUser(uid);
-    try {
-        if (localStorage.getItem(_stripeOnboardSkipKey(uid)) === '1') {
-            syncAuthRequiredGate('off');
-            return;
-        }
-    } catch (e) { /* ignore quota */ }
-
-    const offer = getStripeOnboardingOffer(supabasePublicConfig);
-    if (!offer || offer.trialDays <= 0) {
-        syncAuthRequiredGate('off');
-        return;
-    }
-    _authGateStripeOffer = offer;
-    syncAuthRequiredGate('stripe_trial', offer);
+    VoyagrSupabaseAuthOrchestration.voyagrOpenSignInFromBanner();
 }
 
 async function authGateStripeContinue() {
-    const st = document.getElementById('authGateStripeStatus');
-    const setSt = (msg, kind) => {
-        if (!st) return;
-        st.textContent = msg || '';
-        st.className = 'auth-required-gate__status';
-        if (kind === 'error') st.classList.add('auth-required-gate__status--error');
-    };
-    const offer = _authGateStripeOffer;
-    if (!offer) {
-        syncAuthRequiredGate('off');
-        return;
-    }
-    if (!supabaseClient) {
-        setSt('Session unavailable. Refresh the page.', 'error');
-        return;
-    }
-    const { data } = await supabaseClient.auth.getSession();
-    const sess = data?.session || null;
-    if (offer.kind === 'payment_link' && offer.url) {
-        setSt('Opening Stripe checkout…', '');
-        window.open(offer.url, '_blank', 'noopener,noreferrer');
-        setSt(
-            'Complete checkout in the new tab. Tap Skip for now below when you are finished (or to use the app without subscribing).',
-            ''
-        );
-        return;
-    }
-    setSt('Opening subscription checkout…', '');
-    try {
-        const origin = window.location.origin;
-        const res = await fetch('/api/support/stripe-checkout', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                success_url: `${origin}/?subscribe=success`,
-                cancel_url: `${origin}/?subscribe=cancelled`,
-                customer_email: sess?.user?.email || undefined,
-                supabase_user_id: sess?.user?.id || undefined,
-            }),
-        });
-        const resData = await res.json();
-        if (!res.ok || !resData.success || !resData.url) {
-            setSt(resData.error || 'Could not start checkout.', 'error');
-            return;
-        }
-        window.location.href = resData.url;
-    } catch (e) {
-        console.error('[Stripe gate] checkout', e);
-        setSt('Could not start checkout.', 'error');
-    }
+    return VoyagrSupabaseAuthOrchestration.authGateStripeContinue();
 }
 
 async function authGateStripeSkip() {
-    try {
-        const { data } = await supabaseClient.auth.getSession();
-        const uid = data?.session?.user?.id;
-        const k = _stripeOnboardSkipKey(uid);
-        if (k) localStorage.setItem(k, '1');
-    } catch (e) { /* ignore */ }
-    _authGateStripeOffer = null;
-    syncAuthRequiredGate('off');
-}
-
-function setAuthGateFormStatus(message, kind) {
-    const statusEl = document.getElementById('authGateStatus');
-    if (!statusEl) return;
-    statusEl.textContent = message || '';
-    statusEl.className = 'auth-required-gate__status';
-    if (kind === 'error') statusEl.classList.add('auth-required-gate__status--error');
-    else if (kind === 'ok') statusEl.classList.add('auth-required-gate__status--ok');
-}
-
-/**
- * When Supabase URL + anon key exist, users must sign in before using the app.
- * Modes: off, loading, signin, stripe_trial (after sign-in if Stripe trial is configured).
- */
-function syncAuthRequiredGate(mode, offer) {
-    const gate = document.getElementById('authRequiredGate');
-    const loadingEl = document.getElementById('authGateLoading');
-    const formEl = document.getElementById('authGateForm');
-    const stripeEl = document.getElementById('authGateStripeTrial');
-    const titleEl = document.getElementById('authGateTitle');
-    if (!gate) return;
-
-    if (mode === 'off') {
-        _authGateStripeOffer = null;
-        gate.style.display = 'none';
-        gate.setAttribute('aria-hidden', 'true');
-        document.body.classList.remove('auth-gate-active');
-        if (stripeEl) stripeEl.style.display = 'none';
-        return;
-    }
-
-    gate.style.display = 'flex';
-    gate.setAttribute('aria-hidden', 'false');
-    document.body.classList.add('auth-gate-active');
-
-    if (stripeEl) stripeEl.style.display = 'none';
-
-    if (mode === 'loading') {
-        if (titleEl) titleEl.textContent = 'Sign in to Voyagr';
-        if (loadingEl) loadingEl.style.display = 'block';
-        if (formEl) formEl.style.display = 'none';
-        return;
-    }
-
-    if (mode === 'signin') {
-        if (titleEl) titleEl.textContent = 'Sign in to Voyagr';
-        setAuthGateFormStatus('', '');
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (formEl) formEl.style.display = 'block';
-        return;
-    }
-
-    if (mode === 'stripe_trial' && offer && stripeEl) {
-        if (titleEl) titleEl.textContent = 'Start your free trial';
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (formEl) formEl.style.display = 'none';
-        const hint = document.getElementById('authGateStripeHint');
-        const td = offer.trialDays;
-        if (hint) {
-            hint.textContent =
-                `Continue to Stripe to start your ${td}-day Voyager Premium trial. Billing begins after the trial unless you cancel in the Stripe portal.`;
-        }
-        const ssl = document.getElementById('authGateStripeStatus');
-        if (ssl) {
-            ssl.textContent = '';
-            ssl.className = 'auth-required-gate__status';
-        }
-        const primary = document.getElementById('authGateStripePrimaryBtn');
-        if (primary) {
-            primary.textContent = offer.kind === 'payment_link' ? 'Open Stripe checkout' : 'Continue to Stripe';
-        }
-        stripeEl.style.display = 'block';
-    }
+    return VoyagrSupabaseAuthOrchestration.authGateStripeSkip();
 }
 
 async function authSignInEmailGate() {
-    if (!supabaseClient) {
-        setAuthGateFormStatus('Sign-in is unavailable. Try again later.', 'error');
-        return;
-    }
-    const email = document.getElementById('authGateEmail')?.value?.trim();
-    const password = document.getElementById('authGatePassword')?.value || '';
-    if (!email || !password) {
-        setAuthGateFormStatus('Enter your email and password.', 'error');
-        return;
-    }
-    setAuthGateFormStatus('Signing in…', '');
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) {
-        setAuthGateFormStatus(error.message || 'Sign-in failed', 'error');
-        return;
-    }
-    setAuthGateFormStatus('', '');
+    return VoyagrSupabaseAuthOrchestration.authSignInEmailGate();
 }
 
 async function authSignUpEmailGate() {
-    if (!supabaseClient) {
-        setAuthGateFormStatus('Sign-up is unavailable. Try again later.', 'error');
-        return;
-    }
-    const email = document.getElementById('authGateEmail')?.value?.trim();
-    const password = document.getElementById('authGatePassword')?.value || '';
-    if (!email || !password) {
-        setAuthGateFormStatus('Enter your email and password.', 'error');
-        return;
-    }
-    setAuthGateFormStatus('Creating account…', '');
-    const { error } = await supabaseClient.auth.signUp({ email, password });
-    if (error) {
-        setAuthGateFormStatus(error.message || 'Sign-up failed', 'error');
-        return;
-    }
-    setAuthGateFormStatus('Account created. Check your email if confirmation is required.', 'ok');
-}
-
-function setAccountUIState({ signedIn, email, message }) {
-    const statusEl = document.getElementById('accountStatus');
-    const signedOutEl = document.getElementById('accountSignedOut');
-    const signedInEl = document.getElementById('accountSignedIn');
-    const emailEl = document.getElementById('accountEmail');
-
-    if (statusEl) statusEl.textContent = message || '';
-    if (signedOutEl) signedOutEl.style.display = signedIn ? 'none' : 'block';
-    if (signedInEl) signedInEl.style.display = signedIn ? 'block' : 'none';
-    if (emailEl) emailEl.textContent = email || '-';
+    return VoyagrSupabaseAuthOrchestration.authSignUpEmailGate();
 }
 
 async function initSupabaseAuth() {
-    try {
-        const res = await fetch('/api/config', { cache: 'no-store' });
-        const data = await res.json();
-        supabasePublicConfig = data;
-        applySupportLinksFromConfig(data);
-
-        const url = data.supabase_url;
-        const anonKey = data.supabase_anon_key;
-
-        if (!url || !anonKey || typeof supabase === 'undefined') {
-            setAccountUIState({
-                signedIn: false,
-                message: 'Account login not configured on this server.'
-            });
-            const accountSection = document.getElementById('accountSection');
-            if (accountSection) accountSection.style.display = 'none';
-            syncAuthRequiredGate('off');
-            syncSoftAuthBannerVisibility(false);
-            return;
-        }
-
-        // Create client (global UMD: supabase.createClient)
-        const { createClient } = supabase;
-        supabaseClient = createClient(url, anonKey, {
-            auth: {
-                persistSession: true,
-                autoRefreshToken: true,
-                detectSessionInUrl: true
-            }
-        });
-        window.supabaseClient = supabaseClient;
-
-        // Initial session (no full-screen loading gate — map stays usable)
-        const { data: sessionData } = await supabaseClient.auth.getSession();
-        await handleSupabaseSession(sessionData?.session || null);
-
-        // Session changes (login/logout/refresh)
-        supabaseClient.auth.onAuthStateChange(async (_event, session) => {
-            await handleSupabaseSession(session || null);
-        });
-    } catch (e) {
-        console.error('[Auth] initSupabaseAuth failed:', e);
-        setAccountUIState({ signedIn: false, message: 'Account login unavailable (config error).' });
-        syncAuthRequiredGate('off');
-        syncSoftAuthBannerVisibility(false);
-    }
-}
-
-async function handleSupabaseSession(session) {
-    if (session && session.user) {
-        syncSoftAuthBannerVisibility(false);
-        const userId = session.user.id;
-        const email = session.user.email || '';
-        setAccountUIState({ signedIn: true, email, message: 'Signed in.' });
-
-        const userProfileId = `sb:${userId}`;
-        ensureProfileExists(userProfileId);
-
-        // If user profile is empty but guest has data, offer import once.
-        const store = getProfileStore();
-        const guestSnap = store['guest'];
-        const userSnap = store[userProfileId];
-        const guestHasData = !!(guestSnap?.voyagr_all_settings && guestSnap.voyagr_all_settings.length > 10) ||
-                             !!(guestSnap?.savedRoutes && guestSnap.savedRoutes !== '[]');
-        const userHasData = !!(userSnap?.voyagr_all_settings && userSnap.voyagr_all_settings.length > 10) ||
-                            !!(userSnap?.savedRoutes && userSnap.savedRoutes !== '[]');
-
-        if (guestHasData && !userHasData) {
-            const importChoice = confirm('Import your current on-device (guest) profile into this account profile?');
-            if (importChoice) {
-                switchActiveProfile(userProfileId, { importFromProfileId: 'guest' });
-                showStatus('Imported guest profile into account profile', 'success');
-                scheduleSupabaseProfileSync();
-                await refreshPromoCodeSection(session || null);
-                await showPostAuthStripeGateIfNeeded(session);
-                return;
-            }
-        }
-
-        switchActiveProfile(userProfileId);
-        // Pull down latest snapshot from Supabase (if any). If remote is newer, it will apply.
-        await pullProfileSnapshotFromSupabase(userProfileId);
-        // If no remote snapshot exists yet, push current local snapshot.
-        scheduleSupabaseProfileSync();
-        await refreshPromoCodeSection(session || null);
-        await showPostAuthStripeGateIfNeeded(session);
-        return;
-    }
-
-    // Signed out
-    setAccountUIState({ signedIn: false, message: 'Not signed in (guest profile).' });
-    switchActiveProfile('guest');
-    await refreshPromoCodeSection(session || null);
-    syncAuthRequiredGate('off');
-    syncSoftAuthBannerVisibility(!!supabaseClient);
+    return VoyagrSupabaseAuthOrchestration.initSupabaseAuth();
 }
 
 async function authSignInEmail() {
-    if (!supabaseClient) return showStatus('Auth not configured', 'error');
-    const email = document.getElementById('authEmail')?.value?.trim();
-    const password = document.getElementById('authPassword')?.value || '';
-    if (!email || !password) return showStatus('Enter email + password', 'error');
-
-    const { error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) return showStatus(error.message || 'Sign-in failed', 'error');
-    showStatus('Signed in', 'success');
+    return VoyagrSupabaseAuthOrchestration.authSignInEmail();
 }
 
 async function authSignUpEmail() {
-    if (!supabaseClient) return showStatus('Auth not configured', 'error');
-    const email = document.getElementById('authEmail')?.value?.trim();
-    const password = document.getElementById('authPassword')?.value || '';
-    if (!email || !password) return showStatus('Enter email + password', 'error');
-
-    const { error } = await supabaseClient.auth.signUp({ email, password });
-    if (error) return showStatus(error.message || 'Sign-up failed', 'error');
-    showStatus('Account created. Check your email if confirmation is required.', 'success');
+    return VoyagrSupabaseAuthOrchestration.authSignUpEmail();
 }
 
 async function authSignInProvider(provider) {
-    if (!supabaseClient) return showStatus('Auth not configured', 'error');
-    const { error } = await supabaseClient.auth.signInWithOAuth({
-        provider,
-        options: { redirectTo: window.location.origin }
-    });
-    if (error) return showStatus(error.message || 'OAuth sign-in failed', 'error');
+    return VoyagrSupabaseAuthOrchestration.authSignInProvider(provider);
 }
 
 async function authSignOut() {
-    if (!supabaseClient) return;
-    const { error } = await supabaseClient.auth.signOut();
-    if (error) return showStatus(error.message || 'Sign-out failed', 'error');
-    showStatus('Signed out', 'info');
-}
-
-async function refreshPromoCodeSection(session) {
-    const block = document.getElementById('promoCodeBlock');
-    const guestNote = document.getElementById('promoCodeGuestNote');
-    const formWrap = document.getElementById('promoCodeFormWrap');
-    if (!block || !guestNote || !formWrap) return;
-    if (!supabaseClient) {
-        block.style.display = 'none';
-        return;
-    }
-    block.style.display = 'block';
-    if (session?.user) {
-        guestNote.style.display = 'none';
-        formWrap.style.display = 'block';
-        await loadPromoEntitlementStatus();
-    } else {
-        guestNote.style.display = 'block';
-        formWrap.style.display = 'none';
-        const summary = document.getElementById('promoEntitlementSummary');
-        if (summary) summary.textContent = '';
-    }
-}
-
-async function loadPromoEntitlementStatus() {
-    const summary = document.getElementById('promoEntitlementSummary');
-    if (!summary) return;
-    const token = await getSupabaseAccessToken();
-    if (!token) {
-        summary.textContent = '';
-        return;
-    }
-    try {
-        const { res, data } = await fetchJsonWithAuth('/api/coupons/status');
-        if (res.status === 401 || !res.ok || !data.success) {
-            summary.textContent = '';
-            return;
-        }
-        if (data.lifetime) {
-            summary.textContent = 'Promo access: lifetime.';
-            summary.style.color = '#2e7d32';
-        } else if (data.trial_active && data.trial_expires_at) {
-            const d = new Date(data.trial_expires_at * 1000);
-            summary.textContent = `Promo access: trial until ${d.toLocaleString()}.`;
-            summary.style.color = '#1565c0';
-        } else {
-            summary.textContent = 'Promo access: none applied.';
-            summary.style.color = '#666';
-        }
-    } catch {
-        summary.textContent = '';
-    }
+    return VoyagrSupabaseAuthOrchestration.authSignOut();
 }
 
 async function redeemPromoCode() {
-    const input = document.getElementById('promoCodeInput');
-    const statusEl = document.getElementById('promoCodeStatus');
-    const code = input?.value?.trim();
-    if (!code) {
-        if (statusEl) statusEl.textContent = 'Enter a code.';
-        return;
-    }
-    if (statusEl) statusEl.textContent = 'Applying…';
-    try {
-        const { res, data } = await fetchJsonWithAuth('/api/coupons/redeem', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ code })
-        });
-        if (data.success) {
-            showStatus(data.message || 'Code applied', 'success');
-            if (statusEl) statusEl.textContent = data.message || 'Applied.';
-            if (input) input.value = '';
-            await loadPromoEntitlementStatus();
-        } else {
-            if (statusEl) statusEl.textContent = data.error || 'Could not apply code.';
-            showStatus(data.error || 'Could not apply code', 'error');
-        }
-    } catch {
-        if (statusEl) statusEl.textContent = 'Network error.';
-        showStatus('Could not apply code', 'error');
-    }
+    return VoyagrSupabaseAuthOrchestration.redeemPromoCode();
 }
 
-// Expose handlers for inline onclick buttons in HTML
-window.authSignInEmail = authSignInEmail;
-window.authSignUpEmail = authSignUpEmail;
-window.authSignInProvider = authSignInProvider;
-window.authSignOut = authSignOut;
-window.redeemPromoCode = redeemPromoCode;
+async function getSupabaseAccessToken() {
+    return VoyagrSupabaseAuthOrchestration.getSupabaseAccessToken();
+}
+
+async function fetchJsonWithAuth(url, options = {}) {
+    return VoyagrSupabaseAuthOrchestration.fetchJsonWithAuth(url, options);
+}
 
 // ===== SETTINGS ORCHESTRATION =====
 // Orchestration lives in static/js/app/settings-orchestration.js (bound at file end).
@@ -1123,33 +549,6 @@ async function recalculateTrip(tripId) {
 
 async function deleteTripHistory(tripId) {
     return VoyagrTripHistoryOrchestration.deleteTripHistory(tripId);
-}
-
-async function getSupabaseAccessToken() {
-    try {
-        if (!supabaseClient) return null;
-        const { data } = await supabaseClient.auth.getSession();
-        return data?.session?.access_token || null;
-    } catch {
-        return null;
-    }
-}
-
-async function fetchJsonWithAuth(url, options = {}) {
-    const token = await getSupabaseAccessToken();
-    if (!token) {
-        // Guest / signed-out: skip network (avoids noisy 401s for account-only APIs).
-        return {
-            res: { status: 401, ok: false, headers: { get: () => '' } },
-            data: { success: false, error: 'Unauthorized' },
-        };
-    }
-    const headers = { ...(options.headers || {}) };
-    headers['Authorization'] = `Bearer ${token}`;
-    const res = await fetch(url, { ...options, headers });
-    const contentType = res.headers.get('content-type') || '';
-    const data = contentType.includes('application/json') ? await res.json() : await res.text();
-    return { res, data };
 }
 
 // ===== ROUTE COMPARISON FUNCTIONS =====
@@ -5056,6 +4455,7 @@ VoyagrRoadNameOrchestration.bind(getRoadNameOrchestrationRuntime());
 VoyagrMobilePwaOrchestration.bind(getMobilePwaOrchestrationRuntime());
 VoyagrHazardPreferencesOrchestration.bind(getHazardPreferencesOrchestrationRuntime());
 VoyagrBottomSheetOrchestration.bind(getBottomSheetOrchestrationRuntime());
+VoyagrSupabaseAuthOrchestration.bind(getSupabaseAuthOrchestrationRuntime());
 VoyagrProfileStoreOrchestration.bind(getProfileStoreOrchestrationRuntime());
 VoyagrSettingsOrchestration.bind(getSettingsOrchestrationRuntime());
 VoyagrVoiceControlOrchestration.bind(getVoiceControlOrchestrationRuntime());
