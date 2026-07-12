@@ -32,6 +32,63 @@
         console.log(execute.logMessage, rt().getSmartZoomEnabled());
     }
 
+    function applySmartZoomWithAnimation(speedMph, distanceToNextTurn, roadType, userLat, userLon) {
+        if (distanceToNextTurn === undefined) distanceToNextTurn = null;
+        if (roadType === undefined) roadType = 'urban';
+        if (userLat === undefined) userLat = null;
+        if (userLon === undefined) userLon = null;
+
+        const CP = rt().cameraPitch();
+        const map = rt().getMap();
+        const currentUserMarker = rt().getCurrentUserMarker();
+        const easePlan = CP.buildSmartZoomEasePlan({
+            smartZoomEnabled: rt().getSmartZoomEnabled(),
+            routeInProgress: rt().getRouteInProgress(),
+            speedMph: speedMph,
+            distanceToNextTurn: distanceToNextTurn,
+            roadType: roadType,
+            lastZoomLevel: rt().getLastZoomLevel(),
+            userLat: userLat,
+            userLon: userLon,
+            hasMap: !!map,
+            zoomAndFollowEnabled: rt().getZoomAndFollowEnabled(),
+            mapFollowingActive: rt().getMapFollowingActive(),
+            viewportHeight: window.innerHeight,
+            viewportWidth: window.innerWidth,
+            currentPitch: map && typeof map.getPitch === 'function' ? map.getPitch() : 0,
+            currentBearing: map && typeof map.getBearing === 'function' ? map.getBearing() : 0,
+            vehicleHeading: currentUserMarker && typeof currentUserMarker.heading === 'number'
+                ? currentUserMarker.heading
+                : null,
+            usePitchedDrivingCamera: rt().call.shouldUsePitchedDrivingCamera(),
+            shouldTilt: rt().call.shouldTiltDrivingCamera(),
+            zoomAnimationDurationMs: rt().getZoomAnimationDurationMs(),
+            turnZoomThreshold: rt().getTurnZoomThreshold(),
+            computeSmartZoom: (spd, dist, rtName) => rt().routeGeometry().calculateSmartZoom(
+                spd, dist, rtName, rt().getZoomLevels(), rt().getTurnZoomThreshold()
+            ),
+        });
+
+        const apply = CP.buildSmartZoomApplyPlan(easePlan);
+        if (apply.action !== 'apply') return;
+
+        if (apply.easeTo && map) {
+            map.easeTo(apply.easeTo);
+        } else if (apply.setZoomOnly && map) {
+            map.setZoom(apply.newZoomLevel);
+        }
+
+        rt().setLastZoomLevel(apply.newZoomLevel);
+        rt().setLastTurnZoomApplied(apply.lastTurnZoomApplied);
+        if (apply.logLine) console.log(apply.logLine);
+    }
+
+    function applySmartZoom(speedMph, distanceToNextTurn, roadType) {
+        if (distanceToNextTurn === undefined) distanceToNextTurn = null;
+        if (roadType === undefined) roadType = 'urban';
+        applySmartZoomWithAnimation(speedMph, distanceToNextTurn, roadType, rt().getCurrentLat(), rt().getCurrentLon());
+    }
+
     function bind(nextRuntime) {
         runtime = nextRuntime;
     }
@@ -39,6 +96,8 @@
     var api = {
         bind: bind,
         toggleSmartZoom: toggleSmartZoom,
+        applySmartZoomWithAnimation: applySmartZoomWithAnimation,
+        applySmartZoom: applySmartZoom,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

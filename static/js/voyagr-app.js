@@ -4913,74 +4913,6 @@ function createVehicleMarker(lat, lon, speed, accuracy, heading = 0) {
     return VoyagrVehicleRoutingOrchestration.createVehicleMarker(lat, lon, speed, accuracy, heading);
 }
 
-// ===== SMART ZOOM FUNCTIONALITY =====
-/**
- * applySmartZoomWithAnimation function
- * @function applySmartZoomWithAnimation
- * @param {*} speedMph - Parameter description
- * @param {*} distanceToNextTurn - Parameter description
- * @param {*} roadType - Parameter description
- * @param {*} userLat - Parameter description
- * @param {*} userLon - Parameter description
- * @returns {*} Return value description
- */
-function applySmartZoomWithAnimation(speedMph, distanceToNextTurn = null, roadType = 'urban', userLat = null, userLon = null) {
-    const CP = _cameraPitch();
-    const easePlan = CP.buildSmartZoomEasePlan({
-        smartZoomEnabled,
-        routeInProgress,
-        speedMph,
-        distanceToNextTurn,
-        roadType,
-        lastZoomLevel,
-        userLat,
-        userLon,
-        hasMap: !!map,
-        zoomAndFollowEnabled,
-        mapFollowingActive,
-        viewportHeight: window.innerHeight,
-        viewportWidth: window.innerWidth,
-        currentPitch: map && typeof map.getPitch === 'function' ? map.getPitch() : 0,
-        currentBearing: map && typeof map.getBearing === 'function' ? map.getBearing() : 0,
-        vehicleHeading: currentUserMarker && typeof currentUserMarker.heading === 'number'
-            ? currentUserMarker.heading
-            : null,
-        usePitchedDrivingCamera: shouldUsePitchedDrivingCamera(),
-        shouldTilt: shouldTiltDrivingCamera(),
-        zoomAnimationDurationMs: ZOOM_ANIMATION_DURATION * 1000,
-        turnZoomThreshold: TURN_ZOOM_THRESHOLD,
-        computeSmartZoom: (spd, dist, rt) => _routeGeometry().calculateSmartZoom(
-            spd, dist, rt, ZOOM_LEVELS, TURN_ZOOM_THRESHOLD
-        ),
-    });
-
-    const apply = CP.buildSmartZoomApplyPlan(easePlan);
-    if (apply.action !== 'apply') return;
-
-    if (apply.easeTo && map) {
-        map.easeTo(apply.easeTo);
-    } else if (apply.setZoomOnly && map) {
-        map.setZoom(apply.newZoomLevel);
-    }
-
-    lastZoomLevel = apply.newZoomLevel;
-    lastTurnZoomApplied = apply.lastTurnZoomApplied;
-    if (apply.logLine) console.log(apply.logLine);
-}
-
-// Legacy function for backward compatibility
-/**
- * applySmartZoom function
- * @function applySmartZoom
- * @param {*} speedMph - Parameter description
- * @param {*} distanceToNextTurn - Parameter description
- * @param {*} roadType - Parameter description
- * @returns {*} Return value description
- */
-function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
-    applySmartZoomWithAnimation(speedMph, distanceToNextTurn, roadType, currentLat, currentLon);
-}
-
 // ===== SMART ZOOM ORCHESTRATION =====
 // Orchestration lives in static/js/app/smart-zoom-orchestration.js (bound at file end).
 
@@ -4988,16 +4920,40 @@ function getSmartZoomOrchestrationRuntime() {
     return {
         smartZoom: () => _smartZoom(),
         toggleUI: () => _toggleUI(),
+        cameraPitch: () => _cameraPitch(),
+        routeGeometry: () => _routeGeometry(),
         getSmartZoomEnabled: () => smartZoomEnabled,
         setSmartZoomEnabled: (val) => { smartZoomEnabled = val; },
+        getRouteInProgress: () => routeInProgress,
+        getLastZoomLevel: () => lastZoomLevel,
+        setLastZoomLevel: (val) => { lastZoomLevel = val; },
+        getLastTurnZoomApplied: () => lastTurnZoomApplied,
+        setLastTurnZoomApplied: (val) => { lastTurnZoomApplied = val; },
+        getZoomLevels: () => ZOOM_LEVELS,
+        getTurnZoomThreshold: () => TURN_ZOOM_THRESHOLD,
+        getZoomAnimationDurationMs: () => ZOOM_ANIMATION_DURATION * 1000,
+        getMap: () => map,
+        getZoomAndFollowEnabled: () => zoomAndFollowEnabled,
+        getMapFollowingActive: () => mapFollowingActive,
+        getCurrentUserMarker: () => currentUserMarker,
+        getCurrentLat: () => currentLat,
+        getCurrentLon: () => currentLon,
         call: {
             saveAllSettings,
             showStatus,
+            shouldUsePitchedDrivingCamera,
+            shouldTiltDrivingCamera,
         },
     };
 }
 
 function toggleSmartZoom() { VoyagrSmartZoomOrchestration.toggleSmartZoom(); }
+function applySmartZoomWithAnimation(speedMph, distanceToNextTurn = null, roadType = 'urban', userLat = null, userLon = null) {
+    return VoyagrSmartZoomOrchestration.applySmartZoomWithAnimation(speedMph, distanceToNextTurn, roadType, userLat, userLon);
+}
+function applySmartZoom(speedMph, distanceToNextTurn = null, roadType = 'urban') {
+    return VoyagrSmartZoomOrchestration.applySmartZoom(speedMph, distanceToNextTurn, roadType);
+}
 
 // Initialize Phase 2 features on page load
 window.addEventListener('load', () => {
@@ -6154,195 +6110,50 @@ function scheduleInitialETAAnnouncement() {
 function clearInitialETAAnnouncement() { VoyagrLiveDataRefreshOrchestration.clearInitialETAAnnouncement(); }
 function refreshWeatherData() { VoyagrLiveDataRefreshOrchestration.refreshWeatherData(); }
 
-// ===== PHASE 2: PWA AUTO-RELOAD FUNCTIONS =====
+// ===== PWA LIFECYCLE ORCHESTRATION =====
+// Orchestration lives in static/js/app/pwa-lifecycle-orchestration.js (bound at file end).
 
-/** Prevent duplicate reloads when Check Updates and Refresh App fire close together. */
-function scheduleAppReload(reason, delayMs) {
-    const plan = _pwaInstall().buildScheduleAppReloadPlan({
-        reason,
-        delayMs,
-        alreadyScheduled: !!window.__voyagrReloadScheduled,
-    });
-    if (!plan.shouldSchedule) {
-        console.log(plan.skipLogMessage, plan.reason);
-        return false;
-    }
-    window.__voyagrReloadScheduled = true;
-    setTimeout(() => {
-        window.location.reload();
-    }, plan.delayMs);
-    return true;
-}
-
-/** Repaint map after bottom-sheet/tab layout changes (common after PWA reload). */
-function scheduleMapRepaintAfterUiChange() {
-    const execute = _pwaInstall().buildScheduleMapRepaintAfterUiChangePlan();
-    if (!execute.shouldRepaint) return;
-
-    const repaint = () => {
-        if (typeof window[execute.handlerName] === 'function') {
-            window[execute.handlerName]();
-        }
+function getPwaLifecycleOrchestrationRuntime() {
+    return {
+        pwaInstall: () => _pwaInstall(),
+        appState: () => _appState(),
+        getBottomSheetExpanded: () => (typeof bottomSheetIsExpanded !== 'undefined' ? bottomSheetIsExpanded : true),
+        call: {
+            showStatus,
+            safeServiceWorkerUpdate,
+            switchTab,
+            expandBottomSheet,
+            collapseBottomSheet,
+            isAvoidTollsEnabled,
+            getCurrentVisibleTab,
+        },
     };
-    if (execute.immediate) repaint();
-    if (execute.requestAnimationFrame) requestAnimationFrame(repaint);
-    (execute.delayedRepaintsMs || []).forEach((ms) => setTimeout(repaint, ms));
 }
 
-/** Restore active tab and bottom-sheet state saved before a reload/update. */
+function scheduleAppReload(reason, delayMs) {
+    return VoyagrPwaLifecycleOrchestration.scheduleAppReload(reason, delayMs);
+}
+function scheduleMapRepaintAfterUiChange() {
+    VoyagrPwaLifecycleOrchestration.scheduleMapRepaintAfterUiChange();
+}
 function restoreUiStateAfterReload() {
-    const pending = window.__voyagrPendingUiRestore;
-    const execute = _pwaInstall().buildRestoreUiStateAfterReloadExecutePlan(pending);
-    if (!execute.shouldRestore) return;
-    window.__voyagrPendingUiRestore = null;
-
-    try {
-        if (execute.activeTab && typeof switchTab === 'function') {
-            switchTab(execute.activeTab);
-        }
-        if (execute.bottomSheetExpanded === true && typeof expandBottomSheet === 'function') {
-            expandBottomSheet();
-        } else if (execute.bottomSheetExpanded === false && typeof collapseBottomSheet === 'function') {
-            collapseBottomSheet();
-        }
-        if (execute.scheduleMapRepaint) scheduleMapRepaintAfterUiChange();
-        console.log(execute.restoreLogPrefix, pending);
-    } catch (e) {
-        console.warn(execute.errorLogPrefix, e);
-    }
+    VoyagrPwaLifecycleOrchestration.restoreUiStateAfterReload();
 }
-
-/**
- * saveAppState function
- * @function saveAppState
- * @returns {*} Return value description
- */
-function applyRestoreAppStateFromPlan(apply, orch) {
-    if (!apply || !apply.shouldApply) return;
-
-    (apply.storagePatches || []).forEach(({ key, value }) => {
-        localStorage.setItem(key, value);
-    });
-    if (apply.pendingUiRestore) {
-        window[apply.pendingUiRestoreProperty] = apply.pendingUiRestore;
-    }
-    localStorage.removeItem(apply.removeAppStateKey);
-    console.log(apply.restoredLogMessage);
-}
-
 function saveAppState() {
-    const AS = _appState();
-    try {
-        const execute = AS.buildSaveAppStateExecutePlan({
-            avoidTolls: isAvoidTollsEnabled(),
-            getStorageItem: (key) => localStorage.getItem(key),
-            activeTab: typeof getCurrentVisibleTab === 'function' ? getCurrentVisibleTab() : 'navigation',
-            bottomSheetExpanded: typeof bottomSheetIsExpanded !== 'undefined' ? bottomSheetIsExpanded : true,
-        });
-        if (!execute.shouldSave) return;
-        localStorage.setItem(execute.storageKey, execute.storageValue);
-        console.log(execute.logMessage);
-    } catch (e) {
-        console.log(AS.buildSaveAppStateExecutePlan().errorLogPrefix, e);
-    }
+    VoyagrPwaLifecycleOrchestration.saveAppState();
 }
-
 function restoreAppState() {
-    const AS = _appState();
-    const orch = AS.buildRestoreAppStateOrchestrationPlan();
-    if (window[orch.restoredFlagProperty]) {
-        return;
-    }
-    window[orch.restoredFlagProperty] = true;
-
-    try {
-        const saved = localStorage.getItem(orch.storageKey);
-        if (!saved) return;
-
-        const state = JSON.parse(saved);
-        const execute = AS.buildRestoreAppStateExecutePlan(state);
-        applyRestoreAppStateFromPlan(AS.buildRestoreAppStateApplyPlan(execute, orch), orch);
-    } catch (e) {
-        console.log(AS.buildRestoreAppStateExecutePlan().errorLogPrefix, e);
-    }
+    VoyagrPwaLifecycleOrchestration.restoreAppState();
 }
-
-/**
- * Refresh the PWA app - saves state and reloads
- */
 function refreshApp() {
-    const execute = _pwaInstall().buildRefreshAppExecutePlan();
-    if (!execute.shouldRefresh) return;
-
-    showStatus(execute.statusRefreshing.message, execute.statusRefreshing.type);
-    if (execute.saveAppState) saveAppState();
-
-    if (!scheduleAppReload(execute.reloadReason, execute.reloadDelayMs)) {
-        showStatus(
-            execute.alreadyScheduledStatus.message,
-            execute.alreadyScheduledStatus.type
-        );
-    }
+    VoyagrPwaLifecycleOrchestration.refreshApp();
 }
-
-/**
- * Check for PWA updates and apply if available
- */
 async function checkForUpdates() {
-    const PWA = _pwaInstall();
-    const preflight = PWA.buildCheckForUpdatesPreflightPlan({
-        hasServiceWorker: 'serviceWorker' in navigator,
-    });
-
-    if (preflight.action === 'unsupported') {
-        showStatus(preflight.statusMessage, preflight.statusType);
-        return;
-    }
-
-    showStatus(preflight.statusChecking.message, preflight.statusChecking.type);
-
-    try {
-        const registration = await navigator.serviceWorker.getRegistration();
-        if (!registration) {
-            const missing = PWA.buildCheckForUpdatesRegistrationOutcomePlan({ hasRegistration: false });
-            showStatus(missing.statusMessage, missing.statusType);
-            return;
-        }
-
-        await safeServiceWorkerUpdate(registration, 'manual');
-
-        const outcome = PWA.buildCheckForUpdatesRegistrationOutcomePlan({
-            hasRegistration: true,
-            hasWaiting: !!registration.waiting,
-            hasInstalling: !!registration.installing,
-        });
-
-        if (outcome.action === 'activate-waiting') {
-            showStatus(outcome.statusMessage, outcome.statusType);
-            if (outcome.saveAppState) saveAppState();
-            registration.waiting.postMessage({ type: outcome.skipWaitingMessageType });
-            return;
-        }
-
-        showStatus(outcome.statusMessage, outcome.statusType);
-    } catch (error) {
-        console.error(preflight.errorLogPrefix, error);
-        showStatus(preflight.errorStatus.message, preflight.errorStatus.type);
-    }
+    return VoyagrPwaLifecycleOrchestration.checkForUpdates();
 }
-
-/**
- * Display PWA version info
- */
 function displayPWAVersion() {
-    const execute = _pwaInstall().buildDisplayPwaVersionExecutePlan();
-    if (!execute.shouldUpdate) return;
-    const versionElement = document.getElementById(execute.elementId);
-    if (versionElement) versionElement.textContent = execute.versionText;
+    VoyagrPwaLifecycleOrchestration.displayPWAVersion();
 }
-
-// Call on page load
-document.addEventListener('DOMContentLoaded', displayPWAVersion);
 
 // ===== PHASE 3: BATTERY-AWARE REFRESH INTERVALS =====
 /**
@@ -7209,6 +7020,7 @@ VoyagrFormClearOrchestration.bind(getFormClearOrchestrationRuntime());
 VoyagrMapHintsOrchestration.bind(getMapHintsOrchestrationRuntime());
 VoyagrDarkModeOrchestration.bind(getDarkModeOrchestrationRuntime());
 VoyagrRoadReportOrchestration.bind(getRoadReportOrchestrationRuntime());
+VoyagrPwaLifecycleOrchestration.bind(getPwaLifecycleOrchestrationRuntime());
 VoyagrServiceWorkerOrchestration.bind(getServiceWorkerOrchestrationRuntime());
 VoyagrMlPredictionsOrchestration.bind(getMlPredictionsOrchestrationRuntime());
 VoyagrVehicleRoutingOrchestration.bind(getVehicleRoutingOrchestrationRuntime());
