@@ -8,6 +8,44 @@
     var runtime = null;
     var win = root;
 
+    var routeJoinConfirmedForDeviation = false;
+    var preferPrimaryRouteOnNextNavUpdate = false;
+    var deviationStartTimeCheck = null;
+    var deviationOffRouteStreak = 0;
+    var rerouteAttemptCount = 0;
+    var postRerouteGraceUntil = 0;
+    var lastRerouteTime = 0;
+    var lastRerouteAttemptTime = 0;
+    var rerouteInProgress = false;
+    var lastRerouteDeviation = 0;
+    var rerouteFailureRetryTimer = null;
+    var rerouteFailureRetryCount = 0;
+
+    function getRouteJoinConfirmedForDeviation() { return routeJoinConfirmedForDeviation; }
+    function setRouteJoinConfirmedForDeviation(val) { routeJoinConfirmedForDeviation = !!val; }
+    function getPreferPrimaryRouteOnNextNavUpdate() { return preferPrimaryRouteOnNextNavUpdate; }
+    function setPreferPrimaryRouteOnNextNavUpdate(val) { preferPrimaryRouteOnNextNavUpdate = !!val; }
+    function getDeviationStartTimeCheck() { return deviationStartTimeCheck; }
+    function setDeviationStartTimeCheck(val) { deviationStartTimeCheck = val; }
+    function getDeviationOffRouteStreak() { return deviationOffRouteStreak; }
+    function setDeviationOffRouteStreak(val) { deviationOffRouteStreak = val; }
+    function getRerouteAttemptCount() { return rerouteAttemptCount; }
+    function setRerouteAttemptCount(val) { rerouteAttemptCount = val; }
+    function getPostRerouteGraceUntil() { return postRerouteGraceUntil; }
+    function setPostRerouteGraceUntil(val) { postRerouteGraceUntil = val; }
+    function getLastRerouteTime() { return lastRerouteTime; }
+    function setLastRerouteTime(val) { lastRerouteTime = val; }
+    function getLastRerouteAttemptTime() { return lastRerouteAttemptTime; }
+    function setLastRerouteAttemptTime(val) { lastRerouteAttemptTime = val; }
+    function getRerouteInProgress() { return rerouteInProgress; }
+    function setRerouteInProgress(val) { rerouteInProgress = !!val; }
+    function getLastRerouteDeviation() { return lastRerouteDeviation; }
+    function setLastRerouteDeviation(val) { lastRerouteDeviation = val; }
+    function getRerouteFailureRetryTimer() { return rerouteFailureRetryTimer; }
+    function setRerouteFailureRetryTimer(val) { rerouteFailureRetryTimer = val; }
+    function getRerouteFailureRetryCount() { return rerouteFailureRetryCount; }
+    function setRerouteFailureRetryCount(val) { rerouteFailureRetryCount = val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[RerouteMap] Orchestration runtime not bound');
@@ -16,9 +54,9 @@
     }
 
     function pickActiveRouteDuringNavigation(routeList, singleRoutePayload) {
-        var preferPrimary = rt().getPreferPrimaryRouteOnNextNavUpdate();
+        var preferPrimary = getPreferPrimaryRouteOnNextNavUpdate();
         if (preferPrimary) {
-            rt().setPreferPrimaryRouteOnNextNavUpdate(false);
+            setPreferPrimaryRouteOnNextNavUpdate(false);
             console.log('[Reroute] Using primary route (post-deviation; skipping name match)');
         }
         var activeRoute = rt().routeSelection().pickActiveRouteDuringNavigation(
@@ -68,14 +106,14 @@
     }
 
     function applyDeviationRerouteState(dev) {
-        rt().setDeviationStartTimeCheck(dev.deviationStartTimeCheck);
-        rt().setRerouteAttemptCount(dev.rerouteAttemptCount);
-        rt().setPostRerouteGraceUntil(dev.postRerouteGraceUntil);
-        rt().setRouteJoinConfirmedForDeviation(dev.routeJoinConfirmedForDeviation);
-        rt().setDeviationOffRouteStreak(dev.deviationOffRouteStreak);
-        rt().setLastRerouteTime(dev.lastRerouteTime);
-        rt().setLastRerouteAttemptTime(dev.lastRerouteAttemptTime);
-        rt().setRerouteInProgress(dev.rerouteInProgress);
+        setDeviationStartTimeCheck(dev.deviationStartTimeCheck);
+        setRerouteAttemptCount(dev.rerouteAttemptCount);
+        setPostRerouteGraceUntil(dev.postRerouteGraceUntil);
+        setRouteJoinConfirmedForDeviation(dev.routeJoinConfirmedForDeviation);
+        setDeviationOffRouteStreak(dev.deviationOffRouteStreak);
+        setLastRerouteTime(dev.lastRerouteTime);
+        setLastRerouteAttemptTime(dev.lastRerouteAttemptTime);
+        setRerouteInProgress(dev.rerouteInProgress);
         if (dev.clearFailureRetries) rt().call.clearRerouteFailureRetries();
     }
 
@@ -347,7 +385,7 @@
         rt().setLastTurnDetectRouteVertexIndex(plan.lastTurnDetectRouteVertexIndex);
         rt().setCurrentStepIndex(plan.currentStepIndex);
         if (plan.routeJoinConfirmedForDeviation) {
-            rt().setRouteJoinConfirmedForDeviation(true);
+            setRouteJoinConfirmedForDeviation(true);
         }
 
         console.log(plan.logMessage);
@@ -372,6 +410,30 @@
         redrawNavigationVehicleMarker: redrawNavigationVehicleMarker,
         redrawNavigationOverlaysAfterMapRecovery: redrawNavigationOverlaysAfterMapRecovery,
         seedNavigationProgressOnNewRoute: seedNavigationProgressOnNewRoute,
+        getRouteJoinConfirmedForDeviation: getRouteJoinConfirmedForDeviation,
+        setRouteJoinConfirmedForDeviation: setRouteJoinConfirmedForDeviation,
+        getPreferPrimaryRouteOnNextNavUpdate: getPreferPrimaryRouteOnNextNavUpdate,
+        setPreferPrimaryRouteOnNextNavUpdate: setPreferPrimaryRouteOnNextNavUpdate,
+        getDeviationStartTimeCheck: getDeviationStartTimeCheck,
+        setDeviationStartTimeCheck: setDeviationStartTimeCheck,
+        getDeviationOffRouteStreak: getDeviationOffRouteStreak,
+        setDeviationOffRouteStreak: setDeviationOffRouteStreak,
+        getRerouteAttemptCount: getRerouteAttemptCount,
+        setRerouteAttemptCount: setRerouteAttemptCount,
+        getPostRerouteGraceUntil: getPostRerouteGraceUntil,
+        setPostRerouteGraceUntil: setPostRerouteGraceUntil,
+        getLastRerouteTime: getLastRerouteTime,
+        setLastRerouteTime: setLastRerouteTime,
+        getLastRerouteAttemptTime: getLastRerouteAttemptTime,
+        setLastRerouteAttemptTime: setLastRerouteAttemptTime,
+        getRerouteInProgress: getRerouteInProgress,
+        setRerouteInProgress: setRerouteInProgress,
+        getLastRerouteDeviation: getLastRerouteDeviation,
+        setLastRerouteDeviation: setLastRerouteDeviation,
+        getRerouteFailureRetryTimer: getRerouteFailureRetryTimer,
+        setRerouteFailureRetryTimer: setRerouteFailureRetryTimer,
+        getRerouteFailureRetryCount: getRerouteFailureRetryCount,
+        setRerouteFailureRetryCount: setRerouteFailureRetryCount,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

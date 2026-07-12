@@ -54,7 +54,7 @@
 
         if (apply.resetSessionCounters) {
             setLastTurnDetectRouteVertexIndex(0);
-            rt().setRouteJoinConfirmedForDeviation(false);
+            VoyagrRerouteMapOrchestration.setRouteJoinConfirmedForDeviation(false);
             rt().call.resetVehicleMarkerDisplayState();
             resetNavigationArrivalState();
             setNavTraveledMeters(0);
@@ -267,7 +267,7 @@
         if (!apply || !apply.shouldApply) return;
 
         rt().setRouteInProgress(apply.routeInProgress);
-        rt().setRouteJoinConfirmedForDeviation(apply.routeJoinConfirmedForDeviation);
+        VoyagrRerouteMapOrchestration.setRouteJoinConfirmedForDeviation(apply.routeJoinConfirmedForDeviation);
         if (apply.clearRerouteFailureRetries) rt().call.clearRerouteFailureRetries();
         rt().setCurrentStepIndex(apply.currentStepIndex);
         if (apply.clearRouteSteps) rt().setCurrentRouteSteps([]);

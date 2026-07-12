@@ -861,10 +861,7 @@ function getMapLayersOrchestrationRuntime() {
 // ===== AUTO-TRAFFIC UPDATE & AUTO-REROUTE SYSTEM =====
 // Traffic orchestration lives in static/js/app/traffic-orchestration.js (bound at file end).
 // Reroute map update orchestration lives in static/js/app/reroute-map-orchestration.js (bound at file end).
-// Deviation tracking for time-based detection (shared with GPS reroute):
-let routeJoinConfirmedForDeviation = false;
-/** After GPS deviation reroute, next in-nav route pick uses primary only (no name-based alt). */
-let _preferPrimaryRouteOnNextNavUpdate = false;
+// Reroute deviation state lives in reroute-map-orchestration.js.
 
 function getRerouteMapOrchestrationRuntime() {
     return {
@@ -896,10 +893,6 @@ function getRerouteMapOrchestrationRuntime() {
         setLastSnappedRouteIndex: (val) => { lastSnappedRouteIndex = val; },
         getLastTurnDetectRouteVertexIndex: () => VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex(),
         setLastTurnDetectRouteVertexIndex: (val) => VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val),
-        getRouteJoinConfirmedForDeviation: () => routeJoinConfirmedForDeviation,
-        setRouteJoinConfirmedForDeviation: (val) => { routeJoinConfirmedForDeviation = val; },
-        getPreferPrimaryRouteOnNextNavUpdate: () => _preferPrimaryRouteOnNextNavUpdate,
-        setPreferPrimaryRouteOnNextNavUpdate: (val) => { _preferPrimaryRouteOnNextNavUpdate = val; },
         getCurrentRoutingMode: () => currentRoutingMode,
         getCurrentVehicleType: () => currentVehicleType,
         getCurrentUserMarker: () => currentUserMarker,
@@ -915,20 +908,6 @@ function getRerouteMapOrchestrationRuntime() {
         setInitialETAMovementRetries: (val) => VoyagrLiveDataRefreshOrchestration.setInitialETAMovementRetries(val),
         setVoiceAnnouncedForManeuverIndex: (val) => VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncedForManeuverIndex(val),
         setVoiceAnnouncedCategory: (val) => VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncedCategory(val),
-        getDeviationStartTimeCheck: () => deviationStartTimeCheck,
-        setDeviationStartTimeCheck: (val) => { deviationStartTimeCheck = val; },
-        getRerouteAttemptCount: () => rerouteAttemptCount,
-        setRerouteAttemptCount: (val) => { rerouteAttemptCount = val; },
-        getPostRerouteGraceUntil: () => postRerouteGraceUntil,
-        setPostRerouteGraceUntil: (val) => { postRerouteGraceUntil = val; },
-        getDeviationOffRouteStreak: () => deviationOffRouteStreak,
-        setDeviationOffRouteStreak: (val) => { deviationOffRouteStreak = val; },
-        getLastRerouteTime: () => lastRerouteTime,
-        setLastRerouteTime: (val) => { lastRerouteTime = val; },
-        getLastRerouteAttemptTime: () => lastRerouteAttemptTime,
-        setLastRerouteAttemptTime: (val) => { lastRerouteAttemptTime = val; },
-        getRerouteInProgress: () => rerouteInProgress,
-        setRerouteInProgress: (val) => { rerouteInProgress = val; },
         call: {
             getRouteCostParams,
             getRoutePreferences,
@@ -1384,18 +1363,18 @@ function getGpsOrchestrationRuntime() {
             case 'initialETAMovementRetries': return VoyagrLiveDataRefreshOrchestration.getInitialETAMovementRetries();
             case 'initialETAAnnouncementTimeoutId': return VoyagrLiveDataRefreshOrchestration.getInitialETAAnnouncementTimeoutId();
             case 'lastNavTrafficFetchAt': return VoyagrLiveDataRefreshOrchestration.getLastNavTrafficFetchAt();
-            case 'routeJoinConfirmedForDeviation': return routeJoinConfirmedForDeviation;
-            case 'deviationStartTimeCheck': return deviationStartTimeCheck;
-            case 'deviationOffRouteStreak': return deviationOffRouteStreak;
-            case 'rerouteAttemptCount': return rerouteAttemptCount;
-            case 'postRerouteGraceUntil': return postRerouteGraceUntil;
-            case 'lastRerouteTime': return lastRerouteTime;
-            case 'lastRerouteAttemptTime': return lastRerouteAttemptTime;
-            case 'rerouteInProgress': return rerouteInProgress;
-            case 'lastRerouteDeviation': return lastRerouteDeviation;
-            case 'rerouteFailureRetryTimer': return rerouteFailureRetryTimer;
-            case 'rerouteFailureRetryCount': return rerouteFailureRetryCount;
-            case '_preferPrimaryRouteOnNextNavUpdate': return _preferPrimaryRouteOnNextNavUpdate;
+            case 'routeJoinConfirmedForDeviation': return VoyagrRerouteMapOrchestration.getRouteJoinConfirmedForDeviation();
+            case 'deviationStartTimeCheck': return VoyagrRerouteMapOrchestration.getDeviationStartTimeCheck();
+            case 'deviationOffRouteStreak': return VoyagrRerouteMapOrchestration.getDeviationOffRouteStreak();
+            case 'rerouteAttemptCount': return VoyagrRerouteMapOrchestration.getRerouteAttemptCount();
+            case 'postRerouteGraceUntil': return VoyagrRerouteMapOrchestration.getPostRerouteGraceUntil();
+            case 'lastRerouteTime': return VoyagrRerouteMapOrchestration.getLastRerouteTime();
+            case 'lastRerouteAttemptTime': return VoyagrRerouteMapOrchestration.getLastRerouteAttemptTime();
+            case 'rerouteInProgress': return VoyagrRerouteMapOrchestration.getRerouteInProgress();
+            case 'lastRerouteDeviation': return VoyagrRerouteMapOrchestration.getLastRerouteDeviation();
+            case 'rerouteFailureRetryTimer': return VoyagrRerouteMapOrchestration.getRerouteFailureRetryTimer();
+            case 'rerouteFailureRetryCount': return VoyagrRerouteMapOrchestration.getRerouteFailureRetryCount();
+            case '_preferPrimaryRouteOnNextNavUpdate': return VoyagrRerouteMapOrchestration.getPreferPrimaryRouteOnNextNavUpdate();
             case 'lastTurnDetectRouteVertexIndex': return VoyagrNavigationLifecycleOrchestration.getLastTurnDetectRouteVertexIndex();
             case 'voiceAnnouncementsEnabled': return VoyagrVoiceAnnouncementsOrchestration.getVoiceAnnouncementsEnabled();
             case 'voiceFrequencyMode': return VoyagrVoiceAnnouncementsOrchestration.getVoiceFrequencyMode();
@@ -1450,18 +1429,18 @@ function getGpsOrchestrationRuntime() {
             case 'initialETAMovementRetries': VoyagrLiveDataRefreshOrchestration.setInitialETAMovementRetries(val); break;
             case 'initialETAAnnouncementTimeoutId': VoyagrLiveDataRefreshOrchestration.setInitialETAAnnouncementTimeoutId(val); break;
             case 'lastNavTrafficFetchAt': VoyagrLiveDataRefreshOrchestration.setLastNavTrafficFetchAt(val); break;
-            case 'routeJoinConfirmedForDeviation': routeJoinConfirmedForDeviation = val; break;
-            case 'deviationStartTimeCheck': deviationStartTimeCheck = val; break;
-            case 'deviationOffRouteStreak': deviationOffRouteStreak = val; break;
-            case 'rerouteAttemptCount': rerouteAttemptCount = val; break;
-            case 'postRerouteGraceUntil': postRerouteGraceUntil = val; break;
-            case 'lastRerouteTime': lastRerouteTime = val; break;
-            case 'lastRerouteAttemptTime': lastRerouteAttemptTime = val; break;
-            case 'rerouteInProgress': rerouteInProgress = val; break;
-            case 'lastRerouteDeviation': lastRerouteDeviation = val; break;
-            case 'rerouteFailureRetryTimer': rerouteFailureRetryTimer = val; break;
-            case 'rerouteFailureRetryCount': rerouteFailureRetryCount = val; break;
-            case '_preferPrimaryRouteOnNextNavUpdate': _preferPrimaryRouteOnNextNavUpdate = val; break;
+            case 'routeJoinConfirmedForDeviation': VoyagrRerouteMapOrchestration.setRouteJoinConfirmedForDeviation(val); break;
+            case 'deviationStartTimeCheck': VoyagrRerouteMapOrchestration.setDeviationStartTimeCheck(val); break;
+            case 'deviationOffRouteStreak': VoyagrRerouteMapOrchestration.setDeviationOffRouteStreak(val); break;
+            case 'rerouteAttemptCount': VoyagrRerouteMapOrchestration.setRerouteAttemptCount(val); break;
+            case 'postRerouteGraceUntil': VoyagrRerouteMapOrchestration.setPostRerouteGraceUntil(val); break;
+            case 'lastRerouteTime': VoyagrRerouteMapOrchestration.setLastRerouteTime(val); break;
+            case 'lastRerouteAttemptTime': VoyagrRerouteMapOrchestration.setLastRerouteAttemptTime(val); break;
+            case 'rerouteInProgress': VoyagrRerouteMapOrchestration.setRerouteInProgress(val); break;
+            case 'lastRerouteDeviation': VoyagrRerouteMapOrchestration.setLastRerouteDeviation(val); break;
+            case 'rerouteFailureRetryTimer': VoyagrRerouteMapOrchestration.setRerouteFailureRetryTimer(val); break;
+            case 'rerouteFailureRetryCount': VoyagrRerouteMapOrchestration.setRerouteFailureRetryCount(val); break;
+            case '_preferPrimaryRouteOnNextNavUpdate': VoyagrRerouteMapOrchestration.setPreferPrimaryRouteOnNextNavUpdate(val); break;
             case 'lastTurnDetectRouteVertexIndex': VoyagrNavigationLifecycleOrchestration.setLastTurnDetectRouteVertexIndex(val); break;
             case 'voiceAnnouncementsEnabled': VoyagrVoiceAnnouncementsOrchestration.setVoiceAnnouncementsEnabled(val); break;
             case 'voiceFrequencyMode': VoyagrVoiceAnnouncementsOrchestration.setVoiceFrequencyMode(val); break;
@@ -2716,8 +2695,8 @@ function getNavigationLifecycleOrchestrationRuntime() {
         getSelectedRouteIndex: () => selectedRouteIndex,
         getRouteInProgress: () => routeInProgress,
         setRouteInProgress: (val) => { routeInProgress = val; },
-        getRouteJoinConfirmedForDeviation: () => routeJoinConfirmedForDeviation,
-        setRouteJoinConfirmedForDeviation: (val) => { routeJoinConfirmedForDeviation = val; },
+        getRouteJoinConfirmedForDeviation: () => VoyagrRerouteMapOrchestration.getRouteJoinConfirmedForDeviation(),
+        setRouteJoinConfirmedForDeviation: (val) => VoyagrRerouteMapOrchestration.setRouteJoinConfirmedForDeviation(val),
         getCurrentStepIndex: () => currentStepIndex,
         setCurrentStepIndex: (val) => { currentStepIndex = val; },
         getCurrentRouteSteps: () => currentRouteSteps,
