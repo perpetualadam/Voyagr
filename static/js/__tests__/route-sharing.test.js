@@ -185,6 +185,33 @@ describe('route-sharing module', () => {
         expect(RS.buildEncodedShareLinkOrchestrationPlan({ route: null }).plan.ok).toBe(false);
     });
 
+    test('buildPrepareRouteSharingOrchestrationPlan and share entry orchestration', () => {
+        const orch = RS.buildPrepareRouteSharingOrchestrationPlan({
+            route: { distance_km: 10, time: '20 min', fuel_cost: 4, toll_cost: 1, caz_cost: 0 },
+            startLabel: 'A',
+            endLabel: 'B',
+            distanceText: '6.2',
+            distUnit: 'mi',
+            currencySymbol: '£',
+        });
+        expect(orch.apply.shouldApply).toBe(true);
+        expect(orch.apply.elementPatches.shareStart).toContain('A');
+
+        const blocked = RS.buildPrepareRouteSharingOrchestrationPlan({ route: null });
+        expect(blocked.apply.shouldApply).toBe(false);
+
+        const link = RS.buildEncodedShareLinkPlan({
+            route: { distance_km: 10, time: '20 min', geometry: 'abc' },
+            startLabel: 'A',
+            endLabel: 'B',
+            origin: 'https://voyagr.test',
+        });
+        const share = RS.buildGenerateShareLinkEntryOrchestrationPlan(link);
+        expect(share.execute.shouldGenerate).toBe(true);
+        const qr = RS.buildGenerateQrCodeEntryOrchestrationPlan(link);
+        expect(qr.execute.qrImageUrl).toContain('api.qrserver.com');
+    });
+
     test('buildLastCalculatedRouteFromSharedPayload includes destination for recalculate', () => {
         const route = RS.buildLastCalculatedRouteFromSharedPayload({
             start: 'A',
@@ -221,6 +248,14 @@ describe('route-sharing module', () => {
         expect(execute.cleanUrl).not.toContain('route=');
 
         expect(RS.buildLoadSharedRouteFromUrlOrchestrationPlan('').shouldLoad).toBe(false);
+
+        const entry = RS.buildLoadSharedRouteFromUrlEntryOrchestrationPlan(
+            search,
+            'https://voyagr.test/?route=' + encoded
+        );
+        expect(entry.shouldLoad).toBe(true);
+        expect(entry.execute.shouldApply).toBe(true);
+        expect(entry.execute.startLabel).toBe('Home');
     });
 
     test('buildCopyShareLinkExecutePlan targets share link input', () => {

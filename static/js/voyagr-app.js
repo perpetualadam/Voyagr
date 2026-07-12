@@ -3477,17 +3477,22 @@ function drawMultiDropLegsOnMap(data) {
     );
 }
 
-/**
- * Clear multi-drop leg layers from map
- */
-function clearMultiDropLayers() {
-    const apply = _waypoints().buildClearMultiDropLayersApplyPlan();
-    if (!apply.shouldClear || !map) return;
+function applyClearMultiDropLayersFromPlan(apply) {
+    if (!apply || !apply.shouldClear || !map) return;
 
     apply.layerSpecs.forEach((spec) => {
         if (map.getLayer(spec.layerId)) map.removeLayer(spec.layerId);
         if (map.getSource(spec.sourceId)) map.removeSource(spec.sourceId);
     });
+}
+
+/**
+ * Clear multi-drop leg layers from map
+ */
+function clearMultiDropLayers() {
+    const entry = _waypoints().buildClearMultiDropLayersEntryOrchestrationPlan();
+    if (!entry.requiresMap || !map) return;
+    applyClearMultiDropLayersFromPlan(entry.apply);
 }
 
 /**
@@ -3719,19 +3724,15 @@ function buildRouteShareFormatInput() {
     });
 }
 
-/**
- * Load a shared route from the `?route=` URL query param when present.
- * @returns {boolean} true when a shared route was applied
- */
-function loadSharedRouteFromUrl() {
-    const RS = _routeSharing();
-    const orch = RS.buildLoadSharedRouteFromUrlOrchestrationPlan(window.location.search);
-    if (!orch.shouldLoad) {
-        if (orch.invalidPayloadLog) console.warn(orch.invalidPayloadLog);
+function applyLoadSharedRouteFromUrlFromPlan(entry) {
+    if (!entry || !entry.shouldLoad) {
+        if (entry && entry.invalidPayloadLog) console.warn(entry.invalidPayloadLog);
         return false;
     }
 
-    const execute = RS.buildLoadSharedRouteFromUrlExecutePlan(orch, window.location.href);
+    const execute = entry.execute;
+    if (!execute || !execute.shouldApply) return false;
+
     const startEl = document.getElementById(execute.startInputId);
     const endEl = document.getElementById(execute.endInputId);
     if (startEl) startEl.value = execute.startLabel;
@@ -3755,45 +3756,60 @@ function loadSharedRouteFromUrl() {
 }
 
 /**
+ * Load a shared route from the `?route=` URL query param when present.
+ * @returns {boolean} true when a shared route was applied
+ */
+function loadSharedRouteFromUrl() {
+    return applyLoadSharedRouteFromUrlFromPlan(
+        _routeSharing().buildLoadSharedRouteFromUrlEntryOrchestrationPlan(
+            window.location.search,
+            window.location.href
+        )
+    );
+}
+
+function collectPrepareRouteSharingInput() {
+    const fmt = buildRouteShareFormatInput();
+    return _routeSharing().buildPrepareRouteSharingInputPlan({
+        route: window.lastCalculatedRoute,
+        ...fmt,
+    });
+}
+
+function applyPrepareRouteSharingFromPlan(apply) {
+    if (!apply || !apply.shouldApply) {
+        if (apply && apply.errorStatusMessage) showStatus(apply.errorStatusMessage, 'error');
+        return;
+    }
+
+    Object.entries(apply.elementPatches).forEach(([id, text]) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = text;
+    });
+
+    if (apply.costLogMessage != null) {
+        console.log(apply.costLogMessage, {
+            distanceUnit,
+            totalCost: apply.costLogTotalCost.toFixed(2),
+        });
+    }
+}
+
+/**
  * prepareRouteSharing function
  * @function prepareRouteSharing
  * @returns {*} Return value description
  */
 function prepareRouteSharing() {
-    const RS = _routeSharing();
-    const fmt = buildRouteShareFormatInput();
-    const execute = RS.buildPrepareRouteSharingExecutePlan(
-        RS.buildPrepareRouteSharingInputPlan({
-            route: window.lastCalculatedRoute,
-            ...fmt,
-        })
+    const orch = _routeSharing().buildPrepareRouteSharingOrchestrationPlan(
+        collectPrepareRouteSharingInput()
     );
-    if (!execute.shouldPrepare) {
-        showStatus(execute.errorStatusMessage, 'error');
-        return;
-    }
-
-    Object.entries(execute.elementPatches).forEach(([id, text]) => {
-        const el = document.getElementById(id);
-        if (el) el.textContent = text;
-    });
-
-    console.log('[Cost] Route sharing prepared with costs:', {
-        distanceUnit: distanceUnit,
-        totalCost: execute.summary.totalCost.toFixed(2),
-    });
+    applyPrepareRouteSharingFromPlan(orch.apply);
 }
 
-/**
- * generateShareLink function
- * @function generateShareLink
- * @returns {*} Return value description
- */
-function generateShareLink() {
-    const RS = _routeSharing();
-    const execute = RS.buildGenerateShareLinkDomExecutePlan(buildEncodedShareLinkPlan(true));
-    if (!execute.shouldGenerate) {
-        showStatus(execute.errorStatusMessage, 'error');
+function applyGenerateShareLinkFromPlan(execute) {
+    if (!execute || !execute.shouldGenerate) {
+        if (execute && execute.errorStatusMessage) showStatus(execute.errorStatusMessage, 'error');
         return;
     }
 
@@ -3808,31 +3824,21 @@ function generateShareLink() {
 }
 
 /**
- * copyShareLink function
- * @function copyShareLink
+ * generateShareLink function
+ * @function generateShareLink
  * @returns {*} Return value description
  */
-function copyShareLink() {
-    const execute = _routeSharing().buildCopyShareLinkExecutePlan();
-    if (!execute.shouldCopy) return;
-
-    const shareLink = document.getElementById(execute.shareLinkInputId);
-    if (!shareLink) return;
-    shareLink.select();
-    document.execCommand('copy');
-    showStatus(execute.successStatusMessage, execute.successStatusType);
+function generateShareLink() {
+    applyGenerateShareLinkFromPlan(
+        _routeSharing().buildGenerateShareLinkEntryOrchestrationPlan(
+            buildEncodedShareLinkPlan(true)
+        ).execute
+    );
 }
 
-/**
- * generateQRCode function
- * @function generateQRCode
- * @returns {*} Return value description
- */
-function generateQRCode() {
-    const RS = _routeSharing();
-    const execute = RS.buildGenerateQrCodeDomExecutePlan(buildEncodedShareLinkPlan(false));
-    if (!execute.shouldGenerate) {
-        showStatus(execute.errorStatusMessage, 'error');
+function applyGenerateQrCodeFromPlan(execute) {
+    if (!execute || !execute.shouldGenerate) {
+        if (execute && execute.errorStatusMessage) showStatus(execute.errorStatusMessage, 'error');
         return;
     }
 
@@ -3853,6 +3859,35 @@ function generateQRCode() {
     const shareLinkContainer = document.getElementById(execute.shareLinkContainerId);
     if (shareLinkContainer && execute.hideShareLinkContainer) shareLinkContainer.style.display = 'none';
 
+    showStatus(execute.successStatusMessage, execute.successStatusType);
+}
+
+/**
+ * generateQRCode function
+ * @function generateQRCode
+ * @returns {*} Return value description
+ */
+function generateQRCode() {
+    applyGenerateQrCodeFromPlan(
+        _routeSharing().buildGenerateQrCodeEntryOrchestrationPlan(
+            buildEncodedShareLinkPlan(false)
+        ).execute
+    );
+}
+
+/**
+ * copyShareLink function
+ * @function copyShareLink
+ * @returns {*} Return value description
+ */
+function copyShareLink() {
+    const execute = _routeSharing().buildCopyShareLinkExecutePlan();
+    if (!execute.shouldCopy) return;
+
+    const shareLink = document.getElementById(execute.shareLinkInputId);
+    if (!shareLink) return;
+    shareLink.select();
+    document.execCommand('copy');
     showStatus(execute.successStatusMessage, execute.successStatusType);
 }
 
@@ -5156,15 +5191,20 @@ function clearHazardMarkers() {
     );
 }
 
+function applyDisplayAllRouteHazardsFromPlan(apply) {
+    if (!apply || !apply.shouldApply) return;
+
+    displayHazardMarkers(apply.hazards);
+    if (apply.logMessage) console.log(apply.logMessage);
+}
+
 /**
  * Display hazards from all routes on the map
  */
 function displayAllRouteHazards() {
-    const plan = _hazardMapMarkers().buildDisplayAllRouteHazardsPlan(routeOptions);
-    if (!plan.shouldDisplay) return;
-
-    displayHazardMarkers(plan.hazards);
-    if (plan.logMessage) console.log(plan.logMessage);
+    applyDisplayAllRouteHazardsFromPlan(
+        _hazardMapMarkers().buildDisplayAllRouteHazardsEntryOrchestrationPlan(routeOptions).apply
+    );
 }
 
 // ===== BOTTOM SHEET CONTROL =====

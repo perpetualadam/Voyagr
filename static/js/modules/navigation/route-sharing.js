@@ -524,6 +524,40 @@
     }
 
     /**
+     * Apply plan for prepareRouteSharing handler side effects.
+     * @param {Object} [execute] - from buildPrepareRouteSharingExecutePlan
+     * @returns {Object}
+     */
+    function buildPrepareRouteSharingApplyPlan(execute) {
+        execute = execute || {};
+        if (!execute.shouldPrepare) {
+            return {
+                shouldApply: false,
+                errorStatusMessage: execute.errorStatusMessage,
+            };
+        }
+        return {
+            shouldApply: true,
+            elementPatches: execute.elementPatches || {},
+            costLogMessage: '[Cost] Route sharing prepared with costs:',
+            costLogTotalCost: execute.summary ? execute.summary.totalCost : 0,
+        };
+    }
+
+    /**
+     * Orchestration plan for prepareRouteSharing entry.
+     * @param {Object} [input] - from buildPrepareRouteSharingInputPlan
+     * @returns {Object}
+     */
+    function buildPrepareRouteSharingOrchestrationPlan(input) {
+        var execute = buildPrepareRouteSharingExecutePlan(input);
+        return {
+            execute: execute,
+            apply: buildPrepareRouteSharingApplyPlan(execute),
+        };
+    }
+
+    /**
      * Input assembly for encoded share link generation.
      * @param {Object} o
      * @returns {Object}
@@ -622,6 +656,17 @@
     }
 
     /**
+     * Entry orchestration plan for generateShareLink handler.
+     * @param {Object} [linkPlan] - from buildEncodedShareLinkPlan
+     * @returns {Object}
+     */
+    function buildGenerateShareLinkEntryOrchestrationPlan(linkPlan) {
+        return {
+            execute: buildGenerateShareLinkDomExecutePlan(linkPlan),
+        };
+    }
+
+    /**
      * Execute plan for generating and mounting a route QR code.
      * @param {Object} linkPlan - from buildEncodedShareLinkPlan
      * @returns {Object}
@@ -670,6 +715,17 @@
             storeQrImageUrl: execute.storeQrImageUrl,
             successStatusMessage: execute.successStatusMessage,
             successStatusType: 'success',
+        };
+    }
+
+    /**
+     * Entry orchestration plan for generateQRCode handler.
+     * @param {Object} [linkPlan] - from buildEncodedShareLinkPlan
+     * @returns {Object}
+     */
+    function buildGenerateQrCodeEntryOrchestrationPlan(linkPlan) {
+        return {
+            execute: buildGenerateQrCodeDomExecutePlan(linkPlan),
         };
     }
 
@@ -828,6 +884,26 @@
     }
 
     /**
+     * Entry orchestration plan for loadSharedRouteFromUrl handler.
+     * @param {string} [search]
+     * @param {string} [href]
+     * @returns {Object}
+     */
+    function buildLoadSharedRouteFromUrlEntryOrchestrationPlan(search, href) {
+        var orch = buildLoadSharedRouteFromUrlOrchestrationPlan(search);
+        if (!orch.shouldLoad) {
+            return {
+                shouldLoad: false,
+                invalidPayloadLog: orch.invalidPayloadLog,
+            };
+        }
+        return {
+            shouldLoad: true,
+            execute: buildLoadSharedRouteFromUrlExecutePlan(orch, href),
+        };
+    }
+
+    /**
      * Execute plan for copying the share link input to clipboard.
      * @returns {Object}
      */
@@ -888,13 +964,17 @@
         buildDeleteSavedRouteExecutePlan: buildDeleteSavedRouteExecutePlan,
         buildPrepareRouteSharingInputPlan: buildPrepareRouteSharingInputPlan,
         buildPrepareRouteSharingExecutePlan: buildPrepareRouteSharingExecutePlan,
+        buildPrepareRouteSharingApplyPlan: buildPrepareRouteSharingApplyPlan,
+        buildPrepareRouteSharingOrchestrationPlan: buildPrepareRouteSharingOrchestrationPlan,
         buildEncodedShareLinkInputPlan: buildEncodedShareLinkInputPlan,
         buildEncodedShareLinkPlan: buildEncodedShareLinkPlan,
         buildEncodedShareLinkOrchestrationPlan: buildEncodedShareLinkOrchestrationPlan,
         buildShareLinkGenerateExecutePlan: buildShareLinkGenerateExecutePlan,
         buildGenerateShareLinkDomExecutePlan: buildGenerateShareLinkDomExecutePlan,
+        buildGenerateShareLinkEntryOrchestrationPlan: buildGenerateShareLinkEntryOrchestrationPlan,
         buildQrCodeGenerateExecutePlan: buildQrCodeGenerateExecutePlan,
         buildGenerateQrCodeDomExecutePlan: buildGenerateQrCodeDomExecutePlan,
+        buildGenerateQrCodeEntryOrchestrationPlan: buildGenerateQrCodeEntryOrchestrationPlan,
         buildRouteShareFormatInputPlan: buildRouteShareFormatInputPlan,
         buildShareViaWhatsAppPlan: buildShareViaWhatsAppPlan,
         buildShareViaEmailPlan: buildShareViaEmailPlan,
@@ -902,6 +982,7 @@
         buildShareViaEmailExecutePlan: buildShareViaEmailExecutePlan,
         buildLoadSharedRouteFromUrlOrchestrationPlan: buildLoadSharedRouteFromUrlOrchestrationPlan,
         buildLoadSharedRouteFromUrlExecutePlan: buildLoadSharedRouteFromUrlExecutePlan,
+        buildLoadSharedRouteFromUrlEntryOrchestrationPlan: buildLoadSharedRouteFromUrlEntryOrchestrationPlan,
         buildCopyShareLinkExecutePlan: buildCopyShareLinkExecutePlan,
         buildDownloadQrCodeExecutePlan: buildDownloadQrCodeExecutePlan,
         QR_CODE_IMAGE_SIZE_PX: QR_CODE_IMAGE_SIZE_PX,

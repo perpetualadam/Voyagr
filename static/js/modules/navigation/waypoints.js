@@ -1859,6 +1859,18 @@
     }
 
     /**
+     * Entry orchestration plan for clearMultiDropLayers handler.
+     * @param {number} [maxLegs]
+     * @returns {Object}
+     */
+    function buildClearMultiDropLayersEntryOrchestrationPlan(maxLegs) {
+        return {
+            apply: buildClearMultiDropLayersApplyPlan(maxLegs),
+            requiresMap: true,
+        };
+    }
+
+    /**
      * MapLibre layer descriptor for one multi-drop leg geometry string.
      * @param {string} geom - Encoded polyline
      * @param {number} idx - Leg index
@@ -1987,6 +1999,7 @@
         buildDrawMultiDropLegsEntryOrchestrationPlan: buildDrawMultiDropLegsEntryOrchestrationPlan,
         buildClearMultiDropLayersPlan: buildClearMultiDropLayersPlan,
         buildClearMultiDropLayersApplyPlan: buildClearMultiDropLayersApplyPlan,
+        buildClearMultiDropLayersEntryOrchestrationPlan: buildClearMultiDropLayersEntryOrchestrationPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {
