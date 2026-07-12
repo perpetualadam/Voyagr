@@ -8838,123 +8838,11 @@ function updateTurnWidgetFromPosition(lat, lon, turnInfo) {
 }
 
 // ===== JOURNEY SUMMARY BAR =====
-let journeySummaryUpdateInterval = null;
-
-/**
- * Show the journey summary bar
- */
-function showJourneySummaryBar() {
-    const bar = document.getElementById('journeySummaryBar');
-    if (bar) {
-        bar.style.display = 'flex';
-        console.log('[Journey Summary] Displayed');
-        // Start updates
-        startJourneySummaryUpdates();
-    }
-}
-
-/**
- * Hide the journey summary bar
- */
-function hideJourneySummaryBar() {
-    const bar = document.getElementById('journeySummaryBar');
-    if (bar) {
-        bar.style.display = 'none';
-        console.log('[Journey Summary] Hidden');
-    }
-    // Stop updates
-    if (journeySummaryUpdateInterval) {
-        clearInterval(journeySummaryUpdateInterval);
-        journeySummaryUpdateInterval = null;
-    }
-}
-
-/**
- * Start periodic journey summary updates
- */
-function startJourneySummaryUpdates() {
-    // Update immediately
-    updateJourneySummaryBar();
-
-    // Then update every 5 seconds
-    if (journeySummaryUpdateInterval) {
-        clearInterval(journeySummaryUpdateInterval);
-    }
-    journeySummaryUpdateInterval = setInterval(updateJourneySummaryBar, 5000);
-}
-
-
-/**
- * Format remaining time for display
- * @param {number} minutes - Time in minutes
- * @returns {string} Formatted time string (e.g., "45 min" or "2h 15min")
- */
-
-/**
- * Detect if the user has actually started moving.
- * Checks GPS position changes and speed to avoid false progress calculations.
- * @returns {boolean} True if user has started moving, false otherwise
- */
-function hasUserStartedMoving() {
-    return _movementDetection().hasUserStartedMoving({
-        trackingHistory: trackingHistory,
-        haversineDistanceMeters: _routeGeometry().haversineDistanceMeters,
-        log: console.log.bind(console),
-    });
-}
-
-/**
- * Update the journey summary bar with current navigation data
- * FIX: Added movement detection to prevent incorrect ETA before journey starts
- */
-function updateJourneySummaryBar() {
-    if (!routeInProgress || !routePolyline || routePolyline.length === 0) {
-        return;
-    }
-
-    const distanceEl = document.getElementById('remainingDistance');
-    const timeEl = document.getElementById('remainingTime');
-    const etaEl = document.getElementById('etaTime');
-
-    if (!distanceEl || !timeEl || !etaEl) return;
-
-    const userHasStartedMoving = hasUserStartedMoving();
-    let remainingDistanceMeters = 0;
-    if (routePolyline.length >= 2) {
-        if (userHasStartedMoving && currentLat != null && currentLon != null) {
-            remainingDistanceMeters = _routeGeometry().computeRemainingDistanceAlongRoute(
-                currentLat, currentLon, routePolyline, lastSnappedRouteIndex
-            );
-        } else {
-            remainingDistanceMeters = _routeGeometry().totalPolylineLengthMeters(routePolyline);
-        }
-    }
-
-    const ETA = _eta();
-    const polylineTotalM = _routeGeometry().totalPolylineLengthMeters(routePolyline);
-    const plan = ETA.buildJourneySummaryBarApplyPlan({
-        remainingDistanceMeters,
-        distanceUnit,
-        formatRemainingDistance: (m, unit) => _units().formatRemainingDistanceText(m, unit),
-        lastCalculatedRoute: window.lastCalculatedRoute,
-        routeDurationMin: ETA.normalizeRouteDurationMinutes(window.lastCalculatedRoute),
-        userHasStartedMoving,
-        polylineTotalM,
-        applyTrafficRatio: applyTrafficRatioToBaseRemaining,
-        use24HourFormat: localStorage.getItem('use24HourFormat') !== 'false',
-    });
-
-    distanceEl.textContent = plan.distanceText;
-    timeEl.textContent = plan.timeText;
-    etaEl.textContent = plan.etaText;
-
-    if (userHasStartedMoving && polylineTotalM > 0) {
-        console.log(`[ETA] Progress-based: ${(1 - remainingDistanceMeters / polylineTotalM).toFixed(2)} complete, ${plan.remainingTimeMinutes.toFixed(1)} min remaining`);
-    } else if (!userHasStartedMoving) {
-        console.log(`[ETA] Pre-movement: Using original duration ${plan.remainingTimeMinutes.toFixed(1)} min`);
-    }
-    console.log(`[Journey Summary] Distance: ${plan.distanceText}, Time: ${plan.timeText}, ETA: ${plan.etaText}`);
-}
+function hasUserStartedMoving() { return VoyagrJourneySummaryOrchestration.hasUserStartedMoving(); }
+function showJourneySummaryBar() { VoyagrJourneySummaryOrchestration.showJourneySummaryBar(); }
+function hideJourneySummaryBar() { VoyagrJourneySummaryOrchestration.hideJourneySummaryBar(); }
+function startJourneySummaryUpdates() { VoyagrJourneySummaryOrchestration.startJourneySummaryUpdates(); }
+function updateJourneySummaryBar() { VoyagrJourneySummaryOrchestration.updateJourneySummaryBar(); }
 
 // ===== PWA AUTO-RELOAD SYSTEM (PHASE 2) =====
 let updatePending = false;
@@ -11193,81 +11081,44 @@ window.addEventListener('load', () => {
 });
 
 // ===== JOURNEY SUMMARY & SETTINGS CONSOLIDATION =====
-
-/**
- * Build the route object used for the end-of-trip summary / history, overriding the
- * planned distance and duration with what was actually driven (GPS odometer + elapsed
- * navigation time). After one or more reroutes the stored route only covers the final
- * leg, so without this the summary under-reports the whole journey.
- * @param {Object} route - The active route (window.lastCalculatedRoute)
- * @returns {Object} Route with corrected distance_km / duration_minutes when available
- */
-function buildTraveledJourneyRoute(route) {
-    const result = _eta().buildTraveledJourneyRoutePatch(route, _navTraveledMeters, _navStartedAt);
-    if (!result.patch) return route;
-    const out = { ...result.patch };
-    if ('distance' in out) {
-        try {
-            out.distance = `${convertDistance(out.distance_km)} ${getDistanceUnit()}`;
-        } catch (_e) {
-            delete out.distance;
-        }
-    }
-    if ('time' in out) out.time = `${out.duration_minutes} minutes`;
-    return out;
-}
-
-/**
- * showJourneySummary function
- * Displays a summary of the completed journey
- * @param {Object} routeData - The route data (from window.lastCalculatedRoute)
- */
-function showJourneySummary(routeData) {
-    const ETA = _eta();
-    const execute = ETA.buildJourneySummaryModalExecutePlan(
-        ETA.buildJourneySummaryModalApplyPlan(routeData, {
-            traveledMeters: _navTraveledMeters,
-            navStartedAt: _navStartedAt,
+function getJourneySummaryOrchestrationRuntime() {
+    return {
+        eta: () => _eta(),
+        routeGeometry: () => _routeGeometry(),
+        movementDetection: () => _movementDetection(),
+        units: () => _units(),
+        getTrackingHistory: () => trackingHistory,
+        getRouteInProgress: () => routeInProgress,
+        getRoutePolyline: () => routePolyline,
+        getCurrentLat: () => currentLat,
+        getCurrentLon: () => currentLon,
+        getLastSnappedRouteIndex: () => lastSnappedRouteIndex,
+        getDistanceUnit: () => distanceUnit,
+        getNavTraveledMeters: () => _navTraveledMeters,
+        getNavStartedAt: () => _navStartedAt,
+        call: {
+            applyTrafficRatioToBaseRemaining,
             convertDistance,
-            distUnit: getDistanceUnit(),
+            getDistanceUnit,
             convertSpeed,
-            speedUnit: getSpeedUnit(),
-            currencySymbol: getCurrencySymbol(),
-            adjustCost: adjustCostForUnits,
-        })
-    );
-    if (!execute.shouldShow) return;
-
-    const modal = document.getElementById(execute.modalId);
-    if (!modal) return;
-
-    const distanceEl = document.getElementById(execute.elementIds.summaryDistance);
-    const timeEl = document.getElementById(execute.elementIds.summaryTime);
-    const costEl = document.getElementById(execute.elementIds.summaryCost);
-    const speedEl = document.getElementById(execute.elementIds.summaryAvgSpeed);
-    if (distanceEl) distanceEl.textContent = execute.distanceText;
-    if (timeEl) timeEl.textContent = execute.timeText;
-    if (costEl) costEl.textContent = execute.costText;
-    if (speedEl) speedEl.textContent = execute.avgSpeedText;
-
-    modal.style.display = 'block';
-    if (execute.expandBottomSheet) expandBottomSheet();
-    if (execute.logMessage) console.log(execute.logMessage);
+            getSpeedUnit,
+            getCurrencySymbol,
+            adjustCostForUnits,
+            expandBottomSheet,
+            switchTab,
+            clearForm,
+        },
+    };
 }
 
-/**
- * closeJourneySummary function
- * Closes the journey summary modal
- */
+function buildTraveledJourneyRoute(route) {
+    return VoyagrJourneySummaryOrchestration.buildTraveledJourneyRoute(route);
+}
+function showJourneySummary(routeData) {
+    VoyagrJourneySummaryOrchestration.showJourneySummary(routeData);
+}
 function closeJourneySummary() {
-    const execute = _eta().buildCloseJourneySummaryExecutePlan();
-    if (!execute.shouldClose) return;
-
-    const modal = document.getElementById(execute.modalId);
-    if (modal) modal.style.display = 'none';
-
-    if (execute.switchTab) switchTab(execute.switchTab);
-    if (execute.clearForm) clearForm();
+    VoyagrJourneySummaryOrchestration.closeJourneySummary();
 }
 
 VoyagrParkingOrchestration.bind(getParkingOrchestrationRuntime());
@@ -11292,6 +11143,7 @@ VoyagrRouteAvoidanceOrchestration.bind(getRouteAvoidanceOrchestrationRuntime());
 VoyagrRoadNameOrchestration.bind(getRoadNameOrchestrationRuntime());
 VoyagrMobilePwaOrchestration.bind(getMobilePwaOrchestrationRuntime());
 VoyagrHazardPreferencesOrchestration.bind(getHazardPreferencesOrchestrationRuntime());
+VoyagrJourneySummaryOrchestration.bind(getJourneySummaryOrchestrationRuntime());
 
 
 
