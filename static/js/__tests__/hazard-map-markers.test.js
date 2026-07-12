@@ -135,4 +135,14 @@ describe('hazard-map-markers module', () => {
         expect(execute.resetMarkerArray).toBe(true);
         expect(HM.buildClearHazardMarkersExecutePlan({ shouldClear: false }).shouldClear).toBe(false);
     });
+
+    test('buildClearHazardMarkersEntryOrchestrationPlan wraps clear execute', () => {
+        const entry = HM.buildClearHazardMarkersEntryOrchestrationPlan(3);
+        expect(entry.execute.shouldClear).toBe(true);
+        expect(entry.execute.resetMarkerArray).toBe(true);
+
+        const empty = HM.buildClearHazardMarkersEntryOrchestrationPlan(0);
+        expect(empty.execute.shouldClear).toBe(false);
+        expect(empty.execute.resetMarkerArray).toBe(true);
+    });
 });

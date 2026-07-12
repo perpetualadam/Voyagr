@@ -368,6 +368,18 @@
         };
     }
 
+    /**
+     * Entry orchestration plan for clearHazardMarkers handler.
+     * @param {number} [markerCount]
+     * @returns {Object}
+     */
+    function buildClearHazardMarkersEntryOrchestrationPlan(markerCount) {
+        var clearPlan = buildClearHazardMarkersPlan(markerCount);
+        return {
+            execute: buildClearHazardMarkersExecutePlan(clearPlan),
+        };
+    }
+
     var api = {
         HAZARD_MARKER_ICON_SIZE: HAZARD_MARKER_ICON_SIZE,
         DEFAULT_HAZARD_MARKER_CONFIG: DEFAULT_HAZARD_MARKER_CONFIG,
@@ -386,6 +398,7 @@
         buildDisplayHazardMarkersExecutePlan: buildDisplayHazardMarkersExecutePlan,
         buildDisplayHazardMarkersEntryOrchestrationPlan: buildDisplayHazardMarkersEntryOrchestrationPlan,
         buildClearHazardMarkersExecutePlan: buildClearHazardMarkersExecutePlan,
+        buildClearHazardMarkersEntryOrchestrationPlan: buildClearHazardMarkersEntryOrchestrationPlan,
         buildHazardMarkersMountPlans: buildHazardMarkersMountPlans,
     };
 

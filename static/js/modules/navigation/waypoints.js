@@ -207,6 +207,18 @@
         };
     }
 
+    /**
+     * Entry orchestration plan for displayMultiDropLegs handler.
+     * @param {Object} [data]
+     * @param {Object} [fmt]
+     * @returns {Object}
+     */
+    function buildMultiDropLegsDisplayEntryOrchestrationPlan(data, fmt) {
+        return {
+            apply: buildMultiDropLegsDisplayDomApplyPlan(data, fmt),
+        };
+    }
+
     var ROUTE_DRAG_MARKER_ICON_SIZE = [20, 20];
     var WAYPOINT_MARKER_ICON_SIZE = [28, 28];
 
@@ -1530,6 +1542,17 @@
     }
 
     /**
+     * Entry orchestration plan for onWaypointDragStart handler.
+     * @param {Object|null|undefined} target
+     * @returns {Object}
+     */
+    function buildWaypointDragStartEntryOrchestrationPlan(target) {
+        return {
+            apply: buildWaypointDragStartApplyPlan(target),
+        };
+    }
+
+    /**
      * Reset plan for waypoint item opacity after drag ends.
      * @returns {Object}
      */
@@ -1574,6 +1597,16 @@
             shouldHandle: true,
             preventDefault: plan.preventDefault,
             dropEffect: plan.dropEffect,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for onWaypointDragOver handler.
+     * @returns {Object}
+     */
+    function buildWaypointDragOverEntryOrchestrationPlan() {
+        return {
+            apply: buildWaypointDragOverApplyPlan(),
         };
     }
 
@@ -1787,6 +1820,15 @@
     }
 
     /**
+     * Entry orchestration plan for drawMultiDropLegsOnMap handler.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildDrawMultiDropLegsEntryOrchestrationPlan(input) {
+        return buildDrawMultiDropLegsOrchestrationPlan(input);
+    }
+
+    /**
      * Clear plan for multi-drop leg map layers.
      * @param {number} [maxLegs]
      * @returns {Object}
@@ -1852,6 +1894,7 @@
         buildMultiDropLegLayerDescriptor: buildMultiDropLegLayerDescriptor,
         buildMultiDropItineraryMountPlan: buildMultiDropItineraryMountPlan,
         buildMultiDropLegsDisplayDomApplyPlan: buildMultiDropLegsDisplayDomApplyPlan,
+        buildMultiDropLegsDisplayEntryOrchestrationPlan: buildMultiDropLegsDisplayEntryOrchestrationPlan,
         ROUTE_DRAG_MARKER_ICON_SIZE: ROUTE_DRAG_MARKER_ICON_SIZE,
         WAYPOINT_MARKER_ICON_SIZE: WAYPOINT_MARKER_ICON_SIZE,
         buildRouteDragMarkerHtml: buildRouteDragMarkerHtml,
@@ -1927,9 +1970,11 @@
         buildWaypointsListUpdateApplyPlan: buildWaypointsListUpdateApplyPlan,
         buildWaypointDragStartPlan: buildWaypointDragStartPlan,
         buildWaypointDragStartApplyPlan: buildWaypointDragStartApplyPlan,
+        buildWaypointDragStartEntryOrchestrationPlan: buildWaypointDragStartEntryOrchestrationPlan,
         buildWaypointDragEventContextPlan: buildWaypointDragEventContextPlan,
         buildWaypointDragOverPlan: buildWaypointDragOverPlan,
         buildWaypointDragOverApplyPlan: buildWaypointDragOverApplyPlan,
+        buildWaypointDragOverEntryOrchestrationPlan: buildWaypointDragOverEntryOrchestrationPlan,
         buildWaypointDropDispatchPlan: buildWaypointDropDispatchPlan,
         buildWaypointDropApplyPlan: buildWaypointDropApplyPlan,
         buildWaypointDropEntryOrchestrationPlan: buildWaypointDropEntryOrchestrationPlan,
@@ -1939,6 +1984,7 @@
         buildMultiDropLegLayerMapLibreApplyPlan: buildMultiDropLegLayerMapLibreApplyPlan,
         buildMultiDropLegsMapExecutePlan: buildMultiDropLegsMapExecutePlan,
         buildDrawMultiDropLegsOrchestrationPlan: buildDrawMultiDropLegsOrchestrationPlan,
+        buildDrawMultiDropLegsEntryOrchestrationPlan: buildDrawMultiDropLegsEntryOrchestrationPlan,
         buildClearMultiDropLayersPlan: buildClearMultiDropLayersPlan,
         buildClearMultiDropLayersApplyPlan: buildClearMultiDropLayersApplyPlan,
     };

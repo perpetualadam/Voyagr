@@ -1295,6 +1295,17 @@ describe('route preview panel and in-nav dispatch helpers', () => {
         expect(apply.preClear.clearAllRouteLayerHandles).toBe(true);
     });
 
+    test('buildDisplaySingleRouteEntryOrchestrationPlan wraps runtime input', () => {
+        const entry = RS.buildDisplaySingleRouteEntryOrchestrationPlan({
+            index: 0,
+            routeOptions: [{ name: 'Scenic', polyline: [[51.5, -0.1], [51.6, -0.2]], hazards: [] }],
+            runtime: { displayOpts: { routeColors: ['#f00'] } },
+        });
+        expect(entry.shouldExecute).toBe(true);
+        expect(entry.apply.shouldApply).toBe(true);
+        expect(entry.entryLogMessage).toContain('displaySingleRoute(0)');
+    });
+
     test('buildRouteComparisonModalExecutePlan wraps DOM mount fields', () => {
         const execute = RS.buildRouteComparisonModalExecutePlan({
             action: 'mount',

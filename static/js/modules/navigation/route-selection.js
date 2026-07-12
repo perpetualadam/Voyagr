@@ -1137,6 +1137,23 @@
     }
 
     /**
+     * Entry orchestration plan for displaySingleRoute handler.
+     * @param {Object} [input]
+     * @param {number} [input.index]
+     * @param {Array<Object>} [input.routeOptions]
+     * @param {Object} [input.runtime]
+     * @returns {Object}
+     */
+    function buildDisplaySingleRouteEntryOrchestrationPlan(input) {
+        input = input || {};
+        return buildDisplaySingleRouteOrchestrationPlan(
+            input.index,
+            input.routeOptions,
+            input.runtime
+        );
+    }
+
+    /**
      * Post-panel UI plan after route preview values are written to the DOM.
      * @param {Object} opts
      * @returns {Object}
@@ -4189,6 +4206,7 @@
         buildSelectRouteEntryOrchestrationPlan: buildSelectRouteEntryOrchestrationPlan,
         buildDisplaySingleRouteOrchestrationPlan: buildDisplaySingleRouteOrchestrationPlan,
         buildDisplaySingleRouteApplyPlan: buildDisplaySingleRouteApplyPlan,
+        buildDisplaySingleRouteEntryOrchestrationPlan: buildDisplaySingleRouteEntryOrchestrationPlan,
         buildRoutePreviewAfterDisplayPlan: buildRoutePreviewAfterDisplayPlan,
         buildRoutePreviewAfterDisplayExecutePlan: buildRoutePreviewAfterDisplayExecutePlan,
         buildShowRoutePreviewOrchestrationPlan: buildShowRoutePreviewOrchestrationPlan,

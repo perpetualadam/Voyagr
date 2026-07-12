@@ -170,6 +170,21 @@ describe('route-sharing module', () => {
         expect(RS.buildShareViaWhatsAppPlan(null, {}).ok).toBe(false);
     });
 
+    test('buildEncodedShareLinkOrchestrationPlan bundles input and plan', () => {
+        const input = RS.buildEncodedShareLinkInputPlan({
+            route: { distance_km: 10, time: '20 min', geometry: 'abc' },
+            startLabel: 'A',
+            endLabel: 'B',
+            origin: 'https://voyagr.test',
+            includeGeometry: false,
+        });
+        const orch = RS.buildEncodedShareLinkOrchestrationPlan(input);
+        expect(orch.input).toBe(input);
+        expect(orch.plan.ok).toBe(true);
+        expect(orch.plan.shareLink).toContain('https://voyagr.test');
+        expect(RS.buildEncodedShareLinkOrchestrationPlan({ route: null }).plan.ok).toBe(false);
+    });
+
     test('buildLastCalculatedRouteFromSharedPayload includes destination for recalculate', () => {
         const route = RS.buildLastCalculatedRouteFromSharedPayload({
             start: 'A',
