@@ -10,6 +10,58 @@
     var trafficTileErrorStreak = 0;
     var trafficLayerPausedUntil = 0;
 
+    var MLT_INIT = typeof VoyagrMapLayerToggles !== 'undefined' ? VoyagrMapLayerToggles : null;
+    var GPC_INIT = typeof VoyagrGooglePlusCodesPrefs !== 'undefined' ? VoyagrGooglePlusCodesPrefs : null;
+    var WL_INIT = typeof VoyagrWeatherLayer !== 'undefined' ? VoyagrWeatherLayer : null;
+
+    var trafficLayer = null;
+    var showTrafficEnabled = MLT_INIT
+        ? MLT_INIT.resolveShowTrafficEnabledFromStorage(localStorage.getItem('showTrafficEnabled'))
+        : localStorage.getItem('showTrafficEnabled') !== 'false';
+    var buildings3DEnabled = MLT_INIT
+        ? MLT_INIT.resolveBuildings3DEnabledFromStorage(localStorage.getItem('buildings3DEnabled'))
+        : localStorage.getItem('buildings3DEnabled') !== 'false';
+    var buildings3DHeightMultiplier = MLT_INIT
+        ? MLT_INIT.parseBuildings3DHeightMultiplier(localStorage.getItem('buildings3DHeight'))
+        : (parseFloat(localStorage.getItem('buildings3DHeight')) || 1.0);
+    var buildings3DOpacity = MLT_INIT
+        ? MLT_INIT.parseBuildings3DOpacity(localStorage.getItem('buildings3DOpacity'))
+        : (parseFloat(localStorage.getItem('buildings3DOpacity')) || 0.6);
+    var roadLabelsEnabled = MLT_INIT
+        ? MLT_INIT.resolveRoadLabelsEnabledFromStorage(localStorage.getItem('roadLabelsEnabled'))
+        : localStorage.getItem('roadLabelsEnabled') !== 'false';
+    var googlePlusCodesEnabled = GPC_INIT
+        ? GPC_INIT.resolveGooglePlusCodesEnabledFromStorage(localStorage.getItem('googlePlusCodesEnabled'))
+        : localStorage.getItem('googlePlusCodesEnabled') === 'true';
+    var weatherLayer = null;
+    var showWeatherEnabled = WL_INIT
+        ? WL_INIT.resolveShowWeatherEnabledFromStorage(localStorage.getItem('showWeatherEnabled'))
+        : localStorage.getItem('showWeatherEnabled') === 'true';
+    var weatherLayerType = WL_INIT
+        ? WL_INIT.resolveWeatherLayerTypeFromStorage(localStorage.getItem('weatherLayerType'))
+        : (localStorage.getItem('weatherLayerType') || 'precipitation_new');
+
+    function getBuildings3DEnabled() { return buildings3DEnabled; }
+    function setBuildings3DEnabled(val) { buildings3DEnabled = !!val; }
+    function getBuildings3DHeightMultiplier() { return buildings3DHeightMultiplier; }
+    function setBuildings3DHeightMultiplier(val) { buildings3DHeightMultiplier = val; }
+    function getBuildings3DOpacity() { return buildings3DOpacity; }
+    function setBuildings3DOpacity(val) { buildings3DOpacity = val; }
+    function getRoadLabelsEnabled() { return roadLabelsEnabled; }
+    function setRoadLabelsEnabled(val) { roadLabelsEnabled = !!val; }
+    function getGooglePlusCodesEnabled() { return googlePlusCodesEnabled; }
+    function setGooglePlusCodesEnabled(val) { googlePlusCodesEnabled = !!val; }
+    function getShowTrafficEnabled() { return showTrafficEnabled; }
+    function setShowTrafficEnabled(val) { showTrafficEnabled = !!val; }
+    function getTrafficLayer() { return trafficLayer; }
+    function setTrafficLayer(val) { trafficLayer = val; }
+    function getShowWeatherEnabled() { return showWeatherEnabled; }
+    function setShowWeatherEnabled(val) { showWeatherEnabled = !!val; }
+    function getWeatherLayer() { return weatherLayer; }
+    function setWeatherLayer(val) { weatherLayer = val; }
+    function getWeatherLayerType() { return weatherLayerType; }
+    function setWeatherLayerType(val) { weatherLayerType = val; }
+
     function rt() {
         if (!runtime) {
             throw new Error('[MapLayers] Orchestration runtime not bound');
@@ -37,11 +89,11 @@
                 hasMap: !!map,
                 hasMapLibreHelpers: !!window.MapLibreHelpers,
                 roadLabelsStorageValue: localStorage.getItem('roadLabelsEnabled'),
-                showTrafficEnabled: rt().getShowTrafficEnabled(),
-                showWeatherEnabled: rt().getShowWeatherEnabled(),
-                hasTrafficLayerRef: !!rt().getTrafficLayer(),
+                showTrafficEnabled: getShowTrafficEnabled(),
+                showWeatherEnabled: getShowWeatherEnabled(),
+                hasTrafficLayerRef: !!getTrafficLayer(),
                 mapHasTrafficLayer: !!(map && map.getLayer && map.getLayer('traffic-layer')),
-                hasWeatherLayerRef: !!rt().getWeatherLayer(),
+                hasWeatherLayerRef: !!getWeatherLayer(),
                 mapHasWeatherLayer: !!(map && map.getLayer && map.getLayer('weather-layer')),
             })
             : null;
@@ -59,10 +111,10 @@
         try {
             if (!map || !reconcile) return;
             if (reconcile.resetTrafficLayerRef) {
-                rt().setTrafficLayer(null);
+                setTrafficLayer(null);
             }
             if (reconcile.resetWeatherLayerRef) {
-                rt().setWeatherLayer(null);
+                setWeatherLayer(null);
             }
             if (reconcile.addTrafficLayer) {
                 addTrafficLayer();
@@ -79,17 +131,17 @@ function toggle3DBuildings() {
     const map = rt().getMap();
     const layerToggles = MLT();
     const toggleUi = TU();
-    const collected = layerToggles.buildToggle3DBuildingsCollectPlan({ currentlyEnabled: rt().getBuildings3DEnabled() });
+    const collected = layerToggles.buildToggle3DBuildingsCollectPlan({ currentlyEnabled: getBuildings3DEnabled() });
     const execute = layerToggles.buildToggle3DBuildingsExecutePlan({
         enabled: collected.enabled,
-        heightMultiplier: rt().getBuildings3DHeightMultiplier(),
-        opacity: rt().getBuildings3DOpacity(),
+        heightMultiplier: getBuildings3DHeightMultiplier(),
+        opacity: getBuildings3DOpacity(),
     });
     if (!execute.shouldApply) return;
 
-    rt().setBuildings3DEnabled(execute.enabled);
+    setBuildings3DEnabled(execute.enabled);
     localStorage.setItem(execute.storageKey, execute.storageValue);
-    toggleUi.applyToggleButton(document.getElementById(execute.toggleId), rt().getBuildings3DEnabled());
+    toggleUi.applyToggleButton(document.getElementById(execute.toggleId), getBuildings3DEnabled());
 
     if (map) {
         if (execute.mapAction === 'add3DBuildings') {
@@ -114,19 +166,19 @@ function toggleRoadLabels() {
     const map = rt().getMap();
     const layerToggles = MLT();
     const toggleUi = TU();
-    const collected = layerToggles.buildToggleRoadLabelsCollectPlan({ currentlyEnabled: rt().getRoadLabelsEnabled() });
+    const collected = layerToggles.buildToggleRoadLabelsCollectPlan({ currentlyEnabled: getRoadLabelsEnabled() });
     const execute = layerToggles.buildToggleRoadLabelsExecutePlan({ enabled: collected.enabled });
     if (!execute.shouldApply) return;
 
-    rt().setRoadLabelsEnabled(execute.enabled);
+    setRoadLabelsEnabled(execute.enabled);
     if (execute.useWriteBoolPref) {
-        toggleUi.writeBoolPref(execute.storageKey, rt().getRoadLabelsEnabled());
+        toggleUi.writeBoolPref(execute.storageKey, getRoadLabelsEnabled());
     } else {
         localStorage.setItem(execute.storageKey, execute.storageValue);
     }
     toggleUi.applyToggleButton(
         document.getElementById(execute.toggleId),
-        rt().getRoadLabelsEnabled(),
+        getRoadLabelsEnabled(),
         execute.toggleInactiveStyles
     );
 
@@ -141,15 +193,15 @@ function toggleRoadLabels() {
 function toggleGooglePlusCodes() {
     const prefs = GPC();
     const toggleUi = TU();
-    const collected = prefs.buildToggleGooglePlusCodesCollectPlan({ currentlyEnabled: rt().getGooglePlusCodesEnabled() });
+    const collected = prefs.buildToggleGooglePlusCodesCollectPlan({ currentlyEnabled: getGooglePlusCodesEnabled() });
     const execute = prefs.buildToggleGooglePlusCodesExecutePlan({ enabled: collected.enabled });
     if (!execute.shouldApply) return;
 
-    rt().setGooglePlusCodesEnabled(execute.enabled);
+    setGooglePlusCodesEnabled(execute.enabled);
     localStorage.setItem(execute.storageKey, execute.storageValue);
     toggleUi.applyToggleButton(
         document.getElementById(execute.toggleId),
-        rt().getGooglePlusCodesEnabled(),
+        getGooglePlusCodesEnabled(),
         execute.toggleInactiveStyles
     );
     rt().call.showStatus(execute.statusMessage, execute.statusType);
@@ -160,7 +212,7 @@ function set3DBuildingHeight(multiplier) {
     const map = rt().getMap();
     const execute = MLT().buildSet3DBuildingHeightExecutePlan(multiplier);
     if (!execute.shouldApply) return;
-    rt().setBuildings3DHeightMultiplier(execute.heightMultiplier);
+    setBuildings3DHeightMultiplier(execute.heightMultiplier);
     localStorage.setItem(execute.storageKey, execute.storageValue);
     if (map) rt().getMapLibreHelpers().set3DBuildingHeight(map, execute.heightMultiplier);
     console.log(execute.logMessage);
@@ -175,7 +227,7 @@ function set3DBuildingOpacity(opacity) {
     const map = rt().getMap();
     const execute = MLT().buildSet3DBuildingOpacityExecutePlan(opacity);
     if (!execute.shouldApply) return;
-    rt().setBuildings3DOpacity(execute.opacity);
+    setBuildings3DOpacity(execute.opacity);
     localStorage.setItem(execute.storageKey, execute.storageValue);
     if (map) rt().getMapLibreHelpers().set3DBuildingOpacity(map, execute.opacity);
     console.log(execute.logMessage);
@@ -183,13 +235,13 @@ function set3DBuildingOpacity(opacity) {
 function toggleTrafficLayer() {
     const layerToggles = MLT();
     const toggleUi = TU();
-    const collected = layerToggles.buildToggleTrafficLayerCollectPlan({ currentlyEnabled: rt().getShowTrafficEnabled() });
+    const collected = layerToggles.buildToggleTrafficLayerCollectPlan({ currentlyEnabled: getShowTrafficEnabled() });
     const execute = layerToggles.buildToggleTrafficLayerExecutePlan({ enabled: collected.enabled });
     if (!execute.shouldApply) return;
 
-    rt().setShowTrafficEnabled(execute.enabled);
-    toggleUi.writeBoolPref(execute.storageKey, rt().getShowTrafficEnabled());
-    toggleUi.applyToggleButton(document.getElementById(execute.toggleId), rt().getShowTrafficEnabled());
+    setShowTrafficEnabled(execute.enabled);
+    toggleUi.writeBoolPref(execute.storageKey, getShowTrafficEnabled());
+    toggleUi.applyToggleButton(document.getElementById(execute.toggleId), getShowTrafficEnabled());
 
     if (execute.mapAction === 'addTrafficLayer') {
         addTrafficLayer();
@@ -232,11 +284,11 @@ function addTrafficLayer() {
 
     try {
         const stale = layerToggles.buildTrafficLayerStaleRefResetPlan({
-            hasTrafficLayerRef: !!rt().getTrafficLayer(),
+            hasTrafficLayerRef: !!getTrafficLayer(),
             hasMap: !!map,
             mapHasTrafficLayer: !!(map && map.getLayer && map.getLayer(layerToggles.TRAFFIC_LAYER_ID)),
         });
-        if (stale.shouldReset) rt().setTrafficLayer(null);
+        if (stale.shouldReset) setTrafficLayer(null);
     } catch (e) {
         /* ignore */
     }
@@ -339,7 +391,7 @@ function addTrafficLayer() {
             }
 
             if (execute.setTrafficLayerRef) {
-                rt().setTrafficLayer({ id: execute.trafficLayerRefId });
+                setTrafficLayer({ id: execute.trafficLayerRefId });
             }
             console.log(execute.successLog);
             if (execute.bringRoutesToTop) rt().call.bringRoutesToTop();
@@ -401,7 +453,7 @@ function removeTrafficLayer() {
     const map = rt().getMap();
     const layerToggles = MLT();
     const execute = layerToggles.buildRemoveTrafficLayerExecutePlan({
-        hasTrafficLayerRef: !!rt().getTrafficLayer(),
+        hasTrafficLayerRef: !!getTrafficLayer(),
         hasMap: !!map,
     });
     if (!execute.shouldRemove) return;
@@ -412,7 +464,7 @@ function removeTrafficLayer() {
     if (map.getSource(execute.sourceId)) {
         map.removeSource(execute.sourceId);
     }
-    if (execute.clearTrafficLayerRef) rt().setTrafficLayer(null);
+    if (execute.clearTrafficLayerRef) setTrafficLayer(null);
     console.log(execute.logMessage);
 }
 
@@ -446,7 +498,7 @@ function voyagrOnTrafficTileLoadError(statusCode) {
  */
 function initTrafficLayer() {
     const map = rt().getMap();
-    const execute = MLT().buildInitTrafficLayerExecutePlan({ enabled: rt().getShowTrafficEnabled() });
+    const execute = MLT().buildInitTrafficLayerExecutePlan({ enabled: getShowTrafficEnabled() });
     if (!execute.shouldApply) return;
 
     TU().applyToggleButton(document.getElementById(execute.toggleId), execute.enabled);
@@ -466,13 +518,13 @@ function initTrafficLayer() {
 function toggleWeatherLayer() {
     const weatherMod = WL();
     const toggleUi = TU();
-    const collected = weatherMod.buildToggleWeatherLayerCollectPlan({ currentlyEnabled: rt().getShowWeatherEnabled() });
+    const collected = weatherMod.buildToggleWeatherLayerCollectPlan({ currentlyEnabled: getShowWeatherEnabled() });
     const execute = weatherMod.buildToggleWeatherLayerExecutePlan({ enabled: collected.enabled });
     if (!execute.shouldApply) return;
 
-    rt().setShowWeatherEnabled(execute.enabled);
-    toggleUi.writeBoolPref(execute.storageKey, rt().getShowWeatherEnabled());
-    toggleUi.applyToggleButton(document.getElementById(execute.toggleId), rt().getShowWeatherEnabled());
+    setShowWeatherEnabled(execute.enabled);
+    toggleUi.writeBoolPref(execute.storageKey, getShowWeatherEnabled());
+    toggleUi.applyToggleButton(document.getElementById(execute.toggleId), getShowWeatherEnabled());
 
     if (execute.mapAction === 'addWeatherLayer') {
         addWeatherLayer();
@@ -493,10 +545,10 @@ function setWeatherLayerType(type) {
     const execute = WL().buildSetWeatherLayerTypeExecutePlan(type);
     if (!execute.shouldApply) return;
 
-    rt().setWeatherLayerType(execute.layerType);
+    setWeatherLayerType(execute.layerType);
     localStorage.setItem(execute.storageKey, execute.storageValue);
 
-    if (execute.refreshLayerWhenEnabled && rt().getShowWeatherEnabled() && map) {
+    if (execute.refreshLayerWhenEnabled && getShowWeatherEnabled() && map) {
         removeWeatherLayer();
         addWeatherLayer();
     }
@@ -521,8 +573,8 @@ function addWeatherLayer() {
     }
 
     try {
-        if (rt().getWeatherLayer() && map && !map.getLayer(weatherMod.WEATHER_LAYER_ID)) {
-            rt().setWeatherLayer(null);
+        if (getWeatherLayer() && map && !map.getLayer(weatherMod.WEATHER_LAYER_ID)) {
+            setWeatherLayer(null);
         }
     } catch (e) {
         /* ignore */
@@ -553,7 +605,7 @@ function addWeatherLayer() {
 
     const addWeatherLayerNow = () => {
         try {
-            const tileUrl = weatherMod.buildWeatherTileUrl(rt().getWeatherLayerType(), owmApiKey);
+            const tileUrl = weatherMod.buildWeatherTileUrl(getWeatherLayerType(), owmApiKey);
 
             if (!map.getSource(orch.sourceId)) {
                 map.addSource(orch.sourceId, weatherMod.buildWeatherSourceSpec(tileUrl));
@@ -563,7 +615,7 @@ function addWeatherLayer() {
                 map.addLayer(weatherMod.buildWeatherLayerSpec());
             }
 
-            rt().setWeatherLayer({ id: orch.layerId });
+            setWeatherLayer({ id: orch.layerId });
             console.log(orch.successLogMessage);
 
             if (orch.bringRoutesToTop) rt().call.bringRoutesToTop();
@@ -587,7 +639,7 @@ function addWeatherLayer() {
 function removeWeatherLayer() {
     const map = rt().getMap();
     const execute = WL().buildRemoveWeatherLayerExecutePlan({
-        hasWeatherLayerRef: !!rt().getWeatherLayer(),
+        hasWeatherLayerRef: !!getWeatherLayer(),
         hasMap: !!map,
     });
     if (!execute.shouldRemove) return;
@@ -598,7 +650,7 @@ function removeWeatherLayer() {
     if (map.getSource(execute.sourceId)) {
         map.removeSource(execute.sourceId);
     }
-    if (execute.clearWeatherLayerRef) rt().setWeatherLayer(null);
+    if (execute.clearWeatherLayerRef) setWeatherLayer(null);
     console.log(execute.logMessage);
 }
 
@@ -607,7 +659,7 @@ function removeWeatherLayer() {
  */
 function initWeatherLayer() {
     const map = rt().getMap();
-    const execute = WL().buildInitWeatherLayerExecutePlan({ enabled: rt().getShowWeatherEnabled() });
+    const execute = WL().buildInitWeatherLayerExecutePlan({ enabled: getShowWeatherEnabled() });
     if (!execute.shouldApply) return;
 
     TU().applyToggleButton(document.getElementById(execute.toggleId), execute.enabled);
@@ -650,6 +702,26 @@ function initWeatherLayer() {
         toggleTrafficLayer: toggleTrafficLayer,
         toggleWeatherLayer: toggleWeatherLayer,
         voyagrOnTrafficTileLoadError: voyagrOnTrafficTileLoadError,
+        getBuildings3DEnabled: getBuildings3DEnabled,
+        setBuildings3DEnabled: setBuildings3DEnabled,
+        getBuildings3DHeightMultiplier: getBuildings3DHeightMultiplier,
+        setBuildings3DHeightMultiplier: setBuildings3DHeightMultiplier,
+        getBuildings3DOpacity: getBuildings3DOpacity,
+        setBuildings3DOpacity: setBuildings3DOpacity,
+        getRoadLabelsEnabled: getRoadLabelsEnabled,
+        setRoadLabelsEnabled: setRoadLabelsEnabled,
+        getGooglePlusCodesEnabled: getGooglePlusCodesEnabled,
+        setGooglePlusCodesEnabled: setGooglePlusCodesEnabled,
+        getShowTrafficEnabled: getShowTrafficEnabled,
+        setShowTrafficEnabled: setShowTrafficEnabled,
+        getTrafficLayer: getTrafficLayer,
+        setTrafficLayer: setTrafficLayer,
+        getShowWeatherEnabled: getShowWeatherEnabled,
+        setShowWeatherEnabled: setShowWeatherEnabled,
+        getWeatherLayer: getWeatherLayer,
+        setWeatherLayer: setWeatherLayer,
+        getWeatherLayerType: getWeatherLayerType,
+        setWeatherLayerType: setWeatherLayerType,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

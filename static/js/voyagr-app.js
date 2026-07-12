@@ -339,8 +339,8 @@ function getSettingsOrchestrationRuntime() {
         setShowOsmTrafficLightsEnabled: (val) => { VoyagrMapOverlayOrchestration.setShowOsmTrafficLightsEnabled(val); },
         getShowOsmRailwayCrossingsEnabled: () => VoyagrMapOverlayOrchestration.getShowOsmRailwayCrossingsEnabled(),
         setShowOsmRailwayCrossingsEnabled: (val) => { VoyagrMapOverlayOrchestration.setShowOsmRailwayCrossingsEnabled(val); },
-        getShowTrafficEnabled: () => showTrafficEnabled,
-        setShowTrafficEnabled: (val) => { showTrafficEnabled = val; },
+        getShowTrafficEnabled: () => VoyagrMapLayersOrchestration.getShowTrafficEnabled(),
+        setShowTrafficEnabled: (val) => VoyagrMapLayersOrchestration.setShowTrafficEnabled(val),
         getSpeedWidgetEnabled: () => VoyagrSpeedWidgetOrchestration.getSpeedWidgetEnabled(),
         setSpeedWidgetEnabled: (val) => VoyagrSpeedWidgetOrchestration.setSpeedWidgetEnabled(val),
         call: {
@@ -480,8 +480,8 @@ function getRouteComparisonOrchestrationRuntime() {
         setRouteLayer: (val) => { routeLayer = val; },
         getRoutePolyline: () => routePolyline,
         setRoutePolyline: (val) => { routePolyline = val; },
-        getShowTrafficEnabled: () => showTrafficEnabled,
-        getTrafficLayer: () => trafficLayer,
+        getShowTrafficEnabled: () => VoyagrMapLayersOrchestration.getShowTrafficEnabled(),
+        getTrafficLayer: () => VoyagrMapLayersOrchestration.getTrafficLayer(),
         call: {
             decodePolyline,
             displayAllRouteHazards,
@@ -761,37 +761,8 @@ function getBottomSheetOrchestrationRuntime() {
     };
 }
 
-// ===== MAP LAYER STATE (orchestration in map-layers-orchestration.js) =====
-const MLT = typeof VoyagrMapLayerToggles !== 'undefined' ? VoyagrMapLayerToggles : null;
-const GPC = typeof VoyagrGooglePlusCodesPrefs !== 'undefined' ? VoyagrGooglePlusCodesPrefs : null;
-const WL_INIT = typeof VoyagrWeatherLayer !== 'undefined' ? VoyagrWeatherLayer : null;
-
-let trafficLayer = null;
-let showTrafficEnabled = MLT
-    ? MLT.resolveShowTrafficEnabledFromStorage(localStorage.getItem('showTrafficEnabled'))
-    : localStorage.getItem('showTrafficEnabled') !== 'false';
-let buildings3DEnabled = MLT
-    ? MLT.resolveBuildings3DEnabledFromStorage(localStorage.getItem('buildings3DEnabled'))
-    : localStorage.getItem('buildings3DEnabled') !== 'false';
-let buildings3DHeightMultiplier = MLT
-    ? MLT.parseBuildings3DHeightMultiplier(localStorage.getItem('buildings3DHeight'))
-    : (parseFloat(localStorage.getItem('buildings3DHeight')) || 1.0);
-let buildings3DOpacity = MLT
-    ? MLT.parseBuildings3DOpacity(localStorage.getItem('buildings3DOpacity'))
-    : (parseFloat(localStorage.getItem('buildings3DOpacity')) || 0.6);
-let roadLabelsEnabled = MLT
-    ? MLT.resolveRoadLabelsEnabledFromStorage(localStorage.getItem('roadLabelsEnabled'))
-    : localStorage.getItem('roadLabelsEnabled') !== 'false';
-let googlePlusCodesEnabled = GPC
-    ? GPC.resolveGooglePlusCodesEnabledFromStorage(localStorage.getItem('googlePlusCodesEnabled'))
-    : localStorage.getItem('googlePlusCodesEnabled') === 'true';
-let weatherLayer = null;
-let showWeatherEnabled = WL_INIT
-    ? WL_INIT.resolveShowWeatherEnabledFromStorage(localStorage.getItem('showWeatherEnabled'))
-    : localStorage.getItem('showWeatherEnabled') === 'true';
-let weatherLayerType = WL_INIT
-    ? WL_INIT.resolveWeatherLayerTypeFromStorage(localStorage.getItem('weatherLayerType'))
-    : (localStorage.getItem('weatherLayerType') || 'precipitation_new');
+// ===== MAP LAYER STATE =====
+// Layer prefs and refs live in static/js/app/map-layers-orchestration.js (bound at file end).
 
 function toggle3DBuildings() { VoyagrMapLayersOrchestration.toggle3DBuildings(); }
 function toggleRoadLabels() { VoyagrMapLayersOrchestration.toggleRoadLabels(); }
@@ -817,26 +788,26 @@ function getMapLayersOrchestrationRuntime() {
         routeSelection: () => _routeSelection(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
-        getBuildings3DEnabled: () => buildings3DEnabled,
-        setBuildings3DEnabled: (val) => { buildings3DEnabled = val; },
-        getBuildings3DHeightMultiplier: () => buildings3DHeightMultiplier,
-        setBuildings3DHeightMultiplier: (val) => { buildings3DHeightMultiplier = val; },
-        getBuildings3DOpacity: () => buildings3DOpacity,
-        setBuildings3DOpacity: (val) => { buildings3DOpacity = val; },
-        getRoadLabelsEnabled: () => roadLabelsEnabled,
-        setRoadLabelsEnabled: (val) => { roadLabelsEnabled = val; },
-        getGooglePlusCodesEnabled: () => googlePlusCodesEnabled,
-        setGooglePlusCodesEnabled: (val) => { googlePlusCodesEnabled = val; },
-        getShowTrafficEnabled: () => showTrafficEnabled,
-        setShowTrafficEnabled: (val) => { showTrafficEnabled = val; },
-        getTrafficLayer: () => trafficLayer,
-        setTrafficLayer: (val) => { trafficLayer = val; },
-        getShowWeatherEnabled: () => showWeatherEnabled,
-        setShowWeatherEnabled: (val) => { showWeatherEnabled = val; },
-        getWeatherLayer: () => weatherLayer,
-        setWeatherLayer: (val) => { weatherLayer = val; },
-        getWeatherLayerType: () => weatherLayerType,
-        setWeatherLayerType: (val) => { weatherLayerType = val; },
+        getBuildings3DEnabled: () => VoyagrMapLayersOrchestration.getBuildings3DEnabled(),
+        setBuildings3DEnabled: (val) => VoyagrMapLayersOrchestration.setBuildings3DEnabled(val),
+        getBuildings3DHeightMultiplier: () => VoyagrMapLayersOrchestration.getBuildings3DHeightMultiplier(),
+        setBuildings3DHeightMultiplier: (val) => VoyagrMapLayersOrchestration.setBuildings3DHeightMultiplier(val),
+        getBuildings3DOpacity: () => VoyagrMapLayersOrchestration.getBuildings3DOpacity(),
+        setBuildings3DOpacity: (val) => VoyagrMapLayersOrchestration.setBuildings3DOpacity(val),
+        getRoadLabelsEnabled: () => VoyagrMapLayersOrchestration.getRoadLabelsEnabled(),
+        setRoadLabelsEnabled: (val) => VoyagrMapLayersOrchestration.setRoadLabelsEnabled(val),
+        getGooglePlusCodesEnabled: () => VoyagrMapLayersOrchestration.getGooglePlusCodesEnabled(),
+        setGooglePlusCodesEnabled: (val) => VoyagrMapLayersOrchestration.setGooglePlusCodesEnabled(val),
+        getShowTrafficEnabled: () => VoyagrMapLayersOrchestration.getShowTrafficEnabled(),
+        setShowTrafficEnabled: (val) => VoyagrMapLayersOrchestration.setShowTrafficEnabled(val),
+        getTrafficLayer: () => VoyagrMapLayersOrchestration.getTrafficLayer(),
+        setTrafficLayer: (val) => VoyagrMapLayersOrchestration.setTrafficLayer(val),
+        getShowWeatherEnabled: () => VoyagrMapLayersOrchestration.getShowWeatherEnabled(),
+        setShowWeatherEnabled: (val) => VoyagrMapLayersOrchestration.setShowWeatherEnabled(val),
+        getWeatherLayer: () => VoyagrMapLayersOrchestration.getWeatherLayer(),
+        setWeatherLayer: (val) => VoyagrMapLayersOrchestration.setWeatherLayer(val),
+        getWeatherLayerType: () => VoyagrMapLayersOrchestration.getWeatherLayerType(),
+        setWeatherLayerType: (val) => VoyagrMapLayersOrchestration.setWeatherLayerType(val),
         call: {
             showStatus,
             saveAllSettings,
@@ -1001,7 +972,7 @@ function getMapOverlayOrchestrationRuntime() {
         cameraMapMarkers: () => _cameraMapMarkers(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
-        getRoadLabelsEnabled: () => roadLabelsEnabled,
+        getRoadLabelsEnabled: () => VoyagrMapLayersOrchestration.getRoadLabelsEnabled(),
         call: {
             saveAllSettings,
         },
@@ -1071,8 +1042,8 @@ function getRoutePreviewOrchestrationRuntime() {
         getCurrentRoutingMode: () => currentRoutingMode,
         getCurrentVehicleType: () => currentVehicleType,
         getDistanceUnitValue: () => distanceUnit,
-        getShowTrafficEnabled: () => showTrafficEnabled,
-        getTrafficLayer: () => trafficLayer,
+        getShowTrafficEnabled: () => VoyagrMapLayersOrchestration.getShowTrafficEnabled(),
+        getTrafficLayer: () => VoyagrMapLayersOrchestration.getTrafficLayer(),
         call: {
             showStatus,
             switchTab,
@@ -1973,9 +1944,9 @@ function getMapThemeOrchestrationRuntime() {
         mapTheme: () => _mapTheme(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
-        getBuildings3DEnabled: () => buildings3DEnabled,
-        getBuildings3DHeightMultiplier: () => buildings3DHeightMultiplier,
-        getBuildings3DOpacity: () => buildings3DOpacity,
+        getBuildings3DEnabled: () => VoyagrMapLayersOrchestration.getBuildings3DEnabled(),
+        getBuildings3DHeightMultiplier: () => VoyagrMapLayersOrchestration.getBuildings3DHeightMultiplier(),
+        getBuildings3DOpacity: () => VoyagrMapLayersOrchestration.getBuildings3DOpacity(),
         call: {
             showStatus,
             saveAllSettings,
@@ -2180,7 +2151,7 @@ function applyDriverPerspective() { VoyagrDriverCameraOrchestration.applyDriverP
 // it just stays flat instead of tilting to 60° (see shouldTiltDrivingCamera()).
 let mapView3DEnabled = _mapView3D().resolveMapView3DEnabledFromStorage(
     localStorage.getItem('mapView3DEnabled'),
-    driverPerspectiveEnabled || buildings3DEnabled
+    driverPerspectiveEnabled || VoyagrMapLayersOrchestration.getBuildings3DEnabled()
 );
 
 // ===== MAP VIEW 3D ORCHESTRATION =====
@@ -2194,10 +2165,10 @@ function getMapView3DOrchestrationRuntime() {
         setMapView3DEnabled: (val) => { mapView3DEnabled = val; },
         getDriverPerspectiveEnabled: () => driverPerspectiveEnabled,
         setDriverPerspectiveEnabled: (val) => { driverPerspectiveEnabled = val; },
-        getBuildings3DEnabled: () => buildings3DEnabled,
-        setBuildings3DEnabled: (val) => { buildings3DEnabled = val; },
-        getBuildings3DHeightMultiplier: () => buildings3DHeightMultiplier,
-        getBuildings3DOpacity: () => buildings3DOpacity,
+        getBuildings3DEnabled: () => VoyagrMapLayersOrchestration.getBuildings3DEnabled(),
+        setBuildings3DEnabled: (val) => VoyagrMapLayersOrchestration.setBuildings3DEnabled(val),
+        getBuildings3DHeightMultiplier: () => VoyagrMapLayersOrchestration.getBuildings3DHeightMultiplier(),
+        getBuildings3DOpacity: () => VoyagrMapLayersOrchestration.getBuildings3DOpacity(),
         getMap: () => map,
         getMapLibreHelpers: () => MapLibreHelpers,
         call: {
