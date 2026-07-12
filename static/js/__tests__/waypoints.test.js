@@ -633,4 +633,34 @@ describe('waypoints module', () => {
         expect(plan.shouldDrawLegs).toBe(true);
         expect(W.buildMultiDropLegsDisplayDomApplyPlan(null, {}).shouldDisplay).toBe(false);
     });
+
+    test('buildMultiDropLegsDisplayEntryOrchestrationPlan and draw entry wrap apply', () => {
+        const display = W.buildMultiDropLegsDisplayEntryOrchestrationPlan({
+            legs: [{ distance_km: 4, duration_minutes: 10 }],
+            total_distance_km: 4,
+            all_geometry: ['geom1'],
+        }, {
+            distUnit: 'mi',
+            convertDistance: (km) => String(km),
+        });
+        expect(display.apply.shouldDisplay).toBe(true);
+
+        const draw = W.buildDrawMultiDropLegsEntryOrchestrationPlan({
+            hasMap: true,
+            data: { all_geometry: ['geom1'], legs: [{ geometry_precision: 6 }] },
+            decodePolyline: () => [[51.5, -0.1], [51.6, -0.2]],
+        });
+        expect(draw.shouldDraw).toBe(true);
+        expect(draw.execute.layers.length).toBeGreaterThan(0);
+    });
+
+    test('buildWaypointDragStartEntryOrchestrationPlan and drag-over entry wrap apply', () => {
+        const start = W.buildWaypointDragStartEntryOrchestrationPlan({ dataset: { type: 'via', index: '0' } });
+        expect(start.apply.shouldDrag).toBe(true);
+        expect(start.apply.dragState.type).toBe('via');
+
+        const over = W.buildWaypointDragOverEntryOrchestrationPlan();
+        expect(over.apply.shouldHandle).toBe(true);
+        expect(over.apply.dropEffect).toBe('move');
+    });
 });

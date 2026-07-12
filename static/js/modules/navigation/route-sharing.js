@@ -564,6 +564,18 @@
     }
 
     /**
+     * Orchestration plan for buildEncodedShareLink entry from runtime input.
+     * @param {Object} [input] - from buildEncodedShareLinkInputPlan
+     * @returns {Object}
+     */
+    function buildEncodedShareLinkOrchestrationPlan(input) {
+        return {
+            input: input,
+            plan: buildEncodedShareLinkPlan(input),
+        };
+    }
+
+    /**
      * Execute plan for showing a generated share link in the UI.
      * @param {Object} linkPlan - from buildEncodedShareLinkPlan
      * @returns {Object}
@@ -878,6 +890,7 @@
         buildPrepareRouteSharingExecutePlan: buildPrepareRouteSharingExecutePlan,
         buildEncodedShareLinkInputPlan: buildEncodedShareLinkInputPlan,
         buildEncodedShareLinkPlan: buildEncodedShareLinkPlan,
+        buildEncodedShareLinkOrchestrationPlan: buildEncodedShareLinkOrchestrationPlan,
         buildShareLinkGenerateExecutePlan: buildShareLinkGenerateExecutePlan,
         buildGenerateShareLinkDomExecutePlan: buildGenerateShareLinkDomExecutePlan,
         buildQrCodeGenerateExecutePlan: buildQrCodeGenerateExecutePlan,

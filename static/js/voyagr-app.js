@@ -3286,18 +3286,32 @@ function updateWaypointsList() {
 
 let _draggedWaypoint = null;
 
-function onWaypointDragStart(e) {
-    const apply = _waypoints().buildWaypointDragStartApplyPlan(e.target);
-    if (!apply.shouldDrag) return;
+function applyWaypointDragStartFromPlan(apply, event) {
+    if (!apply || !apply.shouldDrag || !event) return;
+
     _draggedWaypoint = apply.dragState;
-    e.target.style.opacity = apply.itemOpacity;
-    e.dataTransfer.effectAllowed = apply.dataTransferEffect;
+    if (event.target) event.target.style.opacity = apply.itemOpacity;
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = apply.dataTransferEffect;
+}
+
+function onWaypointDragStart(e) {
+    applyWaypointDragStartFromPlan(
+        _waypoints().buildWaypointDragStartEntryOrchestrationPlan(e.target).apply,
+        e
+    );
+}
+
+function applyWaypointDragOverFromPlan(apply, event) {
+    if (!apply || !apply.shouldHandle || !event) return;
+    if (apply.preventDefault) event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = apply.dropEffect;
 }
 
 function onWaypointDragOver(e) {
-    const apply = _waypoints().buildWaypointDragOverApplyPlan();
-    if (apply.preventDefault) e.preventDefault();
-    e.dataTransfer.dropEffect = apply.dropEffect;
+    applyWaypointDragOverFromPlan(
+        _waypoints().buildWaypointDragOverEntryOrchestrationPlan().apply,
+        e
+    );
 }
 
 function onWaypointDrop(e) {
@@ -3372,26 +3386,37 @@ function moveWaypoint(type, index, direction) {
     );
 }
 
+function collectMultiDropLegsDisplayInput(data) {
+    return {
+        data,
+        fmt: {
+            distUnit: getDistanceUnit(),
+            convertDistance,
+            formatEtaClock: (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        },
+    };
+}
+
+function applyMultiDropLegsDisplayFromPlan(apply, data) {
+    if (!apply || !apply.shouldDisplay) return;
+
+    const container = document.getElementById(apply.containerId);
+    if (!container) return;
+
+    container.innerHTML += apply.appendHtml;
+
+    if (apply.shouldDrawLegs) drawMultiDropLegsOnMap(data);
+}
+
 /**
  * Display multi-drop route leg breakdown in the waypoints area
  */
 function displayMultiDropLegs(data) {
-    const WP = _waypoints();
-    const plan = WP.buildMultiDropLegsDisplayDomApplyPlan(data, {
-        distUnit: getDistanceUnit(),
-        convertDistance,
-        formatEtaClock: (date) => date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    });
-    if (!plan.shouldDisplay) return;
-
-    const container = document.getElementById(plan.containerId);
-    if (!container) return;
-
-    container.innerHTML += plan.appendHtml;
-
-    if (plan.shouldDrawLegs) {
-        drawMultiDropLegsOnMap(data);
-    }
+    const input = collectMultiDropLegsDisplayInput(data);
+    applyMultiDropLegsDisplayFromPlan(
+        _waypoints().buildMultiDropLegsDisplayEntryOrchestrationPlan(input.data, input.fmt).apply,
+        data
+    );
 }
 
 /**
@@ -3431,20 +3456,25 @@ function applyMultiDropLegLayerFromMapLibrePlan(applyPlan) {
     }
 }
 
-/**
- * Draw multi-drop route legs on the map with distinct colors per leg
- */
-function drawMultiDropLegsOnMap(data) {
-    const orch = _waypoints().buildDrawMultiDropLegsOrchestrationPlan({
-        hasMap: !!map,
-        data,
-        decodePolyline,
-    });
-    if (!orch.shouldDraw) return;
+function applyDrawMultiDropLegsFromPlan(orch) {
+    if (!orch || !orch.shouldDraw) return;
 
     orch.execute.layers.forEach((layerPlan) => {
         applyMultiDropLegLayerFromMapLibrePlan(layerPlan);
     });
+}
+
+/**
+ * Draw multi-drop route legs on the map with distinct colors per leg
+ */
+function drawMultiDropLegsOnMap(data) {
+    applyDrawMultiDropLegsFromPlan(
+        _waypoints().buildDrawMultiDropLegsEntryOrchestrationPlan({
+            hasMap: !!map,
+            data,
+            decodePolyline,
+        })
+    );
 }
 
 /**
@@ -3583,15 +3613,21 @@ function applyDisplaySingleRouteFromPlan(apply) {
     applySingleRouteMapDisplayFromPlan(apply.execute);
 }
 
+function collectDisplaySingleRouteInput(index) {
+    return {
+        index,
+        routeOptions,
+        runtime: collectDisplaySingleRouteRuntime(),
+    };
+}
+
 /**
  * Display only a single route on the map
  * @param {number} index - Route index to display
  */
 function displaySingleRoute(index) {
-    const orch = _routeSelection().buildDisplaySingleRouteOrchestrationPlan(
-        index,
-        routeOptions,
-        collectDisplaySingleRouteRuntime()
+    const orch = _routeSelection().buildDisplaySingleRouteEntryOrchestrationPlan(
+        collectDisplaySingleRouteInput(index)
     );
     applyDisplaySingleRouteFromPlan(orch.apply);
 }
@@ -3642,22 +3678,25 @@ function useRoute(index) {
 }
 
 // ===== ROUTE SHARING FUNCTIONS =====
+function collectEncodedShareLinkInput(includeGeometry) {
+    return _routeSharing().buildEncodedShareLinkInputPlan({
+        route: window.lastCalculatedRoute,
+        startLabel: document.getElementById('start')?.value,
+        endLabel: document.getElementById('end')?.value,
+        origin: window.location.origin,
+        includeGeometry,
+    });
+}
+
 /**
  * Build encoded share URL from current route (optionally omit geometry for QR).
  * @param {boolean} [includeGeometry=true]
- * @returns {{ shareLink: string, encodedRoute: string }|null}
+ * @returns {{ ok: boolean, shareLink?: string, encodedRoute?: string, errorStatusMessage?: string }}
  */
 function buildEncodedShareLinkPlan(includeGeometry) {
-    const RS = _routeSharing();
-    return RS.buildEncodedShareLinkPlan(
-        RS.buildEncodedShareLinkInputPlan({
-            route: window.lastCalculatedRoute,
-            startLabel: document.getElementById('start')?.value,
-            endLabel: document.getElementById('end')?.value,
-            origin: window.location.origin,
-            includeGeometry,
-        })
-    );
+    return _routeSharing().buildEncodedShareLinkOrchestrationPlan(
+        collectEncodedShareLinkInput(includeGeometry)
+    ).plan;
 }
 
 function buildEncodedShareLink(includeGeometry) {
@@ -5090,15 +5129,10 @@ function displayHazardMarkers(hazards) {
     );
 }
 
-/**
- * Clear all hazard markers from the map
- */
-function clearHazardMarkers() {
-    const HM = _hazardMapMarkers();
+function applyClearHazardMarkersFromPlan(execute) {
+    if (!execute) return;
+
     const existing = window.hazardMarkers || [];
-    const execute = HM.buildClearHazardMarkersExecutePlan(
-        HM.buildClearHazardMarkersPlan(existing.length)
-    );
     if (!execute.shouldClear) {
         if (execute.resetMarkerArray) window.hazardMarkers = [];
         return;
@@ -5110,6 +5144,16 @@ function clearHazardMarkers() {
         }
     });
     if (execute.resetMarkerArray) window.hazardMarkers = [];
+}
+
+/**
+ * Clear all hazard markers from the map
+ */
+function clearHazardMarkers() {
+    const existing = window.hazardMarkers || [];
+    applyClearHazardMarkersFromPlan(
+        _hazardMapMarkers().buildClearHazardMarkersEntryOrchestrationPlan(existing.length).execute
+    );
 }
 
 /**
