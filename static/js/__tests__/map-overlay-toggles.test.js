@@ -29,6 +29,7 @@ describe('map-overlay-toggles module', () => {
         const ok = OT.buildFetchCamerasDispatchPlan({ enabled: true, hasMap: true, zoom: 12 });
         expect(ok.shouldFetch).toBe(true);
         expect(ok.apiPath).toBe(OT.CAMERAS_AREA_API_PATH);
+        expect(ok.logLabel).toBe('Cameras');
     });
 
     test('buildFetchOsmOverlayDispatchPlan builds bounds URL', () => {

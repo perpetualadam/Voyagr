@@ -118,16 +118,14 @@
         var east = bounds.getEast();
         var west = bounds.getWest();
 
-        fetch(OT().buildAreaBoundsApiUrl(north, south, east, west, dispatch.apiPath))
-            .then(function (response) { return response.json(); })
+        var url = OT().buildAreaBoundsApiUrl(north, south, east, west, dispatch.apiPath);
+
+        fetchOsmAreaOverlay(url, dispatch.logLabel || 'Cameras')
             .then(function (data) {
-                if (data.success && data.cameras) {
+                if (data && data.success && data.cameras) {
                     displayCameraMarkers(data.cameras);
                     console.log('[Cameras] Loaded ' + data.cameras.length + ' cameras in viewport');
                 }
-            })
-            .catch(function (error) {
-                console.error('[Cameras] Error fetching cameras:', error);
             });
     }
 
