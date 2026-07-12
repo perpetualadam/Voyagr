@@ -408,6 +408,53 @@
         };
     }
 
+    /**
+     * Entry orchestration plan for bottom sheet handle click toggle.
+     * @param {boolean} isExpanded
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildBottomSheetHandleClickEntryOrchestrationPlan(isExpanded, opts) {
+        opts = opts || {};
+        return {
+            shouldToggle: true,
+            action: isExpanded ? 'collapse' : 'expand',
+            logMessage: opts.handleClickLogMessage,
+            logState: isExpanded,
+        };
+    }
+
+    /**
+     * Entry orchestration plan for bottom sheet header click toggle.
+     * @param {boolean} clickedButton
+     * @param {boolean} isExpanded
+     * @returns {Object}
+     */
+    function buildBottomSheetHeaderClickEntryOrchestrationPlan(clickedButton, isExpanded) {
+        var allow = buildBottomSheetHeaderClickAllowedPlan(clickedButton);
+        return {
+            shouldToggle: allow.allowToggle,
+            action: isExpanded ? 'collapse' : 'expand',
+        };
+    }
+
+    /**
+     * Entry orchestration plan for bottom sheet body click expand.
+     * @param {boolean} clickedContent
+     * @param {boolean} isExpanded
+     * @param {Object} [opts]
+     * @returns {Object}
+     */
+    function buildBottomSheetBodyClickEntryOrchestrationPlan(clickedContent, isExpanded, opts) {
+        opts = opts || {};
+        var expandPlan = buildBottomSheetBodyClickExpandPlan(clickedContent, isExpanded);
+        return {
+            shouldExpand: expandPlan.shouldExpand,
+            logMessage: opts.sheetExpandClickLogMessage,
+            action: 'expand',
+        };
+    }
+
     var api = {
         eventTargetElement: eventTargetElement,
         closest: closest,
@@ -436,6 +483,9 @@
         buildBottomSheetDragVisualEntryOrchestrationPlan: buildBottomSheetDragVisualEntryOrchestrationPlan,
         buildBottomSheetDragFinishEntryOrchestrationPlan: buildBottomSheetDragFinishEntryOrchestrationPlan,
         buildBottomSheetDragStartExecutePlan: buildBottomSheetDragStartExecutePlan,
+        buildBottomSheetHandleClickEntryOrchestrationPlan: buildBottomSheetHandleClickEntryOrchestrationPlan,
+        buildBottomSheetHeaderClickEntryOrchestrationPlan: buildBottomSheetHeaderClickEntryOrchestrationPlan,
+        buildBottomSheetBodyClickEntryOrchestrationPlan: buildBottomSheetBodyClickEntryOrchestrationPlan,
         buildCollapseBottomSheetForRoutePreviewExecutePlan: buildCollapseBottomSheetForRoutePreviewExecutePlan,
         buildCollapseBottomSheetForRoutePreviewApplyPlan: buildCollapseBottomSheetForRoutePreviewApplyPlan,
         buildCollapseBottomSheetForRoutePreviewOrchestrationPlan:

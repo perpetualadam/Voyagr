@@ -3110,6 +3110,35 @@
     }
 
     /**
+     * Apply plan for scheduling route layer mount after style load.
+     * @param {Object} [stylePlan] - from buildDisplayAllRoutesMapStyleLoadExecutePlan
+     * @param {Object} [opts]
+     * @param {string} [opts.addLayersLogMessage]
+     * @returns {Object}
+     */
+    function buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan(stylePlan, opts) {
+        stylePlan = stylePlan || {};
+        opts = opts || {};
+        if (!stylePlan || stylePlan.strategy === 'immediate') {
+            return {
+                shouldApply: true,
+                strategy: 'immediate',
+                addLayersLogMessage: opts.addLayersLogMessage,
+            };
+        }
+        return {
+            shouldApply: true,
+            strategy: 'wait',
+            waitLogMessage: stylePlan.waitLogMessage,
+            waitForStyleLoadEvent: !!stylePlan.waitForStyleLoadEvent,
+            fallbackTimeoutMs: stylePlan.fallbackTimeoutMs,
+            runFallbackOnlyIfNoLayers: !!stylePlan.runFallbackOnlyIfNoLayers,
+            fallbackLogMessage: stylePlan.fallbackLogMessage,
+            addLayersLogMessage: opts.addLayersLogMessage || stylePlan.addLayersLogMessage,
+        };
+    }
+
+    /**
      * Post-mount execute plan after doAddRouteLayers batch apply.
      * @param {Object} sideEffects - from buildAllRoutesMapSideEffectsPlan
      * @param {Object} [opts]
@@ -3247,6 +3276,9 @@
             shouldMount: true,
             preMount: execute.preMount,
             stylePlan: execute.stylePlan,
+            styleSchedule: buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan(execute.stylePlan, {
+                addLayersLogMessage: execute.addLayersLogMessage,
+            }),
             addLayersLogMessage: execute.addLayersLogMessage,
             requireMap: !!execute.requireMap,
             mapMissingLogMessage: orch.mapMissingLogMessage,
@@ -4291,6 +4323,8 @@
         buildClearAllRouteLayersFromMapPlan: buildClearAllRouteLayersFromMapPlan,
         buildDisplayAllRoutesMapPreMountPlan: buildDisplayAllRoutesMapPreMountPlan,
         buildDisplayAllRoutesMapStyleLoadExecutePlan: buildDisplayAllRoutesMapStyleLoadExecutePlan,
+        buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan:
+            buildDisplayAllRoutesMapStyleLoadScheduleApplyPlan,
         buildDoAddRouteLayersPostMountExecutePlan: buildDoAddRouteLayersPostMountExecutePlan,
         buildDisplayAllRoutesMapDispatchPlan: buildDisplayAllRoutesMapDispatchPlan,
         buildDisplayAllRoutesMapOrchestrationPlan: buildDisplayAllRoutesMapOrchestrationPlan,

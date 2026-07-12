@@ -142,4 +142,25 @@ describe('dom-helpers', () => {
         expect(start.shouldDisableTransition).toBe(true);
         expect(start.transitionValue).toBe('none');
     });
+
+    test('buildBottomSheet click entry orchestration plans choose toggle actions', () => {
+        const handle = Dom.buildBottomSheetHandleClickEntryOrchestrationPlan(false, {
+            handleClickLogMessage: 'handle click',
+        });
+        expect(handle.shouldToggle).toBe(true);
+        expect(handle.action).toBe('expand');
+        expect(handle.logMessage).toBe('handle click');
+
+        const header = Dom.buildBottomSheetHeaderClickEntryOrchestrationPlan(false, true);
+        expect(header.shouldToggle).toBe(true);
+        expect(header.action).toBe('collapse');
+        expect(Dom.buildBottomSheetHeaderClickEntryOrchestrationPlan(true, false).shouldToggle)
+            .toBe(false);
+
+        const body = Dom.buildBottomSheetBodyClickEntryOrchestrationPlan(false, false, {
+            sheetExpandClickLogMessage: 'expand sheet',
+        });
+        expect(body.shouldExpand).toBe(true);
+        expect(body.logMessage).toBe('expand sheet');
+    });
 });
