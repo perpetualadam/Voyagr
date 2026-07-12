@@ -345,6 +345,7 @@ function getSettingsOrchestrationRuntime() {
             loadPreferences,
             setRoutingMode,
             setMapTheme,
+            applyTheme,
             initializeDarkMode,
             updateThemeButtons,
             applySpeedWidgetToggleUi: () => VoyagrSpeedWidgetOrchestration.applySpeedWidgetToggleUi(),

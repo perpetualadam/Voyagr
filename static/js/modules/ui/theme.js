@@ -39,10 +39,26 @@
         return null;
     }
 
+    /**
+     * Plan for applying dark-mode class before deferred app scripts run.
+     * @param {string} [storedTheme]
+     * @param {boolean} [prefersDark]
+     * @returns {{ themeName: string, useDark: boolean, className: string }}
+     */
+    function buildEarlyUiThemeBootPlan(storedTheme, prefersDark) {
+        var themeName = storedTheme || 'light';
+        return {
+            themeName: themeName,
+            useDark: shouldUseDarkMode(themeName, !!prefersDark),
+            className: 'dark-mode',
+        };
+    }
+
     var api = {
         shouldUseDarkMode: shouldUseDarkMode,
         toggleBetweenLightAndDark: toggleBetweenLightAndDark,
         activeThemeButtonId: activeThemeButtonId,
+        buildEarlyUiThemeBootPlan: buildEarlyUiThemeBootPlan,
     };
 
     if (typeof module !== 'undefined' && module.exports) {

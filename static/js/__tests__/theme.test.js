@@ -33,4 +33,17 @@ describe('theme module', () => {
             expect(Theme.activeThemeButtonId('unknown')).toBeNull();
         });
     });
+
+    describe('buildEarlyUiThemeBootPlan', () => {
+        test('enables dark class for explicit dark theme', () => {
+            const plan = Theme.buildEarlyUiThemeBootPlan('dark', false);
+            expect(plan.useDark).toBe(true);
+            expect(plan.className).toBe('dark-mode');
+        });
+
+        test('auto theme follows system preference', () => {
+            expect(Theme.buildEarlyUiThemeBootPlan('auto', true).useDark).toBe(true);
+            expect(Theme.buildEarlyUiThemeBootPlan('auto', false).useDark).toBe(false);
+        });
+    });
 });
