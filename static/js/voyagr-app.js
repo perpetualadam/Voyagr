@@ -770,37 +770,9 @@ function loadSavedRoutes() { VoyagrRouteSavingOrchestration.loadSavedRoutes(); }
 function useSavedRoute(routeId) { VoyagrRouteSavingOrchestration.useSavedRoute(routeId); }
 function deleteSavedRoute(routeId) { VoyagrRouteSavingOrchestration.deleteSavedRoute(routeId); }
 
-// Decode polyline (supports both precision 5 and precision 6)
-/**
- * decodePolyline function
- * @function decodePolyline
- * @param {*} encoded - Encoded polyline string
- * @param {*} precision - Precision level (5 for OSRM/GraphHopper, 6 for Valhalla). Default: 6
- * @returns {*} Array of [lat, lon] coordinates
- */
-// decodePolyline / encodePolyline moved to modules/navigation/polyline-codec.js
-// (VoyagrPolylineCodec global). Thin stubs below keep all existing callers working.
-
-/**
- * Decode an encoded polyline string to [lat,lon] pairs.
- * Delegates to VoyagrPolylineCodec (pure, unit-tested). Precision 6 = Valhalla, 5 = OSRM/GH.
- * @param {string} encoded
- * @param {number} [precision=6]
- * @returns {Array<[number, number]>}
- */
 function decodePolyline(encoded, precision = 6) {
-    if (!encoded || typeof encoded !== 'string') {
-        console.warn('[decodePolyline] Invalid input:', encoded);
-        return [];
-    }
-    return _polylineCodec().decodePolyline(encoded, precision);
+    return VoyagrCalculateRouteOrchestration.decodePolyline(encoded, precision);
 }
-
-/**
- * Recover `routeData` from persisted OfflineNav blob for a normal navigation bootstrap.
- *
- * @param {*} saved
- */
 
 /**
  * showStatus function
@@ -824,6 +796,7 @@ function collectSettingsFormState() {
 
 function getCalculateRouteOrchestrationRuntime() {
     return {
+        polylineCodec: () => _polylineCodec(),
         geocodingLocations: () => _geocodingLocations(),
         routeSelection: () => _routeSelection(),
         routeSharing: () => _routeSharing(),
@@ -2100,9 +2073,6 @@ function _theme() { return VoyagrModules.theme(); }
 
 /** Unit-tested HTML escape helper (modules/html.js). */
 function _html() { return VoyagrModules.html(); }
-function escapeHtml(s) {
-    return _html().escapeHtml(s);
-}
 
 /** Unit-tested polyline encode/decode (modules/navigation/polyline-codec.js). */
 function _polylineCodec() { return VoyagrModules.polylineCodec(); }
@@ -2303,6 +2273,7 @@ function getJourneyOverviewOrchestrationRuntime() {
 function toggleJourneyOverview() { VoyagrJourneyOverviewOrchestration.toggleJourneyOverview(); }
 
 // ===== DISTANCE CALCULATION & TURN DETECTION =====
+/**
  * Map a Valhalla maneuver type to a turn-by-turn direction key, or null when it is not
  * an announceable maneuver (start / continue / straight / ramp-straight / stay-straight).
  * Shared by the advance "Then" maneuver (widget + voice). Kept in sync with the inline
@@ -3189,8 +3160,13 @@ function updateAutoGpsLocation() { VoyagrAutoGpsOrchestration.updateAutoGpsLocat
 // ===== GEOCODING ORCHESTRATION =====
 // Orchestration lives in static/js/app/geocoding-orchestration.js (bound at file end).
 
+function escapeHtml(s) {
+    return VoyagrGeocodingOrchestration.escapeHtml(s);
+}
+
 function getGeocodingOrchestrationRuntime() {
     return {
+        html: () => _html(),
         geocodingLocations: () => _geocodingLocations(),
         searchAutocomplete: () => _searchAutocomplete(),
         getAutoGpsEnabled: () => VoyagrAutoGpsOrchestration.getAutoGpsEnabled(),

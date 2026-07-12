@@ -14,6 +14,17 @@
         return runtime;
     }
 
+    function polylineCodecModule() { return rt().polylineCodec(); }
+
+    function decodePolyline(encoded, precision) {
+        if (precision === undefined) precision = 6;
+        if (!encoded || typeof encoded !== 'string') {
+            console.warn('[decodePolyline] Invalid input:', encoded);
+            return [];
+        }
+        return polylineCodecModule().decodePolyline(encoded, precision);
+    }
+
     function applyMapClickLocationPickerFromPlan(apply) {
         if (!apply || !apply.shouldApply) return;
 
@@ -534,6 +545,7 @@
 
     var api = {
         bind: bind,
+        decodePolyline: decodePolyline,
         setupMapClickHandler: setupMapClickHandler,
         calculateRoute: calculateRoute,
         showRouteProgressBar: showRouteProgressBar,

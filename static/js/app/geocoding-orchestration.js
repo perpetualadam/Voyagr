@@ -19,6 +19,12 @@
         return runtime;
     }
 
+    function htmlModule() { return rt().html(); }
+
+    function escapeHtml(s) {
+        return htmlModule().escapeHtml(s);
+    }
+
     function GL() { return rt().geocodingLocations(); }
     function SA() { return rt().searchAutocomplete(); }
 
@@ -490,6 +496,7 @@ function showSearchHistory() {
 
     var api = {
         bind: bind,
+        escapeHtml: escapeHtml,
         initGeocodeCache: initGeocodeCache,
         saveGeocodeCache: saveGeocodeCache,
         showAutocomplete: showAutocomplete,
