@@ -78,7 +78,7 @@ load_dotenv(_env_path)
 
 app = Flask(__name__, static_folder='static', static_url_path='/static')
 
-# Reverse proxy: fix scheme / client IP when the edge sets X-Forwarded-* (Railway, nginx).
+# Reverse proxy: fix scheme / client IP when the edge sets X-Forwarded-* (nginx on Contabo).
 if os.getenv('VOYAGR_TRUST_PROXY', '').strip().lower() in ('1', 'true', 'yes'):
     try:
         from werkzeug.middleware.proxy_fix import ProxyFix

@@ -1,5 +1,7 @@
 # 🚀 Railway.app Deployment Guide for Voyagr PWA
 
+> **Deprecated:** Production runs on **Contabo**, not Railway. Use [CONTABO_UPDATE_COMMANDS.md](CONTABO_UPDATE_COMMANDS.md) and [PRODUCTION_DEPLOYMENT_GUIDE.md](PRODUCTION_DEPLOYMENT_GUIDE.md). This file is kept for historical reference only.
+
 ## ✅ Pre-Deployment Checklist
 
 - [x] App is compliant with Railway.app terms

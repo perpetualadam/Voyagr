@@ -1,0 +1,38 @@
+name: Deploy to Contabo
+
+# Production runs on a Contabo VPS — GitHub Actions does not deploy there automatically.
+# This workflow runs after CI on main and prints the SSH deploy steps for the operator.
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    needs: []
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Production deploy reminder (Contabo VPS)
+        run: |
+          echo "✅ Code pushed to GitHub main."
+          echo ""
+          echo "📍 Production host: Contabo VPS (/opt/voyagr)"
+          echo "   GitHub Actions does NOT deploy to Contabo — pull and restart on the server."
+          echo ""
+          echo "🚀 Deploy on Contabo (SSH):"
+          echo "   cd /opt/voyagr"
+          echo "   sudo bash deploy/deploy-pull.sh"
+          echo ""
+          echo "   Or manually:"
+          echo "   git pull origin main"
+          echo "   sudo systemctl restart voyagr"
+          echo "   sudo systemctl status voyagr"
+          echo ""
+          echo "📋 Full guide: CONTABO_UPDATE_COMMANDS.md"
+          echo ""
+          echo "Latest commit on main:"
+          git log -1 --oneline

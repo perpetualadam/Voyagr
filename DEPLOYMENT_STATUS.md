@@ -1,3 +1,9 @@
+# Deployment Status
+
+> **Production:** Contabo VPS — deploy with `sudo bash /opt/voyagr/deploy/deploy-pull.sh` after merging to `main`. See [CONTABO_UPDATE_COMMANDS.md](CONTABO_UPDATE_COMMANDS.md).
+
+---
+
 # Deployment Status - All Changes Committed ✅
 
 ## Summary

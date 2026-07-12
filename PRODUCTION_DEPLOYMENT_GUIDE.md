@@ -2,7 +2,9 @@
 
 ## Overview
 
-This guide covers production deployment, monitoring, alerting, backups, and security configuration for Voyagr PWA on Railway.app.
+This guide covers production deployment, monitoring, alerting, backups, and security configuration for the Voyagr PWA on the **Contabo VPS** (`/opt/voyagr`).
+
+**Deploying code:** see [CONTABO_UPDATE_COMMANDS.md](CONTABO_UPDATE_COMMANDS.md) — pull on the server and restart `voyagr`; GitHub Actions only runs tests.
 
 ## Table of Contents
 
@@ -214,13 +216,14 @@ Backups are automatically verified:
 
 ## SSL/TLS Security
 
-### Railway.app Automatic SSL
+### Contabo / nginx
 
-Railway.app automatically provides SSL certificates:
-1. Go to project settings
-2. Click "Domains"
-3. Add custom domain
-4. SSL certificate auto-generated
+Production TLS is terminated at **nginx** on the Contabo VPS (not Railway). Typical setup:
+
+1. Point your domain A-record at the Contabo server IP
+2. Configure nginx `server` blocks for HTTPS (Let's Encrypt / certbot)
+3. Proxy to `http://127.0.0.1:5000` (Gunicorn/Flask `voyagr` service)
+4. Set `VOYAGR_TRUST_PROXY=true` in `.env` so Flask respects `X-Forwarded-*` headers
 
 ### Security Headers
 
@@ -274,7 +277,8 @@ Limits: 100 requests per 60 seconds per IP address.
 
 ### Deployment
 
-- [ ] Deploy to Railway.app
+- [ ] SSH to Contabo and run `sudo bash /opt/voyagr/deploy/deploy-pull.sh` (or `git pull` + `systemctl restart voyagr`)
+- [ ] Verify commit: `git log --oneline -1` in `/opt/voyagr`
 - [ ] Verify all endpoints responding
 - [ ] Check production logs
 - [ ] Monitor metrics dashboard
