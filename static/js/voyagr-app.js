@@ -851,7 +851,7 @@ function getMapLayersOrchestrationRuntime() {
             saveAllSettings,
             applySupportLinksFromConfig,
             bringRoutesToTop,
-            recomputeMapView3DFromGranular: _recomputeMapView3DFromGranular,
+            recomputeMapView3DFromGranular: () => VoyagrMapView3DOrchestration.recomputeMapView3DFromGranular(),
             scheduleMapRepaintAfterUiChange: typeof scheduleMapRepaintAfterUiChange === 'function' ? scheduleMapRepaintAfterUiChange : null,
         },
     };
@@ -1731,166 +1731,70 @@ let _smoothedSpeedInitAt = 0;
 let _lastGoodRawPickMph = 0;
 let _consecutiveDisplacementMoves = 0;
 
-/** Unit-tested speed/GPS helpers (modules/navigation/speed-gps.js). */
-function _speedGps() { return VoyagrModules.speedGps(); }
-
-/** Unit-tested hazard alert helpers (modules/navigation/hazard-alerts.js). */
-function _hazardAlerts() { return VoyagrModules.hazardAlerts(); }
-
-/** Unit-tested offline/resume navigation banner helpers (modules/navigation/offline-navigation.js). */
-function _offlineNavigation() { return VoyagrModules.offlineNavigation(); }
-
-/** Unit-tested ML prediction list HTML (modules/navigation/ml-predictions.js). */
-function _mlPredictions() { return VoyagrModules.mlPredictions(); }
-
-/** Unit-tested Porcupine wake-word UI plans (modules/navigation/porcupine-wake.js). */
-function _porcupineWake() { return VoyagrModules.porcupineWake(); }
-
-/** Unit-tested battery-saving mode plans (modules/navigation/battery-saving.js). */
-function _batterySaving() { return VoyagrModules.batterySaving(); }
-
-/** Unit-tested search autocomplete row HTML (modules/navigation/search-autocomplete.js). */
-function _searchAutocomplete() { return VoyagrModules.searchAutocomplete(); }
-
-/** Unit-tested device environment hint copy and banner HTML (modules/ui/device-environment.js). */
-function _deviceEnvironment() { return VoyagrModules.deviceEnvironment(); }
-
-/** Unit-tested route calculation progress bar HTML (modules/navigation/route-progress.js). */
-function _routeProgress() { return VoyagrModules.routeProgress(); }
-function _settingsSnapshot() { return VoyagrModules.settingsSnapshot(); }
-function _appState() { return VoyagrModules.appState(); }
-function _gestureControl() { return VoyagrModules.gestureControl(); }
-function _legacyPrefsRestore() { return VoyagrModules.legacyPrefsRestore(); }
-function _voiceControl() { return VoyagrModules.voiceControl(); }
-function _smartZoom() { return VoyagrModules.smartZoom(); }
-function _phase3Features() { return VoyagrModules.phase3Features(); }
-
-/** Unit-tested map preview marker HTML (modules/map/preview-marker.js). */
-function _previewMarker() { return VoyagrModules.previewMarker(); }
-
-/** Unit-tested favorites list HTML (modules/navigation/favorites.js). */
-function _favorites() { return VoyagrModules.favorites(); }
-
-/** Unit-tested road name bar throttle/display helpers (modules/navigation/road-name-display.js). */
-function _roadNameDisplay() { return VoyagrModules.roadNameDisplay(); }
-function _roadReport() { return VoyagrModules.roadReport(); }
-
-/** Unit-tested CAZ zones settings panel HTML (modules/navigation/caz-info.js). */
-function _cazInfo() { return VoyagrModules.cazInfo(); }
-
-/** Unit-tested vehicle marker SVG/popup HTML (modules/map/vehicle-marker.js). */
-function _vehicleMarker() { return VoyagrModules.vehicleMarker(); }
-
-/** Unit-tested OSM map layer marker HTML (modules/map/osm-map-icons.js). */
-function _osmMapIcons() { return VoyagrModules.osmMapIcons(); }
-
-/** Unit-tested navigation map control icons (modules/map/map-controls.js). */
-function _mapControls() { return VoyagrModules.mapControls(); }
-function _mapLayerToggles() { return VoyagrModules.mapLayerToggles(); }
-function _mapOverlayToggles() { return VoyagrModules.mapOverlayToggles(); }
-function _mapView3D() { return VoyagrModules.mapView3D(); }
-function _mapTheme() { return VoyagrModules.mapTheme(); }
-
-/** Unit-tested route geometry helpers (modules/navigation/route-geometry.js). */
-function _routeGeometry() { return VoyagrModules.routeGeometry(); }
-
-/** Unit-tested ETA helpers (modules/navigation/eta.js). */
-function _eta() { return VoyagrModules.eta(); }
-function _liveDataRefresh() { return VoyagrModules.liveDataRefresh(); }
-
-/** Unit-tested turn-by-turn instruction helpers (modules/navigation/turn-instructions.js). */
-function _turnInstructions() { return VoyagrModules.turnInstructions(); }
-
-/** Unit-tested voice announcement helpers (modules/navigation/voice-announcements.js). */
-function _voiceAnnouncements() { return VoyagrModules.voiceAnnouncements(); }
-
-/** Unit-tested route selection and comparison helpers (modules/navigation/route-selection.js). */
-function _routeSelection() { return VoyagrModules.routeSelection(); }
-
-/** Unit-tested camera pitch / follow-padding helpers (modules/navigation/camera-pitch.js). */
-function _cameraPitch() { return VoyagrModules.cameraPitch(); }
-
-/** Unit-tested reroute decision helpers (modules/navigation/reroute-decision.js). */
-function _rerouteDecision() { return VoyagrModules.rerouteDecision(); }
-
-/** Unit-tested movement-detection helpers (modules/navigation/movement-detection.js). */
-function _movementDetection() { return VoyagrModules.movementDetection(); }
-
-/** Unit-tested DOM event helpers (modules/ui/dom-helpers.js). */
-function _domHelpers() { return VoyagrModules.domHelpers(); }
-
-/** Unit-tested geocoding / location parse helpers (modules/navigation/geocoding-locations.js). */
-function _geocodingLocations() { return VoyagrModules.geocodingLocations(); }
-function _googlePlusCodesPrefs() { return VoyagrModules.googlePlusCodesPrefs(); }
-
-/** Unit-tested units / currency / temperature helpers (modules/navigation/units.js). */
-function _units() { return VoyagrModules.units(); }
-
-/** Unit-tested route preference helpers (modules/navigation/route-prefs.js). */
-function _routePrefs() { return VoyagrModules.routePrefs(); }
-
-/** Unit-tested trip history helpers (modules/navigation/trip-history.js). */
-function _tripHistory() { return VoyagrModules.tripHistory(); }
-
-/** Unit-tested toggle button UI helpers (modules/ui/toggle-ui.js). */
-function _toggleUI() { return VoyagrModules.toggleUI(); }
-
-/** Unit-tested theme helpers (modules/ui/theme.js). */
-function _theme() { return VoyagrModules.theme(); }
-
-/** Unit-tested HTML escape helper (modules/html.js). */
-function _html() { return VoyagrModules.html(); }
-
-/** Unit-tested polyline encode/decode (modules/navigation/polyline-codec.js). */
-function _polylineCodec() { return VoyagrModules.polylineCodec(); }
-
-/** Unit-tested waypoints / multidrop helpers (modules/navigation/waypoints.js). */
-function _waypoints() { return VoyagrModules.waypoints(); }
-
-/** Unit-tested recent-destinations storage (modules/navigation/recent-destinations.js). */
-function _recentDestinations() { return VoyagrModules.recentDestinations(); }
-
-/** Unit-tested route traffic flow sampling (modules/navigation/route-traffic-flow.js). */
-function _routeTrafficFlow() { return VoyagrModules.routeTrafficFlow(); }
-
-/** Unit-tested traffic-change reroute helpers (modules/navigation/traffic-change.js). */
-function _trafficChange() { return VoyagrModules.trafficChange(); }
-
-/** Unit-tested route sharing helpers (modules/navigation/route-sharing.js). */
-function _routeSharing() { return VoyagrModules.routeSharing(); }
-
-/** Unit-tested weather map layer helpers (modules/map/weather-layer.js). */
-function _weatherLayer() { return VoyagrModules.weatherLayer(); }
-
-/** Unit-tested navigation destination resolution (modules/navigation/navigation-destination.js). */
-function _navigationDestination() { return VoyagrModules.navigationDestination(); }
-
-/** Unit-tested multimodal parking helpers (modules/navigation/multimodal-parking.js). */
-function _multimodalParking() { return VoyagrModules.multimodalParking(); }
-
-/** Unit-tested lane guidance helpers (modules/navigation/lane-guidance.js). */
-function _laneGuidance() { return VoyagrModules.laneGuidance(); }
-
-/** Unit-tested POI search helpers (modules/navigation/poi-search.js). */
-function _poiSearch() { return VoyagrModules.poiSearch(); }
-
-/** Unit-tested routing request builders (modules/navigation/routing-request.js). */
-function _routingRequest() { return VoyagrModules.routingRequest(); }
-
-/** Unit-tested camera map marker HTML (modules/map/camera-map-markers.js). */
-function _cameraMapMarkers() { return VoyagrModules.cameraMapMarkers(); }
-
-/** Unit-tested route hazard map marker HTML (modules/map/hazard-map-markers.js). */
-function _hazardMapMarkers() { return VoyagrModules.hazardMapMarkers(); }
-
-/** Unit-tested PWA install banner HTML (modules/ui/pwa-install.js). */
-function _pwaInstall() { return VoyagrModules.pwaInstall(); }
-
-/** Unit-tested best-time-to-leave panel HTML (modules/navigation/best-time-leave.js). */
-function _bestTimeLeave() { return VoyagrModules.bestTimeLeave(); }
-
-/** Unit-tested speed-limit widget helpers (modules/navigation/speed-limit-widget.js). */
-function _speedLimitWidget() { return VoyagrModules.speedLimitWidget(); }
+// Module accessors — thin delegates to VoyagrModules (modules/voyagr-modules.js).
+const _speedGps = () => VoyagrModules.speedGps();
+const _hazardAlerts = () => VoyagrModules.hazardAlerts();
+const _offlineNavigation = () => VoyagrModules.offlineNavigation();
+const _mlPredictions = () => VoyagrModules.mlPredictions();
+const _porcupineWake = () => VoyagrModules.porcupineWake();
+const _batterySaving = () => VoyagrModules.batterySaving();
+const _searchAutocomplete = () => VoyagrModules.searchAutocomplete();
+const _deviceEnvironment = () => VoyagrModules.deviceEnvironment();
+const _routeProgress = () => VoyagrModules.routeProgress();
+const _settingsSnapshot = () => VoyagrModules.settingsSnapshot();
+const _appState = () => VoyagrModules.appState();
+const _gestureControl = () => VoyagrModules.gestureControl();
+const _legacyPrefsRestore = () => VoyagrModules.legacyPrefsRestore();
+const _voiceControl = () => VoyagrModules.voiceControl();
+const _smartZoom = () => VoyagrModules.smartZoom();
+const _phase3Features = () => VoyagrModules.phase3Features();
+const _previewMarker = () => VoyagrModules.previewMarker();
+const _favorites = () => VoyagrModules.favorites();
+const _roadNameDisplay = () => VoyagrModules.roadNameDisplay();
+const _roadReport = () => VoyagrModules.roadReport();
+const _cazInfo = () => VoyagrModules.cazInfo();
+const _vehicleMarker = () => VoyagrModules.vehicleMarker();
+const _osmMapIcons = () => VoyagrModules.osmMapIcons();
+const _mapControls = () => VoyagrModules.mapControls();
+const _mapLayerToggles = () => VoyagrModules.mapLayerToggles();
+const _mapOverlayToggles = () => VoyagrModules.mapOverlayToggles();
+const _mapView3D = () => VoyagrModules.mapView3D();
+const _mapTheme = () => VoyagrModules.mapTheme();
+const _routeGeometry = () => VoyagrModules.routeGeometry();
+const _eta = () => VoyagrModules.eta();
+const _liveDataRefresh = () => VoyagrModules.liveDataRefresh();
+const _turnInstructions = () => VoyagrModules.turnInstructions();
+const _voiceAnnouncements = () => VoyagrModules.voiceAnnouncements();
+const _routeSelection = () => VoyagrModules.routeSelection();
+const _cameraPitch = () => VoyagrModules.cameraPitch();
+const _rerouteDecision = () => VoyagrModules.rerouteDecision();
+const _movementDetection = () => VoyagrModules.movementDetection();
+const _domHelpers = () => VoyagrModules.domHelpers();
+const _geocodingLocations = () => VoyagrModules.geocodingLocations();
+const _googlePlusCodesPrefs = () => VoyagrModules.googlePlusCodesPrefs();
+const _units = () => VoyagrModules.units();
+const _routePrefs = () => VoyagrModules.routePrefs();
+const _tripHistory = () => VoyagrModules.tripHistory();
+const _toggleUI = () => VoyagrModules.toggleUI();
+const _theme = () => VoyagrModules.theme();
+const _html = () => VoyagrModules.html();
+const _polylineCodec = () => VoyagrModules.polylineCodec();
+const _waypoints = () => VoyagrModules.waypoints();
+const _recentDestinations = () => VoyagrModules.recentDestinations();
+const _routeTrafficFlow = () => VoyagrModules.routeTrafficFlow();
+const _trafficChange = () => VoyagrModules.trafficChange();
+const _routeSharing = () => VoyagrModules.routeSharing();
+const _weatherLayer = () => VoyagrModules.weatherLayer();
+const _navigationDestination = () => VoyagrModules.navigationDestination();
+const _multimodalParking = () => VoyagrModules.multimodalParking();
+const _laneGuidance = () => VoyagrModules.laneGuidance();
+const _poiSearch = () => VoyagrModules.poiSearch();
+const _routingRequest = () => VoyagrModules.routingRequest();
+const _cameraMapMarkers = () => VoyagrModules.cameraMapMarkers();
+const _hazardMapMarkers = () => VoyagrModules.hazardMapMarkers();
+const _pwaInstall = () => VoyagrModules.pwaInstall();
+const _bestTimeLeave = () => VoyagrModules.bestTimeLeave();
+const _speedLimitWidget = () => VoyagrModules.speedLimitWidget();
 
 // ===== SPEED WIDGET ORCHESTRATION =====
 // Orchestration lives in static/js/app/speed-widget-orchestration.js (bound at file end).
@@ -2374,7 +2278,7 @@ function getDriverCameraOrchestrationRuntime() {
         call: {
             showStatus,
             saveAllSettings,
-            recomputeMapView3DFromGranular: _recomputeMapView3DFromGranular,
+            recomputeMapView3DFromGranular: () => VoyagrMapView3DOrchestration.recomputeMapView3DFromGranular(),
         },
     };
 }
@@ -2428,9 +2332,6 @@ function getMapView3DOrchestrationRuntime() {
 function syncMapView3DToggleUI() { VoyagrMapView3DOrchestration.syncMapView3DToggleUI(); }
 function setMapView3D(enabled) { VoyagrMapView3DOrchestration.setMapView3D(enabled); }
 function toggleMapView3D() { VoyagrMapView3DOrchestration.toggleMapView3D(); }
-function _recomputeMapView3DFromGranular() {
-    return VoyagrMapView3DOrchestration.recomputeMapView3DFromGranular();
-}
 
 // ===== AR NAVIGATION ORCHESTRATION =====
 // Orchestration lives in static/js/app/ar-navigation-orchestration.js (bound at file end).
