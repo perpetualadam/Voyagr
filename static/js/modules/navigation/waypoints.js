@@ -444,6 +444,38 @@
     }
 
     /**
+     * Apply plan for mounting one route drag marker with drag-end wiring.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {number} routeIndex
+     * @returns {Object}
+     */
+    function buildRouteDragMarkerApplyPlan(lat, lon, routeIndex) {
+        var execute = buildRouteDragMarkerExecutePlan(
+            buildRouteDragMarkerMountPlan(lat, lon, routeIndex)
+        );
+        return {
+            shouldMount: execute.shouldMount,
+            lat: execute.lat,
+            lon: execute.lon,
+            routeIndex: execute.routeIndex,
+            markerMount: {
+                className: execute.className,
+                markerHtml: execute.markerHtml,
+                iconSize: execute.iconSize,
+                iconAnchor: execute.iconAnchor,
+                draggable: execute.draggable,
+            },
+            cursorStyle: execute.cursorStyle,
+            originalLat: execute.originalLat,
+            originalLon: execute.originalLon,
+            dragEndEvent: execute.dragEndEvent,
+            dragEndAction: execute.dragEndAction,
+            registerInRouteDragMarkers: true,
+        };
+    }
+
+    /**
      * Dispatch plan when a route drag marker finishes dragging.
      * @param {number} lat
      * @param {number} lon
@@ -584,6 +616,33 @@
     }
 
     /**
+     * Apply plan for mounting a via-point marker and list side effects.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {string|null} [name]
+     * @param {number} [viaPointsCount]
+     * @returns {Object}
+     */
+    function buildViaPointApplyPlan(lat, lon, name, viaPointsCount) {
+        var add = buildViaPointAddPlan(lat, lon, name, viaPointsCount);
+        return {
+            lat: lat,
+            lon: lon,
+            viaPoint: add.viaPoint,
+            markerMount: {
+                className: add.marker.className,
+                markerHtml: buildViaPointMarkerHtml(add.marker.label),
+                iconSize: add.marker.iconSize,
+                iconAnchor: add.marker.iconAnchor,
+                popupHtml: buildViaPointPopupHtml(add.viaPoint.name, add.marker.removeOnclick),
+            },
+            updateWaypointsList: add.updateWaypointsList,
+            statusMessage: add.statusMessage,
+            statusType: add.statusType,
+        };
+    }
+
+    /**
      * Remove plan for a via-point by index.
      * @param {number} index
      * @param {number} [viaPointsCount]
@@ -654,6 +713,34 @@
             updateWaypointsList: true,
             statusMessage: 'Added stop: ' + stopName + ' (' + stopDuration + ' min)',
             statusType: 'success',
+        };
+    }
+
+    /**
+     * Apply plan for mounting a stop marker and list side effects.
+     * @param {number} lat
+     * @param {number} lon
+     * @param {string|null} [name]
+     * @param {number} [duration]
+     * @param {number} [stopsCount]
+     * @returns {Object}
+     */
+    function buildStopApplyPlan(lat, lon, name, duration, stopsCount) {
+        var add = buildStopAddPlan(lat, lon, name, duration, stopsCount);
+        return {
+            lat: lat,
+            lon: lon,
+            stop: add.stop,
+            markerMount: {
+                className: add.marker.className,
+                markerHtml: buildStopMarkerHtml(),
+                iconSize: add.marker.iconSize,
+                iconAnchor: add.marker.iconAnchor,
+                popupHtml: buildStopPopupHtml(add.stop.name, add.stop.duration, add.marker.removeOnclick),
+            },
+            updateWaypointsList: add.updateWaypointsList,
+            statusMessage: add.statusMessage,
+            statusType: add.statusType,
         };
     }
 
@@ -1149,6 +1236,7 @@
         buildToggleRouteEditingOrchestrationPlan: buildToggleRouteEditingOrchestrationPlan,
         buildRouteEditEnableExecutePlan: buildRouteEditEnableExecutePlan,
         buildRouteDragMarkerExecutePlan: buildRouteDragMarkerExecutePlan,
+        buildRouteDragMarkerApplyPlan: buildRouteDragMarkerApplyPlan,
         buildRouteDragMarkerDragEndDispatchPlan: buildRouteDragMarkerDragEndDispatchPlan,
         buildClearRouteDragMarkersExecutePlan: buildClearRouteDragMarkersExecutePlan,
         buildClearRouteDragMarkersApplyPlan: buildClearRouteDragMarkersApplyPlan,
@@ -1161,9 +1249,11 @@
         buildViaPointDragPopupHtml: buildViaPointDragPopupHtml,
         buildStopPopupHtml: buildStopPopupHtml,
         buildViaPointAddPlan: buildViaPointAddPlan,
+        buildViaPointApplyPlan: buildViaPointApplyPlan,
         buildViaPointRemovePlan: buildViaPointRemovePlan,
         buildViaPointMarkersRefreshPlan: buildViaPointMarkersRefreshPlan,
         buildStopAddPlan: buildStopAddPlan,
+        buildStopApplyPlan: buildStopApplyPlan,
         buildStopRemovePlan: buildStopRemovePlan,
         buildClearAllWaypointsPlan: buildClearAllWaypointsPlan,
         buildWaypointMovePlan: buildWaypointMovePlan,

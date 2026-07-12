@@ -108,6 +108,15 @@ describe('waypoints module', () => {
         expect(mount.dragEndAction).toBe('addDraggedViaPoint');
     });
 
+    test('buildRouteDragMarkerApplyPlan wraps mount and drag-end wiring', () => {
+        const apply = W.buildRouteDragMarkerApplyPlan(51.5, -0.1, 8);
+        expect(apply.shouldMount).toBe(true);
+        expect(apply.routeIndex).toBe(8);
+        expect(apply.markerMount.draggable).toBe(true);
+        expect(apply.dragEndAction).toBe('addDraggedViaPoint');
+        expect(apply.registerInRouteDragMarkers).toBe(true);
+    });
+
     test('buildRouteDragMarkerDragEndDispatchPlan validates coordinates', () => {
         const ok = W.buildRouteDragMarkerDragEndDispatchPlan(51.5, -0.1);
         expect(ok.shouldAddViaPoint).toBe(true);
@@ -167,6 +176,14 @@ describe('waypoints module', () => {
         expect(plan.statusType).toBe('success');
     });
 
+    test('buildViaPointApplyPlan wraps marker mount html and popup', () => {
+        const apply = W.buildViaPointApplyPlan(51.5, -0.1, 'Custom', 0);
+        expect(apply.viaPoint.name).toBe('Custom');
+        expect(apply.markerMount.markerHtml).toContain('1');
+        expect(apply.markerMount.popupHtml).toContain('Custom');
+        expect(apply.updateWaypointsList).toBe(true);
+    });
+
     test('buildViaPointRemovePlan rejects invalid index and refreshes markers', () => {
         expect(W.buildViaPointRemovePlan(-1, 2).shouldRemove).toBe(false);
         const plan = W.buildViaPointRemovePlan(0, 2);
@@ -192,6 +209,13 @@ describe('waypoints module', () => {
 
         expect(W.buildStopRemovePlan(3, 2).shouldRemove).toBe(false);
         expect(W.buildStopRemovePlan(1, 2).shouldRemove).toBe(true);
+    });
+
+    test('buildStopApplyPlan wraps stop marker mount and popup', () => {
+        const apply = W.buildStopApplyPlan(51.5, -0.1, 'Coffee', 20, 1);
+        expect(apply.stop.name).toBe('Coffee');
+        expect(apply.markerMount.markerHtml).toContain('E91E63');
+        expect(apply.markerMount.popupHtml).toContain('20 min');
     });
 
     test('buildClearAllWaypointsPlan clears markers and multidrop layers', () => {

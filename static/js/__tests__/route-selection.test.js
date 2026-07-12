@@ -1349,4 +1349,49 @@ describe('route overview and single-route display plans', () => {
         expect(orch.shouldRun).toBe(true);
         expect(orch.styleLayers).toHaveLength(1);
     });
+
+    test('buildEnsureLabelsOnTopApplyPlan combines orchestration and debounce apply', () => {
+        const apply = RS.buildEnsureLabelsOnTopApplyPlan({
+            hasMap: true,
+            styleLayers: [{ id: 'labels', type: 'symbol', layout: { 'text-field': 'name' } }],
+        });
+        expect(apply.shouldApply).toBe(true);
+        expect(apply.clearExistingTimer).toBe(true);
+        expect(apply.labelLayerIds).toEqual(['labels']);
+        expect(RS.buildEnsureLabelsOnTopApplyPlan({ hasMap: false }).shouldApply).toBe(false);
+        expect(RS.buildEnsureLabelsOnTopApplyPlan({
+            hasMap: true,
+            styleLayers: [],
+        }).noLabelsLogMessage).toContain('No label layers');
+    });
+
+    test('buildBringTrafficEdgesToTopOrchestrationPlan guards map and empty layers', () => {
+        expect(RS.buildBringTrafficEdgesToTopOrchestrationPlan({
+            hasMap: false,
+            trafficLayers: [{ id: 'traffic-edge-0' }],
+        }).shouldRun).toBe(false);
+        expect(RS.buildBringTrafficEdgesToTopOrchestrationPlan({
+            hasMap: true,
+            trafficLayers: [],
+        }).shouldRun).toBe(false);
+        const orch = RS.buildBringTrafficEdgesToTopOrchestrationPlan({
+            hasMap: true,
+            trafficLayers: [{ id: 'traffic-edge-0' }],
+        });
+        expect(orch.shouldRun).toBe(true);
+        expect(orch.trafficLayers).toHaveLength(1);
+    });
+
+    test('buildBringNavRouteAboveTrafficEdgesOrchestrationPlan guards missing map', () => {
+        expect(RS.buildBringNavRouteAboveTrafficEdgesOrchestrationPlan({
+            hasMap: false,
+        }).shouldRun).toBe(false);
+        const orch = RS.buildBringNavRouteAboveTrafficEdgesOrchestrationPlan({
+            hasMap: true,
+            routeLayer: { id: 'nav-route' },
+            allRouteLayers: [{ id: 'route-layer-0' }],
+        });
+        expect(orch.shouldRun).toBe(true);
+        expect(orch.routeLayer.id).toBe('nav-route');
+    });
 });

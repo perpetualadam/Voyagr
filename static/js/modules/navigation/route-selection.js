@@ -2952,6 +2952,60 @@
     }
 
     /**
+     * Debounced apply plan for ensureLabelsOnTop layer moves.
+     * @param {Object} [executePlan] - from buildEnsureLabelsOnTopExecutePlan
+     * @returns {Object}
+     */
+    function buildEnsureLabelsOnTopDebounceApplyPlan(executePlan) {
+        executePlan = executePlan || {};
+        if (!executePlan.shouldExecute) {
+            return {
+                shouldSchedule: false,
+                noLabelsLogMessage: executePlan.noLabelsLogMessage,
+            };
+        }
+        return {
+            shouldSchedule: true,
+            clearExistingTimer: true,
+            debounceMs: executePlan.debounceMs,
+            labelLayerIds: executePlan.labelLayerIds,
+            movedLogMessage: executePlan.movedLogMessage,
+            errorLogPrefix: executePlan.errorLogPrefix,
+            skipMoveErrors: executePlan.skipMoveErrors,
+        };
+    }
+
+    /**
+     * Combined orchestration + debounced apply plan for ensureLabelsOnTop.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildEnsureLabelsOnTopApplyPlan(input) {
+        var orch = buildEnsureLabelsOnTopOrchestrationPlan(input);
+        if (!orch.shouldRun) {
+            return { shouldApply: false };
+        }
+        var debounce = buildEnsureLabelsOnTopDebounceApplyPlan(
+            buildEnsureLabelsOnTopExecutePlan(orch.styleLayers)
+        );
+        if (!debounce.shouldSchedule) {
+            return {
+                shouldApply: false,
+                noLabelsLogMessage: debounce.noLabelsLogMessage,
+            };
+        }
+        return {
+            shouldApply: true,
+            clearExistingTimer: debounce.clearExistingTimer,
+            debounceMs: debounce.debounceMs,
+            labelLayerIds: debounce.labelLayerIds,
+            movedLogMessage: debounce.movedLogMessage,
+            errorLogPrefix: debounce.errorLogPrefix,
+            skipMoveErrors: debounce.skipMoveErrors,
+        };
+    }
+
+    /**
      * Layer reorder plan for route-traffic edge overlays.
      * @param {Array<{ id?: string }>} trafficLayers
      * @param {Array<Object>} [styleLayers]
@@ -3053,6 +3107,45 @@
                 dispatch.layerIds.join(', '),
             errorLogPrefix: '[Routes] bringNavRouteAboveTrafficEdges:',
             useWarnOnError: true,
+        };
+    }
+
+    /**
+     * Orchestration plan for bringTrafficEdgesToTop entry guards.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildBringTrafficEdgesToTopOrchestrationPlan(input) {
+        input = input || {};
+        if (!input.hasMap) {
+            return { shouldRun: false };
+        }
+        var trafficLayers = input.trafficLayers || [];
+        if (trafficLayers.length === 0) {
+            return { shouldRun: false };
+        }
+        return {
+            shouldRun: true,
+            trafficLayers: trafficLayers,
+            styleLayers: input.styleLayers || [],
+        };
+    }
+
+    /**
+     * Orchestration plan for bringNavRouteAboveTrafficEdges entry guards.
+     * @param {Object} [input]
+     * @returns {Object}
+     */
+    function buildBringNavRouteAboveTrafficEdgesOrchestrationPlan(input) {
+        input = input || {};
+        if (!input.hasMap) {
+            return { shouldRun: false };
+        }
+        return {
+            shouldRun: true,
+            routeLayer: input.routeLayer || null,
+            allRouteLayers: input.allRouteLayers || [],
+            styleLayers: input.styleLayers || [],
         };
     }
 
@@ -3183,10 +3276,15 @@
         buildEnsureLabelsOnTopOrchestrationPlan: buildEnsureLabelsOnTopOrchestrationPlan,
         buildEnsureLabelsOnTopDispatchPlan: buildEnsureLabelsOnTopDispatchPlan,
         buildEnsureLabelsOnTopExecutePlan: buildEnsureLabelsOnTopExecutePlan,
+        buildEnsureLabelsOnTopDebounceApplyPlan: buildEnsureLabelsOnTopDebounceApplyPlan,
+        buildEnsureLabelsOnTopApplyPlan: buildEnsureLabelsOnTopApplyPlan,
         buildBringTrafficEdgesToTopDispatchPlan: buildBringTrafficEdgesToTopDispatchPlan,
         buildBringNavRouteAboveTrafficEdgesDispatchPlan: buildBringNavRouteAboveTrafficEdgesDispatchPlan,
         buildBringTrafficEdgesToTopExecutePlan: buildBringTrafficEdgesToTopExecutePlan,
         buildBringNavRouteAboveTrafficEdgesExecutePlan: buildBringNavRouteAboveTrafficEdgesExecutePlan,
+        buildBringTrafficEdgesToTopOrchestrationPlan: buildBringTrafficEdgesToTopOrchestrationPlan,
+        buildBringNavRouteAboveTrafficEdgesOrchestrationPlan:
+            buildBringNavRouteAboveTrafficEdgesOrchestrationPlan,
         ENSURE_LABELS_ON_TOP_DEBOUNCE_MS: ENSURE_LABELS_ON_TOP_DEBOUNCE_MS,
         DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS: DISPLAY_ALL_ROUTES_STYLE_FALLBACK_MS,
         mergeNavigationRouteFromSelected: mergeNavigationRouteFromSelected,

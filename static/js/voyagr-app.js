@@ -2748,41 +2748,40 @@ function enableRouteEditing() {
  * Add a draggable marker for route editing
  */
 function addRouteDragMarker(lat, lon, routeIndex) {
-    const WP = _waypoints();
-    const execute = WP.buildRouteDragMarkerExecutePlan(
-        WP.buildRouteDragMarkerMountPlan(lat, lon, routeIndex)
-    );
-    const marker = MapLibreHelpers.createMarker(execute.lat, execute.lon, {
-        className: execute.className,
-        html: execute.markerHtml,
-        iconSize: execute.iconSize,
-        iconAnchor: execute.iconAnchor,
-        draggable: execute.draggable,
+    const apply = _waypoints().buildRouteDragMarkerApplyPlan(lat, lon, routeIndex);
+    if (!apply.shouldMount) return;
+
+    const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
+        className: apply.markerMount.className,
+        html: apply.markerMount.markerHtml,
+        iconSize: apply.markerMount.iconSize,
+        iconAnchor: apply.markerMount.iconAnchor,
+        draggable: apply.markerMount.draggable,
     }).addTo(map);
 
     const el = marker.getElement();
-    if (el && execute.cursorStyle) {
-        el.style.cursor = execute.cursorStyle;
+    if (el && apply.cursorStyle) {
+        el.style.cursor = apply.cursorStyle;
     }
 
-    marker.routeIndex = execute.routeIndex;
-    marker.originalLat = execute.originalLat;
-    marker.originalLon = execute.originalLon;
+    marker.routeIndex = apply.routeIndex;
+    marker.originalLat = apply.originalLat;
+    marker.originalLon = apply.originalLon;
 
-    if (execute.draggable && typeof marker.on === 'function') {
-        marker.on(execute.dragEndEvent, () => {
+    if (apply.markerMount.draggable && typeof marker.on === 'function') {
+        marker.on(apply.dragEndEvent, () => {
             const lngLat = marker.getLngLat && marker.getLngLat();
-            const dispatch = WP.buildRouteDragMarkerDragEndDispatchPlan(
+            const dispatch = _waypoints().buildRouteDragMarkerDragEndDispatchPlan(
                 lngLat ? lngLat.lat : null,
                 lngLat ? lngLat.lng : null
             );
-            if (dispatch.shouldAddViaPoint && dispatch.dragEndAction === 'addDraggedViaPoint') {
+            if (dispatch.shouldAddViaPoint && dispatch.dragEndAction === apply.dragEndAction) {
                 addDraggedViaPoint(dispatch.lat, dispatch.lon);
             }
         });
     }
 
-    routeDragMarkers.push(marker);
+    if (apply.registerInRouteDragMarkers) routeDragMarkers.push(marker);
 }
 
 /**
@@ -3048,42 +3047,40 @@ async function addStopFromAddress() {
  * Add a via-point at given coordinates
  */
 function addViaPoint(lat, lon, name = null) {
-    const WP = _waypoints();
-    const plan = WP.buildViaPointAddPlan(lat, lon, name, viaPoints.length);
-    viaPoints.push(plan.viaPoint);
+    const apply = _waypoints().buildViaPointApplyPlan(lat, lon, name, viaPoints.length);
+    viaPoints.push(apply.viaPoint);
 
-    const marker = MapLibreHelpers.createMarker(lat, lon, {
-        className: plan.marker.className,
-        html: WP.buildViaPointMarkerHtml(plan.marker.label),
-        iconSize: plan.marker.iconSize,
-        iconAnchor: plan.marker.iconAnchor,
-        popup: WP.buildViaPointPopupHtml(plan.viaPoint.name, plan.marker.removeOnclick)
+    const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
+        className: apply.markerMount.className,
+        html: apply.markerMount.markerHtml,
+        iconSize: apply.markerMount.iconSize,
+        iconAnchor: apply.markerMount.iconAnchor,
+        popup: apply.markerMount.popupHtml,
     }).addTo(map);
 
     viaPointMarkers.push(marker);
-    if (plan.updateWaypointsList) updateWaypointsList();
-    showStatus(plan.statusMessage, plan.statusType);
+    if (apply.updateWaypointsList) updateWaypointsList();
+    showStatus(apply.statusMessage, apply.statusType);
 }
 
 /**
  * Add a stop at given coordinates
  */
 function addStop(lat, lon, name = null, duration = 15) {
-    const WP = _waypoints();
-    const plan = WP.buildStopAddPlan(lat, lon, name, duration, stops.length);
-    stops.push(plan.stop);
+    const apply = _waypoints().buildStopApplyPlan(lat, lon, name, duration, stops.length);
+    stops.push(apply.stop);
 
-    const marker = MapLibreHelpers.createMarker(lat, lon, {
-        className: plan.marker.className,
-        html: WP.buildStopMarkerHtml(),
-        iconSize: plan.marker.iconSize,
-        iconAnchor: plan.marker.iconAnchor,
-        popup: WP.buildStopPopupHtml(plan.stop.name, plan.stop.duration, plan.marker.removeOnclick)
+    const marker = MapLibreHelpers.createMarker(apply.lat, apply.lon, {
+        className: apply.markerMount.className,
+        html: apply.markerMount.markerHtml,
+        iconSize: apply.markerMount.iconSize,
+        iconAnchor: apply.markerMount.iconAnchor,
+        popup: apply.markerMount.popupHtml,
     }).addTo(map);
 
     stopMarkers.push(marker);
-    if (plan.updateWaypointsList) updateWaypointsList();
-    showStatus(plan.statusMessage, plan.statusType);
+    if (apply.updateWaypointsList) updateWaypointsList();
+    showStatus(apply.statusMessage, apply.statusType);
 }
 
 /**
@@ -5691,14 +5688,17 @@ function displayRouteTrafficEdges(segments) {
  * Bring traffic edge layers to top of map rendering order
  */
 function bringTrafficEdgesToTop() {
-    if (!map || routeTrafficLayers.length === 0) return;
-
     const RS = _routeSelection();
-    const plan = RS.buildBringTrafficEdgesToTopExecutePlan(
-        routeTrafficLayers,
-        map.getStyle() && map.getStyle().layers
+    const orch = RS.buildBringTrafficEdgesToTopOrchestrationPlan({
+        hasMap: !!map,
+        trafficLayers: routeTrafficLayers,
+        styleLayers: map && map.getStyle && map.getStyle().layers,
+    });
+    if (!orch.shouldRun) return;
+
+    applyMapLayerReorderFromPlan(
+        RS.buildBringTrafficEdgesToTopExecutePlan(orch.trafficLayers, orch.styleLayers)
     );
-    applyMapLayerReorderFromPlan(plan);
 }
 
 /**
@@ -5707,23 +5707,30 @@ function bringTrafficEdgesToTop() {
  * were previously drawn under green/orange traffic polylines.
  */
 function bringNavRouteAboveTrafficEdges() {
-    if (!map) return;
-
     const RS = _routeSelection();
-    const plan = RS.buildBringNavRouteAboveTrafficEdgesExecutePlan(
+    const orch = RS.buildBringNavRouteAboveTrafficEdgesOrchestrationPlan({
+        hasMap: !!map,
         routeLayer,
         allRouteLayers,
-        map.getStyle() && map.getStyle().layers
+        styleLayers: map && map.getStyle && map.getStyle().layers,
+    });
+    if (!orch.shouldRun) return;
+
+    applyMapLayerReorderFromPlan(
+        RS.buildBringNavRouteAboveTrafficEdgesExecutePlan(
+            orch.routeLayer,
+            orch.allRouteLayers,
+            orch.styleLayers
+        )
     );
-    applyMapLayerReorderFromPlan(plan);
 }
 
 // Debounce timer for ensureLabelsOnTop to prevent excessive calls
 let ensureLabelsTimeout = null;
 
 function applyEnsureLabelsOnTopFromPlan(plan) {
-    if (!plan || !plan.shouldExecute || !map) return false;
-    clearTimeout(ensureLabelsTimeout);
+    if (!plan || !plan.shouldApply || !map) return false;
+    if (plan.clearExistingTimer) clearTimeout(ensureLabelsTimeout);
     ensureLabelsTimeout = setTimeout(() => {
         try {
             plan.labelLayerIds.forEach((layerId) => {
@@ -5732,7 +5739,7 @@ function applyEnsureLabelsOnTopFromPlan(plan) {
                         map.moveLayer(layerId);
                     }
                 } catch (_e) {
-                    // Silently skip layers that can't be moved
+                    if (!plan.skipMoveErrors) throw _e;
                 }
             });
             if (plan.movedLogMessage) console.log(plan.movedLogMessage);
@@ -5749,20 +5756,16 @@ function applyEnsureLabelsOnTopFromPlan(plan) {
  * Debounced to prevent excessive calls during rapid layer additions
  */
 function ensureLabelsOnTop() {
-    const RS = _routeSelection();
-    const orch = RS.buildEnsureLabelsOnTopOrchestrationPlan({
+    const apply = _routeSelection().buildEnsureLabelsOnTopApplyPlan({
         hasMap: !!map,
         styleLayers: map && map.getStyle && map.getStyle().layers,
     });
-    if (!orch.shouldRun) return;
-
-    const plan = RS.buildEnsureLabelsOnTopExecutePlan(orch.styleLayers);
-    if (!plan.shouldExecute) {
-        if (plan.noLabelsLogMessage) console.log(plan.noLabelsLogMessage);
+    if (!apply.shouldApply) {
+        if (apply.noLabelsLogMessage) console.log(apply.noLabelsLogMessage);
         return;
     }
 
-    applyEnsureLabelsOnTopFromPlan(plan);
+    applyEnsureLabelsOnTopFromPlan(apply);
 }
 
 /**
