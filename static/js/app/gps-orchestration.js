@@ -131,8 +131,8 @@
                 usePitchedDrivingCamera: rt().call.shouldUsePitchedDrivingCamera(),
                 viewportHeight: window.innerHeight,
                 viewportWidth: window.innerWidth,
-                computeSmartZoom: (spd, dist, rt) => rgModule().calculateSmartZoom(
-                    spd, dist, rt, rt().consts.ZOOM_LEVELS, rt().consts.TURN_ZOOM_THRESHOLD
+                computeSmartZoom: (spd, dist, roadType) => rgModule().calculateSmartZoom(
+                    spd, dist, roadType, rt().consts.ZOOM_LEVELS, rt().consts.TURN_ZOOM_THRESHOLD
                 ),
             })
             : null;
@@ -819,7 +819,7 @@
             baseRemainingMinutes,
             window.navETASnapshot,
             Date.now(),
-            etaModule().shouldApplyTrafficAwareETA(localStorage, currentRoutingMode)
+            etaModule().shouldApplyTrafficAwareETA(localStorage, VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode())
         );
     }
 
@@ -828,7 +828,7 @@
         const preflight = ETA.buildRefreshNavTrafficETAPreflightPlan({
             baseRemainingMinutes,
             progressPercent,
-            applyTrafficAware: ETA.shouldApplyTrafficAwareETA(localStorage, currentRoutingMode),
+            applyTrafficAware: ETA.shouldApplyTrafficAwareETA(localStorage, VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode()),
             lat: rt().g('currentLat'),
             lon: rt().g('currentLon'),
             now: Date.now(),
@@ -885,7 +885,7 @@
             progressPercent,
             trafficLevel,
             congestionPercent,
-            showTraffic: ETA.shouldApplyTrafficAwareETA(localStorage, currentRoutingMode),
+            showTraffic: ETA.shouldApplyTrafficAwareETA(localStorage, VoyagrVehicleRoutingOrchestration.getCurrentRoutingMode()),
             etaClockText: new Date(Date.now() + displayMins * 60000).toLocaleTimeString([], {
                 hour: '2-digit',
                 minute: '2-digit',
