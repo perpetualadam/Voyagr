@@ -240,215 +240,42 @@ function saveUnitSettingsToBackend() { VoyagrUnitsPreferencesOrchestration.saveU
 // =============================================================================
 // Multi-profile local storage (guest vs signed-in user)
 // =============================================================================
-// We keep the existing runtime keys (pref_*, voyagr_all_settings, savedRoutes, etc.)
-// but snapshot/restore them per profile so multiple users on the same device stay separate.
-const VOYAGR_PROFILE_STORE_KEY = 'voyagr_profiles_v1';
-let activeProfileId = 'guest';
-const SUPABASE_PROFILE_SNAPSHOTS_TABLE = 'voyagr_profile_snapshots';
-let supabaseProfileSyncTimer = null;
-let supabaseProfileSyncInFlight = false;
+// Orchestration lives in static/js/app/profile-store-orchestration.js (bound at file end).
 
-function getProfileStore() {
-    try {
-        return JSON.parse(localStorage.getItem(VOYAGR_PROFILE_STORE_KEY) || '{}');
-    } catch {
-        return {};
-    }
-}
-
-function setProfileStore(store) {
-    localStorage.setItem(VOYAGR_PROFILE_STORE_KEY, JSON.stringify(store));
-}
-
-function getRuntimeProfileSnapshot() {
+function getProfileStoreOrchestrationRuntime() {
     return {
-        voyagr_all_settings: localStorage.getItem('voyagr_all_settings') || '',
-        savedRoutes: localStorage.getItem('savedRoutes') || '[]'
+        getSupabaseClient: () => supabaseClient,
+        call: {
+            loadAllSettings,
+            applySettingsToUI,
+            loadSavedRoutes,
+        },
     };
 }
 
-function applyRuntimeProfileSnapshot(snapshot) {
-    // Restore canonical blobs first
-    localStorage.setItem('voyagr_all_settings', snapshot?.voyagr_all_settings || '');
-    localStorage.setItem('savedRoutes', snapshot?.savedRoutes || '[]');
-
-    // Hydrate derived keys + in-memory vars
-    loadAllSettings();
-    applySettingsToUI();
-
-    // Refresh saved routes UI (if present)
-    try {
-        if (typeof loadSavedRoutes === 'function') loadSavedRoutes();
-    } catch (e) {
-        console.log('[Profiles] loadSavedRoutes failed:', e);
-    }
-}
-
-function isAccountProfileId(profileId) {
-    return typeof profileId === 'string' && profileId.startsWith('sb:') && profileId.length > 5;
-}
-
-function getUserIdFromProfileId(profileId) {
-    // profileId format: "sb:<uuid>"
-    if (!isAccountProfileId(profileId)) return '';
-    return profileId.slice(3);
-}
-
-function scheduleSupabaseProfileSync() {
-    if (!supabaseClient) return;
-    if (!isAccountProfileId(activeProfileId)) return;
-
-    if (supabaseProfileSyncTimer) {
-        clearTimeout(supabaseProfileSyncTimer);
-    }
-
-    supabaseProfileSyncTimer = setTimeout(async () => {
-        await syncActiveProfileToSupabase();
-    }, 1200);
-}
-
-async function syncActiveProfileToSupabase() {
-    if (!supabaseClient) return;
-    if (supabaseProfileSyncInFlight) return;
-    if (!isAccountProfileId(activeProfileId)) return;
-
-    const userId = getUserIdFromProfileId(activeProfileId);
-    if (!userId) return;
-
-    try {
-        supabaseProfileSyncInFlight = true;
-        const store = getProfileStore();
-        const entry = store[activeProfileId] || {};
-
-        const snapshot = getRuntimeProfileSnapshot();
-        const row = {
-            user_id: userId,
-            profile_id: activeProfileId,
-            snapshot
-        };
-
-        const { data, error } = await supabaseClient
-            .from(SUPABASE_PROFILE_SNAPSHOTS_TABLE)
-            .upsert(row, { onConflict: 'user_id,profile_id' })
-            .select('updated_at')
-            .single();
-
-        if (error) {
-            console.warn('[Supabase][Profiles] Sync failed:', error.message || error);
-            return;
-        }
-
-        // Persist remote timestamp locally for simple LWW conflict handling
-        const updatedAt = data?.updated_at || '';
-        store[activeProfileId] = {
-            ...entry,
-            ...snapshot,
-            supabase_updated_at: updatedAt
-        };
-        setProfileStore(store);
-        console.log('[Supabase][Profiles] Synced profile snapshot:', activeProfileId);
-    } catch (e) {
-        console.warn('[Supabase][Profiles] Sync exception:', e);
-    } finally {
-        supabaseProfileSyncInFlight = false;
-    }
-}
-
-async function pullProfileSnapshotFromSupabase(profileId) {
-    if (!supabaseClient) return false;
-    if (!isAccountProfileId(profileId)) return false;
-
-    const userId = getUserIdFromProfileId(profileId);
-    if (!userId) return false;
-
-    try {
-        const { data, error } = await supabaseClient
-            .from(SUPABASE_PROFILE_SNAPSHOTS_TABLE)
-            .select('snapshot, updated_at')
-            .eq('user_id', userId)
-            .eq('profile_id', profileId)
-            .maybeSingle();
-
-        if (error) {
-            console.warn('[Supabase][Profiles] Pull failed:', error.message || error);
-            return false;
-        }
-        if (!data) {
-            return false;
-        }
-
-        const remoteUpdatedAt = data.updated_at || '';
-        const remoteSnapshot = data.snapshot || {};
-
-        const store = getProfileStore();
-        const localEntry = store[profileId] || {};
-        const localUpdatedAt = localEntry.supabase_updated_at || '';
-
-        // LWW: only overwrite local profile if remote is newer (or local has never synced)
-        const shouldApplyRemote = !localUpdatedAt || (remoteUpdatedAt && remoteUpdatedAt > localUpdatedAt);
-        if (shouldApplyRemote) {
-            store[profileId] = {
-                ...localEntry,
-                ...remoteSnapshot,
-                supabase_updated_at: remoteUpdatedAt
-            };
-            setProfileStore(store);
-
-            if (activeProfileId === profileId) {
-                applyRuntimeProfileSnapshot(store[profileId]);
-            }
-            console.log('[Supabase][Profiles] Pulled profile snapshot:', profileId);
-        }
-
-        return true;
-    } catch (e) {
-        console.warn('[Supabase][Profiles] Pull exception:', e);
-        return false;
-    }
+function getProfileStore() {
+    return VoyagrProfileStoreOrchestration.getProfileStore();
 }
 
 function persistActiveProfile() {
-    const store = getProfileStore();
-    store[activeProfileId] = getRuntimeProfileSnapshot();
-    setProfileStore(store);
-    console.log('[Profiles] Persisted profile:', activeProfileId);
-    scheduleSupabaseProfileSync();
+    return VoyagrProfileStoreOrchestration.persistActiveProfile();
 }
 
 function ensureProfileExists(profileId) {
-    const store = getProfileStore();
-    if (!store[profileId]) {
-        store[profileId] = { voyagr_all_settings: '', savedRoutes: '[]', supabase_updated_at: '' };
-        setProfileStore(store);
-    }
+    return VoyagrProfileStoreOrchestration.ensureProfileExists(profileId);
 }
 
-function switchActiveProfile(profileId, options = {}) {
-    if (!profileId) profileId = 'guest';
-
-    // Save current runtime state into current profile before switching
-    persistActiveProfile();
-
-    const store = getProfileStore();
-    const fromProfileId = activeProfileId;
-
-    ensureProfileExists(profileId);
-    activeProfileId = profileId;
-
-    // Optional: import previous profile into new one (first login migration)
-    if (options.importFromProfileId && store[options.importFromProfileId]) {
-        store[profileId] = store[options.importFromProfileId];
-        setProfileStore(store);
-        console.log('[Profiles] Imported profile', options.importFromProfileId, '→', profileId);
-    }
-
-    // Apply new profile state
-    applyRuntimeProfileSnapshot(store[profileId]);
-    console.log('[Profiles] Switched profile:', fromProfileId, '→', activeProfileId);
+function switchActiveProfile(profileId, options) {
+    return VoyagrProfileStoreOrchestration.switchActiveProfile(profileId, options);
 }
 
-// Ensure guest profile exists on boot (maintains current behavior)
-ensureProfileExists('guest');
+function scheduleSupabaseProfileSync() {
+    return VoyagrProfileStoreOrchestration.scheduleSupabaseProfileSync();
+}
+
+async function pullProfileSnapshotFromSupabase(profileId) {
+    return VoyagrProfileStoreOrchestration.pullProfileSnapshotFromSupabase(profileId);
+}
 
 // =============================================================================
 // Support: Stripe subscription (link or Checkout) + BMC/Patreon tips from /api/config
@@ -5828,6 +5655,7 @@ VoyagrRoadNameOrchestration.bind(getRoadNameOrchestrationRuntime());
 VoyagrMobilePwaOrchestration.bind(getMobilePwaOrchestrationRuntime());
 VoyagrHazardPreferencesOrchestration.bind(getHazardPreferencesOrchestrationRuntime());
 VoyagrBottomSheetOrchestration.bind(getBottomSheetOrchestrationRuntime());
+VoyagrProfileStoreOrchestration.bind(getProfileStoreOrchestrationRuntime());
 VoyagrSettingsOrchestration.bind(getSettingsOrchestrationRuntime());
 VoyagrVoiceControlOrchestration.bind(getVoiceControlOrchestrationRuntime());
 VoyagrMapExploreOrchestration.bind(getMapExploreOrchestrationRuntime());
